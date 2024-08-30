@@ -1,24 +1,11 @@
-use crate::gfx::debug::vulkan_debug_callback;
+use crate::{gfx::debug::vulkan_debug_callback, prelude::{PhysicalDevice, QueueFamily}};
 use anyhow::Result;
-use ash::ext::debug_utils;
-use ash::{ext, vk};
+use ash::{ext, ext::debug_utils, khr, vk};
 use core::fmt;
 use raw_window_handle::HasDisplayHandle;
-use std::ffi;
-use std::sync::Arc;
+use std::{ffi, sync::Arc};
 use winit::window::Window;
 
-// macro_rules! dbg {
-//     ($name:expr) => {{
-//         &format!(
-//             "{}",
-//             match $name {
-//                 Some(_) => "Some(...)",
-//                 _ => "None",
-//             }
-//         )
-//     }};
-// }
 pub struct Instance {
     pub raw: ash::Instance,
     pub entry: ash::Entry,
@@ -50,19 +37,6 @@ impl InstanceBuilder {
         Instance::build(&self)
     }
 
-    pub fn with_required_extensions(mut self) -> Self {
-        let display_handle = self.window.display_handle().unwrap().into();
-        self.extensions = ash_window::enumerate_required_extensions(display_handle)
-            .unwrap()
-            .to_vec();
-        self
-    }
-
-    pub fn with_name(mut self, name: &str) -> Self {
-        self.name = Some(name.to_string());
-        self
-    }
-
     pub fn debug(mut self, debug: bool) -> Self {
         self.debug = debug;
         self
@@ -70,6 +44,53 @@ impl InstanceBuilder {
 }
 
 impl Instance {
+    pub fn get_physical_devices(&self) -> Result<Vec<PhysicalDevice>> {
+        unsafe {
+            let pdevices = self.raw.enumerate_physical_devices()?;
+
+            Ok(pdevices
+                .into_iter()
+                .map(|physical_device| {
+                    let properties =  self.raw.get_physical_device_properties(physical_device);
+                    /*let properties = PhysicalDeviceProperties {
+                        api_version: properties.api_version,
+                        driver_version: properties.driver_version,
+                        vendor_id: properties.vendor_id,
+                        device_id: properties.device_id,
+                        device_type: properties.device_type,
+                        device_name: CStr::from_ptr(&properties.device_name[0])
+                            .to_str()
+                            .unwrap()
+                            .to_string(),
+                        pipeline_cache_uuid: properties.pipeline_cache_uuid,
+                        limits: properties.limits,
+                        sparse_properties: properties.sparse_properties,
+                    };*/
+
+                    let queue_families = self
+                        .raw
+                        .get_physical_device_queue_family_properties(physical_device)
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, properties)| QueueFamily {
+                            index: index as _,
+                            properties,
+                        })
+                        .collect();
+
+                    let memory_properties = self.raw.get_physical_device_memory_properties(physical_device);
+
+                    PhysicalDevice {
+                        inner: physical_device,
+                        queue_families,
+                        properties,
+                        memory_properties,
+                    }
+                })
+                .collect())
+        }
+    }
+
     pub fn builder(window: Arc<Window>) -> InstanceBuilder {
         InstanceBuilder {
             window: window.clone(),
@@ -80,11 +101,18 @@ impl Instance {
     }
 
     fn extension_names(builder: &InstanceBuilder) -> Vec<*const i8> {
-        let mut extensions: Vec<*const i8> = builder.extensions.iter().cloned().collect();
+        let mut extensions: Vec<*const i8> = vec![
+            khr::surface::NAME.as_ptr(),
+            khr::win32_surface::NAME.as_ptr(),
+        ];
         if builder.debug {
             extensions.push(debug_utils::NAME.as_ptr());
         }
         extensions
+    }
+    pub fn required_layers(entry: &ash::Entry) {
+        let instance_layers = unsafe { entry.enumerate_instance_layer_properties().unwrap()};
+        log::info!("instance layers: {:?}", instance_layers)
     }
 
     fn layer_names() -> Vec<*const i8> {
@@ -102,6 +130,7 @@ impl Instance {
         log::info!("Instance build: {:?}", builder);
 
         let entry = unsafe { ash::Entry::load()? };
+        Self::required_layers(&entry);
         let extension_names = Self::extension_names(builder);
         let layer_names = Self::layer_names();
 

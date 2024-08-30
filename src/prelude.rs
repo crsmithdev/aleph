@@ -1,7 +1,7 @@
 pub use crate::{
     core::{App, AppBuilder, AppContainer, Plugin},
     gfx::{
-        device::{PhysicalDevice, PhysicalDevices, QueueFamily},
+        physical_device::{PhysicalDevice, PhysicalDevices, QueueFamily},
         instance::Instance,
         surface::Surface,
         GraphicsPlugin,

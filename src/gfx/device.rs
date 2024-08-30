@@ -1,119 +1,191 @@
-use crate::gfx::instance::Instance;
-use crate::gfx::surface::Surface;
-use anyhow::{anyhow, Result};
-use ash::vk;
-use ash::vk::Handle;
-use std::fmt;
-use std::sync::Arc;
-
-#[derive(Copy, Clone)]
-pub struct QueueFamily {
-    pub index: u32,
-    pub properties: vk::QueueFamilyProperties,
+use crate::{gfx::physical_device::{PhysicalDevice, PhysicalDevices, QueueFamily}, prelude::Instance};
+use anyhow::Result;
+use ash::{khr, vk};
+// use gpu_allocator::{AllocatorDebugSettings, VulkanAllocator, VulkanAllocatorCreateDesc};
+// use gpu_profiler::backend::ash::VulkanProfilerFrame;
+// dse parking_lot::Mutex;
+use std::{
+    collections::HashSet,
+    os::raw::c_char,
+    sync::Arc,
+};
+pub struct Queue {
+    pub raw: vk::Queue,
+    pub family: QueueFamily,
 }
 
-pub struct PhysicalDevice {
-    pub instance: Arc<Instance>,
-    pub raw: vk::PhysicalDevice,
-    pub queue_families: Vec<QueueFamily>,
-    pub presentation_requested: bool,
-    pub properties: vk::PhysicalDeviceProperties,
-    pub memory_properties: vk::PhysicalDeviceMemoryProperties,
+pub struct Device {
+    pub raw: ash::Device,
+    pub(crate) pdevice: Arc<PhysicalDevice>,
+    pub universal_queue: Queue,
 }
 
-impl fmt::Debug for PhysicalDevice {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("PhysicalDevice")
-            .field("raw", &self.raw.as_raw())
-            .finish()
-    }
-}
+impl Device {
+    pub fn create(instance: Arc<Instance>, physical_device: Arc<PhysicalDevice>) -> Result<Arc<Self>> {
+        let supported_extensions: HashSet<String> = unsafe {
+            let extension_properties =
+                instance
+                .raw
+                .enumerate_device_extension_properties(physical_device.inner)?;
+            log::debug!("Extension properties:\n{:#?}", &extension_properties);
 
-impl PhysicalDevice {
-
-    pub fn get_physical_devices(instance: Arc<Instance>) -> impl PhysicalDevices {
-        unsafe { instance.raw.enumerate_physical_devices().unwrap().into_iter().map(|d| PhysicalDevice::from_raw(d, &instance)).collect::<Vec<PhysicalDevice>>()}
-        }
-
-    pub fn from_raw(device: vk::PhysicalDevice, instance: &Arc<Instance>) -> Self {
-        unsafe {
-            let properties = instance.raw.get_physical_device_properties(device);
-
-            let queue_families = instance.raw
-
-                .get_physical_device_queue_family_properties(device)
-                .into_iter()
-                .enumerate()
-                .map(|(index, properties)| QueueFamily {
-                    index: index as _,
-                    properties,
+            extension_properties
+                .iter()
+                .map(|ext| {
+                    std::ffi::CStr::from_ptr(ext.extension_name.as_ptr() as *const c_char)
+                        .to_string_lossy()
+                        .as_ref()
+                        .to_owned()
                 })
-                .collect();
+                .collect()
+        };
 
-            let memory_properties = instance.raw.get_physical_device_memory_properties(device);
+        let mut device_extension_names = vec![];
 
-            Self {
-                raw: device,
-                queue_families,
-                presentation_requested: true,
-                instance: instance.clone(),
-                properties,
-                memory_properties,
-            }
-        }
-    }
+        // let ray_tracing_extensions = [
+        // ];
 
-    fn supports_extension(&self, _extension: &str) -> bool {
-        todo!()
-    }
+        // let ray_tracing_enabled = false;
+        //     ray_tracing_extensions.iter().all(|ext| {
+        //         let ext = std::ffi::CStr::from_ptr(*ext).to_string_lossy();
 
-    fn supports_surface(&self, surface: &Surface) -> bool {
-        self.queue_families.iter().any(|f| unsafe {
-            f.properties.queue_flags.contains(vk::QueueFlags::GRAPHICS)
-                && surface
-                    .fns
-                    .get_physical_device_surface_support(self.raw, f.index, surface.raw)
-                    .unwrap_or(false)
-        })
-    }
-}
+        //         let supported = supported_extensions.contains(ext.as_ref());
 
-pub trait PhysicalDevices {
-    fn with_extension_support(self, extension: &str) -> Self;
-    fn with_surface_support(self, surface: &Surface) -> Self;
-    fn select(&self, rank_fn: fn(&PhysicalDevice) -> i32) -> Result<&PhysicalDevice>;
-    fn select_default(&self) -> Result<&PhysicalDevice> {
-        let rank_fn: fn(&PhysicalDevice) -> i32 = rank_default;
-        self.select(rank_fn)
-    }
-}
+        //         if !supported {
+        //             log::info!("Ray tracing extension not supported: {}", ext);
+        //         }
 
-fn rank_default(device: &PhysicalDevice) -> i32 {
-    match device.properties.device_type {
-        vk::PhysicalDeviceType::INTEGRATED_GPU => 200,
-        vk::PhysicalDeviceType::DISCRETE_GPU => 1000,
-        vk::PhysicalDeviceType::VIRTUAL_GPU => 1,
-        _ => 0,
-    }
-}
+        //         supported
+        //     })
+        // };
 
-impl PhysicalDevices for Vec<PhysicalDevice> {
-    fn with_extension_support(self, extension: &str) -> Self {
-        self.into_iter()
-            .filter(|qf| qf.supports_extension(extension))
-            .collect()
-    }
+        // if ray_tracing_enabled {
+        //     log::info!("All ray tracing extensions are supported");
 
-    fn with_surface_support(self, surface: &Surface) -> Self {
-        self.into_iter()
-            .filter(|qf| qf.supports_surface(surface))
-            .collect()
-    }
+        //     device_extension_names.extend(ray_tracing_extensions.iter());
+        // }
 
-    fn select(&self, rank_fn: fn(&PhysicalDevice) -> i32) -> Result<&PhysicalDevice> {
-        self.into_iter()
-            .rev()
-            .max_by_key(|d| rank_fn(d))
-            .ok_or(anyhow!("err"))
+        // if physical_device.presentation_requested {
+        device_extension_names.push(ash::khr::swapchain::NAME.as_ptr());
+        device_extension_names.push(ash::khr::swapchain::NAME.as_ptr());
+        // }
+
+        // unsafe {
+        //     for &ext in &device_extension_names {
+        //         let ext = std::ffi::CStr::from_ptr(ext).to_string_lossy();
+        //         if !supported_extensions.contains(ext.as_ref()) {
+        //             panic!("Device extension not supported: {}", ext);
+        //         }
+        //     }
+        // }
+
+        let priorities = [1.0];
+
+        let universal_queue = physical_device
+            .queue_families
+            .iter()
+            .filter(|qf| qf.properties.queue_flags.contains(vk::QueueFlags::GRAPHICS))
+            .copied()
+            .next()
+            .unwrap();
+
+        // let universal_queue = if let Some(universal_queue) = universal_queue {
+        //     universal_queue
+        // } else {
+        //     anyhow::bail!("No suitable render queue found");
+        // };
+
+        let universal_queue_info = [vk::DeviceQueueCreateInfo::default()
+            .queue_family_index(universal_queue.index)
+            .queue_priorities(&priorities)];
+
+        let mut features2 = vk::PhysicalDeviceFeatures2::default();
+
+        let device_create_info = vk::DeviceCreateInfo::default()
+            .queue_create_infos(&universal_queue_info)
+            .enabled_extension_names(&device_extension_names)
+            .push_next(&mut features2);
+        // .build();
+
+        let device = unsafe {
+                 instance
+                .raw
+                .create_device(physical_device.inner, &device_create_info, None)
+                .unwrap()
+        };
+
+        log::info!("Created a Vulkan device");
+
+        // let mut global_allocator = VulkanAllocator::new(&VulkanAllocatorCreateDesc {
+        //     instance: instance.clone(),
+        //     device: device.clone(),
+        //     physical_device: physical_device.inner,
+        // debug_settings: AllocatorDebugSettings {
+        // log_leaks_on_shutdown: false,
+        // log_memory_information: true,
+        // log_allocations: true,
+        // ..Default::default()
+        // },
+        // buffer_device_address: true,
+        // });
+
+        let universal_queue = Queue {
+            raw: unsafe { device.get_device_queue(universal_queue.index, 0) },
+            family: universal_queue,
+        };
+
+        // let frame0 = DeviceFrame::new(
+        //     physical_device,
+        //     &device,
+        //     &mut global_allocator,
+        //     &universal_queue.family,
+        // );
+        // let frame1 = DeviceFrame::new(
+        //     physical_device,
+        //     &device,
+        //     &mut global_allocator,
+        //     &universal_queue.family,
+        // );
+        //let frame2 = DeviceFrame::new(&device, &mut global_allocator, &universal_queue.family);
+
+        // let immutable_samplers = Self::create_samplers(&device);
+        // let setup_cb = CommandBuffer::new(&device, &universal_queue.family).unwrap();
+
+        // let acceleration_structure_ext =
+        //     khr::AccelerationStructure::new(&physical_device.instance.inner, &device);
+        // let ray_tracing_pipeline_ext =
+        //     khr::RayTracingPipeline::new(&physical_device.instance.inner, &device);
+        // //let ray_query_ext = khr::RayQuery::new(&physical_device.instance.inner, &device);
+        // let ray_tracing_pipeline_properties =
+        //     khr::RayTracingPipeline::get_properties(&physical_device.instance.inner,
+        // pdevice.inner);
+
+        // let crash_tracking_buffer = Self::create_buffer_impl(
+        //     &device,
+        //     &mut global_allocator,
+        //     BufferDesc::new_gpu_to_cpu(4, vk::BufferUsageFlags::TRANSFER_DST),
+        //     "crash tracking buffer",
+        // )?;
+
+        Ok(Arc::new(Device {
+            pdevice: physical_device.clone(),
+            raw: device,
+            universal_queue,
+            // global_allocator: Arc::new(Mutex::new(global_allocator)),
+            // immutable_samplers,
+            // setup_cb: Mutex::new(setup_cb),
+            // crash_tracking_buffer,
+            // crash_marker_names: Default::default(),
+            // acceleration_structure_ext,
+            // ray_tracing_pipeline_ext,
+            // // ray_query_ext,
+            // ray_tracing_pipeline_properties,
+            // frames: [
+            //     Mutex::new(Arc::new(frame0)),
+            //     Mutex::new(Arc::new(frame1)),
+            //     //Mutex::new(Arc::new(frame2)),
+            // ],
+            // ray_tracing_enabled,
+        }))
     }
 }

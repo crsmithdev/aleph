@@ -3,15 +3,16 @@ use std::sync::Arc;
 
 use crate::{
     core::Plugin,
-    gfx::{instance::Instance, surface::Surface},
+    gfx::{instance::Instance, surface::Surface, device::Device},
 };
 use anyhow::Result;
+use physical_device::PhysicalDevices;
 use winit::window::Window;
-
 pub mod debug;
 pub mod device;
 pub mod instance;
 pub mod surface;
+pub mod physical_device;
 pub struct GraphicsPlugin {
     backend: OnceCell<RenderBackend>,
 }
@@ -53,12 +54,16 @@ impl RenderBackend {
         // let window_height: u32 = 480;
 
         let instance = Instance::builder(window.clone())
-            .with_name("Untitled")
             .build()?;
         log::info!("Created instance: {instance:?}");
 
         let surface = Surface::create(instance.clone(), window.clone())?;
         log::info!("Created surface: {surface:?}");
+
+        let physical_devices = instance.get_physical_devices()?;
+        let physical_device = physical_devices.select_default()?;
+        let device = Device::create(instance, physical_device);
+
 
         // let physical_device = instance.get_physical_devices()?
         //     .with_default_extensions()
