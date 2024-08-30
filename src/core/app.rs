@@ -6,24 +6,24 @@ use winit::{
     event_loop::EventLoop,
     window::{Window, WindowAttributes},
 };
-pub struct AppContainer {}
+pub struct App {}
 
 pub struct AppBuilder {}
 
 impl AppBuilder {
-    pub fn build(self) -> Result<AppContainer> {
-        AppContainer::build(self)
+    pub fn build(self) -> Result<App> {
+        App::build(self)
     }
 }
 
-impl AppContainer {
+impl App {
     pub fn builder() -> AppBuilder {
         AppBuilder {}
     }
 
-    pub fn build(_builder: AppBuilder) -> Result<AppContainer> {
+    pub fn build(_builder: AppBuilder) -> Result<App> {
         logging::setup_logger()?;
-        Ok(AppContainer {})
+        Ok(App {})
     }
 
     pub fn run<F>(&mut self, mut _frame_fn: F) -> Result<()>
@@ -31,7 +31,7 @@ impl AppContainer {
         F: (FnMut(FrameContext) -> ()),
     {
         log::info!("run");
-        let mut app = App::new();
+        let mut app = AppState::new();
         EventLoop::new()?.run_app(&mut app)?;
         Ok(())
     }
@@ -40,14 +40,14 @@ impl AppContainer {
 pub struct FrameContext {}
 
 #[derive(Default)]
-pub struct App {
+pub struct AppState {
     plugins: Vec<Box<dyn Plugin>>,
     window: Option<Arc<Window>>,
 }
 
-impl App {
+impl AppState {
     pub fn new() -> Self {
-        App {
+        AppState {
             plugins: vec![Box::new(GraphicsPlugin::new())],
             window: None,
         }
@@ -59,9 +59,10 @@ impl App {
             .for_each(|p| p.init(window.clone()).unwrap());
     }
 }
-impl ApplicationHandler for App {
+
+impl ApplicationHandler for AppState {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        log::info!("Resumed");
+        log::info!("App resumed");
         let window = Arc::new(
             event_loop
                 .create_window(WindowAttributes::default())
@@ -70,7 +71,7 @@ impl ApplicationHandler for App {
 
         self.init_plugins(window.clone());
         self.window = Some(window.clone());
-        log::info!("window: {0:?}", window);
+        log::info!("Created window:  {0:?}", window);
     }
 
     fn window_event(

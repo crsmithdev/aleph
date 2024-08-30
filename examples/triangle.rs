@@ -1,7 +1,7 @@
 use vk_engine::prelude::*;
 
 fn main() {
-    let mut app = AppContainer::builder().build().unwrap();
+    let mut app = App::builder().build().unwrap();
     app.run(|_| {}).expect(":/");
 }
 

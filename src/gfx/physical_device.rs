@@ -1,4 +1,4 @@
-use crate::{gfx::surface::Surface, gfx::instance::Instance};
+use crate::gfx::{instance::Instance, surface::Surface};
 use anyhow::{anyhow, Result};
 use ash::{vk, vk::Handle};
 use std::{fmt, sync::Arc};
@@ -26,8 +26,6 @@ impl fmt::Debug for PhysicalDevice {
 }
 
 impl PhysicalDevice {
-
-
     fn supports_surface(&self, surface: &Surface) -> bool {
         self.queue_families.iter().any(|f| unsafe {
             f.properties.queue_flags.contains(vk::QueueFlags::GRAPHICS)
@@ -43,10 +41,13 @@ pub trait PhysicalDevices {
     // fn with_extension_support(self, extension: &str) -> Self;
     // fn with_surface_support(self, surface: &Surface) -> Self;
     fn select(self, rank_fn: fn(&PhysicalDevice) -> i32) -> Result<Arc<PhysicalDevice>>;
-    fn select_default(self) ->  Result<Arc<PhysicalDevice>> where Self: Sized {
+    fn select_default(self) -> Result<Arc<PhysicalDevice>>
+    where
+        Self: Sized,
+    {
         let rank_fn: fn(&PhysicalDevice) -> i32 = rank_default;
         let selected = self.select(rank_fn);
-       selected
+        selected
     }
 }
 
@@ -72,14 +73,10 @@ impl PhysicalDevices for Vec<PhysicalDevice> {
     //         .collect()
     // }
 
-    fn select(self, rank_fn: fn(&PhysicalDevice) -> i32) ->  Result<Arc<PhysicalDevice>> {
-        let selected = self.into_iter()
-            .rev()
-            .max_by_key(|d| rank_fn(d));
+    fn select(self, rank_fn: fn(&PhysicalDevice) -> i32) -> Result<Arc<PhysicalDevice>> {
+        let selected = self.into_iter().rev().max_by_key(|d| rank_fn(d));
         //  let s2 = selected.clone();
         selected.ok_or(anyhow!("err")).map(|d| Arc::new(d))
         // Err(
-
-
     }
 }
