@@ -3,9 +3,12 @@ use crate::{
     prelude::Instance,
 };
 use anyhow::Result;
-use ash::vk;
+use ash::vk::{self, Handle};
 use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
-use std::sync::{Arc, Mutex};
+use std::{
+    fmt,
+    sync::{Arc, Mutex},
+};
 pub struct Queue {
     pub raw: vk::Queue,
     pub family: QueueFamily,
@@ -15,6 +18,7 @@ pub struct Queue {
 pub struct Device {
     pub raw: ash::Device,
     pub(crate) physical_device: Arc<PhysicalDevice>,
+    pub instance: Arc<Instance>,
     pub universal_queue: Queue,
     pub allocator: Arc<Mutex<Allocator>>,
 }
@@ -72,8 +76,19 @@ impl Device {
         Ok(Arc::new(Device {
             physical_device: physical_device.clone(),
             raw: device,
+            instance: instance.clone(),
             universal_queue: queue,
             allocator: Arc::new(Mutex::new(allocator)),
         }))
+    }
+}
+
+impl fmt::Debug for Device {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Device")
+            .field("inner", &format_args!("{:x}", &self.raw.handle().as_raw()))
+            .field("instance", &self.instance) // &format_args!("{:x}", &self.raw.handle().as_raw()))
+            .field("physical_device", &self.physical_device) // &format_args!("{:x}", &self.raw.handle().as_raw()))
+            .finish_non_exhaustive()
     }
 }

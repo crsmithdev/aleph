@@ -1,8 +1,14 @@
 use crate::{
     core::Plugin,
-    gfx::{device::Device, instance::Instance, surface::Surface},
+    gfx::{
+        device::Device,
+        instance::Instance,
+        surface::Surface,
+        swapchain::{Swapchain, SwapchainProperties},
+    },
 };
 use anyhow::Result;
+use ash::vk;
 use physical_device::PhysicalDevices;
 use std::{cell::OnceCell, sync::Arc};
 use winit::window::Window;
@@ -11,6 +17,8 @@ pub mod device;
 pub mod instance;
 pub mod physical_device;
 pub mod surface;
+pub mod swapchain;
+
 pub struct GraphicsPlugin {
     backend: OnceCell<RenderBackend>,
 }
@@ -57,31 +65,33 @@ impl RenderBackend {
 
         let physical_devices = instance.get_physical_devices()?;
         let physical_device = physical_devices.select_default()?;
-        let _device = Device::create(instance, physical_device);
+        let device = Device::create(instance, physical_device)?;
+        log::info!("Created device: {device:?}");
 
-        // let queue_family_index = queue_family_index as u32;
-        // let device_extension_names_raw = [khr::swapchain::NAME.as_ptr()];
-        // let features = vk::PhysicalDeviceFeatures {
-        //     shader_clip_distance: 1,
-        //     ..Default::default()
-        // };
-        // let priorities = [1.0];
+        let surface_formats = swapchain::Swapchain::enumerate_surface_formats(&device, &surface)?;
+        let preferred = vk::SurfaceFormatKHR {
+            format: vk::Format::B8G8R8A8_UNORM,
+            color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
+        };
 
-        // let queue_info = vk::DeviceQueueCreateInfo::default()
-        //     .queue_family_index(queue_family_index)
-        //     .queue_priorities(&priorities);
+        let format = if surface_formats.contains(&preferred) {
+            Some(preferred)
+        } else {
+            None
+        };
 
-        // let device_create_info = vk::DeviceCreateInfo::default()
-        //     .queue_create_infos(std::slice::from_ref(&queue_info))
-        //     .enabled_extension_names(&device_extension_names_raw)
-        //     .enabled_features(&features);
-
-        // let device: ash::Device = unsafe {
-        //     instance
-        //         .raw
-        //         .create_device(physical_device, &device_create_info, None)
-        //         .unwrap()
-        // };
+        let _swapchain = Swapchain::new(
+            &device,
+            &surface,
+            swapchain::SwapchainProperties {
+                format: format.unwrap(),
+                dims: vk::Extent2D {
+                    width: 640,
+                    height: 480,
+                },
+                vsync: false,
+            },
+        )?;
 
         // let present_queue = unsafe { device.get_device_queue(queue_family_index, 0) };
 
