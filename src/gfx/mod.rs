@@ -80,10 +80,10 @@ impl RenderBackend {
             None
         };
 
-        let _swapchain = Swapchain::new(
+        let swapchain = Swapchain::new(
             &device,
             &surface,
-            swapchain::SwapchainProperties {
+            SwapchainProperties {
                 format: format.unwrap(),
                 dims: vk::Extent2D {
                     width: 640,
@@ -92,6 +92,8 @@ impl RenderBackend {
                 vsync: false,
             },
         )?;
+
+        log::info!("Created swapchain: {swapchain:?}");
 
         // let present_queue = unsafe { device.get_device_queue(queue_family_index, 0) };
 

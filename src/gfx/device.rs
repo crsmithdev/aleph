@@ -52,7 +52,7 @@ impl Device {
 
         let device = unsafe {
             instance
-                .raw
+                .inner
                 .create_device(physical_device.inner, &device_info, None)
                 .unwrap()
         };
@@ -60,7 +60,7 @@ impl Device {
         log::info!("Created a Vulkan device");
 
         let allocator = Allocator::new(&AllocatorCreateDesc {
-            instance: instance.raw.clone(),
+            instance: instance.inner.clone(),
             device: device.clone(),
             physical_device: physical_device.inner,
             buffer_device_address: true,

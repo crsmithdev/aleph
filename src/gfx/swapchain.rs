@@ -78,7 +78,6 @@ impl Swapchain {
             .into_iter()
             .find(|mode| present_modes.contains(mode))
             .unwrap_or(vk::PresentModeKHR::FIFO);
-        log::info!("Presentation mode: {:?}", present_mode);
 
         let pre_transform = if surface_capabilities
             .supported_transforms
@@ -103,7 +102,7 @@ impl Swapchain {
             .clipped(true)
             .image_array_layers(1);
 
-        let fns = khr::swapchain::Device::new(&device.instance.raw, &device.raw);
+        let fns = khr::swapchain::Device::new(&device.instance.inner, &device.raw);
         let swapchain = unsafe { fns.create_swapchain(&swapchain_create_info, None) }.unwrap();
 
         let images = unsafe { fns.get_swapchain_images(swapchain)? };

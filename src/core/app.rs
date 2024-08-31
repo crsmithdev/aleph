@@ -30,7 +30,7 @@ impl App {
     where
         F: (FnMut(FrameContext) -> ()),
     {
-        log::info!("run");
+        log::info!("App starting");
         let mut app = AppState::new();
         EventLoop::new()?.run_app(&mut app)?;
         Ok(())
@@ -69,9 +69,10 @@ impl ApplicationHandler for AppState {
                 .unwrap(),
         );
 
+        log::info!("Created window: {0:?}", window);
+
         self.init_plugins(window.clone());
         self.window = Some(window.clone());
-        log::info!("Created window:  {0:?}", window);
     }
 
     fn window_event(

@@ -1,15 +1,14 @@
-use crate::{
-    gfx::debug::vulkan_debug_callback,
-    prelude::{PhysicalDevice, QueueFamily},
+use crate::gfx::{
+    debug::vulkan_debug_callback,
+    physical_device::{PhysicalDevice, QueueFamily},
 };
 use anyhow::Result;
-use ash::{ext, ext::debug_utils, khr, vk, vk::Handle};
-use core::fmt;
-use raw_window_handle::HasDisplayHandle;
-use std::{ffi, sync::Arc};
+use ash::{ext, ext::debug_utils, khr, vk};
+use std::{ffi, fmt, sync::Arc};
 use winit::window::Window;
+
 pub struct Instance {
-    pub raw: ash::Instance,
+    pub inner: ash::Instance,
     pub entry: ash::Entry,
     pub debug_utils: Option<ext::debug_utils::Instance>,
     pub debug_callback: Option<vk::DebugUtilsMessengerEXT>,
@@ -18,11 +17,8 @@ pub struct Instance {
 impl fmt::Debug for Instance {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Instance")
-            .field("raw", &self.raw.handle())
-            .field("entry", &"...")
-            .field("debug_utils", &"...")
-            .field("debug_callback", &self.debug_callback)
-            .finish()
+            .field("raw", &self.inner.handle())
+            .finish_non_exhaustive()
     }
 }
 
@@ -48,14 +44,14 @@ impl InstanceBuilder {
 impl Instance {
     pub fn get_physical_devices(&self) -> Result<Vec<PhysicalDevice>> {
         unsafe {
-            let pdevices = self.raw.enumerate_physical_devices()?;
+            let pdevices = self.inner.enumerate_physical_devices()?;
 
             Ok(pdevices
                 .into_iter()
                 .map(|physical_device| {
-                    let properties = self.raw.get_physical_device_properties(physical_device);
+                    let properties = self.inner.get_physical_device_properties(physical_device);
                     let queue_families = self
-                        .raw
+                        .inner
                         .get_physical_device_queue_family_properties(physical_device)
                         .into_iter()
                         .enumerate()
@@ -66,7 +62,7 @@ impl Instance {
                         .collect();
 
                     let memory_properties = self
-                        .raw
+                        .inner
                         .get_physical_device_memory_properties(physical_device);
 
                     PhysicalDevice {
@@ -93,6 +89,7 @@ impl Instance {
         let mut extensions: Vec<*const i8> = vec![
             khr::surface::NAME.as_ptr(),
             khr::win32_surface::NAME.as_ptr(),
+            khr::get_physical_device_properties2::NAME.as_ptr(),
         ];
         if builder.debug {
             extensions.push(debug_utils::NAME.as_ptr());
@@ -162,7 +159,7 @@ impl Instance {
 
         Ok(Arc::new(Self {
             entry,
-            raw: instance,
+            inner: instance,
             debug_utils,
             debug_callback,
         }))
