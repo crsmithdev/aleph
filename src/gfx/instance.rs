@@ -70,7 +70,6 @@ impl Instance {
                         .get_physical_device_memory_properties(physical_device);
 
                     PhysicalDevice {
-                        // instance: self.raw,
                         inner: physical_device,
                         queue_families,
                         properties,
@@ -100,10 +99,6 @@ impl Instance {
         }
         extensions
     }
-    pub fn required_layers(entry: &ash::Entry) {
-        let instance_layers = unsafe { entry.enumerate_instance_layer_properties().unwrap() };
-        log::info!("instance layers: {:?}", instance_layers)
-    }
 
     fn layer_names() -> Vec<*const i8> {
         unsafe {
@@ -120,7 +115,6 @@ impl Instance {
         log::info!("Instance build: {:?}", builder);
 
         let entry = unsafe { ash::Entry::load()? };
-        Self::required_layers(&entry);
         let extension_names = Self::extension_names(builder);
         let layer_names = Self::layer_names();
 

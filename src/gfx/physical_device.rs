@@ -20,7 +20,7 @@ impl fmt::Debug for PhysicalDevice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PhysicalDevice")
             .field("inner", &format_args!("{:x}", &self.inner.as_raw()))
-            .field("properties", &self.properties)
+            // .field("properties", &self.properties)
             .finish()
     }
 }
