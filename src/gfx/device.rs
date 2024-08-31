@@ -1,14 +1,13 @@
-use crate::{gfx::physical_device::{PhysicalDevice, PhysicalDevices, QueueFamily}, prelude::Instance};
+use crate::{
+    gfx::physical_device::{PhysicalDevice, QueueFamily},
+    prelude::Instance,
+};
 use anyhow::Result;
 use ash::{khr, vk};
 // use gpu_allocator::{AllocatorDebugSettings, VulkanAllocator, VulkanAllocatorCreateDesc};
 // use gpu_profiler::backend::ash::VulkanProfilerFrame;
 // dse parking_lot::Mutex;
-use std::{
-    collections::HashSet,
-    os::raw::c_char,
-    sync::Arc,
-};
+use std::{collections::HashSet, os::raw::c_char, sync::Arc};
 pub struct Queue {
     pub raw: vk::Queue,
     pub family: QueueFamily,
@@ -21,10 +20,12 @@ pub struct Device {
 }
 
 impl Device {
-    pub fn create(instance: Arc<Instance>, physical_device: Arc<PhysicalDevice>) -> Result<Arc<Self>> {
+    pub fn create(
+        instance: Arc<Instance>,
+        physical_device: Arc<PhysicalDevice>,
+    ) -> Result<Arc<Self>> {
         let supported_extensions: HashSet<String> = unsafe {
-            let extension_properties =
-                instance
+            let extension_properties = instance
                 .raw
                 .enumerate_device_extension_properties(physical_device.inner)?;
             log::debug!("Extension properties:\n{:#?}", &extension_properties);
@@ -108,7 +109,7 @@ impl Device {
         // .build();
 
         let device = unsafe {
-                 instance
+            instance
                 .raw
                 .create_device(physical_device.inner, &device_create_info, None)
                 .unwrap()

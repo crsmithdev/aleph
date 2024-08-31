@@ -1,18 +1,16 @@
-use std::cell::OnceCell;
-use std::sync::Arc;
-
 use crate::{
     core::Plugin,
-    gfx::{instance::Instance, surface::Surface, device::Device},
+    gfx::{device::Device, instance::Instance, surface::Surface},
 };
 use anyhow::Result;
 use physical_device::PhysicalDevices;
+use std::{cell::OnceCell, sync::Arc};
 use winit::window::Window;
 pub mod debug;
 pub mod device;
 pub mod instance;
-pub mod surface;
 pub mod physical_device;
+pub mod surface;
 pub struct GraphicsPlugin {
     backend: OnceCell<RenderBackend>,
 }
@@ -50,11 +48,8 @@ impl RenderBackend {
 
     unsafe fn init_vulkan(window: Arc<Window>) -> Result<RenderBackend> {
         log::info!("Initializing Vulkan");
-        // let window_width: u32 = 640;
-        // let window_height: u32 = 480;
 
-        let instance = Instance::builder(window.clone())
-            .build()?;
+        let instance = Instance::builder(window.clone()).build()?;
         log::info!("Created instance: {instance:?}");
 
         let surface = Surface::create(instance.clone(), window.clone())?;
@@ -62,14 +57,7 @@ impl RenderBackend {
 
         let physical_devices = instance.get_physical_devices()?;
         let physical_device = physical_devices.select_default()?;
-        let device = Device::create(instance, physical_device);
-
-
-        // let physical_device = instance.get_physical_devices()?
-        //     .with_default_extensions()
-        //     .with_extension("test")
-        //     .with_layer("test")
-        //     .select_default();
+        let _device = Device::create(instance, physical_device);
 
         // let queue_family_index = queue_family_index as u32;
         // let device_extension_names_raw = [khr::swapchain::NAME.as_ptr()];

@@ -1,4 +1,4 @@
-use crate::gfx::{instance::Instance, surface::Surface};
+use crate::gfx::surface::Surface;
 use anyhow::{anyhow, Result};
 use ash::{vk, vk::Handle};
 use std::{fmt, sync::Arc};
@@ -38,8 +38,7 @@ impl PhysicalDevice {
 }
 
 pub trait PhysicalDevices {
-    // fn with_extension_support(self, extension: &str) -> Self;
-    // fn with_surface_support(self, surface: &Surface) -> Self;
+    fn with_surface_support(self, surface: &Surface) -> Self;
     fn select(self, rank_fn: fn(&PhysicalDevice) -> i32) -> Result<Arc<PhysicalDevice>>;
     fn select_default(self) -> Result<Arc<PhysicalDevice>>
     where
@@ -61,22 +60,14 @@ fn rank_default(device: &PhysicalDevice) -> i32 {
 }
 
 impl PhysicalDevices for Vec<PhysicalDevice> {
-    // fn with_extension_support(self, extension: &str) -> Self {
-    //     self.into_iter()
-    //         .filter(|qf| qf.supports_extension(extension))
-    //         .collect()
-    // }
-
-    // fn with_surface_support(self, surface: &Surface) -> Self {
-    //     self.into_iter()
-    //         .filter(|qf| qf.supports_surface(surface))
-    //         .collect()
-    // }
+    fn with_surface_support(self, surface: &Surface) -> Self {
+        self.into_iter()
+            .filter(|qf| qf.supports_surface(surface))
+            .collect()
+    }
 
     fn select(self, rank_fn: fn(&PhysicalDevice) -> i32) -> Result<Arc<PhysicalDevice>> {
         let selected = self.into_iter().rev().max_by_key(|d| rank_fn(d));
-        //  let s2 = selected.clone();
         selected.ok_or(anyhow!("err")).map(|d| Arc::new(d))
-        // Err(
     }
 }

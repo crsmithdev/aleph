@@ -1,11 +1,13 @@
-use crate::{gfx::debug::vulkan_debug_callback, prelude::{PhysicalDevice, QueueFamily}};
+use crate::{
+    gfx::debug::vulkan_debug_callback,
+    prelude::{PhysicalDevice, QueueFamily},
+};
 use anyhow::Result;
-use ash::{ext, ext::debug_utils, khr, vk};
+use ash::{ext, ext::debug_utils, khr, vk, vk::Handle};
 use core::fmt;
 use raw_window_handle::HasDisplayHandle;
 use std::{ffi, sync::Arc};
 use winit::window::Window;
-
 pub struct Instance {
     pub raw: ash::Instance,
     pub entry: ash::Entry,
@@ -51,22 +53,7 @@ impl Instance {
             Ok(pdevices
                 .into_iter()
                 .map(|physical_device| {
-                    let properties =  self.raw.get_physical_device_properties(physical_device);
-                    /*let properties = PhysicalDeviceProperties {
-                        api_version: properties.api_version,
-                        driver_version: properties.driver_version,
-                        vendor_id: properties.vendor_id,
-                        device_id: properties.device_id,
-                        device_type: properties.device_type,
-                        device_name: CStr::from_ptr(&properties.device_name[0])
-                            .to_str()
-                            .unwrap()
-                            .to_string(),
-                        pipeline_cache_uuid: properties.pipeline_cache_uuid,
-                        limits: properties.limits,
-                        sparse_properties: properties.sparse_properties,
-                    };*/
-
+                    let properties = self.raw.get_physical_device_properties(physical_device);
                     let queue_families = self
                         .raw
                         .get_physical_device_queue_family_properties(physical_device)
@@ -78,9 +65,12 @@ impl Instance {
                         })
                         .collect();
 
-                    let memory_properties = self.raw.get_physical_device_memory_properties(physical_device);
+                    let memory_properties = self
+                        .raw
+                        .get_physical_device_memory_properties(physical_device);
 
                     PhysicalDevice {
+                        // instance: self.raw,
                         inner: physical_device,
                         queue_families,
                         properties,
@@ -111,7 +101,7 @@ impl Instance {
         extensions
     }
     pub fn required_layers(entry: &ash::Entry) {
-        let instance_layers = unsafe { entry.enumerate_instance_layer_properties().unwrap()};
+        let instance_layers = unsafe { entry.enumerate_instance_layer_properties().unwrap() };
         log::info!("instance layers: {:?}", instance_layers)
     }
 

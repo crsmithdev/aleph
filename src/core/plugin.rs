@@ -1,6 +1,5 @@
-use std::sync::Arc;
-
 use anyhow::Result;
+use std::sync::Arc;
 use winit::window::Window;
 
 pub trait Plugin {
