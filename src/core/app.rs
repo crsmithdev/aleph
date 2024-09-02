@@ -1,4 +1,4 @@
-use crate::{core::plugin::Plugin, gfx::GraphicsPlugin, logging};
+use crate::{core::plugin::Plugin, gfx::vk::GraphicsPlugin, logging};
 use anyhow::{Ok, Result};
 use std::sync::Arc;
 use winit::{
@@ -30,7 +30,7 @@ impl App {
     where
         F: (FnMut(FrameContext) -> ()),
     {
-        log::info!("App starting");
+        log::info!("Starting");
         let mut app = AppState::new();
         EventLoop::new()?.run_app(&mut app)?;
         Ok(())
@@ -62,7 +62,7 @@ impl AppState {
 
 impl ApplicationHandler for AppState {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        log::info!("App resumed");
+        log::info!("Resumed");
         let window = Arc::new(
             event_loop
                 .create_window(WindowAttributes::default())
@@ -73,6 +73,7 @@ impl ApplicationHandler for AppState {
 
         self.init_plugins(window.clone());
         self.window = Some(window.clone());
+        self.plugins.iter_mut().for_each(|p| p.update());
     }
 
     fn window_event(

@@ -1,4 +1,4 @@
-use crate::gfx::surface::Surface;
+use crate::gfx::vk::surface::Surface;
 use anyhow::{anyhow, Result};
 use ash::{vk, vk::Handle};
 use std::{fmt, sync::Arc};

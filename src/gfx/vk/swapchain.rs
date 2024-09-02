@@ -1,4 +1,4 @@
-use crate::gfx::{Device, Surface};
+use crate::gfx::vk::{Device, Surface};
 use anyhow::Result;
 use ash::{khr, vk};
 use std::sync::Arc;
@@ -11,7 +11,7 @@ pub struct SwapchainProperties {
 }
 
 pub struct Swapchain {
-    inner: vk::SwapchainKHR,
+    pub inner: vk::SwapchainKHR,
     pub fns: khr::swapchain::Device,
     pub device: Arc<Device>,
     pub surface: Arc<Surface>,
@@ -87,6 +87,7 @@ impl Swapchain {
         } else {
             surface_capabilities.current_transform
         };
+        let indices = &[device.universal_queue.family.index];
 
         let swapchain_create_info = vk::SwapchainCreateInfoKHR::default()
             .surface(surface.inner)
@@ -94,12 +95,21 @@ impl Swapchain {
             .image_color_space(properties.format.color_space)
             .image_format(properties.format.format)
             .image_extent(surface_resolution)
-            .image_usage(vk::ImageUsageFlags::STORAGE)
+            // .image_usage(vk::ImageUsageFlags::STORAGE)
             .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
             .pre_transform(pre_transform)
             .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
             .present_mode(present_mode)
             .clipped(true)
+            //         .image_format(surface_format.format)
+            //   .image_color_space(surface_format.color_space)
+            //   .image_extent(extent)
+            //   .image_array_layers(1)
+            .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+            //   .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .queue_family_indices(indices)
+            //   .pre_transform(context.surface_capabilities.current_transform)
+            //   .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
             .image_array_layers(1);
 
         let fns = khr::swapchain::Device::new(&device.instance.inner, &device.raw);
@@ -171,88 +181,3 @@ impl std::fmt::Debug for Swapchain {
             .finish()
     }
 }
-
-/*
-    pub fn extent(&self) -> [u32; 2] {
-        [self.desc.dims.width, self.desc.dims.height]
-    }
-
-    pub fn acquire_next_image(
-        &mut self,
-    ) -> std::result::Result<SwapchainImage, SwapchainAcquireImageErr> {
-        puffin::profile_function!();
-
-        let acquire_semaphore = self.acquire_semaphores[self.next_semaphore];
-        let rendering_finished_semaphore = self.rendering_finished_semaphores[self.next_semaphore];
-
-        let present_index = unsafe {
-            self.fns.acquire_next_image(
-                self.raw,
-                std::u64::MAX,
-                acquire_semaphore,
-                vk::Fence::null(),
-            )
-        }
-        .map(|(val, _)| val as usize);
-
-        match present_index {
-            Ok(present_index) => {
-                assert_eq!(present_index, self.next_semaphore);
-
-                self.next_semaphore = (self.next_semaphore + 1) % self.images.len();
-                Ok(SwapchainImage {
-                    image: self.images[present_index].clone(),
-                    image_index: present_index as u32,
-                    acquire_semaphore,
-                    rendering_finished_semaphore,
-                })
-            }
-            Err(err)
-                if err == vk::Result::ERROR_OUT_OF_DATE_KHR
-                    || err == vk::Result::SUBOPTIMAL_KHR =>
-            {
-                Err(SwapchainAcquireImageErr::RecreateFramebuffer)
-            }
-            err => {
-                panic!("Could not acquire swapchain image: {:?}", err);
-            }
-        }
-    }
-
-    pub fn present_image(&self, image: SwapchainImage) {
-        puffin::profile_function!();
-
-        let present_info = vk::PresentInfoKHR::builder()
-            .wait_semaphores(std::slice::from_ref(&image.rendering_finished_semaphore))
-            .swapchains(std::slice::from_ref(&self.raw))
-            .image_indices(std::slice::from_ref(&image.image_index));
-
-        unsafe {
-            match self
-                .fns
-                .queue_present(self.device.universal_queue.raw, &present_info)
-            {
-                Ok(_) => (),
-                Err(err)
-                    if err == vk::Result::ERROR_OUT_OF_DATE_KHR
-                        || err == vk::Result::SUBOPTIMAL_KHR =>
-                {
-                    // Handled in the next frame
-                }
-                err => {
-                    panic!("Could not present image: {:?}", err);
-                }
-            }
-        }
-    }
-}
-
-impl Drop for Swapchain {
-    fn drop(&mut self) {
-        unsafe {
-            self.fns.destroy_swapchain(self.raw, None);
-        }
-    }
-}
-
-*/

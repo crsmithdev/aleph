@@ -1,4 +1,4 @@
-use crate::gfx::{
+use crate::gfx::vk::{
     debug::vulkan_debug_callback,
     physical_device::{PhysicalDevice, QueueFamily},
 };

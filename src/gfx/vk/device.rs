@@ -1,5 +1,5 @@
 use crate::{
-    gfx::physical_device::{PhysicalDevice, QueueFamily},
+    gfx::vk::physical_device::{PhysicalDevice, QueueFamily},
     prelude::Instance,
 };
 use anyhow::Result;
@@ -25,13 +25,13 @@ pub struct Device {
 
 impl Device {
     pub fn create(
-        instance: Arc<Instance>,
-        physical_device: Arc<PhysicalDevice>,
+        instance: &Arc<Instance>,
+        physical_device: &Arc<PhysicalDevice>,
     ) -> Result<Arc<Self>> {
         let device_extension_names = vec![ash::khr::swapchain::NAME.as_ptr()];
         let priorities = [1.0];
 
-        let queue = physical_device
+        let queue_family = physical_device
             .queue_families
             .iter()
             .filter(|qf| qf.properties.queue_flags.contains(vk::QueueFlags::GRAPHICS))
@@ -40,7 +40,7 @@ impl Device {
             .unwrap();
 
         let queue_info = [vk::DeviceQueueCreateInfo::default()
-            .queue_family_index(queue.index)
+            .queue_family_index(queue_family.index)
             .queue_priorities(&priorities)];
 
         let mut device_features = vk::PhysicalDeviceFeatures2::default();
@@ -69,8 +69,8 @@ impl Device {
         })?;
 
         let queue = Queue {
-            raw: unsafe { device.get_device_queue(queue.index, 0) },
-            family: queue,
+            raw: unsafe { device.get_device_queue(queue_family.index, 0) },
+            family: queue_family,
         };
 
         Ok(Arc::new(Device {
@@ -87,8 +87,8 @@ impl fmt::Debug for Device {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Device")
             .field("inner", &format_args!("{:x}", &self.raw.handle().as_raw()))
-            .field("instance", &self.instance) // &format_args!("{:x}", &self.raw.handle().as_raw()))
-            .field("physical_device", &self.physical_device) // &format_args!("{:x}", &self.raw.handle().as_raw()))
+            .field("instance", &self.instance)
+            .field("physical_device", &self.physical_device)
             .finish_non_exhaustive()
     }
 }
