@@ -1,0 +1,11 @@
+[package]
+name = "aleph-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.86"
+log = "0.4"
+winit = "0.30.5"
+fern = "0.6.2"
+humantime = "2.1.0"

@@ -1,16 +1,12 @@
-use crate::{
-    core::Plugin,
-    gfx::{
-        renderer::Renderer,
-        vk::{
-            device::Device,
-            instance::Instance,
-            physical_device::PhysicalDevice,
-            surface::Surface,
-            swapchain::{Swapchain, SwapchainProperties},
-        },
-    },
+use crate::vk::{
+    device::Device,
+    instance::Instance,
+    physical_device::PhysicalDevice,
+    surface::Surface,
+    swapchain::{Swapchain, SwapchainProperties},
 };
+use aleph_core::plugin::Plugin;
+// use aleph_gfx::renderer::Renderer;
 use anyhow::Result;
 use ash::vk;
 use physical_device::PhysicalDevices;
@@ -23,36 +19,6 @@ pub mod instance;
 pub mod physical_device;
 pub mod surface;
 pub mod swapchain;
-
-pub struct GraphicsPlugin {
-    renderer: OnceCell<Renderer>,
-}
-
-impl GraphicsPlugin {
-    pub fn new() -> Self {
-        Self {
-            renderer: OnceCell::new(),
-        }
-    }
-}
-
-impl Plugin for GraphicsPlugin {
-    fn init(&self, window: Arc<Window>) -> Result<()> {
-        let backend = RenderBackend::new(window.clone())?;
-        let renderer = Renderer::new(backend)?;
-        let _ = self.renderer.set(renderer);
-        Ok(())
-    }
-
-    fn update(&mut self) {
-        let renderer = self.renderer.get_mut().unwrap();
-        renderer.update().unwrap();
-    }
-
-    fn cleanup(&self) {
-        todo!()
-    }
-}
 
 pub struct RenderBackend {
     pub instance: Arc<Instance>,

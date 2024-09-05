@@ -1,20 +1,18 @@
 [package]
-name = "vk-engine"
+name = "aleph"
 version = "0.1.0"
 edition = "2021"
 
+[workspace]
+members = [
+    "crates/aleph-app",
+    "crates/aleph-core",
+    "crates/aleph-gfx",
+    "crates/aleph-hal",
+]
+
 [dependencies]
-anyhow = "1.0.86"
-ash = "0.38.0+1.3.281"
-ash-window = "0.13.0"
-gpu-allocator = "0.27.0"
-lazy_static = "1.5.0"
-log = "0.4"
-raw-window-handle = "0.6.2"
-thiserror = "1.0.63"
-winit = "0.30.5"
-fern = "0.6.2"
-humantime = "2.1.0"
-pollster = "0.3.0"
-vk-shader-macros = "0.2.10"
-nalgebra = "0.33.0"
+aleph-hal = { path = "./crates/aleph-hal" }
+aleph-app = { path = "./crates/aleph-app" }
+aleph-gfx = { path = "./crates/aleph-gfx" }
+aleph-core = { path = "./crates/aleph-core" }

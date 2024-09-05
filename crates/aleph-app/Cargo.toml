@@ -1,0 +1,17 @@
+[package]
+name = "aleph-app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.86"
+log = "0.4"
+raw-window-handle = "0.6.2"
+winit = "0.30.5"
+fern = "0.6.2"
+humantime = "2.1.0"
+pollster = "0.3.0"
+
+aleph-hal = { path = "../aleph-hal" }
+aleph-gfx = { path = "../aleph-gfx" }
+aleph-core = { path = "../aleph-core" }

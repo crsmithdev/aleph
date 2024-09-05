@@ -1,4 +1,4 @@
-use crate::gfx::vk::instance::Instance;
+use crate::vk::instance::Instance;
 use anyhow::Result;
 use ash::{khr, vk, vk::Handle};
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};

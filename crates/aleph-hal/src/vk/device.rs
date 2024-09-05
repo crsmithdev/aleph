@@ -1,6 +1,6 @@
-use crate::{
-    gfx::vk::physical_device::{PhysicalDevice, QueueFamily},
-    prelude::Instance,
+use crate::vk::{
+    instance::Instance,
+    physical_device::{PhysicalDevice, QueueFamily},
 };
 use anyhow::Result;
 use ash::vk::{self, Handle};

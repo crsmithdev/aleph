@@ -1,4 +1,4 @@
-use crate::gfx::vk::RenderBackend;
+use aleph_hal::vk::RenderBackend;
 use anyhow::Result;
 use ash::{
     util::{read_spv, Align},
@@ -377,9 +377,9 @@ impl Renderer {
                 .bind_buffer_memory(vertex_input_buffer, vertex_input_buffer_memory, 0)
                 .unwrap();
             let mut vertex_spv_file =
-                Cursor::new(&include_bytes!("../../shader/triangle/vert.spv")[..]);
+                Cursor::new(&include_bytes!("../../../shader/triangle/vert.spv")[..]);
             let mut frag_spv_file =
-                Cursor::new(&include_bytes!("../../shader/triangle/frag.spv")[..]);
+                Cursor::new(&include_bytes!("../../../shader/triangle/frag.spv")[..]);
 
             let vertex_code =
                 read_spv(&mut vertex_spv_file).expect("Failed to read vertex shader spv file");

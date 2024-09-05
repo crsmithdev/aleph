@@ -1,4 +1,5 @@
-use crate::{core::plugin::Plugin, gfx::vk::GraphicsPlugin, logging};
+use aleph_core::{logging, plugin::Plugin};
+use aleph_gfx::GraphicsPlugin;
 use anyhow::{Ok, Result};
 use std::sync::Arc;
 use winit::{

@@ -1,4 +1,4 @@
-use crate::gfx::vk::{Device, Surface};
+use crate::vk::{Device, Surface};
 use anyhow::Result;
 use ash::{khr, vk};
 use std::sync::Arc;
