@@ -1,6 +1,4 @@
-use anyhow::Result;
-use std::sync::Arc;
-use winit::window::Window;
+use {anyhow::Result, std::sync::Arc, winit::window::Window};
 
 pub trait Plugin {
     fn init(&self, window: Arc<Window>) -> Result<()>;

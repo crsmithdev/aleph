@@ -1,22 +1,24 @@
-use crate::vk::{
-    device::Device,
-    instance::Instance,
-    physical_device::PhysicalDevice,
-    surface::Surface,
-    swapchain::{Swapchain, SwapchainProperties},
-};
-use aleph_core::plugin::Plugin;
 // use aleph_gfx::renderer::Renderer;
-use anyhow::Result;
-use ash::vk;
-use physical_device::PhysicalDevices;
-use std::{cell::OnceCell, sync::Arc};
-use winit::window::Window;
+use {
+    crate::vk::{
+        device::Device,
+        instance::Instance,
+        physical_device::PhysicalDevice,
+        surface::Surface,
+        swapchain::{Swapchain, SwapchainProperties},
+    },
+    anyhow::Result,
+    ash::vk,
+    physical_device::PhysicalDevices,
+    std::sync::Arc,
+    winit::window::Window,
+};
 
 pub mod debug;
 pub mod device;
 pub mod instance;
 pub mod physical_device;
+pub mod queue;
 pub mod surface;
 pub mod swapchain;
 

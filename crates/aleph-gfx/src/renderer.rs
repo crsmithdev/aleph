@@ -1,10 +1,12 @@
-use aleph_hal::vk::RenderBackend;
-use anyhow::Result;
-use ash::{
-    util::{read_spv, Align},
-    vk::{self, Rect2D},
+use {
+    aleph_hal::vk::RenderBackend,
+    anyhow::Result,
+    ash::{
+        util::{read_spv, Align},
+        vk::{self, Rect2D},
+    },
+    std::{ffi, io::Cursor, sync::Arc},
 };
-use std::{ffi, io::Cursor, sync::Arc};
 #[derive(Clone, Debug, Copy)]
 struct Vertex {
     pos: [f32; 4],

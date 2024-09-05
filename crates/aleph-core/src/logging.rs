@@ -1,5 +1,4 @@
-use log::info;
-use std::time::SystemTime;
+use {log::info, std::time::SystemTime};
 
 pub fn setup_logger() -> Result<(), fern::InitError> {
     fern::Dispatch::new()

@@ -1,13 +1,10 @@
-use crate::vk::surface::Surface;
-use anyhow::{anyhow, Result};
-use ash::{vk, vk::Handle};
-use std::{fmt, sync::Arc};
-
-#[derive(Copy, Clone)]
-pub struct QueueFamily {
-    pub index: u32,
-    pub properties: vk::QueueFamilyProperties,
-}
+use {
+    super::queue::QueueFamily,
+    crate::vk::surface::Surface,
+    anyhow::{anyhow, Result},
+    ash::{vk, vk::Handle},
+    std::{fmt, sync::Arc},
+};
 
 pub struct PhysicalDevice {
     pub inner: vk::PhysicalDevice,

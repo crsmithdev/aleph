@@ -1,5 +1,7 @@
-use ash::vk;
-use std::ffi::{c_void, CStr};
+use {
+    ash::vk,
+    std::ffi::{c_void, CStr},
+};
 pub unsafe extern "system" fn vulkan_debug_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
     _message_type: vk::DebugUtilsMessageTypeFlagsEXT,

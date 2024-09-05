@@ -1,9 +1,11 @@
-use aleph_core::plugin::Plugin;
-use aleph_hal::vk::RenderBackend;
-use anyhow::Result;
-use renderer::Renderer;
-use std::{cell::OnceCell, sync::Arc};
-use winit::window::Window;
+use {
+    aleph_core::plugin::Plugin,
+    aleph_hal::vk::RenderBackend,
+    anyhow::Result,
+    renderer::Renderer,
+    std::{cell::OnceCell, sync::Arc},
+    winit::window::Window,
+};
 pub mod renderer;
 
 pub struct GraphicsPlugin {

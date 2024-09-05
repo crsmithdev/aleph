@@ -1,18 +1,13 @@
-use crate::vk::{
-    instance::Instance,
-    physical_device::{PhysicalDevice, QueueFamily},
+use {
+    crate::vk::{instance::Instance, physical_device::PhysicalDevice, queue::Queue},
+    anyhow::Result,
+    ash::vk::{self, Handle},
+    gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc},
+    std::{
+        fmt,
+        sync::{Arc, Mutex},
+    },
 };
-use anyhow::Result;
-use ash::vk::{self, Handle};
-use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
-use std::{
-    fmt,
-    sync::{Arc, Mutex},
-};
-pub struct Queue {
-    pub raw: vk::Queue,
-    pub family: QueueFamily,
-}
 
 #[allow(dead_code)]
 pub struct Device {

@@ -1,11 +1,14 @@
-use crate::vk::{
-    debug::vulkan_debug_callback,
-    physical_device::{PhysicalDevice, QueueFamily},
+use {
+    crate::vk::{
+        debug::vulkan_debug_callback,
+        physical_device::PhysicalDevice,
+        queue::QueueFamily,
+    },
+    anyhow::Result,
+    ash::{ext, ext::debug_utils, khr, vk},
+    std::{ffi, fmt, sync::Arc},
+    winit::window::Window,
 };
-use anyhow::Result;
-use ash::{ext, ext::debug_utils, khr, vk};
-use std::{ffi, fmt, sync::Arc};
-use winit::window::Window;
 
 pub struct Instance {
     pub inner: ash::Instance,

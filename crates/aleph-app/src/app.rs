@@ -1,11 +1,13 @@
-use aleph_core::{logging, plugin::Plugin};
-use aleph_gfx::GraphicsPlugin;
-use anyhow::{Ok, Result};
-use std::sync::Arc;
-use winit::{
-    application::ApplicationHandler,
-    event_loop::EventLoop,
-    window::{Window, WindowAttributes},
+use {
+    aleph_core::{logging, plugin::Plugin},
+    aleph_gfx::GraphicsPlugin,
+    anyhow::{Ok, Result},
+    std::sync::Arc,
+    winit::{
+        application::ApplicationHandler,
+        event_loop::EventLoop,
+        window::{Window, WindowAttributes},
+    },
 };
 pub struct App {}
 

@@ -1,9 +1,14 @@
-use crate::vk::instance::Instance;
-use anyhow::Result;
-use ash::{khr, vk, vk::Handle};
-use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-use std::{fmt, sync::Arc};
-use winit::window::Window;
+use {
+    crate::vk::instance::Instance,
+    anyhow::Result,
+    ash::{
+        khr,
+        vk::{self, Handle},
+    },
+    raw_window_handle::{HasDisplayHandle, HasWindowHandle},
+    std::{fmt, sync::Arc},
+    winit::window::Window,
+};
 pub struct Surface {
     pub inner: vk::SurfaceKHR,
     pub fns: khr::surface::Instance,

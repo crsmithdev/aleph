@@ -1,8 +1,10 @@
-use crate::vk::{Device, Surface};
-use anyhow::Result;
-use ash::{khr, vk};
-use std::sync::Arc;
-use vk::Handle;
+use {
+    crate::vk::{Device, Surface},
+    anyhow::Result,
+    ash::{khr, vk},
+    std::sync::Arc,
+    vk::Handle,
+};
 
 pub struct SwapchainProperties {
     pub format: vk::SurfaceFormatKHR,
