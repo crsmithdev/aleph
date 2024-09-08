@@ -89,7 +89,7 @@ impl Swapchain {
         } else {
             surface_capabilities.current_transform
         };
-        let indices = &[device.universal_queue.family.index];
+        let indices = &[device.queue.family.index];
 
         let swapchain_create_info = vk::SwapchainCreateInfoKHR::default()
             .surface(surface.inner)
@@ -114,7 +114,7 @@ impl Swapchain {
             //   .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
             .image_array_layers(1);
 
-        let fns = khr::swapchain::Device::new(&device.instance.inner, &device.raw);
+        let fns = khr::swapchain::Device::new(&device.instance.inner, &device.inner);
         let swapchain = unsafe { fns.create_swapchain(&swapchain_create_info, None) }.unwrap();
 
         let images = unsafe { fns.get_swapchain_images(swapchain)? };
@@ -134,7 +134,7 @@ impl Swapchain {
                     .subresource_range(subresource_range);
                 unsafe {
                     device
-                        .raw
+                        .inner
                         .create_image_view(&info, None)
                         .expect("Failed to create imageview")
                 }
@@ -145,7 +145,7 @@ impl Swapchain {
             .map(|_| {
                 unsafe {
                     device
-                        .raw
+                        .inner
                         .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)
                 }
                 .unwrap()
@@ -156,7 +156,7 @@ impl Swapchain {
             .map(|_| {
                 unsafe {
                     device
-                        .raw
+                        .inner
                         .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)
                 }
                 .unwrap()

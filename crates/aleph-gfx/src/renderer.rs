@@ -1,5 +1,5 @@
 use {
-    aleph_hal::vk::RenderBackend,
+    aleph_hal::vk::{command_buffer::CommandBuffer, device::Texture, RenderBackend},
     anyhow::Result,
     ash::{
         util::{read_spv, Align},
@@ -28,16 +28,11 @@ pub struct Renderer {
     pub present_images: Vec<vk::Image>,
     pub present_image_views: Vec<vk::ImageView>,
 
-    pub pool: vk::CommandPool,
-    pub draw_command_buffer: vk::CommandBuffer,
-    pub setup_command_buffer: vk::CommandBuffer,
+    pub command_buffer: CommandBuffer,
+    pub draw_command_buffer: CommandBuffer,
     pub draw_commands_reuse_fence: vk::Fence,
-    pub setup_commands_reuse_fence: vk::Fence,
 
-    pub depth_image: vk::Image,
-    pub depth_image_view: vk::ImageView,
-    pub depth_image_memory: vk::DeviceMemory,
-
+    pub depth_image: Texture,
     pub present_complete_semaphore: vk::Semaphore,
     pub rendering_complete_semaphore: vk::Semaphore,
     pub renderpass: vk::RenderPass,
@@ -52,33 +47,17 @@ pub struct Renderer {
 
 impl Renderer {
     pub fn new(backend: Arc<RenderBackend>) -> Result<Self> {
-        let device = &backend.device.raw;
-        let queue_family_index = backend.device.universal_queue.family.index;
+        let device = &backend.device.inner;
         let surface_format = backend.swapchain.properties.format;
         let swapchain_loader = &backend.swapchain.fns;
         let instance = &backend.instance.inner;
         let pdevice = backend.physical_device.inner;
         let swapchain = backend.swapchain.inner;
         let surface_resolution = backend.swapchain.properties.dims;
-        let present_queue = backend.device.universal_queue.raw;
 
         unsafe {
-            let pool_create_info = vk::CommandPoolCreateInfo::default()
-                .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
-                .queue_family_index(queue_family_index);
-
-            let pool = device.create_command_pool(&pool_create_info, None).unwrap();
-
-            let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::default()
-                .command_buffer_count(2)
-                .command_pool(pool)
-                .level(vk::CommandBufferLevel::PRIMARY);
-
-            let command_buffers = device
-                .allocate_command_buffers(&command_buffer_allocate_info)
-                .unwrap();
-            let setup_command_buffer = command_buffers[0];
-            let draw_command_buffer = command_buffers[1];
+            let draw_command_buffer = backend.device.create_command_buffer();
+            let command_buffer = backend.device.create_command_buffer();
 
             let present_images = swapchain_loader.get_swapchain_images(swapchain).unwrap();
             let present_image_views: Vec<vk::ImageView> = present_images
@@ -116,26 +95,7 @@ impl Renderer {
                 .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
-            let depth_image = device.create_image(&depth_image_create_info, None).unwrap();
-            let depth_image_memory_req = device.get_image_memory_requirements(depth_image);
-            let depth_image_memory_index = find_memorytype_index(
-                &depth_image_memory_req,
-                &device_memory_properties,
-                vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            )
-            .expect("Unable to find suitable memory index for depth image.");
-
-            let depth_image_allocate_info = vk::MemoryAllocateInfo::default()
-                .allocation_size(depth_image_memory_req.size)
-                .memory_type_index(depth_image_memory_index);
-
-            let depth_image_memory = device
-                .allocate_memory(&depth_image_allocate_info, None)
-                .unwrap();
-
-            device
-                .bind_image_memory(depth_image, depth_image_memory, 0)
-                .expect("Unable to bind depth image memory");
+            let depth_image = backend.device.create_texture(&depth_image_create_info);
 
             let fence_create_info =
                 vk::FenceCreateInfo::default().flags(vk::FenceCreateFlags::SIGNALED);
@@ -143,61 +103,6 @@ impl Renderer {
             let draw_commands_reuse_fence = device
                 .create_fence(&fence_create_info, None)
                 .expect("Create fence failed.");
-            let setup_commands_reuse_fence = device
-                .create_fence(&fence_create_info, None)
-                .expect("Create fence failed.");
-
-            record_submit_commandbuffer(
-                &device,
-                setup_command_buffer,
-                setup_commands_reuse_fence,
-                present_queue,
-                &[],
-                &[],
-                &[],
-                |device, setup_command_buffer| {
-                    let layout_transition_barriers = vk::ImageMemoryBarrier::default()
-                        .image(depth_image)
-                        .dst_access_mask(
-                            vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
-                                | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
-                        )
-                        .new_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-                        .old_layout(vk::ImageLayout::UNDEFINED)
-                        .subresource_range(
-                            vk::ImageSubresourceRange::default()
-                                .aspect_mask(vk::ImageAspectFlags::DEPTH)
-                                .layer_count(1)
-                                .level_count(1),
-                        );
-
-                    device.cmd_pipeline_barrier(
-                        setup_command_buffer,
-                        vk::PipelineStageFlags::BOTTOM_OF_PIPE,
-                        vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
-                        vk::DependencyFlags::empty(),
-                        &[],
-                        &[],
-                        &[layout_transition_barriers],
-                    );
-                },
-            );
-
-            let depth_image_view_info = vk::ImageViewCreateInfo::default()
-                .subresource_range(
-                    vk::ImageSubresourceRange::default()
-                        .aspect_mask(vk::ImageAspectFlags::DEPTH)
-                        .level_count(1)
-                        .layer_count(1),
-                )
-                .image(depth_image)
-                .format(depth_image_create_info.format)
-                .view_type(vk::ImageViewType::TYPE_2D);
-
-            let depth_image_view = device
-                .create_image_view(&depth_image_view_info, None)
-                .unwrap();
-
             let semaphore_create_info = vk::SemaphoreCreateInfo::default();
 
             let present_complete_semaphore = device
@@ -259,7 +164,7 @@ impl Renderer {
             let framebuffers: Vec<vk::Framebuffer> = present_image_views
                 .iter()
                 .map(|&present_image_view| {
-                    let framebuffer_attachments = [present_image_view, depth_image_view];
+                    let framebuffer_attachments = [present_image_view, depth_image.view];
                     let frame_buffer_create_info = vk::FramebufferCreateInfo::default()
                         .render_pass(renderpass)
                         .attachments(&framebuffer_attachments)
@@ -529,24 +434,21 @@ impl Renderer {
             log::info!("here");
             Ok(Renderer {
                 backend,
-                pool,
+                // pool,
                 renderpass,
                 draw_command_buffer,
                 framebuffers,
-                setup_commands_reuse_fence,
                 draw_commands_reuse_fence,
-                setup_command_buffer,
                 present_images,
                 depth_image,
-                depth_image_view,
                 present_image_views,
-                depth_image_memory,
                 present_complete_semaphore,
                 rendering_complete_semaphore,
                 graphic_pipeline,
                 viewports,
                 scissors,
                 vertex_input_buffer,
+                command_buffer,
                 index_buffer,
                 index_buffer_data,
             })
@@ -555,11 +457,11 @@ impl Renderer {
 
     pub fn update(&mut self) -> Result<()> {
         unsafe {
-            let device = &self.backend.device.raw;
+            let device = &self.backend.device.inner;
             let swapchain_loader = &self.backend.swapchain.fns;
             let swapchain = self.backend.swapchain.inner;
             let surface_resolution = self.backend.swapchain.properties.dims;
-            let present_queue = self.backend.device.universal_queue.raw;
+            let present_queue = self.backend.device.queue.raw;
 
             let (present_index, _) = swapchain_loader
                 .acquire_next_image(
@@ -591,7 +493,7 @@ impl Renderer {
 
             record_submit_commandbuffer(
                 &device,
-                self.draw_command_buffer,
+                self.draw_command_buffer.inner,
                 self.draw_commands_reuse_fence,
                 present_queue,
                 &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT],
