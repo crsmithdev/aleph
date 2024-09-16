@@ -177,7 +177,7 @@ impl Renderer {
                         .unwrap()
                 })
                 .collect();
-
+            backend.device.create_buffer();
             let index_buffer_data = [0u32, 1, 2];
             let index_buffer_info = vk::BufferCreateInfo::default()
                 .size(size_of_val(&index_buffer_data) as u64)
@@ -283,6 +283,9 @@ impl Renderer {
             device
                 .bind_buffer_memory(vertex_input_buffer, vertex_input_buffer_memory, 0)
                 .unwrap();
+
+            // let _ = backend.device.create_buffer();
+
             let mut vertex_spv_file =
                 Cursor::new(&include_bytes!("../../../shader/triangle/vert.spv")[..]);
             let mut frag_spv_file =
@@ -431,10 +434,8 @@ impl Renderer {
                 .expect("Unable to create graphics pipeline");
 
             let graphic_pipeline = graphics_pipelines[0];
-            log::info!("here");
             Ok(Renderer {
                 backend,
-                // pool,
                 renderpass,
                 draw_command_buffer,
                 framebuffers,
@@ -461,7 +462,7 @@ impl Renderer {
             let swapchain_loader = &self.backend.swapchain.fns;
             let swapchain = self.backend.swapchain.inner;
             let surface_resolution = self.backend.swapchain.properties.dims;
-            let present_queue = self.backend.device.queue.raw;
+            let present_queue = self.backend.device.queue.inner;
 
             let (present_index, _) = swapchain_loader
                 .acquire_next_image(
@@ -575,7 +576,6 @@ pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
     signal_semaphores: &[vk::Semaphore],
     f: F,
 ) {
-    // let device = device.raw;
     unsafe {
         device
             .wait_for_fences(&[command_buffer_reuse_fence], true, u64::MAX)

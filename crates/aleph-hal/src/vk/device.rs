@@ -1,5 +1,6 @@
 use {
     crate::vk::{
+        // buffer::{Buffer, BufferDesc, BufferUsage},
         command_buffer::CommandBuffer,
         instance::Instance,
         physical_device::PhysicalDevice,
@@ -7,10 +8,12 @@ use {
     },
     anyhow::Result,
     ash::vk::{self, Handle},
-    gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc},
+    gpu_allocator::{
+        vulkan::{AllocationCreateDesc, AllocationScheme, Allocator, AllocatorCreateDesc},
+        MemoryLocation,
+    },
     std::{
         fmt,
-        process::Command,
         sync::{Arc, Mutex},
     },
 };
@@ -73,13 +76,13 @@ impl Device {
             instance: instance.inner.clone(),
             device: device.clone(),
             physical_device: physical_device.inner,
-            buffer_device_address: true,
+            buffer_device_address: false,
             debug_settings: Default::default(),
             allocation_sizes: Default::default(),
         })?;
 
         let queue = Queue {
-            raw: unsafe { device.get_device_queue(queue_family.index, 0) },
+            inner: unsafe { device.get_device_queue(queue_family.index, 0) },
             family: queue_family,
         };
 
@@ -147,7 +150,7 @@ impl Device {
             &self.inner,
             self.command_buffer.inner,
             self.command_buffer_fence,
-            self.queue.raw,
+            self.queue.inner,
             &[],
             &[],
             &[],
@@ -192,7 +195,7 @@ impl Device {
             .format(info.format)
             .view_type(vk::ImageViewType::TYPE_2D);
 
-        let view = self.create_image_view(image, depth_image_view_info);
+        let view = self.create_image_view(depth_image_view_info);
 
         Texture {
             image,
@@ -201,7 +204,7 @@ impl Device {
         }
     }
 
-    fn create_image_view(&self, image: vk::Image, info: vk::ImageViewCreateInfo) -> vk::ImageView {
+    fn create_image_view(&self, info: vk::ImageViewCreateInfo) -> vk::ImageView {
         unsafe { self.inner.create_image_view(&info, None).unwrap() }
     }
 
@@ -240,6 +243,125 @@ impl Device {
             inner: command_buffers[0],
         }
     }
+
+    pub fn create_buffer(&self) {
+        let mut flags = vk::BufferUsageFlags::INDEX_BUFFER;
+
+        // if initial_data.is_some() {
+        flags |= vk::BufferUsageFlags::TRANSFER_DST;
+        // }
+        let buffer_info = vk::BufferCreateInfo::default()
+            .size(512)
+            .usage(flags)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE);
+        let buffer = unsafe { self.inner.create_buffer(&buffer_info, None) }.unwrap();
+        let requirements = unsafe { self.inner.get_buffer_memory_requirements(buffer) };
+        let location = MemoryLocation::CpuToGpu;
+
+        let allocator = &mut self.allocator.lock().unwrap();
+        let allocation = allocator
+            .allocate(&AllocationCreateDesc {
+                requirements,
+                location,
+                linear: true,
+                allocation_scheme: AllocationScheme::GpuAllocatorManaged,
+                name: "Test allocation (Cpu to Gpu)",
+            })
+            .unwrap();
+
+        let _ = unsafe {
+            self.inner
+                .bind_buffer_memory(buffer, allocation.memory(), allocation.offset())
+                .unwrap()
+        };
+        let initial_data = Some([0u8, 1, 2]);
+        if let Some(initial_data) = initial_data {
+            // let scratch_desc = BufferDesc {
+            //     usage: BufferUsage::TransferSource,
+            //     memory_location: MemoryLocation::CpuToGpu,
+            //     linear: true,
+            // };
+            //BufferDesc::new_cpu_to_gpu(desc.size, vk::BufferUsageFlags::TRANSFER_SRC);
+            let scratch_buffer_info = vk::BufferCreateInfo::default()
+                .size(512)
+                .usage(vk::BufferUsageFlags::TRANSFER_SRC)
+                .sharing_mode(vk::SharingMode::EXCLUSIVE);
+            let scratch_buffer =
+                unsafe { self.inner.create_buffer(&scratch_buffer_info, None) }.unwrap();
+            let scratch_requirements =
+                unsafe { self.inner.get_buffer_memory_requirements(scratch_buffer) };
+            let scratch_location = MemoryLocation::CpuToGpu;
+
+            let mut scratch_allocation = allocator
+                .allocate(&AllocationCreateDesc {
+                    requirements: scratch_requirements,
+                    location: scratch_location,
+                    linear: true,
+                    allocation_scheme: AllocationScheme::GpuAllocatorManaged,
+                    name: "Test allocation (Cpu to Gpu)",
+                })
+                .unwrap();
+
+            let _ = unsafe {
+                self.inner
+                    .bind_buffer_memory(
+                        scratch_buffer,
+                        scratch_allocation.memory(),
+                        scratch_allocation.offset(),
+                    )
+                    .unwrap()
+            };
+
+            // let mut scratch_buffer = Self::create_buffer_impl(
+            //     &self.raw,
+            //     &mut self.global_allocator.lock(),
+            //     scratch_desc,
+            //     &format!("Initial data for {:?}", name),
+            // )?;
+
+            scratch_allocation.mapped_slice_mut().unwrap()[0..initial_data.len()]
+                .copy_from_slice(&initial_data);
+
+            record_submit_commandbuffer(
+                &self.inner,
+                self.command_buffer.inner,
+                self.command_buffer_fence,
+                self.queue.inner,
+                &[],
+                &[],
+                &[],
+                |_, cb| unsafe {
+                    self.inner.cmd_copy_buffer(
+                        cb,
+                        scratch_buffer,
+                        buffer,
+                        &[ash::vk::BufferCopy::default()
+                            .dst_offset(0)
+                            .src_offset(0)
+                            .size(scratch_buffer_info.size as u64)],
+                    );
+                },
+            );
+        }
+    }
+
+    // pub fn create_semaphore(
+    //     &self,
+    //     flags: Option<vk::SemaphoreCreateFlags>,
+    // ) -> Result<vk::Semaphore, vk::Result> {
+    //     let info = vk::SemaphoreCreateInfo::default()
+    //         .flags(flags.unwrap_or(vk::SemaphoreCreateFlags::empty()));
+    //     unsafe { self.device.raw.create_semaphore(&info, None) }
+    // }
+
+    // pub fn create_fence(
+    //     &self,
+    //     flags: Option<vk::FenceCreateFlags>,
+    // ) -> Result<vk::Fence, vk::Result> {
+    //     let info =
+    //         vk::FenceCreateInfo::default().flags(flags.unwrap_or(vk::FenceCreateFlags::empty()));
+    //     unsafe { self.device.raw.create_fence(&info, None) }
+    // }
 }
 
 impl fmt::Debug for Device {
@@ -264,7 +386,6 @@ pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
     signal_semaphores: &[vk::Semaphore],
     f: F,
 ) {
-    // let device = device.raw;
     unsafe {
         device
             .wait_for_fences(&[command_buffer_reuse_fence], true, u64::MAX)

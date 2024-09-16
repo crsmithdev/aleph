@@ -5,6 +5,7 @@ use {
     std::sync::Arc,
     winit::{
         application::ApplicationHandler,
+        dpi::{PhysicalSize, Size},
         event_loop::EventLoop,
         window::{Window, WindowAttributes},
     },
@@ -66,11 +67,12 @@ impl AppState {
 impl ApplicationHandler for AppState {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         log::info!("Resumed");
-        let window = Arc::new(
-            event_loop
-                .create_window(WindowAttributes::default())
-                .unwrap(),
-        );
+        let size = Size::Physical(PhysicalSize {
+            width: 640u32,
+            height: 480u32,
+        });
+        let window_attributes = Window::default_attributes().with_inner_size(size);
+        let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
         log::info!("Created window: {0:?}", window);
 

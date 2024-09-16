@@ -1,18 +1,16 @@
 use {ash::vk, gpu_allocator::MemoryLocation};
 
-struct BufferDesc {
-    usage: vk::BufferUsageFlags,
-    index_type: vk::IndexType,
-    memory_location: MemoryLocation,
-    linear: bool,
-    sharing_mode: vk::SharingMode,
+pub struct BufferDesc {
+    pub usage: BufferUsage,
+    pub memory_location: MemoryLocation,
+    pub linear: bool,
 }
 
-struct Buffer {
+pub struct Buffer {
     desc: BufferDesc,
 }
 
-pub enum BufferType {
+pub enum BufferUsage {
     TransferSource,
     TransferDestination,
     UniformTexel,
@@ -24,18 +22,18 @@ pub enum BufferType {
     Indirect,
 }
 
-impl Into<vk::BufferUsageFlags> for BufferType {
+impl Into<vk::BufferUsageFlags> for BufferUsage {
     fn into(self) -> vk::BufferUsageFlags {
         match self {
-            BufferType::TransferSource => vk::BufferUsageFlags::TRANSFER_SRC,
-            BufferType::TransferDestination => vk::BufferUsageFlags::TRANSFER_DST,
-            BufferType::UniformTexel => vk::BufferUsageFlags::UNIFORM_TEXEL_BUFFER,
-            BufferType::StorageTexel => vk::BufferUsageFlags::STORAGE_TEXEL_BUFFER,
-            BufferType::Storage => vk::BufferUsageFlags::STORAGE_BUFFER,
-            BufferType::Uniform => vk::BufferUsageFlags::UNIFORM_BUFFER,
-            BufferType::Index => vk::BufferUsageFlags::INDEX_BUFFER,
-            BufferType::Vertex => vk::BufferUsageFlags::VERTEX_BUFFER,
-            BufferType::Indirect => vk::BufferUsageFlags::INDIRECT_BUFFER,
+            BufferUsage::TransferSource => vk::BufferUsageFlags::TRANSFER_SRC,
+            BufferUsage::TransferDestination => vk::BufferUsageFlags::TRANSFER_DST,
+            BufferUsage::UniformTexel => vk::BufferUsageFlags::UNIFORM_TEXEL_BUFFER,
+            BufferUsage::StorageTexel => vk::BufferUsageFlags::STORAGE_TEXEL_BUFFER,
+            BufferUsage::Storage => vk::BufferUsageFlags::STORAGE_BUFFER,
+            BufferUsage::Uniform => vk::BufferUsageFlags::UNIFORM_BUFFER,
+            BufferUsage::Index => vk::BufferUsageFlags::INDEX_BUFFER,
+            BufferUsage::Vertex => vk::BufferUsageFlags::VERTEX_BUFFER,
+            BufferUsage::Indirect => vk::BufferUsageFlags::INDIRECT_BUFFER,
         }
     }
 }

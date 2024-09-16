@@ -52,8 +52,6 @@ impl Swapchain {
         if surface_capabilities.max_image_count != 0 {
             desired_image_count = desired_image_count.min(surface_capabilities.max_image_count);
         }
-
-        //dbg!(&surface_capabilities);
         let surface_resolution = match surface_capabilities.current_extent.width {
             std::u32::MAX => properties.dims,
             _ => surface_capabilities.current_extent,
@@ -97,21 +95,13 @@ impl Swapchain {
             .image_color_space(properties.format.color_space)
             .image_format(properties.format.format)
             .image_extent(surface_resolution)
-            // .image_usage(vk::ImageUsageFlags::STORAGE)
             .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
             .pre_transform(pre_transform)
             .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
             .present_mode(present_mode)
             .clipped(true)
-            //         .image_format(surface_format.format)
-            //   .image_color_space(surface_format.color_space)
-            //   .image_extent(extent)
-            //   .image_array_layers(1)
             .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
-            //   .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
             .queue_family_indices(indices)
-            //   .pre_transform(context.surface_capabilities.current_transform)
-            //   .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
             .image_array_layers(1);
 
         let fns = khr::swapchain::Device::new(&device.instance.inner, &device.inner);

@@ -1,7 +1,7 @@
 use ash::vk;
 
 pub struct Queue {
-    pub raw: vk::Queue,
+    pub inner: vk::Queue,
     pub family: QueueFamily,
 }
 
