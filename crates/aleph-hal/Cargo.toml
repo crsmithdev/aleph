@@ -16,5 +16,6 @@ humantime = "2.1.0"
 pollster = "0.3.0"
 vk-shader-macros = "0.2.10"
 nalgebra = "0.33.0"
+byteorder = "1"
 
 aleph-core = { path = "../aleph-core" }

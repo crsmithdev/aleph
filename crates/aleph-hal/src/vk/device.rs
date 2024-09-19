@@ -1,6 +1,6 @@
 use {
     crate::vk::{
-        // buffer::{Buffer, BufferDesc, BufferUsage},
+        buffer::{Buffer, BufferDesc},
         command_buffer::CommandBuffer,
         instance::Instance,
         physical_device::PhysicalDevice,
@@ -9,14 +9,29 @@ use {
     anyhow::Result,
     ash::vk::{self, Handle},
     gpu_allocator::{
-        vulkan::{AllocationCreateDesc, AllocationScheme, Allocator, AllocatorCreateDesc},
+        vulkan::{
+            Allocation,
+            AllocationCreateDesc,
+            AllocationScheme,
+            Allocator,
+            AllocatorCreateDesc,
+        },
         MemoryLocation,
     },
     std::{
         fmt,
+        ptr,
         sync::{Arc, Mutex},
     },
 };
+
+pub struct Semaphore {
+    pub inner: vk::Semaphore,
+}
+
+pub struct Fence {
+    pub inner: vk::Fence,
+}
 
 pub struct Texture {
     pub image: vk::Image,
@@ -119,6 +134,12 @@ impl Device {
         }))
     }
 
+    pub fn create_fence(&self) -> Result<Fence> {
+        let info = vk::FenceCreateInfo::default().flags(vk::FenceCreateFlags::SIGNALED);
+        let fence: vk::Fence = unsafe { self.inner.create_fence(&info, None) }?;
+        Ok(Fence { inner: fence })
+    }
+
     pub fn create_texture(&self, info: &vk::ImageCreateInfo) -> Texture {
         let image = unsafe { self.inner.create_image(&info, None).unwrap() };
         let memory_properties = &self.physical_device.memory_properties;
@@ -208,6 +229,12 @@ impl Device {
         unsafe { self.inner.create_image_view(&info, None).unwrap() }
     }
 
+    pub fn create_semaphore(&self) -> Result<Semaphore> {
+        let info = vk::SemaphoreCreateInfo::default();
+        let semaphore = unsafe { self.inner.create_semaphore(&info, None) }?;
+        Ok(Semaphore { inner: semaphore })
+    }
+
     fn find_memorytype_index(
         &self,
         memory_req: &vk::MemoryRequirements,
@@ -243,125 +270,40 @@ impl Device {
             inner: command_buffers[0],
         }
     }
+    pub fn write<T: Sized>(&self, allocation: &Allocation, data: &[T]) -> Result<()> {
+        // let align = Align::new(allocation.mapped_ptr(), allocation.memory_properties().
+        // align_of::<T>() as u64;
 
-    pub fn create_buffer(&self) {
-        let mut flags = vk::BufferUsageFlags::INDEX_BUFFER;
+        // let len = data.len();
+        // let size = std::mem::size_of::<T>();
+        let buffer_ptr = allocation.mapped_ptr().unwrap().cast().as_ptr();
+        unsafe { ptr::copy_nonoverlapping(data.as_ptr(), buffer_ptr, data.len()) }
+        // self.size = data.len();
 
-        // if initial_data.is_some() {
-        flags |= vk::BufferUsageFlags::TRANSFER_DST;
-        // }
-        let buffer_info = vk::BufferCreateInfo::default()
-            .size(512)
-            .usage(flags)
-            .sharing_mode(vk::SharingMode::EXCLUSIVE);
-        let buffer = unsafe { self.inner.create_buffer(&buffer_info, None) }.unwrap();
-        let requirements = unsafe { self.inner.get_buffer_memory_requirements(buffer) };
-        let location = MemoryLocation::CpuToGpu;
-
-        let allocator = &mut self.allocator.lock().unwrap();
-        let allocation = allocator
-            .allocate(&AllocationCreateDesc {
-                requirements,
-                location,
-                linear: true,
-                allocation_scheme: AllocationScheme::GpuAllocatorManaged,
-                name: "Test allocation (Cpu to Gpu)",
-            })
-            .unwrap();
-
-        let _ = unsafe {
-            self.inner
-                .bind_buffer_memory(buffer, allocation.memory(), allocation.offset())
-                .unwrap()
-        };
-        let initial_data = Some([0u8, 1, 2]);
-        if let Some(initial_data) = initial_data {
-            // let scratch_desc = BufferDesc {
-            //     usage: BufferUsage::TransferSource,
-            //     memory_location: MemoryLocation::CpuToGpu,
-            //     linear: true,
-            // };
-            //BufferDesc::new_cpu_to_gpu(desc.size, vk::BufferUsageFlags::TRANSFER_SRC);
-            let scratch_buffer_info = vk::BufferCreateInfo::default()
-                .size(512)
-                .usage(vk::BufferUsageFlags::TRANSFER_SRC)
-                .sharing_mode(vk::SharingMode::EXCLUSIVE);
-            let scratch_buffer =
-                unsafe { self.inner.create_buffer(&scratch_buffer_info, None) }.unwrap();
-            let scratch_requirements =
-                unsafe { self.inner.get_buffer_memory_requirements(scratch_buffer) };
-            let scratch_location = MemoryLocation::CpuToGpu;
-
-            let mut scratch_allocation = allocator
-                .allocate(&AllocationCreateDesc {
-                    requirements: scratch_requirements,
-                    location: scratch_location,
-                    linear: true,
-                    allocation_scheme: AllocationScheme::GpuAllocatorManaged,
-                    name: "Test allocation (Cpu to Gpu)",
-                })
-                .unwrap();
-
-            let _ = unsafe {
-                self.inner
-                    .bind_buffer_memory(
-                        scratch_buffer,
-                        scratch_allocation.memory(),
-                        scratch_allocation.offset(),
-                    )
-                    .unwrap()
-            };
-
-            // let mut scratch_buffer = Self::create_buffer_impl(
-            //     &self.raw,
-            //     &mut self.global_allocator.lock(),
-            //     scratch_desc,
-            //     &format!("Initial data for {:?}", name),
-            // )?;
-
-            scratch_allocation.mapped_slice_mut().unwrap()[0..initial_data.len()]
-                .copy_from_slice(&initial_data);
-
-            record_submit_commandbuffer(
-                &self.inner,
-                self.command_buffer.inner,
-                self.command_buffer_fence,
-                self.queue.inner,
-                &[],
-                &[],
-                &[],
-                |_, cb| unsafe {
-                    self.inner.cmd_copy_buffer(
-                        cb,
-                        scratch_buffer,
-                        buffer,
-                        &[ash::vk::BufferCopy::default()
-                            .dst_offset(0)
-                            .src_offset(0)
-                            .size(scratch_buffer_info.size as u64)],
-                    );
-                },
-            );
-        }
+        Ok(())
     }
+    pub fn create_buffer<T>(&self, desc: BufferDesc, initial_data: Option<&[T]>) -> Result<Buffer> {
+        let mut flags: vk::BufferUsageFlags = desc.usage.into();
+        if initial_data.is_some() {
+            flags |= vk::BufferUsageFlags::TRANSFER_DST;
+        }
+        let initial_data = initial_data.unwrap();
+        let size = initial_data.len() * size_of::<T>();
+        let (buffer, allocation) = allocate(
+            &self.allocator,
+            &self.inner,
+            size,
+            flags,
+            MemoryLocation::CpuToGpu,
+        )
+        .unwrap();
 
-    // pub fn create_semaphore(
-    //     &self,
-    //     flags: Option<vk::SemaphoreCreateFlags>,
-    // ) -> Result<vk::Semaphore, vk::Result> {
-    //     let info = vk::SemaphoreCreateInfo::default()
-    //         .flags(flags.unwrap_or(vk::SemaphoreCreateFlags::empty()));
-    //     unsafe { self.device.raw.create_semaphore(&info, None) }
-    // }
-
-    // pub fn create_fence(
-    //     &self,
-    //     flags: Option<vk::FenceCreateFlags>,
-    // ) -> Result<vk::Fence, vk::Result> {
-    //     let info =
-    //         vk::FenceCreateInfo::default().flags(flags.unwrap_or(vk::FenceCreateFlags::empty()));
-    //     unsafe { self.device.raw.create_fence(&info, None) }
-    // }
+        self.write(&allocation, initial_data)?;
+        Ok(Buffer {
+            inner: buffer,
+            allocation,
+        })
+    }
 }
 
 impl fmt::Debug for Device {
@@ -425,4 +367,31 @@ pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
             .queue_submit(submit_queue, &[submit_info], command_buffer_reuse_fence)
             .expect("queue submit failed.");
     }
+}
+
+fn allocate(
+    allocator: &Arc<Mutex<Allocator>>,
+    device: &ash::Device,
+    bytes: usize,
+    flags: vk::BufferUsageFlags,
+    location: MemoryLocation,
+) -> Result<(vk::Buffer, Allocation)> {
+    let mut allocator = allocator.lock().unwrap();
+    let info = vk::BufferCreateInfo::default()
+        .size(bytes as u64)
+        .usage(flags);
+    let buffer = unsafe { device.create_buffer(&info, None) }?;
+    let requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
+
+    let allocation = allocator.allocate(&AllocationCreateDesc {
+        name: "Buffer",
+        requirements,
+        location,
+        linear: true,
+        allocation_scheme: AllocationScheme::GpuAllocatorManaged,
+    })?;
+
+    unsafe { device.bind_buffer_memory(buffer, allocation.memory(), allocation.offset()) }?;
+
+    Ok((buffer, allocation))
 }

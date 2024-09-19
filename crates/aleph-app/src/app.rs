@@ -7,7 +7,7 @@ use {
         application::ApplicationHandler,
         dpi::{PhysicalSize, Size},
         event_loop::EventLoop,
-        window::{Window, WindowAttributes},
+        window::Window,
     },
 };
 pub struct App {}

@@ -1,13 +1,14 @@
-use {ash::vk, gpu_allocator::MemoryLocation};
-
+pub use gpu_allocator::MemoryLocation;
+use {ash::vk, gpu_allocator::vulkan::Allocation};
 pub struct BufferDesc {
+    pub size: usize,
     pub usage: BufferUsage,
     pub memory_location: MemoryLocation,
-    pub linear: bool,
 }
 
 pub struct Buffer {
-    desc: BufferDesc,
+    pub allocation: Allocation,
+    pub inner: vk::Buffer,
 }
 
 pub enum BufferUsage {

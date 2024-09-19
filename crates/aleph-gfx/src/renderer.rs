@@ -1,8 +1,13 @@
 use {
-    aleph_hal::vk::{command_buffer::CommandBuffer, device::Texture, RenderBackend},
+    aleph_hal::vk::{
+        buffer::{Buffer, BufferDesc, BufferUsage, MemoryLocation},
+        command_buffer::CommandBuffer,
+        device::{Fence, Semaphore, Texture},
+        RenderBackend,
+    },
     anyhow::Result,
     ash::{
-        util::{read_spv, Align},
+        util::read_spv,
         vk::{self, Rect2D},
     },
     std::{ffi, io::Cursor, sync::Arc},
@@ -23,6 +28,7 @@ macro_rules! offset_of {
         }
     }};
 }
+
 pub struct Renderer {
     backend: Arc<RenderBackend>,
     pub present_images: Vec<vk::Image>,
@@ -30,16 +36,16 @@ pub struct Renderer {
 
     pub command_buffer: CommandBuffer,
     pub draw_command_buffer: CommandBuffer,
-    pub draw_commands_reuse_fence: vk::Fence,
+    pub draw_commands_reuse_fence: Fence,
 
     pub depth_image: Texture,
-    pub present_complete_semaphore: vk::Semaphore,
-    pub rendering_complete_semaphore: vk::Semaphore,
+    pub present_complete_semaphore: Semaphore,
+    pub rendering_complete_semaphore: Semaphore,
     pub renderpass: vk::RenderPass,
     pub framebuffers: Vec<vk::Framebuffer>,
     pub graphic_pipeline: vk::Pipeline,
-    pub vertex_input_buffer: vk::Buffer,
-    pub index_buffer: vk::Buffer,
+    pub vertex_buffer: Buffer,
+    pub index_buffer: Buffer,
     pub viewports: [vk::Viewport; 1],
     pub scissors: [Rect2D; 1],
     pub index_buffer_data: [u32; 3],
@@ -50,8 +56,6 @@ impl Renderer {
         let device = &backend.device.inner;
         let surface_format = backend.swapchain.properties.format;
         let swapchain_loader = &backend.swapchain.fns;
-        let instance = &backend.instance.inner;
-        let pdevice = backend.physical_device.inner;
         let swapchain = backend.swapchain.inner;
         let surface_resolution = backend.swapchain.properties.dims;
 
@@ -83,7 +87,6 @@ impl Renderer {
                     device.create_image_view(&create_view_info, None).unwrap()
                 })
                 .collect();
-            let device_memory_properties = instance.get_physical_device_memory_properties(pdevice);
             let depth_image_create_info = vk::ImageCreateInfo::default()
                 .image_type(vk::ImageType::TYPE_2D)
                 .format(vk::Format::D16_UNORM)
@@ -97,20 +100,9 @@ impl Renderer {
 
             let depth_image = backend.device.create_texture(&depth_image_create_info);
 
-            let fence_create_info =
-                vk::FenceCreateInfo::default().flags(vk::FenceCreateFlags::SIGNALED);
-
-            let draw_commands_reuse_fence = device
-                .create_fence(&fence_create_info, None)
-                .expect("Create fence failed.");
-            let semaphore_create_info = vk::SemaphoreCreateInfo::default();
-
-            let present_complete_semaphore = device
-                .create_semaphore(&semaphore_create_info, None)
-                .unwrap();
-            let rendering_complete_semaphore = device
-                .create_semaphore(&semaphore_create_info, None)
-                .unwrap();
+            let draw_commands_reuse_fence = backend.device.create_fence()?;
+            let present_complete_semaphore = backend.device.create_semaphore()?;
+            let rendering_complete_semaphore = backend.device.create_semaphore()?;
 
             let renderpass_attachments = [
                 vk::AttachmentDescription {
@@ -177,77 +169,16 @@ impl Renderer {
                         .unwrap()
                 })
                 .collect();
-            backend.device.create_buffer();
+
             let index_buffer_data = [0u32, 1, 2];
-            let index_buffer_info = vk::BufferCreateInfo::default()
-                .size(size_of_val(&index_buffer_data) as u64)
-                .usage(vk::BufferUsageFlags::INDEX_BUFFER)
-                .sharing_mode(vk::SharingMode::EXCLUSIVE);
-
-            let index_buffer = device.create_buffer(&index_buffer_info, None).unwrap();
-            let index_buffer_memory_req = device.get_buffer_memory_requirements(index_buffer);
-            let index_buffer_memory_index = find_memorytype_index(
-                &index_buffer_memory_req,
-                &device_memory_properties,
-                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-            )
-            .expect("Unable to find suitable memorytype for the index buffer.");
-
-            let index_allocate_info = vk::MemoryAllocateInfo {
-                allocation_size: index_buffer_memory_req.size,
-                memory_type_index: index_buffer_memory_index,
-                ..Default::default()
-            };
-            let index_buffer_memory = device.allocate_memory(&index_allocate_info, None).unwrap();
-            let index_ptr = device
-                .map_memory(
-                    index_buffer_memory,
-                    0,
-                    index_buffer_memory_req.size,
-                    vk::MemoryMapFlags::empty(),
-                )
-                .unwrap();
-            let mut index_slice = Align::new(
-                index_ptr,
-                align_of::<u32>() as u64,
-                index_buffer_memory_req.size,
-            );
-            index_slice.copy_from_slice(&index_buffer_data);
-            device.unmap_memory(index_buffer_memory);
-            device
-                .bind_buffer_memory(index_buffer, index_buffer_memory, 0)
-                .unwrap();
-
-            let vertex_input_buffer_info = vk::BufferCreateInfo {
-                size: 3 * size_of::<Vertex>() as u64,
-                usage: vk::BufferUsageFlags::VERTEX_BUFFER,
-                sharing_mode: vk::SharingMode::EXCLUSIVE,
-                ..Default::default()
-            };
-
-            let vertex_input_buffer = device
-                .create_buffer(&vertex_input_buffer_info, None)
-                .unwrap();
-
-            let vertex_input_buffer_memory_req =
-                device.get_buffer_memory_requirements(vertex_input_buffer);
-
-            let vertex_input_buffer_memory_index = find_memorytype_index(
-                &vertex_input_buffer_memory_req,
-                &device_memory_properties,
-                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-            )
-            .expect("Unable to find suitable memorytype for the vertex buffer.");
-
-            let vertex_buffer_allocate_info = vk::MemoryAllocateInfo {
-                allocation_size: vertex_input_buffer_memory_req.size,
-                memory_type_index: vertex_input_buffer_memory_index,
-                ..Default::default()
-            };
-
-            let vertex_input_buffer_memory = device
-                .allocate_memory(&vertex_buffer_allocate_info, None)
-                .unwrap();
+            let index_buffer = backend.device.create_buffer(
+                BufferDesc {
+                    size: 3,
+                    usage: BufferUsage::Index,
+                    memory_location: MemoryLocation::CpuToGpu,
+                },
+                Some(&index_buffer_data),
+            )?;
 
             let vertices = [
                 Vertex {
@@ -263,28 +194,14 @@ impl Renderer {
                     color: [1.0, 0.0, 0.0, 1.0],
                 },
             ];
-
-            let vert_ptr = device
-                .map_memory(
-                    vertex_input_buffer_memory,
-                    0,
-                    vertex_input_buffer_memory_req.size,
-                    vk::MemoryMapFlags::empty(),
-                )
-                .unwrap();
-
-            let mut vert_align = Align::new(
-                vert_ptr,
-                align_of::<Vertex>() as u64,
-                vertex_input_buffer_memory_req.size,
-            );
-            vert_align.copy_from_slice(&vertices);
-            device.unmap_memory(vertex_input_buffer_memory);
-            device
-                .bind_buffer_memory(vertex_input_buffer, vertex_input_buffer_memory, 0)
-                .unwrap();
-
-            // let _ = backend.device.create_buffer();
+            let vertex_buffer = backend.device.create_buffer(
+                BufferDesc {
+                    size: 3,
+                    usage: BufferUsage::Vertex,
+                    memory_location: MemoryLocation::CpuToGpu,
+                },
+                Some(&vertices),
+            )?;
 
             let mut vertex_spv_file =
                 Cursor::new(&include_bytes!("../../../shader/triangle/vert.spv")[..]);
@@ -448,7 +365,7 @@ impl Renderer {
                 graphic_pipeline,
                 viewports,
                 scissors,
-                vertex_input_buffer,
+                vertex_buffer,
                 command_buffer,
                 index_buffer,
                 index_buffer_data,
@@ -468,7 +385,7 @@ impl Renderer {
                 .acquire_next_image(
                     swapchain,
                     u64::MAX,
-                    self.present_complete_semaphore,
+                    self.present_complete_semaphore.inner,
                     vk::Fence::null(),
                 )
                 .unwrap();
@@ -495,11 +412,11 @@ impl Renderer {
             record_submit_commandbuffer(
                 &device,
                 self.draw_command_buffer.inner,
-                self.draw_commands_reuse_fence,
+                self.draw_commands_reuse_fence.inner,
                 present_queue,
                 &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT],
-                &[self.present_complete_semaphore],
-                &[self.rendering_complete_semaphore],
+                &[self.present_complete_semaphore.inner],
+                &[self.rendering_complete_semaphore.inner],
                 |device, draw_command_buffer| {
                     device.cmd_begin_render_pass(
                         draw_command_buffer,
@@ -516,12 +433,12 @@ impl Renderer {
                     device.cmd_bind_vertex_buffers(
                         draw_command_buffer,
                         0,
-                        &[self.vertex_input_buffer],
+                        &[self.vertex_buffer.inner],
                         &[0],
                     );
                     device.cmd_bind_index_buffer(
                         draw_command_buffer,
-                        self.index_buffer,
+                        self.index_buffer.inner,
                         0,
                         vk::IndexType::UINT32,
                     );
@@ -536,7 +453,7 @@ impl Renderer {
                     device.cmd_end_render_pass(draw_command_buffer);
                 },
             );
-            let wait_semaphors = [self.rendering_complete_semaphore];
+            let wait_semaphors = [self.rendering_complete_semaphore.inner];
             let swapchains = [swapchain];
             let image_indices = [present_index];
             let present_info = vk::PresentInfoKHR::default()
