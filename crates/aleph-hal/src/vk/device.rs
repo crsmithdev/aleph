@@ -235,22 +235,6 @@ impl Device {
         Ok(Semaphore { inner: semaphore })
     }
 
-    fn find_memorytype_index(
-        &self,
-        memory_req: &vk::MemoryRequirements,
-        memory_prop: &vk::PhysicalDeviceMemoryProperties,
-        flags: vk::MemoryPropertyFlags,
-    ) -> Option<u32> {
-        memory_prop.memory_types[..memory_prop.memory_type_count as _]
-            .iter()
-            .enumerate()
-            .find(|(index, memory_type)| {
-                (1 << index) & memory_req.memory_type_bits != 0
-                    && memory_type.property_flags & flags == flags
-            })
-            .map(|(index, _memory_type)| index as _)
-    }
-
     pub fn create_command_buffer(&self) -> CommandBuffer {
         let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::default()
             .command_buffer_count(1)
@@ -260,28 +244,6 @@ impl Device {
         Self::allocate_command_buffer(self.inner.clone(), command_buffer_allocate_info)
     }
 
-    fn allocate_command_buffer(
-        device: ash::Device,
-        info: vk::CommandBufferAllocateInfo,
-    ) -> CommandBuffer {
-        let command_buffers = unsafe { device.allocate_command_buffers(&info).unwrap() };
-
-        CommandBuffer {
-            inner: command_buffers[0],
-        }
-    }
-    pub fn write<T: Sized>(&self, allocation: &Allocation, data: &[T]) -> Result<()> {
-        // let align = Align::new(allocation.mapped_ptr(), allocation.memory_properties().
-        // align_of::<T>() as u64;
-
-        // let len = data.len();
-        // let size = std::mem::size_of::<T>();
-        let buffer_ptr = allocation.mapped_ptr().unwrap().cast().as_ptr();
-        unsafe { ptr::copy_nonoverlapping(data.as_ptr(), buffer_ptr, data.len()) }
-        // self.size = data.len();
-
-        Ok(())
-    }
     pub fn create_buffer<T>(&self, desc: BufferDesc, initial_data: Option<&[T]>) -> Result<Buffer> {
         let mut flags: vk::BufferUsageFlags = desc.usage.into();
         if initial_data.is_some() {
@@ -298,11 +260,53 @@ impl Device {
         )
         .unwrap();
 
-        self.write(&allocation, initial_data)?;
+        self.write_buffer(&allocation, initial_data)?;
         Ok(Buffer {
             inner: buffer,
             allocation,
         })
+    }
+
+    pub fn write_buffer<T: Sized>(&self, allocation: &Allocation, data: &[T]) -> Result<()> {
+        let buffer_ptr = allocation.mapped_ptr().unwrap().cast().as_ptr();
+        unsafe { ptr::copy_nonoverlapping(data.as_ptr(), buffer_ptr, data.len()) }
+
+        Ok(())
+    }
+
+    pub fn wait_for_fence(&self, fence: &Fence) -> Result<()> {
+        unsafe {
+            self.inner
+                .wait_for_fences(&[fence.inner], true, std::u64::MAX)?;
+            self.inner.reset_fences(&[fence.inner])?
+        }
+        Ok(())
+    }
+    fn find_memorytype_index(
+        &self,
+        memory_req: &vk::MemoryRequirements,
+        memory_prop: &vk::PhysicalDeviceMemoryProperties,
+        flags: vk::MemoryPropertyFlags,
+    ) -> Option<u32> {
+        memory_prop.memory_types[..memory_prop.memory_type_count as _]
+            .iter()
+            .enumerate()
+            .find(|(index, memory_type)| {
+                (1 << index) & memory_req.memory_type_bits != 0
+                    && memory_type.property_flags & flags == flags
+            })
+            .map(|(index, _memory_type)| index as _)
+    }
+
+    fn allocate_command_buffer(
+        device: ash::Device,
+        info: vk::CommandBufferAllocateInfo,
+    ) -> CommandBuffer {
+        let command_buffers = unsafe { device.allocate_command_buffers(&info).unwrap() };
+
+        CommandBuffer {
+            inner: command_buffers[0],
+        }
     }
 }
 

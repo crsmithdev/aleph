@@ -2,7 +2,7 @@ use {
     aleph_hal::vk::{
         buffer::{Buffer, BufferDesc, BufferUsage, MemoryLocation},
         command_buffer::CommandBuffer,
-        device::{Fence, Semaphore, Texture},
+        device::{Device, Fence, Semaphore, Texture},
         RenderBackend,
     },
     anyhow::Result,
@@ -410,14 +410,15 @@ impl Renderer {
                 .clear_values(&clear_values);
 
             record_submit_commandbuffer(
-                &device,
+                &self.backend.device,
                 self.draw_command_buffer.inner,
-                self.draw_commands_reuse_fence.inner,
+                &self.draw_commands_reuse_fence,
                 present_queue,
                 &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT],
                 &[self.present_complete_semaphore.inner],
                 &[self.rendering_complete_semaphore.inner],
                 |device, draw_command_buffer| {
+                    let device = &device.inner;
                     device.cmd_begin_render_pass(
                         draw_command_buffer,
                         &render_pass_begin_info,
@@ -483,26 +484,28 @@ pub fn find_memorytype_index(
         .map(|(index, _memory_type)| index as _)
 }
 
-pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
-    device: &ash::Device,
+pub fn record_submit_commandbuffer<F: FnOnce(&Device, vk::CommandBuffer)>(
+    device: &Arc<Device>,
     command_buffer: vk::CommandBuffer,
-    command_buffer_reuse_fence: vk::Fence,
+    command_buffer_reuse_fence: &Fence,
     submit_queue: vk::Queue,
     wait_mask: &[vk::PipelineStageFlags],
     wait_semaphores: &[vk::Semaphore],
     signal_semaphores: &[vk::Semaphore],
     f: F,
 ) {
+    device.wait_for_fence(&command_buffer_reuse_fence);
     unsafe {
-        device
-            .wait_for_fences(&[command_buffer_reuse_fence], true, u64::MAX)
-            .expect("Wait for fence failed.");
+        // device
+        //     .wait_for_fences(&[command_buffer_reuse_fence], true, u64::MAX)
+        //     .expect("Wait for fence failed.");
+
+        // device
+        //     .reset_fences(&[command_buffer_reuse_fence])
+        //     .expect("Reset fences failed.");
 
         device
-            .reset_fences(&[command_buffer_reuse_fence])
-            .expect("Reset fences failed.");
-
-        device
+            .inner
             .reset_command_buffer(
                 command_buffer,
                 vk::CommandBufferResetFlags::RELEASE_RESOURCES,
@@ -513,10 +516,12 @@ pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
             .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
 
         device
+            .inner
             .begin_command_buffer(command_buffer, &command_buffer_begin_info)
             .expect("Begin commandbuffer");
-        f(device, command_buffer);
+        f(&device, command_buffer);
         device
+            .inner
             .end_command_buffer(command_buffer)
             .expect("End commandbuffer");
 
@@ -529,7 +534,12 @@ pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
             .signal_semaphores(signal_semaphores);
 
         device
-            .queue_submit(submit_queue, &[submit_info], command_buffer_reuse_fence)
+            .inner
+            .queue_submit(
+                submit_queue,
+                &[submit_info],
+                command_buffer_reuse_fence.inner,
+            )
             .expect("queue submit failed.");
     }
 }
