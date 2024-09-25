@@ -3,14 +3,13 @@ use {
         buffer::{Buffer, BufferDesc, BufferUsage, MemoryLocation},
         command_buffer::CommandBuffer,
         device::{Device, Fence, Semaphore, Texture},
+        renderpass::RenderPass,
+        shader::ShaderDesc,
         RenderBackend,
     },
     anyhow::Result,
-    ash::{
-        util::read_spv,
-        vk::{self, Rect2D},
-    },
-    std::{ffi, io::Cursor, sync::Arc},
+    ash::vk::{self, Rect2D},
+    std::{ffi, sync::Arc},
 };
 #[derive(Clone, Debug, Copy)]
 struct Vertex {
@@ -32,7 +31,6 @@ macro_rules! offset_of {
 pub struct Renderer {
     backend: Arc<RenderBackend>,
     pub present_images: Vec<vk::Image>,
-    pub present_image_views: Vec<vk::ImageView>,
 
     pub command_buffer: CommandBuffer,
     pub draw_command_buffer: CommandBuffer,
@@ -41,7 +39,7 @@ pub struct Renderer {
     pub depth_image: Texture,
     pub present_complete_semaphore: Semaphore,
     pub rendering_complete_semaphore: Semaphore,
-    pub renderpass: vk::RenderPass,
+    pub renderpass: RenderPass,
     pub framebuffers: Vec<vk::Framebuffer>,
     pub graphic_pipeline: vk::Pipeline,
     pub vertex_buffer: Buffer,
@@ -54,39 +52,16 @@ pub struct Renderer {
 impl Renderer {
     pub fn new(backend: Arc<RenderBackend>) -> Result<Self> {
         let device = &backend.device.inner;
-        let surface_format = backend.swapchain.properties.format;
         let swapchain_loader = &backend.swapchain.fns;
-        let swapchain = backend.swapchain.inner;
+        // let swapchain = backend.swapchain.inner;
         let surface_resolution = backend.swapchain.properties.dims;
 
         unsafe {
             let draw_command_buffer = backend.device.create_command_buffer();
             let command_buffer = backend.device.create_command_buffer();
 
-            let present_images = swapchain_loader.get_swapchain_images(swapchain).unwrap();
-            let present_image_views: Vec<vk::ImageView> = present_images
-                .iter()
-                .map(|&image| {
-                    let create_view_info = vk::ImageViewCreateInfo::default()
-                        .view_type(vk::ImageViewType::TYPE_2D)
-                        .format(surface_format.format)
-                        .components(vk::ComponentMapping {
-                            r: vk::ComponentSwizzle::R,
-                            g: vk::ComponentSwizzle::G,
-                            b: vk::ComponentSwizzle::B,
-                            a: vk::ComponentSwizzle::A,
-                        })
-                        .subresource_range(vk::ImageSubresourceRange {
-                            aspect_mask: vk::ImageAspectFlags::COLOR,
-                            base_mip_level: 0,
-                            level_count: 1,
-                            base_array_layer: 0,
-                            layer_count: 1,
-                        })
-                        .image(image);
-                    device.create_image_view(&create_view_info, None).unwrap()
-                })
-                .collect();
+            let present_images = swapchain_loader.get_swapchain_images(backend.swapchain.inner)?;
+            let present_image_views = &backend.swapchain.image_views;
             let depth_image_create_info = vk::ImageCreateInfo::default()
                 .image_type(vk::ImageType::TYPE_2D)
                 .format(vk::Format::D16_UNORM)
@@ -103,62 +78,14 @@ impl Renderer {
             let draw_commands_reuse_fence = backend.device.create_fence()?;
             let present_complete_semaphore = backend.device.create_semaphore()?;
             let rendering_complete_semaphore = backend.device.create_semaphore()?;
+            let renderpass = backend.device.create_render_pass(&backend.swapchain)?; //, allocation_callbacks)
 
-            let renderpass_attachments = [
-                vk::AttachmentDescription {
-                    format: surface_format.format,
-                    samples: vk::SampleCountFlags::TYPE_1,
-                    load_op: vk::AttachmentLoadOp::CLEAR,
-                    store_op: vk::AttachmentStoreOp::STORE,
-                    final_layout: vk::ImageLayout::PRESENT_SRC_KHR,
-                    ..Default::default()
-                },
-                vk::AttachmentDescription {
-                    format: vk::Format::D16_UNORM,
-                    samples: vk::SampleCountFlags::TYPE_1,
-                    load_op: vk::AttachmentLoadOp::CLEAR,
-                    initial_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                    final_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                    ..Default::default()
-                },
-            ];
-            let color_attachment_refs = [vk::AttachmentReference {
-                attachment: 0,
-                layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-            }];
-            let depth_attachment_ref = vk::AttachmentReference {
-                attachment: 1,
-                layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-            };
-            let dependencies = [vk::SubpassDependency {
-                src_subpass: vk::SUBPASS_EXTERNAL,
-                src_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-                dst_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_READ
-                    | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-                dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-                ..Default::default()
-            }];
-
-            let subpass = vk::SubpassDescription::default()
-                .color_attachments(&color_attachment_refs)
-                .depth_stencil_attachment(&depth_attachment_ref)
-                .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS);
-
-            let renderpass_create_info = vk::RenderPassCreateInfo::default()
-                .attachments(&renderpass_attachments)
-                .subpasses(std::slice::from_ref(&subpass))
-                .dependencies(&dependencies);
-
-            let renderpass = device
-                .create_render_pass(&renderpass_create_info, None)
-                .unwrap();
-
-            let framebuffers: Vec<vk::Framebuffer> = present_image_views
+            let framebuffers = present_image_views
                 .iter()
                 .map(|&present_image_view| {
                     let framebuffer_attachments = [present_image_view, depth_image.view];
                     let frame_buffer_create_info = vk::FramebufferCreateInfo::default()
-                        .render_pass(renderpass)
+                        .render_pass(renderpass.inner)
                         .attachments(&framebuffer_attachments)
                         .width(surface_resolution.width)
                         .height(surface_resolution.height)
@@ -203,26 +130,14 @@ impl Renderer {
                 Some(&vertices),
             )?;
 
-            let mut vertex_spv_file =
-                Cursor::new(&include_bytes!("../../../shader/triangle/vert.spv")[..]);
-            let mut frag_spv_file =
-                Cursor::new(&include_bytes!("../../../shader/triangle/frag.spv")[..]);
-
-            let vertex_code =
-                read_spv(&mut vertex_spv_file).expect("Failed to read vertex shader spv file");
-            let vertex_shader_info = vk::ShaderModuleCreateInfo::default().code(&vertex_code);
-
-            let frag_code =
-                read_spv(&mut frag_spv_file).expect("Failed to read fragment shader spv file");
-            let frag_shader_info = vk::ShaderModuleCreateInfo::default().code(&frag_code);
-
-            let vertex_shader_module = device
-                .create_shader_module(&vertex_shader_info, None)
-                .expect("Vertex shader module error");
-
-            let fragment_shader_module = device
-                .create_shader_module(&frag_shader_info, None)
-                .expect("Fragment shader module error");
+            let vertex_shader_module = backend.device.load_shader(ShaderDesc {
+                name: "vertex".to_owned(),
+                path: "shaders/triangle/vert.spv".to_owned(),
+            })?;
+            let fragment_shader_module = backend.device.load_shader(ShaderDesc {
+                name: "fragment".to_owned(),
+                path: "shaders/triangle/frag.spv".to_owned(),
+            })?;
 
             let layout_create_info = vk::PipelineLayoutCreateInfo::default();
 
@@ -233,14 +148,14 @@ impl Renderer {
             let shader_entry_name = ffi::CStr::from_bytes_with_nul_unchecked(b"main\0");
             let shader_stage_create_infos = [
                 vk::PipelineShaderStageCreateInfo {
-                    module: vertex_shader_module,
+                    module: vertex_shader_module.inner,
                     p_name: shader_entry_name.as_ptr(),
                     stage: vk::ShaderStageFlags::VERTEX,
                     ..Default::default()
                 },
                 vk::PipelineShaderStageCreateInfo {
                     s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
-                    module: fragment_shader_module,
+                    module: fragment_shader_module.inner,
                     p_name: shader_entry_name.as_ptr(),
                     stage: vk::ShaderStageFlags::FRAGMENT,
                     ..Default::default()
@@ -341,7 +256,7 @@ impl Renderer {
                 .color_blend_state(&color_blend_state)
                 .dynamic_state(&dynamic_state_info)
                 .layout(pipeline_layout)
-                .render_pass(renderpass);
+                .render_pass(renderpass.inner);
             let graphics_pipelines = device
                 .create_graphics_pipelines(
                     vk::PipelineCache::null(),
@@ -359,7 +274,6 @@ impl Renderer {
                 draw_commands_reuse_fence,
                 present_images,
                 depth_image,
-                present_image_views,
                 present_complete_semaphore,
                 rendering_complete_semaphore,
                 graphic_pipeline,
@@ -375,7 +289,6 @@ impl Renderer {
 
     pub fn update(&mut self) -> Result<()> {
         unsafe {
-            let device = &self.backend.device.inner;
             let swapchain_loader = &self.backend.swapchain.fns;
             let swapchain = self.backend.swapchain.inner;
             let surface_resolution = self.backend.swapchain.properties.dims;
@@ -404,7 +317,7 @@ impl Renderer {
             ];
 
             let render_pass_begin_info = vk::RenderPassBeginInfo::default()
-                .render_pass(self.renderpass)
+                .render_pass(self.renderpass.inner)
                 .framebuffer(self.framebuffers[present_index as usize])
                 .render_area(surface_resolution.into())
                 .clear_values(&clear_values);
@@ -468,6 +381,10 @@ impl Renderer {
         }
         Ok(())
     }
+
+    pub fn draw(&self) -> Result<()> {
+        Ok(())
+    }
 }
 pub fn find_memorytype_index(
     memory_req: &vk::MemoryRequirements,
@@ -494,7 +411,7 @@ pub fn record_submit_commandbuffer<F: FnOnce(&Device, vk::CommandBuffer)>(
     signal_semaphores: &[vk::Semaphore],
     f: F,
 ) {
-    device.wait_for_fence(&command_buffer_reuse_fence);
+    device.wait_for_fence(&command_buffer_reuse_fence).unwrap();
     unsafe {
         // device
         //     .wait_for_fences(&[command_buffer_reuse_fence], true, u64::MAX)
