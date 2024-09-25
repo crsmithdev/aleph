@@ -1,10 +1,79 @@
 use {
+    super::{
+        device::Texture,
+        renderpass::{self, RenderPass},
+    },
     crate::vk::{Device, Surface},
     anyhow::Result,
-    ash::{khr, vk},
-    std::sync::Arc,
+    ash::{
+        khr,
+        vk::{self, FrameBoundaryEXT},
+    },
+    std::{mem::swap, ops::Index, sync::Arc},
     vk::Handle,
 };
+
+pub struct Framebuffers {
+    pub inner: Vec<vk::Framebuffer>,
+    pub present_images: Vec<vk::Image>,
+    pub depth_image: Texture,
+}
+
+impl Index<usize> for Framebuffers {
+    type Output = vk::Framebuffer;
+    fn index<'a>(&'a self, i: usize) -> &'a vk::Framebuffer {
+        &self.inner[i]
+    }
+}
+
+impl Device {
+    pub fn create_framebuffers(
+        &self,
+        swapchain: &Swapchain,
+        renderpass: &RenderPass,
+    ) -> Result<Framebuffers> {
+        let present_images = unsafe { swapchain.fns.get_swapchain_images(swapchain.inner)? };
+        let present_image_views = &swapchain.image_views;
+        let depth_image_create_info = vk::ImageCreateInfo::default()
+            .image_type(vk::ImageType::TYPE_2D)
+            .format(vk::Format::D16_UNORM)
+            .extent(swapchain.properties.dims.into())
+            .mip_levels(1)
+            .array_layers(1)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE);
+
+        let depth_image = self.create_texture(&depth_image_create_info);
+
+        let framebuffers = present_image_views
+            .iter()
+            .map(|&present_image_view| {
+                let framebuffer_attachments = [present_image_view, depth_image.view];
+                let frame_buffer_create_info = vk::FramebufferCreateInfo::default()
+                    .render_pass(renderpass.inner)
+                    .attachments(&framebuffer_attachments)
+                    .width(swapchain.properties.dims.width)
+                    .height(swapchain.properties.dims.height)
+                    .layers(1);
+
+                unsafe {
+                    self.inner
+                        .create_framebuffer(&frame_buffer_create_info, None)
+                        .unwrap()
+                }
+            })
+            .collect();
+        let fb = Framebuffers {
+            inner: framebuffers,
+            present_images,
+            depth_image,
+        };
+
+        Ok(fb)
+    }
+}
 
 pub struct SwapchainProperties {
     pub format: vk::SurfaceFormatKHR,

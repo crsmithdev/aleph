@@ -87,14 +87,14 @@ impl Device {
 
         log::info!("Created a Vulkan device");
 
-        let allocator = Allocator::new(&AllocatorCreateDesc {
+        let allocator = Arc::new(Mutex::new(Allocator::new(&AllocatorCreateDesc {
             instance: instance.inner.clone(),
             device: device.clone(),
             physical_device: physical_device.inner,
             buffer_device_address: false,
             debug_settings: Default::default(),
             allocation_sizes: Default::default(),
-        })?;
+        })?));
 
         let queue = Queue {
             inner: unsafe { device.get_device_queue(queue_family.index, 0) },
@@ -130,7 +130,7 @@ impl Device {
             queue,
             command_buffer_fence,
             command_pool,
-            allocator: Arc::new(Mutex::new(allocator)),
+            allocator,
         }))
     }
 

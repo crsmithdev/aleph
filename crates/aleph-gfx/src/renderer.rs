@@ -5,10 +5,11 @@ use {
         device::{Device, Fence, Semaphore, Texture},
         renderpass::RenderPass,
         shader::ShaderDesc,
+        swapchain::Framebuffers,
         RenderBackend,
     },
     anyhow::Result,
-    ash::vk::{self, Rect2D},
+    ash::vk::{self, Framebuffer, Rect2D},
     std::{ffi, sync::Arc},
 };
 #[derive(Clone, Debug, Copy)]
@@ -30,17 +31,16 @@ macro_rules! offset_of {
 
 pub struct Renderer {
     backend: Arc<RenderBackend>,
-    pub present_images: Vec<vk::Image>,
-
+    // pub present_images: Vec<vk::Image>,
     pub command_buffer: CommandBuffer,
     pub draw_command_buffer: CommandBuffer,
     pub draw_commands_reuse_fence: Fence,
 
-    pub depth_image: Texture,
+    // pub depth_image: Texture,
     pub present_complete_semaphore: Semaphore,
     pub rendering_complete_semaphore: Semaphore,
     pub renderpass: RenderPass,
-    pub framebuffers: Vec<vk::Framebuffer>,
+    pub framebuffers: Framebuffers,
     pub graphic_pipeline: vk::Pipeline,
     pub vertex_buffer: Buffer,
     pub index_buffer: Buffer,
@@ -52,50 +52,20 @@ pub struct Renderer {
 impl Renderer {
     pub fn new(backend: Arc<RenderBackend>) -> Result<Self> {
         let device = &backend.device.inner;
-        let swapchain_loader = &backend.swapchain.fns;
-        // let swapchain = backend.swapchain.inner;
         let surface_resolution = backend.swapchain.properties.dims;
 
         unsafe {
             let draw_command_buffer = backend.device.create_command_buffer();
             let command_buffer = backend.device.create_command_buffer();
 
-            let present_images = swapchain_loader.get_swapchain_images(backend.swapchain.inner)?;
-            let present_image_views = &backend.swapchain.image_views;
-            let depth_image_create_info = vk::ImageCreateInfo::default()
-                .image_type(vk::ImageType::TYPE_2D)
-                .format(vk::Format::D16_UNORM)
-                .extent(surface_resolution.into())
-                .mip_levels(1)
-                .array_layers(1)
-                .samples(vk::SampleCountFlags::TYPE_1)
-                .tiling(vk::ImageTiling::OPTIMAL)
-                .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
-                .sharing_mode(vk::SharingMode::EXCLUSIVE);
-
-            let depth_image = backend.device.create_texture(&depth_image_create_info);
-
             let draw_commands_reuse_fence = backend.device.create_fence()?;
             let present_complete_semaphore = backend.device.create_semaphore()?;
             let rendering_complete_semaphore = backend.device.create_semaphore()?;
             let renderpass = backend.device.create_render_pass(&backend.swapchain)?; //, allocation_callbacks)
 
-            let framebuffers = present_image_views
-                .iter()
-                .map(|&present_image_view| {
-                    let framebuffer_attachments = [present_image_view, depth_image.view];
-                    let frame_buffer_create_info = vk::FramebufferCreateInfo::default()
-                        .render_pass(renderpass.inner)
-                        .attachments(&framebuffer_attachments)
-                        .width(surface_resolution.width)
-                        .height(surface_resolution.height)
-                        .layers(1);
-
-                    device
-                        .create_framebuffer(&frame_buffer_create_info, None)
-                        .unwrap()
-                })
-                .collect();
+            let framebuffers = backend
+                .device
+                .create_framebuffers(&backend.swapchain, &renderpass)?;
 
             let index_buffer_data = [0u32, 1, 2];
             let index_buffer = backend.device.create_buffer(
@@ -272,8 +242,8 @@ impl Renderer {
                 draw_command_buffer,
                 framebuffers,
                 draw_commands_reuse_fence,
-                present_images,
-                depth_image,
+                // present_images,
+                // depth_image,
                 present_complete_semaphore,
                 rendering_complete_semaphore,
                 graphic_pipeline,
@@ -381,24 +351,6 @@ impl Renderer {
         }
         Ok(())
     }
-
-    pub fn draw(&self) -> Result<()> {
-        Ok(())
-    }
-}
-pub fn find_memorytype_index(
-    memory_req: &vk::MemoryRequirements,
-    memory_prop: &vk::PhysicalDeviceMemoryProperties,
-    flags: vk::MemoryPropertyFlags,
-) -> Option<u32> {
-    memory_prop.memory_types[..memory_prop.memory_type_count as _]
-        .iter()
-        .enumerate()
-        .find(|(index, memory_type)| {
-            (1 << index) & memory_req.memory_type_bits != 0
-                && memory_type.property_flags & flags == flags
-        })
-        .map(|(index, _memory_type)| index as _)
 }
 
 pub fn record_submit_commandbuffer<F: FnOnce(&Device, vk::CommandBuffer)>(
