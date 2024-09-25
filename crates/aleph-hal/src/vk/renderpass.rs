@@ -1,16 +1,11 @@
-use {
-    crate::vk::{Device, Swapchain},
-    anyhow::Result,
-    ash::vk,
-    std::sync::Arc,
-};
+use {super::RenderBackend, crate::vk::Swapchain, anyhow::Result, ash::vk, std::sync::Arc};
 
 pub struct RenderPass {
     pub inner: vk::RenderPass,
 }
 
-impl Device {
-pub fn create_render_pass(&self, swapchain: &Arc<Swapchain>) -> Result<RenderPass> {
+impl RenderBackend {
+    pub fn create_render_pass(&self, swapchain: &Arc<Swapchain>) -> Result<RenderPass> {
         let attachments = [
             vk::AttachmentDescription {
                 // format: swapchain.properties.format.format,
@@ -88,7 +83,8 @@ pub fn create_render_pass(&self, swapchain: &Arc<Swapchain>) -> Result<RenderPas
             .subpasses(&subpasses)
             .dependencies(&dependencies);
         let inner = unsafe {
-            self.inner
+            self.device
+                .inner
                 .create_render_pass(&renderpass_create_info, None)?
         };
 

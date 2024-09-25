@@ -1,4 +1,4 @@
-use {crate::vk::device::Device, anyhow::Result, ash::vk};
+use {super::RenderBackend, crate::vk::device::Device, anyhow::Result, ash::vk};
 
 pub struct ShaderDesc {
     pub name: String,
@@ -9,7 +9,7 @@ pub struct Shader {
     pub inner: vk::ShaderModule,
 }
 
-impl Device {
+impl RenderBackend {
     pub fn load_shader(&self, desc: ShaderDesc) -> Result<Shader> {
         let mut file = std::fs::File::open(&desc.path)?;
         let bytes = ash::util::read_spv(&mut file)?;

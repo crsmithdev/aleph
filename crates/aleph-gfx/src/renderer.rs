@@ -61,7 +61,7 @@ impl Renderer {
             let draw_commands_reuse_fence = backend.device.create_fence()?;
             let present_complete_semaphore = backend.device.create_semaphore()?;
             let rendering_complete_semaphore = backend.device.create_semaphore()?;
-            let renderpass = backend.device.create_render_pass(&backend.swapchain)?; //, allocation_callbacks)
+            let renderpass = backend.create_render_pass(&backend.swapchain)?; //, allocation_callbacks)
 
             let framebuffers = backend
                 .device
