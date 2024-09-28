@@ -1,4 +1,5 @@
 use {
+    super::surface::Surface,
     crate::vk::{
         buffer::{Buffer, BufferDesc},
         command_buffer::CommandBuffer,
@@ -7,7 +8,7 @@ use {
         queue::Queue,
     },
     anyhow::Result,
-    ash::vk::{self, Handle},
+    ash::vk::{self, Handle, SemaphoreCreateInfo},
     gpu_allocator::{
         vulkan::{
             Allocation,
@@ -22,12 +23,9 @@ use {
         fmt,
         ptr,
         sync::{Arc, Mutex},
+        u64,
     },
 };
-
-pub struct Semaphore {
-    pub inner: vk::Semaphore,
-}
 
 pub struct Fence {
     pub inner: vk::Fence,
@@ -39,7 +37,6 @@ pub struct Texture {
     pub memory: vk::DeviceMemory,
 }
 
-#[allow(dead_code)]
 pub struct Device {
     pub inner: ash::Device,
     pub(crate) physical_device: Arc<PhysicalDevice>,
@@ -49,6 +46,8 @@ pub struct Device {
     pub command_pool: vk::CommandPool,
     pub command_buffer: CommandBuffer,
     pub command_buffer_fence: vk::Fence,
+    pub present_complete_semaphore: vk::Semaphore,
+    pub rendering_complete_semaphore: vk::Semaphore,
 }
 
 impl Device {
@@ -85,8 +84,6 @@ impl Device {
                 .unwrap()
         };
 
-        log::info!("Created a Vulkan device");
-
         let allocator = Arc::new(Mutex::new(Allocator::new(&AllocatorCreateDesc {
             instance: instance.inner.clone(),
             device: device.clone(),
@@ -114,14 +111,12 @@ impl Device {
 
         let command_buffer =
             Self::allocate_command_buffer(device.clone(), command_buffer_allocate_info);
-        let fence_create_info =
-            vk::FenceCreateInfo::default().flags(vk::FenceCreateFlags::SIGNALED);
-        let command_buffer_fence = unsafe {
-            device
-                .create_fence(&fence_create_info, None)
-                .expect("Create fence failed.")
-        };
+        let command_buffer_fence = Self::create_fence_(&device, true)?;
 
+        let present_complete_semaphore =
+            unsafe { device.create_semaphore(&vk::SemaphoreCreateInfo::default(), None) }?;
+        let rendering_complete_semaphore =
+            unsafe { device.create_semaphore(&vk::SemaphoreCreateInfo::default(), None) }?;
         Ok(Arc::new(Device {
             physical_device: physical_device.clone(),
             command_buffer,
@@ -131,16 +126,33 @@ impl Device {
             command_buffer_fence,
             command_pool,
             allocator,
+            present_complete_semaphore,
+            rendering_complete_semaphore,
         }))
     }
-
-    pub fn create_fence(&self) -> Result<Fence> {
-        let info = vk::FenceCreateInfo::default().flags(vk::FenceCreateFlags::SIGNALED);
-        let fence: vk::Fence = unsafe { self.inner.create_fence(&info, None) }?;
-        Ok(Fence { inner: fence })
+    pub fn enumerate_surface_formats(
+        &self,
+        // device: &Arc<Device>,
+        surface: &Surface,
+    ) -> Result<Vec<vk::SurfaceFormatKHR>> {
+        unsafe {
+            Ok(surface
+                .fns
+                .get_physical_device_surface_formats(self.physical_device.inner, surface.inner)?)
+        }
+    }
+    fn create_fence_(device: &ash::Device, signaled: bool) -> Result<vk::Fence> {
+        let mut info = vk::FenceCreateInfo::default();
+        if signaled {
+            info = info.flags(vk::FenceCreateFlags::SIGNALED);
+        }
+        Ok(unsafe { device.create_fence(&info, None) }?)
+    }
+    pub fn create_fence(&self, signaled: bool) -> Result<vk::Fence> {
+        Self::create_fence_(&self.inner, signaled)
     }
 
-    pub fn create_texture(&self, info: &vk::ImageCreateInfo) -> Texture {
+    pub fn create_texture(&self, info: &vk::ImageCreateInfo) -> Result<Texture> {
         let image = unsafe { self.inner.create_image(&info, None).unwrap() };
         let memory_properties = &self.physical_device.memory_properties;
         let image_memory_req = unsafe { self.inner.get_image_memory_requirements(image) };
@@ -167,43 +179,37 @@ impl Device {
                 .expect("Unable to bind depth image memory");
         }
 
-        record_submit_commandbuffer(
-            &self.inner,
-            self.command_buffer.inner,
-            self.command_buffer_fence,
-            self.queue.inner,
-            &[],
-            &[],
-            &[],
-            |device, setup_command_buffer| {
-                let layout_transition_barriers = vk::ImageMemoryBarrier::default()
-                    .image(image)
-                    .dst_access_mask(
-                        vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
-                            | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
-                    )
-                    .new_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-                    .old_layout(vk::ImageLayout::UNDEFINED)
-                    .subresource_range(
-                        vk::ImageSubresourceRange::default()
-                            .aspect_mask(vk::ImageAspectFlags::DEPTH)
-                            .layer_count(1)
-                            .level_count(1),
-                    );
+        log::info!("Beginning command buffer encoding");
+        self.begin_command_buffer()?;
+        let layout_transition_barriers = vk::ImageMemoryBarrier::default()
+            .image(image)
+            .dst_access_mask(
+                vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
+                    | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+            )
+            .new_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+            .old_layout(vk::ImageLayout::UNDEFINED)
+            .subresource_range(
+                vk::ImageSubresourceRange::default()
+                    .aspect_mask(vk::ImageAspectFlags::DEPTH)
+                    .layer_count(1)
+                    .level_count(1),
+            );
 
-                unsafe {
-                    device.cmd_pipeline_barrier(
-                        setup_command_buffer,
-                        vk::PipelineStageFlags::BOTTOM_OF_PIPE,
-                        vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
-                        vk::DependencyFlags::empty(),
-                        &[],
-                        &[],
-                        &[layout_transition_barriers],
-                    );
-                }
-            },
-        );
+        unsafe {
+            self.inner.cmd_pipeline_barrier(
+                self.command_buffer.inner,
+                vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &[layout_transition_barriers],
+            );
+        }
+
+        self.end_command_buffer(&[], &[], &[])?;
+        log::info!("Ended command buffer encoding");
 
         let depth_image_view_info = vk::ImageViewCreateInfo::default()
             .subresource_range(
@@ -216,23 +222,24 @@ impl Device {
             .format(info.format)
             .view_type(vk::ImageViewType::TYPE_2D);
 
-        let view = self.create_image_view(depth_image_view_info);
+        let view = self.create_image_view(depth_image_view_info)?;
 
-        Texture {
+        Ok(Texture {
             image,
             view,
             memory,
-        }
+        })
     }
 
-    fn create_image_view(&self, info: vk::ImageViewCreateInfo) -> vk::ImageView {
-        unsafe { self.inner.create_image_view(&info, None).unwrap() }
+    pub fn create_image_view(&self, info: vk::ImageViewCreateInfo) -> Result<vk::ImageView> {
+        Ok(unsafe { self.inner.create_image_view(&info, None)? })
     }
 
-    pub fn create_semaphore(&self) -> Result<Semaphore> {
-        let info = vk::SemaphoreCreateInfo::default();
-        let semaphore = unsafe { self.inner.create_semaphore(&info, None) }?;
-        Ok(Semaphore { inner: semaphore })
+    pub fn create_semaphore(&self) -> Result<vk::Semaphore> {
+        Ok(unsafe {
+            self.inner
+                .create_semaphore(&SemaphoreCreateInfo::default(), None)?
+        })
     }
 
     pub fn create_command_buffer(&self) -> CommandBuffer {
@@ -274,14 +281,6 @@ impl Device {
         Ok(())
     }
 
-    pub fn wait_for_fence(&self, fence: &Fence) -> Result<()> {
-        unsafe {
-            self.inner
-                .wait_for_fences(&[fence.inner], true, std::u64::MAX)?;
-            self.inner.reset_fences(&[fence.inner])?
-        }
-        Ok(())
-    }
     fn find_memorytype_index(
         &self,
         memory_req: &vk::MemoryRequirements,
@@ -308,6 +307,50 @@ impl Device {
             inner: command_buffers[0],
         }
     }
+
+    pub fn begin_command_buffer(&self) -> Result<()> {
+        Ok(unsafe {
+            let fences = &[self.command_buffer_fence];
+            self.inner.wait_for_fences(fences, true, u64::MAX)?;
+            self.inner.reset_fences(fences)?;
+            self.inner.reset_command_buffer(
+                self.command_buffer.inner,
+                vk::CommandBufferResetFlags::RELEASE_RESOURCES,
+            )?;
+
+            let command_buffer_begin_info = vk::CommandBufferBeginInfo::default()
+                .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+
+            self.inner
+                .begin_command_buffer(self.command_buffer.inner, &command_buffer_begin_info)?
+        })
+    }
+
+    pub fn end_command_buffer(
+        &self,
+        wait_semaphores: &[vk::Semaphore],
+        signal_semaphores: &[vk::Semaphore],
+        wait_mask: &[vk::PipelineStageFlags],
+    ) -> Result<()> {
+        log::info!("Ending command buffer...        ");
+        log::info!("Wait semaphores: {wait_semaphores:?}");
+        log::info!("Signal semaphores: {signal_semaphores:?}");
+        log::info!("Wait mask: {wait_mask:?}");
+
+        Ok(unsafe {
+            self.inner.end_command_buffer(self.command_buffer.inner)?;
+
+            let buffers = &[self.command_buffer.inner];
+            let submit_info = vk::SubmitInfo::default()
+                .wait_semaphores(wait_semaphores)
+                .wait_dst_stage_mask(wait_mask)
+                .command_buffers(buffers)
+                .signal_semaphores(signal_semaphores);
+
+            self.inner
+                .queue_submit(self.queue.inner, &[submit_info], self.command_buffer_fence)?
+        })
+    }
 }
 
 impl fmt::Debug for Device {
@@ -320,56 +363,6 @@ impl fmt::Debug for Device {
             .field("instance", &self.instance)
             .field("physical_device", &self.physical_device)
             .finish_non_exhaustive()
-    }
-}
-pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
-    device: &ash::Device,
-    command_buffer: vk::CommandBuffer,
-    command_buffer_reuse_fence: vk::Fence,
-    submit_queue: vk::Queue,
-    wait_mask: &[vk::PipelineStageFlags],
-    wait_semaphores: &[vk::Semaphore],
-    signal_semaphores: &[vk::Semaphore],
-    f: F,
-) {
-    unsafe {
-        device
-            .wait_for_fences(&[command_buffer_reuse_fence], true, u64::MAX)
-            .expect("Wait for fence failed.");
-
-        device
-            .reset_fences(&[command_buffer_reuse_fence])
-            .expect("Reset fences failed.");
-
-        device
-            .reset_command_buffer(
-                command_buffer,
-                vk::CommandBufferResetFlags::RELEASE_RESOURCES,
-            )
-            .expect("Reset command buffer failed.");
-
-        let command_buffer_begin_info = vk::CommandBufferBeginInfo::default()
-            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
-
-        device
-            .begin_command_buffer(command_buffer, &command_buffer_begin_info)
-            .expect("Begin commandbuffer");
-        f(device, command_buffer);
-        device
-            .end_command_buffer(command_buffer)
-            .expect("End commandbuffer");
-
-        let command_buffers = vec![command_buffer];
-
-        let submit_info = vk::SubmitInfo::default()
-            .wait_semaphores(wait_semaphores)
-            .wait_dst_stage_mask(wait_mask)
-            .command_buffers(&command_buffers)
-            .signal_semaphores(signal_semaphores);
-
-        device
-            .queue_submit(submit_queue, &[submit_info], command_buffer_reuse_fence)
-            .expect("queue submit failed.");
     }
 }
 

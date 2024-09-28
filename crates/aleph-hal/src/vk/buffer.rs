@@ -1,5 +1,9 @@
 pub use gpu_allocator::MemoryLocation;
-use {ash::vk, gpu_allocator::vulkan::Allocation};
+use {
+    ash::{vk, vk::Handle},
+    gpu_allocator::vulkan::Allocation,
+    std::fmt,
+};
 pub struct BufferDesc {
     pub size: usize,
     pub usage: BufferUsage,
@@ -36,5 +40,13 @@ impl Into<vk::BufferUsageFlags> for BufferUsage {
             BufferUsage::Vertex => vk::BufferUsageFlags::VERTEX_BUFFER,
             BufferUsage::Indirect => vk::BufferUsageFlags::INDIRECT_BUFFER,
         }
+    }
+}
+
+impl fmt::Debug for Buffer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Buffer")
+            .field("inner", &format_args!("{:x}", self.inner.as_raw()))
+            .finish_non_exhaustive()
     }
 }

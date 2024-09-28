@@ -1,15 +1,12 @@
 use {
-    super::{
-        device::Texture,
-        renderpass::{self, RenderPass},
-    },
+    super::{device::Texture, render_pass::RenderPass},
     crate::vk::{Device, Surface},
     anyhow::Result,
     ash::{
         khr,
-        vk::{self, FrameBoundaryEXT},
+        vk::{self},
     },
-    std::{mem::swap, ops::Index, sync::Arc},
+    std::{fmt, ops::Index, sync::Arc},
     vk::Handle,
 };
 
@@ -17,6 +14,12 @@ pub struct Framebuffers {
     pub inner: Vec<vk::Framebuffer>,
     pub present_images: Vec<vk::Image>,
     pub depth_image: Texture,
+}
+
+impl fmt::Debug for Framebuffers {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Framebuffers").finish_non_exhaustive()
+    }
 }
 
 impl Index<usize> for Framebuffers {
@@ -30,14 +33,14 @@ impl Device {
     pub fn create_framebuffers(
         &self,
         swapchain: &Swapchain,
-        renderpass: &RenderPass,
+        render_pass: &RenderPass,
     ) -> Result<Framebuffers> {
         let present_images = unsafe { swapchain.fns.get_swapchain_images(swapchain.inner)? };
         let present_image_views = &swapchain.image_views;
         let depth_image_create_info = vk::ImageCreateInfo::default()
             .image_type(vk::ImageType::TYPE_2D)
             .format(vk::Format::D16_UNORM)
-            .extent(swapchain.properties.dims.into())
+            .extent(swapchain.desc.extent.into())
             .mip_levels(1)
             .array_layers(1)
             .samples(vk::SampleCountFlags::TYPE_1)
@@ -45,17 +48,17 @@ impl Device {
             .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
-        let depth_image = self.create_texture(&depth_image_create_info);
+        let depth_image = self.create_texture(&depth_image_create_info)?;
 
         let framebuffers = present_image_views
             .iter()
             .map(|&present_image_view| {
                 let framebuffer_attachments = [present_image_view, depth_image.view];
                 let frame_buffer_create_info = vk::FramebufferCreateInfo::default()
-                    .render_pass(renderpass.inner)
+                    .render_pass(render_pass.inner)
                     .attachments(&framebuffer_attachments)
-                    .width(swapchain.properties.dims.width)
-                    .height(swapchain.properties.dims.height)
+                    .width(swapchain.desc.extent.width)
+                    .height(swapchain.desc.extent.height)
                     .layers(1);
 
                 unsafe {
@@ -75,10 +78,11 @@ impl Device {
     }
 }
 
-pub struct SwapchainProperties {
-    pub format: vk::SurfaceFormatKHR,
-    pub dims: vk::Extent2D,
+pub struct SwapchainDesc {
+    pub format: vk::Format,
+    pub extent: vk::Extent2D,
     pub vsync: bool,
+    pub color_space: vk::ColorSpaceKHR,
 }
 
 pub struct Swapchain {
@@ -86,28 +90,18 @@ pub struct Swapchain {
     pub fns: khr::swapchain::Device,
     pub device: Arc<Device>,
     pub surface: Arc<Surface>,
-    pub properties: SwapchainProperties,
     pub image_views: Vec<vk::ImageView>,
     pub acquire_semaphores: Vec<vk::Semaphore>,
     pub rendering_finished_semaphores: Vec<vk::Semaphore>,
     pub next_semaphore: usize,
+    pub desc: SwapchainDesc,
 }
 
 impl Swapchain {
-    pub fn enumerate_surface_formats(
-        device: &Arc<Device>,
-        surface: &Surface,
-    ) -> Result<Vec<vk::SurfaceFormatKHR>> {
-        unsafe {
-            Ok(surface
-                .fns
-                .get_physical_device_surface_formats(device.physical_device.inner, surface.inner)?)
-        }
-    }
-    pub fn new(
+    pub fn create(
         device: &Arc<Device>,
         surface: &Arc<Surface>,
-        properties: SwapchainProperties,
+        desc: SwapchainDesc,
     ) -> Result<Arc<Swapchain>> {
         let surface_capabilities = unsafe {
             surface.fns.get_physical_device_surface_capabilities(
@@ -122,7 +116,7 @@ impl Swapchain {
             desired_image_count = desired_image_count.min(surface_capabilities.max_image_count);
         }
         let surface_resolution = match surface_capabilities.current_extent.width {
-            std::u32::MAX => properties.dims,
+            std::u32::MAX => desc.extent,
             _ => surface_capabilities.current_extent,
         };
 
@@ -130,7 +124,7 @@ impl Swapchain {
             anyhow::bail!("Swapchain resolution cannot be zero");
         }
 
-        let present_mode_preference = if properties.vsync {
+        let present_mode_preference = if desc.vsync {
             vec![vk::PresentModeKHR::FIFO_RELAXED, vk::PresentModeKHR::FIFO]
         } else {
             vec![vk::PresentModeKHR::MAILBOX, vk::PresentModeKHR::IMMEDIATE]
@@ -161,8 +155,8 @@ impl Swapchain {
         let swapchain_create_info = vk::SwapchainCreateInfoKHR::default()
             .surface(surface.inner)
             .min_image_count(desired_image_count)
-            .image_color_space(properties.format.color_space)
-            .image_format(properties.format.format)
+            .image_color_space(desc.color_space)
+            .image_format(desc.format)
             .image_extent(surface_resolution)
             .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
             .pre_transform(pre_transform)
@@ -191,40 +185,23 @@ impl Swapchain {
                     .view_type(vk::ImageViewType::TYPE_2D)
                     .format(vk::Format::B8G8R8A8_UNORM)
                     .subresource_range(subresource_range);
-                unsafe {
-                    device
-                        .inner
-                        .create_image_view(&info, None)
-                        .expect("Failed to create imageview")
-                }
+                device
+                    .create_image_view(info)
+                    .expect("Failed to create imageview")
             })
             .collect();
 
         let acquire_semaphores = (0..images.len())
-            .map(|_| {
-                unsafe {
-                    device
-                        .inner
-                        .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)
-                }
-                .unwrap()
-            })
+            .map(|_| device.create_semaphore().unwrap())
             .collect();
 
         let rendering_finished_semaphores = (0..images.len())
-            .map(|_| {
-                unsafe {
-                    device
-                        .inner
-                        .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)
-                }
-                .unwrap()
-            })
+            .map(|_| device.create_semaphore().unwrap())
             .collect();
-        Ok(Arc::new(Self {
+        Ok(Arc::new(Swapchain {
             inner: swapchain,
             fns: fns,
-            properties,
+            desc,
             device: device.clone(),
             surface: surface.clone(),
             rendering_finished_semaphores,
