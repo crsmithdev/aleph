@@ -1,7 +1,7 @@
 use {
-    super::{device::Texture, render_pass::RenderPass},
+    super::RenderBackend,
     crate::vk::{Device, Surface},
-    anyhow::Result,
+    anyhow::{Error, Result},
     ash::{
         khr,
         vk::{self},
@@ -10,72 +10,15 @@ use {
     vk::Handle,
 };
 
-pub struct Framebuffers {
-    pub inner: Vec<vk::Framebuffer>,
-    pub present_images: Vec<vk::Image>,
-    pub depth_image: Texture,
-}
+const MAX_FRAMES: u32 = 2;
 
-impl fmt::Debug for Framebuffers {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Framebuffers").finish_non_exhaustive()
-    }
-}
-
-impl Index<usize> for Framebuffers {
-    type Output = vk::Framebuffer;
-    fn index<'a>(&'a self, i: usize) -> &'a vk::Framebuffer {
-        &self.inner[i]
-    }
-}
-
-impl Device {
-    pub fn create_framebuffers(
-        &self,
-        swapchain: &Swapchain,
-        render_pass: &RenderPass,
-    ) -> Result<Framebuffers> {
-        let present_images = unsafe { swapchain.fns.get_swapchain_images(swapchain.inner)? };
-        let present_image_views = &swapchain.image_views;
-        let depth_image_create_info = vk::ImageCreateInfo::default()
-            .image_type(vk::ImageType::TYPE_2D)
-            .format(vk::Format::D16_UNORM)
-            .extent(swapchain.desc.extent.into())
-            .mip_levels(1)
-            .array_layers(1)
-            .samples(vk::SampleCountFlags::TYPE_1)
-            .tiling(vk::ImageTiling::OPTIMAL)
-            .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
-            .sharing_mode(vk::SharingMode::EXCLUSIVE);
-
-        let depth_image = self.create_texture(&depth_image_create_info)?;
-
-        let framebuffers = present_image_views
-            .iter()
-            .map(|&present_image_view| {
-                let framebuffer_attachments = [present_image_view, depth_image.view];
-                let frame_buffer_create_info = vk::FramebufferCreateInfo::default()
-                    .render_pass(render_pass.inner)
-                    .attachments(&framebuffer_attachments)
-                    .width(swapchain.desc.extent.width)
-                    .height(swapchain.desc.extent.height)
-                    .layers(1);
-
-                unsafe {
-                    self.inner
-                        .create_framebuffer(&frame_buffer_create_info, None)
-                        .unwrap()
-                }
-            })
-            .collect();
-        let fb = Framebuffers {
-            inner: framebuffers,
-            present_images,
-            depth_image,
-        };
-
-        Ok(fb)
-    }
+pub struct Frame {
+    pub(crate) index: usize,
+    pub(crate) swapchain_semaphore: vk::Semaphore,
+    pub(crate) render_semaphore: vk::Semaphore,
+    pub(crate) fence: vk::Fence,
+    pub(crate) command_pool: vk::CommandPool,
+    pub(crate) command_buffer: vk::CommandBuffer,
 }
 
 pub struct SwapchainDesc {
@@ -91,16 +34,13 @@ pub struct Swapchain {
     pub device: Arc<Device>,
     pub surface: Arc<Surface>,
     pub image_views: Vec<vk::ImageView>,
-    pub acquire_semaphores: Vec<vk::Semaphore>,
-    pub rendering_finished_semaphores: Vec<vk::Semaphore>,
-    pub next_semaphore: usize,
     pub desc: SwapchainDesc,
 }
 
-impl Swapchain {
-    pub fn create(
-        device: &Arc<Device>,
-        surface: &Arc<Surface>,
+impl RenderBackend {
+    pub(crate) fn create_swapchain(
+        device: Arc<Device>,
+        surface: Arc<Surface>,
         desc: SwapchainDesc,
     ) -> Result<Arc<Swapchain>> {
         let surface_capabilities = unsafe {
@@ -110,7 +50,7 @@ impl Swapchain {
             )
         }?;
 
-        let mut desired_image_count = 3.max(surface_capabilities.min_image_count);
+        let mut desired_image_count = 2.max(surface_capabilities.min_image_count);
 
         if surface_capabilities.max_image_count != 0 {
             desired_image_count = desired_image_count.min(surface_capabilities.max_image_count);
@@ -119,10 +59,6 @@ impl Swapchain {
             std::u32::MAX => desc.extent,
             _ => surface_capabilities.current_extent,
         };
-
-        if 0 == surface_resolution.width || 0 == surface_resolution.height {
-            anyhow::bail!("Swapchain resolution cannot be zero");
-        }
 
         let present_mode_preference = if desc.vsync {
             vec![vk::PresentModeKHR::FIFO_RELAXED, vk::PresentModeKHR::FIFO]
@@ -191,31 +127,125 @@ impl Swapchain {
             })
             .collect();
 
-        let acquire_semaphores = (0..images.len())
-            .map(|_| device.create_semaphore().unwrap())
-            .collect();
-
-        let rendering_finished_semaphores = (0..images.len())
-            .map(|_| device.create_semaphore().unwrap())
-            .collect();
         Ok(Arc::new(Swapchain {
             inner: swapchain,
             fns: fns,
             desc,
-            device: device.clone(),
+            device: device,
             surface: surface.clone(),
-            rendering_finished_semaphores,
             image_views,
-            acquire_semaphores,
-            next_semaphore: 0,
         }))
     }
+
+    // pub fn create_frames(&self, swapchain: &Swapchain) -> Result<Vec<Frame>> {
+    //     let pool_create_info = vk::CommandPoolCreateInfo::default()
+    //         .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+    //         .queue_family_index(self.queue.family.index);
+
+    //     (0..swapchain.image_views.len())
+    //         .map(|index| {
+    //             let command_pool = unsafe {
+    //                 self.inner
+    //                     .create_command_pool(&pool_create_info, None)
+    //                     .unwrap()
+    //             };
+    //             let command_buffer_info = vk::CommandBufferAllocateInfo::default()
+    //                 .command_buffer_count(1)
+    //                 .command_pool(command_pool)
+    //                 .level(vk::CommandBufferLevel::PRIMARY);
+
+    //             let command_buffer =
+    //                 unsafe { self.inner.allocate_command_buffers(&command_buffer_info) }?[0];
+    //             let swapchain_semaphore = self.create_semaphore()?;
+    //             let render_semaphore = self.create_semaphore()?;
+    //             let fence = self.create_fence(true)?;
+
+    //             Ok(Frame {
+    //                 index,
+    //                 swapchain_semaphore,
+    //                 render_semaphore,
+    //                 fence,
+    //                 command_pool,
+    //                 command_buffer,
+    //             })
+    //         })
+    //         .collect::<Result<Vec<Frame>>>()
+    // }
 }
 
 impl std::fmt::Debug for Swapchain {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("Swapchain")
             .field("inner", &format_args!("{:x}", self.inner.as_raw()))
             .finish()
     }
 }
+
+/*
+pub struct Framebuffers {
+    pub inner: Vec<vk::Framebuffer>,
+    pub present_images: Vec<vk::Image>,
+    pub depth_image: Texture,
+}
+
+impl fmt::Debug for Framebuffers {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("Framebuffers").finish_non_exhaustive()
+    }
+}
+
+impl Index<usize> for Framebuffers {
+    type Output = vk::Framebuffer;
+    fn index(&'a self, i: usize) -> &'a vk::Framebuffer {
+        &self.inner[i]
+    }
+}
+
+impl Device {
+    pub fn create_framebuffers(
+        &self,
+        swapchain: &Swapchain,
+        render_pass: &RenderPass,
+    ) -> Result<Framebuffers> {
+        let present_images = unsafe { swapchain.fns.get_swapchain_images(swapchain.inner)? };
+        let present_image_views = &swapchain.image_views;
+        let depth_image_create_info = vk::ImageCreateInfo::default()
+            .format(vk::Format::D16_UNORM)
+            .extent(swapchain.desc.extent.into())
+            .mip_levels(1)
+            .array_layers(1)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE);
+
+        let depth_image = self.create_texture(&depth_image_create_info)?;
+
+        let framebuffers = present_image_views
+            .iter()
+            .map(|&present_image_view| {
+                let framebuffer_attachments = [present_image_view, depth_image.view];
+                let frame_buffer_create_info = vk::FramebufferCreateInfo::default()
+                    .render_pass(render_pass.inner)
+                    .attachments(&framebuffer_attachments)
+                    .width(swapchain.desc.extent.width)
+                    .height(swapchain.desc.extent.height)
+                    .layers(1);
+
+                unsafe {
+                    self.inner
+                        .create_framebuffer(&frame_buffer_create_info, None)
+                        .unwrap()
+                }
+            })
+            .collect();
+        let fb = Framebuffers {
+            inner: framebuffers,
+            present_images,
+            depth_image,
+        };
+
+        Ok(fb)
+    }
+}
+*/

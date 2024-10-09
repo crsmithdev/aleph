@@ -1,17 +1,20 @@
 use {
     crate::vk::{
-        command_buffer::CommandBuffer,
         device::Device,
         instance::Instance,
         physical_device::PhysicalDevice,
-        render_pass::RenderPass,
         surface::Surface,
         swapchain::{Swapchain, SwapchainDesc},
     },
     anyhow::Result,
-    ash::vk,
+    ash::{khr, vk},
+    gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc},
     physical_device::PhysicalDevices,
-    std::{fmt, sync::Arc},
+    queue::Queue,
+    std::{
+        fmt,
+        sync::{Arc, Mutex},
+    },
     winit::window::Window,
 };
 
@@ -40,14 +43,10 @@ pub struct RenderBackend {
     pub surface: Arc<Surface>,
     pub swapchain: Arc<Swapchain>,
     pub device: Arc<Device>,
-    pub render_pass: Arc<RenderPass>,
-    pub draw_commands_reuse_fence: vk::Fence,
-    pub present_complete_semaphore: vk::Semaphore,
-    pub rendering_complete_semaphore: vk::Semaphore,
 }
 
 impl fmt::Debug for RenderBackend {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("RenderBackend")
             // .field("instance: {}", self.instance)///  &format_args!("{:?}", self.instance))
             .finish_non_exhaustive()
@@ -55,22 +54,22 @@ impl fmt::Debug for RenderBackend {
 }
 
 impl RenderBackend {
-    pub fn new(window: Arc<Window>) -> Result<Arc<Self>> {
+    pub fn new(window: &Arc<Window>) -> Result<Arc<Self>> {
         unsafe { Self::init_vulkan(window) }
     }
 
-    unsafe fn init_vulkan(window: Arc<Window>) -> Result<Arc<RenderBackend>> {
-        log::info!("Initializing Vulkan");
+    unsafe fn init_vulkan(window: &Arc<Window>) -> Result<Arc<RenderBackend>> {
+        log::info!("Initializing Vulkan, window: {window:?}");
 
         let instance = Instance::builder(window.clone()).build()?;
         log::info!("Created instance: {instance:?}");
 
-        let surface = Surface::create(instance.clone(), window.clone())?;
+        let surface = Self::create_surface(instance.clone(), window.clone())?;
         log::info!("Created surface: {surface:?}");
 
         let physical_devices = instance.get_physical_devices()?;
         let physical_device = physical_devices.select_default()?;
-        let device = Device::create(&instance, &physical_device.clone())?;
+        let device = Self::create_device(instance.clone(), physical_device.clone())?;
         log::info!("Created device: {device:?}");
 
         let format = vk::Format::B8G8R8A8_UNORM;
@@ -80,9 +79,9 @@ impl RenderBackend {
             width: 640,
             height: 480,
         };
-        let swapchain = Swapchain::create(
-            &device,
-            &surface,
+        let swapchain = Self::create_swapchain(
+            device.clone(),
+            surface.clone(),
             SwapchainDesc {
                 format,
                 color_space,
@@ -91,9 +90,6 @@ impl RenderBackend {
             },
         )?;
         log::info!("Created swapchain: {swapchain:?}");
-
-        let render_pass = device.create_render_pass(&swapchain)?;
-        log::info!("Created render pass: {render_pass:?}");
 
         let draw_commands_reuse_fence = device.create_fence(true)?;
         let present_complete_semaphore = device.create_semaphore()?;
@@ -107,12 +103,8 @@ impl RenderBackend {
             instance,
             physical_device,
             surface,
-            device,
+            device: device,
             swapchain,
-            render_pass,
-            draw_commands_reuse_fence,
-            present_complete_semaphore,
-            rendering_complete_semaphore,
         }))
     }
 }

@@ -1,5 +1,5 @@
 use {
-    super::surface::Surface,
+    super::{surface::Surface, RenderBackend},
     crate::vk::{
         buffer::{Buffer, BufferDesc},
         command_buffer::CommandBuffer,
@@ -8,7 +8,10 @@ use {
         queue::Queue,
     },
     anyhow::Result,
-    ash::vk::{self, Handle, SemaphoreCreateInfo},
+    ash::{
+        khr,
+        vk::{self, Handle, SemaphoreCreateInfo},
+    },
     gpu_allocator::{
         vulkan::{
             Allocation,
@@ -43,19 +46,86 @@ pub struct Device {
     pub instance: Arc<Instance>,
     pub queue: Queue,
     pub allocator: Arc<Mutex<Allocator>>,
-    pub command_pool: vk::CommandPool,
-    pub command_buffer: CommandBuffer,
-    pub command_buffer_fence: vk::Fence,
-    pub present_complete_semaphore: vk::Semaphore,
-    pub rendering_complete_semaphore: vk::Semaphore,
+}
+
+impl RenderBackend {
+    pub fn create_device(
+        instance: Arc<Instance>,
+        physical_device: Arc<PhysicalDevice>,
+    ) -> Result<Arc<Device>> {
+        let device_extension_names = vec![
+            khr::swapchain::NAME.as_ptr(),
+            khr::synchronization2::NAME.as_ptr(),
+            khr::maintenance3::NAME.as_ptr(),
+            khr::dynamic_rendering::NAME.as_ptr(),
+            ash::ext::descriptor_indexing::NAME.as_ptr(),
+            ash::ext::buffer_device_address::NAME.as_ptr(),
+        ];
+        let priorities = [1.0];
+
+        let queue_family = physical_device
+            .queue_families
+            .iter()
+            .filter(|qf| qf.properties.queue_flags.contains(vk::QueueFlags::GRAPHICS))
+            .copied()
+            .next()
+            .unwrap();
+
+        let queue_info = [vk::DeviceQueueCreateInfo::default()
+            .queue_family_index(queue_family.index)
+            .queue_priorities(&priorities)];
+
+        let mut device_features = vk::PhysicalDeviceFeatures2::default();
+
+        let device_info = vk::DeviceCreateInfo::default()
+            .queue_create_infos(&queue_info)
+            .enabled_extension_names(&device_extension_names)
+            .push_next(&mut device_features);
+
+        let device = unsafe {
+            instance
+                .inner
+                .create_device(physical_device.inner, &device_info, None)
+                .unwrap()
+        };
+
+        let allocator = Arc::new(Mutex::new(Allocator::new(&AllocatorCreateDesc {
+            instance: instance.inner.clone(),
+            device: device.clone(),
+            physical_device: physical_device.inner,
+            buffer_device_address: false,
+            debug_settings: Default::default(),
+            allocation_sizes: Default::default(),
+        })?));
+
+        let queue = Queue {
+            inner: unsafe { device.get_device_queue(queue_family.index, 0) },
+            family: queue_family,
+        };
+
+        Ok(Arc::new(Device {
+            physical_device,
+            inner: device,
+            instance: instance,
+            queue,
+            allocator,
+        }))
+    }
 }
 
 impl Device {
     pub fn create(
-        instance: &Arc<Instance>,
-        physical_device: &Arc<PhysicalDevice>,
+        instance: Arc<Instance>,
+        physical_device: Arc<PhysicalDevice>,
     ) -> Result<Arc<Self>> {
-        let device_extension_names = vec![ash::khr::swapchain::NAME.as_ptr()];
+        let device_extension_names = vec![
+            khr::swapchain::NAME.as_ptr(),
+            khr::synchronization2::NAME.as_ptr(),
+            khr::maintenance3::NAME.as_ptr(),
+            khr::dynamic_rendering::NAME.as_ptr(),
+            ash::ext::descriptor_indexing::NAME.as_ptr(),
+            ash::ext::buffer_device_address::NAME.as_ptr(),
+        ];
         let priorities = [1.0];
 
         let queue_family = physical_device
@@ -118,16 +188,11 @@ impl Device {
         let rendering_complete_semaphore =
             unsafe { device.create_semaphore(&vk::SemaphoreCreateInfo::default(), None) }?;
         Ok(Arc::new(Device {
-            physical_device: physical_device.clone(),
-            command_buffer,
+            physical_device,
             inner: device,
-            instance: instance.clone(),
+            instance: instance,
             queue,
-            command_buffer_fence,
-            command_pool,
             allocator,
-            present_complete_semaphore,
-            rendering_complete_semaphore,
         }))
     }
     pub fn enumerate_surface_formats(
@@ -152,84 +217,84 @@ impl Device {
         Self::create_fence_(&self.inner, signaled)
     }
 
-    pub fn create_texture(&self, info: &vk::ImageCreateInfo) -> Result<Texture> {
-        let image = unsafe { self.inner.create_image(&info, None).unwrap() };
-        let memory_properties = &self.physical_device.memory_properties;
-        let image_memory_req = unsafe { self.inner.get_image_memory_requirements(image) };
-        let image_memory_index = self
-            .find_memorytype_index(
-                &image_memory_req,
-                memory_properties,
-                vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            )
-            .expect("Unable to find suitable memory index for depth image.");
+    // pub fn create_texture(&self, info: &vk::ImageCreateInfo) -> Result<Texture> {
+    //     let image = unsafe { self.inner.create_image(&info, None).unwrap() };
+    //     let memory_properties = &self.physical_device.memory_properties;
+    //     let image_memory_req = unsafe { self.inner.get_image_memory_requirements(image) };
+    //     let image_memory_index = self
+    //         .find_memorytype_index(
+    //             &image_memory_req,
+    //             memory_properties,
+    //             vk::MemoryPropertyFlags::DEVICE_LOCAL,
+    //         )
+    //         .expect("Unable to find suitable memory index for depth image.");
 
-        let image_allocate_info = vk::MemoryAllocateInfo::default()
-            .allocation_size(image_memory_req.size)
-            .memory_type_index(image_memory_index);
+    //     let image_allocate_info = vk::MemoryAllocateInfo::default()
+    //         .allocation_size(image_memory_req.size)
+    //         .memory_type_index(image_memory_index);
 
-        let memory = unsafe {
-            self.inner
-                .allocate_memory(&image_allocate_info, None)
-                .unwrap()
-        };
-        unsafe {
-            self.inner
-                .bind_image_memory(image, memory, 0)
-                .expect("Unable to bind depth image memory");
-        }
+    //     let memory = unsafe {
+    //         self.inner
+    //             .allocate_memory(&image_allocate_info, None)
+    //             .unwrap()
+    //     };
+    //     unsafe {
+    //         self.inner
+    //             .bind_image_memory(image, memory, 0)
+    //             .expect("Unable to bind depth image memory");
+    //     }
 
-        log::info!("Beginning command buffer encoding");
-        self.begin_command_buffer()?;
-        let layout_transition_barriers = vk::ImageMemoryBarrier::default()
-            .image(image)
-            .dst_access_mask(
-                vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
-                    | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
-            )
-            .new_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-            .old_layout(vk::ImageLayout::UNDEFINED)
-            .subresource_range(
-                vk::ImageSubresourceRange::default()
-                    .aspect_mask(vk::ImageAspectFlags::DEPTH)
-                    .layer_count(1)
-                    .level_count(1),
-            );
+    //     log::info!("Beginning command buffer encoding");
+    //     self.begin_command_buffer()?;
+    //     let layout_transition_barriers = vk::ImageMemoryBarrier::default()
+    //         .image(image)
+    //         .dst_access_mask(
+    //             vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
+    //                 | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+    //         )
+    //         .new_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+    //         .old_layout(vk::ImageLayout::UNDEFINED)
+    //         .subresource_range(
+    //             vk::ImageSubresourceRange::default()
+    //                 .aspect_mask(vk::ImageAspectFlags::DEPTH)
+    //                 .layer_count(1)
+    //                 .level_count(1),
+    //         );
 
-        unsafe {
-            self.inner.cmd_pipeline_barrier(
-                self.command_buffer.inner,
-                vk::PipelineStageFlags::BOTTOM_OF_PIPE,
-                vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
-                vk::DependencyFlags::empty(),
-                &[],
-                &[],
-                &[layout_transition_barriers],
-            );
-        }
+    //     unsafe {
+    //         self.inner.cmd_pipeline_barrier(
+    //             self.command_buffer.inner,
+    //             vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+    //             vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
+    //             vk::DependencyFlags::empty(),
+    //             &[],
+    //             &[],
+    //             &[layout_transition_barriers],
+    //         );
+    //     }
 
-        self.end_command_buffer(&[], &[], &[])?;
-        log::info!("Ended command buffer encoding");
+    //     self.end_command_buffer(&[], &[], &[])?;
+    //     log::info!("Ended command buffer encoding");
 
-        let depth_image_view_info = vk::ImageViewCreateInfo::default()
-            .subresource_range(
-                vk::ImageSubresourceRange::default()
-                    .aspect_mask(vk::ImageAspectFlags::DEPTH)
-                    .level_count(1)
-                    .layer_count(1),
-            )
-            .image(image)
-            .format(info.format)
-            .view_type(vk::ImageViewType::TYPE_2D);
+    //     let depth_image_view_info = vk::ImageViewCreateInfo::default()
+    //         .subresource_range(
+    //             vk::ImageSubresourceRange::default()
+    //                 .aspect_mask(vk::ImageAspectFlags::DEPTH)
+    //                 .level_count(1)
+    //                 .layer_count(1),
+    //         )
+    //         .image(image)
+    //         .format(info.format)
+    //         .view_type(vk::ImageViewType::TYPE_2D);
 
-        let view = self.create_image_view(depth_image_view_info)?;
+    //     let view = self.create_image_view(depth_image_view_info)?;
 
-        Ok(Texture {
-            image,
-            view,
-            memory,
-        })
-    }
+    //     Ok(Texture {
+    //         image,
+    //         view,
+    //         memory,
+    //     })
+    // }
 
     pub fn create_image_view(&self, info: vk::ImageViewCreateInfo) -> Result<vk::ImageView> {
         Ok(unsafe { self.inner.create_image_view(&info, None)? })
@@ -242,14 +307,14 @@ impl Device {
         })
     }
 
-    pub fn create_command_buffer(&self) -> CommandBuffer {
-        let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::default()
-            .command_buffer_count(1)
-            .command_pool(self.command_pool)
-            .level(vk::CommandBufferLevel::PRIMARY);
+    // pub fn create_command_buffer(&self) -> CommandBuffer {
+    //     let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::default()
+    //         .command_buffer_count(1)
+    //         .command_pool(self.command_pool)
+    //         .level(vk::CommandBufferLevel::PRIMARY);
 
-        Self::allocate_command_buffer(self.inner.clone(), command_buffer_allocate_info)
-    }
+    //     Self::allocate_command_buffer(self.inner.clone(), command_buffer_allocate_info)
+    // }
 
     pub fn create_buffer<T>(&self, desc: BufferDesc, initial_data: Option<&[T]>) -> Result<Buffer> {
         let mut flags: vk::BufferUsageFlags = desc.usage.into();
@@ -308,53 +373,53 @@ impl Device {
         }
     }
 
-    pub fn begin_command_buffer(&self) -> Result<()> {
-        Ok(unsafe {
-            let fences = &[self.command_buffer_fence];
-            self.inner.wait_for_fences(fences, true, u64::MAX)?;
-            self.inner.reset_fences(fences)?;
-            self.inner.reset_command_buffer(
-                self.command_buffer.inner,
-                vk::CommandBufferResetFlags::RELEASE_RESOURCES,
-            )?;
+    // pub fn begin_command_buffer(&self) -> Result<()> {
+    //     Ok(unsafe {
+    //         let fences = &[self.command_buffer_fence];
+    //         self.inner.wait_for_fences(fences, true, u64::MAX)?;
+    //         self.inner.reset_fences(fences)?;
+    //         self.inner.reset_command_buffer(
+    //             self.command_buffer.inner,
+    //             vk::CommandBufferResetFlags::RELEASE_RESOURCES,
+    //         )?;
 
-            let command_buffer_begin_info = vk::CommandBufferBeginInfo::default()
-                .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+    //         let command_buffer_begin_info = vk::CommandBufferBeginInfo::default()
+    //             .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
 
-            self.inner
-                .begin_command_buffer(self.command_buffer.inner, &command_buffer_begin_info)?
-        })
-    }
+    //         self.inner
+    //             .begin_command_buffer(self.command_buffer.inner, &command_buffer_begin_info)?
+    //     })
+    // }
 
-    pub fn end_command_buffer(
-        &self,
-        wait_semaphores: &[vk::Semaphore],
-        signal_semaphores: &[vk::Semaphore],
-        wait_mask: &[vk::PipelineStageFlags],
-    ) -> Result<()> {
-        log::info!("Ending command buffer...        ");
-        log::info!("Wait semaphores: {wait_semaphores:?}");
-        log::info!("Signal semaphores: {signal_semaphores:?}");
-        log::info!("Wait mask: {wait_mask:?}");
+    // pub fn end_command_buffer(
+    //     &self,
+    //     wait_semaphores: &[vk::Semaphore],
+    //     signal_semaphores: &[vk::Semaphore],
+    //     wait_mask: &[vk::PipelineStageFlags],
+    // ) -> Result<()> {
+    //     log::info!("Ending command buffer...        ");
+    //     log::info!("Wait semaphores: {wait_semaphores:?}");
+    //     log::info!("Signal semaphores: {signal_semaphores:?}");
+    //     log::info!("Wait mask: {wait_mask:?}");
 
-        Ok(unsafe {
-            self.inner.end_command_buffer(self.command_buffer.inner)?;
+    //     Ok(unsafe {
+    //         self.inner.end_command_buffer(self.command_buffer.inner)?;
 
-            let buffers = &[self.command_buffer.inner];
-            let submit_info = vk::SubmitInfo::default()
-                .wait_semaphores(wait_semaphores)
-                .wait_dst_stage_mask(wait_mask)
-                .command_buffers(buffers)
-                .signal_semaphores(signal_semaphores);
+    //         let buffers = &[self.command_buffer.inner];
+    //         let submit_info = vk::SubmitInfo::default()
+    //             .wait_semaphores(wait_semaphores)
+    //             .wait_dst_stage_mask(wait_mask)
+    //             .command_buffers(buffers)
+    //             .signal_semaphores(signal_semaphores);
 
-            self.inner
-                .queue_submit(self.queue.inner, &[submit_info], self.command_buffer_fence)?
-        })
-    }
+    //         self.inner
+    //             .queue_submit(self.queue.inner, &[submit_info], self.command_buffer_fence)?
+    //     })
+    // }
 }
 
 impl fmt::Debug for Device {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("Device")
             .field(
                 "inner",
