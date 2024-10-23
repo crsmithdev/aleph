@@ -1,9 +1,5 @@
 use {
-    crate::vk::{
-        debug::vulkan_debug_callback,
-        physical_device::PhysicalDevice,
-        queue::QueueFamily,
-    },
+    crate::vk::debug::vulkan_debug_callback,
     anyhow::Result,
     ash::{ext, ext::debug_utils, khr, vk},
     std::{ffi, fmt, sync::Arc},
@@ -20,7 +16,13 @@ pub struct Instance {
 impl fmt::Debug for Instance {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Instance")
-            .field("raw", &self.inner.handle())
+            .field("inner", &self.inner.handle())
+            .field(
+                "entry",
+                &format_args!("{:?}", self.inner.fp_v1_3() as *const _),
+            )
+            // TODO .field("debug_utils", &debug_utils)
+            .field("debug_callback", &self.debug_callback)
             .finish_non_exhaustive()
     }
 }
@@ -45,40 +47,6 @@ impl InstanceBuilder {
 }
 
 impl Instance {
-    pub fn get_physical_devices(&self) -> Result<Vec<PhysicalDevice>> {
-        unsafe {
-            let pdevices = self.inner.enumerate_physical_devices()?;
-
-            Ok(pdevices
-                .into_iter()
-                .map(|physical_device| {
-                    let properties = self.inner.get_physical_device_properties(physical_device);
-                    let queue_families = self
-                        .inner
-                        .get_physical_device_queue_family_properties(physical_device)
-                        .into_iter()
-                        .enumerate()
-                        .map(|(index, properties)| QueueFamily {
-                            index: index as _,
-                            properties,
-                        })
-                        .collect();
-
-                    let memory_properties = self
-                        .inner
-                        .get_physical_device_memory_properties(physical_device);
-
-                    PhysicalDevice {
-                        inner: physical_device,
-                        queue_families,
-                        properties,
-                        memory_properties,
-                    }
-                })
-                .collect())
-        }
-    }
-
     pub fn builder(window: Arc<Window>) -> InstanceBuilder {
         InstanceBuilder {
             window: window.clone(),
@@ -88,7 +56,7 @@ impl Instance {
         }
     }
 
-    fn extension_names(builder: &InstanceBuilder) -> Vec<*const i8> {
+    fn vk_extensions(builder: &InstanceBuilder) -> Vec<*const i8> {
         let mut extensions: Vec<*const i8> = vec![
             khr::surface::NAME.as_ptr(),
             khr::win32_surface::NAME.as_ptr(),
@@ -100,10 +68,10 @@ impl Instance {
         extensions
     }
 
-    fn layer_names() -> Vec<*const i8> {
+    fn vk_layers() -> Vec<*const i8> {
         unsafe {
             [
-                // ffi::CStr::from_bytes_with_nul_unchecked(b"VK_LAYER_LUNARG_api_dump\0"),
+                ffi::CStr::from_bytes_with_nul_unchecked(b"VK_LAYER_LUNARG_api_dump\0"),
                 ffi::CStr::from_bytes_with_nul_unchecked(b"VK_LAYER_KHRONOS_validation\0"),
             ]
             .iter()
@@ -116,8 +84,8 @@ impl Instance {
         log::info!("Instance build: {:?}", builder);
 
         let entry = unsafe { ash::Entry::load()? };
-        let extension_names = Self::extension_names(builder);
-        let layer_names = Self::layer_names();
+        let extension_names = Self::vk_extensions(builder);
+        let layer_names = Self::vk_layers();
 
         let app_name = ffi::CString::new(match builder.name {
             Some(ref name) => name,

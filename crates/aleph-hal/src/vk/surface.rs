@@ -1,6 +1,5 @@
 use {
-    super::RenderBackend,
-    crate::vk::instance::Instance,
+    crate::vk::{instance::Instance, render_backend::RenderBackend},
     anyhow::Result,
     ash::{
         khr,
@@ -12,14 +11,14 @@ use {
 };
 pub struct Surface {
     pub inner: vk::SurfaceKHR,
-    pub fns: khr::surface::Instance,
+    pub loader: khr::surface::Instance,
 }
 
 impl fmt::Debug for Surface {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Surface")
-            .field("raw", &self.inner.as_raw())
-            .field("fns", &self.fns.instance())
+            .field("inner", &self.inner.as_raw())
+            .field("loader", &self.loader.instance())
             .finish_non_exhaustive()
     }
 }
@@ -36,11 +35,11 @@ impl RenderBackend {
             )
             .unwrap()
         };
-        let surface_loader = khr::surface::Instance::new(&instance.entry, &instance.inner); // khr::Surface::new(&instance.entry, &instance.raw);
+        let surface_loader = khr::surface::Instance::new(&instance.entry, &instance.inner);
 
         Ok(Arc::new(Surface {
             inner: surface,
-            fns: surface_loader,
+            loader: surface_loader,
         }))
     }
 }

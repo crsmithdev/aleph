@@ -1,39 +1,25 @@
 use {
     aleph_core::logging,
     aleph_gfx::renderer::Renderer,
-    aleph_hal::vk::RenderBackend,
-    anyhow::{anyhow, bail, Ok, Result},
+    aleph_hal::vk::render_backend::RenderBackend,
+    anyhow::{anyhow, Result},
     human_panic::setup_panic,
     std::{
         cell::OnceCell,
         fmt,
-        iter::Once,
-        panic,
-        process::exit,
         sync::Arc,
         time::{Duration, Instant},
     },
     winit::{
         application::ApplicationHandler,
         dpi::{PhysicalSize, Size},
-        event::{self, Event, WindowEvent},
-        event_loop::{self, ActiveEventLoop, ControlFlow, EventLoop},
-        window::{Window, WindowAttributes, WindowId},
+        event::WindowEvent,
+        event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+        window::{Window, WindowId},
     },
 };
 
-macro_rules! try_set {
-    ($cell:expr, $value:expr) => {
-        match $cell.get() {
-            None => {
-                $cell.set($value);
-                $value
-            }
-            Some(s) => bail!("e"),
-        }
-    };
-}
-
+const HEARTBEAT_STEPS: u64 = 10_000;
 const STEP_TIME_US: u128 = ((1.0 / 60.0) * 1_000_000.0) as u128;
 const UPDATE_TIME_US: u128 = 20 * STEP_TIME_US;
 const INITIAL_SIZE: Size = Size::Physical(PhysicalSize {
@@ -89,7 +75,9 @@ pub struct AppState {
     window: OnceCell<Arc<Window>>,
     last_update: Instant,
     last_step: u64,
+    last_heartbeat: u64,
     step_accumulator: i64,
+    exiting: bool,
 }
 
 impl fmt::Debug for AppState {
@@ -100,6 +88,7 @@ impl fmt::Debug for AppState {
             .field("last_update", &self.last_update)
             .field("last_step", &self.last_step)
             .field("step_accumulator", &self.step_accumulator)
+            .field("last_heartbeat", &self.last_heartbeat)
             .finish()
     }
 }
@@ -109,13 +98,36 @@ impl Default for AppState {
         AppState {
             window: OnceCell::new(),
             renderer: OnceCell::new(),
-            last_update: Instant::now(),
             step_accumulator: 0,
+            last_update: Instant::now(),
+            last_heartbeat: 0,
             last_step: 0,
+            exiting: false,
         }
     }
 }
 
+// pub trait OnceCellExtensions {
+//     fn must_set<T>(&self, cell: OnceCell<T>, value: T) -> Result<()>;
+// }
+
+// impl<T> OnceCellExtensions for OnceCell<T> {
+//     fn must_set<T>(&self, cell: OnceCell<T>, value: T) -> Result<()> {
+//         todo!()
+//     }
+// }
+
+// macro_rules! set_once {
+//     ($cell:expr, $value:expr) => {
+//         // match $self.must_set($cell, $value) {
+//         //     Ok(_) => {}
+//         //     Err(err) => {
+//         //         bail!("Failed to set cell: {err}");
+//         //     }
+//         // }
+//     };
+//     () => {};
+// }
 impl AppState {
     pub fn init(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
         let attributes = Window::default_attributes().with_inner_size(INITIAL_SIZE);
@@ -139,6 +151,10 @@ impl AppState {
     }
 
     fn update(&mut self, now: Instant) {
+        if self.exiting {
+            return;
+        }
+
         let elapsed = now.duration_since(self.last_update);
 
         self.step_elapsed(elapsed);
@@ -147,17 +163,46 @@ impl AppState {
         self.last_update = now;
     }
 
+    fn resize(&mut self, size: Size) {
+        if self.exiting {
+            return;
+        }
+
+        if let Some(renderer) = self.renderer.get_mut() {
+            let scale_factor = match self.window.get() {
+                Some(window) => window.scale_factor(),
+                None => 1.0,
+            };
+            let size = size.to_physical(scale_factor);
+
+            if let Err(err) = renderer.resize(size.width, size.height) {
+                log::error!("Failed to resize renderer: {err}");
+                self.exiting = true;
+            }
+        }
+    }
+
     fn render(&mut self) {
-        match self.renderer.get() {
-            Some(renderer) => renderer.render(),
+        if self.exiting {
+            return;
+        }
+
+        match self.renderer.get_mut() {
+            Some(renderer) => match renderer.render() {
+                Ok(_) => {}
+                Err(err) => {
+                    log::error!("Unhandled error while rendering: {err}");
+                    self.exiting = true;
+                }
+            },
             None => {
-                log::error!("Renderer not initialized");
+                log::error!("Cannot render, Renderer not initialized or already destroyed");
+                self.exiting = true;
             }
         }
     }
 
     fn step_elapsed(&mut self, elapsed: Duration) {
-        let mut steps = 0;
         let elapsed_us = elapsed.as_micros().min(UPDATE_TIME_US);
 
         self.step_accumulator = match self.last_step {
@@ -169,17 +214,17 @@ impl AppState {
             self.step_accumulator -= STEP_TIME_US as i64;
             self.step();
             self.last_step += 1;
-            steps += 1;
         }
 
-        if steps > 0 || elapsed_us >= UPDATE_TIME_US {
-            log::trace!(
-                "Step: {}, accumulator: {}, elapsed us: {}, max: {}",
+        if self.last_step > self.last_heartbeat + HEARTBEAT_STEPS {
+            log::info!(
+                "[step: {}, last_step: {}, accumulator: {}, elapsed: {}]",
+                self.last_step,
                 self.last_step,
                 self.step_accumulator,
-                elapsed_us,
-                elapsed_us >= UPDATE_TIME_US
+                elapsed_us
             );
+            self.last_heartbeat = self.last_step;
         }
     }
 
@@ -187,12 +232,7 @@ impl AppState {
         // ...
     }
 
-    fn exit(&mut self, event_loop: &ActiveEventLoop) {
-        log::info!("Exiting");
-        let _ = self.renderer.take();
-        let _ = self.window.take();
-        event_loop.exit();
-    }
+    fn exit(&mut self, _event_loop: &ActiveEventLoop) {}
 }
 
 impl ApplicationHandler for AppState {
@@ -205,14 +245,23 @@ impl ApplicationHandler for AppState {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        self.update(Instant::now());
-        event_loop.set_control_flow(ControlFlow::WaitUntil(
-            Instant::now() + Duration::from_millis(1),
-        ));
+        if !self.exiting {
+            self.update(Instant::now());
+            event_loop.set_control_flow(ControlFlow::WaitUntil(
+                Instant::now() + Duration::from_millis(1),
+            ));
+        }
     }
 
     fn exiting(&mut self, event_loop: &ActiveEventLoop) {
-        self.exit(event_loop);
+        if !self.exiting {
+            self.exiting = true;
+            log::info!("Exiting");
+
+            let _ = self.renderer.take();
+            let _ = self.window.take();
+            event_loop.exit();
+        }
     }
 
     fn window_event(
@@ -233,13 +282,17 @@ impl ApplicationHandler for AppState {
                 }
                 WindowEvent::CloseRequested => {
                     log::info!("Close requested");
-                    event_loop.exit();
+                    self.exit(event_loop);
                 }
                 WindowEvent::KeyboardInput { event, .. } => {
                     log::info!("Keyboard input: {event:?}");
                 }
                 WindowEvent::MouseInput { button, state, .. } => {
                     log::info!("Mouse input: {button:?}, {state:?}");
+                }
+                WindowEvent::Resized(size) => {
+                    log::info!("Window resized: {size:?}");
+                    self.resize(size.into());
                 }
                 _ => {}
             }

@@ -50,3 +50,85 @@ impl fmt::Debug for Buffer {
             .finish_non_exhaustive()
     }
 }
+
+// fn allocate(
+//     allocator: &Arc<Mutex<Allocator>>,
+//     device: &ash::Device,
+//     bytes: usize,
+//     flags: vk::BufferUsageFlags,
+//     location: MemoryLocation,
+// ) -> Result<(vk::Buffer, Allocation)> {
+//     let mut allocator = allocator.lock().unwrap();
+//     let info = vk::BufferCreateInfo::default()
+//         .size(bytes as u64)
+//         .usage(flags);
+//     let buffer = unsafe { device.create_buffer(&info, None) }?;
+//     let requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
+
+//     let allocation = allocator.allocate(&AllocationCreateDesc {
+//         name: "Buffer",
+//         requirements,
+//         location,
+//         linear: true,
+//         allocation_scheme: AllocationScheme::GpuAllocatorManaged,
+//     })?;
+
+//     unsafe { device.bind_buffer_memory(buffer, allocation.memory(), allocation.offset()) }?;
+
+//     Ok((buffer, allocation))
+// }
+
+// pub fn create_command_buffer(&self) -> CommandBuffer {
+//     let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::default()
+//         .command_buffer_count(1)
+//         .command_pool(self.command_pool)
+//         .level(vk::CommandBufferLevel::PRIMARY);
+
+//     Self::allocate_command_buffer(self.inner.clone(), command_buffer_allocate_info)
+// }
+
+// pub fn create_buffer<T>(&self, desc: BufferDesc, initial_data: Option<&[T]>) ->
+// Result<Buffer> {     let mut flags: vk::BufferUsageFlags = desc.usage.into();
+//     if initial_data.is_some() {
+//         flags |= vk::BufferUsageFlags::TRANSFER_DST;
+//     }
+//     let initial_data = initial_data.unwrap();
+//     let size = initial_data.len() * size_of::<T>();
+//     let (buffer, allocation) = allocate(
+//         &self.allocator,
+//         &self.inner,
+//         size,
+//         flags,
+//         MemoryLocation::CpuToGpu,
+//     )
+//     .unwrap();
+
+//     self.write_buffer(&allocation, initial_data)?;
+//     Ok(Buffer {
+//         inner: buffer,
+//         allocation,
+//     })
+// }
+
+// pub fn write_buffer<T: Sized>(&self, allocation: &Allocation, data: &[T]) -> Result<()> {
+//     let buffer_ptr = allocation.mapped_ptr().unwrap().cast().as_ptr();
+//     unsafe { ptr::copy_nonoverlapping(data.as_ptr(), buffer_ptr, data.len()) }
+
+//     Ok(())
+// }
+
+// fn find_memorytype_index(
+//     &self,
+//     memory_req: &vk::MemoryRequirements,
+//     memory_prop: &vk::PhysicalDeviceMemoryProperties,
+//     flags: vk::MemoryPropertyFlags,
+// ) -> Option<u32> {
+//     memory_prop.memory_types[..memory_prop.memory_type_count as _]
+//         .iter()
+//         .enumerate()
+//         .find(|(index, memory_type)| {
+//             (1 << index) & memory_req.memory_type_bits != 0
+//                 && memory_type.property_flags & flags == flags
+//         })
+//         .map(|(index, _memory_type)| index as _)
+// }
