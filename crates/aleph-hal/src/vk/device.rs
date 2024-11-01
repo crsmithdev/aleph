@@ -1,10 +1,11 @@
 use {
+    super::buffer,
     crate::vk::{instance::Instance, physical_device::PhysicalDevice, queue::Queue},
     aleph_core::constants::VK_TIMEOUT_NS,
     anyhow::Result,
     ash::{
         khr,
-        vk::{self, Handle},
+        vk::{self, Handle, PhysicalDeviceBufferDeviceAddressFeaturesKHR},
     },
     std::{fmt, sync::Arc},
 };
@@ -44,8 +45,11 @@ impl Device {
 
         let mut synchronization_features =
             ash::vk::PhysicalDeviceSynchronization2FeaturesKHR::default().synchronization2(true);
-        let mut device_features =
-            vk::PhysicalDeviceFeatures2::default().push_next(&mut synchronization_features);
+        let mut buffer_device_address_features =
+            PhysicalDeviceBufferDeviceAddressFeaturesKHR::default();
+        let mut device_features = vk::PhysicalDeviceFeatures2::default()
+            .push_next(&mut synchronization_features)
+            .push_next(&mut buffer_device_address_features);
 
         let device_info = vk::DeviceCreateInfo::default()
             .queue_create_infos(&queue_info)

@@ -48,7 +48,7 @@ impl Instance {
             khr::surface::NAME.as_ptr(),
             khr::win32_surface::NAME.as_ptr(),
             khr::get_physical_device_properties2::NAME.as_ptr(),
-            khr::buffer_device_address::NAME.as_ptr(),
+            // khr::buffer_device_address::NAME.as_ptr(),
             debug_utils::NAME.as_ptr(),
         ]
     }
