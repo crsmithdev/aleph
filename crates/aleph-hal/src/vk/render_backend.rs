@@ -1,8 +1,6 @@
 use {
     crate::vk::{
-        allocator,
         allocator::Allocator,
-        buffer::{Buffer, BufferDesc},
         device::Device,
         instance::{Instance, InstanceInfo},
         physical_device::PhysicalDevice,
@@ -10,13 +8,9 @@ use {
         swapchain::{Swapchain, SwapchainInfo},
     },
     anyhow::Result,
-    ash::{khr, vk},
-    core::{alloc, fmt},
-    gpu_allocator as ga,
-    std::{
-        ptr,
-        sync::{Arc, Mutex},
-    },
+    ash::vk,
+    core::fmt,
+    std::sync::Arc,
     winit::window::Window,
 };
 pub struct RenderBackend {

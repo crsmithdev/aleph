@@ -1,7 +1,6 @@
 use {
     crate::vk::{
         instance::Instance, physical_device::PhysicalDevice, queue::Queue,
-        render_backend::RenderBackend,
     },
     aleph_core::constants::VK_TIMEOUT_NS,
     anyhow::Result,

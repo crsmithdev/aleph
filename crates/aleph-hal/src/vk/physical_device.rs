@@ -1,5 +1,4 @@
 use {
-    super::render_backend::RenderBackend,
     crate::vk::{queue::QueueFamily, surface::Surface},
     anyhow::{anyhow, Result},
     ash::{vk, vk::Handle},

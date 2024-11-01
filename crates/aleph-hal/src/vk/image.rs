@@ -3,17 +3,16 @@ use {
     anyhow::Result,
     ash::{
         vk,
-        vk::{Extent2D, Extent3D, Handle},
+        vk::Handle,
     },
     gpu_allocator::{
         self as ga,
-        vulkan::{Allocation, AllocationCreateDesc, AllocationScheme},
+        vulkan::{Allocation, AllocationScheme},
         MemoryLocation,
     },
     std::{
-        borrow::BorrowMut,
         fmt,
-        sync::{Arc, Mutex},
+        sync::Arc,
     },
 };
 pub struct ImageInfo<'a> {

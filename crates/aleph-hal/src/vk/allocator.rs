@@ -1,10 +1,8 @@
 use {
     crate::vk::{device::Device, instance::Instance, physical_device::PhysicalDevice},
     anyhow::Result,
-    gpu_allocator::{self as ga, vulkan},
+    gpu_allocator::self as ga,
     std::{
-        borrow::Borrow,
-        cell::RefCell,
         fmt,
         sync::{Arc, Mutex},
     },

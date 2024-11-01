@@ -8,7 +8,7 @@ use {
     },
     std::{
         fmt,
-        sync::{Arc, Mutex},
+        sync::Arc,
     },
 };
 pub struct BufferDesc {
