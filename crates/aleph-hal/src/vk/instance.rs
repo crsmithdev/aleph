@@ -4,7 +4,6 @@ use {
         physical_device::{PhysicalDevice, PhysicalDevices},
         queue::QueueFamily,
     },
-    aleph_core::{constants::DEFAULT_APP_NAME, cstr, ptrs, ptrs2},
     anyhow::Result,
     ash::{
         ext::{self, debug_utils},
@@ -12,9 +11,8 @@ use {
         vk,
     },
     std::{
-        ffi::{self, CStr, CString},
+        ffi::{self, CString},
         fmt,
-        str::FromStr,
         sync::Arc,
     },
     winit::window::Window,
@@ -147,16 +145,6 @@ impl Instance {
             }
         }
     }
-}
-
-fn to_ptrs(strings: &[CString]) -> Result<Vec<*const i8>, anyhow::Error> {
-    let strings3 = strings
-        .iter()
-        .map(|s| s.as_c_str().as_ptr())
-        .collect::<Vec<_>>();
-    println!("strings: {:?}", strings);
-    println!("strings3: {:?}", strings3);
-    Ok(strings3)
 }
 
 impl fmt::Debug for Instance {
