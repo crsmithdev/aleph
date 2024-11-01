@@ -1,6 +1,6 @@
 use {
     super::render_backend::RenderBackend,
-    crate::vk::{instance::Instance, queue::QueueFamily, surface::Surface},
+    crate::vk::{queue::QueueFamily, surface::Surface},
     anyhow::{anyhow, Result},
     ash::{vk, vk::Handle},
     std::{fmt, sync::Arc},
@@ -34,50 +34,6 @@ impl PhysicalDevice {
     }
 }
 
-impl RenderBackend {
-    fn create_physical_device(
-        instance: &Arc<Instance>,
-        physical_device: vk::PhysicalDevice,
-    ) -> PhysicalDevice {
-        unsafe {
-            let instance = &instance.inner;
-            let properties = instance.get_physical_device_properties(physical_device);
-            let memory_properties = instance.get_physical_device_memory_properties(physical_device);
-            let queue_families = instance
-                .get_physical_device_queue_family_properties(physical_device)
-                .into_iter()
-                .enumerate()
-                .map(|(i, properties)| QueueFamily {
-                    index: i as _,
-                    properties,
-                })
-                .collect();
-
-            PhysicalDevice {
-                inner: physical_device,
-                queue_families,
-                properties,
-                memory_properties,
-            }
-        }
-    }
-    pub fn create_physical_devices(instance: &Arc<Instance>) -> Result<PhysicalDevices> {
-        unsafe {
-            let devices = instance
-                .inner
-                .enumerate_physical_devices()?
-                .into_iter()
-                .map(|d| Self::create_physical_device(instance, d))
-                .collect();
-
-            Ok(PhysicalDevices {
-                inner: devices,
-                features: vec![],
-            })
-        }
-    }
-}
-
 pub struct PhysicalDevices {
     pub inner: Vec<PhysicalDevice>,
     pub features: Vec<Box<dyn vk::ExtendsPhysicalDeviceFeatures2>>,
@@ -107,7 +63,7 @@ impl PhysicalDevices {
         let selected = self.inner.into_iter().rev().max_by_key(|d| f(d));
         match selected {
             Some(device) => Ok(Arc::new(device)),
-            None => Err(anyhow!("Could not find suitable physical device")),
+            None => Err(anyhow!("No suitable physical device found")),
         }
     }
 

@@ -1,8 +1,9 @@
-use aleph_hal::vk::swapchain::Frame;
-use anyhow::bail;
-use ash::vk::{self, CommandBufferResetFlags, Extent2D};
-
-use {aleph_hal::vk::render_backend::RenderBackend, anyhow::Result, std::fmt};
+use {
+    aleph_hal::vk::{render_backend::RenderBackend, swapchain::Frame},
+    anyhow::{bail, Result},
+    ash::vk::{self, CommandBufferResetFlags, Extent2D},
+    std::fmt,
+};
 
 const TIMEOUT_NS: u64 = 1_000_000_000;
 
@@ -26,10 +27,10 @@ impl Renderer {
             backend,
             frames,
             current_frame_index: 0,
-            extent: vk::Extent2D::default(), // {
-                                             // width: 1,
-                                             // height: 1,
-                                             // },
+            extent: vk::Extent2D::default(), /* {
+                                              * width: 1,
+                                              * height: 1,
+                                              * }, */
         })
     }
 
@@ -54,18 +55,17 @@ impl Renderer {
     }
 
     pub fn render(&mut self) -> Result<()> {
-        let RenderBackend {
-            device, swapchain, ..
-        } = &self.backend;
-        let current_frame = self.current_frame();
+        self.backend
+            .device
+            .wait_for_fence(self.current_frame().fence)?;
 
-        device.wait_for_fence(current_frame.fence)?;
-        device.reset_fence(current_frame.fence)?;
+        let index = self.next_frame()?;
+        let image = self.backend.swapchain.images[index as usize];
+        self.backend
+            .device
+            .reset_fence(self.current_frame().fence)?;
 
-        let index = self.next_frame(current_frame)?;
-        let image = swapchain.images[index as usize];
-
-        let cmd = current_frame.command_buffer;
+        let cmd = self.current_frame().command_buffer;
         unsafe {
             self.backend
                 .device
@@ -76,7 +76,6 @@ impl Renderer {
         let info = vk::CommandBufferBeginInfo::default()
             .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
         unsafe { self.backend.device.inner.begin_command_buffer(cmd, &info)? }
-
         self.backend.transition_image(
             cmd,
             image,
@@ -84,41 +83,42 @@ impl Renderer {
             vk::ImageLayout::GENERAL,
         );
 
-        let flash = f32::abs(f32::sin(self.current_frame_index as f32 / 120.0));
-        let color = vk::ClearColorValue {
-            float32: [0.0, 0.0, flash, 1.0],
-        };
+        self.draw_background(cmd, image)?;
 
-        let ranges = [vk::ImageSubresourceRange {
-            aspect_mask: vk::ImageAspectFlags::COLOR,
-            base_mip_level: 0,
-            level_count: 1,
-            base_array_layer: 0,
-            layer_count: 1,
-        }];
+        let draw_extent = self.backend.swapchain.draw_image.extent;
 
-        unsafe {
-            self.backend.device.inner.cmd_clear_color_image(
-                cmd,
-                image,
-                vk::ImageLayout::GENERAL,
-                &color,
-                &ranges,
-            );
-            self.backend.transition_image(
-                cmd,
-                image,
-                vk::ImageLayout::GENERAL,
-                vk::ImageLayout::PRESENT_SRC_KHR,
-            );
-            self.backend.device.inner.end_command_buffer(cmd)?;
-        };
+        self.backend.transition_image(
+            cmd,
+            self.backend.swapchain.draw_image.inner,
+            vk::ImageLayout::GENERAL,
+            vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+        );
+        self.backend.transition_image(
+            cmd,
+            image,
+            vk::ImageLayout::UNDEFINED,
+            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+        );
+        self.backend.copy_image_to_image(
+            self.backend.swapchain.draw_image.inner,
+            image,
+            draw_extent,
+            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+            cmd,
+        );
+        self.backend.transition_image(
+            cmd,
+            image,
+            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            vk::ImageLayout::PRESENT_SRC_KHR,
+        );
 
         let wait_info = &[vk::SemaphoreSubmitInfo::default()
-            .semaphore(current_frame.swapchain_semaphore)
+            .semaphore(self.current_frame().swapchain_semaphore)
             .stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)];
         let signal_info = &[vk::SemaphoreSubmitInfo::default()
-            .semaphore(current_frame.render_semaphore)
+            .semaphore(self.current_frame().render_semaphore)
             .stage_mask(vk::PipelineStageFlags2::ALL_GRAPHICS)];
         let command_buffer_info = &[vk::CommandBufferSubmitInfo::default().command_buffer(cmd)];
 
@@ -131,11 +131,11 @@ impl Renderer {
             self.backend.device.inner.queue_submit2(
                 self.backend.device.queue.inner,
                 submit_info,
-                current_frame.fence,
+                self.current_frame().fence,
             )
         }?;
 
-        let wait_semaphores = [current_frame.render_semaphore];
+        let wait_semaphores = [self.current_frame().render_semaphore];
         let swapchains = [self.backend.swapchain.inner];
         let indices = [self.current_frame_index as u32];
 
@@ -164,11 +164,47 @@ impl Renderer {
         Ok(())
     }
 
+    fn draw_background(
+        &mut self,
+        cmd: vk::CommandBuffer,
+        image: vk::Image,
+    ) -> Result<(), anyhow::Error> {
+        let flash = f32::abs(f32::sin(self.current_frame_index as f32 / 120.0));
+        let color = vk::ClearColorValue {
+            float32: [0.0, 0.0, flash, 1.0],
+        };
+        let ranges = [vk::ImageSubresourceRange {
+            aspect_mask: vk::ImageAspectFlags::COLOR,
+            base_mip_level: 0,
+            level_count: 1,
+            base_array_layer: 0,
+            layer_count: 1,
+        }];
+        unsafe {
+            self.backend.device.inner.cmd_clear_color_image(
+                cmd,
+                image,
+                vk::ImageLayout::GENERAL,
+                &color,
+                &ranges,
+            );
+            self.backend.transition_image(
+                cmd,
+                image,
+                vk::ImageLayout::GENERAL,
+                vk::ImageLayout::PRESENT_SRC_KHR,
+            );
+            self.backend.device.inner.end_command_buffer(cmd)?;
+        };
+        Ok(())
+    }
+
     pub fn resize(&mut self, width: u32, height: u32) -> Result<()> {
         self.backend.resize(width, height)
     }
 
-    fn next_frame(&self, current_frame: &Frame) -> Result<u32> {
+    fn next_frame(&mut self) -> Result<u32> {
+        let current_frame = self.current_frame();
         let acquire_info = vk::AcquireNextImageInfoKHR::default()
             .swapchain(self.backend.swapchain.inner)
             .timeout(TIMEOUT_NS)

@@ -1,3 +1,4 @@
+pub mod allocator;
 pub mod buffer;
 pub mod command_buffer;
 pub mod debug;

@@ -1,5 +1,5 @@
 use {
-    crate::vk::{instance::Instance, render_backend::RenderBackend},
+    crate::vk::instance::Instance,
     anyhow::Result,
     ash::{
         khr,
@@ -23,23 +23,29 @@ impl fmt::Debug for Surface {
     }
 }
 
-impl RenderBackend {
-    pub fn create_surface(instance: Arc<Instance>, window: Arc<Window>) -> Result<Arc<Surface>> {
+pub struct SurfaceInfo<'a> {
+    pub window: &'a Arc<Window>,
+    pub instance: &'a Arc<Instance>,
+}
+
+impl Surface {
+    pub fn new(info: &SurfaceInfo) -> Result<Surface> {
         let surface = unsafe {
             ash_window::create_surface(
-                &instance.entry,
-                &instance.inner,
-                window.display_handle()?.into(),
-                window.window_handle()?.into(),
+                &info.instance.entry,
+                &info.instance.inner,
+                info.window.display_handle()?.into(),
+                info.window.window_handle()?.into(),
                 None,
             )
             .unwrap()
         };
-        let surface_loader = khr::surface::Instance::new(&instance.entry, &instance.inner);
+        let surface_loader =
+            khr::surface::Instance::new(&info.instance.entry, &info.instance.inner);
 
-        Ok(Arc::new(Surface {
+        Ok(Surface {
             inner: surface,
             loader: surface_loader,
-        }))
+        })
     }
 }

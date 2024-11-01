@@ -1,13 +1,19 @@
-use ash::vk::SurfaceTransformFlagsKHR;
-
 use {
+    super::{allocator::Allocator, image::ImageInfo},
     crate::vk::{
-        device::Device, instance::Instance, physical_device::PhysicalDevice, surface::Surface,
+        device::Device,
+        image::Image,
+        instance::Instance,
+        physical_device::PhysicalDevice,
+        surface::Surface,
     },
     anyhow::Result,
     ash::{
         khr,
-        vk::{self},
+        vk::{
+            SurfaceTransformFlagsKHR,
+            {self},
+        },
     },
     std::sync::Arc,
     vk::Handle,
@@ -35,6 +41,7 @@ pub struct SwapchainInfo<'a> {
     pub instance: &'a Arc<Instance>,
     pub physical_device: &'a Arc<PhysicalDevice>,
     pub device: &'a Arc<Device>,
+    pub allocator: &'a Arc<Allocator>,
     pub surface: &'a Arc<Surface>,
     pub extent: vk::Extent2D,
     pub format: vk::Format,
@@ -47,10 +54,12 @@ pub struct Swapchain {
     pub physical_device: Arc<PhysicalDevice>,
     pub device: Arc<Device>,
     pub inner: vk::SwapchainKHR,
+    pub allocator: Arc<Allocator>,
     pub loader: khr::swapchain::Device,
     pub surface: Arc<Surface>,
     pub image_views: Vec<vk::ImageView>,
     pub images: Vec<vk::Image>,
+    pub draw_image: Image,
     pub format: vk::Format,
     pub extent: vk::Extent2D,
     pub vsync: bool,
@@ -116,9 +125,21 @@ impl Swapchain {
             })
             .collect();
 
+        let draw_image = Image::new(&ImageInfo {
+            allocator: &info.allocator,
+            width: surface_resolution.width as usize,
+            height: surface_resolution.height as usize,
+            format: vk::Format::R16G16B16A16_SFLOAT,
+            usage: vk::ImageUsageFlags::COLOR_ATTACHMENT
+                | vk::ImageUsageFlags::TRANSFER_DST
+                | vk::ImageUsageFlags::TRANSFER_SRC
+                | vk::ImageUsageFlags::STORAGE,
+        })?;
+
         Ok(Swapchain {
             device: info.device.clone(),
             instance: info.instance.clone(),
+            allocator: info.allocator.clone(),
             physical_device: info.physical_device.clone(),
             inner: swapchain,
             format: info.format,
@@ -127,6 +148,7 @@ impl Swapchain {
             color_space: info.color_space,
             surface: info.surface.clone(),
             image_views,
+            draw_image,
             images,
             loader,
         })
@@ -143,6 +165,7 @@ impl Swapchain {
 
     pub fn recreate(&mut self) -> Result<()> {
         let info = SwapchainInfo {
+            allocator: &self.allocator,
             device: &self.device,
             physical_device: &self.device.physical_device,
             instance: &self.instance,
@@ -232,12 +255,13 @@ impl Drop for Swapchain {
 //             .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
 //             .present_mode(present_mode)
 //             .clipped(true)
-//             .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST)
-//             .queue_family_indices(indices)
+//             .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT |
+// vk::ImageUsageFlags::TRANSFER_DST)             .queue_family_indices(indices)
 //             .image_array_layers(1);
 
 //         let loader = khr::swapchain::Device::new(&instance.inner, &device.inner);
-//         let swapchain = unsafe { loader.create_swapchain(&swapchain_create_info, None) }.unwrap();
+//         let swapchain = unsafe { loader.create_swapchain(&swapchain_create_info, None)
+// }.unwrap();
 
 //         let images = unsafe { loader.get_swapchain_images(swapchain)? };
 //         let subresource_range = vk::ImageSubresourceRange::default()

@@ -1,22 +1,22 @@
 use {
     crate::vk::{
+        allocator,
+        allocator::Allocator,
         buffer::{Buffer, BufferDesc},
         device::Device,
-        instance::Instance,
+        instance::{Instance, InstanceInfo},
         physical_device::PhysicalDevice,
-        surface::Surface,
+        surface::{Surface, SurfaceInfo},
         swapchain::{Swapchain, SwapchainInfo},
     },
     anyhow::Result,
-    ash::vk,
-    core::fmt,
-    gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc},
-    gpu_allocator::{
-        vulkan::{Allocation, AllocationCreateDesc, AllocationScheme},
-        MemoryLocation,
+    ash::{khr, vk},
+    core::{alloc, fmt},
+    gpu_allocator as ga,
+    std::{
+        ptr,
+        sync::{Arc, Mutex},
     },
-    std::ptr,
-    std::sync::{Arc, Mutex},
     winit::window::Window,
 };
 pub struct RenderBackend {
@@ -25,7 +25,7 @@ pub struct RenderBackend {
     pub surface: Arc<Surface>,
     pub swapchain: Arc<Swapchain>,
     pub device: Arc<Device>,
-    pub allocator: Arc<Mutex<Allocator>>,
+    pub allocator: Arc<Allocator>,
 }
 
 impl RenderBackend {
@@ -36,16 +36,24 @@ impl RenderBackend {
     fn init_vulkan(window: &Arc<Window>) -> Result<RenderBackend> {
         log::info!("Initializing Vulkan, window: {window:?}");
 
-        let instance = Instance::builder(window.clone()).build()?;
+        let instance = Arc::new(Instance::new(&InstanceInfo {
+            window,
+            debug: true,
+        })?);
         log::info!("Created instance: {instance:?}");
 
-        let surface = Self::create_surface(instance.clone(), window.clone())?;
+        let surface = Arc::new(Surface::new(&SurfaceInfo {
+            window,
+            instance: &instance,
+        })?);
         log::info!("Created surface: {surface:?}");
 
-        let physical_devices = Self::create_physical_devices(&instance)?;
-        let physical_device = physical_devices.select_default()?;
-        let device = Self::create_device(&instance, &physical_device)?;
+        let physical_device = instance.physical_devices()?.select_default()?;
+        let device = Device::new(&instance, &physical_device)?;
         log::info!("Created device: {device:?}");
+
+        let allocator = Arc::new(Allocator::new(&instance, &physical_device, &device)?);
+        log::info!("Created allocator: {allocator:?}");
 
         let extent = vk::Extent2D {
             width: window.inner_size().width,
@@ -53,6 +61,7 @@ impl RenderBackend {
         };
         let swapchain = Arc::new(Swapchain::new(&SwapchainInfo {
             instance: &instance,
+            allocator: &allocator,
             physical_device: &physical_device,
             device: &device,
             surface: &surface,
@@ -62,15 +71,6 @@ impl RenderBackend {
             extent,
         })?);
         log::info!("Created swapchain: {swapchain:?}");
-
-        let allocator = Arc::new(Mutex::new(Allocator::new(&AllocatorCreateDesc {
-            instance: instance.inner.clone(),
-            device: device.inner.clone(),
-            physical_device: physical_device.inner,
-            buffer_device_address: false,
-            debug_settings: Default::default(),
-            allocation_sizes: Default::default(),
-        })?));
 
         Ok(RenderBackend {
             instance,
@@ -83,9 +83,12 @@ impl RenderBackend {
     }
 
     pub fn resize(&mut self, width: u32, height: u32) -> Result<()> {
+        log::info!("Resizing swapchain to {width}x{height}");
         self.swapchain.destroy();
+
         let extent = vk::Extent2D { width, height };
         let result = Swapchain::new(&SwapchainInfo {
+            allocator: &self.allocator,
             instance: &self.instance,
             physical_device: &self.physical_device,
             device: &self.device,
@@ -140,22 +143,45 @@ impl RenderBackend {
         }
     }
 
-    pub fn create_buffer<T>(&self, desc: BufferDesc, initial_data: Option<&[T]>) -> Result<Buffer> {
-        let mut flags: vk::BufferUsageFlags = desc.usage.into();
-        if initial_data.is_some() {
-            flags |= vk::BufferUsageFlags::TRANSFER_DST;
-        }
-        let initial_data = initial_data.unwrap();
-        let size = initial_data.len() * size_of::<T>();
-        let (buffer, allocation) = self
-            .allocate(size, flags, MemoryLocation::CpuToGpu)
-            .unwrap();
+    pub fn copy_image_to_image(
+        &self,
+        src: vk::Image,
+        dst: vk::Image,
+        extent: vk::Extent3D,
+        src_layout: vk::ImageLayout,
+        dst_layout: vk::ImageLayout,
+        cmd: vk::CommandBuffer,
+    ) {
+        let src_subresource = vk::ImageSubresourceLayers::default()
+            .aspect_mask(vk::ImageAspectFlags::COLOR)
+            .layer_count(1);
+        let dst_subresource = vk::ImageSubresourceLayers::default()
+            .aspect_mask(vk::ImageAspectFlags::COLOR)
+            .layer_count(1);
+        let blit_region = vk::ImageBlit2::default()
+            .src_subresource(src_subresource)
+            .dst_subresource(dst_subresource)
+            .src_offsets([
+                vk::Offset3D::default(),
+                vk::Offset3D::default()
+                    .x(extent.width as i32)
+                    .y(extent.height as i32),
+            ])
+            .dst_offsets([
+                vk::Offset3D::default(),
+                vk::Offset3D::default()
+                    .x(extent.width as i32)
+                    .y(extent.height as i32),
+            ]);
+        let regions = &[blit_region];
+        let blit_info = vk::BlitImageInfo2::default()
+            .src_image(src)
+            .src_image_layout(src_layout)
+            .dst_image(dst)
+            .dst_image_layout(dst_layout)
+            .regions(regions);
 
-        self.write_buffer(&allocation, initial_data)?;
-        Ok(Buffer {
-            inner: buffer,
-            allocation,
-        })
+        unsafe { self.device.inner.cmd_blit_image2(cmd, &blit_info) }
     }
 
     pub fn create_command_buffer(&self, pool: vk::CommandPool) -> Result<vk::CommandBuffer> {
@@ -186,42 +212,12 @@ impl RenderBackend {
         }
     }
 
-    pub fn write_buffer<T: Sized>(&self, allocation: &Allocation, data: &[T]) -> Result<()> {
-        let buffer_ptr = allocation.mapped_ptr().unwrap().cast().as_ptr();
-        unsafe { ptr::copy_nonoverlapping(data.as_ptr(), buffer_ptr, data.len()) }
+    // pub fn write_buffer<T: Sized>(&self, allocation: &Allocation, data: &[T]) -> Result<()> {
+    //     let buffer_ptr = allocation.mapped_ptr().unwrap().cast().as_ptr();
+    //     unsafe { ptr::copy_nonoverlapping(data.as_ptr(), buffer_ptr, data.len()) }
 
-        Ok(())
-    }
-
-    fn allocate(
-        &self,
-        bytes: usize,
-        flags: vk::BufferUsageFlags,
-        location: MemoryLocation,
-    ) -> Result<(vk::Buffer, Allocation)> {
-        let mut allocator = self.allocator.lock().unwrap();
-        let info = vk::BufferCreateInfo::default()
-            .size(bytes as u64)
-            .usage(flags);
-        let buffer = unsafe { self.device.inner.create_buffer(&info, None) }?;
-        let requirements = unsafe { self.device.inner.get_buffer_memory_requirements(buffer) };
-
-        let allocation = allocator.allocate(&AllocationCreateDesc {
-            name: "buffer",
-            requirements,
-            location,
-            linear: true,
-            allocation_scheme: AllocationScheme::GpuAllocatorManaged,
-        })?;
-
-        unsafe {
-            self.device
-                .inner
-                .bind_buffer_memory(buffer, allocation.memory(), allocation.offset())
-        }?;
-
-        Ok((buffer, allocation))
-    }
+    //     Ok(())
+    // }
 }
 
 impl fmt::Debug for RenderBackend {
@@ -235,29 +231,3 @@ impl fmt::Debug for RenderBackend {
             .finish()
     }
 }
-// fn allocate(
-//     allocator: &Arc<Mutex<Allocator>>,
-//     device: &ash::Device,
-//     bytes: usize,
-//     flags: vk::BufferUsageFlags,
-//     location: MemoryLocation,
-// ) -> Result<(vk::Buffer, Allocation)> {
-//     let mut allocator = allocator.lock().unwrap();
-//     let info = vk::BufferCreateInfo::default()
-//         .size(bytes as u64)
-//         .usage(flags);
-//     let buffer = unsafe { device.create_buffer(&info, None) }?;
-//     let requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
-
-//     let allocation = allocator.allocate(&AllocationCreateDesc {
-//         name: "Buffer",
-//         requirements,
-//         location,
-//         linear: true,
-//         allocation_scheme: AllocationScheme::GpuAllocatorManaged,
-//     })?;
-
-//     unsafe { device.bind_buffer_memory(buffer, allocation.memory(), allocation.offset()) }?;
-
-//     Ok((buffer, allocation))
-// }

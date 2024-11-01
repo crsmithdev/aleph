@@ -3,7 +3,7 @@ use {
         instance::Instance, physical_device::PhysicalDevice, queue::Queue,
         render_backend::RenderBackend,
     },
-    aleph_core::constants::TIMEOUT_NS,
+    aleph_core::constants::VK_TIMEOUT_NS,
     anyhow::Result,
     ash::{
         khr,
@@ -18,8 +18,8 @@ pub struct Device {
     pub queue: Queue,
 }
 
-impl RenderBackend {
-    pub fn create_device(
+impl Device {
+    pub fn new(
         instance: &Arc<Instance>,
         physical_device: &Arc<PhysicalDevice>,
     ) -> Result<Arc<Device>> {
@@ -73,11 +73,9 @@ impl RenderBackend {
             queue,
         }))
     }
-}
 
-impl Device {
     pub fn wait_for_fence(&self, fence: vk::Fence) -> Result<()> {
-        Ok(unsafe { self.inner.wait_for_fences(&[fence], true, TIMEOUT_NS)? })
+        Ok(unsafe { self.inner.wait_for_fences(&[fence], true, VK_TIMEOUT_NS)? })
     }
 
     pub fn reset_fence(&self, fence: vk::Fence) -> Result<()> {

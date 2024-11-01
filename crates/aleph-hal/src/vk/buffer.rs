@@ -1,8 +1,15 @@
-pub use gpu_allocator::MemoryLocation;
 use {
+    crate::vk::allocator::Allocator,
+    anyhow::Result,
     ash::{vk, vk::Handle},
-    gpu_allocator::vulkan::Allocation,
-    std::fmt,
+    gpu_allocator::{
+        vulkan::{Allocation, AllocationCreateDesc, AllocationScheme},
+        MemoryLocation,
+    },
+    std::{
+        fmt,
+        sync::{Arc, Mutex},
+    },
 };
 pub struct BufferDesc {
     pub size: usize,
@@ -10,11 +17,24 @@ pub struct BufferDesc {
     pub memory_location: MemoryLocation,
 }
 
-pub struct Buffer {
-    pub allocation: Allocation,
-    pub inner: vk::Buffer,
+pub struct BufferInfo<'a> {
+    pub allocator: &'a Arc<Allocator>,
+    pub size: usize,
+    pub usage: BufferUsage,
+    pub memory_location: MemoryLocation,
+    pub initial_data: Option<&'a [u8]>,
 }
 
+pub struct Buffer {
+    pub allocator: Arc<Allocator>,
+    pub allocation: Allocation,
+    pub inner: vk::Buffer,
+    pub size: usize,
+    pub usage: BufferUsage,
+    pub memory_location: MemoryLocation,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub enum BufferUsage {
     TransferSource,
     TransferDestination,
@@ -51,63 +71,40 @@ impl fmt::Debug for Buffer {
     }
 }
 
-// fn allocate(
-//     allocator: &Arc<Mutex<Allocator>>,
-//     device: &ash::Device,
-//     bytes: usize,
-//     flags: vk::BufferUsageFlags,
-//     location: MemoryLocation,
-// ) -> Result<(vk::Buffer, Allocation)> {
-//     let mut allocator = allocator.lock().unwrap();
-//     let info = vk::BufferCreateInfo::default()
-//         .size(bytes as u64)
-//         .usage(flags);
-//     let buffer = unsafe { device.create_buffer(&info, None) }?;
-//     let requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
+impl Buffer {
+    pub fn new(info: &BufferInfo) -> Result<Self> {
+        let device = &info.allocator.device;
+        let mut allocator = info.allocator.inner.lock().unwrap();
+        let info2 = vk::BufferCreateInfo::default()
+            .size(info.size as u64)
+            .usage(info.usage.into());
+        let buffer = unsafe { device.inner.create_buffer(&info2, None) }?;
+        let requirements = unsafe { device.inner.get_buffer_memory_requirements(buffer) };
 
-//     let allocation = allocator.allocate(&AllocationCreateDesc {
-//         name: "Buffer",
-//         requirements,
-//         location,
-//         linear: true,
-//         allocation_scheme: AllocationScheme::GpuAllocatorManaged,
-//     })?;
+        let allocation = allocator.allocate(&AllocationCreateDesc {
+            name: "Buffer",
+            requirements,
+            location: info.memory_location,
+            linear: true,
+            allocation_scheme: AllocationScheme::GpuAllocatorManaged,
+        })?;
 
-//     unsafe { device.bind_buffer_memory(buffer, allocation.memory(), allocation.offset()) }?;
+        unsafe {
+            device
+                .inner
+                .bind_buffer_memory(buffer, allocation.memory(), allocation.offset())
+        }?;
 
-//     Ok((buffer, allocation))
-// }
-
-// pub fn create_command_buffer(&self) -> CommandBuffer {
-//     let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::default()
-//         .command_buffer_count(1)
-//         .command_pool(self.command_pool)
-//         .level(vk::CommandBufferLevel::PRIMARY);
-
-//     Self::allocate_command_buffer(self.inner.clone(), command_buffer_allocate_info)
-// }
-
-// pub fn create_buffer<T>(&self, desc: BufferDesc, initial_data: Option<&[T]>) ->
-// Result<Buffer> {     let mut flags: vk::BufferUsageFlags = desc.usage.into();
-//     if initial_data.is_some() {
-//         flags |= vk::BufferUsageFlags::TRANSFER_DST;
-//     }
-//     let initial_data = initial_data.unwrap();
-//     let size = initial_data.len() * size_of::<T>();
-//     let (buffer, allocation) = allocate(
-//         &self.allocator,
-//         &self.inner,
-//         size,
-//         flags,
-//         MemoryLocation::CpuToGpu,
-//     )
-//     .unwrap();
-
-//     self.write_buffer(&allocation, initial_data)?;
-//     Ok(Buffer {
-//         inner: buffer,
-//         allocation,
-//     })
+        Ok(Self {
+            allocator: info.allocator.clone(),
+            allocation,
+            inner: buffer,
+            size: info.size,
+            usage: info.usage,
+            memory_location: info.memory_location,
+        })
+    }
+}
 // }
 
 // pub fn write_buffer<T: Sized>(&self, allocation: &Allocation, data: &[T]) -> Result<()> {

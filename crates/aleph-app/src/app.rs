@@ -1,4 +1,7 @@
+use aleph_core::constants::SINGLE_STEP;
+
 use {
+    aleph_core::constants::{DEFAULT_WINDOW_SIZE, STEP_TIME_US, UPDATE_TIME_US},
     aleph_core::logging,
     aleph_gfx::renderer::Renderer,
     aleph_hal::vk::render_backend::RenderBackend,
@@ -12,20 +15,12 @@ use {
     },
     winit::{
         application::ApplicationHandler,
-        dpi::{PhysicalSize, Size},
+        dpi::Size,
         event::WindowEvent,
         event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
         window::{Window, WindowId},
     },
 };
-
-const HEARTBEAT_STEPS: u64 = 10_000;
-const STEP_TIME_US: u128 = ((1.0 / 60.0) * 1_000_000.0) as u128;
-const UPDATE_TIME_US: u128 = 20 * STEP_TIME_US;
-const INITIAL_SIZE: Size = Size::Physical(PhysicalSize {
-    width: 1280,
-    height: 720,
-});
 
 pub struct App {
     state: AppState,
@@ -130,7 +125,7 @@ impl Default for AppState {
 // }
 impl AppState {
     pub fn init(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
-        let attributes = Window::default_attributes().with_inner_size(INITIAL_SIZE);
+        let attributes = Window::default_attributes().with_inner_size(DEFAULT_WINDOW_SIZE);
         let window = Arc::new(event_loop.create_window(attributes)?);
         log::info!("Created window: {window:?}");
 
@@ -156,11 +151,13 @@ impl AppState {
         }
 
         let elapsed = now.duration_since(self.last_update);
-
         self.step_elapsed(elapsed);
         self.render();
-
         self.last_update = now;
+
+        if SINGLE_STEP {
+            self.exiting = true;
+        }
     }
 
     fn resize(&mut self, size: Size) {
@@ -215,17 +212,6 @@ impl AppState {
             self.step();
             self.last_step += 1;
         }
-
-        if self.last_step > self.last_heartbeat + HEARTBEAT_STEPS {
-            log::info!(
-                "[step: {}, last_step: {}, accumulator: {}, elapsed: {}]",
-                self.last_step,
-                self.last_step,
-                self.step_accumulator,
-                elapsed_us
-            );
-            self.last_heartbeat = self.last_step;
-        }
     }
 
     fn step(&mut self) {
@@ -270,7 +256,6 @@ impl ApplicationHandler for AppState {
         _window_id: WindowId,
         event: WindowEvent,
     ) {
-        // event_loop.set_control_flow(ControlFlow::Poll);
         if let Some(_) = self.window.get() {
             match event {
                 WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
