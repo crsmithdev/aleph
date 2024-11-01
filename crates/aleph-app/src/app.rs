@@ -1,8 +1,8 @@
-use aleph_core::constants::SINGLE_STEP;
-
 use {
-    aleph_core::constants::{DEFAULT_WINDOW_SIZE, STEP_TIME_US, UPDATE_TIME_US},
-    aleph_core::logging,
+    aleph_core::{
+        constants::{DEFAULT_WINDOW_SIZE, SINGLE_STEP, STEP_TIME_US, UPDATE_TIME_US},
+        logging,
+    },
     aleph_gfx::renderer::Renderer,
     aleph_hal::vk::render_backend::RenderBackend,
     anyhow::{anyhow, Result},
@@ -102,27 +102,6 @@ impl Default for AppState {
     }
 }
 
-// pub trait OnceCellExtensions {
-//     fn must_set<T>(&self, cell: OnceCell<T>, value: T) -> Result<()>;
-// }
-
-// impl<T> OnceCellExtensions for OnceCell<T> {
-//     fn must_set<T>(&self, cell: OnceCell<T>, value: T) -> Result<()> {
-//         todo!()
-//     }
-// }
-
-// macro_rules! set_once {
-//     ($cell:expr, $value:expr) => {
-//         // match $self.must_set($cell, $value) {
-//         //     Ok(_) => {}
-//         //     Err(err) => {
-//         //         bail!("Failed to set cell: {err}");
-//         //     }
-//         // }
-//     };
-//     () => {};
-// }
 impl AppState {
     pub fn init(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
         let attributes = Window::default_attributes().with_inner_size(DEFAULT_WINDOW_SIZE);

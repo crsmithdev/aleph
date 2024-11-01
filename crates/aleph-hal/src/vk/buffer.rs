@@ -6,10 +6,7 @@ use {
         vulkan::{Allocation, AllocationCreateDesc, AllocationScheme},
         MemoryLocation,
     },
-    std::{
-        fmt,
-        sync::Arc,
-    },
+    std::{fmt, sync::Arc},
 };
 pub struct BufferDesc {
     pub size: usize,
@@ -105,27 +102,3 @@ impl Buffer {
         })
     }
 }
-// }
-
-// pub fn write_buffer<T: Sized>(&self, allocation: &Allocation, data: &[T]) -> Result<()> {
-//     let buffer_ptr = allocation.mapped_ptr().unwrap().cast().as_ptr();
-//     unsafe { ptr::copy_nonoverlapping(data.as_ptr(), buffer_ptr, data.len()) }
-
-//     Ok(())
-// }
-
-// fn find_memorytype_index(
-//     &self,
-//     memory_req: &vk::MemoryRequirements,
-//     memory_prop: &vk::PhysicalDeviceMemoryProperties,
-//     flags: vk::MemoryPropertyFlags,
-// ) -> Option<u32> {
-//     memory_prop.memory_types[..memory_prop.memory_type_count as _]
-//         .iter()
-//         .enumerate()
-//         .find(|(index, memory_type)| {
-//             (1 << index) & memory_req.memory_type_bits != 0
-//                 && memory_type.property_flags & flags == flags
-//         })
-//         .map(|(index, _memory_type)| index as _)
-// }
