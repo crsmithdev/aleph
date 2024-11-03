@@ -189,17 +189,7 @@ impl Renderer {
         cmd: vk::CommandBuffer,
         image: vk::Image,
     ) -> Result<(), anyhow::Error> {
-        let value = self.current_frame as f32 / 120.0;
-        let sin = value.sin();
-        let abs = sin.abs();
-
         let flash = (self.current_frame as f32 / 120.0).sin().abs();
-        // dbg!(&self.current_frame_index);
-        // dbg!(&value);
-        // dbg!(&sin);
-        // dbg!(&abs);
-        dbg!(&flash);
-        // println!("");
         let color = vk::ClearColorValue {
             float32: [0.0, 0.0, flash, 1.0],
         };
