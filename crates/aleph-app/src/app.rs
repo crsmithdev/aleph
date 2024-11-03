@@ -1,6 +1,5 @@
 use {
     aleph_core::{
-        constants,
         constants::{DEFAULT_WINDOW_SIZE, MAX_FRAMES, STEP_TIME_US, UPDATE_TIME_US},
         logging,
     },

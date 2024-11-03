@@ -1,9 +1,6 @@
 use {
     ash::vk,
-    std::{
-        ffi::{c_void, CStr},
-        os::windows::fs::symlink_dir,
-    },
+    std::ffi::{c_void, CStr},
 };
 pub unsafe extern "system" fn vulkan_debug_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
