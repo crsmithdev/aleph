@@ -155,6 +155,7 @@ impl Swapchain {
     }
 
     pub fn destroy(&self) {
+        log::info!("Destroying swapchain: {:?}", self);
         unsafe {
             self.loader.destroy_swapchain(self.inner, None);
             self.image_views
@@ -164,6 +165,7 @@ impl Swapchain {
     }
 
     pub fn recreate(&mut self) -> Result<()> {
+        self.destroy();
         let info = SwapchainInfo {
             allocator: &self.allocator,
             device: &self.device,
@@ -175,7 +177,22 @@ impl Swapchain {
             color_space: self.color_space,
             vsync: self.vsync,
         };
-
+        /*Ok(Swapchain {
+            device: info.device.clone(),
+            instance: info.instance.clone(),
+            allocator: info.allocator.clone(),
+            physical_device: info.physical_device.clone(),
+            inner: swapchain,
+            format: info.format,
+            extent: surface_resolution,
+            vsync: info.vsync,
+            color_space: info.color_space,
+            surface: info.surface.clone(),
+            image_views,
+            draw_image,
+            images,
+            loader,
+        }) */
         match Self::new(&info) {
             Ok(swapchain) => {
                 *self = swapchain;
@@ -189,7 +206,7 @@ impl Swapchain {
 
 impl Drop for Swapchain {
     fn drop(&mut self) {
-        self.destroy();
+        // self.destroy();
     }
 }
 

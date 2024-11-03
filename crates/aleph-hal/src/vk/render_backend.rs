@@ -139,12 +139,11 @@ impl RenderBackend {
 
     pub fn copy_image_to_image(
         &self,
+        cmd: vk::CommandBuffer,
         src: vk::Image,
         dst: vk::Image,
-        extent: vk::Extent3D,
-        src_layout: vk::ImageLayout,
-        dst_layout: vk::ImageLayout,
-        cmd: vk::CommandBuffer,
+        src_extent: vk::Extent3D,
+        dst_extent: vk::Extent3D,
     ) {
         let src_subresource = vk::ImageSubresourceLayers::default()
             .aspect_mask(vk::ImageAspectFlags::COLOR)
@@ -158,21 +157,23 @@ impl RenderBackend {
             .src_offsets([
                 vk::Offset3D::default(),
                 vk::Offset3D::default()
-                    .x(extent.width as i32)
-                    .y(extent.height as i32),
+                    .x(src_extent.width as i32)
+                    .y(src_extent.height as i32)
+                    .z(1),
             ])
             .dst_offsets([
                 vk::Offset3D::default(),
                 vk::Offset3D::default()
-                    .x(extent.width as i32)
-                    .y(extent.height as i32),
+                    .x(dst_extent.width as i32)
+                    .y(dst_extent.height as i32)
+                    .z(1),
             ]);
         let regions = &[blit_region];
         let blit_info = vk::BlitImageInfo2::default()
             .src_image(src)
-            .src_image_layout(src_layout)
+            .src_image_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
             .dst_image(dst)
-            .dst_image_layout(dst_layout)
+            .dst_image_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
             .regions(regions);
 
         unsafe { self.device.inner.cmd_blit_image2(cmd, &blit_info) }
@@ -205,13 +206,6 @@ impl RenderBackend {
                 .unwrap()
         }
     }
-
-    // pub fn write_buffer<T: Sized>(&self, allocation: &Allocation, data: &[T]) -> Result<()> {
-    //     let buffer_ptr = allocation.mapped_ptr().unwrap().cast().as_ptr();
-    //     unsafe { ptr::copy_nonoverlapping(data.as_ptr(), buffer_ptr, data.len()) }
-
-    //     Ok(())
-    // }
 }
 
 impl fmt::Debug for RenderBackend {

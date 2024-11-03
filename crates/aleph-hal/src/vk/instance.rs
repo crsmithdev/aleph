@@ -34,7 +34,7 @@ impl Instance {
     fn layer_names() -> Vec<*const i8> {
         unsafe {
             [
-                ffi::CStr::from_bytes_with_nul_unchecked(b"VK_LAYER_LUNARG_api_dump\0"),
+                // ffi::CStr::from_bytes_with_nul_unchecked(b"VK_LAYER_LUNARG_api_dump\0"),
                 ffi::CStr::from_bytes_with_nul_unchecked(b"VK_LAYER_KHRONOS_validation\0"),
             ]
             .iter()

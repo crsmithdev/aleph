@@ -27,7 +27,7 @@ impl Device {
             khr::maintenance3::NAME.as_ptr(),
             khr::dynamic_rendering::NAME.as_ptr(),
             ash::ext::descriptor_indexing::NAME.as_ptr(),
-            ash::ext::buffer_device_address::NAME.as_ptr(),
+            ash::khr::buffer_device_address::NAME.as_ptr(),
         ];
         let priorities = [1.0];
 
@@ -46,7 +46,7 @@ impl Device {
         let mut synchronization_features =
             ash::vk::PhysicalDeviceSynchronization2FeaturesKHR::default().synchronization2(true);
         let mut buffer_device_address_features =
-            PhysicalDeviceBufferDeviceAddressFeaturesKHR::default();
+            PhysicalDeviceBufferDeviceAddressFeaturesKHR::default().buffer_device_address(true);
         let mut device_features = vk::PhysicalDeviceFeatures2::default()
             .push_next(&mut synchronization_features)
             .push_next(&mut buffer_device_address_features);

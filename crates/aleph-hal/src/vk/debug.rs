@@ -1,6 +1,9 @@
 use {
     ash::vk,
-    std::ffi::{c_void, CStr},
+    std::{
+        ffi::{c_void, CStr},
+        os::windows::fs::symlink_dir,
+    },
 };
 pub unsafe extern "system" fn vulkan_debug_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
@@ -17,6 +20,10 @@ pub unsafe extern "system" fn vulkan_debug_callback(
         vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => log::warn!("{}", message),
         vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => log::trace!("{}", message),
         _ => log::info!("{}", message),
+    }
+
+    if message_severity == vk::DebugUtilsMessageSeverityFlagsEXT::ERROR {
+        std::process::exit(1);
     }
 
     vk::FALSE

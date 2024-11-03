@@ -1,6 +1,19 @@
-use {log::info, std::time::SystemTime};
+use {
+    fern,
+    log::info,
+    std::{env, str::FromStr, time::SystemTime},
+};
 
 pub fn setup_logger() -> Result<(), fern::InitError> {
+    let log_level = {
+        let level = env::var("RUST_LOG").unwrap_or("info".to_string());
+        let level = log::Level::from_str(&level).unwrap_or_else(|_| {
+            eprintln!("Invalid RUST_LOG value: {}, defaulting to info", level);
+            log::Level::Info
+        });
+        level.to_level_filter()
+    };
+
     fern::Dispatch::new()
         .format(|out, message, record| {
             out.finish(format_args!(
@@ -11,7 +24,7 @@ pub fn setup_logger() -> Result<(), fern::InitError> {
                 message
             ))
         })
-        .level(log::LevelFilter::Trace)
+        .level(log_level)
         .chain(std::io::stdout())
         .apply()?;
 
