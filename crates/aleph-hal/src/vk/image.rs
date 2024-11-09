@@ -1,19 +1,13 @@
 use {
     crate::vk::allocator::Allocator,
     anyhow::Result,
-    ash::{
-        vk,
-        vk::Handle,
-    },
+    ash::{vk, vk::Handle},
     gpu_allocator::{
         self as ga,
         vulkan::{Allocation, AllocationScheme},
         MemoryLocation,
     },
-    std::{
-        fmt,
-        sync::Arc,
-    },
+    std::{fmt, sync::Arc},
 };
 pub struct ImageInfo<'a> {
     pub allocator: &'a Arc<Allocator>,
@@ -62,9 +56,7 @@ impl Image {
             .array_layers(1)
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::OPTIMAL)
-            .usage(info.usage)
-            .sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .initial_layout(vk::ImageLayout::UNDEFINED);
+            .usage(info.usage);
         let (image, allocation) = info.allocator.create_image(&create_info)?;
 
         let view_info = vk::ImageViewCreateInfo::default()

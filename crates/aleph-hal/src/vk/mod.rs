@@ -2,6 +2,7 @@ pub mod allocator;
 pub mod buffer;
 pub mod command_buffer;
 pub mod debug;
+pub mod descriptor;
 pub mod device;
 pub mod image;
 pub mod instance;

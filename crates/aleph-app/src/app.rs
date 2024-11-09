@@ -164,8 +164,8 @@ impl AppState {
                 Ok(_) => {
                     self.last_frame += 1;
                     if MAX_FRAMES > 0 && self.last_frame >= MAX_FRAMES {
-                        log::info!("Exiting after max frames of {}", MAX_FRAMES);
-                        self.exit();
+                        // log::info!("Exiting after max frames of {}", MAX_FRAMES);
+                        // self.exit();
                     }
                 }
                 Err(err) => {

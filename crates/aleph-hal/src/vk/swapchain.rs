@@ -59,7 +59,7 @@ pub struct Swapchain {
     pub surface: Arc<Surface>,
     pub image_views: Vec<vk::ImageView>,
     pub images: Vec<vk::Image>,
-    pub draw_image: Image,
+    // pub draw_image: Image,
     pub format: vk::Format,
     pub extent: vk::Extent2D,
     pub vsync: bool,
@@ -125,17 +125,6 @@ impl Swapchain {
             })
             .collect();
 
-        let draw_image = Image::new(&ImageInfo {
-            allocator: &info.allocator,
-            width: surface_resolution.width as usize,
-            height: surface_resolution.height as usize,
-            format: vk::Format::R16G16B16A16_SFLOAT,
-            usage: vk::ImageUsageFlags::COLOR_ATTACHMENT
-                | vk::ImageUsageFlags::TRANSFER_DST
-                | vk::ImageUsageFlags::TRANSFER_SRC
-                | vk::ImageUsageFlags::STORAGE,
-        })?;
-
         Ok(Swapchain {
             device: info.device.clone(),
             instance: info.instance.clone(),
@@ -148,7 +137,7 @@ impl Swapchain {
             color_space: info.color_space,
             surface: info.surface.clone(),
             image_views,
-            draw_image,
+            // draw_image,
             images,
             loader,
         })
