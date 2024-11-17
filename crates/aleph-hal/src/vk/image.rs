@@ -76,7 +76,6 @@ impl Image {
         let view = unsafe {
             info.allocator
                 .device
-                .inner
                 .create_image_view(&view_info, None)
         }?;
 
@@ -94,8 +93,8 @@ impl Image {
 
 impl Allocator {
     fn create_image(&self, info: &vk::ImageCreateInfo) -> Result<(vk::Image, Allocation)> {
-        let image = unsafe { self.device.inner.create_image(&info, None) }?;
-        let requirements = unsafe { self.device.inner.get_image_memory_requirements(image) };
+        let image = unsafe { self.device.create_image(&info, None) }?;
+        let requirements = unsafe { self.device.get_image_memory_requirements(image) };
         let mut allocator = self.inner.lock().unwrap();
         let allocation = allocator.allocate(&ga::vulkan::AllocationCreateDesc {
             name: "Image",
@@ -106,7 +105,6 @@ impl Allocator {
         })?;
         unsafe {
             self.device
-                .inner
                 .bind_image_memory(image, allocation.memory(), allocation.offset())
         }?;
         Ok((image, allocation))

@@ -4,7 +4,7 @@ use {
         logging,
     },
     aleph_gfx::renderer::Renderer,
-    aleph_hal::vk::render_backend::RenderBackend,
+    aleph_hal::vk::backend::RenderBackend,
     anyhow::{anyhow, Result},
     human_panic::setup_panic,
     std::{

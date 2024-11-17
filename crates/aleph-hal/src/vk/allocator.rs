@@ -1,28 +1,26 @@
 use {
-    crate::vk::{device::Device, instance::Instance, physical_device::PhysicalDevice},
-    anyhow::Result,
-    gpu_allocator as ga,
-    std::{
+    anyhow::Result, ash::vk, gpu_allocator as ga, std::{
         fmt,
         sync::{Arc, Mutex},
-    },
+    }
 };
 
 pub struct Allocator {
     pub inner: Arc<Mutex<ga::vulkan::Allocator>>,
-    pub device: Arc<Device>,
+    pub physical_device: vk::PhysicalDevice,
+    pub device: ash::Device,
 }
 
 impl Allocator {
     pub fn new(
-        instance: &Arc<Instance>,
-        physical_device: &PhysicalDevice,
-        device: &Arc<Device>,
+        instance: &ash::Instance,
+        physical_device: &vk::PhysicalDevice,
+        device: &ash::Device,
     ) -> Result<Self> {
         let allocator = ga::vulkan::Allocator::new(&ga::vulkan::AllocatorCreateDesc {
-            instance: instance.inner.clone(),
-            device: device.inner.clone(),
-            physical_device: physical_device.inner.clone(),
+            instance: instance.clone(),
+            device: device.clone(),
+            physical_device: physical_device.clone(),
             buffer_device_address: true,
             debug_settings: ga::AllocatorDebugSettings::default(),
             allocation_sizes: ga::AllocationSizes::default(),
@@ -30,6 +28,7 @@ impl Allocator {
 
         Ok(Self {
             inner: Arc::new(Mutex::new(allocator)),
+            physical_device: physical_device.clone(),
             device: device.clone(),
         })
     }
@@ -40,7 +39,7 @@ impl fmt::Debug for Allocator {
         let inner = self.inner.lock().unwrap();
         f.debug_struct("Allocator")
             .field("inner", &inner)
-            .field("device", &self.device)
+            .field("device", &self.physical_device)
             .finish()
     }
 }

@@ -8,10 +8,7 @@ anyhow = "1.0.86"
 log = "0.4"
 raw-window-handle = "0.6.2"
 winit = "0.30.5"
-fern = "0.6.2"
-humantime = "2.1.0"
 human-panic = "2.0.1"
-pollster = "0.3.0"
 
 
 aleph-hal = { path = "../aleph-hal" }
