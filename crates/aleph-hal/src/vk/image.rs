@@ -93,7 +93,7 @@ impl Image {
 
 impl Allocator {
     fn create_image(&self, info: &vk::ImageCreateInfo) -> Result<(vk::Image, Allocation)> {
-        let image = unsafe { self.device.create_image(&info, None) }?;
+        let image = unsafe { self.device.create_image(info, None) }?;
         let requirements = unsafe { self.device.get_image_memory_requirements(image) };
         let mut allocator = self.inner.lock().unwrap();
         let allocation = allocator.allocate(&ga::vulkan::AllocationCreateDesc {

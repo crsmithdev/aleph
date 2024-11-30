@@ -1,25 +1,21 @@
 pub mod allocator;
-pub mod backend;
 pub mod buffer;
-pub mod debug;
 pub mod descriptor;
 pub mod image;
 pub mod swapchain;
 
 use {
-    crate::vk::{
-        allocator::Allocator,
-        debug::vulkan_debug_callback,
-        swapchain::{Swapchain, SwapchainInfo},
-    },
+    crate::{vk::allocator::Allocator, Swapchain, SwapchainInfo},
     aleph_core::constants::VK_TIMEOUT_NS,
     anyhow::{anyhow, Result},
     ash::{
-        ext,
-        khr,
-        vk::{self, Handle},
+        ext::{self, discard_rectangles},
+        khr::{self, dynamic_rendering},
+        vk::{self, Handle, SwapchainCounterCreateInfoEXT},
     },
     core::fmt,
+    derive_more::{Debug, Deref},
+    descriptor::DescriptorAllocator,
     raw_window_handle::{HasDisplayHandle, HasWindowHandle},
     std::{ffi, sync::Arc},
     winit::window::Window,
@@ -45,19 +41,55 @@ const DEVICE_EXTENSIONS: [&ffi::CStr; 6] = [
     khr::buffer_device_address::NAME,
 ];
 
-#[allow(dead_code)]
-pub struct RenderBackend {
-    pub instance: ash::Instance,
-    pub physical_device: vk::PhysicalDevice,
-    pub surface: vk::SurfaceKHR,
-    pub surface_fns: khr::surface::Instance,
-    pub swapchain: Swapchain,
-    pub device: ash::Device,
-    pub allocator: Arc<Allocator>,
+#[derive(Debug, Deref)]
+pub struct Instance {
+    #[deref]
+    #[debug("{:x}", inner.handle().as_raw())]
+    inner: ash::Instance,
+
+    #[debug(skip)]
     entry: ash::Entry,
-    queue: vk::Queue,
-    queue_family_index: u32,
+}
+
+#[derive(Debug, Deref)]
+pub struct Surface {
+    #[deref]
+    #[debug("{:x}", inner.as_raw())]
+    inner: vk::SurfaceKHR,
+
+    #[debug("{:x}", loader.instance().as_raw())]
+    loader: khr::surface::Instance,
+}
+
+#[derive(Debug, Deref)]
+pub struct Device {
+    #[deref]
+    #[debug("{:x}", inner.handle().as_raw())]
+    pub inner: ash::Device, // TODO
+
+    physical_device: vk::PhysicalDevice,
+}
+
+#[derive(Clone, Debug, Deref)]
+pub struct Queue {
+    #[deref]
+    inner: vk::Queue,
+    family: vk::QueueFamilyProperties,
+    family_index: u32,
+}
+
+#[derive(Debug)]
+pub struct RenderBackend {
+    pub(crate) instance: Instance,
+    pub(crate) surface: Surface,
+    pub device: Device,
+    pub(crate) swapchain: Swapchain,
+    queue: Queue,
+    pub(crate) allocator: Arc<Allocator>,
+
+    #[debug(skip)]
     debug_utils: ext::debug_utils::Instance,
+    #[debug(skip)]
     debug_callback: vk::DebugUtilsMessengerEXT,
 }
 
@@ -65,74 +97,97 @@ impl RenderBackend {
     pub fn new(window: &Arc<Window>) -> Result<Self> {
         Self::init_vulkan(window)
     }
+
+    pub fn device(&self) -> &Device {
+        &self.device
+    }
+
+    pub fn queue(&self) -> &vk::Queue {
+        &self.queue
+    }
+
+    pub fn allocator(&self) -> &Arc<Allocator> {
+        &self.allocator
+    }
+
+    pub fn swapchain(&self) -> &Swapchain {
+        &self.swapchain
+    }
+
+    pub fn swapchain_mut(&mut self) -> &mut Swapchain {
+        &mut self.swapchain
+    }
 }
 
 impl RenderBackend /* Init */ {
     fn init_vulkan(window: &Arc<Window>) -> Result<RenderBackend> {
         log::info!("Initializing Vulkan, window: {window:?}");
 
-        let entry = unsafe { ash::Entry::load()? };
-        let instance = Self::init_instance(&entry)?;
-        log::info!("Created instance: {:?}", instance.handle());
+        // let entry = unsafe { ash::Entry::load()? };
+        let instance = Self::init_instance()?;
+        log::info!("Created instance: {instance:?}");
 
-        let (debug_utils, debug_callback) = Self::init_debug(&entry, &instance)?;
+        let (debug_utils, debug_callback) = Self::init_debug(&instance)?;
 
-        let (surface, surface_fns) = Self::init_surface(&entry, &instance, window)?;
+        let surface = Self::init_surface(&instance, window)?;
         log::info!("Created surface: {surface:?}");
 
-        let physical_device = Self::init_physical_device(&instance)?;
+        let physical_device = Self::get_physical_device(&instance)?;
         log::info!("Selected physical device: {physical_device:?}");
 
-        let (queue_family_index, queue_family) =
-            Self::init_queue_families(&instance, &physical_device)?;
-        log::info!("Selected queue family: {queue_family:?}, index: {queue_family_index}");
+        let (queue_family_index, queue_family) = Self::init_queue_families(&instance, &physical_device)?;
+            Self::get_queue_family_index(&instance, &physical_device, vk::QueueFlags::GRAPHICS)?;
+        
+        let device = Self::init_device(&instance, queue_family_index)?;
+        log::info!("Created device: {device:?}");
 
-        let device = Self::init_device(&instance, &physical_device, queue_family_index)?;
-        log::info!("Created device: {:?}", device.handle());
-
-        let queue = Self::init_queue(&device, queue_family_index);
+        let queue = Self::init_queue(&device, queue_family, queue_family_index);
         log::info!("Created queue: {queue:?}");
-
-        let allocator = Arc::new(Allocator::new(&instance, &physical_device, &device)?);
-        log::info!("Created allocator: {allocator:?}");
 
         let extent = vk::Extent2D {
             width: window.inner_size().width,
             height: window.inner_size().height,
         };
-        let swapchain = Swapchain::new(&SwapchainInfo {
-            instance: &instance,
-            allocator: &allocator,
-            physical_device: &physical_device,
-            device: &device,
-            surface: &surface,
-            surface_fns: &surface_fns,
-            queue_family_index,
-            queue: &queue,
-            format: vk::Format::B8G8R8A8_UNORM,
-            color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
-            vsync: true,
-            extent,
-        })?;
+        let swapchain = Swapchain::new(
+            &instance,
+            &device,
+            &surface,
+            &queue,
+            &SwapchainInfo {
+                extent,
+                format: vk::Format::B8G8R8A8_UNORM,
+                color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
+                vsync: true,
+            },
+        )?;
         log::info!("Created swapchain: {swapchain:?}");
 
+        let allocator = Arc::new(Allocator::new(&instance, &physical_device, &device)?);
+        log::info!("Created allocator: {allocator:?}");
+
+        let _descriptor_allocator = Arc::new(DescriptorAllocator::new(
+            &device,
+            &[vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::STORAGE_IMAGE,
+                descriptor_count: 1,
+            }],
+            10,
+        )?);
+
         Ok(RenderBackend {
-            entry,
             instance,
-            physical_device,
-            surface,
-            surface_fns,
             device,
-            allocator,
+            surface,
             swapchain,
             queue,
-            queue_family_index,
+            allocator,
             debug_utils,
             debug_callback,
         })
     }
 
-    fn init_instance(entry: &ash::Entry) -> Result<ash::Instance> {
+    fn init_instance() -> Result<Instance> {
+        let entry = unsafe { ash::Entry::load() }?;
         let layers: Vec<*const i8> = INSTANCE_LAYERS.iter().map(|n| n.as_ptr()).collect();
         let extensions: Vec<*const i8> = INSTANCE_EXTENSIONS.iter().map(|n| n.as_ptr()).collect();
 
@@ -148,12 +203,12 @@ impl RenderBackend /* Init */ {
             .enabled_extension_names(&extensions)
             .flags(vk::InstanceCreateFlags::default());
 
-        Ok(unsafe { entry.create_instance(&instance_info, None)? })
+        let inner = unsafe { entry.create_instance(&instance_info, None)? };
+        Ok(Instance { inner, entry })
     }
 
     fn init_debug(
-        entry: &ash::Entry,
-        instance: &ash::Instance,
+        instance: &Instance,
     ) -> Result<(ext::debug_utils::Instance, vk::DebugUtilsMessengerEXT)> {
         let debug_info = vk::DebugUtilsMessengerCreateInfoEXT::default()
             .message_severity(
@@ -167,7 +222,7 @@ impl RenderBackend /* Init */ {
                     | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
             )
             .pfn_user_callback(Some(vulkan_debug_callback));
-        let debug_utils = ext::debug_utils::Instance::new(&entry, &instance);
+        let debug_utils = ext::debug_utils::Instance::new(&instance.entry, instance);
         let debug_callback = unsafe {
             debug_utils
                 .create_debug_utils_messenger(&debug_info, None)
@@ -177,24 +232,19 @@ impl RenderBackend /* Init */ {
         Ok((debug_utils, debug_callback))
     }
 
-    pub fn init_surface(
-        entry: &ash::Entry,
-        instance: &ash::Instance,
-        window: &winit::window::Window,
-    ) -> Result<(vk::SurfaceKHR, khr::surface::Instance)> {
-        let surface: vk::SurfaceKHR = unsafe {
+    pub fn init_surface(instance: &Instance, window: &winit::window::Window) -> Result<Surface> {
+        let inner: vk::SurfaceKHR = unsafe {
             ash_window::create_surface(
-                &entry,
-                &instance,
+                &instance.entry,
+                instance,
                 window.display_handle()?.into(),
                 window.window_handle()?.into(),
                 None,
             )?
         };
 
-        let loader = khr::surface::Instance::new(&entry, &instance);
-
-        Ok((surface, loader))
+        let loader = khr::surface::Instance::new(&instance.entry, instance);
+        Ok(Surface { inner, loader })
     }
 
     fn rank_physical_device(instance: &ash::Instance, physical_device: &vk::PhysicalDevice) -> i32 {
@@ -213,13 +263,12 @@ impl RenderBackend /* Init */ {
             None => 0,
         };
 
-        score = score
-            + match device_properties.device_type {
-                vk::PhysicalDeviceType::INTEGRATED_GPU => 20,
-                vk::PhysicalDeviceType::DISCRETE_GPU => 100,
-                vk::PhysicalDeviceType::VIRTUAL_GPU => 1,
-                _ => 0,
-            };
+        score += match device_properties.device_type {
+            vk::PhysicalDeviceType::INTEGRATED_GPU => 20,
+            vk::PhysicalDeviceType::DISCRETE_GPU => 100,
+            vk::PhysicalDeviceType::VIRTUAL_GPU => 1,
+            _ => 0,
+        };
 
         score
     }
@@ -241,43 +290,67 @@ impl RenderBackend /* Init */ {
         }
     }
 
-    fn init_queue(device: &ash::Device, queue_family_index: u32) -> vk::Queue {
-        unsafe { device.get_device_queue(queue_family_index, 0) }
-    }
-
-    fn init_device(
+    fn get_queue_family_index(
         instance: &ash::Instance,
         physical_device: &vk::PhysicalDevice,
-        queue_family_index: u32,
-    ) -> Result<ash::Device> {
+        flags: vk::QueueFlags,
+    ) -> Result<u32> {
+        let queue_families =
+            unsafe { instance.get_physical_device_queue_family_properties(*physical_device) };
+        let selected = queue_families
+            .into_iter()
+            .enumerate()
+            .find(|(_, qf)| qf.queue_flags.contains(flags));
+
+        match selected {
+            Some((index, _)) => Ok(index as u32),
+            None => Err(anyhow!("Could not find queue family with flags: {flags:?}")),
+        }
+    }
+
+    fn init_queue(device: &ash::Device, queue_family: vk::QueueFamilyProperties, queue_family_index: u32) -> Queue {
+        let inner = unsafe { device.get_device_queue(queue_family_index, 0) };
+        Queue{ inner, family: queue_family, family_index: queue_family_index }
+    }
+
+    fn init_device(instance: &Instance, queue_family_index: u32) -> Result<Device> {
+        let physical_device = Self::get_physical_device(&instance)?;
+
         let device_extension_names: Vec<*const i8> = DEVICE_EXTENSIONS
             .iter()
             .map(|n| n.as_ptr())
             .collect::<Vec<_>>();
 
-        let priorities = [1.0];
-        let queue_info = [vk::DeviceQueueCreateInfo::default()
-            .queue_family_index(queue_family_index)
-            .queue_priorities(&priorities)];
-
         let mut synchronization_features =
             ash::vk::PhysicalDeviceSynchronization2FeaturesKHR::default().synchronization2(true);
+        let mut dynamic_rendering_features =
+            ash::vk::PhysicalDeviceDynamicRenderingFeaturesKHR::default().dynamic_rendering(true);
         let mut buffer_device_address_features =
             ash::vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR::default()
                 .buffer_device_address(true);
         let mut device_features = vk::PhysicalDeviceFeatures2::default()
+            .push_next(&mut dynamic_rendering_features)
             .push_next(&mut synchronization_features)
             .push_next(&mut buffer_device_address_features);
 
+        let priorities = [1.0];
+        let queue_info = [vk::DeviceQueueCreateInfo::default()
+            .queue_family_index(queue_family_index)
+            .queue_priorities(&priorities)];
         let device_info = vk::DeviceCreateInfo::default()
             .queue_create_infos(&queue_info)
             .enabled_extension_names(&device_extension_names)
             .push_next(&mut device_features);
 
-        Ok(unsafe { instance.create_device(*physical_device, &device_info, None)? })
+        let inner = unsafe { instance.create_device(physical_device, &device_info, None)? };
+
+        Ok(Device {
+            inner,
+            physical_device,
+        })
     }
 
-    fn init_physical_device(instance: &ash::Instance) -> Result<vk::PhysicalDevice> {
+    fn get_physical_device(instance: &ash::Instance) -> Result<vk::PhysicalDevice> {
         let physical_devices = unsafe { instance.enumerate_physical_devices()? };
 
         let selected = physical_devices
@@ -328,7 +401,7 @@ impl RenderBackend /* Commands */ {
     pub fn create_command_pool(&self) -> Result<vk::CommandPool> {
         let pool_create_info = vk::CommandPoolCreateInfo::default()
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
-            .queue_family_index(self.queue_family_index);
+            .queue_family_index(self.queue.family_index);
         Ok(unsafe { self.device.create_command_pool(&pool_create_info, None)? })
     }
 
@@ -366,7 +439,7 @@ impl RenderBackend /* Commands */ {
         Ok(unsafe { self.device.end_command_buffer(cmd)? })
     }
 
-    pub fn queue_submit(
+    pub fn submit_queued(
         &self,
         cmd: &vk::CommandBuffer,
         wait_semaphore: &vk::Semaphore,
@@ -389,45 +462,10 @@ impl RenderBackend /* Commands */ {
             .wait_semaphore_infos(wait_info)
             .signal_semaphore_infos(signal_info)];
 
-        Ok(unsafe { self.device.queue_submit2(self.queue, submit_info, fence) }?)
-    }
-}
-
-impl RenderBackend /* Swapchain */ {
-    pub fn present(&mut self, semaphore: vk::Semaphore, image_index: u32) -> Result<()> {
-        let wait_semaphores = &[semaphore];
-        let indices = &[image_index];
-
-        self.swapchain.queue_present(wait_semaphores, indices)
-    }
-
-    pub fn resize(&mut self, width: u32, height: u32) -> Result<()> {
-        log::info!("Resizing swapchain to {width}x{height}");
-        self.swapchain.destroy();
-
-        let extent = vk::Extent2D { width, height };
-        let result = Swapchain::new(&SwapchainInfo {
-            allocator: &self.allocator,
-            instance: &self.instance,
-            physical_device: &self.physical_device,
-            device: &self.device,
-            surface: &self.surface,
-            format: vk::Format::B8G8R8A8_UNORM,
-            color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
-            vsync: true,
-            extent,
-            queue_family_index: self.queue_family_index,
-            queue: &self.queue,
-            surface_fns: &self.surface_fns,
-        });
-
-        match result {
-            Ok(swapchain) => {
-                self.swapchain = swapchain;
-                Ok(())
-            }
-            Err(err) => Err(anyhow::anyhow!(err)),
-        }
+        Ok(unsafe {
+            self.device
+                .queue_submit2(*self.queue, submit_info, fence)
+        }?)
     }
 }
 
@@ -515,16 +553,66 @@ impl RenderBackend /* Images */ {
 
         Ok(shader)
     }
+
+    pub fn update_descriptor_sets(
+        &self,
+        writes: &[vk::WriteDescriptorSet],
+        copies: &[vk::CopyDescriptorSet],
+    ) {
+        unsafe {
+            self.device.update_descriptor_sets(writes, copies);
+        }
+    }
+
+    pub fn create_descriptor_set_layout(
+        &self,
+        bindings: &[vk::DescriptorSetLayoutBinding],
+        flags: vk::DescriptorSetLayoutCreateFlags,
+    ) -> Result<vk::DescriptorSetLayout> {
+        let info = vk::DescriptorSetLayoutCreateInfo::default()
+            .bindings(bindings)
+            .flags(flags);
+        Ok(unsafe { self.device.create_descriptor_set_layout(&info, None)? })
+    }
 }
 
-impl fmt::Debug for RenderBackend {
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        f.debug_struct("RenderBackend")
-            .field("instance", &self.instance.handle())
-            .field("physical_device", &self.physical_device.as_raw())
-            .field("surface", &self.surface)
-            .field("swapchain", &self.swapchain)
-            .field("device", &self.device.handle())
-            .finish()
+// impl fmt::Debug for RenderBackend {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+//         f.debug_struct("RenderBackend")
+//             // .field("window", &self.window)
+//             .field("instance", &self.instance.handle())
+//             // .field("surface", &self.surface)
+//             // .field("surface_loader", &self.surface_loader.instance())
+//             // .field("device", &self.device.handle())
+//             .field("allocator", &self.allocator)
+//             // .field("queue", &self.queue)
+//             // .field("queue_family_index  ", &self.queue_family_index)
+//             .field("debug_utils", &self.debug_utils.instance())
+//             .field("debug_callback", &self.debug_callback)
+//             .finish()
+//     }
+// }
+
+pub unsafe extern "system" fn vulkan_debug_callback(
+    message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
+    _message_type: vk::DebugUtilsMessageTypeFlagsEXT,
+    p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
+    _p_user_data: *mut ffi::c_void,
+) -> vk::Bool32 {
+    let message = ffi::CStr::from_ptr((*p_callback_data).p_message)
+        .to_str()
+        .unwrap_or("[Error parsing message data]");
+
+    match message_severity {
+        vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => log::error!("{}", message),
+        vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => log::warn!("{}", message),
+        vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => log::trace!("{}", message),
+        _ => log::info!("{}", message),
     }
+
+    if message_severity == vk::DebugUtilsMessageSeverityFlagsEXT::ERROR {
+        std::process::exit(1);
+    }
+
+    vk::FALSE
 }

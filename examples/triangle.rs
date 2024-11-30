@@ -1,6 +1,6 @@
-use aleph::prelude::*;
+use aleph::App;
 
-fn main() {
-    let mut app = App::builder().build().unwrap();
-    app.run(|_| {}).expect(":/");
+
+fn main() -> anyhow::Result<()> {
+    App::default().run().map_err(|err| anyhow::anyhow!(err))
 }

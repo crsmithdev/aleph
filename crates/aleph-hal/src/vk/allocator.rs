@@ -20,7 +20,7 @@ impl Allocator {
         let allocator = ga::vulkan::Allocator::new(&ga::vulkan::AllocatorCreateDesc {
             instance: instance.clone(),
             device: device.clone(),
-            physical_device: physical_device.clone(),
+            physical_device: *physical_device,
             buffer_device_address: true,
             debug_settings: ga::AllocatorDebugSettings::default(),
             allocation_sizes: ga::AllocationSizes::default(),
@@ -28,7 +28,7 @@ impl Allocator {
 
         Ok(Self {
             inner: Arc::new(Mutex::new(allocator)),
-            physical_device: physical_device.clone(),
+            physical_device: *physical_device,
             device: device.clone(),
         })
     }

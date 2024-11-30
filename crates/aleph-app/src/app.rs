@@ -1,10 +1,10 @@
 use {
     aleph_core::{
-        constants::{DEFAULT_WINDOW_SIZE, MAX_FRAMES, STEP_TIME_US, UPDATE_TIME_US},
+        constants::{DEFAULT_WINDOW_SIZE, STEP_TIME_US, UPDATE_TIME_US},
         logging,
     },
-    aleph_gfx::renderer::Renderer,
-    aleph_hal::vk::backend::RenderBackend,
+    aleph_gfx::{renderer::Renderer, ui::UI},
+    aleph_hal::vk::RenderBackend,
     anyhow::{anyhow, Result},
     human_panic::setup_panic,
     std::{
@@ -15,62 +15,43 @@ use {
     },
     winit::{
         application::ApplicationHandler,
-        dpi::Size,
-        event::WindowEvent,
+    event::{Event,WindowEvent},
         event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
         window::{Window, WindowId},
     },
 };
 
+#[derive(Debug, Default)]
 pub struct App {}
 
-pub struct AppBuilder {}
-
-impl AppBuilder {
-    pub fn build(self) -> Result<App> {
-        App::build(self)
-    }
-}
-
-impl Default for App {
-    fn default() -> Self {
-        App {}
-    }
-}
 impl App {
-    pub fn builder() -> AppBuilder {
-        AppBuilder {}
-    }
-
-    pub fn build(_builder: AppBuilder) -> Result<App> {
+    pub fn run(&mut self) -> Result<()> {
         logging::setup_logger()?;
         setup_panic!();
 
-        Ok(App::default())
-    }
-
-    pub fn run<F>(&mut self, mut _frame_fn: F) -> Result<()>
-    where
-        F: (FnMut(FrameContext) -> ()),
-    {
         let state = AppState::default();
+        let mut handler = AppHandler { state };
+
         EventLoop::new()?
-            .run_app(&mut AppHandler { state })
+            .run_app(&mut handler)
             .map_err(|err| anyhow!(err))
     }
 }
 
-pub struct FrameContext {}
+pub struct Context {}
 
+#[allow(dead_code)]
 pub struct AppState {
     renderer: OnceCell<Renderer>,
+    ui: OnceCell<UI>,
     window: OnceCell<Arc<Window>>,
     last_update: Instant,
     last_step: u64,
     last_frame: u64,
     last_heartbeat: u64,
     step_accumulator: i64,
-    is_exiting: bool,
+    exiting: bool,
+    initialized: bool,
 }
 
 impl Default for AppState {
@@ -78,12 +59,14 @@ impl Default for AppState {
         AppState {
             window: OnceCell::new(),
             renderer: OnceCell::new(),
+            ui: OnceCell::new(),
             step_accumulator: 0,
             last_update: Instant::now(),
             last_heartbeat: 0,
             last_step: 0,
             last_frame: 0,
-            is_exiting: false,
+            exiting: false,
+            initialized: false,
         }
     }
 }
@@ -98,7 +81,8 @@ impl fmt::Debug for AppState {
             .field("step_accumulator", &self.step_accumulator)
             .field("last_heartbeat", &self.last_heartbeat)
             .field("last_frame", &self.last_frame)
-            .field("exiting", &self.is_exiting)
+            .field("exiting", &self.exiting)
+            .field("initialized", &self.initialized)
             .finish()
     }
 }
@@ -109,8 +93,12 @@ impl AppState {
         let window = Arc::new(event_loop.create_window(attributes)?);
         log::info!("Created window: {window:?}");
 
-        let backend = RenderBackend::new(&window)?;
+        let backend = RenderBackend::new(&window.clone())?;
         log::info!("Created render backend: {:?}", &backend);
+
+        let ui = UI::new(&backend, &window)?;
+        log::info!("Created UI: {:?}", &ui);
+
         let renderer = Renderer::new(backend)?;
         log::info!("Created renderer: {:?}", &renderer);
 
@@ -120,64 +108,45 @@ impl AppState {
         self.renderer
             .set(renderer)
             .map_err(|_| anyhow!("Renderer already initialized"))?;
-
-        log::info!("Initialized");
+        self.ui
+            .set(ui)
+            .map_err(|_| anyhow!("UI already initialized"))?;
+        self.initialized = true;
         Ok(())
     }
 
-    fn update(&mut self, now: Instant) {
-        if self.is_exiting {
-            return;
+    fn update(&mut self, now: Instant) -> Result<()> {
+        if self.exiting || !self.initialized {
+            return Ok(());
         }
 
         let elapsed = now.duration_since(self.last_update);
         self.step_elapsed(elapsed);
         self.last_update = now;
+
+        Ok(())
     }
 
-    fn resize(&mut self, size: Size) {
-        if self.is_exiting {
-            return;
+    fn render(&mut self) -> Result<()> {
+        if self.exiting || !self.initialized {
+            return Ok(());
         }
+        let window = self.window.get().unwrap();
 
-        if let Some(renderer) = self.renderer.get_mut() {
-            let scale_factor = match self.window.get() {
-                Some(window) => window.scale_factor(),
-                None => 1.0,
-            };
-            let size = size.to_physical(scale_factor);
+        let renderer = self
+            .renderer
+            .get_mut()
+            .expect("Renderer dropped or not initialized");
+        let ui = self.ui.get_mut().expect("UI dropped or not initialized");
 
-            if let Err(err) = renderer.resize(size.width, size.height) {
-                log::error!("Failed to resize renderer: {err}");
-                self.exit();
-            }
-        }
-    }
+        renderer.begin_frame()?;
+        renderer.render()?;
+        ui.render(window)?;
+        renderer.end_frame()?;
 
-    fn render(&mut self) {
-        if self.is_exiting {
-            return;
-        }
+        self.last_frame = self.last_frame.wrapping_add(1);
 
-        match self.renderer.get_mut() {
-            Some(renderer) => match renderer.render() {
-                Ok(_) => {
-                    self.last_frame += 1;
-                    if MAX_FRAMES > 0 && self.last_frame >= MAX_FRAMES {
-                        // log::info!("Exiting after max frames of {}", MAX_FRAMES);
-                        // self.exit();
-                    }
-                }
-                Err(err) => {
-                    log::error!("Unhandled error while rendering: {err}");
-                    self.exit();
-                }
-            },
-            None => {
-                log::error!("Cannot render, Renderer not initialized or already destroyed");
-                self.exit();
-            }
-        }
+        Ok(())
     }
 
     fn step_elapsed(&mut self, elapsed: Duration) {
@@ -200,8 +169,8 @@ impl AppState {
     }
 
     fn exit(&mut self) {
-        if !self.is_exiting {
-            self.is_exiting = true;
+        if !self.exiting {
+            self.exiting = true;
             log::info!("Exiting");
 
             let _ = self.renderer.take();
@@ -215,7 +184,7 @@ struct AppHandler {
     state: AppState,
 }
 
-impl<'a> ApplicationHandler for AppHandler {
+impl ApplicationHandler for AppHandler {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         log::info!("Resumed");
         if let Err(err) = self.state.init(event_loop) {
@@ -225,13 +194,24 @@ impl<'a> ApplicationHandler for AppHandler {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        if !self.state.is_exiting {
-            self.state.update(Instant::now());
-            event_loop.set_control_flow(ControlFlow::WaitUntil(
-                Instant::now() + Duration::from_millis(1),
-            ));
-            self.state.render();
+        if self.state.exiting || !self.state.initialized {
+            return;
         }
+
+        self.state
+            .update(Instant::now())
+            .expect("Error updating app state");
+        match self.state.render() {
+            Ok(_) => {}
+            Err(err) => {
+                log::error!("Error rendering: {err}");
+                panic!();
+            }
+        }
+
+        event_loop.set_control_flow(ControlFlow::WaitUntil(
+            Instant::now() + Duration::from_millis(1),
+        ));
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
@@ -241,36 +221,47 @@ impl<'a> ApplicationHandler for AppHandler {
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
-        _window_id: WindowId,
+        window_id: WindowId,
         event: WindowEvent,
     ) {
-        if let Some(_) = self.state.window.get() {
-            match event {
-                WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                    log::info!("Window scale factor changed: {scale_factor}");
-                }
-                WindowEvent::RedrawRequested => {
-                    log::info!("Window redraw requested");
-                    self.state.render();
-                }
-                WindowEvent::CloseRequested => {
-                    log::info!("Close requested");
-                    event_loop.exit();
-                    std::process::exit(0);
-                }
-                WindowEvent::KeyboardInput { event, .. } => {
-                    log::info!("Keyboard input: {event:?}");
-                }
-                WindowEvent::MouseInput { button, state, .. } => {
-                    log::info!("Mouse input: {button:?}, {state:?}");
-                }
-                WindowEvent::Resized(size) => {
-                    log::info!("Window resized: {size:?}");
-                    self.state.resize(size.into());
-                }
-                _ => {}
-            }
+        if self.state.exiting || !self.state.initialized {
+            return;
         }
+
+        let window = self.state.window.get().unwrap();
+        let ui = self.state.ui.get_mut().unwrap();
+        let event2 = event.clone();
+        let event3 = Event::WindowEvent { window_id: window_id, event: event2 };
+        // let event2: Event<()> = Event::WindowEvent { event: event.clone(), window_id };
+        // let event2: Event<()> = Event::WindowEvent { event, window_id };
+        // ui.handle_event(window, event2);
+
+        match event {
+            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                log::info!("Window scale factor changed: {scale_factor}");
+            }
+            WindowEvent::RedrawRequested => {
+                log::info!("Window redraw requested");
+                // self.state.render().expect("Rendering error");
+            }
+            WindowEvent::CloseRequested => {
+                log::info!("Close requested");
+                event_loop.exit();
+                std::process::exit(0);
+            }
+            WindowEvent::KeyboardInput { event, .. } => {
+                log::info!("Keyboard input: {event:?}");
+            }
+            WindowEvent::MouseInput { button, state, .. } => {
+                log::info!("Mouse input: {button:?}, {state:?}");
+            }
+            WindowEvent::Resized(size) => {
+                log::info!("Window resized: {size:?}");
+            }
+            _ => {}
+        }
+
+        ui.handle_event(window, event3);
     }
 }
 #[cfg(test)]

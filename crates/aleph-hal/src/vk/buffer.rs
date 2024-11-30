@@ -39,7 +39,7 @@ impl Buffer {
         let mut allocator = info.allocator.inner.lock().unwrap();
         let info2 = vk::BufferCreateInfo::default()
             .size(info.size as u64)
-            .usage(info.usage.into());
+            .usage(info.usage);
         let buffer = unsafe { info.device.create_buffer(&info2, None) }?;
         let requirements = unsafe { info.device.get_buffer_memory_requirements(buffer) };
 
@@ -64,7 +64,7 @@ impl Buffer {
             usage: info.usage,
             memory_location: info.memory_location,
             device: info.device.clone(),
-            physical_device: info.physical_device.clone(),
+            physical_device: *info.physical_device,
         })
     }
 }
