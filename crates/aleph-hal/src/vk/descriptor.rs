@@ -1,7 +1,11 @@
-use {anyhow::Result, ash::vk, std::fmt::Debug};
+use {anyhow::Result, ash::vk, ash::vk::Handle};
+use derive_more::Debug;
 
+#[derive(Debug)]
 pub struct DescriptorAllocator {
     pool: vk::DescriptorPool,
+
+    #[debug("{:x}", device.handle().as_raw())]
     device: ash::Device,
 }
 
@@ -23,6 +27,7 @@ impl DescriptorAllocator {
     }
 
     pub fn clear(&self) -> Result<()> {
+        #[allow(clippy::unit_arg)]
         Ok(unsafe {
             self.device
                 .reset_descriptor_pool(self.pool, vk::DescriptorPoolResetFlags::empty())?
@@ -42,13 +47,5 @@ impl DescriptorAllocator {
             .set_layouts(layouts);
         let sets = unsafe { self.device.allocate_descriptor_sets(&info) }?;
         Ok(sets[0])
-    }
-}
-
-impl Debug for DescriptorAllocator {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DescriptorAllocator")
-            .field("pool", &self.pool)
-            .finish()
     }
 }

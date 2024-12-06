@@ -1,6 +1,17 @@
 pub mod vk;
 
 pub use vk::{
-    swapchain::{Frame, Swapchain, SwapchainInfo},
-    RenderBackend,
+    MemoryAllocator,
+    CommandBuffer,
+    Context,
+    DescriptorAllocator,
+    Device,
+    Frame,
+    Image,
+    ImageInfo,
+    Instance,
+    Queue,
+    Surface,
+    Swapchain,
+    SwapchainInfo,
 };

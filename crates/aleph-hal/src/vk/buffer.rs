@@ -1,12 +1,12 @@
 use {
-    crate::vk::allocator::Allocator,
+    crate::vk::allocator::MemoryAllocator,
     anyhow::Result,
     ash::{vk, vk::Handle},
     gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, AllocationScheme},
     std::{fmt, sync::Arc},
 };
 pub struct BufferInfo<'a> {
-    pub allocator: &'a Arc<Allocator>,
+    pub allocator: &'a Arc<MemoryAllocator>,
     pub device: &'a ash::Device,
     pub physical_device: &'a vk::PhysicalDevice,
     pub size: usize,
@@ -16,7 +16,7 @@ pub struct BufferInfo<'a> {
 }
 
 pub struct Buffer {
-    pub allocator: Arc<Allocator>,
+    pub allocator: Arc<MemoryAllocator>,
     pub allocation: Allocation,
     pub device: ash::Device,
     pub physical_device: vk::PhysicalDevice,

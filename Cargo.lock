@@ -90,6 +90,7 @@ dependencies = [
  "aleph-hal",
  "anyhow",
  "ash",
+ "derive_more",
  "imgui",
  "imgui-rs-vulkan-renderer",
  "imgui-winit-support",

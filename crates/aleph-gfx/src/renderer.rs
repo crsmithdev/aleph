@@ -1,13 +1,13 @@
 use {
+    crate::ui::UiRenderer,
     aleph_hal::{
         vk::{
             descriptor::DescriptorAllocator,
             image::{Image, ImageInfo},
+            CommandBuffer,
         },
+        Context,
         Frame,
-        RenderBackend,
-        Swapchain,
-        SwapchainInfo,
     },
     anyhow::Result,
     ash::vk::{self, Extent3D},
@@ -15,12 +15,8 @@ use {
 };
 
 #[allow(dead_code)]
-pub struct Renderer {
-    backend: RenderBackend,
-    frames: Vec<Frame>,
-    current_frame: usize,
-    swapchain_index: usize,
-    swapchain_invalid: bool,
+struct GraphicsRenderer {
+    context: Context,
     descriptor_allocator: Arc<DescriptorAllocator>,
     draw_image: Image,
     draw_image_descriptors: vk::DescriptorSet,
@@ -29,19 +25,11 @@ pub struct Renderer {
     gradient_pipeline_layout: vk::PipelineLayout,
 }
 
-impl fmt::Debug for Renderer {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Renderer").finish_non_exhaustive()
-    }
-}
-
-impl Renderer {
-    pub fn new(backend: RenderBackend) -> Result<Self> {
-        let swapchain = backend.swapchain();
-        let extent = backend.swapchain().extent();
-        let frames = Self::init_frames(&backend, swapchain)?;
+impl GraphicsRenderer {
+    pub fn new(context: &Context) -> Result<Self> {
+        let extent = context.swapchain().extent();
         let draw_image = Image::new(&ImageInfo {
-            allocator: backend.allocator(),
+            allocator: context.allocator(),
             width: extent.width as usize,
             height: extent.height as usize,
             format: vk::Format::R16G16B16A16_SFLOAT,
@@ -51,7 +39,7 @@ impl Renderer {
                 | vk::ImageUsageFlags::STORAGE,
         })?;
         let descriptor_allocator = Arc::new(DescriptorAllocator::new(
-            backend.device(),
+            context.device(),
             &[vk::DescriptorPoolSize {
                 ty: vk::DescriptorType::STORAGE_IMAGE,
                 descriptor_count: 1,
@@ -65,7 +53,7 @@ impl Renderer {
             .stage_flags(vk::ShaderStageFlags::COMPUTE)
             .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
             .descriptor_count(1)];
-        let desc_layout = backend.create_descriptor_set_layout(
+        let desc_layout = context.create_descriptor_set_layout(
             desc_bindings,
             vk::DescriptorSetLayoutCreateFlags::empty(),
         )?;
@@ -83,14 +71,14 @@ impl Renderer {
             .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
             .image_info(image_info)];
 
-        backend.update_descriptor_sets(image_write, &[]);
+        context.update_descriptor_sets(image_write, &[]);
 
         let layouts = &[desc_layout];
-        let shader = backend.load_shader("shaders/gradient.spv")?;
+        let shader = context.load_shader("shaders/gradient.spv")?;
 
         let pipeline_layout_info = vk::PipelineLayoutCreateInfo::default().set_layouts(layouts);
         let gradient_pipeline_layout = unsafe {
-            backend
+            context
                 .device()
                 .create_pipeline_layout(&pipeline_layout_info, None)
         }?;
@@ -105,131 +93,64 @@ impl Renderer {
             .stage(stage_info)];
 
         let gradient_pipeline = unsafe {
-            backend
+            context
                 .device()
                 .create_compute_pipelines(vk::PipelineCache::null(), pipeline_info, None)
                 .map_err(|err| anyhow::anyhow!(err.1))
         }?[0];
 
-        Ok(Renderer {
-            backend,
+        Ok(Self {
+            context: context.clone(),
             descriptor_allocator,
-            frames,
-            current_frame: 0,
-            swapchain_index: 1,
-            gradient_pipeline,
-            gradient_pipeline_layout,
             draw_image,
             draw_image_descriptors: desc_sets,
             draw_image_layout: desc_layout,
-            swapchain_invalid: false,
+            gradient_pipeline,
+            gradient_pipeline_layout,
         })
     }
 
-    fn init_frames(backend: &RenderBackend, swapchain: &Swapchain) -> Result<Vec<Frame>> {
-        (0..swapchain.image_views().len())
-            .map(|index| {
-                let pool = backend.create_command_pool()?;
-                Ok(Frame {
-                    index,
-                    swapchain_semaphore: backend.create_semaphore()?,
-                    render_semaphore: backend.create_semaphore()?,
-                    fence: backend.create_fence_signaled()?,
-                    command_pool: pool,
-                    command_buffer: backend.create_command_buffer(pool)?,
-                })
-            })
-            .collect()
-    }
-
-    fn current_frame(&self) -> &Frame {
-        &self.frames[self.current_frame % self.frames.len()]
-    }
-
-    pub fn begin_frame(&mut self) -> Result<()> {
-        let Frame {
-            command_buffer,
-            fence,
-            swapchain_semaphore,
-            ..
-        } = *self.current_frame();
-        self.backend.wait_for_fence(fence)?;
-        self.backend.reset_fence(fence)?;
-        let (index, _needs_rebuild) = self
-            .backend
-            .swapchain_mut()
-            .next_image(swapchain_semaphore, vk::Fence::null())?;
-
-        self.swapchain_index = index as usize;
-        self.backend.reset_command_buffer(command_buffer)?;
-        self.backend.begin_command_buffer(command_buffer)?;
-
-        Ok(())
-    }
-
-    pub fn end_frame(&mut self) -> Result<()> {
-        let Frame {
-            command_buffer,
-            fence,
-            swapchain_semaphore,
-            render_semaphore,
-            ..
-        } = *self.current_frame();
-
-        self.backend.end_command_buffer(command_buffer)?;
-        self.backend.submit_queued(
-            &command_buffer,
-            &swapchain_semaphore,
-            &render_semaphore,
-            fence,
-        )?;
-
-        self.backend
-            .swapchain_mut()
-            .present(&[render_semaphore], &[self.swapchain_index as u32])?;
-        self.current_frame = self.current_frame.wrapping_add(1);
-
-        Ok(())
-    }
-
-    pub fn render(&mut self) -> Result<()> {
-        let swapchain_image = self.backend.swapchain().images()[self.swapchain_index];
-        let swapchain_extent: Extent3D = self.backend.swapchain().extent().into();
+    pub fn render(
+        &mut self,
+        command_buffer: &CommandBuffer,
+        swapchain_image: &vk::Image,
+    ) -> Result<()> {
+        let context = &self.context;
+        let swapchain_extent = context.swapchain().extent().into();
         let draw_image = self.draw_image.inner;
         let draw_extent: Extent3D = self.draw_image.extent;
-        let cmd = self.current_frame().command_buffer;
 
-        self.backend.transition_image(
-            cmd,
+        self.context.transition_image(
+            command_buffer,
             draw_image,
             vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::GENERAL,
         );
 
-        self.draw_background(cmd)?;
+        self.render_background(command_buffer);
 
-        self.backend.transition_image(
-            cmd,
+        self.context.transition_image(
+            command_buffer,
             draw_image,
             vk::ImageLayout::GENERAL,
             vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
         );
-        self.backend.transition_image(
-            cmd,
-            swapchain_image,
+        self.context.transition_image(
+            command_buffer,
+            *swapchain_image,
             vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
         );
-        self.backend.copy_image(
-            cmd,
+        self.context.copy_image(
+            command_buffer,
             draw_image,
-            swapchain_image,
+            *swapchain_image,
             draw_extent,
             swapchain_extent,
         );
-        self.backend.transition_image(
-            cmd,
-            swapchain_image,
+        self.context.transition_image(
+            command_buffer,
+            *swapchain_image,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             vk::ImageLayout::PRESENT_SRC_KHR,
         );
@@ -237,41 +158,20 @@ impl Renderer {
         Ok(())
     }
 
-    // fn submit_immediate<F: FnOnce(vk::CommandBuffer)>(
-    //     &self,
-    //     cmd: vk::CommandBuffer,
-    //     wait_semaphore: vk::Semaphore,
-    //     signal_semaphore: vk::Semaphore,
-    //     fence: vk::Fence,
-    //     f: F,
-    // ) -> Result<()> {
-    //     self.backend.reset_fence(fence)?;
-    //     self.backend.reset_command_buffer(cmd)?;
-    //     self.backend.begin_command_buffer(cmd)?;
+    fn render_background(&self, cmd: &CommandBuffer) {
+        let device = self.context.device();
 
-    //     f(cmd);
-
-    //     self.backend.end_command_buffer(cmd)?;
-
-    //     self.backend
-    //         .submit_queued(&cmd, &wait_semaphore, &signal_semaphore, fence)?;
-    //     self.backend.wait_for_fence(fence)?;
-
-    //     Ok(())
-    // }
-
-    fn draw_background(&mut self, cmd: vk::CommandBuffer) -> Result<(), anyhow::Error> {
         unsafe {
-            self.backend.device().cmd_bind_pipeline(
-                cmd,
+            device.cmd_bind_pipeline(
+                cmd.inner,
                 vk::PipelineBindPoint::COMPUTE,
                 self.gradient_pipeline,
             );
 
             let extent = self.draw_image.extent;
             let descriptors = &[self.draw_image_descriptors];
-            self.backend.device().cmd_bind_descriptor_sets(
-                cmd,
+            device.cmd_bind_descriptor_sets(
+                cmd.inner,
                 vk::PipelineBindPoint::COMPUTE,
                 self.gradient_pipeline_layout,
                 0,
@@ -279,24 +179,108 @@ impl Renderer {
                 &[],
             );
 
-            self.backend.device().cmd_dispatch(
-                cmd,
+            device.cmd_dispatch(
+                cmd.inner,
                 f32::ceil(extent.width as f32 / 16.0) as u32,
                 f32::ceil(extent.height as f32 / 16.0) as u32,
                 1,
             );
         };
+    }
+}
+#[allow(dead_code)]
+pub struct Renderer {
+    context: Context,
+    frames: Vec<Frame>,
+    graphics: GraphicsRenderer,
+    ui: UiRenderer,
+    rebuild_swapchain: bool,
+    current_frame: usize,
+}
+
+impl fmt::Debug for Renderer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Renderer").finish_non_exhaustive()
+    }
+}
+
+impl Renderer {
+    pub fn new(context: Context) -> Result<Self> {
+        let graphics = GraphicsRenderer::new(&context)?;
+        let ui = UiRenderer::new(&context)?;
+        let frames = Self::init_frames(context.clone())?;
+
+        Ok(Self {
+            context,
+            frames,
+            graphics,
+            ui,
+            current_frame: 0,
+            rebuild_swapchain: false,
+        })
+    }
+
+    pub fn ui_mut(&mut self) -> &mut UiRenderer {
+        &mut self.ui
+    }
+
+    fn init_frames(context: Context) -> Result<Vec<Frame>> {
+        (0..context.swapchain().image_views().len())
+            .map(|_| {
+                let command_pool = context.create_command_pool()?;
+                let command_buffer = CommandBuffer::new(context.device(), command_pool)?;
+
+                Ok(Frame {
+                    swapchain_semaphore: context.create_semaphore()?,
+                    render_semaphore: context.create_semaphore()?,
+                    fence: context.create_fence_signaled()?,
+                    command_pool,
+                    command_buffer,
+                })
+            })
+            .collect()
+    }
+
+    pub fn handle_event(&mut self, event: &winit::event::Event<()>) {
+        self.ui.handle_event(event.clone());
+    }
+
+    pub fn render(&mut self) -> Result<()> {
+        let context = &mut self.context;
+        let frame = &self.frames[self.current_frame % self.frames.len()];
+        if self.rebuild_swapchain {
+            context.swapchain_mut().rebuild()?;
+            self.rebuild_swapchain = false;
+        }
+
+        let fence = frame.fence;
+        let command_buffer = &frame.command_buffer;
+        let render_semaphore = &frame.render_semaphore;
+        let swapchain_semaphore = &frame.swapchain_semaphore;
+
+        context.wait_for_fence(fence)?;
+        let (image_index, rebuild) = context.swapchain_mut().next_image(*swapchain_semaphore)?;
+        let swapchain_image = context.swapchain().images()[image_index as usize];
+        let swapchain_image_view = context.swapchain().image_views()[image_index as usize];
+        self.rebuild_swapchain = rebuild;
+
+        context.reset_fence(fence)?;
+        command_buffer.reset()?;
+        command_buffer.begin()?;
+
+        self.graphics.render(command_buffer, &swapchain_image)?;
+        self.ui.render(command_buffer, &swapchain_image_view)?;
+
+        command_buffer.end()?;
+        command_buffer.submit(swapchain_semaphore, render_semaphore, fence)?;
+
+        self.rebuild_swapchain |= self
+            .context
+            .swapchain_mut()
+            .present(&[*render_semaphore], &[image_index])?;
+
+        self.current_frame = self.current_frame.wrapping_add(1);
 
         Ok(())
     }
-
-    pub fn present(&mut self, semaphore: vk::Semaphore, image_index: u32) -> Result<bool> {
-        let wait_semaphores = &[semaphore];
-        let indices = &[image_index];
-
-        self.backend
-            .swapchain_mut()
-            .present(wait_semaphores, indices)
-    }
 }
- 

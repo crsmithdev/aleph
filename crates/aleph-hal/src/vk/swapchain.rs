@@ -1,23 +1,23 @@
 use {
-    crate::vk::{Device, Instance, Queue, Surface},
+    crate::vk::{CommandBuffer, Device, Instance, Queue, Surface},
     aleph_core::constants::VK_TIMEOUT_NS,
     anyhow::Result,
     ash::{
         khr,
-        vk::{self, Extent2D},
+        vk::{self, Handle},
     },
-    vk::Handle,
+    std::sync::Arc,
 };
 
-pub const SWAPCHAIN_IMAGES: u32 = 2;
+pub const IN_FLIGHT_FRAMES: u32 = 2;
 
+#[derive(Clone, Debug)]
 pub struct Frame {
-    pub index: usize,
     pub swapchain_semaphore: vk::Semaphore,
     pub render_semaphore: vk::Semaphore,
     pub fence: vk::Fence,
     pub command_pool: vk::CommandPool,
-    pub command_buffer: vk::CommandBuffer,
+    pub command_buffer: CommandBuffer,
 }
 #[derive(Clone, Copy)]
 pub struct SwapchainInfo {
@@ -25,15 +25,20 @@ pub struct SwapchainInfo {
     pub format: vk::Format,
     pub color_space: vk::ColorSpaceKHR,
     pub vsync: bool,
+    pub num_images: u32,
 }
 
 #[derive(Clone)]
 pub struct Swapchain {
     inner: vk::SwapchainKHR,
     loader: khr::swapchain::Device,
+    device: Device,
+    surface: Surface,
     queue: crate::vk::Queue,
+    instance: Instance,
     info: SwapchainInfo,
     image_views: Vec<vk::ImageView>,
+    window: Arc<winit::window::Window>,
     images: Vec<vk::Image>,
 }
 
@@ -43,9 +48,11 @@ impl Swapchain {
         device: &Device,
         surface: &Surface,
         queue: &Queue,
+        window: Arc<winit::window::Window>,
         info: &SwapchainInfo,
     ) -> Result<Self> {
         let indices = [queue.family_index];
+        let in_flight_frames = IN_FLIGHT_FRAMES;
         let capabilities: vk::SurfaceCapabilitiesKHR = unsafe {
             surface
                 .loader
@@ -62,7 +69,7 @@ impl Swapchain {
 
         let swapchain_info = vk::SwapchainCreateInfoKHR::default()
             .surface(**surface)
-            .min_image_count(SWAPCHAIN_IMAGES)
+            .min_image_count(in_flight_frames)
             .image_color_space(info.color_space)
             .image_format(info.format)
             .image_extent(surface_resolution)
@@ -74,7 +81,7 @@ impl Swapchain {
             .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST)
             .queue_family_indices(&indices)
             .image_array_layers(1);
-        let loader = khr::swapchain::Device::new(instance, &device);
+        let loader = khr::swapchain::Device::new(instance, device);
         let swapchain = unsafe { loader.create_swapchain(&swapchain_info, None) }.unwrap();
 
         let images = unsafe { loader.get_swapchain_images(swapchain)? };
@@ -100,9 +107,13 @@ impl Swapchain {
         Ok(Swapchain {
             inner: swapchain,
             loader,
+            instance: instance.clone(),
+            device: device.clone(),
+            surface: surface.clone(),
             info: *info,
             image_views,
             images,
+            window: window.clone(),
             queue: queue.clone(),
         })
     }
@@ -112,7 +123,7 @@ impl Swapchain {
     }
 
     pub fn in_flight_frames(&self) -> u32 {
-        SWAPCHAIN_IMAGES
+        IN_FLIGHT_FRAMES
     }
 
     pub fn extent(&self) -> vk::Extent2D {
@@ -123,60 +134,76 @@ impl Swapchain {
         &self.images
     }
 
+    pub fn image(&self, index: usize) -> vk::Image {
+        self.images[index]
+    }
+
     pub fn image_views(&self) -> &[vk::ImageView] {
         &self.image_views
+    }
+
+    pub fn image_view(&self, index: usize) -> vk::ImageView {
+        self.image_views[index]
     }
 }
 
 impl Swapchain {
-    fn destroy(&self, device: &Device) {
+    fn destroy(&self) {
         log::info!("Destroying swapchain: {:?}", self);
         unsafe {
             self.loader.destroy_swapchain(self.inner, None);
             self.image_views
                 .iter()
-                .for_each(|v| device.destroy_image_view(*v, None));
+                .for_each(|v| self.device.destroy_image_view(*v, None));
         };
     }
 
-    fn rebuild(
-        &mut self,
-        instance: &Instance,
-        device: &Device,
-        extent: Extent2D,
-        surface: &Surface,
-    ) -> Result<()> {
+    pub fn rebuild(&mut self) -> Result<()> {
         log::debug!("Rebuilding swapchain");
+        self.destroy();
 
-        self.destroy(device);
-        let info = SwapchainInfo {
-            extent,
-            format: self.info.format,
-            color_space: self.info.color_space,
-            vsync: self.info.vsync,
+        let size = self.window.inner_size();
+        let mut info = self.info;
+        info.extent = vk::Extent2D {
+            width: size.width,
+            height: size.height,
         };
 
-        match Self::new(instance, device, surface, &self.queue, &info) {
+        match Self::new(
+            &self.instance,
+            &self.device,
+            &self.surface,
+            &self.queue,
+            self.window.clone(),
+            &info,
+        ) {
             Ok(swapchain) => {
                 *self = swapchain;
-                log::info!("Recrated swapchain: {:?}", self);
+                log::info!("Rebuilt swapchain: {:?}", self);
                 Ok(())
             }
             Err(e) => Err(e),
         }
     }
 
-    pub fn next_image(&mut self, semaphore: vk::Semaphore, fence: vk::Fence) -> Result<(u32, bool)> {
+    pub fn next_image(
+        &mut self,
+        semaphore: vk::Semaphore,
+    ) -> Result<(u32, bool)> {
         match unsafe {
             self.loader
-                .acquire_next_image(self.inner, VK_TIMEOUT_NS, semaphore, fence)
+                .acquire_next_image(self.inner, VK_TIMEOUT_NS, semaphore, vk::Fence::null())
         } {
             Ok((index, needs_rebuild)) => Ok((index, needs_rebuild)),
             Err(err) => Err(err.into()),
         }
     }
 
-    pub fn present(&mut self, wait_semaphores: &[vk::Semaphore], indices: &[u32]) -> Result<(bool)> {
+    pub fn present(
+        &mut self,
+        wait_semaphores: &[vk::Semaphore],
+        indices: &[u32],
+    ) -> Result<bool> {
         let swapchains = &[self.inner];
         let present_info = vk::PresentInfoKHR::default()
             .wait_semaphores(wait_semaphores)
@@ -184,7 +211,7 @@ impl Swapchain {
             .image_indices(indices);
         match unsafe { self.loader.queue_present(*self.queue, &present_info) } {
             Ok(needs_rebuild) => Ok(needs_rebuild),
-            // Err(err) if err == vk::Result::ERROR_OUT_OF_DATE_KHR => {
+            Err(err) if err == vk::Result::ERROR_OUT_OF_DATE_KHR => Ok(true),
             Err(err) => Err(err.into()),
         }
     }

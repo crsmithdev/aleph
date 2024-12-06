@@ -1,5 +1,5 @@
 use {
-    crate::vk::allocator::Allocator,
+    crate::vk::allocator::MemoryAllocator,
     anyhow::Result,
     ash::{vk, vk::Handle},
     gpu_allocator::{
@@ -10,7 +10,7 @@ use {
     std::{fmt, sync::Arc},
 };
 pub struct ImageInfo<'a> {
-    pub allocator: &'a Arc<Allocator>,
+    pub allocator: &'a Arc<MemoryAllocator>,
     pub width: usize,
     pub height: usize,
     pub format: vk::Format,
@@ -18,7 +18,7 @@ pub struct ImageInfo<'a> {
 }
 
 pub struct Image {
-    pub allocator: Arc<Allocator>,
+    pub allocator: Arc<MemoryAllocator>,
     pub allocation: Allocation,
     pub inner: vk::Image,
     pub view: vk::ImageView,
@@ -91,7 +91,7 @@ impl Image {
     }
 }
 
-impl Allocator {
+impl MemoryAllocator {
     fn create_image(&self, info: &vk::ImageCreateInfo) -> Result<(vk::Image, Allocation)> {
         let image = unsafe { self.device.create_image(info, None) }?;
         let requirements = unsafe { self.device.get_image_memory_requirements(image) };
