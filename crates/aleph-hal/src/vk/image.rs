@@ -9,12 +9,15 @@ use {
     },
     std::{fmt, sync::Arc},
 };
-pub struct ImageInfo<'a> {
-    pub allocator: &'a Arc<MemoryAllocator>,
+
+#[derive(Clone)]
+pub struct ImageInfo    {
+    pub allocator: Arc<MemoryAllocator>,
     pub width: usize,
     pub height: usize,
     pub format: vk::Format,
     pub usage: vk::ImageUsageFlags,
+    pub aspects: vk::ImageAspectFlags,
 }
 
 pub struct Image {
@@ -43,11 +46,6 @@ impl Image {
             depth: 1,
         };
 
-        let format = vk::Format::R16G16B16A16_SFLOAT;
-        let usage = vk::ImageUsageFlags::TRANSFER_DST
-            | vk::ImageUsageFlags::TRANSFER_SRC
-            | vk::ImageUsageFlags::COLOR_ATTACHMENT
-            | vk::ImageUsageFlags::STORAGE;
         let create_info = vk::ImageCreateInfo::default()
             .image_type(vk::ImageType::TYPE_2D)
             .format(info.format)
@@ -62,11 +60,11 @@ impl Image {
         let view_info = vk::ImageViewCreateInfo::default()
             .image(image)
             .view_type(vk::ImageViewType::TYPE_2D)
-            .format(vk::Format::R16G16B16A16_SFLOAT)
+            .format(info.format)
             .components(vk::ComponentMapping::default())
             .subresource_range(
                 vk::ImageSubresourceRange::default()
-                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .aspect_mask(info.aspects)
                     .base_mip_level(0)
                     .level_count(1)
                     .base_array_layer(0)
@@ -84,8 +82,8 @@ impl Image {
             allocation,
             inner: image,
             extent,
-            format,
-            usage,
+            format: info.format,
+            usage: info.usage,
             view,
         })
     }

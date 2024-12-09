@@ -5,6 +5,7 @@ pub mod context;
 pub mod descriptor;
 pub mod image;
 pub mod swapchain;
+pub mod pipeline;
 
 pub use crate::vk::{
     allocator::MemoryAllocator,

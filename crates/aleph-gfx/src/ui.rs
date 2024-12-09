@@ -1,15 +1,12 @@
 use {
-    aleph_hal::{CommandBuffer, Context },
+    aleph_hal::{CommandBuffer, Context},
     anyhow::Result,
     ash::vk::{self},
     imgui,
     imgui_rs_vulkan_renderer::DynamicRendering,
     imgui_winit_support::{self as imgui_winit},
     std::{fmt, sync::Arc, time},
-    winit::{
-        event::{Event },
-        keyboard::ModifiersState,
-    },
+    winit::{event::Event, keyboard::ModifiersState},
 };
 
 #[allow(dead_code)]
@@ -128,59 +125,60 @@ impl UiRenderer {
     }
 
     pub fn handle_event(&mut self, event: Event<()>) {
-        self.platform.handle_event(self.imgui.io_mut(), &self.window, &event);      
+        self.platform
+            .handle_event(self.imgui.io_mut(), &self.window, &event);
     }
 }
 
-    // pub fn handle_window_event(&mut self, event: WindowEvent) {
-    //     use winit::event::{ElementState::*, MouseScrollDelta::*, WindowEvent::*, *};
+// pub fn handle_window_event(&mut self, event: WindowEvent) {
+//     use winit::event::{ElementState::*, MouseScrollDelta::*, WindowEvent::*, *};
 
-    //     let io = self.imgui.io_mut();
+//     let io = self.imgui.io_mut();
 
-    //     match event {
-    //         CursorMoved { position, .. } => {
-    //             io.mouse_pos = [position.x as f32, position.y as f32];
-    //             io.key_ctrl = self.modifiers.control_key();
-    //             io.key_shift = self.modifiers.shift_key();
-    //             io.key_alt = self.modifiers.alt_key();
-    //         }
-    //         MouseInput { state, button, .. } => match button {
-    //             MouseButton::Left => io.mouse_down[0] = state == Pressed,
-    //             MouseButton::Right => io.mouse_down[1] = state == Pressed,
-    //             MouseButton::Middle => io.mouse_down[2] = state == Pressed,
-    //             _ => {}
-    //         },
-    //         MouseWheel {
-    //             delta: LineDelta(x, y),
-    //             ..
-    //         } => {
-    //             io.mouse_wheel_h += x;
-    //             io.mouse_wheel += y;
-    //         }
-    //         ModifiersChanged(modifiers) => {
-    //             self.modifiers = modifiers.state();
-    //         }
-    //         _ => {}
-    //     }
-    // fn attachment_info
-    //     view: vk::ImageView,
-    //     clear: Option<vk::ClearValue>,
-    //     layout: vk::ImageLayout,
-    //  -> vk::RenderingAttachmentInfo<'static> {
-    //     let load_op = if clear.is_some() {
-    //         vk::AttachmentLoadOp::CLEAR
-    //     } else {
-    //         vk::AttachmentLoadOp::LOAD
-    //     };
-    //     let mut result = vk::RenderingAttachmentInfo::default()
-    //         .image_view(view)
-    //         .image_layout(layout)
-    //         .load_op(load_op)
-    //         .store_op(vk::AttachmentStoreOp::STORE);
+//     match event {
+//         CursorMoved { position, .. } => {
+//             io.mouse_pos = [position.x as f32, position.y as f32];
+//             io.key_ctrl = self.modifiers.control_key();
+//             io.key_shift = self.modifiers.shift_key();
+//             io.key_alt = self.modifiers.alt_key();
+//         }
+//         MouseInput { state, button, .. } => match button {
+//             MouseButton::Left => io.mouse_down[0] = state == Pressed,
+//             MouseButton::Right => io.mouse_down[1] = state == Pressed,
+//             MouseButton::Middle => io.mouse_down[2] = state == Pressed,
+//             _ => {}
+//         },
+//         MouseWheel {
+//             delta: LineDelta(x, y),
+//             ..
+//         } => {
+//             io.mouse_wheel_h += x;
+//             io.mouse_wheel += y;
+//         }
+//         ModifiersChanged(modifiers) => {
+//             self.modifiers = modifiers.state();
+//         }
+//         _ => {}
+//     }
+// fn attachment_info
+//     view: vk::ImageView,
+//     clear: Option<vk::ClearValue>,
+//     layout: vk::ImageLayout,
+//  -> vk::RenderingAttachmentInfo<'static> {
+//     let load_op = if clear.is_some() {
+//         vk::AttachmentLoadOp::CLEAR
+//     } else {
+//         vk::AttachmentLoadOp::LOAD
+//     };
+//     let mut result = vk::RenderingAttachmentInfo::default()
+//         .image_view(view)
+//         .image_layout(layout)
+//         .load_op(load_op)
+//         .store_op(vk::AttachmentStoreOp::STORE);
 
-    //     if let Some(clear) = clear {
-    //         result = result.clear_value(clear);
-    //     }
+//     if let Some(clear) = clear {
+//         result = result.clear_value(clear);
+//     }
 
-    //     result
-    // }
+//     result
+// }
