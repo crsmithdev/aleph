@@ -19,7 +19,7 @@ impl CommandBuffer {
             .level(vk::CommandBufferLevel::PRIMARY);
 
         let inner = unsafe {
-            device
+            device.inner
                 .allocate_command_buffers(&info)
                 .map(|b| b[0])
                 .map_err(anyhow::Error::from)
@@ -35,7 +35,7 @@ impl CommandBuffer {
     pub fn reset(&self) -> Result<()> {
         #[allow(clippy::unit_arg)]
         Ok(unsafe {
-            self.device
+            self.device.inner
                 .reset_command_buffer(self.inner, vk::CommandBufferResetFlags::RELEASE_RESOURCES)?
         })
     }
@@ -45,39 +45,59 @@ impl CommandBuffer {
             .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
 
         #[allow(clippy::unit_arg)]
-        Ok(unsafe { self.device.begin_command_buffer(self.inner, &info)? })
+        Ok(unsafe { self.device.inner.begin_command_buffer(self.inner, &info)? })
     }
 
     pub fn end(&self) -> Result<()> {
         #[allow(clippy::unit_arg)]
-        Ok(unsafe { self.device.end_command_buffer(self.inner)? })
+        Ok(unsafe { self.device.inner.end_command_buffer(self.inner)? })
     }
 
-    pub fn begin_rendering(&self, image_view: &vk::ImageView, extent: vk::Extent2D) -> Result<()> {
-        let color_attachment_info = vk::RenderingAttachmentInfo::default()
-            .image_view(*image_view)
-            .image_layout(vk::ImageLayout::ATTACHMENT_OPTIMAL)
-            .load_op(vk::AttachmentLoadOp::DONT_CARE)
-            .store_op(vk::AttachmentStoreOp::STORE)
-            .clear_value(vk::ClearValue {
-                color: vk::ClearColorValue { float32: [1.0; 4] },
-            });
-
-        let rendering_info = vk::RenderingInfo::default()
+    pub fn begin_rendering2(&self, color_attachments: &[vk::RenderingAttachmentInfo], depth_attachment: Option<&vk::RenderingAttachmentInfo>, extent: vk::Extent2D) -> Result<()> {
+        let mut rendering_info = vk::RenderingInfo::default()
             .render_area(vk::Rect2D {
                 offset: vk::Offset2D { x: 0, y: 0 },
                 extent,
             })
             .layer_count(1)
-            .color_attachments(std::slice::from_ref(&color_attachment_info));
+            .color_attachments(color_attachments);
+
+        if let Some (attachment) = depth_attachment {
+            rendering_info = rendering_info.depth_attachment(attachment);
+        }
+        
 
         #[allow(clippy::unit_arg)]
         Ok(unsafe {
-            self.device
-                .inner
+            self.device.inner
                 .cmd_begin_rendering(self.inner, &rendering_info)
         })
     }
+    // pub fn begin_rendering(&self, image_view: &vk::ImageView, extent: vk::Extent2D) -> Result<()> {
+    //     let color_attachment_info = vk::RenderingAttachmentInfo::default()
+    //         .image_view(*image_view)
+    //         .image_layout(vk::ImageLayout::ATTACHMENT_OPTIMAL)
+    //         .load_op(vk::AttachmentLoadOp::DONT_CARE)
+    //         .store_op(vk::AttachmentStoreOp::STORE)
+    //         .clear_value(vk::ClearValue {
+    //             color: vk::ClearColorValue { float32: [1.0; 4] },
+    //         });
+
+    //     let rendering_info = vk::RenderingInfo::default()
+    //         .render_area(vk::Rect2D {
+    //             offset: vk::Offset2D { x: 0, y: 0 },
+    //             extent,
+    //         })
+    //         .layer_count(1)
+    //         .color_attachments(std::slice::from_ref(&color_attachment_info));
+
+    //     #[allow(clippy::unit_arg)]
+    //     Ok(unsafe {
+    //         self.device
+    //             .inner
+    //             .cmd_begin_rendering(self.inner, &rendering_info)
+    //     })
+    // }
 
     pub fn end_rendering(&self) -> Result<()> {
         #[allow(clippy::unit_arg)]
@@ -91,7 +111,7 @@ impl CommandBuffer {
         fence: vk::Fence,
     ) -> Result<(), anyhow::Error> {
         let cmd = &self.inner;
-        let queue = self.device.queue;
+        let queue = &self.device.queue;
         
         let wait_info = &[vk::SemaphoreSubmitInfo::default()
             .semaphore(*wait_semaphore)
@@ -109,6 +129,6 @@ impl CommandBuffer {
             .wait_semaphore_infos(wait_info)
             .signal_semaphore_infos(signal_info)];
 
-        Ok(unsafe { self.device.queue_submit2(queue, submit_info, fence) }?)
+        Ok(unsafe { self.device.inner.queue_submit2(queue.inner, submit_info, fence) }?)
     }
 }

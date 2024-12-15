@@ -11,8 +11,8 @@ use {
 };
 
 #[derive(Clone)]
-pub struct ImageInfo    {
-    pub allocator: Arc<MemoryAllocator>,
+pub struct ImageInfo {
+    pub(crate) allocator: Arc<MemoryAllocator>,
     pub width: usize,
     pub height: usize,
     pub format: vk::Format,
@@ -38,15 +38,14 @@ impl fmt::Debug for Image {
     }
 }
 
-impl Image {
-    pub fn new(info: &ImageInfo) -> Result<Self> {
+impl MemoryAllocator {
+    pub fn allocate_image(&self, info: &ImageInfo) -> Result<Image> {
         let extent = vk::Extent3D {
             width: info.width as u32,
             height: info.height as u32,
             depth: 1,
         };
-
-        let create_info = vk::ImageCreateInfo::default()
+        let image_info = vk::ImageCreateInfo::default()
             .image_type(vk::ImageType::TYPE_2D)
             .format(info.format)
             .extent(extent)
@@ -55,7 +54,20 @@ impl Image {
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::OPTIMAL)
             .usage(info.usage);
-        let (image, allocation) = info.allocator.create_image(&create_info)?;
+        let image = unsafe { self.device.inner.create_image(&image_info, None) }?;
+        let requirements = unsafe { self.device.inner.get_image_memory_requirements(image) };
+        let allocation = self.inner.lock().expect("lock").allocate(&ga::vulkan::AllocationCreateDesc {
+            name: "Image",
+            requirements,
+            location: MemoryLocation::GpuOnly,
+            linear: false,
+            allocation_scheme: AllocationScheme::GpuAllocatorManaged,
+        })?;
+        unsafe {
+            self.device
+                .inner
+                .bind_image_memory(image, allocation.memory(), allocation.offset())
+        }?;
 
         let view_info = vk::ImageViewCreateInfo::default()
             .image(image)
@@ -74,10 +86,11 @@ impl Image {
         let view = unsafe {
             info.allocator
                 .device
+                .inner
                 .create_image_view(&view_info, None)
         }?;
 
-        Ok(Self {
+        Ok(Image {
             allocator: info.allocator.clone(),
             allocation,
             inner: image,
@@ -91,8 +104,8 @@ impl Image {
 
 impl MemoryAllocator {
     fn create_image(&self, info: &vk::ImageCreateInfo) -> Result<(vk::Image, Allocation)> {
-        let image = unsafe { self.device.create_image(info, None) }?;
-        let requirements = unsafe { self.device.get_image_memory_requirements(image) };
+        let image = unsafe { self.device.inner.create_image(info, None) }?;
+        let requirements = unsafe { self.device.inner.get_image_memory_requirements(image) };
         let mut allocator = self.inner.lock().unwrap();
         let allocation = allocator.allocate(&ga::vulkan::AllocationCreateDesc {
             name: "Image",
@@ -103,6 +116,7 @@ impl MemoryAllocator {
         })?;
         unsafe {
             self.device
+                .inner
                 .bind_image_memory(image, allocation.memory(), allocation.offset())
         }?;
         Ok((image, allocation))

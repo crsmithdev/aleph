@@ -12,5 +12,6 @@ log = "0.4"
 raw-window-handle = "0.6.2"
 winit = "0.30.5"
 derive_more = { version = "1.0", features = ["debug", "deref"] }
+gltf = "1.0"
 
 aleph-core = { path = "../aleph-core" }

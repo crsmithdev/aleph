@@ -1,14 +1,23 @@
-use {
-    crate::{
-        vk::{CommandBuffer, DescriptorAllocator, MemoryAllocator, SwapchainInfo},
-        Swapchain,
+pub mod device;
+pub mod swapchain;
+
+pub use {
+    crate::vk::{
+        CommandBuffer,
+        DescriptorAllocator,
+        MemoryAllocator,
     },
+    device::{Device, Queue},
+    gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, AllocationScheme},
+    swapchain::{Frame, Swapchain, SwapchainInfo},
+};
+use {
     aleph_core::constants::VK_TIMEOUT_NS,
     anyhow::{anyhow, Result},
     ash::{
-        ext::{self},
-        khr::{self},
-        vk::{self, Handle, PFN_vkCmdPipelineBarrier},
+        ext,
+        khr,
+        vk::{self, Handle},
     },
     derive_more::{Debug, Deref},
     raw_window_handle::{HasDisplayHandle, HasWindowHandle},
@@ -28,28 +37,20 @@ const INSTANCE_EXTENSIONS: [&ffi::CStr; 4] = [
     khr::get_physical_device_properties2::NAME,
     ext::debug_utils::NAME,
 ];
-const DEVICE_EXTENSIONS: [&ffi::CStr; 6] = [
-    khr::swapchain::NAME,
-    khr::synchronization2::NAME,
-    khr::maintenance3::NAME,
-    khr::dynamic_rendering::NAME,
-    ext::descriptor_indexing::NAME,
-    khr::buffer_device_address::NAME,
-];
 
 #[derive(Clone, Debug, Deref)]
 pub struct Instance {
     #[deref]
     #[debug("{:x}", inner.handle().as_raw())]
-    inner: ash::Instance,
+    pub(crate) inner: ash::Instance,
 
     #[debug(skip)]
     entry: ash::Entry,
 }
 
 impl Instance {
-    pub fn clone_inner(&self) -> ash::Instance {
-        self.inner.clone()
+    pub fn inner(&self) -> &ash::Instance {
+        &self.inner
     }
 }
 
@@ -63,29 +64,20 @@ pub struct Surface {
     pub(crate) loader: khr::surface::Instance,
 }
 
-#[derive(Clone, Debug, Deref)]
-pub struct Device {
-    #[deref]
-    #[debug("{:x}", inner.handle().as_raw())]
-    pub inner: ash::Device, // TODO
-    pub(crate) queue: vk::Queue,
-
-    pub(crate) physical_device: vk::PhysicalDevice,
+#[derive(Debug)]
+pub struct BufferInfo {
+    pub size: usize,
+    pub usage: vk::BufferUsageFlags,
+    pub location: gpu_allocator::MemoryLocation,
+    pub name: Option<&'static str>,
 }
 
-impl Device {
-    pub fn clone_inner(&self) -> ash::Device {
-        self.inner.clone()
-    }
-}
-
-#[allow(dead_code)]
-#[derive(Clone, Debug, Deref)]
-pub struct Queue {
-    #[deref]
-    inner: vk::Queue,
-    family: vk::QueueFamilyProperties,
-    pub(crate) family_index: u32,
+#[derive(Debug)]
+pub struct Buffer {
+    #[debug("{:x}", handle.as_raw())]
+    pub (crate) handle: vk::Buffer,
+    pub (crate) allocation: Allocation,
+    pub (crate) info: BufferInfo,
 }
 
 #[allow(dead_code)]
@@ -95,7 +87,6 @@ pub struct Context {
     pub(crate) surface: Surface,
     pub device: Device,
     pub(crate) swapchain: Swapchain,
-    queue: Queue,
     pub(crate) allocator: Arc<MemoryAllocator>,
     pub(crate) window: Arc<Window>,
 
@@ -114,8 +105,8 @@ impl Context {
         &self.device
     }
 
-    pub fn queue(&self) -> &vk::Queue {
-        &self.queue
+    pub fn queue(&self) -> &Queue {
+        &self.device.queue
     }
 
     pub fn allocator(&self) -> &Arc<MemoryAllocator> {
@@ -139,7 +130,6 @@ impl Context /* Init */ {
     fn init_vulkan(window: Arc<Window>) -> Result<Context> {
         log::info!("Initializing Vulkan, window: {window:?}");
 
-        // let entry = unsafe { ash::Entry::load()? };
         let instance = Self::init_instance()?;
         log::info!("Created instance: {instance:?}");
 
@@ -148,18 +138,11 @@ impl Context /* Init */ {
         let surface = Self::init_surface(&instance, &Arc::clone(&window))?;
         log::info!("Created surface: {surface:?}");
 
-        let physical_device = Self::get_physical_device(&instance)?;
-        log::info!("Selected physical device: {physical_device:?}");
-
-        let (queue_family_index, queue_family) =
-            Self::init_queue_familiy(&instance, &physical_device)?;
-        Self::get_queue_family_index(&instance, &physical_device, vk::QueueFlags::GRAPHICS)?;
-
-        let device = Self::init_device(&instance, queue_family, queue_family_index)?;
+        let device = Device::new(&instance)?;
         log::info!("Created device: {device:?}");
 
-        let queue = Self::init_queue(&device, queue_family, queue_family_index);
-        log::info!("Created queue: {queue:?}");
+        // let queue = Self::init_queue(&device, queue_family, queue_family_index);
+        // log::info!("Created queue: {queue:?}");
 
         let extent = vk::Extent2D {
             width: window.inner_size().width,
@@ -169,7 +152,6 @@ impl Context /* Init */ {
             &instance,
             &device,
             &surface,
-            &queue,
             Arc::clone(&window),
             &SwapchainInfo {
                 extent,
@@ -185,7 +167,7 @@ impl Context /* Init */ {
         log::info!("Created allocator: {allocator:?}");
 
         let _descriptor_allocator = Arc::new(DescriptorAllocator::new(
-            &device,
+            &device.inner,
             &[vk::DescriptorPoolSize {
                 ty: vk::DescriptorType::STORAGE_IMAGE,
                 descriptor_count: 1,
@@ -198,7 +180,6 @@ impl Context /* Init */ {
             device,
             surface,
             swapchain,
-            queue,
             allocator,
             window: Arc::clone(&window),
             debug_utils,
@@ -267,109 +248,6 @@ impl Context /* Init */ {
         Ok(Surface { inner, loader })
     }
 
-    fn rank_physical_device(instance: &ash::Instance, physical_device: &vk::PhysicalDevice) -> i32 {
-        let device_properties =
-            unsafe { instance.get_physical_device_properties(*physical_device) };
-        let queue_families =
-            unsafe { instance.get_physical_device_queue_family_properties(*physical_device) };
-
-        // TODO extension checks
-
-        let mut score = match queue_families
-            .into_iter()
-            .find(|qf| qf.queue_flags.contains(vk::QueueFlags::GRAPHICS))
-        {
-            Some(_) => 10000,
-            None => 0,
-        };
-
-        score += match device_properties.device_type {
-            vk::PhysicalDeviceType::INTEGRATED_GPU => 20,
-            vk::PhysicalDeviceType::DISCRETE_GPU => 100,
-            vk::PhysicalDeviceType::VIRTUAL_GPU => 1,
-            _ => 0,
-        };
-
-        score
-    }
-
-    fn init_queue(
-        device: &ash::Device,
-        queue_family: vk::QueueFamilyProperties,
-        queue_family_index: u32,
-    ) -> Queue {
-        let inner = unsafe { device.get_device_queue(queue_family_index, 0) };
-        Queue {
-            inner,
-            family: queue_family,
-            family_index: queue_family_index,
-        }
-    }
-
-    fn init_device(
-        instance: &Instance,
-        queue_family: vk::QueueFamilyProperties,
-        queue_family_index: u32,
-    ) -> Result<Device> {
-        let candidate_devices = unsafe { instance.enumerate_physical_devices()? };
-
-        let selected = candidate_devices
-            .into_iter()
-            .rev()
-            .max_by_key(|d| Self::rank_physical_device(instance, d));
-
-        let physical_device =
-            selected.ok_or_else(|| anyhow!("No suitable physical device found"))?;
-
-        let device_extension_names: Vec<*const i8> = DEVICE_EXTENSIONS
-            .iter()
-            .map(|n| n.as_ptr())
-            .collect::<Vec<_>>();
-
-        let mut synchronization_features =
-            ash::vk::PhysicalDeviceSynchronization2FeaturesKHR::default().synchronization2(true);
-        let mut dynamic_rendering_features =
-            ash::vk::PhysicalDeviceDynamicRenderingFeaturesKHR::default().dynamic_rendering(true);
-        let mut buffer_device_address_features =
-            ash::vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR::default()
-                .buffer_device_address(true);
-        let mut device_features = vk::PhysicalDeviceFeatures2::default()
-            .push_next(&mut dynamic_rendering_features)
-            .push_next(&mut synchronization_features)
-            .push_next(&mut buffer_device_address_features);
-
-        let priorities = [1.0];
-        let queue_info = [vk::DeviceQueueCreateInfo::default()
-            .queue_family_index(queue_family_index)
-            .queue_priorities(&priorities)];
-        let device_info = vk::DeviceCreateInfo::default()
-            .queue_create_infos(&queue_info)
-            .enabled_extension_names(&device_extension_names)
-            .push_next(&mut device_features);
-
-        let inner = unsafe { instance.create_device(physical_device, &device_info, None)? };
-        let queue = *Self::init_queue(&inner, queue_family, queue_family_index);
-
-        Ok(Device {
-            inner,
-            physical_device,
-            queue,
-        })
-    }
-
-    fn get_physical_device(instance: &ash::Instance) -> Result<vk::PhysicalDevice> {
-        let physical_devices = unsafe { instance.enumerate_physical_devices()? };
-
-        let selected = physical_devices
-            .into_iter()
-            .rev()
-            .max_by_key(|d| Self::rank_physical_device(instance, d));
-        match selected {
-            Some(device) => Ok(device),
-            None => Err(anyhow!("No suitable physical device found")),
-        }
-    }
-
     fn init_queue_familiy(
         instance: &ash::Instance,
         physical_device: &vk::PhysicalDevice,
@@ -406,17 +284,59 @@ impl Context /* Init */ {
     }
 }
 
-impl Context /* Synchronization */ {
+impl Context {
+    pub fn create_buffer(&self, info: BufferInfo) -> Result<Buffer> {
+        let mut allocator = self.allocator.inner.lock().unwrap();
+        let create_info = vk::BufferCreateInfo::default()
+            .size(info.size as u64)
+            .usage(info.usage);
+        let buffer = unsafe { self.device.inner.create_buffer(&create_info, None) }?;
+        let requirements = unsafe { self.device.inner.get_buffer_memory_requirements(buffer) };
+
+        let allocation = allocator.allocate_buffer()
+        let allocation = allocator.allocate(&AllocationCreateDesc {
+            name: info.name.unwrap_or("unnamed buffer"),
+            requirements,
+            location: info.location,
+            linear: true,
+            allocation_scheme: AllocationScheme::GpuAllocatorManaged,
+        })?;
+
+        unsafe {
+            self.device
+                .inner
+                .bind_buffer_memory(buffer, allocation.memory(), allocation.offset())
+        }?;
+
+        Ok(Buffer {
+            allocation,
+            handle: buffer,
+            info,
+        })
+    }
+}
+impl Context {
+    pub fn create_image_view(&self, info: &vk::ImageViewCreateInfo) -> Result<vk::ImageView> {
+        Ok(unsafe { self.device.inner.create_image_view(info, None) }?)
+    }
+
+    pub fn destroy_image_view(&self, view: vk::ImageView) {
+        unsafe {
+            self.device.inner.destroy_image_view(view, None);
+        }
+    }
+
     pub fn create_fence(&self) -> Result<vk::Fence> {
         Ok(unsafe {
             self.device
+                .inner
                 .create_fence(&vk::FenceCreateInfo::default(), None)?
         })
     }
 
     pub fn create_fence_signaled(&self) -> Result<vk::Fence> {
         Ok(unsafe {
-            self.device.create_fence(
+            self.device.inner.create_fence(
                 &vk::FenceCreateInfo::default().flags(vk::FenceCreateFlags::SIGNALED),
                 None,
             )?
@@ -425,54 +345,35 @@ impl Context /* Synchronization */ {
 
     pub fn wait_for_fence(&self, fence: vk::Fence) -> Result<()> {
         #[allow(clippy::unit_arg)]
-        Ok(unsafe { self.device.wait_for_fences(&[fence], true, VK_TIMEOUT_NS)? })
+        Ok(unsafe {
+            self.device
+                .inner
+                .wait_for_fences(&[fence], true, VK_TIMEOUT_NS)?
+        })
     }
 
     pub fn reset_fence(&self, fence: vk::Fence) -> Result<()> {
         #[allow(clippy::unit_arg)]
-        Ok(unsafe { self.device.reset_fences(&[fence])? })
+        Ok(unsafe { self.device.inner.reset_fences(&[fence])? })
     }
 
     pub fn create_semaphore(&self) -> Result<vk::Semaphore> {
         Ok(unsafe {
             self.device
+                .inner
                 .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)?
         })
     }
-}
 
-impl Context /* Commands */ {
     pub fn create_command_pool(&self) -> Result<vk::CommandPool> {
         let pool_create_info = vk::CommandPoolCreateInfo::default()
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
-            .queue_family_index(self.queue.family_index);
-        Ok(unsafe { self.device.create_command_pool(&pool_create_info, None)? })
-    }
-
-    pub fn submit_queued(
-        &self,
-        cmd: &vk::CommandBuffer,
-        wait_semaphore: &vk::Semaphore,
-        signal_semaphore: &vk::Semaphore,
-        fence: vk::Fence,
-    ) -> Result<(), anyhow::Error> {
-        let wait_info = &[vk::SemaphoreSubmitInfo::default()
-            .semaphore(*wait_semaphore)
-            .stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
-            .value(1)];
-        let signal_info = &[vk::SemaphoreSubmitInfo::default()
-            .semaphore(*signal_semaphore)
-            .stage_mask(vk::PipelineStageFlags2::ALL_GRAPHICS)
-            .value(1)];
-        let command_buffer_info = &[vk::CommandBufferSubmitInfo::default()
-            .command_buffer(*cmd)
-            .device_mask(0)];
-        let submit_info = &[vk::SubmitInfo2::default()
-            .command_buffer_infos(command_buffer_info)
-            .wait_semaphore_infos(wait_info)
-            .signal_semaphore_infos(signal_info)];
-
-        Ok(unsafe { self.device.queue_submit2(*self.queue, submit_info, fence) }?)
+            .queue_family_index(self.device.queue.family_index);
+        Ok(unsafe {
+            self.device
+                .inner
+                .create_command_pool(&pool_create_info, None)?
+        })
     }
 }
 
@@ -507,6 +408,7 @@ impl Context /* Images */ {
 
         unsafe {
             self.device
+                .inner
                 .cmd_pipeline_barrier2(buffer.inner, &dependency_info);
         }
     }
@@ -550,14 +452,14 @@ impl Context /* Images */ {
             .dst_image_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
             .regions(regions);
 
-        unsafe { self.device.cmd_blit_image2(cmd.inner, &blit_info) }
+        unsafe { self.device.inner.cmd_blit_image2(cmd.inner, &blit_info) }
     }
 
     pub fn load_shader(&self, path: &str) -> Result<vk::ShaderModule> {
         let mut file = std::fs::File::open(path)?;
         let bytes = ash::util::read_spv(&mut file)?;
         let info = vk::ShaderModuleCreateInfo::default().code(&bytes);
-        let shader = unsafe { self.device.create_shader_module(&info, None) }?;
+        let shader = unsafe { self.device.inner.create_shader_module(&info, None) }?;
 
         Ok(shader)
     }
@@ -568,7 +470,7 @@ impl Context /* Images */ {
         copies: &[vk::CopyDescriptorSet],
     ) {
         unsafe {
-            self.device.update_descriptor_sets(writes, copies);
+            self.device.inner.update_descriptor_sets(writes, copies);
         }
     }
 
@@ -580,7 +482,11 @@ impl Context /* Images */ {
         let info = vk::DescriptorSetLayoutCreateInfo::default()
             .bindings(bindings)
             .flags(flags);
-        Ok(unsafe { self.device.create_descriptor_set_layout(&info, None)? })
+        Ok(unsafe {
+            self.device
+                .inner
+                .create_descriptor_set_layout(&info, None)?
+        })
     }
 }
 

@@ -1,33 +1,55 @@
 use {
-    crate::vk::{Device, Instance},
-    anyhow::Result,
-    ash::vk::{self, Handle},
-    derive_more::Debug,
-    gpu_allocator::{self as ga, vulkan as gavk},
-    std::sync::{Arc, Mutex},
+    crate::vk::context::{BufferInfo, Buffer}, crate::vk::{Device, Instance}, anyhow::Result, ash::vk::{self, Handle}, derive_more::Debug, gpu_allocator::{self as ga, vulkan as gavk}, std::sync::{Arc, Mutex}
 };
 
 #[derive(Debug)]
 pub struct MemoryAllocator {
-    #[debug("{:x}", device.handle().as_raw())]
-    pub device: Device,
-    pub inner: Arc<Mutex<gavk::Allocator>>,
+    pub (crate) inner: Arc<Mutex<gavk::Allocator>>,
+    pub (crate) device: Device,
 }
 
 impl MemoryAllocator {
     pub fn new(instance: &Instance, device: &Device) -> Result<Self> {
         let allocator = gavk::Allocator::new(&gavk::AllocatorCreateDesc {
-            instance: instance.clone_inner(),
+            instance: instance.inner.clone(),
             physical_device: device.physical_device,
-            device: device.clone_inner(),
+            device: device.inner.clone(),
             buffer_device_address: true,
             debug_settings: ga::AllocatorDebugSettings::default(),
             allocation_sizes: ga::AllocationSizes::default(),
         })?;
-
+        
         Ok(Self {
             inner: Arc::new(Mutex::new(allocator)),
             device: device.clone(),
+        })
+    }
+
+    pub fn allocate_buffer(&self, info: BufferInfo) -> Result<Buffer> {
+        let mut allocator = self.inner.lock().unwrap();
+        let requirements = unsafe { self.device.inner.get_buffer_memory_requirements(buffer) };
+        let create_info = vk::BufferCreateInfo::default()
+        .size(info.size as u64)
+        .usage(info.usage);
+        let buffer = unsafe { self.device.inner.create_buffer(&create_info, None) }?;
+        let allocation = allocator.allocate(&gavk::AllocationCreateDesc {
+            name: info.name.unwrap_or("unnamed buffer"),
+            requirements,
+            location: info.location,
+            linear: true,
+            allocation_scheme: gavk::AllocationScheme::GpuAllocatorManaged,
+        })?;
+
+        unsafe {
+            self.device
+                .inner
+                .bind_buffer_memory(buffer, allocation.memory(), allocation.offset())
+        }?;
+
+        Ok(Buffer {
+            allocation,
+            handle: buffer,
+            info,
         })
     }
 }
@@ -36,7 +58,7 @@ impl MemoryAllocator {
 pub struct DescriptorAllocator {
     pool: vk::DescriptorPool,
     #[debug("{:x}", device.handle().as_raw())]
-    device: ash::Device,
+    pub(crate) device: ash::Device,
 }
 
 impl DescriptorAllocator {

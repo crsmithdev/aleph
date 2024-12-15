@@ -45,14 +45,13 @@ struct GraphicsRenderer {
     draw_image_layout: vk::DescriptorSetLayout,
     background_effect: ComputeEffect,
     triangle_pipeline: vk::Pipeline,
-    // gradient_pipeline: vk::Pipeline,
-    // gradient_pipeline_layout: vk::PipelineLayout,
 }
 
 impl GraphicsRenderer {
     pub fn new(context: &Context) -> Result<Self> {
         let extent = context.swapchain().extent();
-        let draw_image = Image::new(&ImageInfo {
+        context.allocator().clone();
+        let draw_image = context.allocator().allocate_image(&ImageInfo {
             allocator: context.allocator().clone(),
             width: extent.width as usize,
             height: extent.height as usize,
@@ -63,7 +62,7 @@ impl GraphicsRenderer {
                 | vk::ImageUsageFlags::TRANSFER_SRC
                 | vk::ImageUsageFlags::STORAGE,
         })?;
-        let depth_image = Image::new(&ImageInfo {
+        let depth_image = Image::allocate_image(&ImageInfo {
             allocator: context.allocator().clone(),
             width: extent.width as usize,
             height: extent.height as usize,
@@ -172,6 +171,7 @@ impl GraphicsRenderer {
         let layout = unsafe {
             context
                 .device()
+                .inner() 
                 .create_pipeline_layout(&layout_info, None)?
         };
         let pipeline_info = &[vk::GraphicsPipelineCreateInfo::default()
@@ -280,7 +280,7 @@ impl GraphicsRenderer {
             .offset(vk::Offset2D::default())];
 
         unsafe {
-            self.context.device.cmd_begin_rendering(**cmd, &render_info);
+            cmd.begin_rendering2(&color_attachment, Some(&depth_attachment), extent)?;
             self.context.device.cmd_bind_pipeline(
                 **cmd,
                 vk::PipelineBindPoint::GRAPHICS,
@@ -293,31 +293,6 @@ impl GraphicsRenderer {
         };
 
         Ok(())
-        // VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(_drawImage.imageView,
-        // nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL); VkRenderingAttachmentInfo
-        // depthAttachment = vkinit::depth_attachment_info(_depthImage.imageView,
-        // VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL); VkRenderingInfo renderInfo =
-        // vkinit::rendering_info(_drawExtent, &colorAttachment, &depthAttachment);
-        // vkCmdBeginRendering(cmd, &renderInfo);
-        // vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _trianglePipeline);
-        // //set dynamic viewport and scissor
-        // VkViewport viewport = {};
-        // viewport.x = 0;
-        // viewport.y = 0;
-        // viewport.width = _drawExtent.width;
-        // viewport.height = _drawExtent.height;
-        // viewport.minDepth = 0.f;
-        // viewport.maxDepth = 1.f;
-
-        // vkCmdSetViewport(cmd, 0, 1, &viewport);
-
-        // VkRect2D scissor = {};
-        // scissor.offset.x = 0;
-        // scissor.offset.y = 0;
-        // scissor.extent.width = viewport.width;
-        // scissor.extent.height = viewport.height;
-
-        // vkCmdSetScissor(cmd, 0, 1, &scissor);
     }
 
     pub fn render(
@@ -329,35 +304,6 @@ impl GraphicsRenderer {
         let swapchain_extent = context.swapchain().extent().into();
         let draw_image = self.draw_image.inner;
         let draw_extent: Extent3D = self.draw_image.extent;
-
-        // vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED,
-        // VK_IMAGE_LAYOUT_GENERAL);
-
-        // draw_background(cmd);
-
-        // vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL,
-        // VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-        // draw_geometry(cmd);
-
-        // vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        // VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL); vkutil::transition_image(cmd,
-        // _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED,
-        // VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-        // vkutil::copy_image_to_image(cmd, _drawImage.image,
-        // _swapchainImages[swapchainImageIndex],_drawExtent ,_swapchainExtent); //< copyimage
-
-        // 	// set swapchain image layout to Attachment Optimal so we can draw it
-        // 	vkutil::transition_image(cmd, _swapchainImages[swapchainImageIndex],
-        // VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-        // 	//draw imgui into the swapchain image
-        // 	draw_imgui(cmd, _swapchainImageViews[swapchainImageIndex]);
-
-        // 	// set swapchain image layout to Present so we can draw it
-        // 	vkutil::transition_image(cmd, _swapchainImages[swapchainImageIndex],
-        // VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
         self.context.transition_image(
             command_buffer,
@@ -541,7 +487,6 @@ impl Renderer {
         context.wait_for_fence(fence)?;
         let (image_index, rebuild) = context.swapchain_mut().next_image(*swapchain_semaphore)?;
         let swapchain_image = context.swapchain().images()[image_index as usize];
-        let swapchain_image_view = context.swapchain().image_views()[image_index as usize];
         self.rebuild_swapchain = rebuild;
 
         context.reset_fence(fence)?;
@@ -549,7 +494,7 @@ impl Renderer {
         command_buffer.begin()?;
 
         self.graphics.render(command_buffer, &swapchain_image)?;
-        self.ui.render(command_buffer, &swapchain_image_view)?;
+        self.ui.render(command_buffer)?;
 
         command_buffer.end()?;
         command_buffer.submit(swapchain_semaphore, render_semaphore, fence)?;
