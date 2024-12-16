@@ -10,6 +10,8 @@ pub use {
     device::{Device, Queue},
     gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, AllocationScheme},
     swapchain::{Frame, Swapchain, SwapchainInfo},
+    gpu_allocator::MemoryLocation,
+    ash::vk::BufferUsageFlags,
 };
 use {
     aleph_core::constants::VK_TIMEOUT_NS,
@@ -69,7 +71,6 @@ pub struct BufferInfo {
     pub size: usize,
     pub usage: vk::BufferUsageFlags,
     pub location: gpu_allocator::MemoryLocation,
-    pub name: Option<&'static str>,
 }
 
 #[derive(Debug)]
@@ -285,22 +286,23 @@ impl Context /* Init */ {
 }
 
 impl Context {
-    pub fn create_buffer(&self, info: BufferInfo) -> Result<Buffer> {
-        let mut allocator = self.allocator.inner.lock().unwrap();
-        let create_info = vk::BufferCreateInfo::default()
-            .size(info.size as u64)
-            .usage(info.usage);
-        let buffer = unsafe { self.device.inner.create_buffer(&create_info, None) }?;
-        let requirements = unsafe { self.device.inner.get_buffer_memory_requirements(buffer) };
+    pub fn create_buffer(&self, size: usize, usage: BufferUsageFlags, location: MemoryLocation) -> Result<Buffer> {
+        let info = BufferInfo{
+            size,
+            usage,
+            location: MemoryLocation::GpuOnly,
+        };
 
-        let allocation = allocator.allocate_buffer()
-        let allocation = allocator.allocate(&AllocationCreateDesc {
-            name: info.name.unwrap_or("unnamed buffer"),
-            requirements,
-            location: info.location,
-            linear: true,
-            allocation_scheme: AllocationScheme::GpuAllocatorManaged,
-        })?;
+        let create_info = vk::BufferCreateInfo::default()
+        .size(info.size as u64)
+        .usage(info.usage);
+    let buffer = unsafe { self.device.inner.create_buffer(&create_info, None) }?;
+
+        self.allocator.allocate_buffer(BufferInfo{
+            size,
+            usage,
+            location: MemoryLocation::GpuOnly,
+        });
 
         unsafe {
             self.device

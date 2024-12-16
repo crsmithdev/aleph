@@ -26,14 +26,15 @@ impl MemoryAllocator {
     }
 
     pub fn allocate_buffer(&self, info: BufferInfo) -> Result<Buffer> {
-        let mut allocator = self.inner.lock().unwrap();
-        let requirements = unsafe { self.device.inner.get_buffer_memory_requirements(buffer) };
         let create_info = vk::BufferCreateInfo::default()
         .size(info.size as u64)
         .usage(info.usage);
         let buffer = unsafe { self.device.inner.create_buffer(&create_info, None) }?;
+        let requirements = unsafe { self.device.inner.get_buffer_memory_requirements(buffer) };
+
+        let mut allocator = self.inner.lock().unwrap();
         let allocation = allocator.allocate(&gavk::AllocationCreateDesc {
-            name: info.name.unwrap_or("unnamed buffer"),
+            name: info.name.unwrap_or("<un-named buffer"),
             requirements,
             location: info.location,
             linear: true,
