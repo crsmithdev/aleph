@@ -1,5 +1,9 @@
-use {crate::vk::Device, anyhow::Result, ash::vk};
-use derive_more::{Deref, Debug};
+use {
+    crate::vk::Device,
+    anyhow::Result,
+    ash::vk,
+    derive_more::{Debug, Deref},
+};
 
 #[allow(dead_code)]
 #[derive(Clone, Debug, Deref)]
@@ -19,7 +23,8 @@ impl CommandBuffer {
             .level(vk::CommandBufferLevel::PRIMARY);
 
         let inner = unsafe {
-            device.inner
+            device
+                .inner
                 .allocate_command_buffers(&info)
                 .map(|b| b[0])
                 .map_err(anyhow::Error::from)
@@ -35,7 +40,8 @@ impl CommandBuffer {
     pub fn reset(&self) -> Result<()> {
         #[allow(clippy::unit_arg)]
         Ok(unsafe {
-            self.device.inner
+            self.device
+                .inner
                 .reset_command_buffer(self.inner, vk::CommandBufferResetFlags::RELEASE_RESOURCES)?
         })
     }
@@ -53,7 +59,12 @@ impl CommandBuffer {
         Ok(unsafe { self.device.inner.end_command_buffer(self.inner)? })
     }
 
-    pub fn begin_rendering2(&self, color_attachments: &[vk::RenderingAttachmentInfo], depth_attachment: Option<&vk::RenderingAttachmentInfo>, extent: vk::Extent2D) -> Result<()> {
+    pub fn begin_rendering2(
+        &self,
+        color_attachments: &[vk::RenderingAttachmentInfo],
+        depth_attachment: Option<&vk::RenderingAttachmentInfo>,
+        extent: vk::Extent2D,
+    ) -> Result<()> {
         let mut rendering_info = vk::RenderingInfo::default()
             .render_area(vk::Rect2D {
                 offset: vk::Offset2D { x: 0, y: 0 },
@@ -62,19 +73,19 @@ impl CommandBuffer {
             .layer_count(1)
             .color_attachments(color_attachments);
 
-        if let Some (attachment) = depth_attachment {
+        if let Some(attachment) = depth_attachment {
             rendering_info = rendering_info.depth_attachment(attachment);
         }
-        
 
         #[allow(clippy::unit_arg)]
         Ok(unsafe {
-            self.device.inner
+            self.device
+                .inner
                 .cmd_begin_rendering(self.inner, &rendering_info)
         })
     }
-    // pub fn begin_rendering(&self, image_view: &vk::ImageView, extent: vk::Extent2D) -> Result<()> {
-    //     let color_attachment_info = vk::RenderingAttachmentInfo::default()
+    // pub fn begin_rendering(&self, image_view: &vk::ImageView, extent: vk::Extent2D) -> Result<()>
+    // {     let color_attachment_info = vk::RenderingAttachmentInfo::default()
     //         .image_view(*image_view)
     //         .image_layout(vk::ImageLayout::ATTACHMENT_OPTIMAL)
     //         .load_op(vk::AttachmentLoadOp::DONT_CARE)
@@ -112,7 +123,7 @@ impl CommandBuffer {
     ) -> Result<(), anyhow::Error> {
         let cmd = &self.inner;
         let queue = &self.device.queue;
-        
+
         let wait_info = &[vk::SemaphoreSubmitInfo::default()
             .semaphore(*wait_semaphore)
             .stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
@@ -129,6 +140,22 @@ impl CommandBuffer {
             .wait_semaphore_infos(wait_info)
             .signal_semaphore_infos(signal_info)];
 
-        Ok(unsafe { self.device.inner.queue_submit2(queue.inner, submit_info, fence) }?)
+        Ok(unsafe {
+            self.device
+                .inner
+                .queue_submit2(queue.inner, submit_info, fence)
+        }?)
+    }
+
+    pub fn submit_immediate(
+        &self,
+        _callback: impl FnOnce(vk::CommandBuffer)) -> Result<()> {
+            Ok(())
+        // unsafe { self.device.inner.reset_fences(&[fence])? };
+        // unsafe { self.device.inner.reset_command_buffer(self.inner, vk::CommandBufferResetFlags::RELEASE_RESOURCES) }?;
+        // self.begin()?;
+        // callback(self.inner);
+        // self.end()?;
+        // self.submit(&vk::Semaphore::null(), &vk::Semaphore::null(), vk::Fence::null())
     }
 }

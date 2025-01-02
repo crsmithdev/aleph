@@ -1,13 +1,13 @@
 use {
     crate::vk::{CommandBuffer, Device, Instance, Surface},
     aleph_core::constants::VK_TIMEOUT_NS,
-    anyhow::Result,
+    anyhow::{bail, Result},
     ash::{
-        khr,
+        khr::{self, swapchain},
         vk::{self, Handle},
     },
     derive_more::Debug,
-    std::sync::Arc,
+    std::sync::{Arc, Mutex},
 };
 
 pub const IN_FLIGHT_FRAMES: u32 = 2;
@@ -37,23 +37,56 @@ pub struct Swapchain {
     device: Device,
     surface: Surface,
     instance: Instance,
-    info: SwapchainInfo,
+    pub(crate) info: SwapchainInfo,
     image_views: Vec<vk::ImageView>,
-    window: Arc<winit::window::Window>,
     images: Vec<vk::Image>,
     current_index: usize,
+    is_retired: Arc<Mutex<bool>>,
 }
 
 impl Swapchain {
+    // pub fn recreate(&mut self, extent: vk::Extent2D) -> Result<Swapchain> {
+    //     let mut is_retired = self
+    //         .is_retired
+    //         .lock()
+    //         .map_err(|_| anyhow::anyhow!("Could not lock swapchain for recreation"))?;
+
+    //     if *is_retired {
+    //         bail!("Swapchain has already been used in Swapchain recreation");
+    //     }
+
+    //     unsafe { self.device.inner.device_wait_idle() }?;
+    //     *is_retired = true;
+    //     let mut info = self.info.clone();
+    //     info.extent = extent;
+    //     let swapchain = Self::create(
+    //         &self.instance,
+    //         &self.device,
+    //         &self.surface,
+    //         &info,
+    //         Some(self),
+    //     )?;
+    //     Ok(swapchain)
+    // }
+
     pub fn new(
         instance: &Instance,
         device: &Device,
         surface: &Surface,
-        window: Arc<winit::window::Window>,
         info: &SwapchainInfo,
+        old_swapchain: Option<&Swapchain>,
     ) -> Result<Self> {
+        Self::create(instance, device, surface, info, old_swapchain)
+    }
+
+    fn create(
+        instance: &Instance,
+        device: &Device,
+        surface: &Surface,
+        info: &SwapchainInfo,
+        old_swapchain: Option<&Swapchain>,
+    ) -> std::result::Result<Swapchain, anyhow::Error> {
         let indices = [device.queue.family_index];
-        let in_flight_frames = IN_FLIGHT_FRAMES;
         let capabilities: vk::SurfaceCapabilitiesKHR = unsafe {
             surface
                 .loader
@@ -68,9 +101,9 @@ impl Swapchain {
             false => vk::PresentModeKHR::MAILBOX,
         };
 
-        let swapchain_info = vk::SwapchainCreateInfoKHR::default()
+        let mut swapchain_info = vk::SwapchainCreateInfoKHR::default()
             .surface(**surface)
-            .min_image_count(in_flight_frames)
+            .min_image_count(IN_FLIGHT_FRAMES)
             .image_color_space(info.color_space)
             .image_format(info.format)
             .image_extent(surface_resolution)
@@ -82,8 +115,11 @@ impl Swapchain {
             .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST)
             .queue_family_indices(&indices)
             .image_array_layers(1);
+        if let Some(old_swapchain) = old_swapchain {
+            swapchain_info = swapchain_info.old_swapchain(old_swapchain.inner);
+        }
         let loader = khr::swapchain::Device::new(instance, &device.inner);
-        let swapchain = unsafe { loader.create_swapchain(&swapchain_info, None) }.unwrap();
+        let swapchain = unsafe { loader.create_swapchain(&swapchain_info, None) }?;
 
         let images = unsafe { loader.get_swapchain_images(swapchain)? };
         let subresource_range = vk::ImageSubresourceRange::default()
@@ -110,8 +146,8 @@ impl Swapchain {
             info: *info,
             image_views,
             images,
-            window: window.clone(),
             current_index: 0,
+            is_retired: Arc::new(Mutex::new(false)),
         })
     }
 
@@ -127,8 +163,8 @@ impl Swapchain {
         self.info.extent
     }
 
-    pub fn images(&self) -> &[vk::Image] {
-        &self.images
+    pub fn images(&self) -> Vec<vk::Image> {
+        unsafe { self.loader.get_swapchain_images(self.inner).unwrap() }
     }
 
     pub fn image_views(&self) -> &[vk::ImageView] {
@@ -150,7 +186,7 @@ impl Swapchain {
 
 impl Swapchain {
     fn destroy(&self) {
-        log::info!("Destroying swapchain: {:?}", self);
+        log::info!("Destroying sapchain: {:?}", self);
 
         self.image_views
             .iter()
@@ -161,34 +197,44 @@ impl Swapchain {
         }
     }
 
-    pub fn rebuild(&mut self) -> Result<()> {
-        log::debug!("Rebuilding swapchain");
-        self.destroy();
+    // pub fn rebuild(&mut self) -> Result<()> {
+    //     log::debug!("Rebuilding swapchain");
+    //     unsafe { self.device.inner.device_wait_idle() }?;
 
-        let size = self.window.inner_size();
-        let mut info = self.info;
-        info.extent = vk::Extent2D {
-            width: size.width,
-            height: size.height,
-        };
-
-        match Self::new(
-            &self.instance,
-            &self.device,
-            &self.surface,
-            self.window.clone(),
-            &info,
-        ) {
-            Ok(swapchain) => {
-                *self = swapchain;
-                log::info!("Rebuilt swapchain: {:?}", self);
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
-    }
+    //     let size = self.window.inner_size();
+    //     let mut info = self.info;
+    //     info.extent = vk::Extent2D {
+    //         width: size.width,
+    //         height: size.height,
+    //     };
+    //     let old_swapchain = std::mem::replace(&mut self.inner, vk::SwapchainKHR::null());
+    //     match Self::create(
+    //         &self.instance,
+    //         &self.device,
+    //         &self.surface,
+    //         self.window.clone(),
+    //         &info,
+    //         Some(&old_swapchain),
+    //     ) {
+    //         Ok(swapchain) => {
+    //             *self = swapchain;
+    //             log::info!("Rebuilt swapchain: {:?}", self);
+    //             Ok(())
+    //         }
+    //         Err(e) => Err(e),
+    //     }
+    // }
 
     pub fn next_image(&mut self, semaphore: vk::Semaphore) -> Result<(u32, bool)> {
+        let is_retired = self
+            .is_retired
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Could not lock swapchain for recreation"))?;
+
+        if *is_retired {
+            bail!("Swapchain has been retired");
+        }
+
         match unsafe {
             self.loader
                 .acquire_next_image(self.inner, VK_TIMEOUT_NS, semaphore, vk::Fence::null())

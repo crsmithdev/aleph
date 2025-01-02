@@ -43,9 +43,9 @@ impl UiRenderer {
             .add_font(&[imgui::FontSource::DefaultFontData { config: None }]);
 
         let renderer = imgui_renderer::Renderer::with_gpu_allocator(
-            context.allocator().inner.clone(),
-            context.device().inner.clone(),
-            context.queue().inner,
+            context.allocator().inner().clone(),
+            context.device().handle().clone(),
+            context.queue().handle(),
             pool,
             imgui_renderer::DynamicRendering {
                 color_attachment_format: vk::Format::B8G8R8A8_UNORM,

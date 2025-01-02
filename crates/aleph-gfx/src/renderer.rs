@@ -10,9 +10,9 @@ use {
         Frame,
     },
     anyhow::Result,
-    ash::vk::{self, Extent2D, Extent3D, GraphicsPipelineCreateInfo},
+    ash::vk::{self, Extent3D},
     nalgebra_glm as glm,
-    std::{arch::x86_64::_CMP_NEQ_US, ffi, fmt, mem, process::Command, sync::Arc},
+    std::{ffi, fmt, mem, sync::Arc},
 };
 
 macro_rules! c_str {
@@ -50,7 +50,8 @@ struct GraphicsRenderer {
 impl GraphicsRenderer {
     pub fn new(context: &Context) -> Result<Self> {
         let extent = context.swapchain().extent();
-        context.allocator().clone();
+        let q = context.queue();
+        let h = q.handle();
         let draw_image = context.allocator().allocate_image(&ImageInfo {
             allocator: context.allocator().clone(),
             width: extent.width as usize,
@@ -62,7 +63,7 @@ impl GraphicsRenderer {
                 | vk::ImageUsageFlags::TRANSFER_SRC
                 | vk::ImageUsageFlags::STORAGE,
         })?;
-        let depth_image = Image::allocate_image(&ImageInfo {
+        let depth_image = context.allocator().allocate_image(&ImageInfo {
             allocator: context.allocator().clone(),
             width: extent.width as usize,
             height: extent.height as usize,
@@ -71,7 +72,7 @@ impl GraphicsRenderer {
             usage: vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
         })?;
         let descriptor_allocator = Arc::new(DescriptorAllocator::new(
-            context.device(),
+            context.device().handle(),
             &[vk::DescriptorPoolSize {
                 ty: vk::DescriptorType::STORAGE_IMAGE,
                 descriptor_count: 1,
@@ -171,7 +172,7 @@ impl GraphicsRenderer {
         let layout = unsafe {
             context
                 .device()
-                .inner() 
+                .handle()
                 .create_pipeline_layout(&layout_info, None)?
         };
         let pipeline_info = &[vk::GraphicsPipelineCreateInfo::default()
@@ -191,6 +192,7 @@ impl GraphicsRenderer {
         Ok(unsafe {
             context
                 .device
+                .handle()
                 .create_graphics_pipelines(vk::PipelineCache::null(), pipeline_info, None)
                 .map_err(|err| anyhow::anyhow!(err.1))
         }?[0])
@@ -200,8 +202,6 @@ impl GraphicsRenderer {
         context: &Context,
         layout: vk::DescriptorSetLayout,
     ) -> Result<ComputeEffect> {
-        let working_dir = std::env::current_dir()?;
-        dbg!(working_dir);
         let layouts = &[layout];
         let gradient_range = &[vk::PushConstantRange::default()
             .stage_flags(vk::ShaderStageFlags::COMPUTE)
@@ -212,6 +212,7 @@ impl GraphicsRenderer {
         let gradient_layout = unsafe {
             context
                 .device()
+                .handle()
                 .create_pipeline_layout(&gradient_layout_info, None)
         }?;
 
@@ -228,6 +229,7 @@ impl GraphicsRenderer {
         let gradient_pipeline = unsafe {
             context
                 .device()
+                .handle()
                 .create_compute_pipelines(vk::PipelineCache::null(), gradient_pipeline_info, None)
                 .map_err(|err| anyhow::anyhow!(err.1))
         }?[0];
@@ -246,62 +248,60 @@ impl GraphicsRenderer {
         unsafe {
             context
                 .device()
+                .handle()
                 .destroy_shader_module(gradient_shader_module, None)
         };
         Ok(gradient_effect)
     }
 
-    fn draw_geometry(&self, cmd: &CommandBuffer) -> Result<()> {
-        let extent = Extent2D {
-            width: self.draw_image.extent.width,
-            height: self.draw_image.extent.height,
-        };
-        let color_attachment = [vk::RenderingAttachmentInfo::default()
-            .image_view(self.draw_image.view)
-            .image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)];
-        let depth_attachment = vk::RenderingAttachmentInfo::default()
-            .image_view(self.depth_image.view)
-            .image_layout(vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL);
-        let render_area = vk::Rect2D::default().extent(extent);
-        let render_info = vk::RenderingInfo::default()
-            .render_area(render_area)
-            .color_attachments(&color_attachment)
-            .depth_attachment(&depth_attachment).layer_count(1);
+    // fn draw_geometry(&self, cmd: &CommandBuffer) -> Result<()> {
+    //     let extent = Extent2D {
+    //         width: self.draw_image.extent.width,
+    //         height: self.draw_image.extent.height,
+    //     };
+    //     let color_attachment = [vk::RenderingAttachmentInfo::default()
+    //         .image_view(self.draw_image.view)
+    //         .image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)];
+    //     let depth_attachment = vk::RenderingAttachmentInfo::default()
+    //         .image_view(self.depth_image.view)
+    //         .image_layout(vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL);
+    //     let render_area = vk::Rect2D::default().extent(extent);
+    //     let render_info = vk::RenderingInfo::default()
+    //         .render_area(render_area)
+    //         .color_attachments(&color_attachment)
+    //         .depth_attachment(&depth_attachment).layer_count(1);
 
-        let viewport = [vk::Viewport::default()
-            .x(0.0)
-            .y(0.0)
-            .width(extent.width as f32)
-            .height(extent.height as f32)
-            .min_depth(0.0)
-            .max_depth(1.0)];
-        let scissor = [vk::Rect2D::default()
-            .extent(extent)
-            .offset(vk::Offset2D::default())];
+    //     let viewport = [vk::Viewport::default()
+    //         .x(0.0)
+    //         .y(0.0)
+    //         .width(extent.width as f32)
+    //         .height(extent.height as f32)
+    //         .min_depth(0.0)
+    //         .max_depth(1.0)];
+    //     let scissor = [vk::Rect2D::default()
+    //         .extent(extent)
+    //         .offset(vk::Offset2D::default())];
 
-        unsafe {
-            cmd.begin_rendering2(&color_attachment, Some(&depth_attachment), extent)?;
-            self.context.device.cmd_bind_pipeline(
-                **cmd,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.triangle_pipeline,
-            );
-            self.context.device.cmd_set_viewport(**cmd, 0, &viewport);
-            self.context.device.cmd_set_scissor(**cmd, 0, &scissor);
-            self.context.device.cmd_draw(**cmd, 3, 1, 0, 0);
-            self.context.device.cmd_end_rendering(**cmd);
-        };
+    //     unsafe {
+    //         cmd.begin_rendering2(&color_attachment, Some(&depth_attachment), extent)?;
+    //         self.context.device.handle().cmd_bind_pipeline(
+    //             **cmd,
+    //             vk::PipelineBindPoint::GRAPHICS,
+    //             self.triangle_pipeline,
+    //         );
+    //         self.context.device.handle().cmd_set_viewport(**cmd, 0, &viewport);
+    //         self.context.device.handle().cmd_set_scissor(**cmd, 0, &scissor);
+    //         self.context.device.handle().cmd_draw(**cmd, 3, 1, 0, 0);
+    //         self.context.device.handle().cmd_end_rendering(**cmd);
+    //     };
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    pub fn render(
-        &mut self,
-        command_buffer: &CommandBuffer,
-        swapchain_image: &vk::Image,
-    ) -> Result<()> {
+    pub fn render(&mut self, command_buffer: &CommandBuffer) -> Result<()> {
         let context = &self.context;
         let swapchain_extent = context.swapchain().extent().into();
+        let swapchain_image = context.swapchain().current_image();
         let draw_image = self.draw_image.inner;
         let draw_extent: Extent3D = self.draw_image.extent;
 
@@ -313,6 +313,7 @@ impl GraphicsRenderer {
         );
 
         self.draw_background(command_buffer);
+        // self.draw_geometry(command_buffer)?;
 
         self.context.transition_image(
             command_buffer,
@@ -320,8 +321,6 @@ impl GraphicsRenderer {
             vk::ImageLayout::GENERAL,
             vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
         );
-
-        self.draw_geometry(command_buffer)?;
 
         self.context.transition_image(
             command_buffer,
@@ -331,29 +330,23 @@ impl GraphicsRenderer {
         );
         self.context.transition_image(
             command_buffer,
-            *swapchain_image,
+            swapchain_image,
             vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
         );
         self.context.copy_image(
             command_buffer,
             draw_image,
-            *swapchain_image,
+            swapchain_image,
             draw_extent,
             swapchain_extent,
-        );
-        self.context.transition_image(
-            command_buffer,
-            *swapchain_image,
-            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-            vk::ImageLayout::PRESENT_SRC_KHR,
         );
 
         Ok(())
     }
 
     fn draw_background(&self, cmd: &CommandBuffer) {
-        let device = self.context.device();
+        let device = self.context.device().handle();
         let descriptors = &[self.draw_image_descriptors];
         let effect = &self.background_effect;
         let extent = self.draw_image.extent;
@@ -468,43 +461,51 @@ impl Renderer {
     }
 
     pub fn handle_event(&mut self, event: &winit::event::Event<()>) {
-        self.ui.handle_event(event.clone());
+        // self.ui.handle_event(event.clone());
     }
 
     pub fn render(&mut self) -> Result<()> {
         let context = &mut self.context;
-        let frame = &self.frames[self.current_frame % self.frames.len()];
+        let Frame {
+            fence,
+            command_buffer,
+            render_semaphore,
+            swapchain_semaphore,
+            ..
+        } = &self.frames[self.current_frame % self.frames.len()];
+
         if self.rebuild_swapchain {
-            context.swapchain_mut().rebuild()?;
+            context.rebuild_swapchain()?; // }  in.nself.rebuild_swapchain {
             self.rebuild_swapchain = false;
+            return Ok(());
         }
 
-        let fence = frame.fence;
-        let command_buffer = &frame.command_buffer;
-        let render_semaphore = &frame.render_semaphore;
-        let swapchain_semaphore = &frame.swapchain_semaphore;
-
-        context.wait_for_fence(fence)?;
+        context.wait_for_fence(*fence)?;
         let (image_index, rebuild) = context.swapchain_mut().next_image(*swapchain_semaphore)?;
-        let swapchain_image = context.swapchain().images()[image_index as usize];
+        let swapchain_image = context.swapchain.images()[image_index as usize]; //mut().current_image();
         self.rebuild_swapchain = rebuild;
 
-        context.reset_fence(fence)?;
+        context.reset_fence(*fence)?;
         command_buffer.reset()?;
         command_buffer.begin()?;
 
-        self.graphics.render(command_buffer, &swapchain_image)?;
+        self.graphics.render(command_buffer)?;
         self.ui.render(command_buffer)?;
-
+        context.transition_image(
+            command_buffer,
+            swapchain_image,
+            vk::ImageLayout::UNDEFINED,
+            vk::ImageLayout::PRESENT_SRC_KHR,
+        );
         command_buffer.end()?;
-        command_buffer.submit(swapchain_semaphore, render_semaphore, fence)?;
-
-        self.rebuild_swapchain |= self
+        command_buffer.submit(swapchain_semaphore, render_semaphore, *fence)?;
+        let rebuild = self
             .context
             .swapchain_mut()
             .present(&[*render_semaphore], &[image_index])?;
 
         self.current_frame = self.current_frame.wrapping_add(1);
+        self.rebuild_swapchain |= rebuild;
 
         Ok(())
     }

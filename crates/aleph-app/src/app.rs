@@ -6,7 +6,7 @@ use {
     aleph_gfx::{renderer::Renderer, ui::UiRenderer},
     aleph_hal::vk::Context,
     anyhow::{anyhow, Result},
-    human_panic::setup_panic,
+    core::panic,
     std::{
         cell::OnceCell,
         fmt,
@@ -20,21 +20,21 @@ use {
         window::{Window, WindowId},
     },
 };
-
 #[derive(Debug, Default)]
 pub struct App {}
 
 impl App {
-    pub fn run(&mut self) -> Result<()> {
-        logging::setup_logger()?;
-        setup_panic!();
+    pub fn run(&mut self) {
+        println!("RUST_LOG: {:?}", std::env::var("RUST_LOG"));
+        logging::setup_logger().expect("Failed to setup logger");
 
+        let event_loop = EventLoop::new().expect("Failed to create event loop");
         let state = AppState::default();
         let mut handler = AppHandler { state };
-
-        EventLoop::new()?
-            .run_app(&mut handler)
-            .map_err(|err| anyhow!(err))
+        match event_loop.run_app(&mut handler).map_err(|err| anyhow!(err)) {
+            Ok(_) => {}
+            Err(err) => log::error!("Error: {err}"),
+        }
     }
 }
 
@@ -83,6 +83,10 @@ impl fmt::Debug for AppState {
 
 impl AppState {
     pub fn init(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
+        // setup_panic!(Metadata::new("Aleph App", "0.1.0")
+        //     .authors("Aleph Developers")
+        //     .homepage("https://aleph.rs")
+        //     .support("https://aleph.rs/support"));
         let attributes = Window::default_attributes().with_inner_size(DEFAULT_WINDOW_SIZE);
         let window = Arc::new(event_loop.create_window(attributes)?);
         log::info!("Created window: {window:?}");
@@ -124,6 +128,7 @@ impl AppState {
             .get_mut()
             .expect("Renderer dropped or not initialized");
 
+        // renderer.render(j).expect("test");
         renderer.render()?;
 
         Ok(())
@@ -153,8 +158,8 @@ impl AppState {
             self.exiting = true;
             log::info!("Exiting");
 
-            let _ = self.renderer.take();
-            let _ = self.window.take();
+            // let _ = self.renderer.take();
+            // let _ = self.window.take();
             std::process::exit(0)
         }
     }
@@ -167,9 +172,11 @@ struct AppHandler {
 impl ApplicationHandler for AppHandler {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         log::info!("Resumed");
+
         if let Err(err) = self.state.init(event_loop) {
             log::error!("Failed to initialize app state: {err}");
             event_loop.exit();
+            panic!("Failed to initialize app state");
         }
     }
 
@@ -178,7 +185,11 @@ impl ApplicationHandler for AppHandler {
             return;
         }
 
-        let renderer = self.state.renderer.get_mut().unwrap();
+        let renderer = self
+            .state
+            .renderer
+            .get_mut()
+            .expect("Failed to acquire renderer");
         let ui = renderer.ui_mut();
         ui.update_delta_time();
     }
@@ -210,7 +221,7 @@ impl ApplicationHandler for AppHandler {
 
     fn window_event(
         &mut self,
-        event_loop: &ActiveEventLoop,
+        _event_loop: &ActiveEventLoop,
         window_id: WindowId,
         event: WindowEvent,
     ) {
@@ -224,12 +235,16 @@ impl ApplicationHandler for AppHandler {
             }
             WindowEvent::RedrawRequested => {
                 log::info!("Window redraw requested");
-                self.state.render().expect("Rendering error");
+                match self.state.render() {
+                    Ok(_) => {}
+                    Err(err) => {
+                        log::error!("Error rendering: {err}");
+                    }
+                };
             }
             WindowEvent::CloseRequested => {
                 log::info!("Close requested");
-                event_loop.exit();
-                std::process::exit(0);
+                self.state.exit();
             }
             WindowEvent::KeyboardInput { ref event, .. } => {
                 log::info!("Keyboard input: {event:?}");

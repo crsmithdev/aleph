@@ -1,6 +1,5 @@
 use {
     crate::vk::Instance,
-    aleph_core::constants::VK_TIMEOUT_NS,
     anyhow::{anyhow, Result},
     ash::{
         ext,
@@ -14,6 +13,7 @@ use {
 const DEVICE_EXTENSIONS: [&ffi::CStr; 6] = [
     khr::swapchain::NAME,
     khr::synchronization2::NAME,
+    
     khr::maintenance3::NAME,
     khr::dynamic_rendering::NAME,
     ext::descriptor_indexing::NAME,
@@ -29,13 +29,12 @@ pub struct Device {
 }
 
 impl Device {
-    #[deprecated]
-    pub fn inner(&self) -> &ash::Device {
+    pub fn handle(&self) -> &ash::Device {
         &self.inner
     }
 
     pub fn new(instance: &Instance) -> Result<Device> {
-        let physical_device = Self::select_physical_device(&instance)?;
+        let physical_device = Self::select_physical_device(instance)?;
         log::info!("Selected physical device: {physical_device:?}");
 
         let device_extension_names: Vec<*const i8> = DEVICE_EXTENSIONS
@@ -55,8 +54,8 @@ impl Device {
             .push_next(&mut buffer_device_address_features);
 
         let priorities = [1.0];
-        let (queue_family_index, queue_family) =
-            Self::find_queue_family(&instance, &physical_device, vk::QueueFlags::GRAPHICS)?;
+        let (queue_family_index, _) =
+            Self::find_queue_family(instance, &physical_device, vk::QueueFlags::GRAPHICS)?;
         let queue_info = [vk::DeviceQueueCreateInfo::default()
             .queue_family_index(queue_family_index)
             .queue_priorities(&priorities)];
@@ -66,7 +65,7 @@ impl Device {
             .push_next(&mut device_features);
 
         let inner = unsafe { instance.create_device(physical_device, &device_info, None)? };
-        let queue = Queue::new(&inner, queue_family, queue_family_index);
+        let queue = Queue::new(&inner, queue_family_index);
 
         Ok(Device {
             inner,
@@ -131,31 +130,26 @@ impl Device {
             None => Err(anyhow!("Could not find queue family with flags: {flags:?}")),
         }
     }
-
-
 }
 
 #[derive(Clone, Debug)]
 pub struct Queue {
     pub(crate) inner: vk::Queue,
-    pub(crate) family: vk::QueueFamilyProperties,
     pub(crate) family_index: u32,
 }
 
 impl Queue {
-    pub fn inner(&self) -> vk::Queue {
+    pub fn handle(&self) -> vk::Queue {
         self.inner
     }
 
     pub fn new(
         device: &ash::Device,
-        queue_family: vk::QueueFamilyProperties,
         queue_family_index: u32,
     ) -> Queue {
         let inner = unsafe { device.get_device_queue(queue_family_index, 0) };
         Queue {
             inner,
-            family: queue_family,
             family_index: queue_family_index,
         }
     }

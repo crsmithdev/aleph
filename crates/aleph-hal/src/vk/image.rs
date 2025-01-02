@@ -12,7 +12,7 @@ use {
 
 #[derive(Clone)]
 pub struct ImageInfo {
-    pub(crate) allocator: Arc<MemoryAllocator>,
+    pub allocator: Arc<MemoryAllocator>,
     pub width: usize,
     pub height: usize,
     pub format: vk::Format,

@@ -1,14 +1,23 @@
+pub use gavk::Allocation;
 use {
-    crate::vk::context::{BufferInfo, Buffer}, crate::vk::{Device, Instance}, anyhow::Result, ash::vk::{self, Handle}, derive_more::Debug, gpu_allocator::{self as ga, vulkan as gavk}, std::sync::{Arc, Mutex}
+    crate::vk::{buffer::BufferInfo, Device, Instance},
+    anyhow::Result,
+    ash::vk::{self, Handle},
+    derive_more::Debug,
+    gpu_allocator::{self as ga, vulkan as gavk},
+    std::sync::{Arc, Mutex},
 };
 
 #[derive(Debug)]
 pub struct MemoryAllocator {
-    pub (crate) inner: Arc<Mutex<gavk::Allocator>>,
-    pub (crate) device: Device,
+    pub(crate) inner: Arc<Mutex<gavk::Allocator>>,
+    pub(crate) device: Device,
 }
 
 impl MemoryAllocator {
+    pub fn inner(&self) -> &Arc<Mutex<gavk::Allocator>> {
+        &self.inner
+    }
     pub fn new(instance: &Instance, device: &Device) -> Result<Self> {
         let allocator = gavk::Allocator::new(&gavk::AllocatorCreateDesc {
             instance: instance.inner.clone(),
@@ -18,23 +27,22 @@ impl MemoryAllocator {
             debug_settings: ga::AllocatorDebugSettings::default(),
             allocation_sizes: ga::AllocationSizes::default(),
         })?;
-        
+
         Ok(Self {
             inner: Arc::new(Mutex::new(allocator)),
             device: device.clone(),
         })
     }
 
-    pub fn allocate_buffer(&self, info: BufferInfo) -> Result<Buffer> {
-        let create_info = vk::BufferCreateInfo::default()
-        .size(info.size as u64)
-        .usage(info.usage);
-        let buffer = unsafe { self.device.inner.create_buffer(&create_info, None) }?;
+    pub fn allocate_buffer(&self, buffer: vk::Buffer, info: BufferInfo) -> Result<Allocation> {
         let requirements = unsafe { self.device.inner.get_buffer_memory_requirements(buffer) };
 
-        let mut allocator = self.inner.lock().unwrap();
+        let mut allocator = self
+            .inner
+            .lock()
+            .expect("Could not acquire lock on allocator");
         let allocation = allocator.allocate(&gavk::AllocationCreateDesc {
-            name: info.name.unwrap_or("<un-named buffer"),
+            name: "un-named buffer",
             requirements,
             location: info.location,
             linear: true,
@@ -47,11 +55,7 @@ impl MemoryAllocator {
                 .bind_buffer_memory(buffer, allocation.memory(), allocation.offset())
         }?;
 
-        Ok(Buffer {
-            allocation,
-            handle: buffer,
-            info,
-        })
+        Ok(allocation)
     }
 }
 

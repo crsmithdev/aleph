@@ -1,19 +1,20 @@
 pub mod device;
 pub mod swapchain;
-
-pub use {
-    crate::vk::{
-        CommandBuffer,
-        DescriptorAllocator,
-        MemoryAllocator,
-    },
-    device::{Device, Queue},
-    gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, AllocationScheme},
-    swapchain::{Frame, Swapchain, SwapchainInfo},
-    gpu_allocator::MemoryLocation,
-    ash::vk::BufferUsageFlags,
-};
 use {
+    nalgebra,
+    serde::{Deserialize, Serialize},
+};
+
+impl std::panic::UnwindSafe for Context {}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+struct Vertex {
+    position: nalgebra::Vector3<u32>,
+    normal: nalgebra::Vector3<u32>,
+    color: nalgebra::Vector4<u32>,
+}
+use {
+    crate::vk::buffer::{Buffer, BufferInfo},
     aleph_core::constants::VK_TIMEOUT_NS,
     anyhow::{anyhow, Result},
     ash::{
@@ -26,8 +27,18 @@ use {
     std::{ffi, sync::Arc},
     winit::window::Window,
 };
+pub use {
+    crate::vk::{CommandBuffer, DescriptorAllocator, MemoryAllocator},
+    ash::vk::BufferUsageFlags,
+    device::{Device, Queue},
+    gpu_allocator::{
+        vulkan::{Allocation, AllocationCreateDesc, AllocationScheme},
+        MemoryLocation,
+    },
+    swapchain::{Frame, Swapchain, SwapchainInfo},
+};
 
-const IN_FLIGHT_FRAMES: u32 = 2;
+const IN_FLIGHT_FRAMES: u32 = 3;
 const APP_NAME: &ffi::CStr = c"Aleph";
 const INSTANCE_LAYERS: [&ffi::CStr; 1] = [
     // c"VK_LAYER_LUNARG_api_dump",
@@ -39,7 +50,11 @@ const INSTANCE_EXTENSIONS: [&ffi::CStr; 4] = [
     khr::get_physical_device_properties2::NAME,
     ext::debug_utils::NAME,
 ];
-
+struct MeshBuffers {
+    vertex_buffer: Buffer,
+    index_buffer: Buffer,
+    vertex_buffer_address: vk::DeviceAddress,
+}
 #[derive(Clone, Debug, Deref)]
 pub struct Instance {
     #[deref]
@@ -66,31 +81,18 @@ pub struct Surface {
     pub(crate) loader: khr::surface::Instance,
 }
 
-#[derive(Debug)]
-pub struct BufferInfo {
-    pub size: usize,
-    pub usage: vk::BufferUsageFlags,
-    pub location: gpu_allocator::MemoryLocation,
-}
-
-#[derive(Debug)]
-pub struct Buffer {
-    #[debug("{:x}", handle.as_raw())]
-    pub (crate) handle: vk::Buffer,
-    pub (crate) allocation: Allocation,
-    pub (crate) info: BufferInfo,
-}
-
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct Context {
-    pub(crate) instance: Instance,
-    pub(crate) surface: Surface,
+    pub instance: Instance,
+    pub surface: Surface,
     pub device: Device,
-    pub(crate) swapchain: Swapchain,
-    pub(crate) allocator: Arc<MemoryAllocator>,
-    pub(crate) window: Arc<Window>,
-
+    pub swapchain: Swapchain,
+    pub allocator: Arc<MemoryAllocator>,
+    pub window: Arc<Window>,
+    imm_cmd_buffer: CommandBuffer,
+    imm_fence: vk::Fence,
+    vertex_buffer_address: vk::DeviceAddress,
     #[debug(skip)]
     debug_utils: ext::debug_utils::Instance,
     #[debug(skip)]
@@ -142,6 +144,16 @@ impl Context /* Init */ {
         let device = Device::new(&instance)?;
         log::info!("Created device: {device:?}");
 
+        let pool_create_info = vk::CommandPoolCreateInfo::default()
+            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+            .queue_family_index(device.queue.family_index);
+        let imm_cmd_pool = unsafe { device.inner.create_command_pool(&pool_create_info, None)? };
+        let imm_cmd_buffer = CommandBuffer::new(&device, imm_cmd_pool)?;
+        let imm_fence = unsafe {
+            device
+                .inner
+                .create_fence(&vk::FenceCreateInfo::default(), None)?
+        };
         // let queue = Self::init_queue(&device, queue_family, queue_family_index);
         // log::info!("Created queue: {queue:?}");
 
@@ -153,7 +165,6 @@ impl Context /* Init */ {
             &instance,
             &device,
             &surface,
-            Arc::clone(&window),
             &SwapchainInfo {
                 extent,
                 format: vk::Format::B8G8R8A8_UNORM,
@@ -161,6 +172,7 @@ impl Context /* Init */ {
                 vsync: true,
                 num_images: IN_FLIGHT_FRAMES,
             },
+            None
         )?;
         log::info!("Created swapchain: {swapchain:?}");
 
@@ -185,6 +197,9 @@ impl Context /* Init */ {
             window: Arc::clone(&window),
             debug_utils,
             debug_callback,
+            imm_cmd_buffer,
+            vertex_buffer_address: 0,
+            imm_fence,
         })
     }
 
@@ -225,11 +240,8 @@ impl Context /* Init */ {
             )
             .pfn_user_callback(Some(vulkan_debug_callback));
         let debug_utils = ext::debug_utils::Instance::new(&instance.entry, instance);
-        let debug_callback = unsafe {
-            debug_utils
-                .create_debug_utils_messenger(&debug_info, None)
-                .unwrap()
-        };
+        let debug_callback =
+            unsafe { debug_utils.create_debug_utils_messenger(&debug_info, None)? };
 
         Ok((debug_utils, debug_callback))
     }
@@ -248,74 +260,68 @@ impl Context /* Init */ {
         let loader = khr::surface::Instance::new(&instance.entry, instance);
         Ok(Surface { inner, loader })
     }
-
-    fn init_queue_familiy(
-        instance: &ash::Instance,
-        physical_device: &vk::PhysicalDevice,
-    ) -> Result<(u32, vk::QueueFamilyProperties)> {
-        let queue_families =
-            unsafe { instance.get_physical_device_queue_family_properties(*physical_device) };
-        let selected = queue_families
-            .into_iter()
-            .enumerate()
-            .find(|(_, qf)| qf.queue_flags.contains(vk::QueueFlags::GRAPHICS));
-
-        match selected {
-            Some((index, qf)) => Ok((index as _, qf)),
-            None => Err(anyhow!("No suitable queue family found")),
-        }
-    }
-
-    fn get_queue_family_index(
-        instance: &ash::Instance,
-        physical_device: &vk::PhysicalDevice,
-        flags: vk::QueueFlags,
-    ) -> Result<u32> {
-        let queue_families =
-            unsafe { instance.get_physical_device_queue_family_properties(*physical_device) };
-        let selected = queue_families
-            .into_iter()
-            .enumerate()
-            .find(|(_, qf)| qf.queue_flags.contains(flags));
-
-        match selected {
-            Some((index, _)) => Ok(index as u32),
-            None => Err(anyhow!("Could not find queue family with flags: {flags:?}")),
-        }
-    }
 }
 
 impl Context {
-    pub fn create_buffer(&self, size: usize, usage: BufferUsageFlags, location: MemoryLocation) -> Result<Buffer> {
-        let info = BufferInfo{
-            size,
-            usage,
-            location: MemoryLocation::GpuOnly,
-        };
+    pub fn rebuild_swapchain(&mut self) -> Result<()> {
+        log::info!("Rebuilding swapchain: {:?}", self.swapchain);
+        unsafe { self.device.inner.device_wait_idle() }?;
+        let new_swapchain = Swapchain::new(&self.instance, &self.device, &self.surface, &self.swapchain.info.clone(), Some(&self.swapchain))?;    
+        self.swapchain = new_swapchain;
+        log::info!("Rebuilt swapchain: {:?}", self.swapchain);
 
-        let create_info = vk::BufferCreateInfo::default()
-        .size(info.size as u64)
-        .usage(info.usage);
-    let buffer = unsafe { self.device.inner.create_buffer(&create_info, None) }?;
 
-        self.allocator.allocate_buffer(BufferInfo{
-            size,
-            usage,
-            location: MemoryLocation::GpuOnly,
-        });
 
-        unsafe {
-            self.device
-                .inner
-                .bind_buffer_memory(buffer, allocation.memory(), allocation.offset())
-        }?;
-
-        Ok(Buffer {
-            allocation,
-            handle: buffer,
-            info,
-        })
+        // self.swapchain.rebuild(&SwapchainInfo {
+        //     extent: vk::Extent2D {
+        //         width: self.window.inner_size().width,
+        //         height: self.window.inner_size().height,
+        //     },
+        //     format: vk::Format::B8G8R8A8_UNORM,
+        //     color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
+        //     vsync: true,
+        //     num_images: IN_FLIGHT_FRAMES,
+        // })?;
+        Ok(())
     }
+    // fn upload_mesh(
+    //     &self,
+    //     cmd: CommandBuffer,
+    //     indices: Vec<u32>,
+    //     vertices: Vec<Vertex>,
+    // ) -> Result<MeshBuffers> {
+    //     let indices_size = std::mem::size_of_val(&indices); //indices.len() * std::mem::size_of::<u32>();
+    //     let vertices_size = std::mem::size_of_val(&vertices); //indices.len() * std::mem::size_of::<u32>();
+
+    //     let mut index_buffer = Buffer::new(
+    //         &self.device,
+    //         self.allocator.clone(),
+    //         BufferInfo {
+    //             size: indices_size,
+    //             usage: BufferUsageFlags::INDEX_BUFFER,
+    //             location: MemoryLocation::GpuOnly,
+    //         },
+    //     )?;
+    //     let mut vertex_buffer = Buffer::new(
+    //         &self.device,
+    //         self.allocator.clone(),
+    //         BufferInfo {
+    //             size: vertices_size,
+    //             usage: BufferUsageFlags::STORAGE_BUFFER,
+    //             location: MemoryLocation::GpuOnly,
+    //         },
+    //     )?;
+    //     let vertex_buffer_address = unsafe {
+    //         self.device.inner.get_buffer_device_address(
+    //             &vk::BufferDeviceAddressInfo::default().buffer(vertex_buffer.handle),
+    //         )
+    //     };
+
+    //     vertex_buffer.upload_data(self.imm_cmd_buffer.clone(), &vertices)?;
+    //     index_buffer.upload_data(self.imm_cmd_buffer.clone(), &indices)?;
+
+    //     todo!()
+    // }
 }
 impl Context {
     pub fn create_image_view(&self, info: &vk::ImageViewCreateInfo) -> Result<vk::ImageView> {
