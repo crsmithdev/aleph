@@ -8,6 +8,7 @@ use {
         },
         Context,
         Frame,
+        Swapchain,
     },
     anyhow::Result,
     ash::vk::{self, Extent3D},
@@ -16,7 +17,6 @@ use {
 
 #[allow(dead_code)]
 struct GraphicsRenderer {
-    context: Context,
     descriptor_allocator: Arc<DescriptorAllocator>,
     draw_image: Image,
     draw_image_descriptors: vk::DescriptorSet,
@@ -27,17 +27,6 @@ struct GraphicsRenderer {
 
 impl GraphicsRenderer {
     pub fn new(context: &Context) -> Result<Self> {
-        let extent = context.swapchain().extent();
-        let draw_image = Image::new(&ImageInfo {
-            allocator: context.allocator(),
-            width: extent.width as usize,
-            height: extent.height as usize,
-            format: vk::Format::R16G16B16A16_SFLOAT,
-            usage: vk::ImageUsageFlags::COLOR_ATTACHMENT
-                | vk::ImageUsageFlags::TRANSFER_DST
-                | vk::ImageUsageFlags::TRANSFER_SRC
-                | vk::ImageUsageFlags::STORAGE,
-        })?;
         let descriptor_allocator = Arc::new(DescriptorAllocator::new(
             context.device(),
             &[vk::DescriptorPoolSize {
@@ -48,6 +37,36 @@ impl GraphicsRenderer {
         )?);
         log::info!("Created descriptor allocator: {:?}", &descriptor_allocator);
 
+        let draw_image = Self::create_draw_image(context)?;
+        let (desc_layout, desc_sets) = Self::create_descriptors(context, &descriptor_allocator, &draw_image)?;
+        let (gradient_pipeline_layout, gradient_pipeline) = Self::create_gradient_pipeline(context, desc_layout)?;
+
+        Ok(Self {
+            descriptor_allocator,
+            draw_image,
+            draw_image_descriptors: desc_sets,
+            draw_image_layout: desc_layout,
+            gradient_pipeline,
+            gradient_pipeline_layout,
+        })
+    }
+
+    fn create_draw_image(context: &Context) -> Result<Image> {
+        let extent = context.swapchain().extent();
+        let draw_image = Image::new(&ImageInfo {
+            allocator: context.memory_allocator(),
+            width: extent.width as usize,
+            height: extent.height as usize,
+            format: vk::Format::R16G16B16A16_SFLOAT,
+            usage: vk::ImageUsageFlags::COLOR_ATTACHMENT
+                | vk::ImageUsageFlags::TRANSFER_DST
+                | vk::ImageUsageFlags::TRANSFER_SRC
+                | vk::ImageUsageFlags::STORAGE,
+        })?;
+        Ok(draw_image)
+    }
+
+    fn create_descriptors(context: &Context, descriptor_allocator: &Arc<DescriptorAllocator>, draw_image: &Image) -> Result<(vk::DescriptorSetLayout, vk::DescriptorSet), anyhow::Error> {
         let desc_bindings = &[vk::DescriptorSetLayoutBinding::default()
             .binding(0)
             .stage_flags(vk::ShaderStageFlags::COMPUTE)
@@ -57,26 +76,24 @@ impl GraphicsRenderer {
             desc_bindings,
             vk::DescriptorSetLayoutCreateFlags::empty(),
         )?;
-
         let desc_sets = descriptor_allocator.allocate(&desc_layout)?;
-
         let image_info = &[vk::DescriptorImageInfo::default()
             .image_layout(vk::ImageLayout::GENERAL)
             .image_view(draw_image.view)];
-
         let image_write = &[vk::WriteDescriptorSet::default()
             .dst_binding(0)
             .dst_set(desc_sets)
             .descriptor_count(1)
             .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
             .image_info(image_info)];
-
         context.update_descriptor_sets(image_write, &[]);
+        Ok((desc_layout, desc_sets))
+    }
 
-        let layouts = &[desc_layout];
+    fn create_gradient_pipeline(context: &Context, layout: vk::DescriptorSetLayout) -> Result<(vk::PipelineLayout, vk::Pipeline), anyhow::Error> {
         let shader = context.load_shader("shaders/gradient.spv")?;
-
-        let pipeline_layout_info = vk::PipelineLayoutCreateInfo::default().set_layouts(layouts);
+        let layouts = &[layout];
+            let pipeline_layout_info = vk::PipelineLayoutCreateInfo::default().set_layouts(layouts);
         let gradient_pipeline_layout = unsafe {
             context
                 .device()
@@ -87,68 +104,69 @@ impl GraphicsRenderer {
             .stage(vk::ShaderStageFlags::COMPUTE)
             .name(name.as_c_str())
             .module(shader);
-
         let pipeline_info = &[vk::ComputePipelineCreateInfo::default()
             .layout(gradient_pipeline_layout)
             .stage(stage_info)];
-
         let gradient_pipeline = unsafe {
             context
                 .device()
                 .create_compute_pipelines(vk::PipelineCache::null(), pipeline_info, None)
                 .map_err(|err| anyhow::anyhow!(err.1))
         }?[0];
-
-        Ok(Self {
-            context: context.clone(),
-            descriptor_allocator,
-            draw_image,
-            draw_image_descriptors: desc_sets,
-            draw_image_layout: desc_layout,
-            gradient_pipeline,
-            gradient_pipeline_layout,
-        })
+        Ok((gradient_pipeline_layout, gradient_pipeline))
     }
 
     pub fn render(
         &mut self,
+        context: &Context,
         command_buffer: &CommandBuffer,
         swapchain_image: &vk::Image,
     ) -> Result<()> {
-        let context = &self.context;
-        let swapchain_extent = context.swapchain().extent().into();
+        // let context = &self.context;
+        let swapchain_extent = context.swapchain().extent();
+        let draw_image_extent = self.draw_image.extent;
         let draw_image = self.draw_image.inner;
-        let draw_extent: Extent3D = self.draw_image.extent;
 
-        self.context.transition_image(
+
+        let draw_extent = Extent3D {
+            width: draw_image_extent.width.min(swapchain_extent.width),
+            height: draw_image_extent.height.min(swapchain_extent.height),
+            depth: 1,
+        };
+        log::debug!("Render (low) swapchain extent: {:?}", context.swapchain().extent());
+        log::debug!("Render (low) swapchain: {:?}", context.swapchain());
+        log::debug!("Render (low) draw_extent: {:?}", draw_extent);
+        context.transition_image(
+        
+        
             command_buffer,
             draw_image,
             vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::GENERAL,
         );
 
-        self.render_background(command_buffer);
+        self.render_background(context, command_buffer);
 
-        self.context.transition_image(
+        context.transition_image(
             command_buffer,
             draw_image,
             vk::ImageLayout::GENERAL,
             vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
         );
-        self.context.transition_image(
+        context.transition_image(
             command_buffer,
             *swapchain_image,
             vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
         );
-        self.context.copy_image(
+        context.copy_image(
             command_buffer,
             draw_image,
             *swapchain_image,
             draw_extent,
-            swapchain_extent,
+            swapchain_extent.into(),
         );
-        self.context.transition_image(
+        context.transition_image(
             command_buffer,
             *swapchain_image,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
@@ -158,12 +176,12 @@ impl GraphicsRenderer {
         Ok(())
     }
 
-    fn render_background(&self, cmd: &CommandBuffer) {
-        let device = self.context.device();
+    fn render_background(&self, context: &Context, cmd: &CommandBuffer) {
+        let device = context.device();
 
         unsafe {
             device.cmd_bind_pipeline(
-                cmd.inner,
+                cmd.handle(),
                 vk::PipelineBindPoint::COMPUTE,
                 self.gradient_pipeline,
             );
@@ -171,7 +189,7 @@ impl GraphicsRenderer {
             let extent = self.draw_image.extent;
             let descriptors = &[self.draw_image_descriptors];
             device.cmd_bind_descriptor_sets(
-                cmd.inner,
+                cmd.handle(),
                 vk::PipelineBindPoint::COMPUTE,
                 self.gradient_pipeline_layout,
                 0,
@@ -180,7 +198,7 @@ impl GraphicsRenderer {
             );
 
             device.cmd_dispatch(
-                cmd.inner,
+                cmd.handle(),
                 f32::ceil(extent.width as f32 / 16.0) as u32,
                 f32::ceil(extent.height as f32 / 16.0) as u32,
                 1,
@@ -188,6 +206,10 @@ impl GraphicsRenderer {
         };
     }
 }
+
+
+
+
 #[allow(dead_code)]
 pub struct Renderer {
     context: Context,
@@ -208,7 +230,7 @@ impl Renderer {
     pub fn new(context: Context) -> Result<Self> {
         let graphics = GraphicsRenderer::new(&context)?;
         let ui = UiRenderer::new(&context)?;
-        let frames = Self::init_frames(context.clone())?;
+        let frames = Self::init_frames(&context)?;
 
         Ok(Self {
             context,
@@ -224,11 +246,11 @@ impl Renderer {
         &mut self.ui
     }
 
-    fn init_frames(context: Context) -> Result<Vec<Frame>> {
+    fn init_frames(context: &Context) -> Result<Vec<Frame>> {
         (0..context.swapchain().image_views().len())
             .map(|_| {
                 let command_pool = context.create_command_pool()?;
-                let command_buffer = CommandBuffer::new(context.device(), command_pool)?;
+                let command_buffer = context.create_command_buffer(command_pool)?;
 
                 Ok(Frame {
                     swapchain_semaphore: context.create_semaphore()?,
@@ -245,13 +267,27 @@ impl Renderer {
         self.ui.handle_event(event.clone());
     }
 
+    pub fn rebuild_swapchain(&mut self) -> Result<()> {
+        log::info!("Context started rebuilding swapchain");
+        self.context.rebuild_swapchain()?;
+        self.frames = Self::init_frames(&self.context)?;
+        // self.graphics.draw_image = GraphicsRenderer::create_draw_image(&self.context)?;
+        self.rebuild_swapchain = false;
+        log::info!("Context finished rebuilding swapchain");
+        
+        Ok(())
+    }
+
     pub fn render(&mut self) -> Result<()> {
+        log::debug!("Render(high) swapchain extent: {:?}", self.context.swapchain().extent());
+        log::debug!("Render (high) swapchain: {:?}", self.context.swapchain());
+        
+        if self.rebuild_swapchain {
+            self.rebuild_swapchain()?;
+            return Ok(());
+        }
         let context = &mut self.context;
         let frame = &self.frames[self.current_frame % self.frames.len()];
-        if self.rebuild_swapchain {
-            context.swapchain_mut().rebuild()?;
-            self.rebuild_swapchain = false;
-        }
 
         let fence = frame.fence;
         let command_buffer = &frame.command_buffer;
@@ -268,17 +304,17 @@ impl Renderer {
         command_buffer.reset()?;
         command_buffer.begin()?;
 
-        self.graphics.render(command_buffer, &swapchain_image)?;
-        self.ui.render(command_buffer, &swapchain_image_view)?;
+        self.graphics.render(context, command_buffer, &swapchain_image)?;
+        self.ui.render(context, command_buffer, &swapchain_image_view)?;
 
         command_buffer.end()?;
         command_buffer.submit(swapchain_semaphore, render_semaphore, fence)?;
-
-        self.rebuild_swapchain |= self
+        let rebuild = self
             .context
             .swapchain_mut()
             .present(&[*render_semaphore], &[image_index])?;
 
+        self.rebuild_swapchain |= rebuild;
         self.current_frame = self.current_frame.wrapping_add(1);
 
         Ok(())

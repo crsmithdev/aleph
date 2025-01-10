@@ -3,15 +3,15 @@ pub mod vk;
 pub use vk::{
     MemoryAllocator,
     CommandBuffer,
-    Context,
+    context::Context,
     DescriptorAllocator,
     Device,
     Frame,
     Image,
     ImageInfo,
-    Instance,
+    context::Instance,
     Queue,
-    Surface,
+    context::Surface,
     Swapchain,
     SwapchainInfo,
 };

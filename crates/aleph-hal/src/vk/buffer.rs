@@ -1,70 +1,94 @@
+pub use gpu_allocator::MemoryLocation;
 use {
-    crate::vk::allocator::MemoryAllocator,
+    crate::vk::{CommandBuffer, Device, MemoryAllocator},
     anyhow::Result,
     ash::{vk, vk::Handle},
-    gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, AllocationScheme},
-    std::{fmt, sync::Arc},
+    derive_more,
+    gpu_allocator::vulkan::Allocation,
+    serde,
+    std::sync::Arc,
 };
-pub struct BufferInfo<'a> {
-    pub allocator: &'a Arc<MemoryAllocator>,
-    pub device: &'a ash::Device,
-    pub physical_device: &'a vk::PhysicalDevice,
+
+#[derive(Debug, Clone, Copy)]
+pub struct BufferInfo {
     pub size: usize,
     pub usage: vk::BufferUsageFlags,
-    pub memory_location: gpu_allocator::MemoryLocation,
-    pub initial_data: Option<&'a [u8]>,
+    pub location: gpu_allocator::MemoryLocation,
 }
 
+#[allow(dead_code)]
+#[derive(derive_more::Debug)]
 pub struct Buffer {
-    pub allocator: Arc<MemoryAllocator>,
-    pub allocation: Allocation,
-    pub device: ash::Device,
-    pub physical_device: vk::PhysicalDevice,
-    pub inner: vk::Buffer,
-    pub size: usize,
-    pub usage: vk::BufferUsageFlags,
-    pub memory_location: gpu_allocator::MemoryLocation,
-}
-
-impl fmt::Debug for Buffer {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Buffer")
-            .field("inner", &format_args!("{:x}", self.inner.as_raw()))
-            .finish_non_exhaustive()
-    }
+    #[debug("{:x}", handle.as_raw())]
+    pub(crate) handle: vk::Buffer,
+    allocation: Allocation,
+    info: BufferInfo,
+    allocator: Arc<MemoryAllocator>,
 }
 
 impl Buffer {
-    pub fn new(info: &BufferInfo) -> Result<Self> {
-        let mut allocator = info.allocator.inner.lock().unwrap();
-        let info2 = vk::BufferCreateInfo::default()
-            .size(info.size as u64)
-            .usage(info.usage);
-        let buffer = unsafe { info.device.create_buffer(&info2, None) }?;
-        let requirements = unsafe { info.device.get_buffer_memory_requirements(buffer) };
-
-        let allocation = allocator.allocate(&AllocationCreateDesc {
-            name: "Buffer",
-            requirements,
-            location: info.memory_location,
-            linear: true,
-            allocation_scheme: AllocationScheme::GpuAllocatorManaged,
-        })?;
-
-        unsafe {
-            info.device
-                .bind_buffer_memory(buffer, allocation.memory(), allocation.offset())
+    pub fn new(
+        device: &Device,
+        allocator: Arc<MemoryAllocator>,
+        info: BufferInfo,
+    ) -> Result<Buffer> {
+        let buffer = unsafe {
+            device.handle.create_buffer(
+                &vk::BufferCreateInfo::default()
+                    .size(info.size as u64)
+                    .usage(info.usage),
+                None,
+            )
         }?;
 
-        Ok(Self {
-            allocator: info.allocator.clone(),
+        let allocation = allocator.allocate_buffer(buffer, info)?;
+
+        Ok(Buffer {
+            handle: buffer,
             allocation,
-            inner: buffer,
-            size: info.size,
-            usage: info.usage,
-            memory_location: info.memory_location,
-            device: info.device.clone(),
-            physical_device: *info.physical_device,
+            info,
+            allocator,
         })
+    }
+
+    pub fn handle(&self) -> vk::Buffer {
+        self.handle
+    }
+
+    pub fn upload_data<T: serde::Serialize>(
+        &mut self,
+        _cmd: CommandBuffer,
+        _data: &T,
+    ) -> Result<()> {
+        // let bytes = bincode::serialize(data)?;
+        // let size = bytes.len();
+
+        // let staging = Buffer::new(
+        //     &self.allocator.device,
+        //     self.allocator.clone(),
+        //     BufferInfo {
+        //         usage: vk::BufferUsageFlags::TRANSFER_SRC,
+        //         location: MemoryLocation::CpuToGpu,
+        //         size,
+        //     },
+        // )?;
+
+        // let slice = self
+        //     .allocation
+        //     .mapped_slice_mut()
+        //     .ok_or_else(|| anyhow::anyhow!("Buffer upload memory map failed"))?;
+        // slice[0..bytes.len()].copy_from_slice(&bytes);
+
+        // let copy = vk::BufferCopy::default().size(size as u64);
+        // cmd.submit_immediate(|_| unsafe {
+        //     self.allocator.device.inner.cmd_copy_buffer(
+        //         cmd.inner,
+        //         staging.handle,
+        //         self.handle,
+        //         &[copy],
+        //     );
+        // })?;
+
+        Ok(())
     }
 }

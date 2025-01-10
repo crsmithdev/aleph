@@ -1,5 +1,6 @@
+pub use gavk::Allocation;
 use {
-    crate::vk::{Device, Instance},
+    crate::vk::{buffer::BufferInfo, Device, Instance},
     anyhow::Result,
     ash::vk::{self, Handle},
     derive_more::Debug,
@@ -9,17 +10,19 @@ use {
 
 #[derive(Debug)]
 pub struct MemoryAllocator {
-    #[debug("{:x}", device.handle().as_raw())]
-    pub device: Device,
-    pub inner: Arc<Mutex<gavk::Allocator>>,
+    pub(crate) inner: Arc<Mutex<gavk::Allocator>>,
+    pub(crate) device: Device,
 }
 
 impl MemoryAllocator {
+    pub fn inner(&self) -> &Arc<Mutex<gavk::Allocator>> {
+        &self.inner
+    }
     pub fn new(instance: &Instance, device: &Device) -> Result<Self> {
         let allocator = gavk::Allocator::new(&gavk::AllocatorCreateDesc {
-            instance: instance.clone_inner(),
+            instance: instance.inner.clone(),
             physical_device: device.physical_device,
-            device: device.clone_inner(),
+            device: device.handle.clone(),
             buffer_device_address: true,
             debug_settings: ga::AllocatorDebugSettings::default(),
             allocation_sizes: ga::AllocationSizes::default(),
@@ -30,13 +33,37 @@ impl MemoryAllocator {
             device: device.clone(),
         })
     }
+
+    pub fn allocate_buffer(&self, buffer: vk::Buffer, info: BufferInfo) -> Result<Allocation> {
+        let requirements = unsafe { self.device.handle.get_buffer_memory_requirements(buffer) };
+
+        let mut allocator = self
+            .inner
+            .lock()
+            .expect("Could not acquire lock on allocator");
+        let allocation = allocator.allocate(&gavk::AllocationCreateDesc {
+            name: "un-named buffer",
+            requirements,
+            location: info.location,
+            linear: true,
+            allocation_scheme: gavk::AllocationScheme::GpuAllocatorManaged,
+        })?;
+
+        unsafe {
+            self.device
+                .handle
+                .bind_buffer_memory(buffer, allocation.memory(), allocation.offset())
+        }?;
+
+        Ok(allocation)
+    }
 }
 
 #[derive(Debug)]
 pub struct DescriptorAllocator {
     pool: vk::DescriptorPool,
     #[debug("{:x}", device.handle().as_raw())]
-    device: ash::Device,
+    pub(crate) device: ash::Device,
 }
 
 impl DescriptorAllocator {

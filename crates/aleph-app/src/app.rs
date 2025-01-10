@@ -3,13 +3,13 @@ use {
         constants::{DEFAULT_WINDOW_SIZE, STEP_TIME_US, UPDATE_TIME_US},
         logging,
     },
-    aleph_gfx::{renderer::Renderer, ui::UiRenderer},
+    aleph_gfx::renderer::Renderer,
     aleph_hal::vk::Context,
     anyhow::{anyhow, Result},
+    derive_more::Debug,
     human_panic::setup_panic,
     std::{
         cell::OnceCell,
-        fmt,
         sync::Arc,
         time::{Duration, Instant},
     },
@@ -38,13 +38,12 @@ impl App {
     }
 }
 
-#[allow(dead_code)]
+// #[allow(dead_code)]
+#[derive(Debug)]
 pub struct AppState {
     renderer: OnceCell<Renderer>,
-    ui: OnceCell<UiRenderer>,
     window: OnceCell<Arc<Window>>,
     last_update: Instant,
-    last_render: Instant,
     total_steps: u64,
     step_accumulator: i64,
     exiting: bool,
@@ -56,28 +55,12 @@ impl Default for AppState {
         AppState {
             window: OnceCell::new(),
             renderer: OnceCell::new(),
-            ui: OnceCell::new(),
             step_accumulator: 0,
             last_update: Instant::now(),
-            last_render: Instant::now(),
             total_steps: 0,
             exiting: false,
             initialized: false,
         }
-    }
-}
-
-impl fmt::Debug for AppState {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AppState")
-            .field("renderer", &self.renderer)
-            .field("window", &self.window)
-            .field("last_update", &self.last_update)
-            .field("last_step", &self.total_steps)
-            .field("step_accumulator", &self.step_accumulator)
-            .field("exiting", &self.exiting)
-            .field("initialized", &self.initialized)
-            .finish()
     }
 }
 
@@ -160,9 +143,35 @@ impl AppState {
     }
 }
 
+// #[derive(Default)]
+// struct AppHandler2 {
+//     state: OnceCell<AppState2>,
+// }
+
+// #[derive(Debug)]
+// struct AppState2 {
+//     renderer: Renderer,
+//     last_update: Instant,
+//     total_steps: u64,
+//     step_accumulator: i64,
+//     exiting: bool,
+//     initialized: bool,
+// }
+
 struct AppHandler {
     state: AppState,
 }
+
+// impl AppHandler {
+//     fn init(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
+//         Ok(())
+//     }
+
+//     fn update_ui_delta(&mut self) {
+//         // let renderer = self.state.renderer.get_mut().unwrap();
+//         // renderer.ui_mut().update_delta_time();
+//     }
+// }
 
 impl ApplicationHandler for AppHandler {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
@@ -224,7 +233,7 @@ impl ApplicationHandler for AppHandler {
             }
             WindowEvent::RedrawRequested => {
                 log::info!("Window redraw requested");
-                self.state.render().expect("Rendering error");
+                //self.state.render().expect("Rendering error");
             }
             WindowEvent::CloseRequested => {
                 log::info!("Close requested");

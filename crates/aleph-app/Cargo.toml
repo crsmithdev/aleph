@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.86"
+derive_more = { version = "1.0", features = ["debug", "deref"] }
 log = "0.4"
 raw-window-handle = "0.6.2"
 winit = "0.30.5"
