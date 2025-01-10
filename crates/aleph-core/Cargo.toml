@@ -4,8 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = {version="1.0.86", features=["backtrace"]}
-
+anyhow = "1.0.86"
 log = "0.4"
 winit = "0.30.5"
 fern = "0.6.2"

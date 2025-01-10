@@ -22,7 +22,7 @@ impl MemoryAllocator {
         let allocator = gavk::Allocator::new(&gavk::AllocatorCreateDesc {
             instance: instance.inner.clone(),
             physical_device: device.physical_device,
-            device: device.inner.clone(),
+            device: device.handle.clone(),
             buffer_device_address: true,
             debug_settings: ga::AllocatorDebugSettings::default(),
             allocation_sizes: ga::AllocationSizes::default(),
@@ -35,7 +35,7 @@ impl MemoryAllocator {
     }
 
     pub fn allocate_buffer(&self, buffer: vk::Buffer, info: BufferInfo) -> Result<Allocation> {
-        let requirements = unsafe { self.device.inner.get_buffer_memory_requirements(buffer) };
+        let requirements = unsafe { self.device.handle.get_buffer_memory_requirements(buffer) };
 
         let mut allocator = self
             .inner
@@ -51,7 +51,7 @@ impl MemoryAllocator {
 
         unsafe {
             self.device
-                .inner
+                .handle
                 .bind_buffer_memory(buffer, allocation.memory(), allocation.offset())
         }?;
 

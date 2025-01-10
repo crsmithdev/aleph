@@ -1,9 +1,8 @@
 pub use gpu_allocator::MemoryLocation;
 use {
-    crate::vk::{allocator::MemoryAllocator, command::CommandBuffer, context::device::Device},
+    crate::vk::{CommandBuffer, Device, MemoryAllocator},
     anyhow::Result,
     ash::{vk, vk::Handle},
-    bincode,
     derive_more,
     gpu_allocator::vulkan::Allocation,
     serde,
@@ -17,11 +16,12 @@ pub struct BufferInfo {
     pub location: gpu_allocator::MemoryLocation,
 }
 
+#[allow(dead_code)]
 #[derive(derive_more::Debug)]
 pub struct Buffer {
     #[debug("{:x}", handle.as_raw())]
     pub(crate) handle: vk::Buffer,
-    pub(crate) allocation: Allocation,
+    allocation: Allocation,
     info: BufferInfo,
     allocator: Arc<MemoryAllocator>,
 }
@@ -33,7 +33,7 @@ impl Buffer {
         info: BufferInfo,
     ) -> Result<Buffer> {
         let buffer = unsafe {
-            device.inner.create_buffer(
+            device.handle.create_buffer(
                 &vk::BufferCreateInfo::default()
                     .size(info.size as u64)
                     .usage(info.usage),
@@ -51,35 +51,43 @@ impl Buffer {
         })
     }
 
-    pub fn upload_data<T: serde::Serialize>(&mut self, cmd: CommandBuffer, data: &T) -> Result<()> {
-        let bytes = bincode::serialize(data)?;
-        let size = bytes.len();
+    pub fn handle(&self) -> vk::Buffer {
+        self.handle
+    }
 
-        let staging = Buffer::new(
-            &self.allocator.device,
-            self.allocator.clone(),
-            BufferInfo {
-                usage: vk::BufferUsageFlags::TRANSFER_SRC,
-                location: MemoryLocation::CpuToGpu,
-                size,
-            },
-        )?;
+    pub fn upload_data<T: serde::Serialize>(
+        &mut self,
+        _cmd: CommandBuffer,
+        _data: &T,
+    ) -> Result<()> {
+        // let bytes = bincode::serialize(data)?;
+        // let size = bytes.len();
 
-        let slice = self
-            .allocation
-            .mapped_slice_mut()
-            .ok_or_else(|| anyhow::anyhow!("Buffer upload memory map failed"))?;
-        slice[0..bytes.len()].copy_from_slice(&bytes);
+        // let staging = Buffer::new(
+        //     &self.allocator.device,
+        //     self.allocator.clone(),
+        //     BufferInfo {
+        //         usage: vk::BufferUsageFlags::TRANSFER_SRC,
+        //         location: MemoryLocation::CpuToGpu,
+        //         size,
+        //     },
+        // )?;
 
-        let copy = vk::BufferCopy::default().size(size as u64);
-        cmd.submit_immediate(|_| unsafe {
-            self.allocator.device.inner.cmd_copy_buffer(
-                cmd.inner,
-                staging.handle,
-                self.handle,
-                &[copy],
-            );
-        })?;
+        // let slice = self
+        //     .allocation
+        //     .mapped_slice_mut()
+        //     .ok_or_else(|| anyhow::anyhow!("Buffer upload memory map failed"))?;
+        // slice[0..bytes.len()].copy_from_slice(&bytes);
+
+        // let copy = vk::BufferCopy::default().size(size as u64);
+        // cmd.submit_immediate(|_| unsafe {
+        //     self.allocator.device.inner.cmd_copy_buffer(
+        //         cmd.inner,
+        //         staging.handle,
+        //         self.handle,
+        //         &[copy],
+        //     );
+        // })?;
 
         Ok(())
     }

@@ -4,14 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = {version="1.0.86", features=["backtrace"]}
+anyhow = "1.0.86"
 ash = "0.38.0"
 log = "0.4"
 winit = "0.30.5"
 imgui = "0.12.0"
 imgui-rs-vulkan-renderer = { version = "1.16.0", features = ["gpu-allocator", "dynamic-rendering"] }                       
 imgui-winit-support = "0.13.0"
-nalgebra-glm = {version = "0.3.0", features = ["serde-serialize"]}
 derive_more = { version = "1.0", features = ["debug", "deref"] }
 
 

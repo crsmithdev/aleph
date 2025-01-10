@@ -3,13 +3,13 @@ use {
         constants::{DEFAULT_WINDOW_SIZE, STEP_TIME_US, UPDATE_TIME_US},
         logging,
     },
-    aleph_gfx::{renderer::Renderer, ui::UiRenderer},
+    aleph_gfx::renderer::Renderer,
     aleph_hal::vk::Context,
     anyhow::{anyhow, Result},
-    core::panic,
+    derive_more::Debug,
+    human_panic::setup_panic,
     std::{
         cell::OnceCell,
-        fmt,
         sync::Arc,
         time::{Duration, Instant},
     },
@@ -20,31 +20,30 @@ use {
         window::{Window, WindowId},
     },
 };
+
 #[derive(Debug, Default)]
 pub struct App {}
 
 impl App {
-    pub fn run(&mut self) {
-        println!("RUST_LOG: {:?}", std::env::var("RUST_LOG"));
-        logging::setup_logger().expect("Failed to setup logger");
+    pub fn run(&mut self) -> Result<()> {
+        logging::setup_logger()?;
+        setup_panic!();
 
-        let event_loop = EventLoop::new().expect("Failed to create event loop");
         let state = AppState::default();
         let mut handler = AppHandler { state };
-        match event_loop.run_app(&mut handler).map_err(|err| anyhow!(err)) {
-            Ok(_) => {}
-            Err(err) => log::error!("Error: {err}"),
-        }
+
+        EventLoop::new()?
+            .run_app(&mut handler)
+            .map_err(|err| anyhow!(err))
     }
 }
 
-#[allow(dead_code)]
+// #[allow(dead_code)]
+#[derive(Debug)]
 pub struct AppState {
     renderer: OnceCell<Renderer>,
-    ui: OnceCell<UiRenderer>,
     window: OnceCell<Arc<Window>>,
     last_update: Instant,
-    last_render: Instant,
     total_steps: u64,
     step_accumulator: i64,
     exiting: bool,
@@ -56,10 +55,8 @@ impl Default for AppState {
         AppState {
             window: OnceCell::new(),
             renderer: OnceCell::new(),
-            ui: OnceCell::new(),
             step_accumulator: 0,
             last_update: Instant::now(),
-            last_render: Instant::now(),
             total_steps: 0,
             exiting: false,
             initialized: false,
@@ -67,26 +64,8 @@ impl Default for AppState {
     }
 }
 
-impl fmt::Debug for AppState {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AppState")
-            .field("renderer", &self.renderer)
-            .field("window", &self.window)
-            .field("last_update", &self.last_update)
-            .field("last_step", &self.total_steps)
-            .field("step_accumulator", &self.step_accumulator)
-            .field("exiting", &self.exiting)
-            .field("initialized", &self.initialized)
-            .finish()
-    }
-}
-
 impl AppState {
     pub fn init(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
-        // setup_panic!(Metadata::new("Aleph App", "0.1.0")
-        //     .authors("Aleph Developers")
-        //     .homepage("https://aleph.rs")
-        //     .support("https://aleph.rs/support"));
         let attributes = Window::default_attributes().with_inner_size(DEFAULT_WINDOW_SIZE);
         let window = Arc::new(event_loop.create_window(attributes)?);
         log::info!("Created window: {window:?}");
@@ -128,7 +107,6 @@ impl AppState {
             .get_mut()
             .expect("Renderer dropped or not initialized");
 
-        // renderer.render(j).expect("test");
         renderer.render()?;
 
         Ok(())
@@ -158,25 +136,49 @@ impl AppState {
             self.exiting = true;
             log::info!("Exiting");
 
-            // let _ = self.renderer.take();
-            // let _ = self.window.take();
+            let _ = self.renderer.take();
+            let _ = self.window.take();
             std::process::exit(0)
         }
     }
 }
 
+// #[derive(Default)]
+// struct AppHandler2 {
+//     state: OnceCell<AppState2>,
+// }
+
+// #[derive(Debug)]
+// struct AppState2 {
+//     renderer: Renderer,
+//     last_update: Instant,
+//     total_steps: u64,
+//     step_accumulator: i64,
+//     exiting: bool,
+//     initialized: bool,
+// }
+
 struct AppHandler {
     state: AppState,
 }
 
+// impl AppHandler {
+//     fn init(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
+//         Ok(())
+//     }
+
+//     fn update_ui_delta(&mut self) {
+//         // let renderer = self.state.renderer.get_mut().unwrap();
+//         // renderer.ui_mut().update_delta_time();
+//     }
+// }
+
 impl ApplicationHandler for AppHandler {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         log::info!("Resumed");
-
         if let Err(err) = self.state.init(event_loop) {
             log::error!("Failed to initialize app state: {err}");
             event_loop.exit();
-            panic!("Failed to initialize app state");
         }
     }
 
@@ -185,11 +187,7 @@ impl ApplicationHandler for AppHandler {
             return;
         }
 
-        let renderer = self
-            .state
-            .renderer
-            .get_mut()
-            .expect("Failed to acquire renderer");
+        let renderer = self.state.renderer.get_mut().unwrap();
         let ui = renderer.ui_mut();
         ui.update_delta_time();
     }
@@ -221,7 +219,7 @@ impl ApplicationHandler for AppHandler {
 
     fn window_event(
         &mut self,
-        _event_loop: &ActiveEventLoop,
+        event_loop: &ActiveEventLoop,
         window_id: WindowId,
         event: WindowEvent,
     ) {
@@ -235,16 +233,12 @@ impl ApplicationHandler for AppHandler {
             }
             WindowEvent::RedrawRequested => {
                 log::info!("Window redraw requested");
-                match self.state.render() {
-                    Ok(_) => {}
-                    Err(err) => {
-                        log::error!("Error rendering: {err}");
-                    }
-                };
+                //self.state.render().expect("Rendering error");
             }
             WindowEvent::CloseRequested => {
                 log::info!("Close requested");
-                self.state.exit();
+                event_loop.exit();
+                std::process::exit(0);
             }
             WindowEvent::KeyboardInput { ref event, .. } => {
                 log::info!("Keyboard input: {event:?}");

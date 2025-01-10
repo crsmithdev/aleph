@@ -3,13 +3,19 @@ pub mod buffer;
 pub mod command;
 pub mod context;
 pub mod descriptor;
+pub mod device;
 pub mod image;
-pub mod pipeline;
+pub mod swapchain;
 
 pub use crate::vk::{
     allocator::MemoryAllocator,
     command::CommandBuffer,
-    context::{Context, Device, Instance, Queue, Surface, Swapchain, SwapchainInfo, Frame},
     descriptor::DescriptorAllocator,
+    swapchain::{Frame, Swapchain, SwapchainInfo},
     image::{Image, ImageInfo},
+    context::Context,
+    device::Device,
+    device::Queue,
+    context::Instance,
+    context::Surface,
 };

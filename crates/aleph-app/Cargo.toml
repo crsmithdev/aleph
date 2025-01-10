@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = {version="1.0.86", features=["backtrace"]}
-signal-hook = {version="0.3.17", features=["iterator"]}
+anyhow = "1.0.86"
+derive_more = { version = "1.0", features = ["debug", "deref"] }
 log = "0.4"
 raw-window-handle = "0.6.2"
 winit = "0.30.5"
