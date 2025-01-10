@@ -8,7 +8,6 @@ use {
         },
         Context,
         Frame,
-        Swapchain,
     },
     anyhow::Result,
     ash::vk::{self, Extent3D},

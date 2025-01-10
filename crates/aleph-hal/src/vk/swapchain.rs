@@ -103,8 +103,6 @@ impl Swapchain {
             false => vk::PresentModeKHR::MAILBOX,
         };
 
-        dbg!(surface_resolution);
-        dbg!(capabilities.current_extent);
         let mut swapchain_info = vk::SwapchainCreateInfoKHR::default()
             .surface(**surface)
             .min_image_count(in_flight_frames)
