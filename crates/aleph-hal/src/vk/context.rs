@@ -3,6 +3,7 @@ use {
         CommandBuffer,
         DescriptorAllocator,
         Device,
+        Instance,
         MemoryAllocator,
         Queue,
         Swapchain,
@@ -10,7 +11,6 @@ use {
     },
     anyhow::Result,
     ash::{
-        ext::{self},
         khr::{self},
         vk::{self, Handle},
     },
@@ -21,33 +21,6 @@ use {
 };
 
 const IN_FLIGHT_FRAMES: u32 = 2;
-const APP_NAME: &ffi::CStr = c"Aleph";
-const INSTANCE_LAYERS: [&ffi::CStr; 1] = [
-    // c"VK_LAYER_LUNARG_api_dump",
-    c"VK_LAYER_KHRONOS_validation",
-];
-const INSTANCE_EXTENSIONS: [&ffi::CStr; 4] = [
-    khr::surface::NAME,
-    khr::win32_surface::NAME,
-    khr::get_physical_device_properties2::NAME,
-    ext::debug_utils::NAME,
-];
-
-#[derive(Clone, Debug, Deref)]
-pub struct Instance {
-    #[deref]
-    #[debug("{:x}", inner.handle().as_raw())]
-    pub(crate) inner: ash::Instance,
-
-    #[debug(skip)]
-    entry: ash::Entry,
-}
-
-impl Instance {
-    pub fn clone_inner(&self) -> ash::Instance {
-        self.inner.clone()
-    }
-}
 
 #[derive(Clone, Debug, Deref)]
 pub struct Surface {
@@ -64,17 +37,11 @@ pub struct Surface {
 pub struct Context {
     pub(crate) instance: Instance,
     pub(crate) surface: Surface,
-    pub device: Device,
+    pub(crate) device: Device,
     pub(crate) swapchain: Swapchain,
-    // queue: Queue,
     pub(crate) memory_allocator: Arc<MemoryAllocator>,
     pub(crate) descriptor_allocator: Arc<DescriptorAllocator>,
     pub(crate) window: Arc<Window>,
-
-    #[debug(skip)]
-    debug_utils: ext::debug_utils::Instance,
-    #[debug(skip)]
-    debug_callback: vk::DebugUtilsMessengerEXT,
 }
 
 impl Context {
@@ -117,10 +84,8 @@ impl Context /* Init */ {
     fn init_vulkan(window: Arc<Window>) -> Result<Context> {
         log::info!("Initializing Vulkan, window: {window:?}");
 
-        let instance = Self::create_instance()?;
+        let instance = Instance::new()?;
         log::info!("Created instance: {instance:?}");
-
-        let (debug_utils, debug_callback) = Self::create_debug(&instance)?;
 
         let surface = Self::create_surface(&instance, &Arc::clone(&window))?;
         log::info!("Created surface: {surface:?}");
@@ -136,7 +101,6 @@ impl Context /* Init */ {
             &instance,
             &device,
             &surface,
-            Arc::clone(&window),
             &SwapchainInfo {
                 extent,
                 format: vk::Format::B8G8R8A8_UNORM,
@@ -160,15 +124,6 @@ impl Context /* Init */ {
         )?);
         log::info!("Created descriptor allocator: {:?}", &descriptor_allocator);
 
-        let _descriptor_allocator = Arc::new(DescriptorAllocator::new(
-            &device,
-            &[vk::DescriptorPoolSize {
-                ty: vk::DescriptorType::STORAGE_IMAGE,
-                descriptor_count: 1,
-            }],
-            10,
-        )?);
-
         Ok(Context {
             instance,
             device,
@@ -177,69 +132,21 @@ impl Context /* Init */ {
             memory_allocator: allocator,
             descriptor_allocator,
             window: Arc::clone(&window),
-            debug_utils,
-            debug_callback,
         })
-    }
-
-    fn create_instance() -> Result<Instance> {
-        let entry = unsafe { ash::Entry::load() }?;
-        let layers: Vec<*const i8> = INSTANCE_LAYERS.iter().map(|n| n.as_ptr()).collect();
-        let extensions: Vec<*const i8> = INSTANCE_EXTENSIONS.iter().map(|n| n.as_ptr()).collect();
-
-        let app_info = vk::ApplicationInfo::default()
-            .application_name(APP_NAME)
-            .application_version(0)
-            .engine_name(APP_NAME)
-            .engine_version(0)
-            .api_version(vk::make_api_version(0, 1, 3, 0));
-        let instance_info = vk::InstanceCreateInfo::default()
-            .application_info(&app_info)
-            .enabled_layer_names(&layers)
-            .enabled_extension_names(&extensions)
-            .flags(vk::InstanceCreateFlags::default());
-
-        let inner = unsafe { entry.create_instance(&instance_info, None)? };
-        Ok(Instance { inner, entry })
-    }
-
-    fn create_debug(
-        instance: &Instance,
-    ) -> Result<(ext::debug_utils::Instance, vk::DebugUtilsMessengerEXT)> {
-        let debug_info = vk::DebugUtilsMessengerCreateInfoEXT::default()
-            .message_severity(
-                vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
-                    | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING
-                    | vk::DebugUtilsMessageSeverityFlagsEXT::INFO,
-            )
-            .message_type(
-                vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
-                    | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
-                    | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
-            )
-            .pfn_user_callback(Some(vulkan_debug_callback));
-        let debug_utils = ext::debug_utils::Instance::new(&instance.entry, instance);
-        let debug_callback = unsafe {
-            debug_utils
-                .create_debug_utils_messenger(&debug_info, None)
-                .unwrap()
-        };
-
-        Ok((debug_utils, debug_callback))
     }
 
     fn create_surface(instance: &Instance, window: &winit::window::Window) -> Result<Surface> {
         let inner: vk::SurfaceKHR = unsafe {
             ash_window::create_surface(
                 &instance.entry,
-                instance,
+                &instance.handle,
                 window.display_handle()?.into(),
                 window.window_handle()?.into(),
                 None,
             )?
         };
 
-        let loader = khr::surface::Instance::new(&instance.entry, instance);
+        let loader = khr::surface::Instance::new(&instance.entry, &instance.handle);
         Ok(Surface { inner, loader })
     }
 }
@@ -279,88 +186,25 @@ impl Context {
     pub fn create_command_buffer(&self, pool: vk::CommandPool) -> Result<CommandBuffer> {
         self.device.create_command_buffer(pool)
     }
+
+    pub fn update_descriptor_sets(
+        &self,
+        writes: &[vk::WriteDescriptorSet],
+        copies: &[vk::CopyDescriptorSet],
+    ) {
+        self.device.update_descriptor_sets(writes, copies);
+    }
+
+    pub fn create_descriptor_set_layout(
+        &self,
+        bindings: &[vk::DescriptorSetLayoutBinding],
+        flags: vk::DescriptorSetLayoutCreateFlags,
+    ) -> Result<vk::DescriptorSetLayout> {
+        self.device.create_descriptor_set_layout(bindings, flags)
+    }
 }
 
 impl Context /* Images */ {
-    pub fn transition_image(
-        &self,
-        buffer: &CommandBuffer,
-        image: vk::Image,
-        current_layout: vk::ImageLayout,
-        new_layout: vk::ImageLayout,
-    ) {
-        let aspect_mask = match new_layout {
-            vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL => vk::ImageAspectFlags::DEPTH,
-            _ => vk::ImageAspectFlags::COLOR,
-        };
-        let range = vk::ImageSubresourceRange::default()
-            .aspect_mask(aspect_mask)
-            .base_array_layer(0)
-            .base_mip_level(0)
-            .level_count(1)
-            .layer_count(1);
-        let barriers = &[vk::ImageMemoryBarrier2::default()
-            .image(image)
-            .src_stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
-            .src_access_mask(vk::AccessFlags2::MEMORY_WRITE)
-            .dst_stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
-            .dst_access_mask(vk::AccessFlags2::MEMORY_WRITE | vk::AccessFlags2::MEMORY_READ)
-            .old_layout(current_layout)
-            .new_layout(new_layout)
-            .subresource_range(range)];
-        let dependency_info = vk::DependencyInfo::default().image_memory_barriers(barriers);
-
-        unsafe {
-            self.device
-                .cmd_pipeline_barrier2(buffer.handle, &dependency_info);
-        }
-    }
-
-    pub fn copy_image(
-        &self,
-        cmd: &CommandBuffer,
-        src: vk::Image,
-        dst: vk::Image,
-        src_extent: vk::Extent3D,
-        dst_extent: vk::Extent3D,
-    ) {
-        let src_subresource = vk::ImageSubresourceLayers::default()
-            .aspect_mask(vk::ImageAspectFlags::COLOR)
-            .layer_count(1);
-        let dst_subresource = vk::ImageSubresourceLayers::default()
-            .aspect_mask(vk::ImageAspectFlags::COLOR)
-            .layer_count(1);
-        let src_offsets = [
-            vk::Offset3D::default(),
-            vk::Offset3D::default()
-                .x(src_extent.width as i32)
-                .y(src_extent.height as i32)
-                .z(1),
-        ];
-        let dst_offsets = [
-            vk::Offset3D::default(),
-            vk::Offset3D::default()
-                .x(dst_extent.width as i32)
-                .y(dst_extent.height as i32)
-                .z(1),
-        ];
-        let blit_region = vk::ImageBlit2::default()
-            .src_subresource(src_subresource)
-            .dst_subresource(dst_subresource)
-            .src_offsets(src_offsets)
-            .dst_offsets(dst_offsets);
-        let regions = &[blit_region];
-        let blit_info = vk::BlitImageInfo2::default()
-            .src_image(src)
-            .src_image_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-            .dst_image(dst)
-            .dst_image_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-            // .filter(vk::Filter::Linear)
-            .regions(regions);
-
-        unsafe { self.device.cmd_blit_image2(cmd.handle, &blit_info) }
-    }
-
     pub fn load_shader(&self, path: &str) -> Result<vk::ShaderModule> {
         let mut file = std::fs::File::open(path)?;
         let bytes = ash::util::read_spv(&mut file)?;
@@ -370,27 +214,6 @@ impl Context /* Images */ {
         Ok(shader)
     }
 
-    pub fn update_descriptor_sets(
-        &self,
-        writes: &[vk::WriteDescriptorSet],
-        copies: &[vk::CopyDescriptorSet],
-    ) {
-        unsafe {
-            self.device.update_descriptor_sets(writes, copies);
-        }
-    }
-
-    pub fn create_descriptor_set_layout(
-        &self,
-        bindings: &[vk::DescriptorSetLayoutBinding],
-        flags: vk::DescriptorSetLayoutCreateFlags,
-    ) -> Result<vk::DescriptorSetLayout> {
-        let info = vk::DescriptorSetLayoutCreateInfo::default()
-            .bindings(bindings)
-            .flags(flags);
-        Ok(unsafe { self.device.create_descriptor_set_layout(&info, None)? })
-    }
-
     pub fn rebuild_swapchain(&mut self) -> Result<()> {
         unsafe { self.device.device_wait_idle() }?;
 
@@ -398,7 +221,7 @@ impl Context /* Images */ {
             width: self.window.inner_size().width,
             height: self.window.inner_size().height,
         };
-        
+
         self.swapchain.rebuild(extent)
     }
 }

@@ -90,7 +90,7 @@ impl UiRenderer {
             renderer,
             ..
         } = self;
-        let extent = context.swapchain().extent();
+        let extent = context.swapchain().info.extent;
 
         platform.prepare_frame(imgui.io_mut(), &self.window)?;
         let ui = imgui.frame();

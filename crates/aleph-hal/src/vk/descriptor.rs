@@ -49,4 +49,25 @@ impl DescriptorAllocator {
         let sets = unsafe { self.device.allocate_descriptor_sets(&info) }?;
         Ok(sets[0])
     }
+
+    pub fn update_sets(
+        &self,
+        writes: &[vk::WriteDescriptorSet],
+        copies: &[vk::CopyDescriptorSet],
+    ) {
+        unsafe {
+            self.device.update_descriptor_sets(writes, copies);
+        }
+    }
+
+    pub fn create_layout(
+        &self,
+        bindings: &[vk::DescriptorSetLayoutBinding],
+        flags: vk::DescriptorSetLayoutCreateFlags,
+    ) -> Result<vk::DescriptorSetLayout> {
+        let info = vk::DescriptorSetLayoutCreateInfo::default()
+            .bindings(bindings)
+            .flags(flags);
+        Ok(unsafe { self.device.create_descriptor_set_layout(&info, None)? })
+    }
 }

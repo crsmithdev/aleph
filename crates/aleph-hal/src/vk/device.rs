@@ -11,13 +11,14 @@ use {
     std::ffi,
 };
 
-const DEVICE_EXTENSIONS: [&ffi::CStr; 6] = [
+const DEVICE_EXTENSIONS: [&ffi::CStr; 7] = [
     khr::swapchain::NAME,
     khr::synchronization2::NAME,
     khr::maintenance3::NAME,
     khr::dynamic_rendering::NAME,
     ext::descriptor_indexing::NAME,
     khr::buffer_device_address::NAME,
+    khr::push_descriptor::NAME,
 ];
 
 #[allow(dead_code)]
@@ -55,14 +56,16 @@ pub struct Device {
     pub(crate) handle: ash::Device, // TODO
     pub(crate) queue: Queue,
     pub(crate) physical_device: vk::PhysicalDevice,
+
+    #[debug("{:x}", push_descriptor.device().as_raw())]
+    pub(crate) push_descriptor: khr::push_descriptor::Device,
 }
 
 impl Device {
-
-// #region Construction
+    // #region Construction
 
     pub fn new(instance: &Instance) -> Result<Device> {
-        let candidate_devices = unsafe { instance.enumerate_physical_devices()? };
+        let candidate_devices = instance.enumerate_physical_devices()?;
 
         let selected = candidate_devices
             .into_iter()
@@ -72,7 +75,6 @@ impl Device {
         let physical_device =
             selected.ok_or_else(|| anyhow!("No suitable physical device found"))?;
         let queue_family = Self::init_queue_familiy(instance, &physical_device)?;
-        Self::get_queue_family_index(instance, &physical_device, vk::QueueFlags::GRAPHICS)?;
 
         let device_extension_names: Vec<*const i8> = DEVICE_EXTENSIONS
             .iter()
@@ -91,30 +93,37 @@ impl Device {
             .push_next(&mut synchronization_features)
             .push_next(&mut buffer_device_address_features);
 
-        let priorities = [1.0];
-        let queue_info = [vk::DeviceQueueCreateInfo::default()
-            .queue_family_index(queue_family.index)
-            .queue_priorities(&priorities)];
-        let device_info = vk::DeviceCreateInfo::default()
-            .queue_create_infos(&queue_info)
-            .enabled_extension_names(&device_extension_names)
-            .push_next(&mut device_features);
+        // let priorities = [1.0];
+        // let queue_info = [vk::DeviceQueueCreateInfo::default()
+        //     .queue_family_index(queue_family.index)
+        //     .queue_priorities(&priorities)];
+        // let device_info = vk::DeviceCreateInfo::default()
+        //     .queue_create_infos(&queue_info)
+        //     .enabled_extension_names(&device_extension_names)
+        //     .push_next(&mut device_features);
 
-        let handle = unsafe { instance.create_device(physical_device, &device_info, None)? };
+        let handle = instance.create_device(
+            physical_device,
+            queue_family,
+            &device_extension_names,
+            &mut device_features,
+        )?;
+        // &device_info, None)? };
         let queue = Self::create_queue(&handle, queue_family);
+
+        let push_descriptor = khr::push_descriptor::Device::new(&instance.handle, &handle);
 
         Ok(Device {
             handle,
             physical_device,
             queue,
+            push_descriptor,
         })
     }
 
-    fn rank_physical_device(instance: &ash::Instance, physical_device: &vk::PhysicalDevice) -> i32 {
-        let device_properties =
-            unsafe { instance.get_physical_device_properties(*physical_device) };
-        let queue_families =
-            unsafe { instance.get_physical_device_queue_family_properties(*physical_device) };
+    fn rank_physical_device(instance: &Instance, physical_device: &vk::PhysicalDevice) -> i32 {
+        let device_properties = instance.get_physical_device_properties(*physical_device);
+        let queue_families = instance.get_physical_device_queue_family_properties(*physical_device);
 
         // TODO extension checks
 
@@ -136,16 +145,14 @@ impl Device {
         score
     }
 
-// #region Child Object Creation
-
-
+    // #region Child Object Creation
 
     fn create_queue(handle: &ash::Device, family: QueueFamily) -> Queue {
         let handle = unsafe { handle.get_device_queue(family.index, 0) };
         crate::Queue { handle, family }
     }
 
-// #region Test2
+    // #region Test2
 
     pub fn create_command_pool(&self) -> Result<vk::CommandPool> {
         let info = vk::CommandPoolCreateInfo::default()
@@ -179,11 +186,10 @@ impl Device {
     }
 
     fn init_queue_familiy(
-        instance: &ash::Instance,
+        instance: &Instance,
         physical_device: &vk::PhysicalDevice,
     ) -> Result<QueueFamily> {
-        let queue_families =
-            unsafe { instance.get_physical_device_queue_family_properties(*physical_device) };
+        let queue_families = instance.get_physical_device_queue_family_properties(*physical_device);
         let selected = queue_families
             .into_iter()
             .enumerate()
@@ -198,23 +204,6 @@ impl Device {
         }
     }
 
-    fn get_queue_family_index(
-        instance: &ash::Instance,
-        physical_device: &vk::PhysicalDevice,
-        flags: vk::QueueFlags,
-    ) -> Result<u32> {
-        let queue_families =
-            unsafe { instance.get_physical_device_queue_family_properties(*physical_device) };
-        let selected = queue_families
-            .into_iter()
-            .enumerate()
-            .find(|(_, qf)| qf.queue_flags.contains(flags));
-
-        match selected {
-            Some((index, _)) => Ok(index as u32),
-            None => Err(anyhow!("Could not find queue family with flags: {flags:?}")),
-        }
-    }
     pub fn handle(&self) -> &ash::Device {
         &self.handle
     }
@@ -232,6 +221,27 @@ impl Device {
                 None,
             )?
         })
+    }
+
+    pub fn update_descriptor_sets(
+        &self,
+        writes: &[vk::WriteDescriptorSet],
+        copies: &[vk::CopyDescriptorSet],
+    ) {
+        unsafe {
+            self.handle.update_descriptor_sets(writes, copies);
+        }
+    }
+
+    pub fn create_descriptor_set_layout(
+        &self,
+        bindings: &[vk::DescriptorSetLayoutBinding],
+        flags: vk::DescriptorSetLayoutCreateFlags,
+    ) -> Result<vk::DescriptorSetLayout> {
+        let info = vk::DescriptorSetLayoutCreateInfo::default()
+            .bindings(bindings)
+            .flags(flags);
+        Ok(unsafe { self.handle.create_descriptor_set_layout(&info, None)? })
     }
 
     pub fn wait_for_fence(&self, fence: vk::Fence) -> Result<()> {
