@@ -1,6 +1,5 @@
 use {
-    crate::{CommandBuffer, Device, Instance, Queue, Surface},
-    aleph_core::constants::VK_TIMEOUT_NS,
+    crate::{CommandBuffer, CommandPool, Device, Instance, Queue, Surface, VK_TIMEOUT_NS},
     anyhow::Result,
     ash::{
         khr,
@@ -11,12 +10,12 @@ use {
 
 pub const IN_FLIGHT_FRAMES: u32 = 2;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Frame {
     pub swapchain_semaphore: vk::Semaphore,
     pub render_semaphore: vk::Semaphore,
     pub fence: vk::Fence,
-    pub command_pool: vk::CommandPool,
+    pub command_pool: CommandPool,
     pub command_buffer: CommandBuffer,
 }
 #[derive(Clone, Copy, Debug)]

@@ -1,9 +1,41 @@
 use {
-    crate::Device,
+    crate::{Device, Queue},
     anyhow::Result,
     ash::vk,
     derive_more::{Debug, Deref},
 };
+
+#[derive(Clone, Debug)]
+pub struct CommandPool {
+    pub(crate) handle: vk::CommandPool,
+    pub(crate) device: Device,
+    pub(crate) queue: Queue,
+}
+
+impl CommandPool {
+
+    pub fn handle(&self) -> vk::CommandPool {
+        self.handle
+    }
+    
+    pub fn create_command_buffer(&self) -> Result<CommandBuffer> {
+        let info = vk::CommandBufferAllocateInfo::default()
+            .command_pool(self.handle)
+            .level(vk::CommandBufferLevel::PRIMARY)
+            .command_buffer_count(1);
+
+        let handle = unsafe { self.device.allocate_command_buffers(&info)?[0] };
+        let fence = self.device.create_fence_signaled()?;
+
+        Ok(CommandBuffer {
+            handle,
+            pool: self.handle,
+            device: self.device.clone(),
+            queue: self.queue,
+            fence,
+        })
+    }
+}
 
 #[allow(dead_code)]
 #[derive(Clone, Debug, Deref)]
@@ -12,6 +44,8 @@ pub struct CommandBuffer {
     pub(crate) handle: vk::CommandBuffer,
     pub(crate) pool: vk::CommandPool,
     pub(crate) device: Device,
+    pub(crate) queue: Queue,
+    pub(crate) fence: vk::Fence,
 }
 
 impl CommandBuffer {
@@ -37,6 +71,58 @@ impl CommandBuffer {
     pub fn end(&self) -> Result<()> {
         #[allow(clippy::unit_arg)]
         Ok(unsafe { self.device.end_command_buffer(self.handle)? })
+    }
+
+    pub fn begin_rendering2(
+        &self,
+        color_attachments: &[vk::RenderingAttachmentInfo],
+        extent: vk::Extent2D,
+    ) -> Result<()> {
+        let rendering_info = vk::RenderingInfo::default()
+            .render_area(vk::Rect2D {
+                offset: vk::Offset2D { x: 0, y: 0 },
+                extent,
+            })
+            .layer_count(1)
+            .color_attachments(color_attachments);
+
+        #[allow(clippy::unit_arg)]
+        Ok(unsafe {
+            self.device
+                .cmd_begin_rendering(self.handle, &rendering_info)
+        })
+    }
+
+    pub fn draw(
+        &self,
+        vertex_count: u32,
+        instance_count: u32,
+        first_vertex: u32,
+        first_instance: u32,
+    ) {
+        unsafe {
+            self.device.cmd_draw(
+                self.handle,
+                vertex_count,
+                instance_count,
+                first_vertex,
+                first_instance,
+            )
+        }
+    }
+
+    pub fn set_scissor(&self, scissor: vk::Rect2D) {
+        unsafe {
+            self.device
+                .cmd_set_scissor(self.handle, 0, std::slice::from_ref(&scissor));
+        }
+    }
+
+    pub fn set_viewport(&self, viewport: vk::Viewport) {
+        unsafe {
+            self.device
+                .cmd_set_viewport(self.handle, 0, std::slice::from_ref(&viewport));
+        }
     }
 
     pub fn begin_rendering(&self, image_view: &vk::ImageView, extent: vk::Extent2D) -> Result<()> {
@@ -70,6 +156,25 @@ impl CommandBuffer {
         Ok(unsafe { self.device.handle.cmd_end_rendering(self.handle) })
     }
 
+    pub fn bind_pipeline(
+        &self,
+        pipeline_bind_point: vk::PipelineBindPoint,
+        pipeline: vk::Pipeline,
+    ) -> Result<()> {
+        #[allow(clippy::unit_arg)]
+        Ok(unsafe {
+            self.device
+                .cmd_bind_pipeline(self.handle, pipeline_bind_point, pipeline);
+        })
+    }
+
+    pub fn dispatch(&self, group_count_x: u32, group_count_y: u32, group_count_z: u32) {
+        unsafe {
+            self.device
+                .cmd_dispatch(self.handle, group_count_x, group_count_y, group_count_z)
+        }
+    }
+
     pub fn push_descriptor_set(
         &self,
         bind_point: vk::PipelineBindPoint,
@@ -88,7 +193,67 @@ impl CommandBuffer {
         }
     }
 
-    pub fn submit(
+    /*
+        VK_CHECK(vkResetFences(_device, 1, &_immFence));
+    VK_CHECK(vkResetCommandBuffer(_immCommandBuffer, 0));
+
+    VkCommandBuffer cmd = _immCommandBuffer;
+
+    VkCommandBufferBeginInfo cmdBeginInfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+
+    VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
+
+    function(cmd);
+
+    VK_CHECK(vkEndCommandBuffer(cmd));
+
+    VkCommandBufferSubmitInfo cmdinfo = vkinit::command_buffer_submit_info(cmd);
+    VkSubmitInfo2 submit = vkinit::submit_info(&cmdinfo, nullptr, nullptr);
+
+    // submit command buffer to the queue and execute it.
+    //  _renderFence will now block until the graphic commands finish execution
+    VK_CHECK(vkQueueSubmit2(_graphicsQueue, 1, &submit, _immFence));
+
+    VK_CHECK(vkWaitForFences(_device, 1, &_immFence, true, 9999999999));
+     */
+
+    pub fn submit_immediate(
+        &self,
+        // wait_semaphore: &vk::Semaphore,
+        // signal_semaphore: &vk::Semaphore,
+        // fence: &[]// // // // // // // // Option<vk::Fence>,
+        f: impl FnOnce(&CommandBuffer),
+    ) -> Result<()> {
+        self.reset()?;
+        self.begin()?;
+
+        f(self);
+
+        self.end()?;
+
+        // let wait_info = &[vk::SemaphoreSubmitInfo::default()
+        //     .semaphore(*wait_semaphore)
+        //     .stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
+        //     .value(1)];
+        // let signal_info = &[vk::SemaphoreSubmitInfo::default()
+        //     .semaphore(*signal_semaphore)
+        //     .stage_mask(vk::PipelineStageFlags2::ALL_GRAPHICS)
+        //     .value(1)];
+        let command_buffer_info = &[vk::CommandBufferSubmitInfo::default()
+            .command_buffer(self.handle)
+            .device_mask(0)];
+        let submit_info = &[vk::SubmitInfo2::default()
+            .command_buffer_infos(command_buffer_info)
+            .wait_semaphore_infos(&[])
+            .signal_semaphore_infos(&[])];
+
+        Ok(unsafe {
+            self.device
+                .queue_submit2(self.queue.handle, submit_info, self.fence)
+        }?)
+    }
+
+    pub fn submit_queued(
         &self,
         wait_semaphore: &vk::Semaphore,
         signal_semaphore: &vk::Semaphore,

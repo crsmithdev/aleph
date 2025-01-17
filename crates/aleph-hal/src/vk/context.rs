@@ -1,7 +1,9 @@
 use {
     crate::{
+        Buffer,
+        BufferInfo,
+        CommandPool,
         CommandBuffer,
-        DescriptorAllocator,
         Device,
         Instance,
         MemoryAllocator,
@@ -39,8 +41,8 @@ pub struct Context {
     pub(crate) surface: Surface,
     pub(crate) device: Device,
     pub(crate) swapchain: Swapchain,
-    pub(crate) memory_allocator: Arc<MemoryAllocator>,
-    pub(crate) descriptor_allocator: Arc<DescriptorAllocator>,
+    pub(crate) command_pool: CommandPool,
+    pub(crate) allocator: Arc<MemoryAllocator>,
     pub(crate) window: Arc<Window>,
 }
 
@@ -58,13 +60,12 @@ impl Context {
     pub fn queue(&self) -> &Queue {
         &self.device.queue
     }
-
-    pub fn memory_allocator(&self) -> &Arc<MemoryAllocator> {
-        &self.memory_allocator
+    
+    pub fn command_pool(&self) -> &CommandPool {
+        &self.command_pool
     }
-
-    pub fn descriptor_allocator(&self) -> &Arc<DescriptorAllocator> {
-        &self.descriptor_allocator
+    pub fn allocator(&self) -> &Arc<MemoryAllocator> {
+        &self.allocator
     }
 
     pub fn swapchain(&self) -> &Swapchain {
@@ -114,23 +115,19 @@ impl Context /* Init */ {
         let allocator = Arc::new(MemoryAllocator::new(&instance, &device)?);
         log::info!("Created allocator: {allocator:?}");
 
-        let descriptor_allocator = Arc::new(DescriptorAllocator::new(
-            &device,
-            &[vk::DescriptorPoolSize {
-                ty: vk::DescriptorType::STORAGE_IMAGE,
-                descriptor_count: 1,
-            }],
-            10,
-        )?);
-        log::info!("Created descriptor allocator: {:?}", &descriptor_allocator);
+        let command_pool = CommandPool {
+            handle: device.create_command_pool()?,
+            device: device.clone(),
+            queue: device.queue,
+        };
 
         Ok(Context {
             instance,
             device,
             surface,
             swapchain,
-            memory_allocator: allocator,
-            descriptor_allocator,
+            command_pool,
+            allocator,
             window: Arc::clone(&window),
         })
     }
@@ -150,8 +147,17 @@ impl Context /* Init */ {
         Ok(Surface { inner, loader })
     }
 }
-
+/*    pub size: usize,
+pub usage: vk::BufferUsageFlags,
+pub location: gpu_allocator::MemoryLocation, */
 impl Context {
+    pub fn create_buffer(
+        &self,
+        info: BufferInfo,
+    ) -> Result<Buffer> {
+        Buffer::new(&self.device, self.allocator.clone(), info)
+    }
+    
     #[inline]
     pub fn create_fence(&self) -> Result<vk::Fence> {
         self.device.create_fence()
@@ -177,22 +183,14 @@ impl Context {
         self.device.create_semaphore()
     }
 
-    #[inline]
-    pub fn create_command_pool(&self) -> Result<vk::CommandPool> {
-        self.device.create_command_pool()
-    }
+    // #[inline]
+    // pub fn create_command_pool(&self) -> Result<vk::CommandPool> {
+    //     self.device.create_command_pool()
+    // }
 
     #[inline]
-    pub fn create_command_buffer(&self, pool: vk::CommandPool) -> Result<CommandBuffer> {
+    pub fn create_command_buffer(&self, pool: &CommandPool) -> Result<CommandBuffer> {
         self.device.create_command_buffer(pool)
-    }
-
-    pub fn update_descriptor_sets(
-        &self,
-        writes: &[vk::WriteDescriptorSet],
-        copies: &[vk::CopyDescriptorSet],
-    ) {
-        self.device.update_descriptor_sets(writes, copies);
     }
 
     pub fn create_descriptor_set_layout(

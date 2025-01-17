@@ -1,7 +1,7 @@
 pub use gpu_allocator::MemoryLocation;
 use {
     crate::vk::{CommandBuffer, Device, MemoryAllocator},
-    anyhow::Result,
+    anyhow::{Result},
     ash::{vk, vk::Handle},
     derive_more,
     gpu_allocator::vulkan::Allocation,
@@ -55,40 +55,37 @@ impl Buffer {
         self.handle
     }
 
-    pub fn upload_data<T: serde::Serialize>(
-        &mut self,
-        _cmd: CommandBuffer,
-        _data: &T,
-    ) -> Result<()> {
-        // let bytes = bincode::serialize(data)?;
-        // let size = bytes.len();
+    pub fn upload_data<T: serde::Serialize>(&self, cmd: &CommandBuffer, data: &T) -> Result<()> {
+        let bytes = bincode::serialize(data)?;
+        let size = bytes.len();
 
-        // let staging = Buffer::new(
-        //     &self.allocator.device,
-        //     self.allocator.clone(),
-        //     BufferInfo {
-        //         usage: vk::BufferUsageFlags::TRANSFER_SRC,
-        //         location: MemoryLocation::CpuToGpu,
-        //         size,
-        //     },
-        // )?;
+        let mut staging = Buffer::new(
+            &self.allocator.device,
+            self.allocator.clone(),
+            BufferInfo {
+                usage: vk::BufferUsageFlags::TRANSFER_SRC,
+                location: MemoryLocation::CpuToGpu,
+                size,
+            },
+        )?;
 
-        // let slice = self
-        //     .allocation
-        //     .mapped_slice_mut()
-        //     .ok_or_else(|| anyhow::anyhow!("Buffer upload memory map failed"))?;
-        // slice[0..bytes.len()].copy_from_slice(&bytes);
+        let slice = staging
+            .allocation
+            .mapped_slice_mut()
+            .ok_or_else(|| anyhow::anyhow!("Could not map staging buffer memory"))?;
+        slice[0..bytes.len()].copy_from_slice(&bytes);
 
-        // let copy = vk::BufferCopy::default().size(size as u64);
-        // cmd.submit_immediate(|_| unsafe {
-        //     self.allocator.device.inner.cmd_copy_buffer(
-        //         cmd.inner,
-        //         staging.handle,
-        //         self.handle,
-        //         &[copy],
-        //     );
-        // })?;
-
+        cmd.submit_immediate(|_| {
+            let copy = vk::BufferCopy::default().size(size as u64);
+            unsafe {
+                self.allocator.device.handle.cmd_copy_buffer(
+                    cmd.handle(),
+                    staging.handle(),
+                    self.handle(),
+                    &[copy],
+                )
+            };
+        })?;
         Ok(())
     }
 }

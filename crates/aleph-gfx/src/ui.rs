@@ -29,9 +29,9 @@ impl fmt::Debug for UiRenderer {
 
 impl UiRenderer {
     pub fn new(context: &Context) -> Result<Self> {
-        let allocator = context.memory_allocator().clone();
+        let allocator = context.allocator().clone();
         let device = context.device().clone();
-        let pool = context.create_command_pool()?;
+        let pool = context.command_pool();
         let command_buffer = device.create_command_buffer(pool)?;
 
         let mut imgui = imgui::Context::create();
@@ -47,7 +47,7 @@ impl UiRenderer {
             allocator.inner().clone(),
             context.device().handle().clone(),
             context.queue().handle(),
-            pool,
+            pool.handle(),
             imgui_vk::DynamicRendering {
                 color_attachment_format: vk::Format::B8G8R8A8_UNORM,
                 depth_attachment_format: None,

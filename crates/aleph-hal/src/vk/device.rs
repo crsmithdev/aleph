@@ -1,6 +1,5 @@
 use {
-    crate::{CommandBuffer, Instance},
-    aleph_core::constants,
+    crate::{CommandBuffer, CommandPool, Instance, VK_TIMEOUT_NS},
     anyhow::{anyhow, bail, Result},
     ash::{
         ext,
@@ -74,7 +73,7 @@ impl Device {
 
         let physical_device =
             selected.ok_or_else(|| anyhow!("No suitable physical device found"))?;
-        let queue_family = Self::init_queue_familiy(instance, &physical_device)?;
+        let queue_family = Self::init_queue_family(instance, &physical_device)?;
 
         let device_extension_names: Vec<*const i8> = DEVICE_EXTENSIONS
             .iter()
@@ -161,10 +160,10 @@ impl Device {
         Ok(unsafe { self.handle.create_command_pool(&info, None)? })
     }
 
-    pub fn create_command_buffer(self: &Device, pool: vk::CommandPool) -> Result<CommandBuffer> {
+    pub fn create_command_buffer(&self, pool: &crate::CommandPool) -> Result<CommandBuffer> {
         let info = vk::CommandBufferAllocateInfo::default()
             .command_buffer_count(1)
-            .command_pool(pool)
+            .command_pool(pool.handle)
             .level(vk::CommandBufferLevel::PRIMARY);
 
         let inner = unsafe {
@@ -176,8 +175,10 @@ impl Device {
 
         Ok(CommandBuffer {
             handle: inner,
-            pool,
+            pool: pool.handle,
             device: self.clone(),
+            queue: self.queue,
+            fence: self.create_fence_signaled().unwrap(),
         })
     }
 
@@ -185,7 +186,7 @@ impl Device {
         self.handle.clone()
     }
 
-    fn init_queue_familiy(
+    fn init_queue_family(
         instance: &Instance,
         physical_device: &vk::PhysicalDevice,
     ) -> Result<QueueFamily> {
@@ -248,7 +249,7 @@ impl Device {
         #[allow(clippy::unit_arg)]
         Ok(unsafe {
             self.handle
-                .wait_for_fences(&[fence], true, constants::VK_TIMEOUT_NS)?
+                .wait_for_fences(&[fence], true, VK_TIMEOUT_NS)?
         })
     }
 

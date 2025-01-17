@@ -1,16 +1,13 @@
 use {
-    aleph_core::{
-        constants::{DEFAULT_WINDOW_SIZE, STEP_TIME_US, UPDATE_TIME_US},
-        logging,
-    },
-    aleph_gfx::renderer::Renderer,
+    crate::{DEFAULT_APP_NAME, DEFAULT_WINDOW_SIZE, STEP_TIME_US, UPDATE_TIME_US},
+    aleph_core::logging,
+    aleph_gfx::GraphicsLayer,
     aleph_hal::vk::Context,
-    anyhow::{anyhow, Result},
+    anyhow::{anyhow, bail, Result},
     derive_more::Debug,
     human_panic::setup_panic,
     std::{
-        cell::OnceCell,
-        sync::Arc,
+        sync::{Arc, OnceLock},
         time::{Duration, Instant},
     },
     winit::{
@@ -21,19 +18,45 @@ use {
     },
 };
 
-#[derive(Debug, Default)]
-pub struct App {}
+#[derive(Debug)]
+
+pub struct AppConfig {
+    pub name: String,
+}
+
+impl AppConfig {
+    pub fn name(mut self, value: &str) -> Self {
+        self.name = value.to_string();
+        self
+    }
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            name: DEFAULT_APP_NAME.to_string(),
+        }
+    }
+}
+pub struct App {
+    handler: AppHandler,
+}
 
 impl App {
+    pub fn new(config: AppConfig) -> Self {
+        let state = AppState::new(config);
+        let handler = AppHandler { state };
+
+        App { handler }
+    }
+
     pub fn run(&mut self) -> Result<()> {
         logging::setup_logger()?;
         setup_panic!();
 
-        let state = AppState::default();
-        let mut handler = AppHandler { state };
-
-        EventLoop::new()?
-            .run_app(&mut handler)
+        let event_loop = EventLoop::new().expect("Failed to create event loop");
+        event_loop
+            .run_app(&mut self.handler)
             .map_err(|err| anyhow!(err))
     }
 }
@@ -41,39 +64,46 @@ impl App {
 // #[allow(dead_code)]
 #[derive(Debug)]
 pub struct AppState {
-    renderer: OnceCell<Renderer>,
-    window: OnceCell<Arc<Window>>,
+    renderer: OnceLock<GraphicsLayer>,
+    window: OnceLock<Arc<Window>>,
     last_update: Instant,
     total_steps: u64,
     step_accumulator: i64,
     exiting: bool,
     initialized: bool,
+    config: AppConfig,
 }
 
-impl Default for AppState {
-    fn default() -> Self {
+impl AppState {
+    fn new(config: AppConfig) -> Self {
         AppState {
-            window: OnceCell::new(),
-            renderer: OnceCell::new(),
+            window: OnceLock::new(),
+            renderer: OnceLock::new(),
             step_accumulator: 0,
             last_update: Instant::now(),
             total_steps: 0,
             exiting: false,
             initialized: false,
+            config,
         }
     }
 }
 
 impl AppState {
     pub fn init(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
-        let attributes = Window::default_attributes().with_inner_size(DEFAULT_WINDOW_SIZE);
+        if self.initialized {
+            bail!("AppState already initialized")
+        }
+        let attributes = Window::default_attributes()
+            .with_inner_size(DEFAULT_WINDOW_SIZE)
+            .with_title(self.config.name.clone());
         let window = Arc::new(event_loop.create_window(attributes)?);
         log::info!("Created window: {window:?}");
 
-        let backend = Context::new(window.clone())?;
-        log::info!("Created render backend: {:?}", &backend);
+        let context = Context::new(window.clone())?;
+        log::info!("Created render backend: {:?}", &context);
 
-        let renderer = Renderer::new(backend)?;
+        let renderer = GraphicsLayer::new(context)?;
         log::info!("Created renderer: {:?}", &renderer);
 
         self.window
