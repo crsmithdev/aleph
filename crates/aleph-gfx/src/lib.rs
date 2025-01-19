@@ -3,7 +3,7 @@ pub mod renderer;
 pub mod ui;
 use {
     crate::ui::UiRenderer,
-    aleph_hal::{self, Context, CommandPool, CommandBuffer, Frame},
+    aleph_hal::{self, Context, CommandBuffer, Frame},
     anyhow::Result,
     gltf::Gltf,
     renderer::SceneRenderer,
@@ -28,23 +28,15 @@ impl fmt::Debug for GraphicsLayer {
 
 impl GraphicsLayer {
     pub fn new(context: Context) -> Result<Self> {
-        let pool = context.command_pool();
-        let imm_cmd = context.create_command_buffer(pool)?;
+        let pool = context.create_command_pool()?;
+        let imm_cmd = context.create_command_buffer(&pool)?;
+
+        crate::mesh::load_meshes("assets/basicmesh.glb".to_string(), &context, &imm_cmd)?;
 
         let scene_renderer = SceneRenderer::new(&context, imm_cmd.clone())?;   
         let ui = UiRenderer::new(&context)?;
         let frames = Self::init_frames(&context)?;
 
-        let gltf = Gltf::open("assets/basicmesh.glb")?;
-        for scene in gltf.scenes() {
-            for node in scene.nodes() {
-                println!(
-                    "Node #{} has {} children",
-                    node.index(),
-                    node.children().count(),
-                );
-            }
-        }
 
         Ok(Self {
             context,
@@ -65,8 +57,8 @@ impl GraphicsLayer {
         (0..context.swapchain().in_flight_frames())
             .map(|_| {
                 // let command_pool = context.create_command_pool()?;
-                let pool = context.command_pool();
-                let command_buffer = context.create_command_buffer(pool)?;
+                let pool = context.create_command_pool()?;
+                let command_buffer = context.create_command_buffer(&pool)?;
 
                 Ok(Frame {
                     swapchain_semaphore: context.create_semaphore()?,

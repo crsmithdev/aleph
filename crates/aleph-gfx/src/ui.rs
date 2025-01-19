@@ -31,8 +31,8 @@ impl UiRenderer {
     pub fn new(context: &Context) -> Result<Self> {
         let allocator = context.allocator().clone();
         let device = context.device().clone();
-        let pool = context.command_pool();
-        let command_buffer = device.create_command_buffer(pool)?;
+        let pool = context.create_command_pool()?;
+        let command_buffer = device.create_command_buffer(&pool)?;
 
         let mut imgui = imgui::Context::create();
         let mut platform = imgui_winit::WinitPlatform::new(&mut imgui);

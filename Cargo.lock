@@ -92,6 +92,7 @@ dependencies = [
  "anyhow",
  "ash",
  "bincode",
+ "bytemuck",
  "derive_more",
  "gltf",
  "imgui",
@@ -112,9 +113,11 @@ dependencies = [
  "ash",
  "ash-window",
  "bincode",
+ "bytemuck",
  "derive_more",
  "gpu-allocator",
  "log",
+ "nalgebra-glm",
  "raw-window-handle",
  "serde",
  "winit",
@@ -329,6 +332,20 @@ name = "bytemuck"
 version = "1.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ef657dfab802224e671f5818e9a4935f9b1957ed18e58292690cc39e7a4092a3"
+dependencies = [
+ "bytemuck_derive",
+]
+
+[[package]]
+name = "bytemuck_derive"
+version = "1.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3fa76293b4f7bb636ab88fd78228235b5248b4d05cc589aed610f954af5d7c7a"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "byteorder"
@@ -1001,6 +1018,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26aecdf64b707efd1310e3544d709c5c0ac61c13756046aaaba41be5c4f66a3b"
 dependencies = [
  "approx",
+ "bytemuck",
  "matrixmultiply",
  "num-complex",
  "num-rational",

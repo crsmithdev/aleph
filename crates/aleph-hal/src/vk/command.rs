@@ -224,6 +224,8 @@ impl CommandBuffer {
         // fence: &[]// // // // // // // // Option<vk::Fence>,
         f: impl FnOnce(&CommandBuffer),
     ) -> Result<()> {
+        self.device.wait_for_fence(self.fence)?;
+        self.device.reset_fence(self.fence)?;
         self.reset()?;
         self.begin()?;
 

@@ -7,6 +7,7 @@ pub use {
     vk::{
         Buffer,
         BufferInfo,
+        BufferUsageFlags,
         CommandBuffer,
         CommandPool,
         Context,
@@ -16,6 +17,7 @@ pub use {
         ImageInfo,
         Instance,
         MemoryAllocator,
+        MemoryLocation,
         Queue,
         QueueFamily,
         Surface,

@@ -1,5 +1,5 @@
 use {
-    crate::mesh::Vertex,
+    crate::mesh::{MeshAsset, Vertex},
     aleph_hal::{
         vk::{
             buffer::{Buffer, BufferInfo, MemoryLocation},
@@ -22,6 +22,7 @@ pub(crate) struct SceneRenderer {
     mesh_pipeline: vk::Pipeline,
     mesh_pipeline_layout: vk::PipelineLayout,
     mesh_buffers: GpuMeshBuffers,
+    test_meshes: Vec<MeshAsset>,
 }
 
 impl SceneRenderer {
@@ -32,8 +33,7 @@ impl SceneRenderer {
             Self::create_gradient_pipeline(context, draw_image_layout)?;
         let (mesh_pipeline_layout, mesh_pipeline) = Self::create_mesh_pipeline(context)?;
         let mesh_buffers = Self::create_default_data(context, &cmd)?;
-
-        let imm_fence = context.create_fence_signaled()?;
+        let test_meshes = crate::mesh::load_meshes("assets/basicmesh.glb".to_string(), context, &cmd)?;
 
         Ok(Self {
             draw_image,
@@ -43,6 +43,7 @@ impl SceneRenderer {
             mesh_pipeline,
             mesh_pipeline_layout,
             mesh_buffers,
+            test_meshes
         })
     }
 
@@ -89,7 +90,6 @@ impl SceneRenderer {
 
         let range = vk::PushConstantRange::default()
             .stage_flags(vk::ShaderStageFlags::VERTEX)
-            .offset(0)
             .size(std::mem::size_of::<GPUDrawPushConstants>() as u32);
 
         let v = vk::PipelineVertexInputStateCreateInfo::default();

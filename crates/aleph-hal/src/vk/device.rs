@@ -1,5 +1,5 @@
 use {
-    crate::{CommandBuffer, CommandPool, Instance, VK_TIMEOUT_NS},
+    crate::{CommandBuffer, Instance, VK_TIMEOUT_NS},
     anyhow::{anyhow, bail, Result},
     ash::{
         ext,
@@ -153,12 +153,12 @@ impl Device {
 
     // #region Test2
 
-    pub fn create_command_pool(&self) -> Result<vk::CommandPool> {
-        let info = vk::CommandPoolCreateInfo::default()
-            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
-            .queue_family_index(self.queue.family().index());
-        Ok(unsafe { self.handle.create_command_pool(&info, None)? })
-    }
+    // pub fn create_command_pool(&self) -> Result<vk::CommandPool> {
+    //     let info = vk::CommandPoolCreateInfo::default()
+    //         .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+    //         .queue_family_index(self.queue.family().index());
+    //     Ok(unsafe { self.handle.create_command_pool(&info, None)? })
+    // }
 
     pub fn create_command_buffer(&self, pool: &crate::CommandPool) -> Result<CommandBuffer> {
         let info = vk::CommandBufferAllocateInfo::default()

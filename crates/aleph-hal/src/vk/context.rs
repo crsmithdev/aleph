@@ -2,8 +2,8 @@ use {
     crate::{
         Buffer,
         BufferInfo,
-        CommandPool,
         CommandBuffer,
+        CommandPool,
         Device,
         Instance,
         MemoryAllocator,
@@ -41,7 +41,6 @@ pub struct Context {
     pub(crate) surface: Surface,
     pub(crate) device: Device,
     pub(crate) swapchain: Swapchain,
-    pub(crate) command_pool: CommandPool,
     pub(crate) allocator: Arc<MemoryAllocator>,
     pub(crate) window: Arc<Window>,
 }
@@ -60,10 +59,7 @@ impl Context {
     pub fn queue(&self) -> &Queue {
         &self.device.queue
     }
-    
-    pub fn command_pool(&self) -> &CommandPool {
-        &self.command_pool
-    }
+
     pub fn allocator(&self) -> &Arc<MemoryAllocator> {
         &self.allocator
     }
@@ -115,18 +111,11 @@ impl Context /* Init */ {
         let allocator = Arc::new(MemoryAllocator::new(&instance, &device)?);
         log::info!("Created allocator: {allocator:?}");
 
-        let command_pool = CommandPool {
-            handle: device.create_command_pool()?,
-            device: device.clone(),
-            queue: device.queue,
-        };
-
         Ok(Context {
             instance,
             device,
             surface,
             swapchain,
-            command_pool,
             allocator,
             window: Arc::clone(&window),
         })
@@ -151,13 +140,10 @@ impl Context /* Init */ {
 pub usage: vk::BufferUsageFlags,
 pub location: gpu_allocator::MemoryLocation, */
 impl Context {
-    pub fn create_buffer(
-        &self,
-        info: BufferInfo,
-    ) -> Result<Buffer> {
+    pub fn create_buffer(&self, info: BufferInfo) -> Result<Buffer> {
         Buffer::new(&self.device, self.allocator.clone(), info)
     }
-    
+
     #[inline]
     pub fn create_fence(&self) -> Result<vk::Fence> {
         self.device.create_fence()
@@ -183,10 +169,19 @@ impl Context {
         self.device.create_semaphore()
     }
 
-    // #[inline]
-    // pub fn create_command_pool(&self) -> Result<vk::CommandPool> {
-    //     self.device.create_command_pool()
-    // }
+    #[inline]
+    pub fn create_command_pool(&self) -> Result<CommandPool> {
+        let info = vk::CommandPoolCreateInfo::default()
+            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+            .queue_family_index(self.device.queue.family.index);
+        let handle = unsafe { self.device.handle.create_command_pool(&info, None)? };
+
+        Ok(CommandPool {
+            handle,
+            device: self.device.clone(),
+            queue: self.device.queue,
+        })
+    }
 
     #[inline]
     pub fn create_command_buffer(&self, pool: &CommandPool) -> Result<CommandBuffer> {

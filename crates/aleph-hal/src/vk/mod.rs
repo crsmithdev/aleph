@@ -15,5 +15,5 @@ pub use crate::vk::{
     image::{Image, ImageInfo},
     instance::Instance,
     swapchain::{Frame, Swapchain, SwapchainInfo},
-    buffer::{Buffer, BufferInfo},
+    buffer::{Buffer, BufferInfo, MemoryLocation, BufferUsageFlags},
 };
