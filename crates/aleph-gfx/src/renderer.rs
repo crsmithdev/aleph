@@ -9,31 +9,56 @@ use {
         Context,
     },
     anyhow::Result,
-    ash::vk::{self, Extent3D},
-    nalgebra_glm as glm,
+    ash::vk::{self, Extent3D, StencilOpState},
+    nalgebra::{self as na, Isometry},
+    nalgebra_glm::{self as glm, proj},
+    std::sync::Arc,
 };
 
 #[allow(dead_code)]
 pub(crate) struct SceneRenderer {
     draw_image: Image,
     draw_image_layout: vk::DescriptorSetLayout,
+    depth_image: Image,
     gradient_pipeline: vk::Pipeline,
     gradient_pipeline_layout: vk::PipelineLayout,
     mesh_pipeline: vk::Pipeline,
     mesh_pipeline_layout: vk::PipelineLayout,
-    mesh_buffers: GpuMeshBuffers,
     test_meshes: Vec<MeshAsset>,
 }
 
 impl SceneRenderer {
     pub fn new(context: &Context, cmd: CommandBuffer) -> Result<Self> {
-        let draw_image = Self::create_draw_image(context)?;
+        let extent = context.swapchain().info.extent;
+        let draw_image = Image::new(
+            Arc::clone(context.allocator()),
+            &ImageInfo {
+                extent,
+                format: vk::Format::R16G16B16A16_SFLOAT,
+                usage: vk::ImageUsageFlags::COLOR_ATTACHMENT
+                    | vk::ImageUsageFlags::TRANSFER_DST
+                    | vk::ImageUsageFlags::TRANSFER_SRC
+                    | vk::ImageUsageFlags::STORAGE,
+                aspect_flags: vk::ImageAspectFlags::COLOR,
+            },
+        )?;
         let draw_image_layout = Self::create_descriptor_set_layout(context)?;
+
+        let depth_image = Image::new(
+            Arc::clone(context.allocator()),
+            &ImageInfo {
+                extent,
+                format: vk::Format::D32_SFLOAT,
+                usage: vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+                aspect_flags: vk::ImageAspectFlags::DEPTH,
+            },
+        )?;
+
         let (gradient_pipeline_layout, gradient_pipeline) =
             Self::create_gradient_pipeline(context, draw_image_layout)?;
         let (mesh_pipeline_layout, mesh_pipeline) = Self::create_mesh_pipeline(context)?;
-        let mesh_buffers = Self::create_default_data(context, &cmd)?;
-        let test_meshes = crate::mesh::load_meshes("assets/basicmesh.glb".to_string(), context, &cmd)?;
+        let test_meshes =
+            crate::mesh::load_meshes("assets/basicmesh.glb".to_string(), context, &cmd)?;
 
         Ok(Self {
             draw_image,
@@ -42,24 +67,9 @@ impl SceneRenderer {
             gradient_pipeline_layout,
             mesh_pipeline,
             mesh_pipeline_layout,
-            mesh_buffers,
-            test_meshes
+            test_meshes,
+            depth_image,
         })
-    }
-
-    fn create_draw_image(context: &Context) -> Result<Image> {
-        let extent = context.swapchain().info.extent;
-        let draw_image = Image::new(&ImageInfo {
-            allocator: context.allocator(),
-            width: extent.width as usize,
-            height: extent.height as usize,
-            format: vk::Format::R16G16B16A16_SFLOAT,
-            usage: vk::ImageUsageFlags::COLOR_ATTACHMENT
-                | vk::ImageUsageFlags::TRANSFER_DST
-                | vk::ImageUsageFlags::TRANSFER_SRC
-                | vk::ImageUsageFlags::STORAGE,
-        })?;
-        Ok(draw_image)
     }
 
     fn create_descriptor_set_layout(context: &Context) -> Result<vk::DescriptorSetLayout> {
@@ -76,7 +86,7 @@ impl SceneRenderer {
 
     fn create_mesh_pipeline(context: &Context) -> Result<(vk::PipelineLayout, vk::Pipeline)> {
         let name = std::ffi::CString::new("main").unwrap();
-        let vertex_shader = context.load_shader("shaders/colored_triangle.vert.spv")?;
+        let vertex_shader = context.load_shader("shaders/colored_triangle_mesh.vert.spv")?;
         let vertex_shader_info = vk::PipelineShaderStageCreateInfo::default()
             .stage(vk::ShaderStageFlags::VERTEX)
             .name(name.as_c_str())
@@ -103,11 +113,18 @@ impl SceneRenderer {
             .polygon_mode(vk::PolygonMode::FILL)
             .cull_mode(vk::CullModeFlags::NONE)
             .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
-            .line_width(1.0);
+            .line_width(1.0)
+            .depth_bias_enable(true)
+            .depth_bias_constant_factor(4.0)
+            .depth_bias_slope_factor(1.5);
         let d = vk::PipelineDepthStencilStateCreateInfo::default()
-            .depth_test_enable(false)
-            .depth_write_enable(false)
-            .depth_compare_op(vk::CompareOp::NEVER)
+            .depth_test_enable(true)
+            .depth_write_enable(true)
+            .depth_compare_op(vk::CompareOp::GREATER_OR_EQUAL)
+            .depth_bounds_test_enable(false)
+            .front(StencilOpState::default())
+            .back(StencilOpState::default())
+            .min_depth_bounds(0.0)
             .max_depth_bounds(1.0);
         let vp = vk::PipelineViewportStateCreateInfo::default()
             .viewport_count(1)
@@ -118,6 +135,9 @@ impl SceneRenderer {
         let range = &[range];
         let layout_info = vk::PipelineLayoutCreateInfo::default().push_constant_ranges(range);
         let layout = unsafe { context.device().create_pipeline_layout(&layout_info, None) }?;
+        let mut pipeline_rendering_info = vk::PipelineRenderingCreateInfo::default()
+            .color_attachment_formats(&[vk::Format::R16G16B16A16_SFLOAT])
+            .depth_attachment_format(vk::Format::D32_SFLOAT);
 
         let stages = &[fragment_shader_info, vertex_shader_info];
         let pipeline_info = &[vk::GraphicsPipelineCreateInfo::default()
@@ -129,7 +149,8 @@ impl SceneRenderer {
             .viewport_state(&vp)
             .dynamic_state(&dy)
             .layout(layout)
-            .stages(stages)];
+            .stages(stages)
+            .push_next(&mut pipeline_rendering_info)];
         let pipeline = unsafe {
             context
                 .device()
@@ -138,51 +159,6 @@ impl SceneRenderer {
         }?[0];
 
         Ok((layout, pipeline))
-    }
-
-    fn create_default_data(context: &Context, cmd: &CommandBuffer) -> Result<GpuMeshBuffers> {
-        let vertices = vec![
-            Vertex::default()
-                .position(0.5, -0.5, 0.0)
-                .color(0.0, 0.0, 0.0, 1.0),
-            Vertex::default()
-                .position(0.5, 0.5, 0.0)
-                .color(0.5, 0.5, 0.5, 1.0),
-            Vertex::default()
-                .position(-0.5, -0.5, 0.0)
-                .color(1.0, 0.0, 0.0, 1.0),
-            Vertex::default()
-                .position(-0.5, 0.5, 0.0)
-                .color(0.0, 1.0, 0.0, 1.0),
-        ];
-        let vertex_buffer = context.create_buffer(BufferInfo {
-            usage: vk::BufferUsageFlags::STORAGE_BUFFER
-                | vk::BufferUsageFlags::TRANSFER_DST
-                | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
-            location: MemoryLocation::GpuOnly,
-            size: vertices.len() * std::mem::size_of::<Vertex>(),
-        })?;
-        vertex_buffer.upload_data(cmd, &vertices)?;
-
-        let indices = vec![0, 1, 2, 2, 1, 3];
-        let index_buffer = context.create_buffer(BufferInfo {
-            usage: vk::BufferUsageFlags::INDEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
-            location: MemoryLocation::GpuOnly,
-            size: vertices.len() * std::mem::size_of::<Vertex>(),
-        })?;
-        index_buffer.upload_data(cmd, &indices)?;
-
-        let vertex_buffer_address = unsafe {
-            context.device().get_buffer_device_address(
-                &vk::BufferDeviceAddressInfo::default().buffer(vertex_buffer.handle()),
-            )
-        };
-
-        Ok(GpuMeshBuffers {
-            index_buffer,
-            vertex_buffer,
-            vertex_buffer_address,
-        })
     }
 
     fn create_gradient_pipeline(
@@ -218,13 +194,20 @@ impl SceneRenderer {
     pub fn render(&mut self, context: &Context, cmd: &CommandBuffer) -> Result<()> {
         let swapchain_extent = context.swapchain().info.extent;
         let swapchain_image = context.swapchain().current_image();
-        let draw_image_extent = self.draw_image.extent;
-        let draw_image = self.draw_image.inner;
+        let draw_image_extent = self.draw_image.info.extent;
+        let draw_image = self.draw_image.handle;
+        let depth_image = self.depth_image.handle;
         let draw_extent = Extent3D {
             width: draw_image_extent.width.min(swapchain_extent.width),
             height: draw_image_extent.height.min(swapchain_extent.height),
             depth: 1,
         };
+
+        cmd.transition_image(
+            depth_image,
+            vk::ImageLayout::UNDEFINED,
+            vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        );
 
         cmd.transition_image(
             draw_image,
@@ -240,7 +223,7 @@ impl SceneRenderer {
             vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
         );
 
-        self.draw_geometry(cmd, &self.draw_image)?;
+        self.draw_geometry(cmd, &self.draw_image, &self.depth_image)?;
 
         cmd.transition_image(
             draw_image,
@@ -267,27 +250,75 @@ impl SceneRenderer {
         Ok(())
     }
 
-    fn draw_geometry(&self, cmd: &CommandBuffer, draw_image: &Image) -> Result<()> {
+    fn draw_geometry(
+        &self,
+        cmd: &CommandBuffer,
+        draw_image: &Image,
+        depth_image: &Image,
+    ) -> Result<()> {
+        let extent = self.draw_image.info.extent;
         let color_attachment = vk::RenderingAttachmentInfo::default()
             .image_view(draw_image.view)
             .image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
+        let depth_attachment = vk::RenderingAttachmentInfo::default()
+            .image_view(depth_image.view)
+            .image_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .store_op(vk::AttachmentStoreOp::STORE)
+            .clear_value(vk::ClearValue {
+                depth_stencil: vk::ClearDepthStencilValue {
+                    depth: 0.0,
+                    stencil: 0,
+                },
+            });
 
-        let extent = vk::Extent2D::default().width(draw_image.extent.width).height(draw_image.extent.height);
-
-        cmd.begin_rendering2(&[color_attachment], extent)?;
-
-        cmd.bind_pipeline(vk::PipelineBindPoint::GRAPHICS, self.mesh_pipeline)?;
+        cmd.begin_rendering2(&[color_attachment], &depth_attachment, extent)?;
 
         let viewport = vk::Viewport::default()
-            .width(draw_image.extent.width as f32)
-            .height(draw_image.extent.height as f32)
+            .width(extent.width as f32)
+            .height(0.0 - extent.height as f32)
+            .x(0.)
+            .y(extent.height as f32)
             .max_depth(1.0);
         cmd.set_viewport(viewport);
-        
-        let scissor = vk::Rect2D::default().extent(extent); 
+
+        let scissor = vk::Rect2D::default().extent(extent);
         cmd.set_scissor(scissor);
 
-        cmd.draw(3, 1, 0, 0);   
+        cmd.bind_pipeline(vk::PipelineBindPoint::GRAPHICS, self.mesh_pipeline)?;
+        let mesh = &self.test_meshes[2];
+        let vertex_buffer = mesh.mesh_buffers.vertex_buffer_address;
+
+        let model = na::Isometry3::new(na::Vector3::z(), na::zero());
+        let eye = na::Point3::new(-1.0f32, -1.0f32, -1.0f32);
+        let target = na::Point3::new(0.0, 0.0, 0.0);
+        let view = na::Isometry3::look_at_rh(&eye, &target, &na::Vector3::y());
+        let projection = na::Perspective3::new(
+            extent.width as f32 / extent.height as f32,
+            std::f32::consts::PI / 2.0,
+            0.1,
+            1000.0,
+        );
+        let world_matrix = projection.as_matrix() * (view * model).to_homogeneous();
+        let constants = GPUDrawPushConstants {
+            world_matrix,
+            vertex_buffer,
+        };
+
+        cmd.push_constants(self.mesh_pipeline_layout, &constants);
+        cmd.bind_index_buffer(
+            mesh.mesh_buffers.index_buffer.handle(),
+            0,
+            vk::IndexType::UINT32,
+        );
+        cmd.draw_indexed(
+            mesh.surfaces[0].count,
+            1,
+            mesh.surfaces[0].start_index,
+            0,
+            0,
+        );
+
         cmd.end_rendering()
     }
 
@@ -309,8 +340,8 @@ impl SceneRenderer {
             image_write,
         );
         cmd.dispatch(
-            f32::ceil(self.draw_image.extent.width as f32 / 16.0) as u32,
-            f32::ceil(self.draw_image.extent.height as f32 / 16.0) as u32,
+            f32::ceil(self.draw_image.info.extent.width as f32 / 16.0) as u32,
+            f32::ceil(self.draw_image.info.extent.height as f32 / 16.0) as u32,
             1,
         );
 
@@ -340,6 +371,6 @@ pub struct GpuMeshBuffers {
 }
 
 struct GPUDrawPushConstants {
-    world_matrix: glm::Mat4,
+    world_matrix: nalgebra::Matrix4<f32>, // glm::Mat4,
     vertex_buffer: vk::DeviceAddress,
 }

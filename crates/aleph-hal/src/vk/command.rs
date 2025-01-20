@@ -76,6 +76,7 @@ impl CommandBuffer {
     pub fn begin_rendering2(
         &self,
         color_attachments: &[vk::RenderingAttachmentInfo],
+        depth_attachment: &vk::RenderingAttachmentInfo,
         extent: vk::Extent2D,
     ) -> Result<()> {
         let rendering_info = vk::RenderingInfo::default()
@@ -84,7 +85,8 @@ impl CommandBuffer {
                 extent,
             })
             .layer_count(1)
-            .color_attachments(color_attachments);
+            .color_attachments(color_attachments)
+        .depth_attachment(depth_attachment);    
 
         #[allow(clippy::unit_arg)]
         Ok(unsafe {
@@ -156,6 +158,36 @@ impl CommandBuffer {
         Ok(unsafe { self.device.handle.cmd_end_rendering(self.handle) })
     }
 
+    pub fn push_constants<T>(&self, layout: vk::PipelineLayout, data: &T) {
+        let ptr = (data as *const T) as *const u8;
+        let data2 = unsafe { std::slice::from_raw_parts(ptr, std::mem::size_of::<T>()) };
+
+        unsafe {
+            self.device
+                .cmd_push_constants(self.handle, layout, vk::ShaderStageFlags::VERTEX, 0, data2);
+        }
+    }
+
+    pub fn bind_index_buffer(&self, buffer: vk::Buffer, offset: u64, index_type: vk::IndexType) {
+        unsafe {
+            self.device
+                .cmd_bind_index_buffer(self.handle, buffer, offset, index_type);
+        }
+    }
+
+    pub fn draw_indexed(&self, index_count: u32, instance_count: u32, first_index: u32, vertex_offset: i32, first_instance: u32) {
+        unsafe {
+            self.device.cmd_draw_indexed(
+                self.handle,
+                index_count,
+                instance_count,
+                first_index,
+                vertex_offset,
+                first_instance,
+            )
+        }
+    }
+
     pub fn bind_pipeline(
         &self,
         pipeline_bind_point: vk::PipelineBindPoint,
@@ -193,35 +225,8 @@ impl CommandBuffer {
         }
     }
 
-    /*
-        VK_CHECK(vkResetFences(_device, 1, &_immFence));
-    VK_CHECK(vkResetCommandBuffer(_immCommandBuffer, 0));
-
-    VkCommandBuffer cmd = _immCommandBuffer;
-
-    VkCommandBufferBeginInfo cmdBeginInfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-
-    VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
-
-    function(cmd);
-
-    VK_CHECK(vkEndCommandBuffer(cmd));
-
-    VkCommandBufferSubmitInfo cmdinfo = vkinit::command_buffer_submit_info(cmd);
-    VkSubmitInfo2 submit = vkinit::submit_info(&cmdinfo, nullptr, nullptr);
-
-    // submit command buffer to the queue and execute it.
-    //  _renderFence will now block until the graphic commands finish execution
-    VK_CHECK(vkQueueSubmit2(_graphicsQueue, 1, &submit, _immFence));
-
-    VK_CHECK(vkWaitForFences(_device, 1, &_immFence, true, 9999999999));
-     */
-
-    pub fn submit_immediate(
+ pub fn submit_immediate(
         &self,
-        // wait_semaphore: &vk::Semaphore,
-        // signal_semaphore: &vk::Semaphore,
-        // fence: &[]// // // // // // // // Option<vk::Fence>,
         f: impl FnOnce(&CommandBuffer),
     ) -> Result<()> {
         self.device.wait_for_fence(self.fence)?;
@@ -233,14 +238,6 @@ impl CommandBuffer {
 
         self.end()?;
 
-        // let wait_info = &[vk::SemaphoreSubmitInfo::default()
-        //     .semaphore(*wait_semaphore)
-        //     .stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
-        //     .value(1)];
-        // let signal_info = &[vk::SemaphoreSubmitInfo::default()
-        //     .semaphore(*signal_semaphore)
-        //     .stage_mask(vk::PipelineStageFlags2::ALL_GRAPHICS)
-        //     .value(1)];
         let command_buffer_info = &[vk::CommandBufferSubmitInfo::default()
             .command_buffer(self.handle)
             .device_mask(0)];

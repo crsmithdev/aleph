@@ -12,30 +12,31 @@ use {
     derive_more::Debug,
     gltf::Gltf,
     nalgebra_glm as glm,
+    nalgebra as na,
     std::path::Path,
 };
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, serde::Serialize, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex {
-    pub position: glm::Vec3,
+    pub position: na::Vector3<f32>,
     pub uv_x: f32,
-    pub normal: glm::Vec3,
+    pub normal: na::Vector3<f32>,
     pub uv_y: f32,
-    pub color: glm::Vec4,
+    pub color: na::Vector4<f32>,
 }
 
 impl Vertex {
     pub fn position(self, x: f32, y: f32, z: f32) -> Self {
         Self {
-            position: glm::vec3(x, y, z),
+            position: na::Vector3::new(x, y, z),
             ..self
         }
     }
 
     pub fn color(self, r: f32, g: f32, b: f32, a: f32) -> Self {
         Self {
-            color: glm::vec4(r, g, b, a),
+            color: na::Vector4::new(r, g, b, a),
             ..self
         }
     }
@@ -47,14 +48,14 @@ pub struct GpuMeshBuffers {
     pub vertex_buffer_address: DeviceAddress,
 }
 pub struct GeoSurface {
-    start_index: u32,
-    count: u32,
+    pub start_index: u32,
+    pub count: u32,
 }
 
 pub struct MeshAsset {
-    name: String,
-    surfaces: Vec<GeoSurface>,
-    mesh_buffers: GpuMeshBuffers,
+    pub name: String,
+    pub surfaces: Vec<GeoSurface>,
+    pub mesh_buffers: GpuMeshBuffers,
 }
 
 // pub fn load_meshes() -> Result<Vec<GpuMeshBuffers>> {
@@ -69,18 +70,6 @@ pub fn load_meshes(
     context: &Context,
     cmd: &CommandBuffer,
 ) -> Result<Vec<MeshAsset>> {
-     
-     /*
-     pub position: glm::Vec3,
-    pub uv_x: f32,
-    pub normal: glm::Vec3,
-    pub uv_y: f32,
-    pub color: glm::Vec4,  vertex  */
-    dbg!(std::mem::size_of::<Vertex>());
-    dbg!(std::mem::size_of::<glm::Vec3>());
-    dbg!(std::mem::size_of::<glm::Vec4>());
-    dbg!(std::mem::size_of::<f32>());
-    dbg!(bincode::serialized_size(&Vertex::default()));
     let (document, buffers, _images) = match gltf::import(path) {
         Ok(loaded) => loaded,
         Err(err) => panic!("GLTF loading error: {err:?}"),
@@ -93,43 +82,85 @@ pub fn load_meshes(
     for mesh in document.meshes() {
         for primitive in mesh.primitives().take(1) {
             let reader = primitive.reader(get_buffer_data);
-            log::debug!("reader indices len: {:?}", reader.read_indices().unwrap().into_u32().count());
-            log::debug!("reader @ first index: {:?}", reader.read_indices().unwrap().into_u32().next());
-            log::debug!("reader @ last index: {:?}", reader.read_indices().unwrap().into_u32().last());
-            
+            let positions = reader.read_positions().unwrap();
+            let normals = reader.read_normals().unwrap();
+            // let colors = reader.read_colors(0).unwrap();
+            let tex_coords = reader.read_tex_coords(0).unwrap().into_f32();
+
+            let mut vertices = Vec::with_capacity(positions.len());
+            for ((position, normal), tex_coord) in positions.zip(normals).zip(tex_coords) {
+                vertices.push(Vertex {
+                    position: position.into(),
+                    normal: normal.into(),  
+                    uv_x: tex_coord[0], 
+                    uv_y: tex_coord[1],
+                    color: na::Vector4::new(1.0, 1.0, 1.0, 1.0),   
+                });
+            }
+
+            for v in vertices.iter_mut() {  
+                v.color = na::Vector4::new(v.normal[0], v.normal[1], v.normal[2], 1.0);
+            }
+
             let indices = reader
                 .read_indices()
                 .expect("Could not read mesh indices")
                 .into_u32()
                 .collect::<Vec<u32>>();
-            let index_size = indices.len() * std::mem::size_of::<f32>();
             let index_buffer = context.create_buffer(BufferInfo {
                 usage: BufferUsageFlags::INDEX_BUFFER | BufferUsageFlags::TRANSFER_DST,
                 location: MemoryLocation::GpuOnly,
-                size: index_size,
+                size: indices.len() * std::mem::size_of::<f32>(),
             })?;
-
-            log::debug!("calculated index size: {:?}", index_size);
-            log::debug!("indices len: {:?}", indices.len());
-            log::debug!("indices @ first index: {:?}", indices[0]);
-            log::debug!("indices @ last index: {:?}", indices[indices.len() - 1]);
-
             index_buffer.upload_data(cmd, &indices)?;
-            let vertices: Vec<Vertex> = reader
-            .read_positions()
-            .expect("Mesh must have positions")
-            .map(|p| {
-                let v = Vertex {
-                    position: p.into(),
-                    uv_x: 0.0,
-                    uv_y: 0.0,
-                    color: glm::vec4(0.0, 0.0, 0.0, 0.0),
-                    normal: glm::vec3(0.0, 0.0, 0.0),
-                };
-                // dbg!(&v);    
-                v
-            })
-            .collect();
+
+            // let positions = reader
+            //     .read_positions()
+            //     .map(|p| {
+            //         let p2 = p.collect();
+            //         glm::vec3(p2[0], p2[1], p2[2])
+            //     });
+            // let vertices = positions.map(|p| glm::vec3(p[0], p[1], p[2]));
+            // let normals = reader.read_normals().map(|n| n.collect::<Vec<[f32; 3]>>());
+            // let uvs = reader.read_tex_coords(0).map(|t| t.into_f32().collect());
+            // let indices = reader
+            //     .read_indices()
+            //     .map(|i| i.into_u32().collect::<Vec<u32>>());
+
+            // let all = vertices.zip(normals).zip(colors).zip(tex_coords).expect("something bad");
+            // let vertices: Vec<Vertex> = all
+            //     .map(|(((position, normal), color), tex_coord)| {
+            //         position.
+            //         let v = Vertex {
+            //             position: glm::vec3(position[0], position[1], position[2]),
+            //             normal: normal.into(),
+            //             color: if override_colors {
+            //                 glm::vec4(1.0, 1.0, 1.0, 1.0)
+            //             } else {
+            //                 color.map_or(glm::vec4(1.0, 1.0, 1.0, 1.0), |c| c.into())
+            //             },
+            //             uv_x: tex_coord.map_or(0.0, |tc| tc[0]),
+            //             uv_y: tex_coord.map_or(0.0, |tc| tc[1]),
+            //         };
+            //         // dbg!(&v);
+            //         v
+            //     })
+            //     .collect();
+            // let vertices: Vec<Vertex> = reader
+            //     .read_positions()
+            //     .expect("Mesh must have positions")
+            //     .map(|p| {
+            //         let v = Vertex {
+            //             position: p.into(),
+            //             uv_x: 0.0,
+            //             uv_y: 0.0,
+            //             color: glm::vec4(1.0, 1.0, 1.0, 1.0),
+            //             normal: glm::vec3(1.0, 0.0, 0.0),
+            //         };
+            //         // dbg!(&v);
+            //         v
+            //     })
+            //     .collect();
             let vertex_buffer = context.create_buffer(BufferInfo {
                 usage: BufferUsageFlags::STORAGE_BUFFER
                     | BufferUsageFlags::TRANSFER_DST

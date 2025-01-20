@@ -9,12 +9,12 @@ use {
 };
 
 #[derive(Debug)]
-pub struct MemoryAllocator {
+pub struct Allocator {
     pub(crate) inner: Arc<Mutex<gavk::Allocator>>,
     pub(crate) device: Device,
 }
 
-impl MemoryAllocator {
+impl Allocator {
     pub fn inner(&self) -> &Arc<Mutex<gavk::Allocator>> {
         &self.inner
     }

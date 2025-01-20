@@ -1,7 +1,7 @@
 pub use gpu_allocator::MemoryLocation;
 pub use vk::BufferUsageFlags;
 use {
-    crate::vk::{CommandBuffer, Device, MemoryAllocator},
+    crate::vk::{CommandBuffer, Device, Allocator},
     anyhow::{Result},
     ash::{vk, vk::Handle},
     derive_more,
@@ -24,13 +24,13 @@ pub struct Buffer {
     pub(crate) handle: vk::Buffer,
     allocation: Allocation,
     info: BufferInfo,
-    allocator: Arc<MemoryAllocator>,
+    allocator: Arc<Allocator>,
 }
 
 impl Buffer {
     pub fn new(
         device: &Device,
-        allocator: Arc<MemoryAllocator>,
+        allocator: Arc<Allocator>,
         info: BufferInfo,
     ) -> Result<Buffer> {
         let buffer = unsafe {

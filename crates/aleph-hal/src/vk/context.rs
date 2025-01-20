@@ -6,7 +6,7 @@ use {
         CommandPool,
         Device,
         Instance,
-        MemoryAllocator,
+        Allocator,
         Queue,
         Swapchain,
         SwapchainInfo,
@@ -41,7 +41,7 @@ pub struct Context {
     pub(crate) surface: Surface,
     pub(crate) device: Device,
     pub(crate) swapchain: Swapchain,
-    pub(crate) allocator: Arc<MemoryAllocator>,
+    pub(crate) allocator: Arc<Allocator>,
     pub(crate) window: Arc<Window>,
 }
 
@@ -60,7 +60,7 @@ impl Context {
         &self.device.queue
     }
 
-    pub fn allocator(&self) -> &Arc<MemoryAllocator> {
+    pub fn allocator(&self) -> &Arc<Allocator> {
         &self.allocator
     }
 
@@ -108,7 +108,7 @@ impl Context /* Init */ {
         )?;
         log::info!("Created swapchain: {swapchain:?}");
 
-        let allocator = Arc::new(MemoryAllocator::new(&instance, &device)?);
+        let allocator = Arc::new(Allocator::new(&instance, &device)?);
         log::info!("Created allocator: {allocator:?}");
 
         Ok(Context {

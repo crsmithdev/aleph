@@ -1,7 +1,7 @@
 use {
-    crate::vk::allocator::MemoryAllocator,
+    crate::vk::allocator::Allocator,
     anyhow::Result,
-    ash::{vk, vk::Handle},
+    ash::vk::{self, Extent3D, Handle},
     gpu_allocator::{
         self as ga,
         vulkan::{Allocation, AllocationScheme},
@@ -9,45 +9,38 @@ use {
     },
     std::{fmt, sync::Arc},
 };
-pub struct ImageInfo<'a> {
-    pub allocator: &'a Arc<MemoryAllocator>,
-    pub width: usize,
-    pub height: usize,
+
+#[derive(Clone, Debug, Copy)]
+pub struct ImageInfo {
+    pub extent: vk::Extent2D,
     pub format: vk::Format,
     pub usage: vk::ImageUsageFlags,
+    pub aspect_flags: vk::ImageAspectFlags,
 }
 
 pub struct Image {
-    pub allocator: Arc<MemoryAllocator>,
+    pub allocator: Arc<Allocator>,
     pub allocation: Allocation,
-    pub inner: vk::Image,
+    pub handle: vk::Image,
     pub view: vk::ImageView,
-    pub extent: vk::Extent3D,
-    pub format: vk::Format,
-    pub usage: vk::ImageUsageFlags,
+    pub info: ImageInfo,
 }
 
 impl fmt::Debug for Image {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Image")
-            .field("inner", &format_args!("{:x}", self.inner.as_raw()))
+            .field("inner", &format_args!("{:x}", self.handle.as_raw()))
             .finish_non_exhaustive()
     }
 }
 
 impl Image {
-    pub fn new(info: &ImageInfo) -> Result<Self> {
-        let extent = vk::Extent3D {
-            width: info.width as u32,
-            height: info.height as u32,
+    pub fn new(allocator: Arc<Allocator>, info: &ImageInfo) -> Result<Self> {
+        let extent = Extent3D {
+            width: info.extent.width,
+            height: info.extent.height,
             depth: 1,
         };
-
-        let format = vk::Format::R16G16B16A16_SFLOAT;
-        let usage = vk::ImageUsageFlags::TRANSFER_DST
-            | vk::ImageUsageFlags::TRANSFER_SRC
-            | vk::ImageUsageFlags::COLOR_ATTACHMENT
-            | vk::ImageUsageFlags::STORAGE;
         let create_info = vk::ImageCreateInfo::default()
             .image_type(vk::ImageType::TYPE_2D)
             .format(info.format)
@@ -57,41 +50,40 @@ impl Image {
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::OPTIMAL)
             .usage(info.usage);
-        let (image, allocation) = info.allocator.create_image(&create_info)?;
+        let (image, allocation) = allocator.create_image(&create_info)?;
 
         let view_info = vk::ImageViewCreateInfo::default()
             .image(image)
             .view_type(vk::ImageViewType::TYPE_2D)
-            .format(vk::Format::R16G16B16A16_SFLOAT)
+            .format(info.format)
             .components(vk::ComponentMapping::default())
             .subresource_range(
                 vk::ImageSubresourceRange::default()
-                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .aspect_mask(info.aspect_flags)
                     .base_mip_level(0)
                     .level_count(1)
                     .base_array_layer(0)
                     .layer_count(1),
             );
 
+
         let view = unsafe {
-            info.allocator
+            allocator
                 .device
                 .create_image_view(&view_info, None)
         }?;
 
         Ok(Self {
-            allocator: info.allocator.clone(),
+            allocator: allocator.clone(),
             allocation,
-            inner: image,
-            extent,
-            format,
-            usage,
+            handle: image,
+            info: *info,
             view,
         })
     }
 }
 
-impl MemoryAllocator {
+impl Allocator {
     fn create_image(&self, info: &vk::ImageCreateInfo) -> Result<(vk::Image, Allocation)> {
         let image = unsafe { self.device.create_image(info, None) }?;
         let requirements = unsafe { self.device.get_image_memory_requirements(image) };

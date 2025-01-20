@@ -16,7 +16,7 @@ pub use {
         Image,
         ImageInfo,
         Instance,
-        MemoryAllocator,
+        Allocator,
         MemoryLocation,
         Queue,
         QueueFamily,

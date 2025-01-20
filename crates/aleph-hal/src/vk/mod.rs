@@ -8,7 +8,7 @@ pub mod instance;
 pub mod swapchain;
 
 pub use crate::vk::{
-    allocator::MemoryAllocator,
+    allocator::Allocator,
     command::{CommandBuffer, CommandPool},
     context::{Context, Surface},
     device::{Device, QueueFamily, Queue},
