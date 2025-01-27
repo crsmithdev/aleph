@@ -1,10 +1,10 @@
 use {
-    crate::{CommandBuffer, Instance, VK_TIMEOUT_NS},
+    crate::{Instance, VK_TIMEOUT_NS},
     anyhow::{anyhow, bail, Result},
     ash::{
         ext,
         khr,
-        vk::{self, Handle},
+        vk::{self, BufferDeviceAddressInfo, Handle},
     },
     derive_more::{Debug, Deref},
     std::ffi,
@@ -61,8 +61,6 @@ pub struct Device {
 }
 
 impl Device {
-    // #region Construction
-
     pub fn new(instance: &Instance) -> Result<Device> {
         let candidate_devices = instance.enumerate_physical_devices()?;
 
@@ -92,24 +90,13 @@ impl Device {
             .push_next(&mut synchronization_features)
             .push_next(&mut buffer_device_address_features);
 
-        // let priorities = [1.0];
-        // let queue_info = [vk::DeviceQueueCreateInfo::default()
-        //     .queue_family_index(queue_family.index)
-        //     .queue_priorities(&priorities)];
-        // let device_info = vk::DeviceCreateInfo::default()
-        //     .queue_create_infos(&queue_info)
-        //     .enabled_extension_names(&device_extension_names)
-        //     .push_next(&mut device_features);
-
         let handle = instance.create_device(
             physical_device,
             queue_family,
             &device_extension_names,
             &mut device_features,
         )?;
-        // &device_info, None)? };
         let queue = Self::create_queue(&handle, queue_family);
-
         let push_descriptor = khr::push_descriptor::Device::new(&instance.handle, &handle);
 
         Ok(Device {
@@ -141,49 +128,13 @@ impl Device {
             _ => 0,
         };
 
+        log::debug!("{:?} {}", physical_device, score);
         score
     }
-
-    // #region Child Object Creation
 
     fn create_queue(handle: &ash::Device, family: QueueFamily) -> Queue {
         let handle = unsafe { handle.get_device_queue(family.index, 0) };
         crate::Queue { handle, family }
-    }
-
-    // #region Test2
-
-    // pub fn create_command_pool(&self) -> Result<vk::CommandPool> {
-    //     let info = vk::CommandPoolCreateInfo::default()
-    //         .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
-    //         .queue_family_index(self.queue.family().index());
-    //     Ok(unsafe { self.handle.create_command_pool(&info, None)? })
-    // }
-
-    pub fn create_command_buffer(&self, pool: &crate::CommandPool) -> Result<CommandBuffer> {
-        let info = vk::CommandBufferAllocateInfo::default()
-            .command_buffer_count(1)
-            .command_pool(pool.handle)
-            .level(vk::CommandBufferLevel::PRIMARY);
-
-        let inner = unsafe {
-            self.handle
-                .allocate_command_buffers(&info)
-                .map(|b| b[0])
-                .map_err(anyhow::Error::from)
-        }?;
-
-        Ok(CommandBuffer {
-            handle: inner,
-            pool: pool.handle,
-            device: self.clone(),
-            queue: self.queue,
-            fence: self.create_fence_signaled().unwrap(),
-        })
-    }
-
-    pub fn clone_inner(&self) -> ash::Device {
-        self.handle.clone()
     }
 
     fn init_queue_family(
@@ -208,6 +159,15 @@ impl Device {
     pub fn handle(&self) -> &ash::Device {
         &self.handle
     }
+
+    pub fn create_semaphore(&self) -> Result<vk::Semaphore> {
+        #[allow(clippy::unit_arg)]
+        Ok(unsafe {
+            self.handle
+                .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)?
+        })
+    }
+
     pub fn create_fence(&self) -> Result<vk::Fence> {
         Ok(unsafe {
             self.handle
@@ -222,6 +182,16 @@ impl Device {
                 None,
             )?
         })
+    }
+
+    pub fn wait_for_fence(&self, fence: vk::Fence) -> Result<()> {
+        #[allow(clippy::unit_arg)]
+        Ok(unsafe { self.handle.wait_for_fences(&[fence], true, VK_TIMEOUT_NS)? })
+    }
+
+    pub fn reset_fence(&self, fence: vk::Fence) -> Result<()> {
+        #[allow(clippy::unit_arg)]
+        Ok(unsafe { self.handle.reset_fences(&[fence])? })
     }
 
     pub fn update_descriptor_sets(
@@ -245,24 +215,29 @@ impl Device {
         Ok(unsafe { self.handle.create_descriptor_set_layout(&info, None)? })
     }
 
-    pub fn wait_for_fence(&self, fence: vk::Fence) -> Result<()> {
-        #[allow(clippy::unit_arg)]
-        Ok(unsafe {
+    // #region Test2
+    pub fn allocate_command_buffer(
+        &self,
+        pool: vk::CommandPool,
+        count: u32,
+    ) -> Result<vk::CommandBuffer> {
+        let info = vk::CommandBufferAllocateInfo::default()
+            .command_buffer_count(count)
+            .command_pool(pool)
+            .level(vk::CommandBufferLevel::PRIMARY);
+
+        unsafe {
             self.handle
-                .wait_for_fences(&[fence], true, VK_TIMEOUT_NS)?
-        })
+                .allocate_command_buffers(&info)
+                .map(|b| b[0])
+                .map_err(anyhow::Error::from)
+        }
     }
 
-    pub fn reset_fence(&self, fence: vk::Fence) -> Result<()> {
-        #[allow(clippy::unit_arg)]
-        Ok(unsafe { self.handle.reset_fences(&[fence])? })
-    }
-
-    pub fn create_semaphore(&self) -> Result<vk::Semaphore> {
-        #[allow(clippy::unit_arg)]
-        Ok(unsafe {
+    pub fn get_buffer_device_address(&self, buffer: &vk::Buffer) -> vk::DeviceAddress {
+        unsafe {
             self.handle
-                .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)?
-        })
+                .get_buffer_device_address(&BufferDeviceAddressInfo::default().buffer(*buffer))
+        }
     }
 }

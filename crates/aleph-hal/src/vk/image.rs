@@ -1,12 +1,8 @@
 use {
-    crate::vk::allocator::Allocator,
+    crate::{Allocator, Device, Buffer, CommandBuffer, MemoryLocation},
     anyhow::Result,
     ash::vk::{self, Extent3D, Handle},
-    gpu_allocator::{
-        self as ga,
-        vulkan::{Allocation, AllocationScheme},
-        MemoryLocation,
-    },
+    gpu_allocator::vulkan::Allocation,
     std::{fmt, sync::Arc},
 };
 
@@ -24,6 +20,7 @@ pub struct Image {
     pub handle: vk::Image,
     pub view: vk::ImageView,
     pub info: ImageInfo,
+    device: Device,
 }
 
 impl fmt::Debug for Image {
@@ -50,7 +47,7 @@ impl Image {
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::OPTIMAL)
             .usage(info.usage);
-        let (image, allocation) = allocator.create_image(&create_info)?;
+        let (image, allocation) = allocator.allocate_image(&create_info)?;
 
         let view_info = vk::ImageViewCreateInfo::default()
             .image(image)
@@ -66,39 +63,50 @@ impl Image {
                     .layer_count(1),
             );
 
-
-        let view = unsafe {
-            allocator
-                .device
-                .create_image_view(&view_info, None)
-        }?;
+        let view = unsafe { allocator.device.create_image_view(&view_info, None) }?;
 
         Ok(Self {
             allocator: allocator.clone(),
+            device: allocator.device.clone(),
             allocation,
             handle: image,
             info: *info,
             view,
         })
     }
-}
 
-impl Allocator {
-    fn create_image(&self, info: &vk::ImageCreateInfo) -> Result<(vk::Image, Allocation)> {
-        let image = unsafe { self.device.create_image(info, None) }?;
-        let requirements = unsafe { self.device.get_image_memory_requirements(image) };
-        let mut allocator = self.inner.lock().unwrap();
-        let allocation = allocator.allocate(&ga::vulkan::AllocationCreateDesc {
-            name: "Image",
-            requirements,
-            location: MemoryLocation::GpuOnly,
-            linear: false,
-            allocation_scheme: AllocationScheme::GpuAllocatorManaged,
-        })?;
-        unsafe {
-            self.device
-                .bind_image_memory(image, allocation.memory(), allocation.offset())
-        }?;
-        Ok((image, allocation))
-    }
+    // pub fn upload_data<T: serde::Serialize>(
+    //     &self,
+    //     cmd: &CommandBuffer,
+    //     data: &Buffer,
+    //     dst: &Image,
+    //     format: vk::Format,
+    //     flags: vk::ImageUsageFlags,
+    // ) -> Result<()> {
+    //     let subresource = vk::ImageSubresourceLayers {
+    //         aspect_mask: vk::ImageAspectFlags::COLOR,
+    //         mip_level: 0,
+    //         base_array_layer: 0,
+    //         layer_count: 1,
+    //     };
+
+    //     let region = vk::BufferImageCopy {
+    //         buffer_offset: 0,
+    //         buffer_row_length: 0,
+    //         buffer_image_height: 0,
+    //         image_subresource: subresource,
+    //         image_offset: vk::Offset3D::default(),
+    //         image_extent: vk::Extent3D {
+    //             width: self.info.extent.width,
+    //             height: self.info.extent.height,
+    //             depth: 1,
+    //         },
+    //     };
+
+    //     cmd.submit_immediate(|cmd| {
+    //         cmd.copy_buffer_to_image(data, self, format, &region);
+    //     })
+
+    //     // cmd.transition_image(image, current_layout, new_layout);
+    // }
 }

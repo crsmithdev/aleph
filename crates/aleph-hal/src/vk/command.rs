@@ -1,39 +1,23 @@
 use {
-    crate::{Device, Queue},
+    crate::{Buffer, Device, Image, Queue},
     anyhow::Result,
-    ash::vk,
+    ash::vk::{self, BufferCopy2},
     derive_more::{Debug, Deref},
 };
 
 #[derive(Clone, Debug)]
 pub struct CommandPool {
     pub(crate) handle: vk::CommandPool,
-    pub(crate) device: Device,
-    pub(crate) queue: Queue,
+    pub(crate) device: crate::Device,
 }
 
 impl CommandPool {
-
     pub fn handle(&self) -> vk::CommandPool {
         self.handle
     }
-    
+
     pub fn create_command_buffer(&self) -> Result<CommandBuffer> {
-        let info = vk::CommandBufferAllocateInfo::default()
-            .command_pool(self.handle)
-            .level(vk::CommandBufferLevel::PRIMARY)
-            .command_buffer_count(1);
-
-        let handle = unsafe { self.device.allocate_command_buffers(&info)?[0] };
-        let fence = self.device.create_fence_signaled()?;
-
-        Ok(CommandBuffer {
-            handle,
-            pool: self.handle,
-            device: self.device.clone(),
-            queue: self.queue,
-            fence,
-        })
+        CommandBuffer::new(&self.device, self)
     }
 }
 
@@ -44,11 +28,21 @@ pub struct CommandBuffer {
     pub(crate) handle: vk::CommandBuffer,
     pub(crate) pool: vk::CommandPool,
     pub(crate) device: Device,
-    pub(crate) queue: Queue,
     pub(crate) fence: vk::Fence,
 }
 
 impl CommandBuffer {
+    pub fn new(device: &Device, pool: &CommandPool) -> Result<CommandBuffer> {
+        let handle = device.allocate_command_buffer(pool.handle, 1)?;
+        let fence = device.create_fence_signaled()?;
+
+        Ok(CommandBuffer {
+            handle,
+            pool: pool.handle,
+            device: device.clone(),
+            fence,
+        })
+    }
     pub fn handle(&self) -> vk::CommandBuffer {
         self.handle
     }
@@ -73,26 +67,34 @@ impl CommandBuffer {
         Ok(unsafe { self.device.end_command_buffer(self.handle)? })
     }
 
-    pub fn begin_rendering2(
+    pub fn begin_rendering(
         &self,
         color_attachments: &[vk::RenderingAttachmentInfo],
-        depth_attachment: &vk::RenderingAttachmentInfo,
+        depth_attachment: Option<&vk::RenderingAttachmentInfo>,
         extent: vk::Extent2D,
     ) -> Result<()> {
-        let rendering_info = vk::RenderingInfo::default()
+        let mut rendering_info = vk::RenderingInfo::default()
             .render_area(vk::Rect2D {
                 offset: vk::Offset2D { x: 0, y: 0 },
                 extent,
             })
             .layer_count(1)
-            .color_attachments(color_attachments)
-        .depth_attachment(depth_attachment);    
+            .color_attachments(color_attachments);
+
+        if let Some(depth_attachment) = depth_attachment {
+            rendering_info = rendering_info.depth_attachment(depth_attachment);
+        }
 
         #[allow(clippy::unit_arg)]
         Ok(unsafe {
             self.device
                 .cmd_begin_rendering(self.handle, &rendering_info)
         })
+    }
+
+    pub fn end_rendering(&self) -> Result<()> {
+        #[allow(clippy::unit_arg)]
+        Ok(unsafe { self.device.handle.cmd_end_rendering(self.handle) })
     }
 
     pub fn draw(
@@ -113,69 +115,14 @@ impl CommandBuffer {
         }
     }
 
-    pub fn set_scissor(&self, scissor: vk::Rect2D) {
-        unsafe {
-            self.device
-                .cmd_set_scissor(self.handle, 0, std::slice::from_ref(&scissor));
-        }
-    }
-
-    pub fn set_viewport(&self, viewport: vk::Viewport) {
-        unsafe {
-            self.device
-                .cmd_set_viewport(self.handle, 0, std::slice::from_ref(&viewport));
-        }
-    }
-
-    pub fn begin_rendering(&self, image_view: &vk::ImageView, extent: vk::Extent2D) -> Result<()> {
-        let color_attachment_info = vk::RenderingAttachmentInfo::default()
-            .image_view(*image_view)
-            .image_layout(vk::ImageLayout::ATTACHMENT_OPTIMAL)
-            .load_op(vk::AttachmentLoadOp::DONT_CARE)
-            .store_op(vk::AttachmentStoreOp::STORE)
-            .clear_value(vk::ClearValue {
-                color: vk::ClearColorValue { float32: [1.0; 4] },
-            });
-
-        let rendering_info = vk::RenderingInfo::default()
-            .render_area(vk::Rect2D {
-                offset: vk::Offset2D { x: 0, y: 0 },
-                extent,
-            })
-            .layer_count(1)
-            .color_attachments(std::slice::from_ref(&color_attachment_info));
-
-        #[allow(clippy::unit_arg)]
-        Ok(unsafe {
-            self.device
-                .handle
-                .cmd_begin_rendering(self.handle, &rendering_info)
-        })
-    }
-
-    pub fn end_rendering(&self) -> Result<()> {
-        #[allow(clippy::unit_arg)]
-        Ok(unsafe { self.device.handle.cmd_end_rendering(self.handle) })
-    }
-
-    pub fn push_constants<T>(&self, layout: vk::PipelineLayout, data: &T) {
-        let ptr = (data as *const T) as *const u8;
-        let data2 = unsafe { std::slice::from_raw_parts(ptr, std::mem::size_of::<T>()) };
-
-        unsafe {
-            self.device
-                .cmd_push_constants(self.handle, layout, vk::ShaderStageFlags::VERTEX, 0, data2);
-        }
-    }
-
-    pub fn bind_index_buffer(&self, buffer: vk::Buffer, offset: u64, index_type: vk::IndexType) {
-        unsafe {
-            self.device
-                .cmd_bind_index_buffer(self.handle, buffer, offset, index_type);
-        }
-    }
-
-    pub fn draw_indexed(&self, index_count: u32, instance_count: u32, first_index: u32, vertex_offset: i32, first_instance: u32) {
+    pub fn draw_indexed(
+        &self,
+        index_count: u32,
+        instance_count: u32,
+        first_index: u32,
+        vertex_offset: i32,
+        first_instance: u32,
+    ) {
         unsafe {
             self.device.cmd_draw_indexed(
                 self.handle,
@@ -185,6 +132,58 @@ impl CommandBuffer {
                 vertex_offset,
                 first_instance,
             )
+        }
+    }
+
+    pub fn set_scissor(&self, scissor: vk::Rect2D) {
+        unsafe {
+            self.device.cmd_set_scissor(self.handle, 0, &[scissor]);
+        }
+    }
+
+    pub fn set_viewport(&self, viewport: vk::Viewport) {
+        unsafe {
+            self.device.cmd_set_viewport(self.handle, 0, &[viewport]); //std::slice::from_ref(&
+                                                                       // viewport));
+        }
+    }
+
+    pub fn push_constants<T: serde::Serialize + bytemuck::Pod>(&self, layout: vk::PipelineLayout, data: &T) {
+        let data: &[u8] = bytemuck::bytes_of(data);
+
+        unsafe {
+            self.device.cmd_push_constants(
+                self.handle,
+                layout,
+                vk::ShaderStageFlags::VERTEX,
+                0,
+                data,
+            );
+        }
+    }
+
+    pub fn push_descriptor_set(
+        &self,
+        bind_point: vk::PipelineBindPoint,
+        layout: vk::PipelineLayout,
+        set: vk::WriteDescriptorSet,
+    ) {
+        let sets = &[set];
+        unsafe {
+            self.device.push_descriptor.cmd_push_descriptor_set(
+                self.handle,
+                bind_point,
+                layout,
+                0,
+                sets,
+            );
+        }
+    }
+
+    pub fn bind_index_buffer(&self, buffer: vk::Buffer, offset: u64, index_type: vk::IndexType) {
+        unsafe {
+            self.device
+                .cmd_bind_index_buffer(self.handle, buffer, offset, index_type);
         }
     }
 
@@ -207,28 +206,7 @@ impl CommandBuffer {
         }
     }
 
-    pub fn push_descriptor_set(
-        &self,
-        bind_point: vk::PipelineBindPoint,
-        layout: vk::PipelineLayout,
-        set: vk::WriteDescriptorSet,
-    ) {
-        let sets = &[set];
-        unsafe {
-            self.device.push_descriptor.cmd_push_descriptor_set(
-                self.handle,
-                bind_point,
-                layout,
-                0,
-                sets,
-            );
-        }
-    }
-
- pub fn submit_immediate(
-        &self,
-        f: impl FnOnce(&CommandBuffer),
-    ) -> Result<()> {
+    pub fn submit_immediate(&self, f: impl FnOnce(&CommandBuffer)) -> Result<()> {
         self.device.wait_for_fence(self.fence)?;
         self.device.reset_fence(self.fence)?;
         self.reset()?;
@@ -248,7 +226,31 @@ impl CommandBuffer {
 
         Ok(unsafe {
             self.device
-                .queue_submit2(self.queue.handle, submit_info, self.fence)
+                .queue_submit2(self.device.queue.handle, submit_info, self.fence)
+        }?)
+    }
+
+    pub fn submit_immediate2(&self, f: impl FnOnce(&CommandBuffer)) -> Result<()> {
+        self.device.wait_for_fence(self.fence)?;
+        self.device.reset_fence(self.fence)?;
+        self.reset()?;
+        self.begin()?;
+
+        f(self);
+
+        self.end()?;
+
+        let command_buffer_info = &[vk::CommandBufferSubmitInfo::default()
+            .command_buffer(self.handle)
+            .device_mask(0)];
+        let submit_info = &[vk::SubmitInfo2::default()
+            .command_buffer_infos(command_buffer_info)
+            .wait_semaphore_infos(&[])
+            .signal_semaphore_infos(&[])];
+
+        Ok(unsafe {
+            self.device
+                .queue_submit2(self.device.queue.handle, submit_info, self.fence)
         }?)
     }
 
@@ -356,4 +358,27 @@ impl CommandBuffer {
 
         unsafe { self.device.cmd_blit_image2(self.handle, &blit_info) }
     }
+
+    pub fn copy_buffer(&self, src: &Buffer, dst: &Buffer, size: u64) {
+        let copy = vk::BufferCopy::default().size(size);
+        unsafe {
+            self.device
+                .handle
+                .cmd_copy_buffer(self.handle(), src.handle(), dst.handle(), &[copy])
+        };
+    }
+
+    // pub fn copy_buffer_to_image(
+    //     &self,
+    //     src: &Buffer,
+    //     dst: &Image,
+    //     format: vk::Format,
+    //     region: &vk::BufferImageCopy,
+    // ) {
+    //     unsafe {
+    //         self.device
+    //             .handle
+    //             .cmd_copy_buffer_to_image(self.handle(), src.handle(), dst.handle(), region)
+    //     };
+    // }
 }

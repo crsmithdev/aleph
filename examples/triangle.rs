@@ -1,6 +1,9 @@
-use {aleph::App, aleph_app::app::AppConfig};
+use {aleph::prelude::*, anyhow::Result};
 
-fn main() {
+fn main() -> Result<()> {
     let config = AppConfig::default().name("Triangle");
-    App::new(config).run();
+    App::new(config)
+        .with_layer(UpdateLayer::default())
+        .with_layer(GraphicsLayer::default())
+        .run()
 }

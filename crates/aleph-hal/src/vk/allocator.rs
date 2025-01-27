@@ -1,17 +1,21 @@
 pub use gavk::Allocation;
 use {
-    crate::vk::{buffer::BufferInfo, Device, Instance},
+    crate::{Buffer, BufferInfo, Device, Instance},
     anyhow::Result,
     ash::vk::{self, Handle},
     derive_more::Debug,
-    gpu_allocator::{self as ga, vulkan as gavk},
+    gpu_allocator::{
+        self as ga,
+        vulkan::{self as gavk},
+        MemoryLocation,
+    },
     std::sync::{Arc, Mutex},
 };
 
 #[derive(Debug)]
 pub struct Allocator {
     pub(crate) inner: Arc<Mutex<gavk::Allocator>>,
-    pub(crate) device: Device,
+    pub(crate) device: crate::Device,
 }
 
 impl Allocator {
@@ -57,7 +61,36 @@ impl Allocator {
 
         Ok(allocation)
     }
-}
+
+// pub fn destroy_buffer(&self, buffer: vk::Buffer, allocation: &ga::vulkan::Allocation) {
+pub fn destroy_buffer(&self, buffer: Buffer) {
+        // let alloc = std::mem::take(&mut allocation);
+
+    }
+
+    pub fn allocate_image(&self, info: &vk::ImageCreateInfo) -> Result<(vk::Image, Allocation)> {
+        let image = unsafe { self.device.create_image(info, None) }?;
+        let requirements = unsafe { self.device.get_image_memory_requirements(image) };
+        let mut allocator = self.inner.lock().unwrap();
+        let allocation = allocator.allocate(&ga::vulkan::AllocationCreateDesc {
+            name: "Image",
+            requirements,
+            location: MemoryLocation::GpuOnly,
+            linear: false,
+            allocation_scheme: ga::vulkan::AllocationScheme::GpuAllocatorManaged,
+        })?;
+        unsafe {
+            self.device
+                .bind_image_memory(image, allocation.memory(), allocation.offset())
+        }?;
+        Ok((image, allocation))
+    }
+
+    pub fn destroy(self) {
+        let inner = self.inner.lock().unwrap();
+        drop(inner);
+    }
+} 
 
 #[derive(Debug)]
 pub struct DescriptorAllocator {
@@ -106,3 +139,4 @@ impl DescriptorAllocator {
         Ok(sets[0])
     }
 }
+

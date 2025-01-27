@@ -1,5 +1,5 @@
 use {
-    crate::{CommandBuffer, CommandPool, Device, Instance, Queue, Surface, VK_TIMEOUT_NS},
+    crate::{CommandBuffer, CommandPool, DeletionQueue, Device, Instance, Queue, Surface, VK_TIMEOUT_NS},
     anyhow::Result,
     ash::{
         khr,
@@ -17,6 +17,7 @@ pub struct Frame {
     pub fence: vk::Fence,
     pub command_pool: CommandPool,
     pub command_buffer: CommandBuffer,
+    pub deletion_queue: DeletionQueue,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct SwapchainInfo {

@@ -1,5 +1,5 @@
 use {
-    aleph_hal::{CommandBuffer, Context},
+    aleph_hal::{CommandBuffer, Gpu},
     anyhow::Result,
     ash::vk::{self},
     imgui,
@@ -28,25 +28,24 @@ impl fmt::Debug for UiRenderer {
 }
 
 impl UiRenderer {
-    pub fn new(context: &Context) -> Result<Self> {
-        let allocator = context.allocator().clone();
-        let device = context.device().clone();
-        let pool = context.create_command_pool()?;
-        let command_buffer = device.create_command_buffer(&pool)?;
+    pub fn new(gpu: &Gpu) -> Result<Self> {
+        let allocator = gpu.allocator().clone();
+        let pool = gpu.create_command_pool()?;
+        let command_buffer = pool.create_command_buffer()?; //device.create_command_buffer(&pool)?;
 
         let mut imgui = imgui::Context::create();
         let mut platform = imgui_winit::WinitPlatform::new(&mut imgui);
         let dpi_mode = imgui_winit::HiDpiMode::Default;
 
-        platform.attach_window(imgui.io_mut(), context.window(), dpi_mode);
+        platform.attach_window(imgui.io_mut(), gpu.window(), dpi_mode);
         imgui
             .fonts()
             .add_font(&[imgui::FontSource::DefaultFontData { config: None }]);
 
         let renderer = imgui_vk::Renderer::with_gpu_allocator(
             allocator.inner().clone(),
-            context.device().handle().clone(),
-            context.queue().handle(),
+            gpu.device().handle().clone(),
+            gpu.queue().handle(),
             pool.handle(),
             imgui_vk::DynamicRendering {
                 color_attachment_format: vk::Format::B8G8R8A8_UNORM,
@@ -64,8 +63,8 @@ impl UiRenderer {
             platform,
             renderer,
             command_buffer,
-            window: context.window().clone(),
-            queue: context.queue().handle(),
+            window: gpu.window().clone(),
+            queue: gpu.queue().handle(),
             last_delta_update: time::Instant::now(),
             modifiers: ModifiersState::empty(),
         })
@@ -80,7 +79,7 @@ impl UiRenderer {
 
     pub fn render(
         &mut self,
-        context: &Context,
+        gpu: &Gpu,
         command_buffer: &CommandBuffer,
         image_view: &vk::ImageView,
     ) -> Result<()> {
@@ -90,7 +89,7 @@ impl UiRenderer {
             renderer,
             ..
         } = self;
-        let extent = context.swapchain().info.extent;
+        let extent = gpu.swapchain().info.extent;
 
         platform.prepare_frame(imgui.io_mut(), &self.window)?;
         let ui = imgui.frame();
@@ -101,10 +100,19 @@ impl UiRenderer {
                 ui.text("Hello World!");
             });
 
+        let color_attachment_info = &[vk::RenderingAttachmentInfo::default()
+            .image_view(*image_view)
+            .image_layout(vk::ImageLayout::ATTACHMENT_OPTIMAL)
+            .load_op(vk::AttachmentLoadOp::DONT_CARE)
+            .store_op(vk::AttachmentStoreOp::STORE)
+            .clear_value(vk::ClearValue {
+                color: vk::ClearColorValue { float32: [1.0; 4] },
+            })];
+
         platform.prepare_render(ui, &self.window);
         let draw_data = imgui.render();
 
-        command_buffer.begin_rendering(image_view, extent)?;
+        command_buffer.begin_rendering(color_attachment_info, None, extent)?;
         renderer.cmd_draw(command_buffer.handle(), draw_data)?;
         command_buffer.end_rendering()?;
 

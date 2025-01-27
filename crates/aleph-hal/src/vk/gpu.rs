@@ -1,12 +1,12 @@
 use {
     crate::{
+        Allocator,
         Buffer,
         BufferInfo,
-        CommandBuffer,
         CommandPool,
+        DeletionQueue,
         Device,
         Instance,
-        Allocator,
         Queue,
         Swapchain,
         SwapchainInfo,
@@ -34,20 +34,86 @@ pub struct Surface {
     pub(crate) loader: khr::surface::Instance,
 }
 
+impl Surface {
+    pub fn new(instance: &Instance, window: &winit::window::Window) -> Result<Self> {
+        let inner: vk::SurfaceKHR = unsafe {
+            ash_window::create_surface(
+                &instance.entry,
+                &instance.handle,
+                window.display_handle()?.into(),
+                window.window_handle()?.into(),
+                None,
+            )?
+        };
+
+        let loader = khr::surface::Instance::new(&instance.entry, &instance.handle);
+        Ok(Self { inner, loader })
+    }
+}
+
 #[allow(dead_code)]
 #[derive(Debug)]
-pub struct Context {
+pub struct Gpu {
     pub(crate) instance: Instance,
     pub(crate) surface: Surface,
     pub(crate) device: Device,
     pub(crate) swapchain: Swapchain,
     pub(crate) allocator: Arc<Allocator>,
     pub(crate) window: Arc<Window>,
+    pub deletion_queue: DeletionQueue,
 }
 
-impl Context {
+// impl Drop for Gpu {
+//     fn drop(&mut self) {
+//         self.deletion_queue.flush();
+//     }
+// }
+
+impl Gpu {
     pub fn new(window: Arc<Window>) -> Result<Self> {
-        Self::init_vulkan(window)
+        log::info!("Initializing Vulkan, window: {window:?}");
+
+        let instance = Instance::new()?;
+        log::info!("Created instance: {instance:?}");
+
+        let surface = Self::init_surface(&instance, &Arc::clone(&window))?;
+        log::info!("Created surface: {surface:?}");
+
+        let device = Device::new(&instance)?;
+        log::info!("Created device: {device:?}");
+
+        let extent = vk::Extent2D {
+            width: window.inner_size().width,
+            height: window.inner_size().height,
+        };
+        let swapchain = Swapchain::new(
+            &instance,
+            &device,
+            &surface,
+            &SwapchainInfo {
+                extent,
+                format: vk::Format::B8G8R8A8_UNORM,
+                color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
+                vsync: true,
+                num_images: IN_FLIGHT_FRAMES,
+            },
+        )?;
+        log::info!("Created swapchain: {swapchain:?}");
+
+        let allocator = Arc::new(Allocator::new(&instance, &device)?);
+        log::info!("Created allocator: {allocator:?}");
+
+        let deletion_queue = DeletionQueue::new(2);
+
+        Ok(Self {
+            instance,
+            device,
+            surface,
+            swapchain,
+            allocator,
+            deletion_queue,
+            window: Arc::clone(&window),
+        })
     }
 
     #[inline]
@@ -77,51 +143,8 @@ impl Context {
     }
 }
 
-impl Context /* Init */ {
-    fn init_vulkan(window: Arc<Window>) -> Result<Context> {
-        log::info!("Initializing Vulkan, window: {window:?}");
-
-        let instance = Instance::new()?;
-        log::info!("Created instance: {instance:?}");
-
-        let surface = Self::create_surface(&instance, &Arc::clone(&window))?;
-        log::info!("Created surface: {surface:?}");
-
-        let device = Device::new(&instance)?;
-        log::info!("Created device: {device:?}");
-
-        let extent = vk::Extent2D {
-            width: window.inner_size().width,
-            height: window.inner_size().height,
-        };
-        let swapchain = Swapchain::new(
-            &instance,
-            &device,
-            &surface,
-            &SwapchainInfo {
-                extent,
-                format: vk::Format::B8G8R8A8_UNORM,
-                color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
-                vsync: true,
-                num_images: IN_FLIGHT_FRAMES,
-            },
-        )?;
-        log::info!("Created swapchain: {swapchain:?}");
-
-        let allocator = Arc::new(Allocator::new(&instance, &device)?);
-        log::info!("Created allocator: {allocator:?}");
-
-        Ok(Context {
-            instance,
-            device,
-            surface,
-            swapchain,
-            allocator,
-            window: Arc::clone(&window),
-        })
-    }
-
-    fn create_surface(instance: &Instance, window: &winit::window::Window) -> Result<Surface> {
+impl Gpu /* Init */ {
+    fn init_surface(instance: &Instance, window: &winit::window::Window) -> Result<Surface> {
         let inner: vk::SurfaceKHR = unsafe {
             ash_window::create_surface(
                 &instance.entry,
@@ -136,12 +159,9 @@ impl Context /* Init */ {
         Ok(Surface { inner, loader })
     }
 }
-/*    pub size: usize,
-pub usage: vk::BufferUsageFlags,
-pub location: gpu_allocator::MemoryLocation, */
-impl Context {
+impl Gpu {
     pub fn create_buffer(&self, info: BufferInfo) -> Result<Buffer> {
-        Buffer::new(&self.device, self.allocator.clone(), info)
+        Buffer::new(self.allocator.clone(), info)
     }
 
     #[inline]
@@ -152,16 +172,6 @@ impl Context {
     #[inline]
     pub fn create_fence_signaled(&self) -> Result<vk::Fence> {
         self.device.create_fence_signaled()
-    }
-
-    #[inline]
-    pub fn wait_for_fence(&self, fence: vk::Fence) -> Result<()> {
-        self.device.wait_for_fence(fence)
-    }
-
-    #[inline]
-    pub fn reset_fence(&self, fence: vk::Fence) -> Result<()> {
-        self.device.reset_fence(fence)
     }
 
     #[inline]
@@ -179,15 +189,10 @@ impl Context {
         Ok(CommandPool {
             handle,
             device: self.device.clone(),
-            queue: self.device.queue,
         })
     }
 
     #[inline]
-    pub fn create_command_buffer(&self, pool: &CommandPool) -> Result<CommandBuffer> {
-        self.device.create_command_buffer(pool)
-    }
-
     pub fn create_descriptor_set_layout(
         &self,
         bindings: &[vk::DescriptorSetLayoutBinding],
@@ -195,9 +200,17 @@ impl Context {
     ) -> Result<vk::DescriptorSetLayout> {
         self.device.create_descriptor_set_layout(bindings, flags)
     }
-}
 
-impl Context /* Images */ {
+    #[inline]
+    pub fn wait_for_fence(&self, fence: vk::Fence) -> Result<()> {
+        self.device.wait_for_fence(fence)
+    }
+
+    #[inline]
+    pub fn reset_fence(&self, fence: vk::Fence) -> Result<()> {
+        self.device.reset_fence(fence)
+    }
+
     pub fn load_shader(&self, path: &str) -> Result<vk::ShaderModule> {
         let mut file = std::fs::File::open(path)?;
         let bytes = ash::util::read_spv(&mut file)?;
