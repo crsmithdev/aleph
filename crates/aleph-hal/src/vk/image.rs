@@ -1,5 +1,6 @@
 use {
-    crate::{Allocator, Device, Buffer, CommandBuffer, MemoryLocation},
+    super::deletion::Destroyable,
+    crate::{Allocator},
     anyhow::Result,
     ash::vk::{self, Extent3D, Handle},
     gpu_allocator::vulkan::Allocation,
@@ -20,7 +21,6 @@ pub struct Image {
     pub handle: vk::Image,
     pub view: vk::ImageView,
     pub info: ImageInfo,
-    device: Device,
 }
 
 impl fmt::Debug for Image {
@@ -67,46 +67,32 @@ impl Image {
 
         Ok(Self {
             allocator: allocator.clone(),
-            device: allocator.device.clone(),
             allocation,
             handle: image,
             info: *info,
             view,
         })
     }
+}
 
-    // pub fn upload_data<T: serde::Serialize>(
-    //     &self,
-    //     cmd: &CommandBuffer,
-    //     data: &Buffer,
-    //     dst: &Image,
-    //     format: vk::Format,
-    //     flags: vk::ImageUsageFlags,
-    // ) -> Result<()> {
-    //     let subresource = vk::ImageSubresourceLayers {
-    //         aspect_mask: vk::ImageAspectFlags::COLOR,
-    //         mip_level: 0,
-    //         base_array_layer: 0,
-    //         layer_count: 1,
-    //     };
-
-    //     let region = vk::BufferImageCopy {
-    //         buffer_offset: 0,
-    //         buffer_row_length: 0,
-    //         buffer_image_height: 0,
-    //         image_subresource: subresource,
-    //         image_offset: vk::Offset3D::default(),
-    //         image_extent: vk::Extent3D {
-    //             width: self.info.extent.width,
-    //             height: self.info.extent.height,
-    //             depth: 1,
-    //         },
-    //     };
-
-    //     cmd.submit_immediate(|cmd| {
-    //         cmd.copy_buffer_to_image(data, self, format, &region);
-    //     })
-
-    //     // cmd.transition_image(image, current_layout, new_layout);
-    // }
+impl Destroyable for Image {
+    fn destroy(&mut self) {
+        let allocation = std::mem::take(&mut self.allocation);
+        self.allocator
+            .inner
+            .lock()
+            .unwrap()
+            .free(allocation)
+            .unwrap();
+        unsafe {
+            self.allocator
+                .device
+                .handle
+                .destroy_image(self.handle, None);
+            self.allocator
+                .device
+                .handle
+                .destroy_image_view(self.view, None);
+        };
+    }
 }

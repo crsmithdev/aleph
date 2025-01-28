@@ -120,12 +120,14 @@ impl App {
 struct AppHandler<'a> {
     app: &'a mut App,
     wait_canceled: bool,
+    close_requested: bool,
 }
 impl<'a> AppHandler<'a> {
     fn new(app: &'a mut App) -> Self {
         AppHandler {
             app,
             wait_canceled: false,
+            close_requested: false,
         }
     }
 }
@@ -150,6 +152,11 @@ impl ApplicationHandler for AppHandler<'_> {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if self.close_requested {
+                log::info!("Exiting on request");
+            event_loop.exit();
+        }
+
         self.app.emit(&TickEvent {});
         
         if !self.wait_canceled {
@@ -161,8 +168,8 @@ impl ApplicationHandler for AppHandler<'_> {
 
     fn window_event(
         &mut self,
-        event_loop: &ActiveEventLoop,
-        window_id: WindowId,
+        _event_loop: &ActiveEventLoop,
+        _window_id: WindowId,
         event: WindowEvent,
     ) {
         match event {
@@ -171,8 +178,7 @@ impl ApplicationHandler for AppHandler<'_> {
                 // ...
             }
             WindowEvent::CloseRequested => {
-                log::info!("Exiting on request");
-                event_loop.exit();
+                self.close_requested = true;
             }
             WindowEvent::Resized(size) => {
                 log::info!("Window resized to {size:?}");

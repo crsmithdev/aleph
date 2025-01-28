@@ -1,12 +1,5 @@
 use {
-    crate::vk::{Allocator, CommandBuffer, Device},
-    anyhow::Result,
-    ash::vk::{self, DeviceAddress, Handle},
-    bytemuck::Pod,
-    derive_more::Debug,
-    gpu_allocator::vulkan::Allocation,
-    serde::Serialize,
-    std::sync::Arc,
+    crate::vk::{Allocator, Device}, anyhow::Result, ash::vk::{self, DeviceAddress, Handle}, derive_more::Debug, gpu_allocator::vulkan::Allocation, std::sync::Arc
 };
 pub use {gpu_allocator::MemoryLocation, vk::BufferUsageFlags};
 
@@ -26,9 +19,11 @@ pub struct Buffer {
     device: Device,
     pub(crate) allocation: Allocation,
     info: BufferInfo,
-    allocator: Arc<Allocator>,
+    pub(crate) allocator: Arc<Allocator>,
     address: DeviceAddress,
 }
+
+
 
 impl Buffer {
     pub fn new(allocator: Arc<Allocator>, info: BufferInfo) -> Result<Buffer> {
@@ -36,7 +31,7 @@ impl Buffer {
             allocator.device.handle.create_buffer(
                 &vk::BufferCreateInfo::default()
                     .size(info.size as u64)
-                    .usage(info.usage),
+                    .usage(info.usage | BufferUsageFlags::SHADER_DEVICE_ADDRESS),
                 None,
             )
         }?;
@@ -68,41 +63,13 @@ impl Buffer {
             .mapped_slice_mut()
             .expect("Failed to map buffer memory")
     }
+}
 
-    pub fn upload<T: Serialize + Pod>(&self, cmd: &CommandBuffer, data: &[T]) -> Result<()> {
-        let data: &[u8] = bytemuck::cast_slice(data);
-        let size = data.len();
-
-        let mut staging: crate::Buffer = Buffer::new(
-            self.allocator.clone(),
-            BufferInfo {
-                usage: BufferUsageFlags::TRANSFER_SRC,
-                location: MemoryLocation::CpuToGpu,
-                size,
-                label: Some("staging")
-            },
-        )?;
-
-        staging.mapped()[0..data.len()].copy_from_slice(data);
-        cmd.submit_immediate(|_| {
-            cmd.copy_buffer(&staging, self, size as u64);
-        })?;
-
-        // staging.destroy();
-        Ok(())
-    }
-
-    pub fn destroy(self, deletion_queue: &mut crate::DeletionQueue) {
-        // self.allocator.inner.lock().unwrap().free(self.allocation).unwrap();
-        // unsafe {
-        //     self.device.destroy_buffer(self.handle, None);
-        // }
-        // let allocation = std::mem::take(&mut self.allocation);
-        // deletion_queue.pending.push(Box::new(move || {
-        //     self.allocator.inner.lock().unwrap().free(self.allocation).unwrap();
-        //     unsafe {
-        //         self.allocator.device.destroy_buffer(self.handle, None);
-        //     }
-        // }));
+impl crate::vk::deletion::Destroyable for crate::vk::Buffer {
+    fn destroy(&mut self) {
+    log::debug!("Destorying buffer: {} ({})", self.info.label.unwrap_or("unlabeled"), self.handle.as_raw());
+        let allocation = std::mem::take(&mut self.allocation);
+        self.allocator.inner.lock().unwrap().free(allocation).unwrap();
+            unsafe { self.allocator.device.handle.destroy_buffer(self.handle, None) };
     }
 }

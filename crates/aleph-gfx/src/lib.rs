@@ -7,7 +7,7 @@ use {
         app::TickEvent,
         layer::{Layer, Window},
     },
-    aleph_hal::{self, Frame, Gpu, DeletionQueue},
+    aleph_hal::{self, DeletionQueue, Frame, Gpu},
     anyhow::Result,
     renderer::SceneRenderer,
     std::{
@@ -41,9 +41,7 @@ impl Layer for GraphicsLayer {
             .set(renderer)
             .map_err(|_| anyhow::anyhow!("Failed to set renderer"))?;
 
-        events.subscribe::<TickEvent>(|layer, _event| {
-            layer.render()
-        });
+        events.subscribe::<TickEvent>(|layer, _event| layer.render());
 
         Ok(())
     }
@@ -77,13 +75,15 @@ impl Renderer {
     pub fn new(window: Arc<winit::window::Window>) -> Result<Self> {
         let gpu = Gpu::new(window)?;
         let pool = gpu.create_command_pool()?;
-        let imm_cmd = pool.create_command_buffer()?;
+        let mut imm_cmd = pool.create_command_buffer()?;
 
         // crate::mesh::load_meshes("assets/basicmesh.glb".to_string(), &gpu,&imm_cmd)?;
 
-        let scene_renderer = SceneRenderer::new(&gpu, imm_cmd.clone())?;
+        let scene_renderer = SceneRenderer::new(&gpu, &mut imm_cmd)?;
         let ui = UiRenderer::new(&gpu)?;
         let frames = Self::init_frames(&gpu)?;
+
+        imm_cmd.deletion_queue.flush();
 
         Ok(Self {
             gpu,
@@ -109,9 +109,9 @@ impl Renderer {
                     swapchain_semaphore: gpu.create_semaphore()?,
                     render_semaphore: gpu.create_semaphore()?,
                     fence: gpu.create_fence_signaled()?,
-                    command_pool:pool,
+                    command_pool: pool,
                     command_buffer,
-                    deletion_queue: DeletionQueue::new(2),
+                    deletion_queue: DeletionQueue::default(),
                 })
             })
             .collect()
@@ -136,13 +136,16 @@ impl Renderer {
         }
 
         let gpu = &mut self.gpu;
-        let frame = &self.frames[self.current_frame % self.frames.len()];
+        let n_frames = self.frames.len();
+        let frame = &mut self.frames[self.current_frame % n_frames];
         let fence = frame.fence;
         let command_buffer = &frame.command_buffer;
         let render_semaphore = &frame.render_semaphore;
         let swapchain_semaphore = &frame.swapchain_semaphore;
+        let deletion_queue = &mut frame.deletion_queue;
 
         gpu.wait_for_fence(fence)?;
+        deletion_queue.flush();
         let (image_index, rebuild) = gpu.swapchain_mut().next_image(*swapchain_semaphore)?;
         let swapchain_image_view = gpu.swapchain().current_image_view();
         self.rebuild_swapchain = rebuild;
@@ -151,7 +154,8 @@ impl Renderer {
         command_buffer.reset()?;
         command_buffer.begin()?;
 
-        self.scene_renderer.render(gpu, command_buffer)?;
+        self.scene_renderer
+            .render(gpu, command_buffer)?;
         self.ui.render(gpu, command_buffer, &swapchain_image_view)?;
 
         command_buffer.end()?;

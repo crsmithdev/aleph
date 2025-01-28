@@ -1,8 +1,17 @@
 use {
-    crate::{Buffer, Device, Image, Queue},
+    crate::{
+        vk::DeletionQueue,
+        Buffer,
+        BufferInfo,
+        BufferUsageFlags,
+        Device,
+        MemoryLocation,
+    },
     anyhow::Result,
-    ash::vk::{self, BufferCopy2},
+    ash::vk::{self},
+    bytemuck::Pod,
     derive_more::{Debug, Deref},
+    serde::Serialize,
 };
 
 #[derive(Clone, Debug)]
@@ -22,13 +31,14 @@ impl CommandPool {
 }
 
 #[allow(dead_code)]
-#[derive(Clone, Debug, Deref)]
+#[derive(Debug, Deref)]
 pub struct CommandBuffer {
     #[deref]
     pub(crate) handle: vk::CommandBuffer,
     pub(crate) pool: vk::CommandPool,
     pub(crate) device: Device,
     pub(crate) fence: vk::Fence,
+    pub deletion_queue: DeletionQueue,
 }
 
 impl CommandBuffer {
@@ -40,6 +50,7 @@ impl CommandBuffer {
             handle,
             pool: pool.handle,
             device: device.clone(),
+            deletion_queue: DeletionQueue::default(),
             fence,
         })
     }
@@ -148,7 +159,11 @@ impl CommandBuffer {
         }
     }
 
-    pub fn push_constants<T: serde::Serialize + bytemuck::Pod>(&self, layout: vk::PipelineLayout, data: &T) {
+    pub fn push_constants<T: serde::Serialize + bytemuck::Pod>(
+        &self,
+        layout: vk::PipelineLayout,
+        data: &T,
+    ) {
         let data: &[u8] = bytemuck::bytes_of(data);
 
         unsafe {
@@ -366,6 +381,31 @@ impl CommandBuffer {
                 .handle
                 .cmd_copy_buffer(self.handle(), src.handle(), dst.handle(), &[copy])
         };
+    }
+
+    pub fn upload_buffer<T: Serialize + Pod>(&mut self, buffer: &Buffer, data: &[T]) -> Result<()> {
+        let data: &[u8] = bytemuck::cast_slice(data);
+        let size = data.len();
+
+        let mut staging: Buffer = Buffer::new(
+            buffer.allocator.clone(),
+            BufferInfo {
+                usage: BufferUsageFlags::TRANSFER_SRC,
+                location: MemoryLocation::CpuToGpu,
+                size,
+                label: Some("staging"),
+            },
+        )?;
+
+        staging.mapped()[0..data.len()].copy_from_slice(data);
+        self.submit_immediate(|_| {
+            self.copy_buffer(&staging, buffer, size as u64);
+        })?;
+
+        self.deletion_queue.enqueue(staging);
+
+        // staging.destroy();
+        Ok(())
     }
 
     // pub fn copy_buffer_to_image(

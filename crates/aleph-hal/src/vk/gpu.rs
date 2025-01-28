@@ -63,11 +63,11 @@ pub struct Gpu {
     pub deletion_queue: DeletionQueue,
 }
 
-// impl Drop for Gpu {
-//     fn drop(&mut self) {
-//         self.deletion_queue.flush();
-//     }
-// }
+impl Drop for Gpu {
+    fn drop(&mut self) {
+        unsafe { self.device.handle.device_wait_idle().expect("wait") }
+    }
+}
 
 impl Gpu {
     pub fn new(window: Arc<Window>) -> Result<Self> {
@@ -103,7 +103,7 @@ impl Gpu {
         let allocator = Arc::new(Allocator::new(&instance, &device)?);
         log::info!("Created allocator: {allocator:?}");
 
-        let deletion_queue = DeletionQueue::new(2);
+        let deletion_queue = DeletionQueue::default();
 
         Ok(Self {
             instance,

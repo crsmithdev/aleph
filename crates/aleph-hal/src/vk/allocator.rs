@@ -1,6 +1,6 @@
 pub use gavk::Allocation;
 use {
-    crate::{Buffer, BufferInfo, Device, Instance},
+crate::{BufferInfo, Device, Instance},
     anyhow::Result,
     ash::vk::{self, Handle},
     derive_more::Debug,
@@ -15,10 +15,13 @@ use {
 #[derive(Debug)]
 pub struct Allocator {
     pub(crate) inner: Arc<Mutex<gavk::Allocator>>,
-    pub(crate) device: crate::Device,
+    pub(crate) device: crate::Device, 
 }
 
 impl Allocator {
+    pub fn a(&self) {}
+    pub fn b(&self) {}
+    
     pub fn inner(&self) -> &Arc<Mutex<gavk::Allocator>> {
         &self.inner
     }
@@ -62,12 +65,6 @@ impl Allocator {
         Ok(allocation)
     }
 
-// pub fn destroy_buffer(&self, buffer: vk::Buffer, allocation: &ga::vulkan::Allocation) {
-pub fn destroy_buffer(&self, buffer: Buffer) {
-        // let alloc = std::mem::take(&mut allocation);
-
-    }
-
     pub fn allocate_image(&self, info: &vk::ImageCreateInfo) -> Result<(vk::Image, Allocation)> {
         let image = unsafe { self.device.create_image(info, None) }?;
         let requirements = unsafe { self.device.get_image_memory_requirements(image) };
@@ -84,11 +81,6 @@ pub fn destroy_buffer(&self, buffer: Buffer) {
                 .bind_image_memory(image, allocation.memory(), allocation.offset())
         }?;
         Ok((image, allocation))
-    }
-
-    pub fn destroy(self) {
-        let inner = self.inner.lock().unwrap();
-        drop(inner);
     }
 } 
 

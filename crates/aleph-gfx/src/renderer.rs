@@ -1,14 +1,7 @@
 use {
     crate::mesh::{GeoSurface, GpuMeshBuffers, MeshAsset, Vertex},
     aleph_hal::{
-        Buffer,
-        BufferInfo,
-        BufferUsageFlags,
-        CommandBuffer,
-        Gpu,
-        Image,
-        ImageInfo,
-        MemoryLocation,
+        vk::deletion::Destroyable, BufferInfo, BufferUsageFlags, CommandBuffer, Gpu, Image, ImageInfo, MemoryLocation
     },
     anyhow::Result,
     ash::vk,
@@ -28,8 +21,17 @@ pub(crate) struct SceneRenderer {
     test_mesh: MeshAsset,
 }
 
+impl Drop for SceneRenderer {
+    fn drop(&mut self) {
+        self.test_mesh.mesh_buffers.vertex_buffer.destroy();
+        self.test_mesh.mesh_buffers.index_buffer.destroy();
+        self.draw_image.destroy();
+        self.depth_image.destroy();
+    }
+}
+
 impl SceneRenderer {
-    pub fn new(gpu: &Gpu, cmd: CommandBuffer) -> Result<Self> {
+    pub fn new(gpu: &Gpu, cmd: &mut CommandBuffer) -> Result<Self> {
         let extent = gpu.swapchain().info.extent;
         let draw_image = Image::new(
             Arc::clone(gpu.allocator()),
@@ -66,7 +68,7 @@ impl SceneRenderer {
             location: MemoryLocation::GpuOnly,
             size: mesh_data.indices.len() * std::mem::size_of::<f32>(),
         })?;
-        index_buffer.upload(&cmd, &mesh_data.indices)?;
+        cmd.upload_buffer(&index_buffer, &mesh_data.indices)?;
 
         let vertex_buffer = gpu.create_buffer(BufferInfo {
             label: Some("vertex"),
@@ -76,7 +78,8 @@ impl SceneRenderer {
             location: MemoryLocation::GpuOnly,
             size: mesh_data.vertices.len() * std::mem::size_of::<Vertex>(),
         })?;
-        vertex_buffer.upload(&cmd, &mesh_data.vertices)?;
+        cmd.upload_buffer(&vertex_buffer, &mesh_data.vertices)?;
+        
         let device_address = vertex_buffer.device_address();
         let test_mesh = MeshAsset {
             name: "test".to_owned(),
