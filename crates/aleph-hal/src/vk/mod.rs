@@ -12,7 +12,7 @@ pub use ash::vk::DeviceAddress;
 pub use crate::vk::{
     allocator::Allocator,
     buffer::{Buffer, BufferInfo, BufferUsageFlags, MemoryLocation },
-    deletion::DeletionQueue,
+    deletion::{DeletionQueue, Destroyable},
     command::{CommandBuffer, CommandPool},
     device::{Device, Queue, QueueFamily},
     gpu::{Gpu, Surface},

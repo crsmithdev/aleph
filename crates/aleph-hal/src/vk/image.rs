@@ -1,25 +1,27 @@
 use {
-    super::deletion::Destroyable,
-    crate::{Allocator},
+    crate::Allocator,
+    crate::Destroyable,
+    crate::Device,
     anyhow::Result,
     ash::vk::{self, Extent3D, Handle},
+    ash::vk::{Extent2D, Format, ImageUsageFlags, ImageAspectFlags, Image as VkImage, ImageView as VkImageView},
     gpu_allocator::vulkan::Allocation,
     std::{fmt, sync::Arc},
 };
 
 #[derive(Clone, Debug, Copy)]
 pub struct ImageInfo {
-    pub extent: vk::Extent2D,
-    pub format: vk::Format,
-    pub usage: vk::ImageUsageFlags,
-    pub aspect_flags: vk::ImageAspectFlags,
+    pub extent: Extent2D,
+    pub format: Format,
+    pub usage: ImageUsageFlags,
+    pub aspect_flags: ImageAspectFlags,
 }
 
 pub struct Image {
     pub allocator: Arc<Allocator>,
     pub allocation: Allocation,
-    pub handle: vk::Image,
-    pub view: vk::ImageView,
+    pub handle: VkImage,
+    pub view: VkImageView,
     pub info: ImageInfo,
 }
 
@@ -32,7 +34,16 @@ impl fmt::Debug for Image {
 }
 
 impl Image {
-    pub fn new(allocator: Arc<Allocator>, info: &ImageInfo) -> Result<Self> {
+    pub fn from_existing(image: vk::Image, view: vk::ImageView, info: &ImageInfo) -> Result<Self> {
+        Ok(Self {
+            allocator: Arc::new(Allocator::default()),
+            allocation: Allocation::default(),
+            handle: image,
+            info: *info,
+            view,
+        })
+    }
+    pub fn new(allocator: Arc<Allocator>, device: &Device, info: &ImageInfo) -> Result<Self> {
         let extent = Extent3D {
             width: info.extent.width,
             height: info.extent.height,
@@ -63,7 +74,7 @@ impl Image {
                     .layer_count(1),
             );
 
-        let view = unsafe { allocator.device.create_image_view(&view_info, None) }?;
+        let view = unsafe { device.create_image_view(&view_info, None) }?;
 
         Ok(Self {
             allocator: allocator.clone(),
@@ -79,20 +90,6 @@ impl Destroyable for Image {
     fn destroy(&mut self) {
         let allocation = std::mem::take(&mut self.allocation);
         self.allocator
-            .inner
-            .lock()
-            .unwrap()
-            .free(allocation)
-            .unwrap();
-        unsafe {
-            self.allocator
-                .device
-                .handle
-                .destroy_image(self.handle, None);
-            self.allocator
-                .device
-                .handle
-                .destroy_image_view(self.view, None);
-        };
+            .destroy_image(self.handle, self.view, allocation);
     }
 }

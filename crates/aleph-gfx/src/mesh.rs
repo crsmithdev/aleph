@@ -1,7 +1,5 @@
 use {
-    aleph_hal::{
-        Buffer, DeviceAddress, 
-    },
+    aleph_hal::{Buffer, DeviceAddress},
     anyhow::Result,
     derive_more::Debug,
     nalgebra as na,
@@ -54,9 +52,7 @@ pub struct MeshData {
     pub indices: Vec<u32>,
 }
 
-pub fn load_meshes2(
-    path: String,
-) -> Result<Vec<MeshData>> {
+pub fn load_meshes2(path: String) -> Result<Vec<MeshData>> {
     let (document, buffers, _images) = match gltf::import(path) {
         Ok(loaded) => loaded,
         Err(err) => panic!("GLTF loading error: {err:?}"),
@@ -76,14 +72,14 @@ pub fn load_meshes2(
             for ((position, normal), tex_coord) in positions.zip(normals).zip(tex_coords) {
                 vertices.push(Vertex {
                     position: position.into(),
-                    normal: normal.into(),  
-                    uv_x: tex_coord[0], 
+                    normal: normal.into(),
+                    uv_x: tex_coord[0],
                     uv_y: tex_coord[1],
-                    color: na::Vector4::new(1.0, 1.0, 1.0, 1.0),   
+                    color: na::Vector4::new(1.0, 1.0, 1.0, 1.0),
                 });
             }
 
-            for v in vertices.iter_mut() {  
+            for v in vertices.iter_mut() {
                 v.color = na::Vector4::new(v.normal[0], v.normal[1], v.normal[2], 1.0);
             }
 
@@ -93,7 +89,7 @@ pub fn load_meshes2(
                 .into_u32()
                 .collect::<Vec<u32>>();
 
-            meshes.push(MeshData {vertices, indices});
+            meshes.push(MeshData { vertices, indices });
         }
     }
 

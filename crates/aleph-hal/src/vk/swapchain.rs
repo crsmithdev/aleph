@@ -1,5 +1,16 @@
 use {
-    crate::{CommandBuffer, CommandPool, DeletionQueue, Device, Instance, Queue, Surface, VK_TIMEOUT_NS},
+    crate::{
+        CommandBuffer,
+        CommandPool,
+        DeletionQueue,
+        Device,
+        Image,
+        ImageInfo,
+        Instance,
+        Queue,
+        Surface,
+        VK_TIMEOUT_NS,
+    },
     anyhow::Result,
     ash::{
         khr,
@@ -28,7 +39,7 @@ pub struct SwapchainInfo {
     pub num_images: u32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Swapchain {
     #[debug("{:x}", handle.as_raw())]
     pub(crate) handle: vk::SwapchainKHR,
@@ -39,8 +50,8 @@ pub struct Swapchain {
     queue: Queue,
     instance: Instance,
     pub info: SwapchainInfo,
-    image_views: Vec<vk::ImageView>,
-    images: Vec<vk::Image>,
+    // image_views: Vec<vk::ImageView>,
+    images: Vec<Image>,
     current_index: u32,
 }
 
@@ -112,27 +123,35 @@ impl Swapchain {
         }
         let loader = khr::swapchain::Device::new(&instance.handle, device);
         let swapchain = unsafe { loader.create_swapchain(&swapchain_info, None) }.unwrap();
-
+        let image_info = ImageInfo {
+            extent: info.extent,
+            format: info.format,
+            usage: vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST,
+            aspect_flags: vk::ImageAspectFlags::COLOR,
+        };
         let images = unsafe { loader.get_swapchain_images(swapchain)? };
         let subresource_range = vk::ImageSubresourceRange::default()
             .aspect_mask(vk::ImageAspectFlags::COLOR)
             .level_count(1)
             .layer_count(1);
-        let image_views: Vec<vk::ImageView> = images
-            .iter()
-            .map(|image| {
+
+        let images = images
+            .into_iter()
+            .map(|handle| {
+                
                 let image_view_info = vk::ImageViewCreateInfo::default()
-                    .image(*image)
+                    .image(handle)
                     .view_type(vk::ImageViewType::TYPE_2D)
                     .format(vk::Format::B8G8R8A8_UNORM)
                     .subresource_range(subresource_range);
-                unsafe {
+                let view = unsafe {
                     device
                         .create_image_view(&image_view_info, None)
                         .expect("Failed to create imageview")
-                }
+                };
+                Image::from_existing(handle, view, &image_info).expect("Failed to create image")
             })
-            .collect();
+            .collect::<Vec<_>>();
         Ok(Swapchain {
             handle: swapchain,
             loader,
@@ -140,7 +159,7 @@ impl Swapchain {
             device: device.clone(),
             surface: surface.clone(),
             info: *info,
-            image_views,
+            // image_views,
             images,
             queue: device.queue,
             current_index: 0,
@@ -148,20 +167,20 @@ impl Swapchain {
     }
 
     pub fn in_flight_frames(&self) -> u32 {
-        self.image_views.len() as u32
+        self.images.len() as u32
     }
 
     pub fn current_index(&self) -> u32 {
         self.current_index
     }
 
-    pub fn current_image(&self) -> vk::Image {
-        self.images[self.current_index as usize]
+    pub fn current_image(&self) -> &Image {
+        &self.images[self.current_index as usize]
     }
 
-    pub fn current_image_view(&self) -> vk::ImageView {
-        self.image_views[self.current_index as usize]
-    }
+    // pub fn current_image_view(&self) -> vk::ImageView {
+    //     self.image_views[self.current_index as usize]
+    // }
 }
 
 impl Swapchain {
@@ -169,9 +188,9 @@ impl Swapchain {
         log::info!("Destroying swapchain: {:?}", self);
         unsafe {
             self.loader.destroy_swapchain(self.handle, None);
-            self.image_views
+            self.images
                 .iter()
-                .for_each(|v| self.device.destroy_image_view(*v, None));
+                .for_each(|v| self.device.destroy_image_view(v.view, None));
         };
     }
 

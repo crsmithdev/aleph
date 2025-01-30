@@ -1,17 +1,5 @@
 use {
-    crate::{
-        vk::DeletionQueue,
-        Buffer,
-        BufferInfo,
-        BufferUsageFlags,
-        Device,
-        MemoryLocation,
-    },
-    anyhow::Result,
-    ash::vk::{self},
-    bytemuck::Pod,
-    derive_more::{Debug, Deref},
-    serde::Serialize,
+    crate::{Allocator, Buffer, BufferInfo, BufferUsageFlags, DeletionQueue, Device, Image, MemoryLocation}, anyhow::Result, ash::vk::{self, Extent3D, ImageLayout}, bytemuck::Pod, derive_more::{Debug, Deref},  serde::Serialize, std::sync::Arc
 };
 
 #[derive(Clone, Debug)]
@@ -299,7 +287,7 @@ impl CommandBuffer {
 
     pub fn transition_image(
         &self,
-        image: vk::Image,
+        image: &Image,
         current_layout: vk::ImageLayout,
         new_layout: vk::ImageLayout,
     ) {
@@ -314,7 +302,7 @@ impl CommandBuffer {
             .level_count(1)
             .layer_count(1);
         let barriers = &[vk::ImageMemoryBarrier2::default()
-            .image(image)
+            .image(image.handle)
             .src_stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
             .src_access_mask(vk::AccessFlags2::MEMORY_WRITE)
             .dst_stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
@@ -332,8 +320,8 @@ impl CommandBuffer {
 
     pub fn copy_image(
         &self,
-        src: vk::Image,
-        dst: vk::Image,
+        src: &Image,
+        dst: &Image,
         src_extent: vk::Extent3D,
         dst_extent: vk::Extent3D,
     ) {
@@ -364,9 +352,9 @@ impl CommandBuffer {
             .dst_offsets(dst_offsets);
         let regions = &[blit_region];
         let blit_info = vk::BlitImageInfo2::default()
-            .src_image(src)
+            .src_image(src.handle)
             .src_image_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-            .dst_image(dst)
+            .dst_image(dst.handle)
             .dst_image_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
             // .filter(vk::Filter::Linear)
             .regions(regions);
@@ -389,6 +377,7 @@ impl CommandBuffer {
 
         let mut staging: Buffer = Buffer::new(
             buffer.allocator.clone(),
+            &self.device,
             BufferInfo {
                 usage: BufferUsageFlags::TRANSFER_SRC,
                 location: MemoryLocation::CpuToGpu,
@@ -405,6 +394,43 @@ impl CommandBuffer {
         self.deletion_queue.enqueue(staging);
 
         // staging.destroy();
+        Ok(())
+    }
+
+    pub fn upload_image(&mut self, allocator: &Arc<Allocator>, image: &Image, data: &[u8]) -> Result<()> {
+        let size = data.len();
+        let extent = Extent3D {
+            width: image.info.extent.width,
+            height: image.info.extent.height,
+            depth: 1,
+        };
+
+        let mut staging: Buffer = Buffer::new(
+            allocator.clone(),
+            &self.device,
+            BufferInfo {
+                usage: BufferUsageFlags::TRANSFER_SRC,
+                location: MemoryLocation::CpuToGpu,
+                size,
+                label: Some("staging"),
+            },
+        )?;
+
+        staging.mapped()[0..data.len()].copy_from_slice(data);
+        let copy = vk::BufferImageCopy::default()
+            .buffer_offset(0)
+            .buffer_row_length(0)
+            .buffer_image_height(0)
+            .image_subresource(vk::ImageSubresourceLayers::default().aspect_mask(vk::ImageAspectFlags::COLOR).layer_count(1))
+            .image_offset(vk::Offset3D::default())
+            .image_extent(extent);
+
+        self.submit_immediate(|_| {
+            self.transition_image(image, ImageLayout::UNDEFINED, ImageLayout::TRANSFER_DST_OPTIMAL);
+            unsafe { self.device.cmd_copy_buffer_to_image(self.handle, staging.handle, image.handle, vk::ImageLayout::TRANSFER_DST_OPTIMAL, &[copy]) };
+            self.transition_image(image, ImageLayout::TRANSFER_DST_OPTIMAL, ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+        })?;
+        self.deletion_queue.enqueue(staging);
         Ok(())
     }
 

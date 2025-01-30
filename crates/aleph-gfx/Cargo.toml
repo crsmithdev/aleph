@@ -20,3 +20,8 @@ serde = { version = "1.0.130", features = ["derive"] }
 bytemuck = {version="1.7.0", features=["derive"]}
 aleph-core = { path = "../aleph-core" }
 aleph-hal = { path = "../aleph-hal" }
+image = "0.25.5"
+byteorder = "1.5.0"
+egui = "0.25.0"
+egui-winit = "0.25.0"
+egui-ash = "0.4.0"

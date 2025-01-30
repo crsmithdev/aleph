@@ -1,5 +1,5 @@
 use {
-    crate::vk::{Allocator, Device}, anyhow::Result, ash::vk::{self, DeviceAddress, Handle}, derive_more::Debug, gpu_allocator::vulkan::Allocation, std::sync::Arc
+    crate::vk::{Allocator, Gpu, Device}, anyhow::Result, ash::vk::{self, DeviceAddress, Handle}, derive_more::Debug, gpu_allocator::vulkan::Allocation, std::sync::Arc
 };
 pub use {gpu_allocator::MemoryLocation, vk::BufferUsageFlags};
 
@@ -18,17 +18,36 @@ pub struct Buffer {
     pub(crate) handle: vk::Buffer,
     device: Device,
     pub(crate) allocation: Allocation,
-    info: BufferInfo,
+    pub(crate) info: BufferInfo,
     pub(crate) allocator: Arc<Allocator>,
     address: DeviceAddress,
 }
 
-
-
 impl Buffer {
-    pub fn new(allocator: Arc<Allocator>, info: BufferInfo) -> Result<Buffer> {
+    pub fn new2(gpu: &Gpu, info: BufferInfo) -> Result<Self> {
         let handle = unsafe {
-            allocator.device.handle.create_buffer(
+            gpu.device.handle.create_buffer(
+                &vk::BufferCreateInfo::default()
+                    .size(info.size as u64)
+                    .usage(info.usage | BufferUsageFlags::SHADER_DEVICE_ADDRESS),
+                None,
+            )
+        }?;
+
+        let allocation = gpu.allocator.allocate_buffer(handle, info)?;
+
+        Ok(Buffer {
+            handle,
+            allocation,
+            info,
+            device: gpu.device.clone(),
+            allocator: gpu.allocator.clone(),
+            address: gpu.device.get_buffer_device_address(&handle),
+        })
+    }
+    pub fn new(allocator: Arc<Allocator>,  device: &Device, info: BufferInfo) -> Result<Buffer> {
+        let handle = unsafe {
+            device.handle.create_buffer(
                 &vk::BufferCreateInfo::default()
                     .size(info.size as u64)
                     .usage(info.usage | BufferUsageFlags::SHADER_DEVICE_ADDRESS),
@@ -37,12 +56,12 @@ impl Buffer {
         }?;
 
         let allocation = allocator.allocate_buffer(handle, info)?;
-        let device: &crate::Device = &allocator.device;
+        // let device: &crate::Device = &allocator.device;
         let address = device.get_buffer_device_address(&handle);
 
         Ok(Buffer {
             handle,
-            device: allocator.device.clone(),
+            device: device.clone(),
             allocation,
             info,
             allocator,
@@ -65,11 +84,9 @@ impl Buffer {
     }
 }
 
-impl crate::vk::deletion::Destroyable for crate::vk::Buffer {
+impl crate::vk::deletion::Destroyable for Buffer {
     fn destroy(&mut self) {
-    log::debug!("Destorying buffer: {} ({})", self.info.label.unwrap_or("unlabeled"), self.handle.as_raw());
-        let allocation = std::mem::take(&mut self.allocation);
-        self.allocator.inner.lock().unwrap().free(allocation).unwrap();
-            unsafe { self.allocator.device.handle.destroy_buffer(self.handle, None) };
+        log::debug!("Destroying buffer: {:?}", self.info.label);
+        self.allocator.destroy_buffer(self.handle, &mut self.allocation);
     }
 }

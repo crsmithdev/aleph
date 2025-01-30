@@ -1,20 +1,11 @@
 use {
     crate::{
-        Allocator,
-        Buffer,
-        BufferInfo,
-        CommandPool,
-        DeletionQueue,
-        Device,
-        Instance,
-        Queue,
-        Swapchain,
-        SwapchainInfo,
+        Allocator, Buffer, BufferInfo, CommandPool, DeletionQueue, Destroyable, Device, Instance, Queue, Swapchain, SwapchainInfo
     },
     anyhow::Result,
     ash::{
         khr::{self},
-        vk::{self, Handle},
+        vk::{self, DescriptorSetLayoutCreateFlags, Handle},
     },
     derive_more::{Debug, Deref},
     raw_window_handle::{HasDisplayHandle, HasWindowHandle},
@@ -65,23 +56,17 @@ pub struct Gpu {
 
 impl Drop for Gpu {
     fn drop(&mut self) {
-        unsafe { self.device.handle.device_wait_idle().expect("wait") }
+        unsafe {
+            self.device.handle.device_wait_idle().unwrap();
+        }
     }
 }
 
 impl Gpu {
     pub fn new(window: Arc<Window>) -> Result<Self> {
-        log::info!("Initializing Vulkan, window: {window:?}");
-
         let instance = Instance::new()?;
-        log::info!("Created instance: {instance:?}");
-
         let surface = Self::init_surface(&instance, &Arc::clone(&window))?;
-        log::info!("Created surface: {surface:?}");
-
         let device = Device::new(&instance)?;
-        log::info!("Created device: {device:?}");
-
         let extent = vk::Extent2D {
             width: window.inner_size().width,
             height: window.inner_size().height,
@@ -98,11 +83,8 @@ impl Gpu {
                 num_images: IN_FLIGHT_FRAMES,
             },
         )?;
-        log::info!("Created swapchain: {swapchain:?}");
 
         let allocator = Arc::new(Allocator::new(&instance, &device)?);
-        log::info!("Created allocator: {allocator:?}");
-
         let deletion_queue = DeletionQueue::default();
 
         Ok(Self {
@@ -161,7 +143,11 @@ impl Gpu /* Init */ {
 }
 impl Gpu {
     pub fn create_buffer(&self, info: BufferInfo) -> Result<Buffer> {
-        Buffer::new(self.allocator.clone(), info)
+        Buffer::new(self.allocator.clone(), &self.device, info)
+    }
+
+    pub fn destroy_buffer(&self, buffer: &mut Buffer) {
+        buffer.destroy();
     }
 
     #[inline]
@@ -198,6 +184,7 @@ impl Gpu {
         bindings: &[vk::DescriptorSetLayoutBinding],
         flags: vk::DescriptorSetLayoutCreateFlags,
     ) -> Result<vk::DescriptorSetLayout> {
+        let flags = flags | DescriptorSetLayoutCreateFlags::PUSH_DESCRIPTOR_KHR;
         self.device.create_descriptor_set_layout(bindings, flags)
     }
 

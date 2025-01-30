@@ -1,40 +1,235 @@
 use {
-    crate::mesh::{GeoSurface, GpuMeshBuffers, MeshAsset, Vertex},
+    crate::mesh::{GeoSurface, GpuMeshBuffers, MeshAsset, MeshData, Vertex},
     aleph_hal::{
-        vk::deletion::Destroyable, BufferInfo, BufferUsageFlags, CommandBuffer, Gpu, Image, ImageInfo, MemoryLocation
+        vk::deletion::Destroyable,
+        BufferInfo,
+        BufferUsageFlags,
+        CommandBuffer,
+        DeletionQueue,
+        Frame,
+        Gpu,
+        Image,
+        ImageInfo,
+        MemoryLocation,
     },
     anyhow::Result,
-    ash::vk,
-    nalgebra as na,
-    std::sync::Arc,
+    ash::vk::{self, DescriptorSetLayout},
+    nalgebra::{self as na, Vector4},
+    std::{fmt, sync::Arc},
 };
 
-#[allow(dead_code)]
-pub(crate) struct SceneRenderer {
+pub struct Renderer {
+    gpu: Gpu,
+    frames: Vec<Frame>,
+    rebuild_swapchain: bool,
+    current_frame: usize,
     draw_image: Image,
-    draw_image_layout: vk::DescriptorSetLayout,
+    // draw_descriptor_layout: vk::DescriptorSetLayout,
+    // mesh_descriptor_layout: vk::DescriptorSetLayout,
     depth_image: Image,
     gradient_pipeline: vk::Pipeline,
     gradient_pipeline_layout: vk::PipelineLayout,
     mesh_pipeline: vk::Pipeline,
     mesh_pipeline_layout: vk::PipelineLayout,
-    test_mesh: MeshAsset,
+    mesh: MeshAsset,
+    texture_image: Image,
+    sampler: vk::Sampler,
+    frame_deletion_queues: Vec<DeletionQueue>,
+    // global_deletion_queue: DeletionQueue,
 }
 
-impl Drop for SceneRenderer {
-    fn drop(&mut self) {
-        self.test_mesh.mesh_buffers.vertex_buffer.destroy();
-        self.test_mesh.mesh_buffers.index_buffer.destroy();
-        self.draw_image.destroy();
-        self.depth_image.destroy();
+impl fmt::Debug for Renderer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Renderer").finish_non_exhaustive()
     }
 }
 
-impl SceneRenderer {
-    pub fn new(gpu: &Gpu, cmd: &mut CommandBuffer) -> Result<Self> {
+impl Renderer {
+    pub fn new(window: Arc<winit::window::Window>) -> Result<Self> {
+        let gpu = Gpu::new(window)?;
+        let pool = gpu.create_command_pool()?;
+        let mut cmd = pool.create_command_buffer()?;
+
+        let frames = Self::init_frames(&gpu)?;
+
+        cmd.deletion_queue.flush();
+
+        let (draw_image, draw_descriptor_layout) = Self::create_draw_image(&gpu)?;
+        let depth_image = Self::create_depth_image(&gpu)?;
+
+        let (gradient_pipeline_layout, gradient_pipeline) =
+            Self::create_gradient_pipeline(&gpu, draw_descriptor_layout)?;
+
+        let (mesh_pipeline, mesh_pipeline_layout, _) =
+            Self::create_mesh_pipeline(&gpu)?;
+
+        let mesh_data = &crate::mesh::load_meshes2("assets/basicmesh.glb".to_string())?[2];
+        let mesh = Self::create_mesh_buffers(&gpu, &mut cmd, mesh_data)?;
+
+        let texture_image = Self::create_texture_image(&gpu, &mut cmd)?;
+        let sampler_info = vk::SamplerCreateInfo::default()
+            .mag_filter(vk::Filter::NEAREST)
+            .min_filter(vk::Filter::NEAREST);
+        let sampler = unsafe { &gpu.device().create_sampler(&sampler_info, None)? };
+
+        let frame_deletion_queues = (0..gpu.swapchain().in_flight_frames())
+            .map(|_| DeletionQueue::default())
+            .collect();
+        // let global_deletion_queue = DeletionQueue::default();
+
+        Ok(Self {
+            gpu,
+            frames,
+            current_frame: 0,
+            rebuild_swapchain: false,
+            depth_image,
+            draw_image,
+            // draw_descriptor_layout,
+            gradient_pipeline,
+            gradient_pipeline_layout,
+            mesh,
+            // mesh_descriptor_layout,
+            mesh_pipeline,
+            mesh_pipeline_layout,
+            sampler: *sampler,
+            texture_image,
+            // cmd,
+            frame_deletion_queues,
+            // global_deletion_queue,
+        })
+    }
+
+    fn init_frames(gpu: &Gpu) -> Result<Vec<Frame>> {
+        (0..gpu.swapchain().in_flight_frames())
+            .map(|_| {
+                let pool = gpu.create_command_pool()?;
+                let command_buffer = pool.create_command_buffer()?;
+
+                Ok(Frame {
+                    swapchain_semaphore: gpu.create_semaphore()?,
+                    render_semaphore: gpu.create_semaphore()?,
+                    fence: gpu.create_fence_signaled()?,
+                    command_pool: pool,
+                    command_buffer,
+                    deletion_queue: DeletionQueue::default(),
+                })
+            })
+            .collect()
+    }
+
+    pub fn rebuild_swapchain(&mut self) -> Result<()> {
+        self.gpu.rebuild_swapchain()?;
+        self.frames = Self::init_frames(&self.gpu)?;
+        self.rebuild_swapchain = false;
+
+        Ok(())
+    }
+
+    pub fn render(&mut self) -> Result<()> {
+        if self.rebuild_swapchain {
+            self.rebuild_swapchain()?;
+            return Ok(());
+        }
+        // let gpu = &self.gpu;
+        let n_frames = self.frames.len();
+        let frame = &self.frames[self.current_frame % n_frames];
+        let fence = frame.fence;
+        let cmd = &frame.command_buffer;
+        let render_semaphore = &frame.render_semaphore;
+        let swapchain_semaphore = &frame.swapchain_semaphore;
+        {
+            let frame_deletion_queue =
+                &mut self.frame_deletion_queues[(self.gpu.swapchain().current_index()
+                    % self.gpu.swapchain().in_flight_frames())
+                    as usize];
+            frame_deletion_queue.flush();
+        }
+
+        self.gpu.wait_for_fence(fence)?;
+        let image_index = {
+            let (image_index, rebuild) =
+                self.gpu.swapchain_mut().next_image(*swapchain_semaphore)?;
+            self.rebuild_swapchain = rebuild;
+            image_index
+        };
+
+        self.gpu.reset_fence(fence)?;
+        cmd.reset()?;
+        cmd.begin()?;
+
+        let swapchain_extent = self.gpu.swapchain().info.extent;
+        let swapchain_image = self.gpu.swapchain().current_image();
+
+        let draw_extent = {
+            let extent = self.draw_image.info.extent;
+            vk::Extent3D {
+                width: extent.width.min(swapchain_extent.width),
+                height: extent.height.min(swapchain_extent.height),
+                depth: 1,
+            }
+        };
+
+        cmd.transition_image(
+            &self.depth_image,
+            vk::ImageLayout::UNDEFINED,
+            vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        );
+
+        cmd.transition_image(
+            &self.draw_image,
+            vk::ImageLayout::UNDEFINED,
+            vk::ImageLayout::GENERAL,
+        );
+        self.draw_background(cmd)?;
+
+        cmd.transition_image(
+            &self.draw_image,
+            vk::ImageLayout::GENERAL,
+            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+        );
+
+        self.draw_geometry(cmd)?;
+
+        cmd.transition_image(
+            &self.draw_image,
+            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+        );
+        cmd.transition_image(
+            swapchain_image,
+            vk::ImageLayout::UNDEFINED,
+            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+        );
+        cmd.copy_image(
+            &self.draw_image,
+            swapchain_image,
+            draw_extent,
+            swapchain_extent.into(),
+        );
+        cmd.transition_image(
+            swapchain_image,
+            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+            vk::ImageLayout::PRESENT_SRC_KHR,
+        );
+
+        cmd.end()?;
+        cmd.submit_queued(swapchain_semaphore, render_semaphore, fence)?;
+        let rebuild = self
+            .gpu
+            .swapchain_mut()
+            .present(&[*render_semaphore], &[image_index])?;
+
+        self.rebuild_swapchain |= rebuild;
+        self.current_frame = self.current_frame.wrapping_add(1);
+
+        Ok(())
+    }
+
+    fn create_draw_image(gpu: &Gpu) -> Result<(Image, DescriptorSetLayout)> {
         let extent = gpu.swapchain().info.extent;
-        let draw_image = Image::new(
+        let image = Image::new(
             Arc::clone(gpu.allocator()),
+            gpu.device(),
             &ImageInfo {
                 extent,
                 format: vk::Format::R16G16B16A16_SFLOAT,
@@ -45,30 +240,44 @@ impl SceneRenderer {
                 aspect_flags: vk::ImageAspectFlags::COLOR,
             },
         )?;
-        let draw_image_layout = Self::create_descriptor_set_layout(gpu)?;
+        let bindings = &[vk::DescriptorSetLayoutBinding::default()
+            .binding(0)
+            .stage_flags(vk::ShaderStageFlags::COMPUTE)
+            .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+            .descriptor_count(1)];
+        let layout = gpu.create_descriptor_set_layout(
+            bindings,
+            vk::DescriptorSetLayoutCreateFlags::PUSH_DESCRIPTOR_KHR,
+        )?;
 
-        let depth_image = Image::new(
+        Ok((image, layout))
+    }
+
+    fn create_depth_image(gpu: &Gpu) -> Result<Image> {
+        Image::new(
             Arc::clone(gpu.allocator()),
+            gpu.device(),
             &ImageInfo {
-                extent,
+                extent: gpu.swapchain().info.extent,
                 format: vk::Format::D32_SFLOAT,
                 usage: vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
                 aspect_flags: vk::ImageAspectFlags::DEPTH,
             },
-        )?;
+        )
+    }
 
-        let (gradient_pipeline_layout, gradient_pipeline) =
-            Self::create_gradient_pipeline(gpu, draw_image_layout)?;
-        let (mesh_pipeline_layout, mesh_pipeline) = Self::create_mesh_pipeline(gpu)?;
-
-        let mesh_data = &crate::mesh::load_meshes2("assets/basicmesh.glb".to_string())?[2];
+    fn create_mesh_buffers(
+        gpu: &Gpu,
+        cmd: &mut CommandBuffer,
+        data: &MeshData,
+    ) -> Result<MeshAsset> {
         let index_buffer = gpu.create_buffer(BufferInfo {
             label: Some("index"),
             usage: BufferUsageFlags::INDEX_BUFFER | BufferUsageFlags::TRANSFER_DST,
             location: MemoryLocation::GpuOnly,
-            size: mesh_data.indices.len() * std::mem::size_of::<f32>(),
+            size: data.indices.len() * std::mem::size_of::<f32>(),
         })?;
-        cmd.upload_buffer(&index_buffer, &mesh_data.indices)?;
+        cmd.upload_buffer(&index_buffer, &data.indices)?;
 
         let vertex_buffer = gpu.create_buffer(BufferInfo {
             label: Some("vertex"),
@@ -76,52 +285,67 @@ impl SceneRenderer {
                 | BufferUsageFlags::TRANSFER_DST
                 | BufferUsageFlags::SHADER_DEVICE_ADDRESS,
             location: MemoryLocation::GpuOnly,
-            size: mesh_data.vertices.len() * std::mem::size_of::<Vertex>(),
+            size: data.vertices.len() * std::mem::size_of::<Vertex>(),
         })?;
-        cmd.upload_buffer(&vertex_buffer, &mesh_data.vertices)?;
-        
+        cmd.upload_buffer(&vertex_buffer, &data.vertices)?;
+
         let device_address = vertex_buffer.device_address();
-        let test_mesh = MeshAsset {
+
+        Ok(MeshAsset {
             name: "test".to_owned(),
             surfaces: vec![GeoSurface {
                 start_index: 0,
-                count: mesh_data.indices.len() as u32,
+                count: data.indices.len() as u32,
             }],
             mesh_buffers: GpuMeshBuffers {
                 index_buffer,
                 vertex_buffer,
                 vertex_buffer_address: device_address,
             },
-        };
-
-        Ok(Self {
-            draw_image,
-            draw_image_layout,
-            gradient_pipeline,
-            gradient_pipeline_layout,
-            mesh_pipeline,
-            mesh_pipeline_layout,
-            test_mesh,
-            depth_image,
         })
     }
+    fn create_texture_image(gpu: &Gpu, cmd: &mut CommandBuffer) -> Result<Image> {
+        let black = Color::new(0.0, 0.0, 0.0, 0.0).packed();
+        let magenta = Color::new(1.0, 0.0, 1.0, 1.0).packed();
 
-    fn create_descriptor_set_layout(gpu: &Gpu) -> Result<vk::DescriptorSetLayout> {
-        let bindings = &[vk::DescriptorSetLayoutBinding::default()
-            .binding(0)
-            .stage_flags(vk::ShaderStageFlags::COMPUTE)
-            .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
-            .descriptor_count(1)];
-        gpu.create_descriptor_set_layout(
-            bindings,
-            vk::DescriptorSetLayoutCreateFlags::PUSH_DESCRIPTOR_KHR,
-        )
+        let pixels = {
+            let mut pixels = vec![0u32; 16 * 16];
+            for x in 0..16 {
+                for y in 0..16 {
+                    let offset = x + y * 16;
+                    pixels[offset] = match (x + y) % 2 {
+                        0 => black,
+                        _ => magenta,
+                    };
+                }
+            }
+            pixels
+        };
+        let bytes: Vec<u8> = pixels.into_iter().flat_map(|i| i.to_le_bytes()).collect();
+
+        let texture = Image::new(
+            Arc::clone(gpu.allocator()),
+            gpu.device(),
+            &ImageInfo {
+                extent: vk::Extent2D {
+                    width: 16,
+                    height: 16,
+                },
+                format: vk::Format::R8G8B8A8_UNORM,
+                usage: vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST,
+                aspect_flags: vk::ImageAspectFlags::COLOR,
+            },
+        )?;
+        cmd.upload_image(gpu.allocator(), &texture, &bytes)?;
+        Ok(texture)
     }
 
-    fn create_mesh_pipeline(gpu: &Gpu) -> Result<(vk::PipelineLayout, vk::Pipeline)> {
+    fn create_mesh_pipeline(
+        gpu: &Gpu,
+    ) -> Result<(vk::Pipeline, vk::PipelineLayout, vk::DescriptorSetLayout)> {
         let fn_name = std::ffi::CString::new("main").unwrap();
         let vertex_shader = gpu.load_shader("shaders/colored_triangle_mesh.vert.spv")?;
-        let fragment_shader = gpu.load_shader("shaders/colored_triangle.frag.spv")?;
+        let fragment_shader = gpu.load_shader("shaders/tex_image.frag.spv")?;
         let shader_stages = &[
             vk::PipelineShaderStageCreateInfo::default()
                 .stage(vk::ShaderStageFlags::VERTEX)
@@ -161,12 +385,7 @@ impl SceneRenderer {
         let dynamic_state_info = vk::PipelineDynamicStateCreateInfo::default()
             .dynamic_states(&[vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR]);
         let color_blend_attachments = &[vk::PipelineColorBlendAttachmentState::default()
-            .blend_enable(true)
-            .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
-            .dst_color_blend_factor(vk::BlendFactor::ONE)
-            .src_alpha_blend_factor(vk::BlendFactor::ONE)
-            .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
-            .color_blend_op(vk::BlendOp::ADD)
+            .blend_enable(false)
             .color_write_mask(
                 vk::ColorComponentFlags::A
                     | vk::ColorComponentFlags::R
@@ -176,12 +395,23 @@ impl SceneRenderer {
         let color_blend_state =
             vk::PipelineColorBlendStateCreateInfo::default().attachments(color_blend_attachments);
 
+        let descriptor_bindings = &[vk::DescriptorSetLayoutBinding::default()
+            .binding(0)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_count(1)];
+        let descriptor_layouts = &[gpu.create_descriptor_set_layout(
+            descriptor_bindings,
+            vk::DescriptorSetLayoutCreateFlags::default(),
+        )?];
         let push_constant_ranges = &[vk::PushConstantRange::default()
             .stage_flags(vk::ShaderStageFlags::VERTEX)
             .size(std::mem::size_of::<GPUDrawPushConstants>() as u32)];
-        let layout_info =
-            vk::PipelineLayoutCreateInfo::default().push_constant_ranges(push_constant_ranges);
-        let layout = unsafe { gpu.device().create_pipeline_layout(&layout_info, None) }?;
+        // let descriptor_layouts = &[descriptor_layout];
+        let layout_info = vk::PipelineLayoutCreateInfo::default()
+            .push_constant_ranges(push_constant_ranges)
+            .set_layouts(descriptor_layouts);
+        let pipeline_layout = unsafe { gpu.device().create_pipeline_layout(&layout_info, None) }?;
         let mut pipeline_rendering_info = vk::PipelineRenderingCreateInfo::default()
             .color_attachment_formats(&[vk::Format::R16G16B16A16_SFLOAT])
             .depth_attachment_format(vk::Format::D32_SFLOAT);
@@ -195,7 +425,7 @@ impl SceneRenderer {
             .depth_stencil_state(&depth_stencil_info)
             .viewport_state(&viewport_state_info)
             .dynamic_state(&dynamic_state_info)
-            .layout(layout)
+            .layout(pipeline_layout)
             .stages(shader_stages)
             .push_next(&mut pipeline_rendering_info)];
         let pipeline = unsafe {
@@ -204,7 +434,7 @@ impl SceneRenderer {
                 .map_err(|err| anyhow::anyhow!(err.1))
         }?[0];
 
-        Ok((layout, pipeline))
+        Ok((pipeline, pipeline_layout, descriptor_layouts[0]))
     }
 
     fn create_gradient_pipeline(
@@ -235,71 +465,9 @@ impl SceneRenderer {
         Ok((gradient_pipeline_layout, gradient_pipeline))
     }
 
-    pub fn render(&mut self, gpu: &Gpu, cmd: &CommandBuffer) -> Result<()> {
-        let swapchain_extent = gpu.swapchain().info.extent;
-        let swapchain_image = gpu.swapchain().current_image();
-        let draw_image_extent = self.draw_image.info.extent;
-        let draw_image = self.draw_image.handle;
-        let depth_image = self.depth_image.handle;
-        let draw_extent = vk::Extent3D {
-            width: draw_image_extent.width.min(swapchain_extent.width),
-            height: draw_image_extent.height.min(swapchain_extent.height),
-            depth: 1,
-        };
-
-        cmd.transition_image(
-            depth_image,
-            vk::ImageLayout::UNDEFINED,
-            vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        );
-
-        cmd.transition_image(
-            draw_image,
-            vk::ImageLayout::UNDEFINED,
-            vk::ImageLayout::GENERAL,
-        );
-
-        self.draw_background(cmd)?;
-
-        cmd.transition_image(
-            draw_image,
-            vk::ImageLayout::GENERAL,
-            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-        );
-
-        self.draw_geometry(cmd, &self.draw_image, &self.depth_image)?;
-
-        cmd.transition_image(
-            draw_image,
-            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-            vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-        );
-        cmd.transition_image(
-            swapchain_image,
-            vk::ImageLayout::UNDEFINED,
-            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-        );
-        cmd.copy_image(
-            draw_image,
-            swapchain_image,
-            draw_extent,
-            swapchain_extent.into(),
-        );
-        cmd.transition_image(
-            swapchain_image,
-            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-            vk::ImageLayout::PRESENT_SRC_KHR,
-        );
-
-        Ok(())
-    }
-
-    fn draw_geometry(
-        &self,
-        cmd: &CommandBuffer,
-        draw_image: &Image,
-        depth_image: &Image,
-    ) -> Result<()> {
+    fn draw_geometry(&self, cmd: &CommandBuffer) -> Result<()> {
+        let draw_image = &self.draw_image;
+        let depth_image = &self.depth_image;
         let extent = self.draw_image.info.extent;
         let color_attachment = vk::RenderingAttachmentInfo::default()
             .image_view(draw_image.view)
@@ -330,8 +498,26 @@ impl SceneRenderer {
         cmd.set_scissor(scissor);
 
         cmd.bind_pipeline(vk::PipelineBindPoint::GRAPHICS, self.mesh_pipeline)?;
+
+        let image_info = &[vk::DescriptorImageInfo::default()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(self.texture_image.view)
+            .sampler(self.sampler)];
+        let image_write = vk::WriteDescriptorSet::default()
+            .dst_binding(0)
+            .descriptor_count(1)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(image_info);
+
+        cmd.bind_pipeline(vk::PipelineBindPoint::COMPUTE, self.gradient_pipeline)?;
+
+        cmd.push_descriptor_set(
+            vk::PipelineBindPoint::GRAPHICS,
+            self.mesh_pipeline_layout,
+            image_write,
+        );
         // let mesh = &self.test_mesh[2];
-        let mesh = &self.test_mesh;
+        let mesh = &self.mesh;
         let vertex_buffer = mesh.mesh_buffers.vertex_buffer_address;
 
         let model = na::Isometry3::new(na::Vector3::z(), na::zero());
@@ -392,24 +578,21 @@ impl SceneRenderer {
 
         Ok(())
     }
-
-    // pub fn destroy(&self, gpu: &Gpu) {
-    //     unsafe {
-    //         gpu.device().destroy_pipeline(self.gradient_pipeline, None);
-    //         gpu.device()
-    //             .destroy_pipeline_layout(self.gradient_pipeline_layout, None);
-    //         gpu.device()
-    //             .destroy_descriptor_set_layout(self.draw_image_layout, None);
-    //         // self.draw_image.destroy(gpu);
-    //     }
-    // }
 }
 
-// pub struct GpuMeshBuffers {
-//     pub index_buffer: Buffer,
-//     pub vertex_buffer: Buffer,
-//     pub vertex_buffer_address: vk::DeviceAddress,
-// }
+type Color = Vector4<f32>;
+
+trait ColorExt {
+    fn packed(&self) -> u32;
+}
+
+impl ColorExt for Color {
+    fn packed(&self) -> u32 {
+        let v2 = self.iter().map(|f| (f.clamp(0.0, 1.0) * 255.0) as u32);
+        let v3 = Vector4::from_iterator(v2);
+        u32::from_le_bytes([v3.x as u8, v3.y as u8, v3.z as u8, v3.w as u8])
+    }
+}
 
 #[allow(dead_code)]
 #[repr(C)]
@@ -419,8 +602,12 @@ struct GPUDrawPushConstants {
     vertex_buffer: vk::DeviceAddress,
 }
 
-// impl Copy for GPUDrawPushConstants {
-//     fn copy(&self) -> Self {
-//         *self
-//     }
-// }
+impl Drop for Renderer {
+    fn drop(&mut self) {
+        self.mesh.mesh_buffers.vertex_buffer.destroy();
+        self.mesh.mesh_buffers.index_buffer.destroy();
+        self.draw_image.destroy();
+        self.depth_image.destroy();
+        self.texture_image.destroy();
+    }
+}

@@ -3,8 +3,17 @@ pub mod vk;
 pub(crate) const VK_TIMEOUT_NS: u64 = 5_000_000_000;
 
 pub use {
-    ash::vk::{Extent3D, Fence, Format, ImageUsageFlags, ImageAspectFlags, BufferUsageFlags, DeviceAddress, StencilOpState},
-    gpu_allocator::{MemoryLocation},
+    ash::vk::{
+        BufferUsageFlags,
+        DeviceAddress,
+        Extent3D,
+        Fence,
+        Format,
+        ImageAspectFlags,
+        ImageUsageFlags,
+        StencilOpState,
+    },
+    gpu_allocator::MemoryLocation,
     vk::{
         Allocator,
         Buffer,
@@ -12,9 +21,10 @@ pub use {
         CommandBuffer,
         CommandPool,
         DeletionQueue,
-        Gpu,
+        Destroyable,
         Device,
         Frame,
+        Gpu,
         Image,
         ImageInfo,
         Instance,
