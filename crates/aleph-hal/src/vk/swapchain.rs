@@ -50,9 +50,7 @@ pub struct Swapchain {
     queue: Queue,
     instance: Instance,
     pub info: SwapchainInfo,
-    // image_views: Vec<vk::ImageView>,
     images: Vec<Image>,
-    current_index: u32,
 }
 
 impl Swapchain {
@@ -124,6 +122,7 @@ impl Swapchain {
         let loader = khr::swapchain::Device::new(&instance.handle, device);
         let swapchain = unsafe { loader.create_swapchain(&swapchain_info, None) }.unwrap();
         let image_info = ImageInfo {
+            label: Some("Swapchain image"),
             extent: info.extent,
             format: info.format,
             usage: vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST,
@@ -149,7 +148,7 @@ impl Swapchain {
                         .create_image_view(&image_view_info, None)
                         .expect("Failed to create imageview")
                 };
-                Image::from_existing(handle, view, &image_info).expect("Failed to create image")
+                Image::from_existing(handle, view, image_info).expect("Failed to create image")
             })
             .collect::<Vec<_>>();
         Ok(Swapchain {
@@ -159,10 +158,8 @@ impl Swapchain {
             device: device.clone(),
             surface: surface.clone(),
             info: *info,
-            // image_views,
             images,
             queue: device.queue,
-            current_index: 0,
         })
     }
 
@@ -170,13 +167,17 @@ impl Swapchain {
         self.images.len() as u32
     }
 
-    pub fn current_index(&self) -> u32 {
-        self.current_index
+    pub fn images(&self) -> &[Image] {
+        &self.images
     }
 
-    pub fn current_image(&self) -> &Image {
-        &self.images[self.current_index as usize]
-    }
+    // pub fn current_index(&self) -> u32 {
+        // self.current_index
+    // }
+
+    // pub fn current_image(&self) -> &Image {
+        // &self.images[self.current_index as usize]
+    // }
 
     // pub fn current_image_view(&self) -> vk::ImageView {
     //     self.image_views[self.current_index as usize]
@@ -194,28 +195,28 @@ impl Swapchain {
         };
     }
 
-    pub fn next_image(&mut self, semaphore: vk::Semaphore) -> Result<(u32, bool)> {
+    pub fn acquire_next_image(&self, semaphore: vk::Semaphore) -> Result<(u32, bool)> {
         match unsafe {
             self.loader
                 .acquire_next_image(self.handle, VK_TIMEOUT_NS, semaphore, vk::Fence::null())
         } {
             Ok((index, needs_rebuild)) => {
-                self.current_index = index;
+                // self.current_index = index;
                 Ok((index, needs_rebuild))
             }
             Err(err) if err == vk::Result::ERROR_OUT_OF_DATE_KHR => {
-                self.current_index = 0;
+                // self.current_index = 0;
                 Ok((0, true))
             }
             Err(err) if err == vk::Result::SUBOPTIMAL_KHR => {
-                self.current_index = 0;
+                // self.current_index = 0;
                 Ok((0, true))
             }
             Err(err) => Err(err.into()),
         }
     }
 
-    pub fn present(&mut self, wait_semaphores: &[vk::Semaphore], indices: &[u32]) -> Result<bool> {
+    pub fn present(&self, wait_semaphores: &[vk::Semaphore], indices: &[u32]) -> Result<bool> {
         let swapchains = &[self.handle];
         let present_info = vk::PresentInfoKHR::default()
             .wait_semaphores(wait_semaphores)

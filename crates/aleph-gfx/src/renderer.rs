@@ -1,7 +1,7 @@
 use {
     crate::mesh::{GeoSurface, GpuMeshBuffers, MeshAsset, MeshData, Vertex},
     aleph_hal::{
-        vk::deletion::Destroyable,
+        Buffer,
         BufferInfo,
         BufferUsageFlags,
         CommandBuffer,
@@ -17,6 +17,165 @@ use {
     nalgebra::{self as na, Vector4},
     std::{fmt, sync::Arc},
 };
+
+struct RenderObject {
+    index_count: u32,
+    first_index: u32,
+    index_buffer: Buffer,
+    transform: na::Matrix4<f32>,
+    vertex_buffer_address: vk::DeviceAddress,
+    // material
+}
+
+struct MaterialPipeline {
+    pipeline: vk::Pipeline,
+    layout: vk::PipelineLayout,
+}
+
+struct MaterialInstance {
+    pipeline: MaterialPipeline,
+    material_set: vk::DescriptorSet,
+    pass_type: MaterialPass,
+}
+
+enum MaterialPass {
+    MainColor,
+    Transparent,
+    Other,
+}
+pub struct RenderContext {}
+pub trait Renderable {
+    fn draw(&self, transform: &na::Matrix4<f32>, ctx: &RenderContext);
+}
+
+struct GltfMetallicRoughness {
+    opaque_pipeline: MaterialPipeline,
+    transparent_pipeline: MaterialPipeline,
+    // material_layout: vk::DescriptorSetLayout,
+    // writer: DescriptorWriter,
+}
+
+impl GltfMetallicRoughness {
+    fn build_pipelines(&self) -> Result<()> {
+        fn create_mesh_pipeline(
+            gpu: &Gpu,
+        ) -> Result<(vk::Pipeline, vk::PipelineLayout, vk::DescriptorSetLayout)> {
+            let fn_name = std::ffi::CString::new("main").unwrap();
+            let vertex_shader = gpu.load_shader("shaders/mesh.vert.spv")?;
+            let fragment_shader = gpu.load_shader("shaders/mesh.frag.spv")?;
+            let shader_stages = &[
+                vk::PipelineShaderStageCreateInfo::default()
+                    .stage(vk::ShaderStageFlags::VERTEX)
+                    .name(fn_name.as_c_str())
+                    .module(vertex_shader),
+                vk::PipelineShaderStageCreateInfo::default()
+                    .stage(vk::ShaderStageFlags::FRAGMENT)
+                    .name(fn_name.as_c_str())
+                    .module(fragment_shader),
+            ];
+            let push_constant_ranges = &[vk::PushConstantRange::default()
+                .stage_flags(vk::ShaderStageFlags::VERTEX)
+                .size(std::mem::size_of::<GPUDrawPushConstants>() as u32)];
+            let vertex_state_info = vk::PipelineVertexInputStateCreateInfo::default();
+            let input_state_info = vk::PipelineInputAssemblyStateCreateInfo::default()
+                .topology(vk::PrimitiveTopology::TRIANGLE_LIST);
+            let multisample_state_info = vk::PipelineMultisampleStateCreateInfo::default()
+                .sample_shading_enable(false)
+                .min_sample_shading(1.0)
+                .rasterization_samples(vk::SampleCountFlags::TYPE_1);
+            let color_blend_attachments = &[vk::PipelineColorBlendAttachmentState::default()
+                .blend_enable(false)
+                .color_write_mask(
+                    vk::ColorComponentFlags::A
+                        | vk::ColorComponentFlags::R
+                        | vk::ColorComponentFlags::G
+                        | vk::ColorComponentFlags::B,
+                )];
+            let color_blend_state = vk::PipelineColorBlendStateCreateInfo::default()
+                .attachments(color_blend_attachments)
+                .logic_op(vk::LogicOp::COPY);
+            let raster_state_info = vk::PipelineRasterizationStateCreateInfo::default()
+                .polygon_mode(vk::PolygonMode::FILL)
+                .cull_mode(vk::CullModeFlags::NONE)
+                .front_face(vk::FrontFace::CLOCKWISE)
+                .line_width(1.0);
+            // .depth_bias_enable(true)
+            // .depth_bias_constant_factor(4.0)
+            // .depth_bias_slope_factor(1.5);
+            let depth_stencil_info = vk::PipelineDepthStencilStateCreateInfo::default()
+                .depth_test_enable(true)
+                .depth_write_enable(true)
+                .depth_compare_op(vk::CompareOp::GREATER_OR_EQUAL)
+                .depth_bounds_test_enable(false)
+                .max_depth_bounds(1.0);
+
+            let viewport_state_info = vk::PipelineViewportStateCreateInfo::default()
+                .viewport_count(1)
+                .scissor_count(1);
+            let dynamic_state_info = vk::PipelineDynamicStateCreateInfo::default()
+                .dynamic_states(&[vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR]);
+
+            let descriptor_bindings = &[vk::DescriptorSetLayoutBinding::default()
+                .binding(0)
+                .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                .descriptor_count(1)];
+            let descriptor_layouts = &[gpu.create_descriptor_set_layout(
+                descriptor_bindings,
+                vk::DescriptorSetLayoutCreateFlags::default(),
+            )?];
+
+            let layout_info = vk::PipelineLayoutCreateInfo::default()
+                .push_constant_ranges(push_constant_ranges)
+                .set_layouts(descriptor_layouts);
+            let pipeline_layout =
+                unsafe { gpu.device().create_pipeline_layout(&layout_info, None) }?;
+            let mut pipeline_rendering_info = vk::PipelineRenderingCreateInfo::default()
+                .color_attachment_formats(&[vk::Format::R16G16B16A16_SFLOAT])
+                .depth_attachment_format(vk::Format::D32_SFLOAT);
+
+            let pipeline_info = &[vk::GraphicsPipelineCreateInfo::default()
+                .color_blend_state(&color_blend_state)
+                .vertex_input_state(&vertex_state_info)
+                .input_assembly_state(&input_state_info)
+                .multisample_state(&multisample_state_info)
+                .rasterization_state(&raster_state_info)
+                .depth_stencil_state(&depth_stencil_info)
+                .viewport_state(&viewport_state_info)
+                .dynamic_state(&dynamic_state_info)
+                .layout(pipeline_layout)
+                .stages(shader_stages)
+                .push_next(&mut pipeline_rendering_info)];
+            let pipeline = unsafe {
+                gpu.device()
+                    .create_graphics_pipelines(vk::PipelineCache::null(), pipeline_info, None)
+                    .map_err(|err| anyhow::anyhow!(err.1))
+            }?[0];
+
+            Ok((pipeline, pipeline_layout, descriptor_layouts[0]))
+        }
+        // let opaque_pipeline = self.build_pipeline(MaterialPass::MainColor)?;
+        // let transparent_pipeline = self.build_pipeline(MaterialPass::Transparent)?;
+        // self.opaque_pipeline = opaque_pipeline;
+        // self.transparent_pipeline = transparent_pipeline;
+        Ok(())
+    }
+}
+
+struct MaterialConstants {
+    color_factors: na::Vector4<f32>,
+    metal_rough_factors: na::Vector4<f32>,
+    extra: [na::Vector4<f32>; 14],
+}
+
+struct MaterialResources {
+    color_image: Image,
+    color_sampler: vk::Sampler,
+    metal_rough_image: Image,
+    metal_rough_sampler: vk::Sampler,
+    data_buffer: Buffer,
+    data_buffer_offset: u32,
+}
 
 pub struct Renderer {
     gpu: Gpu,
@@ -34,8 +193,7 @@ pub struct Renderer {
     mesh: MeshAsset,
     texture_image: Image,
     sampler: vk::Sampler,
-    frame_deletion_queues: Vec<DeletionQueue>,
-    // global_deletion_queue: DeletionQueue,
+    deletion_queues: Vec<DeletionQueue>,
 }
 
 impl fmt::Debug for Renderer {
@@ -52,7 +210,7 @@ impl Renderer {
 
         let frames = Self::init_frames(&gpu)?;
 
-        cmd.deletion_queue.flush();
+        // cmd.deletion_queue.flush();
 
         let (draw_image, draw_descriptor_layout) = Self::create_draw_image(&gpu)?;
         let depth_image = Self::create_depth_image(&gpu)?;
@@ -60,8 +218,7 @@ impl Renderer {
         let (gradient_pipeline_layout, gradient_pipeline) =
             Self::create_gradient_pipeline(&gpu, draw_descriptor_layout)?;
 
-        let (mesh_pipeline, mesh_pipeline_layout, _) =
-            Self::create_mesh_pipeline(&gpu)?;
+        let (mesh_pipeline, mesh_pipeline_layout, _) = Self::create_mesh_pipeline(&gpu)?;
 
         let mesh_data = &crate::mesh::load_meshes2("assets/basicmesh.glb".to_string())?[2];
         let mesh = Self::create_mesh_buffers(&gpu, &mut cmd, mesh_data)?;
@@ -71,10 +228,13 @@ impl Renderer {
             .mag_filter(vk::Filter::NEAREST)
             .min_filter(vk::Filter::NEAREST);
         let sampler = unsafe { &gpu.device().create_sampler(&sampler_info, None)? };
-
-        let frame_deletion_queues = (0..gpu.swapchain().in_flight_frames())
+        let deletion_queues = (0..gpu.swapchain().in_flight_frames())
             .map(|_| DeletionQueue::default())
             .collect();
+
+        // let frame_deletion_queues = (0..gpu.swapchain().in_flight_frames())
+        //     .map(|_| DeletionQueue::default())
+        //     .collect();
         // let global_deletion_queue = DeletionQueue::default();
 
         Ok(Self {
@@ -93,8 +253,9 @@ impl Renderer {
             mesh_pipeline_layout,
             sampler: *sampler,
             texture_image,
+            deletion_queues,
             // cmd,
-            frame_deletion_queues,
+            // frame_deletion_queues,
             // global_deletion_queue,
         })
     }
@@ -131,34 +292,34 @@ impl Renderer {
             return Ok(());
         }
         // let gpu = &self.gpu;
-        let n_frames = self.frames.len();
-        let frame = &self.frames[self.current_frame % n_frames];
+        let swapchain = &self.gpu.swapchain();
+        let frame = &self.frames[self.current_frame % self.frames.len()];
         let fence = frame.fence;
         let cmd = &frame.command_buffer;
         let render_semaphore = &frame.render_semaphore;
         let swapchain_semaphore = &frame.swapchain_semaphore;
-        {
-            let frame_deletion_queue =
-                &mut self.frame_deletion_queues[(self.gpu.swapchain().current_index()
-                    % self.gpu.swapchain().in_flight_frames())
-                    as usize];
-            frame_deletion_queue.flush();
-        }
+        // {
+        //     let frame_deletion_queue =
+        //         &mut self.frame_deletion_queues[(self.gpu.swapchain().current_index()
+        //             % self.gpu.swapchain().in_flight_frames())
+        //             as usize];
+        //     frame_deletion_queue.flush();
+        // }
 
         self.gpu.wait_for_fence(fence)?;
-        let image_index = {
-            let (image_index, rebuild) =
-                self.gpu.swapchain_mut().next_image(*swapchain_semaphore)?;
-            self.rebuild_swapchain = rebuild;
-            image_index
+        let (image_index, rebuild) = {
+            let (image_index, rebuild) = swapchain.acquire_next_image(*swapchain_semaphore)?;
+            (image_index as usize, rebuild)
         };
 
+        self.rebuild_swapchain = rebuild;
         self.gpu.reset_fence(fence)?;
+        self.deletion_queues[image_index].flush();
         cmd.reset()?;
         cmd.begin()?;
 
-        let swapchain_extent = self.gpu.swapchain().info.extent;
-        let swapchain_image = self.gpu.swapchain().current_image();
+        let swapchain_extent = swapchain.info.extent;
+        let swapchain_image = &swapchain.images()[image_index];
 
         let draw_extent = {
             let extent = self.draw_image.info.extent;
@@ -213,11 +374,8 @@ impl Renderer {
         );
 
         cmd.end()?;
-        cmd.submit_queued(swapchain_semaphore, render_semaphore, fence)?;
-        let rebuild = self
-            .gpu
-            .swapchain_mut()
-            .present(&[*render_semaphore], &[image_index])?;
+        cmd.submit_queued(&frame.swapchain_semaphore, &frame.render_semaphore, fence)?;
+        let rebuild = swapchain.present(&[*render_semaphore], &[image_index as u32])?;
 
         self.rebuild_swapchain |= rebuild;
         self.current_frame = self.current_frame.wrapping_add(1);
@@ -227,19 +385,16 @@ impl Renderer {
 
     fn create_draw_image(gpu: &Gpu) -> Result<(Image, DescriptorSetLayout)> {
         let extent = gpu.swapchain().info.extent;
-        let image = Image::new(
-            Arc::clone(gpu.allocator()),
-            gpu.device(),
-            &ImageInfo {
-                extent,
-                format: vk::Format::R16G16B16A16_SFLOAT,
-                usage: vk::ImageUsageFlags::COLOR_ATTACHMENT
-                    | vk::ImageUsageFlags::TRANSFER_DST
-                    | vk::ImageUsageFlags::TRANSFER_SRC
-                    | vk::ImageUsageFlags::STORAGE,
-                aspect_flags: vk::ImageAspectFlags::COLOR,
-            },
-        )?;
+        let image = gpu.create_image(ImageInfo {
+            label: Some("draw image"),
+            extent,
+            format: vk::Format::R16G16B16A16_SFLOAT,
+            usage: vk::ImageUsageFlags::COLOR_ATTACHMENT
+                | vk::ImageUsageFlags::TRANSFER_DST
+                | vk::ImageUsageFlags::TRANSFER_SRC
+                | vk::ImageUsageFlags::STORAGE,
+            aspect_flags: vk::ImageAspectFlags::COLOR,
+        })?;
         let bindings = &[vk::DescriptorSetLayoutBinding::default()
             .binding(0)
             .stage_flags(vk::ShaderStageFlags::COMPUTE)
@@ -254,16 +409,13 @@ impl Renderer {
     }
 
     fn create_depth_image(gpu: &Gpu) -> Result<Image> {
-        Image::new(
-            Arc::clone(gpu.allocator()),
-            gpu.device(),
-            &ImageInfo {
-                extent: gpu.swapchain().info.extent,
-                format: vk::Format::D32_SFLOAT,
-                usage: vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
-                aspect_flags: vk::ImageAspectFlags::DEPTH,
-            },
-        )
+        gpu.create_image(ImageInfo {
+            label: Some("depth image"),
+            extent: gpu.swapchain().info.extent,
+            format: vk::Format::D32_SFLOAT,
+            usage: vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+            aspect_flags: vk::ImageAspectFlags::DEPTH,
+        })
     }
 
     fn create_mesh_buffers(
@@ -289,7 +441,7 @@ impl Renderer {
         })?;
         cmd.upload_buffer(&vertex_buffer, &data.vertices)?;
 
-        let device_address = vertex_buffer.device_address();
+        let device_address = vertex_buffer.address();
 
         Ok(MeshAsset {
             name: "test".to_owned(),
@@ -323,19 +475,16 @@ impl Renderer {
         };
         let bytes: Vec<u8> = pixels.into_iter().flat_map(|i| i.to_le_bytes()).collect();
 
-        let texture = Image::new(
-            Arc::clone(gpu.allocator()),
-            gpu.device(),
-            &ImageInfo {
-                extent: vk::Extent2D {
-                    width: 16,
-                    height: 16,
-                },
-                format: vk::Format::R8G8B8A8_UNORM,
-                usage: vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST,
-                aspect_flags: vk::ImageAspectFlags::COLOR,
+        let texture = gpu.create_image(ImageInfo {
+            label: Some("texture"),
+            extent: vk::Extent2D {
+                width: 16,
+                height: 16,
             },
-        )?;
+            format: vk::Format::R8G8B8A8_UNORM,
+            usage: vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST,
+            aspect_flags: vk::ImageAspectFlags::COLOR,
+        })?;
         cmd.upload_image(gpu.allocator(), &texture, &bytes)?;
         Ok(texture)
     }
@@ -602,12 +751,12 @@ struct GPUDrawPushConstants {
     vertex_buffer: vk::DeviceAddress,
 }
 
-impl Drop for Renderer {
-    fn drop(&mut self) {
-        self.mesh.mesh_buffers.vertex_buffer.destroy();
-        self.mesh.mesh_buffers.index_buffer.destroy();
-        self.draw_image.destroy();
-        self.depth_image.destroy();
-        self.texture_image.destroy();
-    }
-}
+// impl Drop for Renderer {
+//     fn drop(&mut self) {
+//         // self.mesh.mesh_buffers.vertex_buffer.destroy();
+//         // self.mesh.mesh_buffers.index_buffer.destroy();
+//         // self.draw_image.destroy();
+//         // self.depth_image.destroy();
+//         // self.texture_image.destroy();
+//     }
+// }

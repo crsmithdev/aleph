@@ -21,7 +21,6 @@ pub use {
         CommandBuffer,
         CommandPool,
         DeletionQueue,
-        Destroyable,
         Device,
         Frame,
         Gpu,

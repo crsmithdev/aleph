@@ -1,6 +1,5 @@
 use {
     crate::Allocator,
-    crate::Destroyable,
     crate::Device,
     anyhow::Result,
     ash::vk::{self, Extent3D, Handle},
@@ -11,6 +10,7 @@ use {
 
 #[derive(Clone, Debug, Copy)]
 pub struct ImageInfo {
+    pub label: Option<&'static str>,
     pub extent: Extent2D,
     pub format: Format,
     pub usage: ImageUsageFlags,
@@ -18,7 +18,7 @@ pub struct ImageInfo {
 }
 
 pub struct Image {
-    pub allocator: Arc<Allocator>,
+    pub allocator: Option<Arc<Allocator>>,
     pub allocation: Allocation,
     pub handle: VkImage,
     pub view: VkImageView,
@@ -34,22 +34,22 @@ impl fmt::Debug for Image {
 }
 
 impl Image {
-    pub fn from_existing(image: vk::Image, view: vk::ImageView, info: &ImageInfo) -> Result<Self> {
+    pub fn from_existing(image: vk::Image, view: vk::ImageView, info: ImageInfo) -> Result<Self> {
         Ok(Self {
-            allocator: Arc::new(Allocator::default()),
+            allocator: None, //Arc::new(Allocator::default()),
             allocation: Allocation::default(),
             handle: image,
-            info: *info,
+        info,
             view,
         })
     }
-    pub fn new(allocator: Arc<Allocator>, device: &Device, info: &ImageInfo) -> Result<Self> {
+    pub fn new(allocator: Arc<Allocator>, device: &Device, info: ImageInfo) -> Result<Self> {
         let extent = Extent3D {
             width: info.extent.width,
             height: info.extent.height,
             depth: 1,
         };
-        let create_info = vk::ImageCreateInfo::default()
+        let create_info = &vk::ImageCreateInfo::default()
             .image_type(vk::ImageType::TYPE_2D)
             .format(info.format)
             .extent(extent)
@@ -58,7 +58,9 @@ impl Image {
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::OPTIMAL)
             .usage(info.usage);
-        let (image, allocation) = allocator.allocate_image(&create_info)?;
+        let image = unsafe { device.create_image(create_info, None) }?;
+        let requirements = unsafe { device.get_image_memory_requirements(image) };
+        let allocation = allocator.allocate_image(image, requirements, info)?;
 
         let view_info = vk::ImageViewCreateInfo::default()
             .image(image)
@@ -77,19 +79,20 @@ impl Image {
         let view = unsafe { device.create_image_view(&view_info, None) }?;
 
         Ok(Self {
-            allocator: allocator.clone(),
+            allocator: Some(allocator.clone()),
             allocation,
             handle: image,
-            info: *info,
+            info,
             view,
         })
     }
 }
 
-impl Destroyable for Image {
-    fn destroy(&mut self) {
-        let allocation = std::mem::take(&mut self.allocation);
-        self.allocator
-            .destroy_image(self.handle, self.view, allocation);
+impl Drop for Image {
+    fn drop(&mut self) {
+        if let Some(allocator) = &self.allocator {
+            let allocation = std::mem::take(&mut self.allocation);
+            allocator.deallocate(allocation);
+        }
     }
 }

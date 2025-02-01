@@ -1,6 +1,6 @@
 use {
     crate::{
-        Allocator, Buffer, BufferInfo, CommandPool, DeletionQueue, Destroyable, Device, Instance, Queue, Swapchain, SwapchainInfo
+        Allocator, Buffer, BufferInfo, CommandPool, DeletionQueue, Image, ImageInfo , Device, Instance,  Swapchain, SwapchainInfo
     },
     anyhow::Result,
     ash::{
@@ -104,24 +104,13 @@ impl Gpu {
     }
 
     #[inline]
-    pub fn queue(&self) -> &Queue {
-        &self.device.queue
-    }
-
     pub fn allocator(&self) -> &Arc<Allocator> {
         &self.allocator
     }
 
+    #[inline]
     pub fn swapchain(&self) -> &Swapchain {
         &self.swapchain
-    }
-
-    pub fn swapchain_mut(&mut self) -> &mut Swapchain {
-        &mut self.swapchain
-    }
-
-    pub fn window(&self) -> &Arc<Window> {
-        &self.window
     }
 }
 
@@ -146,8 +135,12 @@ impl Gpu {
         Buffer::new(self.allocator.clone(), &self.device, info)
     }
 
-    pub fn destroy_buffer(&self, buffer: &mut Buffer) {
-        buffer.destroy();
+    pub fn destroy_buffer(&self, _buffer: &mut Buffer) {
+        // buffer.destroy();
+    }
+
+    pub fn create_image(&self, info: ImageInfo) -> Result<Image> {
+        Image::new(self.allocator.clone(), &self.device, info)
     }
 
     #[inline]

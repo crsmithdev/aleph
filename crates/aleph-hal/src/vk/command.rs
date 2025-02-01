@@ -1,5 +1,20 @@
 use {
-    crate::{Allocator, Buffer, BufferInfo, BufferUsageFlags, DeletionQueue, Device, Image, MemoryLocation}, anyhow::Result, ash::vk::{self, Extent3D, ImageLayout}, bytemuck::Pod, derive_more::{Debug, Deref},  serde::Serialize, std::sync::Arc
+    crate::{
+        Allocator,
+        Buffer,
+        BufferInfo,
+        BufferUsageFlags,
+        DeletionQueue,
+        Device,
+        Image,
+        MemoryLocation,
+    },
+    anyhow::Result,
+    ash::vk::{self, Extent3D, ImageLayout},
+    bytemuck::Pod,
+    derive_more::{Debug, Deref},
+    serde::Serialize,
+    std::{any::Any, sync::Arc},
 };
 
 #[derive(Clone, Debug)]
@@ -26,7 +41,7 @@ pub struct CommandBuffer {
     pub(crate) pool: vk::CommandPool,
     pub(crate) device: Device,
     pub(crate) fence: vk::Fence,
-    pub deletion_queue: DeletionQueue,
+    to_release: Vec<Box<dyn Any>>,
 }
 
 impl CommandBuffer {
@@ -38,7 +53,7 @@ impl CommandBuffer {
             handle,
             pool: pool.handle,
             device: device.clone(),
-            deletion_queue: DeletionQueue::default(),
+            to_release: Vec::new(),
             fence,
         })
     }
@@ -143,7 +158,6 @@ impl CommandBuffer {
     pub fn set_viewport(&self, viewport: vk::Viewport) {
         unsafe {
             self.device.cmd_set_viewport(self.handle, 0, &[viewport]); //std::slice::from_ref(&
-                                                                       // viewport));
         }
     }
 
@@ -375,7 +389,8 @@ impl CommandBuffer {
         let data: &[u8] = bytemuck::cast_slice(data);
         let size = data.len();
 
-        let mut staging: Buffer = Buffer::new(
+
+        let staging: Buffer = Buffer::new(
             buffer.allocator.clone(),
             &self.device,
             BufferInfo {
@@ -385,19 +400,25 @@ impl CommandBuffer {
                 label: Some("staging"),
             },
         )?;
+        staging.write(data);
 
-        staging.mapped()[0..data.len()].copy_from_slice(data);
         self.submit_immediate(|_| {
             self.copy_buffer(&staging, buffer, size as u64);
         })?;
 
-        self.deletion_queue.enqueue(staging);
+        // self.deletion_queue.enqueue(staging);
+        self.to_release.push(Box::new(staging));
 
         // staging.destroy();
         Ok(())
     }
 
-    pub fn upload_image(&mut self, allocator: &Arc<Allocator>, image: &Image, data: &[u8]) -> Result<()> {
+    pub fn upload_image(
+        &mut self,
+        allocator: &Arc<Allocator>,
+        image: &Image,
+        data: &[u8],
+    ) -> Result<()> {
         let size = data.len();
         let extent = Extent3D {
             width: image.info.extent.width,
@@ -405,7 +426,7 @@ impl CommandBuffer {
             depth: 1,
         };
 
-        let mut staging: Buffer = Buffer::new(
+        let staging: Buffer = Buffer::new(
             allocator.clone(),
             &self.device,
             BufferInfo {
@@ -416,23 +437,52 @@ impl CommandBuffer {
             },
         )?;
 
-        staging.mapped()[0..data.len()].copy_from_slice(data);
+        staging.write(data); 
         let copy = vk::BufferImageCopy::default()
             .buffer_offset(0)
             .buffer_row_length(0)
             .buffer_image_height(0)
-            .image_subresource(vk::ImageSubresourceLayers::default().aspect_mask(vk::ImageAspectFlags::COLOR).layer_count(1))
+            .image_subresource(
+                vk::ImageSubresourceLayers::default()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .layer_count(1),
+            )
             .image_offset(vk::Offset3D::default())
             .image_extent(extent);
 
         self.submit_immediate(|_| {
-            self.transition_image(image, ImageLayout::UNDEFINED, ImageLayout::TRANSFER_DST_OPTIMAL);
-            unsafe { self.device.cmd_copy_buffer_to_image(self.handle, staging.handle, image.handle, vk::ImageLayout::TRANSFER_DST_OPTIMAL, &[copy]) };
-            self.transition_image(image, ImageLayout::TRANSFER_DST_OPTIMAL, ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+            self.transition_image(
+                image,
+                ImageLayout::UNDEFINED,
+                ImageLayout::TRANSFER_DST_OPTIMAL,
+            );
+            unsafe {
+                self.device.cmd_copy_buffer_to_image(
+                    self.handle,
+                    staging.handle,
+                    image.handle,
+                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                    &[copy],
+                )
+            };
+            self.transition_image(
+                image,
+                ImageLayout::TRANSFER_DST_OPTIMAL,
+                ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            );
         })?;
-        self.deletion_queue.enqueue(staging);
+        // self.deletion_queue.enqueue(staging);
+        self.to_release.push(Box::new(staging));
+
         Ok(())
     }
+
+    fn release_resources(&mut self, queue: &mut DeletionQueue) {
+            let to_release = std::mem::take(&mut self.to_release);
+            for resource in to_release {
+                queue.enqueue(resource);
+            }
+        }
 
     // pub fn copy_buffer_to_image(
     //     &self,
