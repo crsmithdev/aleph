@@ -17,7 +17,7 @@ pub struct Buffer {
     #[debug("{:x}", handle.as_raw())]
     pub(crate) handle: vk::Buffer,
     device: Device,
-    info: BufferInfo,
+    pub info: BufferInfo,
     pub(crate) allocator: Arc<Allocator>,
     pub(crate) allocation: RefCell<Allocation>,
     address: DeviceAddress,
@@ -54,6 +54,10 @@ impl Buffer {
         self.handle
     }
 
+    pub fn size(&self) -> usize {
+        self.info.size
+    }
+
     #[inline]
     pub fn address(&self) -> vk::DeviceAddress {
         self.address
@@ -62,15 +66,16 @@ impl Buffer {
     pub fn write(&self, data: &[u8]) {
         let mut allocation = self.allocation.borrow_mut();
         let slice = allocation.mapped_slice_mut().expect("Failed to map buffer memory");
-        slice.copy_from_slice(data);
+        
+        slice[0..data.len()].copy_from_slice(data);
     }
 }
 
 impl Drop for Buffer {
     fn drop(&mut self) {
-        log::debug!("Dropping buffer: {:?}", self.info.label);
-        let allocation = self.allocation.take();
-        self.allocator.deallocate(allocation);
-        unsafe { self.device.destroy_buffer(self.handle, None) };
+        // log::debug!("Dropping buffer: {:?}", self.info.label);
+        // let allocation = self.allocation.take();
+        // self.allocator.deallocate(allocation);
+        // unsafe { self.device.destroy_buffer(self.handle, None) };
     }
 }   

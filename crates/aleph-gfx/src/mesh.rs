@@ -31,16 +31,20 @@ impl Vertex {
     }
 }
 
+#[derive(Debug)]
 pub struct GpuMeshBuffers {
     pub index_buffer: Buffer,
     pub vertex_buffer: Buffer,
     pub vertex_buffer_address: DeviceAddress,
 }
+
+#[derive(Debug)]
 pub struct GeoSurface {
     pub start_index: u32,
     pub count: u32,
 }
 
+#[derive(Debug)]
 pub struct MeshAsset {
     pub name: String,
     pub surfaces: Vec<GeoSurface>,
@@ -52,7 +56,7 @@ pub struct MeshData {
     pub indices: Vec<u32>,
 }
 
-pub fn load_meshes2(path: String) -> Result<Vec<MeshData>> {
+pub fn load_meshes2(path: &str) -> Result<Vec<MeshData>> {
     let (document, buffers, _images) = match gltf::import(path) {
         Ok(loaded) => loaded,
         Err(err) => panic!("GLTF loading error: {err:?}"),
@@ -89,7 +93,10 @@ pub fn load_meshes2(path: String) -> Result<Vec<MeshData>> {
                 .into_u32()
                 .collect::<Vec<u32>>();
 
-            meshes.push(MeshData { vertices, indices });
+            log::info!("loaded mesh, vertices: {}, indices: {}", vertices.len(), indices.len());
+            log::info!("first vertex: {:?} & index: {:?}", vertices[0], indices[0]);
+            let data = MeshData { vertices, indices };
+            meshes.push(data);
         }
     }
 

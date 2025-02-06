@@ -1,6 +1,17 @@
 use {
     crate::{
-        Allocator, Buffer, BufferInfo, CommandPool, DeletionQueue, Image, ImageInfo , Device, Instance,  Swapchain, SwapchainInfo
+        Allocator,
+        Buffer,
+        BufferInfo,
+        CommandBuffer,
+        CommandPool,
+        DeletionQueue,
+        Device,
+        Image,
+        ImageInfo,
+        Instance,
+        Swapchain,
+        SwapchainInfo,
     },
     anyhow::Result,
     ash::{
@@ -51,15 +62,8 @@ pub struct Gpu {
     pub(crate) swapchain: Swapchain,
     pub(crate) allocator: Arc<Allocator>,
     pub(crate) window: Arc<Window>,
-    pub deletion_queue: DeletionQueue,
-}
-
-impl Drop for Gpu {
-    fn drop(&mut self) {
-        unsafe {
-            self.device.handle.device_wait_idle().unwrap();
-        }
-    }
+    setup_cmd_pool: CommandPool,
+    setup_cmd_buffer: CommandBuffer,
 }
 
 impl Gpu {
@@ -85,7 +89,8 @@ impl Gpu {
         )?;
 
         let allocator = Arc::new(Allocator::new(&instance, &device)?);
-        let deletion_queue = DeletionQueue::default();
+        let setup_cmd_pool = device.create_command_pool()?;
+        let setup_cmd_buffer = setup_cmd_pool.create_command_buffer()?;
 
         Ok(Self {
             instance,
@@ -93,7 +98,8 @@ impl Gpu {
             surface,
             swapchain,
             allocator,
-            deletion_queue,
+            setup_cmd_buffer,
+            setup_cmd_pool,
             window: Arc::clone(&window),
         })
     }
@@ -135,10 +141,6 @@ impl Gpu {
         Buffer::new(self.allocator.clone(), &self.device, info)
     }
 
-    pub fn destroy_buffer(&self, _buffer: &mut Buffer) {
-        // buffer.destroy();
-    }
-
     pub fn create_image(&self, info: ImageInfo) -> Result<Image> {
         Image::new(self.allocator.clone(), &self.device, info)
     }
@@ -160,16 +162,9 @@ impl Gpu {
 
     #[inline]
     pub fn create_command_pool(&self) -> Result<CommandPool> {
-        let info = vk::CommandPoolCreateInfo::default()
-            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
-            .queue_family_index(self.device.queue.family.index);
-        let handle = unsafe { self.device.handle.create_command_pool(&info, None)? };
-
-        Ok(CommandPool {
-            handle,
-            device: self.device.clone(),
-        })
+        self.device.create_command_pool()
     }
+
 
     #[inline]
     pub fn create_descriptor_set_layout(
@@ -194,10 +189,7 @@ impl Gpu {
     pub fn load_shader(&self, path: &str) -> Result<vk::ShaderModule> {
         let mut file = std::fs::File::open(path)?;
         let bytes = ash::util::read_spv(&mut file)?;
-        let info = vk::ShaderModuleCreateInfo::default().code(&bytes);
-        let shader = unsafe { self.device.create_shader_module(&info, None) }?;
-
-        Ok(shader)
+        self.device.create_shader_module(&bytes)
     }
 
     pub fn rebuild_swapchain(&mut self) -> Result<()> {
@@ -209,6 +201,24 @@ impl Gpu {
         };
 
         self.swapchain.rebuild(extent)
+    }
+
+    pub fn with_setup_cb(&self, callback: impl FnOnce(&CommandBuffer)) -> Result<()> {
+        let cmd_buffer =  &self.setup_cmd_buffer;
+
+        cmd_buffer.begin()?;
+        callback(cmd_buffer);
+        cmd_buffer.end()?;
+        let command_buffer_info = &[vk::CommandBufferSubmitInfo::default()
+        .command_buffer(cmd_buffer.handle)
+        .device_mask(0)];
+        let submit_info = &[vk::SubmitInfo2::default()
+            .command_buffer_infos(command_buffer_info)];
+
+        unsafe { self.device.handle().queue_submit2(self.device.queue.handle(), submit_info, vk::Fence::null())}?;
+        unsafe { self.device.handle().device_wait_idle() }?;
+
+        Ok(())
     }
 }
 
@@ -231,4 +241,10 @@ pub unsafe extern "system" fn vulkan_debug_callback(
     }
 
     vk::FALSE
+}
+
+impl Drop for Gpu {
+    fn drop(&mut self) {
+        log::debug!("Dropping GPU");
+    }
 }

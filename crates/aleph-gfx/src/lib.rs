@@ -1,24 +1,26 @@
 pub mod mesh;
 pub mod renderer;
 pub mod ui;
+pub mod graph;
+pub mod util;
+pub mod camera;
+pub mod mesh_pipeline;
 
 use {
-    crate::renderer::Renderer,
     aleph_core::{
         app::TickEvent,
         layer::{Layer, Window},
-    },
-    aleph_hal::{self, Gpu},
-    std::sync::{Arc, OnceLock},
+    }, aleph_hal::{self, Gpu}, graph::RenderGraph, std::sync::{Arc, OnceLock}
 };
 
 pub struct RenderContex<'a> {
     pub gfx: &'a Gpu,
 }
 
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub struct GraphicsLayer {
-    renderer: OnceLock<Renderer>,
+    renderer: OnceLock<RenderGraph>,
+    gpu: OnceLock<Gpu>,
 }
 
 impl Layer for GraphicsLayer {
@@ -30,11 +32,14 @@ impl Layer for GraphicsLayer {
     where
         Self: Sized,
     {
-        let renderer = Renderer::new(Arc::clone(&window))?;
-        log::info!("Created renderer: {:?}", &renderer);
+    let gpu = Gpu::new(Arc::clone(&window))?;
+        let graph = RenderGraph::new(gpu)?;
+
+        // let renderer = Renderer::new(Arc::clone(&window))?;
+        // log::info!("Created renderer: {:?}", &renderer);
 
         self.renderer
-            .set(renderer)
+            .set(graph)
             .map_err(|_| anyhow::anyhow!("Failed to set renderer"))?;
 
         events.subscribe::<TickEvent>(|layer, _event| layer.render());
@@ -48,6 +53,6 @@ impl GraphicsLayer {
         self.renderer
             .get_mut()
             .expect("Renderer not initialized")
-            .render()
+            .execute()
     }
 }

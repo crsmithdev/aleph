@@ -3,10 +3,12 @@ use {
     crate::Device,
     anyhow::Result,
     ash::vk::{self, Extent3D, Handle},
-    ash::vk::{Extent2D, Format, ImageUsageFlags, ImageAspectFlags, Image as VkImage, ImageView as VkImageView},
+    ash::vk::{Extent2D, Image as VkImage, ImageView as VkImageView},
     gpu_allocator::vulkan::Allocation,
     std::{fmt, sync::Arc},
 };
+
+pub use ash::vk::{ImageUsageFlags, ImageAspectFlags, Format};
 
 #[derive(Clone, Debug, Copy)]
 pub struct ImageInfo {
@@ -57,7 +59,7 @@ impl Image {
             .array_layers(1)
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::OPTIMAL)
-            .usage(info.usage);
+            .usage(info.usage | vk::ImageUsageFlags::TRANSFER_DST);
         let image = unsafe { device.create_image(create_info, None) }?;
         let requirements = unsafe { device.get_image_memory_requirements(image) };
         let allocation = allocator.allocate_image(image, requirements, info)?;
@@ -90,9 +92,10 @@ impl Image {
 
 impl Drop for Image {
     fn drop(&mut self) {
-        if let Some(allocator) = &self.allocator {
-            let allocation = std::mem::take(&mut self.allocation);
-            allocator.deallocate(allocation);
-        }
+        log::info!("dropping image: {:?}", self.info.label);
+        // if let Some(allocator) = &self.allocator {
+            // let allocation = std::mem::take(&mut self.allocation);
+            // allocator.deallocate(allocation);
+        // }
     }
 }

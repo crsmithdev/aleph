@@ -10,12 +10,13 @@ use {
         MemoryLocation,
     },
     anyhow::Result,
-    ash::vk::{self, Extent3D, ImageLayout},
+    ash::vk::{self, Extent3D},
     bytemuck::Pod,
     derive_more::{Debug, Deref},
     serde::Serialize,
     std::{any::Any, sync::Arc},
 };
+pub use ash::vk::ImageLayout;
 
 #[derive(Clone, Debug)]
 pub struct CommandPool {
@@ -149,6 +150,20 @@ impl CommandBuffer {
         }
     }
 
+    pub fn bind_vertex_buffer(&self, buffer: &Buffer, offset: u64) {
+        unsafe {
+            self.device.handle
+                .cmd_bind_vertex_buffers(self.handle, 0, &[buffer.handle], &[0]);
+        }
+    }
+
+    pub fn bind_index_buffer(&self, buffer: &Buffer, offset: u64) {
+        unsafe {
+            self.device.handle
+                .cmd_bind_index_buffer(self.handle, buffer.handle, offset, vk::IndexType::UINT32);
+        }
+    }
+
     pub fn set_scissor(&self, scissor: vk::Rect2D) {
         unsafe {
             self.device.cmd_set_scissor(self.handle, 0, &[scissor]);
@@ -179,13 +194,12 @@ impl CommandBuffer {
         }
     }
 
-    pub fn push_descriptor_set(
+    pub fn push_descriptor_sets(
         &self,
         bind_point: vk::PipelineBindPoint,
         layout: vk::PipelineLayout,
-        set: vk::WriteDescriptorSet,
+        sets: &[vk::WriteDescriptorSet],
     ) {
-        let sets = &[set];
         unsafe {
             self.device.push_descriptor.cmd_push_descriptor_set(
                 self.handle,
@@ -194,13 +208,6 @@ impl CommandBuffer {
                 0,
                 sets,
             );
-        }
-    }
-
-    pub fn bind_index_buffer(&self, buffer: vk::Buffer, offset: u64, index_type: vk::IndexType) {
-        unsafe {
-            self.device
-                .cmd_bind_index_buffer(self.handle, buffer, offset, index_type);
         }
     }
 
@@ -224,14 +231,14 @@ impl CommandBuffer {
     }
 
     pub fn submit_immediate(&self, f: impl FnOnce(&CommandBuffer)) -> Result<()> {
-        self.device.wait_for_fence(self.fence)?;
-        self.device.reset_fence(self.fence)?;
-        self.reset()?;
-        self.begin()?;
+        // self.device.wait_for_fence(self.fence)?;
+        // self.device.reset_fence(self.fence)?;
+        // self.reset()?;
+        // self.begin()?;
 
         f(self);
 
-        self.end()?;
+        // self.end()?;
 
         let command_buffer_info = &[vk::CommandBufferSubmitInfo::default()
             .command_buffer(self.handle)
@@ -241,34 +248,12 @@ impl CommandBuffer {
             .wait_semaphore_infos(&[])
             .signal_semaphore_infos(&[])];
 
-        Ok(unsafe {
+        let result = Ok(unsafe {
             self.device
-                .queue_submit2(self.device.queue.handle, submit_info, self.fence)
-        }?)
-    }
-
-    pub fn submit_immediate2(&self, f: impl FnOnce(&CommandBuffer)) -> Result<()> {
-        self.device.wait_for_fence(self.fence)?;
-        self.device.reset_fence(self.fence)?;
-        self.reset()?;
-        self.begin()?;
-
-        f(self);
-
-        self.end()?;
-
-        let command_buffer_info = &[vk::CommandBufferSubmitInfo::default()
-            .command_buffer(self.handle)
-            .device_mask(0)];
-        let submit_info = &[vk::SubmitInfo2::default()
-            .command_buffer_infos(command_buffer_info)
-            .wait_semaphore_infos(&[])
-            .signal_semaphore_infos(&[])];
-
-        Ok(unsafe {
-            self.device
-                .queue_submit2(self.device.queue.handle, submit_info, self.fence)
-        }?)
+                .queue_submit2(self.device.queue.handle, submit_info, vk::Fence::null())//self.fence)
+        }?);
+        unsafe { self.device.handle.device_wait_idle().unwrap() };
+        result
     }
 
     pub fn submit_queued(
@@ -385,7 +370,7 @@ impl CommandBuffer {
         };
     }
 
-    pub fn upload_buffer<T: Serialize + Pod>(&mut self, buffer: &Buffer, data: &[T]) -> Result<()> {
+    pub fn upload_buffer<T: Serialize + Pod>(&self, buffer: &Buffer, data: &[T]) -> Result<()> {
         let data: &[u8] = bytemuck::cast_slice(data);
         let size = data.len();
 
@@ -402,32 +387,32 @@ impl CommandBuffer {
         )?;
         staging.write(data);
 
-        self.submit_immediate(|_| {
+        // self.submit_immediate(|_| {
             self.copy_buffer(&staging, buffer, size as u64);
-        })?;
+        // })?;
 
         // self.deletion_queue.enqueue(staging);
-        self.to_release.push(Box::new(staging));
+        // self.to_release.push(Box::new(staging));
 
         // staging.destroy();
         Ok(())
     }
 
     pub fn upload_image(
-        &mut self,
-        allocator: &Arc<Allocator>,
+        &self,
         image: &Image,
         data: &[u8],
     ) -> Result<()> {
         let size = data.len();
-        let extent = Extent3D {
+         let extent = Extent3D {
             width: image.info.extent.width,
             height: image.info.extent.height,
             depth: 1,
         };
 
+        let allocator = image.allocator.as_ref().unwrap();
         let staging: Buffer = Buffer::new(
-            allocator.clone(),
+            Arc::clone(allocator),
             &self.device,
             BufferInfo {
                 usage: BufferUsageFlags::TRANSFER_SRC,
@@ -436,7 +421,10 @@ impl CommandBuffer {
                 label: Some("staging"),
             },
         )?;
-
+        // // // // dbg!(size);
+        // // // dbg!(data.len());
+        // // dbg!(data);
+        // dbg!(staging.info.size);
         staging.write(data); 
         let copy = vk::BufferImageCopy::default()
             .buffer_offset(0)
@@ -450,7 +438,7 @@ impl CommandBuffer {
             .image_offset(vk::Offset3D::default())
             .image_extent(extent);
 
-        self.submit_immediate(|_| {
+        // self.submit_immediate(|_| {
             self.transition_image(
                 image,
                 ImageLayout::UNDEFINED,
@@ -470,9 +458,9 @@ impl CommandBuffer {
                 ImageLayout::TRANSFER_DST_OPTIMAL,
                 ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             );
-        })?;
+        // })?;
         // self.deletion_queue.enqueue(staging);
-        self.to_release.push(Box::new(staging));
+        // self.to_release.push(Box::new(staging));
 
         Ok(())
     }

@@ -1,5 +1,5 @@
 use {
-    crate::{Instance, VK_TIMEOUT_NS},
+    crate::{Instance, CommandPool, VK_TIMEOUT_NS},
     anyhow::{anyhow, bail, Result},
     ash::{
         ext,
@@ -7,10 +7,10 @@ use {
         vk::{self, BufferDeviceAddressInfo, Handle},
     },
     derive_more::{Debug, Deref},
-    std::ffi,
+    std::{ffi, slice},
 };
 
-const DEVICE_EXTENSIONS: [&ffi::CStr; 7] = [
+const DEVICE_EXTENSIONS: [&ffi::CStr; 8] = [
     khr::swapchain::NAME,
     khr::synchronization2::NAME,
     khr::maintenance3::NAME,
@@ -18,6 +18,7 @@ const DEVICE_EXTENSIONS: [&ffi::CStr; 7] = [
     ext::descriptor_indexing::NAME,
     khr::buffer_device_address::NAME,
     khr::push_descriptor::NAME,
+    khr::shader_non_semantic_info::NAME,
 ];
 
 #[allow(dead_code)]
@@ -184,6 +185,11 @@ impl Device {
         })
     }
 
+    pub fn create_shader_module(&self, bytes: &[u32]) -> Result<vk::ShaderModule> {
+        let info = vk::ShaderModuleCreateInfo::default().code(bytes);
+        Ok(unsafe { self.handle.create_shader_module(&info, None)? })
+    }
+
     pub fn wait_for_fence(&self, fence: vk::Fence) -> Result<()> {
         #[allow(clippy::unit_arg)]
         Ok(unsafe { self.handle.wait_for_fences(&[fence], true, VK_TIMEOUT_NS)? })
@@ -192,6 +198,28 @@ impl Device {
     pub fn reset_fence(&self, fence: vk::Fence) -> Result<()> {
         #[allow(clippy::unit_arg)]
         Ok(unsafe { self.handle.reset_fences(&[fence])? })
+    }
+
+pub fn create_pipeline_layout(
+        &self,
+        uniforms_layouts: &[vk::DescriptorSetLayout],
+        constants_ranges: &[vk::PushConstantRange],
+    ) -> Result<vk::PipelineLayout> {
+        let pipeline_layout_info = vk::PipelineLayoutCreateInfo::default()
+            .set_layouts(uniforms_layouts)
+            .push_constant_ranges(constants_ranges);
+        Ok(unsafe{self.handle.create_pipeline_layout(&pipeline_layout_info, None)? })
+    }
+
+    pub fn create_graphics_pipeline(
+        &self,
+        info: &vk::GraphicsPipelineCreateInfo,
+    ) -> Result<vk::Pipeline> {
+        Ok(unsafe {
+            self.handle
+                .create_graphics_pipelines(vk::PipelineCache::null(), slice::from_ref(info), None)
+                .map_err(|err| anyhow::anyhow!(err.1))
+        }?[0])
     }
 
     pub fn update_descriptor_sets(
@@ -213,6 +241,17 @@ impl Device {
             .bindings(bindings)
             .flags(flags);
         Ok(unsafe { self.handle.create_descriptor_set_layout(&info, None)? })
+    }
+
+    pub fn create_command_pool(&self) -> Result<CommandPool> {
+        let info = vk::CommandPoolCreateInfo::default()
+            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+            .queue_family_index(self.queue.family.index);
+        let handle = unsafe { self.handle.create_command_pool(&info, None)? };
+        Ok(CommandPool {
+            handle,
+            device: self.clone(),
+        })
     }
 
     // #region Test2

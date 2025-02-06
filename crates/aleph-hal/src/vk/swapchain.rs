@@ -28,7 +28,6 @@ pub struct Frame {
     pub fence: vk::Fence,
     pub command_pool: CommandPool,
     pub command_buffer: CommandBuffer,
-    pub deletion_queue: DeletionQueue,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct SwapchainInfo {
@@ -137,7 +136,6 @@ impl Swapchain {
         let images = images
             .into_iter()
             .map(|handle| {
-                
                 let image_view_info = vk::ImageViewCreateInfo::default()
                     .image(handle)
                     .view_type(vk::ImageViewType::TYPE_2D)
@@ -172,11 +170,11 @@ impl Swapchain {
     }
 
     // pub fn current_index(&self) -> u32 {
-        // self.current_index
+    // self.current_index
     // }
 
     // pub fn current_image(&self) -> &Image {
-        // &self.images[self.current_index as usize]
+    // &self.images[self.current_index as usize]
     // }
 
     // pub fn current_image_view(&self) -> vk::ImageView {
