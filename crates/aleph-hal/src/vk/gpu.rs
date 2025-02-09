@@ -26,9 +26,8 @@ use {
 
 const IN_FLIGHT_FRAMES: u32 = 2;
 
-#[derive(Clone, Debug, Deref)]
+#[derive(Clone, Debug)]
 pub struct Surface {
-    #[deref]
     #[debug("{:x}", inner.as_raw())]
     pub(crate) inner: vk::SurfaceKHR,
 
@@ -203,11 +202,11 @@ impl Gpu {
         self.swapchain.rebuild(extent)
     }
 
-    pub fn with_setup_cb(&self, callback: impl FnOnce(&CommandBuffer)) -> Result<()> {
+    pub fn with_setup_cb(&self, callback: impl FnOnce(&CommandBuffer) -> Result<()>) -> Result<()> {
         let cmd_buffer =  &self.setup_cmd_buffer;
 
         cmd_buffer.begin()?;
-        callback(cmd_buffer);
+        callback(cmd_buffer)?;
         cmd_buffer.end()?;
         let command_buffer_info = &[vk::CommandBufferSubmitInfo::default()
         .command_buffer(cmd_buffer.handle)

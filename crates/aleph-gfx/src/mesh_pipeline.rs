@@ -4,53 +4,44 @@ use {
         mesh::Vertex,
         util::{self, ShaderStageFlags},
     },
-    aleph_hal::{
-        Buffer,
-        CommandBuffer,
-        Device,
-        Format,
-        Frame,
-        Gpu,
-        Image,
-        ImageInfo,
-        ImageUsageFlags,
-    },
+    aleph_hal::{Device, Gpu, Image},
     anyhow::Result,
-    ash::vk::{
-        self, AttachmentLoadOp as LoadOp, AttachmentStoreOp as StoreOp, PipelineBindPoint, VertexInputBindingDescription
-    },
-    nalgebra::Vector4,
+    ash::vk::{self, AttachmentLoadOp as LoadOp, AttachmentStoreOp as StoreOp, PipelineBindPoint},
+    nalgebra::Vector3,
 };
 
-const BINDING_INDEX_CONFIG_UBO: u32 = 0;
+const BINDING_INDEX_GLOBAL_UBO: u32 = 0;
 const BINDING_INDEX_MODEL_UBO: u32 = 1;
-// const BINDING_INDEX_TEXTURE: u32 = 2;
 
 pub struct MeshPipeline {
     pipeline: vk::Pipeline,
     pipeline_layout: vk::PipelineLayout,
-    descriptor_layout: vk::DescriptorSetLayout,
-    texture_image: Image,
-    texture_sampler: vk::Sampler,
+    // descriptor_layout: vk::DescriptorSetLayout,
+    // texture_image: Image,
+    // texture_sampler: vk::Sampler,
 }
 
 impl Pipeline for MeshPipeline {
     fn execute(&self, context: &RenderContext) -> Result<()> {
-
         let cmd = context.command_buffer;
         let color_attachments = &[vk::RenderingAttachmentInfo::default()
             .image_view(context.draw_image.view)
             .image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)];
-        // let depth_attachment = &util::depth_attachment(
-        //     context.depth_image,
-        //     LoadOp::CLEAR,
-        //     StoreOp::STORE,
-        //     clear_value,
-        // );
-        let depth_attachment = None;
+        let clear_value = vk::ClearValue {
+            depth_stencil: vk::ClearDepthStencilValue {
+                depth: 1.0,
+                stencil: 0,
+            },
+        };
+        let depth_attachment = &util::depth_attachment(
+            context.depth_image,
+            LoadOp::CLEAR,
+            StoreOp::STORE,
+            clear_value,
+        );
 
         let extent = context.extent;
-        cmd.begin_rendering(color_attachments, depth_attachment, context.extent)?;
+        cmd.begin_rendering(color_attachments, Some(depth_attachment), context.extent)?;
         let viewport = vk::Viewport::default()
             .width(extent.width as f32)
             .height(0.0 - extent.height as f32)
@@ -63,9 +54,8 @@ impl Pipeline for MeshPipeline {
         cmd.set_scissor(scissor);
 
         cmd.bind_pipeline(vk::PipelineBindPoint::GRAPHICS, self.pipeline)?;
-        self.bind_global_descriptors(context);
         for object in context.objects {
-            self.bind_object_descriptors(object);
+            self.bind_object_descriptors(object, context);
             object.bind_mesh_buffers(cmd);
             object.draw(cmd);
         }
@@ -80,25 +70,29 @@ impl MeshPipeline {
         let descriptor_layout = Self::create_descriptor_layout(device)?;
         let pipeline_layout = device.create_pipeline_layout(&[descriptor_layout], &[])?;
         let pipeline = Self::create_pipeline(device, pipeline_layout)?;
-        let sampler_info = vk::SamplerCreateInfo::default()
-            .mag_filter(vk::Filter::LINEAR)
-            .min_filter(vk::Filter::LINEAR);
-        let texture_sampler = unsafe { gpu.device().create_sampler(&sampler_info, None)? };
+        // let sampler_info = vk::SamplerCreateInfo::default()
+        //     .mag_filter(vk::Filter::LINEAR)
+        //     .min_filter(vk::Filter::LINEAR);
+        // let texture_sampler = unsafe { gpu.device().create_sampler(&sampler_info, None)? };
 
         Ok(Self {
             pipeline,
             pipeline_layout,
-            descriptor_layout,
-            texture_image,
-            texture_sampler,
+            // descriptor_layout,
+            // texture_image,
+            // texture_sampler,
         })
     }
 
     fn create_descriptor_layout(device: &Device) -> Result<vk::DescriptorSetLayout> {
         let bindings = &[
             util::buffer_binding(
-                BINDING_INDEX_CONFIG_UBO,
-                ShaderStageFlags::VERTEX,
+                BINDING_INDEX_GLOBAL_UBO,
+                ShaderStageFlags::VERTEX | ShaderStageFlags::FRAGMENT,
+            ),
+            util::buffer_binding(
+                BINDING_INDEX_MODEL_UBO,
+                ShaderStageFlags::VERTEX | ShaderStageFlags::FRAGMENT,
             ),
         ];
 
@@ -108,44 +102,29 @@ impl MeshPipeline {
         )
     }
 
-    fn bind_object_descriptors(&self, context: &RenderContext) {
-        // ...
-    }
-
-    fn bind_global_descriptors(&self, context: &RenderContext) {
-        let info = &[vk::DescriptorBufferInfo::default()
+    fn bind_object_descriptors(&self, object: &RenderObject, context: &RenderContext) {
+        let global_info = &[vk::DescriptorBufferInfo::default()
             .buffer(context.global_buffer.handle())
             .offset(0)
             .range(std::mem::size_of::<GpuGlobalData>() as u64)];
-        let writes = &[vk::WriteDescriptorSet::default()
-            .dst_binding(BINDING_INDEX_CONFIG_UBO)
-            .descriptor_count(1)
-            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-            .buffer_info(info)];
-        context.command_buffer.push_descriptor_sets(PipelineBindPoint::GRAPHICS, self.pipeline_layout, writes);
-        // let buffer_info2 = &[vk::DescriptorBufferInfo::default()
-        //     .buffer(object.model_buffer.handle())
-        //     .offset(0)
-        //     .range(std::mem::size_of::<GpuModelData>() as u64)];
-        // let buffer_write2 = vk::WriteDescriptorSet::default()
-        //     .dst_binding(BINDING_INDEX_MODEL_UBO)
-        //     .descriptor_count(1)
-        //     .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-        // .buffer_info(buffer_info2);
-        // let image_info = &[vk::DescriptorImageInfo::default()
-        //     .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-        //     .image_view(self.texture_image.view)
-        //     .sampler(self.texture_sampler)];
-        // let image_write = vk::WriteDescriptorSet::default()
-        //     .dst_binding(BINDING_INDEX_TEXTURE)
-        //     .descriptor_count(1)
-        //     .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-        //     .image_info(image_info);
-
-        let writes = &[buffer_write1];
-
+        let model_info = &[vk::DescriptorBufferInfo::default()
+            .buffer(object.model_buffer.handle())
+            .offset(0)
+            .range(std::mem::size_of::<GpuModelData>() as u64)];
+        let writes = &[
+            vk::WriteDescriptorSet::default()
+                .dst_binding(BINDING_INDEX_GLOBAL_UBO)
+                .descriptor_count(1)
+                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                .buffer_info(global_info),
+            vk::WriteDescriptorSet::default()
+                .dst_binding(BINDING_INDEX_MODEL_UBO)
+                .descriptor_count(1)
+                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                .buffer_info(model_info),
+        ];
         context.command_buffer.push_descriptor_sets(
-            vk::PipelineBindPoint::GRAPHICS,
+            PipelineBindPoint::GRAPHICS,
             self.pipeline_layout,
             writes,
         );
@@ -165,11 +144,11 @@ impl MeshPipeline {
         let stages = &[vs_stage, fs_stage];
         let dynamic_state = util::dynamic_state_default();
         let input_state = util::input_state_triangle_list();
-        let raster_state = util::raster_state_polygons(vk::CullModeFlags::BACK).front_face(vk::FrontFace::COUNTER_CLOCKWISE);
+        let raster_state = util::raster_state_polygons(vk::CullModeFlags::BACK)
+            .front_face(vk::FrontFace::COUNTER_CLOCKWISE);
         let multisample_state = util::multisample_state_disabled();
         let viewport_state = util::viewport_state_default();
-        // let depth_stencil_state = util::depth_stencil_enabled();
-        let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::default();
+        let depth_stencil_state = util::depth_stencil_enabled();
         let attachments = &[vk::PipelineColorBlendAttachmentState::default()
             .blend_enable(false)
             .color_write_mask(
@@ -179,19 +158,42 @@ impl MeshPipeline {
                     | vk::ColorComponentFlags::B,
             )];
         let color_blend_state = util::color_blend_disabled(attachments);
-        let vertex_attributes = [vk::VertexInputAttributeDescription::default()
-            .location(0)
+        let vec3_size = std::mem::size_of::<Vector3<f32>>() as u32;
+        let uv_size = std::mem::size_of::<f32>() as u32;
+        let vertex_attributes = [
+            vk::VertexInputAttributeDescription::default()
+                .binding(0)
+                .location(0)
+                .format(vk::Format::R32G32B32_SFLOAT)
+                .offset(0),
+            vk::VertexInputAttributeDescription::default()
+                .location(1)
+                .binding(0)
+                .format(vk::Format::R32G32_SFLOAT)
+                .offset(vec3_size),
+            vk::VertexInputAttributeDescription::default()
+                .binding(0)
+                .location(2)
+                .format(vk::Format::R32G32B32_SFLOAT)
+                .offset(vec3_size + uv_size),
+            vk::VertexInputAttributeDescription::default()
+                .location(3)
+                .binding(0)
+                .format(vk::Format::R32G32_SFLOAT)
+                .offset(2 * vec3_size + uv_size),
+            vk::VertexInputAttributeDescription::default()
+                .binding(0)
+                .location(4)
+                .format(vk::Format::R32G32B32_SFLOAT)
+                .offset(2 * vec3_size + 2 * uv_size),
+        ];
+        let vertex_binding = &[vk::VertexInputBindingDescription::default()
             .binding(0)
-            .format(vk::Format::R32G32_SFLOAT)
-            .offset(0)];
-        let vertex_bindings = [vk::VertexInputBindingDescription::default()
-            .binding(0)
-            .stride(std::mem::size_of::<Vertex>() as u32)
-            .input_rate(vk::VertexInputRate::VERTEX)];
-        let vertex_state = vk::PipelineVertexInputStateCreateInfo::default()
-            .vertex_attribute_descriptions(&vertex_attributes)
-            .vertex_binding_descriptions(&vertex_bindings);
+            .stride(std::mem::size_of::<Vertex>() as u32)];
 
+        let vertex_state = vk::PipelineVertexInputStateCreateInfo::default()
+            .vertex_binding_descriptions(vertex_binding)
+            .vertex_attribute_descriptions(&vertex_attributes);
         let mut pipeline_rendering_info = vk::PipelineRenderingCreateInfo::default()
             .color_attachment_formats(&[vk::Format::R16G16B16A16_SFLOAT])
             .depth_attachment_format(vk::Format::D32_SFLOAT);
@@ -210,4 +212,3 @@ impl MeshPipeline {
         device.create_graphics_pipeline(&info)
     }
 }
-

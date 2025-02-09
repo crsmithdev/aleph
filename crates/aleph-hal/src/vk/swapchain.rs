@@ -90,7 +90,7 @@ impl Swapchain {
         let capabilities: vk::SurfaceCapabilitiesKHR = unsafe {
             surface
                 .loader
-                .get_physical_device_surface_capabilities(device.physical_device, **surface)
+                .get_physical_device_surface_capabilities(device.physical_device, surface.inner)
         }?;
         let surface_resolution = match capabilities.current_extent.width {
             std::u32::MAX => info.extent,
@@ -102,7 +102,7 @@ impl Swapchain {
         };
 
         let mut swapchain_info = vk::SwapchainCreateInfoKHR::default()
-            .surface(**surface)
+            .surface(surface.inner)
             .min_image_count(in_flight_frames)
             .image_color_space(info.color_space)
             .image_format(info.format)

@@ -1,16 +1,22 @@
+pub mod camera;
+pub mod graph;
 pub mod mesh;
+pub mod mesh_pipeline;
 pub mod renderer;
 pub mod ui;
-pub mod graph;
 pub mod util;
-pub mod camera;
-pub mod mesh_pipeline;
 
 use {
     aleph_core::{
         app::TickEvent,
         layer::{Layer, Window},
-    }, aleph_hal::{self, Gpu}, graph::RenderGraph, std::sync::{Arc, OnceLock}
+    },
+    aleph_hal::{self, Gpu},
+    std::sync::{Arc, OnceLock},
+};
+pub use {
+    camera::Camera,
+    graph::{RenderContext, RenderGraph},
 };
 
 pub struct RenderContex<'a> {
@@ -32,7 +38,7 @@ impl Layer for GraphicsLayer {
     where
         Self: Sized,
     {
-    let gpu = Gpu::new(Arc::clone(&window))?;
+        let gpu = Gpu::new(Arc::clone(&window))?;
         let graph = RenderGraph::new(gpu)?;
 
         // let renderer = Renderer::new(Arc::clone(&window))?;
