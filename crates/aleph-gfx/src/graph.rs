@@ -1,26 +1,30 @@
 use {
-    crate::{camera::Camera, mesh::Vertex, mesh_pipeline::MeshPipeline},
-    aleph_hal::{
-        Buffer,
-        BufferInfo,
-        BufferUsageFlags,
-        CommandBuffer,
-        Extent2D,
-        Extent3D,
-        Format,
-        Frame,
-        Gpu,
-        Image,
-        ImageAspectFlags,
-        ImageInfo,
-        ImageLayout,
-        ImageUsageFlags,
-        MemoryLocation,
+    crate::{
+        camera::Camera,
+        mesh::Vertex,
+        mesh_pipeline::MeshPipeline,
+        vk::{
+            Buffer,
+            BufferInfo,
+            BufferUsageFlags,
+            CommandBuffer,
+            Extent2D,
+            Extent3D,
+            Format,
+            Frame,
+            Gpu,
+            Image,
+            ImageAspectFlags,
+            ImageInfo,
+            ImageLayout,
+            ImageUsageFlags,
+            MemoryLocation,
+        },
     },
     anyhow::Result,
     bytemuck::{Pod, Zeroable},
-    nalgebra::{Matrix4, Vector3, Vector4},
     serde::Serialize,
+    glam::{Mat4, Vec3, Vec2, Vec4, vec3, vec4}
 };
 
 pub struct Material {
@@ -29,7 +33,7 @@ pub struct Material {
 
 pub struct RenderObject {
     pub label: &'static str,
-    pub model_matrix: Matrix4<f32>,
+    pub model_matrix: Mat4,
     pub vertex_buffer: Buffer,
     pub vertex_count: u32,
     pub index_buffer: Buffer,
@@ -46,7 +50,9 @@ impl RenderObject {
     fn update_model_buffer(&self, context: &RenderContext) -> Result<()> {
         let model_data = GpuModelData {
             u_model_matrix: self.model_matrix,
-            u_mvp_matrix: context.camera.model_view_projection_matrix(self.model_matrix),
+            u_mvp_matrix: context
+                .camera
+                .model_view_projection_matrix(self.model_matrix),
         };
 
         let bytes = bytemuck::bytes_of(&model_data);
@@ -63,8 +69,8 @@ impl RenderObject {
 }
 
 pub struct RenderConfig {
-    pub clear_color: Vector3<f32>,
-    pub clear_normal: Vector4<u32>,
+    pub clear_color: Vec3,
+    pub clear_normal: Vec4,
     pub clear_depth: f32,
     pub clear_stencil: u32,
 }
@@ -72,8 +78,8 @@ pub struct RenderConfig {
 impl Default for RenderConfig {
     fn default() -> Self {
         Self {
-            clear_color: Vector3::new(0.0, 0.0, 0.0),
-            clear_normal: Vector4::new(0, 0, 0, 0),
+            clear_color: vec3(0.0, 0.0, 0.0),
+            clear_normal: vec4(0., 0., 0., 0.),
             clear_depth: 1.0,
             clear_stencil: 0,
         }
@@ -83,19 +89,19 @@ impl Default for RenderConfig {
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy, Pod, Zeroable, Serialize)]
 pub struct GpuGlobalData {
-    view: Matrix4<f32>,
-    projection: Matrix4<f32>,
-    view_projection: Matrix4<f32>,
-    ambient_color: Vector4<f32>,
-    sunlight_direction: Vector4<f32>,
-    sunlight_color: Vector4<f32>,
+    view: Mat4,
+    projection: Mat4,
+    view_projection:Mat4,
+    ambient_color: Vec4,
+    sunlight_direction: Vec4,
+    sunlight_color: Vec4,
 }
 
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy, Pod, Zeroable, Serialize)]
 pub struct GpuModelData {
-    pub u_model_matrix: Matrix4<f32>,
-    pub u_mvp_matrix: Matrix4<f32>,
+    pub u_model_matrix: Mat4,
+    pub u_mvp_matrix: Mat4,
 }
 
 pub struct RenderContext<'a> {
@@ -177,7 +183,7 @@ impl RenderGraph {
         })?;
         let temp_object = RenderObject {
             label: "test object",
-            model_matrix: Matrix4::identity(),
+            model_matrix: Mat4::IDENTITY,
             vertex_buffer,
             model_buffer,
             vertex_count: temp_mesh.indices.len() as u32,
@@ -379,12 +385,11 @@ impl RenderGraph {
             view: context.camera.view_matrix,
             projection: context.camera.perspective_matrix,
             view_projection: context.camera.view_projection_matrix(),
-            ambient_color: Vector4::new(0.1, 0.1, 0.1, 1.0),
-            sunlight_direction: Vector4::new(1.0, 1.0, 1.0, 0.0),
-            sunlight_color: Vector4::new(1.0, 1.0, 1.0, 1.0),
+            ambient_color: vec4(0.1, 0.1, 0.1, 1.0),
+            sunlight_direction: vec4(1.0, 1.0, 1.0, 0.0),
+            sunlight_color: vec4(1.0, 1.0, 1.0, 1.0),
         };
 
-        // dbg!(data);
         let bytes = bytemuck::bytes_of(&data);
         self.global_data_buffer.write(bytes);
         context
@@ -399,7 +404,7 @@ impl RenderGraph {
     }
 }
 
-type Color = Vector4<f32>;
+type Color = Vec4;
 
 trait ColorExt {
     fn packed(&self) -> u32;
@@ -407,8 +412,13 @@ trait ColorExt {
 
 impl ColorExt for Color {
     fn packed(&self) -> u32 {
-        let v2 = self.iter().map(|f| (f.clamp(0.0, 1.0) * 255.0) as u32);
-        let v3 = Vector4::from_iterator(v2);
-        u32::from_le_bytes([v3.x as u8, v3.y as u8, v3.z as u8, v3.w as u8])
+        let arr = [
+            (self.x.clamp(0.0, 1.0) * 255.0) as u8,
+            (self.y.clamp(0.0, 1.0) * 255.0) as u8,
+            (self.z.clamp(0.0, 1.0) * 255.0) as u8,
+            (self.w.clamp(0.0, 1.0) * 255.0) as u8,
+        ];
+        u32::from_le_bytes(arr)
+        // u32::from_le_bytes([v3.x as u8, v3.y as u8, v3.z as u8, v3.w as u8])
     }
 }

@@ -5,7 +5,7 @@ pub use ash::vk::{
     ShaderStageFlags,
 };
 use {
-    aleph_hal::{Device, Image},
+    crate::vk::{Device, Image},
     anyhow::Result,
     ash::vk,
     std::ffi::CStr,
@@ -112,6 +112,8 @@ pub fn depth_stencil_enabled<'a>() -> vk::PipelineDepthStencilStateCreateInfo<'a
     vk::PipelineDepthStencilStateCreateInfo::default()
         .depth_test_enable(true)
         .depth_write_enable(true)
+        .min_depth_bounds(0.)
+        .max_depth_bounds(1.)
         .depth_compare_op(vk::CompareOp::LESS)
 }
 

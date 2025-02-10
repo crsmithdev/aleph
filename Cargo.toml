@@ -5,7 +5,6 @@ edition = "2021"
 
 [workspace]
 members = [
-    "crates/aleph-app",
     "crates/aleph-core",
     "crates/aleph-gfx",
     "crates/aleph-hal",
@@ -13,7 +12,6 @@ members = [
 
 [dependencies]
 aleph-hal = { path = "./crates/aleph-hal" }
-aleph-app = { path = "./crates/aleph-app" }
 aleph-gfx = { path = "./crates/aleph-gfx" }
 aleph-core = { path = "./crates/aleph-core" }
 

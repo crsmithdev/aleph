@@ -1,31 +1,31 @@
 use {
-    aleph_hal::{Buffer, DeviceAddress},
+    crate::vk::{Buffer, DeviceAddress},
     anyhow::Result,
     derive_more::Debug,
-    nalgebra as na,
+    glam::{Vec2, vec3, vec4, Vec3, Vec4}
 };
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, serde::Serialize, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex {
-    pub position: na::Vector3<f32>,
+    pub position: Vec3,
     pub uv_x: f32,
-    pub normal: na::Vector3<f32>,
+    pub normal: Vec3,
     pub uv_y: f32,
-    pub color: na::Vector4<f32>,
+    pub color: Vec4,
 }
 
 impl Vertex {
     pub fn position(self, x: f32, y: f32, z: f32) -> Self {
         Self {
-            position: na::Vector3::new(x, y, z),
+            position: vec3(x, y, z),
             ..self
         }
     }
 
     pub fn color(self, r: f32, g: f32, b: f32, a: f32) -> Self {
         Self {
-            color: na::Vector4::new(r, g, b, a),
+            color: vec4(r, g, b, a),
             ..self
         }
     }
@@ -79,12 +79,12 @@ pub fn load_meshes2(path: &str) -> Result<Vec<MeshData>> {
                     normal: normal.into(),
                     uv_x: tex_coord[0],
                     uv_y: tex_coord[1],
-                    color: na::Vector4::new(1.0, 1.0, 1.0, 1.0),
+                    color: vec4(1.0, 1.0, 1.0, 1.0),
                 });
             }
 
             for v in vertices.iter_mut() {
-                v.color = na::Vector4::new(v.normal[0], v.normal[1], v.normal[2], 1.0);
+                v.color = vec4(v.normal[0], v.normal[1], v.normal[2], 1.0);
             }
 
             let indices = reader

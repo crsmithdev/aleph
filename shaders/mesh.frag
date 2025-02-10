@@ -16,9 +16,7 @@ layout (std140, binding = 1) uniform GpuModelData {
 	mat4 mvp_matrix;
 } model_data;
 
-layout (location = 0) in vec3 inNormal;
-layout (location = 1) in vec3 inColor;
-layout (location = 2) in vec2 inUV;
+layout (location = 0) in vec3 inColor;
 
 layout (location = 0) out vec4 outFragColor;
 

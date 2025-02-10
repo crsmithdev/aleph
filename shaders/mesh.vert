@@ -22,19 +22,24 @@ layout(location = 2) in vec3 normal;
 layout(location = 3) in float uv_y;
 layout(location = 4) in vec4 color;
 
-layout (location = 0) out vec3 inNormal;
-layout (location = 1) out vec3 inColor;
-layout (location = 2) out vec2 inUV;
+layout (location = 0) out vec3 outColor;
+layout (location = 1) out vec2 outUV;
+
+const vec2 kGeometry[] = vec2[](
+    vec2(-1, -1), vec2(1, -1), vec2(1, 1),
+    vec2(1,1), vec2(-1, 1), vec2(-1, -1)
+);
+
+const vec4 kColor[] = vec4[](
+    vec4(1, 0, 0, 1), vec4(0, 1, 0, 1), vec4(0, 0, 1, 1),
+    vec4(1, 0, 1, 1), vec4(1, 1, 0, 1), vec4(0, 1, 1, 1)
+);
 
 void main() 
 {
-	gl_Position = model_data.mvp_matrix * vec4(position.xyz, 1.0f);
-		outColor = color.xyz;
-	outUV = vec2(uv_x, uv_y);
-	outColor = v.color.xyz *
-	
-	outNormal = (PushConstants.render_matrix * vec4(v.normal, 0.f)).xyz;
-	outColor = v.color.xyz * materialData.colorFactors.xyz;	
-	outUV.x = v.uv_x;
-	outUV.y = v.uv_y;
+    gl_Position = model_data.mvp_matrix * vec4(position, 1.0f);
+    outNormal = (PushConstants.render_matrix * vec4(v.normal, 0.f)).xyz;
+	outColor = color.xyz;
+	outUV.x = uv_x;
+	outUV.y = uv_y;
 }
