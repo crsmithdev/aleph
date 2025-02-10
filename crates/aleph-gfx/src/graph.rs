@@ -1,6 +1,6 @@
 use {
     crate::{
-        camera::Camera,
+        camera::{Camera, CameraConfig},
         mesh::Vertex,
         mesh_pipeline::MeshPipeline,
         vk::{
@@ -20,11 +20,7 @@ use {
             ImageUsageFlags,
             MemoryLocation,
         },
-    },
-    anyhow::Result,
-    bytemuck::{Pod, Zeroable},
-    serde::Serialize,
-    glam::{Mat4, Vec3, Vec2, Vec4, vec3, vec4}
+    }, anyhow::Result, bytemuck::{Pod, Zeroable}, glam::{vec3, vec4, Mat4, Vec2, Vec3, Vec4}, serde::Serialize
 };
 
 pub struct Material {
@@ -73,6 +69,7 @@ pub struct RenderConfig {
     pub clear_normal: Vec4,
     pub clear_depth: f32,
     pub clear_stencil: u32,
+    pub camera: CameraConfig,
 }
 
 impl Default for RenderConfig {
@@ -82,6 +79,7 @@ impl Default for RenderConfig {
             clear_normal: vec4(0., 0., 0., 0.),
             clear_depth: 1.0,
             clear_stencil: 0,
+            camera: CameraConfig::default(),
         }
     }
 }
@@ -137,9 +135,10 @@ pub struct RenderGraph {
 
 impl RenderGraph {
     pub fn new(gpu: Gpu) -> Result<Self> {
+        let config = RenderConfig::default();
         let frames = vec![];
-        let temp_camera = Camera::new(gpu.swapchain().info.extent);
 
+        let temp_camera = Camera::new(config.camera, gpu.swapchain().info.extent);
         let global_data_buffer = Self::create_global_data_buffer(&gpu, &temp_camera)?;
         let draw_image = Self::create_draw_image(&gpu)?;
         let depth_image = Self::create_depth_image(&gpu)?;
@@ -191,7 +190,6 @@ impl RenderGraph {
         };
 
         let temp_pipeline = MeshPipeline::new(&gpu, temp_texture)?; // &setup_command_buffer)?;
-        let temp_camera = Camera::new(gpu.swapchain().info.extent);
 
         Ok(Self {
             gpu,
