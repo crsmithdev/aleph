@@ -16,7 +16,6 @@ use {
             DescriptorType,
             Device,
             Format,
-            FrontFace,
             Gpu,
             GraphicsPipelineCreateInfo,
             Image,
@@ -45,9 +44,6 @@ const BINDING_INDEX_MODEL_UBO: u32 = 1;
 pub struct MeshPipeline {
     handle: VkPipeline,
     layout: PipelineLayout,
-    // descriptor_layout: DescriptorSetLayout,
-    // texture_image: Image,
-    // texture_sampler: Sampler,
 }
 
 impl Pipeline for MeshPipeline {
@@ -98,22 +94,15 @@ impl Pipeline for MeshPipeline {
 }
 
 impl MeshPipeline {
-    pub fn new(gpu: &Gpu, texture_image: Image) -> Result<Self> {
+    pub fn new(gpu: &Gpu, _texture_image: Image) -> Result<Self> {
         let device = gpu.device();
         let descriptor_layout = Self::create_descriptor_layout(device)?;
         let pipeline_layout = device.create_pipeline_layout(&[descriptor_layout], &[])?;
         let pipeline = Self::create_pipeline(device, pipeline_layout)?;
-        // let sampler_info = SamplerCreateInfo::default()
-        //     .mag_filter(Filter::LINEAR)
-        //     .min_filter(Filter::LINEAR);
-        // let texture_sampler = unsafe { gpu.device().create_sampler(&sampler_info, None)? };
-
+        
         Ok(Self {
             handle: pipeline,
             layout: pipeline_layout,
-            // descriptor_layout,
-            // texture_image,
-            // texture_sampler,
         })
     }
 
@@ -216,7 +205,6 @@ impl MeshPipeline {
             .vertex_attribute_descriptions(&vertex_attributes);
         let mut pipeline_rendering_info = PipelineRenderingCreateInfo::default()
             .color_attachment_formats(&[Format::R16G16B16A16_SFLOAT]);
-        // .depth_attachment_format(Format::D32_SFLOAT);
         let info = GraphicsPipelineCreateInfo::default()
             .stages(stages)
             .layout(layout)

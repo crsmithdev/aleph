@@ -5,14 +5,26 @@ edition = "2021"
 
 [workspace]
 members = [
-    "crates/aleph-core",
     "crates/aleph-gfx",
-    "crates/aleph-hal",
+    "crates/aleph-core",
 ]
 
-[dependencies]
-aleph-hal = { path = "./crates/aleph-hal" }
-aleph-gfx = { path = "./crates/aleph-gfx" }
-aleph-core = { path = "./crates/aleph-core" }
+[workspace.dependencies]
+aleph-gfx = { path = "crates/aleph-gfx" } 
+aleph-core = { path = "crates/aleph-core" } 
 
-anyhow = "1.0"
+anyhow = "1.0.95"
+bytemuck = { version = "1.7.0", features = ["derive"] }
+derive_more = { version = "1.0", features = ["debug"] }
+downcast-rs = "1.1.1"
+log = "0.4"
+raw-window-handle = "0.6.2"
+serde = { version = "1.0.130", features = ["derive"] }
+winit = "0.30.5"
+fern = "0.6.2"
+human-panic = "2.0.1"
+humantime = "2.1.0"
+
+[dependencies]
+aleph-gfx = { path = "crates/aleph-gfx" } 
+aleph-core = { path = "crates/aleph-core" } 

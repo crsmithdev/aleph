@@ -1,4 +1,3 @@
-// use crate::events::InitContext;
 pub use winit::window::Window;
 use {
     crate::events::{EventRegistry, EventSubscriber},

@@ -2,7 +2,6 @@ use {
     super::{
         CommandBuffer,
         CommandPool,
-        DeletionQueue,
         Device,
         Image,
         ImageInfo,
@@ -118,7 +117,7 @@ impl Swapchain {
         if let Some(old_swapchain) = old_swapchain {
             swapchain_info = swapchain_info.old_swapchain(old_swapchain);
         }
-        let loader = khr::swapchain::Device::new(&instance.handle, device);
+        let loader = khr::swapchain::Device::new(&instance.handle, &device.handle);
         let swapchain = unsafe { loader.create_swapchain(&swapchain_info, None) }.unwrap();
         let image_info = ImageInfo {
             label: Some("Swapchain image"),
@@ -142,7 +141,7 @@ impl Swapchain {
                     .format(vk::Format::B8G8R8A8_UNORM)
                     .subresource_range(subresource_range);
                 let view = unsafe {
-                    device
+                    device.handle
                         .create_image_view(&image_view_info, None)
                         .expect("Failed to create imageview")
                 };
@@ -168,18 +167,6 @@ impl Swapchain {
     pub fn images(&self) -> &[Image] {
         &self.images
     }
-
-    // pub fn current_index(&self) -> u32 {
-    // self.current_index
-    // }
-
-    // pub fn current_image(&self) -> &Image {
-    // &self.images[self.current_index as usize]
-    // }
-
-    // pub fn current_image_view(&self) -> vk::ImageView {
-    //     self.image_views[self.current_index as usize]
-    // }
 }
 
 impl Swapchain {
@@ -189,7 +176,7 @@ impl Swapchain {
             self.loader.destroy_swapchain(self.handle, None);
             self.images
                 .iter()
-                .for_each(|v| self.device.destroy_image_view(v.view, None));
+                .for_each(|v| self.device.handle.destroy_image_view(v.view, None));
         };
     }
 
@@ -198,18 +185,9 @@ impl Swapchain {
             self.loader
                 .acquire_next_image(self.handle, VK_TIMEOUT_NS, semaphore, vk::Fence::null())
         } {
-            Ok((index, needs_rebuild)) => {
-                // self.current_index = index;
-                Ok((index, needs_rebuild))
-            }
-            Err(err) if err == vk::Result::ERROR_OUT_OF_DATE_KHR => {
-                // self.current_index = 0;
-                Ok((0, true))
-            }
-            Err(err) if err == vk::Result::SUBOPTIMAL_KHR => {
-                // self.current_index = 0;
-                Ok((0, true))
-            }
+            Ok((index, needs_rebuild)) => Ok((index, needs_rebuild)),
+            Err(err) if err == vk::Result::ERROR_OUT_OF_DATE_KHR => Ok((0, true)),
+            Err(err) if err == vk::Result::SUBOPTIMAL_KHR => Ok((0, true)),
             Err(err) => Err(err.into()),
         }
     }

@@ -34,9 +34,8 @@ impl Buffer {
             )
         }?;
 
-        let requirements = unsafe { device.get_buffer_memory_requirements(handle) };
+        let requirements = unsafe { device.handle.get_buffer_memory_requirements(handle) };
         let allocation = RefCell::new(allocator.allocate_buffer(handle, requirements, info)?);
-        // let device: &crate::Device = &allocator.device;
         let address = device.get_buffer_device_address(&handle);
 
         Ok(Buffer {

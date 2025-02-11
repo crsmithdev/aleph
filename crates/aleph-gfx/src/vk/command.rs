@@ -1,22 +1,12 @@
+pub use ash::vk::ImageLayout;
 use {
-    super::{
-        Allocator,
-        Buffer,
-        BufferInfo,
-        BufferUsageFlags,
-        DeletionQueue,
-        Device,
-        Image,
-        MemoryLocation,
-    },
+    super::{Buffer, BufferInfo, BufferUsageFlags, Device, Image, MemoryLocation},
     anyhow::Result,
     ash::vk::{self, Extent3D},
     bytemuck::Pod,
-    derive_more::{Debug, Deref},
-    serde::Serialize,
+    derive_more::{Debug},
     std::{any::Any, sync::Arc},
 };
-pub use ash::vk::ImageLayout;
 
 #[derive(Clone, Debug)]
 pub struct CommandPool {
@@ -35,9 +25,8 @@ impl CommandPool {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Deref)]
+#[derive(Debug)]
 pub struct CommandBuffer {
-    #[deref]
     pub(crate) handle: vk::CommandBuffer,
     pub(crate) pool: vk::CommandPool,
     pub(crate) device: Device,
@@ -64,7 +53,7 @@ impl CommandBuffer {
     pub fn reset(&self) -> Result<()> {
         #[allow(clippy::unit_arg)]
         Ok(unsafe {
-            self.device
+            self.device.handle
                 .reset_command_buffer(self.handle, vk::CommandBufferResetFlags::RELEASE_RESOURCES)?
         })
     }
@@ -74,12 +63,12 @@ impl CommandBuffer {
             .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
 
         #[allow(clippy::unit_arg)]
-        Ok(unsafe { self.device.begin_command_buffer(self.handle, &info)? })
+        Ok(unsafe { self.device.handle.begin_command_buffer(self.handle, &info)? })
     }
 
     pub fn end(&self) -> Result<()> {
         #[allow(clippy::unit_arg)]
-        Ok(unsafe { self.device.end_command_buffer(self.handle)? })
+        Ok(unsafe { self.device.handle.end_command_buffer(self.handle)? })
     }
 
     pub fn begin_rendering(
@@ -102,7 +91,7 @@ impl CommandBuffer {
 
         #[allow(clippy::unit_arg)]
         Ok(unsafe {
-            self.device
+            self.device.handle
                 .cmd_begin_rendering(self.handle, &rendering_info)
         })
     }
@@ -120,7 +109,7 @@ impl CommandBuffer {
         first_instance: u32,
     ) {
         unsafe {
-            self.device.cmd_draw(
+            self.device.handle.cmd_draw(
                 self.handle,
                 vertex_count,
                 instance_count,
@@ -139,7 +128,7 @@ impl CommandBuffer {
         first_instance: u32,
     ) {
         unsafe {
-            self.device.cmd_draw_indexed(
+            self.device.handle.cmd_draw_indexed(
                 self.handle,
                 index_count,
                 instance_count,
@@ -150,33 +139,38 @@ impl CommandBuffer {
         }
     }
 
-    pub fn bind_vertex_buffer(&self, buffer: &Buffer, offset: u64) {
+    pub fn bind_vertex_buffer(&self, buffer: &Buffer, _offset: u64) {
         unsafe {
-            self.device.handle
+            self.device
+                .handle
                 .cmd_bind_vertex_buffers(self.handle, 0, &[buffer.handle], &[0]);
         }
     }
 
     pub fn bind_index_buffer(&self, buffer: &Buffer, offset: u64) {
         unsafe {
-            self.device.handle
-                .cmd_bind_index_buffer(self.handle, buffer.handle, offset, vk::IndexType::UINT32);
+            self.device.handle.cmd_bind_index_buffer(
+                self.handle,
+                buffer.handle,
+                offset,
+                vk::IndexType::UINT32,
+            );
         }
     }
 
     pub fn set_scissor(&self, scissor: vk::Rect2D) {
         unsafe {
-            self.device.cmd_set_scissor(self.handle, 0, &[scissor]);
+            self.device.handle.cmd_set_scissor(self.handle, 0, &[scissor]);
         }
     }
 
     pub fn set_viewport(&self, viewport: vk::Viewport) {
         unsafe {
-            self.device.cmd_set_viewport(self.handle, 0, &[viewport]); //std::slice::from_ref(&
+            self.device.handle.cmd_set_viewport(self.handle, 0, &[viewport]); //std::slice::from_ref(&
         }
     }
 
-    pub fn push_constants<T: serde::Serialize + bytemuck::Pod>(
+    pub fn push_constants<T: bytemuck::Pod>(
         &self,
         layout: vk::PipelineLayout,
         data: &T,
@@ -184,7 +178,7 @@ impl CommandBuffer {
         let data: &[u8] = bytemuck::bytes_of(data);
 
         unsafe {
-            self.device.cmd_push_constants(
+            self.device.handle.cmd_push_constants(
                 self.handle,
                 layout,
                 vk::ShaderStageFlags::VERTEX,
@@ -218,27 +212,20 @@ impl CommandBuffer {
     ) -> Result<()> {
         #[allow(clippy::unit_arg)]
         Ok(unsafe {
-            self.device
+            self.device.handle
                 .cmd_bind_pipeline(self.handle, pipeline_bind_point, pipeline);
         })
     }
 
     pub fn dispatch(&self, group_count_x: u32, group_count_y: u32, group_count_z: u32) {
         unsafe {
-            self.device
+            self.device.handle
                 .cmd_dispatch(self.handle, group_count_x, group_count_y, group_count_z)
         }
     }
 
     pub fn submit_immediate(&self, f: impl FnOnce(&CommandBuffer)) -> Result<()> {
-        // self.device.wait_for_fence(self.fence)?;
-        // self.device.reset_fence(self.fence)?;
-        // self.reset()?;
-        // self.begin()?;
-
         f(self);
-
-        // self.end()?;
 
         let command_buffer_info = &[vk::CommandBufferSubmitInfo::default()
             .command_buffer(self.handle)
@@ -249,8 +236,8 @@ impl CommandBuffer {
             .signal_semaphore_infos(&[])];
 
         let result = Ok(unsafe {
-            self.device
-                .queue_submit2(self.device.queue.handle, submit_info, vk::Fence::null())//self.fence)
+            self.device.handle
+                .queue_submit2(self.device.queue.handle, submit_info, vk::Fence::null()) //self.fence)
         }?);
         unsafe { self.device.handle.device_wait_idle().unwrap() };
         result
@@ -281,7 +268,7 @@ impl CommandBuffer {
             .wait_semaphore_infos(wait_info)
             .signal_semaphore_infos(signal_info)];
 
-        Ok(unsafe { self.device.queue_submit2(queue.handle, submit_info, fence) }?)
+        Ok(unsafe { self.device.handle.queue_submit2(queue.handle, submit_info, fence) }?)
     }
 
     pub fn transition_image(
@@ -312,7 +299,7 @@ impl CommandBuffer {
         let dependency_info = vk::DependencyInfo::default().image_memory_barriers(barriers);
 
         unsafe {
-            self.device
+            self.device.handle
                 .cmd_pipeline_barrier2(self.handle, &dependency_info);
         }
     }
@@ -355,10 +342,9 @@ impl CommandBuffer {
             .src_image_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
             .dst_image(dst.handle)
             .dst_image_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-            // .filter(vk::Filter::Linear)
             .regions(regions);
 
-        unsafe { self.device.cmd_blit_image2(self.handle, &blit_info) }
+        unsafe { self.device.handle.cmd_blit_image2(self.handle, &blit_info) }
     }
 
     pub fn copy_buffer(&self, src: &Buffer, dst: &Buffer, size: u64) {
@@ -370,10 +356,9 @@ impl CommandBuffer {
         };
     }
 
-    pub fn upload_buffer<T: Serialize + Pod>(&self, buffer: &Buffer, data: &[T]) -> Result<()> {
+    pub fn upload_buffer<T: Pod>(&self, buffer: &Buffer, data: &[T]) -> Result<()> {
         let data: &[u8] = bytemuck::cast_slice(data);
         let size = data.len();
-
 
         let staging: Buffer = Buffer::new(
             buffer.allocator.clone(),
@@ -387,24 +372,13 @@ impl CommandBuffer {
         )?;
         staging.write(data);
 
-        // self.submit_immediate(|_| {
-            self.copy_buffer(&staging, buffer, size as u64);
-        // })?;
-
-        // self.deletion_queue.enqueue(staging);
-        // self.to_release.push(Box::new(staging));
-
-        // staging.destroy();
+        self.copy_buffer(&staging, buffer, size as u64);
         Ok(())
     }
 
-    pub fn upload_image(
-        &self,
-        image: &Image,
-        data: &[u8],
-    ) -> Result<()> {
+    pub fn upload_image(&self, image: &Image, data: &[u8]) -> Result<()> {
         let size = data.len();
-         let extent = Extent3D {
+        let extent = Extent3D {
             width: image.info.extent.width,
             height: image.info.extent.height,
             depth: 1,
@@ -421,11 +395,7 @@ impl CommandBuffer {
                 label: Some("staging"),
             },
         )?;
-        // // // // dbg!(size);
-        // // // dbg!(data.len());
-        // // dbg!(data);
-        // dbg!(staging.info.size);
-        staging.write(data); 
+        staging.write(data);
         let copy = vk::BufferImageCopy::default()
             .buffer_offset(0)
             .buffer_row_length(0)
@@ -438,51 +408,26 @@ impl CommandBuffer {
             .image_offset(vk::Offset3D::default())
             .image_extent(extent);
 
-        // self.submit_immediate(|_| {
-            self.transition_image(
-                image,
-                ImageLayout::UNDEFINED,
-                ImageLayout::TRANSFER_DST_OPTIMAL,
-            );
-            unsafe {
-                self.device.cmd_copy_buffer_to_image(
-                    self.handle,
-                    staging.handle,
-                    image.handle,
-                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                    &[copy],
-                )
-            };
-            self.transition_image(
-                image,
-                ImageLayout::TRANSFER_DST_OPTIMAL,
-                ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            );
-        // })?;
-        // self.deletion_queue.enqueue(staging);
-        // self.to_release.push(Box::new(staging));
+        self.transition_image(
+            image,
+            ImageLayout::UNDEFINED,
+            ImageLayout::TRANSFER_DST_OPTIMAL,
+        );
+        unsafe {
+            self.device.handle.cmd_copy_buffer_to_image(
+                self.handle,
+                staging.handle,
+                image.handle,
+                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                &[copy],
+            )
+        };
+        self.transition_image(
+            image,
+            ImageLayout::TRANSFER_DST_OPTIMAL,
+            ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        );
 
         Ok(())
     }
-
-    fn release_resources(&mut self, queue: &mut DeletionQueue) {
-            let to_release = std::mem::take(&mut self.to_release);
-            for resource in to_release {
-                queue.enqueue(resource);
-            }
-        }
-
-    // pub fn copy_buffer_to_image(
-    //     &self,
-    //     src: &Buffer,
-    //     dst: &Image,
-    //     format: vk::Format,
-    //     region: &vk::BufferImageCopy,
-    // ) {
-    //     unsafe {
-    //         self.device
-    //             .handle
-    //             .cmd_copy_buffer_to_image(self.handle(), src.handle(), dst.handle(), region)
-    //     };
-    // }
 }

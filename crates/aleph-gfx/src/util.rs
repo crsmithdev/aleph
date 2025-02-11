@@ -11,7 +11,7 @@ use {
     std::ffi::CStr,
 };
 
-pub const SHADER_MAIN: &CStr = unsafe { CStr::from_bytes_with_nul_unchecked(b"main\0") };
+pub const SHADER_MAIN: &CStr = c"main" ;
 pub const DYNAMIC_STATES: [vk::DynamicState; 2] =
     [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
 
@@ -94,9 +94,9 @@ pub fn descriptor_layout_binding<'a>(
 //             )];
  */
 
-pub fn color_blend_disabled<'a>(
-    attachments: &'a [vk::PipelineColorBlendAttachmentState],
-) -> vk::PipelineColorBlendStateCreateInfo<'a> {
+pub fn color_blend_disabled(
+    attachments: &[vk::PipelineColorBlendAttachmentState],
+) -> vk::PipelineColorBlendStateCreateInfo {
     vk::PipelineColorBlendStateCreateInfo::default()
         .logic_op_enable(false)
         .attachments(attachments)

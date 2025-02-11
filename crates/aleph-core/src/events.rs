@@ -74,8 +74,3 @@ impl EventRegistry {
         Ok(())
     }
 }
-// pub struct TickEvent(Instant);
-// impl Event for TickEvent {}
-
-// pub struct PostInitEvent {}
-// impl Event for PostInitEvent {}

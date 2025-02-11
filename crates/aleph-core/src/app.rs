@@ -87,7 +87,7 @@ impl App {
     }
 
     fn init(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
-        log::info!("Initializing app");
+        log::info!("Initializing app...");
 
         let window_attributes = Window::default_attributes()
             .with_inner_size(DEFAULT_WINDOW_SIZE)
@@ -95,10 +95,6 @@ impl App {
         let window = Arc::new(event_loop.create_window(window_attributes)?);
 
         for (index, layer) in self.layers.iter_mut().enumerate() {
-            log::info!(
-                "Initializing layer: {:?}",
-                std::any::type_name_of_val(layer)
-            );
             layer.init_dyn(window.clone(), &mut self.event_registry, index)?;
         }
 
@@ -112,7 +108,6 @@ impl App {
     }
 
     fn update_frame_timing(&mut self) {
-        // self.gfx().renderer().ui_mut().update_delta_time();
         // ...
     }
 }
@@ -153,7 +148,7 @@ impl ApplicationHandler for AppHandler<'_> {
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         if self.close_requested {
-                log::info!("Exiting on request");
+            log::info!("Exiting on user request");
             event_loop.exit();
         }
 
@@ -173,16 +168,8 @@ impl ApplicationHandler for AppHandler<'_> {
         event: WindowEvent,
     ) {
         match event {
-            WindowEvent::RedrawRequested => {
-                log::info!("Window redraw requested");
-                // ...
-            }
             WindowEvent::CloseRequested => {
                 self.close_requested = true;
-            }
-            WindowEvent::Resized(size) => {
-                log::info!("Window resized to {size:?}");
-                // ...
             }
             _ => {}
         }

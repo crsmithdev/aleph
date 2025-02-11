@@ -11,9 +11,7 @@ use {
 };
 
 const DEFAULT_APP_NAME: &ffi::CStr = c"Aleph";
-const INSTANCE_LAYERS: [&ffi::CStr; 0] = [
-    // c"VK_LAYER_KHRONOS_validation",
-];
+const INSTANCE_LAYERS: [&ffi::CStr; 0] = [];
 const INSTANCE_EXTENSIONS: [&ffi::CStr; 4] = [
     khr::surface::NAME,
     khr::win32_surface::NAME,

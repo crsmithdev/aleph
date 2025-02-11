@@ -5,7 +5,6 @@ use {
         BufferInfo,
         CommandBuffer,
         CommandPool,
-        DeletionQueue,
         Device,
         Image,
         ImageInfo,
@@ -18,7 +17,7 @@ use {
         khr::{self},
         vk::{self, DescriptorSetLayoutCreateFlags, Handle},
     },
-    derive_more::{Debug, Deref},
+    derive_more::Debug,
     raw_window_handle::{HasDisplayHandle, HasWindowHandle},
     std::{ffi, sync::Arc},
     winit::window::Window,
@@ -192,7 +191,7 @@ impl Gpu {
     }
 
     pub fn rebuild_swapchain(&mut self) -> Result<()> {
-        unsafe { self.device.device_wait_idle() }?;
+        unsafe { self.device.handle.device_wait_idle() }?;
 
         let extent = vk::Extent2D {
             width: self.window.inner_size().width,

@@ -2,11 +2,11 @@ use {
     crate::vk::{Buffer, DeviceAddress},
     anyhow::Result,
     derive_more::Debug,
-    glam::{Vec2, vec3, vec4, Vec3, Vec4}
+    glam::{vec3, vec4, Vec3, Vec4}
 };
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, serde::Serialize, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Copy, Clone, Debug, Default, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex {
     pub position: Vec3,
     pub uv_x: f32,

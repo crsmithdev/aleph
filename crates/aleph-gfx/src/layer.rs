@@ -11,7 +11,6 @@ use {
 #[derive(Default)]
 pub struct GraphicsLayer {
     renderer: OnceLock<RenderGraph>,
-    gpu: OnceLock<Gpu>,
 }
 
 

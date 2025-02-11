@@ -20,7 +20,7 @@ use {
             ImageUsageFlags,
             MemoryLocation,
         },
-    }, anyhow::Result, bytemuck::{Pod, Zeroable}, glam::{vec3, vec4, Mat4, Vec2, Vec3, Vec4}, serde::Serialize
+    }, anyhow::Result, bytemuck::{Pod, Zeroable}, glam::{vec3, vec4, Mat4, Vec3, Vec4}
 };
 
 pub struct Material {
@@ -33,7 +33,6 @@ pub struct RenderObject {
     pub vertex_buffer: Buffer,
     pub vertex_count: u32,
     pub index_buffer: Buffer,
-    // pub material: Material,
     pub model_buffer: Buffer,
 }
 
@@ -85,7 +84,7 @@ impl Default for RenderConfig {
 }
 
 #[repr(C)]
-#[derive(Default, Debug, Clone, Copy, Pod, Zeroable, Serialize)]
+#[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
 pub struct GpuGlobalData {
     view: Mat4,
     projection: Mat4,
@@ -96,7 +95,7 @@ pub struct GpuGlobalData {
 }
 
 #[repr(C)]
-#[derive(Default, Debug, Clone, Copy, Pod, Zeroable, Serialize)]
+#[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
 pub struct GpuModelData {
     pub u_model_matrix: Mat4,
     pub u_mvp_matrix: Mat4,
@@ -138,8 +137,8 @@ impl RenderGraph {
         let config = RenderConfig::default();
         let frames = vec![];
 
-        let temp_camera = Camera::new(config.camera, gpu.swapchain().info.extent);
-        let global_data_buffer = Self::create_global_data_buffer(&gpu, &temp_camera)?;
+        let camera = Camera::new(config.camera, gpu.swapchain().info.extent);
+        let global_data_buffer = Self::create_global_data_buffer(&gpu)?;
         let draw_image = Self::create_draw_image(&gpu)?;
         let depth_image = Self::create_depth_image(&gpu)?;
 
@@ -195,7 +194,7 @@ impl RenderGraph {
             gpu,
             frames,
             temp_pipeline,
-            temp_camera,
+            temp_camera: camera,
             draw_image,
             depth_image,
             global_data_buffer,
@@ -206,7 +205,7 @@ impl RenderGraph {
     }
 
     pub fn execute(&mut self) -> Result<()> {
-        if self.frames.len() == 0 {
+        if self.frames.is_empty() {
             self.frames = Self::create_frames(&self.gpu)?;
         }
         if self.rebuild_swapchain {
@@ -367,7 +366,7 @@ impl RenderGraph {
         pixels.into_iter().flat_map(|i| i.to_le_bytes()).collect()
     }
 
-    fn create_global_data_buffer(gpu: &Gpu, camera: &Camera) -> Result<Buffer> {
+    fn create_global_data_buffer(gpu: &Gpu) -> Result<Buffer> {
         let buffer = gpu.create_buffer(BufferInfo {
             label: Some("global config buffer"),
             size: std::mem::size_of::<GpuGlobalData>(),
@@ -397,7 +396,7 @@ impl RenderGraph {
 
     fn update_model_ubos(&self, context: &RenderContext) {
         for object in &self.objects {
-            object.update_model_buffer(context);
+            object.update_model_buffer(context).unwrap();
         }
     }
 }
@@ -417,6 +416,5 @@ impl ColorExt for Color {
             (self.w.clamp(0.0, 1.0) * 255.0) as u8,
         ];
         u32::from_le_bytes(arr)
-        // u32::from_le_bytes([v3.x as u8, v3.y as u8, v3.z as u8, v3.w as u8])
     }
 }

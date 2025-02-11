@@ -41,7 +41,7 @@ impl Camera {
         let rotation_yaw = config.rotation.x.to_radians();
         let rotation_pitch = config.rotation.y.to_radians();
         let aspect_ratio: f32 = extent.width as f32 / extent.height as f32;
-        let view_matrix = Self::calc_view_matrix(position, rotation_yaw, rotation_pitch);
+        let view_matrix = Self::calculate_view_matrix(position, rotation_yaw, rotation_pitch);
         let perspective_matrix = Mat4::perspective_rh(
             config.fov_degrees.to_radians(),
             aspect_ratio,
@@ -80,10 +80,10 @@ impl Camera {
     pub fn model_view_projection_matrix(&self, model: Mat4) -> Mat4 {
         let view = self.view_matrix();
         let perspective = self.perspective_matrix();
-        Self::calc_model_view_projection_matrix(&model, view, perspective)
+        Self::calculate_model_view_projection_matrix(&model, view, perspective)
     }
 
-    pub fn calc_model_view_projection_matrix(
+    pub fn calculate_model_view_projection_matrix(
         model_matrix: &Mat4,
         view_matrix: &Mat4,
         projection_matrix: &Mat4,
@@ -93,13 +93,13 @@ impl Camera {
             .mul_mat4(model_matrix)
     }
 
-    fn calc_view_matrix(position: Vec3, yaw: f32, pitch: f32) -> Mat4 {
-        let rotation = Self::calc_rotation_matrix(yaw, pitch);
+    fn calculate_view_matrix(position: Vec3, yaw: f32, pitch: f32) -> Mat4 {
+        let rotation = Self::calculate_rotation_matrix(yaw, pitch);
         let translation = Mat4::from_translation(-position);
         rotation * translation
     }
 
-    fn calc_rotation_matrix(yaw: f32, pitch: f32) -> Mat4 {
+    fn calculate_rotation_matrix(yaw: f32, pitch: f32) -> Mat4 {
         let pitch = Mat4::from_rotation_x(pitch);
         let yaw = Mat4::from_rotation_y(yaw);
         pitch * yaw

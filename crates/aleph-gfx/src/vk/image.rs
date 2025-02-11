@@ -1,5 +1,5 @@
 use {
-    super::{Allocator, Device},
+    crate::vk::{Allocator, Device},
     anyhow::Result,
     ash::vk::{self, Extent3D, Handle},
     ash::vk::{Extent2D, Image as VkImage, ImageView as VkImageView},
@@ -59,8 +59,8 @@ impl Image {
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::OPTIMAL)
             .usage(info.usage | vk::ImageUsageFlags::TRANSFER_DST);
-        let image = unsafe { device.create_image(create_info, None) }?;
-        let requirements = unsafe { device.get_image_memory_requirements(image) };
+        let image = unsafe { device.handle.create_image(create_info, None) }?;
+        let requirements = unsafe { device.handle.get_image_memory_requirements(image) };
         let allocation = allocator.allocate_image(image, requirements, info)?;
 
         let view_info = vk::ImageViewCreateInfo::default()
@@ -77,7 +77,7 @@ impl Image {
                     .layer_count(1),
             );
 
-        let view = unsafe { device.create_image_view(&view_info, None) }?;
+        let view = unsafe { device.handle.create_image_view(&view_info, None) }?;
 
         Ok(Self {
             allocator: Some(allocator.clone()),
@@ -91,10 +91,10 @@ impl Image {
 
 impl Drop for Image {
     fn drop(&mut self) {
-        log::info!("dropping image: {:?}", self.info.label);
+        // log::info!("dropping image: {:?}", self.info.label);
         // if let Some(allocator) = &self.allocator {
-            // let allocation = std::mem::take(&mut self.allocation);
-            // allocator.deallocate(allocation);
+        // let allocation = std::mem::take(&mut self.allocation);
+        // allocator.deallocate(allocation);
         // }
     }
 }

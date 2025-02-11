@@ -1,5 +1,5 @@
 use {
-    super::{BufferInfo, ImageInfo, Device, Instance},
+    crate::vk::{BufferInfo, ImageInfo, Device, Instance},
     anyhow::Result,
     ash::vk::{MemoryRequirements, Buffer as VkBuffer, Image as VkImage},
     derive_more::Debug,
@@ -78,7 +78,7 @@ impl Allocator {
             allocation_scheme: AllocationScheme::GpuAllocatorManaged,
         })?;
         unsafe {
-            self.device
+            self.device.handle
                 .bind_image_memory(image, allocation.memory(), allocation.offset())
         }?;
         Ok(allocation)
@@ -87,12 +87,4 @@ impl Allocator {
     pub fn deallocate(&self, allocation: Allocation) {
         self.inner.lock().unwrap().free(allocation).unwrap();
     }
-
-    // fn destroy_image(&self, image: vk::Image, view: vk::ImageView, allocation: Allocation) {
-    //     unsafe {
-    //         self.inner.lock().unwrap().free(allocation).unwrap();
-    //         self.device.handle.destroy_image(image, None);
-    //         self.device.handle.destroy_image_view(view, None);
-    //     };
-    // }
 }

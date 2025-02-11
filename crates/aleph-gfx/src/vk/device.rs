@@ -1,12 +1,12 @@
 use {
-    super::{Instance, CommandPool, VK_TIMEOUT_NS},
+    super::{CommandPool, Instance, VK_TIMEOUT_NS},
     anyhow::{anyhow, bail, Result},
     ash::{
         ext,
         khr,
         vk::{self, BufferDeviceAddressInfo, Handle},
     },
-    derive_more::{Debug, Deref},
+    derive_more::Debug,
     std::{ffi, slice},
 };
 
@@ -49,9 +49,8 @@ impl Queue {
     }
 }
 
-#[derive(Clone, Debug, Deref)]
+#[derive(Clone, Debug)]
 pub struct Device {
-    #[deref]
     #[debug("{:x}", handle.handle().as_raw())]
     pub(crate) handle: ash::Device, // TODO
     pub(crate) queue: Queue,
@@ -200,7 +199,7 @@ impl Device {
         Ok(unsafe { self.handle.reset_fences(&[fence])? })
     }
 
-pub fn create_pipeline_layout(
+    pub fn create_pipeline_layout(
         &self,
         uniforms_layouts: &[vk::DescriptorSetLayout],
         constants_ranges: &[vk::PushConstantRange],
@@ -208,7 +207,10 @@ pub fn create_pipeline_layout(
         let pipeline_layout_info = vk::PipelineLayoutCreateInfo::default()
             .set_layouts(uniforms_layouts)
             .push_constant_ranges(constants_ranges);
-        Ok(unsafe{self.handle.create_pipeline_layout(&pipeline_layout_info, None)? })
+        Ok(unsafe {
+            self.handle
+                .create_pipeline_layout(&pipeline_layout_info, None)?
+        })
     }
 
     pub fn create_graphics_pipeline(
