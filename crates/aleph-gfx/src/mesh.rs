@@ -36,7 +36,10 @@ impl Vertex {
 pub struct Mesh {
     pub index_buffer: Buffer,
     pub vertex_buffer: Buffer,
-    pub vertex_buffer_address: DeviceAddress,
+    pub vertex_count: u32,
+}
+
+impl Mesh {
 }
 
 pub struct MeshData {
@@ -44,7 +47,7 @@ pub struct MeshData {
     pub indices: Vec<u32>,
 }
 
-pub fn load_meshes2(path: &str) -> Result<Vec<MeshData>> {
+pub fn load_mesh_data(path: &str) -> Result<Vec<MeshData>> {
     let (document, buffers, _images) = match gltf::import(path) {
         Ok(loaded) => loaded,
         Err(err) => return Err(anyhow!("Error reading gltf file").context(err)),

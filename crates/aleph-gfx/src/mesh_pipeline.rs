@@ -202,7 +202,8 @@ impl MeshPipeline {
             .vertex_binding_descriptions(vertex_binding)
             .vertex_attribute_descriptions(&vertex_attributes);
         let mut pipeline_rendering_info = PipelineRenderingCreateInfo::default()
-            .color_attachment_formats(&[Format::R16G16B16A16_SFLOAT]);
+            .color_attachment_formats(&[Format::R16G16B16A16_SFLOAT])
+            .depth_attachment_format(Format::D32_SFLOAT);
         let info = GraphicsPipelineCreateInfo::default()
             .stages(stages)
             .layout(layout)

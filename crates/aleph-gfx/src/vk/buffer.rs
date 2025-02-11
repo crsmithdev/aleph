@@ -1,5 +1,5 @@
 use {
-    crate::vk::{Allocator, Device}, anyhow::Result, ash::vk::{self, DeviceAddress, Handle}, derive_more::Debug, gpu_allocator::vulkan::Allocation, std::{cell::RefCell, sync::Arc}
+    crate::vk::{Allocator,  CommandBuffer, Device}, anyhow::Result, ash::vk::{self, DeviceAddress, Handle}, derive_more::Debug, gpu_allocator::vulkan::Allocation, std::{cell::RefCell, process::Command, slice, sync::Arc}
 };
 pub use {gpu_allocator::MemoryLocation, vk::BufferUsageFlags};
 
@@ -10,6 +10,38 @@ pub struct BufferInfo {
     pub location: MemoryLocation,
     pub label: Option<&'static str>,
 }
+
+pub struct BufferInfo2 {
+    pub size: usize,
+    pub usage: BufferUsageFlags,
+    pub label: Option<&'static str>,
+}
+
+pub struct GpuBuffer {
+    inner: Buffer,
+}
+impl GpuBuffer {
+    pub fn new(allocator: Arc<Allocator>, device: &Device, info: BufferInfo) -> Result<Self> {
+        Ok(Self {
+            inner: Buffer::new(allocator, device, info)?,
+        })
+    }
+    pub fn write(&self, data: &[u8], cmd: &CommandBuffer) {
+        let _ = cmd;
+        self.inner.write(data);
+    }
+
+    pub fn size(&self) -> usize {
+        self.inner.size()
+    }
+
+    pub fn label(&self) -> &'static str{
+        self.inner.info.label.unwrap_or("unnamed")
+    }
+
+}
+
+
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -61,6 +93,16 @@ impl Buffer {
     pub fn address(&self) -> vk::DeviceAddress {
         self.address
     }
+    
+    pub fn write2<T: bytemuck::Pod>(&self, data: &[T]) {
+        let mut allocation = self.allocation.borrow_mut();
+        let mapped = allocation.mapped_slice_mut().expect("Failed to map buffer memory");
+        let size = std::mem::size_of_val(data);
+        let bytes = bytemuck::cast_slice(data);
+        
+        mapped[0..size].copy_from_slice(bytes);
+    }
+
 
     pub fn write(&self, data: &[u8]) {
         let mut allocation = self.allocation.borrow_mut();
