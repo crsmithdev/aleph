@@ -14,7 +14,6 @@ use {
             DescriptorSetLayout,
             DescriptorSetLayoutCreateFlags,
             DescriptorType,
-            Device,
             Format,
             Gpu,
             GraphicsPipelineCreateInfo,
@@ -95,10 +94,9 @@ impl Pipeline for MeshPipeline {
 
 impl MeshPipeline {
     pub fn new(gpu: &Gpu, _texture_image: Image) -> Result<Self> {
-        let device = gpu.device();
-        let descriptor_layout = Self::create_descriptor_layout(device)?;
-        let pipeline_layout = device.create_pipeline_layout(&[descriptor_layout], &[])?;
-        let pipeline = Self::create_pipeline(device, pipeline_layout)?;
+        let descriptor_layout = Self::create_descriptor_layout(gpu)?;
+        let pipeline_layout = gpu.create_pipeline_layout(&[descriptor_layout], &[])?;
+        let pipeline = Self::create_pipeline(gpu, pipeline_layout)?;
         
         Ok(Self {
             handle: pipeline,
@@ -106,13 +104,13 @@ impl MeshPipeline {
         })
     }
 
-    fn create_descriptor_layout(device: &Device) -> Result<DescriptorSetLayout> {
+    fn create_descriptor_layout(gpu: &Gpu) -> Result<DescriptorSetLayout> {
         let bindings = &[
             util::buffer_binding(BINDING_INDEX_GLOBAL_UBO, ShaderStageFlags::VERTEX),
             util::buffer_binding(BINDING_INDEX_MODEL_UBO, ShaderStageFlags::VERTEX),
         ];
 
-        device.create_descriptor_set_layout(
+        gpu.create_descriptor_set_layout(
             bindings,
             DescriptorSetLayoutCreateFlags::PUSH_DESCRIPTOR_KHR,
         )
@@ -146,11 +144,11 @@ impl MeshPipeline {
         );
     }
 
-    fn create_pipeline(device: &Device, layout: PipelineLayout) -> Result<VkPipeline> {
+    fn create_pipeline(gpu: &Gpu, layout: PipelineLayout) -> Result<VkPipeline> {
         let (_vs_module, vs_stage) =
-            util::load_shader("shaders/mesh.vert.spv", device, ShaderStageFlags::VERTEX)?;
+            util::load_shader("shaders/mesh.vert.spv", gpu, ShaderStageFlags::VERTEX)?;
         let (_fs_module, fs_stage) =
-            util::load_shader("shaders/mesh.frag.spv", device, ShaderStageFlags::FRAGMENT)?;
+            util::load_shader("shaders/mesh.frag.spv", gpu, ShaderStageFlags::FRAGMENT)?;
         let stages = &[vs_stage, fs_stage];
         let dynamic_state = util::dynamic_state_default();
         let input_state = util::input_state_triangle_list();
@@ -217,6 +215,6 @@ impl MeshPipeline {
             .depth_stencil_state(&depth_stencil_state)
             .color_blend_state(&color_blend_state)
             .push_next(&mut pipeline_rendering_info);
-        device.create_graphics_pipeline(&info)
+        gpu.create_graphics_pipeline(&info)
     }
 }

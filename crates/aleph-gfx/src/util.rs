@@ -4,29 +4,25 @@ pub use ash::vk::{
     DescriptorSetLayoutBinding,
     ShaderStageFlags,
 };
+use crate::vk::Gpu;
+
 use {
-    crate::vk::{Device, Image},
+    crate::vk::{ Image},
     anyhow::Result,
     ash::vk,
     std::ffi::CStr,
 };
 
-pub const SHADER_MAIN: &CStr = c"main" ;
+const SHADER_MAIN: &CStr = c"main" ;
 pub const DYNAMIC_STATES: [vk::DynamicState; 2] =
     [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
 
-pub fn load_shader<'a>(
-    path: &str,
-    device: &Device,
-    shader_stage: vk::ShaderStageFlags,
-) -> Result<(vk::ShaderModule, vk::PipelineShaderStageCreateInfo<'a>)> {
-    let mut file = std::fs::File::open(path)?;
-    let bytes = ash::util::read_spv(&mut file)?;
-    let module = device.create_shader_module(&bytes)?;
+pub fn load_shader<'a>(path: &str, gpu: &Gpu, flags: ShaderStageFlags) -> Result<(vk::ShaderModule, vk::PipelineShaderStageCreateInfo<'a>)> {
+    let module = gpu.create_shader_module(path)?;
     let stage_info = vk::PipelineShaderStageCreateInfo::default()
         .module(module)
         .name(SHADER_MAIN)
-        .stage(shader_stage);
+        .stage(flags);
     Ok((module, stage_info))
 }
 

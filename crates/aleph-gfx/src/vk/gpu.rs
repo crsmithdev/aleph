@@ -11,15 +11,20 @@ use {
         Instance,
         Swapchain,
         SwapchainInfo,
+        VK_TIMEOUT_NS,
     },
     anyhow::Result,
     ash::{
         khr::{self},
-        vk::{self, DescriptorSetLayoutCreateFlags, Handle},
+        vk::{self, Handle},
     },
     derive_more::Debug,
     raw_window_handle::{HasDisplayHandle, HasWindowHandle},
-    std::{ffi, sync::Arc},
+    std::{
+        ffi,
+        slice,
+        sync::Arc,
+    },
     winit::window::Window,
 };
 
@@ -143,51 +148,89 @@ impl Gpu {
         Image::new(self.allocator.clone(), &self.device, info)
     }
 
-    #[inline]
-    pub fn create_fence(&self) -> Result<vk::Fence> {
-        self.device.create_fence()
+    pub fn create_pipeline_layout(
+        &self,
+        uniforms_layouts: &[vk::DescriptorSetLayout],
+        constants_ranges: &[vk::PushConstantRange],
+    ) -> Result<vk::PipelineLayout> {
+        let pipeline_layout_info = vk::PipelineLayoutCreateInfo::default()
+            .set_layouts(uniforms_layouts)
+            .push_constant_ranges(constants_ranges);
+        Ok(unsafe {
+            self.device
+                .handle
+                .create_pipeline_layout(&pipeline_layout_info, None)?
+        })
     }
 
-    #[inline]
-    pub fn create_fence_signaled(&self) -> Result<vk::Fence> {
-        self.device.create_fence_signaled()
+    pub fn create_graphics_pipeline(
+        &self,
+        info: &vk::GraphicsPipelineCreateInfo,
+    ) -> Result<vk::Pipeline> {
+        Ok(unsafe {
+            self.device
+                .handle
+                .create_graphics_pipelines(vk::PipelineCache::null(), slice::from_ref(info), None)
+                .map_err(|err| anyhow::anyhow!(err.1))
+        }?[0])
     }
 
-    #[inline]
     pub fn create_semaphore(&self) -> Result<vk::Semaphore> {
-        self.device.create_semaphore()
+        #[allow(clippy::unit_arg)]
+        Ok(unsafe {
+            self.device
+                .handle
+                .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)?
+        })
     }
 
-    #[inline]
     pub fn create_command_pool(&self) -> Result<CommandPool> {
         self.device.create_command_pool()
     }
 
-
-    #[inline]
     pub fn create_descriptor_set_layout(
         &self,
         bindings: &[vk::DescriptorSetLayoutBinding],
         flags: vk::DescriptorSetLayoutCreateFlags,
     ) -> Result<vk::DescriptorSetLayout> {
-        let flags = flags | DescriptorSetLayoutCreateFlags::PUSH_DESCRIPTOR_KHR;
-        self.device.create_descriptor_set_layout(bindings, flags)
+        let info = vk::DescriptorSetLayoutCreateInfo::default()
+            .bindings(bindings)
+            .flags(flags);
+        Ok(unsafe {
+            self.device
+                .handle
+                .create_descriptor_set_layout(&info, None)?
+        })
     }
 
-    #[inline]
+    pub fn create_fence(&self) -> Result<vk::Fence> {
+        self.device.create_fence(vk::FenceCreateFlags::empty())
+    }
+
+    pub fn create_fence_signaled(&self) -> Result<vk::Fence> {
+        self.device.create_fence(vk::FenceCreateFlags::SIGNALED)
+    }
+
     pub fn wait_for_fence(&self, fence: vk::Fence) -> Result<()> {
-        self.device.wait_for_fence(fence)
+        #[allow(clippy::unit_arg)]
+        Ok(unsafe {
+            self.device
+                .handle
+                .wait_for_fences(&[fence], true, VK_TIMEOUT_NS)?
+        })
     }
 
-    #[inline]
     pub fn reset_fence(&self, fence: vk::Fence) -> Result<()> {
-        self.device.reset_fence(fence)
+        #[allow(clippy::unit_arg)]
+        Ok(unsafe { self.device.handle.reset_fences(&[fence])? })
     }
 
-    pub fn load_shader(&self, path: &str) -> Result<vk::ShaderModule> {
+    pub fn create_shader_module(&self, path: &str) -> Result<vk::ShaderModule> {
         let mut file = std::fs::File::open(path)?;
         let bytes = ash::util::read_spv(&mut file)?;
-        self.device.create_shader_module(&bytes)
+        let info = vk::ShaderModuleCreateInfo::default().code(&bytes);
+        let module = unsafe { self.device.handle.create_shader_module(&info, None) }?;
+        Ok(module)
     }
 
     pub fn rebuild_swapchain(&mut self) -> Result<()> {
@@ -201,19 +244,24 @@ impl Gpu {
         self.swapchain.rebuild(extent)
     }
 
-    pub fn with_setup_cb(&self, callback: impl FnOnce(&CommandBuffer) -> Result<()>) -> Result<()> {
-        let cmd_buffer =  &self.setup_cmd_buffer;
+    pub fn execute(&self, callback: impl FnOnce(&CommandBuffer) -> Result<()>) -> Result<()> {
+        let cmd_buffer = &self.setup_cmd_buffer;
 
         cmd_buffer.begin()?;
         callback(cmd_buffer)?;
         cmd_buffer.end()?;
         let command_buffer_info = &[vk::CommandBufferSubmitInfo::default()
-        .command_buffer(cmd_buffer.handle)
-        .device_mask(0)];
-        let submit_info = &[vk::SubmitInfo2::default()
-            .command_buffer_infos(command_buffer_info)];
+            .command_buffer(cmd_buffer.handle)
+            .device_mask(0)];
+        let submit_info = &[vk::SubmitInfo2::default().command_buffer_infos(command_buffer_info)];
 
-        unsafe { self.device.handle().queue_submit2(self.device.queue.handle(), submit_info, vk::Fence::null())}?;
+        unsafe {
+            self.device.handle().queue_submit2(
+                self.device.queue.handle(),
+                submit_info,
+                vk::Fence::null(),
+            )
+        }?;
         unsafe { self.device.handle().device_wait_idle() }?;
 
         Ok(())

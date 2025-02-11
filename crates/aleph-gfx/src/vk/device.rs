@@ -1,5 +1,5 @@
 use {
-    super::{CommandPool, Instance, VK_TIMEOUT_NS},
+    super::{CommandPool, Instance},
     anyhow::{anyhow, bail, Result},
     ash::{
         ext,
@@ -7,7 +7,7 @@ use {
         vk::{self, BufferDeviceAddressInfo, Handle},
     },
     derive_more::Debug,
-    std::{ffi, slice},
+    std::ffi
 };
 
 const DEVICE_EXTENSIONS: [&ffi::CStr; 8] = [
@@ -160,89 +160,11 @@ impl Device {
         &self.handle
     }
 
-    pub fn create_semaphore(&self) -> Result<vk::Semaphore> {
-        #[allow(clippy::unit_arg)]
+    pub fn create_fence(&self, flags: vk::FenceCreateFlags) -> Result<vk::Fence> {
         Ok(unsafe {
             self.handle
-                .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)?
+                .create_fence(&vk::FenceCreateInfo::default().flags(flags), None)?
         })
-    }
-
-    pub fn create_fence(&self) -> Result<vk::Fence> {
-        Ok(unsafe {
-            self.handle
-                .create_fence(&vk::FenceCreateInfo::default(), None)?
-        })
-    }
-
-    pub fn create_fence_signaled(&self) -> Result<vk::Fence> {
-        Ok(unsafe {
-            self.handle.create_fence(
-                &vk::FenceCreateInfo::default().flags(vk::FenceCreateFlags::SIGNALED),
-                None,
-            )?
-        })
-    }
-
-    pub fn create_shader_module(&self, bytes: &[u32]) -> Result<vk::ShaderModule> {
-        let info = vk::ShaderModuleCreateInfo::default().code(bytes);
-        Ok(unsafe { self.handle.create_shader_module(&info, None)? })
-    }
-
-    pub fn wait_for_fence(&self, fence: vk::Fence) -> Result<()> {
-        #[allow(clippy::unit_arg)]
-        Ok(unsafe { self.handle.wait_for_fences(&[fence], true, VK_TIMEOUT_NS)? })
-    }
-
-    pub fn reset_fence(&self, fence: vk::Fence) -> Result<()> {
-        #[allow(clippy::unit_arg)]
-        Ok(unsafe { self.handle.reset_fences(&[fence])? })
-    }
-
-    pub fn create_pipeline_layout(
-        &self,
-        uniforms_layouts: &[vk::DescriptorSetLayout],
-        constants_ranges: &[vk::PushConstantRange],
-    ) -> Result<vk::PipelineLayout> {
-        let pipeline_layout_info = vk::PipelineLayoutCreateInfo::default()
-            .set_layouts(uniforms_layouts)
-            .push_constant_ranges(constants_ranges);
-        Ok(unsafe {
-            self.handle
-                .create_pipeline_layout(&pipeline_layout_info, None)?
-        })
-    }
-
-    pub fn create_graphics_pipeline(
-        &self,
-        info: &vk::GraphicsPipelineCreateInfo,
-    ) -> Result<vk::Pipeline> {
-        Ok(unsafe {
-            self.handle
-                .create_graphics_pipelines(vk::PipelineCache::null(), slice::from_ref(info), None)
-                .map_err(|err| anyhow::anyhow!(err.1))
-        }?[0])
-    }
-
-    pub fn update_descriptor_sets(
-        &self,
-        writes: &[vk::WriteDescriptorSet],
-        copies: &[vk::CopyDescriptorSet],
-    ) {
-        unsafe {
-            self.handle.update_descriptor_sets(writes, copies);
-        }
-    }
-
-    pub fn create_descriptor_set_layout(
-        &self,
-        bindings: &[vk::DescriptorSetLayoutBinding],
-        flags: vk::DescriptorSetLayoutCreateFlags,
-    ) -> Result<vk::DescriptorSetLayout> {
-        let info = vk::DescriptorSetLayoutCreateInfo::default()
-            .bindings(bindings)
-            .flags(flags);
-        Ok(unsafe { self.handle.create_descriptor_set_layout(&info, None)? })
     }
 
     pub fn create_command_pool(&self) -> Result<CommandPool> {
@@ -256,14 +178,9 @@ impl Device {
         })
     }
 
-    // #region Test2
-    pub fn allocate_command_buffer(
-        &self,
-        pool: vk::CommandPool,
-        count: u32,
-    ) -> Result<vk::CommandBuffer> {
+    pub fn create_command_buffer(&self, pool: vk::CommandPool) -> Result<vk::CommandBuffer> {
         let info = vk::CommandBufferAllocateInfo::default()
-            .command_buffer_count(count)
+            .command_buffer_count(1)
             .command_pool(pool)
             .level(vk::CommandBufferLevel::PRIMARY);
 

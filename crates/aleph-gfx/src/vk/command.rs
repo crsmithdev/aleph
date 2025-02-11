@@ -4,7 +4,7 @@ use {
     anyhow::Result,
     ash::vk::{self, Extent3D},
     bytemuck::Pod,
-    derive_more::{Debug},
+    derive_more::Debug,
     std::{any::Any, sync::Arc},
 };
 
@@ -36,8 +36,8 @@ pub struct CommandBuffer {
 
 impl CommandBuffer {
     pub fn new(device: &Device, pool: &CommandPool) -> Result<CommandBuffer> {
-        let handle = device.allocate_command_buffer(pool.handle, 1)?;
-        let fence = device.create_fence_signaled()?;
+        let handle = device.create_command_buffer(pool.handle)?;
+        let fence = device.create_fence(vk::FenceCreateFlags::SIGNALED)?;
 
         Ok(CommandBuffer {
             handle,
@@ -53,7 +53,8 @@ impl CommandBuffer {
     pub fn reset(&self) -> Result<()> {
         #[allow(clippy::unit_arg)]
         Ok(unsafe {
-            self.device.handle
+            self.device
+                .handle
                 .reset_command_buffer(self.handle, vk::CommandBufferResetFlags::RELEASE_RESOURCES)?
         })
     }
@@ -63,7 +64,11 @@ impl CommandBuffer {
             .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
 
         #[allow(clippy::unit_arg)]
-        Ok(unsafe { self.device.handle.begin_command_buffer(self.handle, &info)? })
+        Ok(unsafe {
+            self.device
+                .handle
+                .begin_command_buffer(self.handle, &info)?
+        })
     }
 
     pub fn end(&self) -> Result<()> {
@@ -91,7 +96,8 @@ impl CommandBuffer {
 
         #[allow(clippy::unit_arg)]
         Ok(unsafe {
-            self.device.handle
+            self.device
+                .handle
                 .cmd_begin_rendering(self.handle, &rendering_info)
         })
     }
@@ -160,21 +166,21 @@ impl CommandBuffer {
 
     pub fn set_scissor(&self, scissor: vk::Rect2D) {
         unsafe {
-            self.device.handle.cmd_set_scissor(self.handle, 0, &[scissor]);
+            self.device
+                .handle
+                .cmd_set_scissor(self.handle, 0, &[scissor]);
         }
     }
 
     pub fn set_viewport(&self, viewport: vk::Viewport) {
         unsafe {
-            self.device.handle.cmd_set_viewport(self.handle, 0, &[viewport]); //std::slice::from_ref(&
+            self.device
+                .handle
+                .cmd_set_viewport(self.handle, 0, &[viewport]); //std::slice::from_ref(&
         }
     }
 
-    pub fn push_constants<T: bytemuck::Pod>(
-        &self,
-        layout: vk::PipelineLayout,
-        data: &T,
-    ) {
+    pub fn push_constants<T: bytemuck::Pod>(&self, layout: vk::PipelineLayout, data: &T) {
         let data: &[u8] = bytemuck::bytes_of(data);
 
         unsafe {
@@ -212,15 +218,20 @@ impl CommandBuffer {
     ) -> Result<()> {
         #[allow(clippy::unit_arg)]
         Ok(unsafe {
-            self.device.handle
+            self.device
+                .handle
                 .cmd_bind_pipeline(self.handle, pipeline_bind_point, pipeline);
         })
     }
 
     pub fn dispatch(&self, group_count_x: u32, group_count_y: u32, group_count_z: u32) {
         unsafe {
-            self.device.handle
-                .cmd_dispatch(self.handle, group_count_x, group_count_y, group_count_z)
+            self.device.handle.cmd_dispatch(
+                self.handle,
+                group_count_x,
+                group_count_y,
+                group_count_z,
+            )
         }
     }
 
@@ -236,8 +247,11 @@ impl CommandBuffer {
             .signal_semaphore_infos(&[])];
 
         let result = Ok(unsafe {
-            self.device.handle
-                .queue_submit2(self.device.queue.handle, submit_info, vk::Fence::null()) //self.fence)
+            self.device.handle.queue_submit2(
+                self.device.queue.handle,
+                submit_info,
+                vk::Fence::null(),
+            ) //self.fence)
         }?);
         unsafe { self.device.handle.device_wait_idle().unwrap() };
         result
@@ -268,7 +282,11 @@ impl CommandBuffer {
             .wait_semaphore_infos(wait_info)
             .signal_semaphore_infos(signal_info)];
 
-        Ok(unsafe { self.device.handle.queue_submit2(queue.handle, submit_info, fence) }?)
+        Ok(unsafe {
+            self.device
+                .handle
+                .queue_submit2(queue.handle, submit_info, fence)
+        }?)
     }
 
     pub fn transition_image(
@@ -299,7 +317,8 @@ impl CommandBuffer {
         let dependency_info = vk::DependencyInfo::default().image_memory_barriers(barriers);
 
         unsafe {
-            self.device.handle
+            self.device
+                .handle
                 .cmd_pipeline_barrier2(self.handle, &dependency_info);
         }
     }

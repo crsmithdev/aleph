@@ -167,6 +167,7 @@ impl ApplicationHandler for AppHandler<'_> {
         _window_id: WindowId,
         event: WindowEvent,
     ) {
+        #[allow(clippy::single_match)]
         match event {
             WindowEvent::CloseRequested => {
                 self.close_requested = true;
