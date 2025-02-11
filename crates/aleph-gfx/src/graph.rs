@@ -174,7 +174,8 @@ impl RenderGraph {
             aspect_flags: ImageAspectFlags::COLOR,
         })?;
         gpu.execute(|cmd| {
-            cmd.upload_buffer(&index_buffer, &temp_mesh.indices)?;
+            index_buffer.write(bytemuck::cast_slice(&temp_mesh.indices));
+            // cmd.upload_buffer(&index_buffer, &temp_mesh.indices)?;
             cmd.upload_buffer(&vertex_buffer, &temp_mesh.vertices)?;
             cmd.upload_buffer(&model_buffer, bytemuck::bytes_of(&GpuModelData::default()))?;
             cmd.upload_image(&temp_texture, &temp_texture_data)

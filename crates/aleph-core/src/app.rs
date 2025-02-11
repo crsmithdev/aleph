@@ -172,6 +172,7 @@ impl ApplicationHandler for AppHandler<'_> {
             WindowEvent::CloseRequested => {
                 self.close_requested = true;
             }
+            // ...
             _ => {}
         }
 

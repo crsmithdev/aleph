@@ -1,8 +1,9 @@
 use {
     crate::vk::{Buffer, DeviceAddress},
-    anyhow::Result,
+    anyhow::{anyhow, Result},
     derive_more::Debug,
-    glam::{vec3, vec4, Vec3, Vec4}
+    glam::{vec3, vec4, Vec3, Vec4},
+    itertools::izip,
 };
 
 #[repr(C)]
@@ -32,23 +33,10 @@ impl Vertex {
 }
 
 #[derive(Debug)]
-pub struct GpuMeshBuffers {
+pub struct Mesh {
     pub index_buffer: Buffer,
     pub vertex_buffer: Buffer,
     pub vertex_buffer_address: DeviceAddress,
-}
-
-#[derive(Debug)]
-pub struct GeoSurface {
-    pub start_index: u32,
-    pub count: u32,
-}
-
-#[derive(Debug)]
-pub struct MeshAsset {
-    pub name: String,
-    pub surfaces: Vec<GeoSurface>,
-    pub mesh_buffers: GpuMeshBuffers,
 }
 
 pub struct MeshData {
@@ -59,7 +47,7 @@ pub struct MeshData {
 pub fn load_meshes2(path: &str) -> Result<Vec<MeshData>> {
     let (document, buffers, _images) = match gltf::import(path) {
         Ok(loaded) => loaded,
-        Err(err) => panic!("GLTF loading error: {err:?}"),
+        Err(err) => return Err(anyhow!("Error reading gltf file").context(err)),
     };
 
     let get_buffer_data = |buffer: gltf::Buffer| buffers.get(buffer.index()).map(|x| &*x.0);
@@ -68,37 +56,35 @@ pub fn load_meshes2(path: &str) -> Result<Vec<MeshData>> {
     for mesh in document.meshes() {
         for primitive in mesh.primitives().take(1) {
             let reader = primitive.reader(get_buffer_data);
-            let positions = reader.read_positions().unwrap();
-            let normals = reader.read_normals().unwrap();
-            let tex_coords = reader.read_tex_coords(0).unwrap().into_f32();
+            let positions = reader
+                .read_positions()
+                .ok_or(anyhow::anyhow!("Error reading mesh positions"))?;
+            let normals = reader
+                .read_normals()
+                .ok_or(anyhow::anyhow!("Error reading mesh normals"))?;
+            let tex_coords = reader
+                .read_tex_coords(0)
+                .ok_or(anyhow::anyhow!("Error reading mesh tex_coords"))?
+                .into_f32();
 
-            let mut vertices = Vec::with_capacity(positions.len());
-            for ((position, normal), tex_coord) in positions.zip(normals).zip(tex_coords) {
-                vertices.push(Vertex {
+            let vertices: Vec<Vertex> = izip!(positions, normals, tex_coords)
+                .map(|(position, normal, tex_coord)| Vertex {
                     position: position.into(),
                     normal: normal.into(),
                     uv_x: tex_coord[0],
                     uv_y: tex_coord[1],
-                    color: vec4(1.0, 1.0, 1.0, 1.0),
-                });
-            }
-
-            for v in vertices.iter_mut() {
-                v.color = vec4(v.normal[0], v.normal[1], v.normal[2], 1.0);
-            }
-
+                    color: vec4(normal[0], normal[1], normal[2], 1.0),
+                })
+                .collect();
             let indices = reader
                 .read_indices()
-                .expect("Could not read mesh indices")
+                .ok_or(anyhow::anyhow!("Error reading mesh indices"))?
                 .into_u32()
                 .collect::<Vec<u32>>();
 
-            log::info!("loaded mesh, vertices: {}, indices: {}", vertices.len(), indices.len());
-            log::info!("first vertex: {:?} & index: {:?}", vertices[0], indices[0]);
             let data = MeshData { vertices, indices };
             meshes.push(data);
         }
     }
-
     Ok(meshes)
 }
