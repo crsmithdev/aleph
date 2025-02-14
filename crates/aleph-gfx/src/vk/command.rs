@@ -1,4 +1,6 @@
 pub use ash::vk::ImageLayout;
+use super::Allocator;
+
 use {
     super::{buffer::HostBuffer, BufferDesc, BufferUsageFlags, Device, DeviceBuffer, Image},
     anyhow::Result,
@@ -258,19 +260,19 @@ impl CommandBuffer {
 
     pub fn submit_queued(
         &self,
-        wait_semaphore: &vk::Semaphore,
-        signal_semaphore: &vk::Semaphore,
+        wait_semaphore: vk::Semaphore,
+        signal_semaphore: vk::Semaphore,
         fence: vk::Fence,
     ) -> Result<(), anyhow::Error> {
         let cmd = &self.handle;
         let queue = self.device.queue;
 
         let wait_info = &[vk::SemaphoreSubmitInfo::default()
-            .semaphore(*wait_semaphore)
+            .semaphore(wait_semaphore)
             .stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
             .value(1)];
         let signal_info = &[vk::SemaphoreSubmitInfo::default()
-            .semaphore(*signal_semaphore)
+            .semaphore(signal_semaphore)
             .stage_mask(vk::PipelineStageFlags2::ALL_GRAPHICS)
             .value(1)];
         let command_buffer_info = &[vk::CommandBufferSubmitInfo::default()
@@ -374,19 +376,18 @@ impl CommandBuffer {
         };
     }
 
-    pub fn upload_image(&self, image: &Image, data: &[u8]) -> Result<()> {
+    pub fn upload_image(&self, image: &Image, allocator: Allocator, data: &[u8]) -> Result<()> {
         let extent = Extent3D {
             width: image.info.extent.width,
             height: image.info.extent.height,
             depth: 1,
         };
 
-        let allocator = image.allocator.as_ref().unwrap();
         let desc = BufferDesc::default()
             .data(data)
             .label("image staging")
             .flags(BufferUsageFlags::TRANSFER_SRC);
-        let staging = HostBuffer::new(&self.device, allocator, desc)?;
+        let staging = HostBuffer::new(self.device.clone(), allocator, desc)?;
 
         let copy = vk::BufferImageCopy::default()
             .buffer_offset(0)

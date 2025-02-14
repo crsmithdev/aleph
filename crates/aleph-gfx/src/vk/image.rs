@@ -1,13 +1,11 @@
+pub use ash::vk::{Format, ImageAspectFlags, ImageUsageFlags};
 use {
     crate::vk::{Allocator, Device},
     anyhow::Result,
-    ash::vk::{self, Extent3D, Handle},
-    ash::vk::{Extent2D, Image as VkImage, ImageView as VkImageView},
+    ash::vk::{self, Extent2D, Extent3D, Handle, Image as VkImage, ImageView as VkImageView},
     gpu_allocator::vulkan::Allocation,
-    std::{fmt, sync::Arc},
+    std::fmt,
 };
-
-pub use ash::vk::{ImageUsageFlags, ImageAspectFlags, Format};
 
 #[derive(Clone, Debug, Copy)]
 pub struct ImageInfo {
@@ -19,7 +17,7 @@ pub struct ImageInfo {
 }
 
 pub struct Image {
-    pub allocator: Option<Arc<Allocator>>,
+    pub allocator: Option<Allocator>,
     pub allocation: Allocation,
     pub handle: VkImage,
     pub view: VkImageView,
@@ -40,11 +38,11 @@ impl Image {
             allocator: None, //Arc::new(Allocator::default()),
             allocation: Allocation::default(),
             handle: image,
-        info,
+            info,
             view,
         })
     }
-    pub fn new(allocator: Arc<Allocator>, device: &Device, info: ImageInfo) -> Result<Self> {
+    pub fn new(device: Device, allocator: Allocator, info: ImageInfo) -> Result<Self> {
         let extent = Extent3D {
             width: info.extent.width,
             height: info.extent.height,

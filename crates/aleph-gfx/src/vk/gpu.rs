@@ -51,7 +51,7 @@ pub struct Gpu {
     pub(crate) surface: Surface,
     pub(crate) device: Device,
     pub(crate) swapchain: Swapchain,
-    pub(crate) allocator: Arc<Allocator>,
+    pub(crate) allocator: Allocator,
     pub(crate) window: Arc<Window>,
     setup_cmd_pool: CommandPool,
     setup_cmd_buffer: CommandBuffer,
@@ -60,7 +60,7 @@ pub struct Gpu {
 impl Gpu {
     pub fn new(window: Arc<Window>) -> Result<Self> {
         let instance = Instance::new()?;
-        let surface = Self::init_surface(&instance, &Arc::clone(&window))?;
+        let surface = Self::init_surface(&instance, Arc::clone(&window))?;
         let device = Device::new(&instance)?;
         let extent = vk::Extent2D {
             width: window.inner_size().width,
@@ -79,7 +79,7 @@ impl Gpu {
             },
         )?;
 
-        let allocator = Arc::new(Allocator::new(&instance, &device)?);
+        let allocator = Allocator::new(&instance, &device)?;
         let setup_cmd_pool = device.create_command_pool()?;
         let setup_cmd_buffer = setup_cmd_pool.create_command_buffer()?;
 
@@ -99,14 +99,14 @@ impl Gpu {
     pub fn device(&self) -> &Device { &self.device }
 
     #[inline]
-    pub fn allocator(&self) -> &Arc<Allocator> { &self.allocator }
+    pub fn allocator(&self) -> &Allocator { &self.allocator }
 
     #[inline]
     pub fn swapchain(&self) -> &Swapchain { &self.swapchain }
 }
 
 impl Gpu /* Init */ {
-    fn init_surface(instance: &Instance, window: &winit::window::Window) -> Result<Surface> {
+    fn init_surface(instance: &Instance, window: Arc<winit::window::Window>) -> Result<Surface> {
         let inner: vk::SurfaceKHR = unsafe {
             ash_window::create_surface(
                 &instance.entry,
@@ -122,33 +122,29 @@ impl Gpu /* Init */ {
     }
 }
 impl Gpu {
-    // pub fn create_buffer(&self, info: BufferInfo) -> Result<Buffer> {
-    // Buffer::new(self.allocator.clone(), &self.device, info)
-    // }
-
-    pub fn create_shared_buffer<T: Pod + Debug>(
+    pub fn create_shared_buffer<T: Pod>(
         &self,
         desc: BufferDesc<T>,
     ) -> Result<SharedBuffer> {
-        SharedBuffer::new(&self.device, &self.allocator, desc)
+        SharedBuffer::new(self.device.clone(), self.allocator.clone(), desc)
     }
 
-    pub fn create_host_buffer<T: Pod + Debug>(
+    pub fn create_host_buffer<T: Pod>(
         &self,
         desc: BufferDesc<T>,
     ) -> Result<HostBuffer> {
-        HostBuffer::new(&self.device, &self.allocator, desc)
+        HostBuffer::new(self.device.clone(), self.allocator.clone(), desc)
     }
 
-    pub fn create_device_buffer<T: Pod + Debug>(
+    pub fn create_device_buffer<T: Pod>(
         &self,
         desc: BufferDesc<T>,
     ) -> Result<DeviceBuffer> {
-        DeviceBuffer::new(&self.device, &self.allocator, desc)
+        DeviceBuffer::new(self.device.clone(), self.allocator.clone(), desc)
     }
 
     pub fn create_image(&self, info: ImageInfo) -> Result<Image> {
-        Image::new(self.allocator.clone(), &self.device, info)
+        Image::new(self.device.clone(), self.allocator.clone(),  info)
     }
 
     pub fn create_pipeline_layout(

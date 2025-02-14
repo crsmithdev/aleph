@@ -18,7 +18,7 @@ use {
     std::sync::{Arc, Mutex},
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Allocator {
     pub(crate) inner: Arc<Mutex<GpuAllocator>>,
     pub(crate) device: Device,

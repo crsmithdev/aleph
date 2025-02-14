@@ -38,8 +38,7 @@ impl RenderObject {
             u_mvp_matrix: camera.model_view_projection_matrix(self.model_matrix),
         };
 
-        let bytes = bytemuck::bytes_of(&model_data);
-        self.model_buffer.write(bytes);
+        self.model_buffer.write(&[model_data]);
     }
 
     pub fn draw(&self, cmd: &CommandBuffer) {
@@ -167,28 +166,57 @@ impl RenderGraph {
         })
     }
 
+    pub fn context(&self) -> RenderContext {
+        RenderContext {
+            gpu: &self.gpu,
+            objects: &self.objects,
+            camera: &self.camera,
+            command_buffer: &self.frames[self.frame_index].command_buffer,
+            draw_image: &self.draw_image,
+            depth_image: &self.depth_image,
+            extent: self.gpu.swapchain().info.extent,
+            global_buffer: &self.global_data_buffer,
+            config: &self.config,
+        }
+    }
+
+    fn check_rebuild_swapchain(&mut self) -> Result<bool> {
+        match self.rebuild_swapchain {
+            true => {
+                self.gpu.rebuild_swapchain()?;
+                self.frames = Self::create_frames(&self.gpu)?;
+                self.rebuild_swapchain = false;
+                Ok(true)
+            }
+            false => Ok(false),
+        }
+    }
+
     pub fn execute(&mut self) -> Result<()> {
-        if self.rebuild_swapchain {
-            self.gpu.rebuild_swapchain()?;
-            self.frames = Self::create_frames(&self.gpu)?;
-            self.rebuild_swapchain = false;
+        if self.check_rebuild_swapchain()? {
             return Ok(());
         }
+        let Frame {
+            swapchain_semaphore,
+            command_buffer,
+            render_semaphore,
+            fence,
+            ..
+        } = &self.frames[self.frame_index];
 
-        let frame = &self.frames[self.frame_index];
-        let cmd_buffer = &frame.command_buffer;
-
-        self.gpu.wait_for_fence(frame.fence)?;
+        self.gpu.wait_for_fence(*fence)?;
         let (image_index, rebuild) = {
             let (image_index, rebuild) = self
                 .gpu
                 .swapchain
-                .acquire_next_image(frame.swapchain_semaphore)?;
+                .acquire_next_image(*swapchain_semaphore)?;
             (image_index as usize, rebuild)
         };
 
         self.rebuild_swapchain = rebuild;
-        self.gpu.reset_fence(frame.fence)?;
+        self.gpu.reset_fence(*fence)?;
+
+        let cmd_buffer = &command_buffer;
         cmd_buffer.reset()?;
         cmd_buffer.begin()?;
         let swapchain_extent = self.gpu.swapchain.info.extent;
@@ -213,19 +241,7 @@ impl RenderGraph {
             ImageLayout::UNDEFINED,
             ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
         );
-
-        let context = RenderContext {
-            gpu: &self.gpu,
-            objects: &self.objects,
-            camera: &self.camera,
-            command_buffer: &self.frames[self.frame_index].command_buffer,
-            draw_image: &self.draw_image,
-            depth_image: &self.depth_image,
-            extent: self.gpu.swapchain().info.extent,
-            global_buffer: &self.global_data_buffer,
-            config: &self.config,
-        };
-
+        let context = self.context();
         self.update_buffers();
         self.temp_pipeline.execute(&context)?;
 
@@ -253,14 +269,14 @@ impl RenderGraph {
 
         cmd_buffer.end()?;
         cmd_buffer.submit_queued(
-            &frame.swapchain_semaphore,
-            &frame.render_semaphore,
-            frame.fence,
+            *swapchain_semaphore,
+            *render_semaphore,
+            *fence,
         )?;
         let rebuild = self
             .gpu
             .swapchain
-            .present(&[frame.render_semaphore], &[image_index as u32])?;
+            .present(&[*render_semaphore], &[image_index as u32])?;
 
         self.rebuild_swapchain |= rebuild;
         self.frame_index = image_index;
@@ -386,7 +402,7 @@ fn create_temp_texture(gpu: &Gpu) -> Result<Image> {
         usage: ImageUsageFlags::SAMPLED,
         aspect_flags: ImageAspectFlags::COLOR,
     })?;
-    gpu.execute(|cmd| cmd.upload_image(&image, &data).unwrap())?;
+    gpu.execute(|cmd| cmd.upload_image(&image, gpu.allocator().clone(), &data).unwrap())?;
 
     Ok(image)
 }

@@ -5,7 +5,7 @@ use {
     bytemuck::Pod,
     derive_more::Debug,
     gpu_allocator::vulkan::Allocation,
-    std::{cell::RefCell, mem, sync::Arc},
+    std::{cell::RefCell, mem},
 };
 pub use {gpu_allocator::MemoryLocation, vk::BufferUsageFlags};
 
@@ -60,8 +60,8 @@ pub struct HostBuffer(Buffer);
 
 impl HostBuffer {
     pub fn new<T: Pod>(
-        device: &Device,
-        allocator: &Arc<Allocator>,
+        device: Device,
+        allocator: Allocator,
         desc: BufferDesc<T>,
     ) -> Result<Self> {
         let desc = desc.location(MemoryLocation::GpuToCpu);
@@ -82,8 +82,8 @@ pub struct DeviceBuffer(Buffer);
 
 impl DeviceBuffer {
     pub fn new<T: Pod>(
-        device: &Device,
-        allocator: &Arc<Allocator>,
+        device: Device,
+        allocator: Allocator,
         desc: BufferDesc<T>,
     ) -> Result<Self> {
         let desc = desc
@@ -106,8 +106,8 @@ pub struct SharedBuffer(Buffer);
 
 impl SharedBuffer {
     pub fn new<T: Pod>(
-        device: &Device,
-        allocator: &Arc<Allocator>,
+        device: Device,
+        allocator: Allocator,
         desc: BufferDesc<T>,
     ) -> Result<Self> {
         let desc = desc.location(MemoryLocation::CpuToGpu);
@@ -130,15 +130,15 @@ struct Buffer {
     address: DeviceAddress,
     handle: vk::Buffer,
     device: Device,
-    allocator: Arc<Allocator>,
+    allocator: Allocator,
     allocation: RefCell<Allocation>,
     size: u64,
 }
 
 impl Buffer {
     pub fn new<T: Pod>(
-        device: &Device,
-        allocator: &Arc<Allocator>,
+        device: Device,
+        allocator: Allocator,
         desc: BufferDesc<T>,
     ) -> Result<Buffer> {
         let create_info = vk::BufferCreateInfo::default()
@@ -162,7 +162,7 @@ impl Buffer {
 
         let buffer = Buffer {
             device: device.clone(),
-            allocator: allocator.clone(),
+            allocator,
             size: desc.size,
             handle,
             allocation,
