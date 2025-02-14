@@ -1,6 +1,6 @@
 use {
     crate::{
-        graph::{GpuGlobalData, GpuModelData, Pipeline, RenderContext, RenderObject},
+        graph::{GpuGlobalData, GpuModelData, Pipeline, RenderContext, RenderObject, FORMAT_DEPTH_IMAGE, FORMAT_DRAW_IMAGE},
         mesh::Vertex,
         util::{self, ShaderStageFlags},
         vk::{
@@ -202,8 +202,8 @@ impl MeshPipeline {
             .vertex_binding_descriptions(vertex_binding)
             .vertex_attribute_descriptions(&vertex_attributes);
         let mut pipeline_rendering_info = PipelineRenderingCreateInfo::default()
-            .color_attachment_formats(&[Format::R16G16B16A16_SFLOAT])
-            .depth_attachment_format(Format::D32_SFLOAT);
+            .color_attachment_formats(&[FORMAT_DRAW_IMAGE])
+            .depth_attachment_format(FORMAT_DEPTH_IMAGE);
         let info = GraphicsPipelineCreateInfo::default()
             .stages(stages)
             .layout(layout)

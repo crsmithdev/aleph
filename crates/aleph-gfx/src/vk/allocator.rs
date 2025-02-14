@@ -1,5 +1,5 @@
 use {
-    crate::vk::{BufferInfo, ImageInfo, Device, Instance},
+    crate::vk::{ImageInfo, Device, Instance},
     anyhow::Result,
     ash::vk::{MemoryRequirements, Buffer as VkBuffer, Image as VkImage},
     derive_more::Debug,
@@ -45,16 +45,17 @@ impl Allocator {
         &self,
         buffer: VkBuffer,
         requirements: MemoryRequirements,
-        info: BufferInfo,
+        location: MemoryLocation,
+        label: Option<&'static str>,
     ) -> Result<Allocation> {
         let mut allocator = self
             .inner
             .lock()
             .expect("Could not acquire lock on allocator");
         let allocation = allocator.allocate(&AllocationCreateDesc {
-            name: info.label.unwrap_or("default"),
+            name: label.unwrap_or("default"),
             requirements,
-            location: info.location,
+            location,
             linear: true,
             allocation_scheme: AllocationScheme::GpuAllocatorManaged,
         })?;

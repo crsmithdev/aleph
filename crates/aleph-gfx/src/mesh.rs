@@ -1,13 +1,14 @@
 use {
-    crate::vk::{Buffer, DeviceAddress},
+    crate::vk::DeviceBuffer,
     anyhow::{anyhow, Result},
+    bytemuck::{Pod, Zeroable},
     derive_more::Debug,
-    glam::{vec3, vec4, Vec3, Vec4},
+    glam::{vec4, Vec3, Vec4},
     itertools::izip,
 };
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Copy, Clone, Debug, Default, Pod, Zeroable)]
 pub struct Vertex {
     pub position: Vec3,
     pub uv_x: f32,
@@ -16,31 +17,15 @@ pub struct Vertex {
     pub color: Vec4,
 }
 
-impl Vertex {
-    pub fn position(self, x: f32, y: f32, z: f32) -> Self {
-        Self {
-            position: vec3(x, y, z),
-            ..self
-        }
-    }
-
-    pub fn color(self, r: f32, g: f32, b: f32, a: f32) -> Self {
-        Self {
-            color: vec4(r, g, b, a),
-            ..self
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct Mesh {
-    pub index_buffer: Buffer,
-    pub vertex_buffer: Buffer,
+    pub index_buffer: DeviceBuffer,
+    pub vertex_buffer: DeviceBuffer,
     pub vertex_count: u32,
 }
 
-impl Mesh {
-}
+impl Mesh {}
+
 
 pub struct MeshData {
     pub vertices: Vec<Vertex>,

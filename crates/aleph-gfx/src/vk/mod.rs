@@ -13,7 +13,7 @@ pub(crate) const VK_TIMEOUT_NS: u64 = 5_000_000_000;
 pub use {
     crate::vk::{
         allocator::Allocator,
-        buffer::{Buffer, BufferInfo, BufferUsageFlags, MemoryLocation},
+        buffer::{BufferDesc, BufferUsageFlags, SharedBuffer, DeviceBuffer, MemoryLocation},
         command::{CommandBuffer, CommandPool},
         deletion::DeletionQueue,
         device::{Device, Queue, QueueFamily},

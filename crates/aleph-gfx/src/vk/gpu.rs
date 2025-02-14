@@ -1,30 +1,18 @@
 use {
     super::{
-        Allocator,
-        Buffer,
-        BufferInfo,
-        CommandBuffer,
-        CommandPool,
-        Device,
-        Image,
-        ImageInfo,
-        Instance,
-        Swapchain,
-        SwapchainInfo,
+        buffer::HostBuffer, Allocator, BufferDesc, CommandBuffer, CommandPool, Device,
+        DeviceBuffer, Image, ImageInfo, Instance, SharedBuffer, Swapchain, SwapchainInfo,
         VK_TIMEOUT_NS,
     },
     anyhow::Result,
     ash::{
-        khr::{self},
+        khr,
         vk::{self, Handle},
     },
+    bytemuck::Pod,
     derive_more::Debug,
     raw_window_handle::{HasDisplayHandle, HasWindowHandle},
-    std::{
-        ffi,
-        slice,
-        sync::Arc,
-    },
+    std::{ffi, slice, sync::Arc},
     winit::window::Window,
 };
 
@@ -108,19 +96,13 @@ impl Gpu {
     }
 
     #[inline]
-    pub fn device(&self) -> &Device {
-        &self.device
-    }
+    pub fn device(&self) -> &Device { &self.device }
 
     #[inline]
-    pub fn allocator(&self) -> &Arc<Allocator> {
-        &self.allocator
-    }
+    pub fn allocator(&self) -> &Arc<Allocator> { &self.allocator }
 
     #[inline]
-    pub fn swapchain(&self) -> &Swapchain {
-        &self.swapchain
-    }
+    pub fn swapchain(&self) -> &Swapchain { &self.swapchain }
 }
 
 impl Gpu /* Init */ {
@@ -140,8 +122,29 @@ impl Gpu /* Init */ {
     }
 }
 impl Gpu {
-    pub fn create_buffer(&self, info: BufferInfo) -> Result<Buffer> {
-        Buffer::new(self.allocator.clone(), &self.device, info)
+    // pub fn create_buffer(&self, info: BufferInfo) -> Result<Buffer> {
+    // Buffer::new(self.allocator.clone(), &self.device, info)
+    // }
+
+    pub fn create_shared_buffer<T: Pod + Debug>(
+        &self,
+        desc: BufferDesc<T>,
+    ) -> Result<SharedBuffer> {
+        SharedBuffer::new(&self.device, &self.allocator, desc)
+    }
+
+    pub fn create_host_buffer<T: Pod + Debug>(
+        &self,
+        desc: BufferDesc<T>,
+    ) -> Result<HostBuffer> {
+        HostBuffer::new(&self.device, &self.allocator, desc)
+    }
+
+    pub fn create_device_buffer<T: Pod + Debug>(
+        &self,
+        desc: BufferDesc<T>,
+    ) -> Result<DeviceBuffer> {
+        DeviceBuffer::new(&self.device, &self.allocator, desc)
     }
 
     pub fn create_image(&self, info: ImageInfo) -> Result<Image> {
@@ -184,9 +187,7 @@ impl Gpu {
         })
     }
 
-    pub fn create_command_pool(&self) -> Result<CommandPool> {
-        self.device.create_command_pool()
-    }
+    pub fn create_command_pool(&self) -> Result<CommandPool> { self.device.create_command_pool() }
 
     pub fn create_descriptor_set_layout(
         &self,
@@ -244,11 +245,12 @@ impl Gpu {
         self.swapchain.rebuild(extent)
     }
 
-    pub fn execute(&self, callback: impl FnOnce(&CommandBuffer) -> Result<()>) -> Result<()> {
+    pub fn execute(&self, callback: impl FnOnce(&CommandBuffer)) -> Result<()> {
         let cmd_buffer = &self.setup_cmd_buffer;
 
+        cmd_buffer.reset()?;
         cmd_buffer.begin()?;
-        callback(cmd_buffer)?;
+        callback(cmd_buffer);
         cmd_buffer.end()?;
         let command_buffer_info = &[vk::CommandBufferSubmitInfo::default()
             .command_buffer(cmd_buffer.handle)

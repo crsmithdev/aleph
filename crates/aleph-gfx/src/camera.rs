@@ -7,6 +7,7 @@ const FOV_DEGREES: f32 = 75.;
 const Z_NEAR: f32 = 0.1;
 const Z_FAR: f32 = 100.;
 
+#[derive(Debug, Clone, Copy)]
 pub struct CameraConfig {
     pub position: Vec3,
     pub rotation: Vec2,
@@ -27,6 +28,7 @@ impl Default for CameraConfig {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Camera {
     pub position: Vec3,
     pub rotation_yaw: f32,

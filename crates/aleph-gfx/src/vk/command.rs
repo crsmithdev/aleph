@@ -1,11 +1,10 @@
 pub use ash::vk::ImageLayout;
 use {
-    super::{Buffer, BufferInfo, BufferUsageFlags, Device, Image, MemoryLocation},
+    super::{buffer::HostBuffer, BufferDesc, BufferUsageFlags, Device, DeviceBuffer, Image},
     anyhow::Result,
     ash::vk::{self, Extent3D},
-    bytemuck::Pod,
     derive_more::Debug,
-    std::{any::Any, sync::Arc},
+    std::any::Any,
 };
 
 #[derive(Clone, Debug)]
@@ -145,19 +144,19 @@ impl CommandBuffer {
         }
     }
 
-    pub fn bind_vertex_buffer(&self, buffer: &Buffer, _offset: u64) {
+    pub fn bind_vertex_buffer(&self, buffer: &DeviceBuffer, _offset: u64) {
         unsafe {
             self.device
                 .handle
-                .cmd_bind_vertex_buffers(self.handle, 0, &[buffer.handle], &[0]);
+                .cmd_bind_vertex_buffers(self.handle, 0, &[buffer.handle()], &[0]);
         }
     }
 
-    pub fn bind_index_buffer(&self, buffer: &Buffer, offset: u64) {
+    pub fn bind_index_buffer(&self, buffer: &DeviceBuffer, offset: u64) {
         unsafe {
             self.device.handle.cmd_bind_index_buffer(
                 self.handle,
-                buffer.handle,
+                buffer.handle(),
                 offset,
                 vk::IndexType::UINT32,
             );
@@ -366,7 +365,7 @@ impl CommandBuffer {
         unsafe { self.device.handle.cmd_blit_image2(self.handle, &blit_info) }
     }
 
-    pub fn copy_buffer(&self, src: &Buffer, dst: &Buffer, size: u64) {
+    pub fn copy_buffer(&self, src: &HostBuffer, dst: &DeviceBuffer, size: u64) {
         let copy = vk::BufferCopy::default().size(size);
         unsafe {
             self.device
@@ -375,28 +374,7 @@ impl CommandBuffer {
         };
     }
 
-    pub fn upload_buffer<T: Pod>(&self, buffer: &Buffer, data: &[T]) -> Result<()> {
-        let data: &[u8] = bytemuck::cast_slice(data);
-        let size = data.len();
-
-        let staging: Buffer = Buffer::new(
-            buffer.allocator.clone(),
-            &self.device,
-            BufferInfo {
-                usage: BufferUsageFlags::TRANSFER_SRC,
-                location: MemoryLocation::CpuToGpu,
-                size,
-                label: Some("staging"),
-            },
-        )?;
-        staging.write(data);
-
-        self.copy_buffer(&staging, buffer, size as u64);
-        Ok(())
-    }
-
     pub fn upload_image(&self, image: &Image, data: &[u8]) -> Result<()> {
-        let size = data.len();
         let extent = Extent3D {
             width: image.info.extent.width,
             height: image.info.extent.height,
@@ -404,17 +382,12 @@ impl CommandBuffer {
         };
 
         let allocator = image.allocator.as_ref().unwrap();
-        let staging: Buffer = Buffer::new(
-            Arc::clone(allocator),
-            &self.device,
-            BufferInfo {
-                usage: BufferUsageFlags::TRANSFER_SRC,
-                location: MemoryLocation::CpuToGpu,
-                size,
-                label: Some("staging"),
-            },
-        )?;
-        staging.write(data);
+        let desc = BufferDesc::default()
+            .data(data)
+            .label("image staging")
+            .flags(BufferUsageFlags::TRANSFER_SRC);
+        let staging = HostBuffer::new(&self.device, allocator, desc)?;
+
         let copy = vk::BufferImageCopy::default()
             .buffer_offset(0)
             .buffer_row_length(0)
@@ -435,7 +408,7 @@ impl CommandBuffer {
         unsafe {
             self.device.handle.cmd_copy_buffer_to_image(
                 self.handle,
-                staging.handle,
+                staging.handle(),
                 image.handle,
                 vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                 &[copy],
