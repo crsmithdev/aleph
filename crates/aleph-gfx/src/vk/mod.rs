@@ -56,3 +56,17 @@ pub use {
         WriteDescriptorSet,
     },
 };
+
+// pub trait Extent2DExt {
+//     fn into_3d(self) -> Extent3D;
+// }
+
+// impl Extent2DExt for Extent2D {
+//     fn into_3d(self) -> Extent3D {
+//         Extent3D {
+//             width: self.width,
+//             height: self.height,
+//             depth: 1,
+//         }
+//     }
+// }

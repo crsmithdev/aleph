@@ -1,10 +1,10 @@
 pub use ash::vk::ImageLayout;
-use super::Allocator;
-
 use {
-    super::{buffer::HostBuffer, BufferDesc, BufferUsageFlags, Device, DeviceBuffer, Image},
+    super::{
+        buffer::HostBuffer, Allocator, BufferDesc, BufferUsageFlags, Device, DeviceBuffer, Image,
+    },
     anyhow::Result,
-    ash::vk::{self, Extent3D},
+    ash::vk,
     derive_more::Debug,
     std::any::Any,
 };
@@ -16,9 +16,7 @@ pub struct CommandPool {
 }
 
 impl CommandPool {
-    pub fn handle(&self) -> vk::CommandPool {
-        self.handle
-    }
+    pub fn handle(&self) -> vk::CommandPool { self.handle }
 
     pub fn create_command_buffer(&self) -> Result<CommandBuffer> {
         CommandBuffer::new(&self.device, self)
@@ -48,9 +46,7 @@ impl CommandBuffer {
             fence,
         })
     }
-    pub fn handle(&self) -> vk::CommandBuffer {
-        self.handle
-    }
+    pub fn handle(&self) -> vk::CommandBuffer { self.handle }
     pub fn reset(&self) -> Result<()> {
         #[allow(clippy::unit_arg)]
         Ok(unsafe {
@@ -195,19 +191,20 @@ impl CommandBuffer {
         }
     }
 
-    pub fn push_descriptor_sets(
+    pub fn push_descriptor_set(
         &self,
         bind_point: vk::PipelineBindPoint,
         layout: vk::PipelineLayout,
-        sets: &[vk::WriteDescriptorSet],
+        writes: &[vk::WriteDescriptorSet],
+        set: u32
     ) {
         unsafe {
             self.device.push_descriptor.cmd_push_descriptor_set(
                 self.handle,
                 bind_point,
                 layout,
-                0,
-                sets,
+                set,
+                writes,
             );
         }
     }
@@ -297,7 +294,7 @@ impl CommandBuffer {
         new_layout: vk::ImageLayout,
     ) {
         let aspect_mask = match new_layout {
-            vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL => vk::ImageAspectFlags::DEPTH,
+            vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL => vk::ImageAspectFlags::DEPTH ,
             _ => vk::ImageAspectFlags::COLOR,
         };
         let range = vk::ImageSubresourceRange::default()
@@ -376,13 +373,41 @@ impl CommandBuffer {
         };
     }
 
-    pub fn upload_image(&self, image: &Image, allocator: Allocator, data: &[u8]) -> Result<()> {
-        let extent = Extent3D {
-            width: image.info.extent.width,
-            height: image.info.extent.height,
-            depth: 1,
-        };
+    pub fn copy_buffer_to_image(&self, src: &HostBuffer, dst: &Image) {
+        let copy = vk::BufferImageCopy::default()
+            .buffer_offset(0)
+            .buffer_row_length(0)
+            .buffer_image_height(0)
+            .image_subresource(
+                vk::ImageSubresourceLayers::default()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .layer_count(1),
+            )
+            .image_offset(vk::Offset3D::default())
+            .image_extent(dst.info.extent.into());
 
+        self.transition_image(
+            dst,
+            ImageLayout::UNDEFINED,
+            ImageLayout::TRANSFER_DST_OPTIMAL,
+        );
+        unsafe {
+            self.device.handle.cmd_copy_buffer_to_image(
+                self.handle,
+                src.handle(),
+                dst.handle,
+                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                &[copy],
+            )
+        };
+        self.transition_image(
+            dst,
+            ImageLayout::TRANSFER_DST_OPTIMAL,
+            ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        );
+    }
+
+    pub fn upload_image(&self, image: &Image, allocator: Allocator, data: &[u8]) -> Result<()> {
         let desc = BufferDesc::default()
             .data(data)
             .label("image staging")
@@ -399,7 +424,7 @@ impl CommandBuffer {
                     .layer_count(1),
             )
             .image_offset(vk::Offset3D::default())
-            .image_extent(extent);
+            .image_extent(image.info.extent.into());
 
         self.transition_image(
             image,

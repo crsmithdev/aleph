@@ -75,6 +75,8 @@ impl HostBuffer {
     pub fn size(&self) -> u64 { self.0.size() }
 
     pub fn write<T: bytemuck::Pod>(&self, data: &[T]) { self.0.write(data); }
+
+    pub fn destroy(&self) { self.0.destroy(); }
 }
 
 #[derive(Debug)]
@@ -99,6 +101,8 @@ impl DeviceBuffer {
     pub fn address(&self) -> DeviceAddress { self.0.address() }
 
     pub fn size(&self) -> u64 { self.0.size() }
+
+    pub fn destroy(&self) { self.0.destroy(); }
 }
 
 #[derive(Debug)]
@@ -121,6 +125,8 @@ impl SharedBuffer {
     pub fn write<T: Pod>(&self, data: &[T]) { self.0.write(data) }
 
     pub fn address(&self) -> DeviceAddress { self.0.address() }
+    
+    pub fn destroy(&self) { self.0.destroy(); }
 }
 
 #[allow(dead_code)]
@@ -132,6 +138,7 @@ struct Buffer {
     device: Device,
     allocator: Allocator,
     allocation: RefCell<Allocation>,
+    label: &'static str,
     size: u64,
 }
 
@@ -163,6 +170,7 @@ impl Buffer {
         let buffer = Buffer {
             device: device.clone(),
             allocator,
+            label: desc.label,
             size: desc.size,
             handle,
             allocation,
@@ -198,13 +206,17 @@ impl Buffer {
 
         mapped[0..size].copy_from_slice(bytes);
     }
+
+    pub fn destroy(&self) {
+        log::debug!("Destroying buffer: {:?}", self.label);
+        let allocation = self.allocation.replace(Allocation::default());
+        self.allocator.deallocate(allocation);
+        unsafe { self.device.handle.destroy_buffer(self.handle, None) };
+    }
 }
 
 impl Drop for Buffer {
     fn drop(&mut self) {
-        // log::debug!("Dropping buffer: {:?}", self.info.label);
-        // let allocation = self.allocation.take();
-        // self.allocator.deallocate(allocation);
-        // unsafe { self.device.destroy_buffer(self.handle, None) };
+        self.destroy();
     }
 }

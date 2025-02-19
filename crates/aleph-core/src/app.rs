@@ -148,7 +148,7 @@ impl ApplicationHandler for AppHandler<'_> {
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         if self.close_requested {
-            log::info!("Exiting on user request");
+            log::info!("Exiting on user request"); // TODO: Add a way to cancel this
             event_loop.exit();
         }
 

@@ -1,8 +1,9 @@
 pub use ash::vk::{Format, ImageAspectFlags, ImageUsageFlags};
+
 use {
     crate::vk::{Allocator, Device},
     anyhow::Result,
-    ash::vk::{self, Extent2D, Extent3D, Handle, Image as VkImage, ImageView as VkImageView},
+    ash::vk::{self, Extent2D, Handle, Image as VkImage, ImageView as VkImageView},
     gpu_allocator::vulkan::Allocation,
     std::fmt,
 };
@@ -43,15 +44,10 @@ impl Image {
         })
     }
     pub fn new(device: Device, allocator: Allocator, info: ImageInfo) -> Result<Self> {
-        let extent = Extent3D {
-            width: info.extent.width,
-            height: info.extent.height,
-            depth: 1,
-        };
         let create_info = &vk::ImageCreateInfo::default()
             .image_type(vk::ImageType::TYPE_2D)
             .format(info.format)
-            .extent(extent)
+            .extent(info.extent.into())
             .mip_levels(1)
             .array_layers(1)
             .samples(vk::SampleCountFlags::TYPE_1)

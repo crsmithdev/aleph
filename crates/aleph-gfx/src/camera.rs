@@ -1,17 +1,16 @@
 use {
-    crate::vk::Extent2D,
-    glam::{vec2, vec3, Mat4, Vec2, Vec3},
+    crate::vk::Extent2D, core::f32, glam::{vec2, vec3, Mat4, Vec2, Vec3}
 };
 
-const FOV_DEGREES: f32 = 75.;
+const FOV_DEGREES: f32 = 90.;
 const Z_NEAR: f32 = 0.1;
 const Z_FAR: f32 = 100.;
 
 #[derive(Debug, Clone, Copy)]
 pub struct CameraConfig {
-    pub position: Vec3,
+    pub distance: f32,
     pub rotation: Vec2,
-    pub fov_degrees: f32,
+    pub fov: f32,
     pub z_near: f32,
     pub z_far: f32,
 }
@@ -19,9 +18,9 @@ pub struct CameraConfig {
 impl Default for CameraConfig {
     fn default() -> Self {
         Self {
-            position: vec3(0.0, 0.0, 2.0),
-            rotation: vec2(0.0, 0.0),
-            fov_degrees: FOV_DEGREES,
+            rotation: vec2(-f32::consts::PI / 4.0, -f32::consts::PI / 4.0),
+            distance: 2.0,
+            fov: FOV_DEGREES,
             z_near: Z_NEAR,
             z_far: Z_FAR,
         }
@@ -30,80 +29,66 @@ impl Default for CameraConfig {
 
 #[derive(Debug, Clone)]
 pub struct Camera {
-    pub position: Vec3,
-    pub rotation_yaw: f32,
-    pub rotation_pitch: f32,
-    pub view_matrix: Mat4,
-    pub perspective_matrix: Mat4,
+    distance: f32,
+    target: Vec3,
+    rotation_yaw: f32,
+    rotation_pitch: f32,
+    aspect_ratio: f32,
+    config: CameraConfig,
+    _pc: Vec3,
 }
 
 impl Camera {
     pub fn new(config: CameraConfig, extent: Extent2D) -> Self {
-        let position = config.position;
         let rotation_yaw = config.rotation.x.to_radians();
         let rotation_pitch = config.rotation.y.to_radians();
         let aspect_ratio: f32 = extent.width as f32 / extent.height as f32;
-        let view_matrix = Self::calculate_view_matrix(position, rotation_yaw, rotation_pitch);
-        let perspective_matrix = Mat4::perspective_rh(
-            config.fov_degrees.to_radians(),
-            aspect_ratio,
-            config.z_near,
-            config.z_far,
-        );
+        let distance = config.distance;
+        let target = Vec3::ZERO;
 
         Self {
-            position,
+            distance,
             rotation_pitch,
             rotation_yaw,
-            view_matrix,
-            perspective_matrix,
+            target,
+            aspect_ratio,
+            config,
+            _pc: Vec3::ZERO,
         }
     }
 
+    pub fn projection(&self) -> Mat4 {
+        Mat4::perspective_rh(
+            self.config.fov.to_radians(),
+            self.aspect_ratio,
+            self.config.z_near,
+            self.config.z_far,
+        )
+    }
+
+    pub fn view(&self) -> Mat4 { Mat4::look_at_rh(self.position(), self.target, Vec3::Y) }
+
+    pub fn view_projection(&self) -> Mat4 { self.projection() * self.view() }
+
+    pub fn model_view_projection(&self, model: &Mat4) -> Mat4 { self.view_projection() * *model }
+
+    pub fn rotate(&mut self, delta: f32) {
+        self.rotation_yaw += delta;
+        self._pc = self.position(); 
+    }
+
+    pub fn zoom(&mut self, delta: f32) {
+        self.distance += delta;
+    }
+
     pub fn position(&self) -> Vec3 {
-        self.position
-    }
+        let yaw = self.rotation_yaw;
+        let pitch = self.rotation_pitch;
 
-    pub fn view_matrix(&self) -> &Mat4 {
-        &self.view_matrix
-    }
-
-    pub fn perspective_matrix(&self) -> &Mat4 {
-        &self.perspective_matrix
-    }
-
-    #[allow(dead_code)]
-    pub fn view_projection_matrix(&self) -> Mat4 {
-        let view = self.view_matrix();
-        let perspective = self.perspective_matrix();
-        perspective.mul_mat4(view)
-    }
-
-    pub fn model_view_projection_matrix(&self, model: Mat4) -> Mat4 {
-        let view = self.view_matrix();
-        let perspective = self.perspective_matrix();
-        Self::calculate_model_view_projection_matrix(&model, view, perspective)
-    }
-
-    pub fn calculate_model_view_projection_matrix(
-        model_matrix: &Mat4,
-        view_matrix: &Mat4,
-        projection_matrix: &Mat4,
-    ) -> Mat4 {
-        projection_matrix
-            .mul_mat4(view_matrix)
-            .mul_mat4(model_matrix)
-    }
-
-    fn calculate_view_matrix(position: Vec3, yaw: f32, pitch: f32) -> Mat4 {
-        let rotation = Self::calculate_rotation_matrix(yaw, pitch);
-        let translation = Mat4::from_translation(-position);
-        rotation * translation
-    }
-
-    fn calculate_rotation_matrix(yaw: f32, pitch: f32) -> Mat4 {
-        let pitch = Mat4::from_rotation_x(pitch);
-        let yaw = Mat4::from_rotation_y(yaw);
-        pitch * yaw
+        Vec3::new(
+            self.distance * yaw.sin() * pitch.cos(),
+            self.distance * pitch.sin(),
+            self.distance * yaw.cos() * pitch.cos(),
+        )
     }
 }

@@ -1,45 +1,44 @@
 #version 450
 
 #extension GL_EXT_debug_printf : enable
+precision highp float;
 
-layout (std140, binding = 0) uniform GpuGlobalData {
+layout (std140, binding = 0) uniform GpuSceneData {
 	mat4 view;
-	mat4 projection;
-	mat4 view_projection;
-	vec4 ambient_color;
-	vec4 sunlight_directionL;
-	vec4 sunlight_color;
-} global_data;
+    mat4 projection;
+    mat4 view_projection;
+    vec3 lights[4];
+    vec3 camera_position;
+    float _padding1;
+} scene;
 
-layout (std140, binding = 1) uniform GpuModelData {
-	mat4 model_matrix;
-	mat4 mvp_matrix;
-} model_data;
+layout (std140, binding = 1) uniform GpuMaterialData {
+    vec4 albedo;
+    float _padding;
+    float metallic;
+    float roughness;
+    float ao;
+} material;
 
-layout(location = 0) in vec3 position;
-layout(location = 1) in float uv_x;
-layout(location = 2) in vec3 normal;
-layout(location = 3) in float uv_y;
-layout(location = 4) in vec4 color;
+layout (std140, binding = 2) uniform GpuDrawData {
+    mat4 model;
+    mat4 model_view;
+    mat4 model_view_projection;
+    mat3 normal;
+    vec3 position;
+} draw;
 
-layout (location = 0) out vec3 outColor;
-layout (location = 1) out vec2 outUV;
+layout(location = 0) in vec3 in_position;
+layout(location = 1) in vec3 in_normal;
+layout(location = 2) in vec2 in_uv;
 
-const vec2 kGeometry[] = vec2[](
-    vec2(-1, -1), vec2(1, -1), vec2(1, 1),
-    vec2(1,1), vec2(-1, 1), vec2(-1, -1)
-);
+layout (location = 0) out vec3 out_normal;
+layout (location = 1) out vec2 out_tex_coords;
+layout (location = 2) out vec3 out_world_position;
 
-const vec4 kColor[] = vec4[](
-    vec4(1, 0, 0, 1), vec4(0, 1, 0, 1), vec4(0, 0, 1, 1),
-    vec4(1, 0, 1, 1), vec4(1, 1, 0, 1), vec4(0, 1, 1, 1)
-);
-
-void main() 
+void main()
 {
-    gl_Position = model_data.mvp_matrix * vec4(position, 1.0f);
-    outNormal = (PushConstants.render_matrix * vec4(v.normal, 0.f)).xyz;
-	outColor = color.xyz;
-	outUV.x = uv_x;
-	outUV.y = uv_y;
+  gl_Position = draw.model_view_projection * vec4(in_position, 1.0);
+  out_world_position = vec3(draw.model * vec4(in_position, 1.0));
+  out_normal = mat3(transpose(inverse(draw.model))) * in_normal;
 }

@@ -5,25 +5,93 @@ use {
         mesh_pipeline::MeshPipeline,
         vk::{
             BufferDesc, BufferUsageFlags, CommandBuffer, Extent2D, Extent3D, Format, Frame, Gpu,
-            Image, ImageAspectFlags, ImageInfo, ImageLayout, ImageUsageFlags, 
-            SharedBuffer,
+            Image, ImageAspectFlags, ImageInfo, ImageLayout, ImageUsageFlags, SharedBuffer,
         },
-    },
-    anyhow::Result,
-    bytemuck::{Pod, Zeroable},
-    glam::{vec3, vec4, Mat4, Vec3, Vec4},
-    std::mem,
+    }, anyhow::Result, bytemuck::{Pod, Zeroable}, core::f32, derive_more::derive::Debug, glam::{vec3, vec4, Mat3, Mat4, Vec3, Vec4, Vec4Swizzles}, std::mem
 };
 
+#[derive(Default, Debug)]
+pub struct ObjectManager {
+    pub(crate) objects: Vec<RenderObject>,
+    value: u32,
+}
+
+impl ObjectManager {
+    pub fn iter(&self) -> impl Iterator<Item = &RenderObject> { self.objects.iter() }
+
+    pub fn add_mesh(&mut self, gpu: &Gpu, mesh: MeshData) -> Result<()> {
+        let vertex_buffer_size = mem::size_of::<Vertex>() as u64 * mesh.vertices.len() as u64;
+        let index_buffer_size = mem::size_of::<u32>() as u64 * mesh.indices.len() as u64;
+
+        let vertex_buffer = gpu.create_device_buffer::<Vertex>(
+            BufferDesc::default()
+                .size(vertex_buffer_size)
+                .flags(BufferUsageFlags::VERTEX_BUFFER | BufferUsageFlags::TRANSFER_DST)
+                .label("vertex buffer"),
+        )?;
+        let vertex_staging = gpu.create_host_buffer(
+            BufferDesc::default()
+                .data(&mesh.vertices)
+                .flags(BufferUsageFlags::TRANSFER_SRC),
+        )?;
+
+        let index_buffer = gpu.create_device_buffer::<u32>(
+            BufferDesc::default()
+                .size(index_buffer_size)
+                .flags(BufferUsageFlags::INDEX_BUFFER | BufferUsageFlags::TRANSFER_DST)
+                .label("index buffer"),
+        )?;
+        let index_staging = gpu.create_host_buffer(
+            BufferDesc::default()
+                .data(&mesh.indices)
+                .flags(BufferUsageFlags::TRANSFER_SRC),
+        )?;
+
+        gpu.execute(|cmd| {
+            cmd.copy_buffer(&vertex_staging, &vertex_buffer, vertex_buffer.size());
+            cmd.copy_buffer(&index_staging, &index_buffer, index_buffer.size());
+        })?;
+
+        let model_buffer = gpu.create_shared_buffer::<GpuDrawData>(
+            BufferDesc::default()
+                .size(mem::size_of::<GpuDrawData>() as u64)
+                .flags(BufferUsageFlags::UNIFORM_BUFFER | BufferUsageFlags::TRANSFER_DST)
+                .label("model buffer"),
+        )?;
+        let vertex_count = mesh.indices.len() as u32;
+        let mesh = Mesh {
+            vertex_buffer,
+            index_buffer,
+            vertex_count,
+        };
+
+        self.objects.push(RenderObject {
+            label: "test object", // TODO
+            model_matrix: Mat4::IDENTITY,
+            model_buffer,
+            mesh,
+        });
+
+        Ok(())
+    }
+}
+
+#[derive(Default, Debug)]
+pub struct ResourceManager {
+    materials: Vec<Material>,
+}
+
+#[derive(Debug)]
 pub struct Material {
     pub texture: Image,
 }
 
+#[derive(Debug)]
 pub struct RenderObject {
     pub label: &'static str,
     pub model_matrix: Mat4,
     pub model_buffer: SharedBuffer,
-    mesh: Mesh,
+    pub mesh: Mesh,
 }
 
 impl RenderObject {
@@ -33,9 +101,23 @@ impl RenderObject {
     }
 
     fn update_model_buffer(&self, camera: &Camera) {
-        let model_data = GpuModelData {
-            u_model_matrix: self.model_matrix,
-            u_mvp_matrix: camera.model_view_projection_matrix(self.model_matrix),
+        let model = self.model_matrix;
+        // let scale = Mat4::from_scale(vec3(0.5, 0.5, 0.5));
+        // let rotation = Mat4::from_rotation_x(270.0f32.to_radians());
+        // let model = model * rotation;
+        let model_view_projection = camera.model_view_projection(&model);
+        let model_view = camera.view() * model;
+        let inverse_model_view = model_view.inverse();
+        let normal = Mat3::from_mat4(inverse_model_view).transpose();
+
+        let model_data = GpuDrawData {
+            model,
+            model_view,
+            model_view_projection,
+            position: self.model_matrix.w_axis.xyz(),
+            normal,
+            padding1: Vec3::ZERO,
+            padding2: 0.0,
         };
 
         self.model_buffer.write(&[model_data]);
@@ -68,26 +150,42 @@ impl Default for RenderConfig {
 
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
-pub struct GpuGlobalData {
-    view: Mat4,
-    projection: Mat4,
-    view_projection: Mat4,
-    ambient_color: Vec4,
-    sunlight_direction: Vec4,
-    sunlight_color: Vec4,
+pub struct GpuSceneData {
+    pub view: Mat4,            // 0
+    pub projection: Mat4,      // 64
+    pub view_projection: Mat4, // 128
+    pub lights: [Vec3; 4],     // 192 + 48
+    pub _padding1: Vec4,         // 240
+    pub camera_position: Vec3, // 240 + 
+    pub _padding2: f32,
 }
 
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
-pub struct GpuModelData {
-    pub u_model_matrix: Mat4,
-    pub u_mvp_matrix: Mat4,
+pub struct GpuMaterialData {
+    pub albedo: Vec4,
+    pub _padding: f32,
+    pub metallic: f32,
+    pub roughness: f32,
+    pub ao: f32,
+}
+
+#[repr(C)]
+#[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
+pub struct GpuDrawData {
+    pub model: Mat4,                 // 0
+    pub model_view: Mat4,            // 64
+    pub model_view_projection: Mat4, // 128
+    pub normal: Mat3,                // 192 + 36
+    pub padding1: Vec3,              // 228 + 12
+    pub position: Vec3,              // 240 + 12 = 252
+    pub padding2: f32
 }
 
 #[derive(Clone)]
 pub struct RenderContext<'a> {
     pub gpu: &'a Gpu,
-    pub objects: &'a [RenderObject],
+    pub objects: &'a ObjectManager,
     pub camera: &'a Camera,
     pub command_buffer: &'a CommandBuffer,
     pub draw_image: &'a Image,
@@ -109,7 +207,6 @@ pub struct RenderGraph {
     global_data_buffer: SharedBuffer,
     rebuild_swapchain: bool,
     frame_index: usize,
-    objects: Vec<RenderObject>,
     draw_image: Image,
     camera: Camera,
     depth_image: Image,
@@ -118,12 +215,11 @@ pub struct RenderGraph {
 }
 
 impl RenderGraph {
-    pub fn new(gpu: Gpu) -> Result<Self> {
-        let config = RenderConfig::default();
+    pub fn new(gpu: Gpu, config: RenderConfig) -> Result<Self> {
         let frames = Self::create_frames(&gpu)?;
-        let global_buffer = gpu.create_shared_buffer::<GpuGlobalData>(
+        let global_buffer = gpu.create_shared_buffer::<GpuSceneData>(
             BufferDesc::default()
-                .size(mem::size_of::<GpuGlobalData>() as u64)
+                .size(mem::size_of::<GpuSceneData>() as u64)
                 .flags(BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::UNIFORM_BUFFER)
                 .label("global uniform"),
         )?;
@@ -148,7 +244,6 @@ impl RenderGraph {
 
         // TODO make configurable
         let temp_texture = create_temp_texture(&gpu)?;
-        let temp_object = create_temp_object(&gpu)?;
         let temp_pipeline = MeshPipeline::new(&gpu, temp_texture)?;
 
         Ok(Self {
@@ -161,23 +256,8 @@ impl RenderGraph {
             global_data_buffer: global_buffer,
             rebuild_swapchain: false,
             frame_index: 0,
-            objects: vec![temp_object],
             config,
         })
-    }
-
-    pub fn context(&self) -> RenderContext {
-        RenderContext {
-            gpu: &self.gpu,
-            objects: &self.objects,
-            camera: &self.camera,
-            command_buffer: &self.frames[self.frame_index].command_buffer,
-            draw_image: &self.draw_image,
-            depth_image: &self.depth_image,
-            extent: self.gpu.swapchain().info.extent,
-            global_buffer: &self.global_data_buffer,
-            config: &self.config,
-        }
     }
 
     fn check_rebuild_swapchain(&mut self) -> Result<bool> {
@@ -192,7 +272,9 @@ impl RenderGraph {
         }
     }
 
-    pub fn execute(&mut self) -> Result<()> {
+    pub fn execute(&mut self, objects: &ObjectManager) -> Result<()> {
+        self.camera.rotate(0.01);
+
         if self.check_rebuild_swapchain()? {
             return Ok(());
         }
@@ -241,8 +323,18 @@ impl RenderGraph {
             ImageLayout::UNDEFINED,
             ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
         );
-        let context = self.context();
-        self.update_buffers();
+        let context = RenderContext {
+            gpu: &self.gpu,
+            objects,
+            camera: &self.camera,
+            command_buffer: &self.frames[self.frame_index].command_buffer,
+            draw_image: &self.draw_image,
+            depth_image: &self.depth_image,
+            extent: self.gpu.swapchain().info.extent,
+            global_buffer: &self.global_data_buffer,
+            config: &self.config,
+        };
+        self.update_buffers(&context);
         self.temp_pipeline.execute(&context)?;
 
         cmd_buffer.transition_image(
@@ -268,11 +360,7 @@ impl RenderGraph {
         );
 
         cmd_buffer.end()?;
-        cmd_buffer.submit_queued(
-            *swapchain_semaphore,
-            *render_semaphore,
-            *fence,
-        )?;
+        cmd_buffer.submit_queued(*swapchain_semaphore, *render_semaphore, *fence)?;
         let rebuild = self
             .gpu
             .swapchain
@@ -300,78 +388,32 @@ impl RenderGraph {
             })
             .collect()
     }
-    fn update_buffers(&self) {
+    fn update_buffers(&self, context: &RenderContext) {
+        let p = 15.;
+        let lights = [
+            vec3(-p, -p * 0.5, -p),
+            vec3(-p, -p * 0.5, p),
+            vec3(p, -p * 0.5, p),
+            vec3(p, -p * 0.5, -p),
+        ];
         let camera = &self.camera;
-        let data = GpuGlobalData {
-            view: camera.view_matrix,
-            projection: camera.perspective_matrix,
-            view_projection: camera.view_projection_matrix(),
-            ambient_color: vec4(0.1, 0.1, 0.1, 1.0),
-            sunlight_direction: vec4(1.0, 1.0, 1.0, 0.0),
-            sunlight_color: vec4(1.0, 1.0, 1.0, 1.0),
+        let data = GpuSceneData {
+            view: camera.view(),
+            projection: camera.projection(),
+            view_projection: camera.view_projection(),
+            lights,
+            camera_position: camera.position(),
+            _padding1: Vec4::ZERO,
+            _padding2: 0.0,
         };
 
         let bytes = bytemuck::bytes_of(&data);
         self.global_data_buffer.write(bytes);
 
-        for object in &self.objects {
+        for object in context.objects.iter() {
             object.update_model_buffer(camera);
         }
     }
-}
-
-pub fn create_temp_object(gpu: &Gpu) -> Result<RenderObject> {
-    let data: &MeshData = &crate::mesh::load_mesh_data("assets/basicmesh.glb")?[2];
-    let vertex_buffer_size = mem::size_of::<Vertex>() as u64 * data.vertices.len() as u64;
-    let index_buffer_size = mem::size_of::<u32>() as u64 * data.indices.len() as u64;
-
-    let vertex_buffer = gpu.create_device_buffer::<Vertex>(
-        BufferDesc::default()
-            .size(vertex_buffer_size)
-            .flags(BufferUsageFlags::VERTEX_BUFFER | BufferUsageFlags::TRANSFER_DST)
-            .label("vertex buffer"),
-    )?;
-    let vertex_staging = gpu.create_host_buffer(
-        BufferDesc::default()
-            .data(&data.vertices)
-            .flags(BufferUsageFlags::TRANSFER_SRC),
-    )?;
-
-    let index_buffer = gpu.create_device_buffer::<u32>(
-        BufferDesc::default()
-            .size(index_buffer_size)
-            .flags(BufferUsageFlags::INDEX_BUFFER | BufferUsageFlags::TRANSFER_DST)
-            .label("index buffer"),
-    )?;
-    let index_staging = gpu.create_host_buffer(
-        BufferDesc::default()
-            .data(&data.indices)
-            .flags(BufferUsageFlags::TRANSFER_SRC),
-    )?;
-
-    gpu.execute(|cmd| {
-        cmd.copy_buffer(&vertex_staging, &vertex_buffer, vertex_buffer.size());
-        cmd.copy_buffer(&index_staging, &index_buffer, index_buffer.size());
-    })?;
-
-    let model_buffer = gpu.create_shared_buffer::<GpuModelData>(
-        BufferDesc::default()
-            .size(mem::size_of::<GpuModelData>() as u64)
-            .flags(BufferUsageFlags::UNIFORM_BUFFER | BufferUsageFlags::TRANSFER_DST)
-            .label("model buffer"),
-    )?;
-    let vertex_count = data.indices.len() as u32;
-    let mesh = Mesh {
-        vertex_buffer,
-        index_buffer,
-        vertex_count,
-    };
-    Ok(RenderObject {
-        label: "test object",
-        model_matrix: Mat4::IDENTITY,
-        model_buffer,
-        mesh,
-    })
 }
 
 fn create_temp_texture(gpu: &Gpu) -> Result<Image> {
@@ -402,7 +444,22 @@ fn create_temp_texture(gpu: &Gpu) -> Result<Image> {
         usage: ImageUsageFlags::SAMPLED,
         aspect_flags: ImageAspectFlags::COLOR,
     })?;
-    gpu.execute(|cmd| cmd.upload_image(&image, gpu.allocator().clone(), &data).unwrap())?;
+    let staging = gpu.create_host_buffer(
+        BufferDesc::default()
+            .data(&data)
+            .flags(BufferUsageFlags::TRANSFER_SRC),
+    )?;
+    staging.write(&data);
+    gpu.execute(|cmd| cmd.copy_buffer_to_image(&staging, &image))?;
 
     Ok(image)
+}
+
+impl Drop for RenderGraph {
+    fn drop(&mut self) {
+        unsafe { self.gpu.device().handle().device_wait_idle().unwrap() };
+        self.global_data_buffer.destroy();
+        // mem::drop(&self.draw_image);
+        // mem::drop(&self.depth_image);
+    }
 }

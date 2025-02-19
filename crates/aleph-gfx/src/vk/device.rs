@@ -2,18 +2,19 @@ use {
     super::{CommandPool, Instance},
     anyhow::{anyhow, bail, Result},
     ash::{
-        ext,
-        khr,
+        ext, khr,
         vk::{self, BufferDeviceAddressInfo, Handle},
     },
     derive_more::Debug,
-    std::ffi
+    std::ffi,
 };
 
-const DEVICE_EXTENSIONS: [&ffi::CStr; 8] = [
+const DEVICE_EXTENSIONS: [&ffi::CStr; 10] = [
+    khr::maintenance1::NAME,
+    khr::maintenance2::NAME,
+    khr::maintenance3::NAME,
     khr::swapchain::NAME,
     khr::synchronization2::NAME,
-    khr::maintenance3::NAME,
     khr::dynamic_rendering::NAME,
     ext::descriptor_indexing::NAME,
     khr::buffer_device_address::NAME,
@@ -29,9 +30,7 @@ pub struct QueueFamily {
 }
 
 impl QueueFamily {
-    pub fn index(&self) -> u32 {
-        self.index
-    }
+    pub fn index(&self) -> u32 { self.index }
 }
 
 #[allow(dead_code)]
@@ -41,12 +40,8 @@ pub struct Queue {
     pub(crate) family: QueueFamily,
 }
 impl Queue {
-    pub fn handle(&self) -> vk::Queue {
-        self.handle
-    }
-    pub fn family(&self) -> QueueFamily {
-        self.family
-    }
+    pub fn handle(&self) -> vk::Queue { self.handle }
+    pub fn family(&self) -> QueueFamily { self.family }
 }
 
 #[derive(Clone, Debug)]
@@ -78,17 +73,25 @@ impl Device {
             .map(|n| n.as_ptr())
             .collect::<Vec<_>>();
 
-        let mut synchronization_features =
+        let mut swapchain_maintenance1_features =
+            ash::vk::PhysicalDeviceSwapchainMaintenance1FeaturesEXT::default()
+                .swapchain_maintenance1(true);
+        let mut synchronization2_features =
             ash::vk::PhysicalDeviceSynchronization2FeaturesKHR::default().synchronization2(true);
         let mut dynamic_rendering_features =
             ash::vk::PhysicalDeviceDynamicRenderingFeaturesKHR::default().dynamic_rendering(true);
         let mut buffer_device_address_features =
             ash::vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR::default()
                 .buffer_device_address(true);
+        let mut descriptor_indexing_features =
+            ash::vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::default()
+                .runtime_descriptor_array(true);
+
         let mut device_features = vk::PhysicalDeviceFeatures2::default()
+            .push_next(&mut synchronization2_features)
             .push_next(&mut dynamic_rendering_features)
-            .push_next(&mut synchronization_features)
-            .push_next(&mut buffer_device_address_features);
+            .push_next(&mut buffer_device_address_features)
+            .push_next(&mut descriptor_indexing_features);
 
         let handle = instance.create_device(
             physical_device,
@@ -156,9 +159,7 @@ impl Device {
         }
     }
 
-    pub fn handle(&self) -> &ash::Device {
-        &self.handle
-    }
+    pub fn handle(&self) -> &ash::Device { &self.handle }
 
     pub fn create_fence(&self, flags: vk::FenceCreateFlags) -> Result<vk::Fence> {
         Ok(unsafe {

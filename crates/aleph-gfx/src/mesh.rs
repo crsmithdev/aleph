@@ -50,18 +50,20 @@ pub fn load_mesh_data(path: &str) -> Result<Vec<MeshData>> {
             let normals = reader
                 .read_normals()
                 .ok_or(anyhow::anyhow!("Error reading mesh normals"))?;
-            let tex_coords = reader
-                .read_tex_coords(0)
-                .ok_or(anyhow::anyhow!("Error reading mesh tex_coords"))?
-                .into_f32();
+            // let tex_coords = reader
+                // .read_tex_coords(0)
+                // .ok_or(anyhow::anyhow!("Error reading mesh tex_coords"))?
+                // .into_f32();
 
-            let vertices: Vec<Vertex> = izip!(positions, normals, tex_coords)
-                .map(|(position, normal, tex_coord)| Vertex {
+            let vertices: Vec<Vertex> = izip!(positions, normals)
+                .map(|(position, normal)| Vertex {
                     position: position.into(),
                     normal: normal.into(),
-                    uv_x: tex_coord[0],
-                    uv_y: tex_coord[1],
-                    color: vec4(normal[0], normal[1], normal[2], 1.0),
+                    uv_x: 1.,
+                    uv_y: 1.,
+                    // uv_x: tex_coord[0],
+                    // uv_y: tex_coord[1],
+                    color: vec4(1., 1., 1., 1.),
                 })
                 .collect();
             let indices = reader
@@ -70,6 +72,9 @@ pub fn load_mesh_data(path: &str) -> Result<Vec<MeshData>> {
                 .into_u32()
                 .collect::<Vec<u32>>();
 
+            log::debug!("loaded {} indices for mesh, 0-10: {:?}", &indices.len(), &indices[0..30]);
+            println!("{:?}", indices);
+            log::debug!("loaded {} vertices for mesh, 0-10: {:?}", &vertices.len(), &vertices[0..30]);
             let data = MeshData { vertices, indices };
             meshes.push(data);
         }

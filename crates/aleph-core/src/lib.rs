@@ -20,3 +20,5 @@ pub use {
     layer::Layer,
     logging::setup_logger,
 };
+
+pub use winit::window::Window;

@@ -1,4 +1,5 @@
 use aleph::prelude::*;
+use aleph_core::Layer;
 
 fn main() {
     let config = AppConfig::default().name("Demo");
