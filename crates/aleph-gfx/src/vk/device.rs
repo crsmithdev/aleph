@@ -88,6 +88,7 @@ impl Device {
                 .runtime_descriptor_array(true);
 
         let mut device_features = vk::PhysicalDeviceFeatures2::default()
+            .push_next(&mut swapchain_maintenance1_features)
             .push_next(&mut synchronization2_features)
             .push_next(&mut dynamic_rendering_features)
             .push_next(&mut buffer_device_address_features)

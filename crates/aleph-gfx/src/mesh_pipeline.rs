@@ -15,23 +15,19 @@ use {
             PipelineViewport, PipelineViewportStateCreateInfoExt, ShaderStageFlags,
         },
         vk::{
-            AttachmentLoadOp, AttachmentStoreOp, BufferDesc, BufferUsageFlags,
-            ClearDepthStencilValue, ClearValue, ColorComponentFlags, CullModeFlags,
-            DescriptorBufferInfo, DescriptorSetLayout, DescriptorSetLayoutCreateFlags,
-            DescriptorType, Format, Gpu, GraphicsPipelineCreateInfo, Image, ImageLayout,
-            Pipeline as VkPipeline, PipelineBindPoint, PipelineColorBlendAttachmentState,
+            BufferDesc, BufferUsageFlags, CullModeFlags, DescriptorBufferInfo, DescriptorSetLayout,
+            DescriptorSetLayoutCreateFlags, DescriptorType, Format, Gpu,
+            GraphicsPipelineCreateInfo, Image, Pipeline as VkPipeline, PipelineBindPoint,
             PipelineLayout, PipelineRenderingCreateInfo, PipelineVertexInputStateCreateInfo,
-            Rect2D, RenderingAttachmentInfo, SharedBuffer, VertexInputAttributeDescription,
-            VertexInputBindingDescription, Viewport, WriteDescriptorSet,
+            Rect2D, SharedBuffer, VertexInputAttributeDescription, VertexInputBindingDescription,
+            Viewport, WriteDescriptorSet,
         },
     },
     anyhow::Result,
     ash::vk::{
-        CompareOp, FrontFace, PipelineDepthStencilStateCreateFlags,
-        PipelineDepthStencilStateCreateInfo, PipelineRasterizationStateCreateInfo,
-        PipelineViewportStateCreateInfo,
+        CompareOp, FrontFace, 
     },
-    glam::{vec3, vec4, Vec3},
+    glam::{vec4, Vec3},
     std::mem,
 };
 
@@ -57,7 +53,9 @@ impl Pipeline for MeshPipeline {
             .width(extent.width as f32)
             .height(0.0 - extent.height as f32)
             .x(0.)
-            .y(extent.height as f32).min_depth(0.).max_depth(1.);
+            .y(extent.height as f32)
+            .min_depth(0.)
+            .max_depth(1.);
         cmd.set_viewport(viewport);
 
         let scissor = Rect2D::default().extent(extent);
@@ -191,7 +189,8 @@ impl MeshPipeline {
         let stages = &[vs_stage, fs_stage];
         let dynamic_state = PipelineDynamicState::viewport_and_scissor();
         let input = PipelineInput::triangle_list();
-        let raster = PipelineRasterization::filled(CullModeFlags::NONE, FrontFace::COUNTER_CLOCKWISE);
+        let raster =
+            PipelineRasterization::filled(CullModeFlags::NONE, FrontFace::COUNTER_CLOCKWISE);
         let multisampling = PipelineMultisampling::disabled();
         let viewport = PipelineViewport::single_viewport_scissor();
         let depth_info = PipelineDepthStencil::enabled(CompareOp::LESS_OR_EQUAL);

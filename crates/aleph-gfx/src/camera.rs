@@ -1,5 +1,5 @@
 use {
-    crate::vk::Extent2D, core::f32, glam::{vec2, vec3, Mat4, Vec2, Vec3}
+    crate::vk::Extent2D, core::f32, glam::{vec2, Mat4, Vec2, Vec3}
 };
 
 const FOV_DEGREES: f32 = 90.;

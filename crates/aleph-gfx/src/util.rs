@@ -115,38 +115,37 @@ pub trait PipelineColorBlendAttachmentStateExt {
 pub type PipelineColorBlendAttachment = vk::PipelineColorBlendAttachmentState;
 impl PipelineColorBlendAttachmentStateExt for PipelineColorBlendAttachment {
     fn disabled() -> Self {
-        Self::default()
-            .blend_enable(false)
-            .color_write_mask(
-                vk::ColorComponentFlags::A
-                    | vk::ColorComponentFlags::R
-                    | vk::ColorComponentFlags::G
-                    | vk::ColorComponentFlags::B,
-            )
+        Self::default().blend_enable(false).color_write_mask(
+            vk::ColorComponentFlags::A
+                | vk::ColorComponentFlags::R
+                | vk::ColorComponentFlags::G
+                | vk::ColorComponentFlags::B,
+        )
     }
 }
 
 pub trait PipelineColorBlendStateCreateInfoExt {
-    fn disabled(attachments: &[vk::PipelineColorBlendAttachmentState]) -> vk::PipelineColorBlendStateCreateInfo<'_>;
+    fn disabled(
+        attachments: &[vk::PipelineColorBlendAttachmentState],
+    ) -> vk::PipelineColorBlendStateCreateInfo<'_>;
 }
 pub type PipelineColorBlend<'a> = vk::PipelineColorBlendStateCreateInfo<'a>;
 impl PipelineColorBlendStateCreateInfoExt for PipelineColorBlend<'_> {
-    fn disabled(attachments: &[vk::PipelineColorBlendAttachmentState]) -> vk::PipelineColorBlendStateCreateInfo<'_> {
+    fn disabled(
+        attachments: &[vk::PipelineColorBlendAttachmentState],
+    ) -> vk::PipelineColorBlendStateCreateInfo<'_> {
         vk::PipelineColorBlendStateCreateInfo::default()
             .logic_op_enable(false)
             .attachments(attachments)
     }
 }
 
-
 pub trait PipelineInputAssemblyStateCreateInfoExt {
     fn triangle_list() -> Self;
 }
 pub type PipelineInput<'a> = vk::PipelineInputAssemblyStateCreateInfo<'a>;
 impl PipelineInputAssemblyStateCreateInfoExt for PipelineInput<'_> {
-    fn triangle_list() -> Self {
-        Self::default().topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-    }
+    fn triangle_list() -> Self { Self::default().topology(vk::PrimitiveTopology::TRIANGLE_LIST) }
 }
 
 pub trait PipelineMultisampleStateCreateInfoExt {
@@ -154,9 +153,7 @@ pub trait PipelineMultisampleStateCreateInfoExt {
 }
 pub type PipelineMultisampling<'a> = vk::PipelineMultisampleStateCreateInfo<'a>;
 impl PipelineMultisampleStateCreateInfoExt for PipelineMultisampling<'_> {
-    fn disabled() -> Self {
-        Self::default().rasterization_samples(vk::SampleCountFlags::TYPE_1)
-    }
+    fn disabled() -> Self { Self::default().rasterization_samples(vk::SampleCountFlags::TYPE_1) }
 }
 
 pub trait PipelineDynamicStateCreateInfoExt {
@@ -167,7 +164,7 @@ pub type PipelineDynamicState<'a> = vk::PipelineDynamicStateCreateInfo<'a>;
 impl PipelineDynamicStateCreateInfoExt for PipelineDynamicState<'_> {
     fn viewport_and_scissor() -> Self {
         Self::default().dynamic_states(&[vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
-    }   
+    }
 }
 
 pub trait PipelineViewportStateCreateInfoExt {
@@ -176,9 +173,7 @@ pub trait PipelineViewportStateCreateInfoExt {
 
 pub type PipelineViewport<'a> = vk::PipelineViewportStateCreateInfo<'a>;
 impl PipelineViewportStateCreateInfoExt for PipelineViewport<'_> {
-    fn single_viewport_scissor() -> Self {
-        Self::default().viewport_count(1).scissor_count(1)
-    }
+    fn single_viewport_scissor() -> Self { Self::default().viewport_count(1).scissor_count(1) }
 }
 
 pub trait PipelineRasterizationStateCreateInfoExt {
@@ -196,7 +191,7 @@ impl PipelineRasterizationStateCreateInfoExt for PipelineRasterization<'_> {
             .depth_bias_enable(true)
             .depth_bias_constant_factor(4.0)
             .depth_bias_slope_factor(1.5)
-            // .depth_clamp_enable(true)
+        // .depth_clamp_enable(true)
     }
 }
 pub trait PipelineDepthStencilStateCreateInfoExt {
@@ -205,7 +200,7 @@ pub trait PipelineDepthStencilStateCreateInfoExt {
 }
 
 pub type PipelineDepthStencil<'a> = vk::PipelineDepthStencilStateCreateInfo<'a>;
-impl<'a> PipelineDepthStencilStateCreateInfoExt for PipelineDepthStencil<'a> {
+impl PipelineDepthStencilStateCreateInfoExt for PipelineDepthStencil<'_> {
     fn enabled(compare_op: CompareOp) -> Self {
         let mut info = Self::default()
             .depth_test_enable(true)

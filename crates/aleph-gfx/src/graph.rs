@@ -13,7 +13,6 @@ use {
 #[derive(Default, Debug)]
 pub struct ObjectManager {
     pub(crate) objects: Vec<RenderObject>,
-    value: u32,
 }
 
 impl ObjectManager {
@@ -78,7 +77,6 @@ impl ObjectManager {
 
 #[derive(Default, Debug)]
 pub struct ResourceManager {
-    materials: Vec<Material>,
 }
 
 #[derive(Debug)]
