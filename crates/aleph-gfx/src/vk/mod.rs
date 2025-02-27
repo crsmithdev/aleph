@@ -1,21 +1,21 @@
 pub mod allocator;
 pub mod buffer;
 pub mod command;
-pub mod deletion;
 pub mod device;
 pub mod gpu;
 pub mod image;
 pub mod instance;
 pub mod swapchain;
+pub mod pipeline;
 
 pub(crate) const VK_TIMEOUT_NS: u64 = 5_000_000_000;
 
 pub use {
     crate::vk::{
         allocator::Allocator,
-        buffer::{BufferDesc, BufferUsageFlags, SharedBuffer, DeviceBuffer, MemoryLocation},
+        pipeline::PipelineBuilder,
+        buffer::{Buffer, BufferUsageFlags, RawBuffer, MemoryLocation},
         command::{CommandBuffer, CommandPool},
-        deletion::DeletionQueue,
         device::{Device, Queue, QueueFamily},
         gpu::{Gpu, Surface},
         image::{Image, ImageAspectFlags, ImageInfo, ImageUsageFlags},

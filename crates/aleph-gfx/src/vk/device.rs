@@ -14,6 +14,7 @@ const DEVICE_EXTENSIONS: [&ffi::CStr; 10] = [
     khr::maintenance2::NAME,
     khr::maintenance3::NAME,
     khr::swapchain::NAME,
+    // ext::swapchain_maintenance1::NAME,
     khr::synchronization2::NAME,
     khr::dynamic_rendering::NAME,
     ext::descriptor_indexing::NAME,
@@ -73,9 +74,9 @@ impl Device {
             .map(|n| n.as_ptr())
             .collect::<Vec<_>>();
 
-        let mut swapchain_maintenance1_features =
-            ash::vk::PhysicalDeviceSwapchainMaintenance1FeaturesEXT::default()
-                .swapchain_maintenance1(true);
+        // let mut swapchain_maintenance1_features =
+        //     ash::vk::PhysicalDeviceSwapchainMaintenance1FeaturesEXT::default()
+        //         .swapchain_maintenance1(true);
         let mut synchronization2_features =
             ash::vk::PhysicalDeviceSynchronization2FeaturesKHR::default().synchronization2(true);
         let mut dynamic_rendering_features =
@@ -88,7 +89,7 @@ impl Device {
                 .runtime_descriptor_array(true);
 
         let mut device_features = vk::PhysicalDeviceFeatures2::default()
-            .push_next(&mut swapchain_maintenance1_features)
+            // .push_next(&mut swapchain_maintenance1_features)
             .push_next(&mut synchronization2_features)
             .push_next(&mut dynamic_rendering_features)
             .push_next(&mut buffer_device_address_features)

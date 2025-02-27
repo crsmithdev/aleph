@@ -1,16 +1,15 @@
 use {
     crate::{
-        graph::{ObjectManager, RenderConfig},
-        vk::{
-             Gpu,
-        },
-         RenderGraph, 
-    }, aleph_core::{
+        graph::{managers::ObjectManager, config::RenderConfig},
+        vk::Gpu,
+        RenderGraph,
+    },
+    aleph_core::{
         app::TickEvent,
         layer::{Layer, Window},
-    }, anyhow::Result, std::{
-        sync::{Arc, OnceLock},
-    }
+    },
+    anyhow::Result,
+    std::sync::{Arc, OnceLock},
 };
 
 #[derive(Default)]
@@ -33,13 +32,11 @@ impl Layer for GraphicsLayer {
         self.load_temp_data(&gpu)?;
         let graph = RenderGraph::new(gpu, config)?;
 
-
-
         self.renderer
             .set(graph)
             .map_err(|_| anyhow::anyhow!("Failed to set renderer"))?;
 
-        events.subscribe::<TickEvent>(move|layer, _event| layer.render());
+        events.subscribe::<TickEvent>(move |layer, _event| layer.render());
 
         Ok(())
     }
@@ -54,8 +51,10 @@ impl GraphicsLayer {
     }
 
     fn load_temp_data(&mut self, gpu: &Gpu) -> Result<()> {
-        let mut meshes = crate::mesh::load_mesh_data("assets/suzanne.glb")?;
-        let mesh = meshes.pop().ok_or_else(|| anyhow::anyhow!("No mesh found"))?; 
+        let mut meshes = crate::graph::mesh::load_mesh_data("assets/suzanne.glb")?;
+        let mesh = meshes
+            .pop()
+            .ok_or_else(|| anyhow::anyhow!("No mesh found"))?;
         self.object_manager.add_mesh(gpu, mesh)?;
 
         Ok(())

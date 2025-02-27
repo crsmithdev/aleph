@@ -1,94 +1,36 @@
+pub mod camera;
+pub mod config;
+pub mod managers;
+pub mod mesh;
+pub mod mesh_pipeline;
+pub mod util;
+
 use {
-    crate::{
-        camera::{Camera, CameraConfig},
-        mesh::{Mesh, MeshData, Vertex},
-        mesh_pipeline::MeshPipeline,
-        vk::{
-            BufferDesc, BufferUsageFlags, CommandBuffer, Extent2D, Extent3D, Format, Frame, Gpu,
-            Image, ImageAspectFlags, ImageInfo, ImageLayout, ImageUsageFlags, SharedBuffer,
-        },
-    }, anyhow::Result, bytemuck::{Pod, Zeroable}, core::f32, derive_more::derive::Debug, glam::{vec3, vec4, Mat3, Mat4, Vec3, Vec4, Vec4Swizzles}, std::mem
+    crate::vk::{
+        pipeline::Pipeline, BufferUsageFlags, CommandBuffer, Extent2D, Extent3D,
+        Format, Frame, Gpu, Image, ImageAspectFlags, ImageInfo, ImageLayout, ImageUsageFlags,
+        Buffer,
+    },
+    anyhow::Result,
+    bytemuck::{Pod, Zeroable},
+    core::f32,
+    derive_more::derive::Debug,
+    glam::{vec3, Mat3, Mat4, Vec3, Vec4, Vec4Swizzles},
+    std::mem,
 };
 
-#[derive(Default, Debug)]
-pub struct ObjectManager {
-    pub(crate) objects: Vec<RenderObject>,
-}
+pub use crate::graph::{
+        camera::Camera,
+        config::{CameraConfig, RenderConfig},
+        managers::{ObjectManager, ResourceManager},
+        mesh::Mesh,
+        mesh_pipeline::MeshPipeline,
+    };
 
-impl ObjectManager {
-    pub fn iter(&self) -> impl Iterator<Item = &RenderObject> { self.objects.iter() }
-
-    pub fn add_mesh(&mut self, gpu: &Gpu, mesh: MeshData) -> Result<()> {
-        let vertex_buffer_size = mem::size_of::<Vertex>() as u64 * mesh.vertices.len() as u64;
-        let index_buffer_size = mem::size_of::<u32>() as u64 * mesh.indices.len() as u64;
-
-        let vertex_buffer = gpu.create_device_buffer::<Vertex>(
-            BufferDesc::default()
-                .size(vertex_buffer_size)
-                .flags(BufferUsageFlags::VERTEX_BUFFER | BufferUsageFlags::TRANSFER_DST)
-                .label("vertex buffer"),
-        )?;
-        let vertex_staging = gpu.create_host_buffer(
-            BufferDesc::default()
-                .data(&mesh.vertices)
-                .flags(BufferUsageFlags::TRANSFER_SRC),
-        )?;
-
-        let index_buffer = gpu.create_device_buffer::<u32>(
-            BufferDesc::default()
-                .size(index_buffer_size)
-                .flags(BufferUsageFlags::INDEX_BUFFER | BufferUsageFlags::TRANSFER_DST)
-                .label("index buffer"),
-        )?;
-        let index_staging = gpu.create_host_buffer(
-            BufferDesc::default()
-                .data(&mesh.indices)
-                .flags(BufferUsageFlags::TRANSFER_SRC),
-        )?;
-
-        gpu.execute(|cmd| {
-            cmd.copy_buffer(&vertex_staging, &vertex_buffer, vertex_buffer.size());
-            cmd.copy_buffer(&index_staging, &index_buffer, index_buffer.size());
-        })?;
-
-        let model_buffer = gpu.create_shared_buffer::<GpuDrawData>(
-            BufferDesc::default()
-                .size(mem::size_of::<GpuDrawData>() as u64)
-                .flags(BufferUsageFlags::UNIFORM_BUFFER | BufferUsageFlags::TRANSFER_DST)
-                .label("model buffer"),
-        )?;
-        let vertex_count = mesh.indices.len() as u32;
-        let mesh = Mesh {
-            vertex_buffer,
-            index_buffer,
-            vertex_count,
-        };
-
-        self.objects.push(RenderObject {
-            label: "test object", // TODO
-            model_matrix: Mat4::IDENTITY,
-            model_buffer,
-            mesh,
-        });
-
-        Ok(())
-    }
-}
-
-#[derive(Default, Debug)]
-pub struct ResourceManager {
-}
-
-#[derive(Debug)]
-pub struct Material {
-    pub texture: Image,
-}
-
-#[derive(Debug)]
 pub struct RenderObject {
     pub label: &'static str,
     pub model_matrix: Mat4,
-    pub model_buffer: SharedBuffer,
+    pub model_buffer: Buffer<GpuDrawData>,
     pub mesh: Mesh,
 }
 
@@ -100,9 +42,6 @@ impl RenderObject {
 
     fn update_model_buffer(&self, camera: &Camera) {
         let model = self.model_matrix;
-        // let scale = Mat4::from_scale(vec3(0.5, 0.5, 0.5));
-        // let rotation = Mat4::from_rotation_x(270.0f32.to_radians());
-        // let model = model * rotation;
         let model_view_projection = camera.model_view_projection(&model);
         let model_view = camera.view() * model;
         let inverse_model_view = model_view.inverse();
@@ -126,26 +65,6 @@ impl RenderObject {
     }
 }
 
-pub struct RenderConfig {
-    pub clear_color: Vec3,
-    pub clear_normal: Vec4,
-    pub clear_depth: f32,
-    pub clear_stencil: u32,
-    pub camera: CameraConfig,
-}
-
-impl Default for RenderConfig {
-    fn default() -> Self {
-        Self {
-            clear_color: vec3(0.0, 0.0, 0.0),
-            clear_normal: vec4(0., 0., 0., 0.),
-            clear_depth: 1.0,
-            clear_stencil: 0,
-            camera: CameraConfig::default(),
-        }
-    }
-}
-
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
 pub struct GpuSceneData {
@@ -153,8 +72,8 @@ pub struct GpuSceneData {
     pub projection: Mat4,      // 64
     pub view_projection: Mat4, // 128
     pub lights: [Vec3; 4],     // 192 + 48
-    pub _padding1: Vec4,         // 240
-    pub camera_position: Vec3, // 240 + 
+    pub _padding1: Vec4,       // 240
+    pub camera_position: Vec3, // 240 +
     pub _padding2: f32,
 }
 
@@ -177,7 +96,7 @@ pub struct GpuDrawData {
     pub normal: Mat3,                // 192 + 36
     pub padding1: Vec3,              // 228 + 12
     pub position: Vec3,              // 240 + 12 = 252
-    pub padding2: f32
+    pub padding2: f32,
 }
 
 #[derive(Clone)]
@@ -185,15 +104,12 @@ pub struct RenderContext<'a> {
     pub gpu: &'a Gpu,
     pub objects: &'a ObjectManager,
     pub camera: &'a Camera,
-    pub command_buffer: &'a CommandBuffer,
+    pub cmd_buffer: &'a CommandBuffer,
     pub draw_image: &'a Image,
     pub depth_image: &'a Image,
     pub extent: Extent2D,
-    pub global_buffer: &'a SharedBuffer,
+    pub global_buffer: &'a Buffer<GpuSceneData>,
     pub config: &'a RenderConfig,
-}
-pub trait Pipeline {
-    fn execute(&self, context: &RenderContext) -> Result<()>;
 }
 
 pub(crate) const FORMAT_DRAW_IMAGE: Format = Format::R16G16B16A16_SFLOAT;
@@ -202,7 +118,7 @@ pub(crate) const FORMAT_DEPTH_IMAGE: Format = Format::D32_SFLOAT;
 pub struct RenderGraph {
     frames: Vec<Frame>,
     temp_pipeline: MeshPipeline,
-    global_data_buffer: SharedBuffer,
+    global_data_buffer: Buffer<GpuSceneData>,
     rebuild_swapchain: bool,
     frame_index: usize,
     draw_image: Image,
@@ -216,10 +132,9 @@ impl RenderGraph {
     pub fn new(gpu: Gpu, config: RenderConfig) -> Result<Self> {
         let frames = Self::create_frames(&gpu)?;
         let global_buffer = gpu.create_shared_buffer::<GpuSceneData>(
-            BufferDesc::default()
-                .size(mem::size_of::<GpuSceneData>() as u64)
-                .flags(BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::UNIFORM_BUFFER)
-                .label("global uniform"),
+                mem::size_of::<GpuSceneData>() as u64,
+                BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::UNIFORM_BUFFER,
+                "global uniform",
         )?;
         let draw_image = gpu.create_image(ImageInfo {
             label: Some("draw"),
@@ -240,9 +155,7 @@ impl RenderGraph {
         })?;
         let camera = Camera::new(config.camera, gpu.swapchain().info.extent);
 
-        // TODO make configurable
-        let temp_texture = create_temp_texture(&gpu)?;
-        let temp_pipeline = MeshPipeline::new(&gpu, temp_texture)?;
+        let temp_pipeline = MeshPipeline::new(&gpu)?;
 
         Ok(Self {
             gpu,
@@ -325,7 +238,7 @@ impl RenderGraph {
             gpu: &self.gpu,
             objects,
             camera: &self.camera,
-            command_buffer: &self.frames[self.frame_index].command_buffer,
+            cmd_buffer: &self.frames[self.frame_index].command_buffer,
             draw_image: &self.draw_image,
             depth_image: &self.depth_image,
             extent: self.gpu.swapchain().info.extent,
@@ -405,8 +318,7 @@ impl RenderGraph {
             _padding2: 0.0,
         };
 
-        let bytes = bytemuck::bytes_of(&data);
-        self.global_data_buffer.write(bytes);
+        self.global_data_buffer.write(&[data]);
 
         for object in context.objects.iter() {
             object.update_model_buffer(camera);
@@ -414,44 +326,44 @@ impl RenderGraph {
     }
 }
 
-fn create_temp_texture(gpu: &Gpu) -> Result<Image> {
-    let black = 0;
-    let magenta = 4294902015;
+// fn create_temp_texture(gpu: &Gpu) -> Result<Image> {
+//     let black = 0;
+//     let magenta = 4294902015;
 
-    let pixels = {
-        let mut pixels = vec![0u32; 16 * 16];
-        for x in 0..16 {
-            for y in 0..16 {
-                let offset = x + y * 16;
-                pixels[offset] = match (x + y) % 2 {
-                    0 => black,
-                    _ => magenta,
-                };
-            }
-        }
-        pixels
-    };
-    let data: Vec<u8> = pixels.into_iter().flat_map(|i| i.to_le_bytes()).collect();
-    let image = gpu.create_image(ImageInfo {
-        label: Some("color image"),
-        extent: Extent2D {
-            width: 16,
-            height: 16,
-        },
-        format: Format::R8G8B8A8_UNORM,
-        usage: ImageUsageFlags::SAMPLED,
-        aspect_flags: ImageAspectFlags::COLOR,
-    })?;
-    let staging = gpu.create_host_buffer(
-        BufferDesc::default()
-            .data(&data)
-            .flags(BufferUsageFlags::TRANSFER_SRC),
-    )?;
-    staging.write(&data);
-    gpu.execute(|cmd| cmd.copy_buffer_to_image(&staging, &image))?;
+//     let pixels = {
+//         let mut pixels = vec![0u32; 16 * 16];
+//         for x in 0..16 {
+//             for y in 0..16 {
+//                 let offset = x + y * 16;
+//                 pixels[offset] = match (x + y) % 2 {
+//                     0 => black,
+//                     _ => magenta,
+//                 };
+//             }
+//         }
+//         pixels
+//     };
+//     let data: Vec<u8> = pixels.into_iter().flat_map(|i| i.to_le_bytes()).collect();
+//     let image = gpu.create_image(ImageInfo {
+//         label: Some("color image"),
+//         extent: Extent2D {
+//             width: 16,
+//             height: 16,
+//         },
+//         format: Format::R8G8B8A8_UNORM,
+//         usage: ImageUsageFlags::SAMPLED,
+//         aspect_flags: ImageAspectFlags::COLOR,
+//     })?;
+//     let staging = gpu.create_host_buffer(
+//         BufferDesc::default()
+//             .data(&data)
+//             .flags(BufferUsageFlags::TRANSFER_SRC),
+//     )?;
+//     staging.write(&data);
+//     gpu.execute(|cmd| cmd.copy_buffer_to_image(&staging, &image))?;
 
-    Ok(image)
-}
+//     Ok(image)
+// }
 
 impl Drop for RenderGraph {
     fn drop(&mut self) {

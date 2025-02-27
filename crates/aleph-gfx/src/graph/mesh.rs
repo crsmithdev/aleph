@@ -1,5 +1,5 @@
 use {
-    crate::vk::DeviceBuffer,
+    crate::vk::Buffer,
     anyhow::{anyhow, Result},
     bytemuck::{Pod, Zeroable},
     derive_more::Debug,
@@ -17,10 +17,9 @@ pub struct Vertex {
     pub color: Vec4,
 }
 
-#[derive(Debug)]
 pub struct Mesh {
-    pub index_buffer: DeviceBuffer,
-    pub vertex_buffer: DeviceBuffer,
+    pub index_buffer: Buffer<u32>,
+    pub vertex_buffer: Buffer<Vertex>,
     pub vertex_count: u32,
 }
 
@@ -72,9 +71,6 @@ pub fn load_mesh_data(path: &str) -> Result<Vec<MeshData>> {
                 .into_u32()
                 .collect::<Vec<u32>>();
 
-            log::debug!("loaded {} indices for mesh, 0-10: {:?}", &indices.len(), &indices[0..30]);
-            println!("{:?}", indices);
-            log::debug!("loaded {} vertices for mesh, 0-10: {:?}", &vertices.len(), &vertices[0..30]);
             let data = MeshData { vertices, indices };
             meshes.push(data);
         }

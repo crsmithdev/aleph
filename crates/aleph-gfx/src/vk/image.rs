@@ -34,6 +34,14 @@ impl fmt::Debug for Image {
 }
 
 impl Image {
+    pub fn handle(&self) -> VkImage {
+        self.handle
+    }
+
+    pub fn view(&self) -> VkImageView {
+        self.view
+    }
+
     pub fn from_existing(image: vk::Image, view: vk::ImageView, info: ImageInfo) -> Result<Self> {
         Ok(Self {
             allocator: None, //Arc::new(Allocator::default()),

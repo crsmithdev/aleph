@@ -1,31 +1,8 @@
 use {
-    crate::vk::Extent2D, core::f32, glam::{vec2, Mat4, Vec2, Vec3}
+    crate::{graph::config::CameraConfig, vk::Extent2D},
+    core::f32,
+    glam::{Mat4, Vec3},
 };
-
-const FOV_DEGREES: f32 = 90.;
-const Z_NEAR: f32 = 0.1;
-const Z_FAR: f32 = 100.;
-
-#[derive(Debug, Clone, Copy)]
-pub struct CameraConfig {
-    pub distance: f32,
-    pub rotation: Vec2,
-    pub fov: f32,
-    pub z_near: f32,
-    pub z_far: f32,
-}
-
-impl Default for CameraConfig {
-    fn default() -> Self {
-        Self {
-            rotation: vec2(-f32::consts::PI / 4.0, -f32::consts::PI / 4.0),
-            distance: 2.0,
-            fov: FOV_DEGREES,
-            z_near: Z_NEAR,
-            z_far: Z_FAR,
-        }
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct Camera {
@@ -74,12 +51,10 @@ impl Camera {
 
     pub fn rotate(&mut self, delta: f32) {
         self.rotation_yaw += delta;
-        self._pc = self.position(); 
+        self._pc = self.position();
     }
 
-    pub fn zoom(&mut self, delta: f32) {
-        self.distance += delta;
-    }
+    pub fn zoom(&mut self, delta: f32) { self.distance += delta; }
 
     pub fn position(&self) -> Vec3 {
         let yaw = self.rotation_yaw;

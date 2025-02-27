@@ -1,7 +1,11 @@
 pub use ash::vk::ImageLayout;
+use bytemuck::Pod;
+use gpu_allocator::MemoryLocation;
+use crate::Vertex;
+
 use {
     super::{
-        buffer::HostBuffer, Allocator, BufferDesc, BufferUsageFlags, Device, DeviceBuffer, Image,
+        buffer::Buffer, Allocator, BufferUsageFlags, Device, Image,
     },
     anyhow::Result,
     ash::vk,
@@ -142,7 +146,7 @@ impl CommandBuffer {
         }
     }
 
-    pub fn bind_vertex_buffer(&self, buffer: &DeviceBuffer, _offset: u64) {
+    pub fn bind_vertex_buffer(&self, buffer: &Buffer<Vertex>, _offset: u64) {
         unsafe {
             self.device
                 .handle
@@ -150,7 +154,7 @@ impl CommandBuffer {
         }
     }
 
-    pub fn bind_index_buffer(&self, buffer: &DeviceBuffer, offset: u64) {
+    pub fn bind_index_buffer(&self, buffer: &Buffer<u32>, offset: u64) {
         unsafe {
             self.device.handle.cmd_bind_index_buffer(
                 self.handle,
@@ -177,19 +181,19 @@ impl CommandBuffer {
         }
     }
 
-    pub fn push_constants<T: bytemuck::Pod>(&self, layout: vk::PipelineLayout, data: &T) {
-        let data: &[u8] = bytemuck::bytes_of(data);
+    // pub fn push_constants(&self, layout: vk::PipelineLayout, data: &T) {
+        // let data: &[u8] = bytemuck::bytes_of(data);
 
-        unsafe {
-            self.device.handle.cmd_push_constants(
-                self.handle,
-                layout,
-                vk::ShaderStageFlags::VERTEX,
-                0,
-                data,
-            );
-        }
-    }
+        // unsafe {
+        //     self.device.handle.cmd_push_constants(
+        //         self.handle,
+        //         layout,
+        //         vk::ShaderStageFlags::VERTEX,
+        //         0,
+        //         data,
+        //     );
+        // }
+    // }
 
     pub fn push_descriptor_set(
         &self,
@@ -364,7 +368,7 @@ impl CommandBuffer {
         unsafe { self.device.handle.cmd_blit_image2(self.handle, &blit_info) }
     }
 
-    pub fn copy_buffer(&self, src: &HostBuffer, dst: &DeviceBuffer, size: u64) {
+    pub fn copy_buffer<T: Pod>(&self, src: &Buffer<T>, dst: &Buffer<T>, size: u64) {
         let copy = vk::BufferCopy::default().size(size);
         unsafe {
             self.device
@@ -373,7 +377,7 @@ impl CommandBuffer {
         };
     }
 
-    pub fn copy_buffer_to_image(&self, src: &HostBuffer, dst: &Image) {
+    pub fn copy_buffer_to_image<T: Pod>(&self, src: &Buffer<T>, dst: &Image) {
         let copy = vk::BufferImageCopy::default()
             .buffer_offset(0)
             .buffer_row_length(0)
@@ -407,12 +411,16 @@ impl CommandBuffer {
         );
     }
 
-    pub fn upload_image(&self, image: &Image, allocator: Allocator, data: &[u8]) -> Result<()> {
-        let desc = BufferDesc::default()
-            .data(data)
-            .label("image staging")
-            .flags(BufferUsageFlags::TRANSFER_SRC);
-        let staging = HostBuffer::new(self.device.clone(), allocator, desc)?;
+    pub fn upload_image(&self, image: &Image, allocator: &Allocator, data: &[u8]) -> Result<()> {
+        let staging =  Buffer::new(
+            &self.device,
+            allocator,
+            std::mem::size_of_val(data) as u64,
+            BufferUsageFlags::TRANSFER_SRC,
+            MemoryLocation::GpuToCpu,
+            "staging",
+        )?;
+        staging.write(data);
 
         let copy = vk::BufferImageCopy::default()
             .buffer_offset(0)

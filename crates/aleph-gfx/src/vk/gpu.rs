@@ -1,8 +1,8 @@
 use {
     super::{
-        buffer::HostBuffer, Allocator, BufferDesc, CommandBuffer, CommandPool, Device,
-        DeviceBuffer, Image, ImageInfo, Instance, SharedBuffer, Swapchain, SwapchainInfo,
-        VK_TIMEOUT_NS,
+        buffer::{self, Buffer},
+        Allocator, CommandBuffer, CommandPool, Device, Image, ImageInfo, Instance,
+        Swapchain, SwapchainInfo, VK_TIMEOUT_NS,
     },
     anyhow::Result,
     ash::{
@@ -124,27 +124,49 @@ impl Gpu /* Init */ {
 impl Gpu {
     pub fn create_shared_buffer<T: Pod>(
         &self,
-        desc: BufferDesc<T>,
-    ) -> Result<SharedBuffer> {
-        SharedBuffer::new(self.device.clone(), self.allocator.clone(), desc)
+        size: u64,
+        flags: vk::BufferUsageFlags,
+        label: impl Into<String>,
+    ) -> Result<Buffer<T>> {
+        Buffer::new(
+            &self.device,
+            &self.allocator,
+            size,
+            flags,
+            buffer::MemoryLocation::CpuToGpu,
+            label,
+        )
     }
 
     pub fn create_host_buffer<T: Pod>(
         &self,
-        desc: BufferDesc<T>,
-    ) -> Result<HostBuffer> {
-        HostBuffer::new(self.device.clone(), self.allocator.clone(), desc)
+        size: u64,
+        flags: vk::BufferUsageFlags,
+        label: impl Into<String>,
+    ) -> Result<Buffer<T>> {
+        Buffer::new(
+            &self.device,
+            &self.allocator,
+            size,
+            flags,
+            buffer::MemoryLocation::GpuToCpu,
+            label,
+        )
     }
-
     pub fn create_device_buffer<T: Pod>(
         &self,
-        desc: BufferDesc<T>,
-    ) -> Result<DeviceBuffer> {
-        DeviceBuffer::new(self.device.clone(), self.allocator.clone(), desc)
-    }
-
-    pub fn create_image(&self, info: ImageInfo) -> Result<Image> {
-        Image::new(self.device.clone(), self.allocator.clone(),  info)
+        size: u64,
+        flags: vk::BufferUsageFlags,
+        label: impl Into<String>,
+    ) -> Result<Buffer<T>> {
+        Buffer::new(
+            &self.device,
+            &self.allocator,
+            size,
+            flags,
+            buffer::MemoryLocation::GpuOnly,
+            label,
+        )
     }
 
     pub fn create_pipeline_layout(
@@ -239,6 +261,10 @@ impl Gpu {
         };
 
         self.swapchain.rebuild(extent)
+    }
+
+    pub fn create_image(&self, info: ImageInfo) -> Result<Image> {
+        Image::new(self.device.clone(), self.allocator.clone(),  info)
     }
 
     pub fn execute(&self, callback: impl FnOnce(&CommandBuffer)) -> Result<()> {
