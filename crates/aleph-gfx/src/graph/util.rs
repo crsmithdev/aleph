@@ -4,8 +4,9 @@ pub use ash::vk::{
 use bytemuck::Pod;
 use crate::{vk::Gpu, Vertex};
 
+
 use {
-    crate::vk::Image,
+    crate::vk::Texture,
     crate::vk::buffer::*,
     anyhow::Result,
     ash::{
@@ -31,7 +32,18 @@ pub fn vertex_buffer(gpu: &Gpu, size: u64, label: impl Into<String>) -> Result<B
         gpu.allocator(),
         size,
         vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
-        MemoryLocation::GpuOnly ,
+        MemoryLocation::GpuOnly,
+        label,
+    )
+}
+
+pub fn vertex_buffer2(gpu: &Gpu, size: u64, label: impl Into<String>) -> Result<Buffer<Vertex>> {
+    Buffer::new(
+        gpu.device(),
+        gpu.allocator(),
+        size,
+        vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
+        MemoryLocation::GpuOnly,
         label,
     )
 }
@@ -40,17 +52,17 @@ pub fn staging_buffer<T: Pod>(gpu: &Gpu, data: &[T], label: impl Into<String>) -
     Buffer::from_data(gpu.device(), gpu.allocator(), data, vk::BufferUsageFlags::TRANSFER_SRC, MemoryLocation::GpuToCpu, label)
 }
 
-pub fn color_attachment<'a>(image: &Image) -> vk::RenderingAttachmentInfo<'a> {
+pub fn color_attachment<'a>(image: &Texture) -> vk::RenderingAttachmentInfo<'a> {
     vk::RenderingAttachmentInfo::default()
-        .image_view(image.view)
+        .image_view(image.view())
         .image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
         .load_op(AttachmentLoadOp::CLEAR)
         .store_op(AttachmentStoreOp::STORE)
 }
 
-pub fn depth_attachment<'a>(image: &Image) -> vk::RenderingAttachmentInfo<'a> {
+pub fn depth_attachment<'a>(image: &Texture) -> vk::RenderingAttachmentInfo<'a> {
     vk::RenderingAttachmentInfo::default()
-        .image_view(image.view)
+        .image_view(image.view())
         .image_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
         .clear_value(ClearValue {
             depth_stencil: ClearDepthStencilValue {

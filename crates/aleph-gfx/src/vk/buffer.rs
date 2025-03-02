@@ -3,11 +3,13 @@ use {
     anyhow::{Ok, Result},
     ash::vk::{self, DeviceAddress},
     bytemuck::Pod,
+    derive_more::Debug,
     gpu_allocator::vulkan::Allocation,
     std::{cell::RefCell, mem},
 };
 pub use {gpu_allocator::MemoryLocation, vk::BufferUsageFlags};
 
+#[derive(Debug)]
 pub struct Buffer<T> {
     buffer: RawBuffer,
     _marker: std::marker::PhantomData<T>,
@@ -67,11 +69,15 @@ impl<T: Pod> Buffer<T> {
     }
 }
 
+#[derive(Debug)]
 pub struct RawBuffer {
     address: DeviceAddress,
     handle: vk::Buffer,
+    #[debug(skip)]
     device: Device,
+    #[debug(skip)]
     allocator: Allocator,
+    #[debug("{:x}", allocation.as_ptr() as u64)]
     allocation: RefCell<Allocation>,
     label: String,
     size: u64,
@@ -86,6 +92,7 @@ impl RawBuffer {
         location: MemoryLocation,
         label: impl Into<String>,
     ) -> Result<Self> {
+        let flags = flags | vk:: BufferUsageFlags::SHADER_DEVICE_ADDRESS;
         let create_info = vk::BufferCreateInfo::default().size(size).usage(flags);
         let handle = unsafe { device.handle().create_buffer(&create_info, None) }?;
         let requirements = unsafe { device.handle().get_buffer_memory_requirements(handle) };

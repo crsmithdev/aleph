@@ -5,7 +5,7 @@ use crate::Vertex;
 
 use {
     super::{
-        buffer::Buffer, Allocator, BufferUsageFlags, Device, Image,
+        buffer::Buffer, Allocator, BufferUsageFlags, Device, Texture,
     },
     anyhow::Result,
     ash::vk,
@@ -293,7 +293,7 @@ impl CommandBuffer {
 
     pub fn transition_image(
         &self,
-        image: &Image,
+        image: &Texture,
         current_layout: vk::ImageLayout,
         new_layout: vk::ImageLayout,
     ) {
@@ -327,8 +327,8 @@ impl CommandBuffer {
 
     pub fn copy_image(
         &self,
-        src: &Image,
-        dst: &Image,
+        src: &Texture,
+        dst: &Texture,
         src_extent: vk::Extent3D,
         dst_extent: vk::Extent3D,
     ) {
@@ -377,7 +377,7 @@ impl CommandBuffer {
         };
     }
 
-    pub fn copy_buffer_to_image<T: Pod>(&self, src: &Buffer<T>, dst: &Image) {
+    pub fn copy_buffer_to_image<T: Pod>(&self, src: &Buffer<T>, dst: &Texture) {
         let copy = vk::BufferImageCopy::default()
             .buffer_offset(0)
             .buffer_row_length(0)
@@ -411,7 +411,7 @@ impl CommandBuffer {
         );
     }
 
-    pub fn upload_image(&self, image: &Image, allocator: &Allocator, data: &[u8]) -> Result<()> {
+    pub fn upload_image(&self, image: &Texture, allocator: &Allocator, data: &[u8]) -> Result<()> {
         let staging =  Buffer::new(
             &self.device,
             allocator,

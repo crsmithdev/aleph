@@ -1,26 +1,44 @@
 use {
-    crate::{
+    super::{mesh::{self, NodeGraph, Primitive}, Camera, GpuDrawData}, crate::{
         graph::{util, GpuMaterialData, RenderContext},
         vk::{
-            pipeline::{Pipeline, PipelineBuilder, ResourceBinder, ResourceLayout}, Format, Gpu, Pipeline as VkPipeline, PipelineBindPoint, PipelineLayout,
-            Rect2D, Buffer, Viewport,
+            pipeline::{Pipeline, PipelineBuilder, ResourceBinder, ResourceLayout},
+            Buffer, Format, Gpu, Pipeline as VkPipeline, PipelineBindPoint, PipelineLayout, Rect2D,
+            Viewport,
         },
-    },
-    anyhow::Result,
-    ash::vk::{self, BufferUsageFlags, CompareOp},
-    glam::vec4,
-    std::mem,
+    }, anyhow::Result, ash::vk::{self, BufferUsageFlags, CompareOp}, glam::{vec4, Mat3, Mat4, Vec3, Vec4Swizzles}, petgraph::{graph::NodeIndex, visit::Dfs}, std::mem
 };
+
+
+pub fn calculate_global_transform(node_index: NodeIndex, graph: &NodeGraph) ->Mat4 {
+    let indices = mesh::path_between_nodes(NodeIndex::new(0), node_index, graph);
+    indices
+        .iter()
+        .fold(Mat4::IDENTITY, |transform, index| {
+            transform * graph[*index].local_transform /* graph[*index].animation_transform.matrix()*.*/
+        })
+}
 
 const IDX_SCENE_BUFFER: u32 = 0;
 const IDX_MATERIAL_BUFFER: u32 = 1;
 const IDX_DRAW_BUFFER: u32 = 2;
+const IDX_ALBEDO: u32 = 3;
+const IDX_NORMAL: u32 = 4;
+const IDX_METALLIC: u32 = 5;
+const IDX_ROUGHNESS: u32 = 6;
+const IDX_AO: u32 = 7;
+
 const VERTEX_SHADER_PATH: &str = "shaders/mesh.vert.spv";
 const FRAGMENT_SHADER_PATH: &str = "shaders/mesh.frag.spv";
-const VERTEX_ATTRIBUTES: [(u32, vk::Format); 3] = [
+const VERTEX_ATTRIBUTES: [(u32, vk::Format); 7] = [
     (0, Format::R32G32B32_SFLOAT),
-    (12, Format::R32G32B32_SFLOAT),
-    (24, Format::R32G32_SFLOAT),
+    (12, Format::R32_SFLOAT),
+    (16, Format::R32G32B32_SFLOAT),
+    (28, Format::R32_SFLOAT),
+    (32, Format::R32G32_SFLOAT),
+    (40, Format::R32G32_SFLOAT),
+    (48, Format::R32G32B32A32_SFLOAT),
+
 ];
 
 pub trait ViewportExt {
@@ -58,19 +76,61 @@ impl Pipeline for MeshPipeline {
         cmd_buffer.set_scissor(Rect2D::default().extent(extent));
         cmd_buffer.bind_pipeline(PipelineBindPoint::GRAPHICS, self.handle)?;
 
-        for object in context.objects.objects.iter() {
-            ResourceBinder::default()
-                .buffer(IDX_SCENE_BUFFER, context.global_buffer)
-                .buffer(IDX_MATERIAL_BUFFER, &self.material_buffer)
-                .buffer(IDX_DRAW_BUFFER, &object.model_buffer)
-                .bind(cmd_buffer, &self.pipeline_layout);
-            object.bind_mesh_buffers(cmd_buffer);
-            object.draw(cmd_buffer);
-        }
+        let albedo = context.resources.get_texture("albedo").unwrap();
+        let normal = context.resources.get_texture("normal").unwrap();
+        let metallic = context.resources.get_texture("metallic").unwrap();
+        let roughness = context.resources.get_texture("roughness").unwrap();
+        let ao = context.resources.get_texture("ao").unwrap();
+
+            for graph in context.scene.nodes.iter() {
+                let mut dfs = Dfs::new(&graph, NodeIndex::new(0));
+                while let Some(node_index) = dfs.next(&graph) {
+                    let global_transform = calculate_global_transform(node_index, graph);
+                
+                    if let Some(mesh) = graph[node_index].mesh.as_ref() {
+                        for primitive_info in mesh.primitives.iter() {
+                            self.update_model_buffer(primitive_info, global_transform, &context.camera);
+                            if let Some(material_index) = primitive_info.material_index {
+                                // let material = &graph[node_index].materials[material_index];
+                                // self.material_buffer.write(&[material.gpu_data()]);
+                                ResourceBinder::default()
+                                    .buffer(IDX_SCENE_BUFFER, context.global_buffer)
+                                    .buffer(IDX_MATERIAL_BUFFER, &self.material_buffer)
+                                    .buffer(IDX_DRAW_BUFFER, &primitive_info.model_buffer)
+                                    .image(IDX_ALBEDO, albedo)
+                                    .image(IDX_NORMAL, normal)
+                                    .image(IDX_METALLIC, metallic)
+                                    .image(IDX_ROUGHNESS, roughness)
+                                    .image(IDX_AO, ao)
+                                    .bind(cmd_buffer, &self.pipeline_layout);
+                                cmd_buffer.bind_vertex_buffer(&primitive_info.vertex_buffer, 0);
+                                cmd_buffer.bind_index_buffer(&primitive_info.index_buffer, 0);
+                                }
+                                cmd_buffer.draw_indexed(primitive_info.vertex_count, 1, 0, 0, 0);
+                            }
+                        }
+                    }
+                }
+        // for object in context.objects.objects.iter() {
+        //     ResourceBinder::default()
+        //         .buffer(IDX_SCENE_BUFFER, context.global_buffer)
+        //         .buffer(IDX_MATERIAL_BUFFER, &self.material_buffer)
+        //         .buffer(IDX_DRAW_BUFFER, &object.model_buffer)
+        //         .image(IDX_ALBEDO, albedo)
+        //         .image(IDX_NORMAL, normal)
+        //         .image(IDX_METALLIC, metallic)
+        //         .image(IDX_ROUGHNESS, roughness)
+        //         .image(IDX_AO, ao)
+        //         .bind(cmd_buffer, &self.pipeline_layout);
+        //     object.bind_mesh_buffers(cmd_buffer);
+        //     object.draw(cmd_buffer);
+        // }
 
         cmd_buffer.end_rendering()?;
         Ok(())
     }
+
+
 }
 
 impl MeshPipeline {
@@ -79,15 +139,20 @@ impl MeshPipeline {
             .buffer(IDX_SCENE_BUFFER, vk::ShaderStageFlags::ALL_GRAPHICS)
             .buffer(IDX_MATERIAL_BUFFER, vk::ShaderStageFlags::ALL_GRAPHICS)
             .buffer(IDX_DRAW_BUFFER, vk::ShaderStageFlags::ALL_GRAPHICS)
+            .image(IDX_ALBEDO, vk::ShaderStageFlags::FRAGMENT)
+            .image(IDX_NORMAL, vk::ShaderStageFlags::FRAGMENT)
+            .image(IDX_METALLIC, vk::ShaderStageFlags::FRAGMENT)
+            .image(IDX_ROUGHNESS, vk::ShaderStageFlags::FRAGMENT)
+            .image(IDX_AO, vk::ShaderStageFlags::FRAGMENT)
             .layout(gpu)?;
 
         let pipeline_layout = gpu.create_pipeline_layout(&[descriptor_layout], &[])?;
         let handle = Self::create_pipeline(gpu, pipeline_layout)?;
 
         let material_buffer = gpu.create_shared_buffer::<GpuMaterialData>(
-                mem::size_of::<GpuMaterialData>() as u64,
-                BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::UNIFORM_BUFFER,
-                "material",
+            mem::size_of::<GpuMaterialData>() as u64,
+            BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::UNIFORM_BUFFER,
+            "material",
         )?;
         material_buffer.write(&[GpuMaterialData {
             albedo: vec4(0.0, 0.0, 1.0, 1.0),
@@ -129,5 +194,26 @@ impl MeshPipeline {
             .dynamic_scissor()
             .dynamic_viewport()
             .build(gpu, layout)
+    }
+
+    fn update_model_buffer(&self, primitive: &Primitive, transform: Mat4, camera: &Camera) {
+        let model_view_projection = camera.model_view_projection(&primitive.model_matrix);
+        let model = primitive.model_matrix;
+        let model_view = camera.view() * transform;
+        let inverse_model_view = model_view.inverse();
+        let normal = Mat3::from_mat4(inverse_model_view).transpose();
+
+
+        let model_data = GpuDrawData {
+            model,
+            model_view,
+            model_view_projection,
+            position: model.w_axis.xyz(),
+            normal,
+            padding1: Vec3::ZERO,
+            padding2: 0.0,
+        };
+
+        primitive.model_buffer.write(&[model_data]);
     }
 }

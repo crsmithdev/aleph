@@ -3,7 +3,7 @@ use {
         CommandBuffer,
         CommandPool,
         Device,
-        Image,
+        Texture,
         ImageInfo,
         Instance,
         Queue,
@@ -48,7 +48,7 @@ pub struct Swapchain {
     queue: Queue,
     instance: Instance,
     pub info: SwapchainInfo,
-    images: Vec<Image>,
+    images: Vec<Texture>,
 }
 
 impl Swapchain {
@@ -145,7 +145,7 @@ impl Swapchain {
                         .create_image_view(&image_view_info, None)
                         .expect("Failed to create imageview")
                 };
-                Image::from_existing(handle, view, image_info).expect("Failed to create image")
+                Texture::from_existing(&device, handle, view, image_info).expect("Failed to create image")
             })
             .collect::<Vec<_>>();
         Ok(Swapchain {
@@ -164,7 +164,7 @@ impl Swapchain {
         self.images.len() as u32
     }
 
-    pub fn images(&self) -> &[Image] {
+    pub fn images(&self) -> &[Texture] {
         &self.images
     }
 }

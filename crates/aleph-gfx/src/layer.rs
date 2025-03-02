@@ -1,21 +1,20 @@
 use {
     crate::{
-        graph::{managers::ObjectManager, config::RenderConfig},
+        graph::{config::RenderConfig, managers::ObjectManager, mesh::{self, GltfAsset, Scene}, ResourceManager},
         vk::Gpu,
         RenderGraph,
-    },
-    aleph_core::{
+    }, aleph_core::{
         app::TickEvent,
         layer::{Layer, Window},
-    },
-    anyhow::Result,
-    std::sync::{Arc, OnceLock},
+    }, anyhow::Result, glam::vec4, std::sync::{Arc, OnceLock}
 };
 
 #[derive(Default)]
 pub struct GraphicsLayer {
     renderer: OnceLock<RenderGraph>,
     object_manager: ObjectManager,
+    resource_manager: ResourceManager,
+    gltf: Option<GltfAsset>,
 }
 
 impl Layer for GraphicsLayer {
@@ -30,32 +29,45 @@ impl Layer for GraphicsLayer {
         let gpu = Gpu::new(Arc::clone(&window))?;
         let config = RenderConfig::default();
         self.load_temp_data(&gpu)?;
+        let mut gltf = mesh::load_gltf("assets/gltf/suzanne/Suzanne.gltf", &gpu, &mut self.resource_manager)?;
+        let scene = gltf.scenes.pop().ok_or_else(|| anyhow::anyhow!("No scene found"))?;
         let graph = RenderGraph::new(gpu, config)?;
 
         self.renderer
             .set(graph)
             .map_err(|_| anyhow::anyhow!("Failed to set renderer"))?;
 
-        events.subscribe::<TickEvent>(move |layer, _event| layer.render());
+        events.subscribe::<TickEvent>(move |layer, _event| layer.render(&scene));
 
         Ok(())
     }
 }
 
 impl GraphicsLayer {
-    pub fn render(&mut self) -> Result<()> {
+    pub fn render(&mut self, scene: &Scene) -> Result<()> {
         self.renderer
             .get_mut()
             .expect("Renderer not initialized")
-            .execute(&self.object_manager)
+            .execute(scene, &self.resource_manager)
     }
 
     fn load_temp_data(&mut self, gpu: &Gpu) -> Result<()> {
-        let mut meshes = crate::graph::mesh::load_mesh_data("assets/suzanne.glb")?;
-        let mesh = meshes
-            .pop()
-            .ok_or_else(|| anyhow::anyhow!("No mesh found"))?;
-        self.object_manager.add_mesh(gpu, mesh)?;
+        // let mut meshes = crate::graph::mesh::load_mesh_data("assets/gltf/suzanne/Suzanne.gltf")?;
+        // let mesh = meshes
+        //     .pop()
+        //     .ok_or_else(|| anyhow::anyhow!("No mesh found"))?;
+        // self.object_manager.add_mesh(gpu, mesh)?;
+
+
+        self.resource_manager.load_texture(gpu, "assets/materials/rusted_iron/albedo.png", "albedo")?;
+        self.resource_manager.load_texture(gpu, "assets/materials/rusted_iron/normal.png", "normal")?;
+        self.resource_manager.load_texture(gpu, "assets/materials/rusted_iron/metallic.png", "metallic")?;
+        self.resource_manager.load_texture(gpu, "assets/materials/rusted_iron/roughness.png", "roughness")?;
+        self.resource_manager.load_texture(gpu, "assets/materials/rusted_iron/ao.png", "ao")?;
+        self.resource_manager.create_single_color_image(gpu, vec4(1.0, 1.0, 1.0, 1.0), "white")?;
+        self.resource_manager.create_single_color_image(gpu, vec4(0.0, 0.0, 0.0, 1.0), "black")?;
+        self.resource_manager.create_single_color_image(gpu, vec4(0.5, 0.5, 0.5, 1.0), "grey")?;
+        self.resource_manager.create_error_texture(gpu)?;
 
         Ok(())
     }

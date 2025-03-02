@@ -1,7 +1,7 @@
 use {
     super::{
         buffer::{self, Buffer},
-        Allocator, CommandBuffer, CommandPool, Device, Image, ImageInfo, Instance,
+        Allocator, CommandBuffer, CommandPool, Device, Texture, ImageInfo, Instance,
         Swapchain, SwapchainInfo, VK_TIMEOUT_NS,
     },
     anyhow::Result,
@@ -263,8 +263,12 @@ impl Gpu {
         self.swapchain.rebuild(extent)
     }
 
-    pub fn create_image(&self, info: ImageInfo) -> Result<Image> {
-        Image::new(self.device.clone(), self.allocator.clone(),  info)
+    pub fn create_image(&self, info: ImageInfo) -> Result<Texture> {
+        Texture::new(self.device.clone(), self.allocator.clone(),  info)
+    }
+
+    pub fn create_sampler(&self, min_filter: vk::Filter, mag_filter: vk::Filter) -> Result<vk::Sampler> {
+        self.device.create_sampler(min_filter, mag_filter)
     }
 
     pub fn execute(&self, callback: impl FnOnce(&CommandBuffer)) -> Result<()> {

@@ -1,10 +1,10 @@
 use {
-    super::{buffer::RawBuffer, Buffer, CommandBuffer, Gpu},
+    super::{buffer::RawBuffer, Buffer, CommandBuffer, Gpu, Texture},
     crate::{RenderContext, Vertex},
     anyhow::Result,
     ash::vk::{self, PipelineBindPoint, SampleCountFlags},
     bytemuck::Pod,
-    std::{collections::HashSet, ffi},
+    std::{arch::x86_64, collections::HashSet, ffi},
 };
 pub trait Pipeline {
     fn execute(&self, context: &RenderContext) -> Result<()>;
@@ -240,6 +240,18 @@ impl ResourceLayout<'_> {
 
         self
     }
+
+    pub fn image(&mut self, index: u32, flags: vk::ShaderStageFlags) -> &mut Self {
+        self.bindings.push(
+            vk::DescriptorSetLayoutBinding::default()
+                .binding(index)
+                .descriptor_count(1)
+                .stage_flags(flags)
+                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER),
+        );
+
+        self
+    }
 }
 
 #[derive(Default)]
@@ -260,9 +272,17 @@ impl<'a> ResourceBinder<'a> {
         self
     }
 
+    pub fn image(&mut self, index: u32, image: &'a Texture) -> &mut Self {
+        let resource = BoundResource::Image {index, image};
+        self.bindings.push(resource);
+        self
+    }
+
     pub fn bind(&self, cmd: &CommandBuffer, layout: &vk::PipelineLayout) {
-        let mut infos = vec![];
-        let mut writes = vec![];
+        let mut buffer_infos = vec![];
+        let mut buffer_writes = vec![];
+        let mut image_infos = vec![];
+        let mut image_writes = vec![];
 
         for binding in &self.bindings {
             match binding {
@@ -273,19 +293,45 @@ impl<'a> ResourceBinder<'a> {
                     offset,
                 } => {
                     let (info, write) = self.write_buffer(buffer, *index, *size, *offset);
-                    infos.push([info]);
-                    writes.push(write);
-                }
+                    buffer_infos.push([info]);
+                    buffer_writes.push(write);
+                },
+                BoundResource::Image {index, image} => {
+                    let (info, write) = self.write_image(image, *index);
+                    image_infos.push([info]);
+                    image_writes.push(write);
+                },
             }
         }
 
-        for i in 0..infos.len() {
-            writes[i] = writes[i].buffer_info(&infos[i]);
+        for i in 0..buffer_infos.len() {
+            buffer_writes[i] = buffer_writes[i].buffer_info(&buffer_infos[i]);
+        }
+        for i in 0..image_infos.len() {
+            image_writes[i] = image_writes[i].image_info(&image_infos[i]);
         }
 
-        cmd.push_descriptor_set(PipelineBindPoint::GRAPHICS, *layout, &writes, 0);
+        cmd.push_descriptor_set(PipelineBindPoint::GRAPHICS, *layout, &buffer_writes, 0);
+        cmd.push_descriptor_set(PipelineBindPoint::GRAPHICS, *layout, &image_writes, 0);
     }
 
+    fn write_image(
+        &self,
+        image: &Texture,
+        index: u32,
+    ) -> (vk::DescriptorImageInfo, vk::WriteDescriptorSet) {
+        let info = vk::DescriptorImageInfo::default()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(image.view())
+            .sampler(image.sampler());
+        let write = vk::WriteDescriptorSet::default()
+            .dst_binding(index)
+            .descriptor_count(1)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER);
+
+        (info, write)
+    }
+    
     fn write_buffer(
         &self,
         buffer: &RawBuffer,
@@ -311,5 +357,9 @@ pub enum BoundResource<'a> {
         buffer: &'a RawBuffer,
         size: u64,
         offset: u64,
+    },
+    Image {
+        index: u32,
+        image: &'a Texture,
     },
 }

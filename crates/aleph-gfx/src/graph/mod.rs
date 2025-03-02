@@ -5,11 +5,13 @@ pub mod mesh;
 pub mod mesh_pipeline;
 pub mod util;
 
+use mesh::{Primitive, Scene};
+
 use {
     crate::vk::{
-        pipeline::Pipeline, BufferUsageFlags, CommandBuffer, Extent2D, Extent3D,
-        Format, Frame, Gpu, Image, ImageAspectFlags, ImageInfo, ImageLayout, ImageUsageFlags,
-        Buffer,
+        pipeline::Pipeline, Buffer, BufferUsageFlags, CommandBuffer, Extent2D,
+        Extent3D, Format, Frame, Gpu, Texture, ImageAspectFlags, ImageInfo, ImageLayout,
+        ImageUsageFlags,
     },
     anyhow::Result,
     bytemuck::{Pod, Zeroable},
@@ -20,18 +22,18 @@ use {
 };
 
 pub use crate::graph::{
-        camera::Camera,
-        config::{CameraConfig, RenderConfig},
-        managers::{ObjectManager, ResourceManager},
-        mesh::Mesh,
-        mesh_pipeline::MeshPipeline,
-    };
+    camera::Camera,
+    config::{CameraConfig, RenderConfig},
+    managers::{ObjectManager, ResourceManager},
+    mesh::Mesh,
+    mesh_pipeline::MeshPipeline,
+};
 
 pub struct RenderObject {
     pub label: &'static str,
     pub model_matrix: Mat4,
     pub model_buffer: Buffer<GpuDrawData>,
-    pub mesh: Mesh,
+    pub mesh: Primitive,
 }
 
 impl RenderObject {
@@ -102,11 +104,12 @@ pub struct GpuDrawData {
 #[derive(Clone)]
 pub struct RenderContext<'a> {
     pub gpu: &'a Gpu,
-    pub objects: &'a ObjectManager,
+    pub scene: &'a Scene,
+    pub resources: &'a ResourceManager,
     pub camera: &'a Camera,
     pub cmd_buffer: &'a CommandBuffer,
-    pub draw_image: &'a Image,
-    pub depth_image: &'a Image,
+    pub draw_image: &'a Texture,
+    pub depth_image: &'a Texture,
     pub extent: Extent2D,
     pub global_buffer: &'a Buffer<GpuSceneData>,
     pub config: &'a RenderConfig,
@@ -121,9 +124,9 @@ pub struct RenderGraph {
     global_data_buffer: Buffer<GpuSceneData>,
     rebuild_swapchain: bool,
     frame_index: usize,
-    draw_image: Image,
+    draw_image: Texture,
     camera: Camera,
-    depth_image: Image,
+    depth_image: Texture,
     config: RenderConfig,
     gpu: Gpu,
 }
@@ -132,9 +135,9 @@ impl RenderGraph {
     pub fn new(gpu: Gpu, config: RenderConfig) -> Result<Self> {
         let frames = Self::create_frames(&gpu)?;
         let global_buffer = gpu.create_shared_buffer::<GpuSceneData>(
-                mem::size_of::<GpuSceneData>() as u64,
-                BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::UNIFORM_BUFFER,
-                "global uniform",
+            mem::size_of::<GpuSceneData>() as u64,
+            BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::UNIFORM_BUFFER,
+            "global uniform",
         )?;
         let draw_image = gpu.create_image(ImageInfo {
             label: Some("draw"),
@@ -183,7 +186,7 @@ impl RenderGraph {
         }
     }
 
-    pub fn execute(&mut self, objects: &ObjectManager) -> Result<()> {
+    pub fn execute(&mut self, scene: &Scene, resources: &ResourceManager) -> Result<()> {
         self.camera.rotate(0.01);
 
         if self.check_rebuild_swapchain()? {
@@ -215,7 +218,7 @@ impl RenderGraph {
         let swapchain_extent = self.gpu.swapchain.info.extent;
         let swapchain_image = &self.gpu.swapchain.images()[image_index];
         let draw_extent = {
-            let extent = self.draw_image.info.extent;
+            let extent = self.draw_image.extent();
             Extent3D {
                 width: extent.width.min(swapchain_extent.width),
                 height: extent.height.min(swapchain_extent.height),
@@ -236,8 +239,9 @@ impl RenderGraph {
         );
         let context = RenderContext {
             gpu: &self.gpu,
-            objects,
+            scene,
             camera: &self.camera,
+            resources,
             cmd_buffer: &self.frames[self.frame_index].command_buffer,
             draw_image: &self.draw_image,
             depth_image: &self.depth_image,
@@ -320,50 +324,13 @@ impl RenderGraph {
 
         self.global_data_buffer.write(&[data]);
 
-        for object in context.objects.iter() {
-            object.update_model_buffer(camera);
-        }
+        // for object in context.objects.iter() {
+        //     object.update_model_buffer(camera);
+        // }
     }
 }
 
-// fn create_temp_texture(gpu: &Gpu) -> Result<Image> {
-//     let black = 0;
-//     let magenta = 4294902015;
 
-//     let pixels = {
-//         let mut pixels = vec![0u32; 16 * 16];
-//         for x in 0..16 {
-//             for y in 0..16 {
-//                 let offset = x + y * 16;
-//                 pixels[offset] = match (x + y) % 2 {
-//                     0 => black,
-//                     _ => magenta,
-//                 };
-//             }
-//         }
-//         pixels
-//     };
-//     let data: Vec<u8> = pixels.into_iter().flat_map(|i| i.to_le_bytes()).collect();
-//     let image = gpu.create_image(ImageInfo {
-//         label: Some("color image"),
-//         extent: Extent2D {
-//             width: 16,
-//             height: 16,
-//         },
-//         format: Format::R8G8B8A8_UNORM,
-//         usage: ImageUsageFlags::SAMPLED,
-//         aspect_flags: ImageAspectFlags::COLOR,
-//     })?;
-//     let staging = gpu.create_host_buffer(
-//         BufferDesc::default()
-//             .data(&data)
-//             .flags(BufferUsageFlags::TRANSFER_SRC),
-//     )?;
-//     staging.write(&data);
-//     gpu.execute(|cmd| cmd.copy_buffer_to_image(&staging, &image))?;
-
-//     Ok(image)
-// }
 
 impl Drop for RenderGraph {
     fn drop(&mut self) {

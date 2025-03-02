@@ -163,6 +163,11 @@ impl Device {
 
     pub fn handle(&self) -> &ash::Device { &self.handle }
 
+    pub fn create_sampler(&self, min_filter: vk::Filter, mag_filter: vk::Filter) -> Result<vk::Sampler> {
+        let info = vk::SamplerCreateInfo::default().mag_filter(mag_filter).min_filter(min_filter);  
+        Ok(unsafe { self.handle.create_sampler(&info, None)? })
+    }
+
     pub fn create_fence(&self, flags: vk::FenceCreateFlags) -> Result<vk::Fence> {
         Ok(unsafe {
             self.handle

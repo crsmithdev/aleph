@@ -69,10 +69,10 @@ impl Allocator {
         Ok(allocation)
     }
 
-    pub (crate) fn allocate_image(&self, image: VkImage, requirements: MemoryRequirements, info: ImageInfo) -> Result<Allocation> {
+    pub (crate) fn allocate_image(&self, image: VkImage, requirements: MemoryRequirements, label: &str) -> Result<Allocation> {
         let mut allocator = self.inner.lock().unwrap();
         let allocation = allocator.allocate(&AllocationCreateDesc {
-            name: info.label.unwrap_or("default"),
+            name: label,
             requirements,
             location: MemoryLocation::GpuOnly,
             linear: false,
