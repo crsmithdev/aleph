@@ -1,7 +1,7 @@
 use {
     super::{
         buffer::{self, Buffer},
-        Allocator, CommandBuffer, CommandPool, Device, Texture, ImageInfo, Instance,
+        Allocator, CommandBuffer, CommandPool, Device, Texture,  Instance,
         Swapchain, SwapchainInfo, VK_TIMEOUT_NS,
     },
     anyhow::Result,
@@ -51,7 +51,7 @@ pub struct Gpu {
     pub(crate) surface: Surface,
     pub(crate) device: Device,
     pub(crate) swapchain: Swapchain,
-    pub(crate) allocator: Allocator,
+    pub(crate) allocator: Arc<Allocator>,
     pub(crate) window: Arc<Window>,
     setup_cmd_pool: CommandPool,
     setup_cmd_buffer: CommandBuffer,
@@ -79,7 +79,7 @@ impl Gpu {
             },
         )?;
 
-        let allocator = Allocator::new(&instance, &device)?;
+        let allocator = Arc::new(Allocator::new(&instance, &device)?);
         let setup_cmd_pool = device.create_command_pool()?;
         let setup_cmd_buffer = setup_cmd_pool.create_command_buffer()?;
 
@@ -99,7 +99,7 @@ impl Gpu {
     pub fn device(&self) -> &Device { &self.device }
 
     #[inline]
-    pub fn allocator(&self) -> &Allocator { &self.allocator }
+    pub fn allocator(&self) -> Arc<Allocator> { Arc::clone(&self.allocator) }
 
     #[inline]
     pub fn swapchain(&self) -> &Swapchain { &self.swapchain }
@@ -130,45 +130,13 @@ impl Gpu {
     ) -> Result<Buffer<T>> {
         Buffer::new(
             &self.device,
-            &self.allocator,
+            Arc::clone(&self.allocator),
             size,
             flags,
             buffer::MemoryLocation::CpuToGpu,
             label,
         )
     }
-
-    pub fn create_host_buffer<T: Pod>(
-        &self,
-        size: u64,
-        flags: vk::BufferUsageFlags,
-        label: impl Into<String>,
-    ) -> Result<Buffer<T>> {
-        Buffer::new(
-            &self.device,
-            &self.allocator,
-            size,
-            flags,
-            buffer::MemoryLocation::GpuToCpu,
-            label,
-        )
-    }
-    pub fn create_device_buffer<T: Pod>(
-        &self,
-        size: u64,
-        flags: vk::BufferUsageFlags,
-        label: impl Into<String>,
-    ) -> Result<Buffer<T>> {
-        Buffer::new(
-            &self.device,
-            &self.allocator,
-            size,
-            flags,
-            buffer::MemoryLocation::GpuOnly,
-            label,
-        )
-    }
-
     pub fn create_pipeline_layout(
         &self,
         uniforms_layouts: &[vk::DescriptorSetLayout],
@@ -263,8 +231,15 @@ impl Gpu {
         self.swapchain.rebuild(extent)
     }
 
-    pub fn create_image(&self, info: ImageInfo) -> Result<Texture> {
-        Texture::new(self.device.clone(), self.allocator.clone(),  info)
+    pub fn create_image(&self,
+        extent: vk::Extent2D,
+        format: vk::Format,
+        usage: vk::ImageUsageFlags,
+        aspect_flags: vk::ImageAspectFlags,
+        label: impl Into<String>,
+    
+    ) -> Result<Texture> {
+        Texture::new(self.device.clone(), Arc::clone(&self.allocator), extent, format, usage, aspect_flags, label)
     }
 
     pub fn create_sampler(&self, min_filter: vk::Filter, mag_filter: vk::Filter) -> Result<vk::Sampler> {

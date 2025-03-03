@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 pub use ash::vk::ImageLayout;
 use bytemuck::Pod;
 use gpu_allocator::MemoryLocation;
@@ -308,7 +310,7 @@ impl CommandBuffer {
             .level_count(1)
             .layer_count(1);
         let barriers = &[vk::ImageMemoryBarrier2::default()
-            .image(image.handle)
+            .image(image.handle())
             .src_stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
             .src_access_mask(vk::AccessFlags2::MEMORY_WRITE)
             .dst_stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
@@ -359,9 +361,9 @@ impl CommandBuffer {
             .dst_offsets(dst_offsets);
         let regions = &[blit_region];
         let blit_info = vk::BlitImageInfo2::default()
-            .src_image(src.handle)
+            .src_image(src.handle())
             .src_image_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-            .dst_image(dst.handle)
+            .dst_image(dst.handle())
             .dst_image_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
             .regions(regions);
 
@@ -388,7 +390,7 @@ impl CommandBuffer {
                     .layer_count(1),
             )
             .image_offset(vk::Offset3D::default())
-            .image_extent(dst.info.extent.into());
+            .image_extent(dst.extent().into());
 
         self.transition_image(
             dst,
@@ -397,9 +399,9 @@ impl CommandBuffer {
         );
         unsafe {
             self.device.handle.cmd_copy_buffer_to_image(
-                self.handle,
+                self.handle(),
                 src.handle(),
-                dst.handle,
+                dst.handle(),
                 vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                 &[copy],
             )
@@ -411,7 +413,7 @@ impl CommandBuffer {
         );
     }
 
-    pub fn upload_image(&self, image: &Texture, allocator: &Allocator, data: &[u8]) -> Result<()> {
+    pub fn upload_image(&self, image: &Texture, allocator: Arc<Allocator>, data: &[u8]) -> Result<()> {
         let staging =  Buffer::new(
             &self.device,
             allocator,
@@ -432,7 +434,7 @@ impl CommandBuffer {
                     .layer_count(1),
             )
             .image_offset(vk::Offset3D::default())
-            .image_extent(image.info.extent.into());
+            .image_extent(image.extent().into());
 
         self.transition_image(
             image,
@@ -443,7 +445,7 @@ impl CommandBuffer {
             self.device.handle.cmd_copy_buffer_to_image(
                 self.handle,
                 staging.handle(),
-                image.handle,
+                image.handle(),
                 vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                 &[copy],
             )

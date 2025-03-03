@@ -1,13 +1,6 @@
 use {
     super::{
-        CommandBuffer,
-        CommandPool,
-        Device,
-        Texture,
-        ImageInfo,
-        Instance,
-        Queue,
-        Surface,
+        CommandBuffer, CommandPool, Device,  Instance, Queue, Surface, Texture,
         VK_TIMEOUT_NS,
     },
     anyhow::Result,
@@ -119,13 +112,7 @@ impl Swapchain {
         }
         let loader = khr::swapchain::Device::new(&instance.handle, &device.handle);
         let swapchain = unsafe { loader.create_swapchain(&swapchain_info, None) }.unwrap();
-        let image_info = ImageInfo {
-            label: Some("Swapchain image"),
-            extent: info.extent,
-            format: info.format,
-            usage: vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST,
-            aspect_flags: vk::ImageAspectFlags::COLOR,
-        };
+        
         let images = unsafe { loader.get_swapchain_images(swapchain)? };
         let subresource_range = vk::ImageSubresourceRange::default()
             .aspect_mask(vk::ImageAspectFlags::COLOR)
@@ -141,11 +128,20 @@ impl Swapchain {
                     .format(vk::Format::B8G8R8A8_UNORM)
                     .subresource_range(subresource_range);
                 let view = unsafe {
-                    device.handle
+                    device
+                        .handle
                         .create_image_view(&image_view_info, None)
                         .expect("Failed to create imageview")
                 };
-                Texture::from_existing(&device, handle, view, image_info).expect("Failed to create image")
+                Texture::from_existing(
+                    &device,
+                    handle,
+                    view,
+                    info.extent,
+                    info.format,
+                    "swapchain image",
+                )
+                .expect("Failed to create image")
             })
             .collect::<Vec<_>>();
         Ok(Swapchain {
@@ -160,13 +156,9 @@ impl Swapchain {
         })
     }
 
-    pub fn in_flight_frames(&self) -> u32 {
-        self.images.len() as u32
-    }
+    pub fn in_flight_frames(&self) -> u32 { self.images.len() as u32 }
 
-    pub fn images(&self) -> &[Texture] {
-        &self.images
-    }
+    pub fn images(&self) -> &[Texture] { &self.images }
 }
 
 impl Swapchain {
@@ -176,7 +168,7 @@ impl Swapchain {
             self.loader.destroy_swapchain(self.handle, None);
             self.images
                 .iter()
-                .for_each(|v| self.device.handle.destroy_image_view(v.view, None));
+                .for_each(|v| self.device.handle.destroy_image_view(v.view(), None));
         };
     }
 

@@ -2,7 +2,7 @@ use {
     super::{mesh::{Mesh, Primitive, VertexSet}, util, GpuDrawData},
     crate::{
         graph::mesh::{MeshData, Vertex},
-        vk::{BufferUsageFlags, Gpu, ImageInfo, Texture},
+        vk::{BufferUsageFlags, Gpu, Texture},
         RenderObject,
     },
     anyhow::Result,
@@ -118,7 +118,7 @@ impl ResourceManager {
             height: image.height(),
         };
         let format = Format::R16G16B16A16_UNORM;
-        let bytes = bytemuck::cast_slice(&data);
+        let bytes = bytemuck::cast_slice(data);
         self.create_image(gpu, bytes, extent, format, name)
     }
 
@@ -130,16 +130,11 @@ impl ResourceManager {
         format: vk::Format,
         name: impl Into<String>,
     ) -> Result<()> {
-        let image = gpu.create_image(ImageInfo {
-            label: Some("texture image"),
-            extent,
-            format,
-            usage: ImageUsageFlags::SAMPLED,
-            aspect_flags: ImageAspectFlags::COLOR,
-        })?;
+        let name: String = name.into();
+        let image = gpu.create_image(extent, format, ImageUsageFlags::SAMPLED, ImageAspectFlags::COLOR, name.clone())?;
         let staging = util::staging_buffer(gpu, data, "texture staging")?;
         gpu.execute(|cmd| cmd.copy_buffer_to_image(&staging, &image))?;
-        self.textures.insert(name.into(), image);
+        self.textures.insert(name, image);
         Ok(())
     }
     pub fn create_error_texture(&mut self, gpu: &Gpu) -> Result<()> {

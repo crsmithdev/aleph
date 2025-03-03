@@ -1,5 +1,5 @@
 use {
-    crate::vk::{ImageInfo, Device, Instance},
+    crate::vk::{Device, Instance},
     anyhow::Result,
     ash::vk::{MemoryRequirements, Buffer as VkBuffer, Image as VkImage},
     derive_more::Debug,
@@ -18,7 +18,7 @@ use {
     std::sync::{Arc, Mutex},
 };
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Allocator {
     pub(crate) inner: Arc<Mutex<GpuAllocator>>,
     pub(crate) device: Device,

@@ -10,7 +10,7 @@ use mesh::{Primitive, Scene};
 use {
     crate::vk::{
         pipeline::Pipeline, Buffer, BufferUsageFlags, CommandBuffer, Extent2D,
-        Extent3D, Format, Frame, Gpu, Texture, ImageAspectFlags, ImageInfo, ImageLayout,
+        Extent3D, Format, Frame, Gpu, Texture, ImageAspectFlags, ImageLayout,
         ImageUsageFlags,
     },
     anyhow::Result,
@@ -139,23 +139,24 @@ impl RenderGraph {
             BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::UNIFORM_BUFFER,
             "global uniform",
         )?;
-        let draw_image = gpu.create_image(ImageInfo {
-            label: Some("draw"),
-            extent: gpu.swapchain().info.extent,
-            format: FORMAT_DRAW_IMAGE,
-            usage: ImageUsageFlags::COLOR_ATTACHMENT
+        let draw_image = gpu.create_image(
+            gpu.swapchain().info.extent,
+            FORMAT_DRAW_IMAGE,
+            ImageUsageFlags::COLOR_ATTACHMENT
                 | ImageUsageFlags::TRANSFER_DST
                 | ImageUsageFlags::TRANSFER_SRC
                 | ImageUsageFlags::STORAGE,
-            aspect_flags: ImageAspectFlags::COLOR,
-        })?;
-        let depth_image = gpu.create_image(ImageInfo {
-            label: Some("depth"),
-            extent: gpu.swapchain().info.extent,
-            format: FORMAT_DEPTH_IMAGE,
-            usage: ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
-            aspect_flags: ImageAspectFlags::DEPTH,
-        })?;
+            ImageAspectFlags::COLOR,
+            "draw")?;
+
+            let depth_image = gpu.create_image(
+                gpu.swapchain().info.extent,
+                FORMAT_DEPTH_IMAGE,
+                ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+                ImageAspectFlags::DEPTH,
+                "draw")?;
+
+
         let camera = Camera::new(config.camera, gpu.swapchain().info.extent);
 
         let temp_pipeline = MeshPipeline::new(&gpu)?;

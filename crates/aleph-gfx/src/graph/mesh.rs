@@ -11,7 +11,7 @@ use {
         prelude::*,
         visit::Dfs,
     },
-    std::{fmt, mem, sync::Arc},
+    std::{fmt, mem },
 };
 
 #[repr(C)]
@@ -136,7 +136,7 @@ fn load_mesh(gpu: &Gpu, node: &gltf::Node, buffers: &[gltf::buffer::Data]) -> Op
     if let Some(mesh) = node.mesh() {
         let mut all_primitive_info = Vec::new();
         for primitive in mesh.primitives() {
-            let (vertex_set, indices) = read_buffer_data(&primitive, &buffers);
+            let (vertex_set, indices) = read_buffer_data(&primitive, buffers);
             let mut primitive_info = prepare_primitive_gl(gpu, &vertex_set, &indices).unwrap();
             let material_index = primitive.material().index();
             primitive_info.material_index = material_index;

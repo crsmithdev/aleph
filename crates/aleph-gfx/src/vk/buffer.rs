@@ -5,7 +5,7 @@ use {
     bytemuck::Pod,
     derive_more::Debug,
     gpu_allocator::vulkan::Allocation,
-    std::{cell::RefCell, mem},
+    std::{cell::RefCell, mem, sync::Arc},
 };
 pub use {gpu_allocator::MemoryLocation, vk::BufferUsageFlags};
 
@@ -18,7 +18,7 @@ pub struct Buffer<T> {
 impl<T: Pod> Buffer<T> {
     pub fn new(
         device: &Device,
-        allocator: &Allocator,
+        allocator: Arc<Allocator>,
         size: u64,
         flags: vk::BufferUsageFlags,
         location: MemoryLocation,
@@ -33,7 +33,7 @@ impl<T: Pod> Buffer<T> {
 
     pub fn from_data(
         device: &Device,
-        allocator: &Allocator,
+        allocator: Arc<Allocator>,
         data: &[T],
         flags: vk::BufferUsageFlags,
         location: MemoryLocation,
@@ -76,7 +76,7 @@ pub struct RawBuffer {
     #[debug(skip)]
     device: Device,
     #[debug(skip)]
-    allocator: Allocator,
+    allocator: Arc<Allocator>,
     #[debug("{:x}", allocation.as_ptr() as u64)]
     allocation: RefCell<Allocation>,
     label: String,
@@ -86,7 +86,7 @@ pub struct RawBuffer {
 impl RawBuffer {
     pub fn new(
         device: &Device,
-        allocator: &Allocator,
+        allocator: Arc<Allocator>,
         size: u64,
         flags: vk::BufferUsageFlags,
         location: MemoryLocation,
@@ -109,7 +109,7 @@ impl RawBuffer {
 
         Ok(Self {
             device: device.clone(),
-            allocator: allocator.clone(),
+            allocator: Arc::clone(&allocator),
             label: label.into(),
             size,
             handle,
@@ -120,7 +120,7 @@ impl RawBuffer {
 
     pub fn from_data(
         device: &Device,
-        allocator: &Allocator,
+        allocator: Arc<Allocator>,
         data: &[u8],
         flags: vk::BufferUsageFlags,
         location: MemoryLocation,

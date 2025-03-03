@@ -18,7 +18,7 @@ pub use {
         command::{CommandBuffer, CommandPool},
         device::{Device, Queue, QueueFamily},
         gpu::{Gpu, Surface},
-        image::{Texture, ImageAspectFlags, ImageInfo, ImageUsageFlags},
+        image::{Texture, ImageAspectFlags,  ImageUsageFlags},
         instance::Instance,
         swapchain::{Frame, Swapchain, SwapchainInfo},
     },
