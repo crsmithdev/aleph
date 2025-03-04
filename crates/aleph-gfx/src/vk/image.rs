@@ -92,6 +92,8 @@ impl Texture {
 
     pub fn format(&self) -> Format { self.format }
 
+    pub fn label(&self) -> &str { &self.label }
+
     pub fn sampler(&self) -> vk::Sampler { self.sampler }
 }
 

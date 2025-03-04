@@ -1,115 +1,77 @@
 use {
-    super::{mesh::{Mesh, Primitive, VertexSet}, util, GpuDrawData},
     crate::{
-        graph::mesh::{MeshData, Vertex},
-        vk::{BufferUsageFlags, Gpu, Texture},
-        RenderObject,
+        graph::util,
+        vk::{Gpu, Texture},
     },
     anyhow::Result,
     ash::vk::{self, Extent2D, Format, ImageAspectFlags, ImageUsageFlags},
     core::str,
     derive_more::derive::Debug,
-    glam::{vec4, Mat4, Vec4},
-    std::{collections::HashMap, mem, path::Path},
+    glam::{vec4, Vec4},
+    std::{collections::HashMap, hash::Hash, mem },
 };
 
-#[derive(Default)]
-pub struct ObjectManager {
-    pub(crate) objects: Vec<RenderObject>,
-}
-
-impl ObjectManager {
-    pub fn iter(&self) -> impl Iterator<Item = &RenderObject> { self.objects.iter() }
-
-    // pub fn add_mesh(&mut self, gpu: &Gpu, mesh: MeshData) -> Result<()> {
-    //     let index_buffer_size = mem::size_of::<u32>() as u64 * mesh.indices.len() as u64;
-    //     let index_buffer = util::index_buffer(gpu, index_buffer_size, "index buffer")?;
-    //     let index_staging = util::staging_buffer(gpu, &mesh.indices, "index staging")?;
-
-    //     let vertex_buffer_size = mem::size_of::<Vertex>() as u64 * mesh.vertices.len() as u64;
-    //     let vertex_buffer = util::vertex_buffer(gpu, vertex_buffer_size, "vertex buffer")?;
-    //     let vertex_staging = util::staging_buffer(gpu, &mesh.vertices, "vertex staging")?;
-
-    //     gpu.execute(|cmd| {
-    //         cmd.copy_buffer(&vertex_staging, &vertex_buffer, vertex_buffer.size());
-    //         cmd.copy_buffer(&index_staging, &index_buffer, index_buffer.size());
-    //     })?;
-
-    //     let model_buffer = gpu.create_shared_buffer::<GpuDrawData>(
-    //         mem::size_of::<GpuDrawData>() as u64,
-    //         BufferUsageFlags::UNIFORM_BUFFER | BufferUsageFlags::TRANSFER_DST,
-    //         "model buffer",
-    //     )?;
-    //     let vertex_count = mesh.indices.len() as u32;
-    //     let mesh = Mesh {
-    //         vertex_buffer,
-    //         index_buffer,
-    //         vertex_count,
-    //     };
-
-    //     self.objects.push(RenderObject {
-    //         label: "test object", // TODO
-    //         model_matrix: Mat4::IDENTITY,
-    //         model_buffer,
-    //         mesh,
-    //     });
-
-    //     Ok(())
-    // }
-
-
-    // pub fn add_mesh2(&mut self, gpu: &Gpu, vertices: &VertexSet, indices: &[u32]) -> Result<()> {
-    //     let vertices: &[Vertex] = &vertices.vertices;
-    //     let index_buffer_size = mem::size_of::<u32>() as u64 * indices.len() as u64;
-    //     let index_buffer = util::index_buffer(gpu, index_buffer_size, "index buffer")?;
-    //     let index_staging = util::staging_buffer(gpu, &indices, "index staging")?;
-
-    //     let vertex_buffer_size = mem::size_of::<Vertex>() as u64 * vertices.len() as u64;
-    //     let vertex_buffer = util::vertex_buffer2(gpu, vertex_buffer_size, "vertex buffer")?;
-    //     let vertex_staging = util::staging_buffer(gpu, vertices, "vertex staging")?;
-
-    //     gpu.execute(|cmd| {
-    //         cmd.copy_buffer(&vertex_staging, &vertex_buffer, vertex_buffer.size());
-    //         cmd.copy_buffer(&index_staging, &index_buffer, index_buffer.size());
-    //     })?;
-
-    //     let model_buffer = gpu.create_shared_buffer::<GpuDrawData>(
-    //         mem::size_of::<GpuDrawData>() as u64,
-    //         BufferUsageFlags::UNIFORM_BUFFER | BufferUsageFlags::TRANSFER_DST,
-    //         "model buffer",
-    //     )?;
-    //     let vertex_count = indices.len() as u32;
-    //     let primitive = Primitive {
-    //         vertex_buffer,
-    //         index_buffer,
-    //         material_index: None,
-    //         vertex_count,
-    //     };
-
-
-    //     self.objects.push(RenderObject {
-    //         label: "test object", // TODO
-    //         model_matrix: Mat4::IDENTITY,
-    //         model_buffer,
-    //         mesh: primitive,
-    //     });
-
-    //     Ok(())
-    // }
-}
-
 #[derive(Default, Debug)]
-pub struct ResourceManager {
+pub struct AssetCache {
     textures: HashMap<String, Texture>,
+    // counter: atomic::AtomicU64,
+    materials: HashMap<String, Material>,
 }
 
-impl ResourceManager {
+#[derive(Debug)]
+pub struct Material {
+    pub base_color_texture: Texture,
+    pub normal_texture: Texture,
+    pub metallic_texture: Texture,
+    pub metallic_factor: f32,
+    pub roughness_texture: Texture,
+    pub roughness_factor: f32,
+    pub occlusion_texture: Texture,
+}
+
+#[derive(PartialEq, Clone, Copy, Eq, Hash, Debug)]
+pub struct AssetHandle {
+    id: u64,
+}
+
+impl AssetCache {
+    pub fn add_material(&mut self, key: String, material: Material) {
+        // let id = self.counter.fetch_add(1, atomic::Ordering::Relaxed);
+        // let handle = AssetHandle {id };
+        self.materials.insert(key, material);
+    }
+
+    pub fn get_material(&self, handle: String) -> Option<&Material> {
+        self.materials.get(&handle)
+    }
+    pub fn load_texture2(
+        &mut self,
+        gpu: &Gpu,
+        path: impl Into<String>,
+        name: impl Into<String>,
+    ) -> Result<Texture> {
+        let image = image::open(path.into())?;
+        let image = image.to_rgba8();
+    let data: &Vec<u8> = image.as_raw();
+        let extent = Extent2D {
+            width: image.width(),
+            height: image.height(),
+        };
+        let format = Format::R16G16B16A16_UNORM;
+        let bytes: Vec<u8> = bytemuck::cast_slice(data).to_vec();
+         let name: String = name.into();
+         let image = gpu.create_image(extent, format, ImageUsageFlags::SAMPLED, ImageAspectFlags::COLOR, name.clone())?;
+         let staging = util::staging_buffer(gpu, &bytes, "texture staging")?;
+         gpu.execute(|cmd| cmd.copy_buffer_to_image(&staging, &image))?;
+        Ok(image)
+    }
+
     pub fn load_texture(
         &mut self,
         gpu: &Gpu,
         path: impl Into<String>,
         name: impl Into<String>,
-    ) -> Result<()> {
+    ) -> Result<&Texture> {
         let image = image::open(path.into())?;
         let image = image.to_rgba16();
         let data = image.as_raw();
@@ -119,7 +81,8 @@ impl ResourceManager {
         };
         let format = Format::R16G16B16A16_UNORM;
         let bytes = bytemuck::cast_slice(data);
-        self.create_image(gpu, bytes, extent, format, name)
+        let image = self.create_image(gpu, bytes, extent, format, name);
+        image
     }
 
     pub fn create_image(
@@ -129,15 +92,15 @@ impl ResourceManager {
         extent: Extent2D,
         format: vk::Format,
         name: impl Into<String>,
-    ) -> Result<()> {
+    ) -> Result<&Texture> {
         let name: String = name.into();
         let image = gpu.create_image(extent, format, ImageUsageFlags::SAMPLED, ImageAspectFlags::COLOR, name.clone())?;
         let staging = util::staging_buffer(gpu, data, "texture staging")?;
         gpu.execute(|cmd| cmd.copy_buffer_to_image(&staging, &image))?;
-        self.textures.insert(name, image);
-        Ok(())
+        self.textures.insert(name.clone(), image);
+        Ok(self.textures.get(&name).unwrap())
     }
-    pub fn create_error_texture(&mut self, gpu: &Gpu) -> Result<()> {
+    pub fn create_error_texture(&mut self, gpu: &Gpu) -> Result<&Texture> {
         let pixels = (0..256).map(|i| match i % 2 {
             0 => 0,
             _ => 4294902015u32,
@@ -155,14 +118,14 @@ impl ResourceManager {
         gpu: &Gpu,
         color: Vec4,
         name: impl Into<String>,
-    ) -> Result<()> {
+    ) -> Result<&Texture> {
         let data = [packUnorm4x8(color)];
         let extent = Extent2D {
             width: 1,
             height: 1,
         };
         let data = bytemuck::cast_slice(&data);
-        self.create_image(gpu, &data, extent, Format::R8G8B8A8_UNORM, name)
+        self.create_image(gpu, data, extent, Format::R8G8B8A8_UNORM, name)
     }
 
     pub fn get_texture(&self, name: &str) -> Option<&Texture> { self.textures.get(name) }

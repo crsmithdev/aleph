@@ -134,7 +134,7 @@ impl Swapchain {
                         .expect("Failed to create imageview")
                 };
                 Texture::from_existing(
-                    &device,
+                    device,
                     handle,
                     view,
                     info.extent,

@@ -5,67 +5,27 @@ pub mod mesh;
 pub mod mesh_pipeline;
 pub mod util;
 
-use mesh::{Primitive, Scene};
-
 use {
     crate::vk::{
-        pipeline::Pipeline, Buffer, BufferUsageFlags, CommandBuffer, Extent2D,
-        Extent3D, Format, Frame, Gpu, Texture, ImageAspectFlags, ImageLayout,
-        ImageUsageFlags,
+        pipeline::Pipeline, Buffer, BufferUsageFlags, CommandBuffer, Extent2D, Extent3D, Format,
+        Frame, Gpu, ImageAspectFlags, ImageLayout, ImageUsageFlags, Texture,
     },
     anyhow::Result,
     bytemuck::{Pod, Zeroable},
     core::f32,
     derive_more::derive::Debug,
-    glam::{vec3, Mat3, Mat4, Vec3, Vec4, Vec4Swizzles},
+    glam::{vec3, Mat3, Mat4, Vec3, Vec4},
+    mesh::Scene,
     std::mem,
 };
 
 pub use crate::graph::{
     camera::Camera,
     config::{CameraConfig, RenderConfig},
-    managers::{ObjectManager, ResourceManager},
+    managers::AssetCache,
     mesh::Mesh,
     mesh_pipeline::MeshPipeline,
 };
-
-pub struct RenderObject {
-    pub label: &'static str,
-    pub model_matrix: Mat4,
-    pub model_buffer: Buffer<GpuDrawData>,
-    pub mesh: Primitive,
-}
-
-impl RenderObject {
-    pub fn bind_mesh_buffers(&self, cmd: &CommandBuffer) {
-        cmd.bind_vertex_buffer(&self.mesh.vertex_buffer, 0);
-        cmd.bind_index_buffer(&self.mesh.index_buffer, 0);
-    }
-
-    fn update_model_buffer(&self, camera: &Camera) {
-        let model = self.model_matrix;
-        let model_view_projection = camera.model_view_projection(&model);
-        let model_view = camera.view() * model;
-        let inverse_model_view = model_view.inverse();
-        let normal = Mat3::from_mat4(inverse_model_view).transpose();
-
-        let model_data = GpuDrawData {
-            model,
-            model_view,
-            model_view_projection,
-            position: self.model_matrix.w_axis.xyz(),
-            normal,
-            padding1: Vec3::ZERO,
-            padding2: 0.0,
-        };
-
-        self.model_buffer.write(&[model_data]);
-    }
-
-    pub fn draw(&self, cmd: &CommandBuffer) {
-        cmd.draw_indexed(self.mesh.vertex_count, 1, 0, 0, 0);
-    }
-}
 
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
@@ -105,7 +65,7 @@ pub struct GpuDrawData {
 pub struct RenderContext<'a> {
     pub gpu: &'a Gpu,
     pub scene: &'a Scene,
-    pub resources: &'a ResourceManager,
+    pub assets: &'a AssetCache,
     pub camera: &'a Camera,
     pub cmd_buffer: &'a CommandBuffer,
     pub draw_image: &'a Texture,
@@ -147,15 +107,16 @@ impl RenderGraph {
                 | ImageUsageFlags::TRANSFER_SRC
                 | ImageUsageFlags::STORAGE,
             ImageAspectFlags::COLOR,
-            "draw")?;
+            "draw",
+        )?;
 
-            let depth_image = gpu.create_image(
-                gpu.swapchain().info.extent,
-                FORMAT_DEPTH_IMAGE,
-                ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
-                ImageAspectFlags::DEPTH,
-                "draw")?;
-
+        let depth_image = gpu.create_image(
+            gpu.swapchain().info.extent,
+            FORMAT_DEPTH_IMAGE,
+            ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+            ImageAspectFlags::DEPTH,
+            "draw",
+        )?;
 
         let camera = Camera::new(config.camera, gpu.swapchain().info.extent);
 
@@ -187,7 +148,7 @@ impl RenderGraph {
         }
     }
 
-    pub fn execute(&mut self, scene: &Scene, resources: &ResourceManager) -> Result<()> {
+    pub fn execute(&mut self, scene: &Scene, resources: &AssetCache) -> Result<()> {
         self.camera.rotate(0.01);
 
         if self.check_rebuild_swapchain()? {
@@ -242,7 +203,7 @@ impl RenderGraph {
             gpu: &self.gpu,
             scene,
             camera: &self.camera,
-            resources,
+            assets: resources,
             cmd_buffer: &self.frames[self.frame_index].command_buffer,
             draw_image: &self.draw_image,
             depth_image: &self.depth_image,
@@ -250,7 +211,7 @@ impl RenderGraph {
             global_buffer: &self.global_data_buffer,
             config: &self.config,
         };
-        self.update_buffers(&context);
+        self.update_buffers();
         self.temp_pipeline.execute(&context)?;
 
         cmd_buffer.transition_image(
@@ -304,7 +265,7 @@ impl RenderGraph {
             })
             .collect()
     }
-    fn update_buffers(&self, context: &RenderContext) {
+    fn update_buffers(&self) {
         let p = 15.;
         let lights = [
             vec3(-p, -p * 0.5, -p),
@@ -330,8 +291,6 @@ impl RenderGraph {
         // }
     }
 }
-
-
 
 impl Drop for RenderGraph {
     fn drop(&mut self) {

@@ -1,10 +1,10 @@
 use {
-    super::{buffer::RawBuffer, Buffer, CommandBuffer, Gpu, Texture},
+    super::{buffer::RawBuffer, Buffer, CommandBuffer, Gpu, Texture, VkPipeline},
     crate::{RenderContext, Vertex},
     anyhow::Result,
     ash::vk::{self, PipelineBindPoint, SampleCountFlags},
     bytemuck::Pod,
-    std::{arch::x86_64, collections::HashSet, ffi},
+    std::{collections::HashSet, ffi},
 };
 pub trait Pipeline {
     fn execute(&self, context: &RenderContext) -> Result<()>;
@@ -55,7 +55,7 @@ impl Default for PipelineBuilder<'_> {
 }
 
 impl<'a> PipelineBuilder<'a> {
-    pub fn build(&self, gpu: &Gpu, layout: vk::PipelineLayout) -> Result<vk::Pipeline> {
+    pub fn build(&self, gpu: &Gpu, layout: vk::PipelineLayout) -> Result<VkPipeline> {
         let vertex_stage = vk::PipelineShaderStageCreateInfo::default()
             .stage(vk::ShaderStageFlags::VERTEX)
             .module(self.vertex_shader)
