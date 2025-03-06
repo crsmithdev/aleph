@@ -3,7 +3,7 @@ use {
     anyhow::{anyhow, bail, Result},
     ash::{
         ext, khr,
-        vk::{self, BufferDeviceAddressInfo, Handle},
+        vk::{self, BufferDeviceAddressInfo, Handle, LOD_CLAMP_NONE},
     },
     derive_more::Debug,
     std::ffi,
@@ -163,8 +163,8 @@ impl Device {
 
     pub fn handle(&self) -> &ash::Device { &self.handle }
 
-    pub fn create_sampler(&self, min_filter: vk::Filter, mag_filter: vk::Filter) -> Result<vk::Sampler> {
-        let info = vk::SamplerCreateInfo::default().mag_filter(mag_filter).min_filter(min_filter);  
+    pub fn create_sampler(&self, min_filter: vk::Filter, mag_filter: vk::Filter, mipmap_mode: vk::SamplerMipmapMode) -> Result<vk::Sampler> {
+        let info = vk::SamplerCreateInfo::default().mag_filter(mag_filter).min_filter(min_filter).min_lod(0.).max_lod(LOD_CLAMP_NONE).mipmap_mode(mipmap_mode);  
         Ok(unsafe { self.handle.create_sampler(&info, None)? })
     }
 

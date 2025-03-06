@@ -1,3 +1,4 @@
+use ash::vk::SamplerMipmapMode;
 pub use ash::vk::{Format, ImageAspectFlags, ImageUsageFlags};
 use {
     crate::vk::{Allocator, Device, Extent2D},
@@ -8,9 +9,9 @@ use {
     std::sync::Arc,
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Texture {
-    image: Image2,
+    image: ImageInner,
     view: vk::ImageView,
     extent: Extent2D,
     format: Format,
@@ -29,7 +30,7 @@ impl Texture {
         label: impl Into<String>,
     ) -> Result<Self> {
         let label = label.into();
-        let image = Image2::new(
+        let inner = ImageInner::new(
             device.clone(),
             allocator,
             extent,
@@ -38,7 +39,7 @@ impl Texture {
             label.clone(),
         )?;
         let view_info = vk::ImageViewCreateInfo::default()
-            .image(image.handle)
+            .image(inner.handle)
             .view_type(vk::ImageViewType::TYPE_2D)
             .format(format)
             .components(vk::ComponentMapping::default())
@@ -51,9 +52,9 @@ impl Texture {
                     .layer_count(1),
             );
         let view = unsafe { device.handle.create_image_view(&view_info, None) }?;
-        let sampler = device.create_sampler(vk::Filter::LINEAR, vk::Filter::LINEAR)?;
+        let sampler = device.create_sampler(vk::Filter::NEAREST, vk::Filter::NEAREST, SamplerMipmapMode::NEAREST)?;
         Ok(Self {
-            image,
+            image: inner,
             view,
             extent,
             format,
@@ -70,11 +71,11 @@ impl Texture {
         format: vk::Format,
         label: impl Into<String>,
     ) -> Result<Self> {
-        let sampler = device.create_sampler(vk::Filter::LINEAR, vk::Filter::LINEAR)?;
+        let sampler = device.create_sampler(vk::Filter::NEAREST, vk::Filter::NEAREST, SamplerMipmapMode::NEAREST)?;
         Ok(Self {
-            image: Image2 {
+            image: ImageInner {
                 handle: image,
-                allocation: ImageAllocation::External,
+                allocation: Arc::new(ImageAllocation::External),
             },
             view,
             extent,
@@ -106,14 +107,14 @@ pub enum ImageAllocation {
     External,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[allow(dead_code)]
-pub struct Image2 {
+pub struct ImageInner {
     handle: vk::Image,
-    allocation: ImageAllocation,
+    allocation: Arc<ImageAllocation>,
 }
 
-impl Image2 {
+impl ImageInner {
     pub fn new(
         device: Device,
         allocator: Arc<Allocator>,
@@ -131,9 +132,9 @@ impl Image2 {
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::OPTIMAL)
             .usage(usage | vk::ImageUsageFlags::TRANSFER_DST);
+
         let image = unsafe { device.handle.create_image(info, None) }?;
         let requirements = unsafe { device.handle.get_image_memory_requirements(image) };
-
         let allocation = {
             let allocation = allocator.allocate_image(image, requirements, &label.into())?;
             ImageAllocation::Internal {
@@ -143,7 +144,7 @@ impl Image2 {
         };
 
         Ok(Self {
-            allocation,
+            allocation: Arc::new(allocation),
             handle: image,
         })
     }

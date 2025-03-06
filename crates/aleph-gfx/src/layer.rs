@@ -1,12 +1,11 @@
 use {
     crate::{
-        graph::{
-            config::RenderConfig,
-            mesh::{self, Scene},
+        render::renderer::{Renderer, RendererConfig},
+        scene::{
+            gltf::{self, Scene},
             AssetCache,
         },
         vk::Gpu,
-        RenderGraph,
     },
     aleph_core::{
         app::TickEvent,
@@ -18,7 +17,7 @@ use {
 
 #[derive(Default)]
 pub struct GraphicsLayer {
-    renderer: OnceLock<RenderGraph>,
+    renderer: OnceLock<Renderer>,
     resource_manager: AssetCache,
 }
 
@@ -32,8 +31,8 @@ impl Layer for GraphicsLayer {
         Self: Sized,
     {
         let gpu = Gpu::new(Arc::clone(&window))?;
-        let config = RenderConfig::default();
-        let mut scenes = mesh::load_gltf(
+        let config = RendererConfig::default();
+        let mut scenes = gltf::load_gltf(
             "assets/gltf/suzanne/Suzanne.gltf",
             &gpu,
             &mut self.resource_manager,
@@ -41,7 +40,7 @@ impl Layer for GraphicsLayer {
         let scene = scenes
             .pop()
             .ok_or_else(|| anyhow::anyhow!("No scene found"))?;
-        let graph = RenderGraph::new(gpu, config)?;
+        let graph = Renderer::new(gpu, config)?;
 
         self.renderer
             .set(graph)

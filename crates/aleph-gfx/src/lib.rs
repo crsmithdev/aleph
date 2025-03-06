@@ -1,9 +1,14 @@
-pub mod graph;
 pub mod layer;
+pub mod render;
+pub mod scene;
 pub mod vk;
 
 pub use {
-    graph::{camera::Camera, mesh::Vertex, GpuDrawData, GpuSceneData, RenderContext, RenderGraph},
     layer::GraphicsLayer,
+    scene::{
+        assets::{AssetCache, Material},
+        camera::Camera,
+        model::{Mesh, Node, Primitive, Vertex},
+    },
     vk::Pipeline,
 };

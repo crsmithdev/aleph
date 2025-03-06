@@ -242,8 +242,8 @@ impl Gpu {
         Texture::new(self.device.clone(), Arc::clone(&self.allocator), extent, format, usage, aspect_flags, label)
     }
 
-    pub fn create_sampler(&self, min_filter: vk::Filter, mag_filter: vk::Filter) -> Result<vk::Sampler> {
-        self.device.create_sampler(min_filter, mag_filter)
+    pub fn create_sampler(&self, min_filter: vk::Filter, mag_filter: vk::Filter, mipmap_mode: vk::SamplerMipmapMode) -> Result<vk::Sampler> {
+        self.device.create_sampler(min_filter, mag_filter, mipmap_mode)
     }
 
     pub fn execute(&self, callback: impl FnOnce(&CommandBuffer)) -> Result<()> {

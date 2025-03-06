@@ -1,6 +1,6 @@
 use {
     super::{buffer::RawBuffer, Buffer, CommandBuffer, Gpu, Texture, VkPipeline},
-    crate::{RenderContext, Vertex},
+    crate::{render::renderer::RenderContext, Vertex},
     anyhow::Result,
     ash::vk::{self, PipelineBindPoint, SampleCountFlags},
     bytemuck::Pod,
@@ -273,7 +273,7 @@ impl<'a> ResourceBinder<'a> {
     }
 
     pub fn image(&mut self, index: u32, image: &'a Texture) -> &mut Self {
-        let resource = BoundResource::Image {index, image};
+        let resource = BoundResource::Image { index, image };
         self.bindings.push(resource);
         self
     }
@@ -295,12 +295,12 @@ impl<'a> ResourceBinder<'a> {
                     let (info, write) = self.write_buffer(buffer, *index, *size, *offset);
                     buffer_infos.push([info]);
                     buffer_writes.push(write);
-                },
-                BoundResource::Image {index, image} => {
+                }
+                BoundResource::Image { index, image } => {
                     let (info, write) = self.write_image(image, *index);
                     image_infos.push([info]);
                     image_writes.push(write);
-                },
+                }
             }
         }
 
@@ -331,7 +331,7 @@ impl<'a> ResourceBinder<'a> {
 
         (info, write)
     }
-    
+
     fn write_buffer(
         &self,
         buffer: &RawBuffer,

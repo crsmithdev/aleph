@@ -1,8 +1,5 @@
 use {
-    super::{
-        CommandBuffer, CommandPool, Device,  Instance, Queue, Surface, Texture,
-        VK_TIMEOUT_NS,
-    },
+    super::{CommandBuffer, CommandPool, Device, Instance, Queue, Surface, Texture, VK_TIMEOUT_NS},
     anyhow::Result,
     ash::{
         khr,
@@ -112,7 +109,7 @@ impl Swapchain {
         }
         let loader = khr::swapchain::Device::new(&instance.handle, &device.handle);
         let swapchain = unsafe { loader.create_swapchain(&swapchain_info, None) }.unwrap();
-        
+
         let images = unsafe { loader.get_swapchain_images(swapchain)? };
         let subresource_range = vk::ImageSubresourceRange::default()
             .aspect_mask(vk::ImageAspectFlags::COLOR)
