@@ -204,7 +204,7 @@ fn load_materials(
             pbr.base_color_texture().map(|t| t.texture()),
             &context.texture_data,
             context.samplers,
-            format!("{label}-base-color"),
+            format!("gltf-material-{i}-base-color"),
             &defaults.base_color_texture,
             &defaults.sampler,
         )?;
@@ -213,7 +213,7 @@ fn load_materials(
             material_data.normal_texture().map(|t| t.texture()),
             &context.texture_data,
             context.samplers,
-            format!("{label}-normal"),
+            format!("gltf-material-{i}-normal"),
             &defaults.normal_texture,
             &defaults.sampler,
         )?;
@@ -222,7 +222,7 @@ fn load_materials(
             material_data.occlusion_texture().map(|t| t.texture()),
             &context.texture_data,
             context.samplers,
-            format!("{label}-occlusion"),
+            format!("gltf-material-{i}-occlusion"),
             &defaults.occlusion_texture,
             &defaults.sampler,
         )?;
