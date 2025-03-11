@@ -2,17 +2,23 @@ use {
     crate::{
         render::renderer::{Renderer, RendererConfig},
         scene::{
-            gltf::{self, Scene},
+            gltf::{self},
             AssetCache,
+            model::Scene,
         },
-        vk::Gpu,
+        vk::Gpu, Material,
     },
     aleph_core::{
         app::TickEvent,
         layer::{Layer, Window},
     },
     anyhow::Result,
-    std::sync::{Arc, OnceLock},
+    ash::vk::{Image, ImageAspectFlags, ImageUsageFlags},
+    std::{
+        backtrace,
+        collections::HashMap,
+        sync::{Arc, OnceLock},
+    },
 };
 
 #[derive(Default)]
@@ -31,19 +37,13 @@ impl Layer for GraphicsLayer {
         Self: Sized,
     {
         let gpu = Gpu::new(Arc::clone(&window))?;
+        let doc = gltf::load_gltf2("assets/gltf/suzanne/Suzanne.gltf")?;
+        let scene = Scene::from_gltf(&gpu, &doc, &mut self.resource_manager)?;
         let config = RendererConfig::default();
-        let mut scenes = gltf::load_gltf(
-            "assets/gltf/suzanne/Suzanne.gltf",
-            &gpu,
-            &mut self.resource_manager,
-        )?;
-        let scene = scenes
-            .pop()
-            .ok_or_else(|| anyhow::anyhow!("No scene found"))?;
-        let graph = Renderer::new(gpu, config)?;
+        let renderer = Renderer::new(gpu, config)?;
 
         self.renderer
-            .set(graph)
+            .set(renderer)
             .map_err(|_| anyhow::anyhow!("Failed to set renderer"))?;
 
         events.subscribe::<TickEvent>(move |layer, _event| layer.render(&scene));
@@ -59,4 +59,5 @@ impl GraphicsLayer {
             .expect("Renderer not initialized")
             .execute(scene, &self.resource_manager)
     }
+
 }

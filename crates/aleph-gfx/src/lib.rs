@@ -6,7 +6,7 @@ pub mod vk;
 pub use {
     layer::GraphicsLayer,
     scene::{
-        assets::{AssetCache, Material},
+        material::{AssetCache, Material},
         camera::Camera,
         model::{Mesh, Node, Primitive, Vertex},
     },

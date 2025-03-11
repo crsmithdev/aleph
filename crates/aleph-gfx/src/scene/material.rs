@@ -23,7 +23,7 @@ impl Default for AssetCache {
 
 #[derive(PartialEq, Clone, Copy, Eq, Hash, Debug)]
 pub struct AssetHandle {
-    id: u64,
+    pub id: u64,
 }
 
 impl AssetCache {
@@ -54,11 +54,10 @@ pub struct Material {
     pub base_color_sampler: vk::Sampler,
     pub normal_texture: Texture,
     pub normal_sampler: vk::Sampler,
-    pub metallic_texture: Texture,
-    pub metallic_factor: f32,
-    pub roughness_texture: Texture,
+    pub metallic_roughness_texture: Texture,
     pub metallic_roughness_sampler: vk::Sampler,
     pub roughness_factor: f32,
+    pub metallic_factor: f32,
     pub occlusion_texture: Texture,
     pub occlusion_sampler: vk::Sampler,
 }

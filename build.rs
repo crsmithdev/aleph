@@ -30,6 +30,7 @@ fn compile_shader(path: &str, kind: sc::ShaderKind, output: &str) {
             path.as_os_str().to_str().unwrap(),
             "main",
             Some(&options),
+            
         )
         .unwrap();
     save_file(output, binary.as_binary_u8());

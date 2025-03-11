@@ -1,16 +1,16 @@
 use {
-    super::assets::Material, crate::{
+    super::material::Material, crate::{
         vk::{
             buffer::*, AttachmentLoadOp, AttachmentStoreOp, BufferUsageFlags, ClearDepthStencilValue, ClearValue, Format, Gpu, ImageAspectFlags, ImageLayout, ImageUsageFlags, RenderingAttachmentInfo, Texture
         },
         Vertex,
-    }, anyhow::Result, ash::vk::{Extent2D, Filter, SamplerMipmapMode}, bytemuck::Pod, image
+    }, anyhow::Result, ash::vk::{ClearColorValue, Extent2D, Filter, SamplerMipmapMode}, bytemuck::Pod, image
 };
 
-pub fn single_color_image(gpu: &Gpu, pixel: [f32; 4], label: impl Into<String>) -> Result<Texture> {
+pub fn single_color_image(gpu: &Gpu, pixel: [f32; 4], extent: Extent2D, label: impl Into<String>) -> Result<Texture> {
     let created = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
-        1,
-        1,
+        extent.width,
+        extent.height,
         image::Rgba::<u8>::from([
             (pixel[0] * 255.0) as u8,
             (pixel[1] * 255.0) as u8,
@@ -79,6 +79,11 @@ pub fn staging_buffer<T: Pod>(
 
 pub fn color_attachment<'a>(image: &Texture) -> RenderingAttachmentInfo<'a> {
     RenderingAttachmentInfo::default()
+        .clear_value(ClearValue{
+            color: ClearColorValue {
+                float32: [0.5, 0.5, 0.5, 1.0],
+            }
+        })
         .image_view(image.view())
         .image_layout(ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
         .load_op(AttachmentLoadOp::CLEAR)
@@ -97,26 +102,4 @@ pub fn depth_attachment<'a>(image: &Texture) -> RenderingAttachmentInfo<'a> {
         })
         .load_op(AttachmentLoadOp::CLEAR)
         .store_op(AttachmentStoreOp::DONT_CARE)
-}
-
-pub fn load_default_material(gpu: &Gpu) -> Result<Material> {
-    let base_color_texture = single_color_image(gpu, [1., 1., 1., 1.], "base_color")?;
-    let normal_texture = single_color_image(gpu, [0.5, 0.5, 1., 1.], "normal")?;
-    let metallic_texture = single_color_image(gpu, [0., 0., 0., 1.], "metallic")?;
-    let roughness_texture = single_color_image(gpu, [0.5, 0.5, 0.5, 1.], "roughness")?;
-    let occlusion_texture = single_color_image(gpu, [1., 1., 1., 1.], "occlusion")?;
-    let sampler = gpu.create_sampler(Filter::NEAREST, Filter::NEAREST, SamplerMipmapMode::NEAREST)?;
-    Ok(Material {
-        base_color_texture,
-        normal_texture,
-        metallic_texture,
-        metallic_factor: 0.,
-        roughness_texture,
-        roughness_factor: 0.,
-        occlusion_texture,
-        base_color_sampler: sampler,
-        normal_sampler: sampler,
-        metallic_roughness_sampler: sampler,
-        occlusion_sampler: sampler,
-    })
 }

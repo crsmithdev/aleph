@@ -1,6 +1,7 @@
 
 use {
-    crate::{render::PbrPipeline, scene::{camera::CameraConfig, Scene}, vk::{
+    crate::scene::model::Scene,
+    crate::{render::PbrPipeline, scene::{camera::CameraConfig, model::GpuSceneData }, vk::{
         pipeline::Pipeline, Buffer, BufferUsageFlags, CommandBuffer, Extent2D, Extent3D, Format,
         Frame, Gpu, ImageAspectFlags, ImageLayout, ImageUsageFlags, Texture,
     }, AssetCache, Camera},
@@ -11,40 +12,6 @@ use {
     glam::{vec3, vec4, Mat3, Mat4, Vec3, Vec4},
     std::mem,
 };
-
-#[repr(C)]
-#[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
-pub struct GpuSceneData {
-    pub view: Mat4,            // 0
-    pub projection: Mat4,      // 64
-    pub view_projection: Mat4, // 128
-    pub lights: [Vec3; 4],     // 192 + 48
-    pub _padding1: Vec4,       // 240
-    pub camera_position: Vec3, // 240 +
-    pub _padding2: f32,
-}
-
-#[repr(C)]
-#[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
-pub struct GpuMaterialData {
-    pub albedo: Vec4,
-    pub _padding: f32,
-    pub metallic: f32,
-    pub roughness: f32,
-    pub ao: f32,
-}
-
-#[repr(C)]
-#[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
-pub struct GpuDrawData {
-    pub model: Mat4,                 // 0
-    pub model_view: Mat4,            // 64
-    pub model_view_projection: Mat4, // 128
-    pub normal: Mat3,                // 192 + 36
-    pub padding1: Vec3,              // 228 + 12
-    pub position: Vec3,              // 240 + 12 = 252
-    pub padding2: f32,
-}
 
 #[derive(Clone)]
 pub struct RenderContext<'a> {
@@ -125,7 +92,6 @@ impl Renderer {
         )?;
 
         let camera = Camera::new(config.camera, gpu.swapchain().info.extent);
-
         let temp_pipeline = PbrPipeline::new(&gpu)?;
 
         Ok(Self {
