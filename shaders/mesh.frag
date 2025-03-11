@@ -143,7 +143,7 @@ vec3 SpecularContribution(vec3 L, vec3 V, vec3 N, vec3 F0, float metallic, float
 	return color;
 }
 
-vec3 test(vec3 lightPosition, vec3 lightColor, vec3 N, vec3 V, vec3 F0, float metallic, float roughness) {
+vec3 test(vec3 lightPosition, vec3 lightColor, vec3 N, vec3 V, vec3 F0, float metallic, float roughness, vec3 albedo) {
     vec3 Lo = vec3(0.0);
      vec3 L = normalize(lightPosition - in_world_position);
     vec3 H = normalize(V + L);
@@ -166,7 +166,7 @@ vec3 test(vec3 lightPosition, vec3 lightColor, vec3 N, vec3 V, vec3 F0, float me
         
     // add to outgoing radiance Lo
     float NdotL = max(dot(N, L), 0.0);                
-    Lo += (kD * ALBEDO / PI + specular) * radiance * NdotL; 
+    Lo += (kD * albedo / PI + specular) * radiance * NdotL; 
 
     return Lo;
 }
@@ -219,11 +219,12 @@ void main()
     };
         float metallic  = texture(metallicMap, in_tex_coords).b;
     float roughness = texture(roughnessMap, in_tex_coords).g;
+    vec3 albedo = texture(albedoMap, in_tex_coords).rgb;
 	vec3 N = normalize(in_normal);
 	vec3 V = normalize(scene.camera_position - in_world_position);
     vec3 F0 = mix(vec3(0.04), ALBEDO, metallic);
 
-    vec3 albedo     = pow(texture(albedoMap, in_tex_coords).rgb, vec3(2.2));
+    // vec3 albedo     = pow(texture(albedoMap, in_tex_coords).rgb, vec3(2.2));
 
     // float ao        = texture(aoMap, in_tex_coords).rrr;
 
@@ -235,7 +236,7 @@ void main()
     vec3 brdf = vec3(0.0);
     for(int i = 0; i < 4; ++i)                                                                                  
     {
-        Lo += test(lightPositions[i], lightColors[i], N, V, F0, metallic, roughness);
+        Lo += test(lightPositions[i], lightColors[i], N, V, F0, metallic, roughness, albedo);
         // vec3 L = normalize(lightPositions[i] - in_world_position);
         // Lo += SpecularContribution(L, V, N, F0, metallic, roughness);
         // brdf += BRDF(L, V, N, F0, metallic, roughness);
@@ -253,7 +254,7 @@ void main()
     kD = ALBEDO;
     vec3 ambient = (kD * diffuse + specular) * texture(aoMap, in_tex_coords).rrr;;
 	// Combine with ambient
-	vec3 color = ambient + Lo;
+	vec3 color = Lo + ambient;
 
 	// Gamma correct
 	color = pow(color, vec3(0.4545));
