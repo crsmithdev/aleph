@@ -2,34 +2,23 @@ use {
     crate::{
         render::renderer::RenderContext,
         scene::{
-            material::AssetHandle,
-            model::{GpuDrawData, GpuMaterialData, Primitive},
+            model::{GpuDrawData, GpuMaterialData, GpuSceneData, Primitive},
             util, Camera,
         },
         vk::{
             pipeline::{Pipeline, PipelineBuilder, ResourceBinder, ResourceLayout},
-            Buffer, Format, Gpu, PipelineBindPoint, PipelineLayout, Rect2D, VkPipeline,
+            Buffer, CommandBuffer, Format, Gpu, PipelineBindPoint, PipelineLayout, Rect2D,
+            VkPipeline,
         },
-        AssetCache,
+        Material, Mesh, Node,
     },
     anyhow::Result,
     ash::vk::{self, BufferUsageFlags, CompareOp},
-    glam::{vec4, Mat3, Mat4, Vec3, Vec4Swizzles},
-    petgraph::{graph::{edge_index, NodeIndex}, visit::Dfs},
-    std::{mem, primitive},
+    glam::{Mat3, Mat4, Vec3, Vec4Swizzles},
+    petgraph::{graph::NodeIndex, visit::Dfs},
+    std::mem,
+    tracing::{instrument, warn},
 };
-
-pub fn calculate_global_transform(
-    local_transform: Mat4,
-    node_index: NodeIndex,
-    graph: &crate::scene::model::Graph,
-) -> Mat4 {
-    let indices: Vec<NodeIndex> = vec![];
-    // let indices = gltf::path_between_nodes(NodeIndex::new(0), node_index, graph);
-    indices.iter().fold(Mat4::IDENTITY, |transform, _| {
-        transform * local_transform /* graph[*index].animation_transform.matrix()*.*/
-    })
-}
 
 const IDX_SCENE_BUFFER: u32 = 0;
 const IDX_MATERIAL_BUFFER: u32 = 1;
@@ -59,78 +48,35 @@ pub struct PbrPipeline {
 }
 
 impl Pipeline for PbrPipeline {
-    fn execute(&self, context: &RenderContext) -> Result<()> {
-        let color_attachments = &[util::color_attachment(context.draw_image)];
-        let depth_attachment = &util::depth_attachment(context.depth_image);
-        let cmd_buffer = context.cmd_buffer;
-
-        let extent = context.extent;
-        cmd_buffer.begin_rendering(color_attachments, Some(depth_attachment), context.extent)?;
-
+    #[instrument(skip_all)]
+    fn execute(&self, ctx: &RenderContext) -> Result<()> {
+        let color_attachments = &[util::color_attachment(ctx.draw_image)];
+        let depth_attachment = &util::depth_attachment(ctx.depth_image);
         let viewport = vk::Viewport::default()
-            .width(extent.width as f32)
-            .height(0.0 - extent.height as f32)
+            .width(ctx.extent.width as f32)
+            .height(0.0 - ctx.extent.height as f32)
             .x(0.)
-            .y(extent.height as f32)
+            .y(ctx.extent.height as f32)
             .min_depth(0.)
             .max_depth(1.);
 
-        cmd_buffer.set_viewport(viewport);
-        cmd_buffer.set_scissor(Rect2D::default().extent(extent));
-        cmd_buffer.bind_pipeline(PipelineBindPoint::GRAPHICS, self.handle)?;
+        ctx.cmd_buffer
+            .begin_rendering(color_attachments, Some(depth_attachment), ctx.extent)?;
+        ctx.cmd_buffer.set_viewport(viewport);
+        ctx.cmd_buffer
+            .set_scissor(Rect2D::default().extent(ctx.extent));
+        ctx.cmd_buffer
+            .bind_pipeline(PipelineBindPoint::GRAPHICS, self.handle)?;
 
-        let mut dfs = Dfs::new(&context.scene.graph, NodeIndex::new(0));
-            while let Some(node_index) = dfs.next(&context.scene. graph) {
-                match &context.scene.graph[node_index] {
-                    crate::scene::model::Node::Mesh(mesh) 
-                     => {
-                        let global_transform = mesh.local_transform; //`calculate_global_transform(*local_transform, node_index, graph);
-                        for primitive_info in mesh.primitives.iter() {
-                            self.update_model_buffer(
-                                primitive_info,
-                                global_transform,
-                                context.camera,
-                            );
-                            let handle = primitive_info.material.unwrap_or(AssetHandle{id:0});
-                            // if let Some(handle) = primitive_info.material {
-                                let material = context.assets.get_material(handle).unwrap();
-                                ResourceBinder::default()
-                                    .buffer(IDX_SCENE_BUFFER, context.global_buffer)
-                                    .buffer(IDX_MATERIAL_BUFFER, &self.material_buffer)
-                                    .buffer(IDX_DRAW_BUFFER, &primitive_info.model_buffer)
-                                    .image(IDX_ALBEDO, &material.base_color_texture)
-                                    .image(IDX_NORMAL, &material.normal_texture)
-                                    .image(IDX_METALLIC, &material.metallic_roughness_texture)
-                                    // .image(IDX_ROUGHNESS, &material.roughness_texture)
-                                    .image(IDX_AO, &material.occlusion_texture)
-                                    .bind(cmd_buffer, &self.pipeline_layout);
-                            // }
-                                cmd_buffer.bind_vertex_buffer(&primitive_info.vertex_buffer, 0);
-                                cmd_buffer.bind_index_buffer(&primitive_info.index_buffer, 0);
-                                self.material_buffer.write(&[GpuMaterialData {
-                                    albedo: vec4(0.0, 0.0, 1.0, 1.0),
-                                    metallic: 1.0,
-                                    roughness: 0.1,
-                                    ao: 1.0,
-                                    _padding: 0.,
-                                }]);
-                            cmd_buffer.draw_indexed(primitive_info.vertex_count, 1, 0, 0, 0);
-                            }
-                    }
-                    _ => {}
-                };
+        let mut dfs = Dfs::new(&ctx.scene.root, NodeIndex::new(0));
+        while let Some(index) = dfs.next(&ctx.scene.root) {
+            if let Node::Mesh(mesh) = &ctx.scene.root[index] {
+                self.draw_mesh(ctx, mesh);
             }
-        cmd_buffer.end_rendering()?;
-        Ok(())
+        }
+        
+        ctx.cmd_buffer.end_rendering()
     }
-}
-
-pub struct MaterialDefaults {
-    pub base_color_texture: AssetHandle,
-    pub normal_texture: AssetHandle,
-    pub metallic_texture: AssetHandle,
-    pub roughness_texture: AssetHandle,
-    pub occlusion_texture: AssetHandle,
 }
 
 impl PbrPipeline {
@@ -152,15 +98,8 @@ impl PbrPipeline {
         let material_buffer = gpu.create_shared_buffer::<GpuMaterialData>(
             mem::size_of::<GpuMaterialData>() as u64,
             BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::UNIFORM_BUFFER,
-            "material",
+            "pbr-material",
         )?;
-        material_buffer.write(&[GpuMaterialData {
-            albedo: vec4(0.0, 0.0, 1.0, 1.0),
-            metallic: 1.0,
-            roughness: 0.1,
-            ao: 1.0,
-            _padding: 0.,
-        }]);
 
         Ok(Self {
             handle,
@@ -196,12 +135,11 @@ impl PbrPipeline {
             .build(gpu, layout)
     }
 
-    fn update_model_buffer(&self, primitive: &Primitive, transform: Mat4, camera: &Camera) {
-        let model_view_projection = camera.model_view_projection(&primitive.model_matrix);
+    fn update_draw_buffer(&self, primitive: &Primitive, transform: Mat4, camera: &Camera) {
         let model = primitive.model_matrix;
         let model_view = camera.view() * transform;
-        let inverse_model_view = model_view.inverse();
-        let normal = Mat3::from_mat4(inverse_model_view).transpose();
+        let model_view_projection = camera.model_view_projection(&primitive.model_matrix);
+        let normal = Mat3::from_mat4(model_view.inverse()).transpose();
 
         let model_data = GpuDrawData {
             model,
@@ -209,10 +147,66 @@ impl PbrPipeline {
             model_view_projection,
             position: model.w_axis.xyz(),
             normal,
+            world_matrix: transform,
             padding1: Vec3::ZERO,
             padding2: 0.0,
         };
 
         primitive.model_buffer.write(&[model_data]);
+    }
+
+    pub fn bind_resources(
+        &self,
+        cmd: &CommandBuffer,
+        primitive: &Primitive,
+        scene_buffer: &Buffer<GpuSceneData>,
+        material: Option<&Material>,
+    ) {
+        let mut binder = ResourceBinder::default();
+
+        binder
+            .buffer(IDX_SCENE_BUFFER, scene_buffer)
+            .buffer(IDX_MATERIAL_BUFFER, &self.material_buffer)
+            .buffer(IDX_DRAW_BUFFER, &primitive.model_buffer);
+
+        if let Some(material) = material {
+            binder
+                .image(IDX_ALBEDO, &material.albedo_map, material.albedo_sampler)
+                .image(IDX_NORMAL, &material.normal_map, material.normal_sampler)
+                .image(
+                    IDX_METALLIC,
+                    &material.metallic_map,
+                    material.metallic_sampler,
+                )
+                .image(
+                    IDX_ROUGHNESS,
+                    &material.roughness_map,
+                    material.roughness_sampler,
+                )
+                .image(IDX_AO, &material.occlusion_map, material.occlusion_sampler);
+        }
+        binder.bind(cmd, &self.pipeline_layout);
+
+        cmd.bind_vertex_buffer(&primitive.vertex_buffer, 0);
+        cmd.bind_index_buffer(&primitive.index_buffer, 0);
+    }
+
+    fn draw_mesh(&self, context: &RenderContext<'_>, mesh: &Mesh) {
+        for primitive in mesh.primitives.iter() {
+            let material = primitive
+                .material
+                .as_ref()
+                .and_then(|handle| context.assets.get_material(*handle));
+            self.update_draw_buffer(primitive, mesh.world_matrix, &context.camera);
+            self.bind_resources(
+                context.cmd_buffer,
+                primitive,
+                context.global_buffer,
+                material,
+            );
+            context
+                .cmd_buffer
+                .draw_indexed(primitive.vertex_count, 1, 0, 0, 0);
+        }
     }
 }

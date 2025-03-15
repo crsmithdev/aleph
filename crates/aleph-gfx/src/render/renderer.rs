@@ -1,7 +1,6 @@
 
 use {
-    crate::scene::model::Scene,
-    crate::{render::PbrPipeline, scene::{camera::CameraConfig, model::GpuSceneData }, vk::{
+    crate::{render::PbrPipeline, scene::{camera::CameraConfig, model::{GpuSceneData, Scene}}, vk::{
         pipeline::Pipeline, Buffer, BufferUsageFlags, CommandBuffer, Extent2D, Extent3D, Format,
         Frame, Gpu, ImageAspectFlags, ImageLayout, ImageUsageFlags, Texture,
     }, AssetCache, Camera},
@@ -10,7 +9,7 @@ use {
     core::f32,
     derive_more::derive::Debug,
     glam::{vec3, vec4, Mat3, Mat4, Vec3, Vec4},
-    std::mem,
+    std::mem, tracing::instrument,
 };
 
 #[derive(Clone)]
@@ -73,7 +72,7 @@ impl Renderer {
             "global uniform",
         )?;
         let draw_image = gpu.create_image(
-            gpu.swapchain().info.extent,
+            gpu.swapchain().extent(),
             FORMAT_DRAW_IMAGE,
             ImageUsageFlags::COLOR_ATTACHMENT
                 | ImageUsageFlags::TRANSFER_DST
@@ -84,14 +83,14 @@ impl Renderer {
         )?;
 
         let depth_image = gpu.create_image(
-            gpu.swapchain().info.extent,
+            gpu.swapchain.extent(),
             FORMAT_DEPTH_IMAGE,
             ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
             ImageAspectFlags::DEPTH,
             "draw",
         )?;
 
-        let camera = Camera::new(config.camera, gpu.swapchain().info.extent);
+        let camera = Camera::new(config.camera, gpu.swapchain.extent());
         let temp_pipeline = PbrPipeline::new(&gpu)?;
 
         Ok(Self {
@@ -108,24 +107,15 @@ impl Renderer {
         })
     }
 
-    fn check_rebuild_swapchain(&mut self) -> Result<bool> {
-        match self.rebuild_swapchain {
-            true => {
-                self.gpu.rebuild_swapchain()?;
-                self.frames = Self::create_frames(&self.gpu)?;
-                self.rebuild_swapchain = false;
-                Ok(true)
-            }
-            false => Ok(false),
-        }
-    }
-
+    #[instrument(skip_all)]
     pub fn execute(&mut self, scene: &Scene, resources: &AssetCache) -> Result<()> {
-        self.camera.rotate(0.01);
 
-        if self.check_rebuild_swapchain()? {
-            return Ok(());
+        if self.rebuild_swapchain {
+            self.gpu.rebuild_swapchain()?;
+            self.frames = Self::create_frames(&self.gpu)?;
+            self.rebuild_swapchain = false;
         }
+
         let Frame {
             swapchain_semaphore,
             command_buffer,
@@ -149,7 +139,7 @@ impl Renderer {
         let cmd_buffer = &command_buffer;
         cmd_buffer.reset()?;
         cmd_buffer.begin()?;
-        let swapchain_extent = self.gpu.swapchain.info.extent;
+        let swapchain_extent = self.gpu.swapchain.extent();
         let swapchain_image = &self.gpu.swapchain.images()[image_index];
         let draw_extent = {
             let extent = self.draw_image.extent();
@@ -179,7 +169,7 @@ impl Renderer {
             cmd_buffer: &self.frames[self.frame_index].command_buffer,
             draw_image: &self.draw_image,
             depth_image: &self.depth_image,
-            extent: self.gpu.swapchain().info.extent,
+            extent: self.gpu.swapchain.extent(),
             global_buffer: &self.global_data_buffer,
             config: &self.config,
         };

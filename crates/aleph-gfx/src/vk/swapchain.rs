@@ -5,7 +5,7 @@ use {
         khr,
         vk::{self, Handle},
     },
-    derive_more::Debug,
+    derive_more::Debug, tracing::instrument,
 };
 
 pub const IN_FLIGHT_FRAMES: u32 = 2;
@@ -33,11 +33,15 @@ pub struct Swapchain {
     pub(crate) handle: vk::SwapchainKHR,
     #[debug("{:x}", loader.device().as_raw())]
     pub(crate) loader: khr::swapchain::Device,
+    #[debug("{:x}", device.handle().handle().as_raw())]
     device: Device,
+    #[debug("{:x}", surface.inner.as_raw())]
     surface: Surface,
+    #[debug("{:x}", queue.handle.as_raw())]
     queue: Queue,
+    #[debug("{:x}", instance.handle().handle().as_raw())]
     instance: Instance,
-    pub info: SwapchainInfo,
+    info: SwapchainInfo,
     images: Vec<Texture>,
 }
 
@@ -51,17 +55,22 @@ impl Swapchain {
         Self::create_swapchain(instance, device, surface, info, None)
     }
 
+   #[instrument(skip(self))] 
     pub fn rebuild(&mut self, extent: vk::Extent2D) -> Result<()> {
+        
+        tracing::info!("Swapchain rebuild triggered");
         let instance = self.instance.clone();
         let device = self.device.clone();
         let surface = self.surface.clone();
         let mut info = self.info;
         info.extent = extent;
-        let new_swapchain =
+        let next_swapchain =
             Self::create_swapchain(&instance, &device, &surface, &info, Some(self.handle))?;
 
-        let old = std::mem::replace(self, new_swapchain);
-        old.destroy();
+        tracing::info!("Created new swapchain: {next_swapchain:?}");
+        let last_swapchain = std::mem::replace(self, next_swapchain);
+        tracing::info!("Destroying last swapchain: {last_swapchain:?}");
+        last_swapchain.destroy();
 
         Ok(())
     }
@@ -156,6 +165,8 @@ impl Swapchain {
     pub fn in_flight_frames(&self) -> u32 { self.images.len() as u32 }
 
     pub fn images(&self) -> &[Texture] { &self.images }
+
+    pub fn extent(&self) -> vk::Extent2D { self.info.extent }
 }
 
 impl Swapchain {

@@ -4,21 +4,20 @@ use {
     ash::vk::{self, Extent2D},
     derive_more::Debug,
     glam::{Vec2, Vec3, Vec4},
-    gltf::Node,
 };
 
 #[derive(Debug)]
 pub struct MaterialDesc {
     pub index: usize,
     pub name: String,
-    pub base_texture_idx: Option<usize>,
-    pub base_sampler_idx: Option<usize>,
-    pub normal_texture_idx: Option<usize>,
-    pub normal_sampler_idx: Option<usize>,
-    pub occlusion_texture_idx: Option<usize>,
+    pub albedo_texture: Option<usize>,
+    pub albedo_sampler: Option<usize>,
+    pub normal_texture: Option<usize>,
+    pub normal_sampler: Option<usize>,
+    pub occlusion_texture: Option<usize>,
     pub occlusion_sampler_idx: Option<usize>,
-    pub metallic_roughness_texture_idx: Option<usize>,
-    pub metallic_roughness_sampler_idx: Option<usize>,
+    pub metallic_roughnness_texture: Option<usize>,
+    pub metallic_roughness_sampler: Option<usize>,
     pub metallic_factor: f32,
     pub roughness_factor: f32,
 }
@@ -32,8 +31,8 @@ pub struct MeshDesc {
 #[derive(Debug)]
 pub struct PrimitiveDesc {
     pub index: usize,
-    pub mesh_idx: usize,
-    pub material_idx: Option<usize>,
+    pub mesh: usize,
+    pub material: Option<usize>,
     #[debug("{:} vertrices", vertices.len())]
     pub vertices: Vec<Vertex>,
     #[debug("{:} indices", indices.len())]
@@ -61,10 +60,10 @@ pub struct SamplerDesc {
 
 #[derive(Debug)]
 pub struct NodeDesc {
-    pub idx: usize,
+    pub index: usize,
     pub name: Option<String>,
-    pub parent_idx: Option<usize>,
-    pub child_idxs: Vec<usize>,
+    pub parent: Option<usize>,
+    pub children: Vec<usize>,
     pub mesh: Option<usize>,
     pub camera: Option<usize>,
     pub transform: gltf::scene::Transform,
@@ -88,8 +87,8 @@ pub struct SceneDesc {
 pub fn load_gltf2(path: &str) -> Result<GltfDocument> {
     let (document, buffers, images) = gltf::import(path)?;
     let samplers = read_samplers(&document);
-    let mut textures = read_textures(&document, &images);
-    let materials = read_materials(&document, &mut textures);
+    let textures = read_textures(&document, &images);
+    let materials = read_materials(&document);
     let meshes = read_meshes(&document, &buffers);
     let scenes = read_scenes(&document);
 
@@ -149,7 +148,6 @@ pub fn read_textures(
 
 pub fn read_materials(
     document: &gltf::Document,
-    images: &mut Vec<TextureDesc>,
 ) -> Vec<MaterialDesc> {
     document
         .materials()
@@ -174,14 +172,14 @@ pub fn read_materials(
             MaterialDesc {
                 index: i as usize,
                 name: name.to_string(),
-                base_texture_idx: base.map(|i| i.index()),
-                base_sampler_idx: base_sampler.and_then(|s| s.index()),
-                normal_texture_idx: normal.map(|i| i.index()),
-                normal_sampler_idx: normal_sampler.and_then(|s| s.index()),
+                albedo_texture: base.map(|i| i.index()),
+                albedo_sampler: base_sampler.and_then(|s| s.index()),
+                normal_texture: normal.map(|i| i.index()),
+                normal_sampler: normal_sampler.and_then(|s| s.index()),
                 occlusion_sampler_idx: occlusion_sampler.and_then(|s| s.index()),
-                occlusion_texture_idx: occlusion.map(|i| i.index()),
-                metallic_roughness_texture_idx: metallic.map(|i| i.index()),
-                metallic_roughness_sampler_idx: metallic_sampler.and_then(|s| s.index()),
+                occlusion_texture: occlusion.map(|i| i.index()),
+                metallic_roughnness_texture: metallic.map(|i| i.index()),
+                metallic_roughness_sampler: metallic_sampler.and_then(|s| s.index()),
                 metallic_factor: pbr.metallic_factor(),
                 roughness_factor: pbr.roughness_factor(),
             }
@@ -236,8 +234,8 @@ pub fn read_meshes(
 
                 PrimitiveDesc {
                     index: j,
-                    mesh_idx: i,
-                    material_idx: primitive.material().index(),
+                    mesh: i,
+                    material: primitive.material().index(),
                     vertices,
                     tangents,
                     indices,
@@ -250,7 +248,7 @@ pub fn read_meshes(
         })
         .collect();
 
-    (meshes)
+    meshes
 }
 
 pub fn read_scenes(document: &gltf::Document) -> Vec<SceneDesc> {
@@ -276,29 +274,21 @@ pub fn read_scenes(document: &gltf::Document) -> Vec<SceneDesc> {
 }
 
 fn read_node(node: gltf::Node, parent_idx: Option<usize>) -> Vec<NodeDesc> {
-    let idx = node.index();
+    let index = node.index();
     let mut nodes = vec![NodeDesc {
-        idx,
-        parent_idx,
+        index,
+        parent: parent_idx, 
         name: node.name().map(|s| s.to_string()),
-        child_idxs: node.children().map(|child| child.index()).collect(),
+        children: node.children().map(|child| child.index()).collect(),
         mesh: node.mesh().map(|mesh| mesh.index()),
         camera: node.camera().map(|camera| camera.index()),
         transform: node.transform(),
     }];
     for child in node.children() {
-        let child_nodes = read_node(child, Some(idx));
+        let child_nodes = read_node(child, Some(index));
         nodes.extend(child_nodes);
     }
     nodes
-}
-
-fn extract_color_channel(data: &[u8], stride: usize, channel: usize) -> Vec<u8> {
-    let mut bytes = vec![];
-    for i in (0..data.len()).step_by(stride) {
-        bytes.push(data[i + channel]);
-    }
-    bytes
 }
 
 fn convert_mag_filter(filter: gltf::texture::MagFilter) -> vk::Filter {

@@ -34,7 +34,6 @@ fn compile_shader(path: &str, kind: sc::ShaderKind, output: &str) {
         )
         .unwrap();
     save_file(output, binary.as_binary_u8());
-    println!("{} -> {}", path.display(), output.display()); 
 }
 
 fn main() {

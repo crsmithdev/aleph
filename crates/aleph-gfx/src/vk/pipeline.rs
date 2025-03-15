@@ -272,8 +272,8 @@ impl<'a> ResourceBinder<'a> {
         self
     }
 
-    pub fn image(&mut self, index: u32, image: &'a Texture) -> &mut Self {
-        let resource = BoundResource::Image { index, image };
+    pub fn image(&mut self, index: u32, image: &'a Texture, sampler: vk::Sampler) -> &mut Self {
+        let resource = BoundResource::Image { index, image, sampler };
         self.bindings.push(resource);
         self
     }
@@ -296,8 +296,8 @@ impl<'a> ResourceBinder<'a> {
                     buffer_infos.push([info]);
                     buffer_writes.push(write);
                 }
-                BoundResource::Image { index, image } => {
-                    let (info, write) = self.write_image(image, *index);
+                BoundResource::Image { index, image, sampler } => {
+                    let (info, write) = self.write_image(image, *sampler, *index);
                     image_infos.push([info]);
                     image_writes.push(write);
                 }
@@ -318,12 +318,13 @@ impl<'a> ResourceBinder<'a> {
     fn write_image(
         &self,
         image: &Texture,
+        sampler: vk::Sampler,
         index: u32,
     ) -> (vk::DescriptorImageInfo, vk::WriteDescriptorSet) {
         let info = vk::DescriptorImageInfo::default()
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
             .image_view(image.view())
-            .sampler(image.sampler());
+            .sampler(sampler);
         let write = vk::WriteDescriptorSet::default()
             .dst_binding(index)
             .descriptor_count(1)
@@ -360,6 +361,7 @@ pub enum BoundResource<'a> {
     },
     Image {
         index: u32,
+        sampler: vk::Sampler,
         image: &'a Texture,
     },
 }

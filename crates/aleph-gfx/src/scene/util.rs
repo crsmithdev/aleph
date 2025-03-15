@@ -1,40 +1,48 @@
 use {
-    super::material::Material, crate::{
+    crate::{
         vk::{
-            buffer::*, AttachmentLoadOp, AttachmentStoreOp, BufferUsageFlags, ClearDepthStencilValue, ClearValue, Format, Gpu, ImageAspectFlags, ImageLayout, ImageUsageFlags, RenderingAttachmentInfo, Texture
+            buffer::*, AttachmentLoadOp, AttachmentStoreOp, BufferUsageFlags,
+            ClearDepthStencilValue, ClearValue, Format, Gpu, ImageAspectFlags, ImageLayout,
+            ImageUsageFlags, RenderingAttachmentInfo, Texture,
         },
         Vertex,
-    }, anyhow::Result, ash::vk::{ClearColorValue, Extent2D, Filter, SamplerMipmapMode}, bytemuck::Pod, image
+    },
+    anyhow::Result,
+    ash::vk::{ClearColorValue, Extent2D},
+    bytemuck::Pod,
+    image,
 };
 
-pub fn single_color_image(gpu: &Gpu, pixel: [f32; 4], extent: Extent2D, label: impl Into<String>) -> Result<Texture> {
-    let created = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
-        extent.width,
-        extent.height,
-        image::Rgba::<u8>::from([
-            (pixel[0] * 255.0) as u8,
-            (pixel[1] * 255.0) as u8,
-            (pixel[2] * 255.0) as u8,
-            (pixel[3] * 255.0) as u8,
-        ]),
-    ))
-    .into_rgba8();
-    let extent = Extent2D {
-        width: created.width(),
-        height: created.height(),
-    };
+pub fn single_color_image(
+    gpu: &Gpu,
+    pixel: [f32; 4],
+    extent: Extent2D,
+    label: impl Into<String>,
+) -> Result<Texture> {
+    // let created = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+    //     extent.width,
+    //     extent.height,
+    //     image::Rgba::<u8>::from([
+    //         (pixel[0] * 255.0) as u8,
+    //         (pixel[1] * 255.0) as u8,
+    //         (pixel[2] * 255.0) as u8,
+    //         (pixel[3] * 255.0) as u8,
+    //     ]),
+    // ))
+    // .into_rgba8();
+    let data = pixel.repeat(extent.width as usize * extent.height as usize);
     let image = gpu.create_image(
         extent,
-        Format::R8G8B8A8_UNORM,
+        Format::R8G8B8A8_SRGB,
         ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
         ImageAspectFlags::COLOR,
-        label.into()
+        label.into(),
     )?;
-    
-        let staging = staging_buffer(gpu, created.as_raw(), "staging")?;
+
+    let staging = staging_buffer(gpu, &data, "staging")?;
     gpu.execute(|cmd| {
-        cmd.copy_buffer_to_image(&staging, &image);//, dst);
-        // cmd.transition_image(&image, ImageLayout::UNDEFINED, ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+        cmd.copy_buffer_to_image(&staging, &image); //, dst);
+                                                    // cmd.transition_image(&image, ImageLayout::UNDEFINED, ImageLayout::SHADER_READ_ONLY_OPTIMAL);
     })?;
 
     Ok(image)
@@ -79,10 +87,10 @@ pub fn staging_buffer<T: Pod>(
 
 pub fn color_attachment<'a>(image: &Texture) -> RenderingAttachmentInfo<'a> {
     RenderingAttachmentInfo::default()
-        .clear_value(ClearValue{
+        .clear_value(ClearValue {
             color: ClearColorValue {
                 float32: [0.5, 0.5, 0.5, 1.0],
-            }
+            },
         })
         .image_view(image.view())
         .image_layout(ImageLayout::COLOR_ATTACHMENT_OPTIMAL)

@@ -22,6 +22,7 @@ use {
         event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
         window::{Window, WindowId},
     },
+    tracing::info,
 };
 
 #[derive(Clone, Debug)]
@@ -61,7 +62,9 @@ pub struct App {
 
 impl App {
     pub fn new(config: AppConfig) -> Self {
-        logging::setup_logger().expect("Failed to setup logging");
+        // logging::setup_logger().expect("Failed to setup logging");
+        logging::setup_telemetry();
+        info!("test");
         setup_panic!();
 
         App {

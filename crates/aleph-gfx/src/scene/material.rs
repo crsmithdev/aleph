@@ -50,14 +50,16 @@ pub fn packUnorm4x8(v: Vec4) -> u32 {
 
 #[derive(Debug)]
 pub struct Material {
-    pub base_color_texture: Texture,
-    pub base_color_sampler: vk::Sampler,
-    pub normal_texture: Texture,
+    pub albedo_map: Texture,
+    pub albedo_sampler: vk::Sampler,
+    pub normal_map: Texture,
     pub normal_sampler: vk::Sampler,
-    pub metallic_roughness_texture: Texture,
-    pub metallic_roughness_sampler: vk::Sampler,
+    pub metallic_map: Texture,
+    pub roughness_map: Texture,
+    pub metallic_sampler: vk::Sampler,
+    pub roughness_sampler: vk::Sampler,
     pub roughness_factor: f32,
     pub metallic_factor: f32,
-    pub occlusion_texture: Texture,
+    pub occlusion_map: Texture,
     pub occlusion_sampler: vk::Sampler,
 }

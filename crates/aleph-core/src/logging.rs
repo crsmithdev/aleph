@@ -2,7 +2,16 @@ use {
     fern,
     log::info,
     std::{env, str::FromStr, time::SystemTime},
+    tracing,
+    tracing_subscriber::{self, fmt::{self, format::PrettyFields}},
 };
+
+pub fn setup_telemetry() {
+    tracing_subscriber::fmt()
+        .compact()
+        .with_max_level(tracing::Level::TRACE)
+        .init();
+}
 
 pub fn setup_logger() -> Result<(), fern::InitError> {
     let log_level = {

@@ -18,7 +18,7 @@ impl Default for CameraConfig {
     fn default() -> Self {
         Self {
             rotation: vec2(-f32::consts::PI / 4.0, -f32::consts::PI / 4.0),
-            distance: 2.0,
+            distance: 2.,
             fov: 90.,
             z_near: 0.1,
             z_far: 100.,

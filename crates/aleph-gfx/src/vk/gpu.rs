@@ -1,19 +1,10 @@
 use {
     super::{
-        buffer::{self, Buffer},
-        Allocator, CommandBuffer, CommandPool, Device, Texture,  Instance,
-        Swapchain, SwapchainInfo, VK_TIMEOUT_NS,
-    },
-    anyhow::Result,
-    ash::{
+        buffer::{self, Buffer}, Allocator, CommandBuffer, CommandPool, Device, Instance, Swapchain, SwapchainInfo, Texture, VK_TIMEOUT_NS
+    }, anyhow::Result, ash::{
         khr,
         vk::{self, Handle},
-    },
-    bytemuck::Pod,
-    derive_more::Debug,
-    raw_window_handle::{HasDisplayHandle, HasWindowHandle},
-    std::{ffi, slice, sync::Arc},
-    winit::window::Window,
+    }, bytemuck::Pod, derive_more::Debug, raw_window_handle::{HasDisplayHandle, HasWindowHandle}, std::{ffi, slice, sync::Arc}, tracing::instrument, winit::window::Window
 };
 
 const IN_FLIGHT_FRAMES: u32 = 2;
@@ -229,6 +220,7 @@ impl Gpu {
         };
 
         self.swapchain.rebuild(extent)
+
     }
 
     pub fn create_image(&self,

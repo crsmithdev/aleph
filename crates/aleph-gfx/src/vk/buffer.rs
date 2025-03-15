@@ -39,7 +39,7 @@ impl<T: Pod> Buffer<T> {
         location: MemoryLocation,
         label: impl Into<String>,
     ) -> Result<Self> {
-        let size = std::mem::size_of_val(data) as u64;
+        let size = std::mem::size_of::<T>() as u64 * data.len() as u64;
         let buffer = Self::new(device, allocator, size, flags, location, label)?;
         buffer.write(data);
         Ok(buffer)

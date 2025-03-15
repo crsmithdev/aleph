@@ -24,6 +24,7 @@ layout (std140, binding = 2) uniform GpuDrawData {
     mat4 model;
     mat4 model_view;
     mat4 model_view_projection;
+    mat4 world_matrix;
     mat3 normal;
     vec3 position;
 } draw;
@@ -44,8 +45,8 @@ void main()
 {
     out_tex_coords = in_texcoords_0;
     out_world_position = vec3(draw.model * vec4(in_position, 1.0));
-    out_normal = mat3(transpose(inverse(draw.model))) * in_normal;   
+    out_normal = mat3(transpose(inverse(draw.world_matrix))) * in_normal;   
     out_tangent = vec4(mat3(draw.model) * in_tangent.xyz, in_tangent.w);
 
-    gl_Position =  scene.projection * scene.view * vec4(out_world_position, 1.0);
+    gl_Position =  scene.projection * scene.view * draw.world_matrix * vec4(out_world_position, 1.0);
 }
