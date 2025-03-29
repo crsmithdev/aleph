@@ -1,28 +1,30 @@
-
 use {
-    crate::{render::PbrPipeline, scene::{camera::CameraConfig, model::{GpuSceneData, Scene}}, vk::{
-        pipeline::Pipeline, Buffer, BufferUsageFlags, CommandBuffer, Extent2D, Extent3D, Format,
-        Frame, Gpu, ImageAspectFlags, ImageLayout, ImageUsageFlags, Texture,
-    }, AssetCache, Camera},
+    crate::{
+        render::ForewardPipeline,
+        scene::{camera::CameraConfig, Camera},
+        vk::{
+            pipeline::Pipeline, CommandBuffer, Extent2D, Extent3D,
+            Format, Frame, Gpu, ImageAspectFlags, ImageLayout, ImageUsageFlags, Texture,
+        },
+        Scene,
+    },
+    aleph_core::input::InputState,
     anyhow::Result,
-    bytemuck::{Pod, Zeroable},
     core::f32,
-    derive_more::derive::Debug,
-    glam::{vec3, vec4, Mat3, Mat4, Vec3, Vec4},
-    std::mem, tracing::instrument,
+    glam::{vec3, vec4, Vec2, Vec3, Vec4},
+    tracing::instrument,
+    winit::{event::MouseButton, keyboard::Key},
 };
 
 #[derive(Clone)]
 pub struct RenderContext<'a> {
     pub gpu: &'a Gpu,
     pub scene: &'a Scene,
-    pub assets: &'a AssetCache,
     pub camera: &'a Camera,
     pub cmd_buffer: &'a CommandBuffer,
     pub draw_image: &'a Texture,
     pub depth_image: &'a Texture,
     pub extent: Extent2D,
-    pub global_buffer: &'a Buffer<GpuSceneData>,
     pub config: &'a RendererConfig,
 }
 
@@ -49,13 +51,12 @@ impl Default for RendererConfig {
     }
 }
 
-
 pub struct Renderer {
     frames: Vec<Frame>,
-    temp_pipeline: PbrPipeline,
-    global_data_buffer: Buffer<GpuSceneData>,
+    temp_pipeline: ForewardPipeline,
     rebuild_swapchain: bool,
     frame_index: usize,
+    frame_counter: usize,
     draw_image: Texture,
     camera: Camera,
     depth_image: Texture,
@@ -66,11 +67,6 @@ pub struct Renderer {
 impl Renderer {
     pub fn new(gpu: Gpu, config: RendererConfig) -> Result<Self> {
         let frames = Self::create_frames(&gpu)?;
-        let global_buffer = gpu.create_shared_buffer::<GpuSceneData>(
-            mem::size_of::<GpuSceneData>() as u64,
-            BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::UNIFORM_BUFFER,
-            "global uniform",
-        )?;
         let draw_image = gpu.create_image(
             gpu.swapchain().extent(),
             FORMAT_DRAW_IMAGE,
@@ -91,24 +87,47 @@ impl Renderer {
         )?;
 
         let camera = Camera::new(config.camera, gpu.swapchain.extent());
-        let temp_pipeline = PbrPipeline::new(&gpu)?;
+        let foreward_pipeline = ForewardPipeline::new(&gpu)?;
 
         Ok(Self {
             gpu,
             frames,
-            temp_pipeline,
+            temp_pipeline: foreward_pipeline,
             camera,
             draw_image,
             depth_image,
-            global_data_buffer: global_buffer,
             rebuild_swapchain: false,
             frame_index: 0,
+            frame_counter: 0,
             config,
         })
     }
 
+    fn handle_input(&mut self, input: &InputState) {
+        if input.mouse_held(&MouseButton::Right) {
+            if let Some(delta) = input.mouse_delta() {
+                let adjusted = Vec2::new(delta.x / 100., delta.y / 100.);
+                self.camera.rotate(adjusted);
+            }
+        }
+
+        if let Some(delta) = input.mouse_scroll_delta() {
+            self.camera.zoom(delta * 0.01);
+        }
+
+        if input.key_pressed(&Key::Character("a".into())) {
+            self.camera.translate(vec3(-1., 0., 0.));
+        }
+
+        if input.key_pressed(&Key::Character("d".into())) {
+            self.camera.translate(vec3(1., 0., 0.));
+        }
+    }
+
     #[instrument(skip_all)]
-    pub fn execute(&mut self, scene: &Scene, resources: &AssetCache) -> Result<()> {
+    pub fn execute(&mut self, scene: &Scene, input: &InputState) -> Result<()> {
+        self.handle_input(input);
+        tracing::trace!("start of frame {}", self.frame_counter);
 
         if self.rebuild_swapchain {
             self.gpu.rebuild_swapchain()?;
@@ -165,15 +184,12 @@ impl Renderer {
             gpu: &self.gpu,
             scene,
             camera: &self.camera,
-            assets: resources,
             cmd_buffer: &self.frames[self.frame_index].command_buffer,
             draw_image: &self.draw_image,
             depth_image: &self.depth_image,
             extent: self.gpu.swapchain.extent(),
-            global_buffer: &self.global_data_buffer,
             config: &self.config,
         };
-        self.update_buffers();
         self.temp_pipeline.execute(&context)?;
 
         cmd_buffer.transition_image(
@@ -207,6 +223,7 @@ impl Renderer {
 
         self.rebuild_swapchain |= rebuild;
         self.frame_index = image_index;
+        self.frame_counter += 1;
 
         Ok(())
     }
@@ -227,37 +244,11 @@ impl Renderer {
             })
             .collect()
     }
-    fn update_buffers(&self) {
-        let p = 15.;
-        let lights = [
-            vec3(-p, -p * 0.5, -p),
-            vec3(-p, -p * 0.5, p),
-            vec3(p, -p * 0.5, p),
-            vec3(p, -p * 0.5, -p),
-        ];
-        let camera = &self.camera;
-        let data = GpuSceneData {
-            view: camera.view(),
-            projection: camera.projection(),
-            view_projection: camera.view_projection(),
-            lights,
-            camera_position: camera.position(),
-            _padding1: Vec4::ZERO,
-            _padding2: 0.0,
-        };
-
-        self.global_data_buffer.write(&[data]);
-
-        // for object in context.objects.iter() {
-        //     object.update_model_buffer(camera);
-        // }
-    }
 }
 
 impl Drop for Renderer {
     fn drop(&mut self) {
         unsafe { self.gpu.device().handle().device_wait_idle().unwrap() };
-        self.global_data_buffer.destroy();
         // mem::drop(&self.draw_image);
         // mem::drop(&self.depth_image);
     }

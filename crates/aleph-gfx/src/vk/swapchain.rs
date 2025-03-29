@@ -3,7 +3,7 @@ use {
     anyhow::Result,
     ash::{
         khr,
-        vk::{self, Handle},
+        vk::{self, CompositeAlphaFlagsKHR, Handle, SurfaceTransformFlagsKHR},
     },
     derive_more::Debug, tracing::instrument,
 };
@@ -58,7 +58,6 @@ impl Swapchain {
    #[instrument(skip(self))] 
     pub fn rebuild(&mut self, extent: vk::Extent2D) -> Result<()> {
         
-        tracing::info!("Swapchain rebuild triggered");
         let instance = self.instance.clone();
         let device = self.device.clone();
         let surface = self.surface.clone();
@@ -67,9 +66,7 @@ impl Swapchain {
         let next_swapchain =
             Self::create_swapchain(&instance, &device, &surface, &info, Some(self.handle))?;
 
-        tracing::info!("Created new swapchain: {next_swapchain:?}");
         let last_swapchain = std::mem::replace(self, next_swapchain);
-        tracing::info!("Destroying last swapchain: {last_swapchain:?}");
         last_swapchain.destroy();
 
         Ok(())
@@ -90,29 +87,25 @@ impl Swapchain {
                 .loader
                 .get_physical_device_surface_capabilities(device.physical_device, surface.inner)
         }?;
-        let surface_resolution = match capabilities.current_extent.width {
-            std::u32::MAX => info.extent,
-            _ => capabilities.current_extent,
-        };
-        let present_mode = match info.vsync {
-            true => vk::PresentModeKHR::FIFO_RELAXED,
-            false => vk::PresentModeKHR::MAILBOX,
-        };
-
+        let formats: Vec<vk::SurfaceFormatKHR> = unsafe {
+            surface
+                .loader
+                .get_physical_device_surface_formats(device.physical_device, surface.inner)
+        }?;
         let mut swapchain_info = vk::SwapchainCreateInfoKHR::default()
             .surface(surface.inner)
             .min_image_count(in_flight_frames)
-            .image_color_space(info.color_space)
             .image_format(info.format)
-            .image_extent(surface_resolution)
+            .image_color_space(info.color_space)
+            .image_extent(capabilities.current_extent)
             .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .pre_transform(vk::SurfaceTransformFlagsKHR::IDENTITY)
-            .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
-            .present_mode(present_mode)
-            .clipped(true)
+            .image_array_layers(1)
+            .present_mode(vk::PresentModeKHR::FIFO)
+            .pre_transform(SurfaceTransformFlagsKHR::IDENTITY)
+            .composite_alpha(CompositeAlphaFlagsKHR::OPAQUE)
+            // .clipped(true)
             .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST)
-            .queue_family_indices(&indices)
-            .image_array_layers(1);
+            .queue_family_indices(&indices);
         if let Some(old_swapchain) = old_swapchain {
             swapchain_info = swapchain_info.old_swapchain(old_swapchain);
         }
@@ -131,7 +124,7 @@ impl Swapchain {
                 let image_view_info = vk::ImageViewCreateInfo::default()
                     .image(handle)
                     .view_type(vk::ImageViewType::TYPE_2D)
-                    .format(vk::Format::B8G8R8A8_UNORM)
+                    .format(vk::Format::B8G8R8A8_SRGB)
                     .subresource_range(subresource_range);
                 let view = unsafe {
                     device
@@ -171,7 +164,6 @@ impl Swapchain {
 
 impl Swapchain {
     pub fn destroy(&self) {
-        log::info!("Destroying swapchain: {:?}", self);
         unsafe {
             self.loader.destroy_swapchain(self.handle, None);
             self.images

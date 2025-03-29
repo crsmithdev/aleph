@@ -20,6 +20,7 @@ pub struct PipelineBuilder<'a> {
     multisample: vk::PipelineMultisampleStateCreateInfo<'a>,
     vertex_shader: vk::ShaderModule,
     fragment_shader: vk::ShaderModule,
+    geometry_shader: vk::ShaderModule,
     vertex_bindings: Vec<vk::VertexInputBindingDescription>,
     vertex_attributes: Vec<vk::VertexInputAttributeDescription>,
     color_blend_formats: HashSet<vk::Format, std::hash::RandomState>,
@@ -45,6 +46,7 @@ impl Default for PipelineBuilder<'_> {
                 .line_width(1.0),
             vertex_shader: vk::ShaderModule::null(),
             fragment_shader: vk::ShaderModule::null(),
+            geometry_shader: vk::ShaderModule::null(),
             vertex_attributes: vec![],
             vertex_bindings: vec![],
             depth_format: vk::Format::D32_SFLOAT,
@@ -64,8 +66,21 @@ impl<'a> PipelineBuilder<'a> {
             .stage(vk::ShaderStageFlags::FRAGMENT)
             .module(self.fragment_shader)
             .name(SHADER_MAIN);
+        let geometry_stage = vk::PipelineShaderStageCreateInfo::default()
+            .stage(vk::ShaderStageFlags::GEOMETRY)
+            .module(self.geometry_shader)
+            .name(SHADER_MAIN);
         // TODO no shader condition
-        let stages = &[vertex_stage, fragment_stage];
+        let mut stages = vec![];
+        if self.vertex_shader != vk::ShaderModule::null() {
+            stages.push(vertex_stage);
+        }
+        if self.fragment_shader != vk::ShaderModule::null() {
+            stages.push(fragment_stage);
+        }
+        if self.geometry_shader != vk::ShaderModule::null() {
+            stages.push(geometry_stage);
+        }
         let vertex_attributes = &self.vertex_attributes;
         let vertex_binding = &self.vertex_bindings;
         let vertex_state = vk::PipelineVertexInputStateCreateInfo::default()
@@ -79,7 +94,7 @@ impl<'a> PipelineBuilder<'a> {
         let dynamic_state =
             vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
         let info = vk::GraphicsPipelineCreateInfo::default()
-            .stages(stages)
+            .stages(&stages)
             .layout(layout)
             .dynamic_state(&dynamic_state)
             .vertex_input_state(&vertex_state)
@@ -205,6 +220,12 @@ impl<'a> PipelineBuilder<'a> {
         self
     }
 
+    pub fn dynamic_line_width(&mut self) -> &mut Self {
+        self.rasterization = self.rasterization.line_width(1.0);
+        self.dynamic_states.insert(vk::DynamicState::LINE_WIDTH);
+        self
+    }
+
     pub fn vertex_shader(&mut self, shader: vk::ShaderModule) -> &mut Self {
         self.vertex_shader = shader;
         self
@@ -212,6 +233,11 @@ impl<'a> PipelineBuilder<'a> {
 
     pub fn fragment_shader(&mut self, shader: vk::ShaderModule) -> &mut Self {
         self.fragment_shader = shader;
+        self
+    }
+
+    pub fn geometry_shader(&mut self, shader: vk::ShaderModule) -> &mut Self {
+        self.geometry_shader = shader;
         self
     }
 }
@@ -273,7 +299,11 @@ impl<'a> ResourceBinder<'a> {
     }
 
     pub fn image(&mut self, index: u32, image: &'a Texture, sampler: vk::Sampler) -> &mut Self {
-        let resource = BoundResource::Image { index, image, sampler };
+        let resource = BoundResource::Image {
+            index,
+            image,
+            sampler,
+        };
         self.bindings.push(resource);
         self
     }
@@ -296,7 +326,11 @@ impl<'a> ResourceBinder<'a> {
                     buffer_infos.push([info]);
                     buffer_writes.push(write);
                 }
-                BoundResource::Image { index, image, sampler } => {
+                BoundResource::Image {
+                    index,
+                    image,
+                    sampler,
+                } => {
                     let (info, write) = self.write_image(image, *sampler, *index);
                     image_infos.push([info]);
                     image_writes.push(write);

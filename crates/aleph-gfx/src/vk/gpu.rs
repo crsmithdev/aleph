@@ -1,10 +1,20 @@
 use {
     super::{
-        buffer::{self, Buffer}, Allocator, CommandBuffer, CommandPool, Device, Instance, Swapchain, SwapchainInfo, Texture, VK_TIMEOUT_NS
-    }, anyhow::Result, ash::{
+        buffer::{self, Buffer},
+        Allocator, CommandBuffer, CommandPool, Device, Instance, Swapchain, SwapchainInfo, Texture,
+        VK_TIMEOUT_NS,
+    },
+    aleph_core::log,
+    anyhow::Result,
+    ash::{
         khr,
         vk::{self, Handle},
-    }, bytemuck::Pod, derive_more::Debug, raw_window_handle::{HasDisplayHandle, HasWindowHandle}, std::{ffi, slice, sync::Arc}, tracing::instrument, winit::window::Window
+    },
+    bytemuck::Pod,
+    derive_more::Debug,
+    raw_window_handle::{HasDisplayHandle, HasWindowHandle},
+    std::{ffi, slice, sync::Arc},
+    winit::window::Window,
 };
 
 const IN_FLIGHT_FRAMES: u32 = 2;
@@ -63,7 +73,7 @@ impl Gpu {
             &surface,
             &SwapchainInfo {
                 extent,
-                format: vk::Format::B8G8R8A8_UNORM,
+                format: vk::Format::B8G8R8A8_SRGB,
                 color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
                 vsync: true,
                 num_images: IN_FLIGHT_FRAMES,
@@ -220,22 +230,42 @@ impl Gpu {
         };
 
         self.swapchain.rebuild(extent)
-
     }
 
-    pub fn create_image(&self,
+    pub fn create_image(
+        &self,
         extent: vk::Extent2D,
         format: vk::Format,
         usage: vk::ImageUsageFlags,
         aspect_flags: vk::ImageAspectFlags,
         label: impl Into<String>,
-    
     ) -> Result<Texture> {
-        Texture::new(self.device.clone(), Arc::clone(&self.allocator), extent, format, usage, aspect_flags, label)
+        Texture::new(
+            self.device.clone(),
+            Arc::clone(&self.allocator),
+            extent,
+            format,
+            usage,
+            aspect_flags,
+            label,
+        )
     }
 
-    pub fn create_sampler(&self, min_filter: vk::Filter, mag_filter: vk::Filter, mipmap_mode: vk::SamplerMipmapMode) -> Result<vk::Sampler> {
-        self.device.create_sampler(min_filter, mag_filter, mipmap_mode)
+    pub fn create_sampler(
+        &self,
+        min_filter: vk::Filter,
+        mag_filter: vk::Filter,
+        mipmap_mode: vk::SamplerMipmapMode,
+        address_mode_u: vk::SamplerAddressMode,
+        address_mode_v: vk::SamplerAddressMode,
+    ) -> Result<vk::Sampler> {
+        self.device.create_sampler(
+            min_filter,
+            mag_filter,
+            mipmap_mode,
+            address_mode_u,
+            address_mode_v,
+        )
     }
 
     pub fn execute(&self, callback: impl FnOnce(&CommandBuffer)) -> Result<()> {
@@ -282,10 +312,4 @@ pub unsafe extern "system" fn vulkan_debug_callback(
     }
 
     vk::FALSE
-}
-
-impl Drop for Gpu {
-    fn drop(&mut self) {
-        log::debug!("Dropping GPU");
-    }
 }

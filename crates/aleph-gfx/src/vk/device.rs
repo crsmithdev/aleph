@@ -14,7 +14,6 @@ const DEVICE_EXTENSIONS: [&ffi::CStr; 10] = [
     khr::maintenance2::NAME,
     khr::maintenance3::NAME,
     khr::swapchain::NAME,
-    // ext::swapchain_maintenance1::NAME,
     khr::synchronization2::NAME,
     khr::dynamic_rendering::NAME,
     ext::descriptor_indexing::NAME,
@@ -88,8 +87,9 @@ impl Device {
             ash::vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::default()
                 .runtime_descriptor_array(true);
 
-        let mut device_features = vk::PhysicalDeviceFeatures2::default()
-            // .push_next(&mut swapchain_maintenance1_features)
+        let device_features1 = vk::PhysicalDeviceFeatures::default().geometry_shader(true).wide_lines(true);
+        let mut device_features2 = vk::PhysicalDeviceFeatures2::default()
+            .features(device_features1)
             .push_next(&mut synchronization2_features)
             .push_next(&mut dynamic_rendering_features)
             .push_next(&mut buffer_device_address_features)
@@ -99,7 +99,7 @@ impl Device {
             physical_device,
             queue_family,
             &device_extension_names,
-            &mut device_features,
+            &mut device_features2,
         )?;
         let queue = Self::create_queue(&handle, queue_family);
         let push_descriptor = khr::push_descriptor::Device::new(&instance.handle, &handle);
@@ -133,7 +133,6 @@ impl Device {
             _ => 0,
         };
 
-        log::debug!("{:?} {}", physical_device, score);
         score
     }
 
@@ -163,8 +162,22 @@ impl Device {
 
     pub fn handle(&self) -> &ash::Device { &self.handle }
 
-    pub fn create_sampler(&self, min_filter: vk::Filter, mag_filter: vk::Filter, mipmap_mode: vk::SamplerMipmapMode) -> Result<vk::Sampler> {
-        let info = vk::SamplerCreateInfo::default().mag_filter(mag_filter).min_filter(min_filter).min_lod(0.).max_lod(LOD_CLAMP_NONE).mipmap_mode(mipmap_mode);  
+    pub fn create_sampler(
+        &self,
+        min_filter: vk::Filter,
+        mag_filter: vk::Filter,
+        mipmap_mode: vk::SamplerMipmapMode,
+        address_mode_u: vk::SamplerAddressMode,
+        address_mode_v: vk::SamplerAddressMode,
+    ) -> Result<vk::Sampler> {
+        let info = vk::SamplerCreateInfo::default()
+            .mag_filter(mag_filter)
+            .min_filter(min_filter)
+            .min_lod(0.)
+            .max_lod(LOD_CLAMP_NONE)
+            .mipmap_mode(mipmap_mode)
+            .address_mode_u(address_mode_u)
+            .address_mode_v(address_mode_v);
         Ok(unsafe { self.handle.create_sampler(&info, None)? })
     }
 

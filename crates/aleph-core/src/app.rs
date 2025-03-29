@@ -1,20 +1,16 @@
 use {
     crate::{
         events::{Event, EventRegistry},
+        input::{Input, InputState},
         layer::LayerDyn,
-        logging,
-        Layer,
-        DEFAULT_APP_NAME,
-        DEFAULT_WINDOW_SIZE,
-        STEP_TIME_US,
-        UPDATE_TIME_US,
+        log, Layer, DEFAULT_APP_NAME, DEFAULT_WINDOW_SIZE, STEP_TIME_US, UPDATE_TIME_US,
     },
     anyhow::{anyhow, Result},
     derive_more::Debug,
     human_panic::setup_panic,
     std::{
         sync::Arc,
-        time::{Duration, Instant},
+        time::{Duration, Instant}
     },
     winit::{
         application::ApplicationHandler,
@@ -22,7 +18,6 @@ use {
         event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
         window::{Window, WindowId},
     },
-    tracing::info,
 };
 
 #[derive(Clone, Debug)]
@@ -47,7 +42,9 @@ impl Default for AppConfig {
 }
 
 #[derive(Debug)]
-pub struct TickEvent {}
+pub struct TickEvent {
+    pub input: InputState,
+}
 impl Event for TickEvent {}
 
 #[allow(dead_code)]
@@ -62,9 +59,7 @@ pub struct App {
 
 impl App {
     pub fn new(config: AppConfig) -> Self {
-        // logging::setup_logger().expect("Failed to setup logging");
-        logging::setup_telemetry();
-        info!("test");
+        log::setup();
         setup_panic!();
 
         App {
@@ -119,6 +114,7 @@ struct AppHandler<'a> {
     app: &'a mut App,
     wait_canceled: bool,
     close_requested: bool,
+    input: Input,
 }
 impl<'a> AppHandler<'a> {
     fn new(app: &'a mut App) -> Self {
@@ -126,6 +122,7 @@ impl<'a> AppHandler<'a> {
             app,
             wait_canceled: false,
             close_requested: false,
+            input: Input::default(),
         }
     }
 }
@@ -155,8 +152,9 @@ impl ApplicationHandler for AppHandler<'_> {
             event_loop.exit();
         }
 
-        self.app.emit(&TickEvent {});
-        
+        let input = self.input.next_frame();
+        self.app.emit(&TickEvent { input });
+
         if !self.wait_canceled {
             event_loop.set_control_flow(ControlFlow::WaitUntil(
                 Instant::now() + Duration::from_millis(1),
@@ -170,6 +168,8 @@ impl ApplicationHandler for AppHandler<'_> {
         _window_id: WindowId,
         event: WindowEvent,
     ) {
+        self.input.handle_window_event(&event);
+
         #[allow(clippy::single_match)]
         match event {
             WindowEvent::CloseRequested => {
@@ -178,8 +178,15 @@ impl ApplicationHandler for AppHandler<'_> {
             // ...
             _ => {}
         }
+    }
 
-        self.app.emit(&WinitEvent::WindowEvent(event));
+    fn device_event(
+        &mut self,
+        _event_loop: &ActiveEventLoop,
+        _device_id: winit::event::DeviceId,
+        event: winit::event::DeviceEvent,
+    ) {
+        self.input.handle_device_event(&event);
     }
 }
 

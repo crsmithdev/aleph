@@ -39,7 +39,8 @@ impl<T: Pod> Buffer<T> {
         location: MemoryLocation,
         label: impl Into<String>,
     ) -> Result<Self> {
-        let size = std::mem::size_of::<T>() as u64 * data.len() as u64;
+        let data2 = bytemuck::cast_slice(&data);
+        let size = bytemuck::cast_slice::<u8, u8>(data2).len() as u64;
         let buffer = Self::new(device, allocator, size, flags, location, label)?;
         buffer.write(data);
         Ok(buffer)
@@ -79,7 +80,6 @@ pub struct RawBuffer {
     allocator: Arc<Allocator>,
     #[debug("{:x}", allocation.as_ptr() as u64)]
     allocation: RefCell<Allocation>,
-    label: String,
     size: u64,
 }
 
@@ -96,8 +96,9 @@ impl RawBuffer {
         let create_info = vk::BufferCreateInfo::default().size(size).usage(flags);
         let handle = unsafe { device.handle().create_buffer(&create_info, None) }?;
         let requirements = unsafe { device.handle().get_buffer_memory_requirements(handle) };
+        let label = &label.into();
         let allocation =
-            RefCell::new(allocator.allocate_buffer(handle, requirements, location, None)?);
+            RefCell::new(allocator.allocate_buffer(handle, requirements, location, label)?);
 
         let address = match location {
             MemoryLocation::GpuOnly => {
@@ -110,7 +111,6 @@ impl RawBuffer {
         Ok(Self {
             device: device.clone(),
             allocator: Arc::clone(&allocator),
-            label: label.into(),
             size,
             handle,
             allocation,
@@ -126,7 +126,9 @@ impl RawBuffer {
         location: MemoryLocation,
         label: impl Into<String>,
     ) -> Result<Self> {
-        let size = std::mem::size_of_val(data) as u64;
+        let size = bytemuck::cast_slice::<u8, u8>(data).len() as u64;
+        
+        // let size = std::mem::size_of_val(data) as u64;
         let buffer = Self::new(device, allocator, size, flags, location, label)?;
         buffer.write(data);
         Ok(buffer)
@@ -153,7 +155,6 @@ impl RawBuffer {
     }
 
     pub fn destroy(&self) {
-        log::debug!("Destroying buffer: {:?}", self.label);
         let allocation = self.allocation.replace(Allocation::default());
         self.allocator.deallocate(allocation);
         unsafe { self.device.handle.destroy_buffer(self.handle, None) };

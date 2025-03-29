@@ -2,7 +2,8 @@ pub mod app;
 pub mod constants;
 pub mod events;
 pub mod layer;
-pub mod logging;
+pub mod log;
+pub mod input;
 
 use winit::dpi::{PhysicalSize, Size};
 
@@ -18,7 +19,7 @@ pub use {
     app::{App, AppConfig, UpdateLayer},
     events::Event,
     layer::Layer,
-    logging::setup_logger,
+    log::setup,
 };
 
 pub use winit::window::Window;

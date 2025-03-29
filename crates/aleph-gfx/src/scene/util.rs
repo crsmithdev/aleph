@@ -9,28 +9,20 @@ use {
     },
     anyhow::Result,
     ash::vk::{ClearColorValue, Extent2D},
-    bytemuck::Pod,
-    image,
+    bytemuck::Pod, image::EncodableLayout,
 };
 
 pub fn single_color_image(
     gpu: &Gpu,
     pixel: [f32; 4],
-    extent: Extent2D,
     label: impl Into<String>,
 ) -> Result<Texture> {
-    // let created = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
-    //     extent.width,
-    //     extent.height,
-    //     image::Rgba::<u8>::from([
-    //         (pixel[0] * 255.0) as u8,
-    //         (pixel[1] * 255.0) as u8,
-    //         (pixel[2] * 255.0) as u8,
-    //         (pixel[3] * 255.0) as u8,
-    //     ]),
-    // ))
-    // .into_rgba8();
-    let data = pixel.repeat(extent.width as usize * extent.height as usize);
+    let extent = Extent2D {
+        width: 1,
+        height: 1,
+    };
+    let pixels = &[pixel];
+    let data = bytemuck::bytes_of(pixels);
     let image = gpu.create_image(
         extent,
         Format::R8G8B8A8_SRGB,
@@ -41,8 +33,12 @@ pub fn single_color_image(
 
     let staging = staging_buffer(gpu, &data, "staging")?;
     gpu.execute(|cmd| {
-        cmd.copy_buffer_to_image(&staging, &image); //, dst);
-                                                    // cmd.transition_image(&image, ImageLayout::UNDEFINED, ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+        cmd.copy_buffer_to_image(&staging, &image);
+        cmd.transition_image(
+            &image,
+            ImageLayout::UNDEFINED,
+            ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        );
     })?;
 
     Ok(image)
@@ -75,14 +71,15 @@ pub fn staging_buffer<T: Pod>(
     data: &[T],
     label: impl Into<String>,
 ) -> Result<Buffer<T>> {
-    Buffer::from_data(
+    let buffer = Buffer::from_data(
         gpu.device(),
         gpu.allocator(),
         data,
         BufferUsageFlags::TRANSFER_SRC,
         MemoryLocation::GpuToCpu,
         label,
-    )
+    )?;
+    Ok(buffer)
 }
 
 pub fn color_attachment<'a>(image: &Texture) -> RenderingAttachmentInfo<'a> {
@@ -110,4 +107,12 @@ pub fn depth_attachment<'a>(image: &Texture) -> RenderingAttachmentInfo<'a> {
         })
         .load_op(AttachmentLoadOp::CLEAR)
         .store_op(AttachmentStoreOp::DONT_CARE)
+}
+
+pub fn rgb_to_rgba(data_rgb: &[u8], extent: Extent2D) -> Vec<u8> {
+    let image = image::DynamicImage::ImageRgb8(
+        image::ImageBuffer::from_raw(extent.width, extent.height, data_rgb.to_vec())
+            .expect("raw"));
+    let dest = image.to_rgba8();
+    dest.as_bytes().to_vec()
 }

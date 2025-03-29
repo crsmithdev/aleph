@@ -14,4 +14,8 @@ humantime.workspace = true
 derive_more.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+tracing-log.workspace = true
+chrono.workspace = true
+glam.workspace = true
 
+winit_input_helper = "0.16.0"

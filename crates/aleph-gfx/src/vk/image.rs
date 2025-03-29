@@ -1,4 +1,3 @@
-use ash::vk::SamplerMipmapMode;
 pub use ash::vk::{Format, ImageAspectFlags, ImageUsageFlags};
 use {
     crate::vk::{Allocator, Device, Extent2D},
@@ -15,7 +14,6 @@ pub struct Texture {
     view: vk::ImageView,
     extent: Extent2D,
     format: Format,
-    sampler: vk::Sampler,
     label: String,
 }
 
@@ -52,13 +50,11 @@ impl Texture {
                     .layer_count(1),
             );
         let view = unsafe { device.handle.create_image_view(&view_info, None) }?;
-        let sampler = device.create_sampler(vk::Filter::NEAREST, vk::Filter::NEAREST, SamplerMipmapMode::NEAREST)?;
         Ok(Self {
             image: inner,
             view,
             extent,
             format,
-            sampler,
             label,
         })
     }
@@ -71,7 +67,6 @@ impl Texture {
         format: vk::Format,
         label: impl Into<String>,
     ) -> Result<Self> {
-        let sampler = device.create_sampler(vk::Filter::NEAREST, vk::Filter::NEAREST, SamplerMipmapMode::NEAREST)?;
         Ok(Self {
             image: ImageInner {
                 handle: image,
@@ -80,7 +75,6 @@ impl Texture {
             view,
             extent,
             format,
-            sampler,
             label: label.into(),
         })
     }
@@ -94,8 +88,6 @@ impl Texture {
     pub fn format(&self) -> Format { self.format }
 
     pub fn label(&self) -> &str { &self.label }
-
-    pub fn sampler(&self) -> vk::Sampler { self.sampler }
 }
 
 #[derive(Debug)]

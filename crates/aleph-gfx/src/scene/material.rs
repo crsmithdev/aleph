@@ -3,41 +3,8 @@ use {
     ash::vk::{self},
     derive_more::derive::Debug,
     glam::{vec4, Vec4},
-    std::{collections::HashMap, hash::Hash, mem, sync::atomic},
+    std::mem,
 };
-
-#[derive(Debug)]
-pub struct AssetCache {
-    counter: atomic::AtomicU64,
-    materials: HashMap<AssetHandle, Material>,
-}
-
-impl Default for AssetCache {
-    fn default() -> Self {
-        Self {
-            counter: atomic::AtomicU64::new(0),
-            materials: HashMap::new(),
-        }
-    }
-}
-
-#[derive(PartialEq, Clone, Copy, Eq, Hash, Debug)]
-pub struct AssetHandle {
-    pub id: u64,
-}
-
-impl AssetCache {
-    pub fn add_material(&mut self, material: Material) -> AssetHandle {
-        let id = self.counter.fetch_add(1, atomic::Ordering::Relaxed);
-        let handle = AssetHandle { id };
-        self.materials.insert(handle, material);
-        handle
-    }
-
-    pub fn get_material(&self, handle: AssetHandle) -> Option<&Material> {
-        self.materials.get(&handle)
-    }
-}
 
 #[inline]
 #[allow(non_snake_case)]
@@ -50,16 +17,20 @@ pub fn packUnorm4x8(v: Vec4) -> u32 {
 
 #[derive(Debug)]
 pub struct Material {
-    pub albedo_map: Texture,
-    pub albedo_sampler: vk::Sampler,
-    pub normal_map: Texture,
+    pub name: String,
+    #[debug("{:?}", base_color_tx.extent())]
+    pub base_color_tx: Texture,
+    pub base_color_factor: Vec4,
+    pub base_color_sampler: vk::Sampler,
+    #[debug("{:?}", normal_tx.extent())]
+    pub normal_tx: Texture,
     pub normal_sampler: vk::Sampler,
-    pub metallic_map: Texture,
-    pub roughness_map: Texture,
-    pub metallic_sampler: vk::Sampler,
-    pub roughness_sampler: vk::Sampler,
-    pub roughness_factor: f32,
+    #[debug("{:?}", metallic_roughness_tx.extent())]
+    pub metallic_roughness_tx: Texture,
+    pub metallic_roughness_sampler: vk::Sampler,
     pub metallic_factor: f32,
-    pub occlusion_map: Texture,
+    pub roughness_factor: f32,
+    #[debug("{:?}", occlusion_tx.extent())]
+    pub occlusion_tx: Texture,
     pub occlusion_sampler: vk::Sampler,
 }

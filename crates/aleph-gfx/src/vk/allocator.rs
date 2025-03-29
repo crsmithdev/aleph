@@ -46,14 +46,14 @@ impl Allocator {
         buffer: VkBuffer,
         requirements: MemoryRequirements,
         location: MemoryLocation,
-        label: Option<&'static str>,
+        label: impl Into<String>,
     ) -> Result<Allocation> {
         let mut allocator = self
             .inner
             .lock()
             .expect("Could not acquire lock on allocator");
         let allocation = allocator.allocate(&AllocationCreateDesc {
-            name: label.unwrap_or("default"),
+            name: &label.into(),
             requirements,
             location,
             linear: true,

@@ -79,6 +79,7 @@ impl CommandBuffer {
         Ok(unsafe { self.device.handle.end_command_buffer(self.handle)? })
     }
 
+
     pub fn begin_rendering(
         &self,
         color_attachments: &[vk::RenderingAttachmentInfo],
@@ -291,6 +292,10 @@ impl CommandBuffer {
                 .handle
                 .queue_submit2(queue.handle, submit_info, fence)
         }?)
+    }
+
+    pub fn set_line_width(&self, width: f32) {
+        unsafe { self.device.handle.cmd_set_line_width(self.handle, width) }
     }
 
     pub fn transition_image(
