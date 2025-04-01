@@ -2,7 +2,7 @@ use {
     crate::{
         render::renderer::RenderContext,
         scene::{
-            model::{GpuDrawData, GpuMaterialData, Primitive},
+            model::{GpuDrawData, Primitive},
             util, NodeData,
         },
         vk::{
@@ -10,26 +10,19 @@ use {
             Buffer, CommandBuffer, Format, Gpu, PipelineBindPoint, PipelineLayout, Rect2D,
             VkPipeline,
         },
-        Material, Mesh,
+        Mesh,
     },
     anyhow::Result,
     ash::vk::{self, AttachmentLoadOp, AttachmentStoreOp, BufferUsageFlags, CompareOp},
-    glam::{Mat4, Vec2},
+    glam::Mat4,
     petgraph::{graph::NodeIndex, visit::EdgeRef},
     std::mem,
     tracing::{instrument, warn},
 };
 
-const BIND_IDX_DRAW: u32 = 0;
-const BIND_IDX_MATERIAL: u32 = 1;
-const BIND_IDX_BASE_COLOR: u32 = 2;
-const BIND_IDX_NORMAL: u32 = 3;
-const BIND_IDX_METALLIC_ROUGHNESS: u32 = 4;
-const BIND_IDX_OCCLUSION: u32 = 5;
-const CLEAR_COLOR: [f32; 4] = [0.7, 0.7, 0.7, 1.0];
+const IDX_BIND_DRAW: u32 = 0;
+const CLEAR_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
 
-const VERTEX_SHADER_PATH: &str = "shaders/mesh.vert.spv";
-const FRAGMENT_SHADER_PATH: &str = "shaders/mesh.frag.spv";
 const VERTEX_ATTRIBUTES: [(u32, vk::Format); 8] = [
     (0, Format::R32G32B32_SFLOAT),  // position (3x f32 = 12 bytes)
     (12, Format::R32_SFLOAT),       // texcoord0.x (1x f32 = 4 bytes)
@@ -41,36 +34,42 @@ const VERTEX_ATTRIBUTES: [(u32, vk::Format); 8] = [
     (72, Format::R32_SFLOAT),       // padding (1x f32 = 4 bytes)
 ];
 
-pub struct ForewardPipeline {
+pub struct DebugPipeline {
     handle: VkPipeline,
-    layout: PipelineLayout,
-    material_buffer: Buffer<GpuMaterialData>,
+    pipeline_layout: PipelineLayout,
     draw_buffer: Buffer<GpuDrawData>,
 }
 
-impl Pipeline for ForewardPipeline {
+impl Pipeline for DebugPipeline {
     #[instrument(skip_all)]
     fn execute(&self, context: &RenderContext) -> Result<()> {
-        let cmd = context.cmd_buffer;
-
         let color_attachments = &[util::color_attachment(
             context.draw_image,
-            AttachmentLoadOp::CLEAR,
+            AttachmentLoadOp::LOAD,
             AttachmentStoreOp::STORE,
             CLEAR_COLOR,
         )];
         let depth_attachment = &util::depth_attachment(
             context.depth_image,
-            AttachmentLoadOp::CLEAR,
+            AttachmentLoadOp::LOAD,
             AttachmentStoreOp::STORE,
             1.0,
         );
-        let viewport = util::viewport_inverted(context.extent.into());
+        let viewport = util::viewport_inverted(context.extent);
 
-        cmd.begin_rendering(color_attachments, Some(depth_attachment), context.extent)?;
-        cmd.set_viewport(viewport);
-        cmd.set_scissor(Rect2D::default().extent(context.extent));
-        cmd.bind_pipeline(PipelineBindPoint::GRAPHICS, self.handle)?;
+        context.cmd_buffer.begin_rendering(
+            color_attachments,
+            Some(depth_attachment),
+            context.extent,
+        )?;
+        context.cmd_buffer.set_viewport(viewport);
+        context
+            .cmd_buffer
+            .set_scissor(Rect2D::default().extent(context.extent));
+        context.cmd_buffer.set_line_width(1.0);
+        context
+            .cmd_buffer
+            .bind_pipeline(PipelineBindPoint::GRAPHICS, self.handle)?;
 
         self.draw_scene(context);
 
@@ -78,35 +77,24 @@ impl Pipeline for ForewardPipeline {
     }
 }
 
-impl ForewardPipeline {
+impl DebugPipeline {
     pub fn new(gpu: &Gpu) -> Result<Self> {
         let descriptor_layout = ResourceLayout::default()
-            .buffer(BIND_IDX_DRAW, vk::ShaderStageFlags::ALL_GRAPHICS)
-            .buffer(BIND_IDX_MATERIAL, vk::ShaderStageFlags::ALL_GRAPHICS)
-            .image(BIND_IDX_BASE_COLOR, vk::ShaderStageFlags::FRAGMENT)
-            .image(BIND_IDX_NORMAL, vk::ShaderStageFlags::FRAGMENT)
-            .image(BIND_IDX_METALLIC_ROUGHNESS, vk::ShaderStageFlags::FRAGMENT)
-            .image(BIND_IDX_OCCLUSION, vk::ShaderStageFlags::FRAGMENT)
+            .buffer(IDX_BIND_DRAW, vk::ShaderStageFlags::ALL_GRAPHICS)
             .layout(gpu)?;
 
-        let layout = gpu.create_pipeline_layout(&[descriptor_layout], &[])?;
-        let handle = Self::create_pipeline(gpu, layout)?;
+        let pipeline_layout = gpu.create_pipeline_layout(&[descriptor_layout], &[])?;
+        let handle = Self::create_pipeline(gpu, pipeline_layout)?;
 
-        let material_buffer = gpu.create_shared_buffer::<GpuMaterialData>(
-            mem::size_of::<GpuMaterialData>() as u64,
-            BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::UNIFORM_BUFFER,
-            "forward-material",
-        )?;
         let draw_buffer = gpu.create_shared_buffer::<GpuDrawData>(
             mem::size_of::<GpuDrawData>() as u64,
             BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::UNIFORM_BUFFER,
-            "forward-draw",
+            "draw",
         )?;
 
         Ok(Self {
             handle,
-            layout,
-            material_buffer,
+            pipeline_layout,
             draw_buffer,
         })
     }
@@ -136,10 +124,8 @@ impl ForewardPipeline {
 
     fn draw_mesh(&self, context: &RenderContext<'_>, mesh: &Mesh, transform: Mat4) {
         for primitive in mesh.primitives.iter() {
-            let material = self.get_material(context, primitive.material_idx);
             self.update_draw_buffer(context, primitive, transform);
-            self.update_material_buffer(material);
-            self.bind_resources(context.cmd_buffer, primitive, &material);
+            self.bind_resources(context.cmd_buffer, primitive);
             context
                 .cmd_buffer
                 .draw_indexed(primitive.vertex_count, 1, 0, 0, 0);
@@ -147,8 +133,10 @@ impl ForewardPipeline {
     }
 
     fn create_pipeline(gpu: &Gpu, layout: PipelineLayout) -> Result<vk::Pipeline> {
-        let vertex_shader = gpu.create_shader_module(VERTEX_SHADER_PATH)?;
-        let fragment_shader = gpu.create_shader_module(FRAGMENT_SHADER_PATH)?;
+        let geometry_shader = gpu.create_shader_module("shaders/debug.geom.spv")?;
+        let vertex_shader = gpu.create_shader_module("shaders/debug.vert.spv")?;
+        let fragment_shader = gpu.create_shader_module("shaders/debug.frag.spv")?;
+
         let attachments = &[vk::PipelineColorBlendAttachmentState::default()
             .blend_enable(false)
             .color_write_mask(
@@ -157,11 +145,11 @@ impl ForewardPipeline {
                     | vk::ColorComponentFlags::G
                     | vk::ColorComponentFlags::B,
             )];
-
         PipelineBuilder::default() // TODO verify defaults
             .vertex_attributes(&VERTEX_ATTRIBUTES)
             .vertex_shader(vertex_shader)
             .fragment_shader(fragment_shader)
+            .geometry_shader(geometry_shader)
             .blend_disabled(attachments)
             .depth_enabled(CompareOp::LESS_OR_EQUAL)
             .input_topology(vk::PrimitiveTopology::TRIANGLE_LIST)
@@ -170,6 +158,7 @@ impl ForewardPipeline {
             .multisampling_disabled()
             .dynamic_scissor()
             .dynamic_viewport()
+            .dynamic_line_width()
             .build(gpu, layout)
     }
 
@@ -208,53 +197,10 @@ impl ForewardPipeline {
         self.draw_buffer.write(&[data]);
     }
 
-    fn get_material<'a>(
-        &'a self,
-        context: &'a RenderContext,
-        material_idx: Option<usize>,
-    ) -> &'a Material {
-        match material_idx {
-            Some(idx) => &context.scene.materials[idx],
-            None => &context.scene.materials[context.scene.default_material_idx],
-        }
-    }
-
-    fn update_material_buffer(&self, material: &Material) {
-        let data = GpuMaterialData {
-            base_color_factor: material.base_color_factor,
-            metallic_factor: material.metallic_factor,
-            roughness_factor: material.roughness_factor,
-            _padding: Vec2::ZERO,
-        };
-
-        self.material_buffer.write(&[data]);
-    }
-
-    pub fn bind_resources(&self, cmd: &CommandBuffer, primitive: &Primitive, material: &Material) {
+    pub fn bind_resources(&self, cmd: &CommandBuffer, primitive: &Primitive) {
         ResourceBinder::default()
-            .buffer(BIND_IDX_DRAW, &self.draw_buffer)
-            .buffer(BIND_IDX_MATERIAL, &self.material_buffer)
-            .image(
-                BIND_IDX_BASE_COLOR,
-                &material.base_color_tx,
-                material.base_color_sampler,
-            )
-            .image(
-                BIND_IDX_NORMAL,
-                &material.normal_tx,
-                material.normal_sampler,
-            )
-            .image(
-                BIND_IDX_METALLIC_ROUGHNESS,
-                &material.metallic_roughness_tx,
-                material.metallic_roughness_sampler,
-            )
-            .image(
-                BIND_IDX_OCCLUSION,
-                &material.occlusion_tx,
-                material.occlusion_sampler,
-            )
-            .bind(cmd, &self.layout);
+            .buffer(IDX_BIND_DRAW, &self.draw_buffer)
+            .bind(cmd, &self.pipeline_layout);
 
         cmd.bind_vertex_buffer(&primitive.vertex_buffer, 0);
         cmd.bind_index_buffer(&primitive.index_buffer, 0);

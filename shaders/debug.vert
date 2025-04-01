@@ -45,13 +45,16 @@
 // }
 #version 450
 
+#pragma shader_stage(vertex)
+
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_debug_printf : enable
-#include "./util.glsl"
 #include "./forward.glsl"
+#include "./util.glsl"
 
 layout(location = 0) in vec3 in_pos;
-layout(location = 1) in vec3 in_normal;
+layout(location = 2) in vec3 in_normal;
+layout (location = 6) in vec3 normal_derived;
 
 layout(location = 0) out vec3 out_pos;
 layout(location = 1) out vec4 out_normal;

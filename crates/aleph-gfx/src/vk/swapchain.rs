@@ -87,11 +87,11 @@ impl Swapchain {
                 .loader
                 .get_physical_device_surface_capabilities(device.physical_device, surface.inner)
         }?;
-        let formats: Vec<vk::SurfaceFormatKHR> = unsafe {
-            surface
-                .loader
-                .get_physical_device_surface_formats(device.physical_device, surface.inner)
-        }?;
+        // let formats: Vec<vk::SurfaceFormatKHR> = unsafe {
+        //     surface
+        //         .loader
+        //         .get_physical_device_surface_formats(device.physical_device, surface.inner)
+        // }?;
         let mut swapchain_info = vk::SwapchainCreateInfoKHR::default()
             .surface(surface.inner)
             .min_image_count(in_flight_frames)
@@ -133,7 +133,6 @@ impl Swapchain {
                         .expect("Failed to create imageview")
                 };
                 Texture::from_existing(
-                    device,
                     handle,
                     view,
                     info.extent,

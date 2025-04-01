@@ -95,7 +95,7 @@ pub struct SceneDesc {
 }
 
 const GLTF_SAMPLE_DIR: &str = "assets/gltf/glTF-Sample-Assets";
-const GLTF_VALIDATION_DIR: &str = "assets/gltf/gltf-Asset-Validator";
+const GLTF_VALIDATION_DIR: &str = "assets/gltf/glTF-Asset-Generator";
 
 pub fn load_sample_scene(name: &str) -> Result<GltfDocument> {
     let path = format!("{GLTF_SAMPLE_DIR}/{name}/glTF/{name}.gltf");
@@ -107,6 +107,17 @@ pub fn load_sample_scene(name: &str) -> Result<GltfDocument> {
 
     let path = format!("{GLTF_SAMPLE_DIR}/{name}/glTF-Binary/{name}.glb");
     load(&path)
+}
+
+pub fn load_validation_scene(name: &str, n: usize) -> Result<GltfDocument> {
+    let path = format!("{GLTF_VALIDATION_DIR}/{name}/{name}_{n:02}.gltf");
+    let path = std::path::Path::new(&path);
+
+    // if std::path::Path::new(&path).exists() {
+        return load(&path.to_string_lossy());
+    // }
+
+    // load(&path)
 }
 pub fn load(path: &str) -> Result<GltfDocument> {
     let (document, buffers, images) = gltf::import(path)?;
@@ -168,11 +179,16 @@ pub fn read_textures(
             let f = image.format;
             let s = document.images().nth(i).unwrap().source();
             match s {
-                gltf::image::Source::View { view, mime_type } => {
-                    log::debug!("image (view) {i} -> format: {f:?}, mime type {:?}", mime_type)
+                gltf::image::Source::View { mime_type, .. } => {
+                    log::debug!(
+                        "image (view) {i} -> format: {f:?}, mime type {:?}",
+                        mime_type
+                    )
                 }
                 gltf::image::Source::Uri { uri, mime_type } => {
-                    log::debug!("image (uri) {i} -> format: {f:?}, mime type {mime_type:?}, uri: {uri}")
+                    log::debug!(
+                        "image (uri) {i} -> format: {f:?}, mime type {mime_type:?}, uri: {uri}"
+                    )
                 }
             }
 

@@ -39,8 +39,8 @@ layout (location = 0) out vec4 out_color;
 //uniform mat4 view_mat;
 // These come from the VAO for texture coordinates.
 const vec3 lightPos = vec3(0.0,0.0,5.0);
-const vec3 diffColor = vec3(1.0,0.5,0.0);
-const vec3 specColor = vec3(1.0,1.0,1.0);
+const vec3 diffColor = vec3(0.5,0.5,0.5);
+const vec3 specColor = vec3(0.5,0.5,0.5);
 
 void main () {
     vec3 normal = in_normal;

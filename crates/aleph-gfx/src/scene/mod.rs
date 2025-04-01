@@ -54,7 +54,9 @@ pub struct Scene {
     pub materials: Vec<Material>,
     pub default_material_idx: usize,
 }
-struct LoadContext<'a> {
+
+#[allow(dead_code)]
+pub struct LoadContext<'a> {
     pub gpu: &'a Gpu,
     pub document: &'a gltf2::GltfDocument,
     pub buffers: Vec<gltf::buffer::Data>,
@@ -64,11 +66,11 @@ struct LoadContext<'a> {
 }
 
 pub struct Model {
-    meshes: Vec<Mesh>,
+    pub meshes: Vec<Mesh>,
 }
 
 impl Scene {
-    pub fn from_gltf2(context: &LoadContext) {}
+    pub fn from_gltf2(_context: &LoadContext) {}
 }
 
 impl Scene {
@@ -293,7 +295,6 @@ fn load_material(
     };
 
     let samplers = &context.document.samplers;
-    let textures = &context.document.textures;
     let gpu = context.gpu;
 
     let metallic_roughness_tx = match desc.metallic_roughnness_texture {
@@ -336,40 +337,6 @@ fn load_material(
     log::debug!("Loaded material: {:?}", material.name);
 
     Ok(material)
-}
-
-fn load_texture(gpu: &Gpu, desc: &TextureDesc, format: vk::Format) -> Result<Texture> {
-    let image = match desc.gltf_format {
-        gltf::image::Format::R8G8B8A8 => image::DynamicImage::ImageRgba8(
-            image::ImageBuffer::from_raw(desc.extent.width, desc.extent.height, desc.data.to_vec())
-                .expect("raw"),
-        ),
-        gltf::image::Format::R8G8B8 => image::DynamicImage::ImageRgb8(
-            image::ImageBuffer::from_raw(desc.extent.width, desc.extent.height, desc.data.to_vec())
-                .expect("raw"),
-        ),
-        _ => unimplemented!(),
-    };
-    let data = &desc.data;
-    // let data = match format {
-    //     vk::Format::R8G8B8A8_SRGB => &desc.data,
-    //     _ => &util::rgb_to_rgba(&desc.data),
-    // };
-    // // let data = &desc.data;
-    // let data = util::rgb_to_rgba(&desc.data);
-
-    let image = gpu.create_image(
-        desc.extent,
-        format,
-        vk::ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
-        vk::ImageAspectFlags::COLOR,
-        &desc.name,
-    )?;
-    let staging = util::staging_buffer(gpu, &desc.data, &desc.name)?;
-    gpu.execute(|cmd| {
-        cmd.copy_buffer_to_image(&staging, &image);
-    })?;
-    Ok(image)
 }
 
 fn load_texture_cached(
@@ -510,14 +477,50 @@ fn load_primitive(gpu: &Gpu, desc: &PrimitiveDesc) -> Result<Primitive> {
     })
 }
 
+
+    // float [ ] triNormals = new float [ indices.length ];
+
+    // for ( int i = 0 , index = 0 ; i < indices.length ;  )
+    // {
+    //    float x , y , z;
+
+    //    x = vertices [ ( 3 * indices [ i ] ) ];
+    //    y = vertices [ ( 3 * indices [ i ] ) + 1 ];
+    //    z = vertices [ ( 3 * indices [ i ++ ] ) + 2 ];
+
+    //    Vector3f p1 = new Vector3f ( x , y , z );
+
+    //    x = vertices [ ( 3 * indices [ i ] ) ];
+    //    y = vertices [ ( 3 * indices [ i ] ) + 1 ];
+    //    z = vertices [ ( 3 * indices [ i ++ ] ) + 2 ];
+
+    //    Vector3f p2 = new Vector3f ( x , y , z );
+
+    //    x = vertices [ ( 3 * indices [ i ] ) ];
+    //    y = vertices [ ( 3 * indices [ i ] ) + 1 ];
+    //    z = vertices [ ( 3 * indices [ i ++ ] ) + 2 ];
+
+    //    Vector3f p3 = new Vector3f ( x , y , z );
+
+    //    Vector3f u = Vector3f.subtract ( p2 , p1 );
+    //    Vector3f v = Vector3f.subtract ( p3 , p1 );
+
+    //    Vector3f normal = Vector3f.crossProduct ( u , v );
+
+    //    triNormals [ index ++ ] = normal.x;
+    //    triNormals [ index ++ ] = normal.y;
+    //    triNormals [ index ++ ] = normal.z;
+    // }
+
 fn calculate_normals(vertices: &[Vertex], indices: &[u32]) -> Vec<glam::Vec3> {
     let mut normals = vec![glam::Vec3::ZERO; vertices.len()];
     for i in (0..indices.len()).step_by(3) {
-        let index = indices[i] as usize;
         let a = vertices[indices[i] as usize].position;
         let b = vertices[indices[i + 1] as usize].position;
         let c = vertices[indices[i + 2] as usize].position;
-        let normal = (b - a).cross(c - a).normalize();
+        let ba = (b - a).normalize();
+        let ca = (c - a).normalize();
+        let normal = ba.cross(ca).normalize();
         normals[indices[i] as usize] += normal;
         normals[indices[i + 1] as usize] += normal;
         normals[indices[i + 2] as usize] += normal;

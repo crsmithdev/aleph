@@ -60,7 +60,6 @@ impl Texture {
     }
 
     pub fn from_existing(
-        device: &Device,
         image: vk::Image,
         view: vk::ImageView,
         extent: Extent2D,

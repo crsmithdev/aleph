@@ -8,15 +8,12 @@ use {
         Vertex,
     },
     anyhow::Result,
-    ash::vk::{ClearColorValue, Extent2D},
-    bytemuck::Pod, image::EncodableLayout,
+    ash::vk::{self, ClearColorValue, Extent2D},
+    bytemuck::Pod,
+    image::EncodableLayout,
 };
 
-pub fn single_color_image(
-    gpu: &Gpu,
-    pixel: [f32; 4],
-    label: impl Into<String>,
-) -> Result<Texture> {
+pub fn single_color_image(gpu: &Gpu, pixel: [f32; 4], label: impl Into<String>) -> Result<Texture> {
     let extent = Extent2D {
         width: 1,
         height: 1,
@@ -82,7 +79,38 @@ pub fn staging_buffer<T: Pod>(
     Ok(buffer)
 }
 
-pub fn color_attachment<'a>(image: &Texture) -> RenderingAttachmentInfo<'a> {
+pub fn color_attachment<'a>(
+    image: &Texture,
+    load_op: AttachmentLoadOp,
+    store_op: AttachmentStoreOp,
+    clear_color: [f32; 4],
+) -> RenderingAttachmentInfo<'a> {
+    RenderingAttachmentInfo::default()
+        .clear_value(ClearValue {
+            color: ClearColorValue {
+                float32: clear_color,
+            },
+        })
+        .image_view(image.view())
+        .image_layout(ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+        .load_op(load_op)
+        .store_op(store_op)
+}
+
+// pub fn color_attachment<'a>(image: &Texture) -> RenderingAttachmentInfo<'a> {
+//     RenderingAttachmentInfo::default()
+//         .clear_value(ClearValue {
+//             color: ClearColorValue {
+//                 float32: [0.5, 0.5, 0.5, 1.0],
+//             },
+//         })
+//         .image_view(image.view())
+//         .image_layout(ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+//         .load_op(AttachmentLoadOp::CLEAR)
+//         .store_op(AttachmentStoreOp::STORE)
+// }
+
+pub fn color_attachment2<'a>(image: &Texture) -> RenderingAttachmentInfo<'a> {
     RenderingAttachmentInfo::default()
         .clear_value(ClearValue {
             color: ClearColorValue {
@@ -91,28 +119,57 @@ pub fn color_attachment<'a>(image: &Texture) -> RenderingAttachmentInfo<'a> {
         })
         .image_view(image.view())
         .image_layout(ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-        .load_op(AttachmentLoadOp::CLEAR)
+        .load_op(AttachmentLoadOp::LOAD)
         .store_op(AttachmentStoreOp::STORE)
 }
 
-pub fn depth_attachment<'a>(image: &Texture) -> RenderingAttachmentInfo<'a> {
+pub fn depth_attachment<'a>(
+    image: &Texture,
+    load_op: AttachmentLoadOp,
+    store_op: AttachmentStoreOp,
+    clear_depth: f32,
+) -> RenderingAttachmentInfo<'a> {
     RenderingAttachmentInfo::default()
         .image_view(image.view())
         .image_layout(ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
         .clear_value(ClearValue {
             depth_stencil: ClearDepthStencilValue {
-                depth: 1.0,
+                depth: clear_depth,
                 stencil: 0,
             },
         })
-        .load_op(AttachmentLoadOp::CLEAR)
-        .store_op(AttachmentStoreOp::DONT_CARE)
+        .load_op(load_op)
+        .store_op(store_op)
 }
+
+pub fn viewport_inverted(extent: Extent2D) -> vk::Viewport {
+    vk::Viewport::default()
+        .width(extent.width as f32)
+        .height(0.0 - extent.height as f32)
+        .x(0.)
+        .y(extent.height as f32)
+        .min_depth(0.)
+        .max_depth(1.)
+}
+
+// pub fn depth_attachment2<'a>(image: &Texture) -> RenderingAttachmentInfo<'a> {
+//     RenderingAttachmentInfo::default()
+//         .image_view(image.view())
+//         .image_layout(ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+//         .clear_value(ClearValue {
+//             depth_stencil: ClearDepthStencilValue {
+//                 depth: 1.0,
+//                 stencil: 0,
+//             },
+//         })
+//         .load_op(AttachmentLoadOp::LOAD)
+//         .store_op(AttachmentStoreOp::STORE)
+// }
 
 pub fn rgb_to_rgba(data_rgb: &[u8], extent: Extent2D) -> Vec<u8> {
     let image = image::DynamicImage::ImageRgb8(
-        image::ImageBuffer::from_raw(extent.width, extent.height, data_rgb.to_vec())
-            .expect("raw"));
+        image::ImageBuffer::from_raw(extent.width, extent.height, data_rgb.to_vec()).expect("raw"),
+    );
     let dest = image.to_rgba8();
     dest.as_bytes().to_vec()
 }

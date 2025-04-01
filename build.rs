@@ -126,8 +126,11 @@ fn compile_shaders(path: &str) {
     for entry in files {
         match compile_shader_opt(&entry.unwrap()) {
             ShaderCompileResult::Ok(file, out) => println!("Compiled shader {file} -> {out}"),
-            ShaderCompileResult::Error(e) => eprintln!("Failed to compile shader: {e}"),
-            ShaderCompileResult::Skip() => ()
+            ShaderCompileResult::Skip() => (),
+            ShaderCompileResult::Error(e) => {
+                eprintln!("Failed to compile shader: {e}");
+                exit(1);
+            },
         }
     }
 }

@@ -7,13 +7,7 @@ use {
             Format, Frame, Gpu, ImageAspectFlags, ImageLayout, ImageUsageFlags, Texture,
         },
         Scene,
-    },
-    aleph_core::input::InputState,
-    anyhow::Result,
-    core::f32,
-    glam::{vec3, vec4, Vec2, Vec3, Vec4},
-    tracing::instrument,
-    winit::{event::MouseButton, keyboard::Key},
+    }, aleph_core::input::InputState, anyhow::Result, core::f32, glam::{vec3, vec4, Vec2, Vec3, Vec4}, tracing::instrument, winit::{event::MouseButton, keyboard::{Key, NamedKey}}
 };
 
 #[derive(Clone)]
@@ -53,7 +47,7 @@ impl Default for RendererConfig {
 
 pub struct Renderer {
     frames: Vec<Frame>,
-    temp_pipeline: ForewardPipeline,
+    foreward_pipeline: ForewardPipeline,
     rebuild_swapchain: bool,
     frame_index: usize,
     frame_counter: usize,
@@ -92,7 +86,7 @@ impl Renderer {
         Ok(Self {
             gpu,
             frames,
-            temp_pipeline: foreward_pipeline,
+            foreward_pipeline,
             camera,
             draw_image,
             depth_image,
@@ -112,7 +106,11 @@ impl Renderer {
         }
 
         if let Some(delta) = input.mouse_scroll_delta() {
-            self.camera.zoom(delta * 0.01);
+            let multiplier = match input.key_pressed(&Key::Named(NamedKey::Shift)) {
+                true => 0.5,
+                false => 0.01,
+            };
+            self.camera.zoom(delta * multiplier);
         }
 
         if input.key_pressed(&Key::Character("a".into())) {
@@ -190,7 +188,8 @@ impl Renderer {
             extent: self.gpu.swapchain.extent(),
             config: &self.config,
         };
-        self.temp_pipeline.execute(&context)?;
+        self.foreward_pipeline.execute(&context)?;
+        // self.debug_pipeline.execute(&context)?;
 
         cmd_buffer.transition_image(
             &self.draw_image,

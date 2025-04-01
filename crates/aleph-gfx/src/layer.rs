@@ -14,7 +14,8 @@ use {
     std::sync::{Arc, OnceLock},
 };
 
-const GLTF_SCENE: &str = "WaterBottle";
+const GLTF_SCENE: &str = "Suzanne";
+
 
 #[derive(Default)]
 pub struct GraphicsLayer {
@@ -33,7 +34,7 @@ impl Layer for GraphicsLayer {
     {
         let gpu = Gpu::new(Arc::clone(&window))?;
         let doc = gltf2::load_sample_scene(GLTF_SCENE)?;
-        // let document = gltf::load(GLTF_VALIDATION_SCENE)?;
+        // let doc = gltf2::load_validation_scene(GLTF_SCENE, 1)?;
         let scene = Scene::from_gltf(&gpu, &doc)?;
         let config = RendererConfig::default();
         let renderer = Renderer::new(gpu, config)?;

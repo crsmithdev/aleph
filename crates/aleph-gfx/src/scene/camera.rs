@@ -17,7 +17,7 @@ impl Default for CameraConfig {
     fn default() -> Self {
         Self {
             rotation: vec2(0., 0.), //vec2(-f32::consts::PI / 4.0, -f32::consts::PI / 4.0),
-            distance: 1.,
+            distance: 3.,
             fov: 75.,
             z_near: 0.1,
             z_far: 100.,
@@ -33,7 +33,6 @@ pub struct Camera {
     pitch: f32,
     aspect_ratio: f32,
     config: CameraConfig,
-    extent: Extent2D,
 }
 
 impl Camera {
@@ -51,7 +50,6 @@ impl Camera {
             target,
             aspect_ratio,
             config,
-            extent,
         }
     }
 
