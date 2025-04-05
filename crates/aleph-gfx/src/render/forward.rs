@@ -26,10 +26,10 @@ const BIND_IDX_BASE_COLOR: u32 = 2;
 const BIND_IDX_NORMAL: u32 = 3;
 const BIND_IDX_METALLIC_ROUGHNESS: u32 = 4;
 const BIND_IDX_OCCLUSION: u32 = 5;
-const CLEAR_COLOR: [f32; 4] = [0.7, 0.7, 0.7, 1.0];
+const CLEAR_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
-const VERTEX_SHADER_PATH: &str = "shaders/mesh.vert.spv";
-const FRAGMENT_SHADER_PATH: &str = "shaders/mesh.frag.spv";
+const VERTEX_SHADER_PATH: &str = "shaders/forward.vert.spv";
+const FRAGMENT_SHADER_PATH: &str = "shaders/forward.frag.spv";
 const VERTEX_ATTRIBUTES: [(u32, vk::Format); 8] = [
     (0, Format::R32G32B32_SFLOAT),  // position (3x f32 = 12 bytes)
     (12, Format::R32_SFLOAT),       // texcoord0.x (1x f32 = 4 bytes)
@@ -166,7 +166,7 @@ impl ForewardPipeline {
             .depth_enabled(CompareOp::LESS_OR_EQUAL)
             .input_topology(vk::PrimitiveTopology::TRIANGLE_LIST)
             .polygon_mode(vk::PolygonMode::FILL)
-            .winding(vk::FrontFace::COUNTER_CLOCKWISE, vk::CullModeFlags::NONE)
+            .winding(vk::FrontFace::COUNTER_CLOCKWISE, vk::CullModeFlags::BACK)
             .multisampling_disabled()
             .dynamic_scissor()
             .dynamic_viewport()

@@ -21,7 +21,7 @@ use {
 };
 
 const IDX_BIND_DRAW: u32 = 0;
-const CLEAR_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
+const CLEAR_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
 const VERTEX_ATTRIBUTES: [(u32, vk::Format); 8] = [
     (0, Format::R32G32B32_SFLOAT),  // position (3x f32 = 12 bytes)
