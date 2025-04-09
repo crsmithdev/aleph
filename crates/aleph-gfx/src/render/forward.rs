@@ -4,13 +4,13 @@ use {
         scene::{
             model::{GpuDrawData, GpuMaterialData, Primitive},
             util, NodeData,
+            Mesh, Material
         },
         vk::{
             pipeline::{Pipeline, PipelineBuilder, ResourceBinder, ResourceLayout},
-            Buffer, CommandBuffer, Format, Gpu, PipelineBindPoint, PipelineLayout, Rect2D,
+            Buffer, CommandBuffer, Format, Gpu, PipelineBindPoint, PipelineLayout, Rect2D, Texture,
             VkPipeline,
         },
-        Material, Mesh,
     },
     anyhow::Result,
     ash::vk::{self, AttachmentLoadOp, AttachmentStoreOp, BufferUsageFlags, CompareOp},
@@ -19,6 +19,15 @@ use {
     std::mem,
     tracing::{instrument, warn},
 };
+
+struct TextureDefaults {
+    white_srgb: Texture,
+    black_srgb: Texture,
+    black_linear: Texture,
+    white_linear: Texture,
+    normal: Texture,
+    sampler: vk::Sampler,
+}
 
 const BIND_IDX_DRAW: u32 = 0;
 const BIND_IDX_MATERIAL: u32 = 1;
@@ -46,6 +55,7 @@ pub struct ForewardPipeline {
     layout: PipelineLayout,
     material_buffer: Buffer<GpuMaterialData>,
     draw_buffer: Buffer<GpuDrawData>,
+    texture_defaults: TextureDefaults,
 }
 
 impl Pipeline for ForewardPipeline {
@@ -91,6 +101,7 @@ impl ForewardPipeline {
 
         let layout = gpu.create_pipeline_layout(&[descriptor_layout], &[])?;
         let handle = Self::create_pipeline(gpu, layout)?;
+        let texture_defaults = Self::create_default_textures(gpu)?;
 
         let material_buffer = gpu.create_shared_buffer::<GpuMaterialData>(
             mem::size_of::<GpuMaterialData>() as u64,
@@ -108,6 +119,7 @@ impl ForewardPipeline {
             layout,
             material_buffer,
             draw_buffer,
+            texture_defaults
         })
     }
 
@@ -117,29 +129,33 @@ impl ForewardPipeline {
         self.draw_node(context, root, world_transform);
     }
 
-    fn draw_node(&self, context: &RenderContext, index: NodeIndex, transform: Mat4) {
-        let node = &context.scene.graph[index];
-        let transform = transform * node.transform;
+    fn draw_node(&self, context: &RenderContext, index: NodeIndex, world_transform: Mat4) {
+        let node = &context.scene.root[index];
+        let transform = world_transform * node.transform;
+        log::debug!("node: {index:?} transform: {:?}", node.transform);
 
         match &node.data {
-            NodeData::Mesh(mesh) => {
+            NodeData::Mesh(index) => {
+                let mesh = &context.scene.meshes[*index];
                 self.draw_mesh(context, mesh, transform);
             }
-            _ => {
-                for edge in context.scene.graph.edges(index) {
+            _ =>
+                for edge in context.scene.root.edges(index) {
                     let child = edge.target();
                     self.draw_node(context, child, transform);
-                }
-            }
+                },
         }
     }
 
     fn draw_mesh(&self, context: &RenderContext<'_>, mesh: &Mesh, transform: Mat4) {
         for primitive in mesh.primitives.iter() {
-            let material = self.get_material(context, primitive.material_idx);
+            let material = match primitive.material_idx {
+                Some(idx) => &context.scene.materials[&idx],
+                None => &Material::default(),
+            };
             self.update_draw_buffer(context, primitive, transform);
             self.update_material_buffer(material);
-            self.bind_resources(context.cmd_buffer, primitive, &material);
+            self.bind_resources(context.cmd_buffer, primitive, &material, &context.scene.textures);
             context
                 .cmd_buffer
                 .draw_indexed(primitive.vertex_count, 1, 0, 0, 0);
@@ -173,13 +189,37 @@ impl ForewardPipeline {
             .build(gpu, layout)
     }
 
+    fn create_default_textures(gpu: &Gpu) -> Result<TextureDefaults> {
+        let srgb = vk::Format::R8G8B8A8_SRGB;
+        let linear = vk::Format::R8G8B8A8_UNORM;
+        let white_srgb =
+            util::single_color_image(gpu, [1.0, 1.0, 1.0, 1.0], srgb, "default-white-srgb")?;
+        let black_srgb =
+            util::single_color_image(gpu, [0.0, 0.0, 0.0, 1.0], srgb, "default-black-srgb")?;
+        let black_linear =
+            util::single_color_image(gpu, [0.0, 0.0, 0.0, 1.0], linear, "default-black-linear")?;
+        let white_linear =
+            util::single_color_image(gpu, [1.0, 1.0, 1.0, 1.0], linear, "default-white-linear")?;
+        let normal = util::single_color_image(gpu, [0.0, 0.0, 1.0, 1.0], linear, "default-normal")?;
+        let sampler = util::default_sampler(gpu)?;
+
+        Ok(TextureDefaults {
+            white_srgb,
+            black_srgb,
+            black_linear,
+            white_linear,
+            normal,
+            sampler,
+        })
+    }
+
     fn update_draw_buffer(
         &self,
         context: &RenderContext,
         primitive: &Primitive,
         world_transform: Mat4,
     ) {
-        let model = world_transform * primitive.transform;
+        let model = world_transform; // TODO * primitive.transform;
         let view = context.camera.view();
         let projection = context.camera.projection();
         let view_projection = projection * view;
@@ -208,20 +248,9 @@ impl ForewardPipeline {
         self.draw_buffer.write(&[data]);
     }
 
-    fn get_material<'a>(
-        &'a self,
-        context: &'a RenderContext,
-        material_idx: Option<usize>,
-    ) -> &'a Material {
-        match material_idx {
-            Some(idx) => &context.scene.materials[idx],
-            None => &context.scene.materials[context.scene.default_material_idx],
-        }
-    }
-
     fn update_material_buffer(&self, material: &Material) {
         let data = GpuMaterialData {
-            base_color_factor: material.base_color_factor,
+            base_color_factor: material.base_color,
             metallic_factor: material.metallic_factor,
             roughness_factor: material.roughness_factor,
             _padding: Vec2::ZERO,
@@ -230,31 +259,45 @@ impl ForewardPipeline {
         self.material_buffer.write(&[data]);
     }
 
-    pub fn bind_resources(&self, cmd: &CommandBuffer, primitive: &Primitive, material: &Material) {
+    pub fn bind_resources(
+        &self,
+        cmd: &CommandBuffer,
+        primitive: &Primitive,
+        material: &Material,
+        textures: &[Texture],
+    ) {
+        let base_texture = match material.base_texture {
+            Some(index) => &textures[index],
+            None => &self.texture_defaults.white_srgb,
+        };
+        let normal_texture = match material.normal_texture {
+            Some(index) => &textures[index],
+            None => &self.texture_defaults.normal,
+        };
+        let metallic_roughness_texture = match material.metallic_roughness_texture {
+            Some(index) => &textures[index],
+            None => &self.texture_defaults.white_linear,
+        };
+        let occlusion_texture = match material.occlusion_texture {
+            Some(index) => &textures[index],
+            None => &self.texture_defaults.white_linear,
+        };        
+
+
+
         ResourceBinder::default()
             .buffer(BIND_IDX_DRAW, &self.draw_buffer)
             .buffer(BIND_IDX_MATERIAL, &self.material_buffer)
-            .image(
-                BIND_IDX_BASE_COLOR,
-                &material.base_color_tx,
-                material.base_color_sampler,
-            )
-            .image(
-                BIND_IDX_NORMAL,
-                &material.normal_tx,
-                material.normal_sampler,
-            )
+            .image(BIND_IDX_BASE_COLOR, base_texture, base_texture.sampler().unwrap())
+            .image(BIND_IDX_NORMAL, normal_texture, normal_texture.sampler().unwrap())
             .image(
                 BIND_IDX_METALLIC_ROUGHNESS,
-                &material.metallic_roughness_tx,
-                material.metallic_roughness_sampler,
+                metallic_roughness_texture,
+                metallic_roughness_texture.sampler().unwrap(),
             )
-            .image(
-                BIND_IDX_OCCLUSION,
-                &material.occlusion_tx,
-                material.occlusion_sampler,
-            )
-            .bind(cmd, &self.layout);
+            .image(BIND_IDX_OCCLUSION, occlusion_texture, occlusion_texture.sampler().unwrap())
+
+        .bind(cmd, &self.layout);
 
         cmd.bind_vertex_buffer(&primitive.vertex_buffer, 0);
         cmd.bind_index_buffer(&primitive.index_buffer, 0);

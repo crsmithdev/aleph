@@ -239,6 +239,7 @@ impl Gpu {
         usage: vk::ImageUsageFlags,
         aspect_flags: vk::ImageAspectFlags,
         label: impl Into<String>,
+        sampler: Option<vk::Sampler>,
     ) -> Result<Texture> {
         Texture::new(
             self.device.clone(),
@@ -248,6 +249,7 @@ impl Gpu {
             usage,
             aspect_flags,
             label,
+            sampler,
         )
     }
 

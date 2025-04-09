@@ -15,6 +15,7 @@ pub struct Texture {
     extent: Extent2D,
     format: Format,
     label: String,
+    sampler: Option<vk::Sampler>,
 }
 
 impl Texture {
@@ -26,6 +27,7 @@ impl Texture {
         usage: ImageUsageFlags,
         aspect_flags: ImageAspectFlags,
         label: impl Into<String>,
+        sampler: Option<vk::Sampler>,
     ) -> Result<Self> {
         let label = label.into();
         let inner = ImageInner::new(
@@ -56,6 +58,7 @@ impl Texture {
             extent,
             format,
             label,
+            sampler
         })
     }
 
@@ -75,6 +78,7 @@ impl Texture {
             extent,
             format,
             label: label.into(),
+            sampler: None,
         })
     }
 
@@ -87,6 +91,8 @@ impl Texture {
     pub fn format(&self) -> Format { self.format }
 
     pub fn label(&self) -> &str { &self.label }
+
+    pub fn sampler(&self) -> Option<vk::Sampler> { self.sampler }
 }
 
 #[derive(Debug)]

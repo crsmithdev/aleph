@@ -8,24 +8,36 @@ use {
         Vertex,
     },
     anyhow::Result,
-    ash::vk::{self, ClearColorValue, Extent2D},
+    ash::vk::{self, ClearColorValue, Extent2D, Image},
     bytemuck::Pod,
     image::EncodableLayout,
 };
 
-pub fn single_color_image(gpu: &Gpu, pixel: [f32; 4], label: impl Into<String>) -> Result<Texture> {
+pub fn default_sampler(gpu: &Gpu) -> Result<vk::Sampler> {
+    gpu.create_sampler(
+        vk::Filter::LINEAR,
+        vk::Filter::LINEAR,
+        vk::SamplerMipmapMode::LINEAR,
+        vk::SamplerAddressMode::REPEAT,
+        vk::SamplerAddressMode::REPEAT,
+    )
+}
+
+pub fn single_color_image(gpu: &Gpu, pixel: [f32; 4], format: vk::Format, label: impl Into<String>) -> Result<Texture> {
     let extent = Extent2D {
         width: 1,
         height: 1,
     };
     let pixels = &[pixel];
     let data = bytemuck::bytes_of(pixels);
+    let sampler = default_sampler(gpu)?;
     let image = gpu.create_image(
         extent,
         Format::R8G8B8A8_SRGB,
         ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
         ImageAspectFlags::COLOR,
         label.into(),
+        Some(sampler),
     )?;
 
     let staging = staging_buffer(gpu, &data, "staging")?;
@@ -172,4 +184,26 @@ pub fn rgb_to_rgba(data_rgb: &[u8], extent: Extent2D) -> Vec<u8> {
     );
     let dest = image.to_rgba8();
     dest.as_bytes().to_vec()
+}
+
+pub fn calculate_normals(vertices: &[Vertex], indices: &[u32]) -> Vec<glam::Vec3> {
+    let mut normals = vec![glam::Vec3::ZERO; vertices.len()];
+
+    for i in (0..indices.len()).step_by(3) {
+        let a = vertices[indices[i] as usize].position;
+        let b = vertices[indices[i + 1] as usize].position;
+        let c = vertices[indices[i + 2] as usize].position;
+        let ba = (b - a).normalize();
+        let ca = (c - a).normalize();
+        let normal = ba.cross(ca).normalize();
+
+        normals[indices[i] as usize] += normal;
+        normals[indices[i + 1] as usize] += normal;
+        normals[indices[i + 2] as usize] += normal;
+    }
+    for normal in &mut normals {
+        *normal = normal.normalize();
+    }
+
+    normals
 }

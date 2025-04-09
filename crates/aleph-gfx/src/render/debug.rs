@@ -106,15 +106,15 @@ impl DebugPipeline {
     }
 
     fn draw_node(&self, context: &RenderContext, index: NodeIndex, transform: Mat4) {
-        let node = &context.scene.graph[index];
+        let node = &context.scene.root[index];
         let transform = transform * node.transform;
 
         match &node.data {
             NodeData::Mesh(mesh) => {
-                self.draw_mesh(context, mesh, transform);
+                // self.draw_mesh(context, mesh, transform);
             }
             _ => {
-                for edge in context.scene.graph.edges(index) {
+                for edge in context.scene.root.edges(index) {
                     let child = edge.target();
                     self.draw_node(context, child, transform);
                 }
@@ -168,7 +168,8 @@ impl DebugPipeline {
         primitive: &Primitive,
         world_transform: Mat4,
     ) {
-        let model = world_transform * primitive.transform;
+        log::debug!("update_draw_buffer: {:?}", world_transform);
+        let model = world_transform;// * primitive.transform;
         let view = context.camera.view();
         let projection = context.camera.projection();
         let view_projection = projection * view;

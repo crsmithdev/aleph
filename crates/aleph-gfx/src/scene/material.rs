@@ -6,6 +6,7 @@ use {
     std::mem,
 };
 
+
 #[inline]
 #[allow(non_snake_case)]
 pub fn packUnorm4x8(v: Vec4) -> u32 {
@@ -18,19 +19,36 @@ pub fn packUnorm4x8(v: Vec4) -> u32 {
 #[derive(Debug)]
 pub struct Material {
     pub name: String,
-    #[debug("{:?}", base_color_tx.extent())]
-    pub base_color_tx: Texture,
-    pub base_color_factor: Vec4,
-    pub base_color_sampler: vk::Sampler,
-    #[debug("{:?}", normal_tx.extent())]
-    pub normal_tx: Texture,
-    pub normal_sampler: vk::Sampler,
-    #[debug("{:?}", metallic_roughness_tx.extent())]
-    pub metallic_roughness_tx: Texture,
-    pub metallic_roughness_sampler: vk::Sampler,
+    pub base_texture: Option<usize>,
+    pub base_color: Vec4,
+    pub color_sampler: Option<vk::Sampler>,
+    pub normal_texture: Option<usize>,
+    pub normal_sampler: Option<vk::Sampler>,
+    pub metallic_roughness_texture: Option<usize>,
+    pub metallic_roughness_sampler: Option<vk::Sampler>,
     pub metallic_factor: f32,
     pub roughness_factor: f32,
-    #[debug("{:?}", occlusion_tx.extent())]
-    pub occlusion_tx: Texture,
-    pub occlusion_sampler: vk::Sampler,
+    pub occlusion_texture: Option<usize>,
+    pub occlusion_sampler: Option<vk::Sampler>,
+    pub occlusion_factor: f32,
+}
+
+impl Default for Material {
+    fn default() -> Self {
+        Self {
+            name: "default".to_string(),
+            base_texture: None,
+            base_color: vec4(1., 1., 1., 1.),
+            color_sampler: None,
+            normal_texture: None,
+            normal_sampler: None,
+            metallic_roughness_texture: None,
+            metallic_roughness_sampler: None,
+            metallic_factor: 1.0,
+            roughness_factor: 1.0,
+            occlusion_texture: None,
+            occlusion_sampler: None,
+            occlusion_factor: 1.0,
+        }
+    }
 }

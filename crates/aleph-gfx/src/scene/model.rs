@@ -32,11 +32,10 @@ pub struct Primitive {
     pub vertex_buffer: Buffer<Vertex>,
     #[debug("{:x}", index_buffer.handle().as_raw())]
     pub index_buffer: Buffer<u32>,
-    #[debug("{:x}", model_buffer.handle().as_raw())]
-    pub model_buffer: Buffer<GpuDrawData>,
+    // #[debug("{:x}", model_buffer.handle().as_raw())]
     pub material_idx: Option<usize>,
     pub vertex_count: u32,
-    pub transform: Mat4,
+    // pub transform: Mat4,
 }
 
 #[repr(C)]

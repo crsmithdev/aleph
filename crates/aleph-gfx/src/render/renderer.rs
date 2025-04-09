@@ -1,5 +1,5 @@
 use {
-    crate::{
+    super::{debug, DebugPipeline}, crate::{
         render::ForewardPipeline,
         scene::{camera::CameraConfig, Camera},
         vk::{
@@ -52,6 +52,7 @@ pub struct Renderer {
     frame_index: usize,
     frame_counter: usize,
     draw_image: Texture,
+    debug_pipeline: debug::DebugPipeline,
     camera: Camera,
     depth_image: Texture,
     config: RendererConfig,
@@ -70,6 +71,7 @@ impl Renderer {
                 | ImageUsageFlags::STORAGE,
             ImageAspectFlags::COLOR,
             "draw",
+            None
         )?;
 
         let depth_image = gpu.create_image(
@@ -78,10 +80,12 @@ impl Renderer {
             ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
             ImageAspectFlags::DEPTH,
             "draw",
+            None
         )?;
 
         let camera = Camera::new(config.camera, gpu.swapchain.extent());
         let foreward_pipeline = ForewardPipeline::new(&gpu)?;
+        let debug_pipeline = DebugPipeline::new(&gpu)?;
 
         Ok(Self {
             gpu,
@@ -91,6 +95,7 @@ impl Renderer {
             draw_image,
             depth_image,
             rebuild_swapchain: false,
+            debug_pipeline,
             frame_index: 0,
             frame_counter: 0,
             config,
@@ -98,27 +103,18 @@ impl Renderer {
     }
 
     fn handle_input(&mut self, input: &InputState) {
+        let multiplier = match input.key_pressed(&Key::Named(NamedKey::Shift)) {
+            true => 1.,
+            false => 0.01,
+        };
         if input.mouse_held(&MouseButton::Right) {
             if let Some(delta) = input.mouse_delta() {
-                let adjusted = Vec2::new(delta.x / 100., delta.y / 100.);
-                self.camera.rotate(adjusted);
+                self.camera.rotate(delta * multiplier);
             }
         }
 
         if let Some(delta) = input.mouse_scroll_delta() {
-            let multiplier = match input.key_pressed(&Key::Named(NamedKey::Shift)) {
-                true => 0.5,
-                false => 0.01,
-            };
-            self.camera.zoom(delta * multiplier);
-        }
-
-        if input.key_pressed(&Key::Character("a".into())) {
-            self.camera.translate(vec3(-1., 0., 0.));
-        }
-
-        if input.key_pressed(&Key::Character("d".into())) {
-            self.camera.translate(vec3(1., 0., 0.));
+            self.camera.zoom(delta * multiplier * 10.);
         }
     }
 

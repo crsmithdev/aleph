@@ -1,7 +1,7 @@
 use {
     crate::{
         render::renderer::{Renderer, RendererConfig},
-        scene::gltf2,
+        scene::gltf,
         vk::Gpu,
         Scene,
     },
@@ -13,8 +13,6 @@ use {
     anyhow::Result,
     std::sync::{Arc, OnceLock},
 };
-
-const GLTF_SCENE: &str = "Suzanne";
 
 
 #[derive(Default)]
@@ -33,9 +31,11 @@ impl Layer for GraphicsLayer {
         Self: Sized,
     {
         let gpu = Gpu::new(Arc::clone(&window))?;
-        let doc = gltf2::load_sample_scene(GLTF_SCENE)?;
+        let path = gltf::sample_path("Suzanne")?;
+        let scene = gltf::load(&gpu, &path)?;
+
         // let doc = gltf2::load_validation_scene(GLTF_SCENE, 1)?;
-        let scene = Scene::from_gltf(&gpu, &doc)?;
+        // let scene = Scene::from_gltf(&gpu, &doc)?;
         let config = RendererConfig::default();
         let renderer = Renderer::new(gpu, config)?;
         self.scene = Some(scene);
