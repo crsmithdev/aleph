@@ -1,18 +1,13 @@
-use std::sync::Arc;
-
 pub use ash::vk::ImageLayout;
-use bytemuck::Pod;
-use gpu_allocator::MemoryLocation;
-use crate::Vertex;
-
 use {
-    super::{
-        buffer::Buffer, Allocator, BufferUsageFlags, Device, Texture,
-    },
+    super::{buffer::Buffer, Allocator, BufferUsageFlags, Device, Texture},
+    crate::Vertex,
     anyhow::Result,
     ash::vk,
+    bytemuck::Pod,
     derive_more::Debug,
-    std::any::Any,
+    gpu_allocator::MemoryLocation,
+    std::{any::Any, sync::Arc},
 };
 
 #[derive(Clone, Debug)]
@@ -78,7 +73,6 @@ impl CommandBuffer {
         #[allow(clippy::unit_arg)]
         Ok(unsafe { self.device.handle.end_command_buffer(self.handle)? })
     }
-
 
     pub fn begin_rendering(
         &self,
@@ -185,17 +179,17 @@ impl CommandBuffer {
     }
 
     // pub fn push_constants(&self, layout: vk::PipelineLayout, data: &T) {
-        // let data: &[u8] = bytemuck::bytes_of(data);
+    // let data: &[u8] = bytemuck::bytes_of(data);
 
-        // unsafe {
-        //     self.device.handle.cmd_push_constants(
-        //         self.handle,
-        //         layout,
-        //         vk::ShaderStageFlags::VERTEX,
-        //         0,
-        //         data,
-        //     );
-        // }
+    // unsafe {
+    //     self.device.handle.cmd_push_constants(
+    //         self.handle,
+    //         layout,
+    //         vk::ShaderStageFlags::VERTEX,
+    //         0,
+    //         data,
+    //     );
+    // }
     // }
 
     pub fn push_descriptor_set(
@@ -203,7 +197,7 @@ impl CommandBuffer {
         bind_point: vk::PipelineBindPoint,
         layout: vk::PipelineLayout,
         writes: &[vk::WriteDescriptorSet],
-        set: u32
+        set: u32,
     ) {
         unsafe {
             self.device.push_descriptor.cmd_push_descriptor_set(
@@ -305,7 +299,7 @@ impl CommandBuffer {
         new_layout: vk::ImageLayout,
     ) {
         let aspect_mask = match new_layout {
-            vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL => vk::ImageAspectFlags::DEPTH ,
+            vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL => vk::ImageAspectFlags::DEPTH,
             _ => vk::ImageAspectFlags::COLOR,
         };
         let range = vk::ImageSubresourceRange::default()
@@ -418,8 +412,13 @@ impl CommandBuffer {
         );
     }
 
-    pub fn upload_image(&self, image: &Texture, allocator: Arc<Allocator>, data: &[u8]) -> Result<()> {
-        let staging =  Buffer::new(
+    pub fn upload_image(
+        &self,
+        image: &Texture,
+        allocator: Arc<Allocator>,
+        data: &[u8],
+    ) -> Result<()> {
+        let staging = Buffer::new(
             &self.device,
             allocator,
             std::mem::size_of_val(data) as u64,

@@ -7,13 +7,14 @@ use {
             Mesh, Material
         },
         vk::{
-            pipeline::{Pipeline, PipelineBuilder, ResourceBinder, ResourceLayout},
+            ColorComponentFlags, pipeline::{Pipeline, PipelineBuilder, ResourceBinder, ResourceLayout},
             Buffer, CommandBuffer, Format, Gpu, PipelineBindPoint, PipelineLayout, Rect2D, Texture,
-            VkPipeline,
+            VkPipeline, AttachmentLoadOp, AttachmentStoreOp, BufferUsageFlags, CompareOp, ShaderStageFlags,
+            PipelineColorBlendAttachmentState,
+            PrimitiveTopology, PolygonMode, FrontFace, CullModeFlags,
         },
     },
     anyhow::Result,
-    ash::vk::{self, AttachmentLoadOp, AttachmentStoreOp, BufferUsageFlags, CompareOp},
     glam::{Mat4, Vec2},
     petgraph::{graph::NodeIndex, visit::EdgeRef},
     std::mem,
@@ -22,11 +23,8 @@ use {
 
 struct TextureDefaults {
     white_srgb: Texture,
-    black_srgb: Texture,
-    black_linear: Texture,
     white_linear: Texture,
     normal: Texture,
-    sampler: vk::Sampler,
 }
 
 const BIND_IDX_DRAW: u32 = 0;
@@ -39,7 +37,7 @@ const CLEAR_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
 const VERTEX_SHADER_PATH: &str = "shaders/forward.vert.spv";
 const FRAGMENT_SHADER_PATH: &str = "shaders/forward.frag.spv";
-const VERTEX_ATTRIBUTES: [(u32, vk::Format); 8] = [
+const VERTEX_ATTRIBUTES: [(u32, Format); 8] = [
     (0, Format::R32G32B32_SFLOAT),  // position (3x f32 = 12 bytes)
     (12, Format::R32_SFLOAT),       // texcoord0.x (1x f32 = 4 bytes)
     (16, Format::R32G32B32_SFLOAT), // normal (3x f32 = 12 bytes)
@@ -91,12 +89,12 @@ impl Pipeline for ForewardPipeline {
 impl ForewardPipeline {
     pub fn new(gpu: &Gpu) -> Result<Self> {
         let descriptor_layout = ResourceLayout::default()
-            .buffer(BIND_IDX_DRAW, vk::ShaderStageFlags::ALL_GRAPHICS)
-            .buffer(BIND_IDX_MATERIAL, vk::ShaderStageFlags::ALL_GRAPHICS)
-            .image(BIND_IDX_BASE_COLOR, vk::ShaderStageFlags::FRAGMENT)
-            .image(BIND_IDX_NORMAL, vk::ShaderStageFlags::FRAGMENT)
-            .image(BIND_IDX_METALLIC_ROUGHNESS, vk::ShaderStageFlags::FRAGMENT)
-            .image(BIND_IDX_OCCLUSION, vk::ShaderStageFlags::FRAGMENT)
+            .buffer(BIND_IDX_DRAW, ShaderStageFlags::ALL_GRAPHICS)
+            .buffer(BIND_IDX_MATERIAL, ShaderStageFlags::ALL_GRAPHICS)
+            .image(BIND_IDX_BASE_COLOR, ShaderStageFlags::FRAGMENT)
+            .image(BIND_IDX_NORMAL, ShaderStageFlags::FRAGMENT)
+            .image(BIND_IDX_METALLIC_ROUGHNESS, ShaderStageFlags::FRAGMENT)
+            .image(BIND_IDX_OCCLUSION, ShaderStageFlags::FRAGMENT)
             .layout(gpu)?;
 
         let layout = gpu.create_pipeline_layout(&[descriptor_layout], &[])?;
@@ -132,7 +130,6 @@ impl ForewardPipeline {
     fn draw_node(&self, context: &RenderContext, index: NodeIndex, world_transform: Mat4) {
         let node = &context.scene.root[index];
         let transform = world_transform * node.transform;
-        log::debug!("node: {index:?} transform: {:?}", node.transform);
 
         match &node.data {
             NodeData::Mesh(index) => {
@@ -153,7 +150,7 @@ impl ForewardPipeline {
                 Some(idx) => &context.scene.materials[&idx],
                 None => &Material::default(),
             };
-            self.update_draw_buffer(context, primitive, transform);
+            self.update_draw_buffer(context, transform);
             self.update_material_buffer(material);
             self.bind_resources(context.cmd_buffer, primitive, &material, &context.scene.textures);
             context
@@ -162,16 +159,16 @@ impl ForewardPipeline {
         }
     }
 
-    fn create_pipeline(gpu: &Gpu, layout: PipelineLayout) -> Result<vk::Pipeline> {
+    fn create_pipeline(gpu: &Gpu, layout: PipelineLayout) -> Result<VkPipeline> {
         let vertex_shader = gpu.create_shader_module(VERTEX_SHADER_PATH)?;
         let fragment_shader = gpu.create_shader_module(FRAGMENT_SHADER_PATH)?;
-        let attachments = &[vk::PipelineColorBlendAttachmentState::default()
+        let attachments = &[PipelineColorBlendAttachmentState::default()
             .blend_enable(false)
             .color_write_mask(
-                vk::ColorComponentFlags::A
-                    | vk::ColorComponentFlags::R
-                    | vk::ColorComponentFlags::G
-                    | vk::ColorComponentFlags::B,
+                ColorComponentFlags::A
+                    | ColorComponentFlags::R
+                    | ColorComponentFlags::G
+                    | ColorComponentFlags::B,
             )];
 
         PipelineBuilder::default() // TODO verify defaults
@@ -180,9 +177,9 @@ impl ForewardPipeline {
             .fragment_shader(fragment_shader)
             .blend_disabled(attachments)
             .depth_enabled(CompareOp::LESS_OR_EQUAL)
-            .input_topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-            .polygon_mode(vk::PolygonMode::FILL)
-            .winding(vk::FrontFace::COUNTER_CLOCKWISE, vk::CullModeFlags::BACK)
+            .input_topology(PrimitiveTopology::TRIANGLE_LIST)
+            .polygon_mode(PolygonMode::FILL)
+            .winding(FrontFace::COUNTER_CLOCKWISE, CullModeFlags::BACK)
             .multisampling_disabled()
             .dynamic_scissor()
             .dynamic_viewport()
@@ -190,36 +187,27 @@ impl ForewardPipeline {
     }
 
     fn create_default_textures(gpu: &Gpu) -> Result<TextureDefaults> {
-        let srgb = vk::Format::R8G8B8A8_SRGB;
-        let linear = vk::Format::R8G8B8A8_UNORM;
+        let srgb = Format::R8G8B8A8_SRGB;
+        let linear = Format::R8G8B8A8_UNORM;
         let white_srgb =
             util::single_color_image(gpu, [1.0, 1.0, 1.0, 1.0], srgb, "default-white-srgb")?;
-        let black_srgb =
-            util::single_color_image(gpu, [0.0, 0.0, 0.0, 1.0], srgb, "default-black-srgb")?;
-        let black_linear =
-            util::single_color_image(gpu, [0.0, 0.0, 0.0, 1.0], linear, "default-black-linear")?;
         let white_linear =
             util::single_color_image(gpu, [1.0, 1.0, 1.0, 1.0], linear, "default-white-linear")?;
         let normal = util::single_color_image(gpu, [0.0, 0.0, 1.0, 1.0], linear, "default-normal")?;
-        let sampler = util::default_sampler(gpu)?;
 
         Ok(TextureDefaults {
             white_srgb,
-            black_srgb,
-            black_linear,
             white_linear,
             normal,
-            sampler,
         })
     }
 
     fn update_draw_buffer(
         &self,
         context: &RenderContext,
-        primitive: &Primitive,
-        world_transform: Mat4,
+        transform: Mat4,
     ) {
-        let model = world_transform; // TODO * primitive.transform;
+        let model = transform;
         let view = context.camera.view();
         let projection = context.camera.projection();
         let view_projection = projection * view;
@@ -237,7 +225,7 @@ impl ForewardPipeline {
             model_view,
             view_projection,
             model_view_projection,
-            world_transform,
+            world_transform: transform,
             camera_pos,
             view_inverse,
             model_view_inverse,

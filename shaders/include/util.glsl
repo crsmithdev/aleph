@@ -7,12 +7,12 @@ float dotMax0 (vec3 n, vec3 toEye){
 }
 
 vec3 readModelTexture_srgb(sampler2D tex, vec2 coords) {
-    coords = fixOpenGLTextureCoords_AxisY(coords);
+    // coords = fixOpenGLTextureCoords_AxisY(coords);
     return texture(tex, coords).rgb; // as uint [0-255]
 }
 
 vec3 readModelTexture_uint(usampler2D tex, vec2 coords) {
-    coords = fixOpenGLTextureCoords_AxisY(coords);
+    // coords = fixOpenGLTextureCoords_AxisY(coords);
     uvec3 value = texture(tex, coords).rgb;
     return vec3(value) / 255.0;
 }

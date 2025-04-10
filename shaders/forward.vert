@@ -57,20 +57,38 @@ layout (location = 3) out vec4 outColor;
 layout (location = 4) out vec3 outTangent;
 layout (location = 5) out vec3 outBitangent;
 layout (location = 6) out vec3 outNormalGen;
+layout (location = 7) out mat3 outTbn;
 
 void main() {
-    vec3 normal = normalize(inNormal);
-    vec3 tangent = normalize(inTangent.xyz);
-    vec3 bitangent = cross(normal, tangent) * inTangent.w;
-    vec4 pos = vec4(inPos, 1.0);
+    vec4 position = vec4(inPos, 1.0);
+    vec4 normal = vec4(inNormal, 1.0);
 
-    outColor = inColor;
-    outNormal = inNormal;
-    outUv = vec2(inUVx, inUVy);
-    outNormalGen = inNormalGen;
-    outPos = (draw.model * pos).xyz;
-    outBitangent = bitangent;
-    outTangent = tangent;
+    gl_Position = draw.projection * draw.view * draw.model * position;
 
-    gl_Position = draw.model_view_projection * vec4(inPos, 1.0);;
+    outNormal = (draw.model * normal).xyz;
+//     outNormal = inNormal;
+     outUv = vec2(inUVx, inUVy);
+     outPos = (draw.model * position).xyz;
+
+    vec3 T = normalize( (draw.model * vec4(inTangent.xyz, 0.0)).xyz );
+    vec3 N = normalize( outNormal );
+    vec3 B = normalize( (draw.model * vec4( (cross(inTangent.xyz, inNormal) * inTangent.w), 0.0 )).xyz );
+    
+    outTbn = mat3(T, B, N);
 }
+// void main() {
+//     vec3 normal = normalize(inNormal);
+//     vec3 tangent = normalize(inTangent.xyz);
+//     vec3 bitangent = cross(normal, tangent) * inTangent.w;
+//     vec4 pos = vec4(inPos, 1.0);
+
+//     outColor = inColor;
+//     outNormal = inNormal;
+//     outUv = vec2(inUVx, inUVy);
+//     outNormalGen = inNormalGen;
+//     outPos = (draw.model * pos).xyz;
+//     outBitangent = bitangent;
+//     outTangent = tangent;
+
+//     gl_Position = draw.model_view_projection * vec4(inPos, 1.0);;
+// }

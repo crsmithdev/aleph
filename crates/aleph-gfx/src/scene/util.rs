@@ -2,13 +2,13 @@ use {
     crate::{
         vk::{
             buffer::*, AttachmentLoadOp, AttachmentStoreOp, BufferUsageFlags,
-            ClearDepthStencilValue, ClearValue, Format, Gpu, ImageAspectFlags, ImageLayout,
+            ClearDepthStencilValue, ClearValue, Gpu, ImageAspectFlags, ImageLayout,
             ImageUsageFlags, RenderingAttachmentInfo, Texture,
         },
         Vertex,
     },
     anyhow::Result,
-    ash::vk::{self, ClearColorValue, Extent2D, Image},
+    ash::vk::{self, ClearColorValue, Extent2D},
     bytemuck::Pod,
     image::EncodableLayout,
 };
@@ -23,7 +23,12 @@ pub fn default_sampler(gpu: &Gpu) -> Result<vk::Sampler> {
     )
 }
 
-pub fn single_color_image(gpu: &Gpu, pixel: [f32; 4], format: vk::Format, label: impl Into<String>) -> Result<Texture> {
+pub fn single_color_image(
+    gpu: &Gpu,
+    pixel: [f32; 4],
+    format: vk::Format,
+    label: impl Into<String>,
+) -> Result<Texture> {
     let extent = Extent2D {
         width: 1,
         height: 1,
@@ -33,7 +38,7 @@ pub fn single_color_image(gpu: &Gpu, pixel: [f32; 4], format: vk::Format, label:
     let sampler = default_sampler(gpu)?;
     let image = gpu.create_image(
         extent,
-        Format::R8G8B8A8_SRGB,
+        format,
         ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
         ImageAspectFlags::COLOR,
         label.into(),

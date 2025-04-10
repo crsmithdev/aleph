@@ -4,21 +4,11 @@ pub mod material;
 pub mod model;
 pub mod util;
 
-use {
-    crate::vk::{Extent2D, Gpu, ImageUsageFlags, Texture},
-    anyhow::{bail, Result},
-    ash::vk,
-    derive_more::Debug,
-    glam::{Mat4, Vec2, Vec3, Vec4},
-    std::{
-        collections::{HashMap, HashSet},
-        mem::size_of,
-    },
-};
+use {crate::vk::Texture, ash::vk, derive_more::Debug, glam::Mat4, std::collections::HashMap};
 
 pub use crate::scene::{
     camera::{Camera, CameraConfig},
-    gltf::GltfScene, //, MaterialDesc, PrimitiveDesc, SamplerDesc, TextureDesc},
+    gltf::GltfScene, 
     material::Material,
     model::{GpuDrawData, Mesh, Primitive, Vertex},
 };
@@ -67,7 +57,6 @@ impl Scene {
     }
 }
 
-
 //     pub fn display(&self) -> Vec<String> {
 //         let mut traversal = Bfs::new(&self.graph, NodeIndex::new(0));
 //         let mut lines = vec![];
@@ -101,4 +90,3 @@ impl Scene {
 //         lines
 //     }
 // }
-

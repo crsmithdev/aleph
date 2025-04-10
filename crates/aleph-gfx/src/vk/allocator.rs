@@ -1,19 +1,14 @@
 use {
     crate::vk::{Device, Instance},
     anyhow::Result,
-    ash::vk::{MemoryRequirements, Buffer as VkBuffer, Image as VkImage},
+    ash::vk::{Buffer as VkBuffer, Image as VkImage, MemoryRequirements},
     derive_more::Debug,
     gpu_allocator::{
         vulkan::{
-            Allocation,
-            AllocationCreateDesc,
-            AllocationScheme,
-            Allocator as GpuAllocator,
+            Allocation, AllocationCreateDesc, AllocationScheme, Allocator as GpuAllocator,
             AllocatorCreateDesc,
         },
-        AllocationSizes,
-        AllocatorDebugSettings,
-        MemoryLocation,
+        AllocationSizes, AllocatorDebugSettings, MemoryLocation,
     },
     std::sync::{Arc, Mutex},
 };
@@ -41,7 +36,7 @@ impl Allocator {
         })
     }
 
-    pub (crate) fn allocate_buffer(
+    pub(crate) fn allocate_buffer(
         &self,
         buffer: VkBuffer,
         requirements: MemoryRequirements,
@@ -69,7 +64,12 @@ impl Allocator {
         Ok(allocation)
     }
 
-    pub (crate) fn allocate_image(&self, image: VkImage, requirements: MemoryRequirements, label: &str) -> Result<Allocation> {
+    pub(crate) fn allocate_image(
+        &self,
+        image: VkImage,
+        requirements: MemoryRequirements,
+        label: &str,
+    ) -> Result<Allocation> {
         let mut allocator = self.inner.lock().unwrap();
         let allocation = allocator.allocate(&AllocationCreateDesc {
             name: label,
@@ -79,7 +79,8 @@ impl Allocator {
             allocation_scheme: AllocationScheme::GpuAllocatorManaged,
         })?;
         unsafe {
-            self.device.handle
+            self.device
+                .handle
                 .bind_image_memory(image, allocation.memory(), allocation.offset())
         }?;
         Ok(allocation)

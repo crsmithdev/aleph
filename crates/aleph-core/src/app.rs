@@ -10,7 +10,7 @@ use {
     human_panic::setup_panic,
     std::{
         sync::Arc,
-        time::{Duration, Instant}
+        time::{Duration, Instant},
     },
     winit::{
         application::ApplicationHandler,

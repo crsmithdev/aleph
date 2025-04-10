@@ -1,13 +1,23 @@
 use {
-    super::{debug, DebugPipeline}, crate::{
+    super::{debug, DebugPipeline},
+    crate::{
         render::ForewardPipeline,
         scene::{camera::CameraConfig, Camera},
         vk::{
-            pipeline::Pipeline, CommandBuffer, Extent2D, Extent3D,
-            Format, Frame, Gpu, ImageAspectFlags, ImageLayout, ImageUsageFlags, Texture,
+            pipeline::Pipeline, CommandBuffer, Extent2D, Extent3D, Format, Frame, Gpu,
+            ImageAspectFlags, ImageLayout, ImageUsageFlags, Texture,
         },
         Scene,
-    }, aleph_core::input::InputState, anyhow::Result, core::f32, glam::{vec3, vec4, Vec2, Vec3, Vec4}, tracing::instrument, winit::{event::MouseButton, keyboard::{Key, NamedKey}}
+    },
+    aleph_core::input::InputState,
+    anyhow::Result,
+    core::f32,
+    glam::{vec3, vec4, Vec3, Vec4},
+    tracing::instrument,
+    winit::{
+        event::MouseButton,
+        keyboard::{Key, NamedKey},
+    },
 };
 
 #[derive(Clone)]
@@ -71,7 +81,7 @@ impl Renderer {
                 | ImageUsageFlags::STORAGE,
             ImageAspectFlags::COLOR,
             "draw",
-            None
+            None,
         )?;
 
         let depth_image = gpu.create_image(
@@ -80,7 +90,7 @@ impl Renderer {
             ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
             ImageAspectFlags::DEPTH,
             "draw",
-            None
+            None,
         )?;
 
         let camera = Camera::new(config.camera, gpu.swapchain.extent());
@@ -185,7 +195,7 @@ impl Renderer {
             config: &self.config,
         };
         self.foreward_pipeline.execute(&context)?;
-        // self.debug_pipeline.execute(&context)?;
+        self.debug_pipeline.execute(&context)?;
 
         cmd_buffer.transition_image(
             &self.draw_image,
@@ -244,7 +254,5 @@ impl Renderer {
 impl Drop for Renderer {
     fn drop(&mut self) {
         unsafe { self.gpu.device().handle().device_wait_idle().unwrap() };
-        // mem::drop(&self.draw_image);
-        // mem::drop(&self.depth_image);
     }
 }

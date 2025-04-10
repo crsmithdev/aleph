@@ -7,9 +7,9 @@ use {
 
 struct Timer {}
 impl tracing_subscriber::fmt::time::FormatTime for Timer {
-    fn format_time(&self, w: &mut Writer<'_>) -> std::fmt::Result {
-        let t = chrono::Utc::now();
-        w.write_str(&format!("{}", t.format("%Y-%m-%d %H:%M:%S")))
+    fn format_time(&self, writer: &mut Writer<'_>) -> std::fmt::Result {
+        let time = chrono::Utc::now();
+        writer.write_str(&format!("{}", time.format("%Y-%m-%d %H:%M:%S")))
     }
 }
 

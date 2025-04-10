@@ -21,6 +21,7 @@ layout (location = 3) in vec4 inColor;
 layout (location = 4) in vec3 inTangent;
 layout (location = 5) in vec3 inBitangent;
 layout (location = 6) in vec3 inNormalGen;
+layout (location = 7) in mat3 inTbn;
 
 layout(set = 0, binding = 2) uniform sampler2D colorMap;
 layout(set = 0, binding = 3) uniform sampler2D normalMap;
@@ -33,14 +34,6 @@ struct Light {
     vec3 color;
     float intensity;
 };
-
-layout (binding = 1) uniform Material2 {
-    vec4 color_factor;
-    float metal_factor;
-    float rough_factor;
-    float occlusion_strength;
-} material2;
-
 
 layout (std140, binding = 0) uniform GpuDrawData {
     mat4 model;
@@ -197,9 +190,6 @@ vec3 cookTorrance (Material material, vec3 V, vec3 L, out vec3 F) {
     float denominator = 4.0 * dotMax0(N, V) * dotMax0(N, L);
     vec3 r = numerator / max(denominator, 0.001); // avoid div by 0
 
-    // if (debugThrottleFrag()) {
-    //     debugPrintfEXT("cookTorrance: %v3f, NDF: %f, G: %f, F: %v3f, numerator: %v3f, denominator: %f", r, NDF, G, F, numerator, denominator);
-    // }
     return r;
 }
 
@@ -208,9 +198,6 @@ vec3 pbr_mixDiffuseAndSpecular (const Material material, vec3 diffuse, vec3 spec
     // kD for metalics is ~0 (means they have pure black diffuse color, but take color of specular)
     vec3 kD = mix(vec3(1.0) - kS, METALLIC_DIFFUSE_CONTRIBUTION, material.metallic);
     vec3 r =  kD * diffuse + specular;
-    // if (debugThrottleFrag()) {
-    //     debugPrintfEXT("mixDiffuse: %v3f, kS: %v3f, kD: %v3f, material.metallic: %f, diffuse: %v3f", r, kS, kD, material.metallic, diffuse);
-    // }
     return r;
 }
 
@@ -224,12 +211,7 @@ vec3 pbr (Material material, Light light) {
     vec3 V = normalize(draw.camera_pos - inPos); // viewDir
     vec3 L = light.position - inPos; // wi in integral
     float distance = length(L);
-    // float        attenuation = lightAttenuation(length(L), light.radius);
     float attenuation = attenuate(distance, 20.0, light.intensity); // hardcoded for this demo
-    // if (debugThrottleFrag()) {
-    //     debugPrintfEXT("attenuate: %f, distance: %f", attenuation, distance);
-    // }
-// attenuation = 1.0;
     L = normalize(L);
 
     // diffuse
@@ -239,71 +221,32 @@ vec3 pbr (Material material, Light light) {
     vec3 F;
     vec3 specular = cookTorrance(material, V, L, F);
 
-    // specular = specular;//* material.specularMul; // not PBR, but simplifies material setup
-
     // final light calc.
     float NdotL = dotMax0(N, L);
     vec3 brdfFinal = pbr_mixDiffuseAndSpecular(material, lambert, specular, F);
     vec3 radiance = light.color * attenuation * light.intensity; // incoming color from light
     vec3 r =  brdfFinal * radiance * NdotL;
-    if (debugThrottleFrag()) {
-        debugPrintfEXT("pbr: %v3f, light.color: %v3f, attenuation: %f, light.intensity: %f, specular: %v3f, F: %v3f, NdotL: %f, brdfFinal: %v3f, radiance: %v3f", r, light.color, attenuation, light.intensity, specular, F, NdotL, brdfFinal, radiance);
-    }
-
  
     return r;
-
 }
-
-// void main() {
-//     outColor = vec4(inColor, 1.0);
-// }
 
 Material createMaterial() {
-    Material material;
-    material.normal = normalize(inNormal); // normalize here as it was interpolated between 3 vertices and is no longer normalized
-    material.toEye = normalize(draw.camera_pos.xyz - inPos);
-    material.baseColor = readModelTexture_srgb(colorMap, inUv);
-    material.metallic = texture(metalRoughMap, inUv).g;
-    material.roughness = texture(metalRoughMap, inUv).b;
-    material.metalFactor = 1.0;//material2.metal_factor;
-    material.roughFactor = 1.0;//material2.rough_factor;
-    // material.roughness = 0.5;//texture(metalRoughMap, inUv).b;
-    material.ao = 1.0; //(aoMap, inUv).r;
-    material.aoStrength = 1.0;
+    Material m;
+    m.normal = texture(normalMap, inUv).rgb * 2.0 - 1.0;
+    m.normal = normalize(inTbn * m.normal);
+    m.toEye = normalize(draw.camera_pos.xyz - inPos);
+    // m.baseColor = pow(texture(colorMap, inUv).xyz, vec3(2.2));
+    m.baseColor = texture(colorMap, inUv).xyz, vec3(2.2);
+    m.metallic = texture(metalRoughMap, inUv).b;
+    m.roughness = texture(metalRoughMap, inUv).g;
+    m.metalFactor = material.metal_factor;
+    m.roughFactor = material.rough_factor;
+    m.ao = texture(aoMap, inUv).r;
+    m.aoStrength = material.occlusion_strength;
 
-    // convert specular/smoothness -> roughness
-    // material.roughness = 1.0 - readSpecular();
-
-    // vec3 toCaster = normalize(u_directionalShadowCasterPosition.xyz - v_Position);
-    // material.shadow = 1.0 - calculateDirectionalShadow(
-    //     u_directionalShadowDepthTex,
-    //     v_PositionLightShadowSpace, material.normal, toCaster,
-    //     u_shadowBiasForwardShading,
-    //     u_shadowRadiusForwardShading
-    // );
-    // material.hairShadow = readHairShadow();
-
-  return material;
+  return m;
 }
 vec3 doShading(Material material, Light lights[1]) {
-    // DEBUG_FRAG("doShading material: normal: %v3f", material.normal);
-    // DEBUG_FRAG("doShading material: toEye: %v3f", material.toEye);
-    // DEBUG_FRAG("doShading material: baseColor: %v3f", material.baseColor);
-    // DEBUG_FRAG("doShading material: metallic: %f", material.metallic);
-    // DEBUG_FRAG("doShading material: metalFactor: %f", material.metalFactor);
-    // DEBUG_FRAG("doShading material: roughness: %f", material.roughness);
-    // DEBUG_FRAG("doShading material: roughFactor: %f", material.roughFactor);
-    // DEBUG_FRAG("doShading material: ao: %f", material.ao);
-    // DEBUG_FRAG("doShading material: aoStrength: %f", material.aoStrength);
-    // DEBUG_FRAG("doShading lights[0]: position: %v3f", lights[0].position);
-    // DEBUG_FRAG("doShading lights[0]: color: %v3f", lights[0].color);
-    // DEBUG_FRAG("doShading lights[0]: intensity: %f", lights[0].intensity);
-
-
-
-    // vec3 ambient = scene.lightAmbient.rgb * scene.lightAmbient.a * material.ao;
-    // vec3 ambient = vec3(0.2, 0.2, 0.2) * material.ao;
     vec3 radianceSum = vec3(0.0);
 
     for (uint i = 0u; i < 1u; i++) {
@@ -324,7 +267,7 @@ vec3 doShading(Material material, Light lights[1]) {
         // }
     }
 
-vec3 ambient = vec3(0.10) * material.baseColor * material.ao;
+vec3 ambient = vec3(0.03) * material.baseColor * material.ao;
 
     // if (debugThrottleFrag()) {
         // debugPrintfEXT("ambient: %v3f, radianceSum: %v3f", ambient, radianceSum);
@@ -356,28 +299,133 @@ Light unpackLight(vec3 pos, vec4 color) {
 
     return light;
 }
-void main() {
+// void main() {
  
 
-    Light[1] lights;
-    lights[0].position = vec3(0.0, 10.0, 10.0);
+//     Light[1] lights;
+//     lights[0].position = vec3(0.0, -3.0, 3.0);
+//     lights[0].color = vec3(1.0, 1.0, 1.0);
+//     lights[0].intensity = 1.0;      
+
+//     Material material = createMaterial();
+//     vec3 color = doShading(material, lights);
+
+//     // vec4 colorDebug = debugModeOverride(material, color);
+//     // color = mix(color, colorDebug.rgb, colorDebug.a);
+//     outColor = vec4(color, 1.0);
+//     // outColor2 = uvec4(packNormal(material.normal), 255);
+
+//     // vec3 toCaster = normalize(u_directionalShadowCasterPosition.xyz - v_Position);
+//     // vec4 positionShadowSpace = u_directionalShadowMatrix_MVP * vec4(v_Position, 1);
+//     // float shadowSim = shadowTestSimple(positionShadowSpace, material.normal, toCaster);
+//     // color = mix(
+//     // material.albedo,
+//     // vec3(shadowSim),
+//     // 0.3
+//     // );  
+// }
+
+float distribution_ggx(vec3 normal, vec3 half_dir, float roughness)
+{
+    float a         = roughness * roughness;
+    float a_2       = a * a;
+    float n_dot_h   = max(dot(normal, half_dir), 0.0);
+    float n_dot_h_2 = n_dot_h * n_dot_h;
+	
+    float nom    = a_2;
+    float denom  = (n_dot_h_2 * (a_2 - 1.0) + 1.0);
+    denom        = PI * denom * denom;
+	
+    return nom / denom;
+}
+
+float geometry_schlick_ggx(float n_dot_v, float roughness)
+{
+    float r = (roughness + 1.0);
+    float k = (r * r) / 8.0;
+
+    float nom   = n_dot_v;
+    float denom = n_dot_v * (1.0 - k) + k;
+	
+    return nom / denom;
+}
+  
+float geometry_smith(vec3 normal, vec3 view_dir, vec3 light_dir, float roughness)
+{
+    float n_dot_v = max(dot(normal, view_dir), 0.0);
+    float n_dot_l = max(dot(normal, light_dir), 0.0);
+    float ggx1 = geometry_schlick_ggx(n_dot_v, roughness);
+    float ggx2 = geometry_schlick_ggx(n_dot_l, roughness);
+	
+    return ggx1 * ggx2;
+}
+
+vec3 fresnel_schlick(float cos_theta, vec3 fresnel_0)
+{
+    return fresnel_0 + (1.0 - fresnel_0) * pow(1.0 - cos_theta, 5.0);
+}
+
+vec3 fresnel_schlick_roughness(float cos_theta, vec3 fresnel_0, float roughness)
+{
+    return fresnel_0 + ( max(vec3(1.0 - roughness), fresnel_0) - fresnel_0 ) * pow(1.0 - cos_theta, 5.0);
+}
+
+void main() {
+        Light[1] lights;
+    lights[0].position = vec3(0.0, -3.0, 3.0);
     lights[0].color = vec3(1.0, 1.0, 1.0);
-    lights[0].intensity = 5.0;      
+    lights[0].intensity = 1.0;      
 
-    Material material = createMaterial();
-    vec3 color = doShading(material, lights);
+    Material m = createMaterial(); 
+    vec3 view_dir = normalize(draw.camera_pos - inPos);
+    vec3 fresnel_0 = mix(vec3(0.04), m.baseColor, m.metallic); // F0 = 0.04 for dielectrics, F0 = baseColor for metals
 
-    // vec4 colorDebug = debugModeOverride(material, color);
-    // color = mix(color, colorDebug.rgb, colorDebug.a);
-    outColor = vec4(color, 1.0);
-    // outColor2 = uvec4(packNormal(material.normal), 255);
+    vec3 reflect_dir = reflect(-view_dir, inNormal);   
 
-    // vec3 toCaster = normalize(u_directionalShadowCasterPosition.xyz - v_Position);
-    // vec4 positionShadowSpace = u_directionalShadowMatrix_MVP * vec4(v_Position, 1);
-    // float shadowSim = shadowTestSimple(positionShadowSpace, material.normal, toCaster);
-    // color = mix(
-    // material.albedo,
-    // vec3(shadowSim),
-    // 0.3
-    // );  
+    // Over all lights:
+    vec3 L_0 = vec3(0.0);
+
+    for (int i = 0; i < 1; ++i)
+    {
+        Light light = lights[i];
+        // Calculate light properties.
+        vec3 light_colour = light.color * 20.0;
+
+        vec3 light_dir = normalize(light.position - inPos);
+        vec3 half_dir = normalize(view_dir + light_dir);
+
+        float light_distance = length(light.position - inPos);
+        float light_attenuation = 1.0 / (light_distance * light_distance);
+        vec3 light_radiance = light_colour * light_attenuation;
+
+        // Calculate Cook-Torrance specular BRDF: DFG / 4(ωo⋅n)(ωi⋅n)
+        vec3 F = fresnel_schlick( max( dot(half_dir, view_dir), 0.0 ), fresnel_0 );
+        float D = distribution_ggx(inNormal, half_dir, m.roughness);
+        float G = geometry_smith(inNormal, view_dir, light_dir, m.roughness);
+
+        float denom = 4.0 * max(dot(inNormal, view_dir), 0.0) * max(dot(inNormal, light_dir), 0.0) + 0.001;
+
+        vec3 specular = (D * F * G) / denom;
+
+        // Calculate ratio of reflected-refracted light.
+        vec3 kS = F;
+        vec3 kD = vec3(1.0) - kS;
+
+        kD *= 1.0 - m.metallic;	
+
+        // Calculate output radiance.
+        float n_dot_l = max(dot(inNormal, light_dir), 0.0);
+
+        L_0 += (kD * m.baseColor / PI + specular) * light_radiance * n_dot_l;
+    }
+    
+    vec3 ambient = vec3(0.03) * m.baseColor * m.ao; // ambient occlusion
+    vec3 color = ambient + L_0;
+
+    // Gamma correct.
+    // color = color / (color + vec3(1.0));
+    // color = pow(color, vec3(1.0 / 2.2));
+
+    outColor = vec4(color, 1.0); 
+
 }

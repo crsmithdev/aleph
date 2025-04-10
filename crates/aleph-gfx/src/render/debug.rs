@@ -3,17 +3,16 @@ use {
         render::renderer::RenderContext,
         scene::{
             model::{GpuDrawData, Primitive},
-            util, NodeData,
+            util, NodeData, Mesh
         },
         vk::{
             pipeline::{Pipeline, PipelineBuilder, ResourceBinder, ResourceLayout},
-            Buffer, CommandBuffer, Format, Gpu, PipelineBindPoint, PipelineLayout, Rect2D,
-            VkPipeline,
+            AttachmentStoreOp, Buffer, BufferUsageFlags, CommandBuffer, Format, Gpu,
+            PipelineBindPoint, PipelineLayout, Rect2D, VkPipeline,
         },
-        Mesh,
     },
     anyhow::Result,
-    ash::vk::{self, AttachmentLoadOp, AttachmentStoreOp, BufferUsageFlags, CompareOp},
+    ash::vk::{self, AttachmentLoadOp, CompareOp},
     glam::Mat4,
     petgraph::{graph::NodeIndex, visit::EdgeRef},
     std::mem,
@@ -105,26 +104,26 @@ impl DebugPipeline {
         self.draw_node(context, root, world_transform);
     }
 
-    fn draw_node(&self, context: &RenderContext, index: NodeIndex, transform: Mat4) {
+    fn draw_node(&self, context: &RenderContext, index: NodeIndex, world_transform: Mat4) {
         let node = &context.scene.root[index];
-        let transform = transform * node.transform;
+        let transform = world_transform * node.transform;
 
         match &node.data {
-            NodeData::Mesh(mesh) => {
-                // self.draw_mesh(context, mesh, transform);
+            NodeData::Mesh(index) => {
+                let mesh = &context.scene.meshes[*index];
+                self.draw_mesh(context, mesh, transform);
             }
-            _ => {
+            _ =>
                 for edge in context.scene.root.edges(index) {
                     let child = edge.target();
                     self.draw_node(context, child, transform);
-                }
-            }
+                },
         }
     }
 
     fn draw_mesh(&self, context: &RenderContext<'_>, mesh: &Mesh, transform: Mat4) {
         for primitive in mesh.primitives.iter() {
-            self.update_draw_buffer(context, primitive, transform);
+            self.update_draw_buffer(context, transform);
             self.bind_resources(context.cmd_buffer, primitive);
             context
                 .cmd_buffer
@@ -162,14 +161,8 @@ impl DebugPipeline {
             .build(gpu, layout)
     }
 
-    fn update_draw_buffer(
-        &self,
-        context: &RenderContext,
-        primitive: &Primitive,
-        world_transform: Mat4,
-    ) {
-        log::debug!("update_draw_buffer: {:?}", world_transform);
-        let model = world_transform;// * primitive.transform;
+    fn update_draw_buffer(&self, context: &RenderContext, world_transform: Mat4) {
+        let model = world_transform;
         let view = context.camera.view();
         let projection = context.camera.projection();
         let view_projection = projection * view;

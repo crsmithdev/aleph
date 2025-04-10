@@ -31,20 +31,6 @@ pub use {
         PipelineLayout, PipelineRenderingCreateInfo, PipelineVertexInputStateCreateInfo, Rect2D,
         RenderingAttachmentInfo, Sampler, SamplerMipmapMode, ShaderStageFlags, StencilOpState,
         VertexInputAttributeDescription, VertexInputBindingDescription, Viewport,
-        WriteDescriptorSet,
+        WriteDescriptorSet, CompareOp, PrimitiveTopology, PolygonMode
     },
 };
-
-// pub trait Extent2DExt {
-//     fn into_3d(self) -> Extent3D;
-// }
-
-// impl Extent2DExt for Extent2D {
-//     fn into_3d(self) -> Extent3D {
-//         Extent3D {
-//             width: self.width,
-//             height: self.height,
-//             depth: 1,
-//         }
-//     }
-// }

@@ -31,7 +31,8 @@ impl Layer for GraphicsLayer {
         Self: Sized,
     {
         let gpu = Gpu::new(Arc::clone(&window))?;
-        let path = gltf::sample_path("Suzanne")?;
+        // let scene = gltf::load_validation_scene(&gpu, "Mesh_Primitives", 0)?;
+        let path = gltf::sample_path("NormalTangentTest")?;
         let scene = gltf::load(&gpu, &path)?;
 
         // let doc = gltf2::load_validation_scene(GLTF_SCENE, 1)?;

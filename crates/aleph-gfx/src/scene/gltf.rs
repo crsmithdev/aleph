@@ -6,11 +6,18 @@ use {
             util, Node, NodeData, Scene,
         },
         vk::{Extent2D, Gpu, ImageUsageFlags, Texture},
-    }, anyhow::{bail, Result}, ash::vk, derive_more::Debug, glam::{Mat4, Vec2, Vec3, Vec4}, itertools::Itertools, std::{
+    },
+    anyhow::{bail, Result},
+    ash::vk,
+    derive_more::Debug,
+    glam::{Mat4, Vec2, Vec3, Vec4},
+    itertools::Itertools,
+    petgraph::graph::NodeIndex,
+    std::{
         collections::{HashMap, HashSet},
         mem::size_of,
         path::Path,
-    }
+    },
 };
 
 pub type Graph = petgraph::Graph<Node, ()>;
@@ -43,34 +50,19 @@ pub fn sample_path(name: &str) -> Result<String> {
         .map_err(|e| anyhow::anyhow!(e))
 }
 
-fn add_node(
-    gpu: &Gpu,
-    graph: &mut Graph,
-    src: gltf::Node,
-    parent_transform: Mat4,
-    meshes: &HashMap<usize, Mesh>,
-) {
-    let transform = Mat4::from_cols_array_2d(&src.transform().matrix()) * parent_transform;
-    let index = src.index();
-    let name = match src.name() {
-        Some(name) => format!("gltf-node{index}-{}", name),
-        None => format!("gltf-node{index}"),
-    };
-    let data = match src.mesh() {
-        Some(mesh) => NodeData::Mesh(mesh.index()),
-        None => NodeData::Empty,
-    };
+pub fn load_validation_scene(gpu: &Gpu, name: &str, index: usize) -> Result<Scene> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join(GLTF_VALIDATION_DIR)
+        .join(name)
+        .join(format!("{name}_{index:02}.gltf"))
+        .canonicalize()
+        .map(|p| p.to_string_lossy().to_string())
+        .map_err(|e| anyhow::anyhow!(e));
 
-    graph.add_node(Node {
-        name,
-        transform,
-        data,
-    });
-
-    for child in src.children() {
-        add_node(gpu, graph, child, transform, meshes);
-    }
+    load(gpu, &path?)
 }
+
 
 pub fn load(gpu: &Gpu, path: &str) -> Result<Scene> {
     let (document, buffers, images) = gltf::import(path)?;
@@ -96,7 +88,11 @@ pub fn load(gpu: &Gpu, path: &str) -> Result<Scene> {
         let texture = load_texture(gpu, &data, &name, sampler, srgb)?;
         textures.insert(index, texture);
     }
-    let textures = textures.into_iter().sorted_by_key(|t| t.0).map(|t| t.1).collect::<Vec<_>>();
+    let textures = textures
+        .into_iter()
+        .sorted_by_key(|t| t.0)
+        .map(|t| t.1)
+        .collect::<Vec<_>>();
 
     let mut materials: HashMap<usize, Material> = HashMap::new();
     for index in 0..document.materials().len() {
@@ -112,24 +108,99 @@ pub fn load(gpu: &Gpu, path: &str) -> Result<Scene> {
         meshes.insert(index, mesh);
     }
 
-    let mut root = Graph::new();
+    let mut graph = Graph::new();
+    let root = Node {
+        name: "gltf-root".to_string(),
+        transform: Mat4::IDENTITY,
+        data: NodeData::Empty,
+    };
+    let root_index = graph.add_node(root);
     let scene = match document.scenes().nth(0) {
         Some(scene) => scene,
         None => bail!("No scenes found in the glTF file"),
     };
 
     for node in scene.nodes() {
-        add_node(gpu, &mut root, node, Mat4::IDENTITY, &meshes);
+        let child_index = add_node(gpu, &mut graph, node);
+        graph.add_edge(root_index, child_index, ());
     }
-    let meshes = meshes.into_iter().sorted_by_key(|t| t.0).map(|t| t.1).collect::<Vec<_>>();
+    let meshes = meshes
+        .into_iter()
+        .sorted_by_key(|t| t.0)
+        .map(|t| t.1)
+        .collect::<Vec<_>>();
+
+    log::debug!("Loaded glTF scene from: {}", path);
+    log::debug!("  Nodes ({}):", graph.node_count());
+    for index in graph.node_indices() {
+        let node = &graph[index];
+        let children = graph.neighbors(index).collect::<Vec<_>>();
+        log::debug!(
+            "    #{index:?} ({}): transform: {:?}, children: {:?}",
+            node.name,
+            node.transform.to_cols_array_2d(),
+            children
+        );
+    }
+    log::debug!("  Materials ({}):", materials.len());
+    for index in materials.keys() {
+        let material = &materials[index];
+        log::debug!("    #{index:?} -> {:?}", material);
+    }
+    log::debug!("  Textures ({}):", textures.len());
+    for index in 0..textures.len() {
+        let texture = &textures[index];
+        log::debug!("    #{index:?} -> {:?}", texture);
+    }
+    log::debug!("  Meshes ({}):", meshes.len());
+    for index in 0..meshes.len() {
+        let mesh = &meshes[index];
+        log::debug!("    #{index:?} -> {} primitives", mesh.primitives.len());
+        for primitive in &mesh.primitives {
+            log::debug!(
+                "      {} vertices -> material: {:?}",
+                primitive.vertex_count,
+                primitive.material_idx
+            );
+        }
+    }
 
     Ok(Scene {
-        root,
+        root: graph,
         materials,
         textures,
         meshes,
     })
 }
+
+fn add_node(gpu: &Gpu, graph: &mut Graph, gltf_node: gltf::Node) -> NodeIndex {
+    let transform = Mat4::from_cols_array_2d(&gltf_node.transform().matrix());
+    let index = gltf_node.index();
+    let name = match gltf_node.name() {
+        Some(name) => format!("gltf-node{index}-{}", name),
+        None => format!("gltf-node{index}"),
+    };
+    let data = match gltf_node.mesh() {
+        Some(mesh) => NodeData::Mesh(mesh.index()),
+        None => NodeData::Empty,
+    };
+
+    let node_index = graph.add_node(Node {
+        name: name.clone(),
+        transform,
+        data,
+    });
+
+    log::debug!("Loaded node {name} (transform: {:?})", transform);
+
+    for child in gltf_node.children() {
+        let child_index = add_node(gpu, graph, child);
+        graph.add_edge(node_index, child_index, ());
+    }
+
+    node_index
+}
+
 
 fn load_texture(
     gpu: &Gpu,
@@ -172,17 +243,25 @@ fn load_texture(
 }
 
 fn load_material(material: &gltf::Material) -> Result<Material> {
+    let index = match material.index() {
+        Some(index) => index,
+        None => bail!("Material index not found"),
+    };
     let name = format!(
         "gltf-material-{:02}-{}",
-        material.index().expect("material index"),
+        index,
         material.name().unwrap_or("unnamed")
     );
+    log::debug!("Loading material {name}...");
     let pbr = material.pbr_metallic_roughness();
     let base_texture = pbr.base_color_texture().map(|i| i.texture().index());
+    log::debug!("{name} base texture -> {base_texture:?}");
     let normal_texture = material.normal_texture().map(|i| i.texture().index());
+    log::debug!("{name} normal texture -> {normal_texture:?}");
     let metallic_roughness_texture = pbr
         .metallic_roughness_texture()
         .map(|i| i.texture().index());
+    log::debug!("{name} metallic roughness texture -> {metallic_roughness_texture:?}");
     let occlusion_texture = material.occlusion_texture().map(|i| i.texture().index());
 
     let base_color = Vec4::from_array(pbr.base_color_factor());
@@ -194,21 +273,17 @@ fn load_material(material: &gltf::Material) -> Result<Material> {
         name,
         base_texture: base_texture,
         base_color,
-        color_sampler: None,
         normal_texture: normal_texture,
-        normal_sampler: None,
         metallic_roughness_texture,
         metallic_factor,
         roughness_factor,
         occlusion_texture,
-        occlusion_sampler: None,
         occlusion_factor,
-        metallic_roughness_sampler: None,
     })
 }
 
 fn load_mesh(gpu: &Gpu, source: &gltf::Mesh, buffers: &Vec<gltf::buffer::Data>) -> Result<Mesh> {
-    let mesh_name = {
+    let name = {
         let index = source.index();
         let base = format!("gltf-mesh{index:02}");
         source
@@ -216,6 +291,7 @@ fn load_mesh(gpu: &Gpu, source: &gltf::Mesh, buffers: &Vec<gltf::buffer::Data>) 
             .map(|name| format!("{base}-{name}"))
             .unwrap_or(base)
     };
+    log::debug!("Loading mesh {name}...");
     let mut primitives = vec![];
     for primitive in source.primitives() {
         let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
@@ -286,12 +362,14 @@ fn load_mesh(gpu: &Gpu, source: &gltf::Mesh, buffers: &Vec<gltf::buffer::Data>) 
             material_idx,
             vertex_count: indices.len() as u32,
         });
+        log::debug!(
+            "  Loaded primitive {} -> {} vertices",
+            primitive.index(),
+            vertices.len()
+        );
     }
 
-    Ok(Mesh {
-        name: mesh_name,
-        primitives,
-    })
+    Ok(Mesh { name, primitives })
 }
 
 fn load_sampler(gpu: &Gpu, sampler: gltf::texture::Sampler) -> Result<ash::vk::Sampler> {
@@ -339,59 +417,90 @@ fn load_sampler(gpu: &Gpu, sampler: gltf::texture::Sampler) -> Result<ash::vk::S
 }
 #[cfg(test)]
 mod tests {
-    use std::{cell::LazyCell, sync::Arc};
 
-    use super::*;
-    fn test_gpu() -> Gpu {
-        use {
-            std::sync::Arc,
-            winit::{
-                event_loop::EventLoop, platform::windows::EventLoopBuilderExtWindows,
-                window::WindowAttributes,
-            },
-        };
-
-        let event_loop = {
-            EventLoop::builder()
-                .with_any_thread(true)
-                .build()
-                .expect("error creating test event loop")
-        };
-        let mut attributes = WindowAttributes::default();
-        attributes.visible = false;
-
-        #[allow(deprecated)]
-        let window = event_loop.create_window(attributes).unwrap();
-
-        Gpu::new(Arc::new(window)).expect("error initializing test gpu")
+    struct TestApp {
+        f: Box<dyn Fn(&Gpu)>,
     }
+
+    impl ApplicationHandler for TestApp {
+        fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+            let attributes = winit::window::WindowAttributes::default().with_visible(false);
+            let window = Arc::new(
+                event_loop
+                    .create_window(attributes)
+                    .expect("Failed to create window"),
+            );
+            let gpu = Gpu::new(window).expect("Failed to create GPU");
+
+            (*self.f)(&gpu);
+
+            event_loop.exit();
+        }
+
+        fn window_event(
+            &mut self,
+            _event_loop: &winit::event_loop::ActiveEventLoop,
+            _window_id: winit::window::WindowId,
+            _event: winit::event::WindowEvent,
+        ) {
+        }
+    }
+
+    fn with_gpu<F>(f: F)
+    where
+        F: Fn(&Gpu) -> () + 'static,
+    {
+        use winit::platform::windows::EventLoopBuilderExtWindows;
+
+        let boxed = Box::new(f);
+        let mut app = TestApp { f: boxed };
+        let mut event_loop = EventLoop::builder().with_any_thread(true).build().unwrap();
+
+        event_loop
+            .run_app_on_demand(&mut app)
+            .expect("Failed to run test app");
+    }
+    use {
+        super::*,
+        std::sync::Arc,
+        winit::{
+            application::ApplicationHandler, event_loop::EventLoop,
+            platform::run_on_demand::EventLoopExtRunOnDemand,
+        },
+    };
 
     #[test]
     fn test_load_minimal() {
-
-        let path = sample_path("Box").expect("path");
-        let result = load(&test_gpu(), &path);
-        println!("Result: {:?}", result);
-        assert!(result.is_ok());
-
-        let scene = result.unwrap();
-        assert_eq!(scene.root.node_count(), 2);
-        assert_eq!(scene.materials.len(), 1);
-        assert_eq!(scene.nodes().len(), 2);
-        assert_eq!(scene.textures.len(), 0);
-        assert_eq!(scene.meshes.len(), 1);
-        assert_eq!(scene.meshes[0].primitives.len(), 1);
-        assert_eq!(scene.meshes[0].primitives[0].vertex_count, 36);
+        with_gpu(|gpu| {
+            let path = sample_path("Box").expect("path");
+            let result = load(gpu, &path);
+            let scene = result.unwrap();
+            assert_eq!(scene.root.node_count(), 3);
+            assert_eq!(scene.materials.len(), 1);
+            assert_eq!(scene.nodes().len(), 3);
+            assert_eq!(scene.textures.len(), 0);
+            assert_eq!(scene.meshes.len(), 1);
+            assert_eq!(scene.meshes[0].primitives.len(), 1);
+            assert_eq!(scene.meshes[0].primitives[0].vertex_count, 36);
+        });
     }
 
-    fn test_load_suzanne() {
-        let path = sample_path("Suzanne").expect("path");
-        let result = load(&test_gpu(), &path);
-        println!("Result: {:?}", result);
-        assert!(result.is_ok());
+    #[test]
+    fn test_load_texture() {
+        with_gpu(|gpu| {
+            let path = sample_path("").expect("path");
+            let result = load(gpu, &path);
+            println!("Result: {:?}", result);
+            assert!(result.is_ok());
 
-        let scene = result.unwrap();
-        assert_eq!(scene.root.node_count(), 2);
-        assert_eq!(scene.materials.len(), 1);
+            let scene = result.unwrap();
+            assert_eq!(scene.root.node_count(), 2);
+            assert_eq!(scene.materials.len(), 1);
+            assert_eq!(scene.nodes().len(), 2);
+            assert_eq!(scene.textures.len(), 1);
+            assert_eq!(scene.meshes.len(), 1);
+            assert_eq!(scene.meshes[0].primitives.len(), 1);
+            assert_eq!(scene.meshes[0].primitives[0].vertex_count, 36);
+        });
     }
 }

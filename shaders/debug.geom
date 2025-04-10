@@ -35,7 +35,7 @@ layout(set = 0, binding = 5) uniform sampler2D occlusion_map;
 layout (triangles) in;
 layout (line_strip, max_vertices = 6) out;
 layout (location = 0) in vec3 in_pos[];
-layout (location = 1) in vec4 in_normal[];
+layout (location = 1) in vec3 in_normal[];
 
 layout (location = 0) out vec4 out_color;
 

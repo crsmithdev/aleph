@@ -17,7 +17,7 @@ impl Default for CameraConfig {
     fn default() -> Self {
         Self {
             rotation: vec2(0., 0.), //vec2(-f32::consts::PI / 4.0, -f32::consts::PI / 4.0),
-            distance: 10.,
+            distance: 3.,
             fov: 75.,
             z_near: 0.1,
             z_far: 100.,
@@ -60,19 +60,11 @@ impl Camera {
             self.config.z_near,
             self.config.z_far,
         );
-        // log::trace!("camera projection r0 {:?}", perspective_rh.row(0));
-        // log::trace!("camera projection r1 {:?}", perspective_rh.row(1));
-        // log::trace!("camera projection r2 {:?}", perspective_rh.row(2));
-        // log::trace!("camera projection r3 {:?}", perspective_rh.row(3));
         perspective_rh
     }
 
     pub fn view(&self) -> Mat4 { 
         let view_rh = Mat4::look_at_rh(self.position(), self.target, Vec3::Y);
-        // log::trace!("camera view r0 {:?}", view_rh.row(0));
-        // log::trace!("camera view r1 {:?}", view_rh.row(1));
-        // log::trace!("camera view r2 {:?}", view_rh.row(2));
-        // log::trace!("camera view r3 {:?}", view_rh.row(3));
         view_rh
      }
 
@@ -87,28 +79,19 @@ impl Camera {
             self.distance * self.yaw.cos() * self.pitch.cos(),
         );
 
-        // log::trace!("camera position {:?}", position);
         position
     }
 
     pub fn rotate(&mut self, delta: Vec2) {
         self.yaw += delta.x;
         self.pitch += delta.y;
-        log::trace!(
-            "camera yaw {:?}, pitch:: {:?} (delta: {}",
-            self.yaw,
-            self.pitch,
-            delta
-        );
     }
 
     pub fn translate(&mut self, delta: Vec3) {
         self.target += delta;
-        // log::trace!("camera target {:?} (delta: {})", self.target, delta);
     }
 
     pub fn zoom(&mut self, delta: f32) { 
         self.distance += delta;
-        // log::trace!("camera distance {:?} (delta: {})", self.distance, delta);
      }
 }
