@@ -87,7 +87,9 @@ impl Device {
             ash::vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::default()
                 .runtime_descriptor_array(true);
 
-        let device_features1 = vk::PhysicalDeviceFeatures::default().geometry_shader(true).wide_lines(true);
+        let device_features1 = vk::PhysicalDeviceFeatures::default()
+            .geometry_shader(true)
+            .wide_lines(true);
         let mut device_features2 = vk::PhysicalDeviceFeatures2::default()
             .features(device_features1)
             .push_next(&mut synchronization2_features)
@@ -161,6 +163,8 @@ impl Device {
     }
 
     pub fn handle(&self) -> &ash::Device { &self.handle }
+
+    pub fn physical_device(&self) -> vk::PhysicalDevice { self.physical_device }
 
     pub fn create_sampler(
         &self,

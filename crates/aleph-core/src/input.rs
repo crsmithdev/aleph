@@ -1,8 +1,10 @@
 use {
-    glam::Vec2, std::collections::HashSet, winit::{
+    glam::Vec2,
+    std::collections::HashSet,
+    winit::{
         event::{DeviceEvent, ElementState, MouseButton, WindowEvent},
         keyboard::Key,
-    }
+    },
 };
 
 #[derive(Default, Debug)]
@@ -14,9 +16,7 @@ impl Input {
     pub fn handle_device_event(&mut self, event: &DeviceEvent) {
         self.state.handle_device_event(event);
     }
-    pub fn handle_window_event(&mut self, event: &WindowEvent) {
-        self.state.handle_event(event);
-    }
+    pub fn handle_window_event(&mut self, event: &WindowEvent) { self.state.handle_event(event); }
     pub fn next_frame(&mut self) -> InputState {
         let next_state = InputState::default();
         let prev_state = std::mem::replace(&mut self.state, next_state);
@@ -39,21 +39,13 @@ pub struct InputState {
 }
 
 impl InputState {
-    pub fn key_pressed(&self, key: &Key) -> bool {
-        self.keys_pressed.contains(key)
-    }
+    pub fn key_pressed(&self, key: &Key) -> bool { self.keys_pressed.contains(key) }
 
-    pub fn mouse_held(&self, button: &MouseButton) -> bool {
-        self.mouse_held.contains(button)
-    }
+    pub fn mouse_held(&self, button: &MouseButton) -> bool { self.mouse_held.contains(button) }
 
-    pub fn mouse_delta(&self) -> Option<Vec2> {
-        self.mouse_delta
-    }
+    pub fn mouse_delta(&self) -> Option<Vec2> { self.mouse_delta }
 
-    pub fn mouse_scroll_delta(&self) -> Option<f32> {
-        self.mouse_scroll_delta
-    }
+    pub fn mouse_scroll_delta(&self) -> Option<f32> { self.mouse_scroll_delta }
 
     fn handle_device_event(&mut self, event: &DeviceEvent) {
         match event {
@@ -63,7 +55,7 @@ impl InputState {
                     Some(d) => Some(d + new),
                     None => Some(new),
                 };
-            },
+            }
             _ => {}
         }
     }
@@ -92,14 +84,14 @@ impl InputState {
                     }
                     ElementState::Released => self.mouse_held.remove(button),
                 };
-            },
+            }
             WindowEvent::MouseWheel { delta, .. } => {
                 let delta = match delta {
                     winit::event::MouseScrollDelta::LineDelta(_, y) => *y,
                     winit::event::MouseScrollDelta::PixelDelta(pos) => pos.y as f32,
                 };
                 self.mouse_scroll_delta = Some(delta);
-            },
+            }
             _ => {}
         }
     }
