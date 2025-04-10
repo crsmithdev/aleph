@@ -1,12 +1,10 @@
 [package]
-name = "aleph-gfx"
+name = "aleph-vk"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 aleph-core.workspace = true
-aleph-scene.workspace = true
-aleph-vk.workspace = true
 anyhow.workspace = true
 bytemuck.workspace = true
 derive_more.workspace = true

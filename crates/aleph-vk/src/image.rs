@@ -1,6 +1,6 @@
 pub use ash::vk::{Format, ImageAspectFlags, ImageUsageFlags};
 use {
-    crate::vk::{Allocator, Device, Extent2D},
+    crate::{Allocator, Device, Extent2D},
     anyhow::Result,
     ash::vk,
     derive_more::Debug,

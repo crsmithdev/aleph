@@ -7,12 +7,17 @@ edition = "2021"
 members = [
     "crates/aleph-gfx",
     "crates/aleph-core",
+    "crates/aleph-scene",
+    "crates/aleph-vk",
+    "crates/aleph-app",
 ]
 
 [workspace.dependencies]
 aleph-gfx = { path = "crates/aleph-gfx" } 
 aleph-core = { path = "crates/aleph-core" } 
-
+aleph-scene = { path = "crates/aleph-scene"}
+aleph-vk = { path = "crates/aleph-vk" }
+aleph-app = { path = "crates/aleph-app" }
 
 anyhow = "1.0.95"
 bytemuck = { version = "1.7.0", features = ["derive"] }
@@ -35,10 +40,14 @@ glob = "0.3.2"
 glam = { version = "0.29.2", features = ["bytemuck", "serde"] }
 
 [dependencies]
+anyhow = "1.0.95"
 aleph-gfx = { path = "crates/aleph-gfx" } 
-aleph-core = { path = "crates/aleph-core" } 
+aleph-core = { path = "crates/aleph-core" }
+aleph-vk = { path = "crates/aleph-vk" }
+aleph-scene = {path = "crates/aleph-scene"}
 
 [build-dependencies]
 glob = "0.3.1"
 shaderc = "0.8.0"
 anyhow = "1.0.95"
+

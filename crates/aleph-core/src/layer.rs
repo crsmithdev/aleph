@@ -10,7 +10,7 @@ pub trait Layer: 'static {
         Self: Sized;
 }
 
-pub(crate) trait LayerDyn: 'static + Downcast {
+pub trait LayerDyn: 'static + Downcast {
     fn init_dyn(
         &mut self,
         window: Arc<Window>,
@@ -33,5 +33,6 @@ impl<T: Layer> LayerDyn for T {
 
 pub struct InitContext<'a, L> {
     pub window: Arc<winit::window::Window>,
+    // pub scene: &'a Scene
     pub events: EventSubscriber<'a, L>,
 }

@@ -45,7 +45,7 @@ impl<'a, L: Layer> EventSubscriber<'a, L> {
 }
 
 #[derive(Default)]
-pub(crate) struct EventRegistry {
+pub struct EventRegistry {
     callbacks: Vec<BoxedEventCallback>,
     listeners: HashMap<TypeId, Vec<(usize, usize)>>,
 }

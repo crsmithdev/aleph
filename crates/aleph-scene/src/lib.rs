@@ -4,11 +4,13 @@ pub mod material;
 pub mod model;
 pub mod util;
 
-use {crate::vk::Texture, ash::vk, derive_more::Debug, glam::Mat4, std::collections::HashMap};
+use petgraph::graph::NodeIndex;
 
-pub use crate::scene::{
+use {aleph_vk::Texture, ash::vk, derive_more::Debug, glam::Mat4, std::collections::HashMap};
+
+pub use crate::{
     camera::{Camera, CameraConfig},
-    gltf::GltfScene, 
+    gltf::GltfScene,
     material::Material,
     model::{GpuDrawData, Mesh, Primitive, Vertex},
 };
@@ -39,7 +41,8 @@ pub struct TextureDefaults {
 
 #[derive(Debug)]
 pub struct Scene {
-    pub root: Graph,
+    pub graph: Graph,
+    pub root: NodeIndex,
     #[debug("{}", materials.len())]
     pub materials: HashMap<usize, Material>,
     #[debug("{}", textures.len())]
@@ -48,11 +51,29 @@ pub struct Scene {
     pub meshes: Vec<Mesh>,
 }
 
+impl Default for Scene {
+    fn default() -> Self {
+        let mut graph = Graph::new();
+        let root = graph.add_node(Node {
+            name: "root".to_string(),
+            transform: Mat4::IDENTITY,
+            data: NodeData::Empty,
+        });
+        Self {
+            graph,
+            root,
+            materials: HashMap::new(),
+            textures: vec![],
+            meshes: vec![],
+        }
+    }
+}
+
 impl Scene {
     pub fn nodes(&self) -> Vec<&Node> {
-        self.root
+        self.graph
             .node_indices()
-            .map(|index| &self.root[index])
+            .map(|index| &self.graph[index])
             .collect()
     }
 }

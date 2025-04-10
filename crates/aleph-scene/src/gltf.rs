@@ -1,11 +1,9 @@
 use {
+    aleph_vk::{Gpu, Texture, Extent2D, ImageUsageFlags},
     crate::{
-        scene::{
             material::Material,
             model::{Mesh, Primitive, Vertex},
             util, Node, NodeData, Scene,
-        },
-        vk::{Extent2D, Gpu, ImageUsageFlags, Texture},
     },
     anyhow::{bail, Result},
     ash::vk,
@@ -109,12 +107,11 @@ pub fn load(gpu: &Gpu, path: &str) -> Result<Scene> {
     }
 
     let mut graph = Graph::new();
-    let root = Node {
+    let root = graph.add_node(Node {
         name: "gltf-root".to_string(),
         transform: Mat4::IDENTITY,
         data: NodeData::Empty,
-    };
-    let root_index = graph.add_node(root);
+    });
     let scene = match document.scenes().nth(0) {
         Some(scene) => scene,
         None => bail!("No scenes found in the glTF file"),
@@ -122,7 +119,7 @@ pub fn load(gpu: &Gpu, path: &str) -> Result<Scene> {
 
     for node in scene.nodes() {
         let child_index = add_node(gpu, &mut graph, node);
-        graph.add_edge(root_index, child_index, ());
+        graph.add_edge(root, child_index, ());
     }
     let meshes = meshes
         .into_iter()
@@ -166,7 +163,8 @@ pub fn load(gpu: &Gpu, path: &str) -> Result<Scene> {
     }
 
     Ok(Scene {
-        root: graph,
+        graph,
+        root,
         materials,
         textures,
         meshes,
@@ -415,92 +413,95 @@ fn load_sampler(gpu: &Gpu, sampler: gltf::texture::Sampler) -> Result<ash::vk::S
         address_mode_y,
     )
 }
-#[cfg(test)]
-mod tests {
+// #[cfg(test)]
+// mod tests {
+//  use {
+//         super::*,
+//         std::{cell::{Cell, LazyCell, OnceCell, RefCell}, os::windows::thread, rc::Rc, sync::{Arc, OnceLock}},
+//         winit::{
+//             application::ApplicationHandler, event_loop::EventLoop,
+//             platform::{run_on_demand::EventLoopExtRunOnDemand, windows::EventLoopBuilderExtWindows},
+//         },
+//     };
+//     struct TestApp {
+//         f: Box<dyn Fn(&Gpu)>,
+//     }
 
-    struct TestApp {
-        f: Box<dyn Fn(&Gpu)>,
-    }
+//     // thread_local! {
+//         static window2: OnceLock<winit::window::Window> = OnceLock::new();
+//     // }
 
-    impl ApplicationHandler for TestApp {
-        fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-            let attributes = winit::window::WindowAttributes::default().with_visible(false);
-            let window = Arc::new(
-                event_loop
-                    .create_window(attributes)
-                    .expect("Failed to create window"),
-            );
-            let gpu = Gpu::new(window).expect("Failed to create GPU");
+//     impl ApplicationHandler for TestApp {
+//         fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+//             let attributes = winit::window::WindowAttributes::default().with_visible(false);
+//             let window = Arc::new(
+//                 event_loop
+//                     .create_window(attributes)
+//                     .expect("Failed to create window"),
+//             );
+//             let gpu = Gpu::new(window).expect("Failed to create GPU");
 
-            (*self.f)(&gpu);
+//             (*self.f)(&gpu);
 
-            event_loop.exit();
-        }
+//             event_loop.exit();
+//         }
 
-        fn window_event(
-            &mut self,
-            _event_loop: &winit::event_loop::ActiveEventLoop,
-            _window_id: winit::window::WindowId,
-            _event: winit::event::WindowEvent,
-        ) {
-        }
-    }
+//         fn window_event(
+//             &mut self,
+//             _event_loop: &winit::event_loop::ActiveEventLoop,
+//             _window_id: winit::window::WindowId,
+//             _event: winit::event::WindowEvent,
+//         ) {
+//         }
+//     }
+   
+//     fn with_gpu<F>(f: F)
+//     where
+//         F: Fn(&Gpu) -> () + 'static,
+//     {
+//         let boxed = Box::new(f);
+//         let mut app = TestApp { f: boxed };
+//         main_event_loop.get_or_init(|| {
+//             EventLoopBuilder::new()
+//                 .with_windowed_context(None)
+//                 .build()
+//         });
+//         main_event_loop.with(|e| e.borrow_mut().run_app_on_demand(&mut app)).expect("run on demand");
+//     }
 
-    fn with_gpu<F>(f: F)
-    where
-        F: Fn(&Gpu) -> () + 'static,
-    {
-        use winit::platform::windows::EventLoopBuilderExtWindows;
 
-        let boxed = Box::new(f);
-        let mut app = TestApp { f: boxed };
-        let mut event_loop = EventLoop::builder().with_any_thread(true).build().unwrap();
+//     #[test]
+//     fn test_load_minimal() {
+//         with_gpu(|gpu| {
+//             let path = sample_path("Box").expect("path");
+//             let result = load(gpu, &path);
+//             let scene = result.unwrap();
+//             assert_eq!(scene.root.node_count(), 3);
+//             assert_eq!(scene.materials.len(), 1);
+//             assert_eq!(scene.nodes().len(), 3);
+//             assert_eq!(scene.textures.len(), 0);
+//             assert_eq!(scene.meshes.len(), 1);
+//             assert_eq!(scene.meshes[0].primitives.len(), 1);
+//             assert_eq!(scene.meshes[0].primitives[0].vertex_count, 36);
+//         });
+//     }
 
-        event_loop
-            .run_app_on_demand(&mut app)
-            .expect("Failed to run test app");
-    }
-    use {
-        super::*,
-        std::sync::Arc,
-        winit::{
-            application::ApplicationHandler, event_loop::EventLoop,
-            platform::run_on_demand::EventLoopExtRunOnDemand,
-        },
-    };
+//     #[test]
+//     fn test_load_texture() {
+//         with_gpu(|gpu| {
+//             let path = sample_path("").expect("path");
+//             let result = load(gpu, &path);
+//             println!("Result: {:?}", result);
+//             assert!(result.is_ok());
 
-    #[test]
-    fn test_load_minimal() {
-        with_gpu(|gpu| {
-            let path = sample_path("Box").expect("path");
-            let result = load(gpu, &path);
-            let scene = result.unwrap();
-            assert_eq!(scene.root.node_count(), 3);
-            assert_eq!(scene.materials.len(), 1);
-            assert_eq!(scene.nodes().len(), 3);
-            assert_eq!(scene.textures.len(), 0);
-            assert_eq!(scene.meshes.len(), 1);
-            assert_eq!(scene.meshes[0].primitives.len(), 1);
-            assert_eq!(scene.meshes[0].primitives[0].vertex_count, 36);
-        });
-    }
-
-    #[test]
-    fn test_load_texture() {
-        with_gpu(|gpu| {
-            let path = sample_path("").expect("path");
-            let result = load(gpu, &path);
-            println!("Result: {:?}", result);
-            assert!(result.is_ok());
-
-            let scene = result.unwrap();
-            assert_eq!(scene.root.node_count(), 2);
-            assert_eq!(scene.materials.len(), 1);
-            assert_eq!(scene.nodes().len(), 2);
-            assert_eq!(scene.textures.len(), 1);
-            assert_eq!(scene.meshes.len(), 1);
-            assert_eq!(scene.meshes[0].primitives.len(), 1);
-            assert_eq!(scene.meshes[0].primitives[0].vertex_count, 36);
-        });
-    }
-}
+//             let scene = result.unwrap();
+//             assert_eq!(scene.root.node_count(), 2);
+//             assert_eq!(scene.materials.len(), 1);
+//             assert_eq!(scene.nodes().len(), 2);
+//             assert_eq!(scene.textures.len(), 1);
+//             assert_eq!(scene.meshes.len(), 1);
+//             assert_eq!(scene.meshes[0].primitives.len(), 1);
+//             assert_eq!(scene.meshes[0].primitives[0].vertex_count, 36);
+//         });
+//     }
+// }

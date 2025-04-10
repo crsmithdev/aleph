@@ -63,10 +63,10 @@ impl Camera {
         perspective_rh
     }
 
-    pub fn view(&self) -> Mat4 { 
+    pub fn view(&self) -> Mat4 {
         let view_rh = Mat4::look_at_rh(self.position(), self.target, Vec3::Y);
         view_rh
-     }
+    }
 
     pub fn view_projection(&self) -> Mat4 { self.projection() * self.view() }
 
@@ -87,11 +87,7 @@ impl Camera {
         self.pitch += delta.y;
     }
 
-    pub fn translate(&mut self, delta: Vec3) {
-        self.target += delta;
-    }
+    pub fn translate(&mut self, delta: Vec3) { self.target += delta; }
 
-    pub fn zoom(&mut self, delta: f32) { 
-        self.distance += delta;
-     }
+    pub fn zoom(&mut self, delta: f32) { self.distance += delta; }
 }

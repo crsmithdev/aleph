@@ -1,10 +1,9 @@
 use {
-    crate::vk::{
-        Buffer, Handle,
-    },
+    aleph_vk::Buffer,
     bytemuck::{Pod, Zeroable},
     derive_more::Debug,
     glam::{Mat4, Vec2, Vec3, Vec4},
+    ash::vk::Handle
 };
 
 #[repr(C)]

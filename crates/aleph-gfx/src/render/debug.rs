@@ -1,15 +1,15 @@
 use {
+    aleph_vk::{
+        AttachmentStoreOp, Buffer, BufferUsageFlags, CommandBuffer, Format, Gpu,
+        PipelineBindPoint, PipelineLayout, Rect2D, VkPipeline,
+    },
+    aleph_scene::{
+        model::{GpuDrawData, Primitive},
+        util, Mesh, NodeData,
+    },
     crate::{
+        render::pipeline::{Pipeline, PipelineBuilder, ResourceBinder, ResourceLayout},
         render::renderer::RenderContext,
-        scene::{
-            model::{GpuDrawData, Primitive},
-            util, NodeData, Mesh
-        },
-        vk::{
-            pipeline::{Pipeline, PipelineBuilder, ResourceBinder, ResourceLayout},
-            AttachmentStoreOp, Buffer, BufferUsageFlags, CommandBuffer, Format, Gpu,
-            PipelineBindPoint, PipelineLayout, Rect2D, VkPipeline,
-        },
     },
     anyhow::Result,
     ash::vk::{self, AttachmentLoadOp, CompareOp},
@@ -105,7 +105,7 @@ impl DebugPipeline {
     }
 
     fn draw_node(&self, context: &RenderContext, index: NodeIndex, world_transform: Mat4) {
-        let node = &context.scene.root[index];
+        let node = &context.scene.graph[index];
         let transform = world_transform * node.transform;
 
         match &node.data {
@@ -114,7 +114,7 @@ impl DebugPipeline {
                 self.draw_mesh(context, mesh, transform);
             }
             _ =>
-                for edge in context.scene.root.edges(index) {
+                for edge in context.scene.graph.edges(index) {
                     let child = edge.target();
                     self.draw_node(context, child, transform);
                 },
@@ -196,7 +196,7 @@ impl DebugPipeline {
             .buffer(IDX_BIND_DRAW, &self.draw_buffer)
             .bind(cmd, &self.pipeline_layout);
 
-        cmd.bind_vertex_buffer(&primitive.vertex_buffer, 0);
-        cmd.bind_index_buffer(&primitive.index_buffer, 0);
+        cmd.bind_vertex_buffer(&primitive.vertex_buffer.raw(), 0);
+        cmd.bind_index_buffer(&primitive.index_buffer.raw(), 0);
     }
 }

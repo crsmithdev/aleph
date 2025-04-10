@@ -1,27 +1,34 @@
 use {
-    crate::{
-        render::renderer::{Renderer, RendererConfig},
-        scene::gltf,
-        vk::Gpu,
-        Scene,
-    },
+    crate::render::renderer::{Renderer, RendererConfig},
     aleph_core::{
         app::TickEvent,
         input::InputState,
         layer::{Layer, Window},
     },
+    aleph_scene::{gltf, Scene},
+    aleph_vk::Gpu,
     anyhow::Result,
     std::sync::{Arc, OnceLock},
 };
 
-
 #[derive(Default)]
-pub struct GraphicsLayer {
+pub struct RenderLayer {
+    config: RendererConfig,
     renderer: OnceLock<Renderer>,
-    scene: Option<Scene>,
+    scene: Scene,
 }
 
-impl Layer for GraphicsLayer {
+impl RenderLayer {
+    pub fn with_config(config: RendererConfig) -> Self {
+        Self {
+            config: config,
+            renderer: OnceLock::new(),
+            scene: Scene::default(),
+        }
+    }
+}
+
+impl Layer for RenderLayer {
     fn init(
         &mut self,
         window: Arc<Window>,
@@ -31,16 +38,10 @@ impl Layer for GraphicsLayer {
         Self: Sized,
     {
         let gpu = Gpu::new(Arc::clone(&window))?;
-        // let scene = gltf::load_validation_scene(&gpu, "Mesh_Primitives", 0)?;
-        let path = gltf::sample_path("NormalTangentTest")?;
-        let scene = gltf::load(&gpu, &path)?;
-
-        // let doc = gltf2::load_validation_scene(GLTF_SCENE, 1)?;
-        // let scene = Scene::from_gltf(&gpu, &doc)?;
-        let config = RendererConfig::default();
-        let renderer = Renderer::new(gpu, config)?;
-        self.scene = Some(scene);
-
+        if let Some(path) = self.config.initial_scene.as_ref() {
+            self.scene = gltf::load(&gpu, path)?
+        }
+        let renderer = Renderer::new(gpu, self.config.clone())?;
         self.renderer
             .set(renderer)
             .map_err(|_| anyhow::anyhow!("Failed to set renderer"))?;
@@ -50,14 +51,11 @@ impl Layer for GraphicsLayer {
     }
 }
 
-impl GraphicsLayer {
+impl RenderLayer {
     pub fn render(&mut self, input: &InputState) -> Result<()> {
-        if let Some(scene) = &mut self.scene {
-            self.renderer
-                .get_mut()
-                .expect("Renderer not initialized")
-                .execute(&scene, input)?;
-        }
-        Ok(())
+        self.renderer
+            .get_mut()
+            .expect("Renderer not initialized")
+            .execute(&self.scene, input)
     }
 }

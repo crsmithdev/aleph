@@ -1,5 +1,5 @@
 use {
-    crate::vk::{Device, Instance},
+    crate::{Device, Instance},
     anyhow::Result,
     ash::vk::{Buffer as VkBuffer, Image as VkImage, MemoryRequirements},
     derive_more::Debug,

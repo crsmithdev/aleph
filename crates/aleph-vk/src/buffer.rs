@@ -1,5 +1,5 @@
 use {
-    crate::vk::{Allocator, Device},
+    crate::{Allocator, Device},
     anyhow::{Ok, Result},
     ash::vk::{self, DeviceAddress},
     bytemuck::Pod,
@@ -56,7 +56,7 @@ impl<T: Pod> Buffer<T> {
     pub fn handle(&self) -> vk::Buffer { self.buffer.handle }
 
     #[inline]
-    pub fn size(&self) -> u64 { self.buffer.size}
+    pub fn size(&self) -> u64 { self.buffer.size }
 
     #[inline]
     pub fn write(&self, data: &[T]) {
@@ -65,9 +65,7 @@ impl<T: Pod> Buffer<T> {
     }
 
     #[inline]
-    pub fn destroy(&self) {
-        self.buffer.destroy()
-    }
+    pub fn destroy(&self) { self.buffer.destroy() }
 }
 
 #[derive(Debug)]
@@ -92,7 +90,7 @@ impl RawBuffer {
         location: MemoryLocation,
         label: impl Into<String>,
     ) -> Result<Self> {
-        let flags = flags | vk:: BufferUsageFlags::SHADER_DEVICE_ADDRESS;
+        let flags = flags | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
         let create_info = vk::BufferCreateInfo::default().size(size).usage(flags);
         let handle = unsafe { device.handle().create_buffer(&create_info, None) }?;
         let requirements = unsafe { device.handle().get_buffer_memory_requirements(handle) };
@@ -127,7 +125,7 @@ impl RawBuffer {
         label: impl Into<String>,
     ) -> Result<Self> {
         let size = bytemuck::cast_slice::<u8, u8>(data).len() as u64;
-        
+
         // let size = std::mem::size_of_val(data) as u64;
         let buffer = Self::new(device, allocator, size, flags, location, label)?;
         buffer.write(data);

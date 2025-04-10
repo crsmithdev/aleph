@@ -1,7 +1,8 @@
 pub use ash::vk::ImageLayout;
+use crate::RawBuffer;
+
 use {
     super::{buffer::Buffer, Allocator, BufferUsageFlags, Device, Texture},
-    crate::Vertex,
     anyhow::Result,
     ash::vk,
     bytemuck::Pod,
@@ -143,7 +144,7 @@ impl CommandBuffer {
         }
     }
 
-    pub fn bind_vertex_buffer(&self, buffer: &Buffer<Vertex>, _offset: u64) {
+    pub fn bind_vertex_buffer(&self, buffer: &RawBuffer, _offset: u64) {
         unsafe {
             self.device
                 .handle
@@ -151,7 +152,7 @@ impl CommandBuffer {
         }
     }
 
-    pub fn bind_index_buffer(&self, buffer: &Buffer<u32>, offset: u64) {
+    pub fn bind_index_buffer(&self, buffer: &RawBuffer, offset: u64) {
         unsafe {
             self.device.handle.cmd_bind_index_buffer(
                 self.handle,

@@ -1,18 +1,19 @@
 use {
     super::{debug, DebugPipeline},
+    aleph_scene::{camera::CameraConfig, Camera, Scene},
+    aleph_vk::{
+        CommandBuffer, Extent2D, Extent3D, Format, Frame, Gpu,
+        ImageAspectFlags, ImageLayout, ImageUsageFlags, Texture,
+    },   
     crate::{
         render::ForewardPipeline,
-        scene::{camera::CameraConfig, Camera},
-        vk::{
-            pipeline::Pipeline, CommandBuffer, Extent2D, Extent3D, Format, Frame, Gpu,
-            ImageAspectFlags, ImageLayout, ImageUsageFlags, Texture,
-        },
-        Scene,
+        pipeline::Pipeline,
+        
+        
     },
     aleph_core::input::InputState,
     anyhow::Result,
-    core::f32,
-    glam::{vec3, vec4, Vec3, Vec4},
+    glam::{vec3, Vec3},
     tracing::instrument,
     winit::{
         event::MouseButton,
@@ -35,11 +36,10 @@ pub struct RenderContext<'a> {
 pub(crate) const FORMAT_DRAW_IMAGE: Format = Format::R16G16B16A16_SFLOAT;
 pub(crate) const FORMAT_DEPTH_IMAGE: Format = Format::D32_SFLOAT;
 
+#[derive(Clone)]
 pub struct RendererConfig {
     pub clear_color: Vec3,
-    pub clear_normal: Vec4,
-    pub clear_depth: f32,
-    pub clear_stencil: u32,
+    pub initial_scene: Option<String>,
     pub camera: CameraConfig,
 }
 
@@ -47,10 +47,8 @@ impl Default for RendererConfig {
     fn default() -> Self {
         Self {
             clear_color: vec3(0.0, 0.0, 0.0),
-            clear_normal: vec4(0., 0., 0., 0.),
-            clear_depth: 1.0,
-            clear_stencil: 0,
             camera: CameraConfig::default(),
+            initial_scene: None,
         }
     }
 }
@@ -85,7 +83,7 @@ impl Renderer {
         )?;
 
         let depth_image = gpu.create_image(
-            gpu.swapchain.extent(),
+            gpu.swapchain().extent(),
             FORMAT_DEPTH_IMAGE,
             ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
             ImageAspectFlags::DEPTH,
@@ -93,7 +91,7 @@ impl Renderer {
             None,
         )?;
 
-        let camera = Camera::new(config.camera, gpu.swapchain.extent());
+        let camera = Camera::new(config.camera, gpu.swapchain().extent());
         let foreward_pipeline = ForewardPipeline::new(&gpu)?;
         let debug_pipeline = DebugPipeline::new(&gpu)?;
 
@@ -151,7 +149,7 @@ impl Renderer {
         let (image_index, rebuild) = {
             let (image_index, rebuild) = self
                 .gpu
-                .swapchain
+                .swapchain()
                 .acquire_next_image(*swapchain_semaphore)?;
             (image_index as usize, rebuild)
         };
@@ -162,8 +160,8 @@ impl Renderer {
         let cmd_buffer = &command_buffer;
         cmd_buffer.reset()?;
         cmd_buffer.begin()?;
-        let swapchain_extent = self.gpu.swapchain.extent();
-        let swapchain_image = &self.gpu.swapchain.images()[image_index];
+        let swapchain_extent = self.gpu.swapchain().extent();
+        let swapchain_image = &self.gpu.swapchain().images()[image_index];
         let draw_extent = {
             let extent = self.draw_image.extent();
             Extent3D {
@@ -191,7 +189,7 @@ impl Renderer {
             cmd_buffer: &self.frames[self.frame_index].command_buffer,
             draw_image: &self.draw_image,
             depth_image: &self.depth_image,
-            extent: self.gpu.swapchain.extent(),
+            extent: self.gpu.swapchain().extent(),
             config: &self.config,
         };
         self.foreward_pipeline.execute(&context)?;
@@ -223,7 +221,7 @@ impl Renderer {
         cmd_buffer.submit_queued(*swapchain_semaphore, *render_semaphore, *fence)?;
         let rebuild = self
             .gpu
-            .swapchain
+            .swapchain()
             .present(&[*render_semaphore], &[image_index as u32])?;
 
         self.rebuild_swapchain |= rebuild;
@@ -252,7 +250,5 @@ impl Renderer {
 }
 
 impl Drop for Renderer {
-    fn drop(&mut self) {
-        unsafe { self.gpu.device().handle().device_wait_idle().unwrap() };
-    }
+    fn drop(&mut self) { unsafe { self.gpu.device().handle().device_wait_idle().unwrap() }; }
 }

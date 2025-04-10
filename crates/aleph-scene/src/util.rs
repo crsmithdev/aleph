@@ -1,11 +1,9 @@
 use {
-    crate::{
-        vk::{
-            buffer::*, AttachmentLoadOp, AttachmentStoreOp, BufferUsageFlags,
-            ClearDepthStencilValue, ClearValue, Gpu, ImageAspectFlags, ImageLayout,
-            ImageUsageFlags, RenderingAttachmentInfo, Texture,
-        },
-        Vertex,
+    crate::Vertex,
+    aleph_vk::{
+        Buffer, AttachmentLoadOp, AttachmentStoreOp, BufferUsageFlags, ClearDepthStencilValue,
+        ClearValue, Gpu, ImageAspectFlags, ImageLayout, ImageUsageFlags, RenderingAttachmentInfo,
+        Texture, MemoryLocation,
     },
     anyhow::Result,
     ash::vk::{self, ClearColorValue, Extent2D},

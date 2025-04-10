@@ -1,18 +1,17 @@
 use {
-    crate::{
-        render::renderer::RenderContext,
-        scene::{
-            model::{GpuDrawData, GpuMaterialData, Primitive},
-            util, NodeData,
-            Mesh, Material
-        },
-        vk::{
-            ColorComponentFlags, pipeline::{Pipeline, PipelineBuilder, ResourceBinder, ResourceLayout},
-            Buffer, CommandBuffer, Format, Gpu, PipelineBindPoint, PipelineLayout, Rect2D, Texture,
-            VkPipeline, AttachmentLoadOp, AttachmentStoreOp, BufferUsageFlags, CompareOp, ShaderStageFlags,
-            PipelineColorBlendAttachmentState,
-            PrimitiveTopology, PolygonMode, FrontFace, CullModeFlags,
-        },
+    crate::render::{
+        pipeline::{Pipeline, PipelineBuilder, ResourceBinder, ResourceLayout},
+        renderer::RenderContext,
+    },
+    aleph_scene::{
+        model::{GpuDrawData, GpuMaterialData, Primitive},
+        util, Material, Mesh, NodeData,
+    },
+    aleph_vk::{
+        AttachmentLoadOp, AttachmentStoreOp, Buffer, BufferUsageFlags, ColorComponentFlags,
+        CommandBuffer, CompareOp, CullModeFlags, Format, FrontFace, Gpu, PipelineBindPoint,
+        PipelineColorBlendAttachmentState, PipelineLayout, PolygonMode, PrimitiveTopology, Rect2D,
+        ShaderStageFlags, Texture, VkPipeline,
     },
     anyhow::Result,
     glam::{Mat4, Vec2},
@@ -117,7 +116,7 @@ impl ForewardPipeline {
             layout,
             material_buffer,
             draw_buffer,
-            texture_defaults
+            texture_defaults,
         })
     }
 
@@ -128,7 +127,7 @@ impl ForewardPipeline {
     }
 
     fn draw_node(&self, context: &RenderContext, index: NodeIndex, world_transform: Mat4) {
-        let node = &context.scene.root[index];
+        let node = &context.scene.graph[index];
         let transform = world_transform * node.transform;
 
         match &node.data {
@@ -137,7 +136,7 @@ impl ForewardPipeline {
                 self.draw_mesh(context, mesh, transform);
             }
             _ =>
-                for edge in context.scene.root.edges(index) {
+                for edge in context.scene.graph.edges(index) {
                     let child = edge.target();
                     self.draw_node(context, child, transform);
                 },
@@ -152,7 +151,12 @@ impl ForewardPipeline {
             };
             self.update_draw_buffer(context, transform);
             self.update_material_buffer(material);
-            self.bind_resources(context.cmd_buffer, primitive, &material, &context.scene.textures);
+            self.bind_resources(
+                context.cmd_buffer,
+                primitive,
+                &material,
+                &context.scene.textures,
+            );
             context
                 .cmd_buffer
                 .draw_indexed(primitive.vertex_count, 1, 0, 0, 0);
@@ -202,11 +206,7 @@ impl ForewardPipeline {
         })
     }
 
-    fn update_draw_buffer(
-        &self,
-        context: &RenderContext,
-        transform: Mat4,
-    ) {
+    fn update_draw_buffer(&self, context: &RenderContext, transform: Mat4) {
         let model = transform;
         let view = context.camera.view();
         let projection = context.camera.projection();
@@ -269,25 +269,34 @@ impl ForewardPipeline {
         let occlusion_texture = match material.occlusion_texture {
             Some(index) => &textures[index],
             None => &self.texture_defaults.white_linear,
-        };        
-
-
+        };
 
         ResourceBinder::default()
             .buffer(BIND_IDX_DRAW, &self.draw_buffer)
             .buffer(BIND_IDX_MATERIAL, &self.material_buffer)
-            .image(BIND_IDX_BASE_COLOR, base_texture, base_texture.sampler().unwrap())
-            .image(BIND_IDX_NORMAL, normal_texture, normal_texture.sampler().unwrap())
+            .image(
+                BIND_IDX_BASE_COLOR,
+                base_texture,
+                base_texture.sampler().unwrap(),
+            )
+            .image(
+                BIND_IDX_NORMAL,
+                normal_texture,
+                normal_texture.sampler().unwrap(),
+            )
             .image(
                 BIND_IDX_METALLIC_ROUGHNESS,
                 metallic_roughness_texture,
                 metallic_roughness_texture.sampler().unwrap(),
             )
-            .image(BIND_IDX_OCCLUSION, occlusion_texture, occlusion_texture.sampler().unwrap())
+            .image(
+                BIND_IDX_OCCLUSION,
+                occlusion_texture,
+                occlusion_texture.sampler().unwrap(),
+            )
+            .bind(cmd, &self.layout);
 
-        .bind(cmd, &self.layout);
-
-        cmd.bind_vertex_buffer(&primitive.vertex_buffer, 0);
-        cmd.bind_index_buffer(&primitive.index_buffer, 0);
+        cmd.bind_vertex_buffer(&primitive.vertex_buffer.raw(), 0);
+        cmd.bind_index_buffer(&primitive.index_buffer.raw(), 0);
     }
 }

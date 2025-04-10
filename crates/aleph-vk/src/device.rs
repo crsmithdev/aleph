@@ -56,6 +56,7 @@ pub struct Device {
 }
 
 impl Device {
+    pub fn queue(&self) -> &Queue { &self.queue }
     pub fn new(instance: &Instance) -> Result<Device> {
         let candidate_devices = instance.enumerate_physical_devices()?;
 

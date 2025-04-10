@@ -97,7 +97,7 @@ impl Gpu {
     }
 
     #[inline]
-    pub fn instance(&self) -> &Instance { &self.instance } 
+    pub fn instance(&self) -> &Instance { &self.instance }
 
     #[inline]
     pub fn device(&self) -> &Device { &self.device }

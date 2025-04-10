@@ -1,6 +1,7 @@
 use {
-    super::{buffer::RawBuffer, Buffer, CommandBuffer, Gpu, Texture, VkPipeline},
-    crate::{render::renderer::RenderContext, Vertex},
+    crate::render::RenderContext,
+    aleph_scene::Vertex,
+    aleph_vk::{buffer::RawBuffer, Buffer, CommandBuffer, Gpu, Texture, VkPipeline},
     anyhow::Result,
     ash::vk::{self, PipelineBindPoint, SampleCountFlags},
     bytemuck::Pod,
