@@ -1,11 +1,16 @@
 use {
-    super::{CommandBuffer, CommandPool, Device, Instance, Queue, Surface, Texture, VK_TIMEOUT_NS},
+    super::{
+        texture::WrappedTexture, CommandBuffer, CommandPool, Device, Instance, Queue, Surface,
+        VK_TIMEOUT_NS,
+    },
+    crate::Texture,
     anyhow::Result,
     ash::{
         khr,
         vk::{self, CompositeAlphaFlagsKHR, Handle, SurfaceTransformFlagsKHR},
     },
-    derive_more::Debug, tracing::instrument,
+    derive_more::Debug,
+    tracing::instrument,
 };
 
 pub const IN_FLIGHT_FRAMES: u32 = 2;
@@ -42,7 +47,7 @@ pub struct Swapchain {
     #[debug("{:x}", instance.handle().handle().as_raw())]
     instance: Instance,
     info: SwapchainInfo,
-    images: Vec<Texture>,
+    images: Vec<WrappedTexture>,
 }
 
 impl Swapchain {
@@ -55,9 +60,8 @@ impl Swapchain {
         Self::create_swapchain(instance, device, surface, info, None)
     }
 
-   #[instrument(skip(self))] 
+    #[instrument(skip(self))]
     pub fn rebuild(&mut self, extent: vk::Extent2D) -> Result<()> {
-        
         let instance = self.instance.clone();
         let device = self.device.clone();
         let surface = self.surface.clone();
@@ -132,14 +136,8 @@ impl Swapchain {
                         .create_image_view(&image_view_info, None)
                         .expect("Failed to create imageview")
                 };
-                Texture::from_existing(
-                    handle,
-                    view,
-                    info.extent,
-                    info.format,
-                    "swapchain image",
-                )
-                .expect("Failed to create image")
+                WrappedTexture::new(handle, view, info.extent, info.format, "swapchain image")
+                    .expect("Failed to create image")
             })
             .collect::<Vec<_>>();
         Ok(Swapchain {
@@ -156,7 +154,7 @@ impl Swapchain {
 
     pub fn in_flight_frames(&self) -> u32 { self.images.len() as u32 }
 
-    pub fn images(&self) -> &[Texture] { &self.images }
+    pub fn images(&self) -> &[WrappedTexture] { &self.images }
 
     pub fn extent(&self) -> vk::Extent2D { self.info.extent }
 }

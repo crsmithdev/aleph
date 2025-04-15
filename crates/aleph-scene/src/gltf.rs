@@ -1,10 +1,10 @@
 use {
-    aleph_vk::{Gpu, Texture, Extent2D, ImageUsageFlags},
     crate::{
-            material::Material,
-            model::{Mesh, Primitive, Vertex},
-            util, Node, NodeData, Scene,
+        material::Material,
+        model::{Mesh, Primitive, Vertex},
+        util, Camera, Node, NodeData, SceneGraph,
     },
+    aleph_vk::{AllocatedTexture, Extent2D, Gpu, ImageUsageFlags, MemoryLocation},
     anyhow::{bail, Result},
     ash::vk,
     derive_more::Debug,
@@ -12,9 +12,10 @@ use {
     itertools::Itertools,
     petgraph::graph::NodeIndex,
     std::{
+        cell::RefCell,
         collections::{HashMap, HashSet},
         mem::size_of,
-        path::Path,
+        rc::Rc,
     },
 };
 
@@ -27,42 +28,7 @@ pub struct GltfScene {
     pub images: Vec<gltf::image::Data>,
 }
 
-// #[derive(Debug)]
-// pub struct SceneDesc {
-//     pub roots: Vec<usize>,
-//     pub nodes: Vec<NodeDesc>,
-// }
-
-const GLTF_SAMPLE_DIR: &str = "assets/gltf/glTF-Sample-Assets";
-const GLTF_VALIDATION_DIR: &str = "assets/gltf/glTF-Asset-Generator";
-
-pub fn sample_path(name: &str) -> Result<String> {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(GLTF_SAMPLE_DIR)
-        .join(name)
-        .join("glTF")
-        .join(format!("{name}.gltf"))
-        .canonicalize()
-        .map(|p| p.to_string_lossy().to_string())
-        .map_err(|e| anyhow::anyhow!(e))
-}
-
-pub fn load_validation_scene(gpu: &Gpu, name: &str, index: usize) -> Result<Scene> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(GLTF_VALIDATION_DIR)
-        .join(name)
-        .join(format!("{name}_{index:02}.gltf"))
-        .canonicalize()
-        .map(|p| p.to_string_lossy().to_string())
-        .map_err(|e| anyhow::anyhow!(e));
-
-    load(gpu, &path?)
-}
-
-
-pub fn load(gpu: &Gpu, path: &str) -> Result<Scene> {
+pub fn load(gpu: &Gpu, path: &str) -> Result<SceneGraph> {
     let (document, buffers, images) = gltf::import(path)?;
 
     let mut srgb_textures = HashSet::new();
@@ -73,7 +39,7 @@ pub fn load(gpu: &Gpu, path: &str) -> Result<Scene> {
         }
     }
 
-    let mut textures: HashMap<usize, Texture> = HashMap::new();
+    let mut textures: HashMap<usize, AllocatedTexture> = HashMap::new();
     for index in 0..document.textures().len() {
         let info = document.textures().nth(index).unwrap();
         let srgb = srgb_textures.contains(&index);
@@ -162,12 +128,14 @@ pub fn load(gpu: &Gpu, path: &str) -> Result<Scene> {
         }
     }
 
-    Ok(Scene {
-        graph,
+    Ok(SceneGraph {
+        camera: Camera::new(crate::CameraConfig::default()),
+        graph: Rc::new(RefCell::new(graph)),
         root,
         materials,
         textures,
         meshes,
+        rng: rand::random(),
     })
 }
 
@@ -199,14 +167,13 @@ fn add_node(gpu: &Gpu, graph: &mut Graph, gltf_node: gltf::Node) -> NodeIndex {
     node_index
 }
 
-
 fn load_texture(
     gpu: &Gpu,
     data: &gltf::image::Data,
     name: &str,
     sampler: vk::Sampler,
     srgb: bool,
-) -> Result<Texture> {
+) -> Result<AllocatedTexture> {
     let extent = Extent2D {
         width: data.width,
         height: data.height,
@@ -221,7 +188,7 @@ fn load_texture(
         false => vk::Format::R8G8B8A8_UNORM,
     };
 
-    let image = gpu.create_image(
+    let image = gpu.create_texture(
         extent,
         format,
         vk::ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
@@ -275,8 +242,8 @@ fn load_material(material: &gltf::Material) -> Result<Material> {
         metallic_roughness_texture,
         metallic_factor,
         roughness_factor,
-        occlusion_texture,
-        occlusion_factor,
+        ao_texture: occlusion_texture,
+        ao_strength: occlusion_factor,
     })
 }
 
@@ -312,7 +279,7 @@ fn load_mesh(gpu: &Gpu, source: &gltf::Mesh, buffers: &Vec<gltf::buffer::Data>) 
             colors.into_rgba_f32().map(Vec4::from).collect::<Vec<_>>()
         });
 
-        let mut vertices: Vec<Vertex> = positions
+        let vertices: Vec<Vertex> = positions
             .iter()
             .enumerate()
             .map(|(index, position)| {
@@ -324,8 +291,6 @@ fn load_mesh(gpu: &Gpu, source: &gltf::Mesh, buffers: &Vec<gltf::buffer::Data>) 
                     uv_y: uv.y,
                     tangent: *tangents.get(index).unwrap_or(&Vec4::ZERO),
                     color: *colors.get(index).unwrap_or(&Vec4::ONE),
-                    normal_derived: Vec3::ZERO,
-                    _padding: 0.0,
                 }
             })
             .collect();
@@ -334,17 +299,14 @@ fn load_mesh(gpu: &Gpu, source: &gltf::Mesh, buffers: &Vec<gltf::buffer::Data>) 
             .map(|read_indices| read_indices.into_u32().collect::<Vec<_>>())
             .unwrap();
 
-        let normals = util::calculate_normals(&vertices, &indices).to_vec();
-        for i in 0..vertices.len() {
-            vertices[i].normal_derived = normals[i];
-        }
-
-        let index_buffer_size = size_of::<u32>() as u64 * indices.len() as u64;
-        let index_buffer = util::index_buffer(gpu, index_buffer_size, "index buffer")?;
+        let index_size = size_of::<u32>() as u64 * indices.len() as u64;
+        let index_buffer =
+            gpu.create_index_buffer(index_size, MemoryLocation::GpuOnly, "index buffer")?;
         let index_staging = util::staging_buffer(gpu, &indices, "index staging")?;
 
-        let vertex_buffer_size = size_of::<Vertex>() as u64 * vertices.len() as u64;
-        let vertex_buffer = util::vertex_buffer(gpu, vertex_buffer_size, "vertex buffer")?;
+        let vertex_size = size_of::<Vertex>() as u64 * vertices.len() as u64;
+        let vertex_buffer =
+            gpu.create_vertex_buffer(vertex_size, MemoryLocation::GpuOnly, "vertex buffer")?;
         let vertex_staging = util::staging_buffer(gpu, &vertices, "vertex staging")?;
 
         gpu.execute(|cmd| {
@@ -454,7 +416,7 @@ fn load_sampler(gpu: &Gpu, sampler: gltf::texture::Sampler) -> Result<ash::vk::S
 //         ) {
 //         }
 //     }
-   
+
 //     fn with_gpu<F>(f: F)
 //     where
 //         F: Fn(&Gpu) -> () + 'static,
@@ -468,7 +430,6 @@ fn load_sampler(gpu: &Gpu, sampler: gltf::texture::Sampler) -> Result<ash::vk::S
 //         });
 //         main_event_loop.with(|e| e.borrow_mut().run_app_on_demand(&mut app)).expect("run on demand");
 //     }
-
 
 //     #[test]
 //     fn test_load_minimal() {

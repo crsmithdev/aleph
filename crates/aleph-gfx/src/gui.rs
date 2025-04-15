@@ -1,10 +1,10 @@
 use {
-    aleph_vk::{CommandBuffer, CommandPool, Extent2D, Format, Gpu},
+    crate::RenderContext,
+    aleph_scene::util,
+    aleph_vk::{AttachmentLoadOp, AttachmentStoreOp, CommandPool, Extent2D, Format, Gpu},
     anyhow::Result,
     egui, egui_ash_renderer as egui_renderer, egui_extras, egui_winit, gpu_allocator as ga,
-    std::{
-        sync::{Arc, Mutex},
-    },
+    std::sync::{Arc, Mutex},
 };
 
 pub struct Gui {
@@ -15,7 +15,7 @@ pub struct Gui {
     window: Arc<winit::window::Window>,
     textures_to_free: Option<Vec<egui::TextureId>>,
 }
-
+const CLEAR_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
 impl Gui {
     pub fn new(gpu: &Gpu, window: Arc<winit::window::Window>) -> Result<Self> {
         let egui_ctx = egui::Context::default();
@@ -43,14 +43,15 @@ impl Gui {
                 debug_settings: ga::AllocatorDebugSettings::default(),
                 allocation_sizes: ga::AllocationSizes::default(),
             })?;
+            let dynamic_rendering = egui_renderer::DynamicRendering {
+                color_attachment_format: Format::R16G16B16A16_SFLOAT,
+                depth_attachment_format: Some(Format::D32_SFLOAT),
+            };
 
             egui_renderer::Renderer::with_gpu_allocator(
                 Arc::new(Mutex::new(allocator)),
                 device.handle().clone(),
-                egui_renderer::DynamicRendering {
-                    color_attachment_format: Format::B8G8R8A8_SRGB,
-                    depth_attachment_format: Some(Format::D32_SFLOAT),
-                },
+                dynamic_rendering,
                 egui_renderer::Options {
                     srgb_framebuffer: true,
                     ..Default::default()
@@ -68,7 +69,28 @@ impl Gui {
         })
     }
 
-    pub fn draw(&mut self, gpu: &Gpu, cmd: &CommandBuffer, extent: Extent2D) -> Result<()> {
+    pub fn draw<F: FnMut(&egui::Context) -> ()>(
+        &mut self,
+        ctx: &RenderContext,
+        mut build_ui: F,
+    ) -> Result<()> {
+        let color_attachments = &[util::color_attachment(
+            ctx.draw_image,
+            AttachmentLoadOp::LOAD,
+            AttachmentStoreOp::STORE,
+            CLEAR_COLOR,
+        )];
+        let depth_attachment = &util::depth_attachment(
+            ctx.depth_image,
+            AttachmentLoadOp::LOAD,
+            AttachmentStoreOp::STORE,
+            1.0,
+        );
+        let extent = Extent2D {
+            width: ctx.extent.width,
+            height: ctx.extent.height,
+        };
+
         let raw_input = self.egui_winit.take_egui_input(&self.window);
 
         let egui::FullOutput {
@@ -77,9 +99,7 @@ impl Gui {
             shapes,
             pixels_per_point,
             ..
-        } = self.egui_ctx.run(raw_input, |ctx| {
-            build_ui(ctx);
-        });
+        } = self.egui_ctx.run(raw_input, |ctx| build_ui(ctx));
 
         self.egui_winit
             .handle_platform_output(&self.window, platform_output);
@@ -91,15 +111,23 @@ impl Gui {
         if !textures_delta.set.is_empty() {
             self.egui_renderer
                 .set_textures(
-                    gpu.device().queue().handle(),
+                    ctx.gpu.device().queue().handle(),
                     self.pool.handle(),
                     textures_delta.set.as_slice(),
                 )
                 .expect("Failed to set textures");
         }
         let clipped_primitives = self.egui_ctx.tessellate(shapes, pixels_per_point);
-        self.egui_renderer
-            .cmd_draw(cmd.handle(), extent, pixels_per_point, &clipped_primitives)?;
+
+        ctx.cmd_buffer
+            .begin_rendering(color_attachments, Some(depth_attachment), ctx.extent)?;
+        self.egui_renderer.cmd_draw(
+            ctx.cmd_buffer.handle(),
+            extent,
+            pixels_per_point,
+            &clipped_primitives,
+        )?;
+        ctx.cmd_buffer.end_rendering()?;
 
         Ok(())
     }
@@ -108,5 +136,3 @@ impl Gui {
         let _ = self.egui_winit.on_window_event(&self.window, event);
     }
 }
-
-fn build_ui(ctx: &egui::Context) { egui::Window::new("Demo texture").show(ctx, |_| {}); }

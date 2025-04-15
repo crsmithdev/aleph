@@ -1,5 +1,5 @@
 use {
-    crate::{layer::LayerDyn, Layer},
+    crate::{input::InputState, layer::LayerDyn, Layer},
     downcast_rs::{impl_downcast, Downcast},
     std::{any::TypeId, collections::HashMap},
 };
@@ -74,3 +74,16 @@ impl EventRegistry {
         Ok(())
     }
 }
+
+#[derive(Debug)]
+pub struct TickEvent {
+    pub input: InputState,
+}
+impl Event for TickEvent {}
+
+#[derive(Debug)]
+pub struct GuiEvent {
+    pub event: winit::event::WindowEvent,
+}
+
+impl Event for GuiEvent {}

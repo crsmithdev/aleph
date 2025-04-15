@@ -3,9 +3,9 @@ pub mod buffer;
 pub mod command;
 pub mod device;
 pub mod gpu;
-pub mod image;
 pub mod instance;
 pub mod swapchain;
+pub mod texture;
 
 pub(crate) const VK_TIMEOUT_NS: u64 = 5_000_000_000;
 
@@ -16,9 +16,9 @@ pub use {
         command::{CommandBuffer, CommandPool},
         device::{Device, Queue, QueueFamily},
         gpu::{Gpu, Surface},
-        image::{ImageAspectFlags, ImageUsageFlags, Texture},
         instance::Instance,
         swapchain::{Frame, Swapchain, SwapchainInfo},
+        texture::{AllocatedTexture, ImageAspectFlags, ImageUsageFlags, Texture, WrappedTexture},
     },
     ash::vk::{
         AttachmentLoadOp, AttachmentStoreOp, ClearDepthStencilValue, ClearValue,

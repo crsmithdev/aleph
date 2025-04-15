@@ -1,7 +1,9 @@
 use {
-    crate::render::RenderContext,
+    crate::RenderContext,
     aleph_scene::Vertex,
-    aleph_vk::{buffer::RawBuffer, Buffer, CommandBuffer, Gpu, Texture, VkPipeline},
+    aleph_vk::{
+        buffer::RawBuffer, AllocatedTexture, Buffer, CommandBuffer, Gpu, Texture, VkPipeline,
+    },
     anyhow::Result,
     ash::vk::{self, PipelineBindPoint, SampleCountFlags},
     bytemuck::Pod,
@@ -299,7 +301,12 @@ impl<'a> ResourceBinder<'a> {
         self
     }
 
-    pub fn image(&mut self, index: u32, image: &'a Texture, sampler: vk::Sampler) -> &mut Self {
+    pub fn image(
+        &mut self,
+        index: u32,
+        image: &'a AllocatedTexture,
+        sampler: vk::Sampler,
+    ) -> &mut Self {
         let resource = BoundResource::Image {
             index,
             image,
@@ -332,7 +339,7 @@ impl<'a> ResourceBinder<'a> {
                     image,
                     sampler,
                 } => {
-                    let (info, write) = self.write_image(image, *sampler, *index);
+                    let (info, write) = self.write_image(*image, *sampler, *index);
                     image_infos.push([info]);
                     image_writes.push(write);
                 }
@@ -352,7 +359,7 @@ impl<'a> ResourceBinder<'a> {
 
     fn write_image(
         &self,
-        image: &Texture,
+        image: impl Texture,
         sampler: vk::Sampler,
         index: u32,
     ) -> (vk::DescriptorImageInfo, vk::WriteDescriptorSet) {
@@ -397,6 +404,6 @@ pub enum BoundResource<'a> {
     Image {
         index: u32,
         sampler: vk::Sampler,
-        image: &'a Texture,
+        image: &'a AllocatedTexture,
     },
 }

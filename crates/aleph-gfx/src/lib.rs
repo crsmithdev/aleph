@@ -1,7 +1,14 @@
+pub mod debug;
+pub mod forward;
+pub mod gui;
 pub mod layer;
-pub mod render;
+pub mod pipeline;
+pub mod renderer;
 
-pub use crate::render::*;
-pub use layer::*;
-
-pub use winit::window::Window;
+pub use crate::{
+    debug::DebugPipeline,
+    forward::ForwardPipeline,
+    layer::RenderLayer,
+    pipeline::{Pipeline, PipelineBuilder, ResourceBinder, ResourceLayout},
+    renderer::{RenderContext, Renderer},
+};

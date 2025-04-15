@@ -1,9 +1,8 @@
-pub use aleph_gfx;
-pub use aleph_core;
+pub use {aleph_app, aleph_core, aleph_gfx};
 
 pub mod prelude {
-    pub use {
-        crate::aleph_core::{App, AppConfig, UpdateLayer},
-        crate::aleph_gfx::RenderLayer,
+    pub use crate::{
+        aleph_app::{App, AppConfig},
+        aleph_gfx::RenderLayer,
     };
 }

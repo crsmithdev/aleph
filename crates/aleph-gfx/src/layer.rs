@@ -1,11 +1,10 @@
 use {
-    crate::render::renderer::{Renderer, RendererConfig},
+    crate::renderer::{Renderer, RendererConfig},
     aleph_core::{
-        app::TickEvent,
-        input::InputState,
-        layer::{Layer, Window},
+        events::GuiEvent,
+        layer::{Layer, Scene, UpdateContext, Window},
     },
-    aleph_scene::{gltf, Scene},
+    aleph_scene::{gltf, SceneGraph},
     aleph_vk::Gpu,
     anyhow::Result,
     std::sync::{Arc, OnceLock},
@@ -15,7 +14,6 @@ use {
 pub struct RenderLayer {
     config: RendererConfig,
     renderer: OnceLock<Renderer>,
-    scene: Scene,
 }
 
 impl RenderLayer {
@@ -23,7 +21,7 @@ impl RenderLayer {
         Self {
             config: config,
             renderer: OnceLock::new(),
-            scene: Scene::default(),
+            // scene: SceneGraph::default(),
         }
     }
 }
@@ -38,24 +36,44 @@ impl Layer for RenderLayer {
         Self: Sized,
     {
         let gpu = Gpu::new(Arc::clone(&window))?;
-        if let Some(path) = self.config.initial_scene.as_ref() {
-            self.scene = gltf::load(&gpu, path)?
-        }
         let renderer = Renderer::new(gpu, self.config.clone())?;
         self.renderer
             .set(renderer)
             .map_err(|_| anyhow::anyhow!("Failed to set renderer"))?;
-        events.subscribe::<TickEvent>(move |layer, event| layer.render(&event.input));
+        events.subscribe::<GuiEvent>(move |layer, event| {
+            layer
+                .renderer
+                .get_mut()
+                .expect("renderer")
+                .gui
+                .on_window_event(&event.event);
+            Ok(())
+        });
 
+        Ok(())
+    }
+
+    fn update(&mut self, ctx: &mut UpdateContext) -> anyhow::Result<()> {
+        let renderer = self.renderer.get().unwrap();
+
+        if let Some(path) = self.config.initial_scene.as_ref() {
+            let scene: SceneGraph = gltf::load(&renderer.gpu, path)?;
+            let boxed: Box<dyn Scene> = Box::new(scene);
+            ctx.scene = boxed;
+            self.config.initial_scene = None;
+        }
+
+        let scene = ctx.scene.downcast_ref::<SceneGraph>().unwrap();
+        self.render(scene)?;
         Ok(())
     }
 }
 
 impl RenderLayer {
-    pub fn render(&mut self, input: &InputState) -> Result<()> {
+    pub fn render(&mut self, scene: &SceneGraph) -> Result<()> {
         self.renderer
             .get_mut()
             .expect("Renderer not initialized")
-            .execute(&self.scene, input)
+            .execute(scene)
     }
 }

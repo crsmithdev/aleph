@@ -1,11 +1,11 @@
 use {
-    crate::vk::Extent2D,
     core::f32,
     glam::{vec2, Mat4, Vec2, Vec3},
 };
 
 #[derive(Debug, Clone, Copy)]
 pub struct CameraConfig {
+    pub aspect_ratio: f32,
     pub distance: f32,
     pub rotation: Vec2,
     pub fov: f32,
@@ -17,6 +17,7 @@ impl Default for CameraConfig {
     fn default() -> Self {
         Self {
             rotation: vec2(0., 0.), //vec2(-f32::consts::PI / 4.0, -f32::consts::PI / 4.0),
+            aspect_ratio: 16.0 / 9.0,
             distance: 3.,
             fov: 75.,
             z_near: 0.1,
@@ -36,10 +37,10 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub fn new(config: CameraConfig, extent: Extent2D) -> Self {
+    pub fn new(config: CameraConfig) -> Self {
         let yaw = config.rotation.x.to_radians();
         let pitch = config.rotation.y.to_radians();
-        let aspect_ratio: f32 = extent.width as f32 / extent.height as f32;
+        let aspect_ratio: f32 = config.aspect_ratio;
         let distance = config.distance;
         let target = Vec3::ZERO;
 

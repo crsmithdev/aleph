@@ -1,5 +1,6 @@
-layout(binding = 2) uniform Draw {
+layout(std140, binding = 1) uniform DrawBufferData {
     mat4 model;
     mat4 mv;
     mat4 mvp;
-} draw;
+    mat4 transform;
+} u_draw;

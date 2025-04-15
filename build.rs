@@ -2,8 +2,7 @@ use {
     anyhow::Result,
     shaderc as sc,
     std::{
-        env::join_paths,
-        fs::{self, DirEntry},
+        fs,
         io::{Read, Write},
         path::{Path, PathBuf},
         process::exit,
@@ -11,7 +10,6 @@ use {
 };
 
 const SHADER_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/shaders");
-const SHADER_EXTENSIONS: &[&str] = &["vert", "frag", "comp", "geom", "tesc", "tese"];
 
 fn read_file(path: &Path) -> String {
     let mut out = String::new();
@@ -29,7 +27,7 @@ fn write_file(path: &Path, binary: &[u8]) {
 fn resolve_include(
     name: &str,
     include_type: shaderc::IncludeType,
-    src: &str,
+    _src: &str,
     _depth: usize,
 ) -> std::result::Result<shaderc::ResolvedInclude, String> {
     let content = match include_type {
@@ -54,7 +52,6 @@ fn compile_shader(path: &Path, output: &Path, kind: sc::ShaderKind) -> Result<()
     options.set_optimization_level(shaderc::OptimizationLevel::Zero);
     options.set_target_env(sc::TargetEnv::Vulkan, sc::EnvVersion::Vulkan1_3 as u32);
     options.set_include_callback(resolve_include);
-    
 
     let in_path = Path::new(path);
     let out_path = Path::new(output);
@@ -71,44 +68,6 @@ fn compile_shader(path: &Path, output: &Path, kind: sc::ShaderKind) -> Result<()
 
     Ok(())
 }
-
-// fn compile_shader_opt(entry: &DirEntry) -> ShaderCompileResult {
-//     let path = entry.path();
-
-//     if path.is_dir() {
-//         return ShaderCompileResult::Skip();
-//     }
-
-//     let in_file = match path.to_str() {
-//         Some(p) => p,
-//         None => return ShaderCompileResult::Error("Failed reading file path".into()),
-//     };
-//     let extension = match path.extension().and_then(|e| e.to_str()) {
-//         Some(e) => e,
-//         None => return ShaderCompileResult::Error("Failed reading file extension".into()),
-//     };
-//     let in_filename = match path.file_name().and_then(|f| f.to_str()) {
-//         Some(f) => f.to_string(),
-//         None => return ShaderCompileResult::Error("Failed reading filename".into()),
-//     };
-//     let shader_kind = match extension.as_ref() {
-//         "vert" => sc::ShaderKind::Vertex,
-//         "frag" => sc::ShaderKind::Fragment,
-//         "comp" => sc::ShaderKind::Compute,
-//         "geom" => sc::ShaderKind::Geometry,
-//         "tesc" => sc::ShaderKind::TessControl,
-//         "tese" => sc::ShaderKind::TessEvaluation,
-//         _ => {
-//             return ShaderCompileResult::Skip();
-//         }
-//     };
-//     let out_filename = format!("shaders/{}.spv", in_filename);
-
-//     match compile_shader(in_file, &out_filename, shader_kind) {
-//         Ok(_) => ShaderCompileResult::Ok(in_filename, out_filename),
-//         Err(e) => ShaderCompileResult::Error(format!("Failed to compile shader: {e}")),
-//     }
-// }
 
 fn compile_shaders() -> Result<()> {
     let files = fs::read_dir(SHADER_DIR).map_err(|e| anyhow::anyhow!(e))?;
@@ -146,10 +105,10 @@ fn compile_shaders() -> Result<()> {
     }
 
     Ok(())
-
 }
 
-fn main() { match compile_shaders() {
+fn main() {
+    match compile_shaders() {
         Ok(_) => println!("Shaders compiled successfully"),
         Err(e) => {
             eprintln!("Error compiling shaders: {e}");

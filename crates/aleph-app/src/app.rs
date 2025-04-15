@@ -1,11 +1,12 @@
 use {
-    crate::{DEFAULT_APP_NAME, DEFAULT_WINDOW_SIZE, STEP_TIME_US, UPDATE_TIME_US},
+    crate::{DEFAULT_APP_NAME, DEFAULT_WINDOW_SIZE},
     aleph_core::{
-        events::{Event, EventRegistry, EventSubscriber},
+        events::{Event, EventRegistry, GuiEvent},
         input::{Input, InputState},
-        layer::LayerDyn,
+        layer::{LayerDyn, UpdateContext},
         log, Layer,
     },
+    aleph_scene::SceneGraph,
     anyhow::{anyhow, Result},
     derive_more::Debug,
     human_panic::setup_panic,
@@ -25,6 +26,7 @@ use {
 
 pub struct AppConfig {
     pub name: String,
+    pub initial_scene: Option<String>,
 }
 
 impl AppConfig {
@@ -38,16 +40,10 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             name: DEFAULT_APP_NAME.to_string(),
+            initial_scene: None,
         }
     }
 }
-
-#[derive(Debug)]
-pub struct TickEvent {
-    pub input: InputState,
-}
-impl Event for TickEvent {}
-
 #[allow(dead_code)]
 pub struct App {
     event_registry: EventRegistry,
@@ -94,7 +90,7 @@ impl App {
         let window = Arc::new(event_loop.create_window(window_attributes)?);
 
         for (index, layer) in self.layers.iter_mut().enumerate() {
-            layer.init_dyn(window.clone(), &mut self.event_registry, index)?;
+            layer.register(window.clone(), &mut self.event_registry, index)?;
         }
 
         Ok(())
@@ -105,16 +101,13 @@ impl App {
             .emit(&mut self.layers, event)
             .expect("Error emitting event");
     }
-
-    fn update_frame_timing(&mut self) {
-        // ...
-    }
 }
 
 struct AppHandler<'a> {
     app: &'a mut App,
     wait_canceled: bool,
     close_requested: bool,
+    context: UpdateContext,
     input: Input,
 }
 impl<'a> AppHandler<'a> {
@@ -124,6 +117,10 @@ impl<'a> AppHandler<'a> {
             wait_canceled: false,
             close_requested: false,
             input: Input::default(),
+            context: UpdateContext {
+                input: InputState::default(),
+                scene: Box::new(SceneGraph::default()),
+            },
         }
     }
 }
@@ -143,18 +140,20 @@ impl ApplicationHandler for AppHandler<'_> {
             winit::event::StartCause::WaitCancelled { .. } => true,
             _ => false,
         };
-
-        self.app.update_frame_timing();
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         if self.close_requested {
-            log::info!("Exiting on user request"); // TODO: Add a way to cancel this
+            log::info!("Exiting on user request");
             event_loop.exit();
         }
 
         let input = self.input.next_frame();
-        self.app.emit(&TickEvent { input });
+        let context = &mut self.context;
+        context.input = input;
+        self.app.layers.iter_mut().for_each(|layer| {
+            layer.update(context).expect("Error updating layer");
+        });
 
         if !self.wait_canceled {
             event_loop.set_control_flow(ControlFlow::WaitUntil(
@@ -170,13 +169,15 @@ impl ApplicationHandler for AppHandler<'_> {
         event: WindowEvent,
     ) {
         self.input.handle_window_event(&event);
+        self.app.emit(&GuiEvent {
+            event: event.clone(),
+        });
 
         #[allow(clippy::single_match)]
         match event {
             WindowEvent::CloseRequested => {
                 self.close_requested = true;
             }
-            // ...
             _ => {}
         }
     }
@@ -188,71 +189,5 @@ impl ApplicationHandler for AppHandler<'_> {
         event: winit::event::DeviceEvent,
     ) {
         self.input.handle_device_event(&event);
-    }
-}
-
-#[derive(Debug)]
-pub enum WinitEvent {
-    WindowEvent(WindowEvent),
-}
-impl Event for WinitEvent {}
-
-pub struct UpdateLayer {
-    last_update: Instant,
-    total_steps: u64,
-    step_accumulator: i64,
-}
-
-impl Default for UpdateLayer {
-    fn default() -> Self {
-        Self {
-            last_update: Instant::now(),
-            total_steps: 0,
-            step_accumulator: 0,
-        }
-    }
-}
-impl Layer for UpdateLayer {
-    fn init(
-        &mut self,
-        _window: Arc<Window>,
-        mut events: EventSubscriber<Self>,
-    ) -> anyhow::Result<()> {
-        events.subscribe::<TickEvent>(|layer, _event| {
-            layer.update()?;
-            Ok(())
-        });
-
-        Ok(())
-    }
-}
-
-impl UpdateLayer {
-    fn update(&mut self) -> Result<()> {
-        let now = Instant::now();
-        let elapsed = now.duration_since(self.last_update);
-        self.step_elapsed(elapsed);
-        self.last_update = now;
-
-        Ok(())
-    }
-
-    fn step_elapsed(&mut self, elapsed: Duration) {
-        let elapsed_us = elapsed.as_micros().min(UPDATE_TIME_US);
-
-        self.step_accumulator = match self.total_steps {
-            0 => STEP_TIME_US as i64,
-            _ => self.step_accumulator + elapsed_us as i64,
-        };
-
-        while self.step_accumulator >= STEP_TIME_US as i64 {
-            self.step_accumulator -= STEP_TIME_US as i64;
-            self.step();
-            self.total_steps += 1;
-        }
-    }
-
-    fn step(&mut self) {
-        // ...
     }
 }

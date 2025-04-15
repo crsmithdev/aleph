@@ -1,19 +1,21 @@
-#define MAX_LIGHTS 16
+#define MAX_LIGHTS 4
 
 struct Light {
     vec3 position;
-    vec3 color;
-    float intensity;
+    vec4 color;
 };
 
-layout(binding = 0) uniform SceneBufferData {
-    vec4 camera_pos;
+struct Config {
+    float force_metallic;
+    float force_roughness;
+};
+
+layout(std140, binding = 0) uniform SceneBufferData {
     mat4 view;
     mat4 projection;
     mat4 vp;
-    mat4 inverse_vp;
-    mat4 normal;
-    int numLights;
-    vec4 lightAmbient;
+    vec3 cameraPos;
+    int n_lights;
+    Config config;
     Light lights[MAX_LIGHTS];
-} scene;
+} u_scene;

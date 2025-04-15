@@ -126,7 +126,6 @@ impl RawBuffer {
     ) -> Result<Self> {
         let size = bytemuck::cast_slice::<u8, u8>(data).len() as u64;
 
-        // let size = std::mem::size_of_val(data) as u64;
         let buffer = Self::new(device, allocator, size, flags, location, label)?;
         buffer.write(data);
         Ok(buffer)

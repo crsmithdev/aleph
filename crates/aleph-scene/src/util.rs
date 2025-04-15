@@ -1,9 +1,8 @@
 use {
     crate::Vertex,
     aleph_vk::{
-        Buffer, AttachmentLoadOp, AttachmentStoreOp, BufferUsageFlags, ClearDepthStencilValue,
-        ClearValue, Gpu, ImageAspectFlags, ImageLayout, ImageUsageFlags, RenderingAttachmentInfo,
-        Texture, MemoryLocation,
+        AttachmentLoadOp, AttachmentStoreOp, Buffer, BufferUsageFlags, ClearDepthStencilValue,
+        ClearValue, Gpu, ImageLayout, MemoryLocation, RenderingAttachmentInfo, Texture,
     },
     anyhow::Result,
     ash::vk::{self, ClearColorValue, Extent2D},
@@ -21,62 +20,27 @@ pub fn default_sampler(gpu: &Gpu) -> Result<vk::Sampler> {
     )
 }
 
-pub fn single_color_image(
-    gpu: &Gpu,
-    pixel: [f32; 4],
-    format: vk::Format,
-    label: impl Into<String>,
-) -> Result<Texture> {
-    let extent = Extent2D {
-        width: 1,
-        height: 1,
-    };
-    let pixels = &[pixel];
-    let data = bytemuck::bytes_of(pixels);
-    let sampler = default_sampler(gpu)?;
-    let image = gpu.create_image(
-        extent,
-        format,
-        ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
-        ImageAspectFlags::COLOR,
-        label.into(),
-        Some(sampler),
-    )?;
+// pub fn index_buffer(gpu: &Gpu, size: u64, label: impl Into<String>) -> Result<Buffer<u32>> {
+//     Buffer::new(
+//         gpu.device(),
+//         gpu.allocator(),
+//         size,
+//         BufferUsageFlags::INDEX_BUFFER | BufferUsageFlags::TRANSFER_DST,
+//         MemoryLocation::GpuOnly,
+//         label,
+//     )
+// }
 
-    let staging = staging_buffer(gpu, &data, "staging")?;
-    gpu.execute(|cmd| {
-        cmd.copy_buffer_to_image(&staging, &image);
-        cmd.transition_image(
-            &image,
-            ImageLayout::UNDEFINED,
-            ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-        );
-    })?;
-
-    Ok(image)
-}
-
-pub fn index_buffer(gpu: &Gpu, size: u64, label: impl Into<String>) -> Result<Buffer<u32>> {
-    Buffer::new(
-        gpu.device(),
-        gpu.allocator(),
-        size,
-        BufferUsageFlags::INDEX_BUFFER | BufferUsageFlags::TRANSFER_DST,
-        MemoryLocation::GpuOnly,
-        label,
-    )
-}
-
-pub fn vertex_buffer(gpu: &Gpu, size: u64, label: impl Into<String>) -> Result<Buffer<Vertex>> {
-    Buffer::new(
-        gpu.device(),
-        gpu.allocator(),
-        size,
-        BufferUsageFlags::VERTEX_BUFFER | BufferUsageFlags::TRANSFER_DST,
-        MemoryLocation::GpuOnly,
-        label,
-    )
-}
+// pub fn vertex_buffer(gpu: &Gpu, size: u64, label: impl Into<String>) -> Result<Buffer<Vertex>> {
+//     Buffer::new(
+//         gpu.device(),
+//         gpu.allocator(),
+//         size,
+//         BufferUsageFlags::VERTEX_BUFFER | BufferUsageFlags::TRANSFER_DST,
+//         MemoryLocation::GpuOnly,
+//         label,
+//     )
+// }
 
 pub fn staging_buffer<T: Pod>(
     gpu: &Gpu,
@@ -95,7 +59,7 @@ pub fn staging_buffer<T: Pod>(
 }
 
 pub fn color_attachment<'a>(
-    image: &Texture,
+    image: impl Texture,
     load_op: AttachmentLoadOp,
     store_op: AttachmentStoreOp,
     clear_color: [f32; 4],
@@ -112,20 +76,7 @@ pub fn color_attachment<'a>(
         .store_op(store_op)
 }
 
-// pub fn color_attachment<'a>(image: &Texture) -> RenderingAttachmentInfo<'a> {
-//     RenderingAttachmentInfo::default()
-//         .clear_value(ClearValue {
-//             color: ClearColorValue {
-//                 float32: [0.5, 0.5, 0.5, 1.0],
-//             },
-//         })
-//         .image_view(image.view())
-//         .image_layout(ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-//         .load_op(AttachmentLoadOp::CLEAR)
-//         .store_op(AttachmentStoreOp::STORE)
-// }
-
-pub fn color_attachment2<'a>(image: &Texture) -> RenderingAttachmentInfo<'a> {
+pub fn color_attachment2<'a>(image: impl Texture) -> RenderingAttachmentInfo<'a> {
     RenderingAttachmentInfo::default()
         .clear_value(ClearValue {
             color: ClearColorValue {
@@ -139,7 +90,7 @@ pub fn color_attachment2<'a>(image: &Texture) -> RenderingAttachmentInfo<'a> {
 }
 
 pub fn depth_attachment<'a>(
-    image: &Texture,
+    image: impl Texture,
     load_op: AttachmentLoadOp,
     store_op: AttachmentStoreOp,
     clear_depth: f32,
@@ -166,20 +117,6 @@ pub fn viewport_inverted(extent: Extent2D) -> vk::Viewport {
         .min_depth(0.)
         .max_depth(1.)
 }
-
-// pub fn depth_attachment2<'a>(image: &Texture) -> RenderingAttachmentInfo<'a> {
-//     RenderingAttachmentInfo::default()
-//         .image_view(image.view())
-//         .image_layout(ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-//         .clear_value(ClearValue {
-//             depth_stencil: ClearDepthStencilValue {
-//                 depth: 1.0,
-//                 stencil: 0,
-//             },
-//         })
-//         .load_op(AttachmentLoadOp::LOAD)
-//         .store_op(AttachmentStoreOp::STORE)
-// }
 
 pub fn rgb_to_rgba(data_rgb: &[u8], extent: Extent2D) -> Vec<u8> {
     let image = image::DynamicImage::ImageRgb8(

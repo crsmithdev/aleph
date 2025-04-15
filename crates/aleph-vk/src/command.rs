@@ -1,14 +1,12 @@
 pub use ash::vk::ImageLayout;
-use crate::RawBuffer;
-
 use {
-    super::{buffer::Buffer, Allocator, BufferUsageFlags, Device, Texture},
+    super::{buffer::Buffer, Device, Texture},
+    crate::RawBuffer,
     anyhow::Result,
-    ash::vk,
+    ash::{vk, vk::ImageAspectFlags},
     bytemuck::Pod,
     derive_more::Debug,
-    gpu_allocator::MemoryLocation,
-    std::{any::Any, sync::Arc},
+    std::any::Any,
 };
 
 #[derive(Clone, Debug)]
@@ -179,20 +177,6 @@ impl CommandBuffer {
         }
     }
 
-    // pub fn push_constants(&self, layout: vk::PipelineLayout, data: &T) {
-    // let data: &[u8] = bytemuck::bytes_of(data);
-
-    // unsafe {
-    //     self.device.handle.cmd_push_constants(
-    //         self.handle,
-    //         layout,
-    //         vk::ShaderStageFlags::VERTEX,
-    //         0,
-    //         data,
-    //     );
-    // }
-    // }
-
     pub fn push_descriptor_set(
         &self,
         bind_point: vk::PipelineBindPoint,
@@ -295,7 +279,7 @@ impl CommandBuffer {
 
     pub fn transition_image(
         &self,
-        image: &Texture,
+        image: impl Texture,
         current_layout: vk::ImageLayout,
         new_layout: vk::ImageLayout,
     ) {
@@ -329,8 +313,8 @@ impl CommandBuffer {
 
     pub fn copy_image(
         &self,
-        src: &Texture,
-        dst: &Texture,
+        src: impl Texture,
+        dst: impl Texture,
         src_extent: vk::Extent3D,
         dst_extent: vk::Extent3D,
     ) {
@@ -379,7 +363,8 @@ impl CommandBuffer {
         };
     }
 
-    pub fn copy_buffer_to_image<T: Pod>(&self, src: &Buffer<T>, dst: &Texture) {
+    pub fn copy_buffer_to_image<T: Pod>(&self, src: &Buffer<T>, dst: impl Texture) {
+        let handle = dst.handle();
         let copy = vk::BufferImageCopy::default()
             .buffer_offset(0)
             .buffer_row_length(0)
@@ -392,75 +377,109 @@ impl CommandBuffer {
             .image_offset(vk::Offset3D::default())
             .image_extent(dst.extent().into());
 
-        self.transition_image(
-            dst,
-            ImageLayout::UNDEFINED,
-            ImageLayout::TRANSFER_DST_OPTIMAL,
-        );
+        // self.transition_image(
+        //     dst.clone(),
+        //     ImageLayout::UNDEFINED,
+        //     ImageLayout::TRANSFER_DST_OPTIMAL,
+        // );
+        let range = vk::ImageSubresourceRange::default()
+            .aspect_mask(ImageAspectFlags::COLOR)
+            .base_array_layer(0)
+            .base_mip_level(0)
+            .level_count(1)
+            .layer_count(1);
+        let barrier = &[vk::ImageMemoryBarrier2::default()
+            .image(handle)
+            .src_stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
+            .src_access_mask(vk::AccessFlags2::MEMORY_WRITE)
+            .dst_stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
+            .dst_access_mask(vk::AccessFlags2::MEMORY_WRITE | vk::AccessFlags2::MEMORY_READ)
+            .old_layout(ImageLayout::UNDEFINED)
+            .new_layout(ImageLayout::TRANSFER_DST_OPTIMAL)
+            .subresource_range(range)];
+        let dependency_info = vk::DependencyInfo::default().image_memory_barriers(barrier);
         unsafe {
+            self.device
+                .handle
+                .cmd_pipeline_barrier2(self.handle, &dependency_info);
             self.device.handle.cmd_copy_buffer_to_image(
                 self.handle(),
                 src.handle(),
                 dst.handle(),
                 vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                 &[copy],
-            )
+            );
+            let barrier = &[vk::ImageMemoryBarrier2::default()
+                .image(handle)
+                .src_stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
+                .src_access_mask(vk::AccessFlags2::MEMORY_WRITE)
+                .dst_stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
+                .dst_access_mask(vk::AccessFlags2::MEMORY_WRITE | vk::AccessFlags2::MEMORY_READ)
+                .old_layout(ImageLayout::TRANSFER_DST_OPTIMAL)
+                .new_layout(ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                .subresource_range(range)];
+            let dependency_info = vk::DependencyInfo::default().image_memory_barriers(barrier);
+            self.device
+                .handle
+                .cmd_pipeline_barrier2(self.handle, &dependency_info);
         };
-        self.transition_image(
-            dst,
-            ImageLayout::TRANSFER_DST_OPTIMAL,
-            ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-        );
+        // self.transition_image(
+        //     dst,
+        //     ImageLayout::TRANSFER_DST_OPTIMAL,
+        //     ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        // );
     }
 
-    pub fn upload_image(
-        &self,
-        image: &Texture,
-        allocator: Arc<Allocator>,
-        data: &[u8],
-    ) -> Result<()> {
-        let staging = Buffer::new(
-            &self.device,
-            allocator,
-            std::mem::size_of_val(data) as u64,
-            BufferUsageFlags::TRANSFER_SRC,
-            MemoryLocation::GpuToCpu,
-            "staging",
-        )?;
-        staging.write(data);
+    // pub fn upload_image(
+    //     &self,
+    //     image: impl Texture,
+    //     allocator: Arc<Allocator>,
+    //     data: &[u8],
+    // ) -> Result<()> {
+    //     let handle = image.handle();
+    //     let staging = Buffer::new(
+    //         &self.device,
+    //         allocator,
+    //         std::mem::size_of_val(data) as u64,
+    //         BufferUsageFlags::TRANSFER_SRC,
+    //         MemoryLocation::GpuToCpu,
+    //         "staging",
+    //     )?;
+    //     staging.write(data);
 
-        let copy = vk::BufferImageCopy::default()
-            .buffer_offset(0)
-            .buffer_row_length(0)
-            .buffer_image_height(0)
-            .image_subresource(
-                vk::ImageSubresourceLayers::default()
-                    .aspect_mask(vk::ImageAspectFlags::COLOR)
-                    .layer_count(1),
-            )
-            .image_offset(vk::Offset3D::default())
-            .image_extent(image.extent().into());
+    //     let copy = vk::BufferImageCopy::default()
+    //         .buffer_offset(0)
+    //         .buffer_row_length(0)
+    //         .buffer_image_height(0)
+    //         .image_subresource(
+    //             vk::ImageSubresourceLayers::default()
+    //                 .aspect_mask(vk::ImageAspectFlags::COLOR)
+    //                 .layer_count(1),
+    //         )
+    //         .image_offset(vk::Offset3D::default())
+    //         .image_extent(image.extent().into());
 
-        self.transition_image(
-            image,
-            ImageLayout::UNDEFINED,
-            ImageLayout::TRANSFER_DST_OPTIMAL,
-        );
-        unsafe {
-            self.device.handle.cmd_copy_buffer_to_image(
-                self.handle,
-                staging.handle(),
-                image.handle(),
-                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                &[copy],
-            )
-        };
-        self.transition_image(
-            image,
-            ImageLayout::TRANSFER_DST_OPTIMAL,
-            ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-        );
+    //     self.transition_image(
+    //         image,
+    //         ImageLayout::UNDEFINED,
+    //         ImageLayout::TRANSFER_DST_OPTIMAL,
+    //     );
 
-        Ok(())
-    }
+    //     unsafe {
+    //         self.device.handle.cmd_copy_buffer_to_image(
+    //             self.handle,
+    //             staging.handle(),
+    //             handle,
+    //             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+    //             &[copy],
+    //         )
+    //     };
+    //     self.transition_image(
+    //         image,
+    //         ImageLayout::TRANSFER_DST_OPTIMAL,
+    //         ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+    //     );
+
+    //     Ok(())
+    // }
 }

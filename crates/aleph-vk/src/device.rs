@@ -74,9 +74,6 @@ impl Device {
             .map(|n| n.as_ptr())
             .collect::<Vec<_>>();
 
-        // let mut swapchain_maintenance1_features =
-        //     ash::vk::PhysicalDeviceSwapchainMaintenance1FeaturesEXT::default()
-        //         .swapchain_maintenance1(true);
         let mut synchronization2_features =
             ash::vk::PhysicalDeviceSynchronization2FeaturesKHR::default().synchronization2(true);
         let mut dynamic_rendering_features =

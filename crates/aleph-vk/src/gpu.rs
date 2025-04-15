@@ -1,8 +1,7 @@
 use {
-    super::{
-        buffer::{self, Buffer},
-        Allocator, CommandBuffer, CommandPool, Device, Instance, Swapchain, SwapchainInfo, Texture,
-        VK_TIMEOUT_NS,
+    crate::{
+        AllocatedTexture, Allocator, Buffer, CommandBuffer, CommandPool, Device, Instance,
+        MemoryLocation, Swapchain, SwapchainInfo, VK_TIMEOUT_NS,
     },
     aleph_core::log,
     anyhow::Result,
@@ -97,6 +96,9 @@ impl Gpu {
     }
 
     #[inline]
+    pub fn window(&self) -> Arc<Window> { self.window.clone() }
+
+    #[inline]
     pub fn instance(&self) -> &Instance { &self.instance }
 
     #[inline]
@@ -137,7 +139,7 @@ impl Gpu {
             Arc::clone(&self.allocator),
             size,
             flags,
-            buffer::MemoryLocation::CpuToGpu,
+            MemoryLocation::CpuToGpu,
             label,
         )
     }
@@ -235,7 +237,39 @@ impl Gpu {
         self.swapchain.rebuild(extent)
     }
 
-    pub fn create_image(
+    pub fn create_index_buffer<T: Pod>(
+        &self,
+        size: u64,
+        location: MemoryLocation,
+        label: impl Into<String>,
+    ) -> Result<Buffer<T>> {
+        Buffer::new(
+            &self.device,
+            Arc::clone(&self.allocator),
+            size,
+            vk::BufferUsageFlags::INDEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
+            location,
+            label,
+        )
+    }
+
+    pub fn create_vertex_buffer<T: Pod>(
+        &self,
+        size: u64,
+        location: MemoryLocation,
+        label: impl Into<String>,
+    ) -> Result<Buffer<T>> {
+        Buffer::new(
+            &self.device,
+            Arc::clone(&self.allocator),
+            size,
+            vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
+            location,
+            label,
+        )
+    }
+
+    pub fn create_texture(
         &self,
         extent: vk::Extent2D,
         format: vk::Format,
@@ -243,8 +277,8 @@ impl Gpu {
         aspect_flags: vk::ImageAspectFlags,
         label: impl Into<String>,
         sampler: Option<vk::Sampler>,
-    ) -> Result<Texture> {
-        Texture::new(
+    ) -> Result<AllocatedTexture> {
+        AllocatedTexture::new(
             self.device.clone(),
             Arc::clone(&self.allocator),
             extent,
