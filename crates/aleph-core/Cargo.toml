@@ -17,5 +17,6 @@ tracing-subscriber.workspace = true
 tracing-log.workspace = true
 chrono.workspace = true
 glam.workspace = true
+smol_str.workspace = true
 
 winit_input_helper = "0.16.0"

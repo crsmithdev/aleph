@@ -18,7 +18,7 @@ pub struct EventSubscriber<'a, L> {
 }
 
 impl<'a, L: Layer> EventSubscriber<'a, L> {
-    pub(crate) fn new(registry: &'a mut EventRegistry, index: usize) -> Self {
+    pub fn new(registry: &'a mut EventRegistry, index: usize) -> Self {
         Self {
             index,
             registry,

@@ -101,7 +101,6 @@ impl AllocatedTexture {
         format: vk::Format,
         label: impl Into<String>,
     ) -> Result<AllocatedTexture> {
-        println!("allocated");
         let extent = Extent2D {
             width: 1,
             height: 1,
@@ -164,7 +163,6 @@ impl WrappedTexture {
         format: vk::Format,
         name: impl Into<String>,
     ) -> Result<Self> {
-        println!("wrapped");
         let image = Image {
             handle,
             extent,

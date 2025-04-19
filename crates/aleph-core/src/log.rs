@@ -1,8 +1,7 @@
 pub use tracing::{debug, error, info, trace, warn};
-use tracing_subscriber::fmt::format::Writer;
 use {
     tracing,
-    tracing_subscriber::{self, EnvFilter},
+    tracing_subscriber::{self, fmt::format::Writer, EnvFilter},
 };
 
 struct Timer {}

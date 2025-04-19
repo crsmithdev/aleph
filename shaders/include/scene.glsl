@@ -6,8 +6,11 @@ struct Light {
 };
 
 struct Config {
-    float force_metallic;
-    float force_roughness;
+    vec4 force_color;
+    vec2 force_metallic;
+    vec2 force_roughness;
+    vec2 force_ao;
+    vec2 padding0;
 };
 
 layout(std140, binding = 0) uniform SceneBufferData {

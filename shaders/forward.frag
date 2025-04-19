@@ -68,14 +68,25 @@ void main() {
     vec3 albedo = texture(u_colorMap, inUv).xyz;
 
     float metallic;
-    if (u_scene.config.force_metallic > -0.01) {
-        metallic = texture(u_metalRoughMap, inUv).b * u_material.metal_factor;
+    if (u_scene.config.force_metallic.x > 0.01) {
+        metallic = u_scene.config.force_metallic.y;
     } else {
-        metallic = u_scene.config.force_metallic;
+        metallic = texture(u_metalRoughMap, inUv).b * u_material.metal_factor;
     }
 
-    float roughness = texture(u_metalRoughMap, inUv).g * u_material.rough_factor;
-    float ao = texture(u_aoMap, inUv).r * u_material.ao_strength;
+    float roughness;
+    if (u_scene.config.force_roughness.x > 0.01) {
+        roughness = u_scene.config.force_roughness.y;
+    } else {
+        roughness = texture(u_metalRoughMap, inUv).g * u_material.rough_factor;
+    }
+
+    float ao;
+    if (u_scene.config.force_ao.x > 0.01) {
+        ao = u_scene.config.force_ao.y;
+    } else {
+        ao = texture(u_aoMap, inUv).r * u_material.ao_strength;
+    }
 
     vec3 view_dir = normalize(u_scene.cameraPos - inPos);
     vec3 fresnel_0 = mix(vec3(0.04), albedo, metallic);

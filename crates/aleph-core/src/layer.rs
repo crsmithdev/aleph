@@ -2,49 +2,43 @@ pub use winit::window::Window;
 use {
     crate::{
         events::{EventRegistry, EventSubscriber},
-        input::InputState,
+        system::{Resources, Scheduler},
     },
-    anyhow::Result,
     downcast_rs::{impl_downcast, Downcast},
     glam::Vec3,
-    std::sync::Arc,
 };
 pub trait Layer: 'static {
-    fn init(&mut self, window: Arc<Window>, events: EventSubscriber<Self>) -> Result<()>
-    where
+    fn register(
+        &mut self,
+        scheduler: &mut Scheduler,
+        resources: &mut Resources,
+        events: &mut EventSubscriber<Self>,
+    ) where
         Self: Sized;
-
-    fn update(&mut self, ctx: &mut UpdateContext) -> Result<()>;
 }
 
 pub trait LayerDyn: 'static + Downcast {
     fn register(
         &mut self,
-        window: Arc<Window>,
-        events: &mut EventRegistry,
+        scheduler: &mut Scheduler,
+        resources: &mut Resources,
+        registry: &mut EventRegistry,
         index: usize,
-    ) -> anyhow::Result<()>;
-
-    fn update(&mut self, ctx: &mut UpdateContext) -> anyhow::Result<()>;
+    );
 }
 impl_downcast!(LayerDyn);
 
 impl<T: Layer> LayerDyn for T {
     fn register(
         &mut self,
-        window: Arc<Window>,
-        events: &mut EventRegistry,
+        scheduler: &mut Scheduler,
+        resources: &mut Resources,
+        registry: &mut EventRegistry,
         index: usize,
-    ) -> anyhow::Result<()> {
-        self.init(window, EventSubscriber::new(events, index))
+    ) {
+        let mut subscriber = EventSubscriber::<Self>::new(registry, index);
+        self.register(scheduler, resources, &mut subscriber)
     }
-
-    fn update(&mut self, ctx: &mut UpdateContext) -> anyhow::Result<()> { self.update(ctx) }
-}
-
-pub struct UpdateContext {
-    pub input: InputState,
-    pub scene: Box<dyn Scene>,
 }
 
 pub trait SceneObject {
@@ -59,23 +53,40 @@ pub trait Scene: 'static + Downcast {
 
 impl_downcast!(Scene);
 
-type UpdateFn = fn(&mut UpdateContext) -> Result<()>;
-pub struct UpdateLayer {
-    update_fn: UpdateFn,
-}
+// type UpdateFn = fn(&mut UpdateContext) -> Result<()>;
+// pub struct UpdateLayer {
+//     update_fn: UpdateFn,
+// }
 
-impl Layer for UpdateLayer {
-    fn init(
-        &mut self,
-        _window: Arc<Window>,
-        mut _events: EventSubscriber<Self>,
-    ) -> anyhow::Result<()> {
-        Ok(())
-    }
+// impl Layer for UpdateLayer {
+//     fn init(&mut self, _ctx: &mut InitContext, _events: &mut EventSubscriber<Self>) -> Result<()> {
+//         Ok(())
+//     }
 
-    fn update(&mut self, ctx: &mut UpdateContext) -> anyhow::Result<()> { (self.update_fn)(ctx) }
-}
+//     fn update(&mut self, ctx: &mut UpdateContext) -> anyhow::Result<()> { (self.update_fn)(ctx) }
+// }
 
-impl UpdateLayer {
-    pub fn new(update_fn: UpdateFn) -> Self { Self { update_fn } }
-}
+// impl UpdateLayer {
+//     pub fn new(update_fn: UpdateFn) -> Self { Self { update_fn } }
+// }
+
+// type InitFn = fn(&mut InitContext) -> Result<()>;
+// pub struct InitLayer {
+//     init_fn: InitFn,
+// }
+
+// impl Layer for InitLayer {
+//     fn init(
+//         &mut self,
+//         ctx: &mut InitContext,
+//         _events: &mut EventSubscriber<Self>,
+//     ) -> anyhow::Result<()> {
+//         (self.init_fn)(ctx)
+//     }
+
+//     fn update(&mut self, _ctx: &mut UpdateContext) -> anyhow::Result<()> { Ok(()) }
+// }
+
+// impl InitLayer {
+//     pub fn new(init_fn: InitFn) -> Self { Self { init_fn } }
+// }

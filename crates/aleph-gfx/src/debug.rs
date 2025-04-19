@@ -4,6 +4,7 @@ use {
         renderer::RenderContext,
     },
     aleph_scene::{
+        graph::NodeHandle,
         model::{GpuDrawData, Primitive},
         util, Mesh, NodeData, Vertex,
     },
@@ -14,7 +15,6 @@ use {
     anyhow::Result,
     ash::vk::{self, AttachmentLoadOp, CompareOp},
     glam::Mat4,
-    petgraph::{graph::NodeIndex, visit::EdgeRef},
     std::mem,
     tracing::{instrument, warn},
 };
@@ -60,7 +60,7 @@ impl Pipeline for DebugPipeline {
             .cmd_buffer
             .bind_pipeline(PipelineBindPoint::GRAPHICS, self.handle)?;
 
-        self.draw_scene(context);
+        self.draw_scene(context)?;
 
         context.cmd_buffer.end_rendering()
     }
@@ -89,38 +89,46 @@ impl DebugPipeline {
         })
     }
 
-    fn draw_scene(&self, context: &RenderContext) {
-        let root = NodeIndex::new(0);
-        self.draw_node(context, root, Mat4::IDENTITY);
+    fn draw_scene(&self, ctx: &RenderContext) -> Result<()> {
+        let world_transform = Mat4::IDENTITY;
+        let root = &ctx.scene.root;
+        self.draw_node(ctx, *root, world_transform)
     }
 
-    fn draw_node(&self, context: &RenderContext, index: NodeIndex, transform: Mat4) {
-        let graph = &context.scene.graph.borrow();
-        let node = &graph[index];
-        let transform = transform * node.transform;
+    fn draw_node(
+        &self,
+        ctx: &RenderContext,
+        handle: NodeHandle,
+        world_transform: Mat4,
+    ) -> Result<()> {
+        match &ctx.scene.node(handle) {
+            None => {} //warn!("TBD"),
+            Some(node) => {
+                let transform = world_transform * node.transform;
+                match &node.data {
+                    NodeData::Mesh(mesh_handle) => {
+                        let mesh = ctx.assets.mesh(*mesh_handle).unwrap();
+                        self.draw_mesh(ctx, mesh, transform)?;
+                    }
+                    _ => {}
+                }
 
-        match &node.data {
-            NodeData::Mesh(index) => {
-                let mesh = &context.scene.meshes[*index];
-                self.draw_mesh(context, mesh, transform);
-            }
-            _ => {
-                for edge in graph.edges(index) {
-                    let child = edge.target();
-                    self.draw_node(context, child, transform);
+                for child_handle in ctx.scene.children(handle) {
+                    self.draw_node(ctx, child_handle, transform)?;
                 }
             }
         }
+
+        Ok(())
     }
 
-    fn draw_mesh(&self, context: &RenderContext, mesh: &Mesh, transform: Mat4) {
+    fn draw_mesh(&self, ctx: &RenderContext<'_>, mesh: &Mesh, transform: Mat4) -> Result<()> {
         for primitive in mesh.primitives.iter() {
-            self.update_draw_buffer(context, transform);
-            self.bind_resources(context, primitive);
-            context
-                .cmd_buffer
+            self.update_draw_buffer(ctx, transform);
+            ctx.cmd_buffer
                 .draw_indexed(primitive.vertex_count, 1, 0, 0, 0);
         }
+        Ok(())
     }
 
     fn create_pipeline(gpu: &Gpu, layout: PipelineLayout) -> Result<vk::Pipeline> {

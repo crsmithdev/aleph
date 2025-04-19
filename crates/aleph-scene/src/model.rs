@@ -1,6 +1,9 @@
 use {
-    aleph_vk::{Buffer, Format},
-    ash::vk::Handle,
+    crate::MaterialHandle,
+    aleph_vk::{
+        Buffer, Extent2D, Filter, Format, ImageAspectFlags, ImageUsageFlags, SamplerAddressMode,
+        SamplerMipmapMode,
+    },
     bytemuck::{Pod, Zeroable},
     derive_more::Debug,
     glam::{Mat4, Vec2, Vec3, Vec4},
@@ -38,23 +41,50 @@ pub struct Mesh {
 
 #[derive(Debug)]
 pub struct Primitive {
-    #[debug("{:x}", vertex_buffer.handle().as_raw())]
     pub vertex_buffer: Buffer<Vertex>,
-    #[debug("{:x}", index_buffer.handle().as_raw())]
     pub index_buffer: Buffer<u32>,
-    pub material_idx: Option<usize>,
+    pub material: Option<MaterialHandle>,
     pub vertex_count: u32,
 }
 
-pub struct PrimitiveDesc {
-    pub vertices: Vec<Vertex>,
-    pub indices: Vec<u32>,
-    pub material_idx: Option<usize>,
+#[derive(Debug)]
+pub struct SamplerDesc {
+    pub name: String,
+    pub index: usize,
+    pub min_filter: Filter,
+    pub mag_filter: Filter,
+    pub mipmap_mode: SamplerMipmapMode,
+    pub address_mode_u: SamplerAddressMode,
+    pub address_mode_y: SamplerAddressMode,
+    pub anisotropy_enable: bool,
+    pub max_anisotropy: f32,
 }
 
+#[derive(Debug)]
+pub struct PrimitiveDesc {
+    pub index: usize,
+    pub vertices: Vec<Vertex>,
+    pub indices: Vec<u32>,
+    pub material: Option<MaterialHandle>,
+}
+
+#[derive(Debug)]
 pub struct MeshDesc {
     pub name: String,
+    pub index: usize,
     pub primitives: Vec<PrimitiveDesc>,
+}
+
+#[derive(Debug)]
+pub struct TextureDesc {
+    pub name: String,
+    pub index: usize,
+    pub extent: Extent2D,
+    pub format: Format,
+    pub usage: ImageUsageFlags,
+    pub aspect: ImageAspectFlags,
+    pub sampler: SamplerDesc,
+    pub data: Vec<u8>,
 }
 
 #[repr(C)]
@@ -87,15 +117,21 @@ pub struct Light {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct Config {
-    pub force_metallic: f32,
-    pub force_roughness: f32,
+    pub force_color: Vec4,
+    pub force_metallic: Vec2,
+    pub force_roughness: Vec2,
+    pub force_ao: Vec2,
+    pub padding0: Vec2,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            force_metallic: -1.,
-            force_roughness: -1.,
+            force_color: Vec4::ZERO,
+            force_metallic: Vec2::ZERO,
+            force_roughness: Vec2::ZERO,
+            force_ao: Vec2::ZERO,
+            padding0: Vec2::ZERO,
         }
     }
 }
@@ -109,6 +145,5 @@ pub struct GpuSceneData {
     pub camera_pos: Vec3,
     pub n_lights: i32,
     pub config: Config,
-    pub padding0: Vec2,
     pub lights: [Light; 4],
 }

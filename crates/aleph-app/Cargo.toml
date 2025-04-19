@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 aleph-core.workspace = true
 aleph-scene.workspace = true
+aleph-gfx.workspace = true
 anyhow.workspace = true
 downcast-rs.workspace = true
 log.workspace = true
