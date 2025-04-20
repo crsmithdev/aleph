@@ -78,12 +78,10 @@ pub struct MeshDesc {
 #[derive(Debug)]
 pub struct TextureDesc {
     pub name: String,
-    pub index: usize,
     pub extent: Extent2D,
     pub format: Format,
     pub usage: ImageUsageFlags,
     pub aspect: ImageAspectFlags,
-    pub sampler: SamplerDesc,
     pub data: Vec<u8>,
 }
 

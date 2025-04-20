@@ -163,7 +163,6 @@ impl DebugPipeline {
 
     fn update_draw_buffer(&self, context: &RenderContext, transform: Mat4) {
         let view = context.scene.camera.view();
-
         let model = transform;
         let mv = view * model;
         let mvp = context.scene.camera.projection() * view * model;

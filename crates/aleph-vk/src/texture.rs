@@ -4,7 +4,7 @@ use {
         Allocator, Buffer, BufferUsageFlags, CommandBuffer, Device, Extent2D, Gpu, MemoryLocation,
     },
     anyhow::Result,
-    ash::vk,
+    ash::{vk, vk::Handle},
     bytemuck::Pod,
     derive_more::Debug,
     gpu_allocator::vulkan::Allocation,
@@ -45,10 +45,15 @@ pub trait Texture: Clone {
 #[derive(Clone, Debug)]
 pub struct AllocatedTexture {
     image: Image,
+    #[debug(skip)]
     allocation: Arc<Allocation>,
+    #[debug(skip)]
     allocator: Arc<Allocator>,
+    #[debug(skip)]
     device: Device,
+    #[debug("sampler: #{:#x}", sampler.as_ref().map(|s| s.as_raw()).unwrap_or(0))]
     sampler: Option<vk::Sampler>,
+    #[debug("view: #{:#x}", view.as_raw())]
     view: vk::ImageView,
 }
 
@@ -98,13 +103,14 @@ impl AllocatedTexture {
     pub fn monochrome(
         gpu: &Gpu,
         pixel: [f32; 4],
+        extent: Extent2D,
         format: vk::Format,
         label: impl Into<String>,
     ) -> Result<AllocatedTexture> {
-        let extent = Extent2D {
-            width: 1,
-            height: 1,
-        };
+        // let extent = Extent2D {
+        //     width: 1,
+        //     height: 1,
+        // };
         let pixels = &[pixel];
         let data = bytemuck::bytes_of(pixels);
         let sampler = gpu.create_sampler(
@@ -152,6 +158,7 @@ impl AllocatedTexture {
 #[derive(Clone, Debug)]
 pub struct WrappedTexture {
     image: Image,
+    #[debug("view: #{:#x}", view.as_raw())]
     view: vk::ImageView,
 }
 
@@ -178,10 +185,13 @@ impl_image!(WrappedTexture);
 
 #[derive(Clone, Debug)]
 struct Image {
+    #[debug("#{:#x}", &handle.as_raw())]
     handle: vk::Image,
+    #[debug("{}x{}", extent.width, extent.height)]
     extent: Extent2D,
     format: Format,
     name: String,
+    #[debug("sampler: {:#x}", sampler.as_ref().map(|s| s.as_raw()).unwrap_or(0))]
     sampler: Option<vk::Sampler>,
 }
 

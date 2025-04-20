@@ -9,23 +9,16 @@ use {
         util, Material, Mesh, NodeData, Vertex,
     },
     aleph_vk::{
-        AllocatedTexture, AttachmentLoadOp, AttachmentStoreOp, Buffer, BufferUsageFlags,
-        ColorComponentFlags, CompareOp, CullModeFlags, Format, FrontFace, Gpu, PipelineBindPoint,
+        AttachmentLoadOp, AttachmentStoreOp, Buffer, BufferUsageFlags, ColorComponentFlags,
+        CompareOp, CullModeFlags, FrontFace, Gpu, PipelineBindPoint,
         PipelineColorBlendAttachmentState, PipelineLayout, PolygonMode, PrimitiveTopology, Rect2D,
         ShaderStageFlags, Texture, VkPipeline,
     },
     anyhow::Result,
-    ash::vk,
     glam::Mat4,
     std::mem,
     tracing::{instrument, warn},
 };
-
-struct TextureDefaults {
-    white_srgb: AllocatedTexture,
-    white_linear: AllocatedTexture,
-    normal: AllocatedTexture,
-}
 
 const BIND_IDX_SCENE: u32 = 0;
 const BIND_IDX_DRAW: u32 = 1;
@@ -34,7 +27,7 @@ const BIND_IDX_BASE_COLOR: u32 = 3;
 const BIND_IDX_NORMAL: u32 = 4;
 const BIND_IDX_METALLIC_ROUGHNESS: u32 = 5;
 const BIND_IDX_OCCLUSION: u32 = 6;
-const CLEAR_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
+const CLEAR_COLOR: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
 const VERTEX_SHADER_PATH: &str = "shaders/forward.vert.spv";
 const FRAGMENT_SHADER_PATH: &str = "shaders/forward.frag.spv";
@@ -44,7 +37,6 @@ pub struct ForwardPipeline {
     layout: PipelineLayout,
     material_buffer: Buffer<GpuMaterialData>,
     draw_buffer: Buffer<GpuDrawData>,
-    texture_defaults: TextureDefaults,
 }
 
 impl Pipeline for ForwardPipeline {
@@ -91,7 +83,6 @@ impl ForwardPipeline {
 
         let layout = gpu.create_pipeline_layout(&[descriptor_layout], &[])?;
         let handle = Self::create_pipeline(gpu, layout)?;
-        let texture_defaults = Self::create_default_textures(gpu)?;
 
         let material_buffer = gpu.create_shared_buffer::<GpuMaterialData>(
             mem::size_of::<GpuMaterialData>() as u64,
@@ -109,7 +100,6 @@ impl ForwardPipeline {
             layout,
             material_buffer,
             draw_buffer,
-            texture_defaults,
         })
     }
 
@@ -150,8 +140,10 @@ impl ForwardPipeline {
 
     fn draw_mesh(&self, ctx: &RenderContext<'_>, mesh: &Mesh, transform: Mat4) -> Result<()> {
         for primitive in mesh.primitives.iter() {
-            let handle = primitive.material.unwrap_or(ctx.assets.defaults.material);
-            let material = ctx.assets.material(handle).unwrap();
+            let material = match primitive.material {
+                Some(handle) => ctx.assets.material(handle).unwrap(),
+                None => &Material::default(),
+            };
 
             self.update_draw_buffer(ctx, transform);
             self.update_material_buffer(material);
@@ -189,27 +181,6 @@ impl ForwardPipeline {
             .build(gpu, layout)
     }
 
-    fn create_default_textures(gpu: &Gpu) -> Result<TextureDefaults> {
-        let linear = Format::R8G8B8A8_UNORM;
-        let srgb = Format::R8G8B8A8_SRGB;
-        let white_srgb =
-            AllocatedTexture::monochrome(gpu, [1.0, 1.0, 1.0, 1.0], srgb, "default-white-srgb")?;
-        let white_linear = AllocatedTexture::monochrome(
-            gpu,
-            [1.0, 1.0, 1.0, 1.0],
-            linear,
-            "default-white-linear",
-        )?;
-        let normal =
-            AllocatedTexture::monochrome(gpu, [0.5, 0.5, 1.0, 1.0], linear, "default-normal")?;
-
-        Ok(TextureDefaults {
-            white_srgb,
-            white_linear,
-            normal,
-        })
-    }
-
     fn update_draw_buffer(&self, context: &RenderContext, transform: Mat4) {
         let model = transform;
         let view = context.scene.camera.view();
@@ -238,67 +209,63 @@ impl ForwardPipeline {
 
     pub fn bind_resources(
         &self,
-        context: &RenderContext,
+        ctx: &RenderContext,
         primitive: &Primitive,
         material: &Material,
     ) -> Result<()> {
         let base_texture = material
             .base_texture
-            .and_then(|index| context.assets.texture(index))
-            .unwrap_or(&self.texture_defaults.white_srgb);
+            .and_then(|handle| ctx.assets.texture(handle))
+            .unwrap_or_else(|| ctx.assets.defaults.white_srgb());
+
         let normal_texture = material
             .normal_texture
-            .and_then(|index| context.assets.texture(index))
-            .unwrap_or(&self.texture_defaults.normal);
+            .and_then(|handle| ctx.assets.texture(handle))
+            .unwrap_or_else(|| ctx.assets.defaults.normal());
+
         let metallic_roughness_texture = material
             .metallic_roughness_texture
-            .and_then(|index| context.assets.texture(index))
-            .unwrap_or(&self.texture_defaults.white_linear);
+            .and_then(|handle| ctx.assets.texture(handle))
+            .unwrap_or_else(|| ctx.assets.defaults.white_linear());
+
         let ao_texture = material
-            .ao_texture
-            .and_then(|index| context.assets.texture(index))
-            .unwrap_or(&self.texture_defaults.white_linear);
-        let default_sampler = context.gpu.create_sampler(
-            vk::Filter::LINEAR,
-            vk::Filter::LINEAR,
-            vk::SamplerMipmapMode::LINEAR,
-            vk::SamplerAddressMode::REPEAT,
-            vk::SamplerAddressMode::REPEAT,
-        )?;
+            .base_texture
+            .and_then(|handle| ctx.assets.texture(handle))
+            .unwrap_or_else(|| ctx.assets.defaults.white_linear());
+
+        let default_sampler = ctx.assets.defaults.sampler;
 
         ResourceBinder::default()
-            .buffer(BIND_IDX_SCENE, &context.scene_buffer)
+            .buffer(BIND_IDX_SCENE, &ctx.scene_buffer)
             .buffer(BIND_IDX_DRAW, &self.draw_buffer)
             .buffer(BIND_IDX_MATERIAL, &self.material_buffer)
             .image(
                 BIND_IDX_BASE_COLOR,
-                base_texture,
+                &base_texture,
                 base_texture.sampler().unwrap_or(default_sampler),
             )
             .image(
                 BIND_IDX_NORMAL,
-                normal_texture,
+                &normal_texture,
                 normal_texture.sampler().unwrap_or(default_sampler),
             )
             .image(
                 BIND_IDX_METALLIC_ROUGHNESS,
-                metallic_roughness_texture,
+                &metallic_roughness_texture,
                 metallic_roughness_texture
                     .sampler()
                     .unwrap_or(default_sampler),
             )
             .image(
                 BIND_IDX_OCCLUSION,
-                ao_texture,
+                &ao_texture,
                 ao_texture.sampler().unwrap_or(default_sampler),
             )
-            .bind(context.cmd_buffer, &self.layout);
+            .bind(ctx.cmd_buffer, &self.layout);
 
-        context
-            .cmd_buffer
+        ctx.cmd_buffer
             .bind_vertex_buffer(&primitive.vertex_buffer.raw(), 0);
-        context
-            .cmd_buffer
+        ctx.cmd_buffer
             .bind_index_buffer(&primitive.index_buffer.raw(), 0);
 
         Ok(())

@@ -90,5 +90,9 @@ impl Camera {
 
     pub fn translate(&mut self, delta: Vec3) { self.target += delta; }
 
-    pub fn zoom(&mut self, delta: f32) { self.distance += delta; }
+    pub fn zoom(&mut self, delta: f32) {
+        self.distance += delta;
+        println!("Camera distance: {}", self.distance);
+        println!("Camera delta: {}", delta);
+    }
 }

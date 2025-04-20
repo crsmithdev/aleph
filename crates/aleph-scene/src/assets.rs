@@ -4,21 +4,27 @@ use {
         util, Material, Mesh, Primitive, Vertex,
     },
     aleph_vk::{
-        AllocatedTexture, Filter, Format, Gpu, ImageAspectFlags, ImageUsageFlags, MemoryLocation,
-        Sampler, SamplerAddressMode, SamplerMipmapMode,
+        AllocatedTexture, Extent2D, Filter, Format, Gpu, ImageAspectFlags, ImageUsageFlags,
+        MemoryLocation, Sampler, SamplerAddressMode, SamplerMipmapMode,
     },
     anyhow::Result,
     std::{
+        cell::RefCell,
         collections::HashMap,
         hash::Hash,
+        rc::Rc,
         sync::{
             atomic::{AtomicU64, Ordering},
             Arc,
         },
     },
+    tracing::instrument,
 };
 
-static HANDLE_INDEX: AtomicU64 = AtomicU64::new(0);
+const WHITE: [f32; 4] = [1., 1., 1., 1.];
+const NORMAL: [f32; 4] = [0.5, 0.5, 1., 1.];
+
+static ASSET_HANDLE_INDEX: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug)]
 pub struct AssetHandle<T> {
@@ -28,7 +34,7 @@ pub struct AssetHandle<T> {
 
 impl<T> AssetHandle<T> {
     pub fn new() -> Self {
-        let index = HANDLE_INDEX.fetch_add(1, Ordering::Relaxed);
+        let index = ASSET_HANDLE_INDEX.fetch_add(1, Ordering::Relaxed);
         Self {
             index,
             marker: std::marker::PhantomData,
@@ -42,12 +48,10 @@ impl<T> std::fmt::Display for AssetHandle<T> {
     }
 }
 
-impl<T> Copy for AssetHandle<T> {}
 impl<T> Clone for AssetHandle<T> {
     fn clone(&self) -> Self { *self }
 }
 
-impl<T> Eq for AssetHandle<T> {}
 impl<T> PartialEq for AssetHandle<T> {
     fn eq(&self, other: &Self) -> bool { self.index == other.index }
 }
@@ -55,39 +59,51 @@ impl<T> Hash for AssetHandle<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) { self.index.hash(state); }
 }
 
+impl<T> Copy for AssetHandle<T> {}
+impl<T> Eq for AssetHandle<T> {}
+
 pub type MeshHandle = AssetHandle<Mesh>;
 pub type TextureHandle = AssetHandle<AllocatedTexture>;
 pub type MaterialHandle = AssetHandle<Material>;
 
 pub struct Defaults {
-    pub white_srgb: TextureHandle,
-    pub black_srgb: TextureHandle,
-    pub black_linear: TextureHandle,
-    pub white_linear: TextureHandle,
-    pub normal: TextureHandle,
+    pub white_srgb: Rc<AllocatedTexture>,
+    pub white_linear: Rc<AllocatedTexture>,
+    pub normal: Rc<AllocatedTexture>,
     pub sampler: Sampler,
-    pub material: MaterialHandle,
 }
 
-const WHITE: [f32; 4] = [1., 1., 1., 1.];
-const BLACK: [f32; 4] = [0., 0., 0., 1.];
-const NORMAL: [f32; 4] = [0.5, 0.5, 1., 1.];
+impl Defaults {
+    pub fn white_srgb(&self) -> Rc<AllocatedTexture> { self.white_srgb.clone() }
+    pub fn white_linear(&self) -> Rc<AllocatedTexture> { self.white_linear.clone() }
+    pub fn normal(&self) -> Rc<AllocatedTexture> { self.normal.clone() }
+    pub fn sampler(&self) -> Sampler { self.sampler }
+}
+
+enum TextureAsset {
+    Loaded(Rc<AllocatedTexture>),
+    Unloaded(TextureDesc),
+}
 
 pub struct Assets {
     gpu: Arc<Gpu>,
     meshes: HashMap<MeshHandle, Mesh>,
-    textures: HashMap<TextureHandle, AllocatedTexture>,
+    textures: RefCell<HashMap<TextureHandle, TextureAsset>>,
     materials: HashMap<MaterialHandle, Material>,
     pub defaults: Defaults,
 }
 
 impl Assets {
-    pub fn new(gpu: Arc<Gpu>) -> Result<Self> {
-        let mut textures = HashMap::new();
-        let mut materials = HashMap::new();
-        let meshes = HashMap::new();
+    const DEFAULT_EXTENT: Extent2D = Extent2D {
+        width: 16,
+        height: 16,
+    };
 
-        let defaults = Self::load_default_textures(&gpu, &mut textures, &mut materials)?;
+    pub fn new(gpu: Arc<Gpu>) -> Result<Self> {
+        let textures = RefCell::new(HashMap::new());
+        let materials = HashMap::new();
+        let meshes = HashMap::new();
+        let defaults = Self::load_defaults(&gpu)?;
 
         Ok(Self {
             gpu,
@@ -98,41 +114,31 @@ impl Assets {
         })
     }
 
-    pub fn load_default_textures(
+    pub fn create_default(
         gpu: &Gpu,
-        textures: &mut HashMap<TextureHandle, AllocatedTexture>,
-        materials: &mut HashMap<MaterialHandle, Material>,
-    ) -> Result<Defaults> {
-        let white_srgb = TextureHandle::new();
-        textures.insert(
-            white_srgb,
-            AllocatedTexture::monochrome(gpu, WHITE, Format::R8G8B8A8_SRGB, "white-srgb")?,
-        );
+        color: &[f32; 4],
+        format: Format,
+        sampler: Sampler,
+        name: impl Into<String>,
+    ) -> Result<AllocatedTexture> {
+        Self::load_texture(
+            gpu,
+            &TextureDesc {
+                name: name.into(),
+                extent: Self::DEFAULT_EXTENT,
+                format,
+                data: bytemuck::bytes_of(color).to_vec(),
+                usage: ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
+                aspect: ImageAspectFlags::COLOR,
+            },
+            sampler,
+        )
+    }
 
-        let black_srgb = TextureHandle::new();
-        textures.insert(
-            black_srgb,
-            AllocatedTexture::monochrome(gpu, BLACK, Format::R8G8B8A8_SRGB, "black-srgb")?,
-        );
-
-        let black_linear = TextureHandle::new();
-        textures.insert(
-            black_linear,
-            AllocatedTexture::monochrome(gpu, BLACK, Format::R8G8B8A8_UNORM, "black-linear")?,
-        );
-
-        let white_linear = TextureHandle::new();
-        textures.insert(
-            white_linear,
-            AllocatedTexture::monochrome(gpu, WHITE, Format::R8G8B8A8_UNORM, "white-linear")?,
-        );
-
-        let normal = TextureHandle::new();
-        textures.insert(
-            normal,
-            AllocatedTexture::monochrome(gpu, NORMAL, Format::R8G8B8A8_UNORM, "normal")?,
-        );
-
+    #[instrument(skip(gpu))]
+    pub fn load_defaults(gpu: &Gpu) -> Result<Defaults> {
+        let srgb = Format::R8G8B8A8_SRGB;
+        let linear = Format::R8G8B8A8_UNORM;
         let sampler = gpu.create_sampler(
             Filter::LINEAR,
             Filter::LINEAR,
@@ -140,49 +146,73 @@ impl Assets {
             SamplerAddressMode::REPEAT,
             SamplerAddressMode::REPEAT,
         )?;
-
-        let material = MaterialHandle::new();
-        materials.insert(material, Material::default());
+        let white_srgb = Rc::new(Self::create_default(
+            gpu,
+            &WHITE,
+            srgb,
+            sampler,
+            "tx-white-srgb",
+        )?);
+        let white_linear = Rc::new(Self::create_default(
+            gpu,
+            &WHITE,
+            linear,
+            sampler,
+            "tx-white-linear",
+        )?);
+        let normal = Rc::new(Self::create_default(
+            gpu,
+            &NORMAL,
+            srgb,
+            sampler,
+            "tx-normal",
+        )?);
 
         Ok(Defaults {
             white_srgb,
-            black_srgb,
-            black_linear,
             white_linear,
             normal,
             sampler,
-            material,
         })
     }
-    pub fn material(&self, handle: MaterialHandle) -> Option<&Material> {
-        self.materials.get(&handle)
-    }
 
-    pub fn add_material(&mut self, material: Material) -> Result<MaterialHandle> {
-        let handle = MaterialHandle::new();
-        self.materials.insert(handle, material);
-        Ok(handle)
-    }
-
-    pub fn texture(&self, handle: TextureHandle) -> Option<&AllocatedTexture> {
-        self.textures.get(&handle)
-    }
-
-    pub fn add_texture(&mut self, texture: AllocatedTexture) -> Result<TextureHandle> {
+    pub fn add_texture(&mut self, desc: TextureDesc) -> TextureHandle {
         let handle = TextureHandle::new();
-        self.textures.insert(handle, texture);
-        Ok(handle)
+        let asset = TextureAsset::Unloaded(desc);
+        self.textures.borrow_mut().insert(handle, asset);
+        handle
     }
 
-    pub fn load_texture(&mut self, desc: TextureDesc) -> Result<TextureHandle> {
-        let sampler = self.gpu.create_sampler(
-            desc.sampler.min_filter,
-            desc.sampler.mag_filter,
-            desc.sampler.mipmap_mode,
-            desc.sampler.address_mode_u,
-            desc.sampler.address_mode_y,
-        )?;
-        let image = self.gpu.create_texture(
+    pub fn texture(&self, handle: TextureHandle) -> Option<Rc<AllocatedTexture>> {
+        let mut textures = self.textures.borrow_mut();
+        match textures.get(&handle) {
+            Some(TextureAsset::Loaded(asset)) => {
+                return Some(asset.clone());
+            }
+            Some(TextureAsset::Unloaded(desc)) => {
+                let texture = Self::load_texture(&self.gpu, &desc, self.defaults.sampler).unwrap();
+                textures.insert(handle, TextureAsset::Loaded(Rc::new(texture)));
+            }
+            None => return None,
+        }
+
+        self.get_loaded_texture(handle)
+    }
+
+    fn get_loaded_texture(
+        &self,
+        handle: AssetHandle<AllocatedTexture>,
+    ) -> Option<Rc<AllocatedTexture>> {
+        if let Some(asset) = self.textures.borrow().get(&handle) {
+            if let TextureAsset::Loaded(te) = asset {
+                return Some(te.clone());
+            }
+        }
+        None
+    }
+
+    fn load_texture(gpu: &Gpu, desc: &TextureDesc, sampler: Sampler) -> Result<AllocatedTexture> {
+        let texture = gpu.create_texture(
             desc.extent,
             desc.format,
             ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
@@ -191,22 +221,18 @@ impl Assets {
             Some(sampler),
         )?;
 
-        self.gpu
-            .execute(|cmd| image.upload(cmd, &desc.data).expect("upload"))?;
+        gpu.execute(|cmd| texture.upload(cmd, &desc.data).expect("upload"))?;
 
-        let handle = TextureHandle::new();
-        self.textures.insert(handle, image);
+        Ok(texture)
+    }
 
-        log::debug!(
-            "Loaded texture asset {}: {} ({} bytes, format: {:?}, {}x{})",
-            handle,
-            desc.name,
-            desc.data.len(),
-            desc.format,
-            desc.extent.width,
-            desc.extent.height,
-        );
+    pub fn material(&self, handle: MaterialHandle) -> Option<&Material> {
+        self.materials.get(&handle)
+    }
 
+    pub fn add_material(&mut self, material: Material) -> Result<MaterialHandle> {
+        let handle = MaterialHandle::new();
+        self.materials.insert(handle, material);
         Ok(handle)
     }
 

@@ -3,7 +3,7 @@ use {
     aleph_core::{
         events::EventSubscriber,
         layer::Layer,
-        system::{Res, Resources, Schedule, Scheduler},
+        system::{Res, ResMut, Resources, Schedule, Scheduler},
         Window,
     },
     aleph_scene::{assets::Assets, Scene},
@@ -32,17 +32,20 @@ impl Layer for RenderLayer {
             Ok(gpu) => Arc::new(gpu),
             Err(err) => panic!("Fatal error creating gpu: {err:?}"),
         };
-        let mut renderer = match Renderer::new(Arc::clone(&gpu), self.config.clone()) {
+        let renderer = match Renderer::new(Arc::clone(&gpu), self.config.clone()) {
             Ok(renderer) => renderer,
             Err(err) => panic!("Fatal error creating renderer: {err:?}"),
         };
         let assets = Assets::new(Arc::clone(&gpu)).expect("assets");
         resources.add(assets);
+        resources.add(renderer);
         resources.add(Arc::clone(&gpu));
         scheduler.add_system(
             Schedule::Default,
-            move |scene: Res<Scene>, assets: Res<Assets>| {
-                renderer.execute(&scene, &assets).expect("execute renderer");
+            move |mut renderer: ResMut<Renderer>, scene: Res<Scene>, mut assets: ResMut<Assets>| {
+                renderer
+                    .execute(&scene, &mut assets)
+                    .expect("execute renderer");
             },
         );
 

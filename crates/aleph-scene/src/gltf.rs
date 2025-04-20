@@ -122,14 +122,14 @@ fn read_node(
 fn load_texture(
     data: &gltf::image::Data,
     info: &gltf::Texture,
-    sampler: SamplerDesc,
+    #[allow(unused_variables)] sampler: SamplerDesc,
     srgb: bool,
     assets: &mut Assets,
 ) -> Result<TextureHandle> {
     let index = info.index();
     let name = match info.name() {
-        Some(name) => format!("texture-glTF-{index:03}-{name}",),
-        None => format!("tex-glTF-{index:03}"),
+        Some(name) => format!("tx-glTF-{index:03}-{name}",),
+        None => format!("tx-glTF-{index:03}"),
     };
     let extent = Extent2D {
         width: data.width,
@@ -145,25 +145,16 @@ fn load_texture(
         false => vk::Format::R8G8B8A8_UNORM,
     };
 
-    log::debug!(
-        "  Texture {} -> {} ({} bytes, format: {:?}, srgb?: {} )",
-        index,
-        name,
-        bytes.len(),
-        format,
-        srgb,
-    );
-
-    assets.load_texture(TextureDesc {
+    let texture_handle = assets.add_texture(TextureDesc {
         name: name.to_string(),
-        index,
         extent,
         format,
         usage: ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
         aspect: vk::ImageAspectFlags::COLOR,
-        sampler,
         data: bytes.clone(),
-    })
+    });
+
+    Ok(texture_handle)
 }
 
 fn load_material(

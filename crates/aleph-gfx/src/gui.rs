@@ -9,6 +9,23 @@ use {
     std::sync::{Arc, Mutex},
 };
 
+pub struct GuiLayer {
+    pub gui: Gui,
+}
+
+// impl Layer for GuiLayer {
+//     fn register(
+//         &mut self,
+//         scheduler: &mut Scheduler,
+//         resources: &mut Resources,
+//         _events: &mut EventSubscriber<Self>,
+//     ) {
+//         let window = Arc::clone(&resources.get::<Arc<Window>>());
+//         let gpu = resources.get::<Arc<Gpu>>().clone();
+//         self.gui = Gui::new(&gpu, window).expect("Failed to create GUI");
+//     }
+// }
+
 pub struct Gui {
     pub egui_ctx: egui::Context,
     pub egui_winit: egui_winit::State,
@@ -17,7 +34,7 @@ pub struct Gui {
     window: Arc<winit::window::Window>,
     textures_to_free: Option<Vec<egui::TextureId>>,
 }
-const CLEAR_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
+const CLEAR_COLOR: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 impl Gui {
     pub fn new(gpu: &Gpu, window: Arc<winit::window::Window>) -> Result<Self> {
         let egui_ctx = egui::Context::default();

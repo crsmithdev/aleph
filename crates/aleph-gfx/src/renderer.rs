@@ -14,7 +14,7 @@ use {
     std::{mem, sync::Arc},
 };
 
-#[derive(Clone)]
+// #[derive(Clone)]
 pub struct RenderContext<'a> {
     pub gpu: &'a Gpu,
     pub scene: &'a Scene,
@@ -22,7 +22,7 @@ pub struct RenderContext<'a> {
     pub scene_buffer: &'a Buffer<GpuSceneData>,
     pub draw_image: &'a AllocatedTexture,
     pub depth_image: &'a AllocatedTexture,
-    pub assets: &'a Assets,
+    pub assets: &'a mut Assets,
     pub extent: Extent2D,
 }
 
@@ -31,22 +31,22 @@ pub(crate) const FORMAT_DEPTH_IMAGE: Format = Format::D32_SFLOAT;
 const LIGHTS: [Light; 4] = [
     Light {
         position: vec3(2., 2., 2.),
-        color: vec4(1., 1., 1., 1.),
+        color: vec4(20., 20., 20., 20.),
         radius: 10.,
     },
     Light {
         position: vec3(-2., -2., -2.),
-        color: vec4(1., 1., 1., 1.),
+        color: vec4(20., 20., 20., 20.),
         radius: 10.,
     },
     Light {
         position: vec3(-2., 2., 2.),
-        color: vec4(1., 1., 1., 1.),
+        color: vec4(20., 20., 20., 20.),
         radius: 10.,
     },
     Light {
         position: vec3(2., -2., -2.),
-        color: vec4(1., 1., 1., 1.),
+        color: vec4(20., 20., 20., 20.),
         radius: 10.,
     },
 ];
@@ -65,8 +65,10 @@ pub struct Renderer {
     frame_index: usize,
     frame_counter: usize,
     draw_image: AllocatedTexture,
+    #[allow(dead_code)]
     debug_pipeline: DebugPipeline,
     depth_image: AllocatedTexture,
+    #[allow(dead_code)]
     config: RendererConfig,
     scene_buffer: Buffer<GpuSceneData>,
     scene_data: GpuSceneData,
@@ -108,7 +110,7 @@ impl Renderer {
         let debug_pipeline = DebugPipeline::new(&gpu)?;
         let scene_data = GpuSceneData {
             lights: LIGHTS,
-            n_lights: 1,
+            n_lights: 4,
             ..Default::default()
         };
 
@@ -142,7 +144,7 @@ impl Renderer {
         self.scene_buffer.write(&[self.scene_data]);
     }
 
-    pub fn execute(&mut self, scene: &Scene, assets: &Assets) -> Result<()> {
+    pub fn execute(&mut self, scene: &Scene, assets: &mut Assets) -> Result<()> {
         self.update_scene_buffer(scene);
 
         if self.rebuild_swapchain {
@@ -207,12 +209,12 @@ impl Renderer {
             extent: self.gpu.swapchain().extent(),
         };
         self.foreward_pipeline.execute(&context)?;
-        if self.config.debug_normals {
-            self.debug_pipeline.execute(&context)?;
-        }
+        // if self.config.debug_normals {
+        //     self.debug_pipeline.execute(&context)?;
+        // }
 
-        self.gui
-            .draw(&context, &mut self.config, &mut self.scene_data)?;
+        // self.gui
+        //     .draw(&context, &mut self.config, &mut self.scene_data)?;
 
         cmd_buffer.transition_image(
             &self.draw_image,

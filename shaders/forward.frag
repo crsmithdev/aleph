@@ -65,7 +65,7 @@ vec3 fresnelSchlick(float cos_theta, vec3 fresnel_0) {
 
 void main() {
     vec3 normal = inTbn * texture(u_normalMap, inUv).rgb * 2.0 - 1.0;
-    vec3 albedo = texture(u_colorMap, inUv).xyz;
+    vec3 albedo = texture(u_colorMap, inUv).rgb;
 
     float metallic;
     if (u_scene.config.force_metallic.x > 0.01) {
