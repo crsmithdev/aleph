@@ -1,28 +1,65 @@
 use {
-    crate::{gui::Gui, DebugPipeline, ForwardPipeline, Pipeline},
-    aleph_scene::{
-        model::{GpuSceneData, Light},
-        Assets, SceneGraph,
-    },
+    crate::{gui::Gui, ForwardPipeline, Pipeline},
+    aleph_scene::{model::Light, Assets, Scene},
     aleph_vk::{
         AllocatedTexture, Buffer, BufferUsageFlags, CommandBuffer, Extent2D, Extent3D, Format,
         Frame, Gpu, ImageAspectFlags, ImageLayout, ImageUsageFlags, Texture,
     },
     anyhow::Result,
-    glam::{vec3, vec4, Vec3},
+    bytemuck::{Pod, Zeroable},
+    glam::{vec3, vec4, Mat4, Vec2, Vec3, Vec4},
     std::{mem, sync::Arc},
     tracing::instrument,
 };
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy, Pod, Zeroable)]
+pub struct Config {
+    pub force_color: Vec4,
+    pub force_metallic: Vec2,
+    pub force_roughness: Vec2,
+    pub force_ao: Vec2,
+    pub padding0: Vec2,
+}
+#[repr(C)]
+#[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
+pub struct GpuSceneData {
+    pub view: Mat4,
+    pub projection: Mat4,
+    pub vp: Mat4,
+    pub camera_pos: Vec3,
+    pub n_lights: i32,
+    pub config: Config,
+    pub lights: [Light; 4],
+}
 
-#[derive(Clone)]
+#[repr(C)]
+#[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
+pub struct GpuMaterialData {
+    pub color_factor: Vec4,
+    pub metallic_factor: f32,
+    pub roughness_factor: f32,
+    pub ao_strength: f32,
+    pub padding0: f32,
+}
+
+#[repr(C)]
+#[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
+pub struct GpuDrawData {
+    pub model: Mat4,
+    pub mv: Mat4,
+    pub mvp: Mat4,
+    pub transform: Mat4,
+}
+
 pub struct RenderContext<'a> {
     pub gpu: &'a Gpu,
-    pub scene: &'a SceneGraph,
+    pub scene: &'a Scene,
     pub cmd_buffer: &'a CommandBuffer,
     pub scene_buffer: &'a Buffer<GpuSceneData>,
     pub draw_image: &'a AllocatedTexture,
     pub depth_image: &'a AllocatedTexture,
     pub extent: Extent2D,
+    pub assets: &'a mut Assets,
 }
 
 pub(crate) const FORMAT_DRAW_IMAGE: Format = Format::R16G16B16A16_SFLOAT;
@@ -65,7 +102,7 @@ pub struct Renderer {
     frame_index: usize,
     frame_counter: usize,
     draw_image: AllocatedTexture,
-    debug_pipeline: DebugPipeline,
+    // debug_pipeline: DebugPipeline,
     depth_image: AllocatedTexture,
     config: RendererConfig,
     scene_buffer: Buffer<GpuSceneData>,
@@ -105,7 +142,7 @@ impl Renderer {
         )?;
 
         let foreward_pipeline = ForwardPipeline::new(&gpu)?;
-        let debug_pipeline = DebugPipeline::new(&gpu)?;
+        // let debug_pipeline = DebugPipeline::new(&gpu)?;
         let scene_data = GpuSceneData {
             lights: LIGHTS,
             n_lights: 2,
@@ -124,13 +161,13 @@ impl Renderer {
             scene_buffer_data: scene_data,
             rebuild_swapchain: false,
             scene_buffer,
-            debug_pipeline,
+            // debug_pipeline,
             frame_index: 0,
             frame_counter: 0,
             config,
         })
     }
-    fn update_scene_buffer(&mut self, scene: &SceneGraph) {
+    fn update_scene_buffer(&mut self, scene: &Scene) {
         let view = scene.camera.view();
         let projection = scene.camera.projection();
 
@@ -143,7 +180,7 @@ impl Renderer {
     }
 
     #[instrument(skip_all)]
-    pub fn execute(&mut self, scene: &SceneGraph, assets: &mut Assets) -> Result<()> {
+    pub fn execute(&mut self, scene: &Scene, assets: &mut Assets) -> Result<()> {
         self.update_scene_buffer(scene);
 
         if self.rebuild_swapchain {
@@ -205,15 +242,16 @@ impl Renderer {
             draw_image: &self.draw_image,
             depth_image: &self.depth_image,
             extent: self.gpu.swapchain().extent(),
+            assets,
         };
         self.foreward_pipeline.execute(&context)?;
-        if self.config.debug_normals {
-            self.debug_pipeline.execute(&context)?;
-        }
+        // if self.config.debug_normals {
+        //     self.debug_pipeline.execute(&context)?;
+        // }
 
-        self.gui.draw(&context, |ctx| {
-            build_ui(ctx, &mut self.config, &mut self.scene_buffer_data)
-        })?;
+        // self.gui.draw(&context, |ctx| {
+        // build_ui(ctx, &mut self.config, &mut self.scene_buffer_data)
+        // })?;
 
         cmd_buffer.transition_image(
             &self.draw_image,
@@ -273,44 +311,44 @@ impl Drop for Renderer {
     fn drop(&mut self) { unsafe { self.gpu.device().handle().device_wait_idle().unwrap() }; }
 }
 
-fn build_ui(ctx: &egui::Context, config: &mut RendererConfig, data: &mut GpuSceneData) {
-    egui::Window::new("Demo texture").show(ctx, |ui| {
-        ui.label("Debug");
-        ui.add(egui::Checkbox::new(
-            &mut config.debug_normals,
-            "Show normals",
-        ));
-        ui.add(egui::Checkbox::new(&mut config.auto_rotate, "Auto rotate"));
-        ui.label("Lights");
-        ui.add(
-            egui::Slider::new(&mut data.n_lights, 0..=4)
-                .step_by(1.0)
-                .text("# Lights"),
-        );
-        ui.horizontal(|ui| {
-            ui.label("0 R:");
-            ui.add(egui::DragValue::new(&mut data.lights[0].color.x).speed(0.1));
-            ui.label("G:");
-            ui.add(egui::DragValue::new(&mut data.lights[0].color.y).speed(0.1));
-            ui.label("B:");
-            ui.add(egui::DragValue::new(&mut data.lights[0].color.z).speed(0.1));
-            ui.label("A:");
-            ui.add(egui::DragValue::new(&mut data.lights[0].color.z).speed(0.1));
-        });
-        ui.separator();
-        ui.label("Material");
+// fn build_ui(ctx: &egui::Context, config: &mut RendererConfig, data: &mut GpuSceneData) {
+//     egui::Window::new("Demo texture").show(ctx, |ui| {
+//         ui.label("Debug");
+//         ui.add(egui::Checkbox::new(
+//             &mut config.debug_normals,
+//             "Show normals",
+//         ));
+//         ui.add(egui::Checkbox::new(&mut config.auto_rotate, "Auto rotate"));
+//         ui.label("Lights");
+//         ui.add(
+//             egui::Slider::new(&mut data.n_lights, 0..=4)
+//                 .step_by(1.0)
+//                 .text("# Lights"),
+//         );
+//         ui.horizontal(|ui| {
+//             ui.label("0 R:");
+//             ui.add(egui::DragValue::new(&mut data.lights[0].color.x).speed(0.1));
+//             ui.label("G:");
+//             ui.add(egui::DragValue::new(&mut data.lights[0].color.y).speed(0.1));
+//             ui.label("B:");
+//             ui.add(egui::DragValue::new(&mut data.lights[0].color.z).speed(0.1));
+//             ui.label("A:");
+//             ui.add(egui::DragValue::new(&mut data.lights[0].color.z).speed(0.1));
+//         });
+//         ui.separator();
+//         ui.label("Material");
 
-        let mut force_metallic = data.config.force_metallic > -0.5;
-        let mut metallic = 0.;
+//         let mut force_metallic = data.config.force_metallic > -0.5;
+//         let mut metallic = 0.;
 
-        ui.horizontal(|ui| {
-            ui.label("Metalness:");
-            ui.checkbox(&mut force_metallic, "Override?");
-            ui.add(egui::Slider::new(&mut metallic, 0.0..=1.0).text("Value"));
-            data.config.force_metallic = metallic;
-            if force_metallic {
-                data.config.force_roughness = -1.0;
-            }
-        });
-    });
-}
+//         ui.horizontal(|ui| {
+//             ui.label("Metalness:");
+//             ui.checkbox(&mut force_metallic, "Override?");
+//             ui.add(egui::Slider::new(&mut metallic, 0.0..=1.0).text("Value"));
+//             data.config.force_metallic = metallic;
+//             if force_metallic {
+//                 data.config.force_roughness = -1.0;
+//             }
+//         });
+//     });
+// }

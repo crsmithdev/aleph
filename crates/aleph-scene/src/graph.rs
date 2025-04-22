@@ -1,115 +1,258 @@
 use {
-    crate::{Camera, CameraConfig, Material, Mesh},
-    aleph_core::layer::{Scene, SceneObject},
-    aleph_vk::AllocatedTexture,
-    ash::vk,
+    crate::{assets::MeshHandle, Camera, CameraConfig},
+    anyhow::Result,
     derive_more::Debug,
-    glam::{Mat4, Vec3},
+    glam::Mat4,
     petgraph::graph::NodeIndex,
-    rand,
-    std::{cell::RefCell, collections::HashMap, rc::Rc},
+    std::{
+        collections::HashMap,
+        fmt::Display,
+        hash::Hash,
+        sync::atomic::{AtomicU64, Ordering},
+    },
 };
 
-pub type Graph = petgraph::Graph<Node, ()>;
+static NODE_HANDLE_INDEX: AtomicU64 = AtomicU64::new(0);
 
-#[derive(Debug)]
-pub enum NodeData {
-    Mesh(usize),
-    Empty,
-}
-
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct Node {
     pub name: String,
     pub transform: Mat4,
     pub data: NodeData,
 }
 
-pub struct TextureDefaults {
-    pub white_srgb: AllocatedTexture,
-    pub black_srgb: AllocatedTexture,
-    pub black_linear: AllocatedTexture,
-    pub white_linear: AllocatedTexture,
-    pub normal: AllocatedTexture,
-    pub sampler: vk::Sampler,
+impl Node {
+    pub fn rotate(&mut self, delta: f32) {
+        self.transform = Mat4::from_rotation_y(delta) * self.transform;
+    }
+}
+
+#[derive(Default, Debug)]
+pub enum NodeData {
+    #[default]
+    Empty,
+    Mesh(MeshHandle),
 }
 
 #[derive(Debug)]
-pub struct SceneGraph {
-    pub graph: Rc<RefCell<Graph>>,
-    pub camera: Camera,
-    pub root: NodeIndex,
-    #[debug("{}", materials.len())]
-    pub materials: HashMap<usize, Material>,
-    #[debug("{}", textures.len())]
-    pub textures: Vec<AllocatedTexture>,
-    #[debug("{}", meshes.len())]
-    pub meshes: Vec<Mesh>,
-    pub rng: f32,
+pub struct NodeDesc {
+    pub name: String,
+    pub index: usize,
+    pub parent: Option<usize>,
+    pub transform: Mat4,
+    pub mesh: Option<MeshHandle>,
+    pub children: Vec<usize>,
 }
 
-impl Default for SceneGraph {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct NodeHandle {
+    index: u64,
+}
+
+impl NodeHandle {
+    pub fn new() -> Self {
+        let index = NODE_HANDLE_INDEX.fetch_add(1, Ordering::Relaxed);
+        Self { index }
+    }
+}
+
+pub type Graph = petgraph::Graph<NodeHandle, ()>;
+
+#[derive(Debug, Default)]
+pub struct SceneDesc {
+    pub name: String,
+    pub nodes: Vec<NodeDesc>,
+}
+
+#[derive(Debug)]
+pub struct Scene {
+    nodes: HashMap<NodeHandle, Node>,
+    indices: HashMap<NodeHandle, NodeIndex>,
+    graph: petgraph::Graph<NodeHandle, ()>,
+    pub camera: Camera,
+    pub root: NodeHandle,
+}
+
+impl Default for Scene {
     fn default() -> Self {
         let mut graph = Graph::new();
-        let root = graph.add_node(Node {
-            name: "root".to_string(),
-            transform: Mat4::IDENTITY,
-            data: NodeData::Empty,
-        });
+        let mut indices = HashMap::new();
+        let mut nodes = HashMap::new();
+        let root = NodeHandle::new();
+        log::debug!("root handle: {root:?}");
+        let index = graph.add_node(root);
+        nodes.insert(
+            root,
+            Node {
+                name: "root".to_string(),
+                transform: Mat4::IDENTITY,
+                data: NodeData::Empty,
+            },
+        );
+        indices.insert(root, index);
+
         let camera = Camera::new(CameraConfig::default());
-        let rng = rand::random();
         Self {
             camera,
-            graph: Rc::new(RefCell::new(graph)),
+            graph,
+            nodes,
             root,
-            materials: HashMap::new(),
-            textures: vec![],
-            meshes: vec![],
-            rng,
+            indices,
         }
     }
 }
 
-struct SceneGraphObject {
-    index: NodeIndex,
-    graph: Rc<RefCell<Graph>>,
-}
-
-impl<'a> SceneObject for SceneGraphObject {
-    fn rotate(&mut self, delta: f32) {
-        let graph = &mut self.graph.borrow_mut();
-        let node = &mut graph[self.index];
-        let transform = node.transform;
-
-        graph[self.index].transform = Mat4::from_rotation_y(delta) * transform;
+impl Scene {
+    fn get_index_for_handle(&self, handle: NodeHandle) -> Result<NodeIndex> {
+        self.indices
+            .get(&handle)
+            .map(|i| *i)
+            .ok_or_else(|| anyhow::anyhow!("Index for handle {handle:?} not found"))
     }
-}
+    pub fn attach(&mut self, node: Node, parent_handle: Option<NodeHandle>) -> Result<NodeHandle> {
+        let node_handle = NodeHandle::new();
+        let node_index = self.graph.add_node(node_handle);
+        self.indices.insert(node_handle, node_index);
+        self.nodes.insert(node_handle, node);
 
-impl Scene for SceneGraph {
-    fn translate_camera(&mut self, delta: Vec3) { self.camera.translate(delta); }
+        let parent_handle = parent_handle.unwrap_or(self.root);
+        let parent_index = self.get_index_for_handle(parent_handle)?;
 
-    fn rotate_camera(&mut self, delta: glam::Vec2) { self.camera.rotate(delta); }
+        self.graph.add_edge(parent_index, node_index, ());
 
-    fn objects(&self) -> Vec<Box<dyn SceneObject>> {
-        let graph_ref = self.graph.borrow_mut();
-        let mut traverse = petgraph::visit::Bfs::new(&*graph_ref, self.root);
-        let mut objects: Vec<Box<dyn SceneObject>> = vec![];
-        println!("obj rng: {}", self.rng);
-        while let Some(index) = traverse.next(&*graph_ref) {
-            let node = &graph_ref[index];
-            match node.data {
-                NodeData::Mesh(_) => objects.push(Box::new(SceneGraphObject {
-                    index,
-                    graph: self.graph.clone(),
-                })),
-                NodeData::Empty => {}
+        log::debug!(
+            "Attached node: {:?} (parent: {:?})",
+            node_handle,
+            parent_handle
+        );
+        Ok(node_handle)
+    }
+
+    pub fn children(&self, node: NodeHandle) -> Vec<NodeHandle> {
+        let index = self.indices.get(&node).unwrap();
+        let children = self.graph.neighbors(*index).collect::<Vec<_>>();
+        children
+            .iter()
+            .map(|child| *self.graph.node_weight(*child).unwrap())
+            .collect()
+    }
+
+    pub fn parent(&self, node: NodeHandle) -> Option<NodeHandle> {
+        let index = self.indices.get(&node).unwrap();
+        let parent = self
+            .graph
+            .neighbors_directed(*index, petgraph::Direction::Incoming)
+            .next();
+        parent.map(|parent| *self.graph.node_weight(parent).unwrap())
+    }
+
+    pub fn detach(&mut self, node: NodeHandle) -> Option<Node> {
+        let node = self.nodes.remove(&node);
+        node
+    }
+
+    pub fn mesh_nodes(&self) -> impl Iterator<Item = &Node> {
+        self.nodes
+            .values()
+            .filter(|node| matches!(node.data, NodeData::Mesh(_)))
+    }
+
+    pub fn nodes(&self) -> impl Iterator<Item = &Node> { self.nodes.values() }
+
+    pub fn nodes_mut(&mut self) -> impl Iterator<Item = &mut Node> { self.nodes.values_mut() }
+
+    pub fn node_mut(&mut self, handle: NodeHandle) -> Option<&mut Node> {
+        self.nodes.get_mut(&handle)
+    }
+
+    pub fn node(&self, handle: NodeHandle) -> Option<&Node> { self.nodes.get(&handle) }
+
+    pub fn clear(&mut self) {
+        self.graph = petgraph::Graph::new();
+        self.nodes.clear();
+        self.indices.clear();
+
+        let root_handle = self.root; //NodeHandle(HANDLE_INDEX.fetch_add(1, Ordering::Relaxed));
+        let root_index = self.graph.add_node(root_handle);
+        self.nodes.insert(
+            root_handle,
+            Node {
+                name: "root".to_string(),
+                transform: Mat4::IDENTITY,
+                data: NodeData::Empty,
+            },
+        );
+        self.indices.insert(root_handle, root_index);
+        self.camera = Camera::new(CameraConfig::default());
+
+        log::debug!(
+            "Cleared scene -> root: {:?}, nodes: {}, indices: {}, graph: {}",
+            self.root,
+            self.nodes.len(),
+            self.indices.len(),
+            self.graph.node_count(),
+        );
+    }
+
+    pub fn load(&mut self, gltf: SceneDesc) -> Result<()> {
+        self.clear();
+
+        let mut index_map = HashMap::new();
+        let mut remaining = gltf.nodes;
+
+        while remaining.len() > 0 {
+            log::debug!("Loading scene nodes, {} remaining...", remaining.len());
+            let mut next_remaining = vec![];
+            for desc in remaining {
+                let parent_handle = desc.parent.map(|i| index_map.get(&i).map(|h| *h)).flatten();
+
+                if desc.parent.is_some() && parent_handle.is_none() {
+                    log::debug!(
+                        "Deferring glTF node {} ({}): parent not yet loaded",
+                        desc.index,
+                        desc.name
+                    );
+                    next_remaining.push(desc);
+                    continue;
+                }
+
+                let node = Node {
+                    name: desc.name.clone(),
+                    transform: desc.transform,
+                    data: match desc.mesh {
+                        Some(mesh) => NodeData::Mesh(mesh),
+                        None => NodeData::Empty,
+                    },
+                };
+
+                log::debug!(
+                    "Loading glTF node {} ({}), parent glTF index: {:?} -> handle {:?}",
+                    desc.index,
+                    desc.name,
+                    desc.parent,
+                    parent_handle,
+                );
+
+                let handle = self.attach(node, parent_handle)?;
+                index_map.insert(desc.index, handle);
             }
+            remaining = next_remaining;
         }
 
-        objects
-    }
-}
+        //             // log::debug!(
+        //             //     "parent index: {}, orig: {}, child index: {}, orig: {}",
+        //             //     index.index(),
+        //             //     node.index,
+        //             //     child_index.index(),
+        //             //     child,
+        //             // );
+        //             // log::debug!(
+        //             //     "Loaded node: {} (transform: {:?}, mesh: {:?})",
+        //             //     name,
+        //             //     transform.to_cols_array_2d(),
+        //             //     mesh_index,
+        //             // );
 
-impl SceneGraph {
-    pub fn rng(&self) -> f32 { self.rng }
+        Ok(())
+    }
 }

@@ -3,7 +3,7 @@ use {
     aleph_vk::{
         texture::{SamplerDesc, TextureDesc},
         AllocatedTexture, Extent2D, Filter, Format, Gpu, ImageAspectFlags, ImageUsageFlags,
-        MemoryLocation, Sampler, SamplerAddressMode, SamplerMipmapMode,
+        MemoryLocation, PrimitiveTopology, Sampler, SamplerAddressMode, SamplerMipmapMode,
     },
     anyhow::Result,
     image::{ImageBuffer, Rgba},
@@ -260,9 +260,9 @@ impl Assets {
             primitives.push(Primitive {
                 vertex_buffer,
                 index_buffer,
-                material_idx: primitive_desc.material_idx,
+                material: primitive_desc.material,
                 vertex_count: n_vertices,
-                // topology: primitive_desc.topology,
+                topology: PrimitiveTopology::TRIANGLE_LIST,
             });
         }
 

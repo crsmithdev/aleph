@@ -187,7 +187,7 @@ impl ApplicationHandler for AppHandler<'_> {
         }
 
         // let context = &mut self.context;
-        // let scene = std::mem::replace(&mut self.app.scene, Box::new(SceneGraph::default()));
+        // let scene = std::mem::replace(&mut self.app.scene, Box::new(Scene::default()));
         // context.input = input;
         // let mut context = UpdateContext { input, scene };
         // self.app.layers.iter_mut().for_each(|layer| {

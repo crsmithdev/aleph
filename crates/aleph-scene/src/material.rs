@@ -1,18 +1,19 @@
 use {
+    crate::assets::TextureHandle,
     derive_more::derive::Debug,
     glam::{vec4, Vec4},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Material {
     pub name: String,
-    pub base_texture: Option<usize>,
+    pub base_texture: Option<TextureHandle>,
     pub base_color: Vec4,
-    pub normal_texture: Option<usize>,
-    pub metallic_roughness_texture: Option<usize>,
+    pub normal_texture: Option<TextureHandle>,
+    pub metallic_roughness_texture: Option<TextureHandle>,
     pub metallic_factor: f32,
     pub roughness_factor: f32,
-    pub ao_texture: Option<usize>,
+    pub ao_texture: Option<TextureHandle>,
     pub ao_strength: f32,
 }
 

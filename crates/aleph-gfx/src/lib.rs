@@ -6,7 +6,7 @@ pub mod pipeline;
 pub mod renderer;
 
 pub use crate::{
-    debug::DebugPipeline,
+    // debug::DebugPipeline,
     forward::ForwardPipeline,
     layer::RenderLayer,
     pipeline::{Pipeline, PipelineBuilder, ResourceBinder, ResourceLayout},

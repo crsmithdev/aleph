@@ -8,7 +8,7 @@ use {
         system::{Res, ResMut, Schedule},
     },
     aleph_gfx::renderer::RendererConfig,
-    aleph_scene::{assets::Assets, gltf, NodeData, SceneGraph},
+    aleph_scene::{assets::Assets, gltf, NodeData, Scene},
     aleph_vk::Gpu,
     anyhow::Result,
     smol_str::SmolStr,
@@ -65,7 +65,7 @@ pub fn path_to_validation(name: &str, index: usize) -> Result<String> {
         .map_err(|_| anyhow::anyhow!("Invalid path: {:?}", name))
 }
 
-fn update(input: Res<InputState>, mut scene: ResMut<SceneGraph>, state: &mut State) {
+fn update(input: Res<InputState>, mut scene: ResMut<Scene>, state: &mut State) {
     if input.mouse_held(&MouseButton::Right) {
         if let Some(delta) = input.mouse_delta() {
             scene.camera.rotate(delta * 0.01);
@@ -97,7 +97,7 @@ fn main() {
         // .with_system(Schedule::Startup, init)
         .with_system(
             Schedule::Default,
-            move |input: Res<InputState>, scene: ResMut<SceneGraph>| {
+            move |input: Res<InputState>, scene: ResMut<Scene>| {
                 update(input, scene, &mut state);
             },
         )

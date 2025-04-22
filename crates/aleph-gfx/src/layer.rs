@@ -4,7 +4,7 @@
 //         events::GuiEvent,
 //         layer::{Layer, Scene, UpdateContext, Window},
 //     },
-//     aleph_scene::{gltf, SceneGraph},
+//     aleph_scene::{gltf, Scene},
 //     aleph_vk::Gpu,
 //     anyhow::Result,
 //     std::sync::{Arc, OnceLock},
@@ -21,7 +21,7 @@
 //         Self {
 //             config: config,
 //             renderer: OnceLock::new(),
-//             // scene: SceneGraph::default(),
+//             // scene: Scene::default(),
 //         }
 //     }
 // }
@@ -41,13 +41,13 @@
 //     //     let renderer = self.renderer.get().unwrap();
 
 //     //     if let Some(path) = self.config.initial_scene.as_ref() {
-//     //         let scene: SceneGraph = gltf::load(&renderer.gpu, path)?;
+//     //         let scene: Scene = gltf::load(&renderer.gpu, path)?;
 //     //         let boxed: Box<dyn Scene> = Box::new(scene);
 //     //         ctx.scene = boxed;
 //     //         self.config.initial_scene = None;
 //     //     }
 
-//     //     let scene = ctx.scene.downcast_ref::<SceneGraph>().unwrap();
+//     //     let scene = ctx.scene.downcast_ref::<Scene>().unwrap();
 //     //     self.render(scene)?;
 //     //     Ok(())
 //     // }
@@ -80,7 +80,7 @@
 // }
 
 // impl RenderLayer {
-//     pub fn render(&mut self, scene: &SceneGraph) -> Result<()> {
+//     pub fn render(&mut self, scene: &Scene) -> Result<()> {
 //         self.renderer
 //             .get_mut()
 //             .expect("Renderer not initialized")
@@ -96,7 +96,7 @@ use {
         system::{Res, ResMut, Resources, Schedule, Scheduler},
         Window,
     },
-    aleph_scene::{assets::Assets, gltf, SceneGraph},
+    aleph_scene::{assets::Assets, gltf, Scene},
     aleph_vk::Gpu,
     anyhow::Result,
     std::{path::Path, sync::Arc},
@@ -145,18 +145,19 @@ impl Layer for RenderLayer {
             Ok(renderer) => renderer,
             Err(err) => panic!("Fatal error creating renderer: {err:?}"),
         };
-        let assets = Assets::new(Arc::clone(&gpu)).expect("assets");
-        let path = path_to_scene("Suzanne").unwrap();
-        let scene = gltf::load(&gpu, &path).unwrap();
+        let mut assets = Assets::new(Arc::clone(&gpu)).expect("assets");
+        let path = path_to_scene("BoxTextured").unwrap();
+        let desc = gltf::load_scene(&path, &mut assets).unwrap();
+        let mut scene = Scene::default();
+        scene.load(desc);
+
         resources.add(scene);
         resources.add(assets);
         resources.add(renderer);
         resources.add(Arc::clone(&gpu));
         scheduler.add_system(
             Schedule::Default,
-            move |mut renderer: ResMut<Renderer>,
-                  scene: Res<SceneGraph>,
-                  mut assets: ResMut<Assets>| {
+            move |mut renderer: ResMut<Renderer>, scene: Res<Scene>, mut assets: ResMut<Assets>| {
                 renderer
                     .execute(&scene, &mut assets)
                     .expect("execute renderer");

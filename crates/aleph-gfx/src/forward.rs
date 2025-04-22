@@ -1,11 +1,10 @@
 use {
     crate::{
         pipeline::{Pipeline, PipelineBuilder, ResourceBinder, ResourceLayout},
-        renderer::RenderContext,
+        renderer::{GpuDrawData, GpuMaterialData, RenderContext},
     },
     aleph_scene::{
-        model::{GpuDrawData, GpuMaterialData, Primitive},
-        util, Material, Mesh, NodeData, Vertex,
+        graph::NodeHandle, model::Primitive, util, Assets, Material, Mesh, NodeData, Vertex,
     },
     aleph_vk::{
         texture::SamplerDesc, AllocatedTexture, AttachmentLoadOp, AttachmentStoreOp, Buffer,
@@ -113,32 +112,36 @@ impl ForwardPipeline {
         })
     }
 
-    fn draw_scene(&self, context: &RenderContext) -> Result<()> {
+    fn draw_scene(&self, ctx: &RenderContext) -> Result<()> {
         let world_transform = Mat4::IDENTITY;
-        let root = NodeIndex::new(0);
-        self.draw_node(context, root, world_transform)
+        let root = &ctx.scene.root;
+        self.draw_node(ctx, *root, world_transform)
     }
 
     fn draw_node(
         &self,
-        context: &RenderContext,
-        index: NodeIndex,
+        ctx: &RenderContext,
+        handle: NodeHandle,
         world_transform: Mat4,
     ) -> Result<()> {
-        let graph = &context.scene.graph.borrow();
-        let node = &graph[index];
-        let transform = world_transform * node.transform;
+        match &ctx.scene.node(handle) {
+            None => {
+                warn!("Node not found: {:?}", handle);
+            } //warn!("TBD"),
+            Some(node) => {
+                let transform = world_transform * node.transform;
+                match &node.data {
+                    NodeData::Mesh(mesh_handle) => {
+                        let mesh = ctx.assets.mesh(*mesh_handle).unwrap();
+                        self.draw_mesh(ctx, mesh, transform)?;
+                    }
+                    _ => {}
+                }
 
-        match &node.data {
-            NodeData::Mesh(index) => {
-                let mesh = &context.scene.meshes[*index];
-                self.draw_mesh(context, mesh, transform)?;
+                for child_handle in ctx.scene.children(handle) {
+                    self.draw_node(ctx, child_handle, transform)?;
+                }
             }
-            _ =>
-                for edge in graph.edges(index) {
-                    let child = edge.target();
-                    self.draw_node(context, child, transform)?;
-                },
         }
 
         Ok(())
@@ -146,13 +149,13 @@ impl ForwardPipeline {
 
     fn draw_mesh(&self, context: &RenderContext<'_>, mesh: &Mesh, transform: Mat4) -> Result<()> {
         for primitive in mesh.primitives.iter() {
-            let material = match primitive.material_idx {
-                Some(idx) => &context.scene.materials[&idx],
+            let material = match primitive.material {
+                Some(idx) => context.assets.material(idx).unwrap(), //&context.scene.materials[&idx],
                 None => &Material::default(),
             };
             self.update_draw_buffer(context, transform);
             self.update_material_buffer(material);
-            self.bind_resources(context, primitive, &material, &context.scene.textures)?;
+            self.bind_resources(context, primitive, material)?;
             context
                 .cmd_buffer
                 .draw_indexed(primitive.vertex_count, 1, 0, 0, 0);
@@ -236,63 +239,59 @@ impl ForwardPipeline {
 
     pub fn bind_resources(
         &self,
-        context: &RenderContext,
+        ctx: &RenderContext,
         primitive: &Primitive,
         material: &Material,
-        textures: &[AllocatedTexture],
     ) -> Result<()> {
-        let base_texture = match material.base_texture {
-            Some(index) => &textures[index],
-            None => &self.texture_defaults.white_srgb,
-        };
-        let normal_texture = match material.normal_texture {
-            Some(index) => &textures[index],
-            None => &self.texture_defaults.normal,
-        };
-        let metallic_roughness_texture = match material.metallic_roughness_texture {
-            Some(index) => &textures[index],
-            None => &self.texture_defaults.white_linear,
-        };
-        let occlusion_texture = match material.ao_texture {
-            Some(index) => &textures[index],
-            None => &self.texture_defaults.white_linear,
-        };
-        let default_sampler = context.gpu.create_sampler(&SamplerDesc::default())?;
+        let cmd = ctx.cmd_buffer;
+
+        let base_texture = material
+            .base_texture
+            .and_then(|handle| ctx.assets.texture(handle))
+            .unwrap_or_else(|| ctx.assets.defaults.white_srgb.clone());
+        let base_sampler = base_texture
+            .sampler()
+            .unwrap_or(ctx.assets.defaults.sampler);
+
+        let normal_texture = material
+            .normal_texture
+            .and_then(|handle| ctx.assets.texture(handle))
+            .unwrap_or_else(|| ctx.assets.defaults.normal.clone());
+        let normal_sampler = normal_texture
+            .sampler()
+            .or(Some(ctx.assets.defaults.sampler))
+            .unwrap();
+
+        let metalrough_texture = material
+            .metallic_roughness_texture
+            .and_then(|handle| ctx.assets.texture(handle))
+            .unwrap_or_else(|| ctx.assets.defaults.white_linear.clone());
+        let metalrough_sampler = metalrough_texture
+            .sampler()
+            .unwrap_or(ctx.assets.defaults.sampler);
+
+        let ao_texture = material
+            .ao_texture
+            .and_then(|handle| ctx.assets.texture(handle))
+            .unwrap_or_else(|| ctx.assets.defaults.white_linear.clone());
+        let ao_sampler = ao_texture.sampler().unwrap_or(ctx.assets.defaults.sampler);
 
         ResourceBinder::default()
-            .buffer(BIND_IDX_SCENE, &context.scene_buffer)
+            .buffer(BIND_IDX_SCENE, &ctx.scene_buffer)
             .buffer(BIND_IDX_DRAW, &self.draw_buffer)
             .buffer(BIND_IDX_MATERIAL, &self.material_buffer)
-            .image(
-                BIND_IDX_BASE_COLOR,
-                base_texture,
-                base_texture.sampler().unwrap_or(default_sampler),
-            )
-            .image(
-                BIND_IDX_NORMAL,
-                normal_texture,
-                normal_texture.sampler().unwrap_or(default_sampler),
-            )
+            .image(BIND_IDX_BASE_COLOR, &base_texture, base_sampler)
+            .image(BIND_IDX_NORMAL, &normal_texture, normal_sampler)
             .image(
                 BIND_IDX_METALLIC_ROUGHNESS,
-                metallic_roughness_texture,
-                metallic_roughness_texture
-                    .sampler()
-                    .unwrap_or(default_sampler),
+                &metalrough_texture,
+                metalrough_sampler,
             )
-            .image(
-                BIND_IDX_OCCLUSION,
-                occlusion_texture,
-                occlusion_texture.sampler().unwrap_or(default_sampler),
-            )
-            .bind(context.cmd_buffer, &self.layout);
+            .image(BIND_IDX_OCCLUSION, &ao_texture, ao_sampler)
+            .bind(cmd, &self.layout);
 
-        context
-            .cmd_buffer
-            .bind_vertex_buffer(&primitive.vertex_buffer.raw(), 0);
-        context
-            .cmd_buffer
-            .bind_index_buffer(&primitive.index_buffer.raw(), 0);
+        cmd.bind_vertex_buffer(primitive.vertex_buffer.raw(), 0);
+        cmd.bind_index_buffer(primitive.index_buffer.raw(), 0);
 
         Ok(())
     }

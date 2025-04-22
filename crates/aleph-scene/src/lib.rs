@@ -3,14 +3,14 @@ pub mod camera;
 pub mod gltf;
 pub mod graph;
 pub mod material;
+pub mod mikktspace;
 pub mod model;
 pub mod util;
 
 pub use crate::{
     assets::Assets,
     camera::{Camera, CameraConfig},
-    gltf::GltfScene,
-    graph::{Node, NodeData, SceneGraph},
+    graph::{Node, NodeData, Scene},
     material::Material,
-    model::{GpuDrawData, Mesh, Primitive, Vertex},
+    model::{Mesh, Primitive, Vertex},
 };

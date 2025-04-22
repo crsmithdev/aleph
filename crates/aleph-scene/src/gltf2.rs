@@ -1,30 +1,42 @@
 use {
     crate::{
-        assets::Assets,
-        graph::{NodeDesc, SceneDesc},
+        assets::TextureHandle,
         material::Material,
-        model::{MeshDesc, PrimitiveDesc, Vertex},
-        util, MaterialHandle, MeshHandle, TextureHandle,
+        model::{Mesh, Primitive, Vertex},
+        util, Assets, Camera, Node, NodeData, Scene,
     },
     aleph_vk::{
         texture::{SamplerDesc, TextureDesc},
-        Extent2D, ImageUsageFlags,
+        AllocatedTexture, Extent2D, Gpu, ImageUsageFlags, MemoryLocation, PrimitiveTopology,
     },
     anyhow::{bail, Result},
     ash::vk,
+    derive_more::Debug,
     glam::{Mat4, Vec2, Vec3, Vec4},
+    gltf::Texture,
+    itertools::Itertools,
+    petgraph::graph::NodeIndex,
     std::{
+        cell::RefCell,
         collections::{HashMap, HashSet},
-        path::Path,
+        mem::size_of,
+        rc::Rc,
     },
 };
 
-pub fn load_scene(path: &str, mut assets: &mut Assets) -> Result<SceneDesc> {
-    log::debug!("Reading glTF scene from {path:?}");
+pub type Graph = petgraph::Graph<Node, ()>;
 
+#[derive(Debug)]
+pub struct GltfScene {
+    pub document: gltf::Document,
+    pub buffers: Vec<gltf::buffer::Data>,
+    pub images: Vec<gltf::image::Data>,
+}
+
+pub fn load<'a>(gpu: &Gpu, path: &str, assets: &'a mut Assets) -> Result<Scene<'a>> {
     let (document, buffers, images) = gltf::import(path)?;
-    let mut srgb_textures = HashSet::new();
 
+    let mut srgb_textures = HashSet::new();
     for material in document.materials() {
         let pbr = material.pbr_metallic_roughness();
         if let Some(info) = pbr.base_color_texture() {
@@ -32,216 +44,218 @@ pub fn load_scene(path: &str, mut assets: &mut Assets) -> Result<SceneDesc> {
         }
     }
 
-    let mut samplers = HashMap::new();
-    for index in 0..document.samplers().len() {
-        let info = document.samplers().nth(index).unwrap();
-        let sampler = load_sampler(info);
-        samplers.insert(index, sampler);
-    }
-
-    let mut textures = HashMap::new();
+    let mut textures: HashMap<usize, TextureHandle> = HashMap::new();
     for index in 0..document.textures().len() {
         let info = document.textures().nth(index).unwrap();
         let srgb = srgb_textures.contains(&index);
         let data = &images[info.source().index()];
-        let sampler = match info.sampler().index() {
-            Some(index) => samplers.get(&index).unwrap().clone(),
-            None => SamplerDesc::default(),
+        let name = match info.name() {
+            Some(name) => format!("gltf-{index:02}-{name}",),
+            None => format!("gltf-{index:02}"),
         };
-        let handle = load_texture(&data, &info, sampler, srgb, &mut assets)?;
+        let sampler = load_sampler(gpu, info.sampler())?;
+
+        let extent = Extent2D {
+            width: data.width,
+            height: data.height,
+        };
+        let bytes = match data.format {
+            gltf::image::Format::R8G8B8A8 => data.pixels.clone(),
+            gltf::image::Format::R8G8B8 => util::rgb_to_rgba(&data.pixels, extent),
+            _ => bail!("Unsupported image format: {:?}", data.format),
+        };
+        let format = match srgb {
+            true => vk::Format::R8G8B8A8_SRGB,
+            false => vk::Format::R8G8B8A8_UNORM,
+        };
+        let usage = vk::ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED;
+        let aspect = vk::ImageAspectFlags::COLOR;
+        let handle = assets.add_texture(TextureDesc {
+            name,
+            extent,
+            format,
+            usage,
+            aspect,
+            data: data.pixels.clone(),
+            sampler: SamplerDesc {
+                name: format!("gltf-sampler-{index:02}"),
+                index,
+                min_filter: vk::Filter::LINEAR,
+                mag_filter: vk::Filter::LINEAR,
+                mipmap_mode: vk::SamplerMipmapMode::LINEAR,
+                address_mode_u: vk::SamplerAddressMode::REPEAT,
+                address_mode_v: vk::SamplerAddressMode::REPEAT,
+                anisotropy_enable: false,
+                max_anisotropy: 1.0,
+            },
+        });
         textures.insert(index, handle);
     }
+    let textures = textures
+        .into_iter()
+        .sorted_by_key(|t| t.0)
+        .map(|t| t.1)
+        .collect::<Vec<_>>();
 
-    let mut materials = HashMap::new();
+    let mut materials: HashMap<usize, Material> = HashMap::new();
     for index in 0..document.materials().len() {
         let source = document.materials().nth(index).unwrap();
-        let handle = load_material(&source, &textures, &mut assets)?;
-        materials.insert(index, handle);
+        let material = load_material(&source)?;
+        materials.insert(index, material);
     }
 
-    let mut meshes: HashMap<usize, MeshHandle> = HashMap::new();
+    let mut meshes: HashMap<usize, Mesh> = HashMap::new();
     for index in 0..document.meshes().len() {
         let source = document.meshes().nth(index).unwrap();
-        let handle = load_mesh(&source, &buffers, &materials, &mut assets)?;
-        meshes.insert(index, handle);
+        let mesh = load_mesh(gpu, &source, &buffers)?;
+        meshes.insert(index, mesh);
     }
 
+    let mut graph = Graph::new();
+    let root = graph.add_node(Node {
+        name: "gltf-root".to_string(),
+        transform: Mat4::IDENTITY,
+        data: NodeData::Empty,
+    });
     let scene = match document.scenes().nth(0) {
         Some(scene) => scene,
         None => bail!("No scenes found in the glTF file"),
     };
 
-    let mut nodes = vec![];
     for node in scene.nodes() {
-        nodes.extend(read_node(node, None, &meshes));
+        let child_index = add_node(gpu, &mut graph, node);
+        graph.add_edge(root, child_index, ());
+    }
+    let meshes = meshes
+        .into_iter()
+        .sorted_by_key(|t| t.0)
+        .map(|t| t.1)
+        .collect::<Vec<_>>();
+
+    log::debug!("Loaded glTF scene from: {}", path);
+    log::debug!("  Nodes ({}):", graph.node_count());
+    for index in graph.node_indices() {
+        let node = &graph[index];
+        let children = graph.neighbors(index).collect::<Vec<_>>();
+        log::debug!(
+            "    #{index:?} ({}): transform: {:?}, children: {:?}",
+            node.name,
+            node.transform.to_cols_array_2d(),
+            children
+        );
+    }
+    log::debug!("  Materials ({}):", materials.len());
+    for index in materials.keys() {
+        let material = &materials[index];
+        log::debug!("    #{index:?} -> {:?}", material);
+    }
+    log::debug!("  Textures ({}):", textures.len());
+    for index in 0..textures.len() {
+        let texture = &textures[index];
+        log::debug!("    #{index:?} -> {:?}", texture);
+    }
+    log::debug!("  Meshes ({}):", meshes.len());
+    for index in 0..meshes.len() {
+        let mesh = &meshes[index];
+        log::debug!("    #{index:?} -> {} primitives", mesh.primitives.len());
+        for primitive in &mesh.primitives {
+            log::debug!(
+                "      {} vertices -> material: {:?}",
+                primitive.vertex_count,
+                primitive.material
+            );
+        }
     }
 
-    let name = Path::new(path)
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("Untitled")
-        .to_string();
-    log::debug!(
-        "Read glTF scene {:?} -> {} node(s), {} mesh(es), {} texture(s), {} material(s)",
-        name,
-        nodes.len(),
-        meshes.len(),
-        textures.len(),
-        materials.len(),
-    );
-    Ok(SceneDesc { name, nodes })
+    Ok(Scene {
+        camera: Camera::new(crate::CameraConfig::default()),
+        graph: Rc::new(RefCell::new(graph)),
+        root,
+        assets: assets as &'a mut Assets,
+    })
 }
 
-fn read_node(
-    node: gltf::Node,
-    parent: Option<usize>,
-    meshes: &HashMap<usize, MeshHandle>,
-) -> Vec<NodeDesc> {
-    let mut nodes = vec![];
-    let transform = Mat4::from_cols_array_2d(&node.transform().matrix());
-    let index = node.index();
-    let children = node.children().map(|n| n.index()).collect::<Vec<_>>();
-    let name = match node.name() {
-        Some(name) => format!("node-glTF-{index:03}-{}", name),
-        None => format!("node-glTF-{index:03}"),
+fn add_node(gpu: &Gpu, graph: &mut Graph, gltf_node: gltf::Node) -> NodeIndex {
+    let transform = Mat4::from_cols_array_2d(&gltf_node.transform().matrix());
+    let index = gltf_node.index();
+    let name = match gltf_node.name() {
+        Some(name) => format!("gltf-node{index}-{}", name),
+        None => format!("gltf-node{index}"),
+    };
+    let data = match gltf_node.mesh() {
+        Some(mesh) => NodeData::Mesh(mesh.index()),
+        None => NodeData::Empty,
     };
 
-    log::debug!(
-        "  Node {} -> {} (parent: {:?}, children: {:?})",
-        index,
-        name,
-        parent,
-        &children
-    );
-
-    let mesh = node.mesh().and_then(|m| meshes.get(&m.index())).map(|h| *h);
-
-    nodes.push(NodeDesc {
+    let node_index = graph.add_node(Node {
         name: name.clone(),
-        index,
-        parent,
-        children,
         transform,
-        mesh,
+        data,
     });
 
-    for child in node.children() {
-        nodes.extend(read_node(child, Some(index), meshes));
+    log::debug!("Loaded node {name} (transform: {:?})", transform);
+
+    for child in gltf_node.children() {
+        let child_index = add_node(gpu, graph, child);
+        graph.add_edge(node_index, child_index, ());
     }
 
-    nodes
+    node_index
 }
 
-fn load_texture(
-    data: &gltf::image::Data,
-    info: &gltf::Texture,
-    sampler: SamplerDesc,
-    srgb: bool,
-    assets: &mut Assets,
-) -> Result<TextureHandle> {
-    let index = info.index();
-    let name = match info.name() {
-        Some(name) => format!("tx-glTF-{index:03}-{name}",),
-        None => format!("tx-glTF-{index:03}"),
-    };
-    let extent = Extent2D {
-        width: data.width,
-        height: data.height,
-    };
-    let bytes = match data.format {
-        gltf::image::Format::R8G8B8A8 => data.pixels.clone(),
-        gltf::image::Format::R8G8B8 => util::rgb_to_rgba(&data.pixels, extent),
-        _ => bail!("Unsupported image format: {:?}", data.format),
-    };
-    let format = match srgb {
-        true => vk::Format::R8G8B8A8_SRGB,
-        false => vk::Format::R8G8B8A8_UNORM,
-    };
-
-    let texture_handle = assets.add_texture(TextureDesc {
-        name: name.to_string(),
-        extent,
-        format,
-        usage: ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
-        aspect: vk::ImageAspectFlags::COLOR,
-        data: bytes.clone(),
-        sampler,
-    });
-
-    Ok(texture_handle)
-}
-
-fn load_material(
-    material: &gltf::Material,
-    textures: &HashMap<usize, TextureHandle>,
-    assets: &mut Assets,
-) -> Result<MaterialHandle> {
+fn load_material(material: &gltf::Material) -> Result<Material> {
     let index = match material.index() {
         Some(index) => index,
         None => bail!("Material index not found"),
     };
-    let name = match material.name() {
-        Some(name) => format!("mat-glTF-{index:03}-{name}"),
-        None => format!("mat-glTF-{index:03}"),
-    };
+    let name = format!(
+        "gltf-material-{:02}-{}",
+        index,
+        material.name().unwrap_or("unnamed")
+    );
+    log::debug!("Loading material {name}...");
     let pbr = material.pbr_metallic_roughness();
-    let base_index = pbr.base_color_texture().map(|i| i.texture().index());
-    let base_handle = base_index.and_then(|i| textures.get(&i)).map(|h| *h);
-    let normal_index = material.normal_texture().map(|i| i.texture().index());
-    let normal_handle = normal_index.and_then(|i| textures.get(&i)).map(|h| *h);
-    let ao_index = material.occlusion_texture().map(|i| i.texture().index());
-    let ao_handle = ao_index.and_then(|i| textures.get(&i)).map(|h| *h);
-    let mr_index = pbr
+    let base_texture = pbr.base_color_texture().map(|i| i.texture().index());
+    log::debug!("{name} base texture -> {base_texture:?}");
+    let normal_texture = material.normal_texture().map(|i| i.texture().index());
+    log::debug!("{name} normal texture -> {normal_texture:?}");
+    let metallic_roughness_texture = pbr
         .metallic_roughness_texture()
         .map(|i| i.texture().index());
-    let mr_handle = mr_index.and_then(|i| textures.get(&i)).map(|h| *h);
+    log::debug!("{name} metallic roughness texture -> {metallic_roughness_texture:?}");
+    let occlusion_texture = material.occlusion_texture().map(|i| i.texture().index());
 
     let base_color = Vec4::from_array(pbr.base_color_factor());
     let metallic_factor = pbr.metallic_factor();
     let roughness_factor = pbr.roughness_factor();
-    let ao_strength = material.occlusion_texture().map_or(0.0, |i| i.strength());
+    let occlusion_factor = material.occlusion_texture().map_or(0.0, |i| i.strength());
 
-    log::debug!("  Material {index} -> {name}");
-    log::debug!("    Base texture -> handle: {base_handle:?} (index: {base_index:?})");
-    log::debug!("    Normal texture -> handle: {normal_handle:?} (index: {normal_index:?})");
-    log::debug!("    MetallicRoughness texture -> handle: {mr_handle:?} (index: {mr_index:?})");
-    log::debug!("    AO texture -> handle: {ao_handle:?} (index: {ao_index:?})");
-    log::debug!("    Base color -> {:?}", base_color);
-    log::debug!("    Metallic factor -> {:?}", metallic_factor);
-    log::debug!("    Roughness factor -> {:?}", roughness_factor);
-    log::debug!("    AO strength -> {:?}", ao_strength);
-
-    assets.add_material(Material {
+    Ok(Material {
         name,
-        base_texture: base_handle,
+        base_texture: base_texture,
         base_color,
-        normal_texture: normal_handle,
-        metallic_roughness_texture: mr_handle,
+        normal_texture: normal_texture,
+        metallic_roughness_texture,
         metallic_factor,
         roughness_factor,
-        ao_texture: ao_handle,
-        ao_strength,
+        ao_texture: occlusion_texture,
+        ao_strength: occlusion_factor,
     })
 }
 
-fn load_mesh(
-    source: &gltf::Mesh,
-    buffers: &Vec<gltf::buffer::Data>,
-    materials: &HashMap<usize, MaterialHandle>,
-    assets: &mut Assets,
-) -> Result<MeshHandle> {
+fn load_mesh(gpu: &Gpu, source: &gltf::Mesh, buffers: &Vec<gltf::buffer::Data>) -> Result<Mesh> {
     let name = {
         let index = source.index();
-        let base = format!("mesh-glTF-{index:03}");
+        let base = format!("gltf-mesh{index:02}");
         source
             .name()
             .map(|name| format!("{base}-{name}"))
             .unwrap_or(base)
     };
+    log::debug!("Loading mesh {name}...");
     let mut primitives = vec![];
-    for (i, primitive) in source.primitives().enumerate() {
+    for primitive in source.primitives() {
         let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
-        let index = primitive.index();
 
         let positions = reader
             .read_positions()
@@ -268,64 +282,55 @@ fn load_mesh(
                 let uv = *tex_coords_0.get(index).unwrap_or(&Vec2::ZERO);
                 Vertex {
                     position: *position,
-                    normal: *normals.get(index).unwrap_or(&Vec3::ONE),
+                    normal: *normals.get(index).unwrap_or(&Vec3::ZERO),
                     uv_x: uv.x,
                     uv_y: uv.y,
-                    tangent: *tangents.get(index).unwrap_or(&Vec4::ONE),
+                    tangent: *tangents.get(index).unwrap_or(&Vec4::ZERO),
                     color: *colors.get(index).unwrap_or(&Vec4::ONE),
                 }
             })
             .collect();
-        println!("{:?}", vertices[0]);
-        println!("{:?}", vertices[1]);
-        println!("{:?}", vertices[2]);
         let indices = reader
             .read_indices()
             .map(|read_indices| read_indices.into_u32().collect::<Vec<_>>())
             .unwrap();
 
-        let material_handle = primitive
-            .material()
-            .index()
-            .and_then(|i| materials.get(&i))
-            .map(|h| *h);
-        let n_vertices = vertices.len() as u64;
+        let index_size = size_of::<u32>() as u64 * indices.len() as u64;
+        let index_buffer =
+            gpu.create_index_buffer(index_size, MemoryLocation::GpuOnly, "index buffer")?;
+        let index_staging = util::staging_buffer(gpu, &indices, "index staging")?;
 
-        let topology = match primitive.mode() {
-            gltf::mesh::Mode::Points => vk::PrimitiveTopology::POINT_LIST,
-            gltf::mesh::Mode::Lines => vk::PrimitiveTopology::LINE_LIST,
-            gltf::mesh::Mode::LineStrip => vk::PrimitiveTopology::LINE_STRIP,
-            gltf::mesh::Mode::Triangles => vk::PrimitiveTopology::TRIANGLE_LIST,
-            gltf::mesh::Mode::TriangleStrip => vk::PrimitiveTopology::TRIANGLE_STRIP,
-            gltf::mesh::Mode::LineLoop => vk::PrimitiveTopology::LINE_STRIP,
-            gltf::mesh::Mode::TriangleFan => vk::PrimitiveTopology::TRIANGLE_FAN,
-        };
-        let has_vertex_normals = reader.read_normals().is_some();
-        let has_tangents = reader.read_tangents().is_some();
-        let n_indices = indices.len();
+        let vertex_size = size_of::<Vertex>() as u64 * vertices.len() as u64;
+        let vertex_buffer =
+            gpu.create_vertex_buffer(vertex_size, MemoryLocation::GpuOnly, "vertex buffer")?;
+        let vertex_staging = util::staging_buffer(gpu, &vertices, "vertex staging")?;
 
-        primitives.push(PrimitiveDesc::new(
-            vertices,
-            indices,
-            material_handle,
-            topology,
-            has_vertex_normals,
-            has_tangents,
-        ));
+        gpu.execute(|cmd| {
+            cmd.copy_buffer(&vertex_staging, &vertex_buffer, vertex_buffer.size());
+            cmd.copy_buffer(&index_staging, &index_buffer, index_buffer.size());
+        })?;
 
-        log::debug!("  Primitive {i} -> {n_vertices} vertices, {n_indices} indices");
+        let material = primitive.material().index();
+
+        primitives.push(Primitive {
+            vertex_buffer,
+            index_buffer,
+            material,
+            vertex_count: indices.len() as u32,
+            topology: PrimitiveTopology::TRIANGLE_LIST,
+        });
+        log::debug!(
+            "  Loaded primitive {} -> {} vertices",
+            primitive.index(),
+            vertices.len()
+        );
     }
 
-    assets.load_mesh(MeshDesc {
-        name,
-        index: source.index(),
-        primitives,
-    })
+    Ok(Mesh { name, primitives })
 }
 
-fn load_sampler(sampler: gltf::texture::Sampler) -> SamplerDesc {
+fn load_sampler(gpu: &Gpu, sampler: gltf::texture::Sampler) -> Result<ash::vk::Sampler> {
     use gltf::texture::{MagFilter, MinFilter, WrappingMode};
-    let index = sampler.index().unwrap_or(usize::MAX);
     let min_filter = match sampler.min_filter() {
         Some(MinFilter::Nearest) => vk::Filter::NEAREST,
         Some(MinFilter::NearestMipmapNearest) => vk::Filter::NEAREST,
@@ -359,14 +364,9 @@ fn load_sampler(sampler: gltf::texture::Sampler) -> SamplerDesc {
         Some(MinFilter::LinearMipmapLinear) => vk::SamplerMipmapMode::LINEAR,
         _ => vk::SamplerMipmapMode::LINEAR,
     };
-    let name = match sampler.name() {
-        Some(name) => format!("gltf-sampler-{index:03}-{name}"),
-        None => format!("gltf-sampler-{index:03}"),
-    };
-
-    SamplerDesc {
-        name,
-        index,
+    gpu.create_sampler(&SamplerDesc {
+        name: format!("gltf-sampler-{:02}", 42),
+        index: 0,
         min_filter,
         mag_filter,
         mipmap_mode,
@@ -374,7 +374,7 @@ fn load_sampler(sampler: gltf::texture::Sampler) -> SamplerDesc {
         address_mode_v: address_mode_y,
         anisotropy_enable: false,
         max_anisotropy: 1.0,
-    }
+    })
 }
 // #[cfg(test)]
 // mod tests {
@@ -453,6 +453,7 @@ fn load_sampler(sampler: gltf::texture::Sampler) -> SamplerDesc {
 //         with_gpu(|gpu| {
 //             let path = sample_path("").expect("path");
 //             let result = load(gpu, &path);
+//             println!("Result: {:?}", result);
 //             assert!(result.is_ok());
 
 //             let scene = result.unwrap();
