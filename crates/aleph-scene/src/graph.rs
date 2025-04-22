@@ -6,7 +6,6 @@ use {
     petgraph::graph::NodeIndex,
     std::{
         collections::HashMap,
-        fmt::Display,
         hash::Hash,
         sync::atomic::{AtomicU64, Ordering},
     },

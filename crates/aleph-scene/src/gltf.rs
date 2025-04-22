@@ -16,7 +16,6 @@ use {
     std::{
         collections::{HashMap, HashSet},
         path::Path,
-        sync::atomic::Ordering,
     },
 };
 

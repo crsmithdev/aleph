@@ -1876,7 +1876,7 @@ unsafe fn GenerateInitialVerticesIndexList<I: MikktGeometry>(
 
 mod test {
     use {
-        super::{generate_tangents, MikktGeometry},
+        super::MikktGeometry,
         glam::{Vec2, Vec3},
     };
 

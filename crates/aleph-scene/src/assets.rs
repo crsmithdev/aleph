@@ -2,8 +2,8 @@ use {
     crate::{model::MeshDesc, util, Material, Mesh, Primitive, Vertex},
     aleph_vk::{
         texture::{SamplerDesc, TextureDesc},
-        AllocatedTexture, Extent2D, Filter, Format, Gpu, ImageAspectFlags, ImageUsageFlags,
-        MemoryLocation, PrimitiveTopology, Sampler, SamplerAddressMode, SamplerMipmapMode,
+        AllocatedTexture, Extent2D, Format, Gpu, ImageAspectFlags, ImageUsageFlags,
+        MemoryLocation, PrimitiveTopology, Sampler,
     },
     anyhow::Result,
     image::{ImageBuffer, Rgba},

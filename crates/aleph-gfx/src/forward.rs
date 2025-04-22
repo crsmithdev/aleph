@@ -4,18 +4,16 @@ use {
         renderer::{GpuDrawData, GpuMaterialData, RenderContext},
     },
     aleph_scene::{
-        graph::NodeHandle, model::Primitive, util, Assets, Material, Mesh, NodeData, Vertex,
+        graph::NodeHandle, model::Primitive, util, Material, Mesh, NodeData, Vertex,
     },
     aleph_vk::{
-        texture::SamplerDesc, AllocatedTexture, AttachmentLoadOp, AttachmentStoreOp, Buffer,
+        AllocatedTexture, AttachmentLoadOp, AttachmentStoreOp, Buffer,
         BufferUsageFlags, ColorComponentFlags, CompareOp, CullModeFlags, Format, FrontFace, Gpu,
         PipelineBindPoint, PipelineColorBlendAttachmentState, PipelineLayout, PolygonMode,
         PrimitiveTopology, Rect2D, ShaderStageFlags, Texture, VkPipeline,
     },
     anyhow::Result,
-    ash::vk,
     glam::Mat4,
-    petgraph::{graph::NodeIndex, visit::EdgeRef},
     std::mem,
     tracing::{instrument, warn},
 };
