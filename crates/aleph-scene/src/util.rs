@@ -10,16 +10,6 @@ use {
     image::EncodableLayout,
 };
 
-pub fn default_sampler(gpu: &Gpu) -> Result<vk::Sampler> {
-    gpu.create_sampler(
-        vk::Filter::LINEAR,
-        vk::Filter::LINEAR,
-        vk::SamplerMipmapMode::LINEAR,
-        vk::SamplerAddressMode::REPEAT,
-        vk::SamplerAddressMode::REPEAT,
-    )
-}
-
 // pub fn index_buffer(gpu: &Gpu, size: u64, label: impl Into<String>) -> Result<Buffer<u32>> {
 //     Buffer::new(
 //         gpu.device(),

@@ -1,7 +1,8 @@
 pub use ash::vk::{Format, ImageAspectFlags, ImageUsageFlags};
 use {
     crate::{
-        Allocator, Buffer, BufferUsageFlags, CommandBuffer, Device, Extent2D, Gpu, MemoryLocation,
+        Allocator, Buffer, BufferUsageFlags, CommandBuffer, Device, Extent2D, Filter, Gpu,
+        MemoryLocation, SamplerAddressMode, SamplerMipmapMode,
     },
     anyhow::Result,
     ash::vk,
@@ -10,6 +11,46 @@ use {
     gpu_allocator::vulkan::Allocation,
     std::sync::Arc,
 };
+
+#[derive(Debug)]
+pub struct SamplerDesc {
+    pub name: String,
+    pub index: usize,
+    pub min_filter: Filter,
+    pub mag_filter: Filter,
+    pub mipmap_mode: SamplerMipmapMode,
+    pub address_mode_u: SamplerAddressMode,
+    pub address_mode_v: SamplerAddressMode,
+    pub anisotropy_enable: bool,
+    pub max_anisotropy: f32,
+}
+
+impl Default for SamplerDesc {
+    fn default() -> Self {
+        Self {
+            name: "sa-default".into(),
+            index: 0,
+            min_filter: Filter::LINEAR,
+            mag_filter: Filter::LINEAR,
+            mipmap_mode: SamplerMipmapMode::LINEAR,
+            address_mode_u: SamplerAddressMode::REPEAT,
+            address_mode_v: SamplerAddressMode::REPEAT,
+            anisotropy_enable: false,
+            max_anisotropy: 1.0,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct TextureDesc {
+    pub name: String,
+    pub extent: Extent2D,
+    pub format: Format,
+    pub usage: ImageUsageFlags,
+    pub aspect: ImageAspectFlags,
+    pub data: Vec<u8>,
+    pub sampler: SamplerDesc,
+}
 
 macro_rules! impl_image {
     ($mty:ident) => {
@@ -108,13 +149,17 @@ impl AllocatedTexture {
         };
         let pixels = &[pixel];
         let data = bytemuck::bytes_of(pixels);
-        let sampler = gpu.create_sampler(
-            vk::Filter::LINEAR,
-            vk::Filter::LINEAR,
-            vk::SamplerMipmapMode::LINEAR,
-            vk::SamplerAddressMode::REPEAT,
-            vk::SamplerAddressMode::REPEAT,
-        )?;
+        let sampler = gpu.create_sampler(&SamplerDesc {
+            name: "sa-default".into(),
+            index: 0,
+            min_filter: Filter::LINEAR,
+            mag_filter: Filter::LINEAR,
+            mipmap_mode: SamplerMipmapMode::LINEAR,
+            address_mode_u: SamplerAddressMode::REPEAT,
+            address_mode_v: SamplerAddressMode::REPEAT,
+            anisotropy_enable: false,
+            max_anisotropy: 1.0,
+        })?;
         let texture = AllocatedTexture::new(
             gpu.device().clone(),
             gpu.allocator(),

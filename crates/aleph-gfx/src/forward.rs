@@ -8,10 +8,10 @@ use {
         util, Material, Mesh, NodeData, Vertex,
     },
     aleph_vk::{
-        AllocatedTexture, AttachmentLoadOp, AttachmentStoreOp, Buffer, BufferUsageFlags,
-        ColorComponentFlags, CompareOp, CullModeFlags, Format, FrontFace, Gpu, PipelineBindPoint,
-        PipelineColorBlendAttachmentState, PipelineLayout, PolygonMode, PrimitiveTopology, Rect2D,
-        ShaderStageFlags, Texture, VkPipeline,
+        texture::SamplerDesc, AllocatedTexture, AttachmentLoadOp, AttachmentStoreOp, Buffer,
+        BufferUsageFlags, ColorComponentFlags, CompareOp, CullModeFlags, Format, FrontFace, Gpu,
+        PipelineBindPoint, PipelineColorBlendAttachmentState, PipelineLayout, PolygonMode,
+        PrimitiveTopology, Rect2D, ShaderStageFlags, Texture, VkPipeline,
     },
     anyhow::Result,
     ash::vk,
@@ -257,13 +257,7 @@ impl ForwardPipeline {
             Some(index) => &textures[index],
             None => &self.texture_defaults.white_linear,
         };
-        let default_sampler = context.gpu.create_sampler(
-            vk::Filter::LINEAR,
-            vk::Filter::LINEAR,
-            vk::SamplerMipmapMode::LINEAR,
-            vk::SamplerAddressMode::REPEAT,
-            vk::SamplerAddressMode::REPEAT,
-        )?;
+        let default_sampler = context.gpu.create_sampler(&SamplerDesc::default())?;
 
         ResourceBinder::default()
             .buffer(BIND_IDX_SCENE, &context.scene_buffer)

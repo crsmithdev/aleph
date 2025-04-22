@@ -1,7 +1,9 @@
 use {
     aleph::prelude::*,
-    aleph_core::input::{Key, MouseButton, NamedKey},
-    aleph_core::layer::{UpdateContext, UpdateLayer},
+    aleph_core::{
+        input::{Key, MouseButton, NamedKey},
+        layer::{UpdateContext, UpdateLayer},
+    },
     aleph_gfx::renderer::RendererConfig,
     anyhow::Result,
     std::path::Path,
@@ -34,7 +36,7 @@ pub fn validation_path(name: &str, index: usize) -> Result<String> {
 
 fn main() {
     let app_config = AppConfig::default().name("Demo");
-    let path = sample_path("Suzanne").expect("Failed to load scene path");
+    let path = sample_path("Box").expect("Failed to load scene path");
     let render_config = RendererConfig {
         initial_scene: Some(path),
         ..Default::default()

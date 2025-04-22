@@ -28,7 +28,8 @@ pub use {
         ImageLayout, Pipeline as VkPipeline, PipelineBindPoint, PipelineColorBlendAttachmentState,
         PipelineLayout, PipelineRenderingCreateInfo, PipelineVertexInputStateCreateInfo,
         PolygonMode, PrimitiveTopology, Rect2D, RenderingAttachmentInfo, Sampler,
-        SamplerMipmapMode, ShaderStageFlags, StencilOpState, VertexInputAttributeDescription,
-        VertexInputBindingDescription, Viewport, WriteDescriptorSet,
+        SamplerAddressMode, SamplerMipmapMode, ShaderStageFlags, StencilOpState,
+        VertexInputAttributeDescription, VertexInputBindingDescription, Viewport,
+        WriteDescriptorSet,
     },
 };

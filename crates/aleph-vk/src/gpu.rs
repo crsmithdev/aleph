@@ -1,7 +1,7 @@
 use {
     crate::{
-        AllocatedTexture, Allocator, Buffer, CommandBuffer, CommandPool, Device, Instance,
-        MemoryLocation, Swapchain, SwapchainInfo, VK_TIMEOUT_NS,
+        texture::SamplerDesc, AllocatedTexture, Allocator, Buffer, CommandBuffer, CommandPool,
+        Device, Instance, MemoryLocation, Swapchain, SwapchainInfo, VK_TIMEOUT_NS,
     },
     aleph_core::log,
     anyhow::Result,
@@ -290,20 +290,13 @@ impl Gpu {
         )
     }
 
-    pub fn create_sampler(
-        &self,
-        min_filter: vk::Filter,
-        mag_filter: vk::Filter,
-        mipmap_mode: vk::SamplerMipmapMode,
-        address_mode_u: vk::SamplerAddressMode,
-        address_mode_v: vk::SamplerAddressMode,
-    ) -> Result<vk::Sampler> {
+    pub fn create_sampler(&self, desc: &SamplerDesc) -> Result<vk::Sampler> {
         self.device.create_sampler(
-            min_filter,
-            mag_filter,
-            mipmap_mode,
-            address_mode_u,
-            address_mode_v,
+            desc.min_filter,
+            desc.mag_filter,
+            desc.mipmap_mode,
+            desc.address_mode_u,
+            desc.address_mode_v,
         )
     }
 
