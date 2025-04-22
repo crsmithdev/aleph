@@ -62,11 +62,13 @@ dependencies = [
  "aleph-app",
  "aleph-core",
  "aleph-gfx",
+ "aleph-scene",
  "aleph-vk",
  "anyhow",
  "glam",
  "glob",
  "shaderc",
+ "smol_str",
 ]
 
 [[package]]

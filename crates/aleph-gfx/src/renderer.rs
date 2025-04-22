@@ -2,7 +2,7 @@ use {
     crate::{gui::Gui, DebugPipeline, ForwardPipeline, Pipeline},
     aleph_scene::{
         model::{GpuSceneData, Light},
-        SceneGraph,
+        Assets, SceneGraph,
     },
     aleph_vk::{
         AllocatedTexture, Buffer, BufferUsageFlags, CommandBuffer, Extent2D, Extent3D, Format,
@@ -10,7 +10,7 @@ use {
     },
     anyhow::Result,
     glam::{vec3, vec4, Vec3},
-    std::mem,
+    std::{mem, sync::Arc},
     tracing::instrument,
 };
 
@@ -30,22 +30,22 @@ pub(crate) const FORMAT_DEPTH_IMAGE: Format = Format::D32_SFLOAT;
 const LIGHTS: [Light; 4] = [
     Light {
         position: vec3(2., 2., 2.),
-        color: vec4(1., 1., 1., 1.),
+        color: vec4(5., 5., 5., 5.),
         radius: 10.,
     },
     Light {
         position: vec3(-2., -2., -2.),
-        color: vec4(1., 1., 1., 1.),
+        color: vec4(5., 5., 5., 5.),
         radius: 10.,
     },
     Light {
         position: vec3(-2., 2., 2.),
-        color: vec4(1., 1., 1., 1.),
+        color: vec4(5., 5., 5., 5.),
         radius: 10.,
     },
     Light {
         position: vec3(2., -2., -2.),
-        color: vec4(1., 1., 1., 1.),
+        color: vec4(5., 5., 5., 5.),
         radius: 10.,
     },
 ];
@@ -71,11 +71,11 @@ pub struct Renderer {
     scene_buffer: Buffer<GpuSceneData>,
     scene_buffer_data: GpuSceneData,
     pub gui: Gui,
-    pub gpu: Gpu,
+    pub gpu: Arc<Gpu>,
 }
 
 impl Renderer {
-    pub fn new(gpu: Gpu, config: RendererConfig) -> Result<Self> {
+    pub fn new(gpu: Arc<Gpu>, config: RendererConfig) -> Result<Self> {
         let frames = Self::create_frames(&gpu)?;
         let draw_image = gpu.create_texture(
             gpu.swapchain().extent(),
@@ -108,7 +108,7 @@ impl Renderer {
         let debug_pipeline = DebugPipeline::new(&gpu)?;
         let scene_data = GpuSceneData {
             lights: LIGHTS,
-            n_lights: 1,
+            n_lights: 2,
             ..Default::default()
         };
 
@@ -143,7 +143,7 @@ impl Renderer {
     }
 
     #[instrument(skip_all)]
-    pub fn execute(&mut self, scene: &SceneGraph) -> Result<()> {
+    pub fn execute(&mut self, scene: &SceneGraph, assets: &mut Assets) -> Result<()> {
         self.update_scene_buffer(scene);
 
         if self.rebuild_swapchain {

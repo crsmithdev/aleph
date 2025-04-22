@@ -12,7 +12,7 @@ use {
     bytemuck::Pod,
     derive_more::Debug,
     raw_window_handle::{HasDisplayHandle, HasWindowHandle},
-    std::{ffi, slice, sync::Arc},
+    std::{cell::UnsafeCell, ffi, slice, sync::Arc},
     winit::window::Window,
 };
 
@@ -50,7 +50,7 @@ pub struct Gpu {
     pub(crate) instance: Instance,
     pub(crate) surface: Surface,
     pub(crate) device: Device,
-    pub(crate) swapchain: Swapchain,
+    pub(crate) swapchain: UnsafeCell<Swapchain>,
     pub(crate) allocator: Arc<Allocator>,
     pub(crate) window: Arc<Window>,
     setup_cmd_pool: CommandPool,
@@ -66,7 +66,7 @@ impl Gpu {
             width: window.inner_size().width,
             height: window.inner_size().height,
         };
-        let swapchain = Swapchain::new(
+        let swapchain = UnsafeCell::new(Swapchain::new(
             &instance,
             &device,
             &surface,
@@ -77,7 +77,7 @@ impl Gpu {
                 vsync: true,
                 num_images: IN_FLIGHT_FRAMES,
             },
-        )?;
+        )?);
 
         let allocator = Arc::new(Allocator::new(&instance, &device)?);
         let setup_cmd_pool = device.create_command_pool()?;
@@ -108,7 +108,7 @@ impl Gpu {
     pub fn allocator(&self) -> Arc<Allocator> { Arc::clone(&self.allocator) }
 
     #[inline]
-    pub fn swapchain(&self) -> &Swapchain { &self.swapchain }
+    pub fn swapchain(&self) -> &Swapchain { unsafe { &*self.swapchain.get() } }
 }
 
 impl Gpu /* Init */ {
@@ -226,7 +226,7 @@ impl Gpu {
         Ok(module)
     }
 
-    pub fn rebuild_swapchain(&mut self) -> Result<()> {
+    pub fn rebuild_swapchain(&self) -> Result<()> {
         unsafe { self.device.handle.device_wait_idle() }?;
 
         let extent = vk::Extent2D {
@@ -234,7 +234,8 @@ impl Gpu {
             height: self.window.inner_size().height,
         };
 
-        self.swapchain.rebuild(extent)
+        let swapchain = unsafe { &mut *self.swapchain.get() };
+        swapchain.rebuild(extent)
     }
 
     pub fn create_index_buffer<T: Pod>(

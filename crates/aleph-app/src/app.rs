@@ -3,10 +3,11 @@ use {
     aleph_core::{
         events::{Event, EventRegistry, GuiEvent},
         input::{Input, InputState},
-        layer::{LayerDyn, UpdateContext},
-        log, Layer,
+        layer::LayerDyn,
+        log,
+        system::{IntoSystem, Resources, Schedule, Scheduler, System},
+        Layer,
     },
-    aleph_scene::SceneGraph,
     anyhow::{anyhow, Result},
     derive_more::Debug,
     human_panic::setup_panic,
@@ -26,7 +27,6 @@ use {
 
 pub struct AppConfig {
     pub name: String,
-    pub initial_scene: Option<String>,
 }
 
 impl AppConfig {
@@ -40,18 +40,20 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             name: DEFAULT_APP_NAME.to_string(),
-            initial_scene: None,
         }
     }
 }
 #[allow(dead_code)]
 pub struct App {
     event_registry: EventRegistry,
+    scheduler: Scheduler,
+    resources: Resources,
     pub(crate) layers: Vec<Box<dyn LayerDyn>>,
     last_update: Instant,
     total_steps: u64,
     step_accumulator: i64,
     config: AppConfig,
+    closing: bool,
 }
 
 impl App {
@@ -61,16 +63,28 @@ impl App {
 
         App {
             event_registry: EventRegistry::default(),
+            scheduler: Scheduler::default(),
+            resources: Resources::default(),
             last_update: Instant::now(),
             layers: vec![],
             total_steps: 0,
             step_accumulator: 0,
+            closing: false,
             config,
         }
     }
 
     pub fn with_layer<T: Layer>(mut self, layer: T) -> Self {
         self.layers.push(Box::new(layer));
+        self
+    }
+
+    pub fn with_system<I, S: System + 'static>(
+        mut self,
+        schedule: Schedule,
+        system: impl IntoSystem<I, System = S>,
+    ) -> Self {
+        self.scheduler.add_system(schedule, system);
         self
     }
 
@@ -88,10 +102,28 @@ impl App {
             .with_inner_size(DEFAULT_WINDOW_SIZE)
             .with_title(self.config.name.clone());
         let window = Arc::new(event_loop.create_window(window_attributes)?);
+        self.resources.add(window);
 
-        for (index, layer) in self.layers.iter_mut().enumerate() {
-            layer.register(window.clone(), &mut self.event_registry, index)?;
+        self.resources.add(Input::default());
+        // self.resources.add(Scene::default());
+
+        for layer in self.layers.iter_mut() {
+            layer.register(
+                &mut self.scheduler,
+                &mut self.resources,
+                &mut self.event_registry,
+                0,
+            );
         }
+
+        self.scheduler.run(Schedule::Startup, &mut self.resources);
+
+        Ok(())
+    }
+
+    fn run_frame(&mut self, input: InputState) -> Result<()> {
+        self.resources.add(input);
+        self.scheduler.run(Schedule::Default, &mut self.resources);
 
         Ok(())
     }
@@ -101,13 +133,23 @@ impl App {
             .emit(&mut self.layers, event)
             .expect("Error emitting event");
     }
+
+    fn exit(&mut self, event_loop: &ActiveEventLoop) {
+        if !self.closing {
+            self.closing = true;
+            log::info!("Exiting on user request");
+
+            // ...
+
+            event_loop.exit();
+        }
+    }
 }
 
 struct AppHandler<'a> {
     app: &'a mut App,
     wait_canceled: bool,
     close_requested: bool,
-    context: UpdateContext,
     input: Input,
 }
 impl<'a> AppHandler<'a> {
@@ -117,10 +159,6 @@ impl<'a> AppHandler<'a> {
             wait_canceled: false,
             close_requested: false,
             input: Input::default(),
-            context: UpdateContext {
-                input: InputState::default(),
-                scene: Box::new(SceneGraph::default()),
-            },
         }
     }
 }
@@ -148,12 +186,20 @@ impl ApplicationHandler for AppHandler<'_> {
             event_loop.exit();
         }
 
+        // let context = &mut self.context;
+        // let scene = std::mem::replace(&mut self.app.scene, Box::new(SceneGraph::default()));
+        // context.input = input;
+        // let mut context = UpdateContext { input, scene };
+        // self.app.layers.iter_mut().for_each(|layer| {
+        // layer.update(&mut context).expect("Error updating layer");
+        // });
+
+        // let _ = std::mem::replace(&mut self.app.scene, context.scene);
         let input = self.input.next_frame();
-        let context = &mut self.context;
-        context.input = input;
-        self.app.layers.iter_mut().for_each(|layer| {
-            layer.update(context).expect("Error updating layer");
-        });
+        if let Err(err) = self.app.run_frame(input) {
+            log::error!("Error executing systems: {:?}", err);
+            self.app.exit(event_loop);
+        }
 
         if !self.wait_canceled {
             event_loop.set_control_flow(ControlFlow::WaitUntil(

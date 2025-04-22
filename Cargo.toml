@@ -38,14 +38,17 @@ palette = "0.7.6"
 chrono = "0.4.40"
 glob = "0.3.2"
 glam = { version = "0.29.2", features = ["bytemuck", "serde"] }
+smol_str = "0.2.2"
 
 [dependencies]
 anyhow = "1.0.95"
 glam.workspace = true
+smol_str.workspace = true
 aleph-app.workspace = true
 aleph-gfx.workspace = true
 aleph-core.workspace = true
 aleph-vk.workspace = true
+aleph-scene.workspace = true
 
 [build-dependencies]
 glob = "0.3.1"
