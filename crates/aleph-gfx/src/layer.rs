@@ -51,18 +51,18 @@ impl Layer for RenderLayer {
             Ok(gpu) => Arc::new(gpu),
             Err(err) => panic!("Fatal error creating gpu: {err:?}"),
         };
+
         let renderer = match Renderer::new(Arc::clone(&gpu), self.config.clone()) {
             Ok(renderer) => renderer,
             Err(err) => panic!("Fatal error creating renderer: {err:?}"),
         };
-        let mut assets = Assets::new(Arc::clone(&gpu)).expect("assets");
-        let path = path_to_scene("BoxTextured").unwrap();
-        let desc = gltf::load_scene(&path, &mut assets).unwrap();
-        let mut scene = Scene::default();
-        scene.load(desc);
 
-        resources.add(scene);
+        let mut assets = Assets::new(Arc::clone(&gpu)).expect("assets");
         resources.add(assets);
+
+        let scene = Scene::default();
+        resources.add(scene);
+
         resources.add(renderer);
         resources.add(Arc::clone(&gpu));
         scheduler.add_system(

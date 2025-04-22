@@ -12,57 +12,76 @@ use {
     aleph_vk::Gpu,
     anyhow::Result,
     smol_str::SmolStr,
-    std::path::Path,
+    std::{path::Path, sync::Arc},
 };
 
 const AUTOROTATE_DELTA: f32 = 0.01;
 const GLTF_SAMPLE_DIR: &str = "submodules/glTF-Sample-Assets/Models";
 const GLTF_VALIDATION_DIR: &str = "submodules/glTF-Asset-Generator/Output/Positive";
+const SCENE_NUMBER: usize = 3;
+static SAMPLE_SCENES: &[&'static str] = &["Box", "BoxTextured", "NormalTangentTest", "Suzanne"];
+static VALIDATION_SCENES: &[(&'static str, usize, usize)] = &[("Mesh_PrimitivesUV", 0, 8)];
 
 struct State {
     auto_rotate: bool,
+    scenes: Vec<String>,
 }
 
-// fn init(gpu: Res<Gpu>, mut assets: ResMut<Assets>) {
-// // let path = path_to_validation("Mesh_PrimitivesUV", 1).unwrap_or_else(|err| {
-// // log::error!("Error loading scene: {:?}", err);
-// // panic!()
-// // });
-// let path = path_to_scene("Box").unwrap_or_else(|err| {
-//     log::error!("Error loading scene: {:?}", err);
-//     panic!()
-// });
-// let desc = gltf::load(&gpu, &path).unwrap_or_else(|err| {
-//     log::error!("Error loading scene {:?}: {}", path, err);
-//     panic!()
-// });
+impl Default for State {
+    fn default() -> Self {
+        let mut scenes = Vec::new();
+        for (name, start, end) in VALIDATION_SCENES {
+            for i in *start..=*end {
+                println!("{} {} {}", name, start, end);
+                scenes.push(validation_path(name, i).unwrap_or_else(|err| {
+                    println!("Error loading scene {:?}: {}", name, err);
+                    panic!()
+                }));
+            }
+        }
+        for name in SAMPLE_SCENES {
+            scenes.push(sample_path(name).unwrap_or_else(|_| {
+                log::error!("Error loading scene: {:?}", name);
+                panic!()
+            }));
+        }
+        Self {
+            auto_rotate: false,
+            scenes,
+        }
+    }
+}
 
-// let desc = gltf::load_scene(&path, &mut assets).unwrap_or_else(|err| {
-//     log::error!("Error loading scene {:?}: {}", path, err);
-//     panic!()
-// });
-// scene.load(desc).expect("Error loading scene");
-// }
+fn init(mut scene: ResMut<Scene>, mut assets: ResMut<Assets>, scene_path: &str) {
+    gltf::load_scene(scene_path, &mut assets)
+        .and_then(|desc| scene.load(desc))
+        .unwrap_or_else(|err| {
+            log::error!("Error loading scene {:?}: {}", scene_path, err);
+            panic!()
+        });
+}
 
-pub fn path_to_scene(name: &str) -> Result<String> {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
+pub fn sample_path(name: &str) -> Result<String> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join(GLTF_SAMPLE_DIR)
         .join(name)
         .join("glTF")
-        .join(format!("{name}.gltf"))
-        .canonicalize()
+        .join(format!("{name}.gltf"));
+
+    path.canonicalize()
         .map(|p| p.to_string_lossy().into_owned())
-        .map_err(|_| anyhow::anyhow!("Invalid path: {:?}", name))
+        .map_err(|_| anyhow::anyhow!("Invalid path: {:?}", &path))
 }
 
-pub fn path_to_validation(name: &str, index: usize) -> Result<String> {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
+pub fn validation_path(name: &str, index: usize) -> Result<String> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join(GLTF_VALIDATION_DIR)
         .join(name)
-        .join(format!("{name}_{index:02}.gltf"))
-        .canonicalize()
+        .join(format!("{name}_{index:02}.gltf"));
+
+    path.canonicalize()
         .map(|p| p.to_string_lossy().into_owned())
-        .map_err(|_| anyhow::anyhow!("Invalid path: {:?}", name))
+        .map_err(|_| anyhow::anyhow!("Invalid path: {:?}", &path))
 }
 
 fn update(input: Res<InputState>, mut scene: ResMut<Scene>, state: &mut State) {
@@ -80,21 +99,27 @@ fn update(input: Res<InputState>, mut scene: ResMut<Scene>, state: &mut State) {
         scene.camera.zoom(delta * 0.1);
     }
 
-    // if state.auto_rotate {
-    scene.nodes_mut().for_each(|node| {
-        if let NodeData::Mesh(_) = node.data {
-            node.rotate(AUTOROTATE_DELTA);
-        }
-    });
-    // }
+    if state.auto_rotate {
+        scene.nodes_mut().for_each(|node| {
+            if let NodeData::Mesh(_) = node.data {
+                node.rotate(AUTOROTATE_DELTA);
+            }
+        });
+    }
 }
 
 fn main() {
     let config = AppConfig::default().name("Demo");
-    let mut state = State { auto_rotate: false };
+    let mut state = State::default();
+    let path = state.scenes[SCENE_NUMBER].clone();
 
     App::new(config)
-        // .with_system(Schedule::Startup, init)
+        .with_system(
+            Schedule::Startup,
+            move |scene: ResMut<Scene>, assets: ResMut<Assets>| {
+                init(scene, assets, &path);
+            },
+        )
         .with_system(
             Schedule::Default,
             move |input: Res<InputState>, scene: ResMut<Scene>| {

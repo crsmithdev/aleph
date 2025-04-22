@@ -2094,7 +2094,7 @@ mod test {
             mesh: make_cube(),
             results: Vec::new(),
         };
-        let ret = generate_tangents(&mut context);
+        let ret = super::generate_tangents(&mut context);
         assert_eq!(true, ret);
 
         let expected_results: Vec<Result> = vec![

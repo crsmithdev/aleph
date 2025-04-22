@@ -5,8 +5,8 @@ use {
     },
     aleph_scene::{graph::NodeHandle, model::Primitive, util, Material, Mesh, NodeData, Vertex},
     aleph_vk::{
-        AllocatedTexture, AttachmentLoadOp, AttachmentStoreOp, Buffer, BufferUsageFlags,
-        ColorComponentFlags, CompareOp, CullModeFlags, Format, FrontFace, Gpu, PipelineBindPoint,
+        AttachmentLoadOp, AttachmentStoreOp, Buffer, BufferUsageFlags,
+        ColorComponentFlags, CompareOp, CullModeFlags, FrontFace, Gpu, PipelineBindPoint,
         PipelineColorBlendAttachmentState, PipelineLayout, PolygonMode, PrimitiveTopology, Rect2D,
         ShaderStageFlags, Texture, VkPipeline,
     },
