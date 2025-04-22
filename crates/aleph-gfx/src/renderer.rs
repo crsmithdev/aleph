@@ -67,22 +67,22 @@ pub(crate) const FORMAT_DEPTH_IMAGE: Format = Format::D32_SFLOAT;
 const LIGHTS: [Light; 4] = [
     Light {
         position: vec3(2., 2., 2.),
-        color: vec4(5., 5., 5., 5.),
+        color: vec4(3., 3., 3., 3.),
         radius: 10.,
     },
     Light {
         position: vec3(-2., -2., -2.),
-        color: vec4(5., 5., 5., 5.),
+        color: vec4(3., 3., 3., 3.),
         radius: 10.,
     },
     Light {
         position: vec3(-2., 2., 2.),
-        color: vec4(5., 5., 5., 5.),
+        color: vec4(3., 3., 3., 3.),
         radius: 10.,
     },
     Light {
         position: vec3(2., -2., -2.),
-        color: vec4(5., 5., 5., 5.),
+        color: vec4(3., 3., 3., 3.),
         radius: 10.,
     },
 ];
@@ -145,7 +145,7 @@ impl Renderer {
         // let debug_pipeline = DebugPipeline::new(&gpu)?;
         let scene_data = GpuSceneData {
             lights: LIGHTS,
-            n_lights: 2,
+            n_lights: 3,
             ..Default::default()
         };
 

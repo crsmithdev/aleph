@@ -81,11 +81,11 @@ fn update(input: Res<InputState>, mut scene: ResMut<Scene>, state: &mut State) {
     }
 
     // if state.auto_rotate {
-    //     scene.nodes_mut().for_each(|node| {
-    //         if let NodeData::Mesh(_) = node.data {
-    //             node.rotate(AUTOROTATE_DELTA);
-    //         }
-    //     });
+    scene.nodes_mut().for_each(|node| {
+        if let NodeData::Mesh(_) = node.data {
+            node.rotate(AUTOROTATE_DELTA);
+        }
+    });
     // }
 }
 
