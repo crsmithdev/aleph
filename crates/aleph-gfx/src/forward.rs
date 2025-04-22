@@ -3,26 +3,18 @@ use {
         pipeline::{Pipeline, PipelineBuilder, ResourceBinder, ResourceLayout},
         renderer::{GpuDrawData, GpuMaterialData, RenderContext},
     },
-    aleph_scene::{
-        graph::NodeHandle, model::Primitive, util, Material, Mesh, NodeData, Vertex,
-    },
+    aleph_scene::{graph::NodeHandle, model::Primitive, util, Material, Mesh, NodeData, Vertex},
     aleph_vk::{
-        AllocatedTexture, AttachmentLoadOp, AttachmentStoreOp, Buffer,
-        BufferUsageFlags, ColorComponentFlags, CompareOp, CullModeFlags, Format, FrontFace, Gpu,
-        PipelineBindPoint, PipelineColorBlendAttachmentState, PipelineLayout, PolygonMode,
-        PrimitiveTopology, Rect2D, ShaderStageFlags, Texture, VkPipeline,
+        AllocatedTexture, AttachmentLoadOp, AttachmentStoreOp, Buffer, BufferUsageFlags,
+        ColorComponentFlags, CompareOp, CullModeFlags, Format, FrontFace, Gpu, PipelineBindPoint,
+        PipelineColorBlendAttachmentState, PipelineLayout, PolygonMode, PrimitiveTopology, Rect2D,
+        ShaderStageFlags, Texture, VkPipeline,
     },
     anyhow::Result,
     glam::Mat4,
     std::mem,
     tracing::{instrument, warn},
 };
-
-struct TextureDefaults {
-    white_srgb: AllocatedTexture,
-    white_linear: AllocatedTexture,
-    normal: AllocatedTexture,
-}
 
 const BIND_IDX_SCENE: u32 = 0;
 const BIND_IDX_DRAW: u32 = 1;
@@ -41,7 +33,6 @@ pub struct ForwardPipeline {
     layout: PipelineLayout,
     material_buffer: Buffer<GpuMaterialData>,
     draw_buffer: Buffer<GpuDrawData>,
-    texture_defaults: TextureDefaults,
 }
 
 impl Pipeline for ForwardPipeline {
@@ -88,7 +79,6 @@ impl ForwardPipeline {
 
         let layout = gpu.create_pipeline_layout(&[descriptor_layout], &[])?;
         let handle = Self::create_pipeline(gpu, layout)?;
-        let texture_defaults = Self::create_default_textures(gpu)?;
 
         let material_buffer = gpu.create_shared_buffer::<GpuMaterialData>(
             mem::size_of::<GpuMaterialData>() as u64,
@@ -106,7 +96,6 @@ impl ForwardPipeline {
             layout,
             material_buffer,
             draw_buffer,
-            texture_defaults,
         })
     }
 
@@ -186,27 +175,6 @@ impl ForwardPipeline {
             .dynamic_scissor()
             .dynamic_viewport()
             .build(gpu, layout)
-    }
-
-    fn create_default_textures(gpu: &Gpu) -> Result<TextureDefaults> {
-        let linear = Format::R8G8B8A8_UNORM;
-        let srgb = Format::R8G8B8A8_SRGB;
-        let white_srgb =
-            AllocatedTexture::monochrome(gpu, [1.0, 1.0, 1.0, 1.0], srgb, "default-white-srgb")?;
-        let white_linear = AllocatedTexture::monochrome(
-            gpu,
-            [1.0, 1.0, 1.0, 1.0],
-            linear,
-            "default-white-linear",
-        )?;
-        let normal =
-            AllocatedTexture::monochrome(gpu, [0.5, 0.5, 1.0, 1.0], linear, "default-normal")?;
-
-        Ok(TextureDefaults {
-            white_srgb,
-            white_linear,
-            normal,
-        })
     }
 
     fn update_draw_buffer(&self, context: &RenderContext, transform: Mat4) {
