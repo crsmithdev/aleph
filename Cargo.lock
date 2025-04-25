@@ -90,7 +90,6 @@ dependencies = [
  "tracing-log",
  "tracing-subscriber",
  "winit 0.30.9",
- "winit_input_helper",
 ]
 
 [[package]]

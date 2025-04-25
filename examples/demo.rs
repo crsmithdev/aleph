@@ -1,5 +1,3 @@
-#![feature(concat_idents)]
-
 use {
     aleph::prelude::*,
     aleph_core::{
@@ -9,10 +7,9 @@ use {
     },
     aleph_gfx::renderer::RendererConfig,
     aleph_scene::{assets::Assets, gltf, NodeData, Scene},
-    aleph_vk::Gpu,
     anyhow::Result,
     smol_str::SmolStr,
-    std::{path::Path, sync::Arc},
+    std::path::Path,
 };
 
 const AUTOROTATE_DELTA: f32 = 0.01;
@@ -32,7 +29,6 @@ impl Default for State {
         let mut scenes = Vec::new();
         for (name, start, end) in VALIDATION_SCENES {
             for i in *start..=*end {
-                println!("{} {} {}", name, start, end);
                 scenes.push(validation_path(name, i).unwrap_or_else(|err| {
                     println!("Error loading scene {:?}: {}", name, err);
                     panic!()

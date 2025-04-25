@@ -107,7 +107,6 @@ pub struct Renderer {
     config: RendererConfig,
     scene_buffer: Buffer<GpuSceneData>,
     scene_buffer_data: GpuSceneData,
-    pub gui: Gui,
     pub gpu: Arc<Gpu>,
 }
 
@@ -149,11 +148,8 @@ impl Renderer {
             ..Default::default()
         };
 
-        let gui = Gui::new(&gpu, gpu.window())?;
-
         Ok(Self {
             gpu,
-            gui,
             frames,
             foreward_pipeline,
             draw_image,
@@ -180,7 +176,7 @@ impl Renderer {
     }
 
     #[instrument(skip_all)]
-    pub fn execute(&mut self, scene: &Scene, assets: &mut Assets) -> Result<()> {
+    pub fn execute(&mut self, scene: &Scene, assets: &mut Assets, gui: &mut Gui) -> Result<()> {
         self.update_scene_buffer(scene);
 
         if self.rebuild_swapchain {
@@ -249,9 +245,7 @@ impl Renderer {
         //     self.debug_pipeline.execute(&context)?;
         // }
 
-        // self.gui.draw(&context, |ctx| {
-        // build_ui(ctx, &mut self.config, &mut self.scene_buffer_data)
-        // })?;
+        gui.draw(&context, &mut self.config, &mut self.scene_buffer_data)?;
 
         cmd_buffer.transition_image(
             &self.draw_image,

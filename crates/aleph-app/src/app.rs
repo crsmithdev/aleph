@@ -1,9 +1,8 @@
 use {
     crate::{DEFAULT_APP_NAME, DEFAULT_WINDOW_SIZE},
     aleph_core::{
-        events::{Event, EventRegistry, GuiEvent},
+        events::{Event, EventRegistry, Events, GuiEvent},
         input::{Input, InputState},
-        layer::LayerDyn,
         log,
         system::{IntoSystem, Resources, Schedule, Scheduler, System},
         Layer,
@@ -48,7 +47,7 @@ pub struct App {
     event_registry: EventRegistry,
     scheduler: Scheduler,
     resources: Resources,
-    pub(crate) layers: Vec<Box<dyn LayerDyn>>,
+    pub(crate) layers: Vec<Box<dyn Layer + 'static>>,
     last_update: Instant,
     total_steps: u64,
     step_accumulator: i64,
@@ -74,8 +73,8 @@ impl App {
         }
     }
 
-    pub fn with_layer<T: Layer>(mut self, layer: T) -> Self {
-        self.layers.push(Box::new(layer));
+    pub fn with_layer<T: Layer + 'static>(mut self, layer: T) -> Self {
+        self.layers.push(Box::new(layer) as Box<dyn Layer>);
         self
     }
 
@@ -88,6 +87,10 @@ impl App {
         self
     }
 
+    pub fn with_event<T: Event + 'static>(mut self) {
+        self.event_registry.register::<T>(&mut self.resources);
+    }
+
     pub fn run(&mut self) -> Result<()> {
         let event_loop = EventLoop::new().expect("Failed to create event loop");
         event_loop
@@ -98,22 +101,18 @@ impl App {
     fn init(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
         log::info!("Initializing app...");
 
-        let window_attributes = Window::default_attributes()
+        let attributes = Window::default_attributes()
             .with_inner_size(DEFAULT_WINDOW_SIZE)
             .with_title(self.config.name.clone());
-        let window = Arc::new(event_loop.create_window(window_attributes)?);
+        let window = Arc::new(event_loop.create_window(attributes)?);
         self.resources.add(window);
 
         self.resources.add(Input::default());
-        // self.resources.add(Scene::default());
+        self.event_registry
+            .register::<GuiEvent>(&mut self.resources);
 
         for layer in self.layers.iter_mut() {
-            layer.register(
-                &mut self.scheduler,
-                &mut self.resources,
-                &mut self.event_registry,
-                0,
-            );
+            layer.register(&mut self.scheduler, &mut self.resources);
         }
 
         self.scheduler.run(Schedule::Startup, &mut self.resources);
@@ -122,17 +121,18 @@ impl App {
     }
 
     fn run_frame(&mut self, input: InputState) -> Result<()> {
+        self.event_registry.update(&self.resources);
         self.resources.add(input);
         self.scheduler.run(Schedule::Default, &mut self.resources);
 
         Ok(())
     }
 
-    pub fn emit<T: Event>(&mut self, event: &T) {
-        self.event_registry
-            .emit(&mut self.layers, event)
-            .expect("Error emitting event");
-    }
+    // pub fn emit<T: Event>(&mut self, event: &T) {
+    //     self.event_registry
+    //         .emit(&mut self.layers, event)
+    //         .expect("Error emitting event");
+    // }
 
     fn exit(&mut self, event_loop: &ActiveEventLoop) {
         if !self.closing {
@@ -215,9 +215,15 @@ impl ApplicationHandler for AppHandler<'_> {
         event: WindowEvent,
     ) {
         self.input.handle_window_event(&event);
-        self.app.emit(&GuiEvent {
+
+        let mut events = self.app.resources.get_mut::<Events<GuiEvent>>();
+        events.write(GuiEvent {
             event: event.clone(),
         });
+
+        // self.app.emit(&GuiEvent {
+        //     event: event.clone(),
+        // });
 
         #[allow(clippy::single_match)]
         match event {

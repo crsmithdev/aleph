@@ -8,29 +8,33 @@ use {
     ash::vk::{self, ClearColorValue, Extent2D},
     bytemuck::Pod,
     image::EncodableLayout,
+    std::path::Path,
 };
+const GLTF_SAMPLE_DIR: &str = "submodules/glTF-Sample-Assets/Models";
+const GLTF_VALIDATION_DIR: &str = "submodules/glTF-Asset-Generator/Output/Positive";
 
-// pub fn index_buffer(gpu: &Gpu, size: u64, label: impl Into<String>) -> Result<Buffer<u32>> {
-//     Buffer::new(
-//         gpu.device(),
-//         gpu.allocator(),
-//         size,
-//         BufferUsageFlags::INDEX_BUFFER | BufferUsageFlags::TRANSFER_DST,
-//         MemoryLocation::GpuOnly,
-//         label,
-//     )
-// }
+pub fn sample_path(name: &str) -> Result<String> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join(GLTF_SAMPLE_DIR)
+        .join(name)
+        .join("glTF")
+        .join(format!("{name}.gltf"));
 
-// pub fn vertex_buffer(gpu: &Gpu, size: u64, label: impl Into<String>) -> Result<Buffer<Vertex>> {
-//     Buffer::new(
-//         gpu.device(),
-//         gpu.allocator(),
-//         size,
-//         BufferUsageFlags::VERTEX_BUFFER | BufferUsageFlags::TRANSFER_DST,
-//         MemoryLocation::GpuOnly,
-//         label,
-//     )
-// }
+    path.canonicalize()
+        .map(|p| p.to_string_lossy().into_owned())
+        .map_err(|_| anyhow::anyhow!("Invalid path: {:?}", &path))
+}
+
+pub fn validation_path(name: &str, index: usize) -> Result<String> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join(GLTF_VALIDATION_DIR)
+        .join(name)
+        .join(format!("{name}_{index:02}.gltf"));
+
+    path.canonicalize()
+        .map(|p| p.to_string_lossy().into_owned())
+        .map_err(|_| anyhow::anyhow!("Invalid path: {:?}", &path))
+}
 
 pub fn staging_buffer<T: Pod>(
     gpu: &Gpu,

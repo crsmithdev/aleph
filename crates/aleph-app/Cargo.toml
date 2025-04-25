@@ -20,4 +20,5 @@ tracing-log.workspace = true
 chrono.workspace = true
 glam.workspace = true
 
-winit_input_helper = "0.16.0"
+[lib]
+doctest = false

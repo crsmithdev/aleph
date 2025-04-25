@@ -3,9 +3,7 @@ use {
         assets::MaterialHandle,
         mikktspace::{self, MikktGeometry},
     },
-    aleph_vk::{
-        Buffer, Format, PrimitiveTopology,
-    },
+    aleph_vk::{Buffer, Format, PrimitiveTopology},
     anyhow::Result,
     bytemuck::{Pod, Zeroable},
     derive_more::Debug,
@@ -78,8 +76,8 @@ impl PrimitiveDesc {
         indices: Vec<u32>,
         material: Option<MaterialHandle>,
         topology: PrimitiveTopology,
-        has_vertex_normals: bool,
-        has_tangents: bool,
+        _has_vertex_normals: bool,
+        _has_tangents: bool,
     ) -> Self {
         // let faces = indices
         // .chunks_exact(3)
@@ -141,7 +139,7 @@ impl PrimitiveDesc {
         vertex_normals
     }
 
-    fn calculate_tangents(&mut self) -> Result<()> {
+    pub fn calculate_tangents(&mut self) -> Result<()> {
         match mikktspace::generate_tangents(self) {
             true => Ok(()),
             false => Err(anyhow::anyhow!(

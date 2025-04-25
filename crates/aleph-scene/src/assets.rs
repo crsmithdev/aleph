@@ -2,8 +2,8 @@ use {
     crate::{model::MeshDesc, util, Material, Mesh, Primitive, Vertex},
     aleph_vk::{
         texture::{SamplerDesc, TextureDesc},
-        AllocatedTexture, Extent2D, Format, Gpu, ImageAspectFlags, ImageUsageFlags,
-        MemoryLocation, PrimitiveTopology, Sampler,
+        AllocatedTexture, Extent2D, Format, Gpu, ImageAspectFlags, ImageUsageFlags, MemoryLocation,
+        PrimitiveTopology, Sampler,
     },
     anyhow::Result,
     image::{ImageBuffer, Rgba},
@@ -115,7 +115,6 @@ impl Assets {
         gpu: &Gpu,
         color: &[u8; 4],
         format: Format,
-        sampler: Sampler,
         name: impl Into<String>,
     ) -> Result<AllocatedTexture> {
         let pixel = Rgba::<u8>(*color);
@@ -141,12 +140,10 @@ impl Assets {
         let srgb = Format::R8G8B8A8_SRGB;
         let linear = Format::R8G8B8A8_UNORM;
 
+        let white_srgb = Self::create_default(gpu, &WHITE, srgb, "white-srgb")?;
+        let white_linear = Self::create_default(gpu, &WHITE, linear, "white-linear")?;
+        let normal = Self::create_default(gpu, &NORMAL, linear, "normal")?;
         let sampler = gpu.create_sampler(&SamplerDesc::default())?;
-        let white_srgb = Self::create_default(gpu, &WHITE, srgb, sampler, "white-srgb")?;
-        let sampler = gpu.create_sampler(&SamplerDesc::default())?;
-        let white_linear = Self::create_default(gpu, &WHITE, linear, sampler, "white-linear")?;
-        let sampler = gpu.create_sampler(&SamplerDesc::default())?;
-        let normal = Self::create_default(gpu, &NORMAL, linear, sampler, "normal")?;
 
         Ok(Defaults {
             white_srgb: Rc::new(white_srgb),
@@ -187,18 +184,6 @@ impl Assets {
         }
 
         unreachable!()
-    }
-
-    fn get_loaded_texture(
-        &self,
-        handle: AssetHandle<AllocatedTexture>,
-    ) -> Option<Rc<AllocatedTexture>> {
-        if let Some(asset) = self.textures.borrow().get(&handle) {
-            if let TextureAsset::Loaded(te) = asset {
-                return Some(te.clone());
-            }
-        }
-        None
     }
 
     fn load_texture(gpu: &Gpu, desc: &TextureDesc) -> Result<AllocatedTexture> {

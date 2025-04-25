@@ -1,11 +1,22 @@
 use {
-    crate::RenderContext,
+    crate::{
+        renderer::{GpuSceneData, RendererConfig},
+        RenderContext,
+    },
+    aleph_core::{
+        system::{Resources, Scheduler},
+        Layer, Window,
+    },
     aleph_scene::util,
     aleph_vk::{AttachmentLoadOp, AttachmentStoreOp, CommandPool, Extent2D, Format, Gpu},
     anyhow::Result,
-    egui, egui_ash_renderer as egui_renderer, egui_extras, egui_winit, gpu_allocator as ga,
+    egui, egui_ash_renderer as egui_renderer, egui_extras, egui_winit,
+    glam::{Vec2, Vec4},
+    gpu_allocator as ga,
     std::sync::{Arc, Mutex},
 };
+
+const CLEAR_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
 
 pub struct Gui {
     pub egui_ctx: egui::Context,
@@ -15,7 +26,16 @@ pub struct Gui {
     window: Arc<winit::window::Window>,
     textures_to_free: Option<Vec<egui::TextureId>>,
 }
-const CLEAR_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
+
+impl Layer for Gui {
+    fn register(&mut self, _scheduler: &mut Scheduler, resources: &mut Resources) {
+        let gpu = resources.get::<Arc<Gpu>>().clone();
+        let window = resources.get::<Arc<Window>>().clone();
+        let gui = Gui::new(&gpu, window).expect("Failed to create GUI");
+        resources.add(gui);
+    }
+}
+
 impl Gui {
     pub fn new(gpu: &Gpu, window: Arc<winit::window::Window>) -> Result<Self> {
         let egui_ctx = egui::Context::default();
@@ -59,20 +79,25 @@ impl Gui {
             )
         }?;
 
-        Ok(Self {
+        let gui = Self {
             egui_ctx,
             egui_winit,
             egui_renderer: renderer,
             window: window.clone(),
             textures_to_free: None,
             pool,
-        })
+        };
+        Ok(gui)
+        // gui.on_window_event(&event.event);
+        // Ok(())
+        // });
     }
 
-    pub fn draw<F: FnMut(&egui::Context) -> ()>(
+    pub fn draw(
         &mut self,
         ctx: &RenderContext,
-        mut build_ui: F,
+        config: &mut RendererConfig,
+        data: &mut GpuSceneData,
     ) -> Result<()> {
         let color_attachments = &[util::color_attachment(
             ctx.draw_image,
@@ -99,7 +124,9 @@ impl Gui {
             shapes,
             pixels_per_point,
             ..
-        } = self.egui_ctx.run(raw_input, |ctx| build_ui(ctx));
+        } = self
+            .egui_ctx
+            .run(raw_input, |ctx| build_ui(ctx, config, data));
 
         self.egui_winit
             .handle_platform_output(&self.window, platform_output);
@@ -135,4 +162,84 @@ impl Gui {
     pub fn on_window_event(&mut self, event: &winit::event::WindowEvent) {
         let _ = self.egui_winit.on_window_event(&self.window, event);
     }
+}
+
+fn build_ui(ctx: &egui::Context, config: &mut RendererConfig, data: &mut GpuSceneData) {
+    egui::Window::new("Config").show(ctx, |ui| {
+        ui.heading("Debug");
+        ui.add(egui::Checkbox::new(
+            &mut config.debug_normals,
+            "Show normals",
+        ));
+
+        ui.separator();
+
+        ui.heading("Lights");
+        ui.add(
+            egui::Slider::new(&mut data.n_lights, 0..=4)
+                .step_by(1.0)
+                .text("# Lights"),
+        );
+        rgba_picker(ui, &mut data.lights[0].color, "#0");
+        rgba_picker(ui, &mut data.lights[1].color, "#1");
+        rgba_picker(ui, &mut data.lights[2].color, "#2");
+        rgba_picker(ui, &mut data.lights[3].color, "#3");
+
+        ui.separator();
+
+        ui.label("Material");
+        vec4_override(ui, &mut data.config.force_color, "Color");
+        vec2_override(ui, &mut data.config.force_metallic, "Metallic");
+        vec2_override(ui, &mut data.config.force_roughness, "Roughness");
+        vec2_override(ui, &mut data.config.force_ao, "Occlusion");
+    });
+}
+
+fn rgba_picker(ui: &mut egui::Ui, data: &mut Vec4, label: impl Into<String>) -> egui::Response {
+    ui.horizontal(|ui| {
+        ui.label(label.into());
+        ui.label("R");
+        ui.add(egui::DragValue::new(&mut data.x).speed(0.1));
+        ui.label("G");
+        ui.add(egui::DragValue::new(&mut data.y).speed(0.1));
+        ui.label("B");
+        ui.add(egui::DragValue::new(&mut data.z).speed(0.1));
+        ui.label("A");
+        ui.add(egui::DragValue::new(&mut data.w).speed(0.1));
+    })
+    .response
+}
+
+fn vec2_override(ui: &mut egui::Ui, data: &mut Vec2, label: impl Into<String>) -> egui::Response {
+    let mut flag = data[0] > 0.01;
+    let mut value = data[1];
+
+    ui.horizontal(|ui| {
+        ui.label(label.into());
+        ui.spacing();
+        ui.checkbox(&mut flag, "Override?");
+        ui.add(egui::DragValue::new(&mut value).speed(0.1).range(0.0..=1.0));
+
+        *data = Vec2::new(if flag { 1.0 } else { 0.0 }, value);
+    })
+    .response
+}
+
+fn vec4_override(ui: &mut egui::Ui, data: &mut Vec4, label: impl Into<String>) -> egui::Response {
+    let mut flag = data[0] > 0.01;
+    let mut x = data[1];
+    let mut y = data[2];
+    let mut z = data[3];
+
+    ui.horizontal(|ui| {
+        ui.label(label.into());
+        ui.spacing();
+        ui.checkbox(&mut flag, "Override?");
+        ui.add(egui::DragValue::new(&mut x).speed(0.1).range(0.0..=1.0));
+        ui.add(egui::DragValue::new(&mut y).speed(0.1).range(0.0..=1.0));
+        ui.add(egui::DragValue::new(&mut z).speed(0.1).range(0.0..=1.0));
+
+        *data = Vec4::new(if flag { 1.0 } else { 0.0 }, x, y, z);
+    })
+    .response
 }

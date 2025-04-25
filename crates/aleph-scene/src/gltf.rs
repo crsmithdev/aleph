@@ -248,7 +248,6 @@ fn load_mesh(
     let mut primitives = vec![];
     for (i, primitive) in source.primitives().enumerate() {
         let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
-        let index = primitive.index();
 
         let positions = reader
             .read_positions()

@@ -1,12 +1,15 @@
 use {
-    crate::renderer::{Renderer, RendererConfig},
+    crate::{
+        gui::Gui,
+        renderer::{Renderer, RendererConfig},
+    },
     aleph_core::{
-        events::EventSubscriber,
+        events::{EventReader, GuiEvent},
         layer::Layer,
         system::{Res, ResMut, Resources, Schedule, Scheduler},
         Window,
     },
-    aleph_scene::{assets::Assets, gltf, Scene},
+    aleph_scene::{assets::Assets, Scene},
     aleph_vk::Gpu,
     anyhow::Result,
     std::{path::Path, sync::Arc},
@@ -19,10 +22,8 @@ pub fn path_to_scene(name: &str) -> Result<String> {
         .join(name)
         .join("glTF")
         .join(format!("{name}.gltf"));
-    println!("{:?}", path);
 
     let path = path.canonicalize();
-    println!("path: {:?}", path);
     path.as_ref()
         .clone()
         .map(|p| p.to_string_lossy().into_owned())
@@ -40,14 +41,8 @@ impl RenderLayer {
 }
 
 impl Layer for RenderLayer {
-    fn register(
-        &mut self,
-        scheduler: &mut Scheduler,
-        resources: &mut Resources,
-        _events: &mut EventSubscriber<Self>,
-    ) {
-        let window = Arc::clone(&resources.get::<Arc<Window>>());
-        let gpu = match Gpu::new(window) {
+    fn register(&mut self, scheduler: &mut Scheduler, resources: &mut Resources) {
+        let gpu = match Gpu::new(Arc::clone(&resources.get::<Arc<Window>>())) {
             Ok(gpu) => Arc::new(gpu),
             Err(err) => panic!("Fatal error creating gpu: {err:?}"),
         };
@@ -57,26 +52,33 @@ impl Layer for RenderLayer {
             Err(err) => panic!("Fatal error creating renderer: {err:?}"),
         };
 
-        let mut assets = Assets::new(Arc::clone(&gpu)).expect("assets");
+        let assets = Assets::new(Arc::clone(&gpu)).expect("assets");
         resources.add(assets);
 
         let scene = Scene::default();
         resources.add(scene);
 
+        let gui = Gui::new(&gpu, Arc::clone(&resources.get::<Arc<Window>>()))
+            .expect("Failed to create GUI");
+        resources.add(gui);
+
         resources.add(renderer);
         resources.add(Arc::clone(&gpu));
+
         scheduler.add_system(
             Schedule::Default,
-            move |mut renderer: ResMut<Renderer>, scene: Res<Scene>, mut assets: ResMut<Assets>| {
+            move |mut renderer: ResMut<Renderer>,
+                  scene: Res<Scene>,
+                  events: EventReader<GuiEvent>,
+                  mut assets: ResMut<Assets>,
+                  mut gui: ResMut<Gui>| {
+                for event in events.read() {
+                    gui.on_window_event(&event.event);
+                }
                 renderer
-                    .execute(&scene, &mut assets)
+                    .execute(&scene, &mut assets, &mut gui)
                     .expect("execute renderer");
             },
         );
-
-        // events.subscribe::<GuiEvent>(move |layer, event| {
-        // renderer.gui.on_window_event(&event.event);
-        // Ok(())
-        // });
     }
 }

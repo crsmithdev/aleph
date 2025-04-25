@@ -1,89 +1,166 @@
 use {
-    crate::{input::InputState, layer::LayerDyn, Layer},
+    crate::system::{Ptr, Res, ResMut, Resources, SystemParam},
     downcast_rs::{impl_downcast, Downcast},
-    std::{any::TypeId, collections::HashMap},
+    std::any::TypeId,
 };
 
-pub trait Event: 'static + Downcast + std::fmt::Debug {}
-impl_downcast!(Event);
+pub trait Event: 'static {}
 
-type BoxedEventCallback = Box<dyn FnMut(&mut dyn LayerDyn, &dyn Event) -> anyhow::Result<()>>;
-
-pub struct EventContext {}
-
-pub struct EventSubscriber<'a, L> {
-    index: usize,
-    registry: &'a mut EventRegistry,
-    _marker: std::marker::PhantomData<L>,
+#[derive(Default)]
+pub struct Events<T>
+where
+    T: 'static,
+{
+    last_frame: Vec<T>,
+    current_frame: Vec<T>,
 }
 
-impl<'a, L: Layer> EventSubscriber<'a, L> {
-    pub(crate) fn new(registry: &'a mut EventRegistry, index: usize) -> Self {
+impl<T> Events<T>
+where
+    T: 'static,
+{
+    pub fn new() -> Self {
         Self {
-            index,
-            registry,
-            _marker: std::marker::PhantomData,
+            last_frame: Vec::new(),
+            current_frame: Vec::new(),
         }
     }
 
-    pub fn subscribe<T: Event>(
-        &mut self,
-        callback: impl 'static + Fn(&mut L, &T) -> anyhow::Result<()>,
-    ) {
-        self.registry.register::<T>(
-            self.index,
-            Box::new(move |layer: &mut dyn LayerDyn, event: &dyn Event| {
-                let layer = layer
-                    .downcast_mut::<L>()
-                    .expect("Error downcasting receiving layer");
-                let event = event.downcast_ref::<T>().expect("Error downcasting event");
+    pub fn read(&self) -> impl Iterator<Item = &T> { self.last_frame.iter() }
 
-                callback(layer, event)
-            }),
-        );
+    pub fn write(&mut self, event: T) { self.current_frame.push(event); }
+
+    fn swap_buffers(&mut self) {
+        std::mem::swap(&mut self.last_frame, &mut self.current_frame);
+        self.current_frame.clear();
     }
+}
+
+pub trait EventsDyn: Downcast + 'static {
+    fn update(&mut self);
+}
+
+impl<T> EventsDyn for Events<T>
+where
+    T: 'static,
+{
+    fn update(&mut self) { self.swap_buffers(); }
+}
+
+impl_downcast!(EventsDyn);
+
+pub struct EventReader<'a, T: 'static> {
+    pub events: Res<'a, Events<T>>,
+}
+
+impl<'a, T> EventReader<'a, T> {
+    pub fn read(&self) -> impl Iterator<Item = &T> { self.events.read() }
+}
+
+impl<'a, T> SystemParam for EventReader<'a, T> {
+    type Item<'new> = EventReader<'new, T>;
+
+    fn retrieve<'r>(resources: &'r Resources) -> Self::Item<'r> {
+        let param = <Res<'r, Events<T>> as SystemParam>::retrieve(resources);
+        EventReader { events: param }
+    }
+}
+
+pub struct EventWriter<'a, T: 'static> {
+    events: ResMut<'a, Events<T>>,
+}
+
+impl<'a, T> EventWriter<'a, T> {
+    pub fn write(&mut self, event: T) { self.events.current_frame.push(event); }
+}
+
+struct EventRegistration {
+    type_id: TypeId,
+    update: fn(Ptr),
 }
 
 #[derive(Default)]
 pub struct EventRegistry {
-    callbacks: Vec<BoxedEventCallback>,
-    listeners: HashMap<TypeId, Vec<(usize, usize)>>,
+    registered_events: Vec<EventRegistration>,
 }
 
 impl EventRegistry {
-    pub fn register<T: Event>(&mut self, index: usize, callback: BoxedEventCallback) {
-        let type_id = TypeId::of::<T>();
-        let listeners = self.listeners.entry(type_id).or_default();
-        self.callbacks.push(callback);
-        listeners.push((index, self.callbacks.len() - 1));
+    pub fn register<'a, T: Event>(&mut self, resources: &mut Resources) {
+        let events = Events::<T>::new();
+        resources.add(events);
+
+        self.registered_events.push(EventRegistration {
+            type_id: TypeId::of::<Events<T>>(),
+            update: |ptr| {
+                let events = ptr.as_mut::<Events<T>>();
+                events.swap_buffers();
+            },
+        });
     }
-    pub fn emit<T: Event>(
-        &mut self,
-        layers: &mut [Box<dyn LayerDyn>],
-        event: &T,
-    ) -> anyhow::Result<()> {
-        let type_id = TypeId::of::<T>();
-        if let Some(callbacks) = self.listeners.get(&type_id) {
-            for (layer_index, callback_index) in callbacks {
-                let layer = layers[*layer_index].as_mut();
-                let callback = self.callbacks[*callback_index].as_mut();
-                callback(layer, event)?;
-            }
+
+    pub fn update(&mut self, resources: &Resources) {
+        for reg in self.registered_events.iter_mut() {
+            let ptr = resources.get_ptr(reg.type_id);
+            (reg.update)(ptr);
         }
-
-        Ok(())
     }
 }
 
-#[derive(Debug)]
-pub struct TickEvent {
-    pub input: InputState,
-}
-impl Event for TickEvent {}
-
-#[derive(Debug)]
 pub struct GuiEvent {
     pub event: winit::event::WindowEvent,
 }
-
 impl Event for GuiEvent {}
+
+#[cfg(test)]
+mod test {
+    use {
+        super::*,
+        crate::system::{Schedule, Scheduler},
+    };
+
+    #[derive(Debug, PartialEq)]
+    struct TestEvent(u32);
+    impl Event for TestEvent {}
+
+    #[test]
+    fn test_2() {
+        let mut resources = Resources::default();
+        let mut registry = EventRegistry::default();
+        registry.register::<TestEvent>(&mut resources);
+
+        let mut scheduler = Scheduler::default();
+        scheduler.add_system(Schedule::Default, |v2: EventReader<TestEvent>| {
+            let events = v2.read().collect::<Vec<_>>();
+            assert_eq!(events.len(), 1);
+            assert_eq!(events[0], &TestEvent(1));
+        });
+
+        let mut events = resources.get_mut::<Events<TestEvent>>();
+        events.write(TestEvent(1));
+        registry.update(&mut resources);
+        scheduler.run(Schedule::Default, &mut resources);
+    }
+    // #[test]
+    // fn test_write_update_read() {
+    //     let resources = &mut Resources::default();
+    //     let mut registry = EventRegistry::default();
+    //     {
+    //         registry.register::<TestEvent>(&mut resources);
+    //         let events = registry.events_mut::<TestEvent>();
+    //         events.write(TestEvent(1));
+    //         events.write(TestEvent(2));
+    //     }
+    //     {
+    //         let events = registry.events_mut::<TestEvent>();
+    //         events.update();
+    //     }
+    //     {
+    //         let events = registry.events_mut::<TestEvent>();
+    //         events.write(TestEvent(3));
+    //         let events_in = events.read().collect::<Vec<_>>();
+    //         assert_eq!(events_in.len(), 2);
+    //         assert_eq!(events_in[0], &TestEvent(1));
+    //         assert_eq!(events_in[1], &TestEvent(2));
+    //     }
+    // }
+}

@@ -1,7 +1,7 @@
 use std::{
     any::{Any, TypeId},
-    cell::{Ref, RefCell, RefMut},
     collections::HashMap,
+    fmt::Debug,
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
@@ -25,9 +25,9 @@ pub struct FunctionSystem<Input, F> {
 
 type StoredSystem = Box<dyn for<'a> System>;
 
+#[derive(Debug)]
 pub struct Res<'a, T: 'static> {
-    value: Ref<'a, Box<dyn Any>>,
-    _marker: PhantomData<&'a T>,
+    pub value: &'a T,
 }
 
 pub trait SystemParam {
@@ -45,21 +45,21 @@ impl<'res, T: 'static> SystemParam for Res<'res, T> {
 impl<T: 'static> Deref for Res<'_, T> {
     type Target = T;
 
-    fn deref(&self) -> &T { self.value.downcast_ref().unwrap() }
+    fn deref(&self) -> &T { self.value }
 }
+
 pub struct ResMut<'a, T: 'static> {
-    value: RefMut<'a, Box<dyn Any>>,
-    _marker: PhantomData<&'a mut T>,
+    pub value: &'a mut T,
 }
 
 impl<T: 'static> Deref for ResMut<'_, T> {
     type Target = T;
 
-    fn deref(&self) -> &T { self.value.downcast_ref().unwrap() }
+    fn deref(&self) -> &T { self.value }
 }
 
 impl<T: 'static> DerefMut for ResMut<'_, T> {
-    fn deref_mut(&mut self) -> &mut T { self.value.downcast_mut().unwrap() }
+    fn deref_mut(&mut self) -> &mut T { self.value }
 }
 
 impl<'res, T: 'static> SystemParam for ResMut<'res, T> {
@@ -68,38 +68,84 @@ impl<'res, T: 'static> SystemParam for ResMut<'res, T> {
     fn retrieve<'r>(resources: &'r Resources) -> Self::Item<'r> { resources.get_mut::<T>() }
 }
 
+// pub struct ResourceHandle(u64);
+
+// impl ResourceHandle {
+//     pub fn new() -> Self {
+//         static COUNTER: AtomicU64 = AtomicU64::new(0);
+//         let id = COUNTER.fetch_add(1, Ordering::Relaxed);
+//         ResourceHandle(id)
+//     }
+// }
+
 #[derive(Default)]
 pub struct Resources {
-    resources: HashMap<TypeId, RefCell<Box<dyn Any>>>,
+    resources: HashMap<TypeId, Resource>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Ptr<'a> {
+    value: *mut u8,
+    marker: PhantomData<&'a mut u8>,
+}
+
+#[derive(Debug)]
+pub struct Resource {
+    boxed: Box<dyn Any>,
+}
+
+impl Resource {
+    pub fn new<T: 'static>(value: T) -> Self {
+        let boxed = Box::new(value) as Box<dyn Any>;
+        Resource { boxed }
+    }
+
+    fn as_ptr(&self) -> Ptr {
+        let ptr = &*self.boxed as *const dyn Any;
+        let ptr2 = ptr as *mut u8;
+        Ptr::new(ptr2)
+    }
+}
+
+impl<'a> Ptr<'a> {
+    pub fn new(value: *mut u8) -> Self {
+        Self {
+            value,
+            marker: PhantomData,
+        }
+    }
+
+    pub fn as_mut<T>(self) -> &'a mut T { unsafe { &mut *(self.value as *mut T) } }
+
+    pub fn as_ref<T>(self) -> &'a T { unsafe { &*(self.value as *const T) } }
 }
 
 impl Resources {
-    pub fn new() -> Self {
-        Self {
-            resources: HashMap::new(),
-        }
-    }
-
-    pub fn add<R: 'static>(&mut self, res: R) {
-        self.resources
-            .insert(TypeId::of::<R>(), RefCell::new(Box::new(res)));
+    pub fn add<T: 'static>(&mut self, value: T) {
+        let type_id = TypeId::of::<T>();
+        let resource = Resource::new(value);
+        log::trace!(
+            "Add resource, type: {:?} -> id: {type_id:?}",
+            std::any::type_name::<T>()
+        );
+        self.resources.insert(type_id, resource);
     }
 
     pub fn get<'a, T: 'static>(&'a self) -> Res<'a, T> {
-        let type_id = TypeId::of::<T>();
-        let resource = self.resources.get(&type_id).expect("Resource not found");
-        Res {
-            value: resource.borrow(),
-            _marker: PhantomData,
-        }
+        let value = self.get_ref(TypeId::of::<T>());
+        Res { value }
     }
 
+    pub fn get_ref<'a, T: 'static>(&self, type_id: TypeId) -> &T { self.get_ptr(type_id).as_ref() }
+
+    pub fn get_ptr<'a>(&'a self, type_id: TypeId) -> Ptr<'a> {
+        let resource = self.resources.get(&type_id).unwrap();
+        resource.as_ptr()
+    }
     pub fn get_mut<'a, T: 'static>(&'a self) -> ResMut<'a, T> {
-        let type_id = TypeId::of::<T>();
-        let resource = self.resources.get(&type_id).expect("Resource not found");
+        let ptr = self.get_ptr(TypeId::of::<T>());
         ResMut {
-            value: resource.borrow_mut(),
-            _marker: PhantomData,
+            value: ptr.as_mut(),
         }
     }
 }
@@ -136,6 +182,33 @@ impl Scheduler {
 
     // pub fn add_resource<R: 'static>(&mut self, res: R) { self.resources.add(res); }
     // pub fn get<'a, T: 'static>(&'a self) -> ResMut<'a, T> { self.resources.get_mut::<T>() }
+}
+
+impl<F> System for FunctionSystem<(), F>
+where
+    for<'a> &'a mut F: FnMut() + FnMut(),
+{
+    fn run(&mut self, _resources: &mut Resources) {
+        fn call_inner(mut f: impl FnMut()) { f() }
+        call_inner(&mut self.f);
+    }
+
+    fn name(&self) -> &str { &self.name }
+}
+
+impl<F: FnMut()> IntoSystem<()> for F
+where
+    for<'a> &'a mut F: FnMut() + FnMut(),
+{
+    type System = FunctionSystem<(), Self>;
+
+    fn into_system(self) -> Self::System {
+        FunctionSystem {
+            name: std::any::type_name_of_val(&self).to_string(),
+            f: self,
+            marker: Default::default(),
+        }
+    }
 }
 
 macro_rules! impl_system2 {
@@ -185,3 +258,54 @@ macro_rules! impl_system2 {
 impl_system2!(T1);
 impl_system2!(T1, T2);
 impl_system2!(T1, T2, T3);
+impl_system2!(T1, T2, T3, T4);
+impl_system2!(T1, T2, T3, T4, T5);
+impl_system2!(T1, T2, T3, T4, T5, T6);
+impl_system2!(T1, T2, T3, T4, T5, T6, T7);
+impl_system2!(T1, T2, T3, T4, T5, T6, T7, T8);
+impl_system2!(T1, T2, T3, T4, T5, T6, T7, T8, T9);
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_run_system() {
+        let mut resources = Resources::default();
+
+        let mut scheduler = Scheduler::default();
+        scheduler.add_system(Schedule::Default, || {
+            assert!(true);
+        });
+
+        scheduler.run(Schedule::Default, &mut resources);
+    }
+
+    #[test]
+    fn test_param() {
+        let mut resources = Resources::default();
+        resources.add(42i32);
+
+        let mut scheduler = Scheduler::default();
+        scheduler.add_system(Schedule::Default, |v: Res<i32>| {
+            assert_eq!(*v, 42);
+        });
+
+        scheduler.run(Schedule::Default, &mut resources);
+    }
+
+    #[test]
+    fn test_mut_param() {
+        let mut resources = Resources::default();
+        resources.add(42i32);
+
+        let mut scheduler = Scheduler::default();
+        scheduler.add_system(Schedule::Default, |mut v: ResMut<i32>| {
+            *v += 1;
+            assert_eq!(*v, 43);
+        });
+
+        scheduler.run(Schedule::Default, &mut resources);
+        assert_eq!(*resources.get::<i32>(), 43);
+    }
+}

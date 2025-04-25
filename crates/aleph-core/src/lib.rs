@@ -4,4 +4,4 @@ pub mod layer;
 pub mod log;
 pub mod system;
 
-pub use {events::Event, layer::Layer, log::setup, winit::window::Window};
+pub use {layer::Layer, log::setup, winit::window::Window};
