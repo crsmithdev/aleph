@@ -1,8 +1,7 @@
 use {
-    crate::{DEFAULT_APP_NAME, DEFAULT_WINDOW_SIZE},
     aleph_core::{
         events::{Event, EventRegistry, Events, GuiEvent},
-        input::{Input, InputState},
+        input::Input,
         log,
         system::{IntoSystem, Resources, Schedule, Scheduler, System},
         Layer,
@@ -16,14 +15,20 @@ use {
     },
     winit::{
         application::ApplicationHandler,
+        dpi::{PhysicalSize, Size},
         event::WindowEvent,
         event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
         window::{Window, WindowId},
     },
 };
 
-#[derive(Clone, Debug)]
+const DEFAULT_APP_NAME: &str = "Untitled (Aleph)";
+const DEFAULT_WINDOW_SIZE: Size = Size::Physical(PhysicalSize {
+    width: 1920,
+    height: 1200,
+});
 
+#[derive(Clone, Debug)]
 pub struct AppConfig {
     pub name: String,
 }
@@ -57,7 +62,7 @@ pub struct App {
 
 impl App {
     pub fn new(config: AppConfig) -> Self {
-        log::setup();
+        log::setup_logging();
         setup_panic!();
 
         App {
@@ -120,26 +125,20 @@ impl App {
         Ok(())
     }
 
-    fn run_frame(&mut self, input: InputState) -> Result<()> {
-        self.event_registry.update(&self.resources);
-        self.resources.add(input);
+    fn next_frame(&mut self) -> Result<()> {
+        let input = self.resources.get_mut::<Input>();
+        input.next_frame();
+
+        self.event_registry.next_frame(&self.resources);
         self.scheduler.run(Schedule::Default, &mut self.resources);
 
         Ok(())
     }
 
-    // pub fn emit<T: Event>(&mut self, event: &T) {
-    //     self.event_registry
-    //         .emit(&mut self.layers, event)
-    //         .expect("Error emitting event");
-    // }
-
     fn exit(&mut self, event_loop: &ActiveEventLoop) {
         if !self.closing {
             self.closing = true;
             log::info!("Exiting on user request");
-
-            // ...
 
             event_loop.exit();
         }
@@ -150,7 +149,6 @@ struct AppHandler<'a> {
     app: &'a mut App,
     wait_canceled: bool,
     close_requested: bool,
-    input: Input,
 }
 impl<'a> AppHandler<'a> {
     fn new(app: &'a mut App) -> Self {
@@ -158,7 +156,6 @@ impl<'a> AppHandler<'a> {
             app,
             wait_canceled: false,
             close_requested: false,
-            input: Input::default(),
         }
     }
 }
@@ -186,17 +183,7 @@ impl ApplicationHandler for AppHandler<'_> {
             event_loop.exit();
         }
 
-        // let context = &mut self.context;
-        // let scene = std::mem::replace(&mut self.app.scene, Box::new(Scene::default()));
-        // context.input = input;
-        // let mut context = UpdateContext { input, scene };
-        // self.app.layers.iter_mut().for_each(|layer| {
-        // layer.update(&mut context).expect("Error updating layer");
-        // });
-
-        // let _ = std::mem::replace(&mut self.app.scene, context.scene);
-        let input = self.input.next_frame();
-        if let Err(err) = self.app.run_frame(input) {
+        if let Err(err) = self.app.next_frame() {
             log::error!("Error executing systems: {:?}", err);
             self.app.exit(event_loop);
         }
@@ -214,23 +201,14 @@ impl ApplicationHandler for AppHandler<'_> {
         _window_id: WindowId,
         event: WindowEvent,
     ) {
-        self.input.handle_window_event(&event);
+        let input = self.app.resources.get_mut::<Input>();
+        input.handle_window_event(&event);
 
-        let mut events = self.app.resources.get_mut::<Events<GuiEvent>>();
-        events.write(GuiEvent {
-            event: event.clone(),
-        });
+        let events = self.app.resources.get_mut::<Events<GuiEvent>>();
+        events.write(GuiEvent(event.clone()));
 
-        // self.app.emit(&GuiEvent {
-        //     event: event.clone(),
-        // });
-
-        #[allow(clippy::single_match)]
-        match event {
-            WindowEvent::CloseRequested => {
-                self.close_requested = true;
-            }
-            _ => {}
+        if let WindowEvent::CloseRequested = event {
+            self.close_requested = true;
         }
     }
 
@@ -240,6 +218,7 @@ impl ApplicationHandler for AppHandler<'_> {
         _device_id: winit::event::DeviceId,
         event: winit::event::DeviceEvent,
     ) {
-        self.input.handle_device_event(&event);
+        let input = self.app.resources.get_mut::<Input>();
+        input.handle_device_event(&event);
     }
 }

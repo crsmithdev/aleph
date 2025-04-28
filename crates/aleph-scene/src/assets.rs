@@ -1,9 +1,8 @@
 use {
-    crate::{model::MeshDesc, util, Material, Mesh, Primitive, Vertex},
+    crate::{util, Material, Mesh, MeshDesc, Primitive, Vertex},
     aleph_vk::{
-        texture::{SamplerDesc, TextureDesc},
         AllocatedTexture, Extent2D, Format, Gpu, ImageAspectFlags, ImageUsageFlags, MemoryLocation,
-        PrimitiveTopology, Sampler,
+        PrimitiveTopology, Sampler, SamplerDesc, TextureDesc,
     },
     anyhow::Result,
     image::{ImageBuffer, Rgba},
@@ -24,7 +23,6 @@ const NORMAL: [u8; 4] = [127, 127, 255, 255];
 
 static ASSET_HANDLE_INDEX: AtomicU64 = AtomicU64::new(0);
 
-#[derive(Debug)]
 pub struct AssetHandle<T> {
     index: u64,
     marker: std::marker::PhantomData<T>,
@@ -42,7 +40,7 @@ impl<T> AssetHandle<T> {
 
 impl<T> std::fmt::Display for AssetHandle<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.index)
+        write!(f, "MeshHandle({})", self.index)
     }
 }
 
@@ -61,8 +59,25 @@ impl<T> Copy for AssetHandle<T> {}
 impl<T> Eq for AssetHandle<T> {}
 
 pub type MeshHandle = AssetHandle<Mesh>;
+impl std::fmt::Debug for MeshHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MeshHandle({})", self.index)
+    }
+}
+
 pub type TextureHandle = AssetHandle<AllocatedTexture>;
+impl std::fmt::Debug for TextureHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TextureHandle({})", self.index)
+    }
+}
+
 pub type MaterialHandle = AssetHandle<Material>;
+impl std::fmt::Debug for MaterialHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MaterialHandle({})", self.index)
+    }
+}
 
 pub struct Defaults {
     pub white_srgb: Rc<AllocatedTexture>,
@@ -120,7 +135,6 @@ impl Assets {
         let pixel = Rgba::<u8>(*color);
         let buffer = ImageBuffer::from_pixel(16, 16, pixel);
         let data = buffer.as_raw();
-        println!("data: {:?}", data);
 
         Self::load_texture(
             gpu,

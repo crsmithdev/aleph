@@ -1,17 +1,16 @@
 use {
-    crate::{
-        renderer::{GpuSceneData, RendererConfig},
-        RenderContext,
-    },
+    crate::{GpuSceneData, RenderConfig, RenderContext},
     aleph_core::{
+        events::GuiEvent,
         system::{Resources, Scheduler},
         Layer, Window,
     },
-    aleph_scene::util,
+    aleph_scene::{model::Light, util},
     aleph_vk::{AttachmentLoadOp, AttachmentStoreOp, CommandPool, Extent2D, Format, Gpu},
     anyhow::Result,
-    egui, egui_ash_renderer as egui_renderer, egui_extras, egui_winit,
-    glam::{Vec2, Vec4},
+    egui::{self},
+    egui_ash_renderer as egui_renderer, egui_extras, egui_winit,
+    glam::Vec4,
     gpu_allocator as ga,
     std::sync::{Arc, Mutex},
 };
@@ -19,9 +18,9 @@ use {
 const CLEAR_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
 
 pub struct Gui {
-    pub egui_ctx: egui::Context,
-    pub egui_winit: egui_winit::State,
-    pub egui_renderer: egui_renderer::Renderer,
+    ctx: egui::Context,
+    state: egui_winit::State,
+    renderer: egui_renderer::Renderer,
     pool: CommandPool,
     window: Arc<winit::window::Window>,
     textures_to_free: Option<Vec<egui::TextureId>>,
@@ -40,6 +39,7 @@ impl Gui {
     pub fn new(gpu: &Gpu, window: Arc<winit::window::Window>) -> Result<Self> {
         let egui_ctx = egui::Context::default();
         egui_extras::install_image_loaders(&egui_ctx);
+
         let egui_winit = egui_winit::State::new(
             egui_ctx.clone(),
             egui::ViewportId::ROOT,
@@ -80,24 +80,21 @@ impl Gui {
         }?;
 
         let gui = Self {
-            egui_ctx,
-            egui_winit,
-            egui_renderer: renderer,
+            ctx: egui_ctx,
+            state: egui_winit,
+            renderer,
             window: window.clone(),
             textures_to_free: None,
             pool,
         };
         Ok(gui)
-        // gui.on_window_event(&event.event);
-        // Ok(())
-        // });
     }
 
     pub fn draw(
         &mut self,
         ctx: &RenderContext,
-        config: &mut RendererConfig,
-        data: &mut GpuSceneData,
+        config: &mut RenderConfig,
+        scene_data: &mut GpuSceneData,
     ) -> Result<()> {
         let color_attachments = &[util::color_attachment(
             ctx.draw_image,
@@ -116,7 +113,7 @@ impl Gui {
             height: ctx.extent.height,
         };
 
-        let raw_input = self.egui_winit.take_egui_input(&self.window);
+        let raw_input = self.state.take_egui_input(&self.window);
 
         let egui::FullOutput {
             platform_output,
@@ -125,10 +122,10 @@ impl Gui {
             pixels_per_point,
             ..
         } = self
-            .egui_ctx
-            .run(raw_input, |ctx| build_ui(ctx, config, data));
+            .ctx
+            .run(raw_input, |ctx| build_ui(ctx, config, scene_data));
 
-        self.egui_winit
+        self.state
             .handle_platform_output(&self.window, platform_output);
 
         if !textures_delta.free.is_empty() {
@@ -136,7 +133,7 @@ impl Gui {
         }
 
         if !textures_delta.set.is_empty() {
-            self.egui_renderer
+            self.renderer
                 .set_textures(
                     ctx.gpu.device().queue().handle(),
                     self.pool.handle(),
@@ -144,11 +141,11 @@ impl Gui {
                 )
                 .expect("Failed to set textures");
         }
-        let clipped_primitives = self.egui_ctx.tessellate(shapes, pixels_per_point);
+        let clipped_primitives = self.ctx.tessellate(shapes, pixels_per_point);
 
         ctx.cmd_buffer
             .begin_rendering(color_attachments, Some(depth_attachment), ctx.extent)?;
-        self.egui_renderer.cmd_draw(
+        self.renderer.cmd_draw(
             ctx.cmd_buffer.handle(),
             extent,
             pixels_per_point,
@@ -159,87 +156,133 @@ impl Gui {
         Ok(())
     }
 
-    pub fn on_window_event(&mut self, event: &winit::event::WindowEvent) {
-        let _ = self.egui_winit.on_window_event(&self.window, event);
+    pub fn handle_events<'a>(&'a mut self, events: impl Iterator<Item = &'a GuiEvent>) {
+        events.for_each(|event| {
+            let _ = self.state.on_window_event(&self.window, &event.0);
+        });
     }
 }
 
-fn build_ui(ctx: &egui::Context, config: &mut RendererConfig, data: &mut GpuSceneData) {
-    egui::Window::new("Config").show(ctx, |ui| {
-        ui.heading("Debug");
-        ui.add(egui::Checkbox::new(
-            &mut config.debug_normals,
-            "Show normals",
-        ));
+fn build_ui(ctx: &egui::Context, config: &mut RenderConfig, scene_data: &mut GpuSceneData) {
+    egui::Window::new("Shader Config")
+        .max_width(350.)
+        .default_width(350.)
+        .resizable(false)
+        .show(ctx, |ui| {
+            ui.heading("Debug");
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut config.force_defaults, "Force defaults");
+                ui.checkbox(&mut config.debug_normals, "Debug normals");
+                ui.checkbox(&mut config.debug_tangents, "Debug tangents");
+            });
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut config.debug_bitangents, "Debug bitangents");
+                ui.checkbox(&mut config.debug_specular, "Debug specular");
+                ui.checkbox(&mut config.debug_normal_maps, "Disable normal maps");
+            });
 
-        ui.separator();
+            ui.separator();
+            ui.heading("Lights");
 
-        ui.heading("Lights");
-        ui.add(
-            egui::Slider::new(&mut data.n_lights, 0..=4)
-                .step_by(1.0)
-                .text("# Lights"),
-        );
-        rgba_picker(ui, &mut data.lights[0].color, "#0");
-        rgba_picker(ui, &mut data.lights[1].color, "#1");
-        rgba_picker(ui, &mut data.lights[2].color, "#2");
-        rgba_picker(ui, &mut data.lights[3].color, "#3");
+            ui.horizontal(|ui| {
+                ui.add(
+                    egui::Slider::new(&mut scene_data.n_lights, 0..=4)
+                        .step_by(1.0)
+                        .text("# Lights"),
+                );
+            });
 
-        ui.separator();
+            light(ui, &mut scene_data.lights[0], 1);
+            light(ui, &mut scene_data.lights[1], 2);
+            light(ui, &mut scene_data.lights[2], 3);
+            light(ui, &mut scene_data.lights[3], 4);
 
-        ui.label("Material");
-        vec4_override(ui, &mut data.config.force_color, "Color");
-        vec2_override(ui, &mut data.config.force_metallic, "Metallic");
-        vec2_override(ui, &mut data.config.force_roughness, "Roughness");
-        vec2_override(ui, &mut data.config.force_ao, "Occlusion");
+            ui.separator();
+            ui.heading("Material");
+            pbr_override_vec4(
+                ui,
+                &mut config.force_color,
+                &mut config.force_color_factor,
+                "Color",
+            );
+            pbr_override_scalar(
+                ui,
+                &mut config.force_metallic,
+                &mut config.force_metallic_factor,
+                "Metallic",
+            );
+            pbr_override_scalar(
+                ui,
+                &mut config.force_roughness,
+                &mut config.force_roughness_factor,
+                "Roughness",
+            );
+            pbr_override_scalar(
+                ui,
+                &mut config.force_ao,
+                &mut config.force_ao_strength,
+                "AO",
+            );
+        });
+}
+
+fn light(ui: &mut egui::Ui, light: &mut Light, n: i32) {
+    egui::Grid::new(format!("light-{n:02}"))
+        .min_col_width(50.)
+        .max_col_width(250.)
+        .show(ui, |ui| {
+            ui.label(format!("Light {}", n));
+            ui.label("Position:");
+            drag_value(ui, &mut light.position.x, "x", 25.);
+            drag_value(ui, &mut light.position.y, "y", 25.);
+            drag_value(ui, &mut light.position.z, "z", 25.);
+            ui.end_row();
+
+            ui.label("");
+            ui.label("Color:");
+            drag_value(ui, &mut light.color.x, "r", 255.);
+            drag_value(ui, &mut light.color.y, "g", 255.);
+            drag_value(ui, &mut light.color.z, "b", 255.);
+            drag_value(ui, &mut light.color.w, "a", 255.);
+            ui.end_row();
+        });
+}
+
+fn drag_value(ui: &mut egui::Ui, value: &mut f32, label: &str, max: f32) {
+    let range = 0.0..=max;
+    let speed = max / 100.;
+    ui.horizontal(|ui| {
+        ui.label(label);
+        ui.add(egui::DragValue::new(value).speed(speed).range(range));
     });
 }
 
-fn rgba_picker(ui: &mut egui::Ui, data: &mut Vec4, label: impl Into<String>) -> egui::Response {
-    ui.horizontal(|ui| {
-        ui.label(label.into());
-        ui.label("R");
-        ui.add(egui::DragValue::new(&mut data.x).speed(0.1));
-        ui.label("G");
-        ui.add(egui::DragValue::new(&mut data.y).speed(0.1));
-        ui.label("B");
-        ui.add(egui::DragValue::new(&mut data.z).speed(0.1));
-        ui.label("A");
-        ui.add(egui::DragValue::new(&mut data.w).speed(0.1));
-    })
-    .response
+fn pbr_override_vec4(ui: &mut egui::Ui, flag: &mut bool, value: &mut Vec4, label: &str) {
+    egui::Grid::new(format!("override-scalar-{label}"))
+        .min_col_width(50.)
+        .max_col_width(250.)
+        .show(ui, |ui| {
+            ui.label(label);
+            ui.checkbox(flag, "Override?");
+            drag_value(ui, &mut value.x, "r", 1.);
+            drag_value(ui, &mut value.y, "g", 1.);
+            drag_value(ui, &mut value.z, "b", 1.);
+            drag_value(ui, &mut value.w, "a", 1.);
+            ui.end_row();
+        });
 }
 
-fn vec2_override(ui: &mut egui::Ui, data: &mut Vec2, label: impl Into<String>) -> egui::Response {
-    let mut flag = data[0] > 0.01;
-    let mut value = data[1];
-
+fn pbr_override_scalar(
+    ui: &mut egui::Ui,
+    flag: &mut bool,
+    mut value: &mut f32,
+    label: &str,
+) -> egui::Response {
     ui.horizontal(|ui| {
-        ui.label(label.into());
-        ui.spacing();
-        ui.checkbox(&mut flag, "Override?");
-        ui.add(egui::DragValue::new(&mut value).speed(0.1).range(0.0..=1.0));
-
-        *data = Vec2::new(if flag { 1.0 } else { 0.0 }, value);
-    })
-    .response
-}
-
-fn vec4_override(ui: &mut egui::Ui, data: &mut Vec4, label: impl Into<String>) -> egui::Response {
-    let mut flag = data[0] > 0.01;
-    let mut x = data[1];
-    let mut y = data[2];
-    let mut z = data[3];
-
-    ui.horizontal(|ui| {
-        ui.label(label.into());
-        ui.spacing();
-        ui.checkbox(&mut flag, "Override?");
-        ui.add(egui::DragValue::new(&mut x).speed(0.1).range(0.0..=1.0));
-        ui.add(egui::DragValue::new(&mut y).speed(0.1).range(0.0..=1.0));
-        ui.add(egui::DragValue::new(&mut z).speed(0.1).range(0.0..=1.0));
-
-        *data = Vec4::new(if flag { 1.0 } else { 0.0 }, x, y, z);
+        ui.label("Override?");
+        ui.checkbox(flag, label);
+        drag_value(ui, &mut value, "r", 1.);
+        ui.end_row();
     })
     .response
 }

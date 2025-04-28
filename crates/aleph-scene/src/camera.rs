@@ -83,10 +83,9 @@ impl Camera {
         position
     }
 
-    pub fn rotate(&mut self, delta: Vec2) {
-        self.yaw += delta.x;
-        self.pitch += delta.y;
-    }
+    pub fn pitch_delta(&mut self, delta: f32) { self.pitch += delta; }
+
+    pub fn yaw_delta(&mut self, delta: f32) { self.yaw += delta; }
 
     pub fn translate(&mut self, delta: Vec3) { self.target += delta; }
 

@@ -1,9 +1,8 @@
 use {
-    super::QueueFamily,
+    crate::QueueFamily,
     anyhow::Result,
     ash::{
-        ext,
-        khr,
+        ext, khr,
         vk::{self, Handle},
     },
     derive_more::Debug,
@@ -82,9 +81,7 @@ impl Instance {
         Ok((debug_utils, debug_callback))
     }
 
-    pub fn handle(&self) -> &ash::Instance {
-        &self.handle
-    }
+    pub fn handle(&self) -> &ash::Instance { &self.handle }
 
     pub fn enumerate_physical_devices(&self) -> Result<Vec<vk::PhysicalDevice>> {
         Ok(unsafe { self.handle.enumerate_physical_devices() }?)
@@ -145,7 +142,8 @@ pub unsafe extern "system" fn vulkan_debug_callback(
         vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => log::error!("{}", message),
         vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => log::warn!("{}", message),
         vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => log::trace!("{}", message),
-        _ => log::info!("{}", message),
+        // _ => log::info!("{}", message),
+        _ => {}
     }
 
     vk::FALSE

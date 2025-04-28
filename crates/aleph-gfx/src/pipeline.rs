@@ -2,10 +2,21 @@ use {
     crate::RenderContext,
     aleph_scene::Vertex,
     aleph_vk::{
-        buffer::RawBuffer, AllocatedTexture, Buffer, CommandBuffer, Gpu, Texture, VkPipeline,
+        AllocatedTexture, Buffer, CommandBuffer, CompareOp, CullModeFlags, DescriptorBufferInfo,
+        DescriptorImageInfo, DescriptorSetLayout, DescriptorSetLayoutBinding,
+        DescriptorSetLayoutCreateFlags, DescriptorType, DynamicState, Format, FrontFace, Gpu,
+        GraphicsPipelineCreateInfo, ImageLayout, PipelineBindPoint,
+        PipelineColorBlendAttachmentState, PipelineColorBlendStateCreateInfo,
+        PipelineDepthStencilStateCreateInfo, PipelineDynamicStateCreateInfo,
+        PipelineInputAssemblyStateCreateInfo, PipelineLayout, PipelineMultisampleStateCreateInfo,
+        PipelineRasterizationStateCreateInfo, PipelineRenderingCreateInfo,
+        PipelineShaderStageCreateInfo, PipelineVertexInputStateCreateInfo,
+        PipelineViewportStateCreateInfo, PolygonMode, PrimitiveTopology, RawBuffer,
+        SampleCountFlags, Sampler, ShaderModule, ShaderStageFlags, Texture,
+        VertexInputAttributeDescription, VertexInputBindingDescription, VkPipeline,
+        WriteDescriptorSet,
     },
     anyhow::Result,
-    ash::vk::{self, PipelineBindPoint, SampleCountFlags},
     bytemuck::Pod,
     std::{collections::HashSet, ffi},
 };
@@ -15,88 +26,88 @@ pub trait Pipeline {
 
 const SHADER_MAIN: &ffi::CStr = c"main";
 pub struct PipelineBuilder<'a> {
-    color_blend: vk::PipelineColorBlendStateCreateInfo<'a>,
-    depth: vk::PipelineDepthStencilStateCreateInfo<'a>,
-    viewport: vk::PipelineViewportStateCreateInfo<'a>,
-    input_assembly: vk::PipelineInputAssemblyStateCreateInfo<'a>,
-    rasterization: vk::PipelineRasterizationStateCreateInfo<'a>,
-    multisample: vk::PipelineMultisampleStateCreateInfo<'a>,
-    vertex_shader: vk::ShaderModule,
-    fragment_shader: vk::ShaderModule,
-    geometry_shader: vk::ShaderModule,
-    vertex_bindings: Vec<vk::VertexInputBindingDescription>,
-    vertex_attributes: Vec<vk::VertexInputAttributeDescription>,
-    color_blend_formats: HashSet<vk::Format, std::hash::RandomState>,
-    depth_format: vk::Format,
-    dynamic_states: HashSet<vk::DynamicState>,
+    color_blend: PipelineColorBlendStateCreateInfo<'a>,
+    depth: PipelineDepthStencilStateCreateInfo<'a>,
+    viewport: PipelineViewportStateCreateInfo<'a>,
+    input_assembly: PipelineInputAssemblyStateCreateInfo<'a>,
+    rasterization: PipelineRasterizationStateCreateInfo<'a>,
+    multisample: PipelineMultisampleStateCreateInfo<'a>,
+    vertex_shader: ShaderModule,
+    fragment_shader: ShaderModule,
+    geometry_shader: ShaderModule,
+    vertex_bindings: Vec<VertexInputBindingDescription>,
+    vertex_attributes: Vec<VertexInputAttributeDescription>,
+    color_blend_formats: HashSet<Format, std::hash::RandomState>,
+    depth_format: Format,
+    dynamic_states: HashSet<DynamicState>,
 }
 
 impl Default for PipelineBuilder<'_> {
     fn default() -> Self {
         Self {
-            color_blend: vk::PipelineColorBlendStateCreateInfo::default().logic_op_enable(false),
-            depth: vk::PipelineDepthStencilStateCreateInfo::default(),
-            viewport: vk::PipelineViewportStateCreateInfo::default()
+            color_blend: PipelineColorBlendStateCreateInfo::default().logic_op_enable(false),
+            depth: PipelineDepthStencilStateCreateInfo::default(),
+            viewport: PipelineViewportStateCreateInfo::default()
                 .viewport_count(1)
                 .scissor_count(1),
-            input_assembly: vk::PipelineInputAssemblyStateCreateInfo::default()
-                .topology(vk::PrimitiveTopology::TRIANGLE_LIST),
-            multisample: vk::PipelineMultisampleStateCreateInfo::default(),
-            rasterization: vk::PipelineRasterizationStateCreateInfo::default()
-                .polygon_mode(vk::PolygonMode::FILL)
-                .cull_mode(vk::CullModeFlags::NONE)
-                .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
+            input_assembly: PipelineInputAssemblyStateCreateInfo::default()
+                .topology(PrimitiveTopology::TRIANGLE_LIST),
+            multisample: PipelineMultisampleStateCreateInfo::default(),
+            rasterization: PipelineRasterizationStateCreateInfo::default()
+                .polygon_mode(PolygonMode::FILL)
+                .cull_mode(CullModeFlags::NONE)
+                .front_face(FrontFace::COUNTER_CLOCKWISE)
                 .line_width(1.0),
-            vertex_shader: vk::ShaderModule::null(),
-            fragment_shader: vk::ShaderModule::null(),
-            geometry_shader: vk::ShaderModule::null(),
+            vertex_shader: ShaderModule::null(),
+            fragment_shader: ShaderModule::null(),
+            geometry_shader: ShaderModule::null(),
             vertex_attributes: vec![],
             vertex_bindings: vec![],
-            depth_format: vk::Format::D32_SFLOAT,
-            color_blend_formats: HashSet::from_iter(vec![vk::Format::R16G16B16A16_SFLOAT]),
+            depth_format: Format::D32_SFLOAT,
+            color_blend_formats: HashSet::from_iter(vec![Format::R16G16B16A16_SFLOAT]),
             dynamic_states: HashSet::new(),
         }
     }
 }
 
 impl<'a> PipelineBuilder<'a> {
-    pub fn build(&self, gpu: &Gpu, layout: vk::PipelineLayout) -> Result<VkPipeline> {
-        let vertex_stage = vk::PipelineShaderStageCreateInfo::default()
-            .stage(vk::ShaderStageFlags::VERTEX)
+    pub fn build(&self, gpu: &Gpu, layout: PipelineLayout) -> Result<VkPipeline> {
+        let vertex_stage = PipelineShaderStageCreateInfo::default()
+            .stage(ShaderStageFlags::VERTEX)
             .module(self.vertex_shader)
             .name(SHADER_MAIN);
-        let fragment_stage = vk::PipelineShaderStageCreateInfo::default()
-            .stage(vk::ShaderStageFlags::FRAGMENT)
+        let fragment_stage = PipelineShaderStageCreateInfo::default()
+            .stage(ShaderStageFlags::FRAGMENT)
             .module(self.fragment_shader)
             .name(SHADER_MAIN);
-        let geometry_stage = vk::PipelineShaderStageCreateInfo::default()
-            .stage(vk::ShaderStageFlags::GEOMETRY)
+        let geometry_stage = PipelineShaderStageCreateInfo::default()
+            .stage(ShaderStageFlags::GEOMETRY)
             .module(self.geometry_shader)
             .name(SHADER_MAIN);
         // TODO no shader condition
         let mut stages = vec![];
-        if self.vertex_shader != vk::ShaderModule::null() {
+        if self.vertex_shader != ShaderModule::null() {
             stages.push(vertex_stage);
         }
-        if self.fragment_shader != vk::ShaderModule::null() {
+        if self.fragment_shader != ShaderModule::null() {
             stages.push(fragment_stage);
         }
-        if self.geometry_shader != vk::ShaderModule::null() {
+        if self.geometry_shader != ShaderModule::null() {
             stages.push(geometry_stage);
         }
         let vertex_attributes = &self.vertex_attributes;
         let vertex_binding = &self.vertex_bindings;
-        let vertex_state = vk::PipelineVertexInputStateCreateInfo::default()
+        let vertex_state = PipelineVertexInputStateCreateInfo::default()
             .vertex_binding_descriptions(vertex_binding)
             .vertex_attribute_descriptions(vertex_attributes);
         let color_formats = self.color_blend_formats.iter().copied().collect::<Vec<_>>();
-        let mut rendering_info = vk::PipelineRenderingCreateInfo::default()
+        let mut rendering_info = PipelineRenderingCreateInfo::default()
             .color_attachment_formats(&color_formats)
             .depth_attachment_format(self.depth_format);
         let dynamic_states = self.dynamic_states.iter().copied().collect::<Vec<_>>();
         let dynamic_state =
-            vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
-        let info = vk::GraphicsPipelineCreateInfo::default()
+            PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
+        let info = GraphicsPipelineCreateInfo::default()
             .stages(&stages)
             .layout(layout)
             .dynamic_state(&dynamic_state)
@@ -112,25 +123,25 @@ impl<'a> PipelineBuilder<'a> {
         gpu.create_graphics_pipeline(&info)
     }
 
-    pub fn color_blend_formats(&mut self, formats: &'a [vk::Format]) -> &mut Self {
+    pub fn color_blend_formats(&mut self, formats: &'a [Format]) -> &mut Self {
         formats.iter().for_each(|&format| {
             self.color_blend_formats.insert(format);
         });
         self
     }
-    pub fn depth_format(&mut self, format: vk::Format) -> &mut Self {
+    pub fn depth_format(&mut self, format: Format) -> &mut Self {
         self.depth_format = format;
         self
     }
-    pub fn vertex_attributes(&mut self, attributes: &'a [(u32, vk::Format)]) -> &mut Self {
-        self.vertex_bindings = vec![vk::VertexInputBindingDescription::default()
+    pub fn vertex_attributes(&mut self, attributes: &'a [(u32, Format)]) -> &mut Self {
+        self.vertex_bindings = vec![VertexInputBindingDescription::default()
             .binding(0)
             .stride(std::mem::size_of::<Vertex>() as u32)];
         self.vertex_attributes = attributes
             .iter()
             .enumerate()
             .map(|(i, (offset, format))| {
-                vk::VertexInputAttributeDescription::default()
+                VertexInputAttributeDescription::default()
                     .binding(0)
                     .location(i as u32)
                     .format(*format)
@@ -142,7 +153,7 @@ impl<'a> PipelineBuilder<'a> {
 
     pub fn blend_disabled(
         &mut self,
-        attachments: &'a [vk::PipelineColorBlendAttachmentState],
+        attachments: &'a [PipelineColorBlendAttachmentState],
     ) -> &mut Self {
         self.color_blend = self
             .color_blend
@@ -153,7 +164,7 @@ impl<'a> PipelineBuilder<'a> {
 
     pub fn blend_enabled(
         &mut self,
-        attachments: &'a [vk::PipelineColorBlendAttachmentState],
+        attachments: &'a [PipelineColorBlendAttachmentState],
     ) -> &mut Self {
         self.color_blend = self
             .color_blend
@@ -162,7 +173,7 @@ impl<'a> PipelineBuilder<'a> {
         self
     }
 
-    pub fn depth_enabled(&mut self, compare_op: vk::CompareOp) -> &mut Self {
+    pub fn depth_enabled(&mut self, compare_op: CompareOp) -> &mut Self {
         self.depth = self
             .depth
             .depth_compare_op(compare_op)
@@ -178,7 +189,7 @@ impl<'a> PipelineBuilder<'a> {
             .depth
             .depth_test_enable(false)
             .depth_write_enable(false)
-            .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL);
+            .depth_compare_op(CompareOp::LESS_OR_EQUAL);
         self
     }
 
@@ -189,21 +200,17 @@ impl<'a> PipelineBuilder<'a> {
         self
     }
 
-    pub fn polygon_mode(&mut self, mode: vk::PolygonMode) -> &mut Self {
+    pub fn polygon_mode(&mut self, mode: PolygonMode) -> &mut Self {
         self.rasterization = self.rasterization.polygon_mode(mode);
         self
     }
 
-    pub fn input_topology(&mut self, topology: vk::PrimitiveTopology) -> &mut Self {
+    pub fn input_topology(&mut self, topology: PrimitiveTopology) -> &mut Self {
         self.input_assembly = self.input_assembly.topology(topology);
         self
     }
 
-    pub fn winding(
-        &mut self,
-        front_face: vk::FrontFace,
-        cull_mode: vk::CullModeFlags,
-    ) -> &mut Self {
+    pub fn winding(&mut self, front_face: FrontFace, cull_mode: CullModeFlags) -> &mut Self {
         self.rasterization = self
             .rasterization
             .cull_mode(cull_mode)
@@ -213,33 +220,33 @@ impl<'a> PipelineBuilder<'a> {
 
     pub fn dynamic_scissor(&mut self) -> &mut Self {
         self.viewport = self.viewport.scissor_count(1);
-        self.dynamic_states.insert(vk::DynamicState::SCISSOR);
+        self.dynamic_states.insert(DynamicState::SCISSOR);
         self
     }
 
     pub fn dynamic_viewport(&mut self) -> &mut Self {
         self.viewport = self.viewport.viewport_count(1);
-        self.dynamic_states.insert(vk::DynamicState::VIEWPORT);
+        self.dynamic_states.insert(DynamicState::VIEWPORT);
         self
     }
 
     pub fn dynamic_line_width(&mut self) -> &mut Self {
         self.rasterization = self.rasterization.line_width(1.0);
-        self.dynamic_states.insert(vk::DynamicState::LINE_WIDTH);
+        self.dynamic_states.insert(DynamicState::LINE_WIDTH);
         self
     }
 
-    pub fn vertex_shader(&mut self, shader: vk::ShaderModule) -> &mut Self {
+    pub fn vertex_shader(&mut self, shader: ShaderModule) -> &mut Self {
         self.vertex_shader = shader;
         self
     }
 
-    pub fn fragment_shader(&mut self, shader: vk::ShaderModule) -> &mut Self {
+    pub fn fragment_shader(&mut self, shader: ShaderModule) -> &mut Self {
         self.fragment_shader = shader;
         self
     }
 
-    pub fn geometry_shader(&mut self, shader: vk::ShaderModule) -> &mut Self {
+    pub fn geometry_shader(&mut self, shader: ShaderModule) -> &mut Self {
         self.geometry_shader = shader;
         self
     }
@@ -247,36 +254,36 @@ impl<'a> PipelineBuilder<'a> {
 
 #[derive(Default)]
 pub struct ResourceLayout<'a> {
-    pub(crate) bindings: Vec<vk::DescriptorSetLayoutBinding<'a>>,
+    pub(crate) bindings: Vec<DescriptorSetLayoutBinding<'a>>,
 }
 
 impl ResourceLayout<'_> {
-    pub fn layout(&self, gpu: &Gpu) -> Result<vk::DescriptorSetLayout> {
+    pub fn layout(&self, gpu: &Gpu) -> Result<DescriptorSetLayout> {
         gpu.create_descriptor_set_layout(
             &self.bindings,
-            vk::DescriptorSetLayoutCreateFlags::PUSH_DESCRIPTOR_KHR,
+            DescriptorSetLayoutCreateFlags::PUSH_DESCRIPTOR_KHR,
         )
     }
 
-    pub fn buffer(&mut self, index: u32, flags: vk::ShaderStageFlags) -> &mut Self {
+    pub fn buffer(&mut self, index: u32, flags: ShaderStageFlags) -> &mut Self {
         self.bindings.push(
-            vk::DescriptorSetLayoutBinding::default()
+            DescriptorSetLayoutBinding::default()
                 .binding(index)
                 .descriptor_count(1)
                 .stage_flags(flags)
-                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER),
+                .descriptor_type(DescriptorType::UNIFORM_BUFFER),
         );
 
         self
     }
 
-    pub fn image(&mut self, index: u32, flags: vk::ShaderStageFlags) -> &mut Self {
+    pub fn image(&mut self, index: u32, flags: ShaderStageFlags) -> &mut Self {
         self.bindings.push(
-            vk::DescriptorSetLayoutBinding::default()
+            DescriptorSetLayoutBinding::default()
                 .binding(index)
                 .descriptor_count(1)
                 .stage_flags(flags)
-                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER),
+                .descriptor_type(DescriptorType::COMBINED_IMAGE_SAMPLER),
         );
 
         self
@@ -305,7 +312,7 @@ impl<'a> ResourceBinder<'a> {
         &mut self,
         index: u32,
         image: &'a AllocatedTexture,
-        sampler: vk::Sampler,
+        sampler: Sampler,
     ) -> &mut Self {
         let resource = BoundResource::Image {
             index,
@@ -316,7 +323,7 @@ impl<'a> ResourceBinder<'a> {
         self
     }
 
-    pub fn bind(&self, cmd: &CommandBuffer, layout: &vk::PipelineLayout) {
+    pub fn bind(&self, cmd: &CommandBuffer, layout: &PipelineLayout) {
         let mut buffer_infos = vec![];
         let mut buffer_writes = vec![];
         let mut image_infos = vec![];
@@ -360,17 +367,17 @@ impl<'a> ResourceBinder<'a> {
     fn write_image(
         &self,
         image: impl Texture,
-        sampler: vk::Sampler,
+        sampler: Sampler,
         index: u32,
-    ) -> (vk::DescriptorImageInfo, vk::WriteDescriptorSet) {
-        let info = vk::DescriptorImageInfo::default()
-            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+    ) -> (DescriptorImageInfo, WriteDescriptorSet) {
+        let info = DescriptorImageInfo::default()
+            .image_layout(ImageLayout::SHADER_READ_ONLY_OPTIMAL)
             .image_view(image.view())
             .sampler(sampler);
-        let write = vk::WriteDescriptorSet::default()
+        let write = WriteDescriptorSet::default()
             .dst_binding(index)
             .descriptor_count(1)
-            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER);
+            .descriptor_type(DescriptorType::COMBINED_IMAGE_SAMPLER);
 
         (info, write)
     }
@@ -381,15 +388,15 @@ impl<'a> ResourceBinder<'a> {
         index: u32,
         size: u64,
         offset: u64,
-    ) -> (vk::DescriptorBufferInfo, vk::WriteDescriptorSet) {
-        let info = vk::DescriptorBufferInfo::default()
+    ) -> (DescriptorBufferInfo, WriteDescriptorSet) {
+        let info = DescriptorBufferInfo::default()
             .buffer(buffer.handle())
             .offset(offset)
             .range(size);
-        let write = vk::WriteDescriptorSet::default()
+        let write = WriteDescriptorSet::default()
             .dst_binding(index)
             .descriptor_count(1)
-            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER);
+            .descriptor_type(DescriptorType::UNIFORM_BUFFER);
         (info, write)
     }
 }
@@ -403,7 +410,7 @@ pub enum BoundResource<'a> {
     },
     Image {
         index: u32,
-        sampler: vk::Sampler,
+        sampler: Sampler,
         image: &'a AllocatedTexture,
     },
 }

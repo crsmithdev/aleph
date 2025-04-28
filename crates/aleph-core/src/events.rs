@@ -1,5 +1,5 @@
 use {
-    crate::system::{Ptr, Res, ResMut, Resources, SystemParam},
+    crate::{Ptr, Res, ResMut, Resources, SystemParam},
     downcast_rs::{impl_downcast, Downcast},
     std::any::TypeId,
 };
@@ -98,7 +98,7 @@ impl EventRegistry {
         });
     }
 
-    pub fn update(&mut self, resources: &Resources) {
+    pub fn next_frame(&mut self, resources: &Resources) {
         for reg in self.registered_events.iter_mut() {
             let ptr = resources.get_ptr(reg.type_id);
             (reg.update)(ptr);
@@ -106,9 +106,7 @@ impl EventRegistry {
     }
 }
 
-pub struct GuiEvent {
-    pub event: winit::event::WindowEvent,
-}
+pub struct GuiEvent(pub winit::event::WindowEvent);
 impl Event for GuiEvent {}
 
 #[cfg(test)]
@@ -135,32 +133,9 @@ mod test {
             assert_eq!(events[0], &TestEvent(1));
         });
 
-        let mut events = resources.get_mut::<Events<TestEvent>>();
+        let events = resources.get_mut::<Events<TestEvent>>();
         events.write(TestEvent(1));
-        registry.update(&mut resources);
+        registry.next_frame(&mut resources);
         scheduler.run(Schedule::Default, &mut resources);
     }
-    // #[test]
-    // fn test_write_update_read() {
-    //     let resources = &mut Resources::default();
-    //     let mut registry = EventRegistry::default();
-    //     {
-    //         registry.register::<TestEvent>(&mut resources);
-    //         let events = registry.events_mut::<TestEvent>();
-    //         events.write(TestEvent(1));
-    //         events.write(TestEvent(2));
-    //     }
-    //     {
-    //         let events = registry.events_mut::<TestEvent>();
-    //         events.update();
-    //     }
-    //     {
-    //         let events = registry.events_mut::<TestEvent>();
-    //         events.write(TestEvent(3));
-    //         let events_in = events.read().collect::<Vec<_>>();
-    //         assert_eq!(events_in.len(), 2);
-    //         assert_eq!(events_in[0], &TestEvent(1));
-    //         assert_eq!(events_in[1], &TestEvent(2));
-    //     }
-    // }
 }

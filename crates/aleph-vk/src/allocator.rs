@@ -1,14 +1,14 @@
 use {
-    crate::{Device, Instance},
+    crate::{Device, Instance, MemoryLocation, MemoryRequirements},
     anyhow::Result,
-    ash::vk::{Buffer as VkBuffer, Image as VkImage, MemoryRequirements},
+    ash::vk::{Buffer as VkBuffer, Image as VkImage},
     derive_more::Debug,
     gpu_allocator::{
         vulkan::{
             Allocation, AllocationCreateDesc, AllocationScheme, Allocator as GpuAllocator,
             AllocatorCreateDesc,
         },
-        AllocationSizes, AllocatorDebugSettings, MemoryLocation,
+        AllocationSizes, AllocatorDebugSettings,
     },
     std::sync::{Arc, Mutex},
 };

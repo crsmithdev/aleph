@@ -1,41 +1,14 @@
 use {
     crate::Vertex,
     aleph_vk::{
-        AttachmentLoadOp, AttachmentStoreOp, Buffer, BufferUsageFlags, ClearDepthStencilValue,
-        ClearValue, Gpu, ImageLayout, MemoryLocation, RenderingAttachmentInfo, Texture,
+        AttachmentLoadOp, AttachmentStoreOp, Buffer, BufferUsageFlags, ClearColorValue,
+        ClearDepthStencilValue, ClearValue, Extent2D, Gpu, ImageLayout, MemoryLocation,
+        RenderingAttachmentInfo, Texture, Viewport,
     },
     anyhow::Result,
-    ash::vk::{self, ClearColorValue, Extent2D},
     bytemuck::Pod,
     image::EncodableLayout,
-    std::path::Path,
 };
-const GLTF_SAMPLE_DIR: &str = "submodules/glTF-Sample-Assets/Models";
-const GLTF_VALIDATION_DIR: &str = "submodules/glTF-Asset-Generator/Output/Positive";
-
-pub fn sample_path(name: &str) -> Result<String> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join(GLTF_SAMPLE_DIR)
-        .join(name)
-        .join("glTF")
-        .join(format!("{name}.gltf"));
-
-    path.canonicalize()
-        .map(|p| p.to_string_lossy().into_owned())
-        .map_err(|_| anyhow::anyhow!("Invalid path: {:?}", &path))
-}
-
-pub fn validation_path(name: &str, index: usize) -> Result<String> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join(GLTF_VALIDATION_DIR)
-        .join(name)
-        .join(format!("{name}_{index:02}.gltf"));
-
-    path.canonicalize()
-        .map(|p| p.to_string_lossy().into_owned())
-        .map_err(|_| anyhow::anyhow!("Invalid path: {:?}", &path))
-}
-
 pub fn staging_buffer<T: Pod>(
     gpu: &Gpu,
     data: &[T],
@@ -102,8 +75,8 @@ pub fn depth_attachment<'a>(
         .store_op(store_op)
 }
 
-pub fn viewport_inverted(extent: Extent2D) -> vk::Viewport {
-    vk::Viewport::default()
+pub fn viewport_inverted(extent: Extent2D) -> Viewport {
+    Viewport::default()
         .width(extent.width as f32)
         .height(0.0 - extent.height as f32)
         .x(0.)

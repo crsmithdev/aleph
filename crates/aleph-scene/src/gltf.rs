@@ -1,18 +1,16 @@
 use {
     crate::{
-        assets::{Assets, MaterialHandle, MeshHandle, TextureHandle},
-        graph::{NodeDesc, SceneDesc},
-        material::Material,
-        model::{MeshDesc, PrimitiveDesc, Vertex},
-        util,
+        util, Assets, Material, MaterialHandle, MeshDesc, MeshHandle, NodeData, NodeDesc,
+        PrimitiveDesc, SceneDesc, TextureHandle, Vertex,
     },
     aleph_vk::{
-        texture::{SamplerDesc, TextureDesc},
-        Extent2D, ImageUsageFlags,
+        Extent2D, Filter, ImageUsageFlags, PrimitiveTopology, SamplerAddressMode, SamplerDesc,
+        SamplerMipmapMode, TextureDesc,
     },
     anyhow::{bail, Result},
     ash::vk,
     glam::{Mat4, Vec2, Vec3, Vec4},
+    gltf::scene::Transform,
     std::{
         collections::{HashMap, HashSet},
         path::Path,
@@ -105,32 +103,43 @@ fn read_node(
     meshes: &HashMap<usize, MeshHandle>,
 ) -> Vec<NodeDesc> {
     let mut nodes = vec![];
-    let transform = Mat4::from_cols_array_2d(&node.transform().matrix());
+    let transform = match node.transform() {
+        Transform::Matrix { matrix } => Mat4::from_cols_array_2d(&matrix),
+        Transform::Decomposed {
+            translation,
+            rotation,
+            scale,
+        } => {
+            let translation = Mat4::from_translation(Vec3::from(translation));
+            let rotation = Mat4::from_quat(glam::Quat::from_array(rotation));
+            let scale = Mat4::from_scale(Vec3::from(scale));
+            translation * rotation * scale
+        }
+    };
     let index = node.index();
     let children = node.children().map(|n| n.index()).collect::<Vec<_>>();
     let name = match node.name() {
-        Some(name) => format!("node-glTF-{index:03}-{}", name),
-        None => format!("node-glTF-{index:03}"),
+        Some(name) => format!("glTF-{index:02}-{}", name),
+        None => format!("glTF-{index:02}"),
+    };
+    let mesh = node.mesh().and_then(|m| meshes.get(&m.index())).map(|h| *h);
+    let data = if let Some(mesh) = mesh {
+        NodeData::Mesh(mesh)
+    } else {
+        NodeData::Group
     };
 
-    log::debug!(
-        "  Node {} -> {} (parent: {:?}, children: {:?})",
-        index,
-        name,
-        parent,
-        &children
-    );
-
-    let mesh = node.mesh().and_then(|m| meshes.get(&m.index())).map(|h| *h);
-
-    nodes.push(NodeDesc {
+    let desc = NodeDesc {
         name: name.clone(),
         index,
         parent,
         children,
         transform,
         mesh,
-    });
+        data,
+    };
+    log::debug!("Read glTF node {} -> {:?}", index, desc);
+    nodes.push(desc);
 
     for child in node.children() {
         nodes.extend(read_node(child, Some(index), meshes));
@@ -282,9 +291,6 @@ fn load_mesh(
                 }
             })
             .collect();
-        println!("{:?}", vertices[0]);
-        println!("{:?}", vertices[1]);
-        println!("{:?}", vertices[2]);
         let indices = reader
             .read_indices()
             .map(|read_indices| read_indices.into_u32().collect::<Vec<_>>())
@@ -298,13 +304,13 @@ fn load_mesh(
         let n_vertices = vertices.len() as u64;
 
         let topology = match primitive.mode() {
-            gltf::mesh::Mode::Points => vk::PrimitiveTopology::POINT_LIST,
-            gltf::mesh::Mode::Lines => vk::PrimitiveTopology::LINE_LIST,
-            gltf::mesh::Mode::LineStrip => vk::PrimitiveTopology::LINE_STRIP,
-            gltf::mesh::Mode::Triangles => vk::PrimitiveTopology::TRIANGLE_LIST,
-            gltf::mesh::Mode::TriangleStrip => vk::PrimitiveTopology::TRIANGLE_STRIP,
-            gltf::mesh::Mode::LineLoop => vk::PrimitiveTopology::LINE_STRIP,
-            gltf::mesh::Mode::TriangleFan => vk::PrimitiveTopology::TRIANGLE_FAN,
+            gltf::mesh::Mode::Points => PrimitiveTopology::POINT_LIST,
+            gltf::mesh::Mode::Lines => PrimitiveTopology::LINE_LIST,
+            gltf::mesh::Mode::LineStrip => PrimitiveTopology::LINE_STRIP,
+            gltf::mesh::Mode::Triangles => PrimitiveTopology::TRIANGLE_LIST,
+            gltf::mesh::Mode::TriangleStrip => PrimitiveTopology::TRIANGLE_STRIP,
+            gltf::mesh::Mode::LineLoop => PrimitiveTopology::LINE_STRIP,
+            gltf::mesh::Mode::TriangleFan => PrimitiveTopology::TRIANGLE_FAN,
         };
         let has_vertex_normals = reader.read_normals().is_some();
         let has_tangents = reader.read_tangents().is_some();
@@ -333,41 +339,41 @@ fn load_sampler(sampler: gltf::texture::Sampler) -> SamplerDesc {
     use gltf::texture::{MagFilter, MinFilter, WrappingMode};
     let index = sampler.index().unwrap_or(usize::MAX);
     let min_filter = match sampler.min_filter() {
-        Some(MinFilter::Nearest) => vk::Filter::NEAREST,
-        Some(MinFilter::NearestMipmapNearest) => vk::Filter::NEAREST,
-        Some(MinFilter::NearestMipmapLinear) => vk::Filter::NEAREST,
-        Some(MinFilter::Linear) => vk::Filter::LINEAR,
-        Some(MinFilter::LinearMipmapNearest) => vk::Filter::LINEAR,
-        Some(MinFilter::LinearMipmapLinear) => vk::Filter::LINEAR,
-        None => vk::Filter::LINEAR,
+        Some(MinFilter::Nearest) => Filter::NEAREST,
+        Some(MinFilter::NearestMipmapNearest) => Filter::NEAREST,
+        Some(MinFilter::NearestMipmapLinear) => Filter::NEAREST,
+        Some(MinFilter::Linear) => Filter::LINEAR,
+        Some(MinFilter::LinearMipmapNearest) => Filter::LINEAR,
+        Some(MinFilter::LinearMipmapLinear) => Filter::LINEAR,
+        None => Filter::LINEAR,
     };
     let mag_filter = match sampler.mag_filter() {
-        Some(MagFilter::Nearest) => vk::Filter::NEAREST,
-        Some(MagFilter::Linear) => vk::Filter::LINEAR,
-        None => vk::Filter::LINEAR,
+        Some(MagFilter::Nearest) => Filter::NEAREST,
+        Some(MagFilter::Linear) => Filter::LINEAR,
+        None => Filter::LINEAR,
     };
     let address_mode_u = match sampler.wrap_s() {
-        WrappingMode::ClampToEdge => vk::SamplerAddressMode::CLAMP_TO_EDGE,
-        WrappingMode::MirroredRepeat => vk::SamplerAddressMode::MIRRORED_REPEAT,
-        WrappingMode::Repeat => vk::SamplerAddressMode::REPEAT,
+        WrappingMode::ClampToEdge => SamplerAddressMode::CLAMP_TO_EDGE,
+        WrappingMode::MirroredRepeat => SamplerAddressMode::MIRRORED_REPEAT,
+        WrappingMode::Repeat => SamplerAddressMode::REPEAT,
     };
     let address_mode_y = match sampler.wrap_t() {
-        WrappingMode::ClampToEdge => vk::SamplerAddressMode::CLAMP_TO_EDGE,
-        WrappingMode::MirroredRepeat => vk::SamplerAddressMode::MIRRORED_REPEAT,
-        WrappingMode::Repeat => vk::SamplerAddressMode::REPEAT,
+        WrappingMode::ClampToEdge => SamplerAddressMode::CLAMP_TO_EDGE,
+        WrappingMode::MirroredRepeat => SamplerAddressMode::MIRRORED_REPEAT,
+        WrappingMode::Repeat => SamplerAddressMode::REPEAT,
     };
     let mipmap_mode = match sampler.min_filter() {
-        Some(MinFilter::Nearest) => vk::SamplerMipmapMode::NEAREST,
-        Some(MinFilter::NearestMipmapNearest) => vk::SamplerMipmapMode::NEAREST,
-        Some(MinFilter::NearestMipmapLinear) => vk::SamplerMipmapMode::NEAREST,
-        Some(MinFilter::Linear) => vk::SamplerMipmapMode::LINEAR,
-        Some(MinFilter::LinearMipmapNearest) => vk::SamplerMipmapMode::LINEAR,
-        Some(MinFilter::LinearMipmapLinear) => vk::SamplerMipmapMode::LINEAR,
-        _ => vk::SamplerMipmapMode::LINEAR,
+        Some(MinFilter::Nearest) => SamplerMipmapMode::NEAREST,
+        Some(MinFilter::NearestMipmapNearest) => SamplerMipmapMode::NEAREST,
+        Some(MinFilter::NearestMipmapLinear) => SamplerMipmapMode::NEAREST,
+        Some(MinFilter::Linear) => SamplerMipmapMode::LINEAR,
+        Some(MinFilter::LinearMipmapNearest) => SamplerMipmapMode::LINEAR,
+        Some(MinFilter::LinearMipmapLinear) => SamplerMipmapMode::LINEAR,
+        _ => SamplerMipmapMode::LINEAR,
     };
     let name = match sampler.name() {
-        Some(name) => format!("gltf-sampler-{index:03}-{name}"),
-        None => format!("gltf-sampler-{index:03}"),
+        Some(name) => format!("gltf-sampler-{index:02}-{name}"),
+        None => format!("gltf-sampler-{index:02}"),
     };
 
     SamplerDesc {

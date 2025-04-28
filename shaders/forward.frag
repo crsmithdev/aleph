@@ -12,20 +12,16 @@ precision highp usampler2D;
 #include "./include/scene.glsl"
 #include "./include/draw.glsl"
 #include "./include/material.glsl"
+#include "./include/util.glsl"
 
 layout (location = 0) in vec3 inPos;
 layout (location = 1) in vec3 inNormal;
-layout (location = 2) in vec2 inUv;
-layout (location = 3) in vec4 inColor;
-layout (location = 4) in mat3 inTbn;
+layout (location = 2) in vec4 inTangent;
+layout (location = 3) in vec2 inUv;
+layout (location = 4) in vec4 inColor;
+layout (location = 5) in mat3 inTbn;
 
 layout (location = 0) out vec4 outColor;
-
-const float PI = 3.1415926535897932384626433832795;
-
-float attenuate(float distance, float radius, float intensity) {
-    return 1.0 / (1.0 + distance * distance * (1.0 / radius)) * intensity;
-}
 
 float distributionGGX(vec3 normal, vec3 half_dir, float roughness) {
     float a         = roughness * roughness;
@@ -63,30 +59,63 @@ vec3 fresnelSchlick(float cos_theta, vec3 fresnel_0) {
     return fresnel_0 + (1.0 - fresnel_0) * pow(1.0 - cos_theta, 5.0);
 }
 
-void main() {
-    vec3 normal = inTbn * texture(u_normalMap, inUv).rgb * 2.0 - 1.0;
-    vec3 albedo = texture(u_colorMap, inUv).xyz;
+vec3 calculateNormal()
+{
+    if (u_scene.config.disable_normal_map == 1) {
+        return inNormal;
+    }
+	vec3 tangentNormal = texture(u_normalMap, inUv).xyz * 2.0 - 1.0;
 
-    float metallic;
-    if (u_scene.config.force_metallic > -0.01) {
-        metallic = texture(u_metalRoughMap, inUv).b * u_material.metal_factor;
-    } else {
-        metallic = u_scene.config.force_metallic;
+	vec3 N = normalize(inNormal);
+	vec3 T = normalize(inTangent.xyz);
+	vec3 B = normalize(cross(N, T));
+	mat3 TBN = mat3(T, B, N);
+	return normalize(TBN * tangentNormal);
+}
+
+void main() {
+    vec2 uv = inUv;
+    vec3 normal = calculateNormal();
+    vec3 bitangent = normalize(cross(normal, inTangent.xyz));
+    vec3 albedo = texture(u_colorMap, uv).xyz; 
+    if (u_scene.config.force_color == 1) {
+        albedo = u_scene.config.force_color_factor.xyz;
     }
 
-    float roughness = texture(u_metalRoughMap, inUv).g * u_material.rough_factor;
-    float ao = texture(u_aoMap, inUv).r * u_material.ao_strength;
+    float metallic = texture(u_metalRoughMap, uv).b * u_material.metal_factor;
+    if (u_scene.config.force_metallic == 1) {
+        metallic = texture(u_metalRoughMap, uv).b * u_scene.config.force_metallic_factor;
+    } 
+
+    float roughness = 0.5;
+    if (u_scene.config.force_roughness == 1) {
+        roughness = u_scene.config.force_roughness_factor;
+    }
+
+    float ao = texture(u_colorMap, uv).r * u_material.ao_strength; 
+    if (u_scene.config.force_ao == 1) {
+        ao = u_scene.config.force_ao_strength; 
+    }
+
+    if (u_scene.config.force_defaults == 1) {
+        albedo = vec3(1.0, 1.0, 1.0);
+        normal = vec3(0.5, 0.5, 1.0);
+        metallic = 0.1;
+        roughness = 0.5;
+        ao = 1.0;
+    }
 
     vec3 view_dir = normalize(u_scene.cameraPos - inPos);
     vec3 fresnel_0 = mix(vec3(0.04), albedo, metallic);
     vec3 reflect_dir = reflect(-view_dir, inNormal);   
 
     vec3 L_0 = vec3(0.0);
+    vec3 totalSpecular = vec3(0.0);
 
     for (int i = 0; i < u_scene.n_lights; ++i)
     {
         Light light = u_scene.lights[i];
-        vec3 light_color = light.color.xyz * 20.0;//light.intensity;
+        vec3 light_color = light.color.xyz * light.color.w;
         vec3 light_dir = normalize(light.position - inPos);
         vec3 half_dir = normalize(view_dir + light_dir);
 
@@ -96,23 +125,44 @@ void main() {
 
         // Cook-Torrance specular BRDF
         vec3 F = fresnelSchlick( max( dot(half_dir, view_dir), 0.0 ), fresnel_0 );
-        float D = distributionGGX(inNormal, half_dir, roughness);
-        float G = geometrySmith(inNormal, view_dir, light_dir, roughness);
+        float D = distributionGGX(normal, half_dir, roughness);
+        float G = geometrySmith(normal, view_dir, light_dir, roughness);
 
-        float denom = 4.0 * max(dot(inNormal, view_dir), 0.0) * max(dot(inNormal, light_dir), 0.0) + 0.001;
+        float denom = 4.0 * max(dot(normal, view_dir), 0.0) * max(dot(inNormal, light_dir), 0.0) + 0.001;
         vec3 specular = (D * F * G) / denom;
 
         vec3 kS = F;
         vec3 kD = vec3(1.0) - kS;
         kD *= 1.0 - metallic;	
 
-        float n_dot_l = max(dot(inNormal, light_dir), 0.0);
+        float n_dot_l = max(dot(normal, light_dir), 0.0);
 
+        totalSpecular += specular;
         L_0 += (kD * albedo / PI + specular) * light_radiance * n_dot_l;
     }
     
-    vec3 ambient = vec3(0.03) * albedo * ao; // ambient occlusion
+    vec3 ambient = vec3(0.03) * albedo * ao;
     vec3 color = ambient + L_0;
 
+    if (u_scene.config.debug_normals == 1) {
+        color = inNormal;
+    }
+    if (u_scene.config.debug_tangents == 1) {
+        color = inTangent.xyz;
+    }
+    if (u_scene.config.debug_bitangents == 1) {
+        color = bitangent;
+    }
+    if (u_scene.config.debug_specular == 1) {
+        if (totalSpecular.r  <= 0.05 || totalSpecular.g <= 0.05 || totalSpecular.b <= 0.01) {
+            color = vec3(1.0, 0.0, 0.0);
+        } else if (totalSpecular.r  >= 0.30 || totalSpecular.g >= 0.30 || totalSpecular.b >= 0.30) {
+            color = vec3(0.0, 1.0, 0.0);
+
+        }
+        // color = totalSpecular;
+    }   
+
     outColor = vec4(color, 1.0); 
+    
 }

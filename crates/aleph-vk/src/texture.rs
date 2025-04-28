@@ -1,8 +1,7 @@
-pub use ash::vk::{Format, ImageAspectFlags, ImageUsageFlags};
 use {
     crate::{
-        Allocator, Buffer, BufferUsageFlags, CommandBuffer, Device, Extent2D, Filter, Gpu,
-        MemoryLocation, SamplerAddressMode, SamplerMipmapMode,
+        Allocator, Buffer, BufferUsageFlags, CommandBuffer, Device, Extent2D, Filter, Format,
+        ImageAspectFlags, ImageUsageFlags, MemoryLocation, SamplerAddressMode, SamplerMipmapMode,
     },
     anyhow::Result,
     ash::vk,
@@ -73,7 +72,7 @@ macro_rules! impl_image {
     };
 }
 
-pub trait Texture: Clone {
+pub trait Texture {
     fn handle(&self) -> vk::Image;
     fn view(&self) -> vk::ImageView;
     fn extent(&self) -> Extent2D;
@@ -83,10 +82,10 @@ pub trait Texture: Clone {
 }
 
 #[allow(dead_code)]
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct AllocatedTexture {
     image: Image,
-    allocation: Arc<Allocation>,
+    allocation: Allocation,
     allocator: Arc<Allocator>,
     device: Device,
     sampler: Option<vk::Sampler>,
@@ -109,8 +108,7 @@ impl AllocatedTexture {
         let name = name.into();
         let image = Image::new(device.clone(), extent, format, usage, name.clone(), None)?;
         let requirements = unsafe { device.handle.get_image_memory_requirements(image.handle) };
-        let allocation =
-            Arc::new(allocator.allocate_image(image.handle, requirements, &name.clone())?);
+        let allocation = allocator.allocate_image(image.handle, requirements, &name.clone())?;
         let view_info = vk::ImageViewCreateInfo::default()
             .image(image.handle)
             .view_type(vk::ImageViewType::TYPE_2D)
@@ -136,49 +134,6 @@ impl AllocatedTexture {
         })
     }
 
-    pub fn monochrome(
-        gpu: &Gpu,
-        pixel: [f32; 4],
-        format: vk::Format,
-        label: impl Into<String>,
-    ) -> Result<AllocatedTexture> {
-        println!("allocated");
-        let extent = Extent2D {
-            width: 1,
-            height: 1,
-        };
-        let pixels = &[pixel];
-        let data = bytemuck::bytes_of(pixels);
-        let sampler = gpu.create_sampler(&SamplerDesc {
-            name: "sa-default".into(),
-            index: 0,
-            min_filter: Filter::LINEAR,
-            mag_filter: Filter::LINEAR,
-            mipmap_mode: SamplerMipmapMode::LINEAR,
-            address_mode_u: SamplerAddressMode::REPEAT,
-            address_mode_v: SamplerAddressMode::REPEAT,
-            anisotropy_enable: false,
-            max_anisotropy: 1.0,
-        })?;
-        let texture = AllocatedTexture::new(
-            gpu.device().clone(),
-            gpu.allocator(),
-            extent,
-            format,
-            ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
-            ImageAspectFlags::COLOR,
-            label.into(),
-            Some(sampler),
-        )?;
-        gpu.execute(|cmd| {
-            if let Err(e) = texture.upload(cmd, data) {
-                log::error!("Failed to upload texture: {:?}", e);
-            }
-        })?;
-
-        Ok(texture)
-    }
-
     pub fn upload<T: Pod>(&self, cmd: &CommandBuffer, data: &[T]) -> Result<()> {
         let buffer = Buffer::from_data(
             &self.device,
@@ -192,6 +147,16 @@ impl AllocatedTexture {
         cmd.copy_buffer_to_image(&buffer, self);
 
         Ok(())
+    }
+}
+
+impl Drop for AllocatedTexture {
+    fn drop(&mut self) {
+        unsafe {
+            let allocation = std::mem::take(&mut self.allocation);
+            self.allocator.deallocate(allocation);
+            self.device.handle.destroy_image(self.image.handle, None);
+        }
     }
 }
 
@@ -209,7 +174,6 @@ impl WrappedTexture {
         format: vk::Format,
         name: impl Into<String>,
     ) -> Result<Self> {
-        println!("wrapped");
         let image = Image {
             handle,
             extent,

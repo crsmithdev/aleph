@@ -1,13 +1,13 @@
-pub mod debug;
 pub mod forward;
 pub mod gui;
 pub mod layer;
 pub mod pipeline;
 pub mod renderer;
 
+use crate::renderer::{GpuDrawData, GpuMaterialData, GpuSceneData, RenderConfig};
 pub use crate::{
-    // debug::DebugPipeline,
     forward::ForwardPipeline,
+    gui::Gui,
     layer::RenderLayer,
     pipeline::{Pipeline, PipelineBuilder, ResourceBinder, ResourceLayout},
     renderer::{RenderContext, Renderer},

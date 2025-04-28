@@ -1,5 +1,5 @@
 use {
-    crate::{gui::Gui, ForwardPipeline, Pipeline},
+    crate::{ForwardPipeline, Gui, Pipeline},
     aleph_scene::{model::Light, Assets, Scene},
     aleph_vk::{
         AllocatedTexture, Buffer, BufferUsageFlags, CommandBuffer, Extent2D, Extent3D, Format,
@@ -7,19 +7,31 @@ use {
     },
     anyhow::Result,
     bytemuck::{Pod, Zeroable},
-    glam::{vec3, vec4, Mat4, Vec2, Vec3, Vec4},
+    glam::{vec3, vec4, Mat4, Vec3, Vec4},
     std::{mem, sync::Arc},
     tracing::instrument,
 };
+
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy, Pod, Zeroable)]
-pub struct Config {
-    pub force_color: Vec4,
-    pub force_metallic: Vec2,
-    pub force_roughness: Vec2,
-    pub force_ao: Vec2,
-    pub padding0: Vec2,
+pub struct GpuConfig {
+    pub force_color: i32,
+    pub force_metallic: i32,
+    pub force_roughness: i32,
+    pub force_ao: i32,
+    pub force_color_factor: Vec4,
+    pub force_metallic_factor: f32,
+    pub force_roughness_factor: f32,
+    pub force_ao_strength: f32,
+    pub debug_normals: i32,
+    pub debug_tangents: i32,
+    pub debug_bitangents: i32,
+    pub debug_specular: i32,
+    pub debug_normal_maps: i32,
+    pub force_defaults: i32,
+    pub _padding0: Vec3,
 }
+
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
 pub struct GpuSceneData {
@@ -28,7 +40,7 @@ pub struct GpuSceneData {
     pub vp: Mat4,
     pub camera_pos: Vec3,
     pub n_lights: i32,
-    pub config: Config,
+    pub config: GpuConfig,
     pub lights: [Light; 4],
 }
 
@@ -67,33 +79,25 @@ pub(crate) const FORMAT_DEPTH_IMAGE: Format = Format::D32_SFLOAT;
 const LIGHTS: [Light; 4] = [
     Light {
         position: vec3(2., 2., 2.),
-        color: vec4(3., 3., 3., 3.),
-        radius: 10.,
+        color: vec4(10., 10., 10., 10.),
+        intensity: 10.,
     },
     Light {
         position: vec3(-2., -2., -2.),
-        color: vec4(3., 3., 3., 3.),
-        radius: 10.,
+        color: vec4(10., 10., 10., 10.),
+        intensity: 10.,
     },
     Light {
         position: vec3(-2., 2., 2.),
-        color: vec4(3., 3., 3., 3.),
-        radius: 10.,
+        color: vec4(10., 10., 10., 10.),
+        intensity: 10.,
     },
     Light {
         position: vec3(2., -2., -2.),
-        color: vec4(3., 3., 3., 3.),
-        radius: 10.,
+        color: vec4(10., 10., 10., 10.),
+        intensity: 10.,
     },
 ];
-
-#[derive(Clone, Default)]
-pub struct RendererConfig {
-    pub clear_color: Vec3,
-    pub initial_scene: Option<String>,
-    pub auto_rotate: bool,
-    pub debug_normals: bool,
-}
 
 pub struct Renderer {
     frames: Vec<Frame>,
@@ -102,16 +106,53 @@ pub struct Renderer {
     frame_index: usize,
     frame_counter: usize,
     draw_image: AllocatedTexture,
-    // debug_pipeline: DebugPipeline,
     depth_image: AllocatedTexture,
-    config: RendererConfig,
     scene_buffer: Buffer<GpuSceneData>,
-    scene_buffer_data: GpuSceneData,
+    scene_data: GpuSceneData,
     pub gpu: Arc<Gpu>,
+    config: RenderConfig,
+}
+
+impl From<&RenderConfig> for GpuConfig {
+    fn from(config: &RenderConfig) -> Self {
+        Self {
+            force_color: config.force_color as i32,
+            force_metallic: config.force_metallic as i32,
+            force_roughness: config.force_roughness as i32,
+            force_ao: config.force_ao as i32,
+            force_color_factor: config.force_color_factor,
+            force_metallic_factor: config.force_metallic_factor,
+            force_roughness_factor: config.force_roughness_factor,
+            force_ao_strength: config.force_ao_strength,
+            debug_normals: config.debug_normals as i32,
+            debug_tangents: config.debug_tangents as i32,
+            debug_bitangents: config.debug_bitangents as i32,
+            debug_specular: config.debug_specular as i32,
+            debug_normal_maps: config.debug_normal_maps as i32,
+            force_defaults: 0,
+            _padding0: Vec3::ZERO,
+        }
+    }
+}
+pub struct RenderConfig {
+    pub force_color: bool,
+    pub force_metallic: bool,
+    pub force_roughness: bool,
+    pub force_ao: bool,
+    pub force_color_factor: Vec4,
+    pub force_metallic_factor: f32,
+    pub force_roughness_factor: f32,
+    pub force_ao_strength: f32,
+    pub debug_normals: bool,
+    pub debug_tangents: bool,
+    pub debug_bitangents: bool,
+    pub debug_specular: bool,
+    pub debug_normal_maps: bool,
+    pub force_defaults: bool,
 }
 
 impl Renderer {
-    pub fn new(gpu: Arc<Gpu>, config: RendererConfig) -> Result<Self> {
+    pub fn new(gpu: Arc<Gpu>) -> Result<Self> {
         let frames = Self::create_frames(&gpu)?;
         let draw_image = gpu.create_texture(
             gpu.swapchain().extent(),
@@ -141,7 +182,6 @@ impl Renderer {
         )?;
 
         let foreward_pipeline = ForwardPipeline::new(&gpu)?;
-        // let debug_pipeline = DebugPipeline::new(&gpu)?;
         let scene_data = GpuSceneData {
             lights: LIGHTS,
             n_lights: 3,
@@ -154,29 +194,49 @@ impl Renderer {
             foreward_pipeline,
             draw_image,
             depth_image,
-            scene_buffer_data: scene_data,
-            rebuild_swapchain: false,
+            scene_data,
             scene_buffer,
-            // debug_pipeline,
+            rebuild_swapchain: false,
             frame_index: 0,
             frame_counter: 0,
-            config,
+            config: RenderConfig {
+                force_color: false,
+                force_metallic: false,
+                force_roughness: false,
+                force_ao: false,
+                force_color_factor: Vec4::ZERO,
+                force_metallic_factor: 0.0,
+                force_roughness_factor: 0.0,
+                force_ao_strength: 0.0,
+                debug_normals: false,
+                debug_tangents: false,
+                debug_bitangents: false,
+                debug_specular: false,
+                debug_normal_maps: false,
+                force_defaults: false,
+            },
         })
     }
+
     fn update_scene_buffer(&mut self, scene: &Scene) {
         let view = scene.camera.view();
         let projection = scene.camera.projection();
 
-        self.scene_buffer_data.view = view;
-        self.scene_buffer_data.projection = projection;
-        self.scene_buffer_data.vp = projection * view;
-        self.scene_buffer_data.camera_pos = scene.camera.position();
-
-        self.scene_buffer.write(&[self.scene_buffer_data]);
+        self.scene_data.view = view;
+        self.scene_data.projection = projection;
+        self.scene_data.vp = projection * view.inverse();
+        self.scene_data.camera_pos = scene.camera.position();
+        self.scene_data.config = GpuConfig::from(&self.config);
+        self.scene_buffer.write(&[self.scene_data]);
     }
 
     #[instrument(skip_all)]
-    pub fn execute(&mut self, scene: &Scene, assets: &mut Assets, gui: &mut Gui) -> Result<()> {
+    pub fn render_scene(
+        &mut self,
+        scene: &Scene,
+        assets: &mut Assets,
+        gui: &mut Gui,
+    ) -> Result<()> {
         self.update_scene_buffer(scene);
 
         if self.rebuild_swapchain {
@@ -194,14 +254,10 @@ impl Renderer {
         } = &self.frames[self.frame_index];
 
         self.gpu.wait_for_fence(*fence)?;
-        let (image_index, rebuild) = {
-            let (image_index, rebuild) = self
-                .gpu
-                .swapchain()
-                .acquire_next_image(*swapchain_semaphore)?;
-            (image_index as usize, rebuild)
-        };
-
+        let (image_index, rebuild) = self
+            .gpu
+            .swapchain()
+            .acquire_next_image(*swapchain_semaphore)?;
         self.rebuild_swapchain = rebuild;
         self.gpu.reset_fence(*fence)?;
 
@@ -241,11 +297,8 @@ impl Renderer {
             assets,
         };
         self.foreward_pipeline.execute(&context)?;
-        // if self.config.debug_normals {
-        //     self.debug_pipeline.execute(&context)?;
-        // }
 
-        gui.draw(&context, &mut self.config, &mut self.scene_buffer_data)?;
+        gui.draw(&context, &mut self.config, &mut self.scene_data)?;
 
         cmd_buffer.transition_image(
             &self.draw_image,
@@ -304,45 +357,3 @@ impl Renderer {
 impl Drop for Renderer {
     fn drop(&mut self) { unsafe { self.gpu.device().handle().device_wait_idle().unwrap() }; }
 }
-
-// fn build_ui(ctx: &egui::Context, config: &mut RendererConfig, data: &mut GpuSceneData) {
-//     egui::Window::new("Demo texture").show(ctx, |ui| {
-//         ui.label("Debug");
-//         ui.add(egui::Checkbox::new(
-//             &mut config.debug_normals,
-//             "Show normals",
-//         ));
-//         ui.add(egui::Checkbox::new(&mut config.auto_rotate, "Auto rotate"));
-//         ui.label("Lights");
-//         ui.add(
-//             egui::Slider::new(&mut data.n_lights, 0..=4)
-//                 .step_by(1.0)
-//                 .text("# Lights"),
-//         );
-//         ui.horizontal(|ui| {
-//             ui.label("0 R:");
-//             ui.add(egui::DragValue::new(&mut data.lights[0].color.x).speed(0.1));
-//             ui.label("G:");
-//             ui.add(egui::DragValue::new(&mut data.lights[0].color.y).speed(0.1));
-//             ui.label("B:");
-//             ui.add(egui::DragValue::new(&mut data.lights[0].color.z).speed(0.1));
-//             ui.label("A:");
-//             ui.add(egui::DragValue::new(&mut data.lights[0].color.z).speed(0.1));
-//         });
-//         ui.separator();
-//         ui.label("Material");
-
-//         let mut force_metallic = data.config.force_metallic > -0.5;
-//         let mut metallic = 0.;
-
-//         ui.horizontal(|ui| {
-//             ui.label("Metalness:");
-//             ui.checkbox(&mut force_metallic, "Override?");
-//             ui.add(egui::Slider::new(&mut metallic, 0.0..=1.0).text("Value"));
-//             data.config.force_metallic = metallic;
-//             if force_metallic {
-//                 data.config.force_roughness = -1.0;
-//             }
-//         });
-//     });
-// }

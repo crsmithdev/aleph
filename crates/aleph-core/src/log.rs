@@ -1,11 +1,11 @@
 pub use tracing::{debug, error, info, trace, warn};
-use tracing_subscriber::fmt::format::Writer;
 use {
     tracing,
-    tracing_subscriber::{self, EnvFilter},
+    tracing_subscriber::{self, fmt::format::Writer, EnvFilter},
 };
 
 struct Timer {}
+
 impl tracing_subscriber::fmt::time::FormatTime for Timer {
     fn format_time(&self, writer: &mut Writer<'_>) -> std::fmt::Result {
         let time = chrono::Utc::now();
@@ -13,7 +13,7 @@ impl tracing_subscriber::fmt::time::FormatTime for Timer {
     }
 }
 
-pub fn setup() {
+pub fn setup_logging() {
     let format = tracing_subscriber::fmt::format()
         .with_timer(Timer {})
         .with_thread_ids(false)

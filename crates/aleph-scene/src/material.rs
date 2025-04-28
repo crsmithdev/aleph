@@ -1,5 +1,5 @@
 use {
-    crate::assets::TextureHandle,
+    crate::TextureHandle,
     derive_more::derive::Debug,
     glam::{vec4, Vec4},
 };

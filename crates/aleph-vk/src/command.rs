@@ -1,9 +1,8 @@
 pub use ash::vk::ImageLayout;
 use {
-    super::{buffer::Buffer, Device, Texture},
-    crate::RawBuffer,
+    crate::{Buffer, Device, ImageAspectFlags, RawBuffer, Texture},
     anyhow::Result,
-    ash::{vk, vk::ImageAspectFlags},
+    ash::vk,
     bytemuck::Pod,
     derive_more::Debug,
     std::any::Any,

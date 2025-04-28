@@ -1,12 +1,12 @@
 use {
     crate::{
-        pipeline::{Pipeline, PipelineBuilder, ResourceBinder, ResourceLayout},
-        renderer::{GpuDrawData, GpuMaterialData, RenderContext},
+        GpuDrawData, GpuMaterialData, Pipeline, PipelineBuilder, RenderContext, ResourceBinder,
+        ResourceLayout,
     },
     aleph_scene::{graph::NodeHandle, model::Primitive, util, Material, Mesh, NodeData, Vertex},
     aleph_vk::{
-        AttachmentLoadOp, AttachmentStoreOp, Buffer, BufferUsageFlags,
-        ColorComponentFlags, CompareOp, CullModeFlags, FrontFace, Gpu, PipelineBindPoint,
+        AttachmentLoadOp, AttachmentStoreOp, Buffer, BufferUsageFlags, ColorComponentFlags,
+        CompareOp, CullModeFlags, FrontFace, Gpu, PipelineBindPoint,
         PipelineColorBlendAttachmentState, PipelineLayout, PolygonMode, PrimitiveTopology, Rect2D,
         ShaderStageFlags, Texture, VkPipeline,
     },

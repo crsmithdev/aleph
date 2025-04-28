@@ -1,9 +1,8 @@
 use {
-    super::{
+    crate::{
         texture::WrappedTexture, CommandBuffer, CommandPool, Device, Instance, Queue, Surface,
-        VK_TIMEOUT_NS,
+        Texture, VK_TIMEOUT_NS,
     },
-    crate::Texture,
     anyhow::Result,
     ash::{
         khr,
@@ -169,12 +168,12 @@ impl Swapchain {
         };
     }
 
-    pub fn acquire_next_image(&self, semaphore: vk::Semaphore) -> Result<(u32, bool)> {
+    pub fn acquire_next_image(&self, semaphore: vk::Semaphore) -> Result<(usize, bool)> {
         match unsafe {
             self.loader
                 .acquire_next_image(self.handle, VK_TIMEOUT_NS, semaphore, vk::Fence::null())
         } {
-            Ok((index, needs_rebuild)) => Ok((index, needs_rebuild)),
+            Ok((index, needs_rebuild)) => Ok((index as usize, needs_rebuild)),
             Err(err) if err == vk::Result::ERROR_OUT_OF_DATE_KHR => Ok((0, true)),
             Err(err) if err == vk::Result::SUBOPTIMAL_KHR => Ok((0, true)),
             Err(err) => Err(err.into()),

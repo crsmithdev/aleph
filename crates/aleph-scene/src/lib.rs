@@ -7,10 +7,11 @@ pub mod mikktspace;
 pub mod model;
 pub mod util;
 
+use crate::mikktspace::{generate_tangents, MikktGeometry};
 pub use crate::{
-    assets::Assets,
+    assets::{Assets, MaterialHandle, MeshHandle, TextureHandle},
     camera::{Camera, CameraConfig},
-    graph::{Node, NodeData, Scene},
+    graph::{Node, NodeData, NodeDesc, Scene, SceneDesc},
     material::Material,
-    model::{Mesh, Primitive, Vertex},
+    model::{Mesh, MeshDesc, Primitive, PrimitiveDesc, Vertex},
 };

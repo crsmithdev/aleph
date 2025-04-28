@@ -39,7 +39,11 @@ pub trait SystemParam {
 impl<'res, T: 'static> SystemParam for Res<'res, T> {
     type Item<'new> = Res<'new, T>;
 
-    fn retrieve<'r>(resources: &'r Resources) -> Self::Item<'r> { resources.get::<T>() }
+    fn retrieve<'r>(resources: &'r Resources) -> Self::Item<'r> {
+        Res {
+            value: resources.get::<T>(),
+        }
+    }
 }
 
 impl<T: 'static> Deref for Res<'_, T> {
@@ -65,7 +69,11 @@ impl<T: 'static> DerefMut for ResMut<'_, T> {
 impl<'res, T: 'static> SystemParam for ResMut<'res, T> {
     type Item<'new> = ResMut<'new, T>;
 
-    fn retrieve<'r>(resources: &'r Resources) -> Self::Item<'r> { resources.get_mut::<T>() }
+    fn retrieve<'r>(resources: &'r Resources) -> Self::Item<'r> {
+        ResMut {
+            value: resources.get_mut::<T>(),
+        }
+    }
 }
 
 // pub struct ResourceHandle(u64);
@@ -124,29 +132,24 @@ impl Resources {
     pub fn add<T: 'static>(&mut self, value: T) {
         let type_id = TypeId::of::<T>();
         let resource = Resource::new(value);
-        log::trace!(
-            "Add resource, type: {:?} -> id: {type_id:?}",
-            std::any::type_name::<T>()
-        );
         self.resources.insert(type_id, resource);
     }
 
-    pub fn get<'a, T: 'static>(&'a self) -> Res<'a, T> {
-        let value = self.get_ref(TypeId::of::<T>());
-        Res { value }
+    pub fn get<'a, T: 'static>(&self) -> &T {
+        let type_id = TypeId::of::<T>();
+        let ptr = self.get_ptr(type_id);
+        ptr.as_ref()
     }
 
-    pub fn get_ref<'a, T: 'static>(&self, type_id: TypeId) -> &T { self.get_ptr(type_id).as_ref() }
+    pub fn get_mut<'a, T: 'static>(&'a self) -> &'a mut T {
+        let type_id = TypeId::of::<T>();
+        let ptr = self.get_ptr(type_id);
+        ptr.as_mut()
+    }
 
     pub fn get_ptr<'a>(&'a self, type_id: TypeId) -> Ptr<'a> {
         let resource = self.resources.get(&type_id).unwrap();
         resource.as_ptr()
-    }
-    pub fn get_mut<'a, T: 'static>(&'a self) -> ResMut<'a, T> {
-        let ptr = self.get_ptr(TypeId::of::<T>());
-        ResMut {
-            value: ptr.as_mut(),
-        }
     }
 }
 
@@ -179,9 +182,6 @@ impl Scheduler {
         let entry = self.systems.entry(schedule).or_default();
         entry.push(Box::new(system.into_system()));
     }
-
-    // pub fn add_resource<R: 'static>(&mut self, res: R) { self.resources.add(res); }
-    // pub fn get<'a, T: 'static>(&'a self) -> ResMut<'a, T> { self.resources.get_mut::<T>() }
 }
 
 impl<F> System for FunctionSystem<(), F>
@@ -211,7 +211,7 @@ where
     }
 }
 
-macro_rules! impl_system2 {
+macro_rules! impl_system {
     ($($params:ident),*) => {
         #[allow(unused_parens)]
         #[allow(unused_variables)]
@@ -255,15 +255,15 @@ macro_rules! impl_system2 {
     };
 }
 
-impl_system2!(T1);
-impl_system2!(T1, T2);
-impl_system2!(T1, T2, T3);
-impl_system2!(T1, T2, T3, T4);
-impl_system2!(T1, T2, T3, T4, T5);
-impl_system2!(T1, T2, T3, T4, T5, T6);
-impl_system2!(T1, T2, T3, T4, T5, T6, T7);
-impl_system2!(T1, T2, T3, T4, T5, T6, T7, T8);
-impl_system2!(T1, T2, T3, T4, T5, T6, T7, T8, T9);
+impl_system!(T1);
+impl_system!(T1, T2);
+impl_system!(T1, T2, T3);
+impl_system!(T1, T2, T3, T4);
+impl_system!(T1, T2, T3, T4, T5);
+impl_system!(T1, T2, T3, T4, T5, T6);
+impl_system!(T1, T2, T3, T4, T5, T6, T7);
+impl_system!(T1, T2, T3, T4, T5, T6, T7, T8);
+impl_system!(T1, T2, T3, T4, T5, T6, T7, T8, T9);
 
 #[cfg(test)]
 mod test {

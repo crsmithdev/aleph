@@ -1,5 +1,5 @@
 use {
-    crate::{assets::MeshHandle, Camera, CameraConfig},
+    crate::{Camera, CameraConfig, MeshHandle},
     anyhow::Result,
     derive_more::Debug,
     glam::Mat4,
@@ -10,8 +10,6 @@ use {
         sync::atomic::{AtomicU64, Ordering},
     },
 };
-
-static NODE_HANDLE_INDEX: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Default, Debug)]
 pub struct Node {
@@ -26,21 +24,47 @@ impl Node {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub enum NodeData {
     #[default]
-    Empty,
+    Group,
     Mesh(MeshHandle),
 }
 
-#[derive(Debug)]
+impl Debug for NodeData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NodeData::Group => f.write_str("Group"),
+            NodeData::Mesh(mesh) => f.write_str(&format!("NodeData::Mesh({:?})", mesh)),
+        }
+    }
+}
+
 pub struct NodeDesc {
     pub name: String,
     pub index: usize,
     pub parent: Option<usize>,
     pub transform: Mat4,
+    pub data: NodeData,
     pub mesh: Option<MeshHandle>,
     pub children: Vec<usize>,
+}
+
+impl Debug for NodeDesc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let parent = match self.parent {
+            Some(id) => &format!("({id})"),
+            None => "-",
+        };
+        let transform = format!(
+            "[{:?}, {:?}, {:?}]",
+            self.transform.row(0).to_array(),
+            self.transform.row(1).to_array(),
+            self.transform.row(2).to_array()
+        );
+        f.write_str(&format!("NodeDesc(name: {:?}, index: {}, parent: {}, children: {:?}, transform: {}, data: {:?})",
+            self.name, self.index, parent, self.children, transform, self.data))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -50,7 +74,8 @@ pub struct NodeHandle {
 
 impl NodeHandle {
     pub fn new() -> Self {
-        let index = NODE_HANDLE_INDEX.fetch_add(1, Ordering::Relaxed);
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let index = COUNTER.fetch_add(1, Ordering::Relaxed);
         Self { index }
     }
 }
@@ -78,14 +103,13 @@ impl Default for Scene {
         let mut indices = HashMap::new();
         let mut nodes = HashMap::new();
         let root = NodeHandle::new();
-        log::debug!("root handle: {root:?}");
         let index = graph.add_node(root);
         nodes.insert(
             root,
             Node {
                 name: "root".to_string(),
                 transform: Mat4::IDENTITY,
-                data: NodeData::Empty,
+                data: NodeData::Group,
             },
         );
         indices.insert(root, index);
@@ -178,7 +202,7 @@ impl Scene {
             Node {
                 name: "root".to_string(),
                 transform: Mat4::IDENTITY,
-                data: NodeData::Empty,
+                data: NodeData::Group,
             },
         );
         self.indices.insert(root_handle, root_index);
@@ -220,7 +244,7 @@ impl Scene {
                     transform: desc.transform,
                     data: match desc.mesh {
                         Some(mesh) => NodeData::Mesh(mesh),
-                        None => NodeData::Empty,
+                        None => NodeData::Group,
                     },
                 };
 
@@ -237,20 +261,6 @@ impl Scene {
             }
             remaining = next_remaining;
         }
-
-        //             // log::debug!(
-        //             //     "parent index: {}, orig: {}, child index: {}, orig: {}",
-        //             //     index.index(),
-        //             //     node.index,
-        //             //     child_index.index(),
-        //             //     child,
-        //             // );
-        //             // log::debug!(
-        //             //     "Loaded node: {} (transform: {:?}, mesh: {:?})",
-        //             //     name,
-        //             //     transform.to_cols_array_2d(),
-        //             //     mesh_index,
-        //             // );
 
         Ok(())
     }

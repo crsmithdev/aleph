@@ -1,5 +1,5 @@
 use {
-    super::{CommandPool, Instance},
+    crate::{CommandPool, Instance},
     anyhow::{anyhow, bail, Result},
     ash::{
         ext, khr,
@@ -84,6 +84,9 @@ impl Device {
         let mut descriptor_indexing_features =
             ash::vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::default()
                 .runtime_descriptor_array(true);
+        let mut device_8bit_storage_features =
+            ash::vk::PhysicalDevice8BitStorageFeaturesKHR::default()
+                .storage_buffer8_bit_access(true);
 
         let device_features1 = vk::PhysicalDeviceFeatures::default()
             .geometry_shader(true)
@@ -93,6 +96,7 @@ impl Device {
             .push_next(&mut synchronization2_features)
             .push_next(&mut dynamic_rendering_features)
             .push_next(&mut buffer_device_address_features)
+            .push_next(&mut device_8bit_storage_features)
             .push_next(&mut descriptor_indexing_features);
 
         let handle = instance.create_device(
