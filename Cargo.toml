@@ -42,6 +42,7 @@ smol_str = "0.2.2"
 
 [dependencies]
 anyhow = "1.0.95"
+glob.workspace = true
 glam.workspace = true
 smol_str.workspace = true
 aleph-app.workspace = true

@@ -77,7 +77,8 @@ void main() {
     vec2 uv = inUv;
     vec3 normal = calculateNormal();
     vec3 bitangent = normalize(cross(normal, inTangent.xyz));
-    vec3 albedo = texture(u_colorMap, uv).xyz; 
+    
+    vec3 albedo = texture(u_colorMap, uv).xyz * inColor.xyz;
     if (u_scene.config.force_color == 1) {
         albedo = u_scene.config.force_color_factor.xyz;
     }

@@ -1,8 +1,12 @@
 use {
-    crate::{util, Material, Mesh, MeshDesc, Primitive, Vertex},
+    crate::{
+        model::{create_index_buffer, create_vertex_buffer},
+        util, Material, Mesh, MeshInfo, Primitive, Vertex,
+    },
     aleph_vk::{
-        AllocatedTexture, Extent2D, Format, Gpu, ImageAspectFlags, ImageUsageFlags, MemoryLocation,
-        PrimitiveTopology, Sampler, SamplerDesc, TextureDesc,
+        AllocatedTexture, Extent2D, Filter, Format, Gpu, ImageAspectFlags, ImageUsageFlags,
+        MemoryLocation, PrimitiveTopology, Sampler, SamplerAddressMode, SamplerMipmapMode,
+        TextureInfo,
     },
     anyhow::Result,
     image::{ImageBuffer, Rgba},
@@ -93,14 +97,14 @@ enum Asset<T, D> {
     Unloaded(D),
 }
 
-type TextureAsset = Asset<AllocatedTexture, TextureDesc>;
+type TextureAsset = Asset<AllocatedTexture, TextureInfo>;
 
 type AssetCache<T, D> = RefCell<HashMap<AssetHandle<T>, Asset<T, D>>>;
 
 pub struct Assets {
     gpu: Arc<Gpu>,
     meshes: HashMap<MeshHandle, Mesh>,
-    textures: AssetCache<AllocatedTexture, TextureDesc>,
+    textures: AssetCache<AllocatedTexture, TextureInfo>,
     materials: HashMap<MaterialHandle, Material>,
     pub defaults: Defaults,
 }
@@ -131,6 +135,7 @@ impl Assets {
         color: &[u8; 4],
         format: Format,
         name: impl Into<String>,
+        sampler: Sampler,
     ) -> Result<AllocatedTexture> {
         let pixel = Rgba::<u8>(*color);
         let buffer = ImageBuffer::from_pixel(16, 16, pixel);
@@ -138,14 +143,14 @@ impl Assets {
 
         Self::load_texture(
             gpu,
-            &TextureDesc {
+            &TextureInfo {
                 name: name.into(),
                 data: data.to_vec(),
                 extent: Self::DEFAULT_EXTENT,
                 usage: ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
                 aspect: ImageAspectFlags::COLOR,
                 format,
-                sampler: SamplerDesc::default(),
+                sampler,
             },
         )
     }
@@ -153,11 +158,17 @@ impl Assets {
     fn load_defaults(gpu: &Gpu) -> Result<Defaults> {
         let srgb = Format::R8G8B8A8_SRGB;
         let linear = Format::R8G8B8A8_UNORM;
+        let sampler = gpu.create_sampler(
+            Filter::LINEAR,
+            Filter::LINEAR,
+            SamplerMipmapMode::LINEAR,
+            SamplerAddressMode::REPEAT,
+            SamplerAddressMode::REPEAT,
+        )?;
 
-        let white_srgb = Self::create_default(gpu, &WHITE, srgb, "white-srgb")?;
-        let white_linear = Self::create_default(gpu, &WHITE, linear, "white-linear")?;
-        let normal = Self::create_default(gpu, &NORMAL, linear, "normal")?;
-        let sampler = gpu.create_sampler(&SamplerDesc::default())?;
+        let white_srgb = Self::create_default(gpu, &WHITE, srgb, "white-srgb", sampler)?;
+        let white_linear = Self::create_default(gpu, &WHITE, linear, "white-linear", sampler)?;
+        let normal = Self::create_default(gpu, &NORMAL, linear, "normal", sampler)?;
 
         Ok(Defaults {
             white_srgb: Rc::new(white_srgb),
@@ -167,7 +178,7 @@ impl Assets {
         })
     }
 
-    pub fn add_texture(&mut self, desc: TextureDesc) -> TextureHandle {
+    pub fn add_texture(&mut self, desc: TextureInfo) -> TextureHandle {
         let handle = TextureHandle::new();
         let asset = TextureAsset::Unloaded(desc);
         self.textures.borrow_mut().insert(handle, asset);
@@ -186,7 +197,7 @@ impl Assets {
                 return Some(asset.clone());
             }
             Some(TextureAsset::Unloaded(desc)) => {
-                let texture = Self::load_texture(&self.gpu, &desc).unwrap();
+                let texture = Self::load_texture(&self.gpu, desc).unwrap();
                 textures.insert(handle, TextureAsset::Loaded(Rc::new(texture)));
             }
             None => return None,
@@ -200,15 +211,14 @@ impl Assets {
         unreachable!()
     }
 
-    fn load_texture(gpu: &Gpu, desc: &TextureDesc) -> Result<AllocatedTexture> {
-        let sampler = gpu.create_sampler(&desc.sampler)?;
+    fn load_texture(gpu: &Gpu, desc: &TextureInfo) -> Result<AllocatedTexture> {
         let texture = gpu.create_texture(
             desc.extent,
             desc.format,
             ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
             ImageAspectFlags::COLOR,
             &desc.name,
-            Some(sampler),
+            Some(desc.sampler),
         )?;
 
         gpu.execute(|cmd| texture.upload(cmd, &desc.data).expect("upload"))?;
@@ -228,14 +238,15 @@ impl Assets {
 
     pub fn mesh(&self, handle: MeshHandle) -> Option<&Mesh> { self.meshes.get(&handle) }
 
-    pub fn load_mesh(&mut self, desc: MeshDesc) -> Result<MeshHandle> {
+    pub fn add_mesh(&mut self, desc: MeshInfo) -> Result<MeshHandle> {
         let mut primitives = vec![];
         for primitive_desc in &desc.primitives {
             let indices = &primitive_desc.indices;
             let vertices = &primitive_desc.vertices;
 
             let index_size = size_of::<u32>() as u64 * indices.len() as u64;
-            let index_buffer = self.gpu.create_index_buffer(
+            let index_buffer = create_index_buffer(
+                &self.gpu,
                 index_size,
                 MemoryLocation::GpuOnly,
                 "index buffer",
@@ -244,7 +255,8 @@ impl Assets {
 
             let n_vertices = primitive_desc.indices.len() as u32;
             let vertex_size = size_of::<Vertex>() as u64 * vertices.len() as u64;
-            let vertex_buffer = self.gpu.create_vertex_buffer(
+            let vertex_buffer = create_vertex_buffer(
+                &self.gpu,
                 vertex_size,
                 MemoryLocation::GpuOnly,
                 "vertex buffer",

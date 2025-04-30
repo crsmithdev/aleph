@@ -1,54 +1,33 @@
 use {
     crate::{
-        Allocator, Buffer, BufferUsageFlags, CommandBuffer, Device, Extent2D, Filter, Format,
-        ImageAspectFlags, ImageUsageFlags, MemoryLocation, SamplerAddressMode, SamplerMipmapMode,
+        Allocator, Buffer, BufferUsageFlags, CommandBuffer, Device, Extent2D, Format,
+        ImageAspectFlags, ImageUsageFlags, MemoryLocation,
     },
     anyhow::Result,
-    ash::vk,
+    ash::vk::{self, Sampler},
     bytemuck::Pod,
     derive_more::Debug,
     gpu_allocator::vulkan::Allocation,
     std::sync::Arc,
 };
-
-#[derive(Debug)]
-pub struct SamplerDesc {
-    pub name: String,
-    pub index: usize,
-    pub min_filter: Filter,
-    pub mag_filter: Filter,
-    pub mipmap_mode: SamplerMipmapMode,
-    pub address_mode_u: SamplerAddressMode,
-    pub address_mode_v: SamplerAddressMode,
-    pub anisotropy_enable: bool,
-    pub max_anisotropy: f32,
-}
-
-impl Default for SamplerDesc {
-    fn default() -> Self {
-        Self {
-            name: "sa-default".into(),
-            index: 0,
-            min_filter: Filter::LINEAR,
-            mag_filter: Filter::LINEAR,
-            mipmap_mode: SamplerMipmapMode::LINEAR,
-            address_mode_u: SamplerAddressMode::REPEAT,
-            address_mode_v: SamplerAddressMode::REPEAT,
-            anisotropy_enable: false,
-            max_anisotropy: 1.0,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct TextureDesc {
+pub struct TextureInfo {
     pub name: String,
     pub extent: Extent2D,
     pub format: Format,
     pub usage: ImageUsageFlags,
     pub aspect: ImageAspectFlags,
     pub data: Vec<u8>,
-    pub sampler: SamplerDesc,
+    pub sampler: Sampler,
+}
+
+impl Debug for TextureInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "TextureInfo(name: {}, extent: {}x{}, format: {:?}, usage: {:?}, aspect: {:?}, data: {} bytes)",
+            self.name, self.extent.width, self.extent.height, self.format, self.usage, self.aspect, self.data.len(),
+        )
+    }
 }
 
 macro_rules! impl_image {

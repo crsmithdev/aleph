@@ -1,13 +1,13 @@
 use {
     crate::{
-        texture::SamplerDesc, AllocatedTexture, Allocator, Buffer, CommandBuffer, CommandPool,
-        Device, Instance, MemoryLocation, Swapchain, SwapchainInfo, VK_TIMEOUT_NS,
+        AllocatedTexture, Allocator, Buffer, CommandBuffer, CommandPool, Device, Instance,
+        MemoryLocation, Swapchain, SwapchainInfo, VK_TIMEOUT_NS,
     },
     aleph_core::log,
     anyhow::Result,
     ash::{
         khr,
-        vk::{self, Handle},
+        vk::{self, Filter, Handle, SamplerAddressMode, SamplerMipmapMode},
     },
     bytemuck::Pod,
     derive_more::Debug,
@@ -238,38 +238,6 @@ impl Gpu {
         swapchain.rebuild(extent)
     }
 
-    pub fn create_index_buffer<T: Pod>(
-        &self,
-        size: u64,
-        location: MemoryLocation,
-        label: impl Into<String>,
-    ) -> Result<Buffer<T>> {
-        Buffer::new(
-            &self.device,
-            Arc::clone(&self.allocator),
-            size,
-            vk::BufferUsageFlags::INDEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
-            location,
-            label,
-        )
-    }
-
-    pub fn create_vertex_buffer<T: Pod>(
-        &self,
-        size: u64,
-        location: MemoryLocation,
-        label: impl Into<String>,
-    ) -> Result<Buffer<T>> {
-        Buffer::new(
-            &self.device,
-            Arc::clone(&self.allocator),
-            size,
-            vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
-            location,
-            label,
-        )
-    }
-
     pub fn create_texture(
         &self,
         extent: vk::Extent2D,
@@ -291,13 +259,20 @@ impl Gpu {
         )
     }
 
-    pub fn create_sampler(&self, desc: &SamplerDesc) -> Result<vk::Sampler> {
+    pub fn create_sampler(
+        &self,
+        min_filter: Filter,
+        mag_filter: Filter,
+        mipmap_mode: SamplerMipmapMode,
+        address_mode_u: SamplerAddressMode,
+        address_mode_y: SamplerAddressMode,
+    ) -> Result<vk::Sampler> {
         self.device.create_sampler(
-            desc.min_filter,
-            desc.mag_filter,
-            desc.mipmap_mode,
-            desc.address_mode_u,
-            desc.address_mode_v,
+            min_filter,
+            mag_filter,
+            mipmap_mode,
+            address_mode_u,
+            address_mode_y,
         )
     }
 

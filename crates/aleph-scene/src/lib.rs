@@ -5,13 +5,13 @@ pub mod graph;
 pub mod material;
 pub mod mikktspace;
 pub mod model;
+pub mod primitives;
 pub mod util;
 
-use crate::mikktspace::{generate_tangents, MikktGeometry};
 pub use crate::{
     assets::{Assets, MaterialHandle, MeshHandle, TextureHandle},
     camera::{Camera, CameraConfig},
-    graph::{Node, NodeData, NodeDesc, Scene, SceneDesc},
+    graph::{Node, NodeType, Scene},
     material::Material,
-    model::{Mesh, MeshDesc, Primitive, PrimitiveDesc, Vertex},
+    model::{Mesh, MeshInfo, Primitive, PrimitiveInfo, Vertex},
 };

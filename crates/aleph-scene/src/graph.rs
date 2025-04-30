@@ -1,5 +1,5 @@
 use {
-    crate::{Camera, CameraConfig, MeshHandle},
+    crate::{model::Light, Camera, CameraConfig, MeshHandle},
     anyhow::Result,
     derive_more::Debug,
     glam::Mat4,
@@ -11,82 +11,82 @@ use {
     },
 };
 
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub struct Node {
+    pub handle: NodeHandle,
     pub name: String,
     pub transform: Mat4,
-    pub data: NodeData,
+    pub data: NodeType,
 }
 
 impl Node {
+    pub fn new(name: &str, data: NodeType) -> Self {
+        Self {
+            handle: NodeHandle::next(),
+            name: name.to_string(),
+            transform: Mat4::IDENTITY,
+            data,
+        }
+    }
+
     pub fn rotate(&mut self, delta: f32) {
         self.transform = Mat4::from_rotation_y(delta) * self.transform;
     }
 }
 
-#[derive(Default)]
-pub enum NodeData {
-    #[default]
-    Group,
-    Mesh(MeshHandle),
-}
-
-impl Debug for NodeData {
+impl Debug for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            NodeData::Group => f.write_str("Group"),
-            NodeData::Mesh(mesh) => f.write_str(&format!("NodeData::Mesh({:?})", mesh)),
-        }
-    }
-}
-
-pub struct NodeDesc {
-    pub name: String,
-    pub index: usize,
-    pub parent: Option<usize>,
-    pub transform: Mat4,
-    pub data: NodeData,
-    pub mesh: Option<MeshHandle>,
-    pub children: Vec<usize>,
-}
-
-impl Debug for NodeDesc {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let parent = match self.parent {
-            Some(id) => &format!("({id})"),
-            None => "-",
-        };
         let transform = format!(
             "[{:?}, {:?}, {:?}]",
             self.transform.row(0).to_array(),
             self.transform.row(1).to_array(),
             self.transform.row(2).to_array()
         );
-        f.write_str(&format!("NodeDesc(name: {:?}, index: {}, parent: {}, children: {:?}, transform: {}, data: {:?})",
-            self.name, self.index, parent, self.children, transform, self.data))
+        write!(
+            f,
+            "Node(handle: {:?} name: {:?}, data: {:?}, transform: {})",
+            self.handle, self.name, self.data, transform
+        )
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct NodeHandle {
-    index: u64,
+#[derive(Default)]
+pub enum NodeType {
+    #[default]
+    Group,
+    Mesh(MeshHandle),
+    Camera(Camera),
+    Light(Light),
+}
+
+impl Debug for NodeType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NodeType::Group => f.write_str("Group()"),
+            NodeType::Camera(camera) => f.write_str(&format!("Camera({:?})", camera)),
+            NodeType::Light(light) => f.write_str(&format!("Light({:?})", light)),
+            NodeType::Mesh(handle) => f.write_str(&format!("Mesh({:?})", handle)),
+        }
+    }
+}
+
+#[derive(Default, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct NodeHandle(u64);
+
+impl Debug for NodeHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "NodeHandle({})", self.0)
+    }
 }
 
 impl NodeHandle {
-    pub fn new() -> Self {
+    pub fn next() -> Self {
         static COUNTER: AtomicU64 = AtomicU64::new(0);
-        let index = COUNTER.fetch_add(1, Ordering::Relaxed);
-        Self { index }
+        Self(COUNTER.fetch_add(1, Ordering::Relaxed))
     }
 }
 
 pub type Graph = petgraph::Graph<NodeHandle, ()>;
-
-#[derive(Debug, Default)]
-pub struct SceneDesc {
-    pub name: String,
-    pub nodes: Vec<NodeDesc>,
-}
 
 #[derive(Debug)]
 pub struct Scene {
@@ -102,14 +102,15 @@ impl Default for Scene {
         let mut graph = Graph::new();
         let mut indices = HashMap::new();
         let mut nodes = HashMap::new();
-        let root = NodeHandle::new();
+        let root = NodeHandle::next();
         let index = graph.add_node(root);
         nodes.insert(
             root,
             Node {
+                handle: root,
                 name: "root".to_string(),
                 transform: Mat4::IDENTITY,
-                data: NodeData::Group,
+                data: NodeType::Group,
             },
         );
         indices.insert(root, index);
@@ -126,29 +127,25 @@ impl Default for Scene {
 }
 
 impl Scene {
-    fn get_index_for_handle(&self, handle: NodeHandle) -> Result<NodeIndex> {
+    fn index_for(&self, handle: NodeHandle) -> Result<NodeIndex> {
         self.indices
             .get(&handle)
             .map(|i| *i)
             .ok_or_else(|| anyhow::anyhow!("Index for handle {handle:?} not found"))
     }
-    pub fn attach(&mut self, node: Node, parent_handle: Option<NodeHandle>) -> Result<NodeHandle> {
-        let node_handle = NodeHandle::new();
-        let node_index = self.graph.add_node(node_handle);
-        self.indices.insert(node_handle, node_index);
-        self.nodes.insert(node_handle, node);
 
-        let parent_handle = parent_handle.unwrap_or(self.root);
-        let parent_index = self.get_index_for_handle(parent_handle)?;
+    pub fn attach_root(&mut self, node: Node) -> Result<()> { self.attach(node, self.root) }
 
-        self.graph.add_edge(parent_index, node_index, ());
+    pub fn attach(&mut self, node: Node, parent: NodeHandle) -> Result<()> {
+        let index = self.graph.add_node(node.handle);
+        let parent_index = self.index_for(parent)?;
 
-        log::debug!(
-            "Attached node: {:?} (parent: {:?})",
-            node_handle,
-            parent_handle
-        );
-        Ok(node_handle)
+        log::debug!("Attached {:?} @ parent: {:?}", node.handle, parent);
+
+        self.indices.insert(node.handle, index);
+        self.nodes.insert(node.handle, node);
+        self.graph.add_edge(parent_index, index, ());
+        Ok(())
     }
 
     pub fn children(&self, node: NodeHandle) -> Vec<NodeHandle> {
@@ -177,7 +174,7 @@ impl Scene {
     pub fn mesh_nodes(&self) -> impl Iterator<Item = &Node> {
         self.nodes
             .values()
-            .filter(|node| matches!(node.data, NodeData::Mesh(_)))
+            .filter(|node| matches!(node.data, NodeType::Mesh(_)))
     }
 
     pub fn nodes(&self) -> impl Iterator<Item = &Node> { self.nodes.values() }
@@ -190,78 +187,5 @@ impl Scene {
 
     pub fn node(&self, handle: NodeHandle) -> Option<&Node> { self.nodes.get(&handle) }
 
-    pub fn clear(&mut self) {
-        self.graph = petgraph::Graph::new();
-        self.nodes.clear();
-        self.indices.clear();
-
-        let root_handle = self.root; //NodeHandle(HANDLE_INDEX.fetch_add(1, Ordering::Relaxed));
-        let root_index = self.graph.add_node(root_handle);
-        self.nodes.insert(
-            root_handle,
-            Node {
-                name: "root".to_string(),
-                transform: Mat4::IDENTITY,
-                data: NodeData::Group,
-            },
-        );
-        self.indices.insert(root_handle, root_index);
-        self.camera = Camera::new(CameraConfig::default());
-
-        log::debug!(
-            "Cleared scene -> root: {:?}, nodes: {}, indices: {}, graph: {}",
-            self.root,
-            self.nodes.len(),
-            self.indices.len(),
-            self.graph.node_count(),
-        );
-    }
-
-    pub fn load(&mut self, gltf: SceneDesc) -> Result<()> {
-        self.clear();
-
-        let mut index_map = HashMap::new();
-        let mut remaining = gltf.nodes;
-
-        while remaining.len() > 0 {
-            log::debug!("Loading scene nodes, {} remaining...", remaining.len());
-            let mut next_remaining = vec![];
-            for desc in remaining {
-                let parent_handle = desc.parent.map(|i| index_map.get(&i).map(|h| *h)).flatten();
-
-                if desc.parent.is_some() && parent_handle.is_none() {
-                    log::debug!(
-                        "Deferring glTF node {} ({}): parent not yet loaded",
-                        desc.index,
-                        desc.name
-                    );
-                    next_remaining.push(desc);
-                    continue;
-                }
-
-                let node = Node {
-                    name: desc.name.clone(),
-                    transform: desc.transform,
-                    data: match desc.mesh {
-                        Some(mesh) => NodeData::Mesh(mesh),
-                        None => NodeData::Group,
-                    },
-                };
-
-                log::debug!(
-                    "Loading glTF node {} ({}), parent glTF index: {:?} -> handle {:?}",
-                    desc.index,
-                    desc.name,
-                    desc.parent,
-                    parent_handle,
-                );
-
-                let handle = self.attach(node, parent_handle)?;
-                index_map.insert(desc.index, handle);
-            }
-            remaining = next_remaining;
-        }
-
-        Ok(())
-    }
+    pub fn clear(&mut self) { *self = Self::default(); }
 }

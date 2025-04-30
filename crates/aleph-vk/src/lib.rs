@@ -18,7 +18,7 @@ pub use {
         gpu::{Gpu, Surface},
         instance::Instance,
         swapchain::{Frame, Swapchain, SwapchainInfo},
-        texture::{AllocatedTexture, SamplerDesc, Texture, TextureDesc, WrappedTexture},
+        texture::{AllocatedTexture, Texture, TextureInfo, WrappedTexture},
     },
     ash::vk::{
         AttachmentLoadOp, AttachmentStoreOp, ClearColorValue, ClearDepthStencilValue, ClearValue,

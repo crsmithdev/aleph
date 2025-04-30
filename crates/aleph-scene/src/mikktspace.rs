@@ -100,7 +100,7 @@ pub trait MikktGeometry {
 ///
 /// Returns `false` if the geometry is unsuitable for tangent generation including,
 /// but not limited to, lack of vertices.
-pub fn generate_tangents<I: MikktGeometry>(geometry: &mut I) -> bool {
+pub fn calculate_tangents<I: MikktGeometry>(geometry: &mut I) -> bool {
     unsafe { genTangSpace(geometry, 180.0) }
 }
 
@@ -2094,7 +2094,7 @@ mod test {
             mesh: make_cube(),
             results: Vec::new(),
         };
-        let ret = super::generate_tangents(&mut context);
+        let ret = super::calculate_tangents(&mut context);
         assert_eq!(true, ret);
 
         let expected_results: Vec<Result> = vec![

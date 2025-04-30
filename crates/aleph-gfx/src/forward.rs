@@ -3,7 +3,7 @@ use {
         GpuDrawData, GpuMaterialData, Pipeline, PipelineBuilder, RenderContext, ResourceBinder,
         ResourceLayout,
     },
-    aleph_scene::{graph::NodeHandle, model::Primitive, util, Material, Mesh, NodeData, Vertex},
+    aleph_scene::{graph::NodeHandle, model::Primitive, util, Material, Mesh, NodeType, Vertex},
     aleph_vk::{
         AttachmentLoadOp, AttachmentStoreOp, Buffer, BufferUsageFlags, ColorComponentFlags,
         CompareOp, CullModeFlags, FrontFace, Gpu, PipelineBindPoint,
@@ -101,24 +101,25 @@ impl ForwardPipeline {
 
     fn draw_scene(&self, ctx: &RenderContext) -> Result<()> {
         let world_transform = Mat4::IDENTITY;
+        log::debug!("root transform: {:?}", world_transform);
         let root = &ctx.scene.root;
         self.draw_node(ctx, *root, world_transform)
     }
 
-    fn draw_node(
-        &self,
-        ctx: &RenderContext,
-        handle: NodeHandle,
-        world_transform: Mat4,
-    ) -> Result<()> {
+    fn draw_node(&self, ctx: &RenderContext, handle: NodeHandle, transform: Mat4) -> Result<()> {
         match &ctx.scene.node(handle) {
             None => {
                 warn!("Node not found: {:?}", handle);
             } //warn!("TBD"),
             Some(node) => {
-                let transform = world_transform * node.transform;
+                let transform = transform * node.transform;
+                log::debug!(
+                    "node transform: {:?} -> new transform: {:?}",
+                    node.transform,
+                    transform
+                );
                 match &node.data {
-                    NodeData::Mesh(mesh_handle) => {
+                    NodeType::Mesh(mesh_handle) => {
                         let mesh = ctx.assets.mesh(*mesh_handle).unwrap();
                         self.draw_mesh(ctx, mesh, transform)?;
                     }
@@ -135,6 +136,7 @@ impl ForwardPipeline {
     }
 
     fn draw_mesh(&self, context: &RenderContext<'_>, mesh: &Mesh, transform: Mat4) -> Result<()> {
+        log::debug!("draw mesh transform: {:?}", transform);
         for primitive in mesh.primitives.iter() {
             let material = match primitive.material {
                 Some(idx) => context.assets.material(idx).unwrap(), //&context.scene.materials[&idx],
@@ -187,6 +189,8 @@ impl ForwardPipeline {
             mvp: context.scene.camera.projection() * view * model,
             transform,
         };
+
+        log::debug!("update draw buffer transform: {:?}", transform);
 
         self.draw_buffer.write(&[data]);
     }
