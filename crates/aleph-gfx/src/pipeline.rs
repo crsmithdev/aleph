@@ -21,8 +21,6 @@ use {
     std::{
         collections::{HashMap, HashSet},
         ffi,
-        fmt::Write,
-        marker::PhantomData,
     },
 };
 pub trait Pipeline {

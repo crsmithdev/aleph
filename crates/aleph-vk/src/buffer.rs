@@ -5,7 +5,7 @@ use {
     bytemuck::Pod,
     derive_more::Debug,
     gpu_allocator::vulkan::Allocation,
-    std::{cell::RefCell, mem, os::raw::c_void, sync::Arc},
+    std::{ffi::c_void, mem, sync::Arc},
 };
 pub use {gpu_allocator::MemoryLocation, vk::BufferUsageFlags};
 

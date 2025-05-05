@@ -8,7 +8,7 @@ use {
     ash::{
         khr,
         vk::{
-            self, DescriptorPoolCreateFlags, Filter, Handle, SamplerAddressMode, SamplerMipmapMode,
+            self, Filter, Handle, SamplerAddressMode, SamplerMipmapMode,
         },
     },
     bytemuck::Pod,
