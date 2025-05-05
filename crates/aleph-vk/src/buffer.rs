@@ -5,7 +5,7 @@ use {
     bytemuck::Pod,
     derive_more::Debug,
     gpu_allocator::vulkan::Allocation,
-    std::{cell::RefCell, mem, sync::Arc},
+    std::{cell::RefCell, mem, os::raw::c_void, sync::Arc},
 };
 pub use {gpu_allocator::MemoryLocation, vk::BufferUsageFlags};
 
@@ -41,7 +41,7 @@ impl<T: Pod> Buffer<T> {
     ) -> Result<Self> {
         let data2 = bytemuck::cast_slice(&data);
         let size = bytemuck::cast_slice::<u8, u8>(data2).len() as u64;
-        let buffer = Self::new(device, allocator, size, flags, location, label)?;
+        let mut buffer = Self::new(device, allocator, size, flags, location, label)?;
         buffer.write(data);
         Ok(buffer)
     }
@@ -59,13 +59,16 @@ impl<T: Pod> Buffer<T> {
     pub fn size(&self) -> u64 { self.buffer.size }
 
     #[inline]
-    pub fn write(&self, data: &[T]) {
-        let bytes = bytemuck::cast_slice(data);
-        self.buffer.write(bytes)
-    }
+    pub fn mapped_slice_mut(&mut self) -> &[u8] { self.buffer.mapped_slice_mut() }
 
     #[inline]
-    pub fn destroy(&self) { self.buffer.destroy() }
+    pub fn write(&mut self, data: &[T]) { self.buffer.write(bytemuck::cast_slice(data)) }
+
+    #[inline]
+    pub fn mapped_ptr(&self) -> *mut c_void { self.buffer.mapped_ptr() }
+
+    #[inline]
+    pub fn destroy(&mut self) { self.buffer.destroy() }
 }
 
 #[derive(Debug)]
@@ -76,8 +79,8 @@ pub struct RawBuffer {
     device: Device,
     #[debug(skip)]
     allocator: Arc<Allocator>,
-    #[debug("{:x}", allocation.as_ptr() as u64)]
-    allocation: RefCell<Allocation>,
+    // #[debug("{:x}", allocation.as_ptr() as u64)]
+    allocation: Allocation,
     size: u64,
 }
 
@@ -95,8 +98,7 @@ impl RawBuffer {
         let handle = unsafe { device.handle().create_buffer(&create_info, None) }?;
         let requirements = unsafe { device.handle().get_buffer_memory_requirements(handle) };
         let label = &label.into();
-        let allocation =
-            RefCell::new(allocator.allocate_buffer(handle, requirements, location, label)?);
+        let allocation = allocator.allocate_buffer(handle, requirements, location, label)?;
 
         let address = match location {
             MemoryLocation::GpuOnly => {
@@ -126,7 +128,7 @@ impl RawBuffer {
     ) -> Result<Self> {
         let size = bytemuck::cast_slice::<u8, u8>(data).len() as u64;
 
-        let buffer = Self::new(device, allocator, size, flags, location, label)?;
+        let mut buffer = Self::new(device, allocator, size, flags, location, label)?;
         buffer.write(data);
         Ok(buffer)
     }
@@ -140,19 +142,25 @@ impl RawBuffer {
     #[inline]
     pub fn size(&self) -> u64 { self.size }
 
-    pub fn write(&self, data: &[u8]) {
+    #[inline]
+    pub fn mapped_slice_mut(&mut self) -> &mut [u8] { self.allocation.mapped_slice_mut().unwrap() }
+
+    pub fn mapped_ptr(&self) -> *mut c_void {
+        self.allocation
+            .mapped_ptr()
+            .map_or(std::ptr::null_mut(), |ptr| ptr.as_ptr())
+    }
+
+    pub fn write(&mut self, data: &[u8]) {
+        let mapped = self.allocation.mapped_slice_mut().expect("mmmap");
         let bytes = bytemuck::cast_slice(data);
-        let mut allocation = self.allocation.borrow_mut();
-        let mapped = allocation
-            .mapped_slice_mut()
-            .expect("Failed to map buffer memory");
         let size = mem::size_of_val(bytes);
 
         mapped[0..size].copy_from_slice(bytes);
     }
 
-    pub fn destroy(&self) {
-        let allocation = self.allocation.replace(Allocation::default());
+    pub fn destroy(&mut self) {
+        let allocation = std::mem::take(&mut self.allocation);
         self.allocator.deallocate(allocation);
         unsafe { self.device.handle.destroy_buffer(self.handle, None) };
     }

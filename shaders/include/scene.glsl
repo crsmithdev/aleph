@@ -22,7 +22,7 @@ struct Config {
     int force_defaults;
 };
 
-layout(std140, binding = 0) uniform SceneBufferData {
+layout(std140, set = 0, binding = 0) uniform SceneBufferData {
     mat4 view;
     mat4 projection;
     mat4 vp;

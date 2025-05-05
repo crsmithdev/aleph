@@ -16,6 +16,7 @@ pub struct Node {
     pub handle: NodeHandle,
     pub name: String,
     pub transform: Mat4,
+    pub local_transform: Mat4,
     pub data: NodeType,
 }
 
@@ -25,6 +26,7 @@ impl Node {
             handle: NodeHandle::next(),
             name: name.to_string(),
             transform: Mat4::IDENTITY,
+            local_transform: Mat4::IDENTITY,
             data,
         }
     }
@@ -110,6 +112,7 @@ impl Default for Scene {
                 handle: root,
                 name: "root".to_string(),
                 transform: Mat4::IDENTITY,
+                local_transform: Mat4::IDENTITY,
                 data: NodeType::Group,
             },
         );
@@ -140,7 +143,12 @@ impl Scene {
         let index = self.graph.add_node(node.handle);
         let parent_index = self.index_for(parent)?;
 
-        log::debug!("Attached {:?} @ parent: {:?}", node.handle, parent);
+        log::debug!(
+            "Attached as child: {:?} -> {:?} (index: {})",
+            parent,
+            node.handle,
+            index.index(),
+        );
 
         self.indices.insert(node.handle, index);
         self.nodes.insert(node.handle, node);

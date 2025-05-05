@@ -114,7 +114,7 @@ impl AllocatedTexture {
     }
 
     pub fn upload<T: Pod>(&self, cmd: &CommandBuffer, data: &[T]) -> Result<()> {
-        let buffer = Buffer::from_data(
+        let mut buffer = Buffer::from_data(
             &self.device,
             Arc::clone(&self.allocator),
             data,

@@ -7,13 +7,13 @@ use {
     anyhow::{anyhow, bail, Result},
     ash::vk,
     glam::{Mat4, Vec2, Vec3, Vec4},
-    gltf::{scene::Transform, Semantic},
-    std::path::Path,
+    gltf::Semantic,
 };
 
 pub fn load_scene(path: &str, mut assets: &mut Assets) -> Result<Scene> {
-    log::info!("Loading glTF scene file from {path:?}");
+    log::info!("Loading glTF scene from {path:?}");
     let (document, buffers, images) = gltf::import(path)?;
+
     let srgb: Vec<usize> = document
         .materials()
         .filter_map(|m| m.pbr_metallic_roughness().base_color_texture())
@@ -28,22 +28,20 @@ pub fn load_scene(path: &str, mut assets: &mut Assets) -> Result<Scene> {
             load_texture(&data, &texture, srgb, &mut assets)
         })
         .collect::<Result<Vec<_>>>()?;
-
-    log::info!("  -> {} texture(s) ({} srgb", textures.len(), srgb.len());
+    log::info!("Loaded {} texture(s) ({} srgb)", textures.len(), srgb.len());
 
     let materials = document
         .materials()
         .map(|material| load_material(&material, &textures, &mut assets))
         .collect::<Result<Vec<_>>>()?;
-
-    log::info!("  -> {} material(s)", materials.len());
+    log::info!("Loaded {} material(s)", materials.len());
 
     let meshes = document
         .meshes()
         .map(|mesh| load_mesh(&mesh, &buffers, &materials, &mut assets))
         .collect::<Result<Vec<_>>>()?;
 
-    log::info!("  -> {} mesh(es)", meshes.len());
+    log::info!("Loaded {} mesh(es)", meshes.len());
 
     let mut scene = Scene::default();
     let gltf_scene = document
@@ -51,49 +49,32 @@ pub fn load_scene(path: &str, mut assets: &mut Assets) -> Result<Scene> {
         .ok_or_else(|| anyhow!("No scene found in glTF file"))?;
 
     for gltf_node in gltf_scene.nodes() {
-        load_node(gltf_node, scene.root, &mut scene, &meshes);
+        load_node(gltf_node, scene.root, &mut scene, &meshes)?;
     }
-    log::info!(
-        "Finished loading scene from file: {:?}",
-        Path::new(path).file_name()
-    );
+    log::info!("Finished loading scene from {path:?}");
     Ok(scene)
 }
 
 fn load_node(
-    gltf_node: gltf::Node,
+    source: gltf::Node,
     parent: NodeHandle,
     scene: &mut Scene,
     meshes: &Vec<MeshHandle>,
-) {
-    let parent_transform = match scene.node(parent) {
-        Some(n) => n.transform,
-        None => {
-            println!("transform missing {:?}", parent);
-            Mat4::IDENTITY
-        }
-    };
-    let transform = parent_transform
-        * match gltf_node.transform() {
-            Transform::Matrix { matrix } => Mat4::from_cols_array_2d(&matrix),
-            Transform::Decomposed {
-                translation,
-                rotation,
-                scale,
-            } => {
-                let translation = Mat4::from_translation(Vec3::from(translation));
-                let rotation = Mat4::from_quat(glam::Quat::from_array(rotation));
-                let scale = Mat4::from_scale(Vec3::from(scale));
-                translation * rotation * scale
-            }
-        };
-    let index = gltf_node.index();
-    let name = match gltf_node.name() {
-        Some(name) => format!("glTF{:02}-{name}", gltf_node.index()),
-        None => format!("glTF{:02}", gltf_node.index()),
+) -> Result<()> {
+    let parent_transform = scene
+        .node(parent)
+        .map(|p| p.transform)
+        .unwrap_or(Mat4::IDENTITY);
+    let matrix = source.transform().matrix();
+    let transform = parent_transform * Mat4::from_cols_array_2d(&matrix);
+
+    let index = source.index();
+    let name = match source.name() {
+        Some(name) => format!("glTF{:02}-{name}", source.index()),
+        None => format!("glTF{:02}", source.index()),
     };
 
-    let data = if let Some(mesh) = gltf_node.mesh() {
+    let data = if let Some(mesh) = source.mesh() {
         let mesh_handle = meshes[mesh.index()];
         NodeType::Mesh(mesh_handle)
     } else {
@@ -105,27 +86,36 @@ fn load_node(
         handle,
         name: name.clone(),
         transform,
+        local_transform: transform,
         data,
     };
 
-    log::info!(" glTF node {:02} -> {:?}", index, &node);
-    let _ = scene.attach(node, parent);
+    log::info!(
+        "Loaded glTF node #{:02} -> {:?} (parent: {:?}, children: {:?})",
+        index,
+        &handle,
+        parent,
+        source.children().count()
+    );
 
-    for child in gltf_node.children() {
-        load_node(child, handle, scene, meshes);
+    scene.attach(node, parent)?;
+    for child in source.children() {
+        load_node(child, handle, scene, meshes)?;
     }
+
+    Ok(())
 }
 
 fn load_texture(
     data: &gltf::image::Data,
-    gltf_texture: &gltf::Texture,
+    source: &gltf::Texture,
     srgb: bool,
     assets: &mut Assets,
 ) -> Result<TextureHandle> {
-    let index = gltf_texture.index();
-    let name = match gltf_texture.name() {
-        Some(name) => format!("tx-glTF-{index:03}-{name}",),
-        None => format!("tx-glTF-{index:03}"),
+    let index = source.index();
+    let name = match source.name() {
+        Some(name) => format!("glTF{index:03}-{name}",),
+        None => format!("glTF{index:03}"),
     };
     let extent = Extent2D {
         width: data.width,
@@ -141,18 +131,7 @@ fn load_texture(
         false => vk::Format::R8G8B8A8_UNORM,
     };
 
-    let info = TextureInfo {
-        name: name.to_string(),
-        extent,
-        format,
-        usage: ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
-        aspect: vk::ImageAspectFlags::COLOR,
-        data: bytes.clone(),
-        sampler: assets.defaults.sampler,
-    };
-    log::info!("glTF texture {index} -> {info:?}");
-
-    let texture_handle = assets.add_texture(TextureInfo {
+    let handle = assets.add_texture(TextureInfo {
         name: name.to_string(),
         extent,
         format,
@@ -162,7 +141,9 @@ fn load_texture(
         sampler: assets.defaults.sampler,
     });
 
-    Ok(texture_handle)
+    log::info!("Loaded glTF texture {index} -> {handle:?}");
+
+    Ok(handle)
 }
 
 fn load_material(
@@ -175,53 +156,51 @@ fn load_material(
         None => bail!("Material index not found"),
     };
     let name = match material.name() {
-        Some(name) => format!("mat-glTF-{index:03}-{name}"),
-        None => format!("mat-glTF-{index:03}"),
+        Some(name) => format!("glTF-{index:03}-{name}"),
+        None => format!("glTF-{index:03}"),
     };
     let pbr = material.pbr_metallic_roughness();
-    let base_handle = pbr
+    let color_texture = pbr
         .base_color_texture()
-        .map(|i| i.texture().index())
-        .map(|i| textures[i]);
-    let normal_handle = material
+        .map(|i| textures[i.texture().index()]);
+    let normal_texture = material
         .normal_texture()
-        .map(|t| t.texture().index())
-        .map(|i| textures[i]);
-    let ao_handle = material
+        .map(|i| textures[i.texture().index()]);
+    let ao_texture = material
         .occlusion_texture()
-        .map(|i| i.texture().index())
-        .map(|i| textures[i]);
-    let mr_handle = pbr
+        .map(|i| textures[i.texture().index()]);
+    let metalrough_texture = pbr
         .metallic_roughness_texture()
-        .map(|i| i.texture().index())
-        .map(|i| textures[i]);
+        .map(|i| textures[i.texture().index()]);
 
-    let base_color = Vec4::from_array(pbr.base_color_factor());
+    let color_factor = Vec4::from_array(pbr.base_color_factor());
     let metallic_factor = pbr.metallic_factor();
     let roughness_factor = pbr.roughness_factor();
     let ao_strength = material.occlusion_texture().map_or(0.0, |i| i.strength());
 
-    // log::info!("  Material {index} -> {name}");
-    // log::info!("    Base texture -> handle: {base_handle:?} (index: {base_index:?})");
-    // log::info!("    Normal texture -> handle: {normal_handle:?} (index: {normal_index:?})");
-    // log::info!("    MetallicRoughness texture -> handle: {mr_handle:?} (index: {mr_index:?})");
-    // log::info!("    AO texture -> handle: {ao_handle:?} (index: {ao_index:?})");
-    // log::info!("    Base color -> {:?}", base_color);
-    // log::info!("    Metallic factor -> {:?}", metallic_factor);
-    // log::info!("    Roughness factor -> {:?}", roughness_factor);
-    // log::info!("    AO strength -> {:?}", ao_strength);
-
-    assets.add_material(Material {
+    let handle = assets.add_material(Material {
         name,
-        base_texture: base_handle,
-        base_color,
-        normal_texture: normal_handle,
-        metallic_roughness_texture: mr_handle,
+        color_texture,
+        color_factor,
+        normal_texture,
+        metalrough_texture,
         metallic_factor,
         roughness_factor,
-        ao_texture: ao_handle,
+        ao_texture,
         ao_strength,
-    })
+    })?;
+
+    log::debug!("Loaded glTF material #{index} -> {handle:?}");
+    log::debug!("  -> Color texture: {color_texture:?}");
+    log::debug!("  -> Color factor: {color_factor:?}");
+    log::debug!("  -> Normal texture: {normal_texture:?}");
+    log::debug!("  -> MetalRough texture: {metalrough_texture:?}");
+    log::debug!("  -> Metallic factor: {metallic_factor:?}");
+    log::debug!("  -> Roughness factor: {roughness_factor:?}");
+    log::debug!("  -> AO texture: {ao_texture:?}");
+    log::debug!("  -> AO strength: {ao_strength:?}");
+
+    Ok(handle)
 }
 
 fn load_mesh(
@@ -230,13 +209,10 @@ fn load_mesh(
     materials: &Vec<MaterialHandle>,
     assets: &mut Assets,
 ) -> Result<MeshHandle> {
-    let name = {
-        let index = source.index();
-        let base = format!("mesh-glTF-{index:03}");
-        source
-            .name()
-            .map(|name| format!("{base}-{name}"))
-            .unwrap_or(base)
+    let index = source.index();
+    let name = match source.name() {
+        Some(name) => format!("glTF-{index:03}-{name}"),
+        None => format!("glTF-{index:03}"),
     };
     let mut primitives = vec![];
     for (i, primitive) in source.primitives().enumerate() {
@@ -285,7 +261,6 @@ fn load_mesh(
             .index()
             .and_then(|i| materials.get(i))
             .map(|h| *h);
-        let n_vertices = vertices.len() as u64;
 
         let attributes: Vec<VertexAttribute> = primitive
             .attributes()
@@ -309,14 +284,19 @@ fn load_mesh(
             gltf::mesh::Mode::LineLoop => PrimitiveTopology::LINE_STRIP,
             gltf::mesh::Mode::TriangleFan => PrimitiveTopology::TRIANGLE_FAN,
         };
-        let n_indices = indices.len();
 
         let desc = PrimitiveInfo::new(vertices, indices, material, topology, attributes);
-        log::info!("  Primitive {i} -> {n_vertices} vertices, {n_indices} indices");
+        log::debug!("Loaded glTF mesh #{index} primitive #{i} -> {desc:?}");
 
         primitives.push(desc);
     }
 
+    log::debug!(
+        "Loaded glTF mesh #{} -> {} (primitives:{})",
+        index,
+        name,
+        primitives.len(),
+    );
     assets.add_mesh(MeshInfo { name, primitives })
 }
 

@@ -2,8 +2,9 @@ use {
     crate::{ForwardPipeline, Gui, Pipeline},
     aleph_scene::{model::Light, Assets, Scene},
     aleph_vk::{
-        AllocatedTexture, Buffer, BufferUsageFlags, CommandBuffer, Extent2D, Extent3D, Format,
-        Frame, Gpu, ImageAspectFlags, ImageLayout, ImageUsageFlags, Texture,
+        AllocatedTexture, Buffer, BufferUsageFlags, CommandBuffer, CommandBufferSubmitInfo,
+        Extent2D, Extent3D, Fence, Format, Frame, Gpu, ImageAspectFlags, ImageLayout,
+        ImageUsageFlags, PipelineStageFlags2, Semaphore, SemaphoreSubmitInfo, SubmitInfo2, Texture,
     },
     anyhow::Result,
     bytemuck::{Pod, Zeroable},
@@ -58,9 +59,6 @@ pub struct GpuMaterialData {
 #[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
 pub struct GpuDrawData {
     pub model: Mat4,
-    pub mv: Mat4,
-    pub mvp: Mat4,
-    pub transform: Mat4,
 }
 
 pub struct RenderContext<'a> {
@@ -261,9 +259,6 @@ impl Renderer {
         self.rebuild_swapchain = rebuild;
         self.gpu.reset_fence(*fence)?;
 
-        let cmd_buffer = &command_buffer;
-        cmd_buffer.reset()?;
-        cmd_buffer.begin()?;
         let swapchain_extent = self.gpu.swapchain().extent();
         let swapchain_image = &self.gpu.swapchain().images()[image_index];
         let draw_extent = {
@@ -274,56 +269,91 @@ impl Renderer {
                 depth: 1,
             }
         };
+        let cmd_buffer = &command_buffer;
+        {
+            cmd_buffer.reset()?;
+            cmd_buffer.begin()?;
+            cmd_buffer.transition_image(
+                &self.depth_image,
+                ImageLayout::UNDEFINED,
+                ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            );
 
-        cmd_buffer.transition_image(
-            &self.depth_image,
-            ImageLayout::UNDEFINED,
-            ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        );
-
-        cmd_buffer.transition_image(
-            &self.draw_image,
-            ImageLayout::UNDEFINED,
-            ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-        );
-        let context = RenderContext {
+            cmd_buffer.transition_image(
+                &self.draw_image,
+                ImageLayout::UNDEFINED,
+                ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            );
+            cmd_buffer.end()?;
+        }
+        let cmd_buffer2 = &self.frames[self.frame_index]
+            .command_pool
+            .create_command_buffer()?;
+        let cmd_buffer3 = &self.frames[self.frame_index]
+            .command_pool
+            .create_command_buffer()?;
+        let mut context = RenderContext {
             gpu: &self.gpu,
             scene,
-            cmd_buffer: &self.frames[self.frame_index].command_buffer,
+            cmd_buffer: cmd_buffer2,
             scene_buffer: &self.scene_buffer,
             draw_image: &self.draw_image,
             depth_image: &self.depth_image,
             extent: self.gpu.swapchain().extent(),
             assets,
         };
-        self.foreward_pipeline.execute(&context)?;
+        {
+            cmd_buffer2.reset()?;
+            cmd_buffer2.begin()?;
+            context.cmd_buffer = cmd_buffer2;
+            self.foreward_pipeline.execute(&context)?;
+            cmd_buffer2.end()?;
+        }
+        {
+            cmd_buffer3.reset()?;
+            cmd_buffer3.begin()?;
+            context.cmd_buffer = cmd_buffer3;
+            gui.draw(&context, &mut self.config, &mut self.scene_data)?;
+            cmd_buffer3.end()?;
+        }
 
-        gui.draw(&context, &mut self.config, &mut self.scene_data)?;
+        let cmd_buffer4 = &self.frames[self.frame_index]
+            .command_pool
+            .create_command_buffer()?;
+        cmd_buffer4.reset()?;
+        cmd_buffer4.begin()?;
 
-        cmd_buffer.transition_image(
+        cmd_buffer4.transition_image(
             &self.draw_image,
             ImageLayout::UNDEFINED,
             ImageLayout::TRANSFER_SRC_OPTIMAL,
         );
-        cmd_buffer.transition_image(
+        cmd_buffer4.transition_image(
             swapchain_image,
             ImageLayout::UNDEFINED,
             ImageLayout::TRANSFER_DST_OPTIMAL,
         );
-        cmd_buffer.copy_image(
+        cmd_buffer4.copy_image(
             &self.draw_image,
             swapchain_image,
             draw_extent,
             swapchain_extent.into(),
         );
-        cmd_buffer.transition_image(
+        cmd_buffer4.transition_image(
             swapchain_image,
             ImageLayout::TRANSFER_DST_OPTIMAL,
             ImageLayout::PRESENT_SRC_KHR,
         );
 
-        cmd_buffer.end()?;
-        cmd_buffer.submit_queued(*swapchain_semaphore, *render_semaphore, *fence)?;
+        cmd_buffer4.end()?;
+        // cmd_buffer4.submit_queued(*swapchain_semaphore, *render_semaphore, *fence)?;
+        self.submit_queued(
+            &context,
+            &[cmd_buffer, cmd_buffer2, cmd_buffer3, cmd_buffer4],
+            *swapchain_semaphore,
+            *render_semaphore,
+            *fence,
+        )?;
         let rebuild = self
             .gpu
             .swapchain()
@@ -334,6 +364,46 @@ impl Renderer {
         self.frame_counter += 1;
 
         Ok(())
+    }
+
+    pub fn submit_queued(
+        &self,
+        ctx: &RenderContext,
+        cmds: &[&CommandBuffer],
+        wait_semaphore: Semaphore,
+        signal_semaphore: Semaphore,
+        fence: Fence,
+    ) -> Result<(), anyhow::Error> {
+        // let cmd = &self.handle;
+        let queue = ctx.gpu.device().queue(); // self..queue;
+
+        let wait_info = &[SemaphoreSubmitInfo::default()
+            .semaphore(wait_semaphore)
+            .stage_mask(PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
+            .value(1)];
+        let signal_info = &[SemaphoreSubmitInfo::default()
+            .semaphore(signal_semaphore)
+            .stage_mask(PipelineStageFlags2::ALL_GRAPHICS)
+            .value(1)];
+        let command_buffer_info = cmds
+            .into_iter()
+            .map(|cmd_buffer| {
+                CommandBufferSubmitInfo::default()
+                    .command_buffer(cmd_buffer.handle())
+                    .device_mask(0)
+            })
+            .collect::<Vec<_>>();
+        let submit_info = &[SubmitInfo2::default()
+            .command_buffer_infos(&command_buffer_info)
+            .wait_semaphore_infos(wait_info)
+            .signal_semaphore_infos(signal_info)];
+
+        Ok(unsafe {
+            ctx.gpu
+                .device()
+                .handle()
+                .queue_submit2(queue.handle(), submit_info, fence)
+        }?)
     }
 
     fn create_frames(gpu: &Gpu) -> Result<Vec<Frame>> {

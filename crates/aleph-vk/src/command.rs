@@ -2,7 +2,7 @@ pub use ash::vk::ImageLayout;
 use {
     crate::{Buffer, Device, ImageAspectFlags, RawBuffer, Texture},
     anyhow::Result,
-    ash::vk,
+    ash::{vk, vk::PipelineBindPoint},
     bytemuck::Pod,
     derive_more::Debug,
     std::any::Any,
@@ -176,21 +176,32 @@ impl CommandBuffer {
         }
     }
 
-    pub fn push_descriptor_set(
+    pub fn bind_descriptor_sets(
         &self,
-        bind_point: vk::PipelineBindPoint,
         layout: vk::PipelineLayout,
-        writes: &[vk::WriteDescriptorSet],
-        set: u32,
+        first_set: u32,
+        sets: &[vk::DescriptorSet],
+        offsets: &[u32],
     ) {
         unsafe {
-            self.device.push_descriptor.cmd_push_descriptor_set(
+            self.device.handle.cmd_bind_descriptor_sets(
                 self.handle,
-                bind_point,
+                PipelineBindPoint::GRAPHICS,
                 layout,
-                set,
-                writes,
+                first_set,
+                sets,
+                offsets,
             );
+        }
+    }
+
+    pub fn update_descriptor_set(
+        &self,
+        writes: &[vk::WriteDescriptorSet],
+        copies: &[vk::CopyDescriptorSet],
+    ) {
+        unsafe {
+            self.device.handle.update_descriptor_sets(writes, copies);
         }
     }
 

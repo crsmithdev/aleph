@@ -50,9 +50,7 @@ pub struct Device {
     pub(crate) handle: ash::Device, // TODO
     pub(crate) queue: Queue,
     pub(crate) physical_device: vk::PhysicalDevice,
-
-    #[debug("{:x}", push_descriptor.device().as_raw())]
-    pub(crate) push_descriptor: khr::push_descriptor::Device,
+    pub properties: vk::PhysicalDeviceProperties,
 }
 
 impl Device {
@@ -106,13 +104,13 @@ impl Device {
             &mut device_features2,
         )?;
         let queue = Self::create_queue(&handle, queue_family);
-        let push_descriptor = khr::push_descriptor::Device::new(&instance.handle, &handle);
+        let properties = instance.get_physical_device_properties(physical_device);
 
         Ok(Device {
             handle,
             physical_device,
             queue,
-            push_descriptor,
+            properties,
         })
     }
 
@@ -217,6 +215,16 @@ impl Device {
                 .map(|b| b[0])
                 .map_err(anyhow::Error::from)
         }
+    }
+    pub fn update_descriptor_sets(
+        &self,
+        writes: &[vk::WriteDescriptorSet],
+        copies: &[vk::CopyDescriptorSet],
+    ) -> Result<()> {
+        unsafe {
+            self.handle.update_descriptor_sets(writes, copies);
+        }
+        Ok(())
     }
 
     pub fn get_buffer_device_address(&self, buffer: &vk::Buffer) -> vk::DeviceAddress {

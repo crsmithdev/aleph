@@ -1,28 +1,32 @@
 use {
     crate::{
-        GpuDrawData, GpuMaterialData, Pipeline, PipelineBuilder, RenderContext, ResourceBinder,
-        ResourceLayout,
+        renderer::{GpuDrawData, GpuMaterialData},
+        Pipeline, PipelineBuilder, RenderContext, ResourceBinder, ResourceLayout,
     },
-    aleph_scene::{graph::NodeHandle, model::Primitive, util, Material, Mesh, NodeType, Vertex},
+    aleph_scene::{model::Primitive, util, Material, MaterialHandle, NodeType, Vertex},
     aleph_vk::{
         AttachmentLoadOp, AttachmentStoreOp, Buffer, BufferUsageFlags, ColorComponentFlags,
-        CompareOp, CullModeFlags, FrontFace, Gpu, PipelineBindPoint,
-        PipelineColorBlendAttachmentState, PipelineLayout, PolygonMode, PrimitiveTopology, Rect2D,
-        ShaderStageFlags, Texture, VkPipeline,
+        CompareOp, CullModeFlags, DescriptorBufferInfo, DescriptorSet, DescriptorType, FrontFace,
+        Gpu, PipelineBindPoint, PipelineColorBlendAttachmentState, PipelineLayout, PolygonMode,
+        PrimitiveTopology, Rect2D, ShaderStageFlags, Texture, VkPipeline, WriteDescriptorSet,
     },
     anyhow::Result,
+    ash::{
+        util::Align,
+        vk::{DeviceSize, WHOLE_SIZE},
+    },
     glam::Mat4,
-    std::mem,
+    std::{collections::HashMap, ffi::c_void, mem},
     tracing::{instrument, warn},
 };
 
 const BIND_IDX_SCENE: u32 = 0;
-const BIND_IDX_DRAW: u32 = 1;
-const BIND_IDX_MATERIAL: u32 = 2;
-const BIND_IDX_BASE_COLOR: u32 = 3;
-const BIND_IDX_NORMAL: u32 = 4;
-const BIND_IDX_METALLIC_ROUGHNESS: u32 = 5;
-const BIND_IDX_OCCLUSION: u32 = 6;
+const BIND_IDX_DRAW: u32 = 0;
+const BIND_IDX_MATERIAL: u32 = 0;
+const BIND_IDX_BASE_COLOR: u32 = 1;
+const BIND_IDX_NORMAL: u32 = 2;
+const BIND_IDX_METALROUGH: u32 = 3;
+const BIND_IDX_AO: u32 = 4;
 const CLEAR_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
 const VERTEX_SHADER_PATH: &str = "shaders/forward.vert.spv";
@@ -30,14 +34,17 @@ const FRAGMENT_SHADER_PATH: &str = "shaders/forward.frag.spv";
 
 pub struct ForwardPipeline {
     handle: VkPipeline,
-    layout: PipelineLayout,
+    pipeline_layout: PipelineLayout,
     material_buffer: Buffer<GpuMaterialData>,
     draw_buffer: Buffer<GpuDrawData>,
+    draw_descriptors: DescriptorSet,
+    material_descriptors: DescriptorSet,
+    scene_descriptors: DescriptorSet,
 }
 
 impl Pipeline for ForwardPipeline {
     #[instrument(skip_all)]
-    fn execute(&self, context: &RenderContext) -> Result<()> {
+    fn execute(&mut self, context: &RenderContext) -> Result<()> {
         let cmd = context.cmd_buffer;
 
         let color_attachments = &[util::color_attachment(
@@ -53,13 +60,27 @@ impl Pipeline for ForwardPipeline {
             1.0,
         );
         let viewport = util::viewport_inverted(context.extent.into());
-
         cmd.begin_rendering(color_attachments, Some(depth_attachment), context.extent)?;
         cmd.set_viewport(viewport);
         cmd.set_scissor(Rect2D::default().extent(context.extent));
-        cmd.bind_pipeline(PipelineBindPoint::GRAPHICS, self.handle)?;
 
-        self.draw_scene(context)?;
+        let batches = Self::get_batches(context);
+        let batch = batches.get(&None).unwrap();
+        let transforms = batch
+            .iter()
+            .map(|(_, transform)| *transform)
+            .collect::<Vec<_>>();
+
+        self.update_material_buffer(context, &Material::default())?;
+        self.update_draw_buffer(context, transforms)?;
+
+        cmd.bind_pipeline(PipelineBindPoint::GRAPHICS, self.handle)?;
+        self.bind_scene(context)?;
+        self.bind_material(context, &Material::default())?;
+
+        for drawables in batches {
+            self.draw(context, drawables.1)?;
+        }
 
         context.cmd_buffer.end_rendering()
     }
@@ -67,88 +88,60 @@ impl Pipeline for ForwardPipeline {
 
 impl ForwardPipeline {
     pub fn new(gpu: &Gpu) -> Result<Self> {
-        let descriptor_layout = ResourceLayout::default()
-            .buffer(BIND_IDX_SCENE, ShaderStageFlags::ALL_GRAPHICS)
-            .buffer(BIND_IDX_DRAW, ShaderStageFlags::ALL_GRAPHICS)
-            .buffer(BIND_IDX_MATERIAL, ShaderStageFlags::FRAGMENT)
-            .image(BIND_IDX_BASE_COLOR, ShaderStageFlags::FRAGMENT)
-            .image(BIND_IDX_NORMAL, ShaderStageFlags::FRAGMENT)
-            .image(BIND_IDX_METALLIC_ROUGHNESS, ShaderStageFlags::FRAGMENT)
-            .image(BIND_IDX_OCCLUSION, ShaderStageFlags::FRAGMENT)
-            .layout(gpu)?;
+        let (scene_descriptors, scene_layout) = ResourceLayout::default()
+            .uniform(BIND_IDX_SCENE, ShaderStageFlags::ALL_GRAPHICS)
+            .create_descriptor_set(gpu)?;
 
-        let layout = gpu.create_pipeline_layout(&[descriptor_layout], &[])?;
-        let handle = Self::create_pipeline(gpu, layout)?;
+        let (material_descriptors, material_layout) = ResourceLayout::default()
+            .uniform(BIND_IDX_MATERIAL, ShaderStageFlags::ALL_GRAPHICS)
+            .texture(BIND_IDX_BASE_COLOR, ShaderStageFlags::ALL_GRAPHICS)
+            .texture(BIND_IDX_NORMAL, ShaderStageFlags::ALL_GRAPHICS)
+            .texture(BIND_IDX_METALROUGH, ShaderStageFlags::ALL_GRAPHICS)
+            .texture(BIND_IDX_AO, ShaderStageFlags::ALL_GRAPHICS)
+            .create_descriptor_set(gpu)?;
 
-        let material_buffer = gpu.create_shared_buffer::<GpuMaterialData>(
-            mem::size_of::<GpuMaterialData>() as u64,
-            BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::UNIFORM_BUFFER,
-            "forward-material",
-        )?;
-        let draw_buffer = gpu.create_shared_buffer::<GpuDrawData>(
-            mem::size_of::<GpuDrawData>() as u64,
-            BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::UNIFORM_BUFFER,
-            "forward-draw",
-        )?;
+        let (draw_descriptors, draw_layout) = ResourceLayout::default()
+            .dynamic_uniform(BIND_IDX_DRAW, ShaderStageFlags::ALL_GRAPHICS)
+            .create_descriptor_set(gpu)?;
+
+        let pipeline_layout =
+            gpu.create_pipeline_layout(&[scene_layout, material_layout, draw_layout], &[])?;
+        let handle = Self::create_pipeline(gpu, pipeline_layout)?;
+        let (draw_buffer, material_buffer) = Self::create_buffers(gpu)?;
 
         Ok(Self {
             handle,
-            layout,
+            pipeline_layout,
             material_buffer,
             draw_buffer,
+            draw_descriptors,
+            material_descriptors,
+            scene_descriptors,
         })
     }
 
-    fn draw_scene(&self, ctx: &RenderContext) -> Result<()> {
-        let world_transform = Mat4::IDENTITY;
-        log::debug!("root transform: {:?}", world_transform);
-        let root = &ctx.scene.root;
-        self.draw_node(ctx, *root, world_transform)
-    }
-
-    fn draw_node(&self, ctx: &RenderContext, handle: NodeHandle, transform: Mat4) -> Result<()> {
-        match &ctx.scene.node(handle) {
-            None => {
-                warn!("Node not found: {:?}", handle);
-            } //warn!("TBD"),
-            Some(node) => {
-                let transform = transform * node.transform;
-                log::debug!(
-                    "node transform: {:?} -> new transform: {:?}",
-                    node.transform,
-                    transform
-                );
-                match &node.data {
-                    NodeType::Mesh(mesh_handle) => {
-                        let mesh = ctx.assets.mesh(*mesh_handle).unwrap();
-                        self.draw_mesh(ctx, mesh, transform)?;
-                    }
-                    _ => {}
-                }
-
-                for child_handle in ctx.scene.children(handle) {
-                    self.draw_node(ctx, child_handle, transform)?;
-                }
-            }
+    fn draw(&mut self, ctx: &RenderContext, drawables: Vec<(&Primitive, Mat4)>) -> Result<()> {
+        for (i, (primitive, _)) in drawables.iter().enumerate() {
+            self.draw_primitive(ctx, primitive, i)?;
         }
 
         Ok(())
     }
 
-    fn draw_mesh(&self, context: &RenderContext<'_>, mesh: &Mesh, transform: Mat4) -> Result<()> {
-        log::debug!("draw mesh transform: {:?}", transform);
-        for primitive in mesh.primitives.iter() {
-            let material = match primitive.material {
-                Some(idx) => context.assets.material(idx).unwrap(), //&context.scene.materials[&idx],
-                None => &Material::default(),
-            };
-            self.update_draw_buffer(context, transform);
-            self.update_material_buffer(material);
-            self.bind_resources(context, primitive, material)?;
-            context
-                .cmd_buffer
-                .draw_indexed(primitive.vertex_count, 1, 0, 0, 0);
-        }
+    fn draw_primitive(
+        &self,
+        ctx: &RenderContext,
+        primitive: &Primitive,
+        offset: usize,
+    ) -> Result<()> {
+        self.bind_draw(ctx, primitive, offset)?;
+        ctx.cmd_buffer
+            .bind_index_buffer(primitive.index_buffer.raw(), 0);
+        ctx.cmd_buffer
+            .bind_vertex_buffer(primitive.vertex_buffer.raw(), 0);
+        ctx.cmd_buffer
+            .draw_indexed(primitive.vertex_count, 1, 0, 0, 0);
+
         Ok(())
     }
 
@@ -179,25 +172,48 @@ impl ForwardPipeline {
             .build(gpu, layout)
     }
 
-    fn update_draw_buffer(&self, context: &RenderContext, transform: Mat4) {
-        let model = transform;
-        let view = context.scene.camera.view();
-
-        let data = GpuDrawData {
-            model,
-            mv: view * model,
-            mvp: context.scene.camera.projection() * view * model,
-            transform,
-        };
-
-        log::debug!("update draw buffer transform: {:?}", transform);
-
-        self.draw_buffer.write(&[data]);
+    fn create_buffers(gpu: &Gpu) -> Result<(Buffer<GpuDrawData>, Buffer<GpuMaterialData>)> {
+        let draw_buffer = gpu.create_shared_buffer::<GpuDrawData>(
+            mem::size_of::<GpuDrawData>() as u64 * 100,
+            BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::UNIFORM_BUFFER,
+            "forward-draw",
+        )?;
+        let material_buffer = gpu.create_shared_buffer::<GpuMaterialData>(
+            mem::size_of::<GpuMaterialData>() as u64,
+            BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::UNIFORM_BUFFER,
+            "forward-material",
+        )?;
+        Ok((draw_buffer, material_buffer))
     }
 
-    fn update_material_buffer(&self, material: &Material) {
+    fn update_draw_buffer(&mut self, context: &RenderContext, transforms: Vec<Mat4>) -> Result<()> {
+        let data = transforms
+            .into_iter()
+            .map(|t| GpuDrawData { model: t })
+            .collect::<Vec<_>>();
+        self.draw_buffer.write(&data);
+
+        // let offset = i as u64 * mem::size_of::<GpuDrawData>() as DeviceSize;
+        // let range = mem::size_of::<GpuDrawData>() as DeviceSize;
+
+        let info = &[DescriptorBufferInfo::default()
+            .buffer(self.draw_buffer.handle())
+            .offset(0)
+            .range(WHOLE_SIZE)];
+        let write = WriteDescriptorSet::default()
+            .dst_set(self.draw_descriptors)
+            .dst_binding(0)
+            .descriptor_count(1)
+            .descriptor_type(DescriptorType::UNIFORM_BUFFER_DYNAMIC)
+            .buffer_info(info);
+
+        context.cmd_buffer.update_descriptor_set(&[write], &[]);
+        Ok(())
+    }
+
+    fn update_material_buffer(&mut self, ctx: &RenderContext, material: &Material) -> Result<()> {
         let data = GpuMaterialData {
-            color_factor: material.base_color,
+            color_factor: material.color_factor,
             metallic_factor: material.metallic_factor,
             roughness_factor: material.roughness_factor,
             ao_strength: material.ao_strength,
@@ -205,18 +221,9 @@ impl ForwardPipeline {
         };
 
         self.material_buffer.write(&[data]);
-    }
-
-    pub fn bind_resources(
-        &self,
-        ctx: &RenderContext,
-        primitive: &Primitive,
-        material: &Material,
-    ) -> Result<()> {
-        let cmd = ctx.cmd_buffer;
 
         let base_texture = material
-            .base_texture
+            .color_texture
             .and_then(|handle| ctx.assets.texture(handle))
             .unwrap_or_else(|| ctx.assets.defaults.white_srgb.clone());
         let base_sampler = base_texture
@@ -233,7 +240,7 @@ impl ForwardPipeline {
             .unwrap();
 
         let metalrough_texture = material
-            .metallic_roughness_texture
+            .metalrough_texture
             .and_then(|handle| ctx.assets.texture(handle))
             .unwrap_or_else(|| ctx.assets.defaults.white_linear.clone());
         let metalrough_sampler = metalrough_texture
@@ -246,23 +253,98 @@ impl ForwardPipeline {
             .unwrap_or_else(|| ctx.assets.defaults.white_linear.clone());
         let ao_sampler = ao_texture.sampler().unwrap_or(ctx.assets.defaults.sampler);
 
-        ResourceBinder::default()
-            .buffer(BIND_IDX_SCENE, &ctx.scene_buffer)
-            .buffer(BIND_IDX_DRAW, &self.draw_buffer)
-            .buffer(BIND_IDX_MATERIAL, &self.material_buffer)
-            .image(BIND_IDX_BASE_COLOR, &base_texture, base_sampler)
-            .image(BIND_IDX_NORMAL, &normal_texture, normal_sampler)
-            .image(
-                BIND_IDX_METALLIC_ROUGHNESS,
-                &metalrough_texture,
-                metalrough_sampler,
-            )
-            .image(BIND_IDX_OCCLUSION, &ao_texture, ao_sampler)
-            .bind(cmd, &self.layout);
+        let ao_texture = ctx.assets.defaults.white_linear.clone();
+        let ao_sampler = ctx.assets.defaults.sampler;
+        let color_texture = ctx.assets.defaults.white_srgb.clone();
+        let color_sampler = ctx.assets.defaults.sampler;
+        let normal_texture = ctx.assets.defaults.normal.clone();
+        let normal_sampler = ctx.assets.defaults.sampler;
+        let metalrough_texture = ctx.assets.defaults.white_linear.clone();
+        let metalrough_sampler = ctx.assets.defaults.sampler;
 
-        cmd.bind_vertex_buffer(primitive.vertex_buffer.raw(), 0);
-        cmd.bind_index_buffer(primitive.index_buffer.raw(), 0);
+        ResourceBinder::set(self.material_descriptors)
+            .uniform(BIND_IDX_MATERIAL, &self.material_buffer)
+            .texture(BIND_IDX_BASE_COLOR, &color_texture, color_sampler)
+            .texture(BIND_IDX_NORMAL, &normal_texture, normal_sampler)
+            .texture(BIND_IDX_METALROUGH, &metalrough_texture, metalrough_sampler)
+            .texture(BIND_IDX_AO, &ao_texture, ao_sampler)
+            .update(ctx)
+    }
+
+    pub fn bind_draw(
+        &self,
+        ctx: &RenderContext,
+        primitive: &Primitive,
+        offset: usize,
+    ) -> Result<()> {
+        ctx.cmd_buffer
+            .bind_index_buffer(primitive.index_buffer.raw(), 0);
+        ctx.cmd_buffer
+            .bind_vertex_buffer(primitive.vertex_buffer.raw(), 0);
+
+        let offsets = [offset as u32 * mem::size_of::<GpuDrawData>() as u32];
+        ctx.cmd_buffer.bind_descriptor_sets(
+            self.pipeline_layout,
+            2,
+            &[self.draw_descriptors],
+            &offsets,
+        );
 
         Ok(())
     }
+
+    pub fn bind_material(&self, ctx: &RenderContext, material: &Material) -> Result<()> {
+        ctx.cmd_buffer.bind_descriptor_sets(
+            self.pipeline_layout,
+            1,
+            &[self.material_descriptors],
+            &[],
+        );
+
+        Ok(())
+    }
+
+    pub fn bind_scene(&self, ctx: &RenderContext) -> Result<()> {
+        ResourceBinder::set(self.scene_descriptors)
+            .uniform(BIND_IDX_SCENE, &ctx.scene_buffer)
+            .update(ctx)?;
+        ctx.cmd_buffer.bind_descriptor_sets(
+            self.pipeline_layout,
+            0,
+            &[self.scene_descriptors],
+            &[],
+        );
+        Ok(())
+    }
+
+    fn get_batches<'a>(
+        ctx: &'a RenderContext<'_>,
+    ) -> HashMap<Option<aleph_scene::assets::AssetHandle<Material>>, Vec<(&'a Primitive, Mat4)>>
+    {
+        let mut material_batches: HashMap<Option<MaterialHandle>, Vec<(&Primitive, Mat4)>> =
+            HashMap::new();
+
+        for node in ctx.scene.mesh_nodes() {
+            match node.data {
+                NodeType::Mesh(handle) => {
+                    let mesh = ctx.assets.mesh(handle).unwrap();
+                    let transform = node.transform;
+                    for primitive in mesh.primitives.iter() {
+                        material_batches
+                            .entry(None)
+                            .or_default()
+                            .push((primitive, transform))
+                    }
+                }
+                _ => {}
+            }
+        }
+        material_batches
+    }
+}
+
+pub unsafe fn mem_copy_aligned<T: Copy>(ptr: *mut c_void, alignment: DeviceSize, data: &[T]) {
+    let size = data.len() as DeviceSize * alignment;
+    let mut align = Align::new(ptr, alignment, size);
+    align.copy_from_slice(data);
 }

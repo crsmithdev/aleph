@@ -3,8 +3,8 @@ pub mod gui;
 pub mod layer;
 pub mod pipeline;
 pub mod renderer;
+mod resource;
 
-use crate::renderer::{GpuDrawData, GpuMaterialData, GpuSceneData, RenderConfig};
 pub use crate::{
     forward::ForwardPipeline,
     gui::Gui,

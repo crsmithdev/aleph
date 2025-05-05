@@ -7,7 +7,9 @@ use {
     anyhow::Result,
     ash::{
         khr,
-        vk::{self, Filter, Handle, SamplerAddressMode, SamplerMipmapMode},
+        vk::{
+            self, DescriptorPoolCreateFlags, Filter, Handle, SamplerAddressMode, SamplerMipmapMode,
+        },
     },
     bytemuck::Pod,
     derive_more::Debug,
@@ -194,6 +196,38 @@ impl Gpu {
                 .handle
                 .create_descriptor_set_layout(&info, None)?
         })
+    }
+
+    pub fn create_descriptor_pool(
+        &self,
+        pool_sizes: &[vk::DescriptorPoolSize],
+        flags: vk::DescriptorPoolCreateFlags,
+        max_sets: u32,
+    ) -> Result<vk::DescriptorPool> {
+        let info = vk::DescriptorPoolCreateInfo::default()
+            .pool_sizes(pool_sizes)
+            .max_sets(max_sets)
+            .flags(flags);
+        Ok(unsafe { self.device.handle.create_descriptor_pool(&info, None)? })
+    }
+
+    pub fn create_descriptor_set(
+        &self,
+        layout: vk::DescriptorSetLayout,
+        pool: vk::DescriptorPool,
+    ) -> Result<vk::DescriptorSet> {
+        let info = vk::DescriptorSetAllocateInfo::default()
+            .descriptor_pool(pool)
+            .set_layouts(slice::from_ref(&layout));
+        Ok(unsafe { self.device.handle.allocate_descriptor_sets(&info)?[0] })
+    }
+
+    pub fn update_descriptor_sets(
+        &self,
+        writes: &[vk::WriteDescriptorSet],
+        copies: &[vk::CopyDescriptorSet],
+    ) -> Result<()> {
+        self.device.update_descriptor_sets(writes, copies)
     }
 
     pub fn create_fence(&self) -> Result<vk::Fence> {
