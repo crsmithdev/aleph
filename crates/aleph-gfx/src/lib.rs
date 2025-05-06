@@ -9,6 +9,7 @@ pub use crate::{
     forward::ForwardPipeline,
     gui::Gui,
     layer::RenderLayer,
-    pipeline::{Pipeline, PipelineBuilder, ResourceBinder, ResourceLayout},
+    pipeline::{Pipeline, PipelineBuilder},
     renderer::{RenderContext, Renderer},
+    resource::{ResourceBinder, ResourceLayout},
 };

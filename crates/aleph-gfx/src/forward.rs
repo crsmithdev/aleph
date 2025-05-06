@@ -6,9 +6,9 @@ use {
     aleph_scene::{model::Primitive, util, Material, MaterialHandle, NodeType, Vertex},
     aleph_vk::{
         AttachmentLoadOp, AttachmentStoreOp, Buffer, BufferUsageFlags, ColorComponentFlags,
-        CompareOp, CullModeFlags, DescriptorBufferInfo, DescriptorSet, DescriptorType, FrontFace,
-        Gpu, PipelineBindPoint, PipelineColorBlendAttachmentState, PipelineLayout, PolygonMode,
-        PrimitiveTopology, Rect2D, ShaderStageFlags, Texture, VkPipeline, WriteDescriptorSet,
+        CompareOp, CullModeFlags, FrontFace, Gpu, PipelineBindPoint,
+        PipelineColorBlendAttachmentState, PipelineLayout, PolygonMode, PrimitiveTopology, Rect2D,
+        ShaderStageFlags, Texture, VkPipeline,
     },
     anyhow::Result,
     ash::{
@@ -20,13 +20,16 @@ use {
     tracing::{instrument, warn},
 };
 
-const BIND_IDX_SCENE: u32 = 0;
-const BIND_IDX_DRAW: u32 = 0;
-const BIND_IDX_MATERIAL: u32 = 0;
-const BIND_IDX_BASE_COLOR: u32 = 1;
-const BIND_IDX_NORMAL: u32 = 2;
-const BIND_IDX_METALROUGH: u32 = 3;
-const BIND_IDX_AO: u32 = 4;
+const SET_TEXTURE: usize = 3;
+const BIND_TEXTURE: usize = 0;
+const BIND_IDX_TEXTURE: uusize32 = 0;
+const BIND_IDX_SCENE: usize = 0;
+const BIND_IDX_DRAW: usize = 0;
+const BIND_IDX_MATERIAL: usize = 0;
+const BIND_IDX_BASE_COLOR: usize = 1;
+const BIND_IDX_NORMAL: usize = 2;
+const BIND_IDX_METALROUGH: usize = 3;
+const BIND_IDX_AO: usize = 4;
 const CLEAR_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
 const VERTEX_SHADER_PATH: &str = "shaders/forward.vert.spv";
@@ -37,9 +40,9 @@ pub struct ForwardPipeline {
     pipeline_layout: PipelineLayout,
     material_buffer: Buffer<GpuMaterialData>,
     draw_buffer: Buffer<GpuDrawData>,
-    draw_descriptors: DescriptorSet,
-    material_descriptors: DescriptorSet,
-    scene_descriptors: DescriptorSet,
+    draw_resources: ResourceBinder,
+    material_resources: ResourceBinder,
+    scene_resources: ResourceBinder,
 }
 
 impl Pipeline for ForwardPipeline {
@@ -75,8 +78,13 @@ impl Pipeline for ForwardPipeline {
         self.update_draw_buffer(context, transforms)?;
 
         cmd.bind_pipeline(PipelineBindPoint::GRAPHICS, self.handle)?;
-        self.bind_scene(context)?;
-        self.bind_material(context, &Material::default())?;
+
+        self.scene_resources
+            .uniform(BIND_IDX_SCENE, &context.scene_buffer, 0)
+            .update(context)?
+            .bind(context, self.pipeline_layout, &[]);
+        self.material_resources
+            .bind(context, self.pipeline_layout, &[]);
 
         for drawables in batches {
             self.draw(context, drawables.1)?;
@@ -88,24 +96,31 @@ impl Pipeline for ForwardPipeline {
 
 impl ForwardPipeline {
     pub fn new(gpu: &Gpu) -> Result<Self> {
-        let (scene_descriptors, scene_layout) = ResourceLayout::default()
+        let texture_resources = ResourceLayout::default()
+            .texture(BIND_TEXTURE, ShaderStageFlags::ALL_GRAPHICS)
+            .define(SET_TEXTURE, gpu)?;
+        let scene_resources = ResourceLayout::default()
             .uniform(BIND_IDX_SCENE, ShaderStageFlags::ALL_GRAPHICS)
-            .create_descriptor_set(gpu)?;
-
-        let (material_descriptors, material_layout) = ResourceLayout::default()
+            .define(0, gpu)?;
+        let material_resources = ResourceLayout::default()
             .uniform(BIND_IDX_MATERIAL, ShaderStageFlags::ALL_GRAPHICS)
             .texture(BIND_IDX_BASE_COLOR, ShaderStageFlags::ALL_GRAPHICS)
             .texture(BIND_IDX_NORMAL, ShaderStageFlags::ALL_GRAPHICS)
             .texture(BIND_IDX_METALROUGH, ShaderStageFlags::ALL_GRAPHICS)
             .texture(BIND_IDX_AO, ShaderStageFlags::ALL_GRAPHICS)
-            .create_descriptor_set(gpu)?;
-
-        let (draw_descriptors, draw_layout) = ResourceLayout::default()
+            .define(1, gpu)?;
+        let draw_resources = ResourceLayout::default()
             .dynamic_uniform(BIND_IDX_DRAW, ShaderStageFlags::ALL_GRAPHICS)
-            .create_descriptor_set(gpu)?;
+            .define(2, gpu)?;
 
-        let pipeline_layout =
-            gpu.create_pipeline_layout(&[scene_layout, material_layout, draw_layout], &[])?;
+        let pipeline_layout = gpu.create_pipeline_layout(
+            &[
+                scene_resources.descriptor_layout(),
+                material_resources.descriptor_layout(),
+                draw_resources.descriptor_layout(),
+            ],
+            &[],
+        )?;
         let handle = Self::create_pipeline(gpu, pipeline_layout)?;
         let (draw_buffer, material_buffer) = Self::create_buffers(gpu)?;
 
@@ -114,9 +129,9 @@ impl ForwardPipeline {
             pipeline_layout,
             material_buffer,
             draw_buffer,
-            draw_descriptors,
-            material_descriptors,
-            scene_descriptors,
+            draw_resources,
+            material_resources,
+            scene_resources,
         })
     }
 
@@ -186,6 +201,14 @@ impl ForwardPipeline {
         Ok((draw_buffer, material_buffer))
     }
 
+    fn update_textures(&mut self, context: &RenderContext) -> Result<()> {
+        let textues = context.assets.textures();
+        self.draw_resources
+            .texture(BIND_IDX_TEXTURE, texture, sampler)
+            .update(context)?;
+        Ok(())
+    }
+
     fn update_draw_buffer(&mut self, context: &RenderContext, transforms: Vec<Mat4>) -> Result<()> {
         let data = transforms
             .into_iter()
@@ -193,21 +216,9 @@ impl ForwardPipeline {
             .collect::<Vec<_>>();
         self.draw_buffer.write(&data);
 
-        // let offset = i as u64 * mem::size_of::<GpuDrawData>() as DeviceSize;
-        // let range = mem::size_of::<GpuDrawData>() as DeviceSize;
-
-        let info = &[DescriptorBufferInfo::default()
-            .buffer(self.draw_buffer.handle())
-            .offset(0)
-            .range(WHOLE_SIZE)];
-        let write = WriteDescriptorSet::default()
-            .dst_set(self.draw_descriptors)
-            .dst_binding(0)
-            .descriptor_count(1)
-            .descriptor_type(DescriptorType::UNIFORM_BUFFER_DYNAMIC)
-            .buffer_info(info);
-
-        context.cmd_buffer.update_descriptor_set(&[write], &[]);
+        self.draw_resources
+            .dynamic_uniform(BIND_IDX_DRAW, &self.draw_buffer, 0, WHOLE_SIZE)
+            .update(context)?;
         Ok(())
     }
 
@@ -222,11 +233,11 @@ impl ForwardPipeline {
 
         self.material_buffer.write(&[data]);
 
-        let base_texture = material
+        let color_texture = material
             .color_texture
             .and_then(|handle| ctx.assets.texture(handle))
             .unwrap_or_else(|| ctx.assets.defaults.white_srgb.clone());
-        let base_sampler = base_texture
+        let color_sampler = color_texture
             .sampler()
             .unwrap_or(ctx.assets.defaults.sampler);
 
@@ -253,22 +264,15 @@ impl ForwardPipeline {
             .unwrap_or_else(|| ctx.assets.defaults.white_linear.clone());
         let ao_sampler = ao_texture.sampler().unwrap_or(ctx.assets.defaults.sampler);
 
-        let ao_texture = ctx.assets.defaults.white_linear.clone();
-        let ao_sampler = ctx.assets.defaults.sampler;
-        let color_texture = ctx.assets.defaults.white_srgb.clone();
-        let color_sampler = ctx.assets.defaults.sampler;
-        let normal_texture = ctx.assets.defaults.normal.clone();
-        let normal_sampler = ctx.assets.defaults.sampler;
-        let metalrough_texture = ctx.assets.defaults.white_linear.clone();
-        let metalrough_sampler = ctx.assets.defaults.sampler;
-
-        ResourceBinder::set(self.material_descriptors)
-            .uniform(BIND_IDX_MATERIAL, &self.material_buffer)
+        self.material_resources
+            .uniform(BIND_IDX_MATERIAL, &self.material_buffer, 0)
             .texture(BIND_IDX_BASE_COLOR, &color_texture, color_sampler)
             .texture(BIND_IDX_NORMAL, &normal_texture, normal_sampler)
             .texture(BIND_IDX_METALROUGH, &metalrough_texture, metalrough_sampler)
             .texture(BIND_IDX_AO, &ao_texture, ao_sampler)
-            .update(ctx)
+            .update(ctx)?;
+
+        Ok(())
     }
 
     pub fn bind_draw(
@@ -283,37 +287,9 @@ impl ForwardPipeline {
             .bind_vertex_buffer(primitive.vertex_buffer.raw(), 0);
 
         let offsets = [offset as u32 * mem::size_of::<GpuDrawData>() as u32];
-        ctx.cmd_buffer.bind_descriptor_sets(
-            self.pipeline_layout,
-            2,
-            &[self.draw_descriptors],
-            &offsets,
-        );
+        self.draw_resources
+            .bind(ctx, self.pipeline_layout, &offsets);
 
-        Ok(())
-    }
-
-    pub fn bind_material(&self, ctx: &RenderContext, material: &Material) -> Result<()> {
-        ctx.cmd_buffer.bind_descriptor_sets(
-            self.pipeline_layout,
-            1,
-            &[self.material_descriptors],
-            &[],
-        );
-
-        Ok(())
-    }
-
-    pub fn bind_scene(&self, ctx: &RenderContext) -> Result<()> {
-        ResourceBinder::set(self.scene_descriptors)
-            .uniform(BIND_IDX_SCENE, &ctx.scene_buffer)
-            .update(ctx)?;
-        ctx.cmd_buffer.bind_descriptor_sets(
-            self.pipeline_layout,
-            0,
-            &[self.scene_descriptors],
-            &[],
-        );
         Ok(())
     }
 

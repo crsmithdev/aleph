@@ -185,6 +185,17 @@ impl Assets {
         handle
     }
 
+    pub fn textures(&self) -> Vec<Rc<AllocatedTexture>> {
+        self.textures
+            .borrow()
+            .values()
+            .filter_map(|t| match t {
+                TextureAsset::Loaded(te) => Some(te.clone()),
+                TextureAsset::Unloaded(_) => None,
+            })
+            .collect()
+    }
+
     pub fn texture(&self, handle: TextureHandle) -> Option<Rc<AllocatedTexture>> {
         let mut textures = self.textures.borrow_mut();
         if let Some(asset) = textures.get(&handle) {
