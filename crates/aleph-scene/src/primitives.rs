@@ -1,8 +1,5 @@
 use {
-    crate::{
-        model::{Vertex, VertexAttribute},
-        MeshInfo,
-    },
+    crate::model::{MeshInfo, Vertex, VertexAttribute},
     glam::{vec3, Vec3, Vec4},
 };
 

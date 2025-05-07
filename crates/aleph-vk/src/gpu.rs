@@ -8,7 +8,7 @@ use {
     ash::{
         khr,
         vk::{
-            self, Filter, Handle, SamplerAddressMode, SamplerMipmapMode,
+            self, Filter, Handle, PhysicalDeviceProperties, SamplerAddressMode, SamplerMipmapMode,
         },
     },
     bytemuck::Pod,
@@ -57,6 +57,7 @@ pub struct Gpu {
     pub(crate) window: Arc<Window>,
     setup_cmd_pool: CommandPool,
     setup_cmd_buffer: CommandBuffer,
+    properties: PhysicalDeviceProperties,
 }
 
 impl Gpu {
@@ -84,6 +85,7 @@ impl Gpu {
         let allocator = Arc::new(Allocator::new(&instance, &device)?);
         let setup_cmd_pool = device.create_command_pool()?;
         let setup_cmd_buffer = setup_cmd_pool.create_command_buffer()?;
+        let properties = instance.get_physical_device_properties(device.physical_device);
 
         Ok(Self {
             instance,
@@ -94,6 +96,7 @@ impl Gpu {
             setup_cmd_buffer,
             setup_cmd_pool,
             window: Arc::clone(&window),
+            properties,
         })
     }
 
@@ -111,6 +114,9 @@ impl Gpu {
 
     #[inline]
     pub fn swapchain(&self) -> &Swapchain { unsafe { &*self.swapchain.get() } }
+
+    #[inline]
+    pub fn properties(&self) -> &PhysicalDeviceProperties { &self.properties }
 }
 
 impl Gpu /* Init */ {
@@ -145,6 +151,7 @@ impl Gpu {
             label,
         )
     }
+
     pub fn create_pipeline_layout(
         &self,
         uniforms_layouts: &[vk::DescriptorSetLayout],
@@ -186,18 +193,53 @@ impl Gpu {
     pub fn create_descriptor_set_layout(
         &self,
         bindings: &[vk::DescriptorSetLayoutBinding],
-        flags: vk::DescriptorSetLayoutCreateFlags,
+        create_flags: vk::DescriptorSetLayoutCreateFlags,
+        binding_flags: &[vk::DescriptorBindingFlags],
     ) -> Result<vk::DescriptorSetLayout> {
-        let info = vk::DescriptorSetLayoutCreateInfo::default()
+        let mut binding_flags_info =
+            vk::DescriptorSetLayoutBindingFlagsCreateInfo::default().binding_flags(binding_flags);
+        let create_info = vk::DescriptorSetLayoutCreateInfo::default()
             .bindings(bindings)
-            .flags(flags);
+            .flags(create_flags)
+            .push_next(&mut binding_flags_info);
+
         Ok(unsafe {
             self.device
                 .handle
-                .create_descriptor_set_layout(&info, None)?
+                .create_descriptor_set_layout(&create_info, None)?
         })
     }
+    pub fn create_index_buffer<T: Pod>(
+        &self,
+        size: u64,
+        location: MemoryLocation,
+        label: impl Into<String>,
+    ) -> Result<Buffer<T>> {
+        Buffer::new(
+            &self.device,
+            Arc::clone(&self.allocator),
+            size,
+            vk::BufferUsageFlags::INDEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
+            location,
+            label,
+        )
+    }
 
+    pub fn create_vertex_buffer<T: Pod>(
+        &self,
+        size: u64,
+        location: MemoryLocation,
+        label: impl Into<String>,
+    ) -> Result<Buffer<T>> {
+        Buffer::new(
+            &self.device,
+            Arc::clone(&self.allocator),
+            size,
+            vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
+            location,
+            label,
+        )
+    }
     pub fn create_descriptor_pool(
         &self,
         pool_sizes: &[vk::DescriptorPoolSize],
@@ -215,11 +257,25 @@ impl Gpu {
         &self,
         layout: vk::DescriptorSetLayout,
         pool: vk::DescriptorPool,
+        variable_descriptor_count: Option<u32>,
     ) -> Result<vk::DescriptorSet> {
-        let info = vk::DescriptorSetAllocateInfo::default()
+        let mut descriptor_set_info = vk::DescriptorSetAllocateInfo::default()
             .descriptor_pool(pool)
             .set_layouts(slice::from_ref(&layout));
-        Ok(unsafe { self.device.handle.allocate_descriptor_sets(&info)?[0] })
+
+        let counts = [variable_descriptor_count.unwrap_or(0)];
+        let mut count_info = vk::DescriptorSetVariableDescriptorCountAllocateInfo::default()
+            .descriptor_counts(&counts);
+
+        if variable_descriptor_count.is_some() {
+            descriptor_set_info = descriptor_set_info.push_next(&mut count_info);
+        }
+
+        Ok(unsafe {
+            self.device
+                .handle
+                .allocate_descriptor_sets(&descriptor_set_info)?[0]
+        })
     }
 
     pub fn update_descriptor_sets(

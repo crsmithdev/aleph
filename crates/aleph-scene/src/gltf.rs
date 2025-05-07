@@ -1,7 +1,9 @@
 use {
     crate::{
-        graph::NodeHandle, model::VertexAttribute, util, Assets, Material, MaterialHandle,
-        MeshHandle, MeshInfo, Node, NodeType, PrimitiveInfo, Scene, TextureHandle, Vertex,
+        graph::NodeHandle,
+        model::{MeshInfo, PrimitiveInfo, VertexAttribute},
+        util, Assets, Material, MaterialHandle, MeshHandle, Node, NodeType, Scene, TextureHandle,
+        Vertex,
     },
     aleph_vk::{Extent2D, ImageUsageFlags, PrimitiveTopology, TextureInfo},
     anyhow::{anyhow, bail, Result},

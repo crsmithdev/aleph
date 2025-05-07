@@ -1,73 +1,124 @@
 use {
     crate::RenderContext,
     aleph_vk::{
-        AllocatedTexture, Buffer, DescriptorBufferInfo, DescriptorImageInfo,
-        DescriptorPoolCreateFlags, DescriptorPoolSize, DescriptorSet, DescriptorSetLayout,
-        DescriptorSetLayoutBinding, DescriptorSetLayoutCreateFlags, DescriptorType, Gpu,
-        ImageLayout, PipelineLayout, RawBuffer, Sampler, ShaderStageFlags, Texture,
+        AllocatedTexture, Buffer, DescriptorBindingFlags, DescriptorBufferInfo,
+        DescriptorImageInfo, DescriptorPoolCreateFlags, DescriptorPoolSize, DescriptorSet,
+        DescriptorSetLayout, DescriptorSetLayoutBinding, DescriptorSetLayoutCreateFlags,
+        DescriptorType, Gpu, ImageLayout, PipelineLayout, Sampler, ShaderStageFlags, Texture,
         WriteDescriptorSet,
     },
     anyhow::Result,
     bytemuck::Pod,
-    std::collections::HashMap,
+    std::rc::Rc,
 };
 
-#[derive(Default)]
-pub struct ResourceLayout<'a> {
-    pub(crate) bindings: Vec<DescriptorSetLayoutBinding<'a>>,
+pub struct ResourceLayout {
+    resources: Vec<UnboundResource>,
+    set: usize,
 }
 
-impl ResourceLayout<'_> {
+impl ResourceLayout {
     const N_DESCRIPTORS: u32 = 10000;
+    const N_VARIABLE_DESCRIPTORS: usize = 128;
+
+    pub fn set(set: usize) -> Self {
+        Self {
+            resources: Vec::new(),
+            set,
+        }
+    }
+
+    pub fn storage_buffer(&mut self, index: usize, flags: ShaderStageFlags) -> &mut Self {
+        self.add_binding(UnboundResource {
+            index,
+            stage_flags: flags,
+            descriptor_count: 1,
+            dimensionality: Dimensionality::Single,
+            descriptor_type: DescriptorType::STORAGE_BUFFER,
+            binding_flags: DescriptorBindingFlags::default(),
+        })
+    }
 
     pub fn texture_array(&mut self, index: usize, flags: ShaderStageFlags) -> &mut Self {
-        self.bindings.push(
-            DescriptorSetLayoutBinding::default()
-                .binding(index as u32)
-                .descriptor_count(1)
-                .stage_flags(flags)
-                .descriptor_type(DescriptorType::COMBINED_IMAGE_SAMPLER),
-        );
-        self
-    }
-    pub fn dynamic_uniform(&mut self, index: usize, flags: ShaderStageFlags) -> &mut Self {
-        self.bindings.push(
-            DescriptorSetLayoutBinding::default()
-                .binding(index as u32)
-                .descriptor_count(1)
-                .stage_flags(flags)
-                .descriptor_type(DescriptorType::UNIFORM_BUFFER_DYNAMIC),
-        );
-        self
+        self.add_binding(UnboundResource {
+            index,
+            stage_flags: flags,
+            descriptor_count: Self::N_VARIABLE_DESCRIPTORS,
+            dimensionality: Dimensionality::Array,
+            descriptor_type: DescriptorType::COMBINED_IMAGE_SAMPLER,
+            binding_flags: DescriptorBindingFlags::default()
+                | DescriptorBindingFlags::PARTIALLY_BOUND
+                | DescriptorBindingFlags::UPDATE_AFTER_BIND
+                | DescriptorBindingFlags::UPDATE_UNUSED_WHILE_PENDING
+                | DescriptorBindingFlags::VARIABLE_DESCRIPTOR_COUNT,
+        })
     }
 
-    pub fn uniform(&mut self, index: usize, flags: ShaderStageFlags) -> &mut Self {
-        self.bindings.push(
-            DescriptorSetLayoutBinding::default()
-                .binding(index as u32)
-                .descriptor_count(1)
-                .stage_flags(flags)
-                .descriptor_type(DescriptorType::UNIFORM_BUFFER),
-        );
-        self
+    pub fn dynamic_uniform(&mut self, index: usize, stage_flags: ShaderStageFlags) -> &mut Self {
+        self.add_binding(UnboundResource {
+            index,
+            stage_flags,
+            descriptor_count: 1,
+            dimensionality: Dimensionality::Array,
+            descriptor_type: DescriptorType::UNIFORM_BUFFER_DYNAMIC,
+            binding_flags: DescriptorBindingFlags::default(),
+        })
+    }
+
+    pub fn uniform_buffer(&mut self, index: usize, flags: ShaderStageFlags) -> &mut Self {
+        self.add_binding(UnboundResource {
+            index,
+            stage_flags: flags,
+            descriptor_count: 1,
+            dimensionality: Dimensionality::Single,
+            descriptor_type: DescriptorType::UNIFORM_BUFFER,
+            binding_flags: DescriptorBindingFlags::default(),
+        })
     }
 
     pub fn texture(&mut self, index: usize, flags: ShaderStageFlags) -> &mut Self {
-        self.bindings.push(
-            DescriptorSetLayoutBinding::default()
-                .binding(index as u32)
-                .descriptor_count(1)
-                .stage_flags(flags)
-                .descriptor_type(DescriptorType::COMBINED_IMAGE_SAMPLER),
-        );
+        self.add_binding(UnboundResource {
+            index,
+            stage_flags: flags,
+            descriptor_count: 1,
+            dimensionality: Dimensionality::Single,
+            descriptor_type: DescriptorType::COMBINED_IMAGE_SAMPLER,
+            binding_flags: DescriptorBindingFlags::default(),
+        })
+    }
+
+    fn add_binding(&mut self, binding: UnboundResource) -> &mut Self {
+        self.resources.push(binding);
         self
     }
 
-    pub fn define(&mut self, index: usize, gpu: &Gpu) -> Result<ResourceBinder> {
+    pub fn finish(&mut self, gpu: &Gpu) -> Result<ResourceBinder> {
+        let mut bindings = vec![];
+        let mut binding_flags = vec![];
+
+        log::debug!("Building descriptor set {:02}:", self.set);
+
+        for unbound in &self.resources {
+            let binding = DescriptorSetLayoutBinding::default()
+                .binding(unbound.index as u32)
+                .descriptor_count(unbound.descriptor_count as u32)
+                .stage_flags(unbound.stage_flags)
+                .descriptor_type(unbound.descriptor_type);
+
+            log::debug!("  unbound {:02}: {:?}", unbound.index, unbound);
+            log::debug!("   -> binding {:?}", binding);
+            log::debug!("   -> binding flags: {:?}", unbound.binding_flags);
+
+            bindings.push(binding);
+            binding_flags.push(unbound.binding_flags);
+        }
+
         let descriptor_layout = gpu.create_descriptor_set_layout(
-            &self.bindings,
+            &bindings,
             DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND_POOL,
+            &binding_flags,
         )?;
+        log::debug!(" -> descriptor layout: {:?}", descriptor_layout);
 
         let pool_sizes = [
             DescriptorPoolSize::default()
@@ -80,16 +131,46 @@ impl ResourceLayout<'_> {
                 .descriptor_count(Self::N_DESCRIPTORS)
                 .ty(DescriptorType::COMBINED_IMAGE_SAMPLER),
         ];
+
         let descriptor_pool = gpu.create_descriptor_pool(
             &pool_sizes,
             DescriptorPoolCreateFlags::UPDATE_AFTER_BIND,
             1,
         )?;
+        log::debug!(" -> descriptor pool: {:?}", descriptor_pool);
+        let has_variable_binding = self
+            .resources
+            .iter()
+            .any(|b| b.dimensionality == Dimensionality::Array && b.descriptor_count > 1);
+        let variable_descriptor_count = match has_variable_binding {
+            true => Some(
+                128.min(
+                    gpu.properties()
+                        .limits
+                        .max_per_stage_descriptor_sampled_images,
+                ),
+            ),
+            false => None,
+        };
+        log::debug!(
+            " -> # variable descriptors: {:?}",
+            variable_descriptor_count
+        );
 
-        let descriptor_set = gpu.create_descriptor_set(descriptor_layout, descriptor_pool)?;
+        // let descriptor_counts = self
+        // .resources
+        // .iter()
+        // .map(|binding| binding.descriptor_count as u32)
+        // .collect::<Vec<_>>();
+        let descriptor_set = gpu.create_descriptor_set(
+            descriptor_layout,
+            descriptor_pool,
+            variable_descriptor_count,
+        )?;
+        log::debug!(" -> descriptor set: {:?}", descriptor_set);
 
         Ok(ResourceBinder {
-            set_index: index as u32,
+            set_index: self.set as u32,
             set: descriptor_set,
             layout: descriptor_layout,
             bindings: vec![],
@@ -109,10 +190,26 @@ impl ResourceBinder {
 
     pub fn descriptor_set(&self) -> DescriptorSet { self.set }
 
+    pub fn storage_buffer<T: Pod>(
+        &mut self,
+        index: usize,
+        buffer: &Buffer<T>,
+        offset: u64,
+    ) -> &mut Self {
+        self.bindings.push(BoundResource::StorageBuffer {
+            index: index as u32,
+            info: DescriptorBufferInfo::default()
+                .buffer(buffer.handle())
+                .offset(offset)
+                .range(buffer.size()),
+        });
+        self
+    }
+
     pub fn texture_array(
         &mut self,
         index: usize,
-        images: &[AllocatedTexture],
+        images: &[Rc<AllocatedTexture>],
         sampler: Sampler,
     ) -> &mut Self {
         let info = images
@@ -126,11 +223,17 @@ impl ResourceBinder {
             .collect();
         self.bindings.push(BoundResource::TextureArray {
             index: index as u32,
+            count: images.len(),
             info: info,
         });
         self
     }
-    pub fn uniform<T: Pod>(&mut self, index: usize, buffer: &Buffer<T>, offset: u64) -> &mut Self {
+    pub fn uniform_buffer<T: Pod>(
+        &mut self,
+        index: usize,
+        buffer: &Buffer<T>,
+        offset: u64,
+    ) -> &mut Self {
         self.bindings.push(BoundResource::Buffer {
             index: index as u32,
             info: DescriptorBufferInfo::default()
@@ -141,7 +244,7 @@ impl ResourceBinder {
         self
     }
 
-    pub fn dynamic_uniform<T: Pod>(
+    pub fn dynamic_uniform_buffer<T: Pod>(
         &mut self,
         index: usize,
         buffer: &Buffer<T>,
@@ -180,18 +283,32 @@ impl ResourceBinder {
             .iter()
             .map(|binding| self.extract(binding))
             .collect::<Vec<_>>();
-        ctx.cmd_buffer
-            .update_descriptor_set(&writes.as_slice(), &[]);
+        if !writes.is_empty() {
+            ctx.command_buffer
+                .update_descriptor_set(&writes.as_slice(), &[]);
+        }
         Ok(self)
     }
 
     fn extract(&self, binding: &BoundResource) -> WriteDescriptorSet {
         match binding {
-            BoundResource::TextureArray { index, info, .. } => {
+            BoundResource::StorageBuffer { index, info, .. } => {
                 let mut write = WriteDescriptorSet::default()
                     .dst_set(self.set)
                     .dst_binding(*index)
-                    .descriptor_count(info.len() as u32)
+                    .descriptor_count(1)
+                    .descriptor_type(DescriptorType::STORAGE_BUFFER);
+                write.p_buffer_info = info;
+                write.descriptor_count = 1;
+                write
+            }
+            BoundResource::TextureArray {
+                index, info, count, ..
+            } => {
+                let mut write = WriteDescriptorSet::default()
+                    .dst_set(self.set)
+                    .dst_binding(*index)
+                    .descriptor_count(*count as u32)
                     .descriptor_type(DescriptorType::COMBINED_IMAGE_SAMPLER);
                 write.p_image_info = info.as_ptr();
                 write.descriptor_count = info.len() as u32;
@@ -231,8 +348,12 @@ impl ResourceBinder {
     }
 
     pub fn bind(&self, ctx: &RenderContext, pipeline_layout: PipelineLayout, offsets: &[u32]) {
-        ctx.cmd_buffer
-            .bind_descriptor_sets(pipeline_layout, self.set_index, &[self.set], offsets);
+        ctx.command_buffer.bind_descriptor_sets(
+            pipeline_layout,
+            self.set_index,
+            &[self.set],
+            offsets,
+        );
     }
 
     pub fn write_descriptor(&self, index: usize) -> Option<WriteDescriptorSet> {
@@ -240,7 +361,27 @@ impl ResourceBinder {
     }
 }
 
+#[derive(Debug)]
+pub struct UnboundResource {
+    index: usize,
+    dimensionality: Dimensionality,
+    stage_flags: ShaderStageFlags,
+    descriptor_count: usize,
+    descriptor_type: DescriptorType,
+    binding_flags: DescriptorBindingFlags,
+}
+
+#[derive(Debug, PartialEq)]
+enum Dimensionality {
+    Single,
+    Array,
+}
+
 pub enum BoundResource {
+    StorageBuffer {
+        info: DescriptorBufferInfo,
+        index: u32,
+    },
     DynamicUniform {
         info: DescriptorBufferInfo,
         index: u32,
@@ -254,6 +395,7 @@ pub enum BoundResource {
         index: u32,
     },
     TextureArray {
+        count: usize,
         info: Vec<DescriptorImageInfo>,
         index: u32,
     },

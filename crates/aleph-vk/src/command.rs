@@ -4,6 +4,7 @@ use {
     anyhow::Result,
     ash::{vk, vk::PipelineBindPoint},
     bytemuck::Pod,
+    core::slice,
     derive_more::Debug,
     std::any::Any,
 };
@@ -72,6 +73,25 @@ impl CommandBuffer {
         Ok(unsafe { self.device.handle.end_command_buffer(self.handle)? })
     }
 
+    pub fn push_constants<T: Pod>(
+        &self,
+        layout: vk::PipelineLayout,
+        stage_flags: vk::ShaderStageFlags,
+        offset: u32,
+        data: &T,
+    ) {
+        let data: &[T] = slice::from_ref(data);
+
+        unsafe {
+            self.device.handle.cmd_push_constants(
+                self.handle,
+                layout,
+                stage_flags,
+                offset,
+                bytemuck::cast_slice(data),
+            );
+        }
+    }
     pub fn begin_rendering(
         &self,
         color_attachments: &[vk::RenderingAttachmentInfo],

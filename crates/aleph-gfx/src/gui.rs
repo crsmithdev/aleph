@@ -143,15 +143,15 @@ impl Gui {
         }
         let clipped_primitives = self.ctx.tessellate(shapes, pixels_per_point);
 
-        ctx.cmd_buffer
+        ctx.command_buffer
             .begin_rendering(color_attachments, Some(depth_attachment), ctx.extent)?;
         self.renderer.cmd_draw(
-            ctx.cmd_buffer.handle(),
+            ctx.command_buffer.handle(),
             extent,
             pixels_per_point,
             &clipped_primitives,
         )?;
-        ctx.cmd_buffer.end_rendering()?;
+        ctx.command_buffer.end_rendering()?;
 
         Ok(())
     }

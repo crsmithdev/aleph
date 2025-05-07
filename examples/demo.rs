@@ -18,7 +18,6 @@ static STATE: LazyLock<Mutex<State>> = LazyLock::new(|| Mutex::new(State::defaul
 #[derive(Default)]
 struct State {
     scene_index: usize,
-    scene_paths: Vec<String>,
     auto_rotate: bool,
 }
 
@@ -45,10 +44,10 @@ fn input_system(mut scene: ResMut<Scene>, mut assets: ResMut<Assets>, input: Res
     let n = (SHIFT_FACTOR * input.key_held(&Key::ShiftLeft) as usize).min(1);
 
     if input.key_pressed(&Key::ArrowLeft) {
-        state.scene_index = state.scene_index - n % state.scene_paths.len();
+        state.scene_index = state.scene_index - n % SCENE_PATHS.len();
         load_scene(state.scene_index, &mut scene, &mut assets);
     } else if input.key_pressed(&Key::ArrowRight) {
-        state.scene_index = state.scene_index + n % state.scene_paths.len();
+        state.scene_index = state.scene_index + n % SCENE_PATHS.len();
         load_scene(state.scene_index, &mut scene, &mut assets);
     }
 

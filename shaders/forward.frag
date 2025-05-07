@@ -9,10 +9,11 @@ precision highp float;
 precision highp int;
 precision highp usampler2D;
 
-#include "./include/scene.glsl"
-#include "./include/draw.glsl"
-#include "./include/material.glsl"
+// #include "./include/scene.glsl"
+// #include "./include/draw.glsl"
+// #include "./include/material.glsl"
 #include "./include/util.glsl"
+#include "./include/bindless.glsl"
 
 layout (location = 0) in vec3 inPos;
 layout (location = 1) in vec3 inNormal;
@@ -22,6 +23,8 @@ layout (location = 4) in vec4 inColor;
 layout (location = 5) in mat3 inTbn;
 
 layout (location = 0) out vec4 outColor;
+// layout (set = 3, binding = 0) uniform sampler2D textures[];
+
 
 float distributionGGX(vec3 normal, vec3 half_dir, float roughness) {
     float a         = roughness * roughness;
@@ -61,42 +64,45 @@ vec3 fresnelSchlick(float cos_theta, vec3 fresnel_0) {
 
 vec3 calculateNormal()
 {
-    if (u_scene.config.disable_normal_map == 1) {
+    // if (u_scene.config.disable_normal_map == 1) {
         return inNormal;
-    }
-	vec3 tangentNormal = texture(u_normalMap, inUv).xyz * 2.0 - 1.0;
+    // }
+	// // vec3 tangentNormal = texture(u_normalMap, inUv).xyz * 2.0 - 1.0;
 
-	vec3 N = normalize(inNormal);
-	vec3 T = normalize(inTangent.xyz);
-	vec3 B = normalize(cross(N, T));
-	mat3 TBN = mat3(T, B, N);
-	return normalize(TBN * tangentNormal);
+	// vec3 N = normalize(inNormal);
+	// vec3 T = normalize(inTangent.xyz);
+	// vec3 B = normalize(cross(N, T));
+	// mat3 TBN = mat3(T, B, N);
+	// return normalize(TBN * );
 }
 
 void main() {
     vec2 uv = inUv;
     vec3 normal = calculateNormal();
     vec3 bitangent = normalize(cross(normal, inTangent.xyz));
-    
-    vec3 albedo = texture(u_colorMap, uv).xyz * inColor.xyz;
-    if (u_scene.config.force_color == 1) {
-        albedo = u_scene.config.force_color_factor.xyz;
-    }
+   
+    vec3 albedo = vec3(1.0, 1.0, 1.0); 
+    // vec3 albedo = inColor.xyz;
+    // if (u_scene.config.force_color == 1) {
+    //     albedo = u_scene.config.force_color_factor.xyz;
+    // }
 
-    float metallic = texture(u_metalRoughMap, uv).b * u_material.metal_factor;
-    if (u_scene.config.force_metallic == 1) {
-        metallic = texture(u_metalRoughMap, uv).b * u_scene.config.force_metallic_factor;
-    } 
+    float metallic = 0.9;
+    // float metallic = texture(u_metalRoughMap, uv).b * u_material.metal_factor;
+    // if (u_scene.config.force_metallic == 1) {
+    //     metallic = texture(u_metalRoughMap, uv).b * u_scene.config.force_metallic_factor;
+    // } 
 
     float roughness = 0.5;
     if (u_scene.config.force_roughness == 1) {
         roughness = u_scene.config.force_roughness_factor;
     }
 
-    float ao = texture(u_colorMap, uv).r * u_material.ao_strength; 
-    if (u_scene.config.force_ao == 1) {
-        ao = u_scene.config.force_ao_strength; 
-    }
+    float ao = 1.0;
+    // float ao = texture(u_colorMap, uv).r * u_material.ao_strength; 
+    // if (u_scene.config.force_ao == 1) {
+    //     ao = u_scene.config.force_ao_strength; 
+    // }
 
     if (u_scene.config.force_defaults == 1) {
         albedo = vec3(1.0, 1.0, 1.0);

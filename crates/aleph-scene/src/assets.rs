@@ -1,7 +1,7 @@
 use {
     crate::{
-        model::{create_index_buffer, create_vertex_buffer},
-        util, Material, Mesh, MeshInfo, Primitive, Vertex,
+        model::{create_index_buffer, create_vertex_buffer, MeshInfo},
+        util, Material, Mesh, Primitive, Vertex,
     },
     aleph_vk::{
         AllocatedTexture, Extent2D, Filter, Format, Gpu, ImageAspectFlags, ImageUsageFlags,
@@ -87,6 +87,7 @@ pub struct Defaults {
     pub white_srgb: Rc<AllocatedTexture>,
     pub white_linear: Rc<AllocatedTexture>,
     pub normal: Rc<AllocatedTexture>,
+    red: Rc<AllocatedTexture>,
     pub sampler: Sampler,
 }
 
@@ -121,13 +122,20 @@ impl Assets {
         let meshes = HashMap::new();
         let defaults = Self::load_defaults(&gpu)?;
 
-        Ok(Self {
+        let mut assets = Self {
             gpu,
             meshes,
             textures,
             materials,
             defaults,
-        })
+        };
+
+        assets.add_texture_loaded(assets.defaults.white_srgb.clone());
+        assets.add_texture_loaded(assets.defaults.white_linear.clone());
+        assets.add_texture_loaded(assets.defaults.normal.clone());
+        assets.add_texture_loaded(assets.defaults.red.clone());
+
+        Ok(assets)
     }
 
     pub fn create_default(
@@ -141,7 +149,7 @@ impl Assets {
         let buffer = ImageBuffer::from_pixel(16, 16, pixel);
         let data = buffer.as_raw();
 
-        Self::load_texture(
+        Ok(Self::load_texture(
             gpu,
             &TextureInfo {
                 name: name.into(),
@@ -152,7 +160,7 @@ impl Assets {
                 format,
                 sampler,
             },
-        )
+        )?)
     }
 
     fn load_defaults(gpu: &Gpu) -> Result<Defaults> {
@@ -169,13 +177,22 @@ impl Assets {
         let white_srgb = Self::create_default(gpu, &WHITE, srgb, "white-srgb", sampler)?;
         let white_linear = Self::create_default(gpu, &WHITE, linear, "white-linear", sampler)?;
         let normal = Self::create_default(gpu, &NORMAL, linear, "normal", sampler)?;
+        let red = Self::create_default(gpu, &[255, 0, 0, 255], linear, "red", sampler)?;
 
         Ok(Defaults {
             white_srgb: Rc::new(white_srgb),
             white_linear: Rc::new(white_linear),
             normal: Rc::new(normal),
+            red: Rc::new(red),
             sampler,
         })
+    }
+
+    pub fn add_texture_loaded(&mut self, texture: Rc<AllocatedTexture>) -> TextureHandle {
+        let handle = TextureHandle::new();
+        let asset = TextureAsset::Loaded(texture.clone());
+        self.textures.borrow_mut().insert(handle, asset);
+        handle
     }
 
     pub fn add_texture(&mut self, desc: TextureInfo) -> TextureHandle {
@@ -185,13 +202,34 @@ impl Assets {
         handle
     }
 
-    pub fn textures(&self) -> Vec<Rc<AllocatedTexture>> {
-        self.textures
-            .borrow()
-            .values()
-            .filter_map(|t| match t {
-                TextureAsset::Loaded(te) => Some(te.clone()),
-                TextureAsset::Unloaded(_) => None,
+    pub fn textures(&self) -> Vec<(TextureHandle, Rc<AllocatedTexture>)> {
+        let keys = self.textures.borrow().keys().cloned().collect::<Vec<_>>();
+        keys.into_iter()
+            .filter_map(|k| match self.texture(k) {
+                Some(texture) => Some((k, texture)),
+                None => None,
+            })
+            .collect()
+    }
+
+    pub fn materials(&self) -> Vec<(MaterialHandle, &Material)> {
+        self.materials
+            .keys()
+            .into_iter()
+            .filter_map(|k| match self.material(*k) {
+                Some(texture) => Some((*k, texture)),
+                None => None,
+            })
+            .collect()
+    }
+
+    pub fn meshes(&self) -> Vec<(MeshHandle, &Mesh)> {
+        self.meshes
+            .keys()
+            .into_iter()
+            .filter_map(|k| match self.mesh(*k) {
+                Some(texture) => Some((*k, texture)),
+                None => None,
             })
             .collect()
     }

@@ -8,9 +8,14 @@ precision highp float;
 precision highp int;
 precision highp usampler2D;
 
-#include "./include/scene.glsl"
-#include "./include/draw.glsl"
-#include "./include/vertex.glsl"
+#include "./include/bindless.glsl"
+
+layout(location = 0) in vec3 inPos;
+layout(location = 1) in float inUVx;
+layout(location = 2) in vec3 inNormal;
+layout(location = 3) in float inUVy;
+layout(location = 4) in vec4 inTangent;
+layout(location = 5) in vec4 inColor;
 
 layout (location = 0) out vec3 outPos;
 layout (location = 1) out vec3 outNormal;
@@ -19,10 +24,11 @@ layout (location = 3) out vec2 outUv;
 layout (location = 4) out vec4 outColor;
 layout (location = 5) out mat3 outTBN;
 
+
 void main() {
-    outPos = vec3(u_draw.model * vec4(inPos, 1.0));;
-    outNormal = mat3(u_draw.model) * inNormal;
-	outTangent = vec4(mat3(u_draw.model) * inTangent.xyz, inTangent.w);
+    outPos = vec3(p_constants.model * vec4(inPos, 1.0));;
+    outNormal = mat3(p_constants.model) * inNormal;
+	outTangent = vec4(mat3(p_constants.model) * inTangent.xyz, inTangent.w);
     outUv = vec2(inUVx, inUVy);
     outColor = inColor;
 

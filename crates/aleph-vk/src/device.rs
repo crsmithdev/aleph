@@ -50,7 +50,6 @@ pub struct Device {
     pub(crate) handle: ash::Device, // TODO
     pub(crate) queue: Queue,
     pub(crate) physical_device: vk::PhysicalDevice,
-    pub properties: vk::PhysicalDeviceProperties,
 }
 
 impl Device {
@@ -81,7 +80,14 @@ impl Device {
                 .buffer_device_address(true);
         let mut descriptor_indexing_features =
             ash::vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::default()
+                .shader_sampled_image_array_non_uniform_indexing(true)
+                .descriptor_binding_uniform_buffer_update_after_bind(true)
+                .descriptor_binding_sampled_image_update_after_bind(true)
+                .descriptor_binding_partially_bound(true)
+                .descriptor_binding_variable_descriptor_count(true)
+                .descriptor_binding_update_unused_while_pending(true)
                 .runtime_descriptor_array(true);
+
         let mut device_8bit_storage_features =
             ash::vk::PhysicalDevice8BitStorageFeaturesKHR::default()
                 .storage_buffer8_bit_access(true);
@@ -104,13 +110,11 @@ impl Device {
             &mut device_features2,
         )?;
         let queue = Self::create_queue(&handle, queue_family);
-        let properties = instance.get_physical_device_properties(physical_device);
 
         Ok(Device {
             handle,
             physical_device,
             queue,
-            properties,
         })
     }
 

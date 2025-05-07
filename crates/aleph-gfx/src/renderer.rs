@@ -49,22 +49,36 @@ pub struct GpuSceneData {
 #[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
 pub struct GpuMaterialData {
     pub color_factor: Vec4,
+    pub color_texture_index: i32,
+    pub normal_texture_index: i32,
     pub metallic_factor: f32,
     pub roughness_factor: f32,
+    pub metalrough_texture_index: i32,
     pub ao_strength: f32,
+    pub ao_texture_index: i32,
     pub padding0: f32,
 }
 
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
-pub struct GpuDrawData {
+pub struct GpuObjectData {
     pub model: Mat4,
+}
+
+#[repr(C)]
+#[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
+pub struct GpuPushConstantData {
+    pub model: Mat4,
+    pub material_index: i32,
+    pub _padding0: i32,
+    pub _padding1: i32,
+    pub _padding2: i32,
 }
 
 pub struct RenderContext<'a> {
     pub gpu: &'a Gpu,
     pub scene: &'a Scene,
-    pub cmd_buffer: &'a CommandBuffer,
+    pub command_buffer: &'a CommandBuffer,
     pub scene_buffer: &'a Buffer<GpuSceneData>,
     pub draw_image: &'a AllocatedTexture,
     pub depth_image: &'a AllocatedTexture,
@@ -295,7 +309,7 @@ impl Renderer {
         let mut context = RenderContext {
             gpu: &self.gpu,
             scene,
-            cmd_buffer: cmd_buffer2,
+            command_buffer: cmd_buffer2,
             scene_buffer: &self.scene_buffer,
             draw_image: &self.draw_image,
             depth_image: &self.depth_image,
@@ -305,14 +319,14 @@ impl Renderer {
         {
             cmd_buffer2.reset()?;
             cmd_buffer2.begin()?;
-            context.cmd_buffer = cmd_buffer2;
+            context.command_buffer = cmd_buffer2;
             self.foreward_pipeline.execute(&context)?;
             cmd_buffer2.end()?;
         }
         {
             cmd_buffer3.reset()?;
             cmd_buffer3.begin()?;
-            context.cmd_buffer = cmd_buffer3;
+            context.command_buffer = cmd_buffer3;
             gui.draw(&context, &mut self.config, &mut self.scene_data)?;
             cmd_buffer3.end()?;
         }
