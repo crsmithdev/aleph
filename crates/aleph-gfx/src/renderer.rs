@@ -1,78 +1,25 @@
 use {
-    crate::{ForwardPipeline, Gui, Pipeline},
-    aleph_scene::{model::Light, Assets, Scene},
+    crate::{ForwardPipeline, Gui, Pipeline, ResourceBinder, ResourceLayout},
+    aleph_scene::{model::Light, Assets, MaterialHandle, Scene, TextureHandle},
     aleph_vk::{
         AllocatedTexture, Buffer, BufferUsageFlags, CommandBuffer, CommandBufferSubmitInfo,
-        Extent2D, Extent3D, Fence, Format, Frame, Gpu, ImageAspectFlags, ImageLayout,
-        ImageUsageFlags, PipelineStageFlags2, Semaphore, SemaphoreSubmitInfo, SubmitInfo2, Texture,
+        DescriptorSet, DescriptorSetLayout, Extent2D, Extent3D, Fence, Format, Frame, Gpu,
+        ImageAspectFlags, ImageLayout, ImageUsageFlags, PipelineStageFlags2, Semaphore,
+        SemaphoreSubmitInfo, ShaderStageFlags, SubmitInfo2, Texture,
     },
     anyhow::Result,
     bytemuck::{Pod, Zeroable},
     glam::{vec3, vec4, Mat4, Vec3, Vec4},
-    std::{mem, sync::Arc},
+    std::{collections::HashMap, mem, sync::Arc},
     tracing::instrument,
 };
 
-#[repr(C)]
-#[derive(Debug, Default, Clone, Copy, Pod, Zeroable)]
-pub struct GpuConfig {
-    pub force_color: i32,
-    pub force_metallic: i32,
-    pub force_roughness: i32,
-    pub force_ao: i32,
-    pub force_color_factor: Vec4,
-    pub force_metallic_factor: f32,
-    pub force_roughness_factor: f32,
-    pub force_ao_strength: f32,
-    pub debug_normals: i32,
-    pub debug_tangents: i32,
-    pub debug_bitangents: i32,
-    pub debug_specular: i32,
-    pub debug_normal_maps: i32,
-    pub force_defaults: i32,
-    pub _padding0: Vec3,
-}
-
-#[repr(C)]
-#[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
-pub struct GpuSceneData {
-    pub view: Mat4,
-    pub projection: Mat4,
-    pub vp: Mat4,
-    pub camera_pos: Vec3,
-    pub n_lights: i32,
-    pub config: GpuConfig,
-    pub lights: [Light; 4],
-}
-
-#[repr(C)]
-#[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
-pub struct GpuMaterialData {
-    pub color_factor: Vec4,
-    pub color_texture_index: i32,
-    pub normal_texture_index: i32,
-    pub metallic_factor: f32,
-    pub roughness_factor: f32,
-    pub metalrough_texture_index: i32,
-    pub ao_strength: f32,
-    pub ao_texture_index: i32,
-    pub padding0: f32,
-}
-
-#[repr(C)]
-#[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
-pub struct GpuObjectData {
-    pub model: Mat4,
-}
-
-#[repr(C)]
-#[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
-pub struct GpuPushConstantData {
-    pub model: Mat4,
-    pub material_index: i32,
-    pub _padding0: i32,
-    pub _padding1: i32,
-    pub _padding2: i32,
+pub struct ResourceInfo {
+    binder: ResourceBinder,
+    material_map: HashMap<MaterialHandle, usize>,
+    texture_map: HashMap<TextureHandle, usize>,
+    scene_buffer: Buffer<GpuSceneData>,
+    material_buffer: Buffer<GpuMaterialData>,
 }
 
 pub struct RenderContext<'a> {
@@ -86,8 +33,13 @@ pub struct RenderContext<'a> {
     pub assets: &'a mut Assets,
 }
 
-pub(crate) const FORMAT_DRAW_IMAGE: Format = Format::R16G16B16A16_SFLOAT;
-pub(crate) const FORMAT_DEPTH_IMAGE: Format = Format::D32_SFLOAT;
+const FORMAT_DRAW_IMAGE: Format = Format::R16G16B16A16_SFLOAT;
+const FORMAT_DEPTH_IMAGE: Format = Format::D32_SFLOAT;
+const SET_IDX_BINDLESS: usize = 0;
+const BIND_IDX_SCENE: usize = 0;
+const BIND_IDX_MATERIAL: usize = 1;
+const BIND_IDX_TEXTURE: usize = 2;
+
 const LIGHTS: [Light; 4] = [
     Light {
         position: vec3(2., 2., 2.),
@@ -113,7 +65,7 @@ const LIGHTS: [Light; 4] = [
 
 pub struct Renderer {
     frames: Vec<Frame>,
-    foreward_pipeline: ForwardPipeline,
+    forward_pipeline: ForwardPipeline,
     rebuild_swapchain: bool,
     frame_index: usize,
     frame_counter: usize,
@@ -193,6 +145,23 @@ impl Renderer {
             "renderer-scene",
         )?;
 
+        let material_buffer = gpu.create_shared_buffer::<GpuMaterialData>(
+            mem::size_of::<GpuMaterialData>() as u64 * 100,
+            BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::STORAGE_BUFFER,
+            "forward-material",
+        )?;
+
+        let binder = ResourceLayout::set(SET_IDX_BINDLESS)
+            .uniform_buffer(BIND_IDX_SCENE, ShaderStageFlags::ALL_GRAPHICS)
+            .storage_buffer(BIND_IDX_MATERIAL, ShaderStageFlags::ALL_GRAPHICS)
+            .texture_array(BIND_IDX_TEXTURE, ShaderStageFlags::ALL_GRAPHICS)
+            .finish(&gpu)?;
+        let resources = ResourceInfo {
+            binder,
+            material_map: HashMap::new(),
+            texture_map: HashMap::new(),
+        };
+
         let foreward_pipeline = ForwardPipeline::new(&gpu)?;
         let scene_data = GpuSceneData {
             lights: LIGHTS,
@@ -203,12 +172,13 @@ impl Renderer {
         Ok(Self {
             gpu,
             frames,
-            foreward_pipeline,
+            forward_pipeline: foreward_pipeline,
             draw_image,
             depth_image,
             scene_data,
             scene_buffer,
             rebuild_swapchain: false,
+            resources,
             frame_index: 0,
             frame_counter: 0,
             config: RenderConfig {
@@ -242,13 +212,13 @@ impl Renderer {
         self.scene_buffer.write(&[self.scene_data]);
     }
 
+    pub fn prepare(&mut self, assets: &mut Assets) -> Result<()> {
+        self.resources.texture_map = self.update_textures()?;
+        self.resources.material_map = self.update_materials(ctx, texture_map)?;
+    }
+
     #[instrument(skip_all)]
-    pub fn render_scene(
-        &mut self,
-        scene: &Scene,
-        assets: &mut Assets,
-        gui: &mut Gui,
-    ) -> Result<()> {
+    pub fn render(&mut self, scene: &Scene, assets: &mut Assets, gui: &mut Gui) -> Result<()> {
         self.update_scene_buffer(scene);
 
         if self.rebuild_swapchain {
@@ -298,6 +268,8 @@ impl Renderer {
                 ImageLayout::UNDEFINED,
                 ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             );
+            let texture_map = self.update_textures(ctx)?;
+            let material_map = self.update_materials(ctx, texture_map)?;
             cmd_buffer.end()?;
         }
         let cmd_buffer2 = &self.frames[self.frame_index]
@@ -320,7 +292,7 @@ impl Renderer {
             cmd_buffer2.reset()?;
             cmd_buffer2.begin()?;
             context.command_buffer = cmd_buffer2;
-            self.foreward_pipeline.execute(&context)?;
+            self.forward_pipeline.render(&context)?;
             cmd_buffer2.end()?;
         }
         {
@@ -420,6 +392,82 @@ impl Renderer {
         }?)
     }
 
+    fn update_materials(
+        &mut self,
+        gpu: &Gpu,
+        assets: &mut Assets,
+        binder: &ResourceBinder,
+        texture_map: HashMap<TextureHandle, usize>,
+    ) -> Result<HashMap<MaterialHandle, usize>> {
+        log::debug!("update materials");
+
+        let mut handle_map: HashMap<MaterialHandle, usize> = HashMap::new();
+        let mut materials = vec![];
+
+        for (handle, material) in assets.materials() {
+            let color_texture = material
+                .color_texture
+                .and_then(|h| texture_map.get(&h))
+                .unwrap_or(&0);
+            let normal_texture = material
+                .normal_texture
+                .and_then(|h| texture_map.get(&h))
+                .unwrap_or(&0);
+            let metalrough_texture = material
+                .metalrough_texture
+                .and_then(|h| texture_map.get(&h))
+                .unwrap_or(&0);
+            let ao_texture = material
+                .ao_texture
+                .and_then(|h| texture_map.get(&h))
+                .unwrap_or(&0);
+            let gpu_material = GpuMaterialData {
+                color_factor: material.color_factor,
+                metallic_factor: material.metallic_factor,
+                roughness_factor: material.roughness_factor,
+                ao_strength: material.ao_strength,
+                color_texture_index: *color_texture as i32,
+                normal_texture_index: *normal_texture as i32,
+                metalrough_texture_index: *metalrough_texture as i32,
+                ao_texture_index: *ao_texture as i32,
+                padding0: 0.,
+            };
+
+            materials.push(gpu_material);
+            handle_map.insert(handle, materials.len() - 1);
+        }
+
+        self.material_buffer.write(&materials);
+
+        self.resources
+            .storage_buffer(BIND_IDX_MATERIAL, &self.material_buffer, 0)
+            .update(ctx.gpu)?;
+
+        Ok(handle_map)
+    }
+    fn update_textures(
+        &mut self,
+        gpu: &Gpu,
+        assets: &mut Assets,
+        binder: &ResourceBinder,
+    ) -> Result<HashMap<TextureHandle, usize>> {
+        log::debug!("update textures");
+        let mut handle_map: HashMap<TextureHandle, usize> = HashMap::new();
+        let mut textures = vec![];
+        let sampler = ctx.assets.defaults.sampler;
+
+        for (handle, texture) in ctx.assets.textures() {
+            textures.push(texture);
+            handle_map.insert(handle, textures.len() - 1);
+        }
+
+        self.resources
+            .texture_array(BIND_IDX_TEXTURE, textures.as_slice(), sampler)
+            .update(ctx.gpu)?;
+
+        Ok(handle_map)
+    }
+
     fn create_frames(gpu: &Gpu) -> Result<Vec<Frame>> {
         (0..gpu.swapchain().in_flight_frames())
             .map(|_| {
@@ -440,4 +488,66 @@ impl Renderer {
 
 impl Drop for Renderer {
     fn drop(&mut self) { unsafe { self.gpu.device().handle().device_wait_idle().unwrap() }; }
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy, Pod, Zeroable)]
+pub struct GpuConfig {
+    pub force_color: i32,
+    pub force_metallic: i32,
+    pub force_roughness: i32,
+    pub force_ao: i32,
+    pub force_color_factor: Vec4,
+    pub force_metallic_factor: f32,
+    pub force_roughness_factor: f32,
+    pub force_ao_strength: f32,
+    pub debug_normals: i32,
+    pub debug_tangents: i32,
+    pub debug_bitangents: i32,
+    pub debug_specular: i32,
+    pub debug_normal_maps: i32,
+    pub force_defaults: i32,
+    pub _padding0: Vec3,
+}
+
+#[repr(C)]
+#[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
+pub struct GpuSceneData {
+    pub view: Mat4,
+    pub projection: Mat4,
+    pub vp: Mat4,
+    pub camera_pos: Vec3,
+    pub n_lights: i32,
+    pub config: GpuConfig,
+    pub lights: [Light; 4],
+}
+
+#[repr(C)]
+#[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
+pub struct GpuMaterialData {
+    pub color_factor: Vec4,
+    pub color_texture_index: i32,
+    pub normal_texture_index: i32,
+    pub metallic_factor: f32,
+    pub roughness_factor: f32,
+    pub metalrough_texture_index: i32,
+    pub ao_strength: f32,
+    pub ao_texture_index: i32,
+    pub padding0: f32,
+}
+
+#[repr(C)]
+#[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
+pub struct GpuObjectData {
+    pub model: Mat4,
+}
+
+#[repr(C)]
+#[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
+pub struct GpuPushConstantData {
+    pub model: Mat4,
+    pub material_index: i32,
+    pub _padding0: i32,
+    pub _padding1: i32,
+    pub _padding2: i32,
 }

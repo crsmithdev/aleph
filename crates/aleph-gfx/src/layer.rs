@@ -38,6 +38,6 @@ fn update_system(
 ) {
     gui.handle_events(events.read());
     renderer
-        .render_scene(&scene, &mut assets, &mut gui)
+        .render(&scene, &mut assets, &mut gui)
         .expect("execute renderer");
 }

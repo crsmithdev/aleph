@@ -15,8 +15,9 @@ use {
     anyhow::Result,
     std::{collections::HashSet, ffi},
 };
+
 pub trait Pipeline {
-    fn execute(&mut self, context: &RenderContext) -> Result<()>;
+    fn render(&mut self, context: &RenderContext) -> Result<()>;
 }
 
 const SHADER_MAIN: &ffi::CStr = c"main";

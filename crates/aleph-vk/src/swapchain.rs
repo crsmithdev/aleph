@@ -1,12 +1,12 @@
 use {
     crate::{
-        texture::WrappedTexture, CommandBuffer, CommandPool, Device, Instance, Queue, Surface,
-        Texture, VK_TIMEOUT_NS,
+        texture::WrappedTexture, CommandBuffer, CommandPool, Device, Instance, Queue, QueueFamily,
+        Surface, Texture, VK_TIMEOUT_NS,
     },
     anyhow::Result,
     ash::{
         khr,
-        vk::{self, CompositeAlphaFlagsKHR, Handle, SurfaceTransformFlagsKHR},
+        vk::{self, CompositeAlphaFlagsKHR, Extent2D, Handle, SurfaceTransformFlagsKHR},
     },
     derive_more::Debug,
     tracing::instrument,
@@ -50,6 +50,33 @@ pub struct Swapchain {
 }
 
 impl Swapchain {
+    pub fn headless(instance: &Instance, device: &Device) -> Result<Self> {
+        Ok(Self {
+            handle: vk::SwapchainKHR::null(),
+            loader: khr::swapchain::Device::new(&instance.handle, &device.handle),
+            device: device.clone(),
+            surface: Surface::headless(instance),
+            queue: Queue {
+                handle: vk::Queue::null(),
+                family: QueueFamily {
+                    index: 0,
+                    properties: vk::QueueFamilyProperties::default(),
+                },
+            },
+            instance: instance.clone(),
+            info: SwapchainInfo {
+                extent: Extent2D {
+                    height: 1,
+                    width: 1,
+                },
+                format: vk::Format::B8G8R8A8_SRGB,
+                color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
+                vsync: true,
+                num_images: 1,
+            },
+            images: vec![],
+        })
+    }
     pub fn new(
         instance: &Instance,
         device: &Device,

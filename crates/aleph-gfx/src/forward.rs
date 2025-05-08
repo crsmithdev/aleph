@@ -1,6 +1,6 @@
 use {
     crate::{
-        renderer::{GpuMaterialData, GpuPushConstantData},
+        renderer::{GpuMaterialData, GpuPushConstantData, PrepareContext},
         Pipeline, PipelineBuilder, RenderContext, ResourceBinder, ResourceLayout,
     },
     aleph_scene::{model::Primitive, util, MaterialHandle, NodeType, TextureHandle, Vertex},
@@ -25,16 +25,20 @@ const CLEAR_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 const VERTEX_SHADER_PATH: &str = "shaders/forward.vert.spv";
 const FRAGMENT_SHADER_PATH: &str = "shaders/forward.frag.spv";
 
+struct Drawable {
+    primitive: usize,
+    material: Option<MaterialHandle>,
+    transform: Mat4,
+}
+
 pub struct ForwardPipeline {
     handle: VkPipeline,
     pipeline_layout: PipelineLayout,
-    material_buffer: Buffer<GpuMaterialData>,
-    resources: ResourceBinder,
 }
 
 impl Pipeline for ForwardPipeline {
     #[instrument(skip_all)]
-    fn execute(&mut self, ctx: &RenderContext) -> Result<()> {
+    fn render(&mut self, ctx: &RenderContext) -> Result<()> {
         let cmd = ctx.command_buffer;
 
         let color_attachments = &[util::color_attachment(
@@ -55,8 +59,6 @@ impl Pipeline for ForwardPipeline {
         cmd.set_scissor(Rect2D::default().extent(ctx.extent));
 
         let drawables = Self::get_drawables(ctx);
-        let texture_map = self.update_textures(ctx)?;
-        let material_map = self.update_materials(ctx, texture_map)?;
 
         cmd.bind_pipeline(PipelineBindPoint::GRAPHICS, self.handle)?;
 
@@ -68,17 +70,6 @@ impl Pipeline for ForwardPipeline {
 
 impl ForwardPipeline {
     pub fn new(gpu: &Gpu) -> Result<Self> {
-        let resources = ResourceLayout::set(SET_IDX_BINDLESS)
-            .uniform_buffer(BIND_IDX_SCENE, ShaderStageFlags::ALL_GRAPHICS)
-            .storage_buffer(BIND_IDX_MATERIAL, ShaderStageFlags::ALL_GRAPHICS)
-            .texture_array(BIND_IDX_TEXTURE, ShaderStageFlags::ALL_GRAPHICS)
-            .finish(gpu)?;
-
-        let material_buffer = gpu.create_shared_buffer::<GpuMaterialData>(
-            mem::size_of::<GpuMaterialData>() as u64 * 100,
-            BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::STORAGE_BUFFER,
-            "forward-material",
-        )?;
         let push_constant_range = PushConstantRange {
             stage_flags: ShaderStageFlags::VERTEX,
             offset: 0,
@@ -91,8 +82,6 @@ impl ForwardPipeline {
         Ok(Self {
             handle,
             pipeline_layout,
-            material_buffer,
-            resources,
         })
     }
     fn draw(
@@ -103,7 +92,7 @@ impl ForwardPipeline {
     ) -> Result<()> {
         self.resources
             .uniform_buffer(BIND_IDX_SCENE, ctx.scene_buffer, 0)
-            .update(ctx)?
+            .update(ctx.gpu)?
             .bind(ctx, self.pipeline_layout, &[]);
 
         for (primitive, material_handle, transform) in drawables.iter() {
@@ -188,75 +177,6 @@ impl ForwardPipeline {
             }
         }
         drawables
-    }
-
-    fn update_materials(
-        &mut self,
-        ctx: &RenderContext,
-        texture_map: HashMap<TextureHandle, usize>,
-    ) -> Result<HashMap<MaterialHandle, usize>> {
-        log::debug!("update materials");
-
-        let mut handle_map: HashMap<MaterialHandle, usize> = HashMap::new();
-        let mut materials = vec![];
-
-        for (handle, material) in ctx.assets.materials() {
-            let color_texture = material
-                .color_texture
-                .and_then(|h| texture_map.get(&h))
-                .unwrap_or(&0);
-            let normal_texture = material
-                .normal_texture
-                .and_then(|h| texture_map.get(&h))
-                .unwrap_or(&0);
-            let metalrough_texture = material
-                .metalrough_texture
-                .and_then(|h| texture_map.get(&h))
-                .unwrap_or(&0);
-            let ao_texture = material
-                .ao_texture
-                .and_then(|h| texture_map.get(&h))
-                .unwrap_or(&0);
-            let gpu_material = GpuMaterialData {
-                color_factor: material.color_factor,
-                metallic_factor: material.metallic_factor,
-                roughness_factor: material.roughness_factor,
-                ao_strength: material.ao_strength,
-                color_texture_index: *color_texture as i32,
-                normal_texture_index: *normal_texture as i32,
-                metalrough_texture_index: *metalrough_texture as i32,
-                ao_texture_index: *ao_texture as i32,
-                padding0: 0.,
-            };
-
-            materials.push(gpu_material);
-            handle_map.insert(handle, materials.len() - 1);
-        }
-
-        self.material_buffer.write(&materials);
-
-        self.resources
-            .storage_buffer(BIND_IDX_MATERIAL, &self.material_buffer, 0)
-            .update(ctx)?;
-
-        Ok(handle_map)
-    }
-    fn update_textures(&mut self, ctx: &RenderContext) -> Result<HashMap<TextureHandle, usize>> {
-        log::debug!("update textures");
-        let mut handle_map: HashMap<TextureHandle, usize> = HashMap::new();
-        let mut textures = vec![];
-        let sampler = ctx.assets.defaults.sampler;
-
-        for (handle, texture) in ctx.assets.textures() {
-            textures.push(texture);
-            handle_map.insert(handle, textures.len() - 1);
-        }
-
-        self.resources
-            .texture_array(BIND_IDX_TEXTURE, textures.as_slice(), sampler)
-            .update(ctx)?;
-
-        Ok(handle_map)
     }
 
     // fn update_draw_buffer(&mut self, context: &RenderContext, transforms: Vec<Mat4>) -> Result<()> {

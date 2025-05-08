@@ -6,9 +6,10 @@ use {
     aleph_core::log,
     anyhow::Result,
     ash::{
-        khr,
+        khr::{self},
         vk::{
-            self, Filter, Handle, PhysicalDeviceProperties, SamplerAddressMode, SamplerMipmapMode,
+            self, Extent2D, Filter, Handle, PhysicalDeviceProperties, SamplerAddressMode,
+            SamplerMipmapMode,
         },
     },
     bytemuck::Pod,
@@ -30,6 +31,13 @@ pub struct Surface {
 }
 
 impl Surface {
+    pub fn headless(instance: &Instance) -> Self {
+        Self {
+            inner: vk::SurfaceKHR::null(),
+            loader: khr::surface::Instance::new(&instance.entry, &instance.handle),
+        }
+    }
+
     pub fn new(instance: &Instance, window: &winit::window::Window) -> Result<Self> {
         let inner: vk::SurfaceKHR = unsafe {
             ash_window::create_surface(
@@ -54,21 +62,21 @@ pub struct Gpu {
     pub(crate) device: Device,
     pub(crate) swapchain: UnsafeCell<Swapchain>,
     pub(crate) allocator: Arc<Allocator>,
-    pub(crate) window: Arc<Window>,
-    setup_cmd_pool: CommandPool,
-    setup_cmd_buffer: CommandBuffer,
+    immediate_cmd_pool: CommandPool,
+    immediate_cmd_buffer: CommandBuffer,
     properties: PhysicalDeviceProperties,
 }
 
 impl Gpu {
     pub fn new(window: Arc<Window>) -> Result<Self> {
         let instance = Instance::new()?;
-        let surface = Self::init_surface(&instance, Arc::clone(&window))?;
         let device = Device::new(&instance)?;
         let extent = vk::Extent2D {
             width: window.inner_size().width,
             height: window.inner_size().height,
         };
+
+        let surface = Self::init_surface(&instance, Arc::clone(&window))?;
         let swapchain = UnsafeCell::new(Swapchain::new(
             &instance,
             &device,
@@ -93,15 +101,48 @@ impl Gpu {
             surface,
             swapchain,
             allocator,
-            setup_cmd_buffer,
-            setup_cmd_pool,
-            window: Arc::clone(&window),
+            immediate_cmd_buffer: setup_cmd_buffer,
+            immediate_cmd_pool: setup_cmd_pool,
             properties,
         })
     }
 
-    #[inline]
-    pub fn window(&self) -> Arc<Window> { self.window.clone() }
+    pub fn headless() -> Result<Self> {
+        let instance = Instance::new()?;
+        let device = Device::new(&instance)?;
+
+        // let surface = Self::init_surface(&instance, Arc::clone(&window))?;
+        // let swapchain = UnsafeCell::new(Swapchain::new(
+        //     &instance,
+        //     &device,
+        //     &surface,
+        //     &SwapchainInfo {
+        //         extent,
+        //         format: vk::Format::B8G8R8A8_SRGB,
+        //         color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
+        //         vsync: true,
+        //         num_images: IN_FLIGHT_FRAMES,
+        //     },
+        // )?);
+
+        let surface = Surface::headless(&instance);
+        let swapchain = UnsafeCell::new(Swapchain::headless(&instance, &device)?);
+        let allocator = Arc::new(Allocator::new(&instance, &device)?);
+        let setup_cmd_pool = device.create_command_pool()?;
+        let setup_cmd_buffer = setup_cmd_pool.create_command_buffer()?;
+        let properties = instance.get_physical_device_properties(device.physical_device);
+
+        Ok(Self {
+            instance,
+            device,
+            surface,
+            swapchain,
+            allocator,
+            immediate_cmd_buffer: setup_cmd_buffer,
+            immediate_cmd_pool: setup_cmd_pool,
+            properties,
+        })
+    }
 
     #[inline]
     pub fn instance(&self) -> &Instance { &self.instance }
@@ -316,14 +357,8 @@ impl Gpu {
         Ok(module)
     }
 
-    pub fn rebuild_swapchain(&self) -> Result<()> {
+    pub fn rebuild_swapchain(&self, extent: Extent2D) -> Result<()> {
         unsafe { self.device.handle.device_wait_idle() }?;
-
-        let extent = vk::Extent2D {
-            width: self.window.inner_size().width,
-            height: self.window.inner_size().height,
-        };
-
         let swapchain = unsafe { &mut *self.swapchain.get() };
         swapchain.rebuild(extent)
     }
@@ -367,7 +402,7 @@ impl Gpu {
     }
 
     pub fn execute(&self, callback: impl FnOnce(&CommandBuffer)) -> Result<()> {
-        let cmd_buffer = &self.setup_cmd_buffer;
+        let cmd_buffer = &self.immediate_cmd_buffer;
 
         cmd_buffer.reset()?;
         cmd_buffer.begin()?;
@@ -410,4 +445,15 @@ pub unsafe extern "system" fn vulkan_debug_callback(
     }
 
     vk::FALSE
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_headless() {
+        let gpu = Gpu::headless();
+        assert!(gpu.is_ok());
+    }
 }

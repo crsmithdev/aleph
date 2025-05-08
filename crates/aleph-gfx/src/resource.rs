@@ -277,16 +277,16 @@ impl ResourceBinder {
         self
     }
 
-    pub fn update(&self, ctx: &RenderContext) -> Result<&Self> {
+    pub fn update(&self, gpu: &Gpu) -> Result<&Self> {
         let writes = self
             .bindings
             .iter()
             .map(|binding| self.extract(binding))
             .collect::<Vec<_>>();
         if !writes.is_empty() {
-            ctx.command_buffer
-                .update_descriptor_set(&writes.as_slice(), &[]);
+            gpu.execute(|cmd| cmd.update_descriptor_set(&writes.as_slice(), &[]));
         }
+
         Ok(self)
     }
 
