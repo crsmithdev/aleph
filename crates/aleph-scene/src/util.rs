@@ -1,32 +1,13 @@
 use {
-    crate::Vertex,
     aleph_vk::{
-        AttachmentLoadOp, AttachmentStoreOp, Buffer, BufferUsageFlags, ClearColorValue,
-        ClearDepthStencilValue, ClearValue, Extent2D, Gpu, ImageLayout, MemoryLocation,
-        RenderingAttachmentInfo, Texture, Viewport,
+        AttachmentLoadOp, AttachmentStoreOp, ClearColorValue, ClearDepthStencilValue, ClearValue,
+        Extent2D, Image, ImageLayout, RenderingAttachmentInfo, Viewport,
     },
-    anyhow::Result,
-    bytemuck::Pod,
     image::EncodableLayout,
 };
-pub fn staging_buffer<T: Pod>(
-    gpu: &Gpu,
-    data: &[T],
-    label: impl Into<String>,
-) -> Result<Buffer<T>> {
-    let buffer = Buffer::from_data(
-        gpu.device(),
-        gpu.allocator(),
-        data,
-        BufferUsageFlags::TRANSFER_SRC,
-        MemoryLocation::GpuToCpu,
-        label,
-    )?;
-    Ok(buffer)
-}
 
 pub fn color_attachment<'a>(
-    image: impl Texture,
+    image: &Image,
     load_op: AttachmentLoadOp,
     store_op: AttachmentStoreOp,
     clear_color: [f32; 4],
@@ -43,7 +24,7 @@ pub fn color_attachment<'a>(
         .store_op(store_op)
 }
 
-pub fn color_attachment2<'a>(image: impl Texture) -> RenderingAttachmentInfo<'a> {
+pub fn color_attachment2<'a>(image: Image) -> RenderingAttachmentInfo<'a> {
     RenderingAttachmentInfo::default()
         .clear_value(ClearValue {
             color: ClearColorValue {
@@ -57,7 +38,7 @@ pub fn color_attachment2<'a>(image: impl Texture) -> RenderingAttachmentInfo<'a>
 }
 
 pub fn depth_attachment<'a>(
-    image: impl Texture,
+    image: &Image,
     load_op: AttachmentLoadOp,
     store_op: AttachmentStoreOp,
     clear_depth: f32,
@@ -91,26 +72,4 @@ pub fn rgb_to_rgba(data_rgb: &[u8], extent: Extent2D) -> Vec<u8> {
     );
     let dest = image.to_rgba8();
     dest.as_bytes().to_vec()
-}
-
-pub fn calculate_normals(vertices: &[Vertex], indices: &[u32]) -> Vec<glam::Vec3> {
-    let mut normals = vec![glam::Vec3::ZERO; vertices.len()];
-
-    for i in (0..indices.len()).step_by(3) {
-        let a = vertices[indices[i] as usize].position;
-        let b = vertices[indices[i + 1] as usize].position;
-        let c = vertices[indices[i + 2] as usize].position;
-        let ba = (b - a).normalize();
-        let ca = (c - a).normalize();
-        let normal = ba.cross(ca).normalize();
-
-        normals[indices[i] as usize] += normal;
-        normals[indices[i + 1] as usize] += normal;
-        normals[indices[i + 2] as usize] += normal;
-    }
-    for normal in &mut normals {
-        *normal = normal.normalize();
-    }
-
-    normals
 }

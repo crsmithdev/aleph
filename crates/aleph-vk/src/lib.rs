@@ -5,24 +5,27 @@ pub mod device;
 pub mod gpu;
 pub mod instance;
 pub mod swapchain;
+pub mod sync;
 pub mod texture;
+pub mod uploader;
 
 pub(crate) const VK_TIMEOUT_NS: u64 = 5_000_000_000;
 
 pub use {
     crate::{
         allocator::Allocator,
-        buffer::{Buffer, BufferUsageFlags, MemoryLocation, RawBuffer},
+        buffer::{Buffer, BufferUsageFlags, MemoryLocation, TypedBuffer},
         command::{CommandBuffer, CommandPool},
         device::{Device, Queue, QueueFamily},
-        gpu::{Gpu, Surface},
+        gpu::Gpu,
         instance::Instance,
-        swapchain::{Frame, Swapchain, SwapchainInfo},
-        texture::{AllocatedTexture, Texture, TextureInfo, WrappedTexture},
+        swapchain::{Frame, Surface, Swapchain, SwapchainInfo},
+        texture::{Image, Texture, TextureInfo},
+        uploader::Uploader,
     },
     ash::vk::{
-        AttachmentLoadOp, AttachmentStoreOp, ClearColorValue, ClearDepthStencilValue, ClearValue,
-        ColorComponentFlags, CommandBufferSubmitInfo, CompareOp, CullModeFlags,
+        AccessFlags2, AttachmentLoadOp, AttachmentStoreOp, ClearColorValue, ClearDepthStencilValue,
+        ClearValue, ColorComponentFlags, CommandBufferSubmitInfo, CompareOp, CullModeFlags,
         DescriptorBindingFlags, DescriptorBufferInfo, DescriptorImageInfo, DescriptorPool,
         DescriptorPoolCreateFlags, DescriptorPoolSize, DescriptorSet, DescriptorSetLayout,
         DescriptorSetLayoutBinding, DescriptorSetLayoutBindingFlagsCreateInfo,

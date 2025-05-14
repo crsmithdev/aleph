@@ -1,35 +1,24 @@
 use {
     crate::{
-        renderer::{GpuMaterialData, GpuPushConstantData, PrepareContext},
-        Pipeline, PipelineBuilder, RenderContext, ResourceBinder, ResourceLayout,
+        renderer::{GpuPushConstantData, ResourceInfo},
+        Pipeline, PipelineBuilder, RenderContext,
     },
-    aleph_scene::{model::Primitive, util, MaterialHandle, NodeType, TextureHandle, Vertex},
+    aleph_scene::{model::Primitive, util, MaterialHandle, NodeType, Vertex},
     aleph_vk::{
-        AttachmentLoadOp, AttachmentStoreOp, Buffer, BufferUsageFlags, ColorComponentFlags,
-        CompareOp, CullModeFlags, FrontFace, Gpu, PipelineBindPoint,
-        PipelineColorBlendAttachmentState, PipelineLayout, PolygonMode, PrimitiveTopology,
-        PushConstantRange, Rect2D, ShaderStageFlags, VkPipeline,
+        AttachmentLoadOp, AttachmentStoreOp, ColorComponentFlags, CompareOp, CullModeFlags,
+        FrontFace, Gpu, PipelineBindPoint, PipelineColorBlendAttachmentState, PipelineLayout,
+        PolygonMode, PrimitiveTopology, PushConstantRange, Rect2D, ShaderStageFlags, VkPipeline,
     },
     anyhow::Result,
     glam::Mat4,
-    std::{collections::HashMap, mem},
+    std::mem,
     tracing::{instrument, warn},
 };
 
-const SET_IDX_BINDLESS: usize = 0;
-const BIND_IDX_SCENE: usize = 0;
-const BIND_IDX_MATERIAL: usize = 1;
-const BIND_IDX_TEXTURE: usize = 2;
 const CLEAR_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
 const VERTEX_SHADER_PATH: &str = "shaders/forward.vert.spv";
 const FRAGMENT_SHADER_PATH: &str = "shaders/forward.frag.spv";
-
-struct Drawable {
-    primitive: usize,
-    material: Option<MaterialHandle>,
-    transform: Mat4,
-}
 
 pub struct ForwardPipeline {
     handle: VkPipeline,
@@ -40,15 +29,14 @@ impl Pipeline for ForwardPipeline {
     #[instrument(skip_all)]
     fn render(&mut self, ctx: &RenderContext) -> Result<()> {
         let cmd = ctx.command_buffer;
-
         let color_attachments = &[util::color_attachment(
-            ctx.draw_image,
+            &*ctx.draw_image,
             AttachmentLoadOp::CLEAR,
             AttachmentStoreOp::STORE,
             CLEAR_COLOR,
         )];
         let depth_attachment = &util::depth_attachment(
-            ctx.depth_image,
+            &*ctx.depth_image,
             AttachmentLoadOp::CLEAR,
             AttachmentStoreOp::STORE,
             1.0,
@@ -61,22 +49,25 @@ impl Pipeline for ForwardPipeline {
         let drawables = Self::get_drawables(ctx);
 
         cmd.bind_pipeline(PipelineBindPoint::GRAPHICS, self.handle)?;
+        ctx.resources.binder.bind(ctx, self.pipeline_layout, &[]);
 
-        self.draw(ctx, drawables, material_map)?;
+        self.draw(ctx, drawables)?;
 
         cmd.end_rendering()
     }
 }
 
 impl ForwardPipeline {
-    pub fn new(gpu: &Gpu) -> Result<Self> {
+    pub fn new(gpu: &Gpu, resources: &ResourceInfo) -> Result<Self> {
         let push_constant_range = PushConstantRange {
-            stage_flags: ShaderStageFlags::VERTEX,
+            stage_flags: ShaderStageFlags::VERTEX | ShaderStageFlags::FRAGMENT,
             offset: 0,
             size: mem::size_of::<GpuPushConstantData>() as u32,
         };
-        let pipeline_layout =
-            gpu.create_pipeline_layout(&[resources.descriptor_layout()], &[push_constant_range])?;
+        let pipeline_layout = gpu.create_pipeline_layout(
+            &[resources.binder.descriptor_layout()],
+            &[push_constant_range],
+        )?;
         let handle = Self::create_pipeline(gpu, pipeline_layout)?;
 
         Ok(Self {
@@ -88,12 +79,8 @@ impl ForwardPipeline {
         &mut self,
         ctx: &RenderContext,
         drawables: Vec<(&Primitive, Option<MaterialHandle>, Mat4)>,
-        material_map: HashMap<MaterialHandle, usize>,
     ) -> Result<()> {
-        self.resources
-            .uniform_buffer(BIND_IDX_SCENE, ctx.scene_buffer, 0)
-            .update(ctx.gpu)?
-            .bind(ctx, self.pipeline_layout, &[]);
+        let material_map = &ctx.resources.material_map;
 
         for (primitive, material_handle, transform) in drawables.iter() {
             let material_index = material_handle
@@ -112,8 +99,8 @@ impl ForwardPipeline {
         transform: Mat4,
     ) -> Result<()> {
         let cmd = ctx.command_buffer;
-        cmd.bind_index_buffer(primitive.index_buffer.raw(), 0);
-        cmd.bind_vertex_buffer(primitive.vertex_buffer.raw(), 0);
+        cmd.bind_index_buffer(&*primitive.index_buffer, 0);
+        cmd.bind_vertex_buffer(&*primitive.vertex_buffer, 0);
 
         let push_constants = GpuPushConstantData {
             model: transform,
@@ -124,7 +111,7 @@ impl ForwardPipeline {
         };
         cmd.push_constants(
             self.pipeline_layout,
-            ShaderStageFlags::VERTEX,
+            ShaderStageFlags::VERTEX | ShaderStageFlags::FRAGMENT,
             0,
             &push_constants,
         );

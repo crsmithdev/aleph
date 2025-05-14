@@ -8,7 +8,13 @@ use {
     std::sync::{LazyLock, Mutex},
 };
 
-const DEFAULT_SCENE: usize = 86;
+/*
+Suzanne: 112
+BoxTextured: 15
+NormalTangentTest: 93
+*/
+
+const DEFAULT_SCENE: usize = 112;
 const SHIFT_FACTOR: usize = 10;
 const ROTATION_FACTOR: f32 = 0.01;
 const ZOOM_FACTOR: f32 = 0.1;
@@ -41,7 +47,9 @@ fn init_system(mut scene: ResMut<Scene>, mut assets: ResMut<Assets>) {
 
 fn input_system(mut scene: ResMut<Scene>, mut assets: ResMut<Assets>, input: Res<Input>) {
     let mut state = STATE.lock().unwrap();
-    let n = (SHIFT_FACTOR * input.key_held(&Key::ShiftLeft) as usize).min(1);
+    let n1 = SHIFT_FACTOR * input.key_held(&Key::ShiftLeft) as usize;
+    let n2 = n1.max(1);
+    let n = n2;
 
     if input.key_pressed(&Key::ArrowLeft) {
         state.scene_index = state.scene_index - n % SCENE_PATHS.len();
@@ -88,7 +96,7 @@ fn main() {
 }
 
 const SCENE_PATHS: &[&str] = &[
-    "submodules/glTF-Sample-Assets/Models/ABeautifulGame/glTF/ABeautifulGame.gltf",
+    "submodules/glTF-Sample-Assets/Models/ABeautifulGame/glTF/ABeautifulGame.gltf",                         // 0
     "submodules/glTF-Sample-Assets/Models/AlphaBlendModeTest/glTF/AlphaBlendModeTest.gltf",
     "submodules/glTF-Sample-Assets/Models/AnisotropyRotationTest/glTF/AnisotropyRotationTest.gltf",
     "submodules/glTF-Sample-Assets/Models/AnisotropyStrengthTest/glTF/AnisotropyStrengthTest.gltf",
@@ -98,7 +106,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Sample-Assets/Models/BarramundiFish/glTF/BarramundiFish.gltf",
     "submodules/glTF-Sample-Assets/Models/BoomBox/glTF/BoomBox.gltf",
     "submodules/glTF-Sample-Assets/Models/BoomBoxWithAxes/glTF/BoomBoxWithAxes.gltf",
-    "submodules/glTF-Sample-Assets/Models/Box/glTF/Box.gltf",
+
+    "submodules/glTF-Sample-Assets/Models/Box/glTF/Box.gltf",                                               // 10
     "submodules/glTF-Sample-Assets/Models/Box With Spaces/glTF/Box With Spaces.gltf",
     "submodules/glTF-Sample-Assets/Models/BoxAnimated/glTF/BoxAnimated.gltf",
     "submodules/glTF-Sample-Assets/Models/BoxInterleaved/glTF/BoxInterleaved.gltf",
@@ -108,7 +117,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Sample-Assets/Models/BrainStem/glTF/BrainStem.gltf",
     "submodules/glTF-Sample-Assets/Models/Cameras/glTF/Cameras.gltf",
     "submodules/glTF-Sample-Assets/Models/CarConcept/glTF/CarConcept.gltf",
-    "submodules/glTF-Sample-Assets/Models/CarbonFibre/glTF/CarbonFibre.gltf",
+
+    "submodules/glTF-Sample-Assets/Models/CarbonFibre/glTF/CarbonFibre.gltf",             // 20     
     "submodules/glTF-Sample-Assets/Models/CesiumMan/glTF/CesiumMan.gltf",
     "submodules/glTF-Sample-Assets/Models/CesiumMilkTruck/glTF/CesiumMilkTruck.gltf",
     "submodules/glTF-Sample-Assets/Models/ChairDamaskPurplegold/glTF/ChairDamaskPurplegold.gltf",
@@ -118,7 +128,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Sample-Assets/Models/CommercialRefrigerator/glTF/CommercialRefrigerator.gltf",
     "submodules/glTF-Sample-Assets/Models/CompareAlphaCoverage/glTF/CompareAlphaCoverage.gltf",
     "submodules/glTF-Sample-Assets/Models/CompareAmbientOcclusion/glTF/CompareAmbientOcclusion.gltf",
-    "submodules/glTF-Sample-Assets/Models/CompareAnisotropy/glTF/CompareAnisotropy.gltf",
+
+    "submodules/glTF-Sample-Assets/Models/CompareAnisotropy/glTF/CompareAnisotropy.gltf",                   // 30
     "submodules/glTF-Sample-Assets/Models/CompareBaseColor/glTF/CompareBaseColor.gltf",
     "submodules/glTF-Sample-Assets/Models/CompareClearcoat/glTF/CompareClearcoat.gltf",
     "submodules/glTF-Sample-Assets/Models/CompareDispersion/glTF/CompareDispersion.gltf",
@@ -128,7 +139,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Sample-Assets/Models/CompareMetallic/glTF/CompareMetallic.gltf",
     "submodules/glTF-Sample-Assets/Models/CompareNormal/glTF/CompareNormal.gltf",
     "submodules/glTF-Sample-Assets/Models/CompareRoughness/glTF/CompareRoughness.gltf",
-    "submodules/glTF-Sample-Assets/Models/CompareSheen/glTF/CompareSheen.gltf",
+
+    "submodules/glTF-Sample-Assets/Models/CompareSheen/glTF/CompareSheen.gltf",             // 40   
     "submodules/glTF-Sample-Assets/Models/CompareSpecular/glTF/CompareSpecular.gltf",
     "submodules/glTF-Sample-Assets/Models/CompareTransmission/glTF/CompareTransmission.gltf",
     "submodules/glTF-Sample-Assets/Models/CompareVolume/glTF/CompareVolume.gltf",
@@ -138,7 +150,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Sample-Assets/Models/DiffuseTransmissionPlant/glTF/DiffuseTransmissionPlant.gltf",
     "submodules/glTF-Sample-Assets/Models/DiffuseTransmissionTeacup/glTF/DiffuseTransmissionTeacup.gltf",
     "submodules/glTF-Sample-Assets/Models/DiffuseTransmissionTest/glTF/DiffuseTransmissionTest.gltf",
-    "submodules/glTF-Sample-Assets/Models/DirectionalLight/glTF/DirectionalLight.gltf",
+
+    "submodules/glTF-Sample-Assets/Models/DirectionalLight/glTF/DirectionalLight.gltf",             // 50
     "submodules/glTF-Sample-Assets/Models/DispersionTest/glTF/DispersionTest.gltf",
     "submodules/glTF-Sample-Assets/Models/DragonAttenuation/glTF/DragonAttenuation.gltf",
     "submodules/glTF-Sample-Assets/Models/DragonDispersion/glTF/DragonDispersion.gltf",
@@ -148,7 +161,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Sample-Assets/Models/FlightHelmet/glTF/FlightHelmet.gltf",
     "submodules/glTF-Sample-Assets/Models/Fox/glTF/Fox.gltf",
     "submodules/glTF-Sample-Assets/Models/GlamVelvetSofa/glTF/GlamVelvetSofa.gltf",
-    "submodules/glTF-Sample-Assets/Models/GlassBrokenWindow/glTF/GlassBrokenWindow.gltf",
+
+    "submodules/glTF-Sample-Assets/Models/GlassBrokenWindow/glTF/GlassBrokenWindow.gltf",           // 60   
     "submodules/glTF-Sample-Assets/Models/GlassHurricaneCandleHolder/glTF/GlassHurricaneCandleHolder.gltf",
     "submodules/glTF-Sample-Assets/Models/GlassVaseFlowers/glTF/GlassVaseFlowers.gltf",
     "submodules/glTF-Sample-Assets/Models/IORTestGrid/glTF/IORTestGrid.gltf",
@@ -158,7 +172,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Sample-Assets/Models/IridescenceLamp/glTF/IridescenceLamp.gltf",
     "submodules/glTF-Sample-Assets/Models/IridescenceMetallicSpheres/glTF/IridescenceMetallicSpheres.gltf",
     "submodules/glTF-Sample-Assets/Models/IridescenceSuzanne/glTF/IridescenceSuzanne.gltf",
-    "submodules/glTF-Sample-Assets/Models/IridescentDishWithOlives/glTF/IridescentDishWithOlives.gltf",
+
+    "submodules/glTF-Sample-Assets/Models/IridescentDishWithOlives/glTF/IridescentDishWithOlives.gltf",                             // 70
     "submodules/glTF-Sample-Assets/Models/Lantern/glTF/Lantern.gltf",
     "submodules/glTF-Sample-Assets/Models/LightsPunctualLamp/glTF/LightsPunctualLamp.gltf",
     "submodules/glTF-Sample-Assets/Models/MandarinOrange/glTF/MandarinOrange.gltf",
@@ -168,7 +183,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Sample-Assets/Models/MetalRoughSpheresNoTextures/glTF/MetalRoughSpheresNoTextures.gltf",
     "submodules/glTF-Sample-Assets/Models/MorphPrimitivesTest/glTF/MorphPrimitivesTest.gltf",
     "submodules/glTF-Sample-Assets/Models/MorphStressTest/glTF/MorphStressTest.gltf",
-    "submodules/glTF-Sample-Assets/Models/MosquitoInAmber/glTF/MosquitoInAmber.gltf",
+
+    "submodules/glTF-Sample-Assets/Models/MosquitoInAmber/glTF/MosquitoInAmber.gltf",            // 80
     "submodules/glTF-Sample-Assets/Models/MultiUVTest/glTF/MultiUVTest.gltf",
     "submodules/glTF-Sample-Assets/Models/MultipleScenes/glTF/MultipleScenes.gltf",
     "submodules/glTF-Sample-Assets/Models/NegativeScaleTest/glTF/NegativeScaleTest.gltf",
@@ -178,7 +194,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Sample-Assets/Models/PointLightIntensityTest/glTF/PointLightIntensityTest.gltf",
     "submodules/glTF-Sample-Assets/Models/PotOfCoals/glTF/PotOfCoals.gltf",
     "submodules/glTF-Sample-Assets/Models/PotOfCoalsAnimationPointer/glTF/PotOfCoalsAnimationPointer.gltf",
-    "submodules/glTF-Sample-Assets/Models/PrimitiveModeNormalsTest/glTF/PrimitiveModeNormalsTest.gltf",
+
+    "submodules/glTF-Sample-Assets/Models/PrimitiveModeNormalsTest/glTF/PrimitiveModeNormalsTest.gltf",                                 // 90
     "submodules/glTF-Sample-Assets/Models/RecursiveSkeletons/glTF/RecursiveSkeletons.gltf",
     "submodules/glTF-Sample-Assets/Models/RiggedFigure/glTF/RiggedFigure.gltf",
     "submodules/glTF-Sample-Assets/Models/RiggedSimple/glTF/RiggedSimple.gltf",
@@ -188,7 +205,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Sample-Assets/Models/SheenTestGrid/glTF/SheenTestGrid.gltf",
     "submodules/glTF-Sample-Assets/Models/SheenWoodLeatherSofa/glTF/SheenWoodLeatherSofa.gltf",
     "submodules/glTF-Sample-Assets/Models/SimpleInstancing/glTF/SimpleInstancing.gltf",
-    "submodules/glTF-Sample-Assets/Models/SimpleMaterial/glTF/SimpleMaterial.gltf",
+
+    "submodules/glTF-Sample-Assets/Models/SimpleMaterial/glTF/SimpleMaterial.gltf",         // 100  
     "submodules/glTF-Sample-Assets/Models/SimpleMeshes/glTF/SimpleMeshes.gltf",
     "submodules/glTF-Sample-Assets/Models/SimpleMorph/glTF/SimpleMorph.gltf",
     "submodules/glTF-Sample-Assets/Models/SimpleSkin/glTF/SimpleSkin.gltf",
@@ -198,7 +216,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Sample-Assets/Models/SpecularSilkPouf/glTF/SpecularSilkPouf.gltf",
     "submodules/glTF-Sample-Assets/Models/SpecularTest/glTF/SpecularTest.gltf",
     "submodules/glTF-Sample-Assets/Models/Sponza/glTF/Sponza.gltf",
-    "submodules/glTF-Sample-Assets/Models/StainedGlassLamp/glTF/StainedGlassLamp.gltf",
+
+    "submodules/glTF-Sample-Assets/Models/StainedGlassLamp/glTF/StainedGlassLamp.gltf",         // 110
     "submodules/glTF-Sample-Assets/Models/SunglassesKhronos/glTF/SunglassesKhronos.gltf",
     "submodules/glTF-Sample-Assets/Models/Suzanne/glTF/Suzanne.gltf",
     "submodules/glTF-Sample-Assets/Models/TextureCoordinateTest/glTF/TextureCoordinateTest.gltf",
@@ -208,7 +227,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Sample-Assets/Models/TextureTransformMultiTest/glTF/TextureTransformMultiTest.gltf",
     "submodules/glTF-Sample-Assets/Models/TextureTransformTest/glTF/TextureTransformTest.gltf",
     "submodules/glTF-Sample-Assets/Models/ToyCar/glTF/ToyCar.gltf",
-    "submodules/glTF-Sample-Assets/Models/TransmissionRoughnessTest/glTF/TransmissionRoughnessTest.gltf",
+
+    "submodules/glTF-Sample-Assets/Models/TransmissionRoughnessTest/glTF/TransmissionRoughnessTest.gltf",                       
     "submodules/glTF-Sample-Assets/Models/TransmissionTest/glTF/TransmissionTest.gltf",
     "submodules/glTF-Sample-Assets/Models/TransmissionThinwallTestGrid/glTF/TransmissionThinwallTestGrid.gltf",
     "submodules/glTF-Sample-Assets/Models/Triangle/glTF/Triangle.gltf",
@@ -218,6 +238,7 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Sample-Assets/Models/UnlitTest/glTF/UnlitTest.gltf",
     "submodules/glTF-Sample-Assets/Models/VertexColorTest/glTF/VertexColorTest.gltf",
     "submodules/glTF-Sample-Assets/Models/VirtualCity/glTF/VirtualCity.gltf",
+
     "submodules/glTF-Sample-Assets/Models/WaterBottle/glTF/WaterBottle.gltf",
     "submodules/glTF-Sample-Assets/Models/XmpMetadataRoundedCube/glTF/XmpMetadataRoundedCube.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Accessor_Sparse/Accessor_Sparse_00.gltf",

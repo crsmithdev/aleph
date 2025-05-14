@@ -27,7 +27,7 @@ layout (location = 5) out mat3 outTBN;
 
 void main() {
     outPos = vec3(p_constants.model * vec4(inPos, 1.0));;
-    outNormal = mat3(p_constants.model) * inNormal;
+    outNormal = mat3(1.0/*p_constants.model*/) * inNormal;
 	outTangent = vec4(mat3(p_constants.model) * inTangent.xyz, inTangent.w);
     outUv = vec2(inUVx, inUVy);
     outColor = inColor;

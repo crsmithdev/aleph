@@ -1,7 +1,6 @@
 use {
     crate::{
-        texture::WrappedTexture, CommandBuffer, CommandPool, Device, Instance, Queue, QueueFamily,
-        Surface, Texture, VK_TIMEOUT_NS,
+        CommandBuffer, CommandPool, Device, Image, Instance, Queue, QueueFamily, VK_TIMEOUT_NS,
     },
     anyhow::Result,
     ash::{
@@ -9,6 +8,7 @@ use {
         vk::{self, CompositeAlphaFlagsKHR, Extent2D, Handle, SurfaceTransformFlagsKHR},
     },
     derive_more::Debug,
+    raw_window_handle::{HasDisplayHandle, HasWindowHandle},
     tracing::instrument,
 };
 
@@ -46,7 +46,7 @@ pub struct Swapchain {
     #[debug("{:x}", instance.handle().handle().as_raw())]
     instance: Instance,
     info: SwapchainInfo,
-    images: Vec<WrappedTexture>,
+    images: Vec<Image>,
 }
 
 impl Swapchain {
@@ -109,7 +109,7 @@ impl Swapchain {
         info: &SwapchainInfo,
         old_swapchain: Option<vk::SwapchainKHR>,
     ) -> Result<Self> {
-        let queue = device.queue;
+        let queue = device.graphics_queue;
         let indices = [queue.family.index];
         let in_flight_frames = IN_FLIGHT_FRAMES;
         let capabilities: vk::SurfaceCapabilitiesKHR = unsafe {
@@ -117,11 +117,7 @@ impl Swapchain {
                 .loader
                 .get_physical_device_surface_capabilities(device.physical_device, surface.inner)
         }?;
-        // let formats: Vec<vk::SurfaceFormatKHR> = unsafe {
-        //     surface
-        //         .loader
-        //         .get_physical_device_surface_formats(device.physical_device, surface.inner)
-        // }?;
+
         let mut swapchain_info = vk::SwapchainCreateInfoKHR::default()
             .surface(surface.inner)
             .min_image_count(in_flight_frames)
@@ -133,7 +129,6 @@ impl Swapchain {
             .present_mode(vk::PresentModeKHR::FIFO)
             .pre_transform(SurfaceTransformFlagsKHR::IDENTITY)
             .composite_alpha(CompositeAlphaFlagsKHR::OPAQUE)
-            // .clipped(true)
             .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST)
             .queue_family_indices(&indices);
         if let Some(old_swapchain) = old_swapchain {
@@ -142,30 +137,20 @@ impl Swapchain {
         let loader = khr::swapchain::Device::new(&instance.handle, &device.handle);
         let swapchain = unsafe { loader.create_swapchain(&swapchain_info, None) }.unwrap();
 
-        let images = unsafe { loader.get_swapchain_images(swapchain)? };
-        let subresource_range = vk::ImageSubresourceRange::default()
-            .aspect_mask(vk::ImageAspectFlags::COLOR)
-            .level_count(1)
-            .layer_count(1);
-
-        let images = images
-            .into_iter()
-            .map(|handle| {
-                let image_view_info = vk::ImageViewCreateInfo::default()
-                    .image(handle)
-                    .view_type(vk::ImageViewType::TYPE_2D)
-                    .format(vk::Format::B8G8R8A8_SRGB)
-                    .subresource_range(subresource_range);
-                let view = unsafe {
-                    device
-                        .handle
-                        .create_image_view(&image_view_info, None)
-                        .expect("Failed to create imageview")
-                };
-                WrappedTexture::new(handle, view, info.extent, info.format, "swapchain image")
-                    .expect("Failed to create image")
+        let swapchain_images = unsafe { loader.get_swapchain_images(swapchain)? };
+        let images = swapchain_images
+            .iter()
+            .map(|swapchain_image| {
+                Image::new(
+                    *swapchain_image,
+                    device.clone(),
+                    info.extent,
+                    info.format,
+                    vk::ImageAspectFlags::COLOR,
+                )
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>>>()?;
+
         Ok(Swapchain {
             handle: swapchain,
             loader,
@@ -174,13 +159,13 @@ impl Swapchain {
             surface: surface.clone(),
             info: *info,
             images,
-            queue: device.queue,
+            queue: device.graphics_queue,
         })
     }
 
     pub fn in_flight_frames(&self) -> u32 { self.images.len() as u32 }
 
-    pub fn images(&self) -> &[WrappedTexture] { &self.images }
+    pub fn images(&self) -> &[Image] { &self.images }
 
     pub fn extent(&self) -> vk::Extent2D { self.info.extent }
 }
@@ -220,5 +205,38 @@ impl Swapchain {
             Err(err) if err == vk::Result::SUBOPTIMAL_KHR => Ok(true),
             Err(err) => Err(err.into()),
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Surface {
+    #[debug("{:x}", inner.as_raw())]
+    pub(crate) inner: vk::SurfaceKHR,
+
+    #[debug("{:x}", loader.instance().as_raw())]
+    pub(crate) loader: khr::surface::Instance,
+}
+
+impl Surface {
+    pub fn headless(instance: &Instance) -> Self {
+        Self {
+            inner: vk::SurfaceKHR::null(),
+            loader: khr::surface::Instance::new(&instance.entry, &instance.handle),
+        }
+    }
+
+    pub fn new(instance: &Instance, window: &winit::window::Window) -> Result<Self> {
+        let inner: vk::SurfaceKHR = unsafe {
+            ash_window::create_surface(
+                &instance.entry,
+                &instance.handle,
+                window.display_handle()?.into(),
+                window.window_handle()?.into(),
+                None,
+            )?
+        };
+
+        let loader = khr::surface::Instance::new(&instance.entry, &instance.handle);
+        Ok(Self { inner, loader })
     }
 }

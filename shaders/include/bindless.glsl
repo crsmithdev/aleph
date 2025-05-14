@@ -32,7 +32,7 @@ layout(std140, set = 0, binding = 0) uniform SceneBufferData {
     Light lights[MAX_LIGHTS];
 } u_scene;
 
-layout(std140, set = 0, binding = 1) readonly buffer MaterialData {
+layout(std140, set = 0, binding = 1) uniform MaterialData {
     vec4 color_factor;
     int color_texture_index;
     int normal_texture_index;
@@ -47,4 +47,8 @@ layout(set = 0, binding = 2) uniform sampler2D u_textures[];
 
 layout(push_constant) uniform PushConstant {
     mat4 model;
+    int material_index;
+    int _padding0;
+    int _padding1;
+    int _padding2;
 } p_constants;

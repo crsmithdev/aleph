@@ -1,15 +1,15 @@
 use {
     crate::RenderContext,
     aleph_vk::{
-        AllocatedTexture, Buffer, DescriptorBindingFlags, DescriptorBufferInfo,
-        DescriptorImageInfo, DescriptorPoolCreateFlags, DescriptorPoolSize, DescriptorSet,
-        DescriptorSetLayout, DescriptorSetLayoutBinding, DescriptorSetLayoutCreateFlags,
-        DescriptorType, Gpu, ImageLayout, PipelineLayout, Sampler, ShaderStageFlags, Texture,
+        DescriptorBindingFlags, DescriptorBufferInfo, DescriptorImageInfo,
+        DescriptorPoolCreateFlags, DescriptorPoolSize, DescriptorSet, DescriptorSetLayout,
+        DescriptorSetLayoutBinding, DescriptorSetLayoutCreateFlags, DescriptorType, Gpu,
+        ImageLayout, PipelineLayout, Sampler, ShaderStageFlags, Texture, TypedBuffer,
         WriteDescriptorSet,
     },
     anyhow::Result,
     bytemuck::Pod,
-    std::rc::Rc,
+    std::arch::x86_64,
 };
 
 pub struct ResourceLayout {
@@ -193,10 +193,12 @@ impl ResourceBinder {
     pub fn storage_buffer<T: Pod>(
         &mut self,
         index: usize,
-        buffer: &Buffer<T>,
+        buffer: &TypedBuffer<T>,
+        count: usize,
         offset: u64,
     ) -> &mut Self {
         self.bindings.push(BoundResource::StorageBuffer {
+            count,
             index: index as u32,
             info: DescriptorBufferInfo::default()
                 .buffer(buffer.handle())
@@ -209,7 +211,7 @@ impl ResourceBinder {
     pub fn texture_array(
         &mut self,
         index: usize,
-        images: &[Rc<AllocatedTexture>],
+        images: &[Texture],
         sampler: Sampler,
     ) -> &mut Self {
         let info = images
@@ -231,7 +233,7 @@ impl ResourceBinder {
     pub fn uniform_buffer<T: Pod>(
         &mut self,
         index: usize,
-        buffer: &Buffer<T>,
+        buffer: &TypedBuffer<T>,
         offset: u64,
     ) -> &mut Self {
         self.bindings.push(BoundResource::Buffer {
@@ -247,7 +249,7 @@ impl ResourceBinder {
     pub fn dynamic_uniform_buffer<T: Pod>(
         &mut self,
         index: usize,
-        buffer: &Buffer<T>,
+        buffer: &TypedBuffer<T>,
         offset: u64,
         range: u64,
     ) -> &mut Self {
@@ -261,12 +263,7 @@ impl ResourceBinder {
         self
     }
 
-    pub fn texture(
-        &mut self,
-        index: usize,
-        image: &AllocatedTexture,
-        sampler: Sampler,
-    ) -> &mut Self {
+    pub fn texture(&mut self, index: usize, image: &Texture, sampler: Sampler) -> &mut Self {
         self.bindings.push(BoundResource::Texture {
             index: index as u32,
             info: DescriptorImageInfo::default()
@@ -284,7 +281,7 @@ impl ResourceBinder {
             .map(|binding| self.extract(binding))
             .collect::<Vec<_>>();
         if !writes.is_empty() {
-            gpu.execute(|cmd| cmd.update_descriptor_set(&writes.as_slice(), &[]));
+            gpu.update_descriptor_sets(&writes.as_slice(), &[])?;
         }
 
         Ok(self)
@@ -292,11 +289,13 @@ impl ResourceBinder {
 
     fn extract(&self, binding: &BoundResource) -> WriteDescriptorSet {
         match binding {
-            BoundResource::StorageBuffer { index, info, .. } => {
+            BoundResource::StorageBuffer {
+                index, info, count, ..
+            } => {
                 let mut write = WriteDescriptorSet::default()
                     .dst_set(self.set)
                     .dst_binding(*index)
-                    .descriptor_count(1)
+                    .descriptor_count(*count as u32)
                     .descriptor_type(DescriptorType::STORAGE_BUFFER);
                 write.p_buffer_info = info;
                 write.descriptor_count = 1;
@@ -379,6 +378,7 @@ enum Dimensionality {
 
 pub enum BoundResource {
     StorageBuffer {
+        count: usize,
         info: DescriptorBufferInfo,
         index: u32,
     },

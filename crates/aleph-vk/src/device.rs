@@ -1,12 +1,12 @@
 use {
-    crate::{CommandPool, Instance},
-    anyhow::{anyhow, bail, Result},
+    crate::{CommandBuffer, CommandPool, Instance, VK_TIMEOUT_NS},
+    anyhow::{anyhow, Result},
     ash::{
         ext, khr,
         vk::{self, BufferDeviceAddressInfo, Handle, LOD_CLAMP_NONE},
     },
-    derive_more::Debug,
-    std::ffi,
+    derive_more::{Debug, Deref},
+    std::{ffi, slice},
 };
 
 const DEVICE_EXTENSIONS: [&ffi::CStr; 10] = [
@@ -34,8 +34,9 @@ impl QueueFamily {
 }
 
 #[allow(dead_code)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Deref)]
 pub struct Queue {
+    #[deref]
     pub(crate) handle: vk::Queue,
     pub(crate) family: QueueFamily,
 }
@@ -48,12 +49,12 @@ impl Queue {
 pub struct Device {
     #[debug("{:x}", handle.handle().as_raw())]
     pub(crate) handle: ash::Device, // TODO
-    pub(crate) queue: Queue,
+    pub(crate) graphics_queue: Queue,
+    pub(crate) transfer_queue: Queue,
     pub(crate) physical_device: vk::PhysicalDevice,
 }
 
 impl Device {
-    pub fn queue(&self) -> &Queue { &self.queue }
     pub fn new(instance: &Instance) -> Result<Device> {
         let candidate_devices = instance.enumerate_physical_devices()?;
 
@@ -64,7 +65,8 @@ impl Device {
 
         let physical_device =
             selected.ok_or_else(|| anyhow!("No suitable physical device found"))?;
-        let queue_family = Self::init_queue_family(instance, &physical_device)?;
+        let (graphics_queue_family, transfer_queue_family) =
+            Self::init_queue_families(instance, &physical_device)?;
 
         let device_extension_names: Vec<*const i8> = DEVICE_EXTENSIONS
             .iter()
@@ -103,21 +105,34 @@ impl Device {
             .push_next(&mut device_8bit_storage_features)
             .push_next(&mut descriptor_indexing_features);
 
+        let queue_families = [graphics_queue_family, transfer_queue_family];
         let handle = instance.create_device(
             physical_device,
-            queue_family,
+            queue_families,
             &device_extension_names,
             &mut device_features2,
         )?;
-        let queue = Self::create_queue(&handle, queue_family);
+        let graphics_queue = Self::create_queue(&handle, graphics_queue_family);
+        let transfer_queue = Self::create_queue(&handle, transfer_queue_family);
 
         Ok(Device {
             handle,
             physical_device,
-            queue,
+            graphics_queue,
+            transfer_queue,
         })
     }
 
+    pub fn handle(&self) -> &ash::Device { &self.handle }
+
+    pub fn physical_device(&self) -> vk::PhysicalDevice { self.physical_device }
+
+    pub fn graphics_queue(&self) -> &Queue { &self.graphics_queue }
+
+    pub fn transfer_queue(&self) -> &Queue { &self.transfer_queue }
+}
+
+impl Device {
     fn rank_physical_device(instance: &Instance, physical_device: &vk::PhysicalDevice) -> i32 {
         let device_properties = instance.get_physical_device_properties(*physical_device);
         let queue_families = instance.get_physical_device_queue_family_properties(*physical_device);
@@ -142,33 +157,135 @@ impl Device {
         score
     }
 
+    fn rank_graphics_queue_family(queue_family: vk::QueueFamilyProperties) -> i32 {
+        let mut score = 100;
+        if queue_family.queue_flags.contains(vk::QueueFlags::COMPUTE) {
+            score -= 10;
+        }
+        if queue_family
+            .queue_flags
+            .contains(vk::QueueFlags::SPARSE_BINDING)
+        {
+            score -= 1;
+        }
+        score
+    }
+
+    fn rank_transfer_queue_family(queue_family: vk::QueueFamilyProperties) -> i32 {
+        let mut score = 100;
+        if queue_family.queue_flags.contains(vk::QueueFlags::GRAPHICS) {
+            score -= 20;
+        }
+        if queue_family.queue_flags.contains(vk::QueueFlags::COMPUTE) {
+            score -= 10;
+        }
+        if queue_family
+            .queue_flags
+            .contains(vk::QueueFlags::SPARSE_BINDING)
+        {
+            score -= 1;
+        }
+        score
+    }
+
+    fn init_queue_families(
+        instance: &Instance,
+        physical_device: &vk::PhysicalDevice,
+    ) -> Result<(QueueFamily, QueueFamily)> {
+        let families = instance.get_physical_device_queue_family_properties(*physical_device);
+
+        let graphics_fam = families
+            .iter()
+            .enumerate()
+            .filter(|(_, qf)| qf.queue_flags.contains(vk::QueueFlags::GRAPHICS))
+            .max_by_key(|(i, qf)| {
+                let score = Self::rank_graphics_queue_family(**qf);
+                log::debug!(
+                    "Candidate queue family for graphics: {} ({:?} {}) -> score: {}",
+                    i,
+                    qf.queue_flags,
+                    qf.queue_count,
+                    score
+                );
+                score
+            })
+            .ok_or_else(|| anyhow!("No suitable graphics queue family found"))?;
+
+        let transfer_fam = families
+            .iter()
+            .enumerate()
+            .filter(|(_, qf)| qf.queue_flags.contains(vk::QueueFlags::TRANSFER))
+            .max_by_key(|(i, qf)| {
+                let score = Self::rank_transfer_queue_family(**qf);
+                log::debug!(
+                    "Candidate queue family for transfer: {} ({:?} {}) -> score: {}",
+                    i,
+                    qf.queue_flags,
+                    qf.queue_count,
+                    score
+                );
+                score
+            })
+            .ok_or_else(|| anyhow!("No suitable transfer queue family found"))?;
+
+        log::info!("Selected graphics queue family index: {}", graphics_fam.0);
+        log::info!("Selected transfer queue family index: {}", transfer_fam.0);
+
+        Ok((
+            QueueFamily {
+                index: graphics_fam.0 as u32,
+                properties: *graphics_fam.1,
+            },
+            QueueFamily {
+                index: transfer_fam.0 as u32,
+                properties: *transfer_fam.1,
+            },
+        ))
+    }
+}
+
+impl Device {
     fn create_queue(handle: &ash::Device, family: QueueFamily) -> Queue {
         let handle = unsafe { handle.get_device_queue(family.index, 0) };
         Queue { handle, family }
     }
 
-    fn init_queue_family(
-        instance: &Instance,
-        physical_device: &vk::PhysicalDevice,
-    ) -> Result<QueueFamily> {
-        let queue_families = instance.get_physical_device_queue_family_properties(*physical_device);
-        let selected = queue_families
-            .into_iter()
-            .enumerate()
-            .find(|(_, qf)| qf.queue_flags.contains(vk::QueueFlags::GRAPHICS));
-
-        match selected {
-            Some((index, properties)) => Ok(QueueFamily {
-                index: index as _,
-                properties,
-            }),
-            None => bail!("No suitable queue family found"),
+    pub fn create_fence(&self, flags: vk::FenceCreateFlags) -> vk::Fence {
+        let info = vk::FenceCreateInfo::default().flags(flags);
+        unsafe {
+            self.handle
+                .create_fence(&info, None)
+                .unwrap_or_else(|e| panic!("Error in {self:?} creating fence: {e}"))
         }
     }
 
-    pub fn handle(&self) -> &ash::Device { &self.handle }
+    pub fn create_command_pool(&self, queue: &Queue) -> Result<CommandPool> {
+        let info = vk::CommandPoolCreateInfo::default()
+            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+            .queue_family_index(queue.family.index);
+        let handle = unsafe { self.handle.create_command_pool(&info, None)? };
+        Ok(CommandPool {
+            queue: *queue,
+            handle,
+            device: self.clone(),
+        })
+    }
+    // pub fn create_command_buffers(
+    //     &self,
+    //     pool: &CommandPool,
+    //     count: u32,
+    // ) -> Result<Vec<vk::CommandBuffer>> {
+    //     let info = vk::CommandBufferAllocateInfo::default()
+    //         .command_buffer_count(count)
+    //         .command_pool(**pool)
+    //         .level(vk::CommandBufferLevel::PRIMARY);
 
-    pub fn physical_device(&self) -> vk::PhysicalDevice { self.physical_device }
+    //     unsafe {
+    //         self.handle
+    //             .allocate_command_buffers(&info)
+    //             .map_err(anyhow::Error::from)
+    //     }
+    // }
 
     pub fn create_sampler(
         &self,
@@ -189,37 +306,22 @@ impl Device {
         Ok(unsafe { self.handle.create_sampler(&info, None)? })
     }
 
-    pub fn create_fence(&self, flags: vk::FenceCreateFlags) -> Result<vk::Fence> {
-        Ok(unsafe {
-            self.handle
-                .create_fence(&vk::FenceCreateInfo::default().flags(flags), None)?
-        })
+    pub fn pipeline_barrier(
+        &self,
+        cmd: &CommandBuffer,
+        memory_barriers: &[vk::MemoryBarrier2],
+        buffer_memory_barriers: &[vk::BufferMemoryBarrier2],
+        image_memory_barriers: &[vk::ImageMemoryBarrier2],
+    ) -> Result<()> {
+        let dependency_info = vk::DependencyInfo::default()
+            .memory_barriers(memory_barriers)
+            .image_memory_barriers(image_memory_barriers)
+            .buffer_memory_barriers(buffer_memory_barriers)
+            .dependency_flags(vk::DependencyFlags::BY_REGION);
+        unsafe { self.handle.cmd_pipeline_barrier2(**cmd, &dependency_info) };
+        Ok(())
     }
 
-    pub fn create_command_pool(&self) -> Result<CommandPool> {
-        let info = vk::CommandPoolCreateInfo::default()
-            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
-            .queue_family_index(self.queue.family.index);
-        let handle = unsafe { self.handle.create_command_pool(&info, None)? };
-        Ok(CommandPool {
-            handle,
-            device: self.clone(),
-        })
-    }
-
-    pub fn create_command_buffer(&self, pool: vk::CommandPool) -> Result<vk::CommandBuffer> {
-        let info = vk::CommandBufferAllocateInfo::default()
-            .command_buffer_count(1)
-            .command_pool(pool)
-            .level(vk::CommandBufferLevel::PRIMARY);
-
-        unsafe {
-            self.handle
-                .allocate_command_buffers(&info)
-                .map(|b| b[0])
-                .map_err(anyhow::Error::from)
-        }
-    }
     pub fn update_descriptor_sets(
         &self,
         writes: &[vk::WriteDescriptorSet],
@@ -235,6 +337,34 @@ impl Device {
         unsafe {
             self.handle
                 .get_buffer_device_address(&BufferDeviceAddressInfo::default().buffer(*buffer))
+        }
+    }
+
+    pub fn wait_for_fences(&self, fences: &[vk::Fence]) {
+        log::trace!("Waiting for fences: {:?}", fences);
+        unsafe {
+            self.handle
+                .wait_for_fences(fences, true, VK_TIMEOUT_NS)
+                .unwrap_or_else(|e| panic!("Timeout waiting for fences {fences:?}: {e}"))
+        }
+    }
+
+    pub fn reset_fences(&self, fences: &[vk::Fence]) {
+        unsafe {
+            self.handle
+                .reset_fences(fences)
+                .unwrap_or_else(|e| panic!("Error resetting fences: {fences:?}: {e}"))
+        }
+    }
+
+    pub fn queue_submit(&self, cmd: &CommandBuffer) {
+        let fence = cmd.fence.unwrap_or(vk::Fence::null());
+        unsafe {
+            self.handle
+                .queue_submit2(*cmd.queue, slice::from_ref(&cmd.submit_info()), fence)
+                .unwrap_or_else(|e| {
+                    panic!("Error submitting command buffer ({self:?}) to queue: {e}")
+                })
         }
     }
 }

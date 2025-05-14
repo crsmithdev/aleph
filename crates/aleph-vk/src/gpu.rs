@@ -1,58 +1,20 @@
 use {
     crate::{
-        AllocatedTexture, Allocator, Buffer, CommandBuffer, CommandPool, Device, Instance,
-        MemoryLocation, Swapchain, SwapchainInfo, VK_TIMEOUT_NS,
+        swapchain::Surface, Allocator, CommandBuffer, CommandPool, Device, Instance, Queue,
+        Swapchain, SwapchainInfo,
     },
     aleph_core::log,
     anyhow::Result,
-    ash::{
-        khr::{self},
-        vk::{
-            self, Extent2D, Filter, Handle, PhysicalDeviceProperties, SamplerAddressMode,
-            SamplerMipmapMode,
-        },
+    ash::vk::{
+        self, Extent2D, Fence, Filter, PhysicalDeviceProperties, SamplerAddressMode,
+        SamplerMipmapMode, Semaphore,
     },
-    bytemuck::Pod,
     derive_more::Debug,
-    raw_window_handle::{HasDisplayHandle, HasWindowHandle},
     std::{cell::UnsafeCell, ffi, slice, sync::Arc},
     winit::window::Window,
 };
 
 const IN_FLIGHT_FRAMES: u32 = 2;
-
-#[derive(Clone, Debug)]
-pub struct Surface {
-    #[debug("{:x}", inner.as_raw())]
-    pub(crate) inner: vk::SurfaceKHR,
-
-    #[debug("{:x}", loader.instance().as_raw())]
-    pub(crate) loader: khr::surface::Instance,
-}
-
-impl Surface {
-    pub fn headless(instance: &Instance) -> Self {
-        Self {
-            inner: vk::SurfaceKHR::null(),
-            loader: khr::surface::Instance::new(&instance.entry, &instance.handle),
-        }
-    }
-
-    pub fn new(instance: &Instance, window: &winit::window::Window) -> Result<Self> {
-        let inner: vk::SurfaceKHR = unsafe {
-            ash_window::create_surface(
-                &instance.entry,
-                &instance.handle,
-                window.display_handle()?.into(),
-                window.window_handle()?.into(),
-                None,
-            )?
-        };
-
-        let loader = khr::surface::Instance::new(&instance.entry, &instance.handle);
-        Ok(Self { inner, loader })
-    }
-}
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -62,8 +24,6 @@ pub struct Gpu {
     pub(crate) device: Device,
     pub(crate) swapchain: UnsafeCell<Swapchain>,
     pub(crate) allocator: Arc<Allocator>,
-    immediate_cmd_pool: CommandPool,
-    immediate_cmd_buffer: CommandBuffer,
     properties: PhysicalDeviceProperties,
 }
 
@@ -76,7 +36,7 @@ impl Gpu {
             height: window.inner_size().height,
         };
 
-        let surface = Self::init_surface(&instance, Arc::clone(&window))?;
+        let surface = Surface::new(&instance, &window)?;
         let swapchain = UnsafeCell::new(Swapchain::new(
             &instance,
             &device,
@@ -91,8 +51,7 @@ impl Gpu {
         )?);
 
         let allocator = Arc::new(Allocator::new(&instance, &device)?);
-        let setup_cmd_pool = device.create_command_pool()?;
-        let setup_cmd_buffer = setup_cmd_pool.create_command_buffer()?;
+        // let uploader = Arc::new(Uploader::new(&device, &allocator, UPLOAD_POOL_SIZE)?);
         let properties = instance.get_physical_device_properties(device.physical_device);
 
         Ok(Self {
@@ -101,8 +60,6 @@ impl Gpu {
             surface,
             swapchain,
             allocator,
-            immediate_cmd_buffer: setup_cmd_buffer,
-            immediate_cmd_pool: setup_cmd_pool,
             properties,
         })
     }
@@ -110,26 +67,10 @@ impl Gpu {
     pub fn headless() -> Result<Self> {
         let instance = Instance::new()?;
         let device = Device::new(&instance)?;
-
-        // let surface = Self::init_surface(&instance, Arc::clone(&window))?;
-        // let swapchain = UnsafeCell::new(Swapchain::new(
-        //     &instance,
-        //     &device,
-        //     &surface,
-        //     &SwapchainInfo {
-        //         extent,
-        //         format: vk::Format::B8G8R8A8_SRGB,
-        //         color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
-        //         vsync: true,
-        //         num_images: IN_FLIGHT_FRAMES,
-        //     },
-        // )?);
-
         let surface = Surface::headless(&instance);
         let swapchain = UnsafeCell::new(Swapchain::headless(&instance, &device)?);
         let allocator = Arc::new(Allocator::new(&instance, &device)?);
-        let setup_cmd_pool = device.create_command_pool()?;
-        let setup_cmd_buffer = setup_cmd_pool.create_command_buffer()?;
+        // let uploader = Arc::new(Uploader::new(&device, &allocator, UPLOAD_POOL_SIZE)?);
         let properties = instance.get_physical_device_properties(device.physical_device);
 
         Ok(Self {
@@ -138,8 +79,6 @@ impl Gpu {
             surface,
             swapchain,
             allocator,
-            immediate_cmd_buffer: setup_cmd_buffer,
-            immediate_cmd_pool: setup_cmd_pool,
             properties,
         })
     }
@@ -160,39 +99,7 @@ impl Gpu {
     pub fn properties(&self) -> &PhysicalDeviceProperties { &self.properties }
 }
 
-impl Gpu /* Init */ {
-    fn init_surface(instance: &Instance, window: Arc<winit::window::Window>) -> Result<Surface> {
-        let inner: vk::SurfaceKHR = unsafe {
-            ash_window::create_surface(
-                &instance.entry,
-                &instance.handle,
-                window.display_handle()?.into(),
-                window.window_handle()?.into(),
-                None,
-            )?
-        };
-
-        let loader = khr::surface::Instance::new(&instance.entry, &instance.handle);
-        Ok(Surface { inner, loader })
-    }
-}
 impl Gpu {
-    pub fn create_shared_buffer<T: Pod>(
-        &self,
-        size: u64,
-        flags: vk::BufferUsageFlags,
-        label: impl Into<String>,
-    ) -> Result<Buffer<T>> {
-        Buffer::new(
-            &self.device,
-            Arc::clone(&self.allocator),
-            size,
-            flags,
-            MemoryLocation::CpuToGpu,
-            label,
-        )
-    }
-
     pub fn create_pipeline_layout(
         &self,
         uniforms_layouts: &[vk::DescriptorSetLayout],
@@ -220,16 +127,9 @@ impl Gpu {
         }?[0])
     }
 
-    pub fn create_semaphore(&self) -> Result<vk::Semaphore> {
-        #[allow(clippy::unit_arg)]
-        Ok(unsafe {
-            self.device
-                .handle
-                .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)?
-        })
+    pub fn create_command_pool(&self, queue: &Queue) -> Result<CommandPool> {
+        self.device.create_command_pool(queue)
     }
-
-    pub fn create_command_pool(&self) -> Result<CommandPool> { self.device.create_command_pool() }
 
     pub fn create_descriptor_set_layout(
         &self,
@@ -250,37 +150,7 @@ impl Gpu {
                 .create_descriptor_set_layout(&create_info, None)?
         })
     }
-    pub fn create_index_buffer<T: Pod>(
-        &self,
-        size: u64,
-        location: MemoryLocation,
-        label: impl Into<String>,
-    ) -> Result<Buffer<T>> {
-        Buffer::new(
-            &self.device,
-            Arc::clone(&self.allocator),
-            size,
-            vk::BufferUsageFlags::INDEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
-            location,
-            label,
-        )
-    }
 
-    pub fn create_vertex_buffer<T: Pod>(
-        &self,
-        size: u64,
-        location: MemoryLocation,
-        label: impl Into<String>,
-    ) -> Result<Buffer<T>> {
-        Buffer::new(
-            &self.device,
-            Arc::clone(&self.allocator),
-            size,
-            vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
-            location,
-            label,
-        )
-    }
     pub fn create_descriptor_pool(
         &self,
         pool_sizes: &[vk::DescriptorPoolSize],
@@ -327,27 +197,26 @@ impl Gpu {
         self.device.update_descriptor_sets(writes, copies)
     }
 
-    pub fn create_fence(&self) -> Result<vk::Fence> {
-        self.device.create_fence(vk::FenceCreateFlags::empty())
-    }
-
-    pub fn create_fence_signaled(&self) -> Result<vk::Fence> {
-        self.device.create_fence(vk::FenceCreateFlags::SIGNALED)
-    }
-
-    pub fn wait_for_fence(&self, fence: vk::Fence) -> Result<()> {
+    pub fn create_semaphore(&self) -> Result<vk::Semaphore> {
         #[allow(clippy::unit_arg)]
         Ok(unsafe {
             self.device
                 .handle
-                .wait_for_fences(&[fence], true, VK_TIMEOUT_NS)?
+                .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)?
         })
     }
 
-    pub fn reset_fence(&self, fence: vk::Fence) -> Result<()> {
-        #[allow(clippy::unit_arg)]
-        Ok(unsafe { self.device.handle.reset_fences(&[fence])? })
+    pub fn create_fence(&self) -> vk::Fence {
+        self.device.create_fence(vk::FenceCreateFlags::empty())
     }
+
+    pub fn create_fence_signaled(&self) -> vk::Fence {
+        self.device.create_fence(vk::FenceCreateFlags::SIGNALED)
+    }
+
+    pub fn wait_for_fence(&self, fence: vk::Fence) { self.device.wait_for_fences(&[fence]) }
+
+    pub fn reset_fence(&self, fence: vk::Fence) { self.device.reset_fences(&[fence]) }
 
     pub fn create_shader_module(&self, path: &str) -> Result<vk::ShaderModule> {
         let mut file = std::fs::File::open(path)?;
@@ -355,33 +224,6 @@ impl Gpu {
         let info = vk::ShaderModuleCreateInfo::default().code(&bytes);
         let module = unsafe { self.device.handle.create_shader_module(&info, None) }?;
         Ok(module)
-    }
-
-    pub fn rebuild_swapchain(&self, extent: Extent2D) -> Result<()> {
-        unsafe { self.device.handle.device_wait_idle() }?;
-        let swapchain = unsafe { &mut *self.swapchain.get() };
-        swapchain.rebuild(extent)
-    }
-
-    pub fn create_texture(
-        &self,
-        extent: vk::Extent2D,
-        format: vk::Format,
-        usage: vk::ImageUsageFlags,
-        aspect_flags: vk::ImageAspectFlags,
-        label: impl Into<String>,
-        sampler: Option<vk::Sampler>,
-    ) -> Result<AllocatedTexture> {
-        AllocatedTexture::new(
-            self.device.clone(),
-            Arc::clone(&self.allocator),
-            extent,
-            format,
-            usage,
-            aspect_flags,
-            label,
-            sampler,
-        )
     }
 
     pub fn create_sampler(
@@ -401,28 +243,14 @@ impl Gpu {
         )
     }
 
-    pub fn execute(&self, callback: impl FnOnce(&CommandBuffer)) -> Result<()> {
-        let cmd_buffer = &self.immediate_cmd_buffer;
+    pub fn rebuild_swapchain(&self, extent: Extent2D) -> Result<()> {
+        unsafe { self.device.handle.device_wait_idle() }?;
+        let swapchain = unsafe { &mut *self.swapchain.get() };
+        swapchain.rebuild(extent)
+    }
 
-        cmd_buffer.reset()?;
-        cmd_buffer.begin()?;
-        callback(cmd_buffer);
-        cmd_buffer.end()?;
-        let command_buffer_info = &[vk::CommandBufferSubmitInfo::default()
-            .command_buffer(cmd_buffer.handle)
-            .device_mask(0)];
-        let submit_info = &[vk::SubmitInfo2::default().command_buffer_infos(command_buffer_info)];
-
-        unsafe {
-            self.device.handle().queue_submit2(
-                self.device.queue.handle(),
-                submit_info,
-                vk::Fence::null(),
-            )
-        }?;
-        unsafe { self.device.handle().device_wait_idle() }?;
-
-        Ok(())
+    pub fn submit(&self, command_buffer: &CommandBuffer, fence: Fence) {
+        self.device.queue_submit(command_buffer)
     }
 }
 

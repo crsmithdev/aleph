@@ -1,11 +1,7 @@
 use {
-    crate::renderer::{GpuSceneData, RenderConfig, RenderContext},
-    aleph_core::{
-        events::GuiEvent,
-        system::{Resources, Scheduler},
-        Layer, Window,
-    },
-    aleph_scene::{model::Light, util},
+    crate::renderer::{RenderConfig, RenderContext},
+    aleph_core::events::GuiEvent,
+    aleph_scene::util,
     aleph_vk::{AttachmentLoadOp, AttachmentStoreOp, CommandPool, Extent2D, Format, Gpu},
     anyhow::Result,
     egui::{self},
@@ -26,17 +22,8 @@ pub struct Gui {
     textures_to_free: Option<Vec<egui::TextureId>>,
 }
 
-impl Layer for Gui {
-    fn register(&mut self, _scheduler: &mut Scheduler, resources: &mut Resources) {
-        let gpu = resources.get::<Arc<Gpu>>().clone();
-        let window = resources.get::<Arc<Window>>().clone();
-        let gui = Gui::new(&gpu, window).expect("Failed to create GUI");
-        resources.add(gui);
-    }
-}
-
 impl Gui {
-    pub fn new(gpu: &Gpu, window: Arc<winit::window::Window>) -> Result<Self> {
+    pub fn new(gpu: Arc<Gpu>, window: Arc<winit::window::Window>) -> Result<Self> {
         let egui_ctx = egui::Context::default();
         egui_extras::install_image_loaders(&egui_ctx);
 
@@ -90,20 +77,16 @@ impl Gui {
         Ok(gui)
     }
 
-    pub fn draw(
-        &mut self,
-        ctx: &RenderContext,
-        config: &mut RenderConfig,
-        scene_data: &mut GpuSceneData,
-    ) -> Result<()> {
+    pub fn draw(&mut self, ctx: &RenderContext, config: &mut RenderConfig) -> Result<()> {
+        // let scene_data = &mut ctx.resources.scene_data;
         let color_attachments = &[util::color_attachment(
-            ctx.draw_image,
+            &*ctx.draw_image,
             AttachmentLoadOp::LOAD,
             AttachmentStoreOp::STORE,
             CLEAR_COLOR,
         )];
         let depth_attachment = &util::depth_attachment(
-            ctx.depth_image,
+            &*ctx.depth_image,
             AttachmentLoadOp::LOAD,
             AttachmentStoreOp::STORE,
             1.0,
@@ -121,9 +104,7 @@ impl Gui {
             shapes,
             pixels_per_point,
             ..
-        } = self
-            .ctx
-            .run(raw_input, |ctx| build_ui(ctx, config, scene_data));
+        } = self.ctx.run(raw_input, |ctx| build_ui(ctx, config));
 
         self.state
             .handle_platform_output(&self.window, platform_output);
@@ -135,7 +116,7 @@ impl Gui {
         if !textures_delta.set.is_empty() {
             self.renderer
                 .set_textures(
-                    ctx.gpu.device().queue().handle(),
+                    ctx.gpu.device().graphics_queue().handle(),
                     self.pool.handle(),
                     textures_delta.set.as_slice(),
                 )
@@ -143,8 +124,11 @@ impl Gui {
         }
         let clipped_primitives = self.ctx.tessellate(shapes, pixels_per_point);
 
-        ctx.command_buffer
-            .begin_rendering(color_attachments, Some(depth_attachment), ctx.extent)?;
+        ctx.command_buffer.begin_rendering(
+            color_attachments,
+            Some(depth_attachment),
+            ctx.extent,
+        )?;
         self.renderer.cmd_draw(
             ctx.command_buffer.handle(),
             extent,
@@ -163,7 +147,7 @@ impl Gui {
     }
 }
 
-fn build_ui(ctx: &egui::Context, config: &mut RenderConfig, scene_data: &mut GpuSceneData) {
+fn build_ui(ctx: &egui::Context, config: &mut RenderConfig) {
     egui::Window::new("Shader Config")
         .max_width(350.)
         .default_width(350.)
@@ -184,18 +168,18 @@ fn build_ui(ctx: &egui::Context, config: &mut RenderConfig, scene_data: &mut Gpu
             ui.separator();
             ui.heading("Lights");
 
-            ui.horizontal(|ui| {
-                ui.add(
-                    egui::Slider::new(&mut scene_data.n_lights, 0..=4)
-                        .step_by(1.0)
-                        .text("# Lights"),
-                );
-            });
+            // ui.horizontal(|ui| {
+            //     ui.add(
+            //         egui::Slider::new(&mut scene_data.n_lights, 0..=4)
+            //             .step_by(1.0)
+            //             .text("# Lights"),
+            //     );
+            // });
 
-            light(ui, &mut scene_data.lights[0], 1);
-            light(ui, &mut scene_data.lights[1], 2);
-            light(ui, &mut scene_data.lights[2], 3);
-            light(ui, &mut scene_data.lights[3], 4);
+            // light(ui, &mut scene_data.lights[0], 1);
+            // light(ui, &mut scene_data.lights[1], 2);
+            // light(ui, &mut scene_data.lights[2], 3);
+            // light(ui, &mut scene_data.lights[3], 4);
 
             ui.separator();
             ui.heading("Material");
@@ -226,27 +210,27 @@ fn build_ui(ctx: &egui::Context, config: &mut RenderConfig, scene_data: &mut Gpu
         });
 }
 
-fn light(ui: &mut egui::Ui, light: &mut Light, n: i32) {
-    egui::Grid::new(format!("light-{n:02}"))
-        .min_col_width(50.)
-        .max_col_width(250.)
-        .show(ui, |ui| {
-            ui.label(format!("Light {}", n));
-            ui.label("Position:");
-            drag_value(ui, &mut light.position.x, "x", 25.);
-            drag_value(ui, &mut light.position.y, "y", 25.);
-            drag_value(ui, &mut light.position.z, "z", 25.);
-            ui.end_row();
+// fn light(ui: &mut egui::Ui, light: &mut Light, n: i32) {
+//     egui::Grid::new(format!("light-{n:02}"))
+//         .min_col_width(50.)
+//         .max_col_width(250.)
+//         .show(ui, |ui| {
+//             ui.label(format!("Light {}", n));
+//             ui.label("Position:");
+//             drag_value(ui, &mut light.position.x, "x", 25.);
+//             drag_value(ui, &mut light.position.y, "y", 25.);
+//             drag_value(ui, &mut light.position.z, "z", 25.);
+//             ui.end_row();
 
-            ui.label("");
-            ui.label("Color:");
-            drag_value(ui, &mut light.color.x, "r", 255.);
-            drag_value(ui, &mut light.color.y, "g", 255.);
-            drag_value(ui, &mut light.color.z, "b", 255.);
-            drag_value(ui, &mut light.color.w, "a", 255.);
-            ui.end_row();
-        });
-}
+//             ui.label("");
+//             ui.label("Color:");
+//             drag_value(ui, &mut light.color.x, "r", 255.);
+//             drag_value(ui, &mut light.color.y, "g", 255.);
+//             drag_value(ui, &mut light.color.z, "b", 255.);
+//             drag_value(ui, &mut light.color.w, "a", 255.);
+//             ui.end_row();
+//         });
+// }
 
 fn drag_value(ui: &mut egui::Ui, value: &mut f32, label: &str, max: f32) {
     let range = 0.0..=max;
