@@ -18,6 +18,7 @@ tracing-subscriber.workspace = true
 palette.workspace = true
 glob.workspace = true
 glam.workspace = true
+lifeguard.workspace = true
 
 ash = "0.38.0"
 ash-window = "0.13.0"

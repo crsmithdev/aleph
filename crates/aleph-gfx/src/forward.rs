@@ -1,16 +1,16 @@
 use {
     crate::{
-        renderer::{GpuPushConstantData, ResourceInfo},
+        renderer::{GpuPushConstantData, RenderObject},
         Pipeline, PipelineBuilder, RenderContext,
     },
-    aleph_scene::{model::Primitive, util, MaterialHandle, NodeType, Vertex},
+    aleph_scene::{util, Vertex},
     aleph_vk::{
-        AttachmentLoadOp, AttachmentStoreOp, ColorComponentFlags, CompareOp, CullModeFlags,
-        FrontFace, Gpu, PipelineBindPoint, PipelineColorBlendAttachmentState, PipelineLayout,
-        PolygonMode, PrimitiveTopology, PushConstantRange, Rect2D, ShaderStageFlags, VkPipeline,
+        command::CommandRecorder, AttachmentLoadOp, AttachmentStoreOp, ColorComponentFlags,
+        CompareOp, CullModeFlags, DescriptorSetLayout, FrontFace, Gpu, Image, PipelineBindPoint,
+        PipelineColorBlendAttachmentState, PipelineLayout, PolygonMode, PrimitiveTopology,
+        PushConstantRange, Rect2D, ShaderStageFlags, VkPipeline,
     },
     anyhow::Result,
-    glam::Mat4,
     std::mem,
     tracing::{instrument, warn},
 };
@@ -23,88 +23,75 @@ const FRAGMENT_SHADER_PATH: &str = "shaders/forward.frag.spv";
 pub struct ForwardPipeline {
     handle: VkPipeline,
     pipeline_layout: PipelineLayout,
+    draw_image: Image,
+    depth_image: Image,
 }
 
 impl Pipeline for ForwardPipeline {
     #[instrument(skip_all)]
-    fn render(&mut self, ctx: &RenderContext) -> Result<()> {
-        let cmd = ctx.command_buffer;
+    fn render(&self, ctx: &RenderContext) -> Result<()> {
+        log::trace!("Begin forward pipeline render");
+        let cmd = &ctx.cmd_buffer.record(ctx.gpu.device());
         let color_attachments = &[util::color_attachment(
-            &*ctx.draw_image,
+            &self.draw_image,
             AttachmentLoadOp::CLEAR,
             AttachmentStoreOp::STORE,
             CLEAR_COLOR,
         )];
         let depth_attachment = &util::depth_attachment(
-            &*ctx.depth_image,
+            &self.depth_image,
             AttachmentLoadOp::CLEAR,
             AttachmentStoreOp::STORE,
             1.0,
         );
-        let viewport = util::viewport_inverted(ctx.extent.into());
-        cmd.begin_rendering(color_attachments, Some(depth_attachment), ctx.extent)?;
+        let viewport = util::viewport_inverted(ctx.draw_extent);
+        cmd.begin_rendering(color_attachments, Some(depth_attachment), ctx.draw_extent);
         cmd.set_viewport(viewport);
-        cmd.set_scissor(Rect2D::default().extent(ctx.extent));
+        cmd.set_scissor(Rect2D::default().extent(ctx.draw_extent));
 
-        let drawables = Self::get_drawables(ctx);
+        cmd.bind_pipeline(PipelineBindPoint::GRAPHICS, self.handle);
+        ctx.binder.bind(&cmd, self.pipeline_layout, &[]);
 
-        cmd.bind_pipeline(PipelineBindPoint::GRAPHICS, self.handle)?;
-        ctx.resources.binder.bind(ctx, self.pipeline_layout, &[]);
-
-        self.draw(ctx, drawables)?;
-
-        cmd.end_rendering()
+        for object in &ctx.objects {
+            self.draw_primitive(cmd, object)?;
+        }
+        cmd.end_rendering();
+        log::trace!("End forward pipeline render");
+        Ok(())
     }
 }
 
 impl ForwardPipeline {
-    pub fn new(gpu: &Gpu, resources: &ResourceInfo) -> Result<Self> {
+    pub fn new(
+        gpu: &Gpu,
+        descriptor_layout: &DescriptorSetLayout,
+        draw_image: &Image,
+        depth_image: &Image,
+    ) -> Result<Self> {
         let push_constant_range = PushConstantRange {
             stage_flags: ShaderStageFlags::VERTEX | ShaderStageFlags::FRAGMENT,
             offset: 0,
             size: mem::size_of::<GpuPushConstantData>() as u32,
         };
-        let pipeline_layout = gpu.create_pipeline_layout(
-            &[resources.binder.descriptor_layout()],
-            &[push_constant_range],
-        )?;
+        let pipeline_layout =
+            gpu.create_pipeline_layout(&[*descriptor_layout], &[push_constant_range])?;
         let handle = Self::create_pipeline(gpu, pipeline_layout)?;
 
         Ok(Self {
             handle,
             pipeline_layout,
+            draw_image: draw_image.clone(),
+            depth_image: depth_image.clone(),
         })
     }
-    fn draw(
-        &mut self,
-        ctx: &RenderContext,
-        drawables: Vec<(&Primitive, Option<MaterialHandle>, Mat4)>,
-    ) -> Result<()> {
-        let material_map = &ctx.resources.material_map;
 
-        for (primitive, material_handle, transform) in drawables.iter() {
-            let material_index = material_handle
-                .and_then(|h| material_map.get(&h))
-                .unwrap_or(&0);
-            self.draw_primitive(ctx, primitive, *material_index as i32, *transform)?;
-        }
-        Ok(())
-    }
-
-    fn draw_primitive(
-        &mut self,
-        ctx: &RenderContext,
-        primitive: &Primitive,
-        material_index: i32,
-        transform: Mat4,
-    ) -> Result<()> {
-        let cmd = ctx.command_buffer;
-        cmd.bind_index_buffer(&*primitive.index_buffer, 0);
-        cmd.bind_vertex_buffer(&*primitive.vertex_buffer, 0);
+    fn draw_primitive(&self, cmd: &CommandRecorder, object: &RenderObject) -> Result<()> {
+        cmd.bind_index_buffer(&*object.primitive.index_buffer, 0);
+        cmd.bind_vertex_buffer(&*object.primitive.vertex_buffer, 0);
 
         let push_constants = GpuPushConstantData {
-            model: transform,
-            material_index,
+            model: object.transform,
+            material_index: object.material as i32,
             _padding0: 0,
             _padding1: 0,
             _padding2: 0,
@@ -115,7 +102,7 @@ impl ForwardPipeline {
             0,
             &push_constants,
         );
-        cmd.draw_indexed(primitive.vertex_count, 1, 0, 0, 0);
+        cmd.draw_indexed(object.primitive.vertex_count, 1, 0, 0, 0);
 
         Ok(())
     }
@@ -145,25 +132,6 @@ impl ForwardPipeline {
             .dynamic_scissor()
             .dynamic_viewport()
             .build(gpu, layout)
-    }
-
-    fn get_drawables<'a>(
-        ctx: &'a RenderContext,
-    ) -> Vec<(&'a Primitive, Option<MaterialHandle>, Mat4)> {
-        let mut drawables = vec![];
-        for node in ctx.scene.mesh_nodes() {
-            match node.data {
-                NodeType::Mesh(handle) => {
-                    let mesh = ctx.assets.mesh(handle).unwrap();
-                    let transform = node.transform;
-                    for primitive in mesh.primitives.iter() {
-                        drawables.push((primitive, primitive.material, transform))
-                    }
-                }
-                _ => {}
-            }
-        }
-        drawables
     }
 
     // fn update_draw_buffer(&mut self, context: &RenderContext, transforms: Vec<Mat4>) -> Result<()> {

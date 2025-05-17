@@ -1,9 +1,9 @@
 use {
-    crate::{CommandBuffer, CommandPool, Instance, VK_TIMEOUT_NS},
+    crate::{command::CommandRecorder, CommandBuffer, CommandPool, Instance, VK_TIMEOUT_NS},
     anyhow::{anyhow, Result},
     ash::{
         ext, khr,
-        vk::{self, BufferDeviceAddressInfo, Handle, LOD_CLAMP_NONE},
+        vk::{self, BufferDeviceAddressInfo, Handle, SubmitInfo2, LOD_CLAMP_NONE},
     },
     derive_more::{Debug, Deref},
     std::{ffi, slice},
@@ -49,7 +49,7 @@ impl Queue {
 pub struct Device {
     #[debug("{:x}", handle.handle().as_raw())]
     pub(crate) handle: ash::Device, // TODO
-    pub(crate) graphics_queue: Queue,
+    pub(crate) gfx_queue: Queue,
     pub(crate) transfer_queue: Queue,
     pub(crate) physical_device: vk::PhysicalDevice,
 }
@@ -118,7 +118,7 @@ impl Device {
         Ok(Device {
             handle,
             physical_device,
-            graphics_queue,
+            gfx_queue: graphics_queue,
             transfer_queue,
         })
     }
@@ -127,7 +127,7 @@ impl Device {
 
     pub fn physical_device(&self) -> vk::PhysicalDevice { self.physical_device }
 
-    pub fn graphics_queue(&self) -> &Queue { &self.graphics_queue }
+    pub fn graphics_queue(&self) -> &Queue { &self.gfx_queue }
 
     pub fn transfer_queue(&self) -> &Queue { &self.transfer_queue }
 }
@@ -245,6 +245,13 @@ impl Device {
 }
 
 impl Device {
+    pub fn wait_idle(&self) {
+        unsafe {
+            self.handle
+                .device_wait_idle()
+                .unwrap_or_else(|e| panic!("Error idling device:: {e}"));
+        }
+    }
     fn create_queue(handle: &ash::Device, family: QueueFamily) -> Queue {
         let handle = unsafe { handle.get_device_queue(family.index, 0) };
         Queue { handle, family }
@@ -255,16 +262,25 @@ impl Device {
         unsafe {
             self.handle
                 .create_fence(&info, None)
-                .unwrap_or_else(|e| panic!("Error in {self:?} creating fence: {e}"))
+                .unwrap_or_else(|e| panic!("Error creating fence: {e}"))
         }
     }
 
-    pub fn create_command_pool(&self, queue: &Queue) -> Result<CommandPool> {
+    pub fn create_semaphore(&self) -> vk::Semaphore {
+        unsafe {
+            self.handle
+                .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)
+                .unwrap_or_else(|e| panic!("Error creating semaphore: {e:?}"))
+        }
+    }
+
+    pub fn create_command_pool(&self, queue: &Queue, name: &str) -> Result<CommandPool> {
         let info = vk::CommandPoolCreateInfo::default()
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
             .queue_family_index(queue.family.index);
         let handle = unsafe { self.handle.create_command_pool(&info, None)? };
         Ok(CommandPool {
+            name: name.to_string(),
             queue: *queue,
             handle,
             device: self.clone(),
@@ -308,7 +324,7 @@ impl Device {
 
     pub fn pipeline_barrier(
         &self,
-        cmd: &CommandBuffer,
+        cmd: &CommandRecorder,
         memory_barriers: &[vk::MemoryBarrier2],
         buffer_memory_barriers: &[vk::BufferMemoryBarrier2],
         image_memory_barriers: &[vk::ImageMemoryBarrier2],
@@ -357,11 +373,30 @@ impl Device {
         }
     }
 
-    pub fn queue_submit(&self, cmd: &CommandBuffer) {
-        let fence = cmd.fence.unwrap_or(vk::Fence::null());
+    pub fn queue_submit3(&self, queue: &Queue, submit_info: &SubmitInfo2, fence: vk::Fence) {
+        // log::trace!("Submitting command buffer: {:?}", cmd);
+
         unsafe {
             self.handle
-                .queue_submit2(*cmd.queue, slice::from_ref(&cmd.submit_info()), fence)
+                .queue_submit2(**queue, slice::from_ref(&submit_info), fence)
+                .unwrap_or_else(|e| {
+                    panic!("Error submitting command buffer ({self:?}) to queue: {e}")
+                })
+        }
+    }
+
+    pub fn queue_submit2(&self, queue: &Queue, cmd: &mut CommandBuffer, fence: vk::Fence) {
+        log::trace!("Submitting command buffer: {:?}", cmd);
+        let submit_info = cmd.extract();
+        // let recorded = cmd.cmd_buffer_infos.borrow();
+        // let submit_info = SubmitInfo2::default()
+        // .command_buffer_infos(&recorded)
+        // .signal_semaphore_infos(&cmd.signal_semaphore_infos)
+        // .wait_semaphore_infos(&cmd.wait_semaphore_infos);
+
+        unsafe {
+            self.handle
+                .queue_submit2(**queue, slice::from_ref(&submit_info), fence)
                 .unwrap_or_else(|e| {
                     panic!("Error submitting command buffer ({self:?}) to queue: {e}")
                 })

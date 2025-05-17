@@ -39,7 +39,8 @@ impl Gui {
         let device = gpu.device();
         let instance = gpu.instance();
         let physical_device = device.physical_device();
-        let pool = gpu.create_command_pool()?;
+        let queue = device.graphics_queue();
+        let pool = device.create_command_pool(queue, "gui")?;
 
         let renderer = {
             let allocator = ga::vulkan::Allocator::new(&ga::vulkan::AllocatorCreateDesc {
@@ -78,66 +79,61 @@ impl Gui {
     }
 
     pub fn draw(&mut self, ctx: &RenderContext, config: &mut RenderConfig) -> Result<()> {
-        // let scene_data = &mut ctx.resources.scene_data;
-        let color_attachments = &[util::color_attachment(
-            &*ctx.draw_image,
-            AttachmentLoadOp::LOAD,
-            AttachmentStoreOp::STORE,
-            CLEAR_COLOR,
-        )];
-        let depth_attachment = &util::depth_attachment(
-            &*ctx.depth_image,
-            AttachmentLoadOp::LOAD,
-            AttachmentStoreOp::STORE,
-            1.0,
-        );
-        let extent = Extent2D {
-            width: ctx.extent.width,
-            height: ctx.extent.height,
-        };
-
-        let raw_input = self.state.take_egui_input(&self.window);
-
-        let egui::FullOutput {
-            platform_output,
-            textures_delta,
-            shapes,
-            pixels_per_point,
-            ..
-        } = self.ctx.run(raw_input, |ctx| build_ui(ctx, config));
-
-        self.state
-            .handle_platform_output(&self.window, platform_output);
-
-        if !textures_delta.free.is_empty() {
-            self.textures_to_free = Some(textures_delta.free.clone());
-        }
-
-        if !textures_delta.set.is_empty() {
-            self.renderer
-                .set_textures(
-                    ctx.gpu.device().graphics_queue().handle(),
-                    self.pool.handle(),
-                    textures_delta.set.as_slice(),
-                )
-                .expect("Failed to set textures");
-        }
-        let clipped_primitives = self.ctx.tessellate(shapes, pixels_per_point);
-
-        ctx.command_buffer.begin_rendering(
-            color_attachments,
-            Some(depth_attachment),
-            ctx.extent,
-        )?;
-        self.renderer.cmd_draw(
-            ctx.command_buffer.handle(),
-            extent,
-            pixels_per_point,
-            &clipped_primitives,
-        )?;
-        ctx.command_buffer.end_rendering()?;
-
         Ok(())
+        // // let scene_data = &mut ctx.resources.scene_data;
+        // let color_attachments = &[util::color_attachment(
+        //     &*ctx.draw_image,
+        //     AttachmentLoadOp::LOAD,
+        //     AttachmentStoreOp::STORE,
+        //     CLEAR_COLOR,
+        // )];
+        // let depth_attachment = &util::depth_attachment(
+        //     &*ctx.depth_image,
+        //     AttachmentLoadOp::LOAD,
+        //     AttachmentStoreOp::STORE,
+        //     1.0,
+        // );
+        // let extent = Extent2D {
+        //     width: ctx.draw_extent.width,
+        //     height: ctx.draw_extent.height,
+        // };
+
+        // let raw_input = self.state.take_egui_input(&self.window);
+
+        // let egui::FullOutput {
+        //     platform_output,
+        //     textures_delta,
+        //     shapes,
+        //     pixels_per_point,
+        //     ..
+        // } = self.ctx.run(raw_input, |ctx| build_ui(ctx, config));
+
+        // self.state
+        //     .handle_platform_output(&self.window, platform_output);
+
+        // if !textures_delta.free.is_empty() {
+        //     self.textures_to_free = Some(textures_delta.free.clone());
+        // }
+
+        // if !textures_delta.set.is_empty() {
+        //     self.renderer
+        //         .set_textures(
+        //             ctx.gpu.device().graphics_queue().handle(),
+        //             self.pool.handle(),
+        //             textures_delta.set.as_slice(),
+        //         )
+        //         .expect("Failed to set textures");
+        // }
+        // let clipped_primitives = self.ctx.tessellate(shapes, pixels_per_point);
+        // let device = ctx.gpu.device();
+        // let cmd = &ctx.cmd_recorder;
+
+        // cmd.begin_rendering(color_attachments, Some(depth_attachment), ctx.draw_extent);
+        // self.renderer
+        //     .cmd_draw(cmd.handle(), extent, pixels_per_point, &clipped_primitives)?;
+        // cmd.end_rendering();
+
+        // Ok(())
     }
 
     pub fn handle_events<'a>(&'a mut self, events: impl Iterator<Item = &'a GuiEvent>) {

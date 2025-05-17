@@ -256,12 +256,10 @@ fn load_mesh(
             .map(|read_indices| read_indices.into_u32().collect::<Vec<_>>())
             .unwrap();
 
-        let material = primitive
-            .material()
-            .index()
-            .and_then(|i| materials.get(i))
-            .map(|h| *h);
-
+        let material = match primitive.material().index() {
+            Some(index) => materials[index],
+            None => MaterialHandle::null(),
+        };
         let attributes: Vec<VertexAttribute> = primitive
             .attributes()
             .filter_map(|a| match a {

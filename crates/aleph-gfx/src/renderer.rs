@@ -1,40 +1,29 @@
 use {
     crate::{ForwardPipeline, Gui, Pipeline, ResourceBinder, ResourceLayout},
-    aleph_scene::{model::Light, Assets, MaterialHandle, Scene, TextureHandle},
+    aleph_scene::{
+        model::Light, Assets, MaterialHandle, NodeType, Primitive, Scene, TextureHandle,
+    },
     aleph_vk::{
-        swapchain, AccessFlags2, CommandBuffer, CommandBufferSubmitInfo, Extent2D, Extent3D, Fence,
+        command::{self, CommandRecorder},
+        swapchain, sync, AccessFlags2, CommandBuffer, CommandBufferSubmitInfo, Extent2D, Fence,
         Format, Frame, Gpu, ImageAspectFlags, ImageLayout, ImageUsageFlags, PipelineStageFlags2,
         Semaphore, SemaphoreSubmitInfo, ShaderStageFlags, SubmitInfo2, Texture, TextureInfo,
         TypedBuffer,
     },
     anyhow::{anyhow, Result},
-    ash::vk::QUEUE_FAMILY_IGNORED,
+    ash::vk::{FenceCreateFlags, QUEUE_FAMILY_IGNORED},
     bytemuck::{Pod, Zeroable},
     glam::{vec3, vec4, Mat4, Vec3, Vec4},
     std::{collections::HashMap, sync::Arc},
     tracing::instrument,
 };
 
-pub struct ResourceInfo {
-    pub binder: ResourceBinder,
-    pub material_map: HashMap<MaterialHandle, usize>,
-    pub texture_map: HashMap<TextureHandle, usize>,
-    pub scene_buffer: TypedBuffer<GpuSceneData>,
-    pub scene_data: GpuSceneData,
-    pub material_buffer: TypedBuffer<GpuMaterialData>,
-    pub material_data: GpuMaterialData,
-}
-
 pub struct RenderContext<'a> {
     pub gpu: &'a Gpu,
-    pub scene: &'a Scene,
-    pub frame: &'a Frame,
-    pub command_buffer: &'a CommandBuffer,
-    pub draw_image: &'a Texture,
-    pub depth_image: &'a Texture,
-    pub extent: Extent2D,
-    pub assets: &'a Assets,
-    pub resources: &'a ResourceInfo,
+    pub cmd_buffer: &'a CommandBuffer,
+    pub draw_extent: Extent2D,
+    pub binder: &'a ResourceBinder,
+    pub objects: Vec<RenderObject<'a>>,
 }
 
 const FORMAT_DRAW_IMAGE: Format = Format::R16G16B16A16_SFLOAT;
@@ -75,34 +64,23 @@ pub struct Renderer {
     frame_counter: usize,
     draw_image: Texture,
     depth_image: Texture,
-    // scene_data: GpuSceneData,
-    resources: ResourceInfo,
+    material_map: HashMap<MaterialHandle, usize>,
+    scene_buffer: TypedBuffer<GpuSceneData>,
+    scene_data: GpuSceneData,
+    material_buffer: TypedBuffer<GpuMaterialData>,
+    binder: ResourceBinder,
     pub gpu: Arc<Gpu>,
     config: RenderConfig,
     pub prepared: bool,
 }
 
-impl From<&RenderConfig> for GpuConfig {
-    fn from(config: &RenderConfig) -> Self {
-        Self {
-            force_color: config.force_color as i32,
-            force_metallic: config.force_metallic as i32,
-            force_roughness: config.force_roughness as i32,
-            force_ao: config.force_ao as i32,
-            force_color_factor: config.force_color_factor,
-            force_metallic_factor: config.force_metallic_factor,
-            force_roughness_factor: config.force_roughness_factor,
-            force_ao_strength: config.force_ao_strength,
-            debug_normals: config.debug_normals as i32,
-            debug_tangents: config.debug_tangents as i32,
-            debug_bitangents: config.debug_bitangents as i32,
-            debug_specular: config.debug_specular as i32,
-            debug_normal_maps: config.debug_normal_maps as i32,
-            force_defaults: 0,
-            _padding0: Vec3::ZERO,
-        }
-    }
+pub struct RenderObject<'a> {
+    pub primitive: &'a Primitive,
+    pub material: usize,
+    pub transform: Mat4,
 }
+
+#[derive(Default)]
 pub struct RenderConfig {
     pub force_color: bool,
     pub force_metallic: bool,
@@ -150,21 +128,16 @@ impl Renderer {
         };
         let depth_image = Texture::new(&gpu, &depth_info)?;
 
-        let resources = ResourceInfo {
-            binder: ResourceLayout::set(SET_IDX_BINDLESS)
-                .uniform_buffer(BIND_IDX_SCENE, ShaderStageFlags::ALL_GRAPHICS)
-                .uniform_buffer(BIND_IDX_MATERIAL, ShaderStageFlags::ALL_GRAPHICS)
-                .texture_array(BIND_IDX_TEXTURE, ShaderStageFlags::ALL_GRAPHICS)
-                .finish(&gpu)?,
-            material_map: HashMap::new(),
-            texture_map: HashMap::new(),
-            scene_buffer: TypedBuffer::shared_uniform(&gpu, 1, "scene")?,
-            material_buffer: TypedBuffer::shared_uniform(&gpu, 10, "material")?,
-            scene_data: GpuSceneData::default(),
-            material_data: GpuMaterialData::default(),
-        };
+        let binder = ResourceLayout::set(SET_IDX_BINDLESS)
+            .uniform_buffer(BIND_IDX_SCENE, ShaderStageFlags::ALL_GRAPHICS)
+            .uniform_buffer(BIND_IDX_MATERIAL, ShaderStageFlags::ALL_GRAPHICS)
+            .texture_array(BIND_IDX_TEXTURE, ShaderStageFlags::ALL_GRAPHICS)
+            .finish(&gpu)?;
 
-        let foreward_pipeline = ForwardPipeline::new(&gpu, &resources)?;
+        let foreward_pipeline =
+            ForwardPipeline::new(&gpu, &binder.descriptor_layout(), &draw_image, &depth_image)?;
+        let material_buffer = TypedBuffer::shared_uniform(&gpu, 10, "material")?;
+        let scene_buffer = TypedBuffer::shared_uniform(&gpu, 1, "scene")?;
 
         Ok(Self {
             gpu,
@@ -173,116 +146,100 @@ impl Renderer {
             draw_image,
             depth_image,
             rebuild_swapchain: false,
-            resources,
             frame_index: 0,
             frame_counter: 0,
             prepared: false,
-            config: RenderConfig {
-                force_color: false,
-                force_metallic: false,
-                force_roughness: false,
-                force_ao: false,
-                force_color_factor: Vec4::ZERO,
-                force_metallic_factor: 0.0,
-                force_roughness_factor: 0.0,
-                force_ao_strength: 0.0,
-                debug_normals: false,
-                debug_tangents: false,
-                debug_bitangents: false,
-                debug_specular: false,
-                debug_normal_maps: false,
-                force_defaults: false,
-            },
+            binder,
+            material_map: HashMap::new(),
+            scene_data: GpuSceneData::default(),
+            material_buffer,
+            scene_buffer,
+            config: RenderConfig::default(),
         })
     }
 
     #[instrument(skip_all)]
     pub fn render(&mut self, scene: &Scene, assets: &Assets, gui: &mut Gui) -> Result<()> {
+        // log::trace!("Render frame");
         if self.rebuild_swapchain {
             let extent = self.gpu.swapchain().extent();
-            self.gpu.rebuild_swapchain(extent)?;
-            self.frames = Self::create_frames(&self.gpu)?;
-            self.rebuild_swapchain = false;
+            self.gpu.rebuild_swapchain(extent);
         }
-        let context = RenderContext {
+        let (image_index, rebuild) = self.begin_frame();
+
+        self.scene_data = self.prepare_scene(scene);
+        self.scene_buffer.write(&[self.scene_data]);
+
+        // let ctx = self.create_context(scene, assets);
+        let cmd_buffer = &self.frames[self.frame_index].command_buffer.clone();
+        let ctx = RenderContext {
             gpu: &self.gpu,
-            scene,
-            frame: &self.frames[self.frame_index],
-            command_buffer: &self.frames[self.frame_index].command_buffer,
-            draw_image: &self.draw_image,
-            depth_image: &self.depth_image,
-            extent: self.gpu.swapchain().extent(),
-            resources: &self.resources,
-            assets,
+            cmd_buffer,
+            draw_extent: self.draw_extent(),
+            binder: &self.binder,
+            objects: self.create_render_objects(scene, assets, &self.material_map),
         };
-        let Frame {
-            swapchain_semaphore,
-            command_buffer,
-            render_semaphore,
-            fence,
-            ..
-        } = &self.frames[self.frame_index];
+        let cmd = &ctx.cmd_buffer.record(&self.gpu.device());
 
-        self.gpu.wait_for_fence(*fence);
-        let (image_index, rebuild) = self
-            .gpu
-            .swapchain()
-            .acquire_next_image(*swapchain_semaphore)?;
-        self.rebuild_swapchain = rebuild;
-        self.gpu.reset_fence(*fence);
-
-        let swapchain_extent = self.gpu.swapchain().extent();
-        let swapchain_image = &self.gpu.swapchain().images()[image_index];
-        let draw_extent = {
-            let extent = self.draw_image.extent();
-            Extent3D {
-                width: extent.width.min(swapchain_extent.width),
-                height: extent.height.min(swapchain_extent.height),
-                depth: 1,
-            }
-        };
-        // assets
-        //     .uploader()
-        //     .enqueue_buffer(&self.resources.scene_buffer, &[self.resources.scene_data])?;
-        let cmd_buffer = &command_buffer;
-
-        cmd_buffer.transition_image(
-            &*self.depth_image,
+        cmd.transition_image(
+            &self.depth_image,
             ImageLayout::UNDEFINED,
             ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         );
 
-        cmd_buffer.transition_image(
-            &*self.draw_image,
+        cmd.transition_image(
+            &self.draw_image,
             ImageLayout::UNDEFINED,
             ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
         );
 
-        self.forward_pipeline.render(&context)?;
-        gui.draw(&context, &mut self.config)?;
+        self.forward_pipeline.render(&ctx)?;
+        // gui.draw(&ctx, &mut self.config)?;
 
-        cmd_buffer.transition_image(
-            &*self.draw_image,
+        cmd.transition_image(
+            &self.draw_image,
             ImageLayout::UNDEFINED,
             ImageLayout::TRANSFER_SRC_OPTIMAL,
         );
-        cmd_buffer.transition_image(
-            &*swapchain_image,
+
+        let swapchain_image = &self.gpu.swapchain().images()[image_index];
+        let swapchain_pre_barrier = sync::image_memory_barrier(
+            &swapchain_image,
+            PipelineStageFlags2::NONE,
+            AccessFlags2::NONE,
+            PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT_KHR,
+            AccessFlags2::COLOR_ATTACHMENT_WRITE,
+            ImageAspectFlags::COLOR,
             ImageLayout::UNDEFINED,
             ImageLayout::TRANSFER_DST_OPTIMAL,
+            QUEUE_FAMILY_IGNORED,
+            QUEUE_FAMILY_IGNORED,
         );
-        cmd_buffer.copy_image(
-            &*self.draw_image,
-            &*swapchain_image,
-            draw_extent,
-            swapchain_extent.into(),
+        cmd.pipeline_barrier(&[], &[], &[swapchain_pre_barrier]);
+
+        // cmd.transition_image(
+        //     &swapchain_image,
+        //     ImageLayout::UNDEFINED,
+        //     ImageLayout::TRANSFER_DST_OPTIMAL,
+        // );
+        cmd.copy_image(
+            &self.draw_image,
+            &swapchain_image,
+            self.draw_extent(),
+            swapchain_image.extent(),
         );
 
-        cmd_buffer.image_barrier(
-            &*swapchain_image,
-            PipelineStageFlags2::TRANSFER,
-            AccessFlags2::TRANSFER_WRITE,
-            PipelineStageFlags2::BOTTOM_OF_PIPE,
+        // cmd.transition_image(
+        //     &swapchain_image,
+        //     ImageLayout::TRANSFER_DST_OPTIMAL,
+        //     ImageLayout::PRESENT_SRC_KHR,
+        // );
+
+        let swapchain_post_barrier = sync::image_memory_barrier(
+            &swapchain_image,
+            PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT_KHR,
+            AccessFlags2::COLOR_ATTACHMENT_WRITE,
+            PipelineStageFlags2::NONE,
             AccessFlags2::NONE,
             ImageAspectFlags::COLOR,
             ImageLayout::TRANSFER_DST_OPTIMAL,
@@ -290,73 +247,146 @@ impl Renderer {
             QUEUE_FAMILY_IGNORED,
             QUEUE_FAMILY_IGNORED,
         );
-        // cmd_buffer.transition_image(
-        //     &*swapchain_image,
-        //     ImageLayout::TRANSFER_DST_OPTIMAL,
-        //     ImageLayout::PRESENT_SRC_KHR,
-        // );
-        cmd_buffer.end()?;
+        cmd.pipeline_barrier(&[], &[], &[swapchain_post_barrier]);
+        assets.uploader().submit();
 
-        self.gpu.queue_submit(
-            &[&**cmd_buffer],
-            &[*swapchain_semaphore],
-            &[*render_semaphore],
-            *fence,
-        )?;
-        let rebuild = self
-            .gpu
+        // let rebuild = self.end_frame(image_index);
+        let fence = self.frames[self.frame_index].fence;
+        let render_semaphore = self.frames[self.frame_index].render_semaphore;
+        let cmd_buffer = &mut self.frames[self.frame_index].command_buffer;
+
+        self.gpu
+            .device()
+            .queue_submit2(self.gpu.device().graphics_queue(), cmd_buffer, fence);
+        self.gpu
             .swapchain()
-            .present(&[*render_semaphore], &[image_index as u32])?;
+            .present(&[render_semaphore], &[image_index as u32])
+            .unwrap_or_else(|e| panic!("Error presenting swapchain: {:?}", e));
+        self.rebuild_swapchain = rebuild;
 
-        self.resources.scene_data = self.prepare_scene(scene);
-        self.resources
-            .scene_buffer
-            .write(&[self.resources.scene_data]);
-        assets.uploader().submit()?;
-
-        self.rebuild_swapchain |= rebuild;
         self.frame_index = image_index;
         self.frame_counter += 1;
 
         Ok(())
     }
 
-    pub fn submit_queued(
+    pub fn begin_frame(&self) -> (usize, bool) {
+        // log::trace!("Begin frame");
+        let fence = &self.frames[self.frame_index].fence;
+        let semaphore = &self.frames[self.frame_index].swapchain_semaphore;
+
+        self.gpu.wait_for_fence(*fence);
+        let (index, rebuild) = self
+            .gpu
+            .swapchain()
+            .acquire_next_image(*semaphore)
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Error acquiring next image at {} (index: {}): {:?}",
+                    self.frame_counter, self.frame_index, e
+                );
+            });
+        self.gpu.reset_fence(*fence);
+
+        (index, rebuild)
+    }
+
+    fn end_frame(&mut self, image_index: usize) -> bool {
+        let cmd_buffer = &mut self.frames[self.frame_index].command_buffer.clone();
+        let fence = &self.frames[self.frame_index].fence;
+        let render_semaphore = self.frames[self.frame_index].render_semaphore;
+
+        self.gpu
+            .device()
+            .queue_submit2(self.gpu.device().graphics_queue(), cmd_buffer, *fence);
+        self.gpu
+            .swapchain()
+            .present(&[render_semaphore], &[image_index as u32])
+            .unwrap_or_else(|e| panic!("Error presenting swapchain: {:?}", e))
+    }
+
+    fn create_render_objects<'a>(
         &self,
-        gpu: &Gpu,
-        cmds: &[&CommandBuffer],
-        wait_semaphore: Semaphore,
-        signal_semaphore: Semaphore,
-        fence: Fence,
-    ) -> Result<(), anyhow::Error> {
-        let queue = gpu.device().graphics_queue();
+        scene: &'a Scene,
+        assets: &'a Assets,
+        materials: &'a HashMap<MaterialHandle, usize>,
+    ) -> Vec<RenderObject<'a>> {
+        // log::trace!("Create render objects");
 
-        let wait_info = &[SemaphoreSubmitInfo::default()
-            .semaphore(wait_semaphore)
-            .stage_mask(PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
-            .value(1)];
-        let signal_info = &[SemaphoreSubmitInfo::default()
-            .semaphore(signal_semaphore)
-            .stage_mask(PipelineStageFlags2::ALL_GRAPHICS)
-            .value(1)];
-        let command_buffer_info = cmds
-            .into_iter()
-            .map(|cmd_buffer| {
-                CommandBufferSubmitInfo::default()
-                    .command_buffer(cmd_buffer.handle())
-                    .device_mask(0)
+        let mut drawables = vec![];
+        for node in scene.mesh_nodes() {
+            match node.data {
+                NodeType::Mesh(handle) => {
+                    let mesh = assets.mesh(handle).unwrap();
+                    let transform = node.transform;
+                    for primitive in mesh.primitives.iter() {
+                        drawables.push(RenderObject {
+                            primitive,
+                            material: materials[&primitive.material],
+                            transform,
+                        })
+                    }
+                }
+                _ => {}
+            }
+        }
+        drawables
+    }
+
+    // fn create_context<'a>(
+    //     cmd_buffer: &'a CommandBuffer,
+    //     frame: &'a [Frame],
+    //     objects: Vec<RenderObject<'a>>,
+    //     scene: &'a Scene,
+    //     assets: &'a Assets,
+    // ) -> RenderContext<'a> {
+    //     // fn create_context<'a>(&'a self, scene: &'a Scene, assets: &'a Assets) -> RenderContext<'a> {
+    //     // log::trace!("Create context");
+
+    //     // let frame = &frames[self.frame_index];
+    //     // let cmd_buffer = &frame.command_buffer;
+    //     // let objects = self.create_render_objects(scene, assets, &self.material_map);
+    //     // let binder = &self.binder;
+    //     let draw_extent = {
+    //         let extent = self.draw_image.extent();
+    //         Extent2D {
+    //             width: extent.width.min(self.gpu.swapchain().extent().width),
+    //             height: extent.height.min(self.gpu.swapchain().extent().height),
+    //         }
+    //     };
+    //     RenderContext {
+    //         gpu: &self.gpu,
+    //         draw_extent,
+    //         binder,
+    //         objects,
+    //         cmd_buffer,
+    //     }
+    // }
+
+    fn create_frames(gpu: &Gpu) -> Result<Vec<Frame>> {
+        (0..gpu.swapchain().in_flight_frames())
+            .map(|i| {
+                let queue = gpu.device().graphics_queue();
+                let name = &format!("frame{i:02}");
+                let command_pool = gpu.device().create_command_pool(queue, name)?;
+                let swapchain_semaphore = gpu.device().create_semaphore();
+                let render_semaphore = gpu.device().create_semaphore();
+                let fence = gpu.device().create_fence(FenceCreateFlags::SIGNALED);
+
+                let mut command_buffer = command_pool.create_command_buffer(name);
+                command_buffer.wait_semaphore(swapchain_semaphore);
+                command_buffer.signal_semaphore(render_semaphore);
+                command_buffer.fence(fence);
+
+                Ok(Frame {
+                    swapchain_semaphore,
+                    render_semaphore,
+                    fence,
+                    command_pool,
+                    command_buffer,
+                })
             })
-            .collect::<Vec<_>>();
-        let submit_info = &[SubmitInfo2::default()
-            .command_buffer_infos(&command_buffer_info)
-            .wait_semaphore_infos(wait_info)
-            .signal_semaphore_infos(signal_info)];
-
-        Ok(unsafe {
-            gpu.device()
-                .handle()
-                .queue_submit2(queue.handle(), submit_info, fence)
-        }?)
+            .collect()
     }
 
     fn prepare_materials(
@@ -391,42 +421,30 @@ impl Renderer {
     }
 
     pub fn prepare_resources(&mut self, assets: &mut Assets, scene: &Scene) -> Result<()> {
-        log::debug!("BEGIN PREPARE RESOURCES");
+        // log::trace!("Prepare resources");
+
         let scene_data = self.prepare_scene(scene);
         let (textures, texture_map) = self.prepare_textures(assets)?;
         let (materials, material_map) = self.prepare_materials(assets, &texture_map)?;
 
-        let resources = &mut self.resources;
-        resources.texture_map = texture_map;
-        resources.material_map = material_map;
-        resources.scene_data = scene_data;
+        self.material_map = material_map;
+        self.scene_data = scene_data;
+        self.material_buffer.write(&materials);
+        self.scene_buffer.write(&[scene_data]);
 
-        // assets
-        // .uploader()
-        // .enqueue_buffer(&resources.material_buffer, &materials)?;
-        // assets
-        //     .uploader()
-        //     .enqueue_buffer(&resources.scene_buffer, &[scene_data])?;
-        resources.material_buffer.write(&materials);
-        resources.scene_buffer.write(&[scene_data]);
-
-        resources
-            .binder
-            .uniform_buffer(BIND_IDX_SCENE, &resources.scene_buffer, 0)
-            .uniform_buffer(
-                BIND_IDX_MATERIAL,
-                &resources.material_buffer,
-                // materials.len() as usize,
-                0,
-            )
+        self.binder
+            .uniform_buffer(BIND_IDX_SCENE, &self.scene_buffer, 0)
+            .uniform_buffer(BIND_IDX_MATERIAL, &self.material_buffer, 0)
             .texture_array(BIND_IDX_TEXTURE, &textures, assets.default_sampler())
             .update(&self.gpu)?;
 
-        log::debug!("END PREPARE RESOURCES");
+        // log::trace!("END PREPARE RESOURCES");
         Ok(())
     }
 
-    fn prepare_scene(&mut self, scene: &Scene) -> GpuSceneData {
+    fn prepare_scene(&self, scene: &Scene) -> GpuSceneData {
+        // log::trace!("Prepare scene");
+
         let view = scene.camera.view();
         let projection = scene.camera.projection();
         GpuSceneData {
@@ -444,6 +462,8 @@ impl Renderer {
         &self,
         assets: &Assets,
     ) -> Result<(Vec<Texture>, HashMap<TextureHandle, usize>)> {
+        // log::trace!("Prepare textures");
+
         let default_texture = assets
             .texture(assets.default_material().color_texture)
             .ok_or_else(|| anyhow!("Default texture not found"))?;
@@ -458,21 +478,12 @@ impl Renderer {
         Ok((textures, handle_map))
     }
 
-    fn create_frames(gpu: &Gpu) -> Result<Vec<Frame>> {
-        (0..gpu.swapchain().in_flight_frames())
-            .map(|_| {
-                let pool = gpu.create_command_pool()?;
-                let command_buffer = pool.create_command_buffer()?;
-
-                Ok(Frame {
-                    swapchain_semaphore: gpu.create_semaphore()?,
-                    render_semaphore: gpu.create_semaphore()?,
-                    fence: gpu.create_fence_signaled()?,
-                    command_pool: pool,
-                    command_buffer,
-                })
-            })
-            .collect()
+    fn draw_extent(&self) -> Extent2D {
+        let extent = self.draw_image.extent();
+        Extent2D {
+            width: extent.width.min(self.gpu.swapchain().extent().width),
+            height: extent.height.min(self.gpu.swapchain().extent().height),
+        }
     }
 }
 
@@ -498,6 +509,28 @@ pub struct GpuConfig {
     pub debug_normal_maps: i32,
     pub force_defaults: i32,
     pub _padding0: Vec3,
+}
+
+impl From<&RenderConfig> for GpuConfig {
+    fn from(config: &RenderConfig) -> Self {
+        Self {
+            force_color: config.force_color as i32,
+            force_metallic: config.force_metallic as i32,
+            force_roughness: config.force_roughness as i32,
+            force_ao: config.force_ao as i32,
+            force_color_factor: config.force_color_factor,
+            force_metallic_factor: config.force_metallic_factor,
+            force_roughness_factor: config.force_roughness_factor,
+            force_ao_strength: config.force_ao_strength,
+            debug_normals: config.debug_normals as i32,
+            debug_tangents: config.debug_tangents as i32,
+            debug_bitangents: config.debug_bitangents as i32,
+            debug_specular: config.debug_specular as i32,
+            debug_normal_maps: config.debug_normal_maps as i32,
+            force_defaults: 0,
+            _padding0: Vec3::ZERO,
+        }
+    }
 }
 
 #[repr(C)]

@@ -1,13 +1,11 @@
 use {
     crate::{
-        swapchain::Surface, Allocator, CommandBuffer, CommandPool, Device, Instance, Queue,
-        Swapchain, SwapchainInfo,
+        swapchain::Surface, Allocator, CommandBuffer, Device, Instance, Swapchain, SwapchainInfo,
     },
     aleph_core::log,
     anyhow::Result,
     ash::vk::{
-        self, Extent2D, Fence, Filter, PhysicalDeviceProperties, SamplerAddressMode,
-        SamplerMipmapMode, Semaphore,
+        self, Extent2D, Filter, PhysicalDeviceProperties, SamplerAddressMode, SamplerMipmapMode,
     },
     derive_more::Debug,
     std::{cell::UnsafeCell, ffi, slice, sync::Arc},
@@ -26,6 +24,9 @@ pub struct Gpu {
     pub(crate) allocator: Arc<Allocator>,
     properties: PhysicalDeviceProperties,
 }
+
+unsafe impl Send for Gpu {}
+unsafe impl Sync for Gpu {}
 
 impl Gpu {
     pub fn new(window: Arc<Window>) -> Result<Self> {
@@ -127,10 +128,6 @@ impl Gpu {
         }?[0])
     }
 
-    pub fn create_command_pool(&self, queue: &Queue) -> Result<CommandPool> {
-        self.device.create_command_pool(queue)
-    }
-
     pub fn create_descriptor_set_layout(
         &self,
         bindings: &[vk::DescriptorSetLayoutBinding],
@@ -197,15 +194,6 @@ impl Gpu {
         self.device.update_descriptor_sets(writes, copies)
     }
 
-    pub fn create_semaphore(&self) -> Result<vk::Semaphore> {
-        #[allow(clippy::unit_arg)]
-        Ok(unsafe {
-            self.device
-                .handle
-                .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)?
-        })
-    }
-
     pub fn create_fence(&self) -> vk::Fence {
         self.device.create_fence(vk::FenceCreateFlags::empty())
     }
@@ -243,14 +231,12 @@ impl Gpu {
         )
     }
 
-    pub fn rebuild_swapchain(&self, extent: Extent2D) -> Result<()> {
-        unsafe { self.device.handle.device_wait_idle() }?;
+    pub fn rebuild_swapchain(&self, extent: Extent2D) {
+        self.device.wait_idle();
         let swapchain = unsafe { &mut *self.swapchain.get() };
-        swapchain.rebuild(extent)
-    }
-
-    pub fn submit(&self, command_buffer: &CommandBuffer, fence: Fence) {
-        self.device.queue_submit(command_buffer)
+        swapchain
+            .rebuild(extent)
+            .unwrap_or_else(|e| panic!("Error rebuilding swapchain: {e:?}"));
     }
 }
 

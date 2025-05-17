@@ -49,7 +49,7 @@ impl MeshInfo {
     pub fn new(
         indices: Vec<u32>,
         vertices: Vec<Vertex>,
-        material: Option<MaterialHandle>,
+        material: MaterialHandle,
         attributes: Vec<VertexAttribute>,
         name: &str,
     ) -> Self {
@@ -76,7 +76,7 @@ pub struct Face {
 pub struct Primitive {
     pub vertex_buffer: TypedBuffer<Vertex>,
     pub index_buffer: TypedBuffer<u32>,
-    pub material: Option<MaterialHandle>,
+    pub material: MaterialHandle,
     pub vertex_count: u32,
     pub topology: PrimitiveTopology,
 }
@@ -86,7 +86,7 @@ impl Primitive {}
 pub struct PrimitiveInfo {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
-    pub material: Option<MaterialHandle>,
+    pub material: MaterialHandle,
     pub topology: PrimitiveTopology,
     pub faces: Vec<Face>,
     pub attributes: Vec<VertexAttribute>,
@@ -125,7 +125,7 @@ impl PrimitiveInfo {
     pub fn new(
         vertices: Vec<Vertex>,
         indices: Vec<u32>,
-        material: Option<MaterialHandle>,
+        material: MaterialHandle,
         topology: PrimitiveTopology,
         attributes: Vec<VertexAttribute>,
     ) -> Self {

@@ -20,6 +20,8 @@ pub fn setup_logging() {
         .with_thread_names(false)
         .with_level(true)
         .with_target(false)
+        .with_file(true)
+        .with_line_number(true)
         .compact();
     tracing_subscriber::fmt()
         .event_format(format)

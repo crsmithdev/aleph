@@ -107,6 +107,9 @@ pub struct Assets {
 }
 
 impl Assets {
+    const UPLOAD_POOL_SIZE: usize = 10;
+    const UPLOAD_RETAINED_SIZE: u64 = 1024 * 1024 * 10;
+    const UPLOAD_RETAINED_FRAMES: usize = 5;
     const DEFAULT_EXTENT: Extent2D = Extent2D {
         width: 8,
         height: 8,
@@ -116,7 +119,12 @@ impl Assets {
         let textures = RefCell::new(HashMap::new());
         let materials = HashMap::new();
         let meshes = HashMap::new();
-        let uploader = RefCell::new(Uploader::new(&gpu)?);
+        let uploader = RefCell::new(Uploader::new(
+            &gpu,
+            Self::UPLOAD_POOL_SIZE,
+            Self::UPLOAD_RETAINED_FRAMES,
+            Self::UPLOAD_RETAINED_SIZE,
+        )?);
 
         let default_sampler = gpu.create_sampler(
             Filter::LINEAR,
@@ -189,7 +197,7 @@ impl Assets {
         let data = buffer.to_vec();
         let info = TextureInfo {
             name: name.to_string(),
-            data: data,
+            data,
             extent: Self::DEFAULT_EXTENT,
             flags: ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
             aspect_flags: ImageAspectFlags::COLOR,
@@ -209,11 +217,6 @@ impl Assets {
 
     pub fn texture(&self, handle: TextureHandle) -> Option<Texture> {
         let mut textures = self.textures.borrow_mut();
-        if let Some(asset) = textures.get(&handle) {
-            if let TextureAsset::Loaded(texture) = asset {
-                return Some(texture.clone());
-            }
-        }
         match textures.get(&handle) {
             Some(TextureAsset::Loaded(texture)) => Some(texture.clone()),
             Some(TextureAsset::Unloaded(desc)) => {
@@ -238,7 +241,7 @@ impl Assets {
     fn load_texture(&self, info: &TextureInfo) -> Result<Texture> {
         let texture = Texture::new(&self.gpu, info)?;
         let mut uploader = self.uploader.borrow_mut();
-        uploader.enqueue_image(&*texture, &info.data)?;
+        uploader.enqueue_image(&*texture, &info.data);
 
         Ok(texture)
     }
@@ -275,8 +278,8 @@ impl Assets {
             let n_vertices = vertices.len();
 
             let mut uploader = self.uploader.borrow_mut();
-            uploader.enqueue_buffer(&index_buffer, indices.as_slice())?;
-            uploader.enqueue_buffer(&vertex_buffer, vertices.as_slice())?;
+            uploader.enqueue_buffer(&index_buffer, indices.as_slice());
+            uploader.enqueue_buffer(&vertex_buffer, vertices.as_slice());
 
             primitives.push(Primitive {
                 vertex_buffer,

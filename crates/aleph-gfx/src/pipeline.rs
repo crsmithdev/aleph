@@ -17,7 +17,7 @@ use {
 };
 
 pub trait Pipeline {
-    fn render(&mut self, context: &RenderContext) -> Result<()>;
+    fn render(&self, context: &RenderContext) -> Result<()>;
 }
 
 const SHADER_MAIN: &ffi::CStr = c"main";

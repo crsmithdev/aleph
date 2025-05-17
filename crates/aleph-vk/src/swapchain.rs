@@ -109,7 +109,7 @@ impl Swapchain {
         info: &SwapchainInfo,
         old_swapchain: Option<vk::SwapchainKHR>,
     ) -> Result<Self> {
-        let queue = device.graphics_queue;
+        let queue = device.gfx_queue;
         let indices = [queue.family.index];
         let in_flight_frames = IN_FLIGHT_FRAMES;
         let capabilities: vk::SurfaceCapabilitiesKHR = unsafe {
@@ -159,7 +159,7 @@ impl Swapchain {
             surface: surface.clone(),
             info: *info,
             images,
-            queue: device.graphics_queue,
+            queue: device.gfx_queue,
         })
     }
 

@@ -134,6 +134,7 @@ dependencies = [
  "gpu-allocator",
  "image",
  "itertools 0.14.0",
+ "lifeguard",
  "log",
  "palette",
  "petgraph",
@@ -196,6 +197,7 @@ dependencies = [
  "gpu-allocator",
  "image",
  "itertools 0.14.0",
+ "lifeguard",
  "log",
  "palette",
  "petgraph",
@@ -1632,6 +1634,12 @@ dependencies = [
  "libc",
  "redox_syscall 0.5.11",
 ]
+
+[[package]]
+name = "lifeguard"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "89be94dbd775db37b46ca4f4bf5cf89adfb13ba197bfbcb69b2122848ee73c26"
 
 [[package]]
 name = "linux-raw-sys"

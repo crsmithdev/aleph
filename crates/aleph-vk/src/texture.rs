@@ -207,3 +207,30 @@ impl Image {
 
     pub fn extent(&self) -> Extent2D { self.extent }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_create_texture() {
+        let gpu = Gpu::headless().unwrap();
+        let texture = Texture::new(
+            &gpu,
+            &TextureInfo {
+                name: "test".to_string(),
+                extent: Extent2D {
+                    width: 1024,
+                    height: 1024,
+                },
+                format: Format::R8G8B8A8_SRGB,
+                flags: ImageUsageFlags::TRANSFER_DST,
+                aspect_flags: ImageAspectFlags::COLOR,
+                data: vec![0; 1024 * 1024 * 4],
+                sampler: None,
+            },
+        );
+
+        assert!(texture.is_ok());
+    }
+}

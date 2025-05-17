@@ -13,6 +13,7 @@ pub use {gpu_allocator::MemoryLocation, vk::BufferUsageFlags};
 pub struct TypedBuffer<T> {
     #[deref]
     buffer: Buffer,
+    #[debug(skip)]
     _marker: std::marker::PhantomData<T>,
 }
 
