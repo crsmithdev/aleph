@@ -1,12 +1,12 @@
 use {
     crate::{
-        renderer::{GpuMaterialData, GpuPushConstantData, PrepareContext},
+        renderer::{GpuMaterialData, GpuPushConstantData},
         Pipeline, PipelineBuilder, RenderContext, ResourceBinder, ResourceLayout,
     },
     aleph_scene::{model::Primitive, util, MaterialHandle, NodeType, TextureHandle, Vertex},
     aleph_vk::{
         AttachmentLoadOp, AttachmentStoreOp, Buffer, BufferUsageFlags, ColorComponentFlags,
-        CompareOp, CullModeFlags, FrontFace, Gpu, PipelineBindPoint,
+        CompareOp, CullModeFlags, DescriptorSetLayout, FrontFace, Gpu, PipelineBindPoint,
         PipelineColorBlendAttachmentState, PipelineLayout, PolygonMode, PrimitiveTopology,
         PushConstantRange, Rect2D, ShaderStageFlags, VkPipeline,
     },
@@ -62,21 +62,21 @@ impl Pipeline for ForwardPipeline {
 
         cmd.bind_pipeline(PipelineBindPoint::GRAPHICS, self.handle)?;
 
-        self.draw(ctx, drawables, material_map)?;
+        self.draw(ctx, drawables, ctx.material_map.clone())?;
 
         cmd.end_rendering()
     }
 }
 
 impl ForwardPipeline {
-    pub fn new(gpu: &Gpu) -> Result<Self> {
+    pub fn new(gpu: &Gpu, descriptor_layout: DescriptorSetLayout) -> Result<Self> {
         let push_constant_range = PushConstantRange {
             stage_flags: ShaderStageFlags::VERTEX,
             offset: 0,
             size: mem::size_of::<GpuPushConstantData>() as u32,
         };
         let pipeline_layout =
-            gpu.create_pipeline_layout(&[resources.descriptor_layout()], &[push_constant_range])?;
+            gpu.create_pipeline_layout(&[descriptor_layout], &[push_constant_range])?;
         let handle = Self::create_pipeline(gpu, pipeline_layout)?;
 
         Ok(Self {
@@ -90,11 +90,6 @@ impl ForwardPipeline {
         drawables: Vec<(&Primitive, Option<MaterialHandle>, Mat4)>,
         material_map: HashMap<MaterialHandle, usize>,
     ) -> Result<()> {
-        self.resources
-            .uniform_buffer(BIND_IDX_SCENE, ctx.scene_buffer, 0)
-            .update(ctx.gpu)?
-            .bind(ctx, self.pipeline_layout, &[]);
-
         for (primitive, material_handle, transform) in drawables.iter() {
             let material_index = material_handle
                 .and_then(|h| material_map.get(&h))

@@ -9,8 +9,9 @@ use {
     },
     anyhow::Result,
     bytemuck::{Pod, Zeroable},
+    derive_more::Debug,
     glam::{vec3, vec4, Mat4, Vec3, Vec4},
-    std::{collections::HashMap, mem, sync::Arc},
+    std::{collections::HashMap, mem, rc::Rc, sync::Arc},
     tracing::instrument,
 };
 
@@ -28,6 +29,7 @@ pub struct RenderContext<'a> {
     pub command_buffer: &'a CommandBuffer,
     pub scene_buffer: &'a Buffer<GpuSceneData>,
     pub draw_image: &'a AllocatedTexture,
+    pub material_map: &'a HashMap<MaterialHandle, usize>,
     pub depth_image: &'a AllocatedTexture,
     pub extent: Extent2D,
     pub assets: &'a mut Assets,
@@ -63,17 +65,29 @@ const LIGHTS: [Light; 4] = [
     },
 ];
 
+#[derive(Debug)]
 pub struct Renderer {
+    #[debug("{}", self.frames.len())]
     frames: Vec<Frame>,
+    #[debug(skip)]
     forward_pipeline: ForwardPipeline,
     rebuild_swapchain: bool,
     frame_index: usize,
     frame_counter: usize,
     draw_image: AllocatedTexture,
     depth_image: AllocatedTexture,
+    #[debug(skip)]
+    material_map: HashMap<MaterialHandle, usize>,
     scene_buffer: Buffer<GpuSceneData>,
+    #[debug(skip)]
     scene_data: GpuSceneData,
+    material_buffer: Buffer<GpuMaterialData>,
+    #[debug(skip)]
+    binder: ResourceBinder,
+    #[debug(skip)]
     pub gpu: Arc<Gpu>,
+    pub prepared: bool,
+    #[debug(skip)]
     config: RenderConfig,
 }
 
@@ -156,13 +170,8 @@ impl Renderer {
             .storage_buffer(BIND_IDX_MATERIAL, ShaderStageFlags::ALL_GRAPHICS)
             .texture_array(BIND_IDX_TEXTURE, ShaderStageFlags::ALL_GRAPHICS)
             .finish(&gpu)?;
-        let resources = ResourceInfo {
-            binder,
-            material_map: HashMap::new(),
-            texture_map: HashMap::new(),
-        };
 
-        let foreward_pipeline = ForwardPipeline::new(&gpu)?;
+        let foreward_pipeline = ForwardPipeline::new(&gpu, binder.descriptor_layout())?;
         let scene_data = GpuSceneData {
             lights: LIGHTS,
             n_lights: 3,
@@ -178,7 +187,6 @@ impl Renderer {
             scene_data,
             scene_buffer,
             rebuild_swapchain: false,
-            resources,
             frame_index: 0,
             frame_counter: 0,
             config: RenderConfig {
@@ -197,6 +205,10 @@ impl Renderer {
                 debug_normal_maps: false,
                 force_defaults: false,
             },
+            material_map: HashMap::new(),
+            material_buffer,
+            binder,
+            prepared: false,
         })
     }
 
@@ -212,17 +224,17 @@ impl Renderer {
         self.scene_buffer.write(&[self.scene_data]);
     }
 
-    pub fn prepare(&mut self, assets: &mut Assets) -> Result<()> {
-        self.resources.texture_map = self.update_textures()?;
-        self.resources.material_map = self.update_materials(ctx, texture_map)?;
-    }
+    // pub fn prepare(&mut self, assets: &mut Assets) -> Result<()> {
+    //     self.resources.texture_map = self.update_textures()?;
+    //     self.resources.material_map = self.update_materials(ctx, texture_map)?;
+    // }
 
     #[instrument(skip_all)]
     pub fn render(&mut self, scene: &Scene, assets: &mut Assets, gui: &mut Gui) -> Result<()> {
         self.update_scene_buffer(scene);
 
         if self.rebuild_swapchain {
-            self.gpu.rebuild_swapchain()?;
+            self.gpu.rebuild_swapchain(self.gpu.swapchain().extent())?;
             self.frames = Self::create_frames(&self.gpu)?;
             self.rebuild_swapchain = false;
         }
@@ -268,8 +280,6 @@ impl Renderer {
                 ImageLayout::UNDEFINED,
                 ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             );
-            let texture_map = self.update_textures(ctx)?;
-            let material_map = self.update_materials(ctx, texture_map)?;
             cmd_buffer.end()?;
         }
         let cmd_buffer2 = &self.frames[self.frame_index]
@@ -286,6 +296,7 @@ impl Renderer {
             draw_image: &self.draw_image,
             depth_image: &self.depth_image,
             extent: self.gpu.swapchain().extent(),
+            material_map: &self.material_map,
             assets,
         };
         {
@@ -391,36 +402,35 @@ impl Renderer {
                 .queue_submit2(queue.handle(), submit_info, fence)
         }?)
     }
-
-    fn update_materials(
-        &mut self,
-        gpu: &Gpu,
-        assets: &mut Assets,
-        binder: &ResourceBinder,
-        texture_map: HashMap<TextureHandle, usize>,
-    ) -> Result<HashMap<MaterialHandle, usize>> {
-        log::debug!("update materials");
-
+    fn prepare_materials(
+        &self,
+        assets: &Assets,
+        texture_map: &HashMap<TextureHandle, usize>,
+    ) -> Result<(Vec<GpuMaterialData>, HashMap<MaterialHandle, usize>)> {
         let mut handle_map: HashMap<MaterialHandle, usize> = HashMap::new();
         let mut materials = vec![];
 
         for (handle, material) in assets.materials() {
             let color_texture = material
                 .color_texture
-                .and_then(|h| texture_map.get(&h))
+                .map(|t| texture_map.get(&t).unwrap_or(&0))
                 .unwrap_or(&0);
             let normal_texture = material
                 .normal_texture
-                .and_then(|h| texture_map.get(&h))
+                .map(|t| texture_map.get(&t).unwrap_or(&0))
                 .unwrap_or(&0);
             let metalrough_texture = material
                 .metalrough_texture
-                .and_then(|h| texture_map.get(&h))
+                .map(|t| texture_map.get(&t).unwrap_or(&0))
                 .unwrap_or(&0);
             let ao_texture = material
                 .ao_texture
-                .and_then(|h| texture_map.get(&h))
+                .map(|t| texture_map.get(&t).unwrap_or(&0))
                 .unwrap_or(&0);
+            // let color_texture = texture_map.get(color_texture).unwrap_or(&0);
+            // let normal_texture = texture_map.get(&material.normal_texture).unwrap_or(&0);
+            // let metalrough_texture = texture_map.get(&material.metalrough_texture).unwrap_or(&0);
+            // let ao_texture = texture_map.get(&material.ao_texture).unwrap_or(&0);
             let gpu_material = GpuMaterialData {
                 color_factor: material.color_factor,
                 metallic_factor: material.metallic_factor,
@@ -436,36 +446,64 @@ impl Renderer {
             materials.push(gpu_material);
             handle_map.insert(handle, materials.len() - 1);
         }
-
-        self.material_buffer.write(&materials);
-
-        self.resources
-            .storage_buffer(BIND_IDX_MATERIAL, &self.material_buffer, 0)
-            .update(ctx.gpu)?;
-
-        Ok(handle_map)
+        Ok((materials, handle_map))
     }
-    fn update_textures(
-        &mut self,
-        gpu: &Gpu,
-        assets: &mut Assets,
-        binder: &ResourceBinder,
-    ) -> Result<HashMap<TextureHandle, usize>> {
-        log::debug!("update textures");
-        let mut handle_map: HashMap<TextureHandle, usize> = HashMap::new();
-        let mut textures = vec![];
-        let sampler = ctx.assets.defaults.sampler;
 
-        for (handle, texture) in ctx.assets.textures() {
+    #[instrument(skip_all)]
+    pub fn prepare_resources(&mut self, assets: &mut Assets, scene: &Scene) -> Result<()> {
+        // log::trace!("Prepare resources");
+
+        let scene_data = self.prepare_scene(scene);
+        let (textures, texture_map) = self.prepare_textures(assets)?;
+        let (materials, material_map) = self.prepare_materials(assets, &texture_map)?;
+
+        self.material_map = material_map;
+        self.scene_data = scene_data;
+        self.material_buffer.write(&materials);
+        self.scene_buffer.write(&[scene_data]);
+
+        self.binder
+            .uniform_buffer(BIND_IDX_SCENE, &self.scene_buffer, 0)
+            .uniform_buffer(BIND_IDX_MATERIAL, &self.material_buffer, 0)
+            .texture_array(BIND_IDX_TEXTURE, &textures, assets.defaults.sampler)
+            .update(&self.gpu)?;
+
+        // log::trace!("END PREPARE RESOURCES");
+        Ok(())
+    }
+
+    fn prepare_scene(&self, scene: &Scene) -> GpuSceneData {
+        // log::trace!("Prepare scene");
+
+        let view = scene.camera.view();
+        let projection = scene.camera.projection();
+        GpuSceneData {
+            view,
+            projection,
+            vp: projection * view.inverse(),
+            camera_pos: scene.camera.position(),
+            n_lights: LIGHTS.len() as i32,
+            config: GpuConfig::from(&self.config),
+            lights: LIGHTS,
+        }
+    }
+
+    fn prepare_textures(
+        &self,
+        assets: &Assets,
+    ) -> Result<(Vec<Rc<AllocatedTexture>>, HashMap<TextureHandle, usize>)> {
+        // log::trace!("Prepare textures");
+
+        let default_texture = assets.defaults.white_linear.clone();
+        let mut handle_map: HashMap<TextureHandle, usize> = HashMap::new();
+        let mut textures = vec![default_texture];
+
+        for (handle, texture) in assets.textures() {
             textures.push(texture);
             handle_map.insert(handle, textures.len() - 1);
         }
 
-        self.resources
-            .texture_array(BIND_IDX_TEXTURE, textures.as_slice(), sampler)
-            .update(ctx.gpu)?;
-
-        Ok(handle_map)
+        Ok((textures, handle_map))
     }
 
     fn create_frames(gpu: &Gpu) -> Result<Vec<Frame>> {

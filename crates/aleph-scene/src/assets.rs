@@ -107,6 +107,7 @@ pub struct Assets {
     meshes: HashMap<MeshHandle, Mesh>,
     textures: AssetCache<AllocatedTexture, TextureInfo>,
     materials: HashMap<MaterialHandle, Material>,
+    pub default_texture: AllocatedTexture,
     pub defaults: Defaults,
 }
 
@@ -121,6 +122,14 @@ impl Assets {
         let materials = HashMap::new();
         let meshes = HashMap::new();
         let defaults = Self::load_defaults(&gpu)?;
+        let default_texture = gpu.create_texture(
+            Self::DEFAULT_EXTENT,
+            Format::R8G8B8A8_SRGB,
+            ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
+            ImageAspectFlags::COLOR,
+            "default texture",
+            Some(defaults.sampler),
+        )?;
 
         let mut assets = Self {
             gpu,
@@ -128,6 +137,7 @@ impl Assets {
             textures,
             materials,
             defaults,
+            default_texture,
         };
 
         assets.add_texture_loaded(assets.defaults.white_srgb.clone());
