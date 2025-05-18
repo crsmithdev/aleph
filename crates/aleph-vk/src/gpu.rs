@@ -1,7 +1,7 @@
 use {
     crate::{
-        AllocatedTexture, Allocator, Buffer, CommandBuffer, CommandPool, Device, Instance,
-        MemoryLocation, Swapchain, SwapchainInfo, VK_TIMEOUT_NS,
+        Allocator, CommandBuffer, CommandPool, Device, Instance, Swapchain, SwapchainInfo,
+        VK_TIMEOUT_NS,
     },
     aleph_core::log,
     anyhow::Result,
@@ -12,7 +12,6 @@ use {
             SamplerMipmapMode,
         },
     },
-    bytemuck::Pod,
     derive_more::Debug,
     raw_window_handle::{HasDisplayHandle, HasWindowHandle},
     std::{cell::UnsafeCell, ffi, slice, sync::Arc},
@@ -177,22 +176,6 @@ impl Gpu /* Init */ {
     }
 }
 impl Gpu {
-    pub fn create_shared_buffer<T: Pod>(
-        &self,
-        size: u64,
-        flags: vk::BufferUsageFlags,
-        label: impl Into<String>,
-    ) -> Result<Buffer<T>> {
-        Buffer::new(
-            &self.device,
-            Arc::clone(&self.allocator),
-            size,
-            flags,
-            MemoryLocation::CpuToGpu,
-            label,
-        )
-    }
-
     pub fn create_pipeline_layout(
         &self,
         uniforms_layouts: &[vk::DescriptorSetLayout],
@@ -250,37 +233,7 @@ impl Gpu {
                 .create_descriptor_set_layout(&create_info, None)?
         })
     }
-    pub fn create_index_buffer<T: Pod>(
-        &self,
-        size: u64,
-        location: MemoryLocation,
-        label: impl Into<String>,
-    ) -> Result<Buffer<T>> {
-        Buffer::new(
-            &self.device,
-            Arc::clone(&self.allocator),
-            size,
-            vk::BufferUsageFlags::INDEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
-            location,
-            label,
-        )
-    }
 
-    pub fn create_vertex_buffer<T: Pod>(
-        &self,
-        size: u64,
-        location: MemoryLocation,
-        label: impl Into<String>,
-    ) -> Result<Buffer<T>> {
-        Buffer::new(
-            &self.device,
-            Arc::clone(&self.allocator),
-            size,
-            vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
-            location,
-            label,
-        )
-    }
     pub fn create_descriptor_pool(
         &self,
         pool_sizes: &[vk::DescriptorPoolSize],
@@ -361,27 +314,6 @@ impl Gpu {
         unsafe { self.device.handle.device_wait_idle() }?;
         let swapchain = unsafe { &mut *self.swapchain.get() };
         swapchain.rebuild(extent)
-    }
-
-    pub fn create_texture(
-        &self,
-        extent: vk::Extent2D,
-        format: vk::Format,
-        usage: vk::ImageUsageFlags,
-        aspect_flags: vk::ImageAspectFlags,
-        label: impl Into<String>,
-        sampler: Option<vk::Sampler>,
-    ) -> Result<AllocatedTexture> {
-        AllocatedTexture::new(
-            self.device.clone(),
-            Arc::clone(&self.allocator),
-            extent,
-            format,
-            usage,
-            aspect_flags,
-            label,
-            sampler,
-        )
     }
 
     pub fn create_sampler(

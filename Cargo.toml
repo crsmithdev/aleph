@@ -21,7 +21,7 @@ aleph-app = { path = "crates/aleph-app" }
 
 anyhow = "1.0.95"
 bytemuck = { version = "1.7.0", features = ["derive"] }
-derive_more = { version = "1.0", features = ["debug"] }
+derive_more = { version = "1.0", features = ["debug", "deref"] }
 downcast-rs = "1.1.1"
 itertools = "0.14.0"
 log = "0.4"

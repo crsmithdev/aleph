@@ -12,13 +12,13 @@ pub(crate) const VK_TIMEOUT_NS: u64 = 5_000_000_000;
 pub use {
     crate::{
         allocator::Allocator,
-        buffer::{Buffer, BufferUsageFlags, MemoryLocation, RawBuffer},
+        buffer::{Buffer, BufferUsageFlags, MemoryLocation, TypedBuffer},
         command::{CommandBuffer, CommandPool},
         device::{Device, Queue, QueueFamily},
         gpu::{Gpu, Surface},
         instance::Instance,
         swapchain::{Frame, Swapchain, SwapchainInfo},
-        texture::{AllocatedTexture, Texture, TextureInfo, WrappedTexture},
+        texture::{Texture, TextureInfo},
     },
     ash::vk::{
         AttachmentLoadOp, AttachmentStoreOp, ClearColorValue, ClearDepthStencilValue, ClearValue,

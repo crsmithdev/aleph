@@ -1,11 +1,13 @@
 use {
     crate::{ForwardPipeline, Gui, Pipeline, ResourceBinder, ResourceLayout},
-    aleph_scene::{model::Light, Assets, MaterialHandle, Scene, TextureHandle},
+    aleph_scene::{
+        material, model::Light, Assets, MaterialHandle, NodeType, Primitive, Scene, TextureHandle,
+    },
     aleph_vk::{
-        AllocatedTexture, Buffer, BufferUsageFlags, CommandBuffer, CommandBufferSubmitInfo,
-        DescriptorSet, DescriptorSetLayout, Extent2D, Extent3D, Fence, Format, Frame, Gpu,
-        ImageAspectFlags, ImageLayout, ImageUsageFlags, PipelineStageFlags2, Semaphore,
-        SemaphoreSubmitInfo, ShaderStageFlags, SubmitInfo2, Texture,
+        Buffer, BufferUsageFlags, CommandBuffer, CommandBufferSubmitInfo, DescriptorSet,
+        DescriptorSetLayout, Extent2D, Extent3D, Fence, Format, Frame, Gpu, ImageAspectFlags,
+        ImageLayout, ImageUsageFlags, PipelineStageFlags2, Semaphore, SemaphoreSubmitInfo,
+        ShaderStageFlags, SubmitInfo2, Texture, TextureInfo, TypedBuffer,
     },
     anyhow::Result,
     bytemuck::{Pod, Zeroable},
@@ -19,20 +21,26 @@ pub struct ResourceInfo {
     binder: ResourceBinder,
     material_map: HashMap<MaterialHandle, usize>,
     texture_map: HashMap<TextureHandle, usize>,
-    scene_buffer: Buffer<GpuSceneData>,
-    material_buffer: Buffer<GpuMaterialData>,
+    scene_buffer: TypedBuffer<GpuSceneData>,
+    material_buffer: TypedBuffer<GpuMaterialData>,
 }
 
 pub struct RenderContext<'a> {
     pub gpu: &'a Gpu,
     pub scene: &'a Scene,
     pub command_buffer: &'a CommandBuffer,
-    pub scene_buffer: &'a Buffer<GpuSceneData>,
-    pub draw_image: &'a AllocatedTexture,
+    pub scene_buffer: &'a TypedBuffer<GpuSceneData>,
+    pub draw_image: &'a Texture,
     pub material_map: &'a HashMap<MaterialHandle, usize>,
-    pub depth_image: &'a AllocatedTexture,
+    pub depth_image: &'a Texture,
     pub extent: Extent2D,
-    pub assets: &'a mut Assets,
+    pub objects: Vec<RenderObject<'a>>,
+    pub binder: &'a ResourceBinder,
+}
+pub struct RenderObject<'a> {
+    pub primitive: &'a Primitive,
+    pub material: usize,
+    pub transform: Mat4,
 }
 
 const FORMAT_DRAW_IMAGE: Format = Format::R16G16B16A16_SFLOAT;
@@ -74,14 +82,14 @@ pub struct Renderer {
     rebuild_swapchain: bool,
     frame_index: usize,
     frame_counter: usize,
-    draw_image: AllocatedTexture,
-    depth_image: AllocatedTexture,
+    draw_image: Texture,
+    depth_image: Texture,
     #[debug(skip)]
     material_map: HashMap<MaterialHandle, usize>,
-    scene_buffer: Buffer<GpuSceneData>,
+    scene_buffer: TypedBuffer<GpuSceneData>,
     #[debug(skip)]
     scene_data: GpuSceneData,
-    material_buffer: Buffer<GpuMaterialData>,
+    material_buffer: TypedBuffer<GpuMaterialData>,
     #[debug(skip)]
     binder: ResourceBinder,
     #[debug(skip)]
@@ -132,38 +140,34 @@ pub struct RenderConfig {
 impl Renderer {
     pub fn new(gpu: Arc<Gpu>) -> Result<Self> {
         let frames = Self::create_frames(&gpu)?;
-        let draw_image = gpu.create_texture(
-            gpu.swapchain().extent(),
-            FORMAT_DRAW_IMAGE,
-            ImageUsageFlags::COLOR_ATTACHMENT
+        let draw_info = TextureInfo {
+            name: "draw".to_string(),
+            extent: gpu.swapchain().extent().into(),
+            format: FORMAT_DRAW_IMAGE,
+            flags: ImageUsageFlags::COLOR_ATTACHMENT
                 | ImageUsageFlags::TRANSFER_DST
-                | ImageUsageFlags::TRANSFER_SRC
-                | ImageUsageFlags::STORAGE,
-            ImageAspectFlags::COLOR,
-            "renderer-draw",
-            None,
-        )?;
+                | ImageUsageFlags::TRANSFER_SRC,
+            aspect_flags: ImageAspectFlags::COLOR,
+            data: vec![],
+            sampler: None,
+        };
+        let draw_image = Texture::new(&gpu, &draw_info)?;
 
-        let depth_image = gpu.create_texture(
-            gpu.swapchain().extent(),
-            FORMAT_DEPTH_IMAGE,
-            ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
-            ImageAspectFlags::DEPTH,
-            "renderer-depth",
-            None,
-        )?;
+        let depth_info = TextureInfo {
+            name: "depth".to_string(),
+            extent: gpu.swapchain().extent().into(),
+            format: FORMAT_DEPTH_IMAGE,
+            flags: ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
+                | ImageUsageFlags::TRANSFER_DST
+                | ImageUsageFlags::TRANSFER_SRC,
+            aspect_flags: ImageAspectFlags::DEPTH,
+            data: vec![],
+            sampler: None,
+        };
+        let depth_image = Texture::new(&gpu, &depth_info)?;
 
-        let scene_buffer = gpu.create_shared_buffer::<GpuSceneData>(
-            mem::size_of::<GpuSceneData>() as u64,
-            BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::UNIFORM_BUFFER,
-            "renderer-scene",
-        )?;
-
-        let material_buffer = gpu.create_shared_buffer::<GpuMaterialData>(
-            mem::size_of::<GpuMaterialData>() as u64 * 100,
-            BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::STORAGE_BUFFER,
-            "forward-material",
-        )?;
+        let scene_buffer = TypedBuffer::shared_uniform(&gpu, 1, "renderer-scene")?;
+        let material_buffer = TypedBuffer::shared_uniform(&gpu, 100, "renderer-material")?;
 
         let binder = ResourceLayout::set(SET_IDX_BINDLESS)
             .uniform_buffer(BIND_IDX_SCENE, ShaderStageFlags::ALL_GRAPHICS)
@@ -171,7 +175,8 @@ impl Renderer {
             .texture_array(BIND_IDX_TEXTURE, ShaderStageFlags::ALL_GRAPHICS)
             .finish(&gpu)?;
 
-        let foreward_pipeline = ForwardPipeline::new(&gpu, binder.descriptor_layout())?;
+        let foreward_pipeline =
+            ForwardPipeline::new(&gpu, &binder.descriptor_layout(), &draw_image, &depth_image)?;
         let scene_data = GpuSceneData {
             lights: LIGHTS,
             n_lights: 3,
@@ -288,6 +293,7 @@ impl Renderer {
         let cmd_buffer3 = &self.frames[self.frame_index]
             .command_pool
             .create_command_buffer()?;
+        let objects = self.create_render_objects(scene, assets, &self.material_map);
         let mut context = RenderContext {
             gpu: &self.gpu,
             scene,
@@ -297,7 +303,8 @@ impl Renderer {
             depth_image: &self.depth_image,
             extent: self.gpu.swapchain().extent(),
             material_map: &self.material_map,
-            assets,
+            binder: &self.binder,
+            objects,
         };
         {
             cmd_buffer2.reset()?;
@@ -448,7 +455,33 @@ impl Renderer {
         }
         Ok((materials, handle_map))
     }
+    fn create_render_objects<'a>(
+        &self,
+        scene: &'a Scene,
+        assets: &'a Assets,
+        materials: &'a HashMap<MaterialHandle, usize>,
+    ) -> Vec<RenderObject<'a>> {
+        // log::trace!("Create render objects");
 
+        let mut drawables = vec![];
+        for node in scene.mesh_nodes() {
+            match node.data {
+                NodeType::Mesh(handle) => {
+                    let mesh = assets.mesh(handle).unwrap();
+                    let transform = node.transform;
+                    for primitive in mesh.primitives.iter() {
+                        drawables.push(RenderObject {
+                            primitive,
+                            material: 0,
+                            transform,
+                        })
+                    }
+                }
+                _ => {}
+            }
+        }
+        drawables
+    }
     #[instrument(skip_all)]
     pub fn prepare_resources(&mut self, assets: &mut Assets, scene: &Scene) -> Result<()> {
         // log::trace!("Prepare resources");
@@ -491,7 +524,7 @@ impl Renderer {
     fn prepare_textures(
         &self,
         assets: &Assets,
-    ) -> Result<(Vec<Rc<AllocatedTexture>>, HashMap<TextureHandle, usize>)> {
+    ) -> Result<(Vec<Rc<Texture>>, HashMap<TextureHandle, usize>)> {
         // log::trace!("Prepare textures");
 
         let default_texture = assets.defaults.white_linear.clone();

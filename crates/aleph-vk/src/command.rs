@@ -1,6 +1,6 @@
 pub use ash::vk::ImageLayout;
 use {
-    crate::{Buffer, Device, ImageAspectFlags, RawBuffer, Texture},
+    crate::{buffer::TypedBuffer, texture::Image, Buffer, Device, ImageAspectFlags, Texture},
     anyhow::Result,
     ash::{vk, vk::PipelineBindPoint},
     bytemuck::Pod,
@@ -161,7 +161,7 @@ impl CommandBuffer {
         }
     }
 
-    pub fn bind_vertex_buffer(&self, buffer: &RawBuffer, _offset: u64) {
+    pub fn bind_vertex_buffer(&self, buffer: &Buffer, _offset: u64) {
         unsafe {
             self.device
                 .handle
@@ -169,7 +169,7 @@ impl CommandBuffer {
         }
     }
 
-    pub fn bind_index_buffer(&self, buffer: &RawBuffer, offset: u64) {
+    pub fn bind_index_buffer(&self, buffer: &Buffer, offset: u64) {
         unsafe {
             self.device.handle.cmd_bind_index_buffer(
                 self.handle,
@@ -309,7 +309,7 @@ impl CommandBuffer {
 
     pub fn transition_image(
         &self,
-        image: impl Texture,
+        image: &Image,
         current_layout: vk::ImageLayout,
         new_layout: vk::ImageLayout,
     ) {
@@ -343,8 +343,8 @@ impl CommandBuffer {
 
     pub fn copy_image(
         &self,
-        src: impl Texture,
-        dst: impl Texture,
+        src: &Image,
+        dst: &Image,
         src_extent: vk::Extent3D,
         dst_extent: vk::Extent3D,
     ) {
@@ -384,7 +384,7 @@ impl CommandBuffer {
         unsafe { self.device.handle.cmd_blit_image2(self.handle, &blit_info) }
     }
 
-    pub fn copy_buffer<T: Pod>(&self, src: &Buffer<T>, dst: &Buffer<T>, size: u64) {
+    pub fn copy_buffer<T: Pod>(&self, src: &TypedBuffer<T>, dst: &TypedBuffer<T>, size: u64) {
         let copy = vk::BufferCopy::default().size(size);
         unsafe {
             self.device
@@ -393,7 +393,7 @@ impl CommandBuffer {
         };
     }
 
-    pub fn copy_buffer_to_image<T: Pod>(&self, src: &Buffer<T>, dst: impl Texture) {
+    pub fn copy_buffer_to_image<T: Pod>(&self, src: &TypedBuffer<T>, dst: &Image) {
         let handle = dst.handle();
         let copy = vk::BufferImageCopy::default()
             .buffer_offset(0)
@@ -462,7 +462,7 @@ impl CommandBuffer {
 
     // pub fn upload_image(
     //     &self,
-    //     image: impl Texture,
+    //     image: &Image,
     //     allocator: Arc<Allocator>,
     //     data: &[u8],
     // ) -> Result<()> {

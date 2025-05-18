@@ -3,7 +3,9 @@ use {
         mikktspace::{calculate_tangents, MikktGeometry},
         MaterialHandle,
     },
-    aleph_vk::{Buffer, BufferUsageFlags, Format, Gpu, MemoryLocation, PrimitiveTopology},
+    aleph_vk::{
+        Buffer, BufferUsageFlags, Format, Gpu, MemoryLocation, PrimitiveTopology, TypedBuffer,
+    },
     bytemuck::{Pod, Zeroable},
     derive_more::Debug,
     glam::{Vec2, Vec3, Vec4},
@@ -75,8 +77,8 @@ pub struct Face {
 
 #[derive(Debug)]
 pub struct Primitive {
-    pub vertex_buffer: Buffer<Vertex>,
-    pub index_buffer: Buffer<u32>,
+    pub vertex_buffer: TypedBuffer<Vertex>,
+    pub index_buffer: TypedBuffer<u32>,
     pub material: Option<MaterialHandle>,
     pub vertex_count: u32,
     pub topology: PrimitiveTopology,
@@ -263,36 +265,4 @@ fn calculate_normals(vertices: &mut Vec<Vertex>, indices: Vec<u32>) -> Vec<Vec3>
     }
 
     normals
-}
-
-pub fn create_index_buffer<T: Pod>(
-    gpu: &Gpu,
-    size: u64,
-    location: MemoryLocation,
-    label: impl Into<String>,
-) -> anyhow::Result<Buffer<T>> {
-    Buffer::new(
-        &gpu.device(),
-        Arc::clone(&gpu.allocator()),
-        size,
-        BufferUsageFlags::INDEX_BUFFER | BufferUsageFlags::TRANSFER_DST,
-        location,
-        label,
-    )
-}
-
-pub fn create_vertex_buffer<T: Pod>(
-    gpu: &Gpu,
-    size: u64,
-    location: MemoryLocation,
-    label: impl Into<String>,
-) -> anyhow::Result<Buffer<T>> {
-    Buffer::new(
-        &gpu.device(),
-        Arc::clone(&gpu.allocator()),
-        size,
-        BufferUsageFlags::VERTEX_BUFFER | BufferUsageFlags::TRANSFER_DST,
-        location,
-        label,
-    )
 }

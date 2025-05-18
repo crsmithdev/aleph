@@ -1,18 +1,16 @@
 use {
-    crate::{
-        model::{create_index_buffer, create_vertex_buffer, MeshInfo},
-        util, Material, Mesh, Primitive, Vertex,
-    },
+    crate::{model::MeshInfo, util, Material, Mesh, Primitive, Vertex},
     aleph_vk::{
-        AllocatedTexture, Extent2D, Filter, Format, Gpu, ImageAspectFlags, ImageUsageFlags,
-        MemoryLocation, PrimitiveTopology, Sampler, SamplerAddressMode, SamplerMipmapMode,
-        TextureInfo,
+        texture::TextureInfo2, Extent2D, Filter, Format, Gpu, ImageAspectFlags, ImageUsageFlags,
+        MemoryLocation, PrimitiveTopology, Sampler, SamplerAddressMode, SamplerMipmapMode, Texture,
+        TextureInfo, TypedBuffer,
     },
     anyhow::Result,
     image::{ImageBuffer, Rgba},
     std::{
         cell::RefCell,
         collections::HashMap,
+        default,
         hash::Hash,
         rc::Rc,
         sync::{
@@ -69,7 +67,7 @@ impl std::fmt::Debug for MeshHandle {
     }
 }
 
-pub type TextureHandle = AssetHandle<AllocatedTexture>;
+pub type TextureHandle = AssetHandle<Texture>;
 impl std::fmt::Debug for TextureHandle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "TextureHandle({})", self.index)
@@ -84,10 +82,10 @@ impl std::fmt::Debug for MaterialHandle {
 }
 
 pub struct Defaults {
-    pub white_srgb: Rc<AllocatedTexture>,
-    pub white_linear: Rc<AllocatedTexture>,
-    pub normal: Rc<AllocatedTexture>,
-    red: Rc<AllocatedTexture>,
+    pub white_srgb: Rc<Texture>,
+    pub white_linear: Rc<Texture>,
+    pub normal: Rc<Texture>,
+    red: Rc<Texture>,
     pub sampler: Sampler,
 }
 
@@ -98,16 +96,16 @@ enum Asset<T, D> {
     Unloaded(D),
 }
 
-type TextureAsset = Asset<AllocatedTexture, TextureInfo>;
+type TextureAsset = Asset<Texture, TextureInfo>;
 
 type AssetCache<T, D> = RefCell<HashMap<AssetHandle<T>, Asset<T, D>>>;
 
 pub struct Assets {
     gpu: Arc<Gpu>,
     meshes: HashMap<MeshHandle, Mesh>,
-    textures: AssetCache<AllocatedTexture, TextureInfo>,
+    textures: AssetCache<Texture, TextureInfo>,
     materials: HashMap<MaterialHandle, Material>,
-    pub default_texture: AllocatedTexture,
+    pub default_texture: Texture,
     pub defaults: Defaults,
 }
 
@@ -122,13 +120,16 @@ impl Assets {
         let materials = HashMap::new();
         let meshes = HashMap::new();
         let defaults = Self::load_defaults(&gpu)?;
-        let default_texture = gpu.create_texture(
-            Self::DEFAULT_EXTENT,
-            Format::R8G8B8A8_SRGB,
-            ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
-            ImageAspectFlags::COLOR,
-            "default texture",
-            Some(defaults.sampler),
+        let default_texture = Texture::new2(
+            &gpu,
+            &TextureInfo2 {
+                name: "default".to_string(),
+                extent: Self::DEFAULT_EXTENT,
+                format: Format::R8G8B8A8_SRGB,
+                flags: ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
+                aspect_flags: ImageAspectFlags::COLOR,
+                sampler: Some(defaults.sampler),
+            },
         )?;
 
         let mut assets = Self {
@@ -154,7 +155,7 @@ impl Assets {
         format: Format,
         name: impl Into<String>,
         sampler: Sampler,
-    ) -> Result<AllocatedTexture> {
+    ) -> Result<Texture> {
         let pixel = Rgba::<u8>(*color);
         let buffer = ImageBuffer::from_pixel(16, 16, pixel);
         let data = buffer.as_raw();
@@ -165,10 +166,10 @@ impl Assets {
                 name: name.into(),
                 data: data.to_vec(),
                 extent: Self::DEFAULT_EXTENT,
-                usage: ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
-                aspect: ImageAspectFlags::COLOR,
+                flags: ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
+                aspect_flags: ImageAspectFlags::COLOR,
                 format,
-                sampler,
+                sampler: Some(sampler),
             },
         )?)
     }
@@ -198,7 +199,7 @@ impl Assets {
         })
     }
 
-    pub fn add_texture_loaded(&mut self, texture: Rc<AllocatedTexture>) -> TextureHandle {
+    pub fn add_texture_loaded(&mut self, texture: Rc<Texture>) -> TextureHandle {
         let handle = TextureHandle::new();
         let asset = TextureAsset::Loaded(texture.clone());
         self.textures.borrow_mut().insert(handle, asset);
@@ -212,7 +213,7 @@ impl Assets {
         handle
     }
 
-    pub fn textures(&self) -> Vec<(TextureHandle, Rc<AllocatedTexture>)> {
+    pub fn textures(&self) -> Vec<(TextureHandle, Rc<Texture>)> {
         let keys = self.textures.borrow().keys().cloned().collect::<Vec<_>>();
         keys.into_iter()
             .filter_map(|k| match self.texture(k) {
@@ -244,7 +245,7 @@ impl Assets {
             .collect()
     }
 
-    pub fn texture(&self, handle: TextureHandle) -> Option<Rc<AllocatedTexture>> {
+    pub fn texture(&self, handle: TextureHandle) -> Option<Rc<Texture>> {
         let mut textures = self.textures.borrow_mut();
         if let Some(asset) = textures.get(&handle) {
             if let TextureAsset::Loaded(te) = asset {
@@ -270,17 +271,20 @@ impl Assets {
         unreachable!()
     }
 
-    fn load_texture(gpu: &Gpu, desc: &TextureInfo) -> Result<AllocatedTexture> {
-        let texture = gpu.create_texture(
-            desc.extent,
-            desc.format,
-            ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
-            ImageAspectFlags::COLOR,
-            &desc.name,
-            Some(desc.sampler),
+    fn load_texture(gpu: &Gpu, desc: &TextureInfo) -> Result<Texture> {
+        let texture = Texture::new2(
+            gpu,
+            &TextureInfo2 {
+                name: desc.name.clone(),
+                extent: desc.extent,
+                format: desc.format,
+                flags: desc.flags,
+                aspect_flags: desc.aspect_flags,
+                sampler: desc.sampler,
+            },
         )?;
 
-        gpu.execute(|cmd| texture.upload(cmd, &desc.data).expect("upload"))?;
+        // gpu.execute(|cmd| texture.upload(cmd, &desc.data).expect("upload"))?;
 
         Ok(texture)
     }
@@ -304,23 +308,14 @@ impl Assets {
             let vertices = &primitive_desc.vertices;
 
             let index_size = size_of::<u32>() as u64 * indices.len() as u64;
-            let index_buffer = create_index_buffer(
-                &self.gpu,
-                index_size,
-                MemoryLocation::GpuOnly,
-                "index buffer",
-            )?;
-            let index_staging = util::staging_buffer(&self.gpu, indices, "index staging")?;
+            let index_buffer = TypedBuffer::index(&self.gpu, index_size as usize, "index buffer")?;
+            let index_staging = TypedBuffer::staging(&self.gpu, index_size, "index staging")?;
 
             let n_vertices = primitive_desc.indices.len() as u32;
             let vertex_size = size_of::<Vertex>() as u64 * vertices.len() as u64;
-            let vertex_buffer = create_vertex_buffer(
-                &self.gpu,
-                vertex_size,
-                MemoryLocation::GpuOnly,
-                "vertex buffer",
-            )?;
-            let vertex_staging = util::staging_buffer(&self.gpu, vertices, "vertex staging")?;
+            let vertex_buffer =
+                TypedBuffer::vertex(&self.gpu, vertex_size as usize, "vertex buffer")?;
+            let vertex_staging = TypedBuffer::staging(&self.gpu, vertex_size, "vertex staging")?;
 
             self.gpu.execute(|cmd| {
                 cmd.copy_buffer(&vertex_staging, &vertex_buffer, vertex_buffer.size());

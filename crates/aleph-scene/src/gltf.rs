@@ -5,7 +5,7 @@ use {
         util, Assets, Material, MaterialHandle, MeshHandle, Node, NodeType, Scene, TextureHandle,
         Vertex,
     },
-    aleph_vk::{Extent2D, ImageUsageFlags, PrimitiveTopology, TextureInfo},
+    aleph_vk::{Extent2D, ImageAspectFlags, ImageUsageFlags, PrimitiveTopology, TextureInfo},
     anyhow::{anyhow, bail, Result},
     ash::vk,
     glam::{Mat4, Vec2, Vec3, Vec4},
@@ -137,10 +137,10 @@ fn load_texture(
         name: name.to_string(),
         extent,
         format,
-        usage: ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
-        aspect: vk::ImageAspectFlags::COLOR,
         data: bytes.clone(),
-        sampler: assets.defaults.sampler,
+        sampler: Some(assets.defaults.sampler),
+        flags: ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
+        aspect_flags: ImageAspectFlags::COLOR,
     });
 
     log::info!("Loaded glTF texture {index} -> {handle:?}");

@@ -1,7 +1,7 @@
 use {
     crate::{
-        texture::WrappedTexture, CommandBuffer, CommandPool, Device, Instance, Queue, QueueFamily,
-        Surface, Texture, VK_TIMEOUT_NS,
+        texture::Image, CommandBuffer, CommandPool, Device, Instance, Queue, QueueFamily, Surface,
+        Texture, VK_TIMEOUT_NS,
     },
     anyhow::Result,
     ash::{
@@ -46,7 +46,7 @@ pub struct Swapchain {
     #[debug("{:x}", instance.handle().handle().as_raw())]
     instance: Instance,
     info: SwapchainInfo,
-    images: Vec<WrappedTexture>,
+    images: Vec<Image>,
 }
 
 impl Swapchain {
@@ -148,24 +148,19 @@ impl Swapchain {
             .level_count(1)
             .layer_count(1);
 
-        let images = images
-            .into_iter()
-            .map(|handle| {
-                let image_view_info = vk::ImageViewCreateInfo::default()
-                    .image(handle)
-                    .view_type(vk::ImageViewType::TYPE_2D)
-                    .format(vk::Format::B8G8R8A8_SRGB)
-                    .subresource_range(subresource_range);
-                let view = unsafe {
-                    device
-                        .handle
-                        .create_image_view(&image_view_info, None)
-                        .expect("Failed to create imageview")
-                };
-                WrappedTexture::new(handle, view, info.extent, info.format, "swapchain image")
-                    .expect("Failed to create image")
+        let swapchain_images = unsafe { loader.get_swapchain_images(swapchain)? };
+        let images = swapchain_images
+            .iter()
+            .map(|swapchain_image| {
+                Image::new(
+                    *swapchain_image,
+                    device.clone(),
+                    info.extent,
+                    info.format,
+                    vk::ImageAspectFlags::COLOR,
+                )
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>>>()?;
         Ok(Swapchain {
             handle: swapchain,
             loader,
@@ -180,7 +175,7 @@ impl Swapchain {
 
     pub fn in_flight_frames(&self) -> u32 { self.images.len() as u32 }
 
-    pub fn images(&self) -> &[WrappedTexture] { &self.images }
+    pub fn images(&self) -> &[Image] { &self.images }
 
     pub fn extent(&self) -> vk::Extent2D { self.info.extent }
 }

@@ -1,32 +1,15 @@
 use {
     crate::Vertex,
     aleph_vk::{
-        AttachmentLoadOp, AttachmentStoreOp, Buffer, BufferUsageFlags, ClearColorValue,
-        ClearDepthStencilValue, ClearValue, Extent2D, Gpu, ImageLayout, MemoryLocation,
-        RenderingAttachmentInfo, Texture, Viewport,
+        texture::Image, AttachmentLoadOp, AttachmentStoreOp, ClearColorValue,
+        ClearDepthStencilValue, ClearValue, Extent2D, ImageLayout, RenderingAttachmentInfo,
+        Viewport,
     },
-    anyhow::Result,
-    bytemuck::Pod,
     image::EncodableLayout,
 };
-pub fn staging_buffer<T: Pod>(
-    gpu: &Gpu,
-    data: &[T],
-    label: impl Into<String>,
-) -> Result<Buffer<T>> {
-    let buffer = Buffer::from_data(
-        gpu.device(),
-        gpu.allocator(),
-        data,
-        BufferUsageFlags::TRANSFER_SRC,
-        MemoryLocation::GpuToCpu,
-        label,
-    )?;
-    Ok(buffer)
-}
 
 pub fn color_attachment<'a>(
-    image: impl Texture,
+    image: &Image,
     load_op: AttachmentLoadOp,
     store_op: AttachmentStoreOp,
     clear_color: [f32; 4],
@@ -43,7 +26,7 @@ pub fn color_attachment<'a>(
         .store_op(store_op)
 }
 
-pub fn color_attachment2<'a>(image: impl Texture) -> RenderingAttachmentInfo<'a> {
+pub fn color_attachment2<'a>(image: &Image) -> RenderingAttachmentInfo<'a> {
     RenderingAttachmentInfo::default()
         .clear_value(ClearValue {
             color: ClearColorValue {
@@ -57,7 +40,7 @@ pub fn color_attachment2<'a>(image: impl Texture) -> RenderingAttachmentInfo<'a>
 }
 
 pub fn depth_attachment<'a>(
-    image: impl Texture,
+    image: &Image,
     load_op: AttachmentLoadOp,
     store_op: AttachmentStoreOp,
     clear_depth: f32,

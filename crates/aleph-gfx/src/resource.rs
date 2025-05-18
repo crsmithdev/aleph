@@ -1,10 +1,10 @@
 use {
     crate::RenderContext,
     aleph_vk::{
-        AllocatedTexture, Buffer, DescriptorBindingFlags, DescriptorBufferInfo,
-        DescriptorImageInfo, DescriptorPoolCreateFlags, DescriptorPoolSize, DescriptorSet,
-        DescriptorSetLayout, DescriptorSetLayoutBinding, DescriptorSetLayoutCreateFlags,
-        DescriptorType, Gpu, ImageLayout, PipelineLayout, Sampler, ShaderStageFlags, Texture,
+        Buffer, DescriptorBindingFlags, DescriptorBufferInfo, DescriptorImageInfo,
+        DescriptorPoolCreateFlags, DescriptorPoolSize, DescriptorSet, DescriptorSetLayout,
+        DescriptorSetLayoutBinding, DescriptorSetLayoutCreateFlags, DescriptorType, Gpu,
+        ImageLayout, PipelineLayout, Sampler, ShaderStageFlags, Texture, TypedBuffer,
         WriteDescriptorSet,
     },
     anyhow::Result,
@@ -193,7 +193,7 @@ impl ResourceBinder {
     pub fn storage_buffer<T: Pod>(
         &mut self,
         index: usize,
-        buffer: &Buffer<T>,
+        buffer: &TypedBuffer<T>,
         offset: u64,
     ) -> &mut Self {
         self.bindings.push(BoundResource::StorageBuffer {
@@ -209,7 +209,7 @@ impl ResourceBinder {
     pub fn texture_array(
         &mut self,
         index: usize,
-        images: &[Rc<AllocatedTexture>],
+        images: &[Rc<Texture>],
         sampler: Sampler,
     ) -> &mut Self {
         let info = images
@@ -231,7 +231,7 @@ impl ResourceBinder {
     pub fn uniform_buffer<T: Pod>(
         &mut self,
         index: usize,
-        buffer: &Buffer<T>,
+        buffer: &TypedBuffer<T>,
         offset: u64,
     ) -> &mut Self {
         self.bindings.push(BoundResource::Buffer {
@@ -247,7 +247,7 @@ impl ResourceBinder {
     pub fn dynamic_uniform_buffer<T: Pod>(
         &mut self,
         index: usize,
-        buffer: &Buffer<T>,
+        buffer: &TypedBuffer<T>,
         offset: u64,
         range: u64,
     ) -> &mut Self {
@@ -261,12 +261,7 @@ impl ResourceBinder {
         self
     }
 
-    pub fn texture(
-        &mut self,
-        index: usize,
-        image: &AllocatedTexture,
-        sampler: Sampler,
-    ) -> &mut Self {
+    pub fn texture(&mut self, index: usize, image: &Texture, sampler: Sampler) -> &mut Self {
         self.bindings.push(BoundResource::Texture {
             index: index as u32,
             info: DescriptorImageInfo::default()

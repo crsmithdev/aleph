@@ -1,95 +1,185 @@
 use {
-    crate::{
-        Allocator, Buffer, BufferUsageFlags, CommandBuffer, Device, Extent2D, Format,
-        ImageAspectFlags, ImageUsageFlags, MemoryLocation,
-    },
+    crate::{Allocator, Device, Extent2D, Format, Gpu, ImageAspectFlags, ImageUsageFlags},
     anyhow::Result,
-    ash::vk::{self, Sampler},
-    bytemuck::Pod,
-    derive_more::Debug,
+    ash::vk::{self, Handle},
+    derive_more::{Debug, Deref},
     gpu_allocator::vulkan::Allocation,
-    std::sync::Arc,
+    std::{mem, rc::Rc, sync::Arc},
+    tracing::instrument,
 };
+
 pub struct TextureInfo {
     pub name: String,
     pub extent: Extent2D,
     pub format: Format,
-    pub usage: ImageUsageFlags,
-    pub aspect: ImageAspectFlags,
+    pub flags: ImageUsageFlags,
+    pub aspect_flags: ImageAspectFlags,
     pub data: Vec<u8>,
-    pub sampler: Sampler,
+    pub sampler: Option<vk::Sampler>,
+}
+
+#[derive(Debug)]
+pub struct TextureInfo2 {
+    pub name: String,
+    #[debug("{}x{}", extent.width, extent.height)]
+    pub extent: Extent2D,
+    pub format: Format,
+    pub flags: ImageUsageFlags,
+    pub aspect_flags: ImageAspectFlags,
+    #[debug("{:x}", sampler.map(|s| s.as_raw()).unwrap_or(0))]
+    pub sampler: Option<vk::Sampler>,
 }
 
 impl Debug for TextureInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let data_len = self.data.len();
         write!(
             f,
-            "TextureInfo(name: {}, extent: {}x{}, format: {:?}, usage: {:?}, aspect: {:?}, data: {} bytes)",
-            self.name, self.extent.width, self.extent.height, self.format, self.usage, self.aspect, self.data.len(),
+            "TextureInfo(name: {}, extent: {}x{}, format: {:?}, usage: {:?}, aspect: {:?}, data: {}b)",
+            self.name, self.extent.width, self.extent.height, self.format, self.flags, self.aspect_flags, data_len,
         )
     }
 }
 
-macro_rules! impl_image {
-    ($mty:ident) => {
-        impl Texture for $mty {
-            fn handle(&self) -> vk::Image { self.image.handle }
-            fn view(&self) -> vk::ImageView { self.view }
-            fn extent(&self) -> Extent2D { self.image.extent }
-            fn format(&self) -> Format { self.image.format }
-            fn label(&self) -> &str { &self.image.name }
-            fn sampler(&self) -> Option<vk::Sampler> { self.image.sampler }
-        }
-        impl<'a> Texture for &'a $mty {
-            fn handle(&self) -> vk::Image { self.image.handle }
-            fn view(&self) -> vk::ImageView { self.view }
-            fn extent(&self) -> Extent2D { self.image.extent }
-            fn format(&self) -> Format { self.image.format }
-            fn label(&self) -> &str { &self.image.name }
-            fn sampler(&self) -> Option<vk::Sampler> { self.image.sampler }
-        }
-    };
-}
-
-pub trait Texture {
-    fn handle(&self) -> vk::Image;
-    fn view(&self) -> vk::ImageView;
-    fn extent(&self) -> Extent2D;
-    fn format(&self) -> Format;
-    fn label(&self) -> &str;
-    fn sampler(&self) -> Option<vk::Sampler>;
-}
-
 #[allow(dead_code)]
-#[derive(Debug)]
-pub struct AllocatedTexture {
+#[derive(Clone, Debug, Deref)]
+pub struct Texture {
+    #[deref]
+    #[debug("{:x}", image.handle().as_raw())]
     image: Image,
-    allocation: Allocation,
+    #[debug("{:?}", Rc::as_ptr(allocation))]
+    allocation: Rc<Allocation>,
+    #[debug(skip)]
     allocator: Arc<Allocator>,
+    #[debug(skip)]
     device: Device,
+    #[debug("{:x}", sampler.map(|s| s.as_raw()).unwrap_or(0))]
     sampler: Option<vk::Sampler>,
-    view: vk::ImageView,
+    name: String,
 }
 
-impl_image!(AllocatedTexture);
+impl Texture {
+    #[instrument(skip_all)]
+    pub fn new(gpu: &Gpu, info: &TextureInfo) -> Result<Self> {
+        let name = info.name.to_string();
+        let device = gpu.device.clone();
+        let allocator = gpu.allocator.clone();
 
-impl AllocatedTexture {
+        let image_info = &vk::ImageCreateInfo::default()
+            .image_type(vk::ImageType::TYPE_2D)
+            .format(info.format)
+            .extent(info.extent.into())
+            .mip_levels(1)
+            .array_layers(1)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .usage(info.flags | vk::ImageUsageFlags::TRANSFER_DST);
+        let image = unsafe { device.handle.create_image(image_info, None) }?;
+        let requirements = unsafe { device.handle.get_image_memory_requirements(image) };
+        let allocation = Rc::new(allocator.allocate_image(image, requirements, &name.clone())?);
+
+        let handle = Image::new(
+            image,
+            device.clone(),
+            info.extent,
+            info.format,
+            info.aspect_flags,
+        )?;
+
+        let device = device.clone();
+
+        let texture = Self {
+            image: handle,
+            allocator,
+            allocation,
+            device,
+            sampler: info.sampler,
+            name,
+        };
+        log::trace!("Created {:?}", texture);
+        Ok(texture)
+    }
+
+    pub fn new2(gpu: &Gpu, info: &TextureInfo2) -> Result<Self> {
+        let name = info.name.to_string();
+        let device = gpu.device.clone();
+        let allocator = gpu.allocator.clone();
+
+        let image_info = &vk::ImageCreateInfo::default()
+            .image_type(vk::ImageType::TYPE_2D)
+            .format(info.format)
+            .extent(info.extent.into())
+            .mip_levels(1)
+            .array_layers(1)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .usage(info.flags | vk::ImageUsageFlags::TRANSFER_DST);
+        let image = unsafe { device.handle.create_image(image_info, None) }?;
+        let requirements = unsafe { device.handle.get_image_memory_requirements(image) };
+        let allocation = Rc::new(allocator.allocate_image(image, requirements, &name.clone())?);
+
+        let handle = Image::new(
+            image,
+            device.clone(),
+            info.extent,
+            info.format,
+            info.aspect_flags,
+        )?;
+
+        let device = device.clone();
+
+        Ok(Self {
+            image: handle,
+            allocator,
+            allocation,
+            device,
+            sampler: info.sampler,
+            name,
+        })
+    }
+
+    pub fn name(&self) -> &str { &self.name }
+
+    pub fn handle(&self) -> vk::Image { self.image.handle }
+
+    pub fn view(&self) -> vk::ImageView { self.image.view }
+
+    pub fn sampler(&self) -> Option<vk::Sampler> { self.sampler }
+}
+
+impl Drop for Texture {
+    fn drop(&mut self) {
+        unsafe {
+            let allocation = mem::replace(&mut self.allocation, Rc::new(Allocation::default()));
+            if let Ok(allocation) = Rc::try_unwrap(allocation) {
+                self.allocator.deallocate(allocation);
+                self.device.handle.destroy_image(self.image.handle, None);
+                self.device.handle.destroy_image_view(self.image.view, None);
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Image {
+    #[debug("{:x}", handle.as_raw())]
+    handle: vk::Image,
+    #[debug("{:x}", view.as_raw())]
+    view: vk::ImageView,
+    #[debug("{}x{}", extent.width, extent.height)]
+    extent: Extent2D,
+}
+
+impl Image {
     pub fn new(
+        handle: vk::Image,
         device: Device,
-        allocator: Arc<Allocator>,
         extent: Extent2D,
         format: Format,
-        usage: ImageUsageFlags,
         aspect_flags: ImageAspectFlags,
-        name: impl Into<String>,
-        sampler: Option<vk::Sampler>,
     ) -> Result<Self> {
-        let name = name.into();
-        let image = Image::new(device.clone(), extent, format, usage, name.clone(), None)?;
-        let requirements = unsafe { device.handle.get_image_memory_requirements(image.handle) };
-        let allocation = allocator.allocate_image(image.handle, requirements, &name.clone())?;
         let view_info = vk::ImageViewCreateInfo::default()
-            .image(image.handle)
+            .image(handle)
             .view_type(vk::ImageViewType::TYPE_2D)
             .format(format)
             .components(vk::ComponentMapping::default())
@@ -102,115 +192,50 @@ impl AllocatedTexture {
                     .layer_count(1),
             );
         let view = unsafe { device.handle.create_image_view(&view_info, None) }?;
-        let device = device.clone();
-        Ok(Self {
-            image,
-            allocator,
-            allocation,
-            device,
-            sampler,
-            view,
-        })
-    }
 
-    pub fn upload<T: Pod>(&self, cmd: &CommandBuffer, data: &[T]) -> Result<()> {
-        let mut buffer = Buffer::from_data(
-            &self.device,
-            Arc::clone(&self.allocator),
-            data,
-            BufferUsageFlags::TRANSFER_SRC,
-            MemoryLocation::GpuToCpu,
-            format!("{}-staging", &self.image.name),
-        )?;
-        buffer.write(data);
-        cmd.copy_buffer_to_image(&buffer, self);
-
-        Ok(())
-    }
-}
-
-impl Drop for AllocatedTexture {
-    fn drop(&mut self) {
-        unsafe {
-            let allocation = std::mem::take(&mut self.allocation);
-            self.allocator.deallocate(allocation);
-            self.device.handle.destroy_image(self.image.handle, None);
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct WrappedTexture {
-    image: Image,
-    view: vk::ImageView,
-}
-
-impl WrappedTexture {
-    pub fn new(
-        handle: vk::Image,
-        view: vk::ImageView,
-        extent: Extent2D,
-        format: vk::Format,
-        name: impl Into<String>,
-    ) -> Result<Self> {
-        let image = Image {
+        let image = Self {
             handle,
+            view,
             extent,
-            format,
-            name: name.into(),
-            sampler: None,
         };
 
-        Ok(Self { image, view })
+        log::trace!("Created {:?}", image);
+        Ok(image)
     }
-}
-impl_image!(WrappedTexture);
 
-#[derive(Clone, Debug)]
-struct Image {
-    handle: vk::Image,
-    extent: Extent2D,
-    format: Format,
-    name: String,
-    sampler: Option<vk::Sampler>,
+    pub fn handle(&self) -> vk::Image { self.handle }
+
+    pub fn view(&self) -> vk::ImageView { self.view }
+
+    pub fn extent(&self) -> Extent2D { self.extent }
 }
 
-impl Image {
-    pub fn new(
-        device: Device,
-        extent: Extent2D,
-        format: Format,
-        usage: ImageUsageFlags,
-        name: impl Into<String>,
-        sampler: Option<vk::Sampler>,
-    ) -> Result<Self> {
-        let name = name.into();
-        let image_info = &vk::ImageCreateInfo::default()
-            .image_type(vk::ImageType::TYPE_2D)
-            .format(format)
-            .extent(extent.into())
-            .mip_levels(1)
-            .array_layers(1)
-            .samples(vk::SampleCountFlags::TYPE_1)
-            .tiling(vk::ImageTiling::OPTIMAL)
-            .usage(usage | vk::ImageUsageFlags::TRANSFER_DST);
-        let handle = unsafe { device.handle.create_image(image_info, None) }?;
+// #[cfg(test)]
+// mod tests {
+//     use {super::*, std::sync::LazyLock};
 
-        Ok(Self {
-            handle,
-            extent,
-            format,
-            name,
-            sampler,
-        })
-    }
-}
+//     static TEST_GPU: LazyLock<Gpu> =
+//         LazyLock::new(|| Gpu::headless().expect("Error creating test GPU"));
 
-#[derive(Debug)]
-pub enum ImageAllocation {
-    Internal {
-        allocator: Arc<Allocator>,
-        allocation: Allocation,
-    },
-    External,
-}
+//     #[test]
+//     fn test_create_texture() {
+//         let gpu = &*TEST_GPU;
+//         let texture = Texture::new(
+//             &gpu,
+//             &TextureInfo {
+//                 name: "test".to_string(),
+//                 extent: Extent2D {
+//                     width: 1024,
+//                     height: 1024,
+//                 },
+//                 format: Format::R8G8B8A8_SRGB,
+//                 flags: ImageUsageFlags::TRANSFER_DST,
+//                 aspect_flags: ImageAspectFlags::COLOR,
+//                 data: vec![0; 1024 * 1024 * 4],
+//                 sampler: None,
+//             },
+//         );
+
+//         assert!(texture.is_ok());
+//     }
+// }
