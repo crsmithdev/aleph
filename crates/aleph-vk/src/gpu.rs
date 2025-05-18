@@ -15,6 +15,7 @@ use {
     derive_more::Debug,
     raw_window_handle::{HasDisplayHandle, HasWindowHandle},
     std::{cell::UnsafeCell, ffi, slice, sync::Arc},
+    tracing::instrument,
     winit::window::Window,
 };
 
@@ -90,6 +91,7 @@ impl Gpu {
             },
         )?);
 
+        let imm_fence = device.create_fence(vk::FenceCreateFlags::SIGNALED);
         let allocator = Arc::new(Allocator::new(&instance, &device)?);
         let setup_cmd_pool = device.create_command_pool(device.graphics_queue(), "setup");
         let setup_cmd_buffer = setup_cmd_pool.create_command_buffer()?;
@@ -104,11 +106,7 @@ impl Gpu {
             properties,
             instance,
             device,
-            imm_fence: unsafe {
-                device
-                    .handle
-                    .create_fence(&vk::FenceCreateInfo::default(), None)?
-            },
+            imm_fence,
         })
     }
 
@@ -130,6 +128,7 @@ impl Gpu {
         //     },
         // )?);
 
+        let imm_fence = device.create_fence(vk::FenceCreateFlags::SIGNALED);
         let surface = Surface::headless(&instance);
         let swapchain = UnsafeCell::new(Swapchain::headless(&instance, &device)?);
         let allocator = Arc::new(Allocator::new(&instance, &device)?);
@@ -137,7 +136,6 @@ impl Gpu {
         let setup_cmd_buffer = setup_cmd_pool.create_command_buffer()?;
         let properties = instance.get_physical_device_properties(device.physical_device);
 
-nn
         Ok(Self {
             instance,
             device,
@@ -147,6 +145,7 @@ nn
             immediate_cmd_buffer: setup_cmd_buffer,
             immediate_cmd_pool: setup_cmd_pool,
             properties,
+            imm_fence,
         })
     }
 
@@ -343,10 +342,11 @@ impl Gpu {
         )
     }
 
+    #[instrument(skip_all)]
     pub fn execute(&self, callback: impl FnOnce(&CommandBuffer)) -> Result<()> {
-        let cmd_buffer = &self.immediate_cmd_buffer;
+        let cmd_buffer = &self.immediate_cmd_pool.create_command_buffer()?;
+        // self.wait_for_fence(self.imm_fence);
 
-        cmd_buffer.reset()?;
         cmd_buffer.begin()?;
         callback(cmd_buffer);
         cmd_buffer.end()?;
@@ -359,7 +359,8 @@ impl Gpu {
             self.device.handle().queue_submit2(
                 self.device.graphics_queue().handle(),
                 submit_info,
-                self.i,
+                vk::Fence::null(),
+                // self.imm_fence,
             )
         }?;
 

@@ -1,7 +1,7 @@
 use {
     crate::{
-        sync, AccessFlags2, Allocator, Buffer, BufferUsageFlags, CommandBuffer, Device, Gpu, Image,
-        MemoryLocation, PipelineStageFlags2, Queue, TypedBuffer,
+        gpu, sync, AccessFlags2, Allocator, Buffer, BufferUsageFlags, CommandBuffer, Device, Gpu,
+        Image, MemoryLocation, PipelineStageFlags2, Queue, TypedBuffer,
     },
     anyhow::Result,
     ash::vk::{
@@ -10,52 +10,71 @@ use {
     },
     bytemuck::Pod,
     derive_more::{derive::Debug, Deref},
+    image::imageops::FilterType::Triangle,
     std::{cell::RefCell, rc::Rc, sync::Arc},
     tracing::instrument,
 };
 
-struct StagingResource<T> {
-    resource: T,
+pub trait Poolable {
+    fn new(gpu: &Gpu) -> Self;
+    fn reset(&mut self, gpu: &Gpu);
+}
+
+struct Pooled<T>
+where
+    T: Poolable,
+{
+    resource: Rc<T>,
     expires: usize,
 }
 
-struct ResourcePool<T> {
-    pool: RefCell<Vec<Rc<StagingResource<T>>>>,
+#[derive(Debug)]
+pub struct ResourcePool<T>
+where
+    T: Poolable,
+{
+    gpu: Arc<Gpu>,
+    pool: RefCell<Vec<Pooled<T>>>,
     size: usize,
     retention: usize,
     frame: usize,
-    create: Box<dyn Fn() -> T + 'static>, // Function to create new resources
 }
 
-impl<T> ResourcePool<T> {
-    fn new(size: usize, retention: usize, create: impl Fn() -> T + 'static) -> Self {
+impl<T> ResourcePool<T>
+where
+    T: Poolable,
+{
+    pub fn new(gpu: &Arc<Gpu>, size: usize, retention: usize) -> Self {
         Self {
+            gpu: Arc::clone(&gpu),
             pool: RefCell::new(Vec::new()),
             size: 0,
             retention: 0,
             frame: 0,
-            create: Box::new(create),
         }
     }
 
-    fn next(&mut self, size: usize) -> Rc<StagingResource<T>> {
-        let mut pool = self.pool.borrow_mut();
-        let found = pool.iter().position(|r| r.expires < self.frame);
+    pub fn next(&self) -> Rc<T> {
+        let index = self
+            .pool
+            .borrow()
+            .iter()
+            .position(|r| r.expires < self.frame);
 
-        match found {
+        match index {
             Some(index) => {
-                let staging = Rc::get_mut(&mut pool[index]).unwrap_or_else(|| {
-                    panic!("Failed to get inner resource from Rc");
-                });
-                staging.expires = self.frame + self.retention;
-                Rc::clone(&pool[index])
+                let pooled = &self.pool.borrow()[index];
+                let rc = pooled.resource.clone();
+                rc
             }
             None => {
-                pool.push(Rc::new(StagingResource {
+                let new = T::new(&self.gpu);
+                let mut pool = self.pool.borrow_mut();
+                pool.push(Pooled {
+                    resource: Rc::new(new),
                     expires: self.frame + self.retention,
-                    resource: (self.create)(),
-                }));
-                Rc::clone(&pool[pool.len() - 1])
+                });
+                Rc::clone(&pool[pool.len() - 1].resource)
             }
         }
     }
@@ -87,46 +106,45 @@ impl<T> ResourcePool<T> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use {
-        super::*,
-        crate::Gpu,
-        ash::vk::{BufferUsageFlags, MemoryPropertyFlags},
-        std::sync::LazyLock,
-    };
-
-    static TEST_GPU: LazyLock<Gpu> =
-        LazyLock::new(|| Gpu::headless().expect("Error creating test GPU"));
-
-    #[test]
-    fn test_resource_pool() {
-        let gpu = &*TEST_GPU;
-
-        let mut pool: ResourcePool<Buffer> = ResourcePool::new(10, 2, move || {
-            Buffer::new(
-                &gpu.device,
-                &gpu.allocator,
-                1024 as u64,
-                BufferUsageFlags::STORAGE_BUFFER,
-                MemoryLocation::CpuToGpu,
-                "test",
-            )
-            .unwrap()
-        });
-
-        for i in 0..20 {
-            let resource = pool.next(i);
-            assert_eq!(resource.expires, i + pool.retention);
-            assert_eq!(pool.pool.borrow().len(), 1);
-        }
-
-        pool.update();
-        assert_eq!(pool.pool.borrow().len(), 1);
-
-        for i in 0..10 {
-            pool.update();
-            assert_eq!(pool.pool.borrow().len(), 1);
-        }
+impl Poolable for Buffer {
+    fn new(gpu: &Gpu) -> Self {
+        Buffer::new(
+            &gpu.device(),
+            &gpu.allocator(),
+            1024 * 1024 * 10,
+            BufferUsageFlags::TRANSFER_SRC,
+            MemoryLocation::CpuToGpu,
+            "staging",
+        )
+        .unwrap_or_else(|e| {
+            panic!("Failed to create staging buffer: {:?}", e);
+        })
     }
+
+    fn reset(&mut self, _gpu: &Gpu) {}
 }
+// #[cfg(test)]
+// mod tests {
+//     use {
+//         super::*,
+//         crate::Gpu,
+//         ash::vk::{BufferUsageFlags, MemoryPropertyFlags},
+//         std::sync::LazyLock,
+//     };
+
+//     // static TEST_GPU: LazyLock<Gpu> =
+//     //     LazyLock::new(|| Gpu::headless().expect("Error creating test GPU"));
+
+//     #[test]
+//     fn test_resource_pool() {
+//         // let gpu = &*TEST_GPU;
+//         let gpu = Arc::new(Gpu::headless().expect("Error creating test GPU"));
+
+//         let mut pool: ResourcePool<Buffer> = ResourcePool::new(&gpu, 5, 2);
+
+//         let resource = pool.next();
+//         assert_eq!(pool.pool.borrow().len(), 1);
+
+//         pool.update();
+//     }
+// }

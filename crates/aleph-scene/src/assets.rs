@@ -1,8 +1,9 @@
 use {
     crate::{model::MeshInfo, Material, Mesh, Primitive, Vertex},
     aleph_vk::{
-        Extent2D, Filter, Format, Gpu, ImageAspectFlags, ImageUsageFlags, PrimitiveTopology,
-        Sampler, SamplerAddressMode, SamplerMipmapMode, Texture, TextureInfo, TypedBuffer,
+        uploader::Poolable, Buffer, Extent2D, Filter, Format, Gpu, ImageAspectFlags,
+        ImageUsageFlags, PrimitiveTopology, ResourcePool, Sampler, SamplerAddressMode,
+        SamplerMipmapMode, Texture, TextureInfo, TypedBuffer,
     },
     anyhow::Result,
     glam::vec4,
@@ -103,6 +104,7 @@ pub struct Assets {
     // uploader: RefCell<Uploader>,
     default_material: MaterialHandle,
     default_sampler: Sampler,
+    staging_pool: ResourcePool<Buffer>,
 }
 
 impl Assets {
@@ -132,6 +134,8 @@ impl Assets {
             SamplerAddressMode::REPEAT,
             SamplerAddressMode::REPEAT,
         )?;
+        let pool =
+            ResourcePool::<Buffer>::new(&gpu, Self::UPLOAD_POOL_SIZE, Self::UPLOAD_RETAINED_FRAMES);
 
         let mut assets = Self {
             gpu,
@@ -141,13 +145,14 @@ impl Assets {
             // uploader,
             default_material: MaterialHandle::null(),
             default_sampler,
+            staging_pool: pool,
         };
         assets.default_material = assets.add_default_material()?;
 
         Ok(assets)
     }
 
-    // pub fn uploader(&self) -> RefMut<Uploader> { self.uploader.borrow_mut() }
+    pub fn update(&mut self) { self.staging_pool.update(); }
 
     pub fn default_sampler(&self) -> Sampler { self.default_sampler }
 
@@ -247,8 +252,13 @@ impl Assets {
 
     fn load_texture(&self, desc: &TextureInfo) -> Result<Texture> {
         let texture = Texture::new(&self.gpu, desc)?;
-        self.gpu
-            .execute(|cmd| texture.upload(cmd, &desc.data).expect("upload"))?;
+        self.gpu.execute(|cmd| {
+            let staging = self.staging_pool.next();
+            let data = bytemuck::cast_slice(&desc.data);
+            staging.write(data);
+
+            cmd.copy_buffer_to_image(&staging, &*texture)
+        })?;
 
         Ok(texture)
     }
@@ -281,14 +291,13 @@ impl Assets {
             let vertices = &primitive_desc.vertices;
 
             let index_buffer = TypedBuffer::<u32>::index(&self.gpu, indices.len(), "index")?;
-            let index_staging =
-                TypedBuffer::<u32>::staging(&self.gpu, indices.len(), "index staging")?;
-            let vertex_buffer = TypedBuffer::<Vertex>::vertex(&self.gpu, vertices.len(), "vertex")?;
-            let vertex_staging =
-                TypedBuffer::<Vertex>::staging(&self.gpu, vertices.len(), "vertex staging")?;
-            let n_vertices = vertices.len();
+            let index_staging = self.staging_pool.next();
+            index_staging.write(bytemuck::cast_slice(indices));
 
-            // let mut uploader = self.uploader.borrow_mut();
+            let vertex_buffer = TypedBuffer::<Vertex>::vertex(&self.gpu, vertices.len(), "vertex")?;
+            let vertex_staging = self.staging_pool.next();
+            vertex_staging.write(bytemuck::cast_slice(vertices));
+            let n_vertices = vertices.len();
 
             self.gpu.execute(|cmd| {
                 cmd.copy_buffer(&vertex_staging, &vertex_buffer, vertex_buffer.size());

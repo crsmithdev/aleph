@@ -108,6 +108,7 @@ fn compile_shaders() -> Result<()> {
 }
 
 fn main() {
+    println!("{}", SHADER_DIR);
     match compile_shaders() {
         Ok(_) => println!("Shaders compiled successfully"),
         Err(e) => {
