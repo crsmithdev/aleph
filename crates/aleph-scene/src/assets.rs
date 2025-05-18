@@ -1,9 +1,9 @@
 use {
     crate::{model::MeshInfo, util, Material, Mesh, Primitive, Vertex},
     aleph_vk::{
-        texture::TextureInfo2, Extent2D, Filter, Format, Gpu, ImageAspectFlags, ImageUsageFlags,
-        MemoryLocation, PrimitiveTopology, Sampler, SamplerAddressMode, SamplerMipmapMode, Texture,
-        TextureInfo, TypedBuffer,
+        texture::TextureInfo2, uploader, Extent2D, Filter, Format, Gpu, ImageAspectFlags,
+        ImageUsageFlags, MemoryLocation, PrimitiveTopology, Sampler, SamplerAddressMode,
+        SamplerMipmapMode, Texture, TextureInfo, TypedBuffer, Uploader,
     },
     anyhow::Result,
     image::{ImageBuffer, Rgba},
@@ -105,6 +105,7 @@ pub struct Assets {
     meshes: HashMap<MeshHandle, Mesh>,
     textures: AssetCache<Texture, TextureInfo>,
     materials: HashMap<MaterialHandle, Material>,
+    pub uploader: RefCell<uploader::Uploader>,
     pub default_texture: Texture,
     pub defaults: Defaults,
 }
@@ -131,11 +132,13 @@ impl Assets {
                 sampler: Some(defaults.sampler),
             },
         )?;
+        let uploader = RefCell::new(Uploader::new(&gpu, 10, 2, 1024 * 1024 * 10)?);
 
         let mut assets = Self {
             gpu,
             meshes,
             textures,
+            uploader,
             materials,
             defaults,
             default_texture,
@@ -257,7 +260,7 @@ impl Assets {
                 return Some(asset.clone());
             }
             Some(TextureAsset::Unloaded(desc)) => {
-                let texture = Self::load_texture(&self.gpu, desc).unwrap();
+                let texture = self.load_texture2(desc).unwrap();
                 textures.insert(handle, TextureAsset::Loaded(Rc::new(texture)));
             }
             None => return None,
@@ -288,6 +291,13 @@ impl Assets {
 
         Ok(texture)
     }
+    fn load_texture2(&self, info: &TextureInfo) -> Result<Texture> {
+        let texture = Texture::new(&self.gpu, info)?;
+        let mut uploader = self.uploader.borrow_mut();
+        uploader.enqueue_image(&*texture, &info.data);
+
+        Ok(texture)
+    }
 
     pub fn material(&self, handle: MaterialHandle) -> Option<&Material> {
         self.materials.get(&handle)
@@ -309,13 +319,15 @@ impl Assets {
 
             let index_size = size_of::<u32>() as u64 * indices.len() as u64;
             let index_buffer = TypedBuffer::index(&self.gpu, index_size as usize, "index buffer")?;
-            let index_staging = TypedBuffer::staging(&self.gpu, index_size, "index staging")?;
+            let index_staging: TypedBuffer<u32> =
+                TypedBuffer::staging(&self.gpu, index_size, "index staging")?;
 
             let n_vertices = primitive_desc.indices.len() as u32;
             let vertex_size = size_of::<Vertex>() as u64 * vertices.len() as u64;
             let vertex_buffer =
                 TypedBuffer::vertex(&self.gpu, vertex_size as usize, "vertex buffer")?;
-            let vertex_staging = TypedBuffer::staging(&self.gpu, vertex_size, "vertex staging")?;
+            let vertex_staging: TypedBuffer<Vertex> =
+                TypedBuffer::staging(&self.gpu, vertex_size, "vertex staging")?;
 
             self.gpu.execute(|cmd| {
                 cmd.copy_buffer(&vertex_staging, &vertex_buffer, vertex_buffer.size());

@@ -263,9 +263,9 @@ impl Renderer {
             }
         };
         let cmd_buffer = &command_buffer;
+        cmd_buffer.reset()?;
+        cmd_buffer.begin()?;
         {
-            cmd_buffer.reset()?;
-            cmd_buffer.begin()?;
             cmd_buffer.transition_image(
                 &self.depth_image,
                 ImageLayout::UNDEFINED,
@@ -277,19 +277,12 @@ impl Renderer {
                 ImageLayout::UNDEFINED,
                 ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             );
-            cmd_buffer.end()?;
         }
-        let cmd_buffer2 = &self.frames[self.frame_index]
-            .command_pool
-            .create_command_buffer()?;
-        let cmd_buffer3 = &self.frames[self.frame_index]
-            .command_pool
-            .create_command_buffer()?;
         let objects = self.create_render_objects(scene, assets, &self.material_map);
         let mut context = RenderContext {
             gpu: &self.gpu,
             scene,
-            command_buffer: cmd_buffer2,
+            command_buffer: cmd_buffer,
             scene_buffer: &self.scene_buffer,
             draw_image: &self.draw_image,
             depth_image: &self.depth_image,
@@ -299,53 +292,38 @@ impl Renderer {
             objects,
         };
         {
-            cmd_buffer2.reset()?;
-            cmd_buffer2.begin()?;
-            context.command_buffer = cmd_buffer2;
             self.forward_pipeline.render(&context)?;
-            cmd_buffer2.end()?;
         }
         {
-            cmd_buffer3.reset()?;
-            cmd_buffer3.begin()?;
-            context.command_buffer = cmd_buffer3;
             gui.draw(&context, &mut self.config, &mut self.scene_data)?;
-            cmd_buffer3.end()?;
         }
 
-        let cmd_buffer4 = &self.frames[self.frame_index]
-            .command_pool
-            .create_command_buffer()?;
-        cmd_buffer4.reset()?;
-        cmd_buffer4.begin()?;
-
-        cmd_buffer4.transition_image(
+        cmd_buffer.transition_image(
             &self.draw_image,
             ImageLayout::UNDEFINED,
             ImageLayout::TRANSFER_SRC_OPTIMAL,
         );
-        cmd_buffer4.transition_image(
+        cmd_buffer.transition_image(
             swapchain_image,
             ImageLayout::UNDEFINED,
             ImageLayout::TRANSFER_DST_OPTIMAL,
         );
-        cmd_buffer4.copy_image(
+        cmd_buffer.copy_image(
             &self.draw_image,
             swapchain_image,
             draw_extent,
             swapchain_extent.into(),
         );
-        cmd_buffer4.transition_image(
+        cmd_buffer.transition_image(
             swapchain_image,
             ImageLayout::TRANSFER_DST_OPTIMAL,
             ImageLayout::PRESENT_SRC_KHR,
         );
-
-        cmd_buffer4.end()?;
+        cmd_buffer.end()?;
         // cmd_buffer4.submit_queued(*swapchain_semaphore, *render_semaphore, *fence)?;
         self.submit_queued(
             &context,
-            &[cmd_buffer, cmd_buffer2, cmd_buffer3, cmd_buffer4],
+            &[cmd_buffer],
             *swapchain_semaphore,
             *render_semaphore,
             *fence,
@@ -486,6 +464,7 @@ impl Renderer {
         self.scene_data = scene_data;
         self.material_buffer.write(&materials);
         self.scene_buffer.write(&[scene_data]);
+        assets.uploader.borrow_mut().submit_uploads();
 
         self.binder
             .uniform_buffer(BIND_IDX_SCENE, &self.scene_buffer, 0)

@@ -5,7 +5,9 @@ pub mod device;
 pub mod gpu;
 pub mod instance;
 pub mod swapchain;
+pub mod sync;
 pub mod texture;
+pub mod uploader;
 
 pub(crate) const VK_TIMEOUT_NS: u64 = 5_000_000_000;
 
@@ -18,11 +20,12 @@ pub use {
         gpu::{Gpu, Surface},
         instance::Instance,
         swapchain::{Frame, Swapchain, SwapchainInfo},
-        texture::{Texture, TextureInfo},
+        texture::{Image, Texture, TextureInfo},
+        uploader::Uploader,
     },
     ash::vk::{
-        AttachmentLoadOp, AttachmentStoreOp, ClearColorValue, ClearDepthStencilValue, ClearValue,
-        ColorComponentFlags, CommandBufferSubmitInfo, CompareOp, CullModeFlags,
+        AccessFlags2, AttachmentLoadOp, AttachmentStoreOp, ClearColorValue, ClearDepthStencilValue,
+        ClearValue, ColorComponentFlags, CommandBufferSubmitInfo, CompareOp, CullModeFlags,
         DescriptorBindingFlags, DescriptorBufferInfo, DescriptorImageInfo, DescriptorPool,
         DescriptorPoolCreateFlags, DescriptorPoolSize, DescriptorSet, DescriptorSetLayout,
         DescriptorSetLayoutBinding, DescriptorSetLayoutBindingFlagsCreateInfo,

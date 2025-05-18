@@ -72,7 +72,22 @@ impl CommandBuffer {
         #[allow(clippy::unit_arg)]
         Ok(unsafe { self.device.handle.end_command_buffer(self.handle)? })
     }
-
+    pub fn pipeline_barrier(
+        &self,
+        memory_barriers: &[vk::MemoryBarrier2],
+        buffer_barriers: &[vk::BufferMemoryBarrier2],
+        image_barriers: &[vk::ImageMemoryBarrier2],
+    ) {
+        unsafe {
+            self.device.handle.cmd_pipeline_barrier2(
+                self.handle,
+                &vk::DependencyInfo::default()
+                    .memory_barriers(memory_barriers)
+                    .buffer_memory_barriers(buffer_barriers)
+                    .image_memory_barriers(image_barriers),
+            )
+        };
+    }
     pub fn push_constants<T: Pod>(
         &self,
         layout: vk::PipelineLayout,
@@ -384,7 +399,7 @@ impl CommandBuffer {
         unsafe { self.device.handle.cmd_blit_image2(self.handle, &blit_info) }
     }
 
-    pub fn copy_buffer<T: Pod>(&self, src: &TypedBuffer<T>, dst: &TypedBuffer<T>, size: u64) {
+    pub fn copy_buffer(&self, src: &Buffer, dst: &Buffer, size: u64) {
         let copy = vk::BufferCopy::default().size(size);
         unsafe {
             self.device
@@ -393,7 +408,7 @@ impl CommandBuffer {
         };
     }
 
-    pub fn copy_buffer_to_image<T: Pod>(&self, src: &TypedBuffer<T>, dst: &Image) {
+    pub fn copy_buffer_to_image(&self, src: &Buffer, dst: &Image) {
         let handle = dst.handle();
         let copy = vk::BufferImageCopy::default()
             .buffer_offset(0)

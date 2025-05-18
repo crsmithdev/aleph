@@ -23,7 +23,7 @@ pub fn setup_logging() {
         .with_target(true)
         .with_file(true)
         .with_line_number(true)
-        .pretty();
+        .pretty();  
     tracing_subscriber::fmt()
         .event_format(format)
         .with_env_filter(EnvFilter::from_default_env())

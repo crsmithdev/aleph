@@ -381,34 +381,31 @@ impl Device {
         }
     }
 
-    pub fn queue_submit(&self, queue: &Queue, submit_info: SubmitInfo2, fence: vk::Fence) {
-        // log::trace!("Submitting {submit_info:?} to queue {queue:?} with fence {fence:?}");
-        // let wait_semaphore_infos = unsafe {
-        //     if !submit_info.p_wait_semaphore_infos.is_null()
-        //         && submit_info.wait_semaphore_info_count > 0
-        //     {
-        //         slice::from_raw_parts(
-        //             submit_info.p_wait_semaphore_infos,
-        //             submit_info.wait_semaphore_info_count as usize,
-        //         )
-        //     } else {
-        //         &[]
-        //     }
-        // };
-        // let signal_semaphore_infos = unsafe {
-        //     if !submit_info.p_signal_semaphore_infos.is_null()
-        //         && submit_info.signal_semaphore_info_count > 0
-        //     {
-        //         slice::from_raw_parts(
-        //             submit_info.p_signal_semaphore_infos,
-        //             submit_info.signal_semaphore_info_count as usize,
-        //         )
-        //     } else {
-        //         &[]
-        //     }
-        // };
-        // log::debug!("wait semaphores: {:?}", wait_semaphore_infos);
-        // log::debug!("signal semaphores: {:?}", signal_semaphore_infos);
+    pub fn queue_submit(
+        &self,
+        queue: &Queue,
+        command_buffers: &[vk::CommandBuffer],
+        wait_semaphores: &[vk::Semaphore],
+        signal_semaphores: &[vk::Semaphore],
+        fence: vk::Fence,
+    ) {
+        let cmd_infos = command_buffers
+            .iter()
+            .map(|cb| vk::CommandBufferSubmitInfo::default().command_buffer(*cb))
+            .collect::<Vec<_>>();
+
+        let wait_semaphore_infos = wait_semaphores
+            .iter()
+            .map(|s| vk::SemaphoreSubmitInfo::default().semaphore(*s))
+            .collect::<Vec<_>>();
+        let signal_semaphore_infos = signal_semaphores
+            .iter()
+            .map(|s| vk::SemaphoreSubmitInfo::default().semaphore(*s))
+            .collect::<Vec<_>>();
+        let submit_info = vk::SubmitInfo2::default()
+            .command_buffer_infos(&cmd_infos)
+            .wait_semaphore_infos(&wait_semaphore_infos)
+            .signal_semaphore_infos(&signal_semaphore_infos);
         unsafe {
             self.handle
                 .queue_submit2(**queue, slice::from_ref(&submit_info), fence)
