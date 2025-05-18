@@ -19,8 +19,11 @@ pub fn setup_logging() {
         .with_thread_ids(false)
         .with_thread_names(false)
         .with_level(true)
-        .with_target(false)
-        .compact();
+        .with_ansi(false)
+        .with_target(true)
+        .with_file(true)
+        .with_line_number(true)
+        .pretty();
     tracing_subscriber::fmt()
         .event_format(format)
         .with_env_filter(EnvFilter::from_default_env())

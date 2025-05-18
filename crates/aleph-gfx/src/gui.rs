@@ -52,7 +52,7 @@ impl Gui {
         let device = gpu.device();
         let instance = gpu.instance();
         let physical_device = device.physical_device();
-        let pool = gpu.create_command_pool()?;
+        let pool = gpu.create_command_pool();
 
         let renderer = {
             let allocator = ga::vulkan::Allocator::new(&ga::vulkan::AllocatorCreateDesc {
@@ -135,7 +135,7 @@ impl Gui {
         if !textures_delta.set.is_empty() {
             self.renderer
                 .set_textures(
-                    ctx.gpu.device().queue().handle(),
+                    ctx.gpu.device().graphics_queue().handle(),
                     self.pool.handle(),
                     textures_delta.set.as_slice(),
                 )
@@ -143,8 +143,11 @@ impl Gui {
         }
         let clipped_primitives = self.ctx.tessellate(shapes, pixels_per_point);
 
-        ctx.command_buffer
-            .begin_rendering(color_attachments, Some(depth_attachment), ctx.extent)?;
+        ctx.command_buffer.begin_rendering(
+            color_attachments,
+            Some(depth_attachment),
+            ctx.extent,
+        )?;
         self.renderer.cmd_draw(
             ctx.command_buffer.handle(),
             extent,

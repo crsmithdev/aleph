@@ -37,6 +37,13 @@ fn update_system(
     mut renderer: ResMut<Renderer>,
 ) {
     gui.handle_events(events.read());
+    if !renderer.prepared {
+        renderer
+            .prepare_resources(&mut assets, &scene)
+            .expect("Error preparing resources");
+        // assets.uploader().submit_uploads();
+        renderer.prepared = true;
+    }
     renderer
         .render(&scene, &mut assets, &mut gui)
         .expect("execute renderer");

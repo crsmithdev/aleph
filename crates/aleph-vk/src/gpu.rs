@@ -90,19 +90,19 @@ impl Gpu {
         )?);
 
         let allocator = Arc::new(Allocator::new(&instance, &device)?);
-        let setup_cmd_pool = device.create_command_pool()?;
+        let setup_cmd_pool = device.create_command_pool(device.graphics_queue(), "setup");
         let setup_cmd_buffer = setup_cmd_pool.create_command_buffer()?;
         let properties = instance.get_physical_device_properties(device.physical_device);
 
         Ok(Self {
-            instance,
-            device,
             surface,
             swapchain,
             allocator,
             immediate_cmd_buffer: setup_cmd_buffer,
             immediate_cmd_pool: setup_cmd_pool,
             properties,
+            instance,
+            device,
         })
     }
 
@@ -127,7 +127,7 @@ impl Gpu {
         let surface = Surface::headless(&instance);
         let swapchain = UnsafeCell::new(Swapchain::headless(&instance, &device)?);
         let allocator = Arc::new(Allocator::new(&instance, &device)?);
-        let setup_cmd_pool = device.create_command_pool()?;
+        let setup_cmd_pool = device.create_command_pool(device.graphics_queue(), "setup");
         let setup_cmd_buffer = setup_cmd_pool.create_command_buffer()?;
         let properties = instance.get_physical_device_properties(device.physical_device);
 
@@ -212,7 +212,10 @@ impl Gpu {
         })
     }
 
-    pub fn create_command_pool(&self) -> Result<CommandPool> { self.device.create_command_pool() }
+    pub fn create_command_pool(&self) -> CommandPool {
+        self.device
+            .create_command_pool(self.device.graphics_queue(), "name")
+    }
 
     pub fn create_descriptor_set_layout(
         &self,
@@ -280,11 +283,11 @@ impl Gpu {
         self.device.update_descriptor_sets(writes, copies)
     }
 
-    pub fn create_fence(&self) -> Result<vk::Fence> {
+    pub fn create_fence(&self) -> vk::Fence {
         self.device.create_fence(vk::FenceCreateFlags::empty())
     }
 
-    pub fn create_fence_signaled(&self) -> Result<vk::Fence> {
+    pub fn create_fence_signaled(&self) -> vk::Fence {
         self.device.create_fence(vk::FenceCreateFlags::SIGNALED)
     }
 
@@ -347,7 +350,7 @@ impl Gpu {
 
         unsafe {
             self.device.handle().queue_submit2(
-                self.device.queue.handle(),
+                self.device.graphics_queue().handle(),
                 submit_info,
                 vk::Fence::null(),
             )

@@ -35,8 +35,8 @@ pub struct CommandBuffer {
 
 impl CommandBuffer {
     pub fn new(device: &Device, pool: &CommandPool) -> Result<CommandBuffer> {
-        let handle = device.create_command_buffer(pool.handle)?;
-        let fence = device.create_fence(vk::FenceCreateFlags::SIGNALED)?;
+        let handle = device.create_command_buffer(pool);
+        let fence = device.create_fence(vk::FenceCreateFlags::SIGNALED);
 
         Ok(CommandBuffer {
             handle,
@@ -262,7 +262,7 @@ impl CommandBuffer {
 
         let result = Ok(unsafe {
             self.device.handle.queue_submit2(
-                self.device.queue.handle,
+                self.device.graphics_queue().handle,
                 submit_info,
                 vk::Fence::null(),
             ) //self.fence)
@@ -278,7 +278,7 @@ impl CommandBuffer {
         fence: vk::Fence,
     ) -> Result<(), anyhow::Error> {
         let cmd = &self.handle;
-        let queue = self.device.queue;
+        let queue = self.device.graphics_queue();
 
         let wait_info = &[vk::SemaphoreSubmitInfo::default()
             .semaphore(wait_semaphore)

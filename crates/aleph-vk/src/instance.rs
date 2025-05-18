@@ -107,16 +107,21 @@ impl Instance {
     pub fn create_device(
         &self,
         physical_device: vk::PhysicalDevice,
-        queue_family: QueueFamily,
+        queue_families: [QueueFamily; 2],
         extension_names: &[*const ffi::c_char],
         features: &mut vk::PhysicalDeviceFeatures2,
     ) -> Result<ash::Device> {
         let priorities = [1.0];
-        let queue_info = [vk::DeviceQueueCreateInfo::default()
-            .queue_family_index(queue_family.index)
-            .queue_priorities(&priorities)];
+        let queue_infos = [
+            vk::DeviceQueueCreateInfo::default()
+                .queue_family_index(queue_families[0].index)
+                .queue_priorities(&priorities),
+            vk::DeviceQueueCreateInfo::default()
+                .queue_family_index(queue_families[1].index)
+                .queue_priorities(&priorities),
+        ];
         let device_info = vk::DeviceCreateInfo::default()
-            .queue_create_infos(&queue_info)
+            .queue_create_infos(&queue_infos)
             .enabled_extension_names(extension_names)
             .push_next(features);
 
@@ -139,7 +144,11 @@ pub unsafe extern "system" fn vulkan_debug_callback(
         .unwrap_or("[Error parsing message data]");
 
     match message_severity {
-        vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => log::error!("{}", message),
+        vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => {
+            let x = 10;
+            println!("{}", x);
+            log::error!("{}", message);
+        }
         vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => log::warn!("{}", message),
         vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => log::trace!("{}", message),
         // _ => log::info!("{}", message),

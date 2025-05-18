@@ -284,7 +284,7 @@ impl Assets {
             },
         )?;
 
-        // gpu.execute(|cmd| texture.upload(cmd, &desc.data).expect("upload"))?;
+        gpu.execute(|cmd| texture.upload(cmd, &desc.data).expect("upload"))?;
 
         Ok(texture)
     }

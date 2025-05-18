@@ -17,14 +17,6 @@ use {
     tracing::instrument,
 };
 
-pub struct ResourceInfo {
-    binder: ResourceBinder,
-    material_map: HashMap<MaterialHandle, usize>,
-    texture_map: HashMap<TextureHandle, usize>,
-    scene_buffer: TypedBuffer<GpuSceneData>,
-    material_buffer: TypedBuffer<GpuMaterialData>,
-}
-
 pub struct RenderContext<'a> {
     pub gpu: &'a Gpu,
     pub scene: &'a Scene,
@@ -171,7 +163,7 @@ impl Renderer {
 
         let binder = ResourceLayout::set(SET_IDX_BINDLESS)
             .uniform_buffer(BIND_IDX_SCENE, ShaderStageFlags::ALL_GRAPHICS)
-            .storage_buffer(BIND_IDX_MATERIAL, ShaderStageFlags::ALL_GRAPHICS)
+            .uniform_buffer(BIND_IDX_MATERIAL, ShaderStageFlags::ALL_GRAPHICS)
             .texture_array(BIND_IDX_TEXTURE, ShaderStageFlags::ALL_GRAPHICS)
             .finish(&gpu)?;
 
@@ -379,7 +371,7 @@ impl Renderer {
         fence: Fence,
     ) -> Result<(), anyhow::Error> {
         // let cmd = &self.handle;
-        let queue = ctx.gpu.device().queue(); // self..queue;
+        let queue = ctx.gpu.device().graphics_queue(); // self..queue;
 
         let wait_info = &[SemaphoreSubmitInfo::default()
             .semaphore(wait_semaphore)
@@ -542,13 +534,13 @@ impl Renderer {
     fn create_frames(gpu: &Gpu) -> Result<Vec<Frame>> {
         (0..gpu.swapchain().in_flight_frames())
             .map(|_| {
-                let pool = gpu.create_command_pool()?;
+                let pool = gpu.create_command_pool();
                 let command_buffer = pool.create_command_buffer()?;
 
                 Ok(Frame {
                     swapchain_semaphore: gpu.create_semaphore()?,
                     render_semaphore: gpu.create_semaphore()?,
-                    fence: gpu.create_fence_signaled()?,
+                    fence: gpu.create_fence_signaled(),
                     command_pool: pool,
                     command_buffer,
                 })

@@ -1,9 +1,13 @@
 use {
-    crate::{Allocator, Device, Extent2D, Format, Gpu, ImageAspectFlags, ImageUsageFlags},
+    crate::{
+        Allocator, Buffer, CommandBuffer, Device, Extent2D, Format, Gpu, ImageAspectFlags,
+        ImageUsageFlags, TypedBuffer,
+    },
     anyhow::Result,
-    ash::vk::{self, Handle},
+    ash::vk::{self, BufferUsageFlags, Handle},
+    bytemuck::Pod,
     derive_more::{Debug, Deref},
-    gpu_allocator::vulkan::Allocation,
+    gpu_allocator::{vulkan::Allocation, MemoryLocation},
     std::{mem, rc::Rc, sync::Arc},
     tracing::instrument,
 };
@@ -145,6 +149,23 @@ impl Texture {
     pub fn view(&self) -> vk::ImageView { self.image.view }
 
     pub fn sampler(&self) -> Option<vk::Sampler> { self.sampler }
+
+    pub fn upload<T: Pod>(&self, cmd: &CommandBuffer, data: &[T]) -> Result<()> {
+        let size = mem::size_of::<T>() as u64 * data.len() as u64;
+        let data = bytemuck::cast_slice(data);
+        let mut buffer: TypedBuffer<u8> = TypedBuffer::new(
+            &self.device,
+            &self.allocator,
+            size,
+            vk::BufferUsageFlags::TRANSFER_SRC,
+            MemoryLocation::CpuToGpu,
+            "staging",
+        )?;
+        buffer.write(data);
+        cmd.copy_buffer_to_image(&buffer, self);
+
+        Ok(())
+    }
 }
 
 impl Drop for Texture {
