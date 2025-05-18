@@ -1,6 +1,6 @@
 pub use ash::vk::ImageLayout;
 use {
-    crate::{buffer::TypedBuffer, texture::Image, Buffer, Device, ImageAspectFlags, Texture},
+    crate::{Buffer, Device, Image, ImageAspectFlags},
     anyhow::Result,
     ash::{vk, vk::PipelineBindPoint},
     bytemuck::Pod,
@@ -13,6 +13,12 @@ use {
 pub struct CommandPool {
     pub(crate) handle: vk::CommandPool,
     pub(crate) device: Device,
+}
+
+impl Drop for CommandBuffer {
+    fn drop(&mut self) {
+        log::trace!("Dropped {self:?}");
+    }
 }
 
 impl CommandPool {
@@ -468,11 +474,6 @@ impl CommandBuffer {
                 .handle
                 .cmd_pipeline_barrier2(self.handle, &dependency_info);
         };
-        // self.transition_image(
-        //     dst,
-        //     ImageLayout::TRANSFER_DST_OPTIMAL,
-        //     ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-        // );
     }
 
     // pub fn upload_image(

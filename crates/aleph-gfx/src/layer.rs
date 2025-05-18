@@ -41,7 +41,7 @@ fn update_system(
         renderer
             .prepare_resources(&mut assets, &scene)
             .expect("Error preparing resources");
-        assets.uploader.borrow_mut().submit_uploads();
+        // assets.uploader().submit_uploads();
         renderer.prepared = true;
     }
     renderer

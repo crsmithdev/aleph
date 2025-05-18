@@ -9,7 +9,7 @@ use {
         khr::{self},
         vk::{
             self, Extent2D, Filter, Handle, PhysicalDeviceProperties, SamplerAddressMode,
-            SamplerMipmapMode,
+            SamplerMipmapMode, TextureLODGatherFormatPropertiesAMD,
         },
     },
     derive_more::Debug,
@@ -63,6 +63,7 @@ pub struct Gpu {
     pub(crate) allocator: Arc<Allocator>,
     immediate_cmd_pool: CommandPool,
     immediate_cmd_buffer: CommandBuffer,
+    imm_fence: vk::Fence,
     properties: PhysicalDeviceProperties,
 }
 
@@ -103,6 +104,11 @@ impl Gpu {
             properties,
             instance,
             device,
+            imm_fence: unsafe {
+                device
+                    .handle
+                    .create_fence(&vk::FenceCreateInfo::default(), None)?
+            },
         })
     }
 
@@ -131,6 +137,7 @@ impl Gpu {
         let setup_cmd_buffer = setup_cmd_pool.create_command_buffer()?;
         let properties = instance.get_physical_device_properties(device.physical_device);
 
+nn
         Ok(Self {
             instance,
             device,
@@ -352,10 +359,9 @@ impl Gpu {
             self.device.handle().queue_submit2(
                 self.device.graphics_queue().handle(),
                 submit_info,
-                vk::Fence::null(),
+                self.i,
             )
         }?;
-        unsafe { self.device.handle().device_wait_idle() }?;
 
         Ok(())
     }

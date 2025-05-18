@@ -151,7 +151,7 @@ impl Texture {
     pub fn sampler(&self) -> Option<vk::Sampler> { self.sampler }
 
     pub fn upload<T: Pod>(&self, cmd: &CommandBuffer, data: &[T]) -> Result<()> {
-        let size = mem::size_of::<T>() as u64 * data.len() as u64;
+        let size = data.len() as u64;
         let data = bytemuck::cast_slice(data);
         let mut buffer: TypedBuffer<u8> = TypedBuffer::new(
             &self.device,

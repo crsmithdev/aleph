@@ -1,7 +1,6 @@
 use {
-    crate::RenderContext,
     aleph_vk::{
-        Buffer, DescriptorBindingFlags, DescriptorBufferInfo, DescriptorImageInfo,
+        CommandBuffer, DescriptorBindingFlags, DescriptorBufferInfo, DescriptorImageInfo,
         DescriptorPoolCreateFlags, DescriptorPoolSize, DescriptorSet, DescriptorSetLayout,
         DescriptorSetLayoutBinding, DescriptorSetLayoutCreateFlags, DescriptorType, Gpu,
         ImageLayout, PipelineLayout, Sampler, ShaderStageFlags, Texture, TypedBuffer,
@@ -9,7 +8,7 @@ use {
     },
     anyhow::Result,
     bytemuck::Pod,
-    std::rc::Rc,
+    derive_more::Debug,
 };
 
 pub struct ResourceLayout {
@@ -157,11 +156,6 @@ impl ResourceLayout {
             variable_descriptor_count
         );
 
-        // let descriptor_counts = self
-        // .resources
-        // .iter()
-        // .map(|binding| binding.descriptor_count as u32)
-        // .collect::<Vec<_>>();
         let descriptor_set = gpu.create_descriptor_set(
             descriptor_layout,
             descriptor_pool,
@@ -178,8 +172,10 @@ impl ResourceLayout {
     }
 }
 
+#[derive(Debug)]
 pub struct ResourceBinder {
     set_index: u32,
+    #[debug(skip)]
     bindings: Vec<BoundResource>,
     layout: DescriptorSetLayout,
     set: DescriptorSet,
@@ -194,9 +190,11 @@ impl ResourceBinder {
         &mut self,
         index: usize,
         buffer: &TypedBuffer<T>,
+        count: usize,
         offset: u64,
     ) -> &mut Self {
         self.bindings.push(BoundResource::StorageBuffer {
+            count,
             index: index as u32,
             info: DescriptorBufferInfo::default()
                 .buffer(buffer.handle())
@@ -209,7 +207,7 @@ impl ResourceBinder {
     pub fn texture_array(
         &mut self,
         index: usize,
-        images: &[Rc<Texture>],
+        images: &[Texture],
         sampler: Sampler,
     ) -> &mut Self {
         let info = images
@@ -279,7 +277,7 @@ impl ResourceBinder {
             .map(|binding| self.extract(binding))
             .collect::<Vec<_>>();
         if !writes.is_empty() {
-            gpu.execute(|cmd| cmd.update_descriptor_set(&writes.as_slice(), &[]));
+            gpu.update_descriptor_sets(&writes.as_slice(), &[])?;
         }
 
         Ok(self)
@@ -287,11 +285,13 @@ impl ResourceBinder {
 
     fn extract(&self, binding: &BoundResource) -> WriteDescriptorSet {
         match binding {
-            BoundResource::StorageBuffer { index, info, .. } => {
+            BoundResource::StorageBuffer {
+                index, info, count, ..
+            } => {
                 let mut write = WriteDescriptorSet::default()
                     .dst_set(self.set)
                     .dst_binding(*index)
-                    .descriptor_count(1)
+                    .descriptor_count(*count as u32)
                     .descriptor_type(DescriptorType::STORAGE_BUFFER);
                 write.p_buffer_info = info;
                 write.descriptor_count = 1;
@@ -342,13 +342,8 @@ impl ResourceBinder {
         }
     }
 
-    pub fn bind(&self, ctx: &RenderContext, pipeline_layout: PipelineLayout, offsets: &[u32]) {
-        ctx.command_buffer.bind_descriptor_sets(
-            pipeline_layout,
-            self.set_index,
-            &[self.set],
-            offsets,
-        );
+    pub fn bind<'a>(&self, cmd: &CommandBuffer, pipeline_layout: PipelineLayout, offsets: &[u32]) {
+        cmd.bind_descriptor_sets(pipeline_layout, self.set_index, &[self.set], offsets);
     }
 
     pub fn write_descriptor(&self, index: usize) -> Option<WriteDescriptorSet> {
@@ -374,6 +369,7 @@ enum Dimensionality {
 
 pub enum BoundResource {
     StorageBuffer {
+        count: usize,
         info: DescriptorBufferInfo,
         index: u32,
     },
@@ -395,349 +391,3 @@ pub enum BoundResource {
         index: u32,
     },
 }
-
-// #[derive(Default)]
-// pub struct ResourceBuilder {
-//     unbound: HashMap<usize, UnboundResource>,
-// }
-
-// impl ResourceBuilder {
-//     const N_DESCRIPTORS: u32 = 10000;
-//     pub fn uniform_buffer(&mut self, index: usize, flags: ShaderStageFlags) -> &mut Self {
-//         self.add(index, flags, DescriptorType::UNIFORM_BUFFER)
-//     }
-//     pub fn dynamic_buffer(&mut self, index: usize, flags: ShaderStageFlags) -> &mut Self {
-//         self.add(index, flags, DescriptorType::UNIFORM_BUFFER_DYNAMIC)
-//     }
-//     pub fn texture(&mut self, index: usize, flags: ShaderStageFlags) -> &mut Self {
-//         self.add(index, flags, DescriptorType::COMBINED_IMAGE_SAMPLER)
-//     }
-
-//     fn add(
-//         &mut self,
-//         index: usize,
-//         flags: ShaderStageFlags,
-//         descriptor_type: DescriptorType,
-//     ) -> &mut Self {
-//         self.unbound.insert(
-//             index,
-//             UnboundResource {
-//                 index,
-//                 flags,
-//                 descriptor_type,
-//             },
-//         );
-//         self
-//     }
-
-//     pub fn define(&mut self, gpu: &Gpu) -> Result<Resources> {
-//         let layout_bindings: Vec<DescriptorSetLayoutBinding> = self
-//             .unbound
-//             .iter()
-//             .map(|(index, binding)| {
-//                 DescriptorSetLayoutBinding::default()
-//                     .binding(*index as u32)
-//                     .descriptor_count(1)
-//                     .stage_flags(binding.flags)
-//                     .descriptor_type(binding.descriptor_type)
-//             })
-//             .collect();
-//         let descriptor_layout = gpu.create_descriptor_set_layout(
-//             &layout_bindings,
-//             DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND_POOL,
-//         )?;
-
-//         let pool_sizes = [
-//             DescriptorPoolSize::default()
-//                 .descriptor_count(Self::N_DESCRIPTORS)
-//                 .ty(DescriptorType::UNIFORM_BUFFER),
-//             DescriptorPoolSize::default()
-//                 .descriptor_count(Self::N_DESCRIPTORS)
-//                 .ty(DescriptorType::UNIFORM_BUFFER_DYNAMIC),
-//             DescriptorPoolSize::default()
-//                 .descriptor_count(Self::N_DESCRIPTORS)
-//                 .ty(DescriptorType::COMBINED_IMAGE_SAMPLER),
-//         ];
-//         let descriptor_pool = gpu.create_descriptor_pool(
-//             &pool_sizes,
-//             DescriptorPoolCreateFlags::UPDATE_AFTER_BIND,
-//             1,
-//         )?;
-
-//         let descriptor_set = gpu.create_descriptor_set(descriptor_layout, descriptor_pool)?;
-
-//         Ok(Resources {
-//             descriptor_set,
-//             descriptor_layout,
-//             unbound: self.unbound.clone(),
-//             bound: HashMap::new(),
-//         })
-//     }
-// }
-
-// #[derive(Default)]
-// pub struct Resources {
-//     descriptor_set: DescriptorSet,
-//     descriptor_layout: DescriptorSetLayout,
-//     unbound: HashMap<usize, UnboundResource>,
-//     bound: HashMap<usize, BoundResource>,
-// }
-
-// impl Resources {
-//     pub fn descriptor_set(&self) -> DescriptorSet { self.descriptor_set }
-//     pub fn descriptor_layout(&self) -> DescriptorSetLayout { self.descriptor_layout }
-
-//     pub fn uniform_buffer<T: Pod>(&mut self, index: usize, buffer: &Buffer<T>) -> &mut Self {
-//         self.bind_resource(
-//             index,
-//             DescriptorType::UNIFORM_BUFFER,
-//             BoundResource::Buffer {
-//                 index: index as u32,
-//                 buffer: buffer.handle(),
-//                 size: buffer.size(),
-//                 offset: 0,
-//             },
-//         )
-//     }
-
-//     pub fn dynamic_uniform_buffer<T: Pod>(
-//         &mut self,
-//         index: usize,
-//         buffer: &Buffer<T>,
-//         offset: u64,
-//         range: u64,
-//     ) -> &mut Self {
-//         self.bind_resource(
-//             index,
-//             DescriptorType::UNIFORM_BUFFER_DYNAMIC,
-//             BoundResource::DynamicUniform {
-//                 index: index as u32,
-//                 buffer: buffer.handle(),
-//                 size: buffer.size(),
-//                 offset,
-//                 range,
-//             },
-//         )
-//     }
-
-//     pub fn texture(
-//         &mut self,
-//         index: usize,
-//         texture: &AllocatedTexture,
-//         sampler: Sampler,
-//     ) -> &mut Self {
-//         self.bind_resource(
-//             index,
-//             DescriptorType::COMBINED_IMAGE_SAMPLER,
-//             BoundResource::Texture {
-//                 index: index as u32,
-//                 image: texture.view(),
-//                 sampler,
-//             },
-//         )
-//     }
-
-//     fn bind_resource(
-//         &mut self,
-//         index: usize,
-//         descriptor_type: DescriptorType,
-//         resource: BoundResource,
-//     ) -> &mut Self {
-//         println!("{} {}", self.unbound.len(), self.bound.len());
-//         match self.unbound.remove(&index) {
-//             Some(unbound) if unbound.descriptor_type == descriptor_type => {
-//                 self.bound.insert(index, resource);
-//             }
-//             Some(unbound) => {
-//                 log::warn!(
-//                     "Resource type mismatch for index {}: expected {:?}, got {:?}",
-//                     index,
-//                     unbound.descriptor_type,
-//                     descriptor_type
-//                 );
-//             }
-//             None => {
-//                 log::warn!(
-//                     "Resource type {:?} has not been defined at index {}",
-//                     descriptor_type,
-//                     index
-//                 );
-//             }
-//         }
-
-//         self
-//     }
-
-//     pub fn update(&self, ctx: &RenderContext) {
-//         let mut buffer_writes = vec![];
-//         let mut image_writes = vec![];
-//         let mut image_infos = vec![];
-//         let mut buffer_infos = vec![];
-
-//         for (index, binding) in &self.bound {
-//             match binding {
-//                 BoundResource::DynamicUniform {
-//                     index,
-//                     buffer,
-//                     size,
-//                     offset,
-//                     range,
-//                 } => {
-//                     // let buffer: &RawBuffer = unsafe { &*(*buffer as *const RawBuffer) };
-//                     buffer_infos.push([DescriptorBufferInfo::default()
-//                         .buffer(*buffer)
-//                         .offset(*offset)
-//                         .range(*range)]);
-//                     buffer_writes.push(
-//                         WriteDescriptorSet::default()
-//                             // .dst_set(self.set)
-//                             .dst_set(self.descriptor_set)
-//                             .dst_binding(*index)
-//                             .descriptor_count(1)
-//                             .descriptor_type(DescriptorType::UNIFORM_BUFFER_DYNAMIC),
-//                     );
-//                 }
-//                 BoundResource::Buffer {
-//                     index,
-//                     buffer,
-//                     size,
-//                     offset,
-//                 } => {
-//                     // let buffer: &RawBuffer = unsafe { &*(*buffer as *const RawBuffer) };
-//                     buffer_infos.push([DescriptorBufferInfo::default()
-//                         .buffer(*buffer)
-//                         .offset(*offset)
-//                         .range(*size)]);
-//                     buffer_writes.push(
-//                         WriteDescriptorSet::default()
-//                             .dst_set(self.descriptor_set)
-//                             .dst_binding(*index)
-//                             .descriptor_count(1)
-//                             .descriptor_type(DescriptorType::UNIFORM_BUFFER),
-//                     );
-//                 }
-//                 BoundResource::Texture {
-//                     index,
-//                     image,
-//                     sampler,
-//                 } => {
-//                     // let image: &AllocatedTexture = unsafe { &*(*image as *const AllocatedTexture) };
-//                     image_infos.push([DescriptorImageInfo::default()
-//                         .image_layout(ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-//                         .image_view(*image)
-//                         .sampler(*sampler)]);
-//                     image_writes.push(
-//                         WriteDescriptorSet::default()
-//                             .dst_set(self.descriptor_set)
-//                             .dst_binding(*index)
-//                             .descriptor_count(1)
-//                             .descriptor_type(DescriptorType::COMBINED_IMAGE_SAMPLER),
-//                     );
-//                 }
-//             }
-//         }
-
-//         for i in 0..buffer_infos.len() {
-//             buffer_writes[i] = buffer_writes[i].buffer_info(&buffer_infos[i]);
-//         }
-//         for i in 0..image_infos.len() {
-//             image_writes[i] = image_writes[i].image_info(&image_infos[i]);
-//         }
-
-//         let mut writes = buffer_writes;
-//         writes.extend(image_writes);
-
-//         if !writes.is_empty() {
-//             ctx.cmd_buffer.update_descriptor_set(writes.as_slice(), &[])
-//         }
-//     }
-
-//     pub fn bind(&self, ctx: &RenderContext, layout: &PipelineLayout) {
-//         let mut buffer_writes = vec![];
-//         let mut image_writes = vec![];
-//         let mut image_infos = vec![];
-//         let mut buffer_infos = vec![];
-
-//         println!("bound: {:?}", self.bound.len());
-//         println!("unbound: {:?}", self.unbound.len());
-//         for (index, binding) in &self.bound {
-//             match binding {
-//                 BoundResource::DynamicUniform {
-//                     index,
-//                     buffer,
-//                     size,
-//                     offset,
-//                     range,
-//                 } => {
-//                     // let buffer: &RawBuffer = unsafe { &*(*buffer as *const RawBuffer) };
-//                     buffer_infos.push([DescriptorBufferInfo::default()
-//                         .buffer(*buffer)
-//                         .offset(*offset)
-//                         .range(*range)]);
-//                     buffer_writes.push(
-//                         WriteDescriptorSet::default()
-//                             // .dst_set(self.set)
-//                             .dst_set(self.descriptor_set)
-//                             .dst_binding(*index)
-//                             .descriptor_count(1)
-//                             .descriptor_type(DescriptorType::UNIFORM_BUFFER_DYNAMIC),
-//                     );
-//                 }
-//                 BoundResource::Buffer {
-//                     index,
-//                     buffer,
-//                     size,
-//                     offset,
-//                 } => {
-//                     // let buffer: &RawBuffer = unsafe { &*(*buffer as *const RawBuffer) };
-//                     buffer_infos.push([DescriptorBufferInfo::default()
-//                         .buffer(*buffer)
-//                         .offset(*offset)
-//                         .range(*size)]);
-//                     buffer_writes.push(
-//                         WriteDescriptorSet::default()
-//                             // .dst_set(self.set)
-//                             .dst_set(self.descriptor_set)
-//                             .dst_binding(*index)
-//                             .descriptor_count(1)
-//                             .descriptor_type(DescriptorType::UNIFORM_BUFFER),
-//                     );
-//                 }
-//                 BoundResource::Texture {
-//                     index,
-//                     image,
-//                     sampler,
-//                 } => {
-//                     // let image: &AllocatedTexture = unsafe { &*(*image as *const AllocatedTexture) };
-//                     image_infos.push([DescriptorImageInfo::default()
-//                         .image_layout(ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-//                         .image_view(*image)
-//                         .sampler(*sampler)]);
-//                     image_writes.push(
-//                         WriteDescriptorSet::default()
-//                             // .dst_set(self.set)
-//                             .dst_set(self.descriptor_set)
-//                             .dst_binding(*index)
-//                             .descriptor_count(1)
-//                             .descriptor_type(DescriptorType::COMBINED_IMAGE_SAMPLER),
-//                     );
-//                 }
-//             }
-//         }
-
-//         for i in 0..buffer_infos.len() {
-//             buffer_writes[i] = buffer_writes[i].buffer_info(&buffer_infos[i]);
-//         }
-//         for i in 0..image_infos.len() {
-//             image_writes[i] = image_writes[i].image_info(&image_infos[i]);
-//         }
-
-//         let mut writes = buffer_writes;
-//         writes.extend(image_writes);
-
-//         if !writes.is_empty() {
-//             ctx.cmd_buffer
-//                 .bind_descriptor_sets(*layout, 0, &[self.descriptor_set], &[]);
-//         }
-//     }
-// }

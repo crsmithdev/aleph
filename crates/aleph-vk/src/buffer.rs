@@ -70,11 +70,11 @@ impl<T: Pod> TypedBuffer<T> {
             name,
         )
     }
-    pub fn staging(gpu: &Gpu, size: u64, name: &str) -> Result<Self> {
+    pub fn staging(gpu: &Gpu, size: usize, name: &str) -> Result<Self> {
         Self::new(
             &gpu.device,
             &gpu.allocator,
-            size,
+            size as u64,
             vk::BufferUsageFlags::TRANSFER_SRC,
             MemoryLocation::CpuToGpu,
             name,
@@ -126,7 +126,10 @@ impl<T: Pod> TypedBuffer<T> {
 }
 
 impl<T> Drop for TypedBuffer<T> {
-    fn drop(&mut self) { self.buffer.destroy(); }
+    fn drop(&mut self) {
+        log::debug!("Dropped buffer: {self:?}");
+        self.buffer.destroy();
+    }
 }
 
 #[derive(Clone, Debug)]

@@ -1,18 +1,16 @@
 use {
-    crate::{model::MeshInfo, util, Material, Mesh, Primitive, Vertex},
+    crate::{model::MeshInfo, Material, Mesh, Primitive, Vertex},
     aleph_vk::{
-        texture::TextureInfo2, uploader, Extent2D, Filter, Format, Gpu, ImageAspectFlags,
-        ImageUsageFlags, MemoryLocation, PrimitiveTopology, Sampler, SamplerAddressMode,
-        SamplerMipmapMode, Texture, TextureInfo, TypedBuffer, Uploader,
+        Extent2D, Filter, Format, Gpu, ImageAspectFlags, ImageUsageFlags, PrimitiveTopology,
+        Sampler, SamplerAddressMode, SamplerMipmapMode, Texture, TextureInfo, TypedBuffer,
     },
     anyhow::Result,
+    glam::vec4,
     image::{ImageBuffer, Rgba},
     std::{
-        cell::RefCell,
+        cell::{RefCell, RefMut},
         collections::HashMap,
-        default,
         hash::Hash,
-        rc::Rc,
         sync::{
             atomic::{AtomicU64, Ordering},
             Arc,
@@ -23,7 +21,7 @@ use {
 const WHITE: [u8; 4] = [255, 255, 255, 255];
 const NORMAL: [u8; 4] = [127, 127, 255, 255];
 
-static ASSET_HANDLE_INDEX: AtomicU64 = AtomicU64::new(0);
+static ASSET_HANDLE_INDEX: AtomicU64 = AtomicU64::new(1);
 
 pub struct AssetHandle<T> {
     index: u64,
@@ -35,6 +33,13 @@ impl<T> AssetHandle<T> {
         let index = ASSET_HANDLE_INDEX.fetch_add(1, Ordering::Relaxed);
         Self {
             index,
+            marker: std::marker::PhantomData,
+        }
+    }
+
+    pub fn null() -> Self {
+        Self {
+            index: 0,
             marker: std::marker::PhantomData,
         }
     }
@@ -81,18 +86,8 @@ impl std::fmt::Debug for MaterialHandle {
     }
 }
 
-pub struct Defaults {
-    pub white_srgb: Rc<Texture>,
-    pub white_linear: Rc<Texture>,
-    pub normal: Rc<Texture>,
-    red: Rc<Texture>,
-    pub sampler: Sampler,
-}
-
-impl Defaults {}
-
 enum Asset<T, D> {
-    Loaded(Rc<T>),
+    Loaded(T),
     Unloaded(D),
 }
 
@@ -105,12 +100,15 @@ pub struct Assets {
     meshes: HashMap<MeshHandle, Mesh>,
     textures: AssetCache<Texture, TextureInfo>,
     materials: HashMap<MaterialHandle, Material>,
-    pub uploader: RefCell<uploader::Uploader>,
-    pub default_texture: Texture,
-    pub defaults: Defaults,
+    // uploader: RefCell<Uploader>,
+    default_material: MaterialHandle,
+    default_sampler: Sampler,
 }
 
 impl Assets {
+    const UPLOAD_POOL_SIZE: usize = 10;
+    const UPLOAD_RETAINED_SIZE: u64 = 1024 * 1024 * 10;
+    const UPLOAD_RETAINED_FRAMES: usize = 5;
     const DEFAULT_EXTENT: Extent2D = Extent2D {
         width: 8,
         height: 8,
@@ -120,67 +118,14 @@ impl Assets {
         let textures = RefCell::new(HashMap::new());
         let materials = HashMap::new();
         let meshes = HashMap::new();
-        let defaults = Self::load_defaults(&gpu)?;
-        let default_texture = Texture::new2(
-            &gpu,
-            &TextureInfo2 {
-                name: "default".to_string(),
-                extent: Self::DEFAULT_EXTENT,
-                format: Format::R8G8B8A8_SRGB,
-                flags: ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
-                aspect_flags: ImageAspectFlags::COLOR,
-                sampler: Some(defaults.sampler),
-            },
-        )?;
-        let uploader = RefCell::new(Uploader::new(&gpu, 10, 2, 1024 * 1024 * 10)?);
+        // let uploader = RefCell::new(Uploader::new(
+        //     &gpu,
+        //     Self::UPLOAD_POOL_SIZE,
+        //     Self::UPLOAD_RETAINED_FRAMES,
+        //     Self::UPLOAD_RETAINED_SIZE,
+        // )?);
 
-        let mut assets = Self {
-            gpu,
-            meshes,
-            textures,
-            uploader,
-            materials,
-            defaults,
-            default_texture,
-        };
-
-        assets.add_texture_loaded(assets.defaults.white_srgb.clone());
-        assets.add_texture_loaded(assets.defaults.white_linear.clone());
-        assets.add_texture_loaded(assets.defaults.normal.clone());
-        assets.add_texture_loaded(assets.defaults.red.clone());
-
-        Ok(assets)
-    }
-
-    pub fn create_default(
-        gpu: &Gpu,
-        color: &[u8; 4],
-        format: Format,
-        name: impl Into<String>,
-        sampler: Sampler,
-    ) -> Result<Texture> {
-        let pixel = Rgba::<u8>(*color);
-        let buffer = ImageBuffer::from_pixel(16, 16, pixel);
-        let data = buffer.as_raw();
-
-        Ok(Self::load_texture(
-            gpu,
-            &TextureInfo {
-                name: name.into(),
-                data: data.to_vec(),
-                extent: Self::DEFAULT_EXTENT,
-                flags: ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
-                aspect_flags: ImageAspectFlags::COLOR,
-                format,
-                sampler: Some(sampler),
-            },
-        )?)
-    }
-
-    fn load_defaults(gpu: &Gpu) -> Result<Defaults> {
-        let srgb = Format::R8G8B8A8_SRGB;
-        let linear = Format::R8G8B8A8_UNORM;
-        let sampler = gpu.create_sampler(
+        let default_sampler = gpu.create_sampler(
             Filter::LINEAR,
             Filter::LINEAR,
             SamplerMipmapMode::LINEAR,
@@ -188,25 +133,78 @@ impl Assets {
             SamplerAddressMode::REPEAT,
         )?;
 
-        let white_srgb = Self::create_default(gpu, &WHITE, srgb, "white-srgb", sampler)?;
-        let white_linear = Self::create_default(gpu, &WHITE, linear, "white-linear", sampler)?;
-        let normal = Self::create_default(gpu, &NORMAL, linear, "normal", sampler)?;
-        let red = Self::create_default(gpu, &[255, 0, 0, 255], linear, "red", sampler)?;
+        let mut assets = Self {
+            gpu,
+            meshes,
+            textures,
+            materials,
+            // uploader,
+            default_material: MaterialHandle::null(),
+            default_sampler,
+        };
+        assets.default_material = assets.add_default_material()?;
 
-        Ok(Defaults {
-            white_srgb: Rc::new(white_srgb),
-            white_linear: Rc::new(white_linear),
-            normal: Rc::new(normal),
-            red: Rc::new(red),
-            sampler,
-        })
+        Ok(assets)
     }
 
-    pub fn add_texture_loaded(&mut self, texture: Rc<Texture>) -> TextureHandle {
-        let handle = TextureHandle::new();
-        let asset = TextureAsset::Loaded(texture.clone());
-        self.textures.borrow_mut().insert(handle, asset);
-        handle
+    // pub fn uploader(&self) -> RefMut<Uploader> { self.uploader.borrow_mut() }
+
+    pub fn default_sampler(&self) -> Sampler { self.default_sampler }
+
+    pub fn default_material(&self) -> Material {
+        self.material(self.default_material).unwrap().clone()
+    }
+
+    fn add_default_material(&mut self) -> Result<MaterialHandle> {
+        let sampler = self.gpu.create_sampler(
+            Filter::LINEAR,
+            Filter::LINEAR,
+            SamplerMipmapMode::LINEAR,
+            SamplerAddressMode::REPEAT,
+            SamplerAddressMode::REPEAT,
+        )?;
+        let white_srgb =
+            self.add_default_texture(&WHITE, Format::R8G8B8A8_SRGB, "white-srgb", sampler);
+        let white_linear =
+            self.add_default_texture(&WHITE, Format::R8G8B8A8_UNORM, "white-unorm", sampler);
+        let normal = self.add_default_texture(&NORMAL, Format::R8G8B8A8_UNORM, "normal", sampler);
+
+        let material = Material {
+            name: "default".to_string(),
+            color_texture: white_srgb,
+            color_factor: vec4(1., 1., 1., 1.),
+            normal_texture: normal,
+            metalrough_texture: white_linear,
+            metallic_factor: 1.0,
+            roughness_factor: 1.0,
+            ao_texture: white_linear,
+            ao_strength: 1.0,
+        };
+
+        self.add_material(material)
+    }
+
+    fn add_default_texture(
+        &mut self,
+        color: &[u8; 4],
+        format: Format,
+        name: &str,
+        sampler: Sampler,
+    ) -> TextureHandle {
+        let pixel = Rgba::<u8>(*color);
+        let buffer = ImageBuffer::from_pixel(16, 16, pixel);
+        let data = buffer.to_vec();
+        let info = TextureInfo {
+            name: name.to_string(),
+            data,
+            extent: Self::DEFAULT_EXTENT,
+            flags: ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
+            aspect_flags: ImageAspectFlags::COLOR,
+            format,
+            sampler: Some(sampler),
+        };
+
+        self.add_texture(info)
     }
 
     pub fn add_texture(&mut self, desc: TextureInfo) -> TextureHandle {
@@ -216,7 +214,20 @@ impl Assets {
         handle
     }
 
-    pub fn textures(&self) -> Vec<(TextureHandle, Rc<Texture>)> {
+    pub fn texture(&self, handle: TextureHandle) -> Option<Texture> {
+        let mut textures = self.textures.borrow_mut();
+        match textures.get(&handle) {
+            Some(TextureAsset::Loaded(texture)) => Some(texture.clone()),
+            Some(TextureAsset::Unloaded(desc)) => {
+                let texture = self.load_texture(&desc).unwrap();
+                textures.insert(handle, TextureAsset::Loaded(texture.clone()));
+                Some(texture)
+            }
+            None => None,
+        }
+    }
+
+    pub fn textures(&self) -> Vec<(TextureHandle, Texture)> {
         let keys = self.textures.borrow().keys().cloned().collect::<Vec<_>>();
         keys.into_iter()
             .filter_map(|k| match self.texture(k) {
@@ -224,6 +235,32 @@ impl Assets {
                 None => None,
             })
             .collect()
+    }
+
+    // fn load_texture(&self, info: &TextureInfo) -> Result<Texture> {
+    //     let texture = Texture::new(&self.gpu, info)?;
+    //     let mut uploader = self.uploader.borrow_mut();
+    //     uploader.enqueue_image(&*texture, &info.data);
+
+    //     Ok(texture)
+    // }
+
+    fn load_texture(&self, desc: &TextureInfo) -> Result<Texture> {
+        let texture = Texture::new(&self.gpu, desc)?;
+        self.gpu
+            .execute(|cmd| texture.upload(cmd, &desc.data).expect("upload"))?;
+
+        Ok(texture)
+    }
+
+    pub fn add_material(&mut self, material: Material) -> Result<MaterialHandle> {
+        let handle = MaterialHandle::new();
+        self.materials.insert(handle, material);
+        Ok(handle)
+    }
+
+    pub fn material(&self, handle: MaterialHandle) -> Option<&Material> {
+        self.materials.get(&handle)
     }
 
     pub fn materials(&self) -> Vec<(MaterialHandle, &Material)> {
@@ -237,97 +274,21 @@ impl Assets {
             .collect()
     }
 
-    pub fn meshes(&self) -> Vec<(MeshHandle, &Mesh)> {
-        self.meshes
-            .keys()
-            .into_iter()
-            .filter_map(|k| match self.mesh(*k) {
-                Some(texture) => Some((*k, texture)),
-                None => None,
-            })
-            .collect()
-    }
-
-    pub fn texture(&self, handle: TextureHandle) -> Option<Rc<Texture>> {
-        let mut textures = self.textures.borrow_mut();
-        if let Some(asset) = textures.get(&handle) {
-            if let TextureAsset::Loaded(te) = asset {
-                return Some(te.clone());
-            }
-        }
-        match textures.get(&handle) {
-            Some(TextureAsset::Loaded(asset)) => {
-                return Some(asset.clone());
-            }
-            Some(TextureAsset::Unloaded(desc)) => {
-                let texture = self.load_texture2(desc).unwrap();
-                textures.insert(handle, TextureAsset::Loaded(Rc::new(texture)));
-            }
-            None => return None,
-        }
-        if let Some(asset) = textures.get(&handle) {
-            if let TextureAsset::Loaded(te) = asset {
-                return Some(te.clone());
-            }
-        }
-
-        unreachable!()
-    }
-
-    fn load_texture(gpu: &Gpu, desc: &TextureInfo) -> Result<Texture> {
-        let texture = Texture::new2(
-            gpu,
-            &TextureInfo2 {
-                name: desc.name.clone(),
-                extent: desc.extent,
-                format: desc.format,
-                flags: desc.flags,
-                aspect_flags: desc.aspect_flags,
-                sampler: desc.sampler,
-            },
-        )?;
-
-        gpu.execute(|cmd| texture.upload(cmd, &desc.data).expect("upload"))?;
-
-        Ok(texture)
-    }
-    fn load_texture2(&self, info: &TextureInfo) -> Result<Texture> {
-        let texture = Texture::new(&self.gpu, info)?;
-        let mut uploader = self.uploader.borrow_mut();
-        uploader.enqueue_image(&*texture, &info.data);
-
-        Ok(texture)
-    }
-
-    pub fn material(&self, handle: MaterialHandle) -> Option<&Material> {
-        self.materials.get(&handle)
-    }
-
-    pub fn add_material(&mut self, material: Material) -> Result<MaterialHandle> {
-        let handle = MaterialHandle::new();
-        self.materials.insert(handle, material);
-        Ok(handle)
-    }
-
-    pub fn mesh(&self, handle: MeshHandle) -> Option<&Mesh> { self.meshes.get(&handle) }
-
     pub fn add_mesh(&mut self, desc: MeshInfo) -> Result<MeshHandle> {
         let mut primitives = vec![];
         for primitive_desc in &desc.primitives {
             let indices = &primitive_desc.indices;
             let vertices = &primitive_desc.vertices;
 
-            let index_size = size_of::<u32>() as u64 * indices.len() as u64;
-            let index_buffer = TypedBuffer::index(&self.gpu, index_size as usize, "index buffer")?;
-            let index_staging: TypedBuffer<u32> =
-                TypedBuffer::staging(&self.gpu, index_size, "index staging")?;
+            let index_buffer = TypedBuffer::<u32>::index(&self.gpu, indices.len(), "index")?;
+            let index_staging =
+                TypedBuffer::<u32>::staging(&self.gpu, indices.len(), "index staging")?;
+            let vertex_buffer = TypedBuffer::<Vertex>::vertex(&self.gpu, vertices.len(), "vertex")?;
+            let vertex_staging =
+                TypedBuffer::<Vertex>::staging(&self.gpu, vertices.len(), "vertex staging")?;
+            let n_vertices = vertices.len();
 
-            let n_vertices = primitive_desc.indices.len() as u32;
-            let vertex_size = size_of::<Vertex>() as u64 * vertices.len() as u64;
-            let vertex_buffer =
-                TypedBuffer::vertex(&self.gpu, vertex_size as usize, "vertex buffer")?;
-            let vertex_staging: TypedBuffer<Vertex> =
-                TypedBuffer::staging(&self.gpu, vertex_size, "vertex staging")?;
+            // let mut uploader = self.uploader.borrow_mut();
 
             self.gpu.execute(|cmd| {
                 cmd.copy_buffer(&vertex_staging, &vertex_buffer, vertex_buffer.size());
@@ -338,7 +299,7 @@ impl Assets {
                 vertex_buffer,
                 index_buffer,
                 material: primitive_desc.material,
-                vertex_count: n_vertices,
+                vertex_count: n_vertices as u32,
                 topology: PrimitiveTopology::TRIANGLE_LIST,
             });
         }
@@ -350,5 +311,18 @@ impl Assets {
         let handle = MeshHandle::new();
         self.meshes.insert(handle, mesh);
         Ok(handle)
+    }
+
+    pub fn mesh(&self, handle: MeshHandle) -> Option<&Mesh> { self.meshes.get(&handle) }
+
+    pub fn meshes(&self) -> Vec<(MeshHandle, &Mesh)> {
+        self.meshes
+            .keys()
+            .into_iter()
+            .filter_map(|k| match self.mesh(*k) {
+                Some(texture) => Some((*k, texture)),
+                None => None,
+            })
+            .collect()
     }
 }

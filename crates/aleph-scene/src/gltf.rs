@@ -2,10 +2,9 @@ use {
     crate::{
         graph::NodeHandle,
         model::{MeshInfo, PrimitiveInfo, VertexAttribute},
-        util, Assets, Material, MaterialHandle, MeshHandle, Node, NodeType, Scene, TextureHandle,
-        Vertex,
+        util, Assets, MaterialHandle, MeshHandle, Node, NodeType, Scene, TextureHandle, Vertex,
     },
-    aleph_vk::{Extent2D, ImageAspectFlags, ImageUsageFlags, PrimitiveTopology, TextureInfo},
+    aleph_vk::{Extent2D, ImageUsageFlags, PrimitiveTopology, TextureInfo},
     anyhow::{anyhow, bail, Result},
     ash::vk,
     glam::{Mat4, Vec2, Vec3, Vec4},
@@ -134,13 +133,13 @@ fn load_texture(
     };
 
     let handle = assets.add_texture(TextureInfo {
-        name: name.to_string(),
+        name: name,
         extent,
         format,
-        data: bytes.clone(),
-        sampler: Some(assets.defaults.sampler),
         flags: ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
-        aspect_flags: ImageAspectFlags::COLOR,
+        aspect_flags: vk::ImageAspectFlags::COLOR,
+        data: bytes,
+        sampler: Some(assets.default_sampler()),
     });
 
     log::info!("Loaded glTF texture {index} -> {handle:?}");
@@ -149,58 +148,57 @@ fn load_texture(
 }
 
 fn load_material(
-    material: &gltf::Material,
+    gltf_material: &gltf::Material,
     textures: &Vec<TextureHandle>,
     assets: &mut Assets,
 ) -> Result<MaterialHandle> {
-    let index = match material.index() {
+    let index = match gltf_material.index() {
         Some(index) => index,
         None => bail!("Material index not found"),
     };
-    let name = match material.name() {
+    let name = match gltf_material.name() {
         Some(name) => format!("glTF-{index:03}-{name}"),
         None => format!("glTF-{index:03}"),
     };
-    let pbr = material.pbr_metallic_roughness();
-    let color_texture = pbr
-        .base_color_texture()
-        .map(|i| textures[i.texture().index()]);
-    let normal_texture = material
-        .normal_texture()
-        .map(|i| textures[i.texture().index()]);
-    let ao_texture = material
+    let pbr = gltf_material.pbr_metallic_roughness();
+
+    let mut material = assets.default_material();
+
+    if let Some(info) = pbr.base_color_texture() {
+        material.color_texture = textures[info.texture().index()];
+    }
+
+    if let Some(info) = pbr.metallic_roughness_texture() {
+        material.metalrough_texture = textures[info.texture().index()];
+    }
+
+    if let Some(info) = gltf_material.normal_texture() {
+        material.normal_texture = textures[info.texture().index()];
+    }
+
+    if let Some(info) = gltf_material.occlusion_texture() {
+        material.ao_texture = textures[info.texture().index()];
+    }
+
+    material.name = name;
+    material.color_factor = Vec4::from_array(pbr.base_color_factor());
+    material.metallic_factor = pbr.metallic_factor();
+    material.roughness_factor = pbr.roughness_factor();
+    material.ao_strength = gltf_material
         .occlusion_texture()
-        .map(|i| textures[i.texture().index()]);
-    let metalrough_texture = pbr
-        .metallic_roughness_texture()
-        .map(|i| textures[i.texture().index()]);
+        .map_or(0.0, |i| i.strength());
 
-    let color_factor = Vec4::from_array(pbr.base_color_factor());
-    let metallic_factor = pbr.metallic_factor();
-    let roughness_factor = pbr.roughness_factor();
-    let ao_strength = material.occlusion_texture().map_or(0.0, |i| i.strength());
-
-    let handle = assets.add_material(Material {
-        name,
-        color_texture,
-        color_factor,
-        normal_texture,
-        metalrough_texture,
-        metallic_factor,
-        roughness_factor,
-        ao_texture,
-        ao_strength,
-    })?;
+    let handle = assets.add_material(material.clone())?;
 
     log::debug!("Loaded glTF material #{index} -> {handle:?}");
-    log::debug!("  -> Color texture: {color_texture:?}");
-    log::debug!("  -> Color factor: {color_factor:?}");
-    log::debug!("  -> Normal texture: {normal_texture:?}");
-    log::debug!("  -> MetalRough texture: {metalrough_texture:?}");
-    log::debug!("  -> Metallic factor: {metallic_factor:?}");
-    log::debug!("  -> Roughness factor: {roughness_factor:?}");
-    log::debug!("  -> AO texture: {ao_texture:?}");
-    log::debug!("  -> AO strength: {ao_strength:?}");
+    log::debug!("  -> Color texture: {:?}", material.color_texture);
+    log::debug!("  -> Color factor: {:?}", material.color_factor);
+    log::debug!("  -> Normal texture: {:?}", material.normal_texture);
+    log::debug!("  -> Metalrough texture: {:?}", material.metalrough_texture);
+    log::debug!("  -> Metallic factor: {:?}", material.metallic_factor);
+    log::debug!("  -> Roughness factor: {:?}", material.roughness_factor);
+    log::debug!("  -> AO texture: {:?}", material.ao_texture);
+    log::debug!("  -> AO strength: {:?}", material.ao_strength);
 
     Ok(handle)
 }
@@ -217,7 +215,7 @@ fn load_mesh(
         None => format!("glTF-{index:03}"),
     };
     let mut primitives = vec![];
-    for (i, primitive) in source.primitives().enumerate() {
+    for (primitive_index, primitive) in source.primitives().enumerate() {
         let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
 
         let positions = reader
@@ -258,12 +256,10 @@ fn load_mesh(
             .map(|read_indices| read_indices.into_u32().collect::<Vec<_>>())
             .unwrap();
 
-        let material = primitive
-            .material()
-            .index()
-            .and_then(|i| materials.get(i))
-            .map(|h| *h);
-
+        let material = match primitive.material().index() {
+            Some(index) => materials[index],
+            None => MaterialHandle::null(),
+        };
         let attributes: Vec<VertexAttribute> = primitive
             .attributes()
             .filter_map(|a| match a {
@@ -287,10 +283,16 @@ fn load_mesh(
             gltf::mesh::Mode::TriangleFan => PrimitiveTopology::TRIANGLE_FAN,
         };
 
-        let desc = PrimitiveInfo::new(vertices, indices, material, topology, attributes);
-        log::debug!("Loaded glTF mesh #{index} primitive #{i} -> {desc:?}");
+        let info = PrimitiveInfo::new(vertices, indices, material, topology, attributes.clone());
+        log::debug!(
+            "Loaded glTF mesh #{} primitive #{} ({:?}) -> {:?}",
+            index,
+            primitive_index,
+            info,
+            attributes
+        );
 
-        primitives.push(desc);
+        primitives.push(info);
     }
 
     log::debug!(

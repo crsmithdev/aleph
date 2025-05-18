@@ -1,5 +1,8 @@
 use {
-    crate::model::{MeshInfo, Vertex, VertexAttribute},
+    crate::{
+        model::{MeshInfo, Vertex, VertexAttribute},
+        MaterialHandle,
+    },
     glam::{vec3, Vec3, Vec4},
 };
 
@@ -33,7 +36,7 @@ pub fn cube(x: f32, y: f32, z: f32, color: [f32; 4]) -> MeshInfo {
     MeshInfo::new(
         indices,
         vertices,
-        None,
+        MaterialHandle::null(),
         vec![VertexAttribute::Position],
         "cube",
     )

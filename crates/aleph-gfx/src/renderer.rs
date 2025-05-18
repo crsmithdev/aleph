@@ -388,26 +388,10 @@ impl Renderer {
         let mut materials = vec![];
 
         for (handle, material) in assets.materials() {
-            let color_texture = material
-                .color_texture
-                .map(|t| texture_map.get(&t).unwrap_or(&0))
-                .unwrap_or(&0);
-            let normal_texture = material
-                .normal_texture
-                .map(|t| texture_map.get(&t).unwrap_or(&0))
-                .unwrap_or(&0);
-            let metalrough_texture = material
-                .metalrough_texture
-                .map(|t| texture_map.get(&t).unwrap_or(&0))
-                .unwrap_or(&0);
-            let ao_texture = material
-                .ao_texture
-                .map(|t| texture_map.get(&t).unwrap_or(&0))
-                .unwrap_or(&0);
-            // let color_texture = texture_map.get(color_texture).unwrap_or(&0);
-            // let normal_texture = texture_map.get(&material.normal_texture).unwrap_or(&0);
-            // let metalrough_texture = texture_map.get(&material.metalrough_texture).unwrap_or(&0);
-            // let ao_texture = texture_map.get(&material.ao_texture).unwrap_or(&0);
+            let color_texture = texture_map.get(&material.color_texture).unwrap_or(&0);
+            let normal_texture = texture_map.get(&material.normal_texture).unwrap_or(&0);
+            let metalrough_texture = texture_map.get(&material.metalrough_texture).unwrap_or(&0);
+            let ao_texture = texture_map.get(&material.ao_texture).unwrap_or(&0);
             let gpu_material = GpuMaterialData {
                 color_factor: material.color_factor,
                 metallic_factor: material.metallic_factor,
@@ -425,6 +409,7 @@ impl Renderer {
         }
         Ok((materials, handle_map))
     }
+
     fn create_render_objects<'a>(
         &self,
         scene: &'a Scene,
@@ -442,7 +427,7 @@ impl Renderer {
                     for primitive in mesh.primitives.iter() {
                         drawables.push(RenderObject {
                             primitive,
-                            material: 0,
+                            material: materials[&primitive.material],
                             transform,
                         })
                     }
@@ -464,12 +449,11 @@ impl Renderer {
         self.scene_data = scene_data;
         self.material_buffer.write(&materials);
         self.scene_buffer.write(&[scene_data]);
-        assets.uploader.borrow_mut().submit_uploads();
 
         self.binder
             .uniform_buffer(BIND_IDX_SCENE, &self.scene_buffer, 0)
             .uniform_buffer(BIND_IDX_MATERIAL, &self.material_buffer, 0)
-            .texture_array(BIND_IDX_TEXTURE, &textures, assets.defaults.sampler)
+            .texture_array(BIND_IDX_TEXTURE, &textures, assets.default_sampler())
             .update(&self.gpu)?;
 
         // log::trace!("END PREPARE RESOURCES");
@@ -495,10 +479,12 @@ impl Renderer {
     fn prepare_textures(
         &self,
         assets: &Assets,
-    ) -> Result<(Vec<Rc<Texture>>, HashMap<TextureHandle, usize>)> {
+    ) -> Result<(Vec<Texture>, HashMap<TextureHandle, usize>)> {
         // log::trace!("Prepare textures");
 
-        let default_texture = assets.defaults.white_linear.clone();
+        let default_texture = assets
+            .texture(assets.default_material().color_texture)
+            .ok_or_else(|| anyhow::anyhow!("Default texture not found"))?;
         let mut handle_map: HashMap<TextureHandle, usize> = HashMap::new();
         let mut textures = vec![default_texture];
 

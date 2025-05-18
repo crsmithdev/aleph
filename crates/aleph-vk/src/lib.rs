@@ -21,7 +21,7 @@ pub use {
         instance::Instance,
         swapchain::{Frame, Swapchain, SwapchainInfo},
         texture::{Image, Texture, TextureInfo},
-        uploader::Uploader,
+        // uploader::Uploader,
     },
     ash::vk::{
         AccessFlags2, AttachmentLoadOp, AttachmentStoreOp, ClearColorValue, ClearDepthStencilValue,

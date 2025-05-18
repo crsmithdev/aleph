@@ -51,7 +51,7 @@ impl Pipeline for ForwardPipeline {
         cmd.set_scissor(Rect2D::default().extent(ctx.extent));
 
         cmd.bind_pipeline(PipelineBindPoint::GRAPHICS, self.handle);
-        ctx.binder.bind(&ctx, self.pipeline_layout, &[]);
+        ctx.binder.bind(&cmd, self.pipeline_layout, &[]);
 
         for object in &ctx.objects {
             self.draw_primitive(cmd, object)?;
