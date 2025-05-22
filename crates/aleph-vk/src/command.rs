@@ -1,12 +1,13 @@
 pub use ash::vk::ImageLayout;
 use {
     crate::{Buffer, Device, Image, ImageAspectFlags},
-    anyhow::Result,
-    ash::{vk, vk::PipelineBindPoint},
+    ash::{
+        vk,
+        vk::{Handle, PipelineBindPoint},
+    },
     bytemuck::Pod,
     core::slice,
-    derive_more::Debug,
-    std::any::Any,
+    derive_more::{Debug, Deref},
 };
 
 #[derive(Clone, Debug)]
@@ -24,59 +25,68 @@ impl Drop for CommandBuffer {
 impl CommandPool {
     pub fn handle(&self) -> vk::CommandPool { self.handle }
 
-    pub fn create_command_buffer(&self) -> Result<CommandBuffer> {
-        CommandBuffer::new(&self.device, self)
+    pub fn create_command_buffer(&self, name: &str) -> CommandBuffer {
+        CommandBuffer::new(&self.device, self, name)
     }
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Deref)]
 pub struct CommandBuffer {
+    #[deref]
+    #[debug("{:#x}", handle.as_raw())]
     pub(crate) handle: vk::CommandBuffer,
+    #[debug("{:#x}", pool.as_raw())]
     pub(crate) pool: vk::CommandPool,
+    #[debug(skip)]
     pub(crate) device: Device,
-    pub(crate) fence: vk::Fence,
-    to_release: Vec<Box<dyn Any>>,
+    name: String,
 }
 
 impl CommandBuffer {
-    pub fn new(device: &Device, pool: &CommandPool) -> Result<CommandBuffer> {
+    pub fn new(device: &Device, pool: &CommandPool, name: &str) -> CommandBuffer {
         let handle = device.create_command_buffer(pool);
-        let fence = device.create_fence(vk::FenceCreateFlags::SIGNALED);
 
-        Ok(CommandBuffer {
+        CommandBuffer {
             handle,
             pool: pool.handle,
             device: device.clone(),
-            to_release: Vec::new(),
-            fence,
-        })
+            name: name.to_string(),
+        }
     }
     pub fn handle(&self) -> vk::CommandBuffer { self.handle }
-    pub fn reset(&self) -> Result<()> {
-        #[allow(clippy::unit_arg)]
-        Ok(unsafe {
+
+    pub fn reset(&self) {
+        log::trace!("Resetting {self:?}");
+        unsafe {
             self.device
                 .handle
-                .reset_command_buffer(self.handle, vk::CommandBufferResetFlags::RELEASE_RESOURCES)?
-        })
+                .reset_command_buffer(self.handle, vk::CommandBufferResetFlags::RELEASE_RESOURCES)
+                .unwrap_or_else(|e| panic!("Failed to reset {self:?}: {e:?}"))
+        }
     }
 
-    pub fn begin(&self) -> Result<()> {
+    pub fn begin(&self) {
+        log::trace!("Beginning {self:?}");
         let info = vk::CommandBufferBeginInfo::default()
             .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
 
-        #[allow(clippy::unit_arg)]
-        Ok(unsafe {
+        unsafe {
             self.device
                 .handle
-                .begin_command_buffer(self.handle, &info)?
-        })
+                .begin_command_buffer(self.handle, &info)
+                .unwrap_or_else(|e| panic!("Failed to begin {self:?}: {e:?}"))
+        }
     }
 
-    pub fn end(&self) -> Result<()> {
-        #[allow(clippy::unit_arg)]
-        Ok(unsafe { self.device.handle.end_command_buffer(self.handle)? })
+    pub fn end(&self) {
+        log::trace!("Ending {self:?}");
+        unsafe {
+            self.device
+                .handle
+                .end_command_buffer(self.handle)
+                .unwrap_or_else(|e| panic!("Failed to end {self:?}: {e:?}"))
+        }
     }
     pub fn pipeline_barrier(
         &self,
@@ -118,7 +128,8 @@ impl CommandBuffer {
         color_attachments: &[vk::RenderingAttachmentInfo],
         depth_attachment: Option<&vk::RenderingAttachmentInfo>,
         extent: vk::Extent2D,
-    ) -> Result<()> {
+    ) {
+        log::trace!("Begin rendering in {self:?}");
         let mut rendering_info = vk::RenderingInfo::default()
             .render_area(vk::Rect2D {
                 offset: vk::Offset2D { x: 0, y: 0 },
@@ -132,16 +143,16 @@ impl CommandBuffer {
         }
 
         #[allow(clippy::unit_arg)]
-        Ok(unsafe {
+        unsafe {
             self.device
                 .handle
                 .cmd_begin_rendering(self.handle, &rendering_info)
-        })
+        }
     }
 
-    pub fn end_rendering(&self) -> Result<()> {
-        #[allow(clippy::unit_arg)]
-        Ok(unsafe { self.device.handle.cmd_end_rendering(self.handle) })
+    pub fn end_rendering(&self) {
+        log::trace!("End rendering in {self:?}");
+        unsafe { self.device.handle.cmd_end_rendering(self.handle) }
     }
 
     pub fn draw(
@@ -250,13 +261,12 @@ impl CommandBuffer {
         &self,
         pipeline_bind_point: vk::PipelineBindPoint,
         pipeline: vk::Pipeline,
-    ) -> Result<()> {
-        #[allow(clippy::unit_arg)]
-        Ok(unsafe {
+    ) {
+        unsafe {
             self.device
                 .handle
-                .cmd_bind_pipeline(self.handle, pipeline_bind_point, pipeline);
-        })
+                .cmd_bind_pipeline(self.handle, pipeline_bind_point, pipeline)
+        }
     }
 
     pub fn dispatch(&self, group_count_x: u32, group_count_y: u32, group_count_z: u32) {
@@ -268,60 +278,6 @@ impl CommandBuffer {
                 group_count_z,
             )
         }
-    }
-
-    pub fn submit_immediate(&self, f: impl FnOnce(&CommandBuffer)) -> Result<()> {
-        f(self);
-
-        let command_buffer_info = &[vk::CommandBufferSubmitInfo::default()
-            .command_buffer(self.handle)
-            .device_mask(0)];
-        let submit_info = &[vk::SubmitInfo2::default()
-            .command_buffer_infos(command_buffer_info)
-            .wait_semaphore_infos(&[])
-            .signal_semaphore_infos(&[])];
-
-        let result = Ok(unsafe {
-            self.device.handle.queue_submit2(
-                self.device.graphics_queue().handle,
-                submit_info,
-                vk::Fence::null(),
-            ) //self.fence)
-        }?);
-        unsafe { self.device.handle.device_wait_idle().unwrap() };
-        result
-    }
-
-    pub fn submit_queued(
-        &self,
-        wait_semaphore: vk::Semaphore,
-        signal_semaphore: vk::Semaphore,
-        fence: vk::Fence,
-    ) -> Result<(), anyhow::Error> {
-        let cmd = &self.handle;
-        let queue = self.device.graphics_queue();
-
-        let wait_info = &[vk::SemaphoreSubmitInfo::default()
-            .semaphore(wait_semaphore)
-            .stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
-            .value(1)];
-        let signal_info = &[vk::SemaphoreSubmitInfo::default()
-            .semaphore(signal_semaphore)
-            .stage_mask(vk::PipelineStageFlags2::ALL_GRAPHICS)
-            .value(1)];
-        let command_buffer_info = &[vk::CommandBufferSubmitInfo::default()
-            .command_buffer(*cmd)
-            .device_mask(0)];
-        let submit_info = &[vk::SubmitInfo2::default()
-            .command_buffer_infos(command_buffer_info)
-            .wait_semaphore_infos(wait_info)
-            .signal_semaphore_infos(signal_info)];
-
-        Ok(unsafe {
-            self.device
-                .handle
-                .queue_submit2(queue.handle, submit_info, fence)
-        }?)
     }
 
     pub fn set_line_width(&self, width: f32) {
@@ -428,11 +384,6 @@ impl CommandBuffer {
             .image_offset(vk::Offset3D::default())
             .image_extent(dst.extent().into());
 
-        // self.transition_image(
-        //     dst.clone(),
-        //     ImageLayout::UNDEFINED,
-        //     ImageLayout::TRANSFER_DST_OPTIMAL,
-        // );
         let range = vk::ImageSubresourceRange::default()
             .aspect_mask(ImageAspectFlags::COLOR)
             .base_array_layer(0)
@@ -441,10 +392,8 @@ impl CommandBuffer {
             .layer_count(1);
         let barrier = &[vk::ImageMemoryBarrier2::default()
             .image(handle)
-            .src_stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
-            .src_access_mask(vk::AccessFlags2::MEMORY_WRITE)
-            .dst_stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
-            .dst_access_mask(vk::AccessFlags2::MEMORY_WRITE | vk::AccessFlags2::MEMORY_READ)
+            .dst_stage_mask(vk::PipelineStageFlags2::TRANSFER)
+            .dst_access_mask(vk::AccessFlags2::MEMORY_WRITE)
             .old_layout(ImageLayout::UNDEFINED)
             .new_layout(ImageLayout::TRANSFER_DST_OPTIMAL)
             .subresource_range(range)];
@@ -462,10 +411,10 @@ impl CommandBuffer {
             );
             let barrier = &[vk::ImageMemoryBarrier2::default()
                 .image(handle)
-                .src_stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
-                .src_access_mask(vk::AccessFlags2::MEMORY_WRITE)
-                .dst_stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
-                .dst_access_mask(vk::AccessFlags2::MEMORY_WRITE | vk::AccessFlags2::MEMORY_READ)
+                .src_stage_mask(vk::PipelineStageFlags2::TRANSFER)
+                .src_access_mask(vk::AccessFlags2::TRANSFER_WRITE)
+                .dst_stage_mask(vk::PipelineStageFlags2::FRAGMENT_SHADER)
+                .dst_access_mask(vk::AccessFlags2::SHADER_READ)
                 .old_layout(ImageLayout::TRANSFER_DST_OPTIMAL)
                 .new_layout(ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                 .subresource_range(range)];
@@ -475,57 +424,4 @@ impl CommandBuffer {
                 .cmd_pipeline_barrier2(self.handle, &dependency_info);
         };
     }
-
-    // pub fn upload_image(
-    //     &self,
-    //     image: &Image,
-    //     allocator: Arc<Allocator>,
-    //     data: &[u8],
-    // ) -> Result<()> {
-    //     let handle = image.handle();
-    //     let staging = Buffer::new(
-    //         &self.device,
-    //         allocator,
-    //         std::mem::size_of_val(data) as u64,
-    //         BufferUsageFlags::TRANSFER_SRC,
-    //         MemoryLocation::GpuToCpu,
-    //         "staging",
-    //     )?;
-    //     staging.write(data);
-
-    //     let copy = vk::BufferImageCopy::default()
-    //         .buffer_offset(0)
-    //         .buffer_row_length(0)
-    //         .buffer_image_height(0)
-    //         .image_subresource(
-    //             vk::ImageSubresourceLayers::default()
-    //                 .aspect_mask(vk::ImageAspectFlags::COLOR)
-    //                 .layer_count(1),
-    //         )
-    //         .image_offset(vk::Offset3D::default())
-    //         .image_extent(image.extent().into());
-
-    //     self.transition_image(
-    //         image,
-    //         ImageLayout::UNDEFINED,
-    //         ImageLayout::TRANSFER_DST_OPTIMAL,
-    //     );
-
-    //     unsafe {
-    //         self.device.handle.cmd_copy_buffer_to_image(
-    //             self.handle,
-    //             staging.handle(),
-    //             handle,
-    //             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-    //             &[copy],
-    //         )
-    //     };
-    //     self.transition_image(
-    //         image,
-    //         ImageLayout::TRANSFER_DST_OPTIMAL,
-    //         ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-    //     );
-
-    //     Ok(())
-    // }
 }

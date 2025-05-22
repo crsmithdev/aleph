@@ -1,9 +1,6 @@
 use {
-    crate::{
-        mikktspace::{calculate_tangents, MikktGeometry},
-        MaterialHandle,
-    },
-    aleph_vk::{Format, PrimitiveTopology, TypedBuffer},
+    crate::{mikktspace::MikktGeometry, MaterialHandle},
+    aleph_vk::{Format, Handle, PrimitiveTopology, TypedBuffer},
     bytemuck::{Pod, Zeroable},
     derive_more::Debug,
     glam::{Vec2, Vec3, Vec4},
@@ -36,79 +33,106 @@ impl Vertex {
 #[derive(Debug)]
 pub struct Mesh {
     pub name: String,
-    pub primitives: Vec<Primitive>,
-}
-
-#[derive(Debug)]
-pub struct MeshInfo {
-    pub name: String,
-    pub primitives: Vec<PrimitiveInfo>,
-}
-
-impl MeshInfo {
-    pub fn new(
-        indices: Vec<u32>,
-        vertices: Vec<Vertex>,
-        material: MaterialHandle,
-        attributes: Vec<VertexAttribute>,
-        name: &str,
-    ) -> Self {
-        let primitive = PrimitiveInfo::new(
-            vertices,
-            indices,
-            material,
-            PrimitiveTopology::TRIANGLE_LIST,
-            attributes,
-        );
-        Self {
-            name: name.to_string(),
-            primitives: vec![primitive],
-        }
-    }
-}
-
-pub struct Face {
-    pub indices: [u32; 3],
-    pub normal: Vec3,
-}
-
-#[derive(Debug)]
-pub struct Primitive {
+    #[debug("{:#x}, ({} vertices)", vertex_buffer.handle().as_raw(), vertex_buffer.size())]
     pub vertex_buffer: TypedBuffer<Vertex>,
+    pub vertex_count: u32,
+    #[debug("{:#x}, ({} indices)", index_buffer.handle().as_raw(), index_buffer.size())]
     pub index_buffer: TypedBuffer<u32>,
     pub material: MaterialHandle,
-    pub vertex_count: u32,
     pub topology: PrimitiveTopology,
 }
 
-impl Primitive {}
-
-pub struct PrimitiveInfo {
-    pub vertices: Vec<Vertex>,
+#[derive(Clone, Debug, Default)]
+pub struct MeshInfo {
+    pub name: String,
+    #[debug("{}", vertices.len())]
+    pub vertices: Vec<Vec3>,
+    #[debug("{}", indices.len())]
     pub indices: Vec<u32>,
+    #[debug("{}", indices.len())]
+    pub normals: Vec<Vec3>,
+    #[debug("{}", tangents.len())]
+    pub tangents: Vec<Vec4>,
+    #[debug("{}", colors.len())]
+    pub colors: Vec<Vec4>,
+    #[debug("{}", tex_coords0.len())]
+    pub tex_coords0: Vec<Vec2>,
     pub material: MaterialHandle,
     pub topology: PrimitiveTopology,
-    pub faces: Vec<Face>,
-    pub attributes: Vec<VertexAttribute>,
+    // pub attributes: Vec<VertexAttribute>,
 }
-
-impl Debug for PrimitiveInfo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let attributes = self
-            .attributes
-            .iter()
-            .map(|a| format!("{:?}", a))
-            .collect::<Vec<_>>();
-        write!(
-            f,
-            "PrimitiveDesc(vertices: {}, indices: {}, faces: {}, material: {:?}, attributes: {:?})",
-            self.vertices.len(),
-            self.indices.len(),
-            self.faces.len(),
-            self.material,
-            attributes,
-        )
+impl MeshInfo {
+    pub fn name(mut self, name: &str) -> Self {
+        self.name = name.to_string();
+        self
     }
+
+    pub fn vertices(mut self, vertices: Vec<Vec3>) -> Self {
+        self.vertices = vertices;
+        self
+    }
+
+    pub fn indices(mut self, indices: Vec<u32>) -> Self {
+        self.indices = indices;
+        self
+    }
+
+    pub fn normals(mut self, normals: Vec<Vec3>) -> Self {
+        self.normals = normals;
+        self
+    }
+
+    pub fn tangents(mut self, tangents: Vec<Vec4>) -> Self {
+        self.tangents = tangents;
+        self
+    }
+
+    pub fn tex_coords0(mut self, tex_coords0: Vec<Vec2>) -> Self {
+        self.tex_coords0 = tex_coords0;
+        self
+    }
+
+    pub fn material(mut self, material: MaterialHandle) -> Self {
+        self.material = material;
+        self
+    }
+
+    pub fn topology(mut self, topology: PrimitiveTopology) -> Self {
+        self.topology = topology;
+        self
+    }
+
+    // pub fn new(
+    //     indices: Vec<u32>,
+    //     vertices: Vec<Vec3>,
+    //     normals: Vec<Vec3>,
+    //     tangents: Vec<Vec4>,
+    //     tex_coords0: Vec<Vec2>,
+    //     material: MaterialHandle,
+    //     name: &str,
+    // ) -> Self {
+    //     let mut info = Self {
+    //         name: name.to_string(),
+    //         vertices,
+    //         indices,
+    //         normals,
+    //         tangents,
+    //         tex_coords0,
+    //         material,
+    //         topology: PrimitiveTopology::TRIANGLE_LIST,
+    //     };
+
+    //     if info.tangents.is_empty() {
+    //         if !calculate_tangents(&mut info) {
+    //             log::warn!("Error calculating tangents for mesh '{}'", info.name);
+    //         }
+    //     }
+    //     if info.normals.is_empty() {
+    //         info.normals = calculate_normals(&info.vertices, &info.indices);
+    //     };
+
+    //     info
+    // }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -116,80 +140,33 @@ pub enum VertexAttribute {
     Position,
     Normal,
     TexCoord0,
-    TexCoord1,
     Tangent,
     Color,
 }
 
-impl PrimitiveInfo {
-    pub fn new(
-        vertices: Vec<Vertex>,
-        indices: Vec<u32>,
-        material: MaterialHandle,
-        topology: PrimitiveTopology,
-        attributes: Vec<VertexAttribute>,
-    ) -> Self {
-        let mut vertices = vertices.clone();
-
-        if !attributes.contains(&VertexAttribute::Normal) {
-            let normals = calculate_normals(&mut vertices, indices.clone());
-            for (i, vertex) in vertices.iter_mut().enumerate() {
-                vertex.normal = normals[i];
-            }
-        }
-        let faces = calculate_faces(&indices, &vertices);
-
-        let mut primitive = Self {
-            vertices,
-            indices,
-            material,
-            topology,
-            faces,
-            attributes,
-        };
-
-        if !primitive.attributes.contains(&VertexAttribute::Tangent) {
-            if !calculate_tangents(&mut primitive) {
-                log::warn!("Error calculating tangents for primitive");
-            }
-        }
-
-        primitive
-    }
-
-    pub fn normals<'a>(&'a self) -> impl Iterator<Item = Vec3> + 'a {
-        self.vertices.iter().map(|v| v.normal)
-    }
-
-    pub fn tex_coords0<'a>(&'a self) -> impl Iterator<Item = Vec2> + 'a {
-        self.vertices.iter().map(|v| Vec2::new(v.uv_x, v.uv_y))
-    }
-}
-
-impl MikktGeometry for PrimitiveInfo {
+impl MikktGeometry for MeshInfo {
     fn num_faces(&self) -> usize { self.indices.len() / 3 }
 
     fn num_vertices_of_face(&self, _face: usize) -> usize { 3 }
 
     fn position(&self, face: usize, vert: usize) -> [f32; 3] {
         let i = self.indices[face * 3 + vert] as usize;
-        self.vertices[i].position.into()
+        self.vertices[i].into()
     }
 
     fn normal(&self, face: usize, vert: usize) -> [f32; 3] {
         let i = self.indices[face * 3 + vert] as usize;
-        self.vertices[i].normal.into()
+        self.normals[i].into()
     }
 
     fn tex_coord(&self, face: usize, vert: usize) -> [f32; 2] {
         let i = self.indices[face * 3 + vert] as usize;
-        let v = self.vertices[i];
-        [v.uv_x, v.uv_y]
+        self.tex_coords0[i].into()
     }
 
     fn set_tangent_encoded(&mut self, tangent: [f32; 4], face: usize, vert: usize) {
         let i = self.indices[face * 3 + vert] as usize;
-        self.vertices[i].tangent = Vec4::from(tangent);
+        self.tangents[i] = Vec4::from(tangent);
     }
 }
 
@@ -201,65 +178,56 @@ pub struct Light {
     pub color: Vec4,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
 
-    #[test]
-    fn test_generate_faces() {
-        let vertices = vec![
-            Vertex {
-                position: Vec3::new(0.0, 0.0, 0.0),
-                ..Default::default()
-            },
-            Vertex {
-                position: Vec3::new(1.0, 0.0, 0.0),
-                ..Default::default()
-            },
-            Vertex {
-                position: Vec3::new(0.0, 1.0, 0.0),
-                ..Default::default()
-            },
-        ];
-        let indices = vec![0, 1, 2, 1, 2, 0, 2, 0, 1];
-        calculate_faces(&indices, &vertices);
-    }
-}
+//     #[test]
+//     fn test_generate_faces() {
+//         let vertices = vec![
+//             Vec3::new(0.0, 0.0, 0.0),
+//             Vec3::new(1.0, 0.0, 0.0),
+//             Vec3::new(0.0, 1.0, 0.0),
+//         ];
+//         let indices = vec![0, 1, 2, 1, 2, 0, 2, 0, 1];
+//         calculate_faces(&indices, &vertices);
+//     }
+// }
 
-fn calculate_faces(indices: &Vec<u32>, vertices: &Vec<Vertex>) -> Vec<Face> {
-    indices
-        .chunks_exact(3)
-        .map(|idxs| {
-            let a = vertices[idxs[0] as usize].position;
-            let b = vertices[idxs[1] as usize].position;
-            let c = vertices[idxs[2] as usize].position;
-            let ba = (b - a).normalize();
-            let ca = (c - a).normalize();
-            let n = ba.cross(ca).normalize();
+// fn calculate_faces(indices: &Vec<u32>, vertices: &Vec<Vec3>) -> Vec<Face> {
+//     indices
+//         .chunks_exact(3)
+//         .map(|idxs| {
+//             let a = vertices[idxs[0] as usize];
+//             let b = vertices[idxs[1] as usize];
+//             let c = vertices[idxs[2] as usize];
+//             let ba = (b - a).normalize();
+//             let ca = (c - a).normalize();
+//             let n = ba.cross(ca).normalize();
 
-            Face {
-                indices: [idxs[0], idxs[1], idxs[2]],
-                normal: n,
-            }
-        })
-        .collect()
-}
+//             Face {
+//                 indices: Vec3::new(idxs[0] as f32, idxs[1] as f32, idxs[2] as f32),
+//                 normal: n,
+//             }
+//         })
+//         .collect()
+// }
 
-fn calculate_normals(vertices: &mut Vec<Vertex>, indices: Vec<u32>) -> Vec<Vec3> {
-    let mut normals = vec![glam::Vec3::ZERO; vertices.len()];
+// fn calculate_normals(vertices: &Vec<Vec3>, indices: &Vec<u32>) -> Vec<Vec3> {
+//     let mut normals = vec![glam::Vec3::ZERO; vertices.len()];
 
-    for i in (0..indices.len()).step_by(3) {
-        let a = vertices[indices[i] as usize].position;
-        let b = vertices[indices[i + 1] as usize].position;
-        let c = vertices[indices[i + 2] as usize].position;
-        let ba = (b - a).normalize();
-        let ca = (c - a).normalize();
-        let normal = ba.cross(ca).normalize();
+//     for i in (0..indices.len()).step_by(3) {
+//         let a = vertices[indices[i] as usize];
+//         let b = vertices[indices[i + 1] as usize];
+//         let c = vertices[indices[i + 2] as usize];
+//         let ba = (b - a).normalize();
+//         let ca = (c - a).normalize();
+//         let normal = ba.cross(ca).normalize();
 
-        normals[indices[i] as usize] += normal;
-        normals[indices[i + 1] as usize] += normal;
-        normals[indices[i + 2] as usize] += normal;
-    }
+//         normals[indices[i] as usize] += normal;
+//         normals[indices[i + 1] as usize] += normal;
+//         normals[indices[i + 2] as usize] += normal;
+//     }
 
-    normals
-}
+//     normals
+// }

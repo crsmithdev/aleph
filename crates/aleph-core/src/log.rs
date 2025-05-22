@@ -9,7 +9,7 @@ struct Timer {}
 impl tracing_subscriber::fmt::time::FormatTime for Timer {
     fn format_time(&self, writer: &mut Writer<'_>) -> std::fmt::Result {
         let time = chrono::Utc::now();
-        writer.write_str(&format!("{}", time.format("%Y-%m-%d %H:%M:%S")))
+        writer.write_str(&format!("{}", time.format("%H:%M:%S")))
     }
 }
 
@@ -20,10 +20,10 @@ pub fn setup_logging() {
         .with_thread_names(false)
         .with_level(true)
         .with_ansi(false)
-        .with_target(true)
-        .with_file(true)
+        // .with_target(true)
+        .with_file(false)
         .with_line_number(true)
-        .pretty();  
+        .compact();
     tracing_subscriber::fmt()
         .event_format(format)
         .with_env_filter(EnvFilter::from_default_env())

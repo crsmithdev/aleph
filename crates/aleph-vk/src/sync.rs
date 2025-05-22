@@ -26,6 +26,21 @@ pub fn buffer_barrier(
     barrier
 }
 
+pub fn memory_barrier<'a>(
+    src_stage_mask: vk::PipelineStageFlags2,
+    src_access_mask: vk::AccessFlags2,
+    dst_stage_mask: vk::PipelineStageFlags2,
+    dst_access_mask: vk::AccessFlags2,
+) -> vk::MemoryBarrier2<'a> {
+    let barrier = vk::MemoryBarrier2::default()
+        .src_stage_mask(src_stage_mask)
+        .dst_stage_mask(dst_stage_mask)
+        .src_access_mask(src_access_mask)
+        .dst_access_mask(dst_access_mask);
+    log::trace!("Created memory barrier {barrier:?}");
+    barrier
+}
+
 pub fn image_memory_barrier(
     image: &Image,
     src_stage_mask: vk::PipelineStageFlags2,

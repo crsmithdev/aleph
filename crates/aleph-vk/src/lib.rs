@@ -1,27 +1,30 @@
 pub mod allocator;
 pub mod buffer;
 pub mod command;
+pub mod debug;
 pub mod device;
 pub mod gpu;
 pub mod instance;
+pub mod pool;
 pub mod swapchain;
 pub mod sync;
 pub mod texture;
-pub mod uploader;
 
-pub(crate) const VK_TIMEOUT_NS: u64 = 5_000_000_000;
+pub(crate) const TIMEOUT_NS: u64 = 5_000_000_000;
 
+#[cfg(test)]
+pub use test::test_gpu;
 pub use {
     crate::{
         allocator::Allocator,
         buffer::{Buffer, BufferUsageFlags, MemoryLocation, TypedBuffer},
         command::{CommandBuffer, CommandPool},
         device::{Device, Queue, QueueFamily},
-        gpu::{Gpu, Surface},
+        gpu::Gpu,
         instance::Instance,
-        swapchain::{Frame, Swapchain, SwapchainInfo},
+        pool::ResourcePool,
+        swapchain::{Frame, Surface, Swapchain, SwapchainInfo},
         texture::{Image, Texture, TextureInfo},
-        uploader::ResourcePool,
     },
     ash::vk::{
         AccessFlags2, AttachmentLoadOp, AttachmentStoreOp, ClearColorValue, ClearDepthStencilValue,
@@ -45,3 +48,14 @@ pub use {
         WriteDescriptorSet,
     },
 };
+
+#[cfg(test)]
+#[allow(dead_code)]
+mod test {
+    use std::sync::{Arc, LazyLock};
+
+    static TEST_GPU: LazyLock<Arc<crate::Gpu>> =
+        LazyLock::new(|| Arc::new(crate::Gpu::headless().expect("Error creating test GPU")));
+
+    pub fn test_gpu() -> &'static Arc<crate::Gpu> { &TEST_GPU }
+}

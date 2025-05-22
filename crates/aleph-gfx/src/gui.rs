@@ -8,6 +8,7 @@ use {
     aleph_scene::{model::Light, util},
     aleph_vk::{AttachmentLoadOp, AttachmentStoreOp, CommandPool, Extent2D, Format, Gpu},
     anyhow::Result,
+    derive_more::Debug,
     egui::{self},
     egui_ash_renderer as egui_renderer, egui_extras, egui_winit,
     glam::Vec4,
@@ -17,9 +18,12 @@ use {
 
 const CLEAR_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
 
+#[derive(Debug)]
 pub struct Gui {
     ctx: egui::Context,
+    #[debug(skip)]
     state: egui_winit::State,
+    #[debug(skip)]
     renderer: egui_renderer::Renderer,
     pool: CommandPool,
     window: Arc<winit::window::Window>,
@@ -109,8 +113,8 @@ impl Gui {
             1.0,
         );
         let extent = Extent2D {
-            width: ctx.extent.width,
-            height: ctx.extent.height,
+            width: ctx.render_extent.width,
+            height: ctx.render_extent.height,
         };
 
         let raw_input = self.state.take_egui_input(&self.window);
@@ -139,22 +143,22 @@ impl Gui {
                     self.pool.handle(),
                     textures_delta.set.as_slice(),
                 )
-                .expect("Failed to set textures");
+                .unwrap_or_else(|e| panic!("Failed to set gui textures: {e:?}"));
         }
         let clipped_primitives = self.ctx.tessellate(shapes, pixels_per_point);
 
         ctx.command_buffer.begin_rendering(
             color_attachments,
             Some(depth_attachment),
-            ctx.extent,
-        )?;
+            ctx.render_extent,
+        );
         self.renderer.cmd_draw(
             ctx.command_buffer.handle(),
             extent,
             pixels_per_point,
             &clipped_primitives,
         )?;
-        ctx.command_buffer.end_rendering()?;
+        ctx.command_buffer.end_rendering();
 
         Ok(())
     }

@@ -168,7 +168,6 @@ impl Scheduler {
     pub fn run(&mut self, schedule: Schedule, resources: &mut Resources) {
         if let Some(systems) = self.systems.get_mut(&schedule) {
             for system in systems {
-                log::trace!("Running {:?} -> {}", schedule, system.name());
                 system.run(resources);
             }
         }

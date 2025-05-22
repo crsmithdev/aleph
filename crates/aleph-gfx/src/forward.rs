@@ -30,34 +30,35 @@ pub struct ForwardPipeline {
 
 impl Pipeline for ForwardPipeline {
     #[instrument(skip_all)]
-    fn render(&mut self, ctx: &RenderContext) -> Result<()> {
-        log::trace!("Begin forward pipeline render");
-        let cmd = &ctx.command_buffer;
+    fn render(&mut self, ctx: &RenderContext, cmd: &CommandBuffer) -> Result<()> {
+        ctx.gpu
+            .debug_utils()
+            .begin_debug_label(&cmd, "forward pipeline render");
         let color_attachments = &[util::color_attachment(
-            ctx.draw_image,
+            &self.draw_image,
             AttachmentLoadOp::CLEAR,
             AttachmentStoreOp::STORE,
             CLEAR_COLOR,
         )];
         let depth_attachment = &util::depth_attachment(
-            ctx.depth_image,
+            &self.depth_image,
             AttachmentLoadOp::CLEAR,
             AttachmentStoreOp::STORE,
             1.0,
         );
-        let viewport = util::viewport_inverted(ctx.extent);
-        cmd.begin_rendering(color_attachments, Some(depth_attachment), ctx.extent);
+        let viewport = util::viewport_inverted(ctx.render_extent);
+        cmd.begin_rendering(color_attachments, Some(depth_attachment), ctx.render_extent);
         cmd.set_viewport(viewport);
-        cmd.set_scissor(Rect2D::default().extent(ctx.extent));
+        cmd.set_scissor(Rect2D::default().extent(ctx.render_extent));
 
         cmd.bind_pipeline(PipelineBindPoint::GRAPHICS, self.handle);
         ctx.binder.bind(&cmd, self.pipeline_layout, &[]);
 
-        for object in &ctx.objects {
+        for object in ctx.objects {
             self.draw_primitive(cmd, object)?;
         }
         cmd.end_rendering();
-        log::trace!("End forward pipeline render");
+        ctx.gpu.debug_utils().end_debug_label(&cmd);
         Ok(())
     }
 }
@@ -87,8 +88,8 @@ impl ForwardPipeline {
     }
 
     fn draw_primitive(&self, cmd: &CommandBuffer, object: &RenderObject) -> Result<()> {
-        cmd.bind_index_buffer(&*object.primitive.index_buffer, 0);
-        cmd.bind_vertex_buffer(&*object.primitive.vertex_buffer, 0);
+        cmd.bind_index_buffer(&*object.mesh.index_buffer, 0);
+        cmd.bind_vertex_buffer(&*object.mesh.vertex_buffer, 0);
 
         let push_constants = GpuPushConstantData {
             model: object.transform,
@@ -103,7 +104,7 @@ impl ForwardPipeline {
             0,
             &push_constants,
         );
-        cmd.draw_indexed(object.primitive.vertex_count, 1, 0, 0, 0);
+        cmd.draw_indexed(object.mesh.vertex_buffer.len() as u32, 1, 0, 0, 0);
 
         Ok(())
     }
@@ -134,61 +135,4 @@ impl ForwardPipeline {
             .dynamic_viewport()
             .build(gpu, layout)
     }
-
-    // fn update_draw_buffer(&mut self, context: &RenderContext, transforms: Vec<Mat4>) -> Result<()> {
-    //     log::debug!("update draw");
-    //     let data = transforms
-    //         .into_iter()
-    //         .map(|t| GpuDrawData { model: t })
-    //         .collect::<Vec<_>>();
-    //     self.draw_buffer.write(&data);
-
-    //     self.draw_resources
-    //         .dynamic_uniform_buffer(BIND_IDX_DRAW, &self.draw_buffer, 0, 64 * data.len() as u64)
-    //         .update(context)?;
-    //     Ok(())
-    // }
-
-    // pub fn bind_draw(&self, ctx: &RenderContext, primitive: &Primitive) -> Result<()> {
-    //     let cmd = ctx.command_buffer;
-    //     cmd.bind_index_buffer(primitive.index_buffer.raw(), 0);
-    //     cmd.bind_vertex_buffer(primitive.vertex_buffer.raw(), 0);
-
-    //     // let offsets = [offset as u32 * mem::size_of::<GpuDrawData>() as u32];
-    //     // self.draw_resources
-    //     // .bind(ctx, self.pipeline_layout, &offsets);
-
-    //     Ok(())
-    // }
-
-    // fn get_batches<'a>(
-    //     ctx: &'a RenderContext<'_>,
-    // ) -> HashMap<Option<aleph_scene::assets::AssetHandle<Material>>, Vec<(&'a Primitive, Mat4)>>
-    // {
-    //     let mut material_batches: HashMap<Option<MaterialHandle>, Vec<(&Primitive, Mat4)>> =
-    //         HashMap::new();
-
-    //     for node in ctx.scene.mesh_nodes() {
-    //         match node.data {
-    //             NodeType::Mesh(handle) => {
-    //                 let mesh = ctx.assets.mesh(handle).unwrap();
-    //                 let transform = node.transform;
-    //                 for primitive in mesh.primitives.iter() {
-    //                     material_batches
-    //                         .entry(None)
-    //                         .or_default()
-    //                         .push((primitive, transform))
-    //                 }
-    //             }
-    //             _ => {}
-    //         }
-    //     }
-    //     material_batches
-    // }
 }
-
-// pub unsafe fn mem_copy_aligned<T: Copy>(ptr: *mut c_void, alignment: DeviceSize, data: &[T]) {
-//     let size = data.len() as DeviceSize * alignment;
-//     let mut align = Align::new(ptr, alignment, size);
-//     align.copy_from_slice(data);
-// }

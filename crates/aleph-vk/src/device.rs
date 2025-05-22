@@ -1,9 +1,9 @@
 use {
-    crate::{CommandBuffer, CommandPool, Instance, VK_TIMEOUT_NS},
+    crate::{CommandBuffer, CommandPool, Instance, TIMEOUT_NS},
     anyhow::{anyhow, Result},
     ash::{
         ext, khr,
-        vk::{self, BufferDeviceAddressInfo, Handle, SubmitInfo2, LOD_CLAMP_NONE},
+        vk::{self, BufferDeviceAddressInfo, Handle, PhysicalDeviceProperties, LOD_CLAMP_NONE},
     },
     derive_more::{Debug, Deref},
     std::{ffi, slice},
@@ -37,7 +37,9 @@ impl QueueFamily {
 #[derive(Clone, Copy, Debug, Deref)]
 pub struct Queue {
     #[deref]
+    #[debug("{:#x}", handle.as_raw())]
     pub(crate) handle: vk::Queue,
+    #[debug("{:?}", family.index)]
     pub(crate) family: QueueFamily,
 }
 impl Queue {
@@ -45,13 +47,15 @@ impl Queue {
     pub fn family(&self) -> QueueFamily { self.family }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deref)]
 pub struct Device {
-    #[debug("{:x}", handle.handle().as_raw())]
+    #[deref]
+    #[debug("{:#x}", handle.handle().as_raw())]
     pub(crate) handle: ash::Device, // TODO
     pub(crate) gfx_queue: Queue,
     pub(crate) transfer_queue: Queue,
     pub(crate) physical_device: vk::PhysicalDevice,
+    properties: PhysicalDeviceProperties,
 }
 
 impl Device {
@@ -72,7 +76,13 @@ impl Device {
             .iter()
             .map(|n| n.as_ptr())
             .collect::<Vec<_>>();
-
+        let mut device_fault_features =
+            ash::vk::PhysicalDeviceFaultFeaturesEXT::default().device_fault(true);
+        let mut swapchain_maintenance_features =
+            ash::vk::PhysicalDeviceSwapchainMaintenance1FeaturesEXT::default()
+                .swapchain_maintenance1(true);
+        let mut timeline_semaphore_features =
+            ash::vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR::default().timeline_semaphore(true);
         let mut synchronization2_features =
             ash::vk::PhysicalDeviceSynchronization2FeaturesKHR::default().synchronization2(true);
         let mut dynamic_rendering_features =
@@ -80,6 +90,9 @@ impl Device {
         let mut buffer_device_address_features =
             ash::vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR::default()
                 .buffer_device_address(true);
+        let mut device_address_binding_report_features =
+            ash::vk::PhysicalDeviceAddressBindingReportFeaturesEXT::default()
+                .report_address_binding(true);
         let mut descriptor_indexing_features =
             ash::vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::default()
                 .shader_sampled_image_array_non_uniform_indexing(true)
@@ -93,17 +106,25 @@ impl Device {
         let mut device_8bit_storage_features =
             ash::vk::PhysicalDevice8BitStorageFeaturesKHR::default()
                 .storage_buffer8_bit_access(true);
+        let mut device_coherent_memory_features =
+            ash::vk::PhysicalDeviceCoherentMemoryFeaturesAMD::default()
+                .device_coherent_memory(true);
 
         let device_features1 = vk::PhysicalDeviceFeatures::default()
             .geometry_shader(true)
             .wide_lines(true);
         let mut device_features2 = vk::PhysicalDeviceFeatures2::default()
             .features(device_features1)
+            .push_next(&mut timeline_semaphore_features)
+            .push_next(&mut swapchain_maintenance_features)
             .push_next(&mut synchronization2_features)
             .push_next(&mut dynamic_rendering_features)
             .push_next(&mut buffer_device_address_features)
             .push_next(&mut device_8bit_storage_features)
-            .push_next(&mut descriptor_indexing_features);
+            .push_next(&mut descriptor_indexing_features)
+            .push_next(&mut device_fault_features)
+            .push_next(&mut device_coherent_memory_features)
+            .push_next(&mut device_address_binding_report_features);
 
         let queue_families = [graphics_queue_family, transfer_queue_family];
         let handle = instance.create_device(
@@ -114,12 +135,14 @@ impl Device {
         )?;
         let graphics_queue = Self::create_queue(&handle, graphics_queue_family);
         let transfer_queue = Self::create_queue(&handle, transfer_queue_family);
+        let properties = instance.get_physical_device_properties(physical_device);
 
         Ok(Device {
             handle,
             physical_device,
             gfx_queue: graphics_queue,
             transfer_queue,
+            properties,
         })
     }
 
@@ -130,6 +153,8 @@ impl Device {
     pub fn graphics_queue(&self) -> &Queue { &self.gfx_queue }
 
     pub fn transfer_queue(&self) -> &Queue { &self.transfer_queue }
+
+    pub fn properties(&self) -> &PhysicalDeviceProperties { &self.properties }
 }
 
 impl Device {
@@ -259,19 +284,54 @@ impl Device {
 
     pub fn create_fence(&self, flags: vk::FenceCreateFlags) -> vk::Fence {
         let info = vk::FenceCreateInfo::default().flags(flags);
-        unsafe {
+        let fence = unsafe {
             self.handle
                 .create_fence(&info, None)
                 .unwrap_or_else(|e| panic!("Error creating fence: {e}"))
+        };
+
+        log::trace!("Created fence {fence:?}");
+        fence
+    }
+
+    pub fn create_timeline_semaphore(&self, initial_value: u64) -> vk::Semaphore {
+        let mut semaphore_type_create_info = vk::SemaphoreTypeCreateInfo::default()
+            .semaphore_type(vk::SemaphoreType::TIMELINE)
+            .initial_value(initial_value);
+
+        let create_info =
+            vk::SemaphoreCreateInfo::default().push_next(&mut semaphore_type_create_info);
+
+        unsafe {
+            self.handle
+                .create_semaphore(&create_info, None)
+                .unwrap_or_else(|e| panic!("Error creating timeline semaphore: {e:?}"))
         }
     }
 
-    pub fn create_semaphore(&self) -> vk::Semaphore {
+    pub fn wait_for_timeline_semaphores(&self, semaphores: &[(vk::Semaphore, u64)]) -> Result<()> {
+        let values = semaphores.iter().map(|(_, v)| *v).collect::<Vec<_>>();
+        let semaphores = semaphores.iter().map(|(s, _)| *s).collect::<Vec<_>>();
+        let info = vk::SemaphoreWaitInfo::default()
+            .semaphores(semaphores.as_slice())
+            .values(values.as_slice());
+
         unsafe {
+            self.handle.wait_semaphores(&info, u64::MAX)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn create_semaphore(&self) -> vk::Semaphore {
+        let semaphore = unsafe {
             self.handle
                 .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)
                 .unwrap_or_else(|e| panic!("Error creating semaphore: {e:?}"))
-        }
+        };
+
+        log::trace!("Created semaphore: {semaphore:?}");
+        semaphore
     }
 
     pub fn create_command_pool(&self, queue: &Queue, _name: &str) -> CommandPool {
@@ -304,7 +364,7 @@ impl Device {
         unsafe {
             self.handle
                 .allocate_command_buffers(&info)
-                .unwrap_or_else(|e| panic!("Error allocating command buffer: {e:?}"))[0]
+                .unwrap_or_else(|e| panic!("Error creating command buffer: {e:?}"))[0]
         }
     }
 
@@ -364,16 +424,25 @@ impl Device {
         }
     }
 
+    pub fn flush_mapped_memory_ranges(&self, ranges: &[vk::MappedMemoryRange]) {
+        unsafe {
+            self.handle
+                .flush_mapped_memory_ranges(ranges)
+                .unwrap_or_else(|e| panic!("Error flushing mapped memory ranges: {e:?}"))
+        }
+    }
+
     pub fn wait_for_fences(&self, fences: &[vk::Fence]) {
         log::trace!("Waiting for fences: {:?}", fences);
         unsafe {
             self.handle
-                .wait_for_fences(fences, true, VK_TIMEOUT_NS)
+                .wait_for_fences(fences, true, TIMEOUT_NS)
                 .unwrap_or_else(|e| panic!("Timeout waiting for fences {fences:?}: {e}"))
         }
     }
 
     pub fn reset_fences(&self, fences: &[vk::Fence]) {
+        log::trace!("Resetting fences: {:?}", fences);
         unsafe {
             self.handle
                 .reset_fences(fences)
@@ -385,22 +454,37 @@ impl Device {
         &self,
         queue: &Queue,
         command_buffers: &[vk::CommandBuffer],
-        wait_semaphores: &[vk::Semaphore],
-        signal_semaphores: &[vk::Semaphore],
+        wait_semaphores: &[(vk::Semaphore, vk::PipelineStageFlags2)],
+        signal_semaphores: &[(vk::Semaphore, vk::PipelineStageFlags2)],
         fence: vk::Fence,
     ) {
+        log::trace!(
+            "Submitting {:?} to {:?}, wait_semaphores: {:?}, signal_semaphores: {:?}, fence: {:?}",
+            command_buffers,
+            queue,
+            wait_semaphores,
+            signal_semaphores,
+            fence
+        );
         let cmd_infos = command_buffers
             .iter()
             .map(|cb| vk::CommandBufferSubmitInfo::default().command_buffer(*cb))
             .collect::<Vec<_>>();
-
         let wait_semaphore_infos = wait_semaphores
             .iter()
-            .map(|s| vk::SemaphoreSubmitInfo::default().semaphore(*s))
+            .map(|(s, f)| {
+                vk::SemaphoreSubmitInfo::default()
+                    .semaphore(*s)
+                    .stage_mask(*f)
+            })
             .collect::<Vec<_>>();
         let signal_semaphore_infos = signal_semaphores
             .iter()
-            .map(|s| vk::SemaphoreSubmitInfo::default().semaphore(*s))
+            .map(|(s, f)| {
+                vk::SemaphoreSubmitInfo::default()
+                    .semaphore(*s)
+                    .stage_mask(*f)
+            })
             .collect::<Vec<_>>();
         let submit_info = vk::SubmitInfo2::default()
             .command_buffer_infos(&cmd_infos)

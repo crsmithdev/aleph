@@ -9,6 +9,7 @@ use {
     anyhow::Result,
     bytemuck::Pod,
     derive_more::Debug,
+    std::rc::Rc,
 };
 
 pub struct ResourceLayout {
@@ -144,7 +145,8 @@ impl ResourceLayout {
         let variable_descriptor_count = match has_variable_binding {
             true => Some(
                 128.min(
-                    gpu.properties()
+                    gpu.device()
+                        .properties()
                         .limits
                         .max_per_stage_descriptor_sampled_images,
                 ),
@@ -207,7 +209,7 @@ impl ResourceBinder {
     pub fn texture_array(
         &mut self,
         index: usize,
-        images: &[Texture],
+        images: &Vec<Rc<Texture>>,
         sampler: Sampler,
     ) -> &mut Self {
         let info = images

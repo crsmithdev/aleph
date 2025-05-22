@@ -1,17 +1,23 @@
 use {
-    crate::{model::MeshInfo, Material, Mesh, Primitive, Vertex},
+    crate::{
+        model::{MeshInfo, Vertex},
+        Material, Mesh,
+    },
     aleph_vk::{
-        uploader::Poolable, Buffer, Extent2D, Filter, Format, Gpu, ImageAspectFlags,
-        ImageUsageFlags, PrimitiveTopology, ResourcePool, Sampler, SamplerAddressMode,
-        SamplerMipmapMode, Texture, TextureInfo, TypedBuffer,
+        Buffer, CommandBuffer, Extent2D, Filter, Format, Gpu, ImageAspectFlags, ImageUsageFlags,
+        PrimitiveTopology, ResourcePool, Sampler, SamplerAddressMode, SamplerMipmapMode, Texture,
+        TextureInfo, TypedBuffer,
     },
     anyhow::Result,
-    glam::vec4,
+    bytemuck::{Pod, Zeroable},
+    derive_more::Debug,
+    glam::{vec4, Vec2, Vec3, Vec4},
     image::{ImageBuffer, Rgba},
     std::{
-        cell::{RefCell, RefMut},
+        cell::RefCell,
         collections::HashMap,
-        hash::Hash,
+        hash::{Hash, Hasher},
+        rc::Rc,
         sync::{
             atomic::{AtomicU64, Ordering},
             Arc,
@@ -19,19 +25,22 @@ use {
     },
 };
 
-const WHITE: [u8; 4] = [255, 255, 255, 255];
-const NORMAL: [u8; 4] = [127, 127, 255, 255];
+static ASSET_HANDLE_COUNTER: AtomicU64 = AtomicU64::new(1);
 
-static ASSET_HANDLE_INDEX: AtomicU64 = AtomicU64::new(1);
-
+#[derive(Debug)]
 pub struct AssetHandle<T> {
     index: u64,
+    #[debug(skip)]
     marker: std::marker::PhantomData<T>,
+}
+
+impl<T> Default for AssetHandle<T> {
+    fn default() -> Self { Self::null() }
 }
 
 impl<T> AssetHandle<T> {
     pub fn new() -> Self {
-        let index = ASSET_HANDLE_INDEX.fetch_add(1, Ordering::Relaxed);
+        let index = ASSET_HANDLE_COUNTER.fetch_add(1, Ordering::Relaxed);
         Self {
             index,
             marker: std::marker::PhantomData,
@@ -45,88 +54,67 @@ impl<T> AssetHandle<T> {
         }
     }
 }
+impl<T> Copy for AssetHandle<T> {}
 
-impl<T> std::fmt::Display for AssetHandle<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "MeshHandle({})", self.index)
+impl<T> Clone for AssetHandle<T> {
+    fn clone(&self) -> Self {
+        Self {
+            index: self.index,
+            marker: std::marker::PhantomData,
+        }
     }
 }
 
-impl<T> Clone for AssetHandle<T> {
-    fn clone(&self) -> Self { *self }
+impl<T> Hash for AssetHandle<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) { self.index.hash(state) }
 }
 
 impl<T> PartialEq for AssetHandle<T> {
     fn eq(&self, other: &Self) -> bool { self.index == other.index }
 }
-impl<T> Hash for AssetHandle<T> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) { self.index.hash(state); }
-}
 
-impl<T> Copy for AssetHandle<T> {}
 impl<T> Eq for AssetHandle<T> {}
 
 pub type MeshHandle = AssetHandle<Mesh>;
-impl std::fmt::Debug for MeshHandle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "MeshHandle({})", self.index)
-    }
-}
-
 pub type TextureHandle = AssetHandle<Texture>;
-impl std::fmt::Debug for TextureHandle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "TextureHandle({})", self.index)
-    }
-}
-
 pub type MaterialHandle = AssetHandle<Material>;
-impl std::fmt::Debug for MaterialHandle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "MaterialHandle({})", self.index)
-    }
-}
 
-enum Asset<T, D> {
-    Loaded(T),
+#[derive(Debug, Default)]
+struct Asset<T>(Rc<T>);
+
+#[derive(Debug)]
+enum LazyAsset<T, D> {
+    Loaded(Rc<T>),
     Unloaded(D),
 }
 
-type TextureAsset = Asset<Texture, TextureInfo>;
+type TextureAsset = LazyAsset<Texture, TextureInfo>;
+type MeshAsset = LazyAsset<Mesh, MeshInfo>;
+type LazyCache<T, D> = RefCell<HashMap<AssetHandle<T>, LazyAsset<T, D>>>;
+type AssetCache<T> = RefCell<HashMap<AssetHandle<T>, Asset<T>>>;
 
-type AssetCache<T, D> = RefCell<HashMap<AssetHandle<T>, Asset<T, D>>>;
-
+#[derive(Debug)]
 pub struct Assets {
     gpu: Arc<Gpu>,
-    meshes: HashMap<MeshHandle, Mesh>,
-    textures: AssetCache<Texture, TextureInfo>,
-    materials: HashMap<MaterialHandle, Material>,
-    // uploader: RefCell<Uploader>,
+    meshes: LazyCache<Mesh, MeshInfo>,
+    textures: LazyCache<Texture, TextureInfo>,
+    materials: AssetCache<Material>,
     default_material: MaterialHandle,
     default_sampler: Sampler,
     staging_pool: ResourcePool<Buffer>,
 }
 
 impl Assets {
-    const UPLOAD_POOL_SIZE: usize = 10;
-    const UPLOAD_RETAINED_SIZE: u64 = 1024 * 1024 * 10;
-    const UPLOAD_RETAINED_FRAMES: usize = 5;
+    const WHITE: [u8; 4] = [255, 255, 255, 255];
+    const NORMAL: [u8; 4] = [127, 127, 255, 255];
+    const STAGING_POOL_SIZE: usize = 10;
+    const STAGING_POOL_RETENTION: usize = 5;
     const DEFAULT_EXTENT: Extent2D = Extent2D {
         width: 8,
         height: 8,
     };
 
     pub fn new(gpu: Arc<Gpu>) -> Result<Self> {
-        let textures = RefCell::new(HashMap::new());
-        let materials = HashMap::new();
-        let meshes = HashMap::new();
-        // let uploader = RefCell::new(Uploader::new(
-        //     &gpu,
-        //     Self::UPLOAD_POOL_SIZE,
-        //     Self::UPLOAD_RETAINED_FRAMES,
-        //     Self::UPLOAD_RETAINED_SIZE,
-        // )?);
-
         let default_sampler = gpu.create_sampler(
             Filter::LINEAR,
             Filter::LINEAR,
@@ -134,20 +122,22 @@ impl Assets {
             SamplerAddressMode::REPEAT,
             SamplerAddressMode::REPEAT,
         )?;
-        let pool =
-            ResourcePool::<Buffer>::new(&gpu, Self::UPLOAD_POOL_SIZE, Self::UPLOAD_RETAINED_FRAMES);
+        let staging_pool = ResourcePool::<Buffer>::new(
+            &gpu,
+            Self::STAGING_POOL_SIZE,
+            Self::STAGING_POOL_RETENTION,
+        );
 
         let mut assets = Self {
             gpu,
-            meshes,
-            textures,
-            materials,
-            // uploader,
+            meshes: RefCell::new(HashMap::new()),
+            textures: RefCell::new(HashMap::new()),
+            materials: RefCell::new(HashMap::new()),
             default_material: MaterialHandle::null(),
             default_sampler,
-            staging_pool: pool,
+            staging_pool,
         };
-        assets.default_material = assets.add_default_material()?;
+        assets.default_material = assets.create_default_material()?;
 
         Ok(assets)
     }
@@ -156,182 +146,302 @@ impl Assets {
 
     pub fn default_sampler(&self) -> Sampler { self.default_sampler }
 
-    pub fn default_material(&self) -> Material {
-        self.material(self.default_material).unwrap().clone()
+    pub fn default_material(&self) -> Rc<Material> {
+        self.get_material(self.default_material.clone())
+            .unwrap()
+            .clone()
     }
 
-    fn add_default_material(&mut self) -> Result<MaterialHandle> {
-        let sampler = self.gpu.create_sampler(
-            Filter::LINEAR,
-            Filter::LINEAR,
-            SamplerMipmapMode::LINEAR,
-            SamplerAddressMode::REPEAT,
-            SamplerAddressMode::REPEAT,
-        )?;
-        let white_srgb =
-            self.add_default_texture(&WHITE, Format::R8G8B8A8_SRGB, "white-srgb", sampler);
-        let white_linear =
-            self.add_default_texture(&WHITE, Format::R8G8B8A8_UNORM, "white-unorm", sampler);
-        let normal = self.add_default_texture(&NORMAL, Format::R8G8B8A8_UNORM, "normal", sampler);
-
-        let material = Material {
-            name: "default".to_string(),
-            color_texture: white_srgb,
-            color_factor: vec4(1., 1., 1., 1.),
-            normal_texture: normal,
-            metalrough_texture: white_linear,
-            metallic_factor: 1.0,
-            roughness_factor: 1.0,
-            ao_texture: white_linear,
-            ao_strength: 1.0,
-        };
-
-        self.add_material(material)
-    }
-
-    fn add_default_texture(
-        &mut self,
-        color: &[u8; 4],
-        format: Format,
-        name: &str,
-        sampler: Sampler,
-    ) -> TextureHandle {
+    fn create_default_texture(&self, color: &[u8; 4], format: Format, name: &str) -> TextureInfo {
         let pixel = Rgba::<u8>(*color);
         let buffer = ImageBuffer::from_pixel(16, 16, pixel);
         let data = buffer.to_vec();
-        let info = TextureInfo {
+        TextureInfo {
             name: name.to_string(),
             data,
             extent: Self::DEFAULT_EXTENT,
             flags: ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
             aspect_flags: ImageAspectFlags::COLOR,
             format,
-            sampler: Some(sampler),
-        };
-
-        self.add_texture(info)
+            sampler: Some(self.default_sampler.clone()),
+        }
     }
 
-    pub fn add_texture(&mut self, desc: TextureInfo) -> TextureHandle {
+    fn create_default_material(&mut self) -> Result<MaterialHandle> {
+        let format = Format::R8G8B8A8_SRGB;
+        let white_srgb = self.create_default_texture(&Self::WHITE, format, "default-white-srgb");
+        let white = self.create_default_texture(&Self::WHITE, format, "default-white-unorm");
+        let normal = self.create_default_texture(&Self::NORMAL, format, "default-normal");
+
+        let color_texture = self.add_texture(white_srgb);
+        let normal_texture = self.add_texture(normal);
+        let metalrough_texture = self.add_texture(white.clone());
+        let ao_texture = self.add_texture(white);
+
+        let material = Material {
+            name: "default".to_string(),
+            color_texture,
+            color_factor: vec4(1., 1., 1., 1.),
+            normal_texture,
+            metalrough_texture,
+            metallic_factor: 1.0,
+            roughness_factor: 1.0,
+            ao_texture,
+            ao_strength: 1.0,
+        };
+
+        Ok(self.add_material(material))
+    }
+
+    pub fn add_texture(&mut self, info: TextureInfo) -> TextureHandle {
         let handle = TextureHandle::new();
-        let asset = TextureAsset::Unloaded(desc);
+        let asset = TextureAsset::Unloaded(info);
         self.textures.borrow_mut().insert(handle, asset);
         handle
     }
 
-    pub fn texture(&self, handle: TextureHandle) -> Option<Texture> {
+    pub fn get_texture(&self, handle: TextureHandle) -> Option<Rc<Texture>> {
+        self.get_or_load_texture(&handle, None)
+    }
+
+    fn get_or_load_texture(
+        &self,
+        handle: &TextureHandle,
+        cmd: Option<&CommandBuffer>,
+    ) -> Option<Rc<Texture>> {
         let mut textures = self.textures.borrow_mut();
         match textures.get(&handle) {
-            Some(TextureAsset::Loaded(texture)) => Some(texture.clone()),
-            Some(TextureAsset::Unloaded(desc)) => {
-                let texture = self.load_texture(&desc).unwrap();
-                textures.insert(handle, TextureAsset::Loaded(texture.clone()));
-                Some(texture)
+            Some(asset) => match asset {
+                TextureAsset::Loaded(texture) => Some(Rc::clone(texture)),
+                TextureAsset::Unloaded(info) => {
+                    let rc = Rc::new(self.load_texture(&info, cmd).unwrap());
+                    let asset = TextureAsset::Loaded(rc.clone());
+                    (*textures).insert(*handle, asset);
+                    Some(rc)
+                }
+            },
+            None => None,
+        }
+    }
+
+    fn load_texture(&self, info: &TextureInfo, cmd: Option<&CommandBuffer>) -> Result<Texture> {
+        let texture = Texture::new(&self.gpu, info)?;
+        let data = bytemuck::cast_slice(&info.data);
+        let staging = self.staging_pool.next();
+        staging.write(data);
+
+        let memory_range = staging.mapped_memory_range();
+        self.gpu
+            .device()
+            .flush_mapped_memory_ranges(&[memory_range]);
+
+        // match cmd {
+        //     Some(cmd) => cmd.copy_buffer_to_image(&staging, &texture),
+        //     None => self
+        //         .gpu
+        //         .execute(|cmd| cmd.copy_buffer_to_image(&staging, &texture)),
+        // }
+
+        Ok(texture)
+    }
+
+    pub fn map_textures(
+        &self,
+        cmd: &CommandBuffer,
+    ) -> Result<(Vec<Rc<Texture>>, HashMap<TextureHandle, usize>)> {
+        let mut textures = Vec::new();
+        let mut handle_map = HashMap::new();
+        let handles = {
+            let cached = self.textures.borrow();
+            let mut handles = cached.keys().cloned().collect::<Vec<_>>();
+            handles.insert(0, self.default_material().color_texture);
+            handles
+        };
+
+        for handle in handles.iter() {
+            let texture = self
+                .get_or_load_texture(&handle.clone(), Some(cmd))
+                .unwrap_or_else(|| panic!("Cached texture not found: {:?}", handle));
+            textures.push(texture);
+            handle_map.insert(handle.clone(), textures.len() - 1);
+        }
+
+        Ok((textures, handle_map))
+    }
+
+    pub fn add_material(&self, material: Material) -> MaterialHandle {
+        let handle = MaterialHandle::new();
+        let asset = Asset(Rc::new(material));
+        self.materials.borrow_mut().insert(handle, asset);
+        handle
+    }
+
+    pub fn get_material(&self, handle: MaterialHandle) -> Option<Rc<Material>> {
+        self.materials
+            .borrow()
+            .get(&handle)
+            .map(|asset| Rc::clone(&asset.0))
+    }
+
+    pub fn map_materials(
+        &self,
+        texture_map: &HashMap<TextureHandle, usize>,
+    ) -> Result<(Vec<GpuMaterialData>, HashMap<MaterialHandle, usize>)> {
+        let handles = {
+            let cache = self.materials.borrow_mut();
+            let mut handles = cache.keys().cloned().collect::<Vec<_>>();
+            handles.insert(0, self.default_material.clone());
+            handles
+        };
+
+        let mut handle_map = HashMap::new();
+        let mut materials = Vec::new();
+
+        for handle in handles {
+            let material = self.get_material(handle).unwrap_or_else(|| {
+                panic!("Material not found: {:?}", handle);
+            });
+
+            let color_texture = texture_map.get(&material.color_texture).unwrap_or(&0);
+            let normal_texture = texture_map.get(&material.normal_texture).unwrap_or(&0);
+            let metalrough_texture = texture_map.get(&material.metalrough_texture).unwrap_or(&0);
+            let ao_texture = texture_map.get(&material.ao_texture).unwrap_or(&0);
+            let gpu_material = GpuMaterialData {
+                color_factor: material.color_factor,
+                metallic_factor: material.metallic_factor,
+                roughness_factor: material.roughness_factor,
+                ao_strength: material.ao_strength,
+                color_texture_index: *color_texture as i32,
+                normal_texture_index: *normal_texture as i32,
+                metalrough_texture_index: *metalrough_texture as i32,
+                ao_texture_index: *ao_texture as i32,
+                padding0: 0.,
+            };
+
+            materials.push(gpu_material);
+            handle_map.insert(handle, materials.len() - 1);
+        }
+
+        Ok((materials, handle_map))
+    }
+
+    pub fn add_mesh(&mut self, info: MeshInfo) -> MeshHandle {
+        let handle = MeshHandle::new();
+        let asset = MeshAsset::Unloaded(info);
+        self.meshes.borrow_mut().insert(handle, asset);
+        handle
+    }
+
+    pub fn get_mesh(&self, handle: MeshHandle) -> Option<Rc<Mesh>> {
+        self.get_or_load_mesh(&handle, None)
+    }
+
+    fn get_or_load_mesh(
+        &self,
+        handle: &MeshHandle,
+        cmd: Option<&CommandBuffer>,
+    ) -> Option<Rc<Mesh>> {
+        let mut meshes = self.meshes.borrow_mut();
+        match meshes.get(handle) {
+            Some(MeshAsset::Loaded(mesh)) => Some(Rc::clone(mesh)),
+            Some(MeshAsset::Unloaded(info)) => {
+                let rc = Rc::new(self.load_mesh(&info, cmd).unwrap());
+                let asset = MeshAsset::Loaded(rc.clone());
+                meshes.insert(*handle, asset);
+                Some(rc)
             }
             None => None,
         }
     }
 
-    pub fn textures(&self) -> Vec<(TextureHandle, Texture)> {
-        let keys = self.textures.borrow().keys().cloned().collect::<Vec<_>>();
-        keys.into_iter()
-            .filter_map(|k| match self.texture(k) {
-                Some(texture) => Some((k, texture)),
-                None => None,
+    fn load_mesh(&self, info: &MeshInfo, cmd: Option<&CommandBuffer>) -> Result<Mesh> {
+        let index_buffer = TypedBuffer::index(&self.gpu, info.indices.len(), "index")?;
+        let vertex_buffer = TypedBuffer::vertex(&self.gpu, info.vertices.len(), "vertex")?;
+        let vertex_count = info.indices.len() as u32;
+        let vertices = (0..info.vertices.len())
+            .map(|i| Vertex {
+                position: info.vertices[i],
+                normal: *info.normals.get(i).unwrap_or(&Vec3::ONE),
+                tangent: *info.tangents.get(i).unwrap_or(&Vec4::ONE),
+                color: *info.colors.get(i).unwrap_or(&Vec4::ONE),
+                uv_x: info.tex_coords0.get(i).unwrap_or(&Vec2::ZERO)[0],
+                uv_y: info.tex_coords0.get(i).unwrap_or(&Vec2::ZERO)[1],
             })
-            .collect()
-    }
+            .collect::<Vec<_>>();
 
-    // fn load_texture(&self, info: &TextureInfo) -> Result<Texture> {
-    //     let texture = Texture::new(&self.gpu, info)?;
-    //     let mut uploader = self.uploader.borrow_mut();
-    //     uploader.enqueue_image(&*texture, &info.data);
+        let index_staging = self.staging_pool.next();
+        let index_data = bytemuck::cast_slice(&info.indices);
+        index_staging.write(index_data);
 
-    //     Ok(texture)
-    // }
+        let vertex_staging = self.staging_pool.next();
+        let vertex_data = bytemuck::cast_slice(&vertices);
+        vertex_staging.write(vertex_data);
 
-    fn load_texture(&self, desc: &TextureInfo) -> Result<Texture> {
-        let texture = Texture::new(&self.gpu, desc)?;
-        self.gpu.execute(|cmd| {
-            let staging = self.staging_pool.next();
-            let data = bytemuck::cast_slice(&desc.data);
-            staging.write(data);
-
-            cmd.copy_buffer_to_image(&staging, &*texture)
-        })?;
-
-        Ok(texture)
-    }
-
-    pub fn add_material(&mut self, material: Material) -> Result<MaterialHandle> {
-        let handle = MaterialHandle::new();
-        self.materials.insert(handle, material);
-        Ok(handle)
-    }
-
-    pub fn material(&self, handle: MaterialHandle) -> Option<&Material> {
-        self.materials.get(&handle)
-    }
-
-    pub fn materials(&self) -> Vec<(MaterialHandle, &Material)> {
-        self.materials
-            .keys()
-            .into_iter()
-            .filter_map(|k| match self.material(*k) {
-                Some(texture) => Some((*k, texture)),
-                None => None,
-            })
-            .collect()
-    }
-
-    pub fn add_mesh(&mut self, desc: MeshInfo) -> Result<MeshHandle> {
-        let mut primitives = vec![];
-        for primitive_desc in &desc.primitives {
-            let indices = &primitive_desc.indices;
-            let vertices = &primitive_desc.vertices;
-
-            let index_buffer = TypedBuffer::<u32>::index(&self.gpu, indices.len(), "index")?;
-            let index_staging = self.staging_pool.next();
-            index_staging.write(bytemuck::cast_slice(indices));
-
-            let vertex_buffer = TypedBuffer::<Vertex>::vertex(&self.gpu, vertices.len(), "vertex")?;
-            let vertex_staging = self.staging_pool.next();
-            vertex_staging.write(bytemuck::cast_slice(vertices));
-            let n_vertices = vertices.len();
-
-            self.gpu.execute(|cmd| {
-                cmd.copy_buffer(&vertex_staging, &vertex_buffer, vertex_buffer.size());
-                cmd.copy_buffer(&index_staging, &index_buffer, index_buffer.size());
-            })?;
-
-            primitives.push(Primitive {
-                vertex_buffer,
-                index_buffer,
-                material: primitive_desc.material,
-                vertex_count: n_vertices as u32,
-                topology: PrimitiveTopology::TRIANGLE_LIST,
-            });
-        }
+        // match cmd {
+        //     Some(cmd) => {
+        //         cmd.copy_buffer(&index_staging, &index_buffer, index_buffer.size());
+        //         cmd.copy_buffer(&vertex_staging, &vertex_buffer, vertex_buffer.size());
+        //     }
+        //     None => {
+        //         self.gpu.execute(|cmd| {
+        //             cmd.copy_buffer(&index_staging, &index_buffer, index_buffer.size());
+        //             cmd.copy_buffer(&vertex_staging, &vertex_buffer, vertex_buffer.size());
+        //         });
+        //     }
+        // }
 
         let mesh = Mesh {
-            name: desc.name.clone(),
-            primitives,
+            vertex_buffer,
+            vertex_count,
+            index_buffer,
+            material: info.material,
+            topology: PrimitiveTopology::TRIANGLE_LIST,
+            name: info.name.clone(),
         };
-        let handle = MeshHandle::new();
-        self.meshes.insert(handle, mesh);
-        Ok(handle)
+        Ok(mesh)
     }
 
-    pub fn mesh(&self, handle: MeshHandle) -> Option<&Mesh> { self.meshes.get(&handle) }
+    pub fn map_meshes(
+        &self,
+        cmd: &CommandBuffer,
+    ) -> Result<(Vec<Rc<Mesh>>, HashMap<MeshHandle, usize>)> {
+        let mut meshes = Vec::new();
+        let mut handle_map = HashMap::new();
+        let handles = {
+            let cached = self.meshes.borrow();
+            cached.keys().cloned().collect::<Vec<_>>()
+        };
 
-    pub fn meshes(&self) -> Vec<(MeshHandle, &Mesh)> {
-        self.meshes
-            .keys()
-            .into_iter()
-            .filter_map(|k| match self.mesh(*k) {
-                Some(texture) => Some((*k, texture)),
-                None => None,
-            })
-            .collect()
+        for handle in handles {
+            let mesh = self
+                .get_or_load_mesh(&handle.clone(), Some(cmd))
+                .unwrap_or_else(|| panic!("Cached mesh not found: {:?}", handle));
+            meshes.push(mesh);
+            handle_map.insert(handle.clone(), meshes.len() - 1);
+        }
+
+        Ok((meshes, handle_map))
     }
+}
+
+#[repr(C)]
+#[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
+pub struct GpuMaterialData {
+    pub color_factor: Vec4,
+    pub color_texture_index: i32,
+    pub normal_texture_index: i32,
+    pub metallic_factor: f32,
+    pub roughness_factor: f32,
+    pub metalrough_texture_index: i32,
+    pub ao_strength: f32,
+    pub ao_texture_index: i32,
+    pub padding0: f32,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::test::test_gpu;
+
+    #[test]
+    fn test_assets() { let _ = test_gpu(); }
 }

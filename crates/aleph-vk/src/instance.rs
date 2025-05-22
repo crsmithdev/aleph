@@ -5,7 +5,7 @@ use {
         ext, khr,
         vk::{self, Handle},
     },
-    derive_more::Debug,
+    derive_more::{Debug, Deref},
     std::ffi,
 };
 
@@ -19,9 +19,10 @@ const INSTANCE_EXTENSIONS: [&ffi::CStr; 4] = [
 ];
 
 #[allow(dead_code)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deref)]
 pub struct Instance {
-    #[debug("{:x}", handle.handle().as_raw())]
+    #[deref]
+    #[debug("{:#x}", handle.handle().as_raw())]
     pub(crate) handle: ash::Instance,
 
     #[debug(skip)]
@@ -47,38 +48,11 @@ impl Instance {
             .flags(vk::InstanceCreateFlags::default());
 
         let inner = unsafe { entry.create_instance(&instance_info, None)? };
-        Self::create_debug(&entry, &inner)?;
 
         Ok(Instance {
             handle: inner,
             entry,
         })
-    }
-
-    fn create_debug(
-        entry: &ash::Entry,
-        instance: &ash::Instance,
-    ) -> Result<(ext::debug_utils::Instance, vk::DebugUtilsMessengerEXT)> {
-        let debug_info = vk::DebugUtilsMessengerCreateInfoEXT::default()
-            .message_severity(
-                vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
-                    | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING
-                    | vk::DebugUtilsMessageSeverityFlagsEXT::INFO,
-            )
-            .message_type(
-                vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
-                    | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
-                    | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
-            )
-            .pfn_user_callback(Some(vulkan_debug_callback));
-        let debug_utils = ext::debug_utils::Instance::new(entry, instance);
-        let debug_callback = unsafe {
-            debug_utils
-                .create_debug_utils_messenger(&debug_info, None)
-                .unwrap()
-        };
-
-        Ok((debug_utils, debug_callback))
     }
 
     pub fn handle(&self) -> &ash::Instance { &self.handle }
@@ -130,30 +104,4 @@ impl Instance {
                 .create_device(physical_device, &device_info, None)
         }?)
     }
-}
-
-#[allow(clippy::missing_safety_doc)]
-pub unsafe extern "system" fn vulkan_debug_callback(
-    message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
-    _message_type: vk::DebugUtilsMessageTypeFlagsEXT,
-    p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
-    _p_user_data: *mut ffi::c_void,
-) -> vk::Bool32 {
-    let message = ffi::CStr::from_ptr((*p_callback_data).p_message)
-        .to_str()
-        .unwrap_or("[Error parsing message data]");
-
-    match message_severity {
-        vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => {
-            let x = 10;
-            println!("{}", x);
-            log::error!("{}", message);
-        }
-        vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => log::warn!("{}", message),
-        vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => log::trace!("{}", message),
-        // _ => log::info!("{}", message),
-        _ => {}
-    }
-
-    vk::FALSE
 }

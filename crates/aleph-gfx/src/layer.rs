@@ -7,7 +7,7 @@ use {
         Window,
     },
     aleph_scene::{assets::Assets, Scene},
-    aleph_vk::Gpu,
+    aleph_vk::{Extent2D, Gpu},
     std::sync::Arc,
 };
 
@@ -35,16 +35,21 @@ fn update_system(
     mut assets: ResMut<Assets>,
     mut gui: ResMut<Gui>,
     mut renderer: ResMut<Renderer>,
+    window: Res<Arc<Window>>,
 ) {
     gui.handle_events(events.read());
     if !renderer.prepared {
         renderer
-            .prepare_resources(&mut assets, &scene)
+            .prepare_bindless(&mut assets, &scene)
             .expect("Error preparing resources");
-        // assets.uploader().submit_uploads();
         renderer.prepared = true;
     }
+    let extent = window.inner_size();
+    let extent = Extent2D {
+        width: extent.width,
+        height: extent.height,
+    };
     renderer
-        .render(&scene, &mut assets, &mut gui)
+        .render(&scene, &mut assets, &mut gui, extent)
         .expect("execute renderer");
 }

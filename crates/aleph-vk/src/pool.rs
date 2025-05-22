@@ -1,18 +1,7 @@
 use {
-    crate::{
-        gpu, sync, AccessFlags2, Allocator, Buffer, BufferUsageFlags, CommandBuffer, Device, Gpu,
-        Image, MemoryLocation, PipelineStageFlags2, Queue, TypedBuffer,
-    },
-    anyhow::Result,
-    ash::vk::{
-        self, Fence, FenceCreateFlags, ImageAspectFlags, ImageLayout, Semaphore,
-        QUEUE_FAMILY_IGNORED,
-    },
-    bytemuck::Pod,
-    derive_more::{derive::Debug, Deref},
-    image::imageops::FilterType::Triangle,
+    crate::{Buffer, BufferUsageFlags, Gpu, MemoryLocation},
+    derive_more::derive::Debug,
     std::{cell::RefCell, rc::Rc, sync::Arc},
-    tracing::instrument,
 };
 
 pub trait Poolable {
@@ -20,6 +9,7 @@ pub trait Poolable {
     fn reset(&mut self, gpu: &Gpu);
 }
 
+#[derive(Clone, Debug)]
 struct Pooled<T>
 where
     T: Poolable,
@@ -48,8 +38,8 @@ where
         Self {
             gpu: Arc::clone(&gpu),
             pool: RefCell::new(Vec::new()),
-            size: 0,
-            retention: 0,
+            size: size,
+            retention: retention,
             frame: 0,
         }
     }
@@ -123,28 +113,18 @@ impl Poolable for Buffer {
 
     fn reset(&mut self, _gpu: &Gpu) {}
 }
-// #[cfg(test)]
-// mod tests {
-//     use {
-//         super::*,
-//         crate::Gpu,
-//         ash::vk::{BufferUsageFlags, MemoryPropertyFlags},
-//         std::sync::LazyLock,
-//     };
+#[cfg(test)]
+mod tests {
+    use {super::*, crate::test::test_gpu};
 
-//     // static TEST_GPU: LazyLock<Gpu> =
-//     //     LazyLock::new(|| Gpu::headless().expect("Error creating test GPU"));
+    #[test]
+    fn test_resource_pool() {
+        let gpu = test_gpu();
+        let mut pool = ResourcePool::<Buffer>::new(&gpu, 10, 5);
 
-//     #[test]
-//     fn test_resource_pool() {
-//         // let gpu = &*TEST_GPU;
-//         let gpu = Arc::new(Gpu::headless().expect("Error creating test GPU"));
+        let _ = pool.next();
+        assert_eq!(pool.pool.borrow().len(), 1);
 
-//         let mut pool: ResourcePool<Buffer> = ResourcePool::new(&gpu, 5, 2);
-
-//         let resource = pool.next();
-//         assert_eq!(pool.pool.borrow().len(), 1);
-
-//         pool.update();
-//     }
-// }
+        pool.update();
+    }
+}

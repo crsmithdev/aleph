@@ -1,7 +1,7 @@
 use {
     crate::{Allocator, Device, DeviceAddress, Gpu},
     anyhow::{Ok, Result},
-    ash::vk::{self, Handle},
+    ash::vk::{self, Handle, MappedMemoryRange},
     bytemuck::Pod,
     derive_more::{Debug, Deref},
     gpu_allocator::vulkan::Allocation,
@@ -14,6 +14,8 @@ pub use {gpu_allocator::MemoryLocation, vk::BufferUsageFlags};
 pub struct TypedBuffer<T> {
     #[deref]
     buffer: Buffer,
+    type_size: usize,
+    len: usize,
     #[debug(skip)]
     _marker: std::marker::PhantomData<T>,
 }
@@ -23,7 +25,7 @@ impl<T: Pod> TypedBuffer<T> {
         Self::new(
             &gpu.device,
             &gpu.allocator,
-            size as u64,
+            size,
             vk::BufferUsageFlags::INDEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
             MemoryLocation::GpuOnly,
             name,
@@ -33,13 +35,13 @@ impl<T: Pod> TypedBuffer<T> {
         Self::new(
             &gpu.device,
             &gpu.allocator,
-            size as u64,
+            size,
             vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
             MemoryLocation::GpuOnly,
             name,
         )
     }
-    pub fn storage(gpu: &Gpu, size: u64, name: &str) -> Result<Self> {
+    pub fn storage(gpu: &Gpu, size: usize, name: &str) -> Result<Self> {
         Self::new(
             &gpu.device,
             &gpu.allocator,
@@ -49,7 +51,7 @@ impl<T: Pod> TypedBuffer<T> {
             name,
         )
     }
-    pub fn uniform(gpu: &Gpu, size: u64, name: &str) -> Result<Self> {
+    pub fn uniform(gpu: &Gpu, size: usize, name: &str) -> Result<Self> {
         Self::new(
             &gpu.device,
             &gpu.allocator,
@@ -60,7 +62,7 @@ impl<T: Pod> TypedBuffer<T> {
         )
     }
 
-    pub fn shared_uniform(gpu: &Gpu, size: u64, name: &str) -> Result<Self> {
+    pub fn shared_uniform(gpu: &Gpu, size: usize, name: &str) -> Result<Self> {
         Self::new(
             &gpu.device,
             &gpu.allocator,
@@ -74,40 +76,29 @@ impl<T: Pod> TypedBuffer<T> {
         Self::new(
             &gpu.device,
             &gpu.allocator,
-            size as u64,
+            size,
             vk::BufferUsageFlags::TRANSFER_SRC,
             MemoryLocation::CpuToGpu,
             name,
         )
     }
 
-    pub fn with_data(
-        gpu: &Gpu,
-        data: &[T],
-        flags: vk::BufferUsageFlags,
-        location: MemoryLocation,
-        name: &str,
-    ) -> Result<Self> {
-        let data2 = bytemuck::cast_slice(&data);
-        let size = bytemuck::cast_slice::<u8, u8>(data2).len() as u64;
-        let mut buffer = Self::new(&gpu.device, &gpu.allocator, size, flags, location, name)?;
-
-        buffer.write(data);
-        Ok(buffer)
-    }
-
     pub fn new(
         device: &Device,
         allocator: &Arc<Allocator>,
-        size: u64,
+        len: usize,
         flags: vk::BufferUsageFlags,
         location: MemoryLocation,
         name: &str,
     ) -> Result<Self> {
-        let size = size * mem::size_of::<T>() as u64;
-        let buffer = Buffer::new(device, allocator, size, flags, location, name)?;
+        let type_size = mem::size_of::<T>();
+        let bytes_size = (type_size * len) as u64;
+
+        let buffer = Buffer::new(device, allocator, bytes_size, flags, location, name)?;
         Ok(Self {
             buffer,
+            type_size,
+            len,
             _marker: std::marker::PhantomData,
         })
     }
@@ -119,7 +110,10 @@ impl<T: Pod> TypedBuffer<T> {
     pub fn handle(&self) -> vk::Buffer { self.buffer.handle }
 
     #[inline]
-    pub fn size(&self) -> u64 { self.buffer.size }
+    pub fn len(&self) -> usize { self.len }
+
+    #[inline]
+    pub fn type_size(&self) -> usize { self.type_size }
 
     #[inline]
     pub fn write(&mut self, data: &[T]) { self.buffer.write(bytemuck::cast_slice(data)) }
@@ -132,11 +126,12 @@ impl<T> Drop for TypedBuffer<T> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deref)]
 pub struct Buffer {
-    #[debug("{:x}", address)]
+    #[debug("{:#x}", address)]
     address: DeviceAddress,
-    #[debug("{:x}", handle.as_raw())]
+    #[deref]
+    #[debug("{:#x}", handle.as_raw())]
     handle: vk::Buffer,
     #[debug(skip)]
     device: Device,
@@ -206,6 +201,26 @@ impl Buffer {
     #[inline]
     pub fn size(&self) -> u64 { self.size }
 
+    #[inline]
+    pub fn len(&self) -> usize { self.size as usize }
+
+    pub fn mapped_memory_range(&self) -> vk::MappedMemoryRange {
+        let atom_size = self.device.properties().limits.non_coherent_atom_size;
+        let size = (self.size - 1) - ((self.size - 1) % atom_size) + atom_size;
+
+        let (memory, offset) = {
+            let allocation = self.allocation.borrow();
+            let memory = unsafe { allocation.memory() };
+            let offset = allocation.offset();
+            (memory, offset)
+        };
+
+        MappedMemoryRange::default()
+            .memory(memory)
+            .offset(offset)
+            .size(size)
+    }
+
     pub fn write(&self, data: &[u8]) {
         let mut allocation = self.allocation.borrow_mut();
         let mapped = allocation.mapped_slice_mut().expect("mmmap");
@@ -228,11 +243,14 @@ impl Buffer {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {
+        super::*,
+        crate::{test::test_gpu, TypedBuffer},
+    };
 
     #[test]
     fn test_create_write_buffer() {
-        let gpu = Gpu::headless().unwrap();
+        let gpu = test_gpu();
         let result = TypedBuffer::<i32>::new(
             &gpu.device,
             &gpu.allocator,
@@ -248,5 +266,14 @@ mod tests {
             "Failed to create buffer: {:?}",
             result.err()
         );
+    }
+
+    #[test]
+    fn test_size_typed_untyped() {
+        let gpu = test_gpu();
+        let buffer = TypedBuffer::<i32>::uniform(&gpu, 256, "test").unwrap();
+        assert_eq!(buffer.type_size(), mem::size_of::<i32>() as usize);
+        assert_eq!(buffer.size(), 256 * mem::size_of::<i32>() as u64);
+        assert_eq!(buffer.len(), 256);
     }
 }

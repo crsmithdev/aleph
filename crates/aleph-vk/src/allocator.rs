@@ -1,10 +1,7 @@
 use {
-    crate::{
-        uploader::Poolable, Buffer, Device, Gpu, Instance, MemoryLocation, MemoryRequirements,
-        ResourcePool, TypedBuffer,
-    },
+    crate::{Device, Instance, MemoryLocation, MemoryRequirements},
     anyhow::Result,
-    ash::vk::{Buffer as VkBuffer, BufferUsageFlags, Image as VkImage},
+    ash::vk::{Buffer as VkBuffer, Image as VkImage},
     derive_more::Debug,
     gpu_allocator::{
         vulkan::{

@@ -1,17 +1,14 @@
 use {
-    crate::{
-        Allocator, Buffer, CommandBuffer, Device, Extent2D, Format, Gpu, ImageAspectFlags,
-        ImageUsageFlags, TypedBuffer,
-    },
+    crate::{Allocator, Device, Extent2D, Format, Gpu, ImageAspectFlags, ImageUsageFlags},
     anyhow::Result,
-    ash::vk::{self, BufferUsageFlags, Handle},
-    bytemuck::Pod,
+    ash::vk::{self, Handle},
     derive_more::{Debug, Deref},
-    gpu_allocator::{vulkan::Allocation, MemoryLocation},
+    gpu_allocator::vulkan::Allocation,
     std::{mem, rc::Rc, sync::Arc},
     tracing::instrument,
 };
 
+#[derive(Clone)]
 pub struct TextureInfo {
     pub name: String,
     pub extent: Extent2D,
@@ -30,7 +27,7 @@ pub struct TextureInfo2 {
     pub format: Format,
     pub flags: ImageUsageFlags,
     pub aspect_flags: ImageAspectFlags,
-    #[debug("{:x}", sampler.map(|s| s.as_raw()).unwrap_or(0))]
+    #[debug("{:#x}", sampler.map(|s| s.as_raw()).unwrap_or(0))]
     pub sampler: Option<vk::Sampler>,
 }
 
@@ -49,15 +46,15 @@ impl Debug for TextureInfo {
 #[derive(Clone, Debug, Deref)]
 pub struct Texture {
     #[deref]
-    #[debug("{:x}", image.handle().as_raw())]
+    #[debug("{:#x}", image.handle().as_raw())]
     image: Image,
-    #[debug("{:?}", Rc::as_ptr(allocation))]
+    #[debug("{:#?}", Rc::as_ptr(allocation))]
     allocation: Rc<Allocation>,
     #[debug(skip)]
     allocator: Arc<Allocator>,
     #[debug(skip)]
     device: Device,
-    #[debug("{:x}", sampler.map(|s| s.as_raw()).unwrap_or(0))]
+    #[debug("{:#x}", sampler.map(|s| s.as_raw()).unwrap_or(0))]
     sampler: Option<vk::Sampler>,
     name: String,
 }
@@ -149,23 +146,6 @@ impl Texture {
     pub fn view(&self) -> vk::ImageView { self.image.view }
 
     pub fn sampler(&self) -> Option<vk::Sampler> { self.sampler }
-
-    pub fn upload<T: Pod>(&self, cmd: &CommandBuffer, data: &[T]) -> Result<()> {
-        let size = data.len() as u64;
-        let data = bytemuck::cast_slice(data);
-        let mut buffer: TypedBuffer<u8> = TypedBuffer::new(
-            &self.device,
-            &self.allocator,
-            size,
-            vk::BufferUsageFlags::TRANSFER_SRC,
-            MemoryLocation::CpuToGpu,
-            "staging",
-        )?;
-        buffer.write(data);
-        cmd.copy_buffer_to_image(&buffer, self);
-
-        Ok(())
-    }
 }
 
 impl Drop for Texture {
@@ -183,9 +163,9 @@ impl Drop for Texture {
 
 #[derive(Clone, Debug)]
 pub struct Image {
-    #[debug("{:x}", handle.as_raw())]
+    #[debug("{:#x}", handle.as_raw())]
     handle: vk::Image,
-    #[debug("{:x}", view.as_raw())]
+    #[debug("{:#x}", view.as_raw())]
     view: vk::ImageView,
     #[debug("{}x{}", extent.width, extent.height)]
     extent: Extent2D,
@@ -231,32 +211,29 @@ impl Image {
     pub fn extent(&self) -> Extent2D { self.extent }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use {super::*, std::sync::LazyLock};
+#[cfg(test)]
+mod tests {
+    use {super::*, crate::test::test_gpu};
 
-//     static TEST_GPU: LazyLock<Gpu> =
-//         LazyLock::new(|| Gpu::headless().expect("Error creating test GPU"));
+    #[test]
+    fn test_create_texture() {
+        let gpu = test_gpu();
+        let texture = Texture::new(
+            &gpu,
+            &TextureInfo {
+                name: "test".to_string(),
+                extent: Extent2D {
+                    width: 1024,
+                    height: 1024,
+                },
+                format: Format::R8G8B8A8_SRGB,
+                flags: ImageUsageFlags::TRANSFER_DST,
+                aspect_flags: ImageAspectFlags::COLOR,
+                data: vec![0; 1024 * 1024 * 4],
+                sampler: None,
+            },
+        );
 
-//     #[test]
-//     fn test_create_texture() {
-//         let gpu = &*TEST_GPU;
-//         let texture = Texture::new(
-//             &gpu,
-//             &TextureInfo {
-//                 name: "test".to_string(),
-//                 extent: Extent2D {
-//                     width: 1024,
-//                     height: 1024,
-//                 },
-//                 format: Format::R8G8B8A8_SRGB,
-//                 flags: ImageUsageFlags::TRANSFER_DST,
-//                 aspect_flags: ImageAspectFlags::COLOR,
-//                 data: vec![0; 1024 * 1024 * 4],
-//                 sampler: None,
-//             },
-//         );
-
-//         assert!(texture.is_ok());
-//     }
-// }
+        assert!(texture.is_ok());
+    }
+}

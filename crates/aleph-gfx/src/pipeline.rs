@@ -2,22 +2,22 @@ use {
     crate::RenderContext,
     aleph_scene::Vertex,
     aleph_vk::{
-        CompareOp, CullModeFlags, DynamicState, Format, FrontFace, Gpu, GraphicsPipelineCreateInfo,
-        PipelineColorBlendAttachmentState, PipelineColorBlendStateCreateInfo,
-        PipelineDepthStencilStateCreateInfo, PipelineDynamicStateCreateInfo,
-        PipelineInputAssemblyStateCreateInfo, PipelineLayout, PipelineMultisampleStateCreateInfo,
-        PipelineRasterizationStateCreateInfo, PipelineRenderingCreateInfo,
-        PipelineShaderStageCreateInfo, PipelineVertexInputStateCreateInfo,
-        PipelineViewportStateCreateInfo, PolygonMode, PrimitiveTopology, SampleCountFlags,
-        ShaderModule, ShaderStageFlags, VertexInputAttributeDescription,
-        VertexInputBindingDescription, VkPipeline,
+        CommandBuffer, CompareOp, CullModeFlags, DynamicState, Format, FrontFace, Gpu,
+        GraphicsPipelineCreateInfo, PipelineColorBlendAttachmentState,
+        PipelineColorBlendStateCreateInfo, PipelineDepthStencilStateCreateInfo,
+        PipelineDynamicStateCreateInfo, PipelineInputAssemblyStateCreateInfo, PipelineLayout,
+        PipelineMultisampleStateCreateInfo, PipelineRasterizationStateCreateInfo,
+        PipelineRenderingCreateInfo, PipelineShaderStageCreateInfo,
+        PipelineVertexInputStateCreateInfo, PipelineViewportStateCreateInfo, PolygonMode,
+        PrimitiveTopology, SampleCountFlags, ShaderModule, ShaderStageFlags,
+        VertexInputAttributeDescription, VertexInputBindingDescription, VkPipeline,
     },
     anyhow::Result,
     std::{collections::HashSet, ffi},
 };
 
 pub trait Pipeline {
-    fn render(&mut self, context: &RenderContext) -> Result<()>;
+    fn render(&mut self, context: &RenderContext, cmd: &CommandBuffer) -> Result<()>;
 }
 
 const SHADER_MAIN: &ffi::CStr = c"main";
