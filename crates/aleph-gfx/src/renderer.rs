@@ -7,9 +7,10 @@ use {
     aleph_vk::{
         debug,
         swapchain::{self, IN_FLIGHT_FRAMES},
-        sync, AccessFlags2, CommandBuffer, CommandBufferSubmitInfo, Extent2D, Extent3D, Fence,
-        Format, Frame, Gpu, ImageAspectFlags, ImageLayout, ImageUsageFlags, PipelineStageFlags2,
-        SemaphoreSubmitInfo, ShaderStageFlags, SubmitInfo2, Texture, TextureInfo, TypedBuffer,
+        sync, AccessFlags2, CommandBuffer, CommandBufferSubmitInfo, CommandPool, Extent2D,
+        Extent3D, Fence, Format, Gpu, Handle as _, ImageAspectFlags, ImageLayout, ImageUsageFlags,
+        PipelineStageFlags2, Semaphore, SemaphoreSubmitInfo, ShaderStageFlags, SubmitInfo2,
+        Texture, TextureInfo, TypedBuffer,
     },
     anyhow::Result,
     ash::vk::FenceCreateFlags,
@@ -31,11 +32,13 @@ pub struct RenderContext<'a> {
     pub depth_image: &'a Texture,
     pub objects: &'a [RenderObject],
     pub binder: &'a ResourceBinder,
+    pub assets: &'a Assets,
 }
 
 #[derive(Debug)]
 pub struct RenderObject {
     pub mesh: Rc<Mesh>,
+    pub vertex_count: usize,
     pub material: usize,
     pub transform: Mat4,
 }
@@ -166,7 +169,7 @@ impl Renderer {
         let depth_image = Texture::new(&gpu, &depth_info)?;
 
         let scene_buffer = TypedBuffer::shared_uniform(&gpu, 1, "renderer-scene")?;
-        let material_buffer = TypedBuffer::shared_uniform(&gpu, 100, "renderer-material")?;
+        let material_buffer = TypedBuffer::shared_uniform(&gpu, 10, "renderer-material")?;
 
         let binder = ResourceLayout::set(SET_IDX_BINDLESS)
             .uniform_buffer(BIND_IDX_SCENE, ShaderStageFlags::ALL_GRAPHICS)
@@ -221,14 +224,30 @@ impl Renderer {
         let view = scene.camera.view();
         let projection = scene.camera.projection();
 
-        self.scene_data.view = view;
-        self.scene_data.projection = projection;
-        self.scene_data.vp = projection * view.inverse();
-        self.scene_data.camera_pos = scene.camera.position();
-        self.scene_data.config = GpuConfig::from(&self.config);
-        self.scene_buffer.write(&[self.scene_data]);
+        let mut scene_data = self.scene_data.clone();
+        scene_data.view = view;
+        scene_data.projection = projection;
+        scene_data.vp = projection * view.inverse();
+        scene_data.camera_pos = scene.camera.position();
 
-        self.render_objects = self.create_render_objects(scene, assets, &self.material_map);
+        let scene_data = GpuSceneData {
+            view,
+            projection,
+            vp: projection * view.inverse(),
+            camera_pos: scene.camera.position(),
+            n_lights: LIGHTS.len() as i32,
+            config: GpuConfig::from(&self.config),
+            lights: LIGHTS,
+        };
+        // self.scene_data.view = view;
+        // self.scene_data.projection = projection;
+        // self.scene_data.vp = projection * view.inverse();
+        // self.scene_data.camera_pos = scene.camera.position();
+        // self.scene_data.config = GpuConfig::from(&self.config);
+        self.scene_buffer.write(&[self.scene_data]);
+        self.scene_data = scene_data;
+
+        // self.create_render_objects2(scene, assets);
     }
 
     #[instrument(skip_all)]
@@ -239,7 +258,9 @@ impl Renderer {
         _gui: &mut Gui,
         extent: Extent2D,
     ) -> Result<()> {
-        // self.update_per_frame_data(scene, assets);
+        log::trace!("ENTER render");
+        self.update_per_frame_data(scene, assets);
+        // self.create_render_objects2(scene, assets);
 
         if self.rebuild_swapchain {
             self.gpu.rebuild_swapchain(extent);
@@ -254,51 +275,40 @@ impl Renderer {
             fence,
             ..
         } = &self.frames[self.frame_idx];
+        log::trace!("WAIT @ render start");
+        self.gpu.device().wait_idle();
         log::trace!(
-            "START OF FRAME {} (index: {}), aq: {:?}, pr: {:?}, fence: {:?}, cmd: {:?}  ",
+            "START FRAME {}@{}: aq, pr semaphores: [{:#x}, {:#x}], fence: {:?}, cmd: {:?}",
             self.frame_counter,
             self.frame_idx,
-            acquire_semaphore,
-            present_semaphore,
+            acquire_semaphore.as_raw(),
+            present_semaphore.as_raw(),
             fence,
             cmd_buffer
         );
 
-        self.gpu.device().wait_for_fences(&[*fence]);
+        // self.gpu.device().wait_for_fences(&[*fence]);
         let (next_idx, rebuild_swapchain) = self
             .gpu
             .swapchain()
             .acquire_next_image(*acquire_semaphore)?;
         self.rebuild_swapchain = rebuild_swapchain;
-        self.gpu.reset_fence(*fence)?;
+        // self.gpu.reset_fence(*fence)?;
 
-        // let draw_image = &self.draw_image;
-        // let depth_image = &self.depth_image;
+        let draw_image = &self.draw_image;
+        let depth_image = &self.depth_image;
         let (swapchain_image, swapchain_extent) = {
             let swapchain = self.gpu.swapchain();
             (&swapchain.images()[next_idx], swapchain.extent())
         };
-        // let render_extent = Extent3D {
-        //     width: self.draw_image.extent().width.min(swapchain_extent.width),
-        //     height: self.draw_image.extent().height.min(swapchain_extent.height),
-        //     depth: 1,
-        // };
+        let render_extent = Extent3D {
+            width: self.draw_image.extent().width.min(swapchain_extent.width),
+            height: self.draw_image.extent().height.min(swapchain_extent.height),
+            depth: 1,
+        };
 
         cmd_buffer.reset();
         cmd_buffer.begin();
-
-        let context = RenderContext {
-            gpu: &self.gpu,
-            command_buffer: &cmd_buffer,
-            scene_buffer: &self.scene_buffer,
-            draw_image: &self.draw_image,
-            depth_image: &self.depth_image,
-            render_extent: swapchain_extent,
-            material_map: &self.material_map,
-            binder: &self.binder,
-            scene,
-            objects: &self.render_objects,
-        };
 
         // let barrier = sync::memory_barrier(
         //     PipelineStageFlags2::TRANSFER,
@@ -312,19 +322,42 @@ impl Renderer {
         //     &depth_image,
         //     ImageLayout::UNDEFINED,
         //     ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        // );
+        // );q
         // cmd_buffer.transition_image(
         //     &draw_image,
         //     ImageLayout::UNDEFINED,
         //     ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
         // );
-
+        let context = RenderContext {
+            gpu: &self.gpu,
+            command_buffer: &cmd_buffer,
+            scene_buffer: &self.scene_buffer,
+            draw_image: &self.draw_image,
+            depth_image: &self.depth_image,
+            render_extent: swapchain_extent,
+            material_map: &self.material_map,
+            binder: &self.binder,
+            scene,
+            objects: &self.render_objects,
+            assets,
+            // assets: &self.assets,
+        };
         self.forward_pipeline.render(&context, &cmd_buffer)?;
-        // gui.draw(&context, &mut self.config, &mut self.scene_data)?;
-
-        // self.gpu
-        //     .debug_utils()
-        //     .begin_debug_label(&cmd_buffer, "blit to swapchain");
+        // gui.draw(&contexot, &mut self.config, &mut self.scene_data)?;
+        log::trace!("WAIT @ blit");
+        self.gpu.device().wait_idle();
+        self.gpu
+            .debug_utils()
+            .begin_debug_label(&cmd_buffer, "blit to swapchain");
+        let barrier = sync::image_memory_barrier(
+            &swapchain_image,
+            PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+            AccessFlags2::COLOR_ATTACHMENT_WRITE,
+            PipelineStageFlags2::TRANSFER,
+            AccessFlags2::TRANSFER_READ,
+            ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            ImageLayout::TRANSFER_DST_OPTIMAL,
+        );
         // cmd_buffer.transition_image(
         //     &draw_image,
         //     ImageLayout::UNDEFINED,
@@ -335,51 +368,66 @@ impl Renderer {
         //     ImageLayout::UNDEFINED,
         //     ImageLayout::TRANSFER_DST_OPTIMAL,
         // );
-        // cmd_buffer.copy_image(
-        //     &draw_image,
-        //     &swapchain_image,
-        //     render_extent,
-        //     swapchain_extent.into(),
-        // );
+        cmd_buffer.copy_image(
+            &draw_image,
+            &swapchain_image,
+            render_extent,
+            swapchain_extent.into(),
+        );
         // cmd_buffer.transition_image(
         //     &swapchain_image,
         //     ImageLayout::TRANSFER_DST_OPTIMAL,
         //     ImageLayout::PRESENT_SRC_KHR,
         // );
-        // self.gpu.debug_utils().end_debug_label(&cmd_buffer);
+        self.gpu.debug_utils().end_debug_label(&cmd_buffer);
         cmd_buffer.end();
 
+        log::trace!("WAIT @ render queue submit");
+        self.gpu.device().wait_idle();
         self.gpu.device().queue_submit(
             &self.gpu.device().graphics_queue(),
             &[cmd_buffer.handle()],
-            &[(
-                *acquire_semaphore,
-                PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-            )],
-            &[(*present_semaphore, PipelineStageFlags2::ALL_GRAPHICS)],
-            *fence,
+            &[(*acquire_semaphore, PipelineStageFlags2::ALL_COMMANDS)],
+            &[(*present_semaphore, PipelineStageFlags2::ALL_COMMANDS)],
+            // *fence,
+            Fence::null(),
         );
+        log::trace!("WAIT @ rebuild");
+        self.gpu.device().wait_idle();
 
         let rebuild_swapchain = self.gpu.swapchain().present(
             self.gpu.device().graphics_queue(),
             &[*present_semaphore],
             &[next_idx as u32],
         )?;
-        log::debug!(
-            "END OF FRAME {} (index: {}), aq: {:?}, pr: {:?}, fence: {:?}, cmd: {:?}",
+        log::trace!(
+            "END FRAME {}@{}: aq, pr semaphores: [{:#x}, {:#x}], fence: {:?}, cmd: {:?}",
             self.frame_counter,
             self.frame_idx,
-            acquire_semaphore,
-            present_semaphore,
+            acquire_semaphore.as_raw(),
+            present_semaphore.as_raw(),
             fence,
             cmd_buffer
         );
+
         self.frame_counter += 1;
         self.frame_idx = self.frame_counter % IN_FLIGHT_FRAMES as usize;
         self.rebuild_swapchain |= rebuild_swapchain;
 
+        log::trace!("WAIT @ end of render");
+        self.gpu.device().wait_idle();
+
+        log::trace!("EXIT render");
         Ok(())
     }
+
+    // fn check_fence(&self, semaphore: &Semaphore) {
+    //     match unsafe { self.gpu.device().handle().get_fence_status(fence) } {
+    //         Ok(_) => log::trace!("Fence signaled"),
+    //         Err(e) => log::error!("Not signaled because of error: {e:?}"),
+    //         _ => log::trace!("Fence not signaled"),
+    //     }
+    // }
 
     fn create_render_objects<'a>(
         &self,
@@ -391,46 +439,90 @@ impl Renderer {
             .mesh_nodes()
             .map(|node| match node.data {
                 NodeType::Mesh(handle) => {
-                    let mesh = assets.get_mesh(handle).unwrap();
+                    let mesh = assets.get_mesh(handle).unwrap_or_else(|| {
+                        panic!("Mesh not found: {:?}", handle);
+                    });
+                    let material = *materials
+                        .get(&mesh.material)
+                        .unwrap_or_else(|| panic!("Material not found: {:?}", mesh.material));
                     RenderObject {
-                        material: materials[&mesh.material],
+                        vertex_count: mesh.vertex_count as usize,
+                        material,
                         mesh: mesh.clone(),
                         transform: node.transform,
                     }
                 }
-                _ => unreachable!(),
+                _ => {
+                    panic!("Should not be here, node: {:?}", node);
+                }
             })
             .collect::<Vec<_>>()
     }
 
+    // fn create_render_objects2<'a>(&mut self, scene: &'a Scene, assets: &'a Assets) {
+    //     let materials = &self.material_map;
+    //     let objects = scene
+    //         .mesh_nodes()
+    //         .map(|node| match node.data {
+    //             NodeType::Mesh(handle) => {
+    //                 let mesh = assets.get_mesh(handle).unwrap_or_else(|| {
+    //                     panic!("Mesh not found: {:?}", handle);
+    //                 });
+    //                 let material = *materials
+    //                     .get(&mesh.material)
+    //                     .unwrap_or_else(|| panic!("Material not found: {:?}", mesh.material));
+    //                 RenderObject {
+    //                     vertex_count: mesh.vertex_count as usize,
+    //                     material,
+    //                     mesh: mesh.clone(),
+    //                     transform: node.transform,
+    //                 }
+    //             }
+    //             _ => {
+    //                 panic!("Should not be here, node: {:?}", node);
+    //             }
+    //         })
+    //         .collect::<Vec<_>>();
+
+    //     self.render_objects = objects;
+    // }
+
     #[instrument(skip_all)]
-    pub fn prepare_bindless(&mut self, assets: &mut Assets, _scene: &Scene) -> Result<()> {
+    pub fn prepare_bindless(&mut self, assets: &mut Assets, scene: &Scene) -> Result<()> {
+        log::trace!("WAIT @ start of prepare bindless");
+        self.gpu.device().wait_idle();
         let cmd = &self.gpu.immediate_cmd_buffer();
         cmd.begin();
 
         let (textures, texture_map) = assets.map_textures(&cmd)?;
         let (_meshes, _mesh_map) = assets.map_meshes(&cmd)?;
         let (materials, material_map) = assets.map_materials(&texture_map)?;
+        let fence = self.frames[self.frame_idx].fence;
         self.material_map = material_map;
         self.material_buffer.write(&materials);
 
+        log::trace!("WAIT @ descriptor update in prepare bindless");
         self.binder
             .uniform_buffer(BIND_IDX_SCENE, &self.scene_buffer, 0)
             .uniform_buffer(BIND_IDX_MATERIAL, &self.material_buffer, 0)
             .texture_array(BIND_IDX_TEXTURE, &textures, assets.default_sampler())
             .update(&self.gpu)?;
         cmd.end();
+        log::trace!("WAIT @ pre-submit in prepare bindless");
+        self.gpu.device().wait_idle();
 
-        // self.gpu.device().queue_submit(
-        //     &self.gpu.device().graphics_queue(),
-        //     &[***cmd],
-        //     &[],
-        //     &[],
-        //     fences[0],
-        // );
+        self.render_objects = self.create_render_objects(scene, assets, &self.material_map);
+        self.gpu.device().queue_submit(
+            &self.gpu.device().graphics_queue(),
+            &[***cmd],
+            &[],
+            &[],
+            Fence::null(),
+        );
 
         // self.gpu.device().wait_for_fences(&fences);
-        log::trace!("END PREPARE RESOURCES");
+        log::trace!("WAIT @ end of prepare bindless");
+        self.gpu.device().wait_idle();
 
         Ok(())
     }
@@ -519,4 +611,18 @@ pub struct GpuPushConstantData {
     pub _padding0: i32,
     pub _padding1: i32,
     pub _padding2: i32,
+}
+
+#[derive(Debug)]
+pub struct Frame {
+    #[debug("{:#x}", acquire_semaphore.as_raw())]
+    pub acquire_semaphore: Semaphore,
+    #[debug("{:#x}", present_semaphore.as_raw())]
+    pub present_semaphore: Semaphore,
+    #[debug("{:#x}", fence.as_raw())]
+    pub fence: Fence,
+    #[debug("{:#x}", cmd_pool.handle().as_raw())]
+    pub cmd_pool: CommandPool,
+    #[debug("{:#x}", cmd_buffer.handle().as_raw())]
+    pub cmd_buffer: CommandBuffer,
 }

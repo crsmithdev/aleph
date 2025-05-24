@@ -10,7 +10,7 @@ pub mod swapchain;
 pub mod sync;
 pub mod texture;
 
-pub(crate) const TIMEOUT_NS: u64 = 5_000_000_000;
+pub(crate) const TIMEOUT_NS: u64 = 20_000_000_000;
 
 #[cfg(test)]
 pub use test::test_gpu;
@@ -23,7 +23,7 @@ pub use {
         gpu::Gpu,
         instance::Instance,
         pool::ResourcePool,
-        swapchain::{Frame, Surface, Swapchain, SwapchainInfo},
+        swapchain::{Surface, Swapchain, SwapchainInfo},
         texture::{Image, Texture, TextureInfo},
     },
     ash::vk::{

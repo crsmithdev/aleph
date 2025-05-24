@@ -27,7 +27,7 @@ impl<T: Pod> TypedBuffer<T> {
             &gpu.allocator,
             size,
             vk::BufferUsageFlags::INDEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
-            MemoryLocation::GpuOnly,
+            MemoryLocation::CpuToGpu,
             name,
         )
     }
@@ -37,7 +37,7 @@ impl<T: Pod> TypedBuffer<T> {
             &gpu.allocator,
             size,
             vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
-            MemoryLocation::GpuOnly,
+            MemoryLocation::CpuToGpu,
             name,
         )
     }
@@ -223,10 +223,14 @@ impl Buffer {
 
     pub fn write(&self, data: &[u8]) {
         let mut allocation = self.allocation.borrow_mut();
-        let mapped = allocation.mapped_slice_mut().expect("mmmap");
+        let mapped = allocation
+            .mapped_slice_mut()
+            .unwrap_or_else(|| panic!("Error mmapping buffer"));
+
         let bytes = bytemuck::cast_slice(data);
         let size = mem::size_of_val(bytes);
 
+        log::trace!("Writing {size} bytes to {self:?}");
         mapped[0..size].copy_from_slice(bytes);
     }
 

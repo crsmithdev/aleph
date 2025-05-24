@@ -3,10 +3,13 @@ use {
     anyhow::{anyhow, Result},
     ash::{
         ext, khr,
-        vk::{self, BufferDeviceAddressInfo, Handle, PhysicalDeviceProperties, LOD_CLAMP_NONE},
+        vk::{
+            self, BufferDeviceAddressInfo, Handle, PhysicalDeviceAddressBindingReportFeaturesEXT,
+            PhysicalDeviceProperties, LOD_CLAMP_NONE,
+        },
     },
     derive_more::{Debug, Deref},
-    std::{ffi, slice},
+    std::{ffi, slice, sync::Arc},
 };
 
 const DEVICE_EXTENSIONS: [&ffi::CStr; 10] = [
@@ -72,6 +75,7 @@ impl Device {
         let (graphics_queue_family, transfer_queue_family) =
             Self::init_queue_families(instance, &physical_device)?;
 
+        let features = instance.get_physical_device_features2(physical_device);
         let device_extension_names: Vec<*const i8> = DEVICE_EXTENSIONS
             .iter()
             .map(|n| n.as_ptr())
@@ -90,9 +94,6 @@ impl Device {
         let mut buffer_device_address_features =
             ash::vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR::default()
                 .buffer_device_address(true);
-        let mut device_address_binding_report_features =
-            ash::vk::PhysicalDeviceAddressBindingReportFeaturesEXT::default()
-                .report_address_binding(true);
         let mut descriptor_indexing_features =
             ash::vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::default()
                 .shader_sampled_image_array_non_uniform_indexing(true)
@@ -106,12 +107,20 @@ impl Device {
         let mut device_8bit_storage_features =
             ash::vk::PhysicalDevice8BitStorageFeaturesKHR::default()
                 .storage_buffer8_bit_access(true);
-        let mut device_coherent_memory_features =
-            ash::vk::PhysicalDeviceCoherentMemoryFeaturesAMD::default()
-                .device_coherent_memory(true);
-
+        // let mut device_coherent_memory_features =
+        // ash::vk::PhysicalDeviceCoherentMemoryFeaturesAMD::default()
+        // .device_coherent_memory(true);
+        // let mut device_robustness_features =
+        // ash::vk::PhysicalDeviceRobustness2FeaturesEXT::default()
+        // .robust_buffer_access2(true)
+        // .robust_image_access2(true);
+        let mut device_robustness2_features =
+            ash::vk::PhysicalDeviceRobustness2FeaturesEXT::default()
+                .robust_buffer_access2(true)
+                .robust_image_access2(true);
         let device_features1 = vk::PhysicalDeviceFeatures::default()
             .geometry_shader(true)
+            .robust_buffer_access(true)
             .wide_lines(true);
         let mut device_features2 = vk::PhysicalDeviceFeatures2::default()
             .features(device_features1)
@@ -123,8 +132,9 @@ impl Device {
             .push_next(&mut device_8bit_storage_features)
             .push_next(&mut descriptor_indexing_features)
             .push_next(&mut device_fault_features)
-            .push_next(&mut device_coherent_memory_features)
-            .push_next(&mut device_address_binding_report_features);
+            // .push_next(&mut device_coherent_memory_features)
+            .push_next(&mut device_robustness2_features);
+        // .push_next(&mut device_address_binding_report_features);
 
         let queue_families = [graphics_queue_family, transfer_queue_family];
         let handle = instance.create_device(

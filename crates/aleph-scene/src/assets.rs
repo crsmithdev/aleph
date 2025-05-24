@@ -235,12 +235,12 @@ impl Assets {
             .device()
             .flush_mapped_memory_ranges(&[memory_range]);
 
-        // match cmd {
-        //     Some(cmd) => cmd.copy_buffer_to_image(&staging, &texture),
-        //     None => self
-        //         .gpu
-        //         .execute(|cmd| cmd.copy_buffer_to_image(&staging, &texture)),
-        // }
+        match cmd {
+            Some(cmd) => cmd.copy_buffer_to_image(&staging, &texture),
+            None => self
+                .gpu
+                .execute(|cmd| cmd.copy_buffer_to_image(&staging, &texture)),
+        }
 
         Ok(texture)
     }
@@ -322,6 +322,10 @@ impl Assets {
             handle_map.insert(handle, materials.len() - 1);
         }
 
+        for (key, value) in handle_map.iter() {
+            log::trace!("Material: {:?} -> {:?}", key, value);
+        }
+
         Ok((materials, handle_map))
     }
 
@@ -355,10 +359,10 @@ impl Assets {
     }
 
     fn load_mesh(&self, info: &MeshInfo, cmd: Option<&CommandBuffer>) -> Result<Mesh> {
-        let index_buffer = TypedBuffer::index(&self.gpu, info.indices.len(), "index")?;
-        let vertex_buffer = TypedBuffer::vertex(&self.gpu, info.vertices.len(), "vertex")?;
-        let vertex_count = info.indices.len() as u32;
-        let vertices = (0..info.vertices.len())
+        let mut index_buffer = TypedBuffer::index(&self.gpu, info.indices.len(), "index")?;
+        let mut vertex_buffer = TypedBuffer::vertex(&self.gpu, info.vertices.len(), "vertex")?;
+        let vertex_count = info.vertices.len();
+        let vertices = (0..vertex_count)
             .map(|i| Vertex {
                 position: info.vertices[i],
                 normal: *info.normals.get(i).unwrap_or(&Vec3::ONE),
@@ -369,30 +373,15 @@ impl Assets {
             })
             .collect::<Vec<_>>();
 
-        let index_staging = self.staging_pool.next();
         let index_data = bytemuck::cast_slice(&info.indices);
-        index_staging.write(index_data);
+        index_buffer.write(index_data);
 
-        let vertex_staging = self.staging_pool.next();
         let vertex_data = bytemuck::cast_slice(&vertices);
-        vertex_staging.write(vertex_data);
-
-        // match cmd {
-        //     Some(cmd) => {
-        //         cmd.copy_buffer(&index_staging, &index_buffer, index_buffer.size());
-        //         cmd.copy_buffer(&vertex_staging, &vertex_buffer, vertex_buffer.size());
-        //     }
-        //     None => {
-        //         self.gpu.execute(|cmd| {
-        //             cmd.copy_buffer(&index_staging, &index_buffer, index_buffer.size());
-        //             cmd.copy_buffer(&vertex_staging, &vertex_buffer, vertex_buffer.size());
-        //         });
-        //     }
-        // }
+        vertex_buffer.write(vertex_data);
 
         let mesh = Mesh {
             vertex_buffer,
-            vertex_count,
+            vertex_count: vertex_count as u32,
             index_buffer,
             material: info.material,
             topology: PrimitiveTopology::TRIANGLE_LIST,

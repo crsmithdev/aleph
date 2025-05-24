@@ -29,6 +29,7 @@ impl DebugUtils {
             )
             .message_type(
                 vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
+                    | vk::DebugUtilsMessageTypeFlagsEXT::DEVICE_ADDRESS_BINDING
                     | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
                     | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
             )
@@ -67,6 +68,7 @@ impl DebugUtils {
             self.debug_device
                 .cmd_begin_debug_utils_label(**cmd_buffer, &marker);
         }
+        log::trace!("Began {name:?} in {:?}", cmd_buffer);
     }
 
     pub fn end_debug_label(&self, cmd_buffer: &CommandBuffer) {

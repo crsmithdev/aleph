@@ -288,17 +288,3 @@ impl Surface {
         Ok(Self { inner, loader })
     }
 }
-
-#[derive(Debug)]
-pub struct Frame {
-    #[debug("{:#x}", acquire_semaphore.as_raw())]
-    pub acquire_semaphore: vk::Semaphore,
-    #[debug("{:#x}", present_semaphore.as_raw())]
-    pub present_semaphore: vk::Semaphore,
-    #[debug("{:#x}", fence.as_raw())]
-    pub fence: vk::Fence,
-    #[debug("{:#x}", cmd_pool.handle().as_raw())]
-    pub cmd_pool: CommandPool,
-    #[debug("{:#x}", cmd_buffer.handle().as_raw())]
-    pub cmd_buffer: CommandBuffer,
-}
