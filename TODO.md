@@ -1,17 +1,33 @@
-# 0.1 yes
-- [ ] Light & camera nodes
-- [ ] Primitive generation
-- [ ] Debug transforms
-- [ ] Scene graph mutations 
-- [ ] Local test git hooks
-- [ ] Github CI actions
-
-# 0.1 maybe
+## General
 - [ ] Minimal documentation
-- [ ] ground plane
-- [ ] skybox
+- [ ] Github CI integrat1ion
+- [x] Local git unit test hook
+- [ ] Systematic tracing
 
-# 0.2+
+## aleph-app
+
+## aleph-core
+
+## aleph-scene
+- [ ] Node types for camera and lights
+- [x] Basic scene graph mutation
+- [ ] AssetLoader abstraction
+- [x] Improve Assets & Uploader integration
+
+
+## aleph-gfx
 - [ ] User-defined pipelines
 - [ ] IBL / cubemaps
+- [ ] Skybox
+- [ ] Ground plane
+- [x] Primitive generation
+- [x] Normal / tangent generation
+- [ ] Per-type control panel widgets
+
+## aleph-vk
+- [ ] QueueType for queues
+
 - [ ] Asset loader abstraction
+
+# Fixes
+- Re-enable all control panel items

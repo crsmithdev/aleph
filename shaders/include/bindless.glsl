@@ -27,11 +27,10 @@ struct Config {
     float force_roughness_factor;
     float force_ao_strength;
     int debug_normals;
-    int debug_albedo;
-    int debug_metallic;
     int debug_color;
-    int debug_roughness;
+    int debug_metallic;
     int debug_occlusion;
+    int debug_roughness;
     int debug_tangents;
     int debug_bitangents;
     int debug_specular;

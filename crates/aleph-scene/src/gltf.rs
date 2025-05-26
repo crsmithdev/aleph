@@ -222,7 +222,7 @@ fn load_material(
         .occlusion_texture()
         .map(|info| textures[info.texture().index()])
         .unwrap_or(TextureHandle::null());
-    let ao_strength = gltf_material.occlusion_texture().map_or(0.0, |i| i.strength());
+    let ao_strength = gltf_material.occlusion_texture().map_or(1.0, |i| i.strength());
 
     let material = Material {
         color_texture,

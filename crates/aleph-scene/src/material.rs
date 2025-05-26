@@ -32,30 +32,3 @@ impl Default for Material {
         }
     }
 }
-
-impl Material {
-    pub fn fill(src: &Self, dst: &mut Self) {
-        if dst.color_texture == TextureHandle::null() {
-            dst.color_texture = src.color_texture;
-        }
-        if dst.normal_texture == TextureHandle::null() {
-            dst.normal_texture = src.normal_texture;
-        }
-        if dst.metalrough_texture == TextureHandle::null() {
-            dst.metalrough_texture = src.metalrough_texture;
-        }
-        if dst.occlusion_texture == TextureHandle::null() {
-            dst.occlusion_texture = src.occlusion_texture;
-        }
-
-        dst.name = src.name.clone();
-        dst.color_texture = src.color_texture.clone();
-        dst.color_factor = src.color_factor;
-        dst.normal_texture = src.normal_texture.clone();
-        dst.metalrough_texture = src.metalrough_texture.clone();
-        dst.metallic_factor = src.metallic_factor;
-        dst.roughness_factor = src.roughness_factor;
-        dst.occlusion_texture = src.occlusion_texture.clone();
-        dst.ao_strength = src.ao_strength;
-    }
-}

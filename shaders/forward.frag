@@ -65,10 +65,6 @@ vec3 calculateNormal() {
     vec3 B = normalize(cross(N, T));
     mat3 TBN = mat3(T, B, N);
 
-    debugPrintfEXT(
-        "inNormal: %v3f, inTangent: %v4f, material_index: %u, tangentNormal: %v3f\n, out1: %v3f, out2: %v3f\n",
-        inNormal, inTangent, p_constants.material_index, tangentNormal, normalize(TBN * inNormal), normalize(TBN * tangentNormal)
-    );
     return normalize(TBN * tangentNormal);
 }
 
@@ -84,9 +80,7 @@ void main() {
     uint metalrough_index = m.metalrough_texture_index;
     uint ao_index = m.ao_texture_index;
 
-    debugPrintfEXT("color_index: %u, normal_index: %u, metalrough_index: %u, ao_index: %u\n");
-
-    vec3 albedo = texture(u_textures[color_index], uv).xyz;
+    vec3 albedo = toLinear(texture(u_textures[color_index], uv)).xyz;
     if (u_scene.config.force_color == 1) {
         albedo = u_scene.config.force_color_factor.xyz;
     }

@@ -144,9 +144,7 @@ impl CommandBuffer {
 
         #[allow(clippy::unit_arg)]
         unsafe {
-            self.device
-                .handle
-                .cmd_begin_rendering(self.handle, &rendering_info)
+            self.device.handle.cmd_begin_rendering(self.handle, &rendering_info)
         }
     }
 
@@ -195,9 +193,7 @@ impl CommandBuffer {
 
     pub fn bind_vertex_buffer(&self, buffer: &Buffer, _offset: u64) {
         unsafe {
-            self.device
-                .handle
-                .cmd_bind_vertex_buffers(self.handle, 0, &[buffer.handle()], &[0]);
+            self.device.handle.cmd_bind_vertex_buffers(self.handle, 0, &[buffer.handle()], &[0]);
         }
     }
 
@@ -214,17 +210,13 @@ impl CommandBuffer {
 
     pub fn set_scissor(&self, scissor: vk::Rect2D) {
         unsafe {
-            self.device
-                .handle
-                .cmd_set_scissor(self.handle, 0, &[scissor]);
+            self.device.handle.cmd_set_scissor(self.handle, 0, &[scissor]);
         }
     }
 
     pub fn set_viewport(&self, viewport: vk::Viewport) {
         unsafe {
-            self.device
-                .handle
-                .cmd_set_viewport(self.handle, 0, &[viewport]); //std::slice::from_ref(&
+            self.device.handle.cmd_set_viewport(self.handle, 0, &[viewport]); //std::slice::from_ref(&
         }
     }
 
@@ -262,11 +254,7 @@ impl CommandBuffer {
         pipeline_bind_point: vk::PipelineBindPoint,
         pipeline: vk::Pipeline,
     ) {
-        unsafe {
-            self.device
-                .handle
-                .cmd_bind_pipeline(self.handle, pipeline_bind_point, pipeline)
-        }
+        unsafe { self.device.handle.cmd_bind_pipeline(self.handle, pipeline_bind_point, pipeline) }
     }
 
     pub fn dispatch(&self, group_count_x: u32, group_count_y: u32, group_count_z: u32) {
@@ -313,9 +301,7 @@ impl CommandBuffer {
         let dependency_info = vk::DependencyInfo::default().image_memory_barriers(barriers);
 
         unsafe {
-            self.device
-                .handle
-                .cmd_pipeline_barrier2(self.handle, &dependency_info);
+            self.device.handle.cmd_pipeline_barrier2(self.handle, &dependency_info);
         }
     }
 
@@ -334,17 +320,11 @@ impl CommandBuffer {
             .layer_count(1);
         let src_offsets = [
             vk::Offset3D::default(),
-            vk::Offset3D::default()
-                .x(src_extent.width as i32)
-                .y(src_extent.height as i32)
-                .z(1),
+            vk::Offset3D::default().x(src_extent.width as i32).y(src_extent.height as i32).z(1),
         ];
         let dst_offsets = [
             vk::Offset3D::default(),
-            vk::Offset3D::default()
-                .x(dst_extent.width as i32)
-                .y(dst_extent.height as i32)
-                .z(1),
+            vk::Offset3D::default().x(dst_extent.width as i32).y(dst_extent.height as i32).z(1),
         ];
         let blit_region = vk::ImageBlit2::default()
             .src_subresource(src_subresource)
