@@ -126,15 +126,18 @@ fn load_texture(
         false => vk::Format::R8G8B8A8_UNORM,
     };
 
-    let handle = assets.add_texture(TextureInfo {
-        name: name,
-        extent,
-        format,
-        flags: ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
-        aspect_flags: vk::ImageAspectFlags::COLOR,
-        data: bytes,
-        sampler: Some(assets.default_sampler()),
-    });
+    let handle = assets.add_texture(
+        TextureInfo {
+            name: name,
+            extent,
+            format,
+            flags: ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
+            aspect_flags: vk::ImageAspectFlags::COLOR,
+            data: bytes.clone(),
+            sampler: Some(assets.default_sampler()),
+        },
+        bytes,
+    );
 
     log::info!("Loaded glTF texture {index} -> {handle:?} ({format:?})");
 

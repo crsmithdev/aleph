@@ -98,10 +98,18 @@ type LazyCache<T, D> = HashMap<AssetHandle<T>, LazyAsset<T, D>>;
 type AssetCache<T> = HashMap<AssetHandle<T>, Asset<T>>;
 
 #[derive(Debug)]
+enum AsyncAsset<T, I, D> {
+    Loaded(Rc<T>),
+    Unloaded(I, D),
+}
+type TextureAsset2 = AsyncAsset<Texture, TextureInfo, Vec<u8>>;
+type AsyncCache<T, I, D> = HashMap<AssetHandle<T>, AsyncAsset<T, I, D>>;
+
+#[derive(Debug)]
 pub struct Assets {
     gpu: Arc<Gpu>,
     meshes: LazyCache<Mesh, MeshInfo>,
-    textures: LazyCache<Texture, TextureInfo>,
+    textures: AsyncCache<Texture, TextureInfo, Vec<u8>>,
     materials: AssetCache<Material>,
     default_material: MaterialHandle,
     default_sampler: Sampler,
@@ -183,10 +191,10 @@ impl Assets {
         let normal =
             self.create_default_texture(&Self::NORMAL, Format::R8G8B8A8_UNORM, "default-normal");
 
-        let color_texture = self.add_texture(white_srgb);
-        let normal_texture = self.add_texture(normal);
-        let metalrough_texture = self.add_texture(white.clone());
-        let ao_texture = self.add_texture(white);
+        let color_texture = self.add_texture(white_srgb.clone(), white_srgb.data.clone());
+        let normal_texture = self.add_texture(normal.clone(), normal.data.clone());
+        let metalrough_texture = self.add_texture(white.clone(), white.data.clone());
+        let ao_texture = self.add_texture(white.clone(), white.data.clone());
 
         let material = Material {
             name: "default".to_string(),
@@ -203,9 +211,9 @@ impl Assets {
         Ok(self.add_material(material))
     }
 
-    pub fn add_texture(&mut self, info: TextureInfo) -> TextureHandle {
+    pub fn add_texture(&mut self, info: TextureInfo, data: Vec<u8>) -> TextureHandle {
         let handle = TextureHandle::new();
-        let asset = TextureAsset::Unloaded(info);
+        let asset = TextureAsset2::Unloaded(info, data);
         self.textures.insert(handle, asset);
         handle
     }
@@ -221,10 +229,10 @@ impl Assets {
     ) -> Option<Rc<Texture>> {
         match self.textures.get(&handle) {
             Some(asset) => match asset {
-                TextureAsset::Loaded(texture) => Some(Rc::clone(texture)),
-                TextureAsset::Unloaded(info) => {
+                TextureAsset2::Loaded(texture) => Some(Rc::clone(texture)),
+                TextureAsset2::Unloaded(info, data) => {
                     let rc = Rc::new(self.load_texture(&info, cmd).unwrap());
-                    let asset = TextureAsset::Loaded(rc.clone());
+                    let asset = TextureAsset2::Loaded(rc.clone());
                     self.textures.insert(*handle, asset);
                     Some(rc)
                 }
