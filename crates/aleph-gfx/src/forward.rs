@@ -100,8 +100,8 @@ impl ForwardPipeline {
     }
 
     fn draw_primitive(&self, cmd: &CommandBuffer, object: &RenderObject) -> Result<()> {
-        cmd.bind_index_buffer(&*object.mesh.index_buffer, 0);
-        cmd.bind_vertex_buffer(&*object.mesh.vertex_buffer, 0);
+        cmd.bind_index_buffer(&*object.index_buffer, 0);
+        cmd.bind_vertex_buffer(&*object.vertex_buffer, 0);
 
         let push_constants = GpuPushConstantData {
             model: Mat4::IDENTITY,
@@ -116,7 +116,7 @@ impl ForwardPipeline {
             0,
             &push_constants,
         );
-        cmd.draw_indexed(object.mesh.vertex_count as u32, 1, 0, 0, 0);
+        cmd.draw_indexed(object.vertex_count as u32, 1, 0, 0, 0);
 
         Ok(())
     }

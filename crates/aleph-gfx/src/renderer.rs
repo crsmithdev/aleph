@@ -2,8 +2,9 @@ use {
     crate::{ForwardPipeline, Gui, Pipeline, ResourceBinder, ResourceLayout},
     aleph_scene::{
         assets::GpuMaterialData,
+        material,
         model::{Light, MeshInfo},
-        Assets, MaterialHandle, Mesh, NodeType, Scene, Vertex,
+        Assets, MaterialHandle, NodeType, Scene, Vertex,
     },
     aleph_vk::{
         sync, AccessFlags2, CommandBuffer, CommandPool, Extent2D, Extent3D, Fence, Format, Gpu,
@@ -468,18 +469,19 @@ impl Renderer {
                 .unwrap_or_else(|| panic!("Material not found: {:?}", mesh.material));
 
             log::debug!("mesh material: {:?} -> index: {}", mesh.material, material);
-            let loaded = self.load_mesh(mesh, None).unwrap();
-            objects.push(RenderObject {
-                vertex_count: loaded.vertex_count as usize,
-                material,
-                mesh: loaded.clone(),
-                transform: node.transform,
-            });
+            let loaded = self.load_mesh(mesh, node.transform, material, cmd).unwrap();
+            objects.push(loaded);
         }
         objects
     }
 
-    fn load_mesh(&self, info: &MeshInfo, _cmd: Option<&CommandBuffer>) -> Result<Mesh> {
+    fn load_mesh(
+        &self,
+        info: &MeshInfo,
+        transform: Mat4,
+        material: usize,
+        cmd: &CommandBuffer,
+    ) -> Result<RenderObject> {
         let mut index_buffer = TypedBuffer::index(&self.gpu, info.indices.len(), "index")?;
         let mut vertex_buffer = TypedBuffer::vertex(&self.gpu, info.vertices.len(), "vertex")?;
         let vertex_count = info.vertices.len();
@@ -500,13 +502,12 @@ impl Renderer {
         let vertex_data = bytemuck::cast_slice(&vertices);
         vertex_buffer.write(vertex_data);
 
-        let mesh = Mesh {
+        let mesh = RenderObject {
             vertex_buffer,
-            vertex_count: vertex_count as u32,
+            vertex_count,
             index_buffer,
-            material: info.material,
-            topology: PrimitiveTopology::TRIANGLE_LIST,
-            name: info.name.clone(),
+            transform,
+            material,
         };
         Ok(mesh)
     }
@@ -541,7 +542,7 @@ impl Renderer {
         let object_data = GpuObjectData {
             materials: materials_arr,
         };
-        self.create_render_objects(scene, assets, &material_map, cmd);
+        self.render_objects = self.create_render_objects(scene, assets, &material_map, cmd);
         self.object_data_buffer.write(&[object_data]);
         self.binder
             .uniform_buffer(BIND_IDX_SCENE, &self.scene_buffer, 0)
@@ -665,7 +666,8 @@ pub struct RenderContext<'a> {
 
 #[derive(Debug)]
 pub struct RenderObject {
-    pub mesh: Rc<Mesh>,
+    pub vertex_buffer: TypedBuffer<Vertex>,
+    pub index_buffer: TypedBuffer<u32>,
     pub vertex_count: usize,
     pub material: usize,
     pub transform: Mat4,

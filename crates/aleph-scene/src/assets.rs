@@ -1,17 +1,14 @@
 use {
-    crate::{
-        model::{MeshInfo, Vertex},
-        Material,
-    },
+    crate::{model::MeshInfo, Material},
     aleph_vk::{
         sync, AccessFlags2, Buffer, CommandBuffer, Extent2D, Filter, Format, Gpu, ImageAspectFlags,
-        ImageLayout, ImageUsageFlags, PipelineStageFlags2, PrimitiveTopology, ResourcePool,
-        Sampler, SamplerAddressMode, SamplerMipmapMode, Texture, TextureInfo, TypedBuffer,
+        ImageLayout, ImageUsageFlags, PipelineStageFlags2, ResourcePool, Sampler,
+        SamplerAddressMode, SamplerMipmapMode, Texture, TextureInfo,
     },
     anyhow::Result,
     bytemuck::{Pod, Zeroable},
     derive_more::Debug,
-    glam::{vec4, Vec2, Vec3, Vec4},
+    glam::{vec4, Vec4},
     image::{ImageBuffer, Rgba},
     std::{
         collections::HashMap,
@@ -91,17 +88,7 @@ pub type MaterialHandle = AssetHandle<Material>;
 
 #[derive(Debug, Default)]
 struct Asset<T>(Rc<T>);
-#[derive(Debug)]
-struct Asset2<T>(T);
 
-#[derive(Debug)]
-enum LazyAsset<T, D> {
-    Loaded(Rc<T>),
-    Unloaded(D),
-}
-
-type MeshAsset = Asset2<MeshInfo>;
-type LazyCache<T, D> = HashMap<AssetHandle<T>, LazyAsset<T, D>>;
 type AssetCache<T> = HashMap<AssetHandle<T>, Asset<T>>;
 type AssetCache2<T> = HashMap<AssetHandle<T>, T>;
 
@@ -120,7 +107,7 @@ pub struct Assets {
     meshes: AssetCache2<MeshInfo>,
     textures: AsyncCache<Texture, TextureInfo, Vec<u8>>,
     materials: AssetCache<Material>,
-    default_material: MaterialHandle,
+    default_material: Material,
     default_sampler: Sampler,
 }
 
@@ -142,10 +129,10 @@ impl Assets {
             meshes: HashMap::new(),
             textures: HashMap::new(),
             materials: HashMap::new(),
-            default_material: MaterialHandle::null(),
+            default_material: Material::default(),
             default_sampler,
         };
-        assets.default_material = assets.create_default_material()?;
+        assets.default_material = assets.create_default_material()?.1;
 
         Ok(assets)
     }
@@ -170,7 +157,7 @@ impl Assets {
         self.add_texture(info, &data)
     }
 
-    fn create_default_material(&mut self) -> Result<MaterialHandle> {
+    fn create_default_material(&mut self) -> Result<(MaterialHandle, Material)> {
         let color_texture = self.create_default_texture(&WHITE, Format::R8G8B8A8_SRGB);
         let normal_texture = self.create_default_texture(&NORMAL, Format::R8G8B8A8_UNORM);
         let metalrough_texture = self.create_default_texture(&WHITE, Format::R8G8B8A8_UNORM);
@@ -188,7 +175,8 @@ impl Assets {
             ao_strength: 1.0,
         };
 
-        Ok(self.add_material(material))
+        let handle = self.add_material(material.clone());
+        Ok((handle, material))
     }
 
     pub fn add_texture(&mut self, info: TextureInfo, data: &[u8]) -> TextureHandle {
@@ -196,10 +184,6 @@ impl Assets {
         let asset = TextureAsset2::Unloaded(info, data.to_vec());
         self.textures.insert(handle, asset);
         handle
-    }
-
-    pub fn get_texture(&mut self, handle: TextureHandle) -> Option<Rc<Texture>> {
-        self.get_or_load_texture(&handle, None)
     }
 
     fn get_or_load_texture(
@@ -224,6 +208,38 @@ impl Assets {
             None => None,
         }
     }
+
+    pub fn add_material(&mut self, material: Material) -> MaterialHandle {
+        let handle = MaterialHandle::new();
+        let mut material = material.clone();
+        if material.color_texture == TextureHandle::null() {
+            material.color_texture = self.default_material.color_texture;
+        }
+        if material.normal_texture == TextureHandle::null() {
+            material.normal_texture = self.default_material.normal_texture;
+        }
+        if material.metalrough_texture == TextureHandle::null() {
+            material.metalrough_texture = self.default_material.metalrough_texture;
+        }
+        if material.ao_texture == TextureHandle::null() {
+            material.ao_texture = self.default_material.ao_texture;
+        }
+        let asset = Asset(Rc::new(material));
+        self.materials.insert(handle, asset);
+        handle
+    }
+
+    pub fn get_material(&self, handle: MaterialHandle) -> Option<Rc<Material>> {
+        self.materials.get(&handle).map(|asset| Rc::clone(&asset.0))
+    }
+
+    pub fn add_mesh(&mut self, info: MeshInfo) -> MeshHandle {
+        let handle = MeshHandle::new();
+        self.meshes.insert(handle, info);
+        handle
+    }
+
+    pub fn get_mesh(&mut self, handle: MeshHandle) -> Option<&MeshInfo> { self.meshes.get(&handle) }
 
     pub fn map_textures(
         &mut self,
@@ -252,15 +268,23 @@ impl Assets {
         Ok((textures, handle_map))
     }
 
-    pub fn add_material(&mut self, material: Material) -> MaterialHandle {
-        let handle = MaterialHandle::new();
-        let asset = Asset(Rc::new(material));
-        self.materials.insert(handle, asset);
-        handle
-    }
+    pub fn map_meshes(
+        &mut self,
+        cmd: &CommandBuffer,
+    ) -> Result<(Vec<MeshInfo>, HashMap<MeshHandle, usize>)> {
+        let mut meshes = Vec::new();
+        let mut handle_map = HashMap::new();
+        let handles = { self.meshes.keys().cloned().collect::<Vec<_>>() };
 
-    pub fn get_material(&self, handle: MaterialHandle) -> Option<Rc<Material>> {
-        self.materials.get(&handle).map(|asset| Rc::clone(&asset.0))
+        for handle in handles {
+            let mesh = self
+                .get_mesh(handle.clone())
+                .unwrap_or_else(|| panic!("Cached mesh not found: {:?}", handle));
+            meshes.push(mesh.clone());
+            handle_map.insert(handle.clone(), meshes.len() - 1);
+        }
+
+        Ok((meshes, handle_map))
     }
 
     pub fn map_materials(
@@ -271,10 +295,6 @@ impl Assets {
             let handles = self.materials.keys().cloned().collect::<Vec<_>>();
             handles
         };
-        let default_material = self
-            .get_material(self.default_material.clone())
-            .unwrap()
-            .clone();
 
         let mut handle_map = HashMap::new();
         let mut materials = Vec::new();
@@ -284,29 +304,10 @@ impl Assets {
                 panic!("Material not found: {:?}", handle);
             });
 
-            let null = TextureHandle::null();
-
-            let color_handle = match material.color_texture {
-                h if h == null => default_material.color_texture,
-                _ => material.color_texture,
-            };
-            let normal_handle = match material.normal_texture {
-                h if h == null => default_material.normal_texture,
-                _ => material.normal_texture,
-            };
-            let metalrough_handle = match material.metalrough_texture {
-                h if h == null => default_material.metalrough_texture,
-                _ => material.metalrough_texture,
-            };
-            let ao_handle = match material.ao_texture {
-                h if h == null => default_material.ao_texture,
-                _ => material.ao_texture,
-            };
-
-            let color_texture = texture_map.get(&color_handle).unwrap_or(&0);
-            let normal_texture = texture_map.get(&normal_handle).unwrap_or(&0);
-            let metalrough_texture = texture_map.get(&metalrough_handle).unwrap_or(&0);
-            let ao_texture = texture_map.get(&ao_handle).unwrap_or(&0);
+            let color_texture = texture_map.get(&material.color_texture).unwrap_or(&0);
+            let normal_texture = texture_map.get(&material.normal_texture).unwrap_or(&0);
+            let metalrough_texture = texture_map.get(&material.metalrough_texture).unwrap_or(&0);
+            let ao_texture = texture_map.get(&material.ao_texture).unwrap_or(&0);
             let gpu_material = GpuMaterialData {
                 color_factor: material.color_factor,
                 metallic_factor: material.metallic_factor,
@@ -331,65 +332,6 @@ impl Assets {
         }
 
         Ok((materials, handle_map))
-    }
-
-    pub fn add_mesh(&mut self, info: MeshInfo) -> MeshHandle {
-        let handle = MeshHandle::new();
-        self.meshes.insert(handle, info);
-        handle
-    }
-
-    pub fn get_mesh(&mut self, handle: MeshHandle) -> Option<&MeshInfo> { self.meshes.get(&handle) }
-
-    // fn load_mesh(&self, info: &MeshInfo, _cmd: Option<&CommandBuffer>) -> Result<Mesh> {
-    //     let mut index_buffer = TypedBuffer::index(&self.gpu, info.indices.len(), "index")?;
-    //     let mut vertex_buffer = TypedBuffer::vertex(&self.gpu, info.vertices.len(), "vertex")?;
-    //     let vertex_count = info.vertices.len();
-    //     let vertices = (0..vertex_count)
-    //         .map(|i| Vertex {
-    //             position: info.vertices[i],
-    //             normal: *info.normals.get(i).unwrap_or(&Vec3::ONE),
-    //             tangent: *info.tangents.get(i).unwrap_or(&Vec4::ONE),
-    //             color: *info.colors.get(i).unwrap_or(&Vec4::ONE),
-    //             uv_x: info.tex_coords0.get(i).unwrap_or(&Vec2::ZERO)[0],
-    //             uv_y: info.tex_coords0.get(i).unwrap_or(&Vec2::ZERO)[1],
-    //         })
-    //         .collect::<Vec<_>>();
-
-    //     let index_data = bytemuck::cast_slice(&info.indices);
-    //     index_buffer.write(index_data);
-
-    //     let vertex_data = bytemuck::cast_slice(&vertices);
-    //     vertex_buffer.write(vertex_data);
-
-    //     let mesh = Mesh {
-    //         vertex_buffer,
-    //         vertex_count: vertex_count as u32,
-    //         index_buffer,
-    //         material: info.material,
-    //         topology: PrimitiveTopology::TRIANGLE_LIST,
-    //         name: info.name.clone(),
-    //     };
-    //     Ok(mesh)
-    // }
-
-    pub fn map_meshes(
-        &mut self,
-        cmd: &CommandBuffer,
-    ) -> Result<(Vec<MeshInfo>, HashMap<MeshHandle, usize>)> {
-        let mut meshes = Vec::new();
-        let mut handle_map = HashMap::new();
-        let handles = { self.meshes.keys().cloned().collect::<Vec<_>>() };
-
-        for handle in handles {
-            let mesh = self
-                .get_mesh(handle.clone())
-                .unwrap_or_else(|| panic!("Cached mesh not found: {:?}", handle));
-            meshes.push(mesh.clone());
-            handle_map.insert(handle.clone(), meshes.len() - 1);
-        }
-
-        Ok((meshes, handle_map))
     }
 }
 
