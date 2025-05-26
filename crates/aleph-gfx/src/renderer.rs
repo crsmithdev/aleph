@@ -2,21 +2,20 @@ use {
     crate::{ForwardPipeline, Gui, Pipeline, ResourceBinder, ResourceLayout},
     aleph_scene::{
         assets::{BindlessData, GpuMaterial},
-        material,
-        model::{Light, MeshInfo},
+        model::Light,
         Assets, MaterialHandle, MeshHandle, NodeType, Scene, Vertex,
     },
     aleph_vk::{
         sync, AccessFlags2, CommandBuffer, CommandPool, Extent2D, Extent3D, Fence, Format, Gpu,
         Handle as _, ImageAspectFlags, ImageLayout, ImageUsageFlags, PipelineStageFlags2,
-        PrimitiveTopology, Semaphore, ShaderStageFlags, Texture, TextureInfo, TypedBuffer,
+        Semaphore, ShaderStageFlags, Texture, TextureInfo, TypedBuffer,
     },
     anyhow::Result,
     ash::vk::FenceCreateFlags,
     bytemuck::{Pod, Zeroable},
     derive_more::Debug,
     glam::{vec3, vec4, Mat4, Vec2, Vec3, Vec4},
-    std::{collections::HashMap, panic, rc::Rc, sync::Arc},
+    std::{collections::HashMap, panic, sync::Arc},
     tracing::instrument,
 };
 
@@ -215,15 +214,8 @@ impl Renderer {
             config: GpuConfig::from(&self.config),
             lights: LIGHTS,
         };
-        // self.scene_data.view = view;
-        // self.scene_data.projection = projection;
-        // self.scene_data.vp = projection * view.inverse();
-        // self.scene_data.camera_pos = scene.camera.position();
-        // self.scene_data.config = GpuConfig::from(&self.config);
         self.scene_buffer.write(&[self.scene_data]);
         self.scene_data = scene_data;
-
-        // self.create_render_objects2(scene, assets);
     }
 
     #[instrument(skip_all)]
@@ -234,9 +226,7 @@ impl Renderer {
         gui: &mut Gui,
         extent: Extent2D,
     ) -> Result<()> {
-        log::trace!("ENTER render");
         self.update_per_frame_data(scene, assets);
-        // self.create_render_objects2(scene, assets);
 
         if self.rebuild_swapchain {
             self.gpu.rebuild_swapchain(extent);
@@ -251,8 +241,6 @@ impl Renderer {
             fence,
             ..
         } = &self.frames[self.frame_idx];
-        log::trace!("WAIT @ render start");
-        self.gpu.device().wait_idle();
         log::trace!(
             "START FRAME {}@{}: aq, pr semaphores: [{:#x}, {:#x}], fence: {:?}, cmd: {:?}",
             self.frame_counter,
@@ -326,11 +314,9 @@ impl Renderer {
             scene,
             objects: &self.render_objects,
             assets,
-            // assets: &self.assets,
         };
         self.forward_pipeline.render(&context, &cmd_buffer)?;
         gui.draw(&context, &mut self.config, &mut self.scene_data)?;
-        log::trace!("WAIT @ blit");
         self.gpu.device().wait_idle();
         self.gpu.debug_utils().begin_debug_label(&cmd_buffer, "blit to swapchain");
 
@@ -339,60 +325,44 @@ impl Renderer {
             &[],
             &[sync::image_memory_barrier(
                 &draw_image,
-                PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT, // Previous stage that wrote to it
-                AccessFlags2::COLOR_ATTACHMENT_WRITE,         // Previous access
-                PipelineStageFlags2::TRANSFER,                // Will be used for transfer
-                AccessFlags2::TRANSFER_READ,                  // Will read for blit source
+                PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                PipelineStageFlags2::TRANSFER,
+                AccessFlags2::TRANSFER_READ,
                 ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
                 ImageLayout::TRANSFER_SRC_OPTIMAL,
             )],
         );
 
-        // Swapchain image: UNDEFINED -> TRANSFER_DST_OPTIMAL
         cmd_buffer.pipeline_barrier(
             &[],
             &[],
             &[sync::image_memory_barrier(
                 &swapchain_image,
-                PipelineStageFlags2::TOP_OF_PIPE, // No previous usage
-                AccessFlags2::NONE,               // No previous access
-                PipelineStageFlags2::TRANSFER,    // Will be used for transfer
-                AccessFlags2::TRANSFER_WRITE,     // Will write as blit destination
+                PipelineStageFlags2::TOP_OF_PIPE,
+                AccessFlags2::NONE,
+                PipelineStageFlags2::TRANSFER,
+                AccessFlags2::TRANSFER_WRITE,
                 ImageLayout::UNDEFINED,
                 ImageLayout::TRANSFER_DST_OPTIMAL,
             )],
         );
 
-        // cmd_buffer.transition_image(
-        //     &draw_image,
-        //     ImageLayout::UNDEFINED,
-        //     ImageLayout::TRANSFER_SRC_OPTIMAL,
-        // );
-        // cmd_buffer.transition_image(
-        //     &swapchain_image,
-        //     ImageLayout::UNDEFINED,
-        //     ImageLayout::TRANSFER_DST_OPTIMAL,
-        // );
         cmd_buffer.copy_image(
             &draw_image,
             &swapchain_image,
             render_extent,
             swapchain_extent.into(),
         );
-        // cmd_buffer.transition_image(
-        // &swapchain_image,
-        // ImageLayout::TRANSFER_DST_OPTIMAL,
-        // ImageLayout::PRESENT_SRC_KHR,
-        // );
         cmd_buffer.pipeline_barrier(
             &[],
             &[],
             &[sync::image_memory_barrier(
                 &swapchain_image,
-                PipelineStageFlags2::TRANSFER, // Previous stage that wrote to it
-                AccessFlags2::TRANSFER_WRITE,  // Previous access
-                PipelineStageFlags2::BOTTOM_OF_PIPE, // Present happens outside pipeline
-                AccessFlags2::NONE,            // Present doesn't need explicit access
+                PipelineStageFlags2::TRANSFER,
+                AccessFlags2::TRANSFER_WRITE,
+                PipelineStageFlags2::BOTTOM_OF_PIPE,
+                AccessFlags2::NONE,
                 ImageLayout::TRANSFER_DST_OPTIMAL,
                 ImageLayout::PRESENT_SRC_KHR,
             )],
@@ -410,7 +380,6 @@ impl Renderer {
             // *fence,
             Fence::null(),
         );
-        log::trace!("WAIT @ rebuild");
         self.gpu.device().wait_idle();
 
         let rebuild_swapchain = self.gpu.swapchain().present(
@@ -432,10 +401,6 @@ impl Renderer {
         self.frame_idx = self.frame_counter % self.frames.len() as usize;
         self.rebuild_swapchain |= rebuild_swapchain;
 
-        log::trace!("WAIT @ end of render");
-        self.gpu.device().wait_idle();
-
-        log::trace!("EXIT render");
         Ok(())
     }
 
@@ -443,7 +408,6 @@ impl Renderer {
         &self,
         transforms: &Vec<(MeshHandle, Mat4)>,
         data: &BindlessData,
-        cmd: &CommandBuffer,
     ) -> Result<Vec<RenderObject>> {
         let mut objects = vec![];
         for (handle, transform) in transforms.iter() {
@@ -492,9 +456,6 @@ impl Renderer {
 
         let bindless_data = assets.prepare_bindless(cmd)?;
 
-        // let (textures, texture_map) = assets.map_textures(&cmd)?;
-        // let (_meshes, _mesh_map) = assets.map_meshes(&cmd)?;
-        // let (materials, material_map) = assets.map_materials(&texture_map)?;
         let mut materials_arr = [
             GpuMaterial::default(),
             GpuMaterial::default(),
@@ -520,7 +481,7 @@ impl Renderer {
                 _ => panic!("Should not be here, node: {:?}", node),
             })
             .collect::<Vec<_>>();
-        self.render_objects = self.create_render_objects(&mesh_nodes, &bindless_data, cmd)?;
+        self.render_objects = self.create_render_objects(&mesh_nodes, &bindless_data)?;
         self.object_data_buffer.write(&[object_data]);
         self.binder
             .uniform_buffer(BIND_IDX_SCENE, &self.scene_buffer, 0)

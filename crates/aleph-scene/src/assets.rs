@@ -102,7 +102,6 @@ type AsyncCache<T, I, D> = HashMap<AssetHandle<T>, AsyncAsset<T, I, D>>;
 
 #[derive(Debug)]
 pub struct Assets {
-    gpu: Arc<Gpu>,
     texture_loader: TextureLoader,
     meshes: AssetCache2<MeshInfo>,
     textures: AsyncCache<Texture, TextureInfo, Vec<u8>>,
@@ -124,7 +123,6 @@ impl Assets {
         let texture_loader = TextureLoader::new(gpu.clone());
 
         let mut assets = Self {
-            gpu: Arc::clone(&gpu),
             texture_loader,
             meshes: HashMap::new(),
             textures: HashMap::new(),

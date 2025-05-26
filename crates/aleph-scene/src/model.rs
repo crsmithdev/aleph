@@ -1,6 +1,6 @@
 use {
     crate::{mikktspace::MikktGeometry, MaterialHandle},
-    aleph_vk::{Format, Handle, PrimitiveTopology, TypedBuffer},
+    aleph_vk::{Format, PrimitiveTopology},
     bytemuck::{Pod, Zeroable},
     derive_more::Debug,
     glam::{Vec2, Vec3, Vec4},

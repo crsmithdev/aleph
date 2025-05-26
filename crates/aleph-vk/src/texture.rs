@@ -17,33 +17,6 @@ pub struct TextureInfo {
     pub sampler: Option<vk::Sampler>,
 }
 
-#[derive(Debug)]
-pub struct TextureInfo2 {
-    pub name: String,
-    #[debug("{}x{}", extent.width, extent.height)]
-    pub extent: Extent2D,
-    pub format: Format,
-    pub flags: ImageUsageFlags,
-    pub aspect_flags: ImageAspectFlags,
-    #[debug("{:#x}", sampler.map(|s| s.as_raw()).unwrap_or(0))]
-    pub sampler: Option<vk::Sampler>,
-}
-
-impl Debug for TextureInfo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "TextureInfo(name: {}, extent: {}x{}, format: {:?}, usage: {:?}, aspect: {:?})",
-            self.name,
-            self.extent.width,
-            self.extent.height,
-            self.format,
-            self.flags,
-            self.aspect_flags
-        )
-    }
-}
-
 #[allow(dead_code)]
 #[derive(Clone, Debug, Deref)]
 #[debug("{image:?}")]
@@ -94,44 +67,6 @@ impl Texture {
         })
     }
 
-    pub fn new2(gpu: &Gpu, info: &TextureInfo2) -> Result<Self> {
-        let name = info.name.to_string();
-        let device = gpu.device.clone();
-        let allocator = gpu.allocator.clone();
-
-        let image_info = &vk::ImageCreateInfo::default()
-            .image_type(vk::ImageType::TYPE_2D)
-            .format(info.format)
-            .extent(info.extent.into())
-            .mip_levels(1)
-            .array_layers(1)
-            .samples(vk::SampleCountFlags::TYPE_1)
-            .tiling(vk::ImageTiling::OPTIMAL)
-            .usage(info.flags | vk::ImageUsageFlags::TRANSFER_DST);
-        let image = unsafe { device.handle.create_image(image_info, None) }?;
-        let requirements = unsafe { device.handle.get_image_memory_requirements(image) };
-        let allocation = Rc::new(allocator.allocate_image(image, requirements, &name.clone())?);
-
-        let handle = Image::new(
-            image,
-            device.clone(),
-            info.extent,
-            info.format,
-            info.aspect_flags,
-            &info.name,
-        )?;
-
-        let device = device.clone();
-
-        Ok(Self {
-            image: handle,
-            allocator,
-            allocation,
-            device,
-            sampler: info.sampler,
-        })
-    }
-
     pub fn name(&self) -> &str { &self.image.name }
 
     pub fn handle(&self) -> vk::Image { self.image.handle }
@@ -139,6 +74,8 @@ impl Texture {
     pub fn view(&self) -> vk::ImageView { self.image.view }
 
     pub fn sampler(&self) -> Option<vk::Sampler> { self.sampler }
+
+    pub fn format(&self) -> Format { self.image.format }
 
     pub fn aspect_flags(&self) -> ImageAspectFlags { self.image.aspect_flags }
 }
@@ -212,6 +149,8 @@ impl Image {
     pub fn view(&self) -> vk::ImageView { self.view }
 
     pub fn extent(&self) -> Extent2D { self.extent }
+
+    pub fn format(&self) -> Format { self.format }
 
     pub fn aspect_flags(&self) -> ImageAspectFlags { self.aspect_flags }
 }
