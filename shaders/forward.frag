@@ -161,6 +161,18 @@ void main() {
     if (u_scene.config.debug_bitangents == 1) {
         color = bitangent;
     }
+    if (u_scene.config.debug_roughness == 1) {
+        color = vec3(roughness);
+    }
+    if (u_scene.config.debug_metallic == 1) {
+        color = vec3(metallic);
+    }
+    if (u_scene.config.debug_occlusion == 1) {
+        color = vec3(ao);
+    }
+    if (u_scene.config.debug_color == 1) {
+        color = albedo;
+    }
     if (u_scene.config.debug_specular == 1) {
         if (totalSpecular.r <= 0.05 || totalSpecular.g <= 0.05 || totalSpecular.b <= 0.01) {
             color = vec3(1.0, 0.0, 0.0);

@@ -184,6 +184,14 @@ fn build_ui(ctx: &egui::Context, config: &mut RenderConfig, scene_data: &mut Gpu
                 ui.checkbox(&mut config.debug_specular, "Debug specular");
                 ui.checkbox(&mut config.debug_normal_maps, "Disable normal maps");
             });
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut config.debug_color, "Debug color");
+                ui.checkbox(&mut config.debug_roughness, "Debug roughness");
+                ui.checkbox(&mut config.debug_metallic, "Disable metallic");
+            });
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut config.debug_occlusion, "Debug occlusion");
+            });
 
             ui.separator();
             ui.heading("Lights");
