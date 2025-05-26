@@ -3,7 +3,7 @@ use {
         renderer::{GpuPushConstantData, RenderObject},
         Pipeline, PipelineBuilder, RenderContext,
     },
-    aleph_scene::{util, Mesh, NodeType, Vertex},
+    aleph_scene::{util, Vertex},
     aleph_vk::{
         texture::Image, AttachmentLoadOp, AttachmentStoreOp, ColorComponentFlags, CommandBuffer,
         CompareOp, CullModeFlags, DescriptorSetLayout, FrontFace, Gpu, PipelineBindPoint,
@@ -55,20 +55,20 @@ impl Pipeline for ForwardPipeline {
         cmd.bind_pipeline(PipelineBindPoint::GRAPHICS, self.handle);
         ctx.binder.bind(&cmd, self.pipeline_layout, &[]);
 
-        ctx.scene.mesh_nodes().for_each(|node| match node.data {
-            NodeType::Mesh(handle) => {
-                let mesh = ctx.assets.get_mesh(handle).unwrap_or_else(|| {
-                    panic!("Mesh not found: {:?}", handle);
-                });
-                self.draw_primitive(cmd, &mesh);
-            }
-            _ => {
-                panic!("Should not be here, node: {:?}", node);
-            }
-        });
-        // for object in ctx.objects {
-        // self.draw_primitive(cmd, object)?;
-        // }
+        // ctx.scene.mesh_nodes().for_each(|node| match node.data {
+        //     NodeType::Mesh(handle) => {
+        //         let mesh = ctx.assets.get_mesh(handle).unwrap_or_else(|| {
+        //             panic!("Mesh not found: {:?}", handle);
+        //         });
+        //         self.draw_primitive(cmd, &mesh);
+        //     }
+        //     _ => {
+        //         panic!("Should not be here, node: {:?}", node);
+        //     }
+        // });
+        for object in ctx.objects {
+            self.draw_primitive(cmd, object)?;
+        }
         cmd.end_rendering();
         ctx.gpu.debug_utils().end_debug_label(&cmd);
         Ok(())
@@ -99,13 +99,13 @@ impl ForwardPipeline {
         })
     }
 
-    fn draw_primitive(&self, cmd: &CommandBuffer, mesh: &Mesh) -> Result<()> {
-        cmd.bind_index_buffer(&*mesh.index_buffer, 0);
-        cmd.bind_vertex_buffer(&*mesh.vertex_buffer, 0);
+    fn draw_primitive(&self, cmd: &CommandBuffer, object: &RenderObject) -> Result<()> {
+        cmd.bind_index_buffer(&*object.mesh.index_buffer, 0);
+        cmd.bind_vertex_buffer(&*object.mesh.vertex_buffer, 0);
 
         let push_constants = GpuPushConstantData {
             model: Mat4::IDENTITY,
-            material_index: 0,
+            material_index: object.material as i32,
             _padding0: 0,
             _padding1: 0,
             _padding2: 0,
@@ -116,8 +116,7 @@ impl ForwardPipeline {
             0,
             &push_constants,
         );
-        cmd.draw_indexed(mesh.vertex_count as u32, 1, 0, 0, 0);
-        // cmd.draw_indexed(1, 1, 0, 0, 0);
+        cmd.draw_indexed(object.mesh.vertex_count as u32, 1, 0, 0, 0);
 
         Ok(())
     }

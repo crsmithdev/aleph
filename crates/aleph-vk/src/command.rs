@@ -1,6 +1,6 @@
 pub use ash::vk::ImageLayout;
 use {
-    crate::{Buffer, Device, Image, ImageAspectFlags},
+    crate::{Buffer, Device, Image},
     ash::{
         vk,
         vk::{Handle, PipelineBindPoint},
@@ -372,7 +372,6 @@ impl CommandBuffer {
     }
 
     pub fn copy_buffer_to_image(&self, src: &Buffer, dst: &Image) {
-        let handle = dst.handle();
         let copy = vk::BufferImageCopy::default()
             .buffer_offset(0)
             .buffer_row_length(0)

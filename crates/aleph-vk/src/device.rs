@@ -3,13 +3,10 @@ use {
     anyhow::{anyhow, Result},
     ash::{
         ext, khr,
-        vk::{
-            self, BufferDeviceAddressInfo, Handle, PhysicalDeviceAddressBindingReportFeaturesEXT,
-            PhysicalDeviceProperties, LOD_CLAMP_NONE,
-        },
+        vk::{self, BufferDeviceAddressInfo, Handle, PhysicalDeviceProperties, LOD_CLAMP_NONE},
     },
     derive_more::{Debug, Deref},
-    std::{ffi, slice, sync::Arc},
+    std::{ffi, slice},
 };
 
 const DEVICE_EXTENSIONS: [&ffi::CStr; 10] = [
@@ -74,14 +71,8 @@ impl Device {
             selected.ok_or_else(|| anyhow!("No suitable physical device found"))?;
         let (graphics_queue_family, transfer_queue_family) =
             Self::init_queue_families(instance, &physical_device)?;
+        let queue_families = [graphics_queue_family, transfer_queue_family];
 
-        let features = instance.get_physical_device_features2(physical_device);
-        let device_extension_names: Vec<*const i8> = DEVICE_EXTENSIONS
-            .iter()
-            .map(|n| n.as_ptr())
-            .collect::<Vec<_>>();
-        let mut device_fault_features =
-            ash::vk::PhysicalDeviceFaultFeaturesEXT::default().device_fault(true);
         let mut swapchain_maintenance_features =
             ash::vk::PhysicalDeviceSwapchainMaintenance1FeaturesEXT::default()
                 .swapchain_maintenance1(true);
@@ -103,27 +94,16 @@ impl Device {
                 .descriptor_binding_variable_descriptor_count(true)
                 .descriptor_binding_update_unused_while_pending(true)
                 .runtime_descriptor_array(true);
-
         let mut device_8bit_storage_features =
             ash::vk::PhysicalDevice8BitStorageFeaturesKHR::default()
                 .storage_buffer8_bit_access(true);
-        // let mut device_coherent_memory_features =
-        // ash::vk::PhysicalDeviceCoherentMemoryFeaturesAMD::default()
-        // .device_coherent_memory(true);
-        // let mut device_robustness_features =
-        // ash::vk::PhysicalDeviceRobustness2FeaturesEXT::default()
-        // .robust_buffer_access2(true)
-        // .robust_image_access2(true);
         let mut device_robustness2_features =
             ash::vk::PhysicalDeviceRobustness2FeaturesEXT::default()
                 .robust_buffer_access2(true)
                 .robust_image_access2(true);
-        let device_features1 = vk::PhysicalDeviceFeatures::default()
-            .geometry_shader(true)
-            .robust_buffer_access(true)
-            .wide_lines(true);
-        let mut device_features2 = vk::PhysicalDeviceFeatures2::default()
-            .features(device_features1)
+        let features1 = vk::PhysicalDeviceFeatures::default().robust_buffer_access(true);
+        let mut features2 = vk::PhysicalDeviceFeatures2::default()
+            .features(features1)
             .push_next(&mut timeline_semaphore_features)
             .push_next(&mut swapchain_maintenance_features)
             .push_next(&mut synchronization2_features)
@@ -131,18 +111,14 @@ impl Device {
             .push_next(&mut buffer_device_address_features)
             .push_next(&mut device_8bit_storage_features)
             .push_next(&mut descriptor_indexing_features)
-            .push_next(&mut device_fault_features)
-            // .push_next(&mut device_coherent_memory_features)
             .push_next(&mut device_robustness2_features);
-        // .push_next(&mut device_address_binding_report_features);
+        let extensions: Vec<*const i8> = DEVICE_EXTENSIONS
+            .iter()
+            .map(|n| n.as_ptr())
+            .collect::<Vec<_>>();
 
-        let queue_families = [graphics_queue_family, transfer_queue_family];
-        let handle = instance.create_device(
-            physical_device,
-            queue_families,
-            &device_extension_names,
-            &mut device_features2,
-        )?;
+        let handle =
+            instance.create_device(physical_device, queue_families, &extensions, &mut features2)?;
         let graphics_queue = Self::create_queue(&handle, graphics_queue_family);
         let transfer_queue = Self::create_queue(&handle, transfer_queue_family);
         let properties = instance.get_physical_device_properties(physical_device);

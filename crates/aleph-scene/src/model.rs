@@ -102,26 +102,6 @@ impl MeshInfo {
         self
     }
 
-    // pub fn new(
-    //     indices: Vec<u32>,
-    //     vertices: Vec<Vec3>,
-    //     normals: Vec<Vec3>,
-    //     tangents: Vec<Vec4>,
-    //     tex_coords0: Vec<Vec2>,
-    //     material: MaterialHandle,
-    //     name: &str,
-    // ) -> Self {
-    //     let mut info = Self {
-    //         name: name.to_string(),
-    //         vertices,
-    //         indices,
-    //         normals,
-    //         tangents,
-    //         tex_coords0,
-    //         material,
-    //         topology: PrimitiveTopology::TRIANGLE_LIST,
-    //     };
-
     //     if info.tangents.is_empty() {
     //         if !calculate_tangents(&mut info) {
     //             log::warn!("Error calculating tangents for mesh '{}'", info.name);
@@ -130,9 +110,6 @@ impl MeshInfo {
     //     if info.normals.is_empty() {
     //         info.normals = calculate_normals(&info.vertices, &info.indices);
     //     };
-
-    //     info
-    // }
 }
 
 #[derive(Clone, Debug, PartialEq)]

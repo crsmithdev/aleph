@@ -1,8 +1,20 @@
 #define MAX_LIGHTS 4
+#define MAX_MATERIALS 10
 
 struct Light {
     vec3 position;
     vec4 color;
+};
+
+struct Material {
+    vec4 color_factor;
+    uint color_texture_index;
+    uint normal_texture_index;
+    float metal_factor;
+    float rough_factor;
+    uint metalrough_texture_index;
+    float ao_strength;
+    uint ao_texture_index;
 };
 
 struct Config {
@@ -22,7 +34,7 @@ struct Config {
     int force_defaults;
 };
 
-layout(std140, set = 0, binding = 0) uniform SceneBufferData {
+layout(std140, set = 0, binding = 0) uniform SceneData {
     mat4 view;
     mat4 projection;
     mat4 vp;
@@ -32,16 +44,9 @@ layout(std140, set = 0, binding = 0) uniform SceneBufferData {
     Light lights[MAX_LIGHTS];
 } u_scene;
 
-layout(std140, set = 0, binding = 1) uniform MaterialData {
-    vec4 color_factor;
-    int color_texture_index;
-    int normal_texture_index;
-    float metal_factor;
-    float rough_factor;
-    int metalrough_texture_index;
-    float ao_strength;
-    int ao_texture_index;
-} s_materials[];
+layout(std140, set = 0, binding = 1) uniform ObjectData {
+    Material materials[MAX_MATERIALS];
+} u_object;
 
 layout(set = 0, binding = 2) uniform sampler2D u_textures[];
 

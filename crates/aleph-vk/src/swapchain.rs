@@ -1,5 +1,5 @@
 use {
-    crate::{texture::Image, CommandBuffer, CommandPool, Device, Instance, Queue, TIMEOUT_NS},
+    crate::{texture::Image, Device, Instance, Queue, TIMEOUT_NS},
     anyhow::Result,
     ash::{
         khr,
@@ -10,7 +10,7 @@ use {
     std::sync::Mutex,
 };
 
-pub const IN_FLIGHT_FRAMES: u32 = 3;
+pub const N_SWAPCHAIN_IMAGES: u32 = 3;
 
 #[derive(Clone, Copy, Debug)]
 pub struct SwapchainInfo {
@@ -80,7 +80,7 @@ impl Swapchain {
             .clone()
     }
 
-    pub fn n_images(&self) -> usize { IN_FLIGHT_FRAMES as usize }
+    pub fn n_images(&self) -> usize { N_SWAPCHAIN_IMAGES as usize }
 
     pub fn rebuild(&self, extent: vk::Extent2D) {
         log::debug!("Rebuilding swapchain with extent: {:?}", extent);
@@ -143,7 +143,7 @@ impl SwapchainInner {
     ) -> Result<Self> {
         let queue = device.graphics_queue();
         let indices = [queue.family.index];
-        let in_flight_frames = IN_FLIGHT_FRAMES;
+        let in_flight_frames = N_SWAPCHAIN_IMAGES;
         let capabilities: vk::SurfaceCapabilitiesKHR = unsafe {
             surface
                 .loader
@@ -171,13 +171,15 @@ impl SwapchainInner {
         let swapchain_images = unsafe { loader.get_swapchain_images(swapchain)? };
         let images = swapchain_images
             .iter()
-            .map(|swapchain_image| {
+            .enumerate()
+            .map(|(i, swapchain_image)| {
                 Image::new(
                     *swapchain_image,
                     device.clone(),
                     info.extent,
                     info.format,
                     vk::ImageAspectFlags::COLOR,
+                    &format!("swapchain{i:02}"),
                 )
             })
             .collect::<Result<Vec<_>>>()?;

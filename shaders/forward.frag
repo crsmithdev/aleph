@@ -1,6 +1,6 @@
 #version 450
 
-#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_debug_printf : require
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_buffer_reference : require
 #extension GL_EXT_nonuniform_qualifier : require
@@ -10,9 +10,6 @@ precision highp float;
 precision highp int;
 precision highp usampler2D;
 
-// #include "./include/scene.glsl"
-// #include "./include/draw.glsl"
-// #include "./include/material.glsl"
 #include "./include/util.glsl"
 #include "./include/bindless.glsl"
 
@@ -65,67 +62,68 @@ vec3 fresnelSchlick(float cos_theta, vec3 fresnel_0) {
 
 vec3 calculateNormal()
 {
-    int normal_index = s_materials[p_constants.material_index].normal_texture_index;
-    
+    Material material = u_object.materials[p_constants.material_index];
+    uint normal_index = material.normal_texture_index;
+
     if (u_scene.config.disable_normal_map == 1) {
         return inNormal;
     }
     vec3 tangentNormal = texture(u_textures[normal_index], inUv).xyz * 2.0 - 1.0;
-	// vec3 tangentNormal = texture(u_normalMap, inUv).xyz * 2.0 - 1.0;
 
 	vec3 N = normalize(inNormal);
 	vec3 T = normalize(inTangent.xyz);
 	vec3 B = normalize(cross(N, T));
     mat3 TBN = mat3(T, B, N);
 
+    debugPrintfEXT("inNormal: %v3f, inTangent: %v4f, material_index: %u, tangentNormal: %v3f\n, out1: %v3f, out2: %v3f\n",
+        inNormal, inTangent, p_constants.material_index, tangentNormal, normalize(TBN * inNormal), normalize(TBN * tangentNormal));
 	return normalize(TBN * tangentNormal);
-    // return normalize(TBN * inNormal);
 }
 
 void main() {
     vec2 uv = inUv;
     vec3 normal = calculateNormal();
-    // vec3 normal = inNormal;
     vec3 bitangent = normalize(cross(normal, inTangent.xyz));
 
     int i = p_constants.material_index;
-    int color_index = s_materials[i].color_texture_index;
-    int normal_index = s_materials[i].normal_texture_index;
-    int metalrough_index = s_materials[i].metalrough_texture_index;
-    int ao_index = s_materials[i].ao_texture_index;
+    Material m = u_object.materials[i];
+    uint color_index = m.color_texture_index;
+    uint normal_index = m.normal_texture_index;
+    uint metalrough_index = m.metalrough_texture_index;
+    uint ao_index = m.ao_texture_index;
 
-    // vec3 albedo = vec3(1.0);
+    debugPrintfEXT("color_index: %u, normal_index: %u, metalrough_index: %u, ao_index: %u\n");  
     vec3 albedo = texture(u_textures[color_index], uv).xyz;
     // debugPrintfEXT("color_index: %v3f\n", albedoj);
-    // if (u_scene.config.force_color == 1) {
-    //     albedo = u_scene.config.force_color_factor.xyz;
-    // }
+    if (u_scene.config.force_color == 1) {
+        albedo = u_scene.config.force_color_factor.xyz;
+    }
 
-    float metallic = 0.9;
-    // float metallic = texture(u_textures[metalrough_index], uv).r;
-    // float metallic = texture(u_textures[metalrough_index], uv).b * s_materials[i].metal_factor;
-    // if (u_scene.config.force_metallic == 1) {
-    //     metallic = u_scene.config.force_metallic_factor;
-    // } 
+    // float metallic = 0.9;
+    float metallic = texture(u_textures[metalrough_index], uv).b * m.metal_factor;
+    if (u_scene.config.force_metallic == 1) {
+        metallic = u_scene.config.force_metallic_factor;
+    } 
 
-    float roughness = 0.5;
-    // if (u_scene.config.force_roughness == 1) {
-    //     roughness = u_scene.config.force_roughness_factor;
-    // }
+    // float roughness = 0.5;
+    float roughness = texture(u_textures[metalrough_index], uv).g * m.rough_factor;
+    if (u_scene.config.force_roughness == 1) {
+        roughness = u_scene.config.force_roughness_factor;
+    }
 
-    float ao = 1.0;
-    // float ao = texture(u_textures[ao_index], uv).r * s_materials[i].ao_strength; 
-    // if (u_scene.config.force_ao == 1) {
-    //     ao = u_scene.config.force_ao_strength; 
-    // }
+    // float ao = 1.0;
+    float ao = texture(u_textures[ao_index], uv).r * m.ao_strength; 
+    if (u_scene.config.force_ao == 1) {
+        ao = u_scene.config.force_ao_strength; 
+    }
 
-    // if (u_scene.config.force_defaults == 1) {
-    //     albedo = vec3(1.0, 1.0, 1.0);
-    //     normal = vec3(0.5, 0.5, 1.0);
-    //     metallic = 0.1;
-    //     roughness = 0.5;
-    //     ao = 1.0;
-    // }
+    if (u_scene.config.force_defaults == 1) {
+        albedo = vec3(1.0, 1.0, 1.0);
+        normal = vec3(0.5, 0.5, 1.0);
+        metallic = 0.1;
+        roughness = 0.5;
+        ao = 1.0;
+    }
 
     vec3 view_dir = normalize(u_scene.cameraPos - inPos);
     vec3 fresnel_0 = mix(vec3(0.04), albedo, metallic);
@@ -182,7 +180,6 @@ void main() {
             color = vec3(0.0, 1.0, 0.0);
 
         }
-        // color = totalSpecular;
     }   
 
     outColor = vec4(color, 1.0); 

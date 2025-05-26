@@ -14,7 +14,7 @@ BoxTextured: 15
 NormalTangentTest: 93
 */
 
-const DEFAULT_SCENE: usize = 15;
+const DEFAULT_SCENE: usize = 112;
 const SHIFT_FACTOR: usize = 10;
 const ROTATION_FACTOR: f32 = 0.01;
 const ZOOM_FACTOR: f32 = 0.1;

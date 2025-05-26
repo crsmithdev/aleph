@@ -11,7 +11,6 @@ use {
     },
 };
 
-#[derive(Default)]
 pub struct Node {
     pub handle: NodeHandle,
     pub name: String,
@@ -44,11 +43,12 @@ impl Debug for Node {
             self.transform.row(1).to_array(),
             self.transform.row(2).to_array()
         );
-        write!(
-            f,
-            "Node(handle: {:?} name: {:?}, data: {:?}, transform: {})",
-            self.handle, self.name, self.data, transform
-        )
+        f.debug_struct("Node")
+            .field("name", &self.name)
+            .field("handle", &self.handle)
+            .field("data", &self.data)
+            .field("transform", &transform)
+            .finish()
     }
 }
 

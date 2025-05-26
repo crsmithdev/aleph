@@ -5,7 +5,6 @@ use {
     derive_more::{Debug, Deref},
     gpu_allocator::vulkan::Allocation,
     std::{mem, rc::Rc, sync::Arc},
-    tracing::instrument,
 };
 
 #[derive(Clone)]
@@ -44,25 +43,18 @@ impl Debug for TextureInfo {
 
 #[allow(dead_code)]
 #[derive(Clone, Debug, Deref)]
+#[debug("{image:?}")]
 pub struct Texture {
     #[deref]
-    #[debug("{:#x}", image.handle().as_raw())]
     image: Image,
-    #[debug("{:#?}", Rc::as_ptr(allocation))]
     allocation: Rc<Allocation>,
-    #[debug(skip)]
     allocator: Arc<Allocator>,
-    #[debug(skip)]
     device: Device,
-    #[debug("{:#x}", sampler.map(|s| s.as_raw()).unwrap_or(0))]
     sampler: Option<vk::Sampler>,
-    name: String,
 }
 
 impl Texture {
-    #[instrument(skip_all)]
     pub fn new(gpu: &Gpu, info: &TextureInfo) -> Result<Self> {
-        let name = info.name.to_string();
         let device = gpu.device.clone();
         let allocator = gpu.allocator.clone();
 
@@ -77,7 +69,7 @@ impl Texture {
             .usage(info.flags | vk::ImageUsageFlags::TRANSFER_DST);
         let image = unsafe { device.handle.create_image(image_info, None) }?;
         let requirements = unsafe { device.handle.get_image_memory_requirements(image) };
-        let allocation = Rc::new(allocator.allocate_image(image, requirements, &name.clone())?);
+        let allocation = Rc::new(allocator.allocate_image(image, requirements, &info.name)?);
 
         let handle = Image::new(
             image,
@@ -85,20 +77,18 @@ impl Texture {
             info.extent,
             info.format,
             info.aspect_flags,
+            &info.name,
         )?;
 
         let device = device.clone();
 
-        let texture = Self {
+        Ok(Self {
             image: handle,
             allocator,
             allocation,
             device,
             sampler: info.sampler,
-            name,
-        };
-        log::trace!("Created {:?}", texture);
-        Ok(texture)
+        })
     }
 
     pub fn new2(gpu: &Gpu, info: &TextureInfo2) -> Result<Self> {
@@ -125,6 +115,7 @@ impl Texture {
             info.extent,
             info.format,
             info.aspect_flags,
+            &info.name,
         )?;
 
         let device = device.clone();
@@ -135,17 +126,18 @@ impl Texture {
             allocation,
             device,
             sampler: info.sampler,
-            name,
         })
     }
 
-    pub fn name(&self) -> &str { &self.name }
+    pub fn name(&self) -> &str { &self.image.name }
 
     pub fn handle(&self) -> vk::Image { self.image.handle }
 
     pub fn view(&self) -> vk::ImageView { self.image.view }
 
     pub fn sampler(&self) -> Option<vk::Sampler> { self.sampler }
+
+    pub fn aspect_flags(&self) -> ImageAspectFlags { self.image.aspect_flags }
 }
 
 impl Drop for Texture {
@@ -163,12 +155,15 @@ impl Drop for Texture {
 
 #[derive(Clone, Debug)]
 pub struct Image {
+    name: String,
     #[debug("{:#x}", handle.as_raw())]
     handle: vk::Image,
     #[debug("{:#x}", view.as_raw())]
     view: vk::ImageView,
     #[debug("{}x{}", extent.width, extent.height)]
     extent: Extent2D,
+    format: Format,
+    aspect_flags: ImageAspectFlags,
 }
 
 impl Image {
@@ -178,6 +173,7 @@ impl Image {
         extent: Extent2D,
         format: Format,
         aspect_flags: ImageAspectFlags,
+        name: &str,
     ) -> Result<Self> {
         let view_info = vk::ImageViewCreateInfo::default()
             .image(handle)
@@ -193,11 +189,15 @@ impl Image {
                     .layer_count(1),
             );
         let view = unsafe { device.handle.create_image_view(&view_info, None) }?;
+        let name = name.to_string();
 
         let image = Self {
+            name,
+            format,
             handle,
             view,
             extent,
+            aspect_flags,
         };
 
         log::trace!("Created {:?}", image);
@@ -209,6 +209,8 @@ impl Image {
     pub fn view(&self) -> vk::ImageView { self.view }
 
     pub fn extent(&self) -> Extent2D { self.extent }
+
+    pub fn aspect_flags(&self) -> ImageAspectFlags { self.aspect_flags }
 }
 
 #[cfg(test)]

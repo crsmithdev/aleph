@@ -96,8 +96,6 @@ impl ResourceLayout {
         let mut bindings = vec![];
         let mut binding_flags = vec![];
 
-        log::debug!("Building descriptor set {:02}:", self.set);
-
         for unbound in &self.resources {
             let binding = DescriptorSetLayoutBinding::default()
                 .binding(unbound.index as u32)
@@ -105,20 +103,16 @@ impl ResourceLayout {
                 .stage_flags(unbound.stage_flags)
                 .descriptor_type(unbound.descriptor_type);
 
-            log::debug!("  unbound {:02}: {:?}", unbound.index, unbound);
-            log::debug!("   -> binding {:?}", binding);
-            log::debug!("   -> binding flags: {:?}", unbound.binding_flags);
-
             bindings.push(binding);
             binding_flags.push(unbound.binding_flags);
         }
 
-        let descriptor_layout = gpu.create_descriptor_set_layout(
+        let desriptor_layout = gpu.create_descriptor_set_layout(
             &bindings,
             DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND_POOL,
             &binding_flags,
         )?;
-        log::debug!(" -> descriptor layout: {:?}", descriptor_layout);
+        log::debug!("Created descriptor layout: {desriptor_layout:?}");
 
         let pool_sizes = [
             DescriptorPoolSize::default()
@@ -137,12 +131,12 @@ impl ResourceLayout {
             DescriptorPoolCreateFlags::UPDATE_AFTER_BIND,
             1,
         )?;
-        log::debug!(" -> descriptor pool: {:?}", descriptor_pool);
+        log::debug!("Created descriptor pool: {descriptor_pool:?}",);
         let has_variable_binding = self
             .resources
             .iter()
             .any(|b| b.dimensionality == Dimensionality::Array && b.descriptor_count > 1);
-        let variable_descriptor_count = match has_variable_binding {
+        let variable_descriptors = match has_variable_binding {
             true => Some(
                 128.min(
                     gpu.device()
@@ -153,22 +147,16 @@ impl ResourceLayout {
             ),
             false => None,
         };
-        log::debug!(
-            " -> # variable descriptors: {:?}",
-            variable_descriptor_count
-        );
+        log::debug!("Variable descriptors: {variable_descriptors:?}");
 
-        let descriptor_set = gpu.create_descriptor_set(
-            descriptor_layout,
-            descriptor_pool,
-            variable_descriptor_count,
-        )?;
-        log::debug!(" -> descriptor set: {:?}", descriptor_set);
+        let descriptor_set =
+            gpu.create_descriptor_set(desriptor_layout, descriptor_pool, variable_descriptors)?;
+        log::debug!("Created descriptor set: {descriptor_set:?}");
 
         Ok(ResourceBinder {
             set_index: self.set as u32,
-            set: descriptor_set,
-            layout: descriptor_layout,
+            descriptor_set,
+            descriptor_layout: desriptor_layout,
             bindings: vec![],
         })
     }
@@ -179,14 +167,14 @@ pub struct ResourceBinder {
     set_index: u32,
     #[debug(skip)]
     bindings: Vec<BoundResource>,
-    layout: DescriptorSetLayout,
-    set: DescriptorSet,
+    descriptor_layout: DescriptorSetLayout,
+    descriptor_set: DescriptorSet,
 }
 
 impl ResourceBinder {
-    pub fn descriptor_layout(&self) -> DescriptorSetLayout { self.layout }
+    pub fn descriptor_layout(&self) -> DescriptorSetLayout { self.descriptor_layout }
 
-    pub fn descriptor_set(&self) -> DescriptorSet { self.set }
+    pub fn descriptor_set(&self) -> DescriptorSet { self.descriptor_set }
 
     pub fn storage_buffer<T: Pod>(
         &mut self,
@@ -291,7 +279,7 @@ impl ResourceBinder {
                 index, info, count, ..
             } => {
                 let mut write = WriteDescriptorSet::default()
-                    .dst_set(self.set)
+                    .dst_set(self.descriptor_set)
                     .dst_binding(*index)
                     .descriptor_count(*count as u32)
                     .descriptor_type(DescriptorType::STORAGE_BUFFER);
@@ -303,7 +291,7 @@ impl ResourceBinder {
                 index, info, count, ..
             } => {
                 let mut write = WriteDescriptorSet::default()
-                    .dst_set(self.set)
+                    .dst_set(self.descriptor_set)
                     .dst_binding(*index)
                     .descriptor_count(*count as u32)
                     .descriptor_type(DescriptorType::COMBINED_IMAGE_SAMPLER);
@@ -313,7 +301,7 @@ impl ResourceBinder {
             }
             BoundResource::DynamicUniform { index, info, .. } => {
                 let mut write = WriteDescriptorSet::default()
-                    .dst_set(self.set)
+                    .dst_set(self.descriptor_set)
                     .dst_binding(*index)
                     .descriptor_count(1)
                     .descriptor_type(DescriptorType::UNIFORM_BUFFER_DYNAMIC);
@@ -323,7 +311,7 @@ impl ResourceBinder {
             }
             BoundResource::Buffer { index, info, .. } => {
                 let mut write = WriteDescriptorSet::default()
-                    .dst_set(self.set)
+                    .dst_set(self.descriptor_set)
                     .dst_binding(*index)
                     .descriptor_count(1)
                     .descriptor_type(DescriptorType::UNIFORM_BUFFER);
@@ -333,7 +321,7 @@ impl ResourceBinder {
             }
             BoundResource::Texture { index, info, .. } => {
                 let mut write = WriteDescriptorSet::default()
-                    .dst_set(self.set)
+                    .dst_set(self.descriptor_set)
                     .dst_binding(*index)
                     .descriptor_count(1)
                     .descriptor_type(DescriptorType::COMBINED_IMAGE_SAMPLER);
@@ -345,7 +333,12 @@ impl ResourceBinder {
     }
 
     pub fn bind<'a>(&self, cmd: &CommandBuffer, pipeline_layout: PipelineLayout, offsets: &[u32]) {
-        cmd.bind_descriptor_sets(pipeline_layout, self.set_index, &[self.set], offsets);
+        cmd.bind_descriptor_sets(
+            pipeline_layout,
+            self.set_index,
+            &[self.descriptor_set],
+            offsets,
+        );
     }
 
     pub fn write_descriptor(&self, index: usize) -> Option<WriteDescriptorSet> {

@@ -1,6 +1,6 @@
 use {
     crate::{Buffer, Image},
-    ash::vk::{self, ImageAspectFlags},
+    ash::vk,
 };
 
 pub fn buffer_barrier(
@@ -48,6 +48,12 @@ pub fn image_memory_barrier(
     old_layout: vk::ImageLayout,
     new_layout: vk::ImageLayout,
 ) -> vk::ImageMemoryBarrier2 {
+    let range = vk::ImageSubresourceRange::default()
+        .aspect_mask(image.aspect_flags())
+        .base_mip_level(0)
+        .level_count(1)
+        .base_array_layer(0)
+        .layer_count(1);
     let barrier = vk::ImageMemoryBarrier2::default()
         .image(image.handle())
         .src_stage_mask(src_stage_mask)
@@ -58,14 +64,8 @@ pub fn image_memory_barrier(
         .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
         .old_layout(old_layout)
         .new_layout(new_layout)
-        .subresource_range(
-            vk::ImageSubresourceRange::default()
-                .aspect_mask(ImageAspectFlags::COLOR)
-                .base_array_layer(0)
-                .base_mip_level(0)
-                .level_count(1)
-                .layer_count(1),
-        );
+        .subresource_range(range);
+
     log::trace!("Created image memory barrier {barrier:?} for {image:?}");
     barrier
 }

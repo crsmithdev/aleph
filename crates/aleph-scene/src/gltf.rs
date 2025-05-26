@@ -27,20 +27,16 @@ pub fn load_scene(path: &str, mut assets: &mut Assets) -> Result<Scene> {
             load_texture(&data, &texture, srgb, &mut assets)
         })
         .collect::<Result<Vec<_>>>()?;
-    log::info!("Loaded {} texture(s) ({} srgb)", textures.len(), srgb.len());
 
     let materials = document
         .materials()
         .map(|material| load_material(&material, &textures, &mut assets))
         .collect::<Result<Vec<_>>>()?;
-    log::info!("Loaded {} material(s)", materials.len());
 
     let meshes = document
         .meshes()
         .flat_map(|mesh| load_mesh(&mesh, &buffers, &materials, &mut assets))
         .collect::<Vec<_>>();
-
-    log::info!("Loaded {} mesh(es)", meshes.len());
 
     let mut scene = Scene::default();
     let gltf_scene = document
@@ -140,7 +136,7 @@ fn load_texture(
         sampler: Some(assets.default_sampler()),
     });
 
-    log::info!("Loaded glTF texture {index} -> {handle:?}");
+    log::info!("Loaded glTF texture {index} -> {handle:?} ({format:?})");
 
     Ok(handle)
 }
@@ -193,7 +189,7 @@ fn load_material(
 
     let handle = assets.add_material(material.clone());
 
-    log::debug!("Loaded {material:?}");
+    log::debug!("Loaded {handle:?} -> {material:?}");
 
     Ok(handle)
 }
