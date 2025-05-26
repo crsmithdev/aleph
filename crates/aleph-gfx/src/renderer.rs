@@ -125,7 +125,6 @@ impl Renderer {
                 | ImageUsageFlags::TRANSFER_DST
                 | ImageUsageFlags::TRANSFER_SRC,
             aspect_flags: ImageAspectFlags::COLOR,
-            data: vec![],
             sampler: None,
         };
         let draw_image = Texture::new(&gpu, &draw_info)?;
@@ -138,7 +137,6 @@ impl Renderer {
                 | ImageUsageFlags::TRANSFER_DST
                 | ImageUsageFlags::TRANSFER_SRC,
             aspect_flags: ImageAspectFlags::DEPTH,
-            data: vec![],
             sampler: None,
         };
         let depth_image = Texture::new(&gpu, &depth_info)?;

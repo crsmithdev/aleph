@@ -12,7 +12,6 @@ use {
     bytemuck::{Pod, Zeroable},
     derive_more::Debug,
     glam::{vec4, Vec2, Vec3, Vec4},
-    gltf::material::NormalTexture,
     image::{ImageBuffer, Rgba},
     std::{
         collections::HashMap,
@@ -24,8 +23,15 @@ use {
         },
     },
 };
-
+const WHITE: [u8; 4] = [255, 255, 255, 255];
+const NORMAL: [u8; 4] = [127, 127, 255, 255];
 static ASSET_HANDLE_COUNTER: AtomicU64 = AtomicU64::new(1);
+const STAGING_POOL_SIZE: usize = 10;
+const STAGING_POOL_RETENTION: usize = 5;
+const DEFAULT_EXTENT: Extent2D = Extent2D {
+    width: 8,
+    height: 8,
+};
 
 pub struct AssetHandle<T> {
     index: u64,
@@ -92,7 +98,6 @@ enum LazyAsset<T, D> {
     Unloaded(D),
 }
 
-type TextureAsset = LazyAsset<Texture, TextureInfo>;
 type MeshAsset = LazyAsset<Mesh, MeshInfo>;
 type LazyCache<T, D> = HashMap<AssetHandle<T>, LazyAsset<T, D>>;
 type AssetCache<T> = HashMap<AssetHandle<T>, Asset<T>>;
@@ -108,24 +113,15 @@ type AsyncCache<T, I, D> = HashMap<AssetHandle<T>, AsyncAsset<T, I, D>>;
 #[derive(Debug)]
 pub struct Assets {
     gpu: Arc<Gpu>,
+    texture_loader: TextureLoader,
     meshes: LazyCache<Mesh, MeshInfo>,
     textures: AsyncCache<Texture, TextureInfo, Vec<u8>>,
     materials: AssetCache<Material>,
     default_material: MaterialHandle,
     default_sampler: Sampler,
-    staging_pool: ResourcePool<Buffer>,
 }
 
 impl Assets {
-    const WHITE: [u8; 4] = [255, 255, 255, 255];
-    const NORMAL: [u8; 4] = [127, 127, 255, 255];
-    const STAGING_POOL_SIZE: usize = 10;
-    const STAGING_POOL_RETENTION: usize = 5;
-    const DEFAULT_EXTENT: Extent2D = Extent2D {
-        width: 8,
-        height: 8,
-    };
-
     pub fn new(gpu: Arc<Gpu>) -> Result<Self> {
         let default_sampler = gpu.create_sampler(
             Filter::LINEAR,
@@ -134,67 +130,48 @@ impl Assets {
             SamplerAddressMode::REPEAT,
             SamplerAddressMode::REPEAT,
         )?;
-        let staging_pool = ResourcePool::<Buffer>::new(
-            &gpu,
-            Self::STAGING_POOL_SIZE,
-            Self::STAGING_POOL_RETENTION,
-        );
+
+        let texture_loader = TextureLoader::new(gpu.clone());
 
         let mut assets = Self {
-            gpu,
+            gpu: Arc::clone(&gpu),
+            texture_loader,
             meshes: HashMap::new(),
             textures: HashMap::new(),
             materials: HashMap::new(),
             default_material: MaterialHandle::null(),
             default_sampler,
-            staging_pool,
         };
         assets.default_material = assets.create_default_material()?;
 
         Ok(assets)
     }
 
-    pub fn update(&mut self) { self.staging_pool.update(); }
+    pub fn update(&mut self) { self.texture_loader.update(); }
 
     pub fn default_sampler(&self) -> Sampler { self.default_sampler }
 
-    pub fn default_material(&self) -> Rc<Material> {
-        self.get_material(self.default_material.clone())
-            .unwrap()
-            .clone()
-    }
-
-    fn create_default_texture(&self, color: &[u8; 4], format: Format, name: &str) -> TextureInfo {
-        let pixel = Rgba::<u8>(*color);
-        let buffer = ImageBuffer::from_pixel(16, 16, pixel);
-        let data = buffer.to_vec();
-        TextureInfo {
-            name: name.to_string(),
-            data,
-            extent: Self::DEFAULT_EXTENT,
+    fn create_default_texture(&mut self, color: &[u8; 4], format: Format) -> TextureHandle {
+        let data = {
+            let pixel = Rgba::<u8>(*color);
+            ImageBuffer::from_pixel(DEFAULT_EXTENT.width, DEFAULT_EXTENT.height, pixel)
+        };
+        let info = TextureInfo {
+            name: "default".to_string(),
+            extent: DEFAULT_EXTENT,
             flags: ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
             aspect_flags: ImageAspectFlags::COLOR,
             format,
             sampler: Some(self.default_sampler.clone()),
-        }
+        };
+        self.add_texture(info, &data)
     }
 
     fn create_default_material(&mut self) -> Result<MaterialHandle> {
-        let format = Format::R8G8B8A8_SRGB;
-        let white_srgb =
-            self.create_default_texture(&Self::WHITE, Format::R8G8B8A8_SRGB, "default-white-srgb");
-        let white = self.create_default_texture(
-            &Self::WHITE,
-            Format::R8G8B8A8_UNORM,
-            "default-white-unorm",
-        );
-        let normal =
-            self.create_default_texture(&Self::NORMAL, Format::R8G8B8A8_UNORM, "default-normal");
-
-        let color_texture = self.add_texture(white_srgb.clone(), white_srgb.data.clone());
-        let normal_texture = self.add_texture(normal.clone(), normal.data.clone());
-        let metalrough_texture = self.add_texture(white.clone(), white.data.clone());
-        let ao_texture = self.add_texture(white.clone(), white.data.clone());
+        let color_texture = self.create_default_texture(&WHITE, Format::R8G8B8A8_SRGB);
+        let normal_texture = self.create_default_texture(&NORMAL, Format::R8G8B8A8_UNORM);
+        let metalrough_texture = self.create_default_texture(&WHITE, Format::R8G8B8A8_UNORM);
+        let ao_texture = self.create_default_texture(&WHITE, Format::R8G8B8A8_UNORM);
 
         let material = Material {
             name: "default".to_string(),
@@ -211,9 +188,9 @@ impl Assets {
         Ok(self.add_material(material))
     }
 
-    pub fn add_texture(&mut self, info: TextureInfo, data: Vec<u8>) -> TextureHandle {
+    pub fn add_texture(&mut self, info: TextureInfo, data: &[u8]) -> TextureHandle {
         let handle = TextureHandle::new();
-        let asset = TextureAsset2::Unloaded(info, data);
+        let asset = TextureAsset2::Unloaded(info, data.to_vec());
         self.textures.insert(handle, asset);
         handle
     }
@@ -231,7 +208,11 @@ impl Assets {
             Some(asset) => match asset {
                 TextureAsset2::Loaded(texture) => Some(Rc::clone(texture)),
                 TextureAsset2::Unloaded(info, data) => {
-                    let rc = Rc::new(self.load_texture(&info, cmd).unwrap());
+                    let rc = Rc::new(
+                        self.texture_loader
+                            .load_texture(&info, data, cmd.unwrap())
+                            .unwrap(),
+                    );
                     let asset = TextureAsset2::Loaded(rc.clone());
                     self.textures.insert(*handle, asset);
                     Some(rc)
@@ -241,62 +222,13 @@ impl Assets {
         }
     }
 
-    fn load_texture(&self, info: &TextureInfo, cmd: Option<&CommandBuffer>) -> Result<Texture> {
-        let texture = Texture::new(&self.gpu, info)?;
-        let data = bytemuck::cast_slice(&info.data);
-        let cmd = cmd.unwrap();
-        let staging = self.staging_pool.next();
-        staging.write(data);
-
-        let memory_range = staging.mapped_memory_range();
-        self.gpu
-            .device()
-            .flush_mapped_memory_ranges(&[memory_range]);
-
-        cmd.pipeline_barrier(
-            &[],
-            &[],
-            &[sync::image_memory_barrier(
-                &*texture,
-                PipelineStageFlags2::NONE,
-                AccessFlags2::NONE,
-                PipelineStageFlags2::TRANSFER,
-                AccessFlags2::TRANSFER_WRITE,
-                ImageLayout::UNDEFINED,
-                ImageLayout::TRANSFER_DST_OPTIMAL,
-            )],
-        );
-
-        cmd.copy_buffer_to_image(&staging, &texture);
-
-        cmd.pipeline_barrier(
-            &[],
-            &[],
-            &[sync::image_memory_barrier(
-                &*texture,
-                PipelineStageFlags2::TRANSFER,
-                AccessFlags2::TRANSFER_WRITE,
-                PipelineStageFlags2::FRAGMENT_SHADER,
-                AccessFlags2::SHADER_READ,
-                ImageLayout::TRANSFER_DST_OPTIMAL,
-                ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            )],
-        );
-
-        Ok(texture)
-    }
-
     pub fn map_textures(
         &mut self,
         cmd: &CommandBuffer,
     ) -> Result<(Vec<Rc<Texture>>, HashMap<TextureHandle, usize>)> {
         let mut textures = Vec::new();
         let mut handle_map = HashMap::new();
-        let handles = {
-            let mut handles = self.textures.keys().cloned().collect::<Vec<_>>();
-            // handles.insert(0, self.default_material().color_texture);
-            handles
-        };
+        let handles = self.textures.keys().cloned().collect::<Vec<_>>();
 
         for handle in handles.iter() {
             let texture = self
@@ -336,7 +268,10 @@ impl Assets {
             let handles = self.materials.keys().cloned().collect::<Vec<_>>();
             handles
         };
-        let default_material = self.default_material();
+        let default_material = self
+            .get_material(self.default_material.clone())
+            .unwrap()
+            .clone();
 
         let mut handle_map = HashMap::new();
         let mut materials = Vec::new();
@@ -472,6 +407,71 @@ impl Assets {
         }
 
         Ok((meshes, handle_map))
+    }
+}
+
+#[derive(Debug)]
+struct TextureLoader {
+    gpu: Arc<Gpu>,
+    staging_pool: ResourcePool<Buffer>,
+}
+
+impl TextureLoader {
+    fn new(gpu: Arc<Gpu>) -> Self {
+        let staging_pool =
+            ResourcePool::<Buffer>::new(&gpu, STAGING_POOL_SIZE, STAGING_POOL_RETENTION);
+        Self { gpu, staging_pool }
+    }
+
+    fn update(&mut self) { self.staging_pool.update(); }
+
+    fn load_texture(
+        &self,
+        info: &TextureInfo,
+        data: &[u8],
+        cmd: &CommandBuffer,
+    ) -> Result<Texture> {
+        let texture = Texture::new(&self.gpu, info)?;
+        let data = bytemuck::cast_slice(data);
+        let staging = self.staging_pool.next();
+        staging.write(data);
+
+        let memory_range = staging.mapped_memory_range();
+        self.gpu
+            .device()
+            .flush_mapped_memory_ranges(&[memory_range]);
+
+        cmd.pipeline_barrier(
+            &[],
+            &[],
+            &[sync::image_memory_barrier(
+                &*texture,
+                PipelineStageFlags2::NONE,
+                AccessFlags2::NONE,
+                PipelineStageFlags2::TRANSFER,
+                AccessFlags2::TRANSFER_WRITE,
+                ImageLayout::UNDEFINED,
+                ImageLayout::TRANSFER_DST_OPTIMAL,
+            )],
+        );
+
+        cmd.copy_buffer_to_image(&staging, &texture);
+
+        cmd.pipeline_barrier(
+            &[],
+            &[],
+            &[sync::image_memory_barrier(
+                &*texture,
+                PipelineStageFlags2::TRANSFER,
+                AccessFlags2::TRANSFER_WRITE,
+                PipelineStageFlags2::FRAGMENT_SHADER,
+                AccessFlags2::SHADER_READ,
+                ImageLayout::TRANSFER_DST_OPTIMAL,
+                ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            )],
+        );
+
+        Ok(texture)
     }
 }
 

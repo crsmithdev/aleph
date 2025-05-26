@@ -133,10 +133,9 @@ fn load_texture(
             format,
             flags: ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
             aspect_flags: vk::ImageAspectFlags::COLOR,
-            data: bytes.clone(),
             sampler: Some(assets.default_sampler()),
         },
-        bytes,
+        &bytes,
     );
 
     log::info!("Loaded glTF texture {index} -> {handle:?} ({format:?})");

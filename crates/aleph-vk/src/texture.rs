@@ -14,7 +14,6 @@ pub struct TextureInfo {
     pub format: Format,
     pub flags: ImageUsageFlags,
     pub aspect_flags: ImageAspectFlags,
-    pub data: Vec<u8>,
     pub sampler: Option<vk::Sampler>,
 }
 
@@ -32,11 +31,15 @@ pub struct TextureInfo2 {
 
 impl Debug for TextureInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let data_len = self.data.len();
         write!(
             f,
-            "TextureInfo(name: {}, extent: {}x{}, format: {:?}, usage: {:?}, aspect: {:?}, data: {}b)",
-            self.name, self.extent.width, self.extent.height, self.format, self.flags, self.aspect_flags, data_len,
+            "TextureInfo(name: {}, extent: {}x{}, format: {:?}, usage: {:?}, aspect: {:?})",
+            self.name,
+            self.extent.width,
+            self.extent.height,
+            self.format,
+            self.flags,
+            self.aspect_flags
         )
     }
 }
@@ -231,7 +234,6 @@ mod tests {
                 format: Format::R8G8B8A8_SRGB,
                 flags: ImageUsageFlags::TRANSFER_DST,
                 aspect_flags: ImageAspectFlags::COLOR,
-                data: vec![0; 1024 * 1024 * 4],
                 sampler: None,
             },
         );
