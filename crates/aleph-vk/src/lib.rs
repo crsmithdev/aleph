@@ -10,10 +10,8 @@ pub mod swapchain;
 pub mod sync;
 pub mod texture;
 
-pub(crate) const TIMEOUT_NS: u64 = 20_000_000_000;
+pub(crate) const TIMEOUT_NS: u64 = 5_000_000_000;
 
-#[cfg(test)]
-pub use test::test_gpu;
 pub use {
     crate::{
         allocator::Allocator,
@@ -24,7 +22,7 @@ pub use {
         instance::Instance,
         pool::ResourcePool,
         swapchain::{Surface, Swapchain, SwapchainInfo},
-        texture::{Image, Texture, TextureInfo},
+        texture::{Image, Sampler, Texture, TextureInfo},
     },
     ash::vk::{
         AccessFlags2, AttachmentLoadOp, AttachmentStoreOp, ClearColorValue, ClearDepthStencilValue,
@@ -42,20 +40,18 @@ pub use {
         PipelineRenderingCreateInfo, PipelineShaderStageCreateInfo, PipelineStageFlags2,
         PipelineTessellationStateCreateInfo, PipelineVertexInputStateCreateInfo,
         PipelineViewportStateCreateInfo, PolygonMode, PrimitiveTopology, PushConstantRange, Rect2D,
-        RenderingAttachmentInfo, SampleCountFlags, Sampler, SamplerAddressMode, SamplerMipmapMode,
+        RenderingAttachmentInfo, SampleCountFlags, SamplerAddressMode, SamplerMipmapMode,
         Semaphore, SemaphoreSubmitInfo, ShaderModule, ShaderStageFlags, StencilOpState,
         SubmitInfo2, VertexInputAttributeDescription, VertexInputBindingDescription, Viewport,
         WriteDescriptorSet,
     },
 };
 
-#[cfg(test)]
-#[allow(dead_code)]
-mod test {
+pub mod test {
     use std::sync::{Arc, LazyLock};
 
-    static TEST_GPU: LazyLock<Arc<crate::Gpu>> =
-        LazyLock::new(|| Arc::new(crate::Gpu::headless().expect("Error creating test GPU")));
+    static TEST_GPU: LazyLock<Arc<crate::gpu::Gpu>> =
+        LazyLock::new(|| Arc::new(crate::gpu::Gpu::headless().expect("Error creating test GPU")));
 
     pub fn test_gpu() -> &'static Arc<crate::Gpu> { &TEST_GPU }
 }

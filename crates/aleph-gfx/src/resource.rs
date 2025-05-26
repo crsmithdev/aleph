@@ -138,12 +138,7 @@ impl ResourceLayout {
             .any(|b| b.dimensionality == Dimensionality::Array && b.descriptor_count > 1);
         let variable_descriptors = match has_variable_binding {
             true => Some(
-                128.min(
-                    gpu.device()
-                        .properties()
-                        .limits
-                        .max_per_stage_descriptor_sampled_images,
-                ),
+                128.min(gpu.device().properties().limits.max_per_stage_descriptor_sampled_images),
             ),
             false => None,
         };
@@ -198,7 +193,7 @@ impl ResourceBinder {
         &mut self,
         index: usize,
         images: &Vec<Rc<Texture>>,
-        sampler: Sampler,
+        default_sampler: &Sampler,
     ) -> &mut Self {
         let info = images
             .iter()
@@ -206,7 +201,7 @@ impl ResourceBinder {
                 DescriptorImageInfo::default()
                     .image_layout(ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                     .image_view(image.view())
-                    .sampler(sampler)
+                    .sampler(*image.sampler().unwrap_or(default_sampler.clone()))
             })
             .collect();
         self.bindings.push(BoundResource::TextureArray {
@@ -255,17 +250,13 @@ impl ResourceBinder {
             info: DescriptorImageInfo::default()
                 .image_layout(ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                 .image_view(image.view())
-                .sampler(sampler),
+                .sampler(*sampler),
         });
         self
     }
 
     pub fn update(&self, gpu: &Gpu) -> Result<&Self> {
-        let writes = self
-            .bindings
-            .iter()
-            .map(|binding| self.extract(binding))
-            .collect::<Vec<_>>();
+        let writes = self.bindings.iter().map(|binding| self.extract(binding)).collect::<Vec<_>>();
         if !writes.is_empty() {
             gpu.update_descriptor_sets(&writes.as_slice(), &[])?;
         }

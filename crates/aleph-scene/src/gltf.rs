@@ -3,7 +3,7 @@ use {
         graph::NodeHandle, model::MeshInfo, util, Assets, Material, MaterialHandle, MeshHandle,
         Node, NodeType, Scene, TextureHandle,
     },
-    aleph_vk::{Extent2D, ImageUsageFlags, PrimitiveTopology, TextureInfo},
+    aleph_vk::{Extent2D, ImageUsageFlags, PrimitiveTopology, Sampler, TextureInfo},
     anyhow::{anyhow, bail, Result},
     ash::vk,
     glam::{Mat4, Vec2, Vec3, Vec4},
@@ -39,9 +39,8 @@ pub fn load_scene(path: &str, mut assets: &mut Assets) -> Result<Scene> {
         .collect::<Vec<_>>();
 
     let mut scene = Scene::default();
-    let gltf_scene = document
-        .default_scene()
-        .ok_or_else(|| anyhow!("No scene found in glTF file"))?;
+    let gltf_scene =
+        document.default_scene().ok_or_else(|| anyhow!("No scene found in glTF file"))?;
 
     for gltf_node in gltf_scene.nodes() {
         load_node(gltf_node, scene.root, &mut scene, &meshes)?;
@@ -56,10 +55,7 @@ fn load_node(
     scene: &mut Scene,
     meshes: &Vec<MeshHandle>,
 ) -> Result<()> {
-    let parent_transform = scene
-        .node(parent)
-        .map(|p| p.transform)
-        .unwrap_or(Mat4::IDENTITY);
+    let parent_transform = scene.node(parent).map(|p| p.transform).unwrap_or(Mat4::IDENTITY);
     let matrix = source.transform().matrix();
     let transform = parent_transform * Mat4::from_cols_array_2d(&matrix);
 
@@ -101,6 +97,57 @@ fn load_node(
     Ok(())
 }
 
+fn load_sampler(data: &gltf::texture::Sampler, assets: &mut Assets) -> Sampler {
+    use gltf::texture::{MagFilter, MinFilter, WrappingMode};
+    let index = data.index().unwrap_or(0);
+    let min_filter = match data.min_filter() {
+        Some(MinFilter::Nearest) => vk::Filter::NEAREST,
+        Some(MinFilter::NearestMipmapNearest) => vk::Filter::NEAREST,
+        Some(MinFilter::NearestMipmapLinear) => vk::Filter::NEAREST,
+        Some(MinFilter::Linear) => vk::Filter::LINEAR,
+        Some(MinFilter::LinearMipmapNearest) => vk::Filter::LINEAR,
+        Some(MinFilter::LinearMipmapLinear) => vk::Filter::LINEAR,
+        None => vk::Filter::LINEAR,
+    };
+    let mag_filter = match data.mag_filter() {
+        Some(MagFilter::Nearest) => vk::Filter::NEAREST,
+        Some(MagFilter::Linear) => vk::Filter::LINEAR,
+        None => vk::Filter::LINEAR,
+    };
+    let address_mode_u = match data.wrap_s() {
+        WrappingMode::ClampToEdge => vk::SamplerAddressMode::CLAMP_TO_EDGE,
+        WrappingMode::MirroredRepeat => vk::SamplerAddressMode::MIRRORED_REPEAT,
+        WrappingMode::Repeat => vk::SamplerAddressMode::REPEAT,
+    };
+    let address_mode_v = match data.wrap_t() {
+        WrappingMode::ClampToEdge => vk::SamplerAddressMode::CLAMP_TO_EDGE,
+        WrappingMode::MirroredRepeat => vk::SamplerAddressMode::MIRRORED_REPEAT,
+        WrappingMode::Repeat => vk::SamplerAddressMode::REPEAT,
+    };
+    let mipmap_mode = match data.min_filter() {
+        Some(MinFilter::Nearest) => vk::SamplerMipmapMode::NEAREST,
+        Some(MinFilter::NearestMipmapNearest) => vk::SamplerMipmapMode::NEAREST,
+        Some(MinFilter::NearestMipmapLinear) => vk::SamplerMipmapMode::NEAREST,
+        Some(MinFilter::Linear) => vk::SamplerMipmapMode::LINEAR,
+        Some(MinFilter::LinearMipmapNearest) => vk::SamplerMipmapMode::LINEAR,
+        Some(MinFilter::LinearMipmapLinear) => vk::SamplerMipmapMode::LINEAR,
+        None => vk::SamplerMipmapMode::LINEAR,
+    };
+
+    let sampler = assets.create_sampler(
+        &format!("gltf-sampler{index:02}"),
+        min_filter,
+        mag_filter,
+        mipmap_mode,
+        address_mode_u,
+        address_mode_v,
+    );
+
+    log::info!("Loaded glTF sampler {index} -> {sampler:?}");
+
+    sampler
+}
+
 fn load_texture(
     data: &gltf::image::Data,
     source: &gltf::Texture,
@@ -126,6 +173,8 @@ fn load_texture(
         false => vk::Format::R8G8B8A8_UNORM,
     };
 
+    let sampler = load_sampler(&source.sampler(), assets);
+
     let handle = assets.add_texture(
         TextureInfo {
             name: name,
@@ -133,7 +182,7 @@ fn load_texture(
             format,
             flags: ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
             aspect_flags: vk::ImageAspectFlags::COLOR,
-            sampler: Some(assets.default_sampler()),
+            sampler: Some(sampler),
         },
         &bytes,
     );
@@ -173,9 +222,7 @@ fn load_material(
         .occlusion_texture()
         .map(|info| textures[info.texture().index()])
         .unwrap_or(TextureHandle::null());
-    let ao_strength = gltf_material
-        .occlusion_texture()
-        .map_or(0.0, |i| i.strength());
+    let ao_strength = gltf_material.occlusion_texture().map_or(0.0, |i| i.strength());
 
     let material = Material {
         color_texture,
@@ -211,14 +258,11 @@ fn load_mesh(
         let vertices = reader
             .read_positions()
             .map_or(Vec::new(), |positions| positions.map(Vec3::from).collect());
-        let normals = reader
-            .read_normals()
-            .map_or(Vec::new(), |normals| normals.map(Vec3::from).collect());
-
-        let to_vec = |coords: gltf::mesh::util::ReadTexCoords<'_>| -> Vec<Vec2> {
+        let normals =
+            reader.read_normals().map_or(Vec::new(), |normals| normals.map(Vec3::from).collect());
+        let tex_coords0 = reader.read_tex_coords(0).map_or(Vec::new(), |coords| -> Vec<Vec2> {
             coords.into_f32().map(Vec2::from).collect()
-        };
-        let tex_coords0 = reader.read_tex_coords(0).map_or(Vec::new(), to_vec);
+        });
         let tangents = reader
             .read_tangents()
             .map_or(Vec::new(), |tangents| tangents.map(Vec4::from).collect());
@@ -226,10 +270,7 @@ fn load_mesh(
             colors.into_rgba_f32().map(Vec4::from).collect::<Vec<_>>()
         });
 
-        let indices = reader
-            .read_indices()
-            .map(|idx| idx.into_u32().collect::<Vec<_>>())
-            .unwrap();
+        let indices = reader.read_indices().map(|idx| idx.into_u32().collect::<Vec<_>>()).unwrap();
 
         let material = match primitive.material().index() {
             Some(index) => materials[index],

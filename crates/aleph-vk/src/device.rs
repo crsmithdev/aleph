@@ -112,10 +112,8 @@ impl Device {
             .push_next(&mut device_8bit_storage_features)
             .push_next(&mut descriptor_indexing_features)
             .push_next(&mut device_robustness2_features);
-        let extensions: Vec<*const i8> = DEVICE_EXTENSIONS
-            .iter()
-            .map(|n| n.as_ptr())
-            .collect::<Vec<_>>();
+        let extensions: Vec<*const i8> =
+            DEVICE_EXTENSIONS.iter().map(|n| n.as_ptr()).collect::<Vec<_>>();
 
         let handle =
             instance.create_device(physical_device, queue_families, &extensions, &mut features2)?;
@@ -173,10 +171,7 @@ impl Device {
         if queue_family.queue_flags.contains(vk::QueueFlags::COMPUTE) {
             score -= 10;
         }
-        if queue_family
-            .queue_flags
-            .contains(vk::QueueFlags::SPARSE_BINDING)
-        {
+        if queue_family.queue_flags.contains(vk::QueueFlags::SPARSE_BINDING) {
             score -= 1;
         }
         score
@@ -190,10 +185,7 @@ impl Device {
         if queue_family.queue_flags.contains(vk::QueueFlags::COMPUTE) {
             score -= 10;
         }
-        if queue_family
-            .queue_flags
-            .contains(vk::QueueFlags::SPARSE_BINDING)
-        {
+        if queue_family.queue_flags.contains(vk::QueueFlags::SPARSE_BINDING) {
             score -= 1;
         }
         score
@@ -325,14 +317,12 @@ impl Device {
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
             .queue_family_index(queue.family.index);
         let handle = unsafe {
-            self.handle
-                .create_command_pool(&info, None)
-                .unwrap_or_else(|e| {
-                    panic!(
-                        "Error creating command pool for queue {}: {e:?}",
-                        queue.family.index
-                    )
-                })
+            self.handle.create_command_pool(&info, None).unwrap_or_else(|e| {
+                panic!(
+                    "Error creating command pool for queue {}: {e:?}",
+                    queue.family.index
+                )
+            })
         };
         CommandPool {
             // name: name.to_string(),
@@ -359,8 +349,7 @@ impl Device {
         min_filter: vk::Filter,
         mag_filter: vk::Filter,
         mipmap_mode: vk::SamplerMipmapMode,
-        address_mode_u: vk::SamplerAddressMode,
-        address_mode_v: vk::SamplerAddressMode,
+        address_mode: vk::SamplerAddressMode,
     ) -> Result<vk::Sampler> {
         let info = vk::SamplerCreateInfo::default()
             .mag_filter(mag_filter)
@@ -368,8 +357,8 @@ impl Device {
             .min_lod(0.)
             .max_lod(LOD_CLAMP_NONE)
             .mipmap_mode(mipmap_mode)
-            .address_mode_u(address_mode_u)
-            .address_mode_v(address_mode_v);
+            .address_mode_u(address_mode)
+            .address_mode_v(address_mode);
         Ok(unsafe { self.handle.create_sampler(&info, None)? })
     }
 
@@ -385,10 +374,7 @@ impl Device {
             .image_memory_barriers(image_memory_barriers)
             .buffer_memory_barriers(buffer_memory_barriers)
             .dependency_flags(vk::DependencyFlags::BY_REGION);
-        unsafe {
-            self.handle
-                .cmd_pipeline_barrier2(cmd.handle, &dependency_info)
-        };
+        unsafe { self.handle.cmd_pipeline_barrier2(cmd.handle, &dependency_info) };
         Ok(())
     }
 
@@ -458,19 +444,11 @@ impl Device {
             .collect::<Vec<_>>();
         let wait_semaphore_infos = wait_semaphores
             .iter()
-            .map(|(s, f)| {
-                vk::SemaphoreSubmitInfo::default()
-                    .semaphore(*s)
-                    .stage_mask(*f)
-            })
+            .map(|(s, f)| vk::SemaphoreSubmitInfo::default().semaphore(*s).stage_mask(*f))
             .collect::<Vec<_>>();
         let signal_semaphore_infos = signal_semaphores
             .iter()
-            .map(|(s, f)| {
-                vk::SemaphoreSubmitInfo::default()
-                    .semaphore(*s)
-                    .stage_mask(*f)
-            })
+            .map(|(s, f)| vk::SemaphoreSubmitInfo::default().semaphore(*s).stage_mask(*f))
             .collect::<Vec<_>>();
         let submit_info = vk::SubmitInfo2::default()
             .command_buffer_infos(&cmd_infos)

@@ -77,27 +77,6 @@ pub struct Renderer {
     config: RenderConfig,
 }
 
-impl From<&RenderConfig> for GpuConfig {
-    fn from(config: &RenderConfig) -> Self {
-        Self {
-            force_color: config.force_color as i32,
-            force_metallic: config.force_metallic as i32,
-            force_roughness: config.force_roughness as i32,
-            force_ao: config.force_ao as i32,
-            force_color_factor: config.force_color_factor,
-            force_metallic_factor: config.force_metallic_factor,
-            force_roughness_factor: config.force_roughness_factor,
-            force_ao_strength: config.force_ao_strength,
-            debug_normals: config.debug_normals as i32,
-            debug_tangents: config.debug_tangents as i32,
-            debug_bitangents: config.debug_bitangents as i32,
-            debug_specular: config.debug_specular as i32,
-            debug_normal_maps: config.debug_normal_maps as i32,
-            force_defaults: 0,
-            _padding0: Vec3::ZERO,
-        }
-    }
-}
 pub struct RenderConfig {
     pub force_color: bool,
     pub force_metallic: bool,
@@ -113,6 +92,27 @@ pub struct RenderConfig {
     pub debug_specular: bool,
     pub debug_normal_maps: bool,
     pub force_defaults: bool,
+}
+
+impl From<GpuConfig> for RenderConfig {
+    fn from(config: GpuConfig) -> Self {
+        Self {
+            force_color: config.force_color != 0,
+            force_metallic: config.force_metallic != 0,
+            force_roughness: config.force_roughness != 0,
+            force_ao: config.force_ao != 0,
+            force_color_factor: config.force_color_factor,
+            force_metallic_factor: config.force_metallic_factor,
+            force_roughness_factor: config.force_roughness_factor,
+            force_ao_strength: config.force_ao_strength,
+            debug_normals: config.debug_normals != 0,
+            debug_tangents: config.debug_tangents != 0,
+            debug_bitangents: config.debug_bitangents != 0,
+            debug_specular: config.debug_specular != 0,
+            debug_normal_maps: config.debug_normal_maps != 0,
+            force_defaults: config.force_defaults != 0,
+        }
+    }
 }
 
 impl Renderer {
@@ -199,23 +199,14 @@ impl Renderer {
         let view = scene.camera.view();
         let projection = scene.camera.projection();
 
-        let mut scene_data = self.scene_data.clone();
-        scene_data.view = view;
-        scene_data.projection = projection;
-        scene_data.vp = projection * view.inverse();
-        scene_data.camera_pos = scene.camera.position();
-
-        let scene_data = GpuSceneData {
-            view,
-            projection,
-            vp: projection * view.inverse(),
-            camera_pos: scene.camera.position(),
-            n_lights: LIGHTS.len() as i32,
-            config: GpuConfig::from(&self.config),
-            lights: LIGHTS,
-        };
+        // let mut scene_data = self.scene_data.clone();
+        self.scene_data.view = view;
+        self.scene_data.projection = projection;
+        self.scene_data.vp = projection * view.inverse();
+        self.scene_data.camera_pos = scene.camera.position();
+        self.scene_data.config = GpuConfig::from(&self.config);
         self.scene_buffer.write(&[self.scene_data]);
-        self.scene_data = scene_data;
+        // self.scene_data = scene_data;
     }
 
     #[instrument(skip_all)]
@@ -489,7 +480,7 @@ impl Renderer {
             .texture_array(
                 BIND_IDX_TEXTURE,
                 &bindless_data.textures,
-                assets.default_sampler(),
+                &assets.default_sampler(),
             )
             .update(&self.gpu)?;
         cmd.end();
@@ -551,6 +542,27 @@ pub struct GpuConfig {
     pub _padding0: Vec3,
 }
 
+impl From<&RenderConfig> for GpuConfig {
+    fn from(config: &RenderConfig) -> Self {
+        Self {
+            force_color: config.force_color as i32,
+            force_metallic: config.force_metallic as i32,
+            force_roughness: config.force_roughness as i32,
+            force_ao: config.force_ao as i32,
+            force_color_factor: config.force_color_factor,
+            force_metallic_factor: config.force_metallic_factor,
+            force_roughness_factor: config.force_roughness_factor,
+            force_ao_strength: config.force_ao_strength,
+            debug_normals: config.debug_normals as i32,
+            debug_tangents: config.debug_tangents as i32,
+            debug_bitangents: config.debug_bitangents as i32,
+            debug_specular: config.debug_specular as i32,
+            debug_normal_maps: config.debug_normal_maps as i32,
+            force_defaults: 0,
+            _padding0: Vec3::ZERO,
+        }
+    }
+}
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
 pub struct GpuSceneData {

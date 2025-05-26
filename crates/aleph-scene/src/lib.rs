@@ -15,17 +15,3 @@ pub use crate::{
     material::Material,
     model::Vertex,
 };
-
-#[cfg(test)]
-#[allow(dead_code)]
-mod test {
-    use {
-        aleph_vk::Gpu,
-        std::sync::{Arc, LazyLock},
-    };
-
-    static TEST_GPU: LazyLock<Arc<Gpu>> =
-        LazyLock::new(|| Arc::new(Gpu::headless().expect("Error creating test GPU")));
-
-    pub fn test_gpu() -> &'static Arc<Gpu> { &TEST_GPU }
-}

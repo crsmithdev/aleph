@@ -7,7 +7,7 @@ use {
     anyhow::Result,
     ash::{
         khr,
-        vk::{self, Extent2D, Filter, SamplerAddressMode, SamplerMipmapMode},
+        vk::{self, Extent2D},
     },
     derive_more::Debug,
     raw_window_handle::{HasDisplayHandle, HasWindowHandle},
@@ -149,11 +149,7 @@ impl Gpu {
         let pipeline_layout_info = vk::PipelineLayoutCreateInfo::default()
             .set_layouts(uniforms_layouts)
             .push_constant_ranges(constants_ranges);
-        Ok(unsafe {
-            self.device
-                .handle
-                .create_pipeline_layout(&pipeline_layout_info, None)?
-        })
+        Ok(unsafe { self.device.handle.create_pipeline_layout(&pipeline_layout_info, None)? })
     }
 
     pub fn create_graphics_pipeline(
@@ -169,8 +165,7 @@ impl Gpu {
     }
 
     pub fn create_command_pool(&self) -> CommandPool {
-        self.device
-            .create_command_pool(self.device.graphics_queue(), "name")
+        self.device.create_command_pool(self.device.graphics_queue(), "name")
     }
 
     pub fn create_descriptor_set_layout(
@@ -186,11 +181,7 @@ impl Gpu {
             .flags(create_flags)
             .push_next(&mut binding_flags_info);
 
-        Ok(unsafe {
-            self.device
-                .handle
-                .create_descriptor_set_layout(&create_info, None)?
-        })
+        Ok(unsafe { self.device.handle.create_descriptor_set_layout(&create_info, None)? })
     }
 
     pub fn create_descriptor_pool(
@@ -224,11 +215,7 @@ impl Gpu {
             descriptor_set_info = descriptor_set_info.push_next(&mut count_info);
         }
 
-        Ok(unsafe {
-            self.device
-                .handle
-                .allocate_descriptor_sets(&descriptor_set_info)?[0]
-        })
+        Ok(unsafe { self.device.handle.allocate_descriptor_sets(&descriptor_set_info)?[0] })
     }
 
     pub fn update_descriptor_sets(
@@ -263,23 +250,6 @@ impl Gpu {
     pub fn rebuild_swapchain(&self, extent: Extent2D) {
         self.device.wait_idle();
         self.swapchain.rebuild(extent)
-    }
-
-    pub fn create_sampler(
-        &self,
-        min_filter: Filter,
-        mag_filter: Filter,
-        mipmap_mode: SamplerMipmapMode,
-        address_mode_u: SamplerAddressMode,
-        address_mode_y: SamplerAddressMode,
-    ) -> Result<vk::Sampler> {
-        self.device.create_sampler(
-            min_filter,
-            mag_filter,
-            mipmap_mode,
-            address_mode_u,
-            address_mode_y,
-        )
     }
 
     #[instrument(skip_all)]

@@ -125,12 +125,9 @@ impl Gui {
             shapes,
             pixels_per_point,
             ..
-        } = self
-            .ctx
-            .run(raw_input, |ctx| build_ui(ctx, config, scene_data));
+        } = self.ctx.run(raw_input, |ctx| build_ui(ctx, config, scene_data));
 
-        self.state
-            .handle_platform_output(&self.window, platform_output);
+        self.state.handle_platform_output(&self.window, platform_output);
 
         if !textures_delta.free.is_empty() {
             self.textures_to_free = Some(textures_delta.free.clone());
@@ -234,10 +231,9 @@ fn build_ui(ctx: &egui::Context, config: &mut RenderConfig, scene_data: &mut Gpu
 }
 
 fn light(ui: &mut egui::Ui, light: &mut Light, n: i32) {
-    egui::Grid::new(format!("light-{n:02}"))
-        .min_col_width(50.)
-        .max_col_width(250.)
-        .show(ui, |ui| {
+    egui::Grid::new(format!("light-{n:02}")).min_col_width(50.).max_col_width(250.).show(
+        ui,
+        |ui| {
             ui.label(format!("Light {}", n));
             ui.label("Position:");
             drag_value(ui, &mut light.position.x, "x", 25.);
@@ -252,7 +248,8 @@ fn light(ui: &mut egui::Ui, light: &mut Light, n: i32) {
             drag_value(ui, &mut light.color.z, "b", 255.);
             drag_value(ui, &mut light.color.w, "a", 255.);
             ui.end_row();
-        });
+        },
+    );
 }
 
 fn drag_value(ui: &mut egui::Ui, value: &mut f32, label: &str, max: f32) {

@@ -178,6 +178,7 @@ impl SwapchainInner {
                     device.clone(),
                     info.extent,
                     info.format,
+                    vk::ImageUsageFlags::TRANSFER_DST,
                     vk::ImageAspectFlags::COLOR,
                     &format!("swapchain{i:02}"),
                 )
@@ -223,8 +224,7 @@ impl SwapchainInner {
 
     pub fn acquire_next_image(&self, semaphore: vk::Semaphore) -> Result<(usize, bool)> {
         match unsafe {
-            self.loader
-                .acquire_next_image(self.handle, TIMEOUT_NS, semaphore, vk::Fence::null())
+            self.loader.acquire_next_image(self.handle, TIMEOUT_NS, semaphore, vk::Fence::null())
         } {
             Ok((index, needs_rebuild)) => Ok((index as usize, needs_rebuild)),
             Err(err) if err == vk::Result::ERROR_OUT_OF_DATE_KHR => Ok((0, true)),

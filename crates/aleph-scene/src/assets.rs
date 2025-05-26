@@ -86,24 +86,20 @@ pub type MeshHandle = AssetHandle<MeshInfo>;
 pub type TextureHandle = AssetHandle<Texture>;
 pub type MaterialHandle = AssetHandle<Material>;
 
-#[derive(Debug, Default)]
-struct Asset<T>(Rc<T>);
-
-type AssetCache<T> = HashMap<AssetHandle<T>, Asset<T>>;
-type AssetCache2<T> = HashMap<AssetHandle<T>, T>;
+type AssetCache<T> = HashMap<AssetHandle<T>, T>;
 
 #[derive(Debug)]
 enum AsyncAsset<T, I, D> {
     Loaded(Rc<T>),
     Unloaded(I, D),
 }
-type TextureAsset2 = AsyncAsset<Texture, TextureInfo, Vec<u8>>;
+type TextureAsset = AsyncAsset<Texture, TextureInfo, Vec<u8>>;
 type AsyncCache<T, I, D> = HashMap<AssetHandle<T>, AsyncAsset<T, I, D>>;
 
 #[derive(Debug)]
 pub struct Assets {
     texture_loader: TextureLoader,
-    meshes: AssetCache2<MeshInfo>,
+    meshes: AssetCache<MeshInfo>,
     textures: AsyncCache<Texture, TextureInfo, Vec<u8>>,
     materials: AssetCache<Material>,
     default_material: Material,
@@ -112,14 +108,7 @@ pub struct Assets {
 
 impl Assets {
     pub fn new(gpu: Arc<Gpu>) -> Result<Self> {
-        let default_sampler = gpu.create_sampler(
-            Filter::LINEAR,
-            Filter::LINEAR,
-            SamplerMipmapMode::LINEAR,
-            SamplerAddressMode::REPEAT,
-            SamplerAddressMode::REPEAT,
-        )?;
-
+        let default_sampler = Sampler::default(&gpu.device())?;
         let texture_loader = TextureLoader::new(gpu.clone());
 
         let mut assets = Self {
@@ -137,7 +126,29 @@ impl Assets {
 
     pub fn update(&mut self) { self.texture_loader.update(); }
 
-    pub fn default_sampler(&self) -> Sampler { self.default_sampler }
+    pub fn default_sampler(&self) -> Sampler { self.default_sampler.clone() }
+
+    pub fn create_sampler(
+        &self,
+        name: &str,
+        min_filter: Filter,
+        mag_filter: Filter,
+        mipmap_mode: SamplerMipmapMode,
+        address_mode_u: SamplerAddressMode,
+        address_mode_v: SamplerAddressMode,
+    ) -> Sampler {
+        let sampler = Sampler::new(
+            &self.texture_loader.gpu.device(),
+            min_filter,
+            mag_filter,
+            mipmap_mode,
+            address_mode_u,
+            address_mode_v,
+            name,
+        )
+        .unwrap_or_else(|e| panic!("Failed to create sampler: {}", e));
+        sampler
+    }
 
     fn create_default_texture(&mut self, color: &[u8; 4], format: Format) -> TextureHandle {
         let data = {
@@ -179,7 +190,7 @@ impl Assets {
 
     pub fn add_texture(&mut self, info: TextureInfo, data: &[u8]) -> TextureHandle {
         let handle = TextureHandle::new();
-        let asset = TextureAsset2::Unloaded(info, data.to_vec());
+        let asset = TextureAsset::Unloaded(info, data.to_vec());
         self.textures.insert(handle, asset);
         handle
     }
@@ -191,12 +202,12 @@ impl Assets {
     ) -> Option<Rc<Texture>> {
         match self.textures.get(&handle) {
             Some(asset) => match asset {
-                TextureAsset2::Loaded(texture) => Some(Rc::clone(texture)),
-                TextureAsset2::Unloaded(info, data) => {
+                TextureAsset::Loaded(texture) => Some(Rc::clone(texture)),
+                TextureAsset::Unloaded(info, data) => {
                     let rc = Rc::new(
                         self.texture_loader.load_texture(&info, data, cmd.unwrap()).unwrap(),
                     );
-                    let asset = TextureAsset2::Loaded(rc.clone());
+                    let asset = TextureAsset::Loaded(rc.clone());
                     self.textures.insert(*handle, asset);
                     Some(rc)
                 }
@@ -220,13 +231,12 @@ impl Assets {
         if material.occlusion_texture == TextureHandle::null() {
             material.occlusion_texture = self.default_material.occlusion_texture;
         }
-        let asset = Asset(Rc::new(material));
-        self.materials.insert(handle, asset);
+        self.materials.insert(handle, material);
         handle
     }
 
-    pub fn get_material(&self, handle: MaterialHandle) -> Option<Rc<Material>> {
-        self.materials.get(&handle).map(|asset| Rc::clone(&asset.0))
+    pub fn get_material(&self, handle: MaterialHandle) -> Option<&Material> {
+        self.materials.get(&handle)
     }
 
     pub fn add_mesh(&mut self, info: MeshInfo) -> MeshHandle {
@@ -258,18 +268,20 @@ impl Assets {
 
         let mut materials = Vec::new();
         let mut material_map = HashMap::new();
+
+        let texture_index =
+            |handle| texture_map.get(&handle).map(|&index| index as u32).unwrap_or(0);
+
         for (handle, material) in self.materials.iter() {
             materials.push(GpuMaterial {
-                color_texture: *texture_map.get(&material.0.color_texture).unwrap_or(&0) as u32,
-                normal_texture: *texture_map.get(&material.0.normal_texture).unwrap_or(&0) as u32,
-                metalrough_texture: *texture_map.get(&material.0.metalrough_texture).unwrap_or(&0)
-                    as u32,
-                occlusion_texture: *texture_map.get(&material.0.occlusion_texture).unwrap_or(&0)
-                    as u32,
-                color_factor: material.0.color_factor,
-                metallic_factor: material.0.metallic_factor,
-                roughness_factor: material.0.roughness_factor,
-                ao_strength: material.0.ao_strength,
+                color_texture: texture_index(material.color_texture),
+                normal_texture: texture_index(material.normal_texture),
+                metalrough_texture: texture_index(material.metalrough_texture),
+                occlusion_texture: texture_index(material.occlusion_texture),
+                color_factor: material.color_factor,
+                metallic_factor: material.metallic_factor,
+                roughness_factor: material.roughness_factor,
+                ao_strength: material.ao_strength,
                 padding0: 0.,
             });
             material_map.insert(*handle, materials.len() - 1);
@@ -374,7 +386,7 @@ pub struct GpuMaterial {
 
 #[cfg(test)]
 mod tests {
-    use crate::test::test_gpu;
+    use aleph_vk::test::test_gpu;
 
     #[test]
     fn test_assets() { let _ = test_gpu(); }
