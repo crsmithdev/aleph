@@ -3,3 +3,4 @@ group_imports = "StdExternalCrate"
 imports_granularity = "One"
 reorder_imports = true
 match_arm_blocks = false
+chain_width = 85

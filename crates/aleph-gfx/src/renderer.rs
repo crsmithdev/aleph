@@ -1,10 +1,10 @@
 use {
     crate::{ForwardPipeline, Gui, Pipeline, ResourceBinder, ResourceLayout},
     aleph_scene::{
-        assets::GpuMaterialData,
+        assets::{BindlessData, GpuMaterial},
         material,
         model::{Light, MeshInfo},
-        Assets, MaterialHandle, NodeType, Scene, Vertex,
+        Assets, MaterialHandle, MeshHandle, NodeType, Scene, Vertex,
     },
     aleph_vk::{
         sync, AccessFlags2, CommandBuffer, CommandPool, Extent2D, Extent3D, Fence, Format, Gpu,
@@ -264,10 +264,8 @@ impl Renderer {
         );
 
         // self.gpu.device().wait_for_fences(&[*fence]);
-        let (next_idx, rebuild_swapchain) = self
-            .gpu
-            .swapchain()
-            .acquire_next_image(*acquire_semaphore)?;
+        let (next_idx, rebuild_swapchain) =
+            self.gpu.swapchain().acquire_next_image(*acquire_semaphore)?;
         self.rebuild_swapchain = rebuild_swapchain;
         // self.gpu.reset_fence(*fence)?;
 
@@ -334,9 +332,7 @@ impl Renderer {
         gui.draw(&context, &mut self.config, &mut self.scene_data)?;
         log::trace!("WAIT @ blit");
         self.gpu.device().wait_idle();
-        self.gpu
-            .debug_utils()
-            .begin_debug_label(&cmd_buffer, "blit to swapchain");
+        self.gpu.debug_utils().begin_debug_label(&cmd_buffer, "blit to swapchain");
 
         cmd_buffer.pipeline_barrier(
             &[],
@@ -445,71 +441,46 @@ impl Renderer {
 
     fn create_render_objects<'a>(
         &self,
-        scene: &'a Scene,
-        assets: &'a mut Assets,
-        material_map: &'a HashMap<MaterialHandle, usize>,
+        transforms: &Vec<(MeshHandle, Mat4)>,
+        data: &BindlessData,
         cmd: &CommandBuffer,
-    ) -> Vec<RenderObject> {
-        let materials = material_map;
-        let handles = scene.mesh_nodes().filter_map(|node| {
-            if let NodeType::Mesh(handle) = node.data {
-                Some((node, handle))
-            } else {
-                None
-            }
-        });
+    ) -> Result<Vec<RenderObject>> {
         let mut objects = vec![];
+        for (handle, transform) in transforms.iter() {
+            let index = data.mesh_map.get(handle).unwrap();
+            let mesh = data.meshes.get(*index).unwrap();
+            let mut index_buffer = TypedBuffer::index(&self.gpu, mesh.indices.len(), "index")?;
+            let mut vertex_buffer = TypedBuffer::vertex(&self.gpu, mesh.vertices.len(), "vertex")?;
+            let vertex_count = mesh.vertices.len();
+            let vertices = (0..vertex_count)
+                .map(|i| Vertex {
+                    position: mesh.vertices[i],
+                    normal: *mesh.normals.get(i).unwrap_or(&Vec3::ONE),
+                    tangent: *mesh.tangents.get(i).unwrap_or(&Vec4::ONE),
+                    color: *mesh.colors.get(i).unwrap_or(&Vec4::ONE),
+                    uv_x: mesh.tex_coords0.get(i).unwrap_or(&Vec2::ZERO)[0],
+                    uv_y: mesh.tex_coords0.get(i).unwrap_or(&Vec2::ZERO)[1],
+                })
+                .collect::<Vec<_>>();
 
-        for (node, handle) in handles {
-            let mesh = assets
-                .get_mesh(handle)
-                .unwrap_or_else(|| panic!("Mesh not found: {:?}", handle));
-            let material = *materials
-                .get(&mesh.material)
-                .unwrap_or_else(|| panic!("Material not found: {:?}", mesh.material));
+            let index_data = bytemuck::cast_slice(&mesh.indices);
+            index_buffer.write(index_data);
 
-            log::debug!("mesh material: {:?} -> index: {}", mesh.material, material);
-            let loaded = self.load_mesh(mesh, node.transform, material, cmd).unwrap();
-            objects.push(loaded);
+            let vertex_data = bytemuck::cast_slice(&vertices);
+            vertex_buffer.write(vertex_data);
+
+            let material = *data.material_map.get(&mesh.material).unwrap_or(&0);
+
+            objects.push(RenderObject {
+                vertex_buffer,
+                vertex_count,
+                index_buffer,
+                transform: *transform,
+                material,
+            });
         }
-        objects
-    }
 
-    fn load_mesh(
-        &self,
-        info: &MeshInfo,
-        transform: Mat4,
-        material: usize,
-        cmd: &CommandBuffer,
-    ) -> Result<RenderObject> {
-        let mut index_buffer = TypedBuffer::index(&self.gpu, info.indices.len(), "index")?;
-        let mut vertex_buffer = TypedBuffer::vertex(&self.gpu, info.vertices.len(), "vertex")?;
-        let vertex_count = info.vertices.len();
-        let vertices = (0..vertex_count)
-            .map(|i| Vertex {
-                position: info.vertices[i],
-                normal: *info.normals.get(i).unwrap_or(&Vec3::ONE),
-                tangent: *info.tangents.get(i).unwrap_or(&Vec4::ONE),
-                color: *info.colors.get(i).unwrap_or(&Vec4::ONE),
-                uv_x: info.tex_coords0.get(i).unwrap_or(&Vec2::ZERO)[0],
-                uv_y: info.tex_coords0.get(i).unwrap_or(&Vec2::ZERO)[1],
-            })
-            .collect::<Vec<_>>();
-
-        let index_data = bytemuck::cast_slice(&info.indices);
-        index_buffer.write(index_data);
-
-        let vertex_data = bytemuck::cast_slice(&vertices);
-        vertex_buffer.write(vertex_data);
-
-        let mesh = RenderObject {
-            vertex_buffer,
-            vertex_count,
-            index_buffer,
-            transform,
-            material,
-        };
-        Ok(mesh)
+        Ok(objects)
     }
 
     #[instrument(skip_all)]
@@ -519,35 +490,46 @@ impl Renderer {
         let cmd = &self.gpu.immediate_cmd_buffer();
         cmd.begin();
 
-        let (textures, texture_map) = assets.map_textures(&cmd)?;
-        let (_meshes, _mesh_map) = assets.map_meshes(&cmd)?;
-        let (materials, material_map) = assets.map_materials(&texture_map)?;
-        // let fence = self.frames[self.frame_idx].fence;
-        // self.material_map = material_map;
+        let bindless_data = assets.prepare_bindless(cmd)?;
+
+        // let (textures, texture_map) = assets.map_textures(&cmd)?;
+        // let (_meshes, _mesh_map) = assets.map_meshes(&cmd)?;
+        // let (materials, material_map) = assets.map_materials(&texture_map)?;
         let mut materials_arr = [
-            GpuMaterialData::default(),
-            GpuMaterialData::default(),
-            GpuMaterialData::default(),
-            GpuMaterialData::default(),
-            GpuMaterialData::default(),
-            GpuMaterialData::default(),
-            GpuMaterialData::default(),
-            GpuMaterialData::default(),
-            GpuMaterialData::default(),
-            GpuMaterialData::default(),
+            GpuMaterial::default(),
+            GpuMaterial::default(),
+            GpuMaterial::default(),
+            GpuMaterial::default(),
+            GpuMaterial::default(),
+            GpuMaterial::default(),
+            GpuMaterial::default(),
+            GpuMaterial::default(),
+            GpuMaterial::default(),
+            GpuMaterial::default(),
         ];
-        for (i, material) in materials.iter().enumerate() {
+        for (i, material) in bindless_data.materials.iter().enumerate() {
             materials_arr[i] = *material;
         }
         let object_data = GpuObjectData {
             materials: materials_arr,
         };
-        self.render_objects = self.create_render_objects(scene, assets, &material_map, cmd);
+        let mesh_nodes = scene
+            .mesh_nodes()
+            .map(|node| match node.data {
+                NodeType::Mesh(handle) => (handle, node.transform),
+                _ => panic!("Should not be here, node: {:?}", node),
+            })
+            .collect::<Vec<_>>();
+        self.render_objects = self.create_render_objects(&mesh_nodes, &bindless_data, cmd)?;
         self.object_data_buffer.write(&[object_data]);
         self.binder
             .uniform_buffer(BIND_IDX_SCENE, &self.scene_buffer, 0)
             .uniform_buffer(BIND_IDX_MATERIAL, &self.object_data_buffer, 0)
-            .texture_array(BIND_IDX_TEXTURE, &textures, assets.default_sampler())
+            .texture_array(
+                BIND_IDX_TEXTURE,
+                &bindless_data.textures,
+                assets.default_sampler(),
+            )
             .update(&self.gpu)?;
         cmd.end();
 
@@ -623,7 +605,7 @@ pub struct GpuSceneData {
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
 pub struct GpuObjectData {
-    pub materials: [GpuMaterialData; 10],
+    pub materials: [GpuMaterial; 10],
 }
 
 #[repr(C)]

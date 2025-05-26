@@ -5,7 +5,7 @@ use {
         ImageLayout, ImageUsageFlags, PipelineStageFlags2, ResourcePool, Sampler,
         SamplerAddressMode, SamplerMipmapMode, Texture, TextureInfo,
     },
-    anyhow::Result,
+    anyhow::{bail, Result},
     bytemuck::{Pod, Zeroable},
     derive_more::Debug,
     glam::{vec4, Vec4},
@@ -171,7 +171,7 @@ impl Assets {
             metalrough_texture,
             metallic_factor: 1.0,
             roughness_factor: 1.0,
-            ao_texture,
+            occlusion_texture: ao_texture,
             ao_strength: 1.0,
         };
 
@@ -196,9 +196,7 @@ impl Assets {
                 TextureAsset2::Loaded(texture) => Some(Rc::clone(texture)),
                 TextureAsset2::Unloaded(info, data) => {
                     let rc = Rc::new(
-                        self.texture_loader
-                            .load_texture(&info, data, cmd.unwrap())
-                            .unwrap(),
+                        self.texture_loader.load_texture(&info, data, cmd.unwrap()).unwrap(),
                     );
                     let asset = TextureAsset2::Loaded(rc.clone());
                     self.textures.insert(*handle, asset);
@@ -221,8 +219,8 @@ impl Assets {
         if material.metalrough_texture == TextureHandle::null() {
             material.metalrough_texture = self.default_material.metalrough_texture;
         }
-        if material.ao_texture == TextureHandle::null() {
-            material.ao_texture = self.default_material.ao_texture;
+        if material.occlusion_texture == TextureHandle::null() {
+            material.occlusion_texture = self.default_material.occlusion_texture;
         }
         let asset = Asset(Rc::new(material));
         self.materials.insert(handle, asset);
@@ -241,97 +239,52 @@ impl Assets {
 
     pub fn get_mesh(&mut self, handle: MeshHandle) -> Option<&MeshInfo> { self.meshes.get(&handle) }
 
-    pub fn map_textures(
-        &mut self,
-        cmd: &CommandBuffer,
-    ) -> Result<(Vec<Rc<Texture>>, HashMap<TextureHandle, usize>)> {
+    pub fn prepare_bindless(&mut self, cmd: &CommandBuffer) -> Result<BindlessData> {
         let mut textures = Vec::new();
-        let mut handle_map = HashMap::new();
-        let handles = self.textures.keys().cloned().collect::<Vec<_>>();
-
-        for handle in handles.iter() {
-            let texture = self
-                .get_or_load_texture(&handle.clone(), Some(cmd))
-                .unwrap_or_else(|| panic!("Cached texture not found: {:?}", handle));
-            let index = textures.len();
-            log::debug!(
-                "Mapped texture {:?} ({:?}) to array index {}",
-                handle,
-                texture.name(),
-                index
-            );
-
-            textures.push(texture);
-            handle_map.insert(handle.clone(), index);
-        }
-
-        Ok((textures, handle_map))
-    }
-
-    pub fn map_meshes(
-        &mut self,
-        cmd: &CommandBuffer,
-    ) -> Result<(Vec<MeshInfo>, HashMap<MeshHandle, usize>)> {
-        let mut meshes = Vec::new();
-        let mut handle_map = HashMap::new();
-        let handles = { self.meshes.keys().cloned().collect::<Vec<_>>() };
-
-        for handle in handles {
-            let mesh = self
-                .get_mesh(handle.clone())
-                .unwrap_or_else(|| panic!("Cached mesh not found: {:?}", handle));
-            meshes.push(mesh.clone());
-            handle_map.insert(handle.clone(), meshes.len() - 1);
-        }
-
-        Ok((meshes, handle_map))
-    }
-
-    pub fn map_materials(
-        &self,
-        texture_map: &HashMap<TextureHandle, usize>,
-    ) -> Result<(Vec<GpuMaterialData>, HashMap<MaterialHandle, usize>)> {
-        let handles = {
-            let handles = self.materials.keys().cloned().collect::<Vec<_>>();
-            handles
-        };
-
-        let mut handle_map = HashMap::new();
-        let mut materials = Vec::new();
-
-        for handle in handles {
-            let material = self.get_material(handle).unwrap_or_else(|| {
-                panic!("Material not found: {:?}", handle);
-            });
-
-            let color_texture = texture_map.get(&material.color_texture).unwrap_or(&0);
-            let normal_texture = texture_map.get(&material.normal_texture).unwrap_or(&0);
-            let metalrough_texture = texture_map.get(&material.metalrough_texture).unwrap_or(&0);
-            let ao_texture = texture_map.get(&material.ao_texture).unwrap_or(&0);
-            let gpu_material = GpuMaterialData {
-                color_factor: material.color_factor,
-                metallic_factor: material.metallic_factor,
-                roughness_factor: material.roughness_factor,
-                ao_strength: material.ao_strength,
-                color_texture_index: *color_texture as u32,
-                normal_texture_index: *normal_texture as u32,
-                metalrough_texture_index: *metalrough_texture as u32,
-                ao_texture_index: *ao_texture as u32,
-                padding0: 0.,
+        let mut texture_map = HashMap::new();
+        for handle in self.textures.keys().cloned().collect::<Vec<_>>() {
+            let texture = match self.get_or_load_texture(&handle, Some(cmd)) {
+                Some(texture) => texture,
+                None => bail!("Texture {:?} not found", handle),
             };
-
-            materials.push(gpu_material);
-            let index = materials.len() - 1;
-
-            handle_map.insert(handle, index);
-            log::debug!("Mapped material {handle:?} to array index {index} ({gpu_material:?})");
+            textures.push(texture);
+            texture_map.insert(handle, textures.len() - 1);
         }
 
-        for (key, value) in handle_map.iter() {
-            log::trace!("Material: {:?} -> {:?}", key, value);
+        let mut meshes = Vec::new();
+        let mut mesh_map = HashMap::new();
+        for (handle, mesh) in self.meshes.iter() {
+            meshes.push(mesh.clone());
+            mesh_map.insert(*handle, meshes.len() - 1);
         }
 
-        Ok((materials, handle_map))
+        let mut materials = Vec::new();
+        let mut material_map = HashMap::new();
+        for (handle, material) in self.materials.iter() {
+            materials.push(GpuMaterial {
+                color_texture: *texture_map.get(&material.0.color_texture).unwrap_or(&0) as u32,
+                normal_texture: *texture_map.get(&material.0.normal_texture).unwrap_or(&0) as u32,
+                metalrough_texture: *texture_map.get(&material.0.metalrough_texture).unwrap_or(&0)
+                    as u32,
+                occlusion_texture: *texture_map.get(&material.0.occlusion_texture).unwrap_or(&0)
+                    as u32,
+                color_factor: material.0.color_factor,
+                metallic_factor: material.0.metallic_factor,
+                roughness_factor: material.0.roughness_factor,
+                ao_strength: material.0.ao_strength,
+                padding0: 0.,
+            });
+            material_map.insert(*handle, materials.len() - 1);
+        }
+
+        Ok(BindlessData {
+            textures,
+            texture_map,
+            meshes,
+            mesh_map,
+            materials,
+            material_map,
+        })
     }
 }
 
@@ -362,9 +315,7 @@ impl TextureLoader {
         staging.write(data);
 
         let memory_range = staging.mapped_memory_range();
-        self.gpu
-            .device()
-            .flush_mapped_memory_ranges(&[memory_range]);
+        self.gpu.device().flush_mapped_memory_ranges(&[memory_range]);
 
         cmd.pipeline_barrier(
             &[],
@@ -400,17 +351,26 @@ impl TextureLoader {
     }
 }
 
+pub struct BindlessData {
+    pub textures: Vec<Rc<Texture>>,
+    pub texture_map: HashMap<TextureHandle, usize>,
+    pub meshes: Vec<MeshInfo>,
+    pub mesh_map: HashMap<MeshHandle, usize>,
+    pub materials: Vec<GpuMaterial>,
+    pub material_map: HashMap<MaterialHandle, usize>,
+}
+
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
-pub struct GpuMaterialData {
+pub struct GpuMaterial {
     pub color_factor: Vec4,
-    pub color_texture_index: u32,
-    pub normal_texture_index: u32,
+    pub color_texture: u32,
+    pub normal_texture: u32,
     pub metallic_factor: f32,
     pub roughness_factor: f32,
-    pub metalrough_texture_index: u32,
+    pub metalrough_texture: u32,
     pub ao_strength: f32,
-    pub ao_texture_index: u32,
+    pub occlusion_texture: u32,
     pub padding0: f32,
 }
 

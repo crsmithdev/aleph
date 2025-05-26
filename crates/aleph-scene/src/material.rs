@@ -13,7 +13,7 @@ pub struct Material {
     pub metalrough_texture: TextureHandle,
     pub metallic_factor: f32,
     pub roughness_factor: f32,
-    pub ao_texture: TextureHandle,
+    pub occlusion_texture: TextureHandle,
     pub ao_strength: f32,
 }
 
@@ -27,7 +27,7 @@ impl Default for Material {
             metalrough_texture: TextureHandle::null(),
             metallic_factor: 1.0,
             roughness_factor: 1.0,
-            ao_texture: TextureHandle::null(),
+            occlusion_texture: TextureHandle::null(),
             ao_strength: 1.0,
         }
     }
@@ -44,8 +44,8 @@ impl Material {
         if dst.metalrough_texture == TextureHandle::null() {
             dst.metalrough_texture = src.metalrough_texture;
         }
-        if dst.ao_texture == TextureHandle::null() {
-            dst.ao_texture = src.ao_texture;
+        if dst.occlusion_texture == TextureHandle::null() {
+            dst.occlusion_texture = src.occlusion_texture;
         }
 
         dst.name = src.name.clone();
@@ -55,7 +55,7 @@ impl Material {
         dst.metalrough_texture = src.metalrough_texture.clone();
         dst.metallic_factor = src.metallic_factor;
         dst.roughness_factor = src.roughness_factor;
-        dst.ao_texture = src.ao_texture.clone();
+        dst.occlusion_texture = src.occlusion_texture.clone();
         dst.ao_strength = src.ao_strength;
     }
 }

@@ -181,7 +181,7 @@ fn load_material(
         color_texture,
         metalrough_texture,
         normal_texture,
-        ao_texture,
+        occlusion_texture: ao_texture,
         ao_strength,
         color_factor: Vec4::from_array(pbr.base_color_factor()),
         metallic_factor: pbr.metallic_factor(),
