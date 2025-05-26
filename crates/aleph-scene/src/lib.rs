@@ -13,7 +13,7 @@ pub use crate::{
     camera::{Camera, CameraConfig},
     graph::{Node, NodeType, Scene},
     material::Material,
-    model::{Mesh, Vertex},
+    model::Vertex,
 };
 
 #[cfg(test)]

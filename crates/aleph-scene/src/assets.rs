@@ -1,7 +1,7 @@
 use {
     crate::{
         model::{MeshInfo, Vertex},
-        Material, Mesh,
+        Material,
     },
     aleph_vk::{
         sync, AccessFlags2, Buffer, CommandBuffer, Extent2D, Filter, Format, Gpu, ImageAspectFlags,
@@ -85,12 +85,14 @@ impl<T> PartialEq for AssetHandle<T> {
 
 impl<T> Eq for AssetHandle<T> {}
 
-pub type MeshHandle = AssetHandle<Mesh>;
+pub type MeshHandle = AssetHandle<MeshInfo>;
 pub type TextureHandle = AssetHandle<Texture>;
 pub type MaterialHandle = AssetHandle<Material>;
 
 #[derive(Debug, Default)]
 struct Asset<T>(Rc<T>);
+#[derive(Debug)]
+struct Asset2<T>(T);
 
 #[derive(Debug)]
 enum LazyAsset<T, D> {
@@ -98,9 +100,10 @@ enum LazyAsset<T, D> {
     Unloaded(D),
 }
 
-type MeshAsset = LazyAsset<Mesh, MeshInfo>;
+type MeshAsset = Asset2<MeshInfo>;
 type LazyCache<T, D> = HashMap<AssetHandle<T>, LazyAsset<T, D>>;
 type AssetCache<T> = HashMap<AssetHandle<T>, Asset<T>>;
+type AssetCache2<T> = HashMap<AssetHandle<T>, T>;
 
 #[derive(Debug)]
 enum AsyncAsset<T, I, D> {
@@ -114,7 +117,7 @@ type AsyncCache<T, I, D> = HashMap<AssetHandle<T>, AsyncAsset<T, I, D>>;
 pub struct Assets {
     gpu: Arc<Gpu>,
     texture_loader: TextureLoader,
-    meshes: LazyCache<Mesh, MeshInfo>,
+    meshes: AssetCache2<MeshInfo>,
     textures: AsyncCache<Texture, TextureInfo, Vec<u8>>,
     materials: AssetCache<Material>,
     default_material: MaterialHandle,
@@ -332,77 +335,57 @@ impl Assets {
 
     pub fn add_mesh(&mut self, info: MeshInfo) -> MeshHandle {
         let handle = MeshHandle::new();
-        let asset = MeshAsset::Unloaded(info);
-        self.meshes.insert(handle, asset);
+        self.meshes.insert(handle, info);
         handle
     }
 
-    pub fn get_mesh(&mut self, handle: MeshHandle) -> Option<Rc<Mesh>> {
-        self.get_or_load_mesh(&handle, None)
-    }
+    pub fn get_mesh(&mut self, handle: MeshHandle) -> Option<&MeshInfo> { self.meshes.get(&handle) }
 
-    fn get_or_load_mesh(
-        &mut self,
-        handle: &MeshHandle,
-        cmd: Option<&CommandBuffer>,
-    ) -> Option<Rc<Mesh>> {
-        match self.meshes.get(handle) {
-            Some(MeshAsset::Loaded(mesh)) => Some(Rc::clone(mesh)),
-            Some(MeshAsset::Unloaded(info)) => {
-                let rc = Rc::new(self.load_mesh(&info, cmd).unwrap());
-                let asset = MeshAsset::Loaded(rc.clone());
-                self.meshes.insert(*handle, asset);
-                Some(rc)
-            }
-            None => None,
-        }
-    }
+    // fn load_mesh(&self, info: &MeshInfo, _cmd: Option<&CommandBuffer>) -> Result<Mesh> {
+    //     let mut index_buffer = TypedBuffer::index(&self.gpu, info.indices.len(), "index")?;
+    //     let mut vertex_buffer = TypedBuffer::vertex(&self.gpu, info.vertices.len(), "vertex")?;
+    //     let vertex_count = info.vertices.len();
+    //     let vertices = (0..vertex_count)
+    //         .map(|i| Vertex {
+    //             position: info.vertices[i],
+    //             normal: *info.normals.get(i).unwrap_or(&Vec3::ONE),
+    //             tangent: *info.tangents.get(i).unwrap_or(&Vec4::ONE),
+    //             color: *info.colors.get(i).unwrap_or(&Vec4::ONE),
+    //             uv_x: info.tex_coords0.get(i).unwrap_or(&Vec2::ZERO)[0],
+    //             uv_y: info.tex_coords0.get(i).unwrap_or(&Vec2::ZERO)[1],
+    //         })
+    //         .collect::<Vec<_>>();
 
-    fn load_mesh(&self, info: &MeshInfo, _cmd: Option<&CommandBuffer>) -> Result<Mesh> {
-        let mut index_buffer = TypedBuffer::index(&self.gpu, info.indices.len(), "index")?;
-        let mut vertex_buffer = TypedBuffer::vertex(&self.gpu, info.vertices.len(), "vertex")?;
-        let vertex_count = info.vertices.len();
-        let vertices = (0..vertex_count)
-            .map(|i| Vertex {
-                position: info.vertices[i],
-                normal: *info.normals.get(i).unwrap_or(&Vec3::ONE),
-                tangent: *info.tangents.get(i).unwrap_or(&Vec4::ONE),
-                color: *info.colors.get(i).unwrap_or(&Vec4::ONE),
-                uv_x: info.tex_coords0.get(i).unwrap_or(&Vec2::ZERO)[0],
-                uv_y: info.tex_coords0.get(i).unwrap_or(&Vec2::ZERO)[1],
-            })
-            .collect::<Vec<_>>();
+    //     let index_data = bytemuck::cast_slice(&info.indices);
+    //     index_buffer.write(index_data);
 
-        let index_data = bytemuck::cast_slice(&info.indices);
-        index_buffer.write(index_data);
+    //     let vertex_data = bytemuck::cast_slice(&vertices);
+    //     vertex_buffer.write(vertex_data);
 
-        let vertex_data = bytemuck::cast_slice(&vertices);
-        vertex_buffer.write(vertex_data);
-
-        let mesh = Mesh {
-            vertex_buffer,
-            vertex_count: vertex_count as u32,
-            index_buffer,
-            material: info.material,
-            topology: PrimitiveTopology::TRIANGLE_LIST,
-            name: info.name.clone(),
-        };
-        Ok(mesh)
-    }
+    //     let mesh = Mesh {
+    //         vertex_buffer,
+    //         vertex_count: vertex_count as u32,
+    //         index_buffer,
+    //         material: info.material,
+    //         topology: PrimitiveTopology::TRIANGLE_LIST,
+    //         name: info.name.clone(),
+    //     };
+    //     Ok(mesh)
+    // }
 
     pub fn map_meshes(
         &mut self,
         cmd: &CommandBuffer,
-    ) -> Result<(Vec<Rc<Mesh>>, HashMap<MeshHandle, usize>)> {
+    ) -> Result<(Vec<MeshInfo>, HashMap<MeshHandle, usize>)> {
         let mut meshes = Vec::new();
         let mut handle_map = HashMap::new();
         let handles = { self.meshes.keys().cloned().collect::<Vec<_>>() };
 
         for handle in handles {
             let mesh = self
-                .get_or_load_mesh(&handle.clone(), Some(cmd))
+                .get_mesh(handle.clone())
                 .unwrap_or_else(|| panic!("Cached mesh not found: {:?}", handle));
-            meshes.push(mesh);
+            meshes.push(mesh.clone());
             handle_map.insert(handle.clone(), meshes.len() - 1);
         }
 

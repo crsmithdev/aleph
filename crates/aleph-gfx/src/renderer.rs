@@ -1,18 +1,20 @@
 use {
     crate::{ForwardPipeline, Gui, Pipeline, ResourceBinder, ResourceLayout},
     aleph_scene::{
-        assets::GpuMaterialData, model::Light, Assets, MaterialHandle, Mesh, NodeType, Scene,
+        assets::GpuMaterialData,
+        model::{Light, MeshInfo},
+        Assets, MaterialHandle, Mesh, NodeType, Scene, Vertex,
     },
     aleph_vk::{
         sync, AccessFlags2, CommandBuffer, CommandPool, Extent2D, Extent3D, Fence, Format, Gpu,
         Handle as _, ImageAspectFlags, ImageLayout, ImageUsageFlags, PipelineStageFlags2,
-        Semaphore, ShaderStageFlags, Texture, TextureInfo, TypedBuffer,
+        PrimitiveTopology, Semaphore, ShaderStageFlags, Texture, TextureInfo, TypedBuffer,
     },
     anyhow::Result,
     ash::vk::FenceCreateFlags,
     bytemuck::{Pod, Zeroable},
     derive_more::Debug,
-    glam::{vec3, vec4, Mat4, Vec3, Vec4},
+    glam::{vec3, vec4, Mat4, Vec2, Vec3, Vec4},
     std::{collections::HashMap, panic, rc::Rc, sync::Arc},
     tracing::instrument,
 };
@@ -441,11 +443,12 @@ impl Renderer {
     }
 
     fn create_render_objects<'a>(
-        &mut self,
+        &self,
         scene: &'a Scene,
         assets: &'a mut Assets,
         material_map: &'a HashMap<MaterialHandle, usize>,
-    ) {
+        cmd: &CommandBuffer,
+    ) -> Vec<RenderObject> {
         let materials = material_map;
         let handles = scene.mesh_nodes().filter_map(|node| {
             if let NodeType::Mesh(handle) = node.data {
@@ -465,14 +468,47 @@ impl Renderer {
                 .unwrap_or_else(|| panic!("Material not found: {:?}", mesh.material));
 
             log::debug!("mesh material: {:?} -> index: {}", mesh.material, material);
+            let loaded = self.load_mesh(mesh, None).unwrap();
             objects.push(RenderObject {
-                vertex_count: mesh.vertex_count as usize,
+                vertex_count: loaded.vertex_count as usize,
                 material,
-                mesh: mesh.clone(),
+                mesh: loaded.clone(),
                 transform: node.transform,
             });
         }
-        self.render_objects = objects;
+        objects
+    }
+
+    fn load_mesh(&self, info: &MeshInfo, _cmd: Option<&CommandBuffer>) -> Result<Mesh> {
+        let mut index_buffer = TypedBuffer::index(&self.gpu, info.indices.len(), "index")?;
+        let mut vertex_buffer = TypedBuffer::vertex(&self.gpu, info.vertices.len(), "vertex")?;
+        let vertex_count = info.vertices.len();
+        let vertices = (0..vertex_count)
+            .map(|i| Vertex {
+                position: info.vertices[i],
+                normal: *info.normals.get(i).unwrap_or(&Vec3::ONE),
+                tangent: *info.tangents.get(i).unwrap_or(&Vec4::ONE),
+                color: *info.colors.get(i).unwrap_or(&Vec4::ONE),
+                uv_x: info.tex_coords0.get(i).unwrap_or(&Vec2::ZERO)[0],
+                uv_y: info.tex_coords0.get(i).unwrap_or(&Vec2::ZERO)[1],
+            })
+            .collect::<Vec<_>>();
+
+        let index_data = bytemuck::cast_slice(&info.indices);
+        index_buffer.write(index_data);
+
+        let vertex_data = bytemuck::cast_slice(&vertices);
+        vertex_buffer.write(vertex_data);
+
+        let mesh = Mesh {
+            vertex_buffer,
+            vertex_count: vertex_count as u32,
+            index_buffer,
+            material: info.material,
+            topology: PrimitiveTopology::TRIANGLE_LIST,
+            name: info.name.clone(),
+        };
+        Ok(mesh)
     }
 
     #[instrument(skip_all)]
@@ -505,6 +541,7 @@ impl Renderer {
         let object_data = GpuObjectData {
             materials: materials_arr,
         };
+        self.create_render_objects(scene, assets, &material_map, cmd);
         self.object_data_buffer.write(&[object_data]);
         self.binder
             .uniform_buffer(BIND_IDX_SCENE, &self.scene_buffer, 0)
@@ -521,7 +558,6 @@ impl Renderer {
             Fence::null(),
         );
 
-        self.create_render_objects(scene, assets, &material_map);
         log::trace!("WAIT @ end of prepare bindless");
         self.gpu.device().wait_idle();
 
