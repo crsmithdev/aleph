@@ -359,6 +359,7 @@ impl Renderer {
             acquire_semaphore,
             cmd_buffer,
             present_semaphore,
+            fence,
             ..
         } = &self.frames[self.frame_idx];
 

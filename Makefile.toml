@@ -3,7 +3,7 @@ default_to_workspace = false
 
 [tasks.build]
 command = "cargo"
-args = ["build", "--examples", "-vv"]
+args = ["build", "--examples"]
 
 [tasks.rebuild]
 dependencies = ["clean", "build"]

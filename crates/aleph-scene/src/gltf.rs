@@ -3,9 +3,11 @@ use {
         graph::NodeHandle, model::MeshInfo, util, Assets, Material, MaterialHandle, MeshHandle,
         Node, NodeType, Scene, TextureHandle,
     },
-    aleph_vk::{Extent2D, ImageUsageFlags, PrimitiveTopology, Sampler, TextureInfo},
+    aleph_vk::{
+        Extent2D, Filter, Format, ImageAspectFlags, ImageUsageFlags, PrimitiveTopology, Sampler,
+        SamplerAddressMode, SamplerMipmapMode, TextureInfo,
+    },
     anyhow::{anyhow, bail, Result},
-    ash::vk,
     glam::{Mat4, Vec2, Vec3, Vec4},
 };
 
@@ -101,37 +103,37 @@ fn load_sampler(data: &gltf::texture::Sampler, assets: &mut Assets) -> Sampler {
     use gltf::texture::{MagFilter, MinFilter, WrappingMode};
     let index = data.index().unwrap_or(0);
     let min_filter = match data.min_filter() {
-        Some(MinFilter::Nearest) => vk::Filter::NEAREST,
-        Some(MinFilter::NearestMipmapNearest) => vk::Filter::NEAREST,
-        Some(MinFilter::NearestMipmapLinear) => vk::Filter::NEAREST,
-        Some(MinFilter::Linear) => vk::Filter::LINEAR,
-        Some(MinFilter::LinearMipmapNearest) => vk::Filter::LINEAR,
-        Some(MinFilter::LinearMipmapLinear) => vk::Filter::LINEAR,
-        None => vk::Filter::LINEAR,
+        Some(MinFilter::Nearest) => Filter::NEAREST,
+        Some(MinFilter::NearestMipmapNearest) => Filter::NEAREST,
+        Some(MinFilter::NearestMipmapLinear) => Filter::NEAREST,
+        Some(MinFilter::Linear) => Filter::LINEAR,
+        Some(MinFilter::LinearMipmapNearest) => Filter::LINEAR,
+        Some(MinFilter::LinearMipmapLinear) => Filter::LINEAR,
+        None => Filter::LINEAR,
     };
     let mag_filter = match data.mag_filter() {
-        Some(MagFilter::Nearest) => vk::Filter::NEAREST,
-        Some(MagFilter::Linear) => vk::Filter::LINEAR,
-        None => vk::Filter::LINEAR,
+        Some(MagFilter::Nearest) => Filter::NEAREST,
+        Some(MagFilter::Linear) => Filter::LINEAR,
+        None => Filter::LINEAR,
     };
     let address_mode_u = match data.wrap_s() {
-        WrappingMode::ClampToEdge => vk::SamplerAddressMode::CLAMP_TO_EDGE,
-        WrappingMode::MirroredRepeat => vk::SamplerAddressMode::MIRRORED_REPEAT,
-        WrappingMode::Repeat => vk::SamplerAddressMode::REPEAT,
+        WrappingMode::ClampToEdge => SamplerAddressMode::CLAMP_TO_EDGE,
+        WrappingMode::MirroredRepeat => SamplerAddressMode::MIRRORED_REPEAT,
+        WrappingMode::Repeat => SamplerAddressMode::REPEAT,
     };
     let address_mode_v = match data.wrap_t() {
-        WrappingMode::ClampToEdge => vk::SamplerAddressMode::CLAMP_TO_EDGE,
-        WrappingMode::MirroredRepeat => vk::SamplerAddressMode::MIRRORED_REPEAT,
-        WrappingMode::Repeat => vk::SamplerAddressMode::REPEAT,
+        WrappingMode::ClampToEdge => SamplerAddressMode::CLAMP_TO_EDGE,
+        WrappingMode::MirroredRepeat => SamplerAddressMode::MIRRORED_REPEAT,
+        WrappingMode::Repeat => SamplerAddressMode::REPEAT,
     };
     let mipmap_mode = match data.min_filter() {
-        Some(MinFilter::Nearest) => vk::SamplerMipmapMode::NEAREST,
-        Some(MinFilter::NearestMipmapNearest) => vk::SamplerMipmapMode::NEAREST,
-        Some(MinFilter::NearestMipmapLinear) => vk::SamplerMipmapMode::NEAREST,
-        Some(MinFilter::Linear) => vk::SamplerMipmapMode::LINEAR,
-        Some(MinFilter::LinearMipmapNearest) => vk::SamplerMipmapMode::LINEAR,
-        Some(MinFilter::LinearMipmapLinear) => vk::SamplerMipmapMode::LINEAR,
-        None => vk::SamplerMipmapMode::LINEAR,
+        Some(MinFilter::Nearest) => SamplerMipmapMode::NEAREST,
+        Some(MinFilter::NearestMipmapNearest) => SamplerMipmapMode::NEAREST,
+        Some(MinFilter::NearestMipmapLinear) => SamplerMipmapMode::NEAREST,
+        Some(MinFilter::Linear) => SamplerMipmapMode::LINEAR,
+        Some(MinFilter::LinearMipmapNearest) => SamplerMipmapMode::LINEAR,
+        Some(MinFilter::LinearMipmapLinear) => SamplerMipmapMode::LINEAR,
+        None => SamplerMipmapMode::LINEAR,
     };
 
     let sampler = assets.create_sampler(
@@ -169,8 +171,8 @@ fn load_texture(
         _ => bail!("Unsupported image format: {:?}", data.format),
     };
     let format = match srgb {
-        true => vk::Format::R8G8B8A8_SRGB,
-        false => vk::Format::R8G8B8A8_UNORM,
+        true => Format::R8G8B8A8_SRGB,
+        false => Format::R8G8B8A8_UNORM,
     };
 
     let sampler = load_sampler(&source.sampler(), assets);
@@ -181,8 +183,8 @@ fn load_texture(
             extent,
             format,
             flags: ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
-            aspect_flags: vk::ImageAspectFlags::COLOR,
             sampler: Some(sampler),
+            aspect_flags: ImageAspectFlags::COLOR,
         },
         &bytes,
     );

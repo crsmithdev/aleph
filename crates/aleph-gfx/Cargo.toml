@@ -1,36 +1,44 @@
 [package]
-name = "aleph-gfx"
-version = "0.1.0"
+authors = ["Chris Smith <crsmithdev@gmail.com>"]
+categories = ["game-engines", "graphics", "utilities"]
+description = "Graphics abstraction and rendering for Aleph."
+documentation = "https://docs.rs/aleph-gfx"
 edition = "2021"
+homepage = "https://github.com/crsmithdev/aleph"
+keywords = ["aleph", "engine", "graphics"]
+license = "MIT"
+name = "aleph-gfx"
+readme = "README.md"
+repository = "https://github.com/crsmithdev/aleph"
+version = "0.1.0"
+
+[lib]
+doctest = false
 
 [dependencies]
 aleph-core.workspace = true
 aleph-scene.workspace = true
 aleph-vk.workspace = true
 anyhow.workspace = true
+ash-window.workspace = true
+ash.workspace = true
 bytemuck.workspace = true
 derive_more.workspace = true
 downcast-rs.workspace = true
-itertools.workspace = true
-log.workspace = true
-raw-window-handle.workspace = true
-winit.workspace = true
-tracing.workspace = true
-tracing-subscriber.workspace = true
-palette.workspace = true
+egui-ash-renderer.workspace = true
+egui-winit.workspace = true
+egui_extras.workspace = true
+egui.workspace = true
 glob.workspace = true
 glam.workspace = true
-
-ash = "0.38.0"
-ash-window = "0.13.0"
-gltf = "1.4.1"
-gpu-allocator = "0.27.0"
-image = "0.25.5"
-petgraph = "0.7.1"
-egui = "0.31.1"
-egui-winit = "0.31.1"
-egui_extras = "0.31.1"
-egui-ash-renderer = { version = "0.8.0", features = ["gpu-allocator", "dynamic-rendering"]}
-
-[lib]
-doctest = false
+gltf.workspace = true
+gpu-allocator.workspace = true
+image.workspace = true
+itertools.workspace = true
+log.workspace = true
+palette.workspace = true
+petgraph.workspace = true
+raw-window-handle.workspace = true
+tracing-subscriber.workspace = true
+tracing.workspace = true
+winit.workspace = true

@@ -1,34 +1,42 @@
 [package]
-name = "aleph-vk"
-version = "0.1.0"
+authors = ["Chris Smith <crsmithdev@gmail.com>"]
+categories = ["game-engines", "graphics", "utilities"]
+description = "Vulkan backend for Aleph."
+documentation = "https://docs.rs/aleph-vk"
 edition = "2021"
-
-[dependencies]
-aleph-core.workspace = true
-anyhow.workspace = true
-bytemuck.workspace = true
-derive_more.workspace = true
-downcast-rs.workspace = true
-itertools.workspace = true
-log.workspace = true
-raw-window-handle.workspace = true
-winit.workspace = true
-tracing.workspace = true
-tracing-subscriber.workspace = true
-palette.workspace = true
-glob.workspace = true
-glam.workspace = true
-
-ash = "0.38.0"
-ash-window = "0.13.0"
-gltf = "1.4.1"
-gpu-allocator = "0.27.0"
-image = "0.25.5"
-petgraph = "0.7.1"
-egui = "0.31.1"
-egui-winit = "0.31.1"
-egui_extras = "0.31.1"
-egui-ash-renderer = { version = "0.8.0", features = ["gpu-allocator", "dynamic-rendering"]}
+homepage = "https://github.com/crsmithdev/aleph"
+keywords = ["aleph", "engine", "vulkan"]
+license = "MIT"
+name = "aleph-vk"
+readme = "README.md"
+repository = "https://github.com/crsmithdev/aleph"
+version = "0.1.0"
 
 [lib]
 doctest = false
+
+[dependencies]
+egui.workspace = true
+glob.workspace = true
+glam.workspace = true
+gltf.workspace = true
+gpu-allocator.workspace = true
+image.workspace = true
+itertools.workspace = true
+log.workspace = true
+palette.workspace = true
+petgraph.workspace = true
+raw-window-handle.workspace = true
+tracing-subscriber.workspace = true
+tracing.workspace = true
+winit.workspace = true
+aleph-core.workspace = true
+anyhow.workspace = true
+ash-window.workspace = true
+ash.workspace = true
+bytemuck.workspace = true
+derive_more.workspace = true
+downcast-rs.workspace = true
+egui-ash-renderer.workspace = true
+egui-winit.workspace = true
+egui_extras.workspace = true

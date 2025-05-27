@@ -1,22 +1,28 @@
 [package]
-name = "aleph-core"
-version = "0.1.0"
+authors = ["Chris Smith <crsmithdev@gmail.com>"]
+categories = ["game-engines", "graphics", "utilities"]
+description = "Core utilities and types for Aleph."
+documentation = "https://docs.rs/aleph-core"
 edition = "2021"
+homepage = "https://github.com/crsmithdev/aleph"
+keywords = ["aleph", "engine", "core"]
+license = "MIT"
+name = "aleph-core"
+readme = "README.md"
+repository = "https://github.com/crsmithdev/aleph"
+version = "0.1.0"
 
 [dependencies]
 anyhow.workspace = true
+chrono.workspace = true
+derive_more.workspace = true
 downcast-rs.workspace = true
-log.workspace = true
-winit.workspace = true
 fern.workspace = true
+glam.workspace = true
 human-panic.workspace = true
 humantime.workspace = true
-derive_more.workspace = true
-tracing.workspace = true
-tracing-subscriber.workspace = true
+log.workspace = true
 tracing-log.workspace = true
-chrono.workspace = true
-glam.workspace = true
-
-[lib]
-doctest = false
+tracing-subscriber.workspace = true
+tracing.workspace = true
+winit.workspace = true

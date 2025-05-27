@@ -22,7 +22,7 @@ pub struct Allocator {
 impl Allocator {
     pub fn new(instance: &Instance, device: &Device) -> Result<Self> {
         let allocator = GpuAllocator::new(&AllocatorCreateDesc {
-            instance: instance.handle.clone(),
+            instance: instance.handle().clone(),
             physical_device: device.physical_device,
             device: device.handle.clone(),
             buffer_device_address: true,
