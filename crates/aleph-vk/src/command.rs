@@ -380,24 +380,7 @@ impl CommandBuffer {
             .image_offset(vk::Offset3D::default())
             .image_extent(dst.extent().into());
 
-        // let range = vk::ImageSubresourceRange::default()
-        //     .aspect_mask(ImageAspectFlags::COLOR)
-        //     .base_array_layer(0)
-        //     .base_mip_level(0)
-        //     .level_count(1)
-        //     .layer_count(1);
-        // let barrier = &[vk::ImageMemoryBarrier2::default()
-        //     .image(handle)
-        //     .dst_stage_mask(vk::PipelineStageFlags2::TRANSFER)
-        //     .dst_access_mask(vk::AccessFlags2::MEMORY_WRITE)
-        //     .old_layout(ImageLayout::UNDEFINED)
-        //     .new_layout(ImageLayout::TRANSFER_DST_OPTIMAL)
-        //     .subresource_range(range)];
-        // let dependency_info = vk::DependencyInfo::default().image_memory_barriers(barrier);
         unsafe {
-            //     self.device
-            //         .handle
-            //         .cmd_pipeline_barrier2(self.handle, &dependency_info);
             self.device.handle.cmd_copy_buffer_to_image(
                 self.handle(),
                 src.handle(),
@@ -405,28 +388,7 @@ impl CommandBuffer {
                 vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                 &[copy],
             );
-            // let barrier = &[vk::ImageMemoryBarrier2::default()
-            //     .image(handle)
-            //     .src_stage_mask(vk::PipelineStageFlags2::TRANSFER)
-            //     .src_access_mask(vk::AccessFlags2::TRANSFER_WRITE)
-            //     .dst_stage_mask(vk::PipelineStageFlags2::FRAGMENT_SHADER)
-            //     .dst_access_mask(vk::AccessFlags2::SHADER_READ)
-            //     .old_layout(ImageLayout::TRANSFER_DST_OPTIMAL)
-            //     .new_layout(ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-            //     .subresource_range(range)];
-            // let dependency_info = vk::DependencyInfo::default().image_memory_barriers(barrier);
-            // self.device
-            //     .handle
-            //     .cmd_pipeline_barrier2(self.handle, &dependency_info);
         };
-    }
-
-    pub fn begin_debug_label(&self, label: &str, color: [f32; 4]) {
-        log::trace!("Begin debug label in {self:?}: {label}");
-        let label_info = vk::DebugUtilsLabelEXT::default().p_label_name(label).color(color);
-        unsafe {
-            self.device.handle.cmd_begin_debug_utils_label_ext(self.handle, &label_info);
-        }
     }
 }
 

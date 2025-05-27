@@ -16,6 +16,7 @@
 
 
 ## aleph-gfx
+- [x] Bindless
 - [ ] User-defined pipelines
 - [ ] IBL / cubemaps
 - [ ] Skybox
