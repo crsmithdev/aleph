@@ -107,7 +107,7 @@ impl ResourceLayout {
             binding_flags.push(unbound.binding_flags);
         }
 
-        let desriptor_layout = gpu.create_descriptor_set_layout(
+        let desriptor_layout = gpu.device().create_descriptor_set_layout(
             &bindings,
             DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND_POOL,
             &binding_flags,
@@ -126,7 +126,7 @@ impl ResourceLayout {
                 .ty(DescriptorType::COMBINED_IMAGE_SAMPLER),
         ];
 
-        let descriptor_pool = gpu.create_descriptor_pool(
+        let descriptor_pool = gpu.device().create_descriptor_pool(
             &pool_sizes,
             DescriptorPoolCreateFlags::UPDATE_AFTER_BIND,
             1,
@@ -144,8 +144,11 @@ impl ResourceLayout {
         };
         log::debug!("Variable descriptors: {variable_descriptors:?}");
 
-        let descriptor_set =
-            gpu.create_descriptor_set(desriptor_layout, descriptor_pool, variable_descriptors)?;
+        let descriptor_set = gpu.device().create_descriptor_set(
+            desriptor_layout,
+            descriptor_pool,
+            variable_descriptors,
+        )?;
         log::debug!("Created descriptor set: {descriptor_set:?}");
 
         Ok(ResourceBinder {
@@ -258,7 +261,7 @@ impl ResourceBinder {
     pub fn update(&self, gpu: &Gpu) -> Result<&Self> {
         let writes = self.bindings.iter().map(|binding| self.extract(binding)).collect::<Vec<_>>();
         if !writes.is_empty() {
-            gpu.update_descriptor_sets(&writes.as_slice(), &[])?;
+            gpu.device().update_descriptor_sets(&writes.as_slice(), &[])?;
         }
 
         Ok(self)

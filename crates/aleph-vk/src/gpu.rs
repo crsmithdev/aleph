@@ -1,17 +1,13 @@
 use {
     crate::{
         debug::DebugUtils, swapchain::Surface, Allocator, CommandBuffer, CommandPool, Device,
-        Instance, Swapchain, SwapchainInfo,
+        Instance, Queue, Swapchain, SwapchainInfo,
     },
     aleph_core::log,
     anyhow::Result,
-    ash::{
-        khr,
-        vk::{self, Extent2D},
-    },
+    ash::vk::{self, CommandBufferSubmitInfo, Extent2D},
     derive_more::Debug,
-    raw_window_handle::{HasDisplayHandle, HasWindowHandle},
-    std::{ffi, slice, sync::Arc},
+    std::{ffi, sync::Arc},
     tracing::instrument,
     winit::window::Window,
 };
@@ -42,7 +38,7 @@ impl Gpu {
             height: window.inner_size().height,
         };
 
-        let surface = Self::init_surface(&instance, Arc::clone(&window))?;
+        let surface = Surface::new(&instance, &window)?;
         let swapchain = Swapchain::new(
             &instance,
             &device,
@@ -58,16 +54,16 @@ impl Gpu {
 
         let imm_fence = device.create_fence(vk::FenceCreateFlags::SIGNALED);
         let allocator = Arc::new(Allocator::new(&instance, &device)?);
-        let setup_cmd_pool = device.create_command_pool(device.graphics_queue(), "immediate");
-        let setup_cmd_buffer = setup_cmd_pool.create_command_buffer("immediate");
+        let imm_cmd_pool = CommandPool::new(&device, device.graphics_queue(), "immediate");
+        let imm_cmd_buffer = imm_cmd_pool.create_command_buffer("immediate");
 
         Ok(Self {
             surface,
             swapchain,
             allocator,
             debug_utils,
-            immediate_cmd_buffer: setup_cmd_buffer,
-            immediate_cmd_pool: setup_cmd_pool,
+            immediate_cmd_buffer: imm_cmd_buffer,
+            immediate_cmd_pool: imm_cmd_pool,
             instance,
             device,
             imm_fence,
@@ -83,8 +79,8 @@ impl Gpu {
         let surface = Surface::headless(&instance);
         let swapchain = Swapchain::headless(&instance, &device)?;
         let allocator = Arc::new(Allocator::new(&instance, &device)?);
-        let setup_cmd_pool = device.create_command_pool(device.graphics_queue(), "immediate");
-        let setup_cmd_buffer = setup_cmd_pool.create_command_buffer("immediate");
+        let imm_cmd_pool = CommandPool::new(&device, device.graphics_queue(), "immediate");
+        let imm_cmd_buffer = imm_cmd_pool.create_command_buffer("immediate");
 
         Ok(Self {
             instance,
@@ -93,8 +89,8 @@ impl Gpu {
             surface,
             swapchain,
             allocator,
-            immediate_cmd_buffer: setup_cmd_buffer,
-            immediate_cmd_pool: setup_cmd_pool,
+            immediate_cmd_buffer: imm_cmd_buffer,
+            immediate_cmd_pool: imm_cmd_pool,
             imm_fence,
         })
     }
@@ -124,132 +120,49 @@ impl Gpu {
     pub fn swapchain(&self) -> &Swapchain { &self.swapchain }
 }
 
-impl Gpu /* Init */ {
-    fn init_surface(instance: &Instance, window: Arc<winit::window::Window>) -> Result<Surface> {
-        let inner: vk::SurfaceKHR = unsafe {
-            ash_window::create_surface(
-                &instance.entry,
-                &instance.handle,
-                window.display_handle()?.into(),
-                window.window_handle()?.into(),
-                None,
-            )?
-        };
-
-        let loader = khr::surface::Instance::new(&instance.entry, &instance.handle);
-        Ok(Surface { inner, loader })
-    }
-}
 impl Gpu {
-    pub fn create_pipeline_layout(
-        &self,
-        uniforms_layouts: &[vk::DescriptorSetLayout],
-        constants_ranges: &[vk::PushConstantRange],
-    ) -> Result<vk::PipelineLayout> {
-        let pipeline_layout_info = vk::PipelineLayoutCreateInfo::default()
-            .set_layouts(uniforms_layouts)
-            .push_constant_ranges(constants_ranges);
-        Ok(unsafe { self.device.handle.create_pipeline_layout(&pipeline_layout_info, None)? })
-    }
-
-    pub fn create_graphics_pipeline(
-        &self,
-        info: &vk::GraphicsPipelineCreateInfo,
-    ) -> Result<vk::Pipeline> {
-        Ok(unsafe {
-            self.device
-                .handle
-                .create_graphics_pipelines(vk::PipelineCache::null(), slice::from_ref(info), None)
-                .map_err(|err| anyhow::anyhow!(err.1))
-        }?[0])
-    }
-
-    pub fn create_command_pool(&self) -> CommandPool {
-        self.device.create_command_pool(self.device.graphics_queue(), "name")
-    }
-
-    pub fn create_descriptor_set_layout(
-        &self,
-        bindings: &[vk::DescriptorSetLayoutBinding],
-        create_flags: vk::DescriptorSetLayoutCreateFlags,
-        binding_flags: &[vk::DescriptorBindingFlags],
-    ) -> Result<vk::DescriptorSetLayout> {
-        let mut binding_flags_info =
-            vk::DescriptorSetLayoutBindingFlagsCreateInfo::default().binding_flags(binding_flags);
-        let create_info = vk::DescriptorSetLayoutCreateInfo::default()
-            .bindings(bindings)
-            .flags(create_flags)
-            .push_next(&mut binding_flags_info);
-
-        Ok(unsafe { self.device.handle.create_descriptor_set_layout(&create_info, None)? })
-    }
-
-    pub fn create_descriptor_pool(
-        &self,
-        pool_sizes: &[vk::DescriptorPoolSize],
-        flags: vk::DescriptorPoolCreateFlags,
-        max_sets: u32,
-    ) -> Result<vk::DescriptorPool> {
-        let info = vk::DescriptorPoolCreateInfo::default()
-            .pool_sizes(pool_sizes)
-            .max_sets(max_sets)
-            .flags(flags);
-        Ok(unsafe { self.device.handle.create_descriptor_pool(&info, None)? })
-    }
-
-    pub fn create_descriptor_set(
-        &self,
-        layout: vk::DescriptorSetLayout,
-        pool: vk::DescriptorPool,
-        variable_descriptor_count: Option<u32>,
-    ) -> Result<vk::DescriptorSet> {
-        let mut descriptor_set_info = vk::DescriptorSetAllocateInfo::default()
-            .descriptor_pool(pool)
-            .set_layouts(slice::from_ref(&layout));
-
-        let counts = [variable_descriptor_count.unwrap_or(0)];
-        let mut count_info = vk::DescriptorSetVariableDescriptorCountAllocateInfo::default()
-            .descriptor_counts(&counts);
-
-        if variable_descriptor_count.is_some() {
-            descriptor_set_info = descriptor_set_info.push_next(&mut count_info);
-        }
-
-        Ok(unsafe { self.device.handle.allocate_descriptor_sets(&descriptor_set_info)?[0] })
-    }
-
-    pub fn update_descriptor_sets(
-        &self,
-        writes: &[vk::WriteDescriptorSet],
-        copies: &[vk::CopyDescriptorSet],
-    ) -> Result<()> {
-        self.device.update_descriptor_sets(writes, copies)
-    }
-
-    pub fn create_fence(&self) -> vk::Fence {
-        self.device.create_fence(vk::FenceCreateFlags::empty())
-    }
-
-    pub fn create_fence_signaled(&self) -> vk::Fence {
-        self.device.create_fence(vk::FenceCreateFlags::SIGNALED)
-    }
-
-    pub fn reset_fence(&self, fence: vk::Fence) -> Result<()> {
-        #[allow(clippy::unit_arg)]
-        Ok(unsafe { self.device.handle.reset_fences(&[fence])? })
-    }
-
-    pub fn create_shader_module(&self, path: &str) -> Result<vk::ShaderModule> {
-        let mut file = std::fs::File::open(path)?;
-        let bytes = ash::util::read_spv(&mut file)?;
-        let info = vk::ShaderModuleCreateInfo::default().code(&bytes);
-        let module = unsafe { self.device.handle.create_shader_module(&info, None) }?;
-        Ok(module)
-    }
-
     pub fn rebuild_swapchain(&self, extent: Extent2D) {
         self.device.wait_idle();
         self.swapchain.rebuild(extent)
+    }
+
+    pub fn queue_submit(
+        &self,
+        queue: &Queue,
+        command_buffers: &[&CommandBuffer],
+        wait_semaphores: &[(vk::Semaphore, vk::PipelineStageFlags2)],
+        signal_semaphores: &[(vk::Semaphore, vk::PipelineStageFlags2)],
+        fence: vk::Fence,
+    ) {
+        log::trace!(
+            "Submitting {:?} to {:?}, wait_semaphores: {:?}, signal_semaphores: {:?}, fence: {:?}",
+            command_buffers,
+            queue,
+            wait_semaphores,
+            signal_semaphores,
+            fence
+        );
+
+        let cmd_infos = command_buffers
+            .iter()
+            .map(|cb| vk::CommandBufferSubmitInfo::default().command_buffer(***cb))
+            .collect::<Vec<_>>();
+        let wait_semaphore_infos = wait_semaphores
+            .iter()
+            .map(|(s, f)| vk::SemaphoreSubmitInfo::default().semaphore(*s).stage_mask(*f))
+            .collect::<Vec<_>>();
+        let signal_semaphore_infos = signal_semaphores
+            .iter()
+            .map(|(s, f)| vk::SemaphoreSubmitInfo::default().semaphore(*s).stage_mask(*f))
+            .collect::<Vec<_>>();
+
+        self.device.queue_submit(
+            queue,
+            &cmd_infos,
+            &wait_semaphore_infos,
+            &signal_semaphore_infos,
+            fence,
+        )
     }
 
     #[instrument(skip_all)]
@@ -265,14 +178,9 @@ impl Gpu {
         cmd_buffer.begin();
         callback(cmd_buffer);
         cmd_buffer.end();
+        let cmd_infos = &[CommandBufferSubmitInfo::default().command_buffer(**cmd_buffer)];
 
-        self.device.queue_submit(
-            self.device.graphics_queue(),
-            &[cmd_buffer.handle()],
-            &[],
-            &[],
-            fence,
-        );
+        self.device.queue_submit(self.device.graphics_queue(), cmd_infos, &[], &[], fence);
     }
 }
 

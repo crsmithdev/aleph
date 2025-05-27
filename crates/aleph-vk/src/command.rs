@@ -1,6 +1,6 @@
 pub use ash::vk::ImageLayout;
 use {
-    crate::{Buffer, Device, Image},
+    crate::{Buffer, Device, Image, Queue},
     ash::{
         vk,
         vk::{Handle, PipelineBindPoint},
@@ -10,29 +10,56 @@ use {
     derive_more::{Debug, Deref},
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deref)]
 pub struct CommandPool {
-    pub(crate) handle: vk::CommandPool,
-    pub(crate) device: Device,
-}
-
-impl Drop for CommandBuffer {
-    fn drop(&mut self) {
-        log::trace!("Dropped {self:?}");
-    }
+    name: String,
+    #[deref]
+    handle: ash::vk::CommandPool,
+    queue: Queue,
+    #[debug(skip)]
+    device: Device,
 }
 
 impl CommandPool {
+    pub fn new(device: &Device, queue: &Queue, name: &str) -> CommandPool {
+        let handle = device.create_command_pool(queue);
+        let pool = CommandPool {
+            name: name.to_string(),
+            queue: queue.clone(),
+            handle,
+            device: device.clone(),
+        };
+
+        log::trace!("Created {pool:?}");
+        pool
+    }
+
     pub fn handle(&self) -> vk::CommandPool { self.handle }
 
     pub fn create_command_buffer(&self, name: &str) -> CommandBuffer {
-        CommandBuffer::new(&self.device, self, name)
+        let handle = self.device.create_command_buffers(&**self, 1)[0];
+        let cmd = CommandBuffer {
+            handle,
+            pool: **self,
+            device: self.device.clone(),
+            name: name.to_string(),
+        };
+
+        log::trace!("Created {cmd:?}");
+        cmd
     }
+
+    pub fn queue(&self) -> &Queue { &self.queue }
+
+    pub fn queue_family_index(&self) -> u32 { self.queue.family.index() }
+
+    pub fn name(&self) -> &str { &self.name }
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Deref)]
 pub struct CommandBuffer {
+    name: String,
     #[deref]
     #[debug("{:#x}", handle.as_raw())]
     pub(crate) handle: vk::CommandBuffer,
@@ -40,20 +67,9 @@ pub struct CommandBuffer {
     pub(crate) pool: vk::CommandPool,
     #[debug(skip)]
     pub(crate) device: Device,
-    name: String,
 }
 
 impl CommandBuffer {
-    pub fn new(device: &Device, pool: &CommandPool, name: &str) -> CommandBuffer {
-        let handle = device.create_command_buffer(pool);
-
-        CommandBuffer {
-            handle,
-            pool: pool.handle,
-            device: device.clone(),
-            name: name.to_string(),
-        }
-    }
     pub fn handle(&self) -> vk::CommandBuffer { self.handle }
 
     pub fn reset(&self) {
@@ -403,5 +419,19 @@ impl CommandBuffer {
             //     .handle
             //     .cmd_pipeline_barrier2(self.handle, &dependency_info);
         };
+    }
+
+    pub fn begin_debug_label(&self, label: &str, color: [f32; 4]) {
+        log::trace!("Begin debug label in {self:?}: {label}");
+        let label_info = vk::DebugUtilsLabelEXT::default().p_label_name(label).color(color);
+        unsafe {
+            self.device.handle.cmd_begin_debug_utils_label_ext(self.handle, &label_info);
+        }
+    }
+}
+
+impl Drop for CommandBuffer {
+    fn drop(&mut self) {
+        log::trace!("Dropped {self:?}");
     }
 }

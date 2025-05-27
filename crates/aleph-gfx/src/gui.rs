@@ -56,7 +56,7 @@ impl Gui {
         let device = gpu.device();
         let instance = gpu.instance();
         let physical_device = device.physical_device();
-        let pool = gpu.create_command_pool();
+        let pool = CommandPool::new(&gpu.device(), &gpu.device().graphics_queue(), "egui");
 
         let renderer = {
             let allocator = ga::vulkan::Allocator::new(&ga::vulkan::AllocatorCreateDesc {

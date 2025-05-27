@@ -227,7 +227,7 @@ impl Sampler {
         let handle = unsafe { device.handle.create_sampler(&create_info, None)? };
         let name = name.to_string();
 
-        Ok(Self {
+        let sampler = Self {
             name,
             handle,
             min_filter,
@@ -235,7 +235,10 @@ impl Sampler {
             mipmap_mode,
             address_mode_u,
             address_mode_v,
-        })
+        };
+
+        log::trace!("Created {sampler:?}");
+        Ok(sampler)
     }
 
     pub fn default(device: &crate::Device) -> Result<Self> {
@@ -249,6 +252,8 @@ impl Sampler {
             "default",
         )
     }
+
+    pub fn name(&self) -> &str { &self.name }
 
     pub fn handle(&self) -> vk::Sampler { self.handle }
 

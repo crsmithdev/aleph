@@ -75,6 +75,8 @@ pub struct Renderer {
     pub prepared: bool,
     #[debug(skip)]
     config: RenderConfig,
+    index_buffer: TypedBuffer<u32>,
+    vertex_buffer: TypedBuffer<Vertex>,
 }
 
 pub struct RenderConfig {
@@ -128,6 +130,8 @@ impl Renderer {
 
         let scene_buffer = TypedBuffer::shared_uniform(&gpu, 1, "renderer-scene")?;
         let object_data_buffer = TypedBuffer::shared_uniform(&gpu, 1, "renderer-objects")?;
+        let index_buffer = TypedBuffer::index(&gpu, 1, "renderer-index")?;
+        let vertex_buffer = TypedBuffer::vertex(&gpu, 1, "renderer-vertex")?;
 
         let binder = ResourceLayout::set(SET_IDX_BINDLESS)
             .uniform_buffer(BIND_IDX_SCENE, ShaderStageFlags::ALL_GRAPHICS)
@@ -153,6 +157,8 @@ impl Renderer {
             scene_buffer,
             rebuild_swapchain: false,
             frame_idx: 0,
+            index_buffer,
+            vertex_buffer,
             frame_counter: 0,
             render_objects: Vec::new(),
             config: RenderConfig {
@@ -249,6 +255,8 @@ impl Renderer {
 
         cmd_buffer.reset();
         cmd_buffer.begin();
+        cmd_buffer.bind_index_buffer(&self.index_buffer, 0);
+        cmd_buffer.bind_vertex_buffer(&self.vertex_buffer, 0);
 
         cmd_buffer.pipeline_barrier(
             &[],
@@ -350,9 +358,9 @@ impl Renderer {
 
         log::trace!("WAIT @ render queue submit");
         self.gpu.device().wait_idle();
-        self.gpu.device().queue_submit(
+        self.gpu.queue_submit(
             &self.gpu.device().graphics_queue(),
-            &[cmd_buffer.handle()],
+            &[cmd_buffer],
             &[(*acquire_semaphore, PipelineStageFlags2::ALL_COMMANDS)],
             &[(*present_semaphore, PipelineStageFlags2::ALL_COMMANDS)],
             // *fence,
@@ -382,19 +390,24 @@ impl Renderer {
         Ok(())
     }
 
-    fn create_render_objects<'a>(
+    fn create_render_objects2<'a>(
         &self,
         transforms: &Vec<(MeshHandle, Mat4)>,
         data: &BindlessData,
-    ) -> Result<Vec<RenderObject>> {
+    ) -> Result<(Vec<RenderObject>, TypedBuffer<Vertex>, TypedBuffer<u32>)> {
         let mut objects = vec![];
+        let mut all_vertices = vec![];
+        let mut all_indices = vec![];
+
         for (handle, transform) in transforms.iter() {
             let index = data.mesh_map.get(handle).unwrap();
             let mesh = data.meshes.get(*index).unwrap();
-            let mut index_buffer = TypedBuffer::index(&self.gpu, mesh.indices.len(), "index")?;
-            let mut vertex_buffer = TypedBuffer::vertex(&self.gpu, mesh.vertices.len(), "vertex")?;
-            let vertex_count = mesh.vertices.len();
-            let vertices = (0..vertex_count)
+
+            let vertex_offset = all_vertices.len();
+            let index_offset = all_indices.len();
+            let index_count = mesh.indices.len();
+
+            let mesh_vertices = (0..mesh.vertices.len())
                 .map(|i| Vertex {
                     position: mesh.vertices[i],
                     normal: *mesh.normals.get(i).unwrap_or(&Vec3::ONE),
@@ -405,25 +418,78 @@ impl Renderer {
                 })
                 .collect::<Vec<_>>();
 
-            let index_data = bytemuck::cast_slice(&mesh.indices);
-            index_buffer.write(index_data);
+            let mesh_indices =
+                mesh.indices.iter().map(|&idx| idx + vertex_offset as u32).collect::<Vec<_>>();
 
-            let vertex_data = bytemuck::cast_slice(&vertices);
-            vertex_buffer.write(vertex_data);
+            all_vertices.extend(mesh_vertices);
+            all_indices.extend(mesh_indices);
 
             let material = *data.material_map.get(&mesh.material).unwrap_or(&0);
 
             objects.push(RenderObject {
-                vertex_buffer,
-                vertex_count,
-                index_buffer,
+                vertex_offset,
+                index_offset,
+                index_count,
                 transform: *transform,
                 material,
             });
         }
 
-        Ok(objects)
+        let mut vertex_buffer =
+            TypedBuffer::vertex(&self.gpu, all_vertices.len(), "shared_vertices")?;
+        let mut index_buffer = TypedBuffer::index(&self.gpu, all_indices.len(), "shared_indices")?;
+
+        let vertex_data = bytemuck::cast_slice(&all_vertices);
+        vertex_buffer.write(vertex_data);
+
+        let index_data = bytemuck::cast_slice(&all_indices);
+        index_buffer.write(index_data);
+
+        Ok((objects, vertex_buffer, index_buffer))
     }
+
+    // fn create_render_objects<'a>(
+    //     &self,
+    //     transforms: &Vec<(MeshHandle, Mat4)>,
+    //     data: &BindlessData,
+    // ) -> Result<Vec<RenderObjectOld>> {
+    //     let mut objects = vec![];
+    //     for (handle, transform) in transforms.iter() {
+    //         let index = data.mesh_map.get(handle).unwrap();
+    //         let mesh = data.meshes.get(*index).unwrap();
+    //         let mut index_buffer = TypedBuffer::index(&self.gpu, mesh.indices.len(), "index")?;
+    //         let mut vertex_buffer = TypedBuffer::vertex(&self.gpu, mesh.vertices.len(), "vertex")?;
+    //         let vertex_count = mesh.vertices.len();
+    //         let vertices = (0..vertex_count)
+    //             .map(|i| Vertex {
+    //                 position: mesh.vertices[i],
+    //                 normal: *mesh.normals.get(i).unwrap_or(&Vec3::ONE),
+    //                 tangent: *mesh.tangents.get(i).unwrap_or(&Vec4::ONE),
+    //                 color: *mesh.colors.get(i).unwrap_or(&Vec4::ONE),
+    //                 uv_x: mesh.tex_coords0.get(i).unwrap_or(&Vec2::ZERO)[0],
+    //                 uv_y: mesh.tex_coords0.get(i).unwrap_or(&Vec2::ZERO)[1],
+    //             })
+    //             .collect::<Vec<_>>();
+
+    //         let index_data = bytemuck::cast_slice(&mesh.indices);
+    //         index_buffer.write(index_data);
+
+    //         let vertex_data = bytemuck::cast_slice(&vertices);
+    //         vertex_buffer.write(vertex_data);
+
+    //         let material = *data.material_map.get(&mesh.material).unwrap_or(&0);
+
+    //         objects.push(RenderObjectOld {
+    //             vertex_buffer,
+    //             vertex_count,
+    //             index_buffer,
+    //             transform: *transform,
+    //             material,
+    //         });
+    //     }
+
+    //     Ok(objects)
+    // }
 
     #[instrument(skip_all)]
     pub fn prepare_bindless(&mut self, assets: &mut Assets, scene: &Scene) -> Result<()> {
@@ -434,24 +500,14 @@ impl Renderer {
 
         let bindless_data = assets.prepare_bindless(cmd)?;
 
-        let mut materials_arr = [
-            GpuMaterial::default(),
-            GpuMaterial::default(),
-            GpuMaterial::default(),
-            GpuMaterial::default(),
-            GpuMaterial::default(),
-            GpuMaterial::default(),
-            GpuMaterial::default(),
-            GpuMaterial::default(),
-            GpuMaterial::default(),
-            GpuMaterial::default(),
-        ];
+        let mut materials_arr = [GpuMaterial::default(); 10];
         for (i, material) in bindless_data.materials.iter().enumerate() {
             materials_arr[i] = *material;
         }
         let object_data = GpuObjectData {
             materials: materials_arr,
         };
+
         let mesh_nodes = scene
             .mesh_nodes()
             .map(|node| match node.data {
@@ -459,8 +515,14 @@ impl Renderer {
                 _ => panic!("Should not be here, node: {:?}", node),
             })
             .collect::<Vec<_>>();
-        self.render_objects = self.create_render_objects(&mesh_nodes, &bindless_data)?;
+        let (render_objects, vertex_buffer, index_buffer) =
+            self.create_render_objects2(&mesh_nodes, &bindless_data)?;
+        self.render_objects = render_objects;
+        self.index_buffer = index_buffer;
+        self.vertex_buffer = vertex_buffer;
+        // self.render_objects = self.create_render_objects(&mesh_nodes, &bindless_data)?;
         self.object_data_buffer.write(&[object_data]);
+
         self.binder
             .uniform_buffer(BIND_IDX_SCENE, &self.scene_buffer, 0)
             .uniform_buffer(BIND_IDX_MATERIAL, &self.object_data_buffer, 0)
@@ -472,9 +534,9 @@ impl Renderer {
             .update(&self.gpu)?;
         cmd.end();
 
-        self.gpu.device().queue_submit(
+        self.gpu.queue_submit(
             &self.gpu.device().graphics_queue(),
-            &[***cmd],
+            &[cmd],
             &[],
             &[],
             Fence::null(),
@@ -489,9 +551,8 @@ impl Renderer {
     fn create_frames(gpu: &Gpu) -> Result<Vec<Frame>> {
         let mut frames = Vec::new();
         for i in 0..N_FRAMES {
-            let queue = gpu.device().graphics_queue();
             let name = format!("frame{i:02}");
-            let cmd_pool = gpu.device().create_command_pool(queue, &name);
+            let cmd_pool = CommandPool::new(gpu.device(), gpu.device().graphics_queue(), &name);
             let swapchain_semaphore = gpu.device().create_semaphore();
             let render_semaphore = gpu.device().create_semaphore();
             let fence = gpu.device().create_fence(FenceCreateFlags::SIGNALED);
@@ -616,6 +677,15 @@ pub struct RenderContext<'a> {
 
 #[derive(Debug)]
 pub struct RenderObject {
+    pub vertex_offset: usize,
+    pub index_offset: usize,
+    pub index_count: usize,
+    pub material: usize,
+    pub transform: Mat4,
+}
+
+#[derive(Debug)]
+pub struct RenderObjectOld {
     pub vertex_buffer: TypedBuffer<Vertex>,
     pub index_buffer: TypedBuffer<u32>,
     pub vertex_count: usize,

@@ -43,9 +43,7 @@ impl Default for PipelineBuilder<'_> {
         Self {
             color_blend: PipelineColorBlendStateCreateInfo::default().logic_op_enable(false),
             depth: PipelineDepthStencilStateCreateInfo::default(),
-            viewport: PipelineViewportStateCreateInfo::default()
-                .viewport_count(1)
-                .scissor_count(1),
+            viewport: PipelineViewportStateCreateInfo::default().viewport_count(1).scissor_count(1),
             input_assembly: PipelineInputAssemblyStateCreateInfo::default()
                 .topology(PrimitiveTopology::TRIANGLE_LIST),
             multisample: PipelineMultisampleStateCreateInfo::default(),
@@ -116,7 +114,7 @@ impl<'a> PipelineBuilder<'a> {
             .color_blend_state(&self.color_blend)
             .input_assembly_state(&self.input_assembly)
             .push_next(&mut rendering_info);
-        gpu.create_graphics_pipeline(&info)
+        gpu.device().create_graphics_pipeline(&info)
     }
 
     pub fn color_blend_formats(&mut self, formats: &'a [Format]) -> &mut Self {
@@ -151,10 +149,7 @@ impl<'a> PipelineBuilder<'a> {
         &mut self,
         attachments: &'a [PipelineColorBlendAttachmentState],
     ) -> &mut Self {
-        self.color_blend = self
-            .color_blend
-            .logic_op_enable(false)
-            .attachments(attachments);
+        self.color_blend = self.color_blend.logic_op_enable(false).attachments(attachments);
         self
     }
 
@@ -162,10 +157,7 @@ impl<'a> PipelineBuilder<'a> {
         &mut self,
         attachments: &'a [PipelineColorBlendAttachmentState],
     ) -> &mut Self {
-        self.color_blend = self
-            .color_blend
-            .logic_op_enable(false)
-            .attachments(attachments);
+        self.color_blend = self.color_blend.logic_op_enable(false).attachments(attachments);
         self
     }
 
@@ -190,9 +182,7 @@ impl<'a> PipelineBuilder<'a> {
     }
 
     pub fn multisampling_disabled(&mut self) -> &mut Self {
-        self.multisample = self
-            .multisample
-            .rasterization_samples(SampleCountFlags::TYPE_1);
+        self.multisample = self.multisample.rasterization_samples(SampleCountFlags::TYPE_1);
         self
     }
 
@@ -207,10 +197,7 @@ impl<'a> PipelineBuilder<'a> {
     }
 
     pub fn winding(&mut self, front_face: FrontFace, cull_mode: CullModeFlags) -> &mut Self {
-        self.rasterization = self
-            .rasterization
-            .cull_mode(cull_mode)
-            .front_face(front_face);
+        self.rasterization = self.rasterization.cull_mode(cull_mode).front_face(front_face);
         self
     }
 

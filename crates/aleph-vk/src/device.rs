@@ -1,9 +1,12 @@
 use {
-    crate::{CommandBuffer, CommandPool, Instance, TIMEOUT_NS},
+    crate::{CommandBuffer, Instance, TIMEOUT_NS},
     anyhow::{anyhow, Result},
     ash::{
         ext, khr,
-        vk::{self, BufferDeviceAddressInfo, Handle, PhysicalDeviceProperties, LOD_CLAMP_NONE},
+        vk::{
+            self, BufferDeviceAddressInfo, CommandBufferSubmitInfo, Handle,
+            PhysicalDeviceProperties, SemaphoreSubmitInfo, LOD_CLAMP_NONE,
+        },
     },
     derive_more::{Debug, Deref},
     std::{ffi, slice},
@@ -312,35 +315,33 @@ impl Device {
         semaphore
     }
 
-    pub fn create_command_pool(&self, queue: &Queue, _name: &str) -> CommandPool {
+    pub fn create_command_pool(&self, queue: &Queue) -> vk::CommandPool {
         let info = vk::CommandPoolCreateInfo::default()
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
             .queue_family_index(queue.family.index);
-        let handle = unsafe {
+        unsafe {
             self.handle.create_command_pool(&info, None).unwrap_or_else(|e| {
                 panic!(
                     "Error creating command pool for queue {}: {e:?}",
                     queue.family.index
                 )
             })
-        };
-        CommandPool {
-            // name: name.to_string(),
-            // queue: *queue,
-            handle,
-            device: self.clone(),
         }
     }
-    pub fn create_command_buffer(&self, pool: &CommandPool) -> vk::CommandBuffer {
+    pub fn create_command_buffers(
+        &self,
+        pool: &vk::CommandPool,
+        count: usize,
+    ) -> Vec<vk::CommandBuffer> {
         let info = vk::CommandBufferAllocateInfo::default()
-            .command_buffer_count(1)
-            .command_pool(pool.handle)
+            .command_buffer_count(count as u32)
+            .command_pool(*pool)
             .level(vk::CommandBufferLevel::PRIMARY);
 
         unsafe {
             self.handle
                 .allocate_command_buffers(&info)
-                .unwrap_or_else(|e| panic!("Error creating command buffer: {e:?}"))[0]
+                .unwrap_or_else(|e| panic!("Error creating command buffers: {e:?}"))
         }
     }
 
@@ -422,44 +423,102 @@ impl Device {
         }
     }
 
+    pub fn create_pipeline_layout(
+        &self,
+        uniforms_layouts: &[vk::DescriptorSetLayout],
+        constants_ranges: &[vk::PushConstantRange],
+    ) -> Result<vk::PipelineLayout> {
+        let pipeline_layout_info = vk::PipelineLayoutCreateInfo::default()
+            .set_layouts(uniforms_layouts)
+            .push_constant_ranges(constants_ranges);
+        Ok(unsafe { self.handle.create_pipeline_layout(&pipeline_layout_info, None)? })
+    }
+
+    pub fn create_graphics_pipeline(
+        &self,
+        info: &vk::GraphicsPipelineCreateInfo,
+    ) -> Result<vk::Pipeline> {
+        Ok(unsafe {
+            self.handle
+                .create_graphics_pipelines(vk::PipelineCache::null(), slice::from_ref(info), None)
+                .map_err(|err| anyhow::anyhow!(err.1))
+        }?[0])
+    }
+
+    pub fn create_descriptor_set_layout(
+        &self,
+        bindings: &[vk::DescriptorSetLayoutBinding],
+        create_flags: vk::DescriptorSetLayoutCreateFlags,
+        binding_flags: &[vk::DescriptorBindingFlags],
+    ) -> Result<vk::DescriptorSetLayout> {
+        let mut binding_flags_info =
+            vk::DescriptorSetLayoutBindingFlagsCreateInfo::default().binding_flags(binding_flags);
+        let create_info = vk::DescriptorSetLayoutCreateInfo::default()
+            .bindings(bindings)
+            .flags(create_flags)
+            .push_next(&mut binding_flags_info);
+
+        Ok(unsafe { self.handle.create_descriptor_set_layout(&create_info, None)? })
+    }
+
+    pub fn create_descriptor_pool(
+        &self,
+        pool_sizes: &[vk::DescriptorPoolSize],
+        flags: vk::DescriptorPoolCreateFlags,
+        max_sets: u32,
+    ) -> Result<vk::DescriptorPool> {
+        let info = vk::DescriptorPoolCreateInfo::default()
+            .pool_sizes(pool_sizes)
+            .max_sets(max_sets)
+            .flags(flags);
+        Ok(unsafe { self.handle.create_descriptor_pool(&info, None)? })
+    }
+
+    pub fn create_descriptor_set(
+        &self,
+        layout: vk::DescriptorSetLayout,
+        pool: vk::DescriptorPool,
+        variable_descriptor_count: Option<u32>,
+    ) -> Result<vk::DescriptorSet> {
+        let mut descriptor_set_info = vk::DescriptorSetAllocateInfo::default()
+            .descriptor_pool(pool)
+            .set_layouts(slice::from_ref(&layout));
+
+        let counts = [variable_descriptor_count.unwrap_or(0)];
+        let mut count_info = vk::DescriptorSetVariableDescriptorCountAllocateInfo::default()
+            .descriptor_counts(&counts);
+
+        if variable_descriptor_count.is_some() {
+            descriptor_set_info = descriptor_set_info.push_next(&mut count_info);
+        }
+
+        Ok(unsafe { self.handle.allocate_descriptor_sets(&descriptor_set_info)?[0] })
+    }
+
+    pub fn create_shader_module(&self, path: &str) -> Result<vk::ShaderModule> {
+        let mut file = std::fs::File::open(path)?;
+        let bytes = ash::util::read_spv(&mut file)?;
+        let info = vk::ShaderModuleCreateInfo::default().code(&bytes);
+        let module = unsafe { self.handle.create_shader_module(&info, None) }?;
+        Ok(module)
+    }
+
     pub fn queue_submit(
         &self,
         queue: &Queue,
-        command_buffers: &[vk::CommandBuffer],
-        wait_semaphores: &[(vk::Semaphore, vk::PipelineStageFlags2)],
-        signal_semaphores: &[(vk::Semaphore, vk::PipelineStageFlags2)],
+        cmd_buffer_infos: &[CommandBufferSubmitInfo],
+        wait_semaphore_infos: &[SemaphoreSubmitInfo],
+        signal_semaphores_infos: &[SemaphoreSubmitInfo],
         fence: vk::Fence,
     ) {
-        log::trace!(
-            "Submitting {:?} to {:?}, wait_semaphores: {:?}, signal_semaphores: {:?}, fence: {:?}",
-            command_buffers,
-            queue,
-            wait_semaphores,
-            signal_semaphores,
-            fence
-        );
-        let cmd_infos = command_buffers
-            .iter()
-            .map(|cb| vk::CommandBufferSubmitInfo::default().command_buffer(*cb))
-            .collect::<Vec<_>>();
-        let wait_semaphore_infos = wait_semaphores
-            .iter()
-            .map(|(s, f)| vk::SemaphoreSubmitInfo::default().semaphore(*s).stage_mask(*f))
-            .collect::<Vec<_>>();
-        let signal_semaphore_infos = signal_semaphores
-            .iter()
-            .map(|(s, f)| vk::SemaphoreSubmitInfo::default().semaphore(*s).stage_mask(*f))
-            .collect::<Vec<_>>();
         let submit_info = vk::SubmitInfo2::default()
-            .command_buffer_infos(&cmd_infos)
+            .command_buffer_infos(&cmd_buffer_infos)
             .wait_semaphore_infos(&wait_semaphore_infos)
-            .signal_semaphore_infos(&signal_semaphore_infos);
+            .signal_semaphore_infos(&signal_semaphores_infos);
         unsafe {
             self.handle
                 .queue_submit2(**queue, slice::from_ref(&submit_info), fence)
-                .unwrap_or_else(|e| {
-                    panic!("Error submitting command buffer ({self:?}) to queue: {e}")
-                })
+                .unwrap_or_else(|e| panic!("Error submitting {submit_info:?} to {queue:?}: {e}"))
         }
     }
 }

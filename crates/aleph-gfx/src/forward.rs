@@ -1,6 +1,6 @@
 use {
     crate::{
-        renderer::{GpuPushConstantData, RenderObject},
+        renderer::{GpuPushConstantData, RenderObject, RenderObjectOld},
         Pipeline, PipelineBuilder, RenderContext,
     },
     aleph_scene::{util, Vertex},
@@ -16,8 +16,7 @@ use {
     tracing::{instrument, warn},
 };
 
-const CLEAR_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
-
+const CLEAR_COLOR: [f32; 4] = [0.8, 0.8, 0.8, 1.0];
 const VERTEX_SHADER_PATH: &str = "shaders/forward.vert.spv";
 const FRAGMENT_SHADER_PATH: &str = "shaders/forward.frag.spv";
 
@@ -32,9 +31,6 @@ pub struct ForwardPipeline {
 impl Pipeline for ForwardPipeline {
     #[instrument(skip_all)]
     fn render(&mut self, ctx: &RenderContext, cmd: &CommandBuffer) -> Result<()> {
-        ctx.gpu
-            .debug_utils()
-            .begin_debug_label(&cmd, "forward pipeline render");
         let color_attachments = &[util::color_attachment(
             &self.draw_image,
             AttachmentLoadOp::CLEAR,
@@ -47,28 +43,19 @@ impl Pipeline for ForwardPipeline {
             AttachmentStoreOp::STORE,
             1.0,
         );
-        let viewport = util::viewport_inverted(ctx.render_extent);
+        ctx.gpu.debug_utils().begin_debug_label(&cmd, "forward pipeline render");
         cmd.begin_rendering(color_attachments, Some(depth_attachment), ctx.render_extent);
+
+        let viewport = util::viewport_inverted(ctx.render_extent);
         cmd.set_viewport(viewport);
         cmd.set_scissor(Rect2D::default().extent(ctx.render_extent));
-
         cmd.bind_pipeline(PipelineBindPoint::GRAPHICS, self.handle);
         ctx.binder.bind(&cmd, self.pipeline_layout, &[]);
 
-        // ctx.scene.mesh_nodes().for_each(|node| match node.data {
-        //     NodeType::Mesh(handle) => {
-        //         let mesh = ctx.assets.get_mesh(handle).unwrap_or_else(|| {
-        //             panic!("Mesh not found: {:?}", handle);
-        //         });
-        //         self.draw_primitive(cmd, &mesh);
-        //     }
-        //     _ => {
-        //         panic!("Should not be here, node: {:?}", node);
-        //     }
-        // });
         for object in ctx.objects {
-            self.draw_primitive(cmd, object)?;
+            self.draw_object(cmd, object)?;
         }
+
         cmd.end_rendering();
         ctx.gpu.debug_utils().end_debug_label(&cmd);
         Ok(())
@@ -88,7 +75,7 @@ impl ForwardPipeline {
             size: mem::size_of::<GpuPushConstantData>() as u32,
         };
         let pipeline_layout =
-            gpu.create_pipeline_layout(&[*descriptor_layout], &[push_constant_range])?;
+            gpu.device().create_pipeline_layout(&[*descriptor_layout], &[push_constant_range])?;
         let handle = Self::create_pipeline(gpu, pipeline_layout)?;
 
         Ok(Self {
@@ -99,10 +86,7 @@ impl ForwardPipeline {
         })
     }
 
-    fn draw_primitive(&self, cmd: &CommandBuffer, object: &RenderObject) -> Result<()> {
-        cmd.bind_index_buffer(&*object.index_buffer, 0);
-        cmd.bind_vertex_buffer(&*object.vertex_buffer, 0);
-
+    fn draw_object(&self, cmd: &CommandBuffer, object: &RenderObject) -> Result<()> {
         let push_constants = GpuPushConstantData {
             model: Mat4::IDENTITY,
             material_index: object.material as i32,
@@ -116,14 +100,21 @@ impl ForwardPipeline {
             0,
             &push_constants,
         );
-        cmd.draw_indexed(object.vertex_count as u32, 1, 0, 0, 0);
+        cmd.draw_indexed(
+            object.index_count as u32,
+            1,
+            object.index_offset as u32,
+            // object.vertex_offset as i32,
+            0,
+            0,
+        );
 
         Ok(())
     }
 
     fn create_pipeline(gpu: &Gpu, layout: PipelineLayout) -> Result<VkPipeline> {
-        let vertex_shader = gpu.create_shader_module(VERTEX_SHADER_PATH)?;
-        let fragment_shader = gpu.create_shader_module(FRAGMENT_SHADER_PATH)?;
+        let vertex_shader = gpu.device().create_shader_module(VERTEX_SHADER_PATH)?;
+        let fragment_shader = gpu.device().create_shader_module(FRAGMENT_SHADER_PATH)?;
         let attachments = &[PipelineColorBlendAttachmentState::default()
             .blend_enable(false)
             .color_write_mask(

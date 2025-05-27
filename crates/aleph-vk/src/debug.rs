@@ -8,7 +8,7 @@ use {
     std::ffi,
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct DebugUtils {
     #[debug(skip)]
     pub debug_instance: debug_utils::Instance,
@@ -36,11 +36,8 @@ impl DebugUtils {
             .pfn_user_callback(Some(vulkan_debug_callback));
         let debug_instance = debug_utils::Instance::new(&instance.entry, &*instance);
         let debug_device = debug_utils::Device::new(&*instance, &*device);
-        let debug_callback = unsafe {
-            debug_instance
-                .create_debug_utils_messenger(&debug_info, None)
-                .unwrap()
-        };
+        let debug_callback =
+            unsafe { debug_instance.create_debug_utils_messenger(&debug_info, None).unwrap() };
 
         Self {
             debug_instance,
@@ -65,8 +62,7 @@ impl DebugUtils {
         unsafe {
             let name_c = ffi::CString::new(name).unwrap();
             let marker = DebugUtilsLabelEXT::default().label_name(&name_c);
-            self.debug_device
-                .cmd_begin_debug_utils_label(**cmd_buffer, &marker);
+            self.debug_device.cmd_begin_debug_utils_label(**cmd_buffer, &marker);
         }
         log::trace!("Began {name:?} in {:?}", cmd_buffer);
     }
