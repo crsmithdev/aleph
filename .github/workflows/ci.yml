@@ -7,75 +7,10 @@ on:
     branches: [ main ]
 
 env:
-  CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  RUST_LOG: trace
 
 jobs:
-  check:
-    name: Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-
-      - uses: humbletim/setup-vulkan-linux@v1.2
-        with:
-          version: 1.4.309.0
-          cache: true
-
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Install cargo-make
-        run: cargo install --locked cargo-make
-
-      - run: cargo make format-check
-      - run: cargo make clippy  
-      - run: cargo make check
-
-  test:
-    name: Test
-    strategy:
-      matrix:
-        os: [windows-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Install Vulkan SDK
-        uses: humbletim/install-vulkan-sdk@v1.2
-        with:
-          version: 1.4
-          cache: true
-
-      - name: Install cargo-make
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: --debug cargo-make
-
-      - name: Run CI
-        uses: actions-rs/cargo@v1
-        with:
-          command: make
-          args: ci-flow
-
-      - run: cargo make build
-      - run: cargo make test
 
   build:
     name: Build & Test
@@ -91,9 +26,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Install Vulkan SDK
-        uses: humbletim/install-vulkan-sdk@v1.2
+        uses: humbletim/install-vulkan-sdk@v1.4
         with:
-          version: 1.4
+          version: 1.4.309.0
           cache: true
 
       - name: Install cargo-make
@@ -107,6 +42,6 @@ jobs:
         with:
           command: make
           args: ci-flow
-          
+
       - run: cargo make build
       - run: cargo make test
