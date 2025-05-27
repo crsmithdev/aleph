@@ -5,7 +5,7 @@ use {
     },
     aleph_scene::{util, Vertex},
     aleph_vk::{
-        texture::Image, AttachmentLoadOp, AttachmentStoreOp, ColorComponentFlags, CommandBuffer,
+        image::Image, AttachmentLoadOp, AttachmentStoreOp, ColorComponentFlags, CommandBuffer,
         CompareOp, CullModeFlags, DescriptorSetLayout, FrontFace, Gpu, PipelineBindPoint,
         PipelineColorBlendAttachmentState, PipelineLayout, PolygonMode, PrimitiveTopology,
         PushConstantRange, Rect2D, ShaderStageFlags, VkPipeline,

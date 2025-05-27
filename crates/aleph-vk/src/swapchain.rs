@@ -1,5 +1,5 @@
 use {
-    crate::{texture::Image, Device, Instance, Queue, TIMEOUT_NS},
+    crate::{image::Image, Device, Instance, Queue, TIMEOUT_NS},
     anyhow::Result,
     ash::{
         khr,

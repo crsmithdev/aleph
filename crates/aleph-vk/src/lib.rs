@@ -4,11 +4,11 @@ pub mod command;
 pub mod debug;
 pub mod device;
 pub mod gpu;
+pub mod image;
 pub mod instance;
 pub mod pool;
 pub mod swapchain;
 pub mod sync;
-pub mod texture;
 
 pub(crate) const TIMEOUT_NS: u64 = 5_000_000_000;
 
@@ -19,10 +19,10 @@ pub use {
         command::{CommandBuffer, CommandPool},
         device::{Device, Queue, QueueFamily},
         gpu::Gpu,
+        image::{Image, Sampler, Texture, TextureInfo},
         instance::Instance,
         pool::ResourcePool,
         swapchain::{Surface, Swapchain, SwapchainInfo},
-        texture::{Image, Sampler, Texture, TextureInfo},
     },
     ash::vk::{
         AccessFlags2, AttachmentLoadOp, AttachmentStoreOp, ClearColorValue, ClearDepthStencilValue,

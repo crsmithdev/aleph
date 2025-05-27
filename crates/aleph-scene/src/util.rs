@@ -1,9 +1,8 @@
 use {
     crate::Vertex,
     aleph_vk::{
-        texture::Image, AttachmentLoadOp, AttachmentStoreOp, ClearColorValue,
-        ClearDepthStencilValue, ClearValue, Extent2D, ImageLayout, RenderingAttachmentInfo,
-        Viewport,
+        image::Image, AttachmentLoadOp, AttachmentStoreOp, ClearColorValue, ClearDepthStencilValue,
+        ClearValue, Extent2D, ImageLayout, RenderingAttachmentInfo, Viewport,
     },
     image::EncodableLayout,
 };
