@@ -159,18 +159,12 @@ impl Scene {
     pub fn children(&self, node: NodeHandle) -> Vec<NodeHandle> {
         let index = self.indices.get(&node).unwrap();
         let children = self.graph.neighbors(*index).collect::<Vec<_>>();
-        children
-            .iter()
-            .map(|child| *self.graph.node_weight(*child).unwrap())
-            .collect()
+        children.iter().map(|child| *self.graph.node_weight(*child).unwrap()).collect()
     }
 
     pub fn parent(&self, node: NodeHandle) -> Option<NodeHandle> {
         let index = self.indices.get(&node).unwrap();
-        let parent = self
-            .graph
-            .neighbors_directed(*index, petgraph::Direction::Incoming)
-            .next();
+        let parent = self.graph.neighbors_directed(*index, petgraph::Direction::Incoming).next();
         parent.map(|parent| *self.graph.node_weight(parent).unwrap())
     }
 
@@ -180,9 +174,7 @@ impl Scene {
     }
 
     pub fn mesh_nodes(&self) -> impl Iterator<Item = &Node> {
-        self.nodes
-            .values()
-            .filter(|node| matches!(node.data, NodeType::Mesh(_)))
+        self.nodes.values().filter(|node| matches!(node.data, NodeType::Mesh(_)))
     }
 
     pub fn nodes(&self) -> impl Iterator<Item = &Node> { self.nodes.values() }

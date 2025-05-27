@@ -65,10 +65,7 @@ impl Instance {
         &self,
         physical_device: vk::PhysicalDevice,
     ) -> Vec<vk::QueueFamilyProperties> {
-        unsafe {
-            self.handle
-                .get_physical_device_queue_family_properties(physical_device)
-        }
+        unsafe { self.handle.get_physical_device_queue_family_properties(physical_device) }
     }
 
     pub fn get_physical_device_properties(
@@ -84,8 +81,7 @@ impl Instance {
     ) -> vk::PhysicalDeviceFeatures2 {
         let mut features = vk::PhysicalDeviceFeatures2::default();
         unsafe {
-            self.handle
-                .get_physical_device_features2(physical_device, &mut features);
+            self.handle.get_physical_device_features2(physical_device, &mut features);
         }
         features
     }
@@ -111,9 +107,6 @@ impl Instance {
             .enabled_extension_names(extension_names)
             .push_next(features);
 
-        Ok(unsafe {
-            self.handle
-                .create_device(physical_device, &device_info, None)
-        }?)
+        Ok(unsafe { self.handle.create_device(physical_device, &device_info, None) }?)
     }
 }

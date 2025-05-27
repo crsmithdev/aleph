@@ -45,11 +45,7 @@ where
     }
 
     pub fn next(&self) -> Rc<T> {
-        let index = self
-            .pool
-            .borrow()
-            .iter()
-            .position(|r| r.expires < self.frame);
+        let index = self.pool.borrow().iter().position(|r| r.expires < self.frame);
 
         match index {
             Some(index) => {
@@ -73,9 +69,7 @@ where
         let retained = {
             let mut pool = self.pool.borrow_mut();
 
-            let mut retained = pool
-                .extract_if(0.., |r| r.expires > self.frame)
-                .collect::<Vec<_>>();
+            let mut retained = pool.extract_if(0.., |r| r.expires > self.frame).collect::<Vec<_>>();
 
             // let remaining = self.pool_size.saturating_sub(retained.len());
             // retained.extend(

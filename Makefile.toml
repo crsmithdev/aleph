@@ -1,0 +1,49 @@
+[config]
+default_to_workspace = false
+
+[tasks.build]
+command = "cargo"
+args = ["build", "--examples", "-vv"]
+
+[tasks.rebuild]
+dependencies = ["clean", "build"]
+
+[tasks.run]
+command = "cargo"
+args = ["run", "--example", "demo"]
+
+[tasks.test]
+command = "cargo"
+args = ["test", "--tests"]
+
+[tasks.clean]
+dependencies = ["clean-rs", "clean-shaders"]
+    
+[tasks.clean-rs]
+script_runner = "pwsh"
+script_extension = "ps1"
+script = """
+pwsh.exe -C "Remove-Item -Path "target" -Exclude "target/debug/deps" -Recurse -Force -ErrorAction Ignore"
+"""
+
+[tasks.clean-shaders]
+script_runner = "pwsh"
+script_extension = "ps1"
+script = """
+pwsh.exe -C "Remove-Item -Path "shaders/*.spv" -Force -ErrorAction Ignore"
+"""
+
+[tasks.format]
+install_crate = "rustfmt"
+command = "cargo"
+args = ["fmt", "--", "--emit=files"]
+
+[tasks.fix]
+command = "cargo"
+args = ["fix", "--allow-dirty", "--allow-staged"] 
+
+[tasks.log]
+script_runner = "@shell"
+script = """
+cargo run --example demo *> log.txt
+"""

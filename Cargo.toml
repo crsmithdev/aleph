@@ -3,6 +3,7 @@ name = "aleph"
 version = "0.1.0"
 edition = "2021"
 build = "build.rs"
+include = ["examples/*", "crates/*", "shaders/*"]
 
 [workspace]
 members = [
@@ -12,6 +13,8 @@ members = [
     "crates/aleph-vk",
     "crates/aleph-app",
 ]
+[[example]]
+name = "demo"
 
 [workspace.dependencies]
 aleph-gfx = { path = "crates/aleph-gfx" } 
@@ -42,7 +45,6 @@ glam = { version = "0.29.2", features = ["bytemuck", "serde"] }
 smol_str = "0.2.2"
 shaderc = "0.9.1"
 
-
 [dependencies]
 anyhow = "1.0.95"
 glob.workspace = true
@@ -53,11 +55,13 @@ aleph-gfx.workspace = true
 aleph-core.workspace = true
 aleph-vk.workspace = true
 aleph-scene.workspace = true
+tracing.workspace = true
 
 [build-dependencies]
 glob = "0.3.1"
 shaderc = "0.8.0"
 anyhow = "1.0.95"
+tracing = "0.1.41"
 
 [lib]
 doctest = false

@@ -1,6 +1,6 @@
 use {
     crate::{
-        renderer::{GpuPushConstantData, RenderObject, RenderObjectOld},
+        renderer::{GpuPushConstantData, RenderObject},
         Pipeline, PipelineBuilder, RenderContext,
     },
     aleph_scene::{util, Vertex},

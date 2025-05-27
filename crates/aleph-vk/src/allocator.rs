@@ -43,10 +43,7 @@ impl Allocator {
         location: MemoryLocation,
         label: impl Into<String>,
     ) -> Result<Allocation> {
-        let mut allocator = self
-            .inner
-            .lock()
-            .expect("Could not acquire lock on allocator");
+        let mut allocator = self.inner.lock().expect("Could not acquire lock on allocator");
         let allocation = allocator.allocate(&AllocationCreateDesc {
             name: &label.into(),
             requirements,
@@ -79,9 +76,7 @@ impl Allocator {
             allocation_scheme: AllocationScheme::GpuAllocatorManaged,
         })?;
         unsafe {
-            self.device
-                .handle
-                .bind_image_memory(image, allocation.memory(), allocation.offset())
+            self.device.handle.bind_image_memory(image, allocation.memory(), allocation.offset())
         }?;
         Ok(allocation)
     }

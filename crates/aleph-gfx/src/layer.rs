@@ -39,9 +39,7 @@ fn update_system(
 ) {
     gui.handle_events(events.read());
     if !renderer.prepared {
-        renderer
-            .prepare_bindless(&mut assets, &scene)
-            .expect("Error preparing resources");
+        renderer.prepare_bindless(&mut assets, &scene).expect("Error preparing resources");
         renderer.prepared = true;
     }
     let extent = window.inner_size();
@@ -49,7 +47,5 @@ fn update_system(
         width: extent.width,
         height: extent.height,
     };
-    renderer
-        .render(&scene, &mut assets, &mut gui, extent)
-        .expect("execute renderer");
+    renderer.render(&scene, &mut assets, &mut gui, extent).expect("execute renderer");
 }

@@ -69,6 +69,7 @@ dependencies = [
  "glob",
  "shaderc",
  "smol_str",
+ "tracing",
 ]
 
 [[package]]

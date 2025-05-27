@@ -98,9 +98,7 @@ impl App {
 
     pub fn run(&mut self) -> Result<()> {
         let event_loop = EventLoop::new().expect("Failed to create event loop");
-        event_loop
-            .run_app(&mut AppHandler::new(self))
-            .map_err(|err| anyhow!(err))
+        event_loop.run_app(&mut AppHandler::new(self)).map_err(|err| anyhow!(err))
     }
 
     fn init(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
@@ -113,8 +111,7 @@ impl App {
         self.resources.add(window);
 
         self.resources.add(Input::default());
-        self.event_registry
-            .register::<GuiEvent>(&mut self.resources);
+        self.event_registry.register::<GuiEvent>(&mut self.resources);
 
         for layer in self.layers.iter_mut() {
             layer.register(&mut self.scheduler, &mut self.resources);
