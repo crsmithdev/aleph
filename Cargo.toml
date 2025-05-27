@@ -1,0 +1,63 @@
+[package]
+name = "aleph"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+
+[workspace]
+members = [
+    "crates/aleph-gfx",
+    "crates/aleph-core",
+    "crates/aleph-scene",
+    "crates/aleph-vk",
+    "crates/aleph-app",
+]
+
+[workspace.dependencies]
+aleph-gfx = { path = "crates/aleph-gfx" } 
+aleph-core = { path = "crates/aleph-core" } 
+aleph-scene = { path = "crates/aleph-scene"}
+aleph-vk = { path = "crates/aleph-vk" }
+aleph-app = { path = "crates/aleph-app" }
+
+anyhow = "1.0.95"
+bytemuck = { version = "1.7.0", features = ["derive"] }
+derive_more = { version = "1.0", features = ["debug", "deref"] }
+downcast-rs = "1.1.1"
+itertools = "0.14.0"
+log = "0.4"
+raw-window-handle = "0.6.2"
+serde = { version = "1.0.130", features = ["derive"] }
+winit = "0.30.5"
+fern = "0.6.2"
+human-panic = "2.0.1"
+humantime = "2.1.0"
+tracing = "0.1.41"
+tracing-subscriber = {version = "0.3.19", features = ["env-filter"]}
+tracing-log = "0.2.0"
+palette = "0.7.6"
+chrono = "0.4.40"
+glob = "0.3.2"
+glam = { version = "0.29.2", features = ["bytemuck", "serde"] }
+smol_str = "0.2.2"
+shaderc = "0.9.1"
+
+
+[dependencies]
+anyhow = "1.0.95"
+glob.workspace = true
+glam.workspace = true
+smol_str.workspace = true
+aleph-app.workspace = true
+aleph-gfx.workspace = true
+aleph-core.workspace = true
+aleph-vk.workspace = true
+aleph-scene.workspace = true
+
+[build-dependencies]
+glob = "0.3.1"
+shaderc = "0.8.0"
+anyhow = "1.0.95"
+
+[lib]
+doctest = false

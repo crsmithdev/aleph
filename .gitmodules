@@ -1,0 +1,6 @@
+[submodule "submodules/glTF-Sample-Assets"]
+	path = submodules/glTF-Sample-Assets
+	url = https://github.com/KhronosGroup/glTF-Sample-Assets.git
+[submodule "submodules/glTF-Asset-Generator"]
+	path = submodules/glTF-Asset-Generator
+	url = https://github.com/KhronosGroup/glTF-Asset-Generator.git

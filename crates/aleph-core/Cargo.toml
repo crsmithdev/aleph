@@ -1,0 +1,22 @@
+[package]
+name = "aleph-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+downcast-rs.workspace = true
+log.workspace = true
+winit.workspace = true
+fern.workspace = true
+human-panic.workspace = true
+humantime.workspace = true
+derive_more.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-log.workspace = true
+chrono.workspace = true
+glam.workspace = true
+
+[lib]
+doctest = false
