@@ -7,7 +7,7 @@ use {
     },
     aleph_vk::{
         sync, AccessFlags2, CommandBuffer, CommandPool, Extent2D, Extent3D, Fence, Format, Gpu,
-        Handle as _, ImageAspectFlags, ImageLayout, ImageUsageFlags, PipelineStageFlags2,
+        Handle as _, Image, ImageAspectFlags, ImageLayout, ImageUsageFlags, PipelineStageFlags2,
         Semaphore, ShaderStageFlags, Texture, TextureInfo, TypedBuffer,
     },
     anyhow::Result,
@@ -15,10 +15,11 @@ use {
     bytemuck::{Pod, Zeroable},
     derive_more::Debug,
     glam::{vec3, vec4, Mat4, Vec2, Vec3, Vec4},
-    std::{collections::HashMap, panic, sync::Arc},
+    std::{collections::HashMap, sync::Arc},
     tracing::instrument,
 };
 
+// Constants
 const FORMAT_DRAW_IMAGE: Format = Format::R16G16B16A16_SFLOAT;
 const FORMAT_DEPTH_IMAGE: Format = Format::D32_SFLOAT;
 const SET_IDX_BINDLESS: usize = 0;
@@ -50,35 +51,7 @@ const LIGHTS: [Light; 4] = [
     },
 ];
 
-#[derive(Debug)]
-pub struct Renderer {
-    #[debug("{}", self.frames.len())]
-    frames: Vec<Frame>,
-    #[debug(skip)]
-    forward_pipeline: ForwardPipeline,
-    rebuild_swapchain: bool,
-    frame_idx: usize,
-    frame_counter: usize,
-    draw_image: Texture,
-    depth_image: Texture,
-    #[debug(skip)]
-    material_map: HashMap<MaterialHandle, usize>,
-    scene_buffer: TypedBuffer<GpuSceneData>,
-    #[debug(skip)]
-    scene_data: GpuSceneData,
-    object_data_buffer: TypedBuffer<GpuObjectData>,
-    render_objects: Vec<RenderObject>,
-    #[debug(skip)]
-    binder: ResourceBinder,
-    #[debug(skip)]
-    pub gpu: Arc<Gpu>,
-    pub prepared: bool,
-    #[debug(skip)]
-    config: RenderConfig,
-    index_buffer: TypedBuffer<u32>,
-    vertex_buffer: TypedBuffer<Vertex>,
-}
-
+// Configuration Structs
 pub struct RenderConfig {
     pub force_color: bool,
     pub force_metallic: bool,
@@ -100,476 +73,7 @@ pub struct RenderConfig {
     pub force_defaults: bool,
 }
 
-impl Renderer {
-    pub fn new(gpu: Arc<Gpu>) -> Result<Self> {
-        let extent = gpu.swapchain().extent().into();
-        let frames = Self::create_frames(&gpu)?;
-        let draw_info = TextureInfo {
-            name: "draw".to_string(),
-            extent: extent,
-            format: FORMAT_DRAW_IMAGE,
-            flags: ImageUsageFlags::COLOR_ATTACHMENT
-                | ImageUsageFlags::TRANSFER_DST
-                | ImageUsageFlags::TRANSFER_SRC,
-            aspect_flags: ImageAspectFlags::COLOR,
-            sampler: None,
-        };
-        let draw_image = Texture::new(&gpu, &draw_info)?;
-
-        let depth_info = TextureInfo {
-            name: "depth".to_string(),
-            extent: extent,
-            format: FORMAT_DEPTH_IMAGE,
-            flags: ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
-                | ImageUsageFlags::TRANSFER_DST
-                | ImageUsageFlags::TRANSFER_SRC,
-            aspect_flags: ImageAspectFlags::DEPTH,
-            sampler: None,
-        };
-        let depth_image = Texture::new(&gpu, &depth_info)?;
-
-        let scene_buffer = TypedBuffer::shared_uniform(&gpu, 1, "renderer-scene")?;
-        let object_data_buffer = TypedBuffer::shared_uniform(&gpu, 1, "renderer-objects")?;
-        let index_buffer = TypedBuffer::index(&gpu, 1, "renderer-index")?;
-        let vertex_buffer = TypedBuffer::vertex(&gpu, 1, "renderer-vertex")?;
-
-        let binder = ResourceLayout::set(SET_IDX_BINDLESS)
-            .uniform_buffer(BIND_IDX_SCENE, ShaderStageFlags::ALL_GRAPHICS)
-            .uniform_buffer(BIND_IDX_MATERIAL, ShaderStageFlags::ALL_GRAPHICS)
-            .texture_array(BIND_IDX_TEXTURE, ShaderStageFlags::ALL_GRAPHICS)
-            .finish(&gpu)?;
-
-        let foreward_pipeline =
-            ForwardPipeline::new(&gpu, &binder.descriptor_layout(), &draw_image, &depth_image)?;
-        let scene_data = GpuSceneData {
-            lights: LIGHTS,
-            n_lights: 3,
-            ..Default::default()
-        };
-
-        Ok(Self {
-            gpu,
-            frames,
-            forward_pipeline: foreward_pipeline,
-            draw_image,
-            depth_image,
-            scene_data,
-            scene_buffer,
-            rebuild_swapchain: false,
-            frame_idx: 0,
-            index_buffer,
-            vertex_buffer,
-            frame_counter: 0,
-            render_objects: Vec::new(),
-            config: RenderConfig {
-                force_color: false,
-                force_metallic: false,
-                force_roughness: false,
-                force_ao: false,
-                force_color_factor: Vec4::ZERO,
-                force_metallic_factor: 0.0,
-                force_roughness_factor: 0.0,
-                force_ao_strength: 0.0,
-                debug_normals: false,
-                debug_tangents: false,
-                debug_bitangents: false,
-                debug_specular: false,
-                debug_normal_maps: false,
-                force_defaults: false,
-                debug_color: false,
-                debug_metallic: false,
-                debug_roughness: false,
-                debug_occlusion: false,
-            },
-            material_map: HashMap::new(),
-            object_data_buffer,
-            binder,
-            prepared: false,
-        })
-    }
-
-    fn update_per_frame_data(&mut self, scene: &Scene, _assets: &Assets) {
-        let view = scene.camera.view();
-        let projection = scene.camera.projection();
-
-        // let mut scene_data = self.scene_data.clone();
-        self.scene_data.view = view;
-        self.scene_data.projection = projection;
-        self.scene_data.vp = projection * view.inverse();
-        self.scene_data.camera_pos = scene.camera.position();
-        self.scene_data.config = GpuConfig::from(&self.config);
-        self.scene_buffer.write(&[self.scene_data]);
-        // self.scene_data = scene_data;
-    }
-
-    #[instrument(skip_all)]
-    pub fn render(
-        &mut self,
-        scene: &Scene,
-        assets: &mut Assets,
-        gui: &mut Gui,
-        extent: Extent2D,
-    ) -> Result<()> {
-        self.update_per_frame_data(scene, assets);
-
-        if self.rebuild_swapchain {
-            self.gpu.rebuild_swapchain(extent);
-            self.frames = Self::create_frames(&self.gpu)?;
-            self.rebuild_swapchain = false;
-        }
-
-        let Frame {
-            acquire_semaphore,
-            cmd_buffer,
-            present_semaphore,
-            fence,
-            ..
-        } = &self.frames[self.frame_idx];
-        log::trace!(
-            "START FRAME {}@{}: aq, pr semaphores: [{:#x}, {:#x}], fence: {:?}, cmd: {:?}",
-            self.frame_counter,
-            self.frame_idx,
-            acquire_semaphore.as_raw(),
-            present_semaphore.as_raw(),
-            fence,
-            cmd_buffer
-        );
-
-        // self.gpu.device().wait_for_fences(&[*fence]);
-        let (next_idx, rebuild_swapchain) =
-            self.gpu.swapchain().acquire_next_image(*acquire_semaphore)?;
-        self.rebuild_swapchain = rebuild_swapchain;
-        // self.gpu.reset_fence(*fence)?;
-
-        let draw_image = &self.draw_image;
-        let depth_image = &self.depth_image;
-        let (swapchain_image, swapchain_extent) = {
-            let swapchain = self.gpu.swapchain();
-            (&swapchain.images()[next_idx], swapchain.extent())
-        };
-        let render_extent = Extent3D {
-            width: self.draw_image.extent().width.min(swapchain_extent.width),
-            height: self.draw_image.extent().height.min(swapchain_extent.height),
-            depth: 1,
-        };
-
-        cmd_buffer.reset();
-        cmd_buffer.begin();
-        cmd_buffer.bind_index_buffer(&self.index_buffer, 0);
-        cmd_buffer.bind_vertex_buffer(&self.vertex_buffer, 0);
-
-        cmd_buffer.pipeline_barrier(
-            &[],
-            &[],
-            &[sync::image_memory_barrier(
-                &draw_image,
-                PipelineStageFlags2::TOP_OF_PIPE, // No previous usage
-                AccessFlags2::NONE,               // No previous access
-                PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT, // Will be used as color attachment
-                AccessFlags2::COLOR_ATTACHMENT_WRITE, // Will write color data
-                ImageLayout::UNDEFINED,
-                ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-            )],
-        );
-
-        // Initial transition: UNDEFINED -> DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-        cmd_buffer.pipeline_barrier(
-            &[],
-            &[],
-            &[sync::image_memory_barrier(
-                &depth_image,
-                PipelineStageFlags2::TOP_OF_PIPE, // No previous usage
-                AccessFlags2::NONE,               // No previous access
-                PipelineStageFlags2::EARLY_FRAGMENT_TESTS
-                    | PipelineStageFlags2::LATE_FRAGMENT_TESTS,
-                AccessFlags2::DEPTH_STENCIL_ATTACHMENT_READ
-                    | AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
-                ImageLayout::UNDEFINED,
-                ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-            )],
-        );
-        let context = RenderContext {
-            gpu: &self.gpu,
-            command_buffer: &cmd_buffer,
-            scene_buffer: &self.scene_buffer,
-            draw_image: &self.draw_image,
-            depth_image: &self.depth_image,
-            render_extent: swapchain_extent,
-            material_map: &self.material_map,
-            binder: &self.binder,
-            scene,
-            objects: &self.render_objects,
-            assets,
-        };
-        self.forward_pipeline.render(&context, &cmd_buffer)?;
-        gui.draw(&context, &mut self.config, &mut self.scene_data)?;
-        self.gpu.device().wait_idle();
-        self.gpu.debug_utils().begin_debug_label(&cmd_buffer, "blit to swapchain");
-
-        cmd_buffer.pipeline_barrier(
-            &[],
-            &[],
-            &[sync::image_memory_barrier(
-                &draw_image,
-                PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                PipelineStageFlags2::TRANSFER,
-                AccessFlags2::TRANSFER_READ,
-                ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-                ImageLayout::TRANSFER_SRC_OPTIMAL,
-            )],
-        );
-
-        cmd_buffer.pipeline_barrier(
-            &[],
-            &[],
-            &[sync::image_memory_barrier(
-                &swapchain_image,
-                PipelineStageFlags2::TOP_OF_PIPE,
-                AccessFlags2::NONE,
-                PipelineStageFlags2::TRANSFER,
-                AccessFlags2::TRANSFER_WRITE,
-                ImageLayout::UNDEFINED,
-                ImageLayout::TRANSFER_DST_OPTIMAL,
-            )],
-        );
-
-        cmd_buffer.copy_image(
-            &draw_image,
-            &swapchain_image,
-            render_extent,
-            swapchain_extent.into(),
-        );
-        cmd_buffer.pipeline_barrier(
-            &[],
-            &[],
-            &[sync::image_memory_barrier(
-                &swapchain_image,
-                PipelineStageFlags2::TRANSFER,
-                AccessFlags2::TRANSFER_WRITE,
-                PipelineStageFlags2::BOTTOM_OF_PIPE,
-                AccessFlags2::NONE,
-                ImageLayout::TRANSFER_DST_OPTIMAL,
-                ImageLayout::PRESENT_SRC_KHR,
-            )],
-        );
-        self.gpu.debug_utils().end_debug_label(&cmd_buffer);
-        cmd_buffer.end();
-
-        log::trace!("WAIT @ render queue submit");
-        self.gpu.device().wait_idle();
-        self.gpu.queue_submit(
-            &self.gpu.device().graphics_queue(),
-            &[cmd_buffer],
-            &[(*acquire_semaphore, PipelineStageFlags2::ALL_COMMANDS)],
-            &[(*present_semaphore, PipelineStageFlags2::ALL_COMMANDS)],
-            // *fence,
-            Fence::null(),
-        );
-        self.gpu.device().wait_idle();
-
-        let rebuild_swapchain = self.gpu.swapchain().present(
-            self.gpu.device().graphics_queue(),
-            &[*present_semaphore],
-            &[next_idx as u32],
-        )?;
-        log::trace!(
-            "END FRAME {}@{}: aq, pr semaphores: [{:#x}, {:#x}], fence: {:?}, cmd: {:?}",
-            self.frame_counter,
-            self.frame_idx,
-            acquire_semaphore.as_raw(),
-            present_semaphore.as_raw(),
-            fence,
-            cmd_buffer
-        );
-
-        self.frame_counter += 1;
-        self.frame_idx = self.frame_counter % self.frames.len() as usize;
-        self.rebuild_swapchain |= rebuild_swapchain;
-
-        Ok(())
-    }
-
-    fn create_render_objects2<'a>(
-        &self,
-        transforms: &Vec<(MeshHandle, Mat4)>,
-        data: &BindlessData,
-    ) -> Result<(Vec<RenderObject>, TypedBuffer<Vertex>, TypedBuffer<u32>)> {
-        let mut objects = vec![];
-        let mut all_vertices = vec![];
-        let mut all_indices = vec![];
-
-        for (handle, transform) in transforms.iter() {
-            let index = data.mesh_map.get(handle).unwrap();
-            let mesh = data.meshes.get(*index).unwrap();
-
-            let vertex_offset = all_vertices.len();
-            let index_offset = all_indices.len();
-            let index_count = mesh.indices.len();
-
-            let mesh_vertices = (0..mesh.vertices.len())
-                .map(|i| Vertex {
-                    position: mesh.vertices[i],
-                    normal: *mesh.normals.get(i).unwrap_or(&Vec3::ONE),
-                    tangent: *mesh.tangents.get(i).unwrap_or(&Vec4::ONE),
-                    color: *mesh.colors.get(i).unwrap_or(&Vec4::ONE),
-                    uv_x: mesh.tex_coords0.get(i).unwrap_or(&Vec2::ZERO)[0],
-                    uv_y: mesh.tex_coords0.get(i).unwrap_or(&Vec2::ZERO)[1],
-                })
-                .collect::<Vec<_>>();
-
-            let mesh_indices =
-                mesh.indices.iter().map(|&idx| idx + vertex_offset as u32).collect::<Vec<_>>();
-
-            all_vertices.extend(mesh_vertices);
-            all_indices.extend(mesh_indices);
-
-            let material = *data.material_map.get(&mesh.material).unwrap_or(&0);
-
-            objects.push(RenderObject {
-                vertex_offset,
-                index_offset,
-                index_count,
-                transform: *transform,
-                material,
-            });
-        }
-
-        let mut vertex_buffer =
-            TypedBuffer::vertex(&self.gpu, all_vertices.len(), "shared_vertices")?;
-        let mut index_buffer = TypedBuffer::index(&self.gpu, all_indices.len(), "shared_indices")?;
-
-        let vertex_data = bytemuck::cast_slice(&all_vertices);
-        vertex_buffer.write(vertex_data);
-
-        let index_data = bytemuck::cast_slice(&all_indices);
-        index_buffer.write(index_data);
-
-        Ok((objects, vertex_buffer, index_buffer))
-    }
-
-    // fn create_render_objects<'a>(
-    //     &self,
-    //     transforms: &Vec<(MeshHandle, Mat4)>,
-    //     data: &BindlessData,
-    // ) -> Result<Vec<RenderObjectOld>> {
-    //     let mut objects = vec![];
-    //     for (handle, transform) in transforms.iter() {
-    //         let index = data.mesh_map.get(handle).unwrap();
-    //         let mesh = data.meshes.get(*index).unwrap();
-    //         let mut index_buffer = TypedBuffer::index(&self.gpu, mesh.indices.len(), "index")?;
-    //         let mut vertex_buffer = TypedBuffer::vertex(&self.gpu, mesh.vertices.len(), "vertex")?;
-    //         let vertex_count = mesh.vertices.len();
-    //         let vertices = (0..vertex_count)
-    //             .map(|i| Vertex {
-    //                 position: mesh.vertices[i],
-    //                 normal: *mesh.normals.get(i).unwrap_or(&Vec3::ONE),
-    //                 tangent: *mesh.tangents.get(i).unwrap_or(&Vec4::ONE),
-    //                 color: *mesh.colors.get(i).unwrap_or(&Vec4::ONE),
-    //                 uv_x: mesh.tex_coords0.get(i).unwrap_or(&Vec2::ZERO)[0],
-    //                 uv_y: mesh.tex_coords0.get(i).unwrap_or(&Vec2::ZERO)[1],
-    //             })
-    //             .collect::<Vec<_>>();
-
-    //         let index_data = bytemuck::cast_slice(&mesh.indices);
-    //         index_buffer.write(index_data);
-
-    //         let vertex_data = bytemuck::cast_slice(&vertices);
-    //         vertex_buffer.write(vertex_data);
-
-    //         let material = *data.material_map.get(&mesh.material).unwrap_or(&0);
-
-    //         objects.push(RenderObjectOld {
-    //             vertex_buffer,
-    //             vertex_count,
-    //             index_buffer,
-    //             transform: *transform,
-    //             material,
-    //         });
-    //     }
-
-    //     Ok(objects)
-    // }
-
-    #[instrument(skip_all)]
-    pub fn prepare_bindless(&mut self, assets: &mut Assets, scene: &Scene) -> Result<()> {
-        log::trace!("WAIT @ start of prepare bindless");
-        self.gpu.device().wait_idle();
-        let cmd = &self.gpu.immediate_cmd_buffer();
-        cmd.begin();
-
-        let bindless_data = assets.prepare_bindless(cmd)?;
-
-        let mut materials_arr = [GpuMaterial::default(); 10];
-        for (i, material) in bindless_data.materials.iter().enumerate() {
-            materials_arr[i] = *material;
-        }
-        let object_data = GpuObjectData {
-            materials: materials_arr,
-        };
-
-        let mesh_nodes = scene
-            .mesh_nodes()
-            .map(|node| match node.data {
-                NodeType::Mesh(handle) => (handle, node.transform),
-                _ => panic!("Should not be here, node: {:?}", node),
-            })
-            .collect::<Vec<_>>();
-        let (render_objects, vertex_buffer, index_buffer) =
-            self.create_render_objects2(&mesh_nodes, &bindless_data)?;
-        self.render_objects = render_objects;
-        self.index_buffer = index_buffer;
-        self.vertex_buffer = vertex_buffer;
-        // self.render_objects = self.create_render_objects(&mesh_nodes, &bindless_data)?;
-        self.object_data_buffer.write(&[object_data]);
-
-        self.binder
-            .uniform_buffer(BIND_IDX_SCENE, &self.scene_buffer, 0)
-            .uniform_buffer(BIND_IDX_MATERIAL, &self.object_data_buffer, 0)
-            .texture_array(
-                BIND_IDX_TEXTURE,
-                &bindless_data.textures,
-                &assets.default_sampler(),
-            )
-            .update(&self.gpu)?;
-        cmd.end();
-
-        self.gpu.queue_submit(
-            &self.gpu.device().graphics_queue(),
-            &[cmd],
-            &[],
-            &[],
-            Fence::null(),
-        );
-
-        log::trace!("WAIT @ end of prepare bindless");
-        self.gpu.device().wait_idle();
-
-        Ok(())
-    }
-
-    fn create_frames(gpu: &Gpu) -> Result<Vec<Frame>> {
-        let mut frames = Vec::new();
-        for i in 0..N_FRAMES {
-            let name = format!("frame{i:02}");
-            let cmd_pool = CommandPool::new(gpu.device(), gpu.device().graphics_queue(), &name);
-            let swapchain_semaphore = gpu.device().create_semaphore();
-            let render_semaphore = gpu.device().create_semaphore();
-            let fence = gpu.device().create_fence(FenceCreateFlags::SIGNALED);
-            let cmd_buffer = cmd_pool.create_command_buffer(&name);
-
-            frames.push(Frame {
-                cmd_pool,
-                acquire_semaphore: swapchain_semaphore,
-                present_semaphore: render_semaphore,
-                cmd_buffer,
-                fence,
-            });
-        }
-        Ok(frames)
-    }
-}
-
+// GPU Data Structures
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy, Pod, Zeroable)]
 pub struct GpuConfig {
@@ -619,6 +123,7 @@ impl From<&RenderConfig> for GpuConfig {
         }
     }
 }
+
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
 pub struct GpuSceneData {
@@ -647,6 +152,17 @@ pub struct GpuPushConstantData {
     pub _padding2: i32,
 }
 
+// Render Objects
+#[derive(Debug)]
+pub struct RenderObject {
+    pub vertex_offset: usize,
+    pub index_offset: usize,
+    pub index_count: usize,
+    pub material: usize,
+    pub transform: Mat4,
+}
+
+// Frame and Context Structures
 #[derive(Debug)]
 pub struct Frame {
     #[debug("{:#x}", acquire_semaphore.as_raw())]
@@ -675,20 +191,496 @@ pub struct RenderContext<'a> {
     pub assets: &'a Assets,
 }
 
+// Main Renderer
 #[derive(Debug)]
-pub struct RenderObject {
-    pub vertex_offset: usize,
-    pub index_offset: usize,
-    pub index_count: usize,
-    pub material: usize,
-    pub transform: Mat4,
+pub struct Renderer {
+    #[debug("{}", self.frames.len())]
+    frames: Vec<Frame>,
+    #[debug(skip)]
+    forward_pipeline: ForwardPipeline,
+    rebuild_swapchain: bool,
+    frame_idx: usize,
+    frame_counter: usize,
+
+    // Images
+    draw_image: Texture,
+    depth_image: Texture,
+
+    // Buffers
+    scene_buffer: TypedBuffer<GpuSceneData>,
+    object_data_buffer: TypedBuffer<GpuObjectData>,
+    index_buffer: TypedBuffer<u32>,
+    vertex_buffer: TypedBuffer<Vertex>,
+
+    // Render data
+    #[debug(skip)]
+    scene_data: GpuSceneData,
+    render_objects: Vec<RenderObject>,
+    #[debug(skip)]
+    material_map: HashMap<MaterialHandle, usize>,
+
+    // Resources
+    #[debug(skip)]
+    binder: ResourceBinder,
+    #[debug(skip)]
+    pub gpu: Arc<Gpu>,
+
+    // State
+    pub prepared: bool,
+    #[debug(skip)]
+    config: RenderConfig,
 }
 
-#[derive(Debug)]
-pub struct RenderObjectOld {
-    pub vertex_buffer: TypedBuffer<Vertex>,
-    pub index_buffer: TypedBuffer<u32>,
-    pub vertex_count: usize,
-    pub material: usize,
-    pub transform: Mat4,
+impl Renderer {
+    pub fn new(gpu: Arc<Gpu>) -> Result<Self> {
+        let extent = gpu.swapchain().extent().into();
+        let frames = Self::create_frames(&gpu)?;
+
+        // Create draw image
+        let draw_info = TextureInfo {
+            name: "draw".to_string(),
+            extent,
+            format: FORMAT_DRAW_IMAGE,
+            flags: ImageUsageFlags::COLOR_ATTACHMENT
+                | ImageUsageFlags::TRANSFER_DST
+                | ImageUsageFlags::TRANSFER_SRC,
+            aspect_flags: ImageAspectFlags::COLOR,
+            sampler: None,
+        };
+        let draw_image = Texture::new(&gpu, &draw_info)?;
+
+        // Create depth image
+        let depth_info = TextureInfo {
+            name: "depth".to_string(),
+            extent,
+            format: FORMAT_DEPTH_IMAGE,
+            flags: ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
+                | ImageUsageFlags::TRANSFER_DST
+                | ImageUsageFlags::TRANSFER_SRC,
+            aspect_flags: ImageAspectFlags::DEPTH,
+            sampler: None,
+        };
+        let depth_image = Texture::new(&gpu, &depth_info)?;
+
+        // Create buffers
+        let scene_buffer = TypedBuffer::shared_uniform(&gpu, 1, "renderer-scene")?;
+        let object_data_buffer = TypedBuffer::shared_uniform(&gpu, 1, "renderer-objects")?;
+        let index_buffer = TypedBuffer::index(&gpu, 1, "renderer-index")?;
+        let vertex_buffer = TypedBuffer::vertex(&gpu, 1, "renderer-vertex")?;
+
+        // Create resource binder
+        let binder = ResourceLayout::set(SET_IDX_BINDLESS)
+            .uniform_buffer(BIND_IDX_SCENE, ShaderStageFlags::ALL_GRAPHICS)
+            .uniform_buffer(BIND_IDX_MATERIAL, ShaderStageFlags::ALL_GRAPHICS)
+            .texture_array(BIND_IDX_TEXTURE, ShaderStageFlags::ALL_GRAPHICS)
+            .finish(&gpu)?;
+
+        // Create pipeline
+        let forward_pipeline =
+            ForwardPipeline::new(&gpu, &binder.descriptor_layout(), &draw_image, &depth_image)?;
+
+        // Initialize scene data
+        let scene_data = GpuSceneData {
+            lights: LIGHTS,
+            n_lights: 3,
+            ..Default::default()
+        };
+
+        Ok(Self {
+            gpu,
+            frames,
+            forward_pipeline,
+            draw_image,
+            depth_image,
+            scene_data,
+            scene_buffer,
+            rebuild_swapchain: false,
+            frame_idx: 0,
+            index_buffer,
+            vertex_buffer,
+            frame_counter: 0,
+            render_objects: Vec::new(),
+            config: RenderConfig {
+                force_color: false,
+                force_metallic: false,
+                force_roughness: false,
+                force_ao: false,
+                force_color_factor: Vec4::ZERO,
+                force_metallic_factor: 0.0,
+                force_roughness_factor: 0.0,
+                force_ao_strength: 0.0,
+                debug_normals: false,
+                debug_tangents: false,
+                debug_bitangents: false,
+                debug_specular: false,
+                debug_normal_maps: false,
+                force_defaults: false,
+                debug_color: false,
+                debug_metallic: false,
+                debug_roughness: false,
+                debug_occlusion: false,
+            },
+            material_map: HashMap::new(),
+            object_data_buffer,
+            binder,
+            prepared: false,
+        })
+    }
+
+    fn update_per_frame_data(&mut self, scene: &Scene, _assets: &Assets) {
+        let view = scene.camera.view();
+        let projection = scene.camera.projection();
+
+        self.scene_data.view = view;
+        self.scene_data.projection = projection;
+        self.scene_data.vp = projection * view.inverse();
+        self.scene_data.camera_pos = scene.camera.position();
+        self.scene_data.config = GpuConfig::from(&self.config);
+        self.scene_buffer.write(&[self.scene_data]);
+    }
+
+    #[instrument(skip_all)]
+    pub fn render(
+        &mut self,
+        scene: &Scene,
+        assets: &mut Assets,
+        gui: &mut Gui,
+        extent: Extent2D,
+    ) -> Result<()> {
+        self.update_per_frame_data(scene, assets);
+
+        if self.rebuild_swapchain {
+            self.gpu.rebuild_swapchain(extent);
+            self.frames = Self::create_frames(&self.gpu)?;
+            self.rebuild_swapchain = false;
+        }
+
+        let Frame {
+            acquire_semaphore,
+            cmd_buffer,
+            present_semaphore,
+            fence,
+            ..
+        } = &self.frames[self.frame_idx];
+
+        // Acquire next image
+        let (next_idx, rebuild_swapchain) =
+            self.gpu.swapchain().acquire_next_image(*acquire_semaphore)?;
+        self.rebuild_swapchain = rebuild_swapchain;
+
+        // Setup rendering
+        let draw_image = &self.draw_image;
+        let depth_image = &self.depth_image;
+        let (swapchain_image, swapchain_extent) = {
+            let swapchain = self.gpu.swapchain();
+            (&swapchain.images()[next_idx], swapchain.extent())
+        };
+        let render_extent = Extent3D {
+            width: self.draw_image.extent().width.min(swapchain_extent.width),
+            height: self.draw_image.extent().height.min(swapchain_extent.height),
+            depth: 1,
+        };
+
+        // Begin command buffer
+        cmd_buffer.reset();
+        cmd_buffer.begin();
+        cmd_buffer.bind_index_buffer(&self.index_buffer, 0);
+        cmd_buffer.bind_vertex_buffer(&self.vertex_buffer, 0);
+
+        // Transition images for rendering
+        self.transition_images_for_rendering(cmd_buffer, draw_image, depth_image);
+
+        // Render
+        let context = RenderContext {
+            gpu: &self.gpu,
+            command_buffer: &cmd_buffer,
+            scene_buffer: &self.scene_buffer,
+            draw_image: &self.draw_image,
+            depth_image: &self.depth_image,
+            render_extent: swapchain_extent,
+            material_map: &self.material_map,
+            binder: &self.binder,
+            scene,
+            objects: &self.render_objects,
+            assets,
+        };
+
+        self.forward_pipeline.render(&context, &cmd_buffer)?;
+        gui.draw(&context, &mut self.config, &mut self.scene_data)?;
+
+        // Blit to swapchain
+        self.blit_to_swapchain(
+            cmd_buffer,
+            draw_image,
+            swapchain_image,
+            render_extent,
+            swapchain_extent,
+        );
+
+        cmd_buffer.end();
+
+        // Submit and present
+        self.gpu.device().wait_idle();
+        self.gpu.queue_submit(
+            &self.gpu.device().graphics_queue(),
+            &[cmd_buffer],
+            &[(*acquire_semaphore, PipelineStageFlags2::ALL_COMMANDS)],
+            &[(*present_semaphore, PipelineStageFlags2::ALL_COMMANDS)],
+            Fence::null(),
+        );
+        self.gpu.device().wait_idle();
+
+        let rebuild_swapchain = self.gpu.swapchain().present(
+            self.gpu.device().graphics_queue(),
+            &[*present_semaphore],
+            &[next_idx as u32],
+        )?;
+
+        self.frame_counter += 1;
+        self.frame_idx = self.frame_counter % self.frames.len();
+        self.rebuild_swapchain |= rebuild_swapchain;
+
+        Ok(())
+    }
+
+    fn transition_images_for_rendering(
+        &self,
+        cmd_buffer: &CommandBuffer,
+        draw_image: &Texture,
+        depth_image: &Texture,
+    ) {
+        cmd_buffer.pipeline_barrier(
+            &[],
+            &[],
+            &[sync::image_memory_barrier(
+                draw_image,
+                PipelineStageFlags2::TOP_OF_PIPE,
+                AccessFlags2::NONE,
+                PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                ImageLayout::UNDEFINED,
+                ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            )],
+        );
+
+        cmd_buffer.pipeline_barrier(
+            &[],
+            &[],
+            &[sync::image_memory_barrier(
+                depth_image,
+                PipelineStageFlags2::TOP_OF_PIPE,
+                AccessFlags2::NONE,
+                PipelineStageFlags2::EARLY_FRAGMENT_TESTS
+                    | PipelineStageFlags2::LATE_FRAGMENT_TESTS,
+                AccessFlags2::DEPTH_STENCIL_ATTACHMENT_READ
+                    | AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                ImageLayout::UNDEFINED,
+                ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            )],
+        );
+    }
+
+    fn blit_to_swapchain(
+        &self,
+        cmd_buffer: &CommandBuffer,
+        draw_image: &Image,
+        swapchain_image: &Image,
+        render_extent: Extent3D,
+        swapchain_extent: Extent2D,
+    ) {
+        self.gpu.debug_utils().begin_debug_label(cmd_buffer, "blit to swapchain");
+
+        // Transition draw image for transfer
+        cmd_buffer.pipeline_barrier(
+            &[],
+            &[],
+            &[sync::image_memory_barrier(
+                draw_image,
+                PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                PipelineStageFlags2::TRANSFER,
+                AccessFlags2::TRANSFER_READ,
+                ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                ImageLayout::TRANSFER_SRC_OPTIMAL,
+            )],
+        );
+
+        // Transition swapchain image for transfer
+        cmd_buffer.pipeline_barrier(
+            &[],
+            &[],
+            &[sync::image_memory_barrier(
+                swapchain_image,
+                PipelineStageFlags2::TOP_OF_PIPE,
+                AccessFlags2::NONE,
+                PipelineStageFlags2::TRANSFER,
+                AccessFlags2::TRANSFER_WRITE,
+                ImageLayout::UNDEFINED,
+                ImageLayout::TRANSFER_DST_OPTIMAL,
+            )],
+        );
+
+        // Copy image
+        cmd_buffer.copy_image(
+            draw_image,
+            swapchain_image,
+            render_extent,
+            swapchain_extent.into(),
+        );
+
+        // Transition swapchain image for present
+        cmd_buffer.pipeline_barrier(
+            &[],
+            &[],
+            &[sync::image_memory_barrier(
+                swapchain_image,
+                PipelineStageFlags2::TRANSFER,
+                AccessFlags2::TRANSFER_WRITE,
+                PipelineStageFlags2::BOTTOM_OF_PIPE,
+                AccessFlags2::NONE,
+                ImageLayout::TRANSFER_DST_OPTIMAL,
+                ImageLayout::PRESENT_SRC_KHR,
+            )],
+        );
+
+        self.gpu.debug_utils().end_debug_label(cmd_buffer);
+    }
+
+    fn create_render_objects2(
+        &self,
+        transforms: &Vec<(MeshHandle, Mat4)>,
+        data: &BindlessData,
+    ) -> Result<(Vec<RenderObject>, TypedBuffer<Vertex>, TypedBuffer<u32>)> {
+        let mut objects = vec![];
+        let mut all_vertices = vec![];
+        let mut all_indices = vec![];
+
+        for (handle, transform) in transforms.iter() {
+            let index = data.mesh_map.get(handle).unwrap();
+            let mesh = data.meshes.get(*index).unwrap();
+
+            let vertex_offset = all_vertices.len();
+            let index_offset = all_indices.len();
+            let index_count = mesh.indices.len();
+
+            // Create vertices
+            let mesh_vertices = (0..mesh.vertices.len())
+                .map(|i| Vertex {
+                    position: mesh.vertices[i],
+                    normal: *mesh.normals.get(i).unwrap_or(&Vec3::ONE),
+                    tangent: *mesh.tangents.get(i).unwrap_or(&Vec4::ONE),
+                    color: *mesh.colors.get(i).unwrap_or(&Vec4::ONE),
+                    uv_x: mesh.tex_coords0.get(i).unwrap_or(&Vec2::ZERO)[0],
+                    uv_y: mesh.tex_coords0.get(i).unwrap_or(&Vec2::ZERO)[1],
+                })
+                .collect::<Vec<_>>();
+
+            // Create indices with vertex offset
+            let mesh_indices =
+                mesh.indices.iter().map(|&idx| idx + vertex_offset as u32).collect::<Vec<_>>();
+
+            all_vertices.extend(mesh_vertices);
+            all_indices.extend(mesh_indices);
+
+            let material = *data.material_map.get(&mesh.material).unwrap_or(&0);
+
+            objects.push(RenderObject {
+                vertex_offset,
+                index_offset,
+                index_count,
+                transform: *transform,
+                material,
+            });
+        }
+
+        // Create and populate buffers
+        let mut vertex_buffer =
+            TypedBuffer::vertex(&self.gpu, all_vertices.len(), "shared_vertices")?;
+        let mut index_buffer = TypedBuffer::index(&self.gpu, all_indices.len(), "shared_indices")?;
+
+        vertex_buffer.write(bytemuck::cast_slice(&all_vertices));
+        index_buffer.write(bytemuck::cast_slice(&all_indices));
+
+        Ok((objects, vertex_buffer, index_buffer))
+    }
+
+    #[instrument(skip_all)]
+    pub fn prepare_bindless(&mut self, assets: &mut Assets, scene: &Scene) -> Result<()> {
+        self.gpu.device().wait_idle();
+        let cmd = &self.gpu.immediate_cmd_buffer();
+        cmd.begin();
+
+        let bindless_data = assets.prepare_bindless(cmd)?;
+
+        // Prepare materials
+        let mut materials_arr = [GpuMaterial::default(); 10];
+        for (i, material) in bindless_data.materials.iter().enumerate() {
+            materials_arr[i] = *material;
+        }
+        let object_data = GpuObjectData {
+            materials: materials_arr,
+        };
+
+        // Create render objects
+        let mesh_nodes = scene
+            .mesh_nodes()
+            .map(|node| match node.data {
+                NodeType::Mesh(handle) => (handle, node.transform),
+                _ => panic!("Should not be here, node: {:?}", node),
+            })
+            .collect::<Vec<_>>();
+
+        let (render_objects, vertex_buffer, index_buffer) =
+            self.create_render_objects2(&mesh_nodes, &bindless_data)?;
+
+        self.render_objects = render_objects;
+        self.index_buffer = index_buffer;
+        self.vertex_buffer = vertex_buffer;
+        self.object_data_buffer.write(&[object_data]);
+
+        // Update bindings
+        self.binder
+            .uniform_buffer(BIND_IDX_SCENE, &self.scene_buffer, 0)
+            .uniform_buffer(BIND_IDX_MATERIAL, &self.object_data_buffer, 0)
+            .texture_array(
+                BIND_IDX_TEXTURE,
+                &bindless_data.textures,
+                &assets.default_sampler(),
+            )
+            .update(&self.gpu)?;
+
+        cmd.end();
+
+        self.gpu.queue_submit(
+            &self.gpu.device().graphics_queue(),
+            &[cmd],
+            &[],
+            &[],
+            Fence::null(),
+        );
+
+        self.gpu.device().wait_idle();
+        Ok(())
+    }
+
+    fn create_frames(gpu: &Gpu) -> Result<Vec<Frame>> {
+        let mut frames = Vec::new();
+        for i in 0..N_FRAMES {
+            let name = format!("frame{i:02}");
+            let cmd_pool = CommandPool::new(gpu.device(), gpu.device().graphics_queue(), &name);
+            let swapchain_semaphore = gpu.device().create_semaphore();
+            let render_semaphore = gpu.device().create_semaphore();
+            let fence = gpu.device().create_fence(FenceCreateFlags::SIGNALED);
+            let cmd_buffer = cmd_pool.create_command_buffer(&name);
+
+            frames.push(Frame {
+                cmd_pool,
+                acquire_semaphore: swapchain_semaphore,
+                present_semaphore: render_semaphore,
+                cmd_buffer,
+                fence,
+            });
+        }
+        Ok(frames)
+    }
 }
