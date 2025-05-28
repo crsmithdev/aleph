@@ -11,7 +11,7 @@ pub mod util;
 pub use crate::{
     assets::{Assets, MaterialHandle, MeshHandle, TextureHandle},
     camera::{Camera, CameraConfig},
-    graph::{Node, NodeType, Scene},
+    graph::{Node, Scene},
     material::Material,
     model::Vertex,
 };

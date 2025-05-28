@@ -73,7 +73,7 @@ void main() {
     vec3 normal = calculateNormal();
     vec3 bitangent = normalize(cross(normal, inTangent.xyz));
 
-    int i = p_constants.material_index;
+    uint i = p_constants.material_index;
     Material m = u_object.materials[i];
     uint color_index = m.color_texture_index;
     uint normal_index = m.normal_texture_index;

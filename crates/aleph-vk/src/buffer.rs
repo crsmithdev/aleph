@@ -20,6 +20,24 @@ pub struct TypedBuffer<T> {
     _marker: std::marker::PhantomData<T>,
 }
 
+#[derive(Debug)]
+pub struct BufferView {
+    pub offset: u64,
+    pub size: u64,
+}
+
+#[derive(Debug)]
+pub struct TypedBufferView<T> {
+    pub offset: u64,
+    pub len: usize,
+    pub _marker: std::marker::PhantomData<T>,
+}
+
+impl<T> TypedBufferView<T> {
+    pub fn offset(&self) -> u64 { self.offset }
+    pub fn len(&self) -> usize { self.len }
+}
+
 impl<T: Pod> TypedBuffer<T> {
     pub fn index(gpu: &Gpu, size: usize, name: &str) -> Result<Self> {
         Self::new(
@@ -117,6 +135,15 @@ impl<T: Pod> TypedBuffer<T> {
 
     #[inline]
     pub fn write(&mut self, data: &[T]) { self.buffer.write(bytemuck::cast_slice(data)) }
+
+    pub fn sub_buffer(&self, offset: usize, len: usize) -> TypedBufferView<T> {
+        assert!(offset + len <= self.len);
+        TypedBufferView {
+            offset: (offset * self.type_size) as u64,
+            len,
+            _marker: std::marker::PhantomData,
+        }
+    }
 }
 
 impl<T> Drop for TypedBuffer<T> {
@@ -283,5 +310,21 @@ mod tests {
         assert!(buffer.name() == "test_buffer");
         assert!(buffer.handle() != vk::Buffer::null());
         assert!(buffer.size() == 1024);
+    }
+
+    #[test]
+    fn test_typed_sub_buffer() {
+        let gpu = test_gpu();
+        let buffer = TypedBuffer::<i32>::new(
+            gpu,
+            100,
+            BufferUsageFlags::TRANSFER_SRC,
+            MemoryLocation::CpuToGpu,
+            "test_subbuf",
+        )
+        .unwrap();
+        let sub = buffer.sub_buffer(10, 20);
+        assert_eq!(sub.offset(), 10 * std::mem::size_of::<i32>() as u64);
+        assert_eq!(sub.len(), 20);
     }
 }

@@ -238,7 +238,7 @@ fn build_ui(ctx: &egui::Context, config: &mut RenderConfig, scene_data: &mut Gpu
         });
 }
 
-fn light(ui: &mut egui::Ui, light: &mut Light, n: i32) {
+fn light(ui: &mut egui::Ui, light: &mut Light, n: u32) {
     egui::Grid::new(format!("light-{n:02}")).min_col_width(50.).max_col_width(250.).show(
         ui,
         |ui| {

@@ -1,6 +1,6 @@
 ## General
 - [ ] Minimal documentation
-- [ ] Github CI integrat1ion
+- [x] Github CI integrat1ion
 - [x] Local git unit test hook
 - [ ] Systematic tracing
 
@@ -11,7 +11,7 @@
 ## aleph-scene
 - [ ] Node types for camera and lights
 - [x] Basic scene graph mutation
-- [ ] AssetLoader abstraction
+- [x] AssetLoader abstraction
 - [x] Improve Assets & Uploader integration
 
 

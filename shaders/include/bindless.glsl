@@ -18,24 +18,24 @@ struct Material {
 };
 
 struct Config {
-    int force_color;
-    int force_metallic;
-    int force_roughness;
-    int force_ao;
+    uint force_color;
+    uint force_metallic;
+    uint force_roughness;
+    uint force_ao;
     vec4 force_color_factor;
     float force_metallic_factor;
     float force_roughness_factor;
     float force_ao_strength;
-    int debug_normals;
-    int debug_color;
-    int debug_metallic;
-    int debug_occlusion;
-    int debug_roughness;
-    int debug_tangents;
-    int debug_bitangents;
-    int debug_specular;
-    int disable_normal_map;
-    int force_defaults;
+    uint debug_normals;
+    uint debug_color;
+    uint debug_metallic;
+    uint debug_occlusion;
+    uint debug_roughness;
+    uint debug_tangents;
+    uint debug_bitangents;
+    uint debug_specular;
+    uint disable_normal_map;
+    uint force_defaults;
 };
 
 layout(std140, set = 0, binding = 0) uniform SceneData {
@@ -43,7 +43,7 @@ layout(std140, set = 0, binding = 0) uniform SceneData {
     mat4 projection;
     mat4 vp;
     vec3 cameraPos;
-    int n_lights;
+    uint n_lights;
     Config config;
     Light lights[MAX_LIGHTS];
 } u_scene;
@@ -56,7 +56,7 @@ layout(set = 0, binding = 2) uniform sampler2D u_textures[];
 
 layout(push_constant) uniform PushConstant {
     mat4 model;
-    int material_index;
+    uint material_index;
     int _padding0;
     int _padding1;
     int _padding2;

@@ -1,6 +1,6 @@
 use {
     crate::{model::Light, Camera, CameraConfig, MeshHandle},
-    anyhow::Result,
+    anyhow::{anyhow, Result},
     derive_more::Debug,
     glam::Mat4,
     petgraph::graph::NodeIndex,
@@ -11,65 +11,49 @@ use {
     },
 };
 
+#[derive(Debug, Clone)]
+pub enum NodeData {
+    Mesh(MeshHandle),
+    Light(Light),
+    Camera(CameraConfig),
+    Group,
+}
+
+#[derive(Debug, Clone)]
 pub struct Node {
     pub handle: NodeHandle,
     pub name: String,
-    pub transform: Mat4,
+    pub data: NodeData,
+    pub world_transform: Mat4,
     pub local_transform: Mat4,
-    pub data: NodeType,
 }
 
 impl Node {
-    pub fn new(name: &str, data: NodeType) -> Self {
+    fn new(name: &str, data: NodeData) -> Self {
         Self {
             handle: NodeHandle::next(),
             name: name.to_string(),
-            transform: Mat4::IDENTITY,
+            world_transform: Mat4::IDENTITY,
             local_transform: Mat4::IDENTITY,
             data,
         }
     }
 
-    pub fn rotate(&mut self, delta: f32) {
-        self.transform = Mat4::from_rotation_y(delta) * self.transform;
-    }
-}
+    pub fn group(name: &str) -> Self { Self::new(name, NodeData::Group) }
 
-impl Debug for Node {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let transform = format!(
-            "[{:?}, {:?}, {:?}]",
-            self.transform.row(0).to_array(),
-            self.transform.row(1).to_array(),
-            self.transform.row(2).to_array()
-        );
-        f.debug_struct("Node")
-            .field("name", &self.name)
-            .field("handle", &self.handle)
-            .field("data", &self.data)
-            .field("transform", &transform)
-            .finish()
-    }
-}
+    pub fn mesh(name: &str, mesh: MeshHandle) -> Self { Self::new(name, NodeData::Mesh(mesh)) }
 
-#[derive(Default)]
-pub enum NodeType {
-    #[default]
-    Group,
-    Mesh(MeshHandle),
-    Camera(Camera),
-    Light(Light),
-}
+    pub fn light(name: &str, light: Light) -> Self { Self::new(name, NodeData::Light(light)) }
 
-impl Debug for NodeType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            NodeType::Group => f.write_str("Group()"),
-            NodeType::Camera(camera) => f.write_str(&format!("Camera({:?})", camera)),
-            NodeType::Light(light) => f.write_str(&format!("Light({:?})", light)),
-            NodeType::Mesh(handle) => f.write_str(&format!("Mesh({:?})", handle)),
-        }
+    pub fn camera(name: &str, config: CameraConfig) -> Self {
+        Self::new(name, NodeData::Camera(config))
     }
+
+    pub fn rotate(&mut self, delta_y_radians: f32) {
+        self.local_transform = Mat4::from_rotation_y(delta_y_radians) * self.local_transform;
+    }
+
+    pub fn transform(&mut self, transform: Mat4) { self.local_transform = transform; }
 }
 
 #[derive(Default, Clone, Copy, PartialEq, Eq, Hash)]
@@ -77,7 +61,7 @@ pub struct NodeHandle(u64);
 
 impl Debug for NodeHandle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "NodeHandle({})", self.0)
+        write!(f, "Node({})", self.0)
     }
 }
 
@@ -88,104 +72,116 @@ impl NodeHandle {
     }
 }
 
-pub type Graph = petgraph::Graph<NodeHandle, ()>;
+pub type Graph = petgraph::Graph<Node, ()>;
 
 #[derive(Debug)]
 pub struct Scene {
-    nodes: HashMap<NodeHandle, Node>,
-    indices: HashMap<NodeHandle, NodeIndex>,
-    graph: petgraph::Graph<NodeHandle, ()>,
     pub camera: Camera,
-    pub root: NodeHandle,
+    graph: Graph,
+    root: NodeHandle,
+    indices: HashMap<NodeHandle, NodeIndex>,
 }
 
 impl Default for Scene {
     fn default() -> Self {
         let mut graph = Graph::new();
-        let mut indices = HashMap::new();
-        let mut nodes = HashMap::new();
-        let root = NodeHandle::next();
-        let index = graph.add_node(root);
-        nodes.insert(
-            root,
-            Node {
-                handle: root,
-                name: "root".to_string(),
-                transform: Mat4::IDENTITY,
-                local_transform: Mat4::IDENTITY,
-                data: NodeType::Group,
-            },
-        );
-        indices.insert(root, index);
+        let root_node = Node::group("root");
+        let root_handle = root_node.handle;
+        let root_index = graph.add_node(root_node);
 
-        let camera = Camera::new(CameraConfig::default());
+        let mut indices = HashMap::new();
+        indices.insert(root_handle, root_index);
+
         Self {
-            camera,
+            camera: Camera::new(CameraConfig::default()),
             graph,
-            nodes,
-            root,
+            root: root_handle,
             indices,
         }
     }
 }
 
 impl Scene {
-    fn index_for(&self, handle: NodeHandle) -> Result<NodeIndex> {
+    fn handle_to_index(&self, handle: NodeHandle) -> Result<NodeIndex> {
         self.indices
             .get(&handle)
-            .map(|i| *i)
-            .ok_or_else(|| anyhow::anyhow!("Index for handle {handle:?} not found"))
+            .copied()
+            .ok_or_else(|| anyhow!("Node {handle:?} not found in index map"))
     }
 
-    pub fn attach_root(&mut self, node: Node) -> Result<()> { self.attach(node, self.root) }
+    pub fn root(&self) -> NodeHandle { self.root }
 
-    pub fn attach(&mut self, node: Node, parent: NodeHandle) -> Result<()> {
-        let index = self.graph.add_node(node.handle);
-        let parent_index = self.index_for(parent)?;
+    pub fn attach_to_root(&mut self, node: Node) -> Result<NodeHandle> {
+        self.attach(node, self.root)
+    }
 
-        log::debug!(
-            "Attached as child: {:?} -> {:?} (index: {})",
-            parent,
-            node.handle,
-            index.index(),
-        );
+    pub fn attach(&mut self, node: Node, parent_handle: NodeHandle) -> Result<NodeHandle> {
+        let parent_index = self.handle_to_index(parent_handle)?;
+        let node_handle = node.handle;
 
-        self.indices.insert(node.handle, index);
-        self.nodes.insert(node.handle, node);
-        self.graph.add_edge(parent_index, index, ());
+        let parent_transform = self
+            .graph
+            .node_weight(parent_index)
+            .ok_or_else(|| {
+                anyhow!("Parent node {parent_handle:?} (index {parent_index:?}) not found in graph")
+            })?
+            .world_transform;
+
+        let mut new_node = node;
+        new_node.world_transform = parent_transform * new_node.local_transform;
+
+        log::debug!("Attached {new_node:?} to parent {parent_handle:?}");
+
+        let node_index = self.graph.add_node(new_node);
+        self.indices.insert(node_handle, node_index);
+        self.graph.add_edge(parent_index, node_index, ());
+
+        Ok(node_handle)
+    }
+
+    pub fn children(&self, node_handle: NodeHandle) -> Vec<NodeHandle> {
+        let index = self.indices.get(&node_handle).unwrap();
+        let children = self.graph.neighbors(*index).collect::<Vec<_>>();
+        children.iter().map(|child| self.graph.node_weight(*child).unwrap().handle).collect()
+    }
+
+    pub fn update_transform(&mut self, handle: NodeHandle, transform: Mat4) -> Result<Mat4> {
+        let node_index = self.handle_to_index(handle)?;
+        let node = self
+            .graph
+            .node_weight_mut(node_index)
+            .ok_or_else(|| anyhow!("Node {handle:?} not found"))?;
+
+        node.world_transform = transform * node.local_transform;
+        Ok(node.world_transform)
+    }
+
+    pub fn update_transforms_recursive(
+        &mut self,
+        handle: NodeHandle,
+        transform: Mat4,
+    ) -> Result<()> {
+        let transform = self.update_transform(handle, transform)?;
+        for child in self.children(handle) {
+            self.update_transforms_recursive(child, transform)?;
+        }
+
         Ok(())
     }
 
-    pub fn children(&self, node: NodeHandle) -> Vec<NodeHandle> {
-        let index = self.indices.get(&node).unwrap();
-        let children = self.graph.neighbors(*index).collect::<Vec<_>>();
-        children.iter().map(|child| *self.graph.node_weight(*child).unwrap()).collect()
-    }
+    pub fn nodes(&self) -> impl Iterator<Item = &Node> { self.graph.node_weights() }
+    pub fn nodes_mut(&mut self) -> impl Iterator<Item = &mut Node> { self.graph.node_weights_mut() }
 
-    pub fn parent(&self, node: NodeHandle) -> Option<NodeHandle> {
-        let index = self.indices.get(&node).unwrap();
-        let parent = self.graph.neighbors_directed(*index, petgraph::Direction::Incoming).next();
-        parent.map(|parent| *self.graph.node_weight(parent).unwrap())
+    pub fn node_mut(&mut self, handle: NodeHandle) -> Option<&mut Node> {
+        self.indices.get(&handle).and_then(|idx| self.graph.node_weight_mut(*idx))
     }
-
-    pub fn detach(&mut self, node: NodeHandle) -> Option<Node> {
-        let node = self.nodes.remove(&node);
-        node
+    pub fn node(&self, handle: NodeHandle) -> Option<&Node> {
+        self.indices.get(&handle).and_then(|idx| self.graph.node_weight(*idx))
     }
 
     pub fn mesh_nodes(&self) -> impl Iterator<Item = &Node> {
-        self.nodes.values().filter(|node| matches!(node.data, NodeType::Mesh(_)))
+        self.graph.node_weights().filter(|node| matches!(node.data, NodeData::Mesh(_)))
     }
-
-    pub fn nodes(&self) -> impl Iterator<Item = &Node> { self.nodes.values() }
-
-    pub fn nodes_mut(&mut self) -> impl Iterator<Item = &mut Node> { self.nodes.values_mut() }
-
-    pub fn node_mut(&mut self, handle: NodeHandle) -> Option<&mut Node> {
-        self.nodes.get_mut(&handle)
-    }
-
-    pub fn node(&self, handle: NodeHandle) -> Option<&Node> { self.nodes.get(&handle) }
 
     pub fn clear(&mut self) { *self = Self::default(); }
 }

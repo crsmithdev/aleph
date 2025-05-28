@@ -4,7 +4,7 @@ use {
         input::{Input, Key, MouseButton},
         system::{Res, ResMut, Schedule},
     },
-    aleph_scene::{assets::Assets, gltf, NodeType, Scene},
+    aleph_scene::{assets::Assets, gltf, graph::NodeData, Scene},
     std::sync::{LazyLock, Mutex},
 };
 
@@ -75,7 +75,7 @@ fn input_system(mut scene: ResMut<Scene>, mut assets: ResMut<Assets>, input: Res
 
     if state.auto_rotate {
         scene.nodes_mut().for_each(|node| {
-            if let NodeType::Mesh(_) = node.data {
+            if let NodeData::Mesh(_) = node.data {
                 node.rotate(ROTATION_FACTOR);
             }
         });

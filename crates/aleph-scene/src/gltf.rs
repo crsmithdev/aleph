@@ -1,7 +1,8 @@
 use {
     crate::{
-        graph::NodeHandle, model::MeshInfo, util, Assets, Material, MaterialHandle, MeshHandle,
-        Node, NodeType, Scene, TextureHandle,
+        graph::{NodeData, NodeHandle},
+        model::MeshInfo,
+        util, Assets, Material, MaterialHandle, MeshHandle, Node, Scene, TextureHandle,
     },
     aleph_vk::{
         Extent2D, Filter, Format, ImageAspectFlags, ImageUsageFlags, PrimitiveTopology, Sampler,
@@ -45,7 +46,7 @@ pub fn load_scene(path: &str, mut assets: &mut Assets) -> Result<Scene> {
         document.default_scene().ok_or_else(|| anyhow!("No scene found in glTF file"))?;
 
     for gltf_node in gltf_scene.nodes() {
-        load_node(gltf_node, scene.root, &mut scene, &meshes)?;
+        load_node(gltf_node, scene.root(), &mut scene, &meshes)?;
     }
     log::info!("Finished loading scene from {path:?}");
     Ok(scene)
@@ -57,7 +58,7 @@ fn load_node(
     scene: &mut Scene,
     meshes: &Vec<MeshHandle>,
 ) -> Result<()> {
-    let parent_transform = scene.node(parent).map(|p| p.transform).unwrap_or(Mat4::IDENTITY);
+    let parent_transform = scene.node(parent).map(|p| p.world_transform).unwrap_or(Mat4::IDENTITY);
     let matrix = source.transform().matrix();
     let transform = parent_transform * Mat4::from_cols_array_2d(&matrix);
 
@@ -69,16 +70,16 @@ fn load_node(
 
     let data = if let Some(mesh) = source.mesh() {
         let mesh_handle = meshes[mesh.index()];
-        NodeType::Mesh(mesh_handle)
+        NodeData::Mesh(mesh_handle)
     } else {
-        NodeType::Group
+        NodeData::Group
     };
 
     let handle = NodeHandle::next();
     let node = Node {
         handle,
         name: name.clone(),
-        transform,
+        world_transform: transform,
         local_transform: transform,
         data,
     };

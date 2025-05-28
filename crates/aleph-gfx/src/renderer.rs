@@ -2,8 +2,9 @@ use {
     crate::{ForwardPipeline, Gui, Pipeline, ResourceBinder, ResourceLayout},
     aleph_scene::{
         assets::{BindlessData, GpuMaterial},
+        graph::NodeData,
         model::Light,
-        Assets, MaterialHandle, MeshHandle, NodeType, Scene, Vertex,
+        Assets, MaterialHandle, MeshHandle, Scene, Vertex,
     },
     aleph_vk::{
         sync, AccessFlags2, CommandBuffer, CommandPool, Extent2D, Extent3D, Fence, Format, Gpu,
@@ -77,48 +78,48 @@ pub struct RenderConfig {
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy, Pod, Zeroable)]
 pub struct GpuConfig {
-    pub force_color: i32,
-    pub force_metallic: i32,
-    pub force_roughness: i32,
-    pub force_ao: i32,
+    pub force_color: u32,
+    pub force_metallic: u32,
+    pub force_roughness: u32,
+    pub force_ao: u32,
     pub force_color_factor: Vec4,
     pub force_metallic_factor: f32,
     pub force_roughness_factor: f32,
     pub force_ao_strength: f32,
-    pub debug_normals: i32,
-    pub debug_color: i32,
-    pub debug_occlusion: i32,
-    pub debug_metallic: i32,
-    pub debug_roughness: i32,
-    pub debug_tangents: i32,
-    pub debug_bitangents: i32,
-    pub debug_specular: i32,
-    pub debug_normal_maps: i32,
-    pub force_defaults: i32,
+    pub debug_normals: u32,
+    pub debug_color: u32,
+    pub debug_occlusion: u32,
+    pub debug_metallic: u32,
+    pub debug_roughness: u32,
+    pub debug_tangents: u32,
+    pub debug_bitangents: u32,
+    pub debug_specular: u32,
+    pub debug_normal_maps: u32,
+    pub force_defaults: u32,
     pub _padding0: Vec3,
 }
 
 impl From<&RenderConfig> for GpuConfig {
     fn from(config: &RenderConfig) -> Self {
         Self {
-            force_color: config.force_color as i32,
-            force_metallic: config.force_metallic as i32,
-            force_roughness: config.force_roughness as i32,
-            force_ao: config.force_ao as i32,
+            force_color: config.force_color as u32,
+            force_metallic: config.force_metallic as u32,
+            force_roughness: config.force_roughness as u32,
+            force_ao: config.force_ao as u32,
             force_color_factor: config.force_color_factor,
             force_metallic_factor: config.force_metallic_factor,
             force_roughness_factor: config.force_roughness_factor,
             force_ao_strength: config.force_ao_strength,
-            debug_normals: config.debug_normals as i32,
-            debug_color: config.debug_color as i32,
-            debug_metallic: config.debug_metallic as i32,
-            debug_occlusion: config.debug_occlusion as i32,
-            debug_roughness: config.debug_roughness as i32,
-            debug_tangents: config.debug_tangents as i32,
-            debug_bitangents: config.debug_bitangents as i32,
-            debug_specular: config.debug_specular as i32,
-            debug_normal_maps: config.debug_normal_maps as i32,
-            force_defaults: 0,
+            debug_normals: config.debug_normals as u32,
+            debug_color: config.debug_color as u32,
+            debug_metallic: config.debug_metallic as u32,
+            debug_occlusion: config.debug_occlusion as u32,
+            debug_roughness: config.debug_roughness as u32,
+            debug_tangents: config.debug_tangents as u32,
+            debug_bitangents: config.debug_bitangents as u32,
+            debug_specular: config.debug_specular as u32,
+            debug_normal_maps: config.debug_normal_maps as u32,
+            force_defaults: config.force_defaults as u32,
             _padding0: Vec3::ZERO,
         }
     }
@@ -131,7 +132,7 @@ pub struct GpuSceneData {
     pub projection: Mat4,
     pub vp: Mat4,
     pub camera_pos: Vec3,
-    pub n_lights: i32,
+    pub n_lights: u32,
     pub config: GpuConfig,
     pub lights: [Light; 4],
 }
@@ -146,10 +147,10 @@ pub struct GpuObjectData {
 #[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
 pub struct GpuPushConstantData {
     pub model: Mat4,
-    pub material_index: i32,
-    pub _padding0: i32,
-    pub _padding1: i32,
-    pub _padding2: i32,
+    pub material_index: u32,
+    pub _padding0: u32,
+    pub _padding1: u32,
+    pub _padding2: u32,
 }
 
 // Render Objects
@@ -641,7 +642,7 @@ impl Renderer {
         let mesh_nodes = scene
             .mesh_nodes()
             .map(|node| match node.data {
-                NodeType::Mesh(handle) => (handle, node.transform),
+                NodeData::Mesh(handle) => (handle, node.world_transform),
                 _ => panic!("Should not be here, node: {:?}", node),
             })
             .collect::<Vec<_>>();
