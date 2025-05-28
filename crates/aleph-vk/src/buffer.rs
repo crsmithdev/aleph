@@ -1,7 +1,7 @@
 use {
-    crate::{Allocator, Device, DeviceAddress, Gpu},
+    crate::{Allocator, Device, Gpu},
     anyhow::Result,
-    ash::vk::{self, Handle, MappedMemoryRange},
+    ash::vk::{self, DeviceAddress, Handle as _, MappedMemoryRange},
     bytemuck::Pod,
     derive_more::{Debug, Deref},
     gpu_allocator::vulkan::Allocation,
@@ -23,8 +23,7 @@ pub struct TypedBuffer<T> {
 impl<T: Pod> TypedBuffer<T> {
     pub fn index(gpu: &Gpu, size: usize, name: &str) -> Result<Self> {
         Self::new(
-            &gpu.device,
-            &gpu.allocator,
+            &gpu,
             size,
             vk::BufferUsageFlags::INDEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
             MemoryLocation::CpuToGpu,
@@ -33,8 +32,7 @@ impl<T: Pod> TypedBuffer<T> {
     }
     pub fn vertex(gpu: &Gpu, size: usize, name: &str) -> Result<Self> {
         Self::new(
-            &gpu.device,
-            &gpu.allocator,
+            &gpu,
             size,
             vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
             MemoryLocation::CpuToGpu,
@@ -43,8 +41,7 @@ impl<T: Pod> TypedBuffer<T> {
     }
     pub fn storage(gpu: &Gpu, size: usize, name: &str) -> Result<Self> {
         Self::new(
-            &gpu.device,
-            &gpu.allocator,
+            &gpu,
             size,
             vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
             MemoryLocation::GpuOnly,
@@ -53,8 +50,7 @@ impl<T: Pod> TypedBuffer<T> {
     }
     pub fn uniform(gpu: &Gpu, size: usize, name: &str) -> Result<Self> {
         Self::new(
-            &gpu.device,
-            &gpu.allocator,
+            &gpu,
             size,
             vk::BufferUsageFlags::UNIFORM_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
             MemoryLocation::GpuOnly,
@@ -64,8 +60,7 @@ impl<T: Pod> TypedBuffer<T> {
 
     pub fn shared_uniform(gpu: &Gpu, size: usize, name: &str) -> Result<Self> {
         Self::new(
-            &gpu.device,
-            &gpu.allocator,
+            &gpu,
             size,
             vk::BufferUsageFlags::UNIFORM_BUFFER,
             MemoryLocation::CpuToGpu,
@@ -74,8 +69,7 @@ impl<T: Pod> TypedBuffer<T> {
     }
     pub fn staging(gpu: &Gpu, size: usize, name: &str) -> Result<Self> {
         Self::new(
-            &gpu.device,
-            &gpu.allocator,
+            &gpu,
             size,
             vk::BufferUsageFlags::TRANSFER_SRC,
             MemoryLocation::CpuToGpu,
@@ -84,8 +78,7 @@ impl<T: Pod> TypedBuffer<T> {
     }
 
     pub fn new(
-        device: &Device,
-        allocator: &Arc<Allocator>,
+        gpu: &Gpu,
         len: usize,
         flags: vk::BufferUsageFlags,
         location: MemoryLocation,
@@ -94,7 +87,14 @@ impl<T: Pod> TypedBuffer<T> {
         let type_size = mem::size_of::<T>();
         let bytes_size = (type_size * len) as u64;
 
-        let buffer = Buffer::new(device, allocator, bytes_size, flags, location, name)?;
+        let buffer = Buffer::new(
+            gpu.device(),
+            &gpu.allocator(),
+            bytes_size,
+            flags,
+            location,
+            name,
+        )?;
         Ok(Self {
             buffer,
             type_size,
@@ -252,8 +252,7 @@ mod tests {
     fn test_create_typed_buffer() {
         let gpu = test_gpu();
         let result = TypedBuffer::<i32>::new(
-            &gpu.device,
-            &gpu.allocator,
+            gpu,
             1024,
             BufferUsageFlags::TRANSFER_SRC,
             MemoryLocation::CpuToGpu,

@@ -25,15 +25,11 @@ pub struct Texture {
     image: Image,
     allocation: Rc<Allocation>,
     allocator: Arc<Allocator>,
-    device: Device,
     sampler: Option<Sampler>,
 }
 
 impl Texture {
     pub fn new(gpu: &Gpu, info: &TextureInfo) -> Result<Self> {
-        let device = gpu.device.clone();
-        let allocator = gpu.allocator.clone();
-
         let image_info = &vk::ImageCreateInfo::default()
             .image_type(vk::ImageType::TYPE_2D)
             .format(info.format)
@@ -43,13 +39,14 @@ impl Texture {
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::OPTIMAL)
             .usage(info.flags | vk::ImageUsageFlags::TRANSFER_DST);
-        let image = unsafe { device.handle.create_image(image_info, None) }?;
-        let requirements = unsafe { device.handle.get_image_memory_requirements(image) };
-        let allocation = Rc::new(allocator.allocate_image(image, requirements, &info.name)?);
+        let image = unsafe { gpu.device().handle.create_image(image_info, None) }?;
+        let requirements = unsafe { gpu.device().handle.get_image_memory_requirements(image) };
+        let allocation =
+            Rc::new(gpu.allocator().allocate_image(image, requirements, &info.name)?);
 
         let handle = Image::new(
             image,
-            device.clone(),
+            gpu.device().clone(),
             info.extent,
             info.format,
             info.flags,
@@ -59,9 +56,8 @@ impl Texture {
 
         Ok(Self {
             image: handle,
-            allocator,
+            allocator: gpu.allocator().clone(),
             allocation,
-            device,
             sampler: info.sampler.clone(),
         })
     }
@@ -77,21 +73,18 @@ impl Texture {
     pub fn format(&self) -> Format { self.image.format }
 
     pub fn aspect_flags(&self) -> ImageAspectFlags { self.image.aspect_flags }
+
+    fn destroy(&mut self) {
+        let allocation = mem::take(&mut self.allocation);
+        match Rc::try_unwrap(allocation) {
+            Ok(allocation) => self.allocator.deallocate(allocation),
+            Err(_) => log::warn!("Error dropping {self:?}, allocation still has references"),
+        }
+    }
 }
 
 impl Drop for Texture {
-    fn drop(&mut self) {
-        unsafe {
-            self.device.handle.destroy_image_view(self.image.view, None);
-            self.device.handle.destroy_image(self.image.handle, None);
-
-            let allocation = mem::take(&mut self.allocation);
-            match Rc::try_unwrap(allocation) {
-                Ok(allocation) => self.allocator.deallocate(allocation),
-                Err(_) => log::warn!("Error dropping {self:?}, allocation still has references"),
-            }
-        }
-    }
+    fn drop(&mut self) { self.destroy(); }
 }
 
 #[derive(Clone, Debug)]
@@ -106,6 +99,7 @@ pub struct Image {
     format: Format,
     usage_flags: ImageUsageFlags,
     aspect_flags: ImageAspectFlags,
+    device: Device,
 }
 
 impl Image {
@@ -142,6 +136,7 @@ impl Image {
             extent,
             usage_flags,
             aspect_flags,
+            device: device.clone(),
         };
 
         log::trace!("Created {:?}", image);
@@ -159,6 +154,20 @@ impl Image {
     pub fn usage_flags(&self) -> ImageUsageFlags { self.usage_flags }
 
     pub fn aspect_flags(&self) -> ImageAspectFlags { self.aspect_flags }
+
+    pub fn destroy(&self) {
+        unsafe {
+            self.device.handle.destroy_image_view(self.view, None);
+            self.device.handle.destroy_image(self.handle, None);
+        }
+    }
+}
+
+impl Drop for Image {
+    fn drop(&mut self) {
+        log::trace!("Destroying image {}", self.name);
+        self.destroy();
+    }
 }
 
 #[cfg(test)]
@@ -192,6 +201,51 @@ mod tests {
         assert_eq!(texture.usage_flags(), ImageUsageFlags::TRANSFER_DST);
         assert!(texture.handle() != vk::Image::null());
         assert!(texture.view() != vk::ImageView::null());
+    }
+
+    #[test]
+    fn test_sampler_new() {
+        let gpu = test_gpu();
+        let device = gpu.device();
+        let sampler = Sampler::new(
+            &device,
+            vk::Filter::NEAREST,
+            vk::Filter::LINEAR,
+            vk::SamplerMipmapMode::NEAREST,
+            vk::SamplerAddressMode::CLAMP_TO_EDGE,
+            vk::SamplerAddressMode::MIRRORED_REPEAT,
+            "sampler_test",
+        )
+        .unwrap();
+
+        assert_eq!(sampler.name(), "sampler_test");
+        assert_eq!(sampler.min_filter(), vk::Filter::NEAREST);
+        assert_eq!(sampler.mag_filter(), vk::Filter::LINEAR);
+        assert_eq!(sampler.mipmap_mode(), vk::SamplerMipmapMode::NEAREST);
+        assert_eq!(
+            sampler.address_mode_u(),
+            vk::SamplerAddressMode::CLAMP_TO_EDGE
+        );
+        assert_eq!(
+            sampler.address_mode_v(),
+            vk::SamplerAddressMode::MIRRORED_REPEAT
+        );
+        assert!(sampler.handle() != vk::Sampler::null());
+    }
+
+    #[test]
+    fn test_sampler_default() {
+        let gpu = test_gpu();
+        let device = gpu.device();
+        let sampler = Sampler::default(&device).unwrap();
+
+        assert_eq!(sampler.name(), "default");
+        assert_eq!(sampler.min_filter(), vk::Filter::LINEAR);
+        assert_eq!(sampler.mag_filter(), vk::Filter::LINEAR);
+        assert_eq!(sampler.mipmap_mode(), vk::SamplerMipmapMode::LINEAR);
+        assert_eq!(sampler.address_mode_u(), vk::SamplerAddressMode::REPEAT);
+        assert_eq!(sampler.address_mode_v(), vk::SamplerAddressMode::REPEAT);
+        assert!(sampler.handle() != vk::Sampler::null());
     }
 }
 
