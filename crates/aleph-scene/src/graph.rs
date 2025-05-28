@@ -2,7 +2,7 @@ use {
     crate::{model::Light, Camera, CameraConfig, MeshHandle},
     anyhow::{anyhow, Result},
     derive_more::Debug,
-    glam::Mat4,
+    glam::{Mat4, Vec3},
     petgraph::graph::NodeIndex,
     std::{
         collections::HashMap,
@@ -49,11 +49,15 @@ impl Node {
         Self::new(name, NodeData::Camera(config))
     }
 
-    pub fn rotate(&mut self, delta_y_radians: f32) {
+    pub fn rotate(mut self, delta_y_radians: f32) -> Self {
         self.local_transform = Mat4::from_rotation_y(delta_y_radians) * self.local_transform;
+        self
     }
 
-    pub fn transform(&mut self, transform: Mat4) { self.local_transform = transform; }
+    pub fn transform(mut self, transform: Mat4) -> Self {
+        self.local_transform = transform;
+        self
+    }
 }
 
 #[derive(Default, Clone, Copy, PartialEq, Eq, Hash)]
@@ -184,4 +188,101 @@ impl Scene {
     }
 
     pub fn clear(&mut self) { *self = Self::default(); }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_node_creation() {
+        let mesh_node = Node::mesh("test_mesh", MeshHandle::default());
+        assert_eq!(mesh_node.name, "test_mesh");
+        assert!(matches!(mesh_node.data, NodeData::Mesh(_)));
+
+        let group_node = Node::group("test_group");
+        assert_eq!(group_node.name, "test_group");
+        assert!(matches!(group_node.data, NodeData::Group));
+
+        let light_node = Node::light("test_light", Light::default());
+        assert_eq!(light_node.name, "test_light");
+        assert!(matches!(light_node.data, NodeData::Light(_)));
+    }
+
+    #[test]
+    fn test_node_handles_unique() {
+        let node1 = Node::group("node1");
+        let node2 = Node::group("node2");
+        assert_ne!(node1.handle, node2.handle);
+    }
+
+    #[test]
+    fn test_scene_default() {
+        let scene = Scene::default();
+        assert_eq!(scene.nodes().count(), 1); // root node
+        assert!(scene.node(scene.root()).is_some());
+    }
+
+    #[test]
+    fn test_attach_to_root() {
+        let mut scene = Scene::default();
+        let node = Node::mesh("test", MeshHandle::default());
+        let handle = scene.attach_to_root(node).unwrap();
+
+        assert_eq!(scene.nodes().count(), 2);
+        assert!(scene.node(handle).is_some());
+        assert_eq!(scene.children(scene.root()).len(), 1);
+    }
+
+    #[test]
+    fn test_attach_hierarchy() {
+        let mut scene = Scene::default();
+        let parent = Node::group("parent");
+        let parent_handle = scene.attach_to_root(parent).unwrap();
+
+        let child = Node::mesh("child", MeshHandle::default());
+        let child_handle = scene.attach(child, parent_handle).unwrap();
+
+        assert_eq!(scene.nodes().count(), 3);
+        assert_eq!(scene.children(parent_handle).len(), 1);
+        assert_eq!(scene.children(parent_handle)[0], child_handle);
+    }
+
+    #[test]
+    fn test_node_transform() {
+        let transform = Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0));
+        let node = Node::group("test").transform(transform);
+        assert_eq!(node.local_transform, transform);
+    }
+
+    #[test]
+    fn test_update_transforms() {
+        let mut scene = Scene::default();
+        let transform1 = Mat4::from_translation(Vec3::new(2.0, 2.0, 2.0));
+        let transform2 = Mat4::from_translation(Vec3::new(3.0, 3.0, 3.0));
+
+        let parent = Node::group("parent");
+        let parent_handle = scene.attach_to_root(parent).unwrap();
+        let child = Node::group("child").transform(transform1);
+        let child_handle = scene.attach(child, parent_handle).unwrap();
+
+        scene.update_transforms_recursive(scene.root(), transform2).unwrap();
+
+        let parent = scene.node(parent_handle).unwrap();
+        assert_eq!(parent.world_transform, transform2 * parent.local_transform);
+
+        let child = scene.node(child_handle).unwrap();
+        assert_eq!(child.world_transform, transform1 * transform2);
+    }
+
+    #[test]
+    fn test_mesh_nodes() {
+        let mut scene = Scene::default();
+        scene.attach_to_root(Node::group("group")).unwrap();
+        scene.attach_to_root(Node::mesh("mesh1", MeshHandle::default())).unwrap();
+        scene.attach_to_root(Node::mesh("mesh2", MeshHandle::default())).unwrap();
+
+        let mesh_count = scene.mesh_nodes().count();
+        assert_eq!(mesh_count, 2);
+    }
 }
