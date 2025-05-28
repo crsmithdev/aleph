@@ -191,51 +191,20 @@ pub struct RenderContext<'a> {
     pub assets: &'a Assets,
 }
 
-// Main Renderer
+// GPU resource bundle for Renderer
 #[derive(Debug)]
-pub struct Renderer {
-    #[debug("{}", self.frames.len())]
-    frames: Vec<Frame>,
-    #[debug(skip)]
-    forward_pipeline: ForwardPipeline,
-    rebuild_swapchain: bool,
-    frame_idx: usize,
-    frame_counter: usize,
-
-    // Images
-    draw_image: Texture,
-    depth_image: Texture,
-
-    // Buffers
-    scene_buffer: TypedBuffer<GpuSceneData>,
-    object_data_buffer: TypedBuffer<GpuObjectData>,
-    index_buffer: TypedBuffer<u32>,
-    vertex_buffer: TypedBuffer<Vertex>,
-
-    // Render data
-    #[debug(skip)]
-    scene_data: GpuSceneData,
-    render_objects: Vec<RenderObject>,
-    #[debug(skip)]
-    material_map: HashMap<MaterialHandle, usize>,
-
-    // Resources
-    #[debug(skip)]
-    binder: ResourceBinder,
-    #[debug(skip)]
-    pub gpu: Arc<Gpu>,
-
-    // State
-    pub prepared: bool,
-    #[debug(skip)]
-    config: RenderConfig,
+pub struct RendererResources {
+    pub draw_image: Texture,
+    pub depth_image: Texture,
+    pub scene_buffer: TypedBuffer<GpuSceneData>,
+    pub object_data_buffer: TypedBuffer<GpuObjectData>,
+    pub index_buffer: TypedBuffer<u32>,
+    pub vertex_buffer: TypedBuffer<Vertex>,
+    pub binder: ResourceBinder,
 }
 
-impl Renderer {
-    pub fn new(gpu: Arc<Gpu>) -> Result<Self> {
-        let extent = gpu.swapchain().extent().into();
-        let frames = Self::create_frames(&gpu)?;
-
+impl RendererResources {
+    pub fn new(gpu: &Arc<Gpu>, extent: Extent2D) -> Result<Self> {
         // Create draw image
         let draw_info = TextureInfo {
             name: "draw".to_string(),
@@ -247,7 +216,7 @@ impl Renderer {
             aspect_flags: ImageAspectFlags::COLOR,
             sampler: None,
         };
-        let draw_image = Texture::new(&gpu, &draw_info)?;
+        let draw_image = Texture::new(gpu, &draw_info)?;
 
         // Create depth image
         let depth_info = TextureInfo {
@@ -260,44 +229,86 @@ impl Renderer {
             aspect_flags: ImageAspectFlags::DEPTH,
             sampler: None,
         };
-        let depth_image = Texture::new(&gpu, &depth_info)?;
+        let depth_image = Texture::new(gpu, &depth_info)?;
 
         // Create buffers
-        let scene_buffer = TypedBuffer::shared_uniform(&gpu, 1, "renderer-scene")?;
-        let object_data_buffer = TypedBuffer::shared_uniform(&gpu, 1, "renderer-objects")?;
-        let index_buffer = TypedBuffer::index(&gpu, 1, "renderer-index")?;
-        let vertex_buffer = TypedBuffer::vertex(&gpu, 1, "renderer-vertex")?;
+        let scene_buffer = TypedBuffer::shared_uniform(gpu, 1, "renderer-scene")?;
+        let object_data_buffer = TypedBuffer::shared_uniform(gpu, 1, "renderer-object")?;
+        let index_buffer = TypedBuffer::index(gpu, 1, "renderer-index")?;
+        let vertex_buffer = TypedBuffer::vertex(gpu, 1, "renderer-vertex")?;
 
         // Create resource binder
         let binder = ResourceLayout::set(SET_IDX_BINDLESS)
             .uniform_buffer(BIND_IDX_SCENE, ShaderStageFlags::ALL_GRAPHICS)
             .uniform_buffer(BIND_IDX_MATERIAL, ShaderStageFlags::ALL_GRAPHICS)
             .texture_array(BIND_IDX_TEXTURE, ShaderStageFlags::ALL_GRAPHICS)
-            .finish(&gpu)?;
+            .finish(gpu)?;
 
-        // Create pipeline
-        let forward_pipeline =
-            ForwardPipeline::new(&gpu, &binder.descriptor_layout(), &draw_image, &depth_image)?;
+        Ok(Self {
+            draw_image,
+            depth_image,
+            scene_buffer,
+            object_data_buffer,
+            index_buffer,
+            vertex_buffer,
+            binder,
+        })
+    }
+}
 
-        // Initialize scene data
+// Main Renderer
+#[derive(Debug)]
+pub struct Renderer {
+    #[debug("{}", self.frames.len())]
+    frames: Vec<Frame>,
+    #[debug(skip)]
+    forward_pipeline: ForwardPipeline,
+    rebuild_swapchain: bool,
+    frame_idx: usize,
+    frame_counter: usize,
+
+    // GPU resources
+    resources: RendererResources,
+
+    // Render data
+    #[debug(skip)]
+    scene_data: GpuSceneData,
+    render_objects: Vec<RenderObject>,
+    #[debug(skip)]
+    material_map: HashMap<MaterialHandle, usize>,
+
+    // State
+    #[debug(skip)]
+    pub gpu: Arc<Gpu>,
+    pub prepared: bool,
+    #[debug(skip)]
+    config: RenderConfig,
+}
+
+impl Renderer {
+    pub fn new(gpu: Arc<Gpu>) -> Result<Self> {
+        let extent = gpu.swapchain().extent().into();
+        let frames = Self::create_frames(&gpu)?;
+        let resources = RendererResources::new(&gpu, extent)?;
+        let forward_pipeline = ForwardPipeline::new(
+            &gpu,
+            &resources.binder.descriptor_layout(),
+            &resources.draw_image,
+            &resources.depth_image,
+        )?;
         let scene_data = GpuSceneData {
             lights: LIGHTS,
             n_lights: 3,
             ..Default::default()
         };
-
         Ok(Self {
             gpu,
             frames,
             forward_pipeline,
-            draw_image,
-            depth_image,
+            resources,
             scene_data,
-            scene_buffer,
             rebuild_swapchain: false,
             frame_idx: 0,
-            index_buffer,
-            vertex_buffer,
             frame_counter: 0,
             render_objects: Vec::new(),
             config: RenderConfig {
@@ -321,8 +332,6 @@ impl Renderer {
                 debug_occlusion: false,
             },
             material_map: HashMap::new(),
-            object_data_buffer,
-            binder,
             prepared: false,
         })
     }
@@ -336,7 +345,7 @@ impl Renderer {
         self.scene_data.vp = projection * view.inverse();
         self.scene_data.camera_pos = scene.camera.position();
         self.scene_data.config = GpuConfig::from(&self.config);
-        self.scene_buffer.write(&[self.scene_data]);
+        self.resources.scene_buffer.write(&[self.scene_data]);
     }
 
     #[instrument(skip_all)]
@@ -352,6 +361,14 @@ impl Renderer {
         if self.rebuild_swapchain {
             self.gpu.rebuild_swapchain(extent);
             self.frames = Self::create_frames(&self.gpu)?;
+            let extent = self.gpu.swapchain().extent().into();
+            self.resources = RendererResources::new(&self.gpu, extent)?;
+            self.forward_pipeline = ForwardPipeline::new(
+                &self.gpu,
+                &self.resources.binder.descriptor_layout(),
+                &self.resources.draw_image,
+                &self.resources.depth_image,
+            )?;
             self.rebuild_swapchain = false;
         }
 
@@ -368,23 +385,23 @@ impl Renderer {
         self.rebuild_swapchain = rebuild_swapchain;
 
         // Setup rendering
-        let draw_image = &self.draw_image;
-        let depth_image = &self.depth_image;
+        let draw_image = &self.resources.draw_image;
+        let depth_image = &self.resources.depth_image;
         let (swapchain_image, swapchain_extent) = {
             let swapchain = self.gpu.swapchain();
             (&swapchain.images()[next_idx], swapchain.extent())
         };
         let render_extent = Extent3D {
-            width: self.draw_image.extent().width.min(swapchain_extent.width),
-            height: self.draw_image.extent().height.min(swapchain_extent.height),
+            width: self.resources.draw_image.extent().width.min(swapchain_extent.width),
+            height: self.resources.draw_image.extent().height.min(swapchain_extent.height),
             depth: 1,
         };
 
         // Begin command buffer
         cmd_buffer.reset();
         cmd_buffer.begin();
-        cmd_buffer.bind_index_buffer(&self.index_buffer, 0);
-        cmd_buffer.bind_vertex_buffer(&self.vertex_buffer, 0);
+        cmd_buffer.bind_index_buffer(&self.resources.index_buffer, 0);
+        cmd_buffer.bind_vertex_buffer(&self.resources.vertex_buffer, 0);
 
         // Transition images for rendering
         self.transition_images_for_rendering(cmd_buffer, draw_image, depth_image);
@@ -393,12 +410,12 @@ impl Renderer {
         let context = RenderContext {
             gpu: &self.gpu,
             command_buffer: &cmd_buffer,
-            scene_buffer: &self.scene_buffer,
-            draw_image: &self.draw_image,
-            depth_image: &self.depth_image,
+            scene_buffer: &self.resources.scene_buffer,
+            draw_image: &self.resources.draw_image,
+            depth_image: &self.resources.depth_image,
             render_extent: swapchain_extent,
             material_map: &self.material_map,
-            binder: &self.binder,
+            binder: &self.resources.binder,
             scene,
             objects: &self.render_objects,
             assets,
@@ -633,14 +650,15 @@ impl Renderer {
             self.create_render_objects2(&mesh_nodes, &bindless_data)?;
 
         self.render_objects = render_objects;
-        self.index_buffer = index_buffer;
-        self.vertex_buffer = vertex_buffer;
-        self.object_data_buffer.write(&[object_data]);
+        self.resources.index_buffer = index_buffer;
+        self.resources.vertex_buffer = vertex_buffer;
+        self.resources.object_data_buffer.write(&[object_data]);
 
         // Update bindings
-        self.binder
-            .uniform_buffer(BIND_IDX_SCENE, &self.scene_buffer, 0)
-            .uniform_buffer(BIND_IDX_MATERIAL, &self.object_data_buffer, 0)
+        self.resources
+            .binder
+            .uniform_buffer(BIND_IDX_SCENE, &self.resources.scene_buffer, 0)
+            .uniform_buffer(BIND_IDX_MATERIAL, &self.resources.object_data_buffer, 0)
             .texture_array(
                 BIND_IDX_TEXTURE,
                 &bindless_data.textures,

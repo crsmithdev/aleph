@@ -14,7 +14,7 @@ args = ["run", "--example", "demo"]
 
 [tasks.test]
 command = "cargo"
-args = ["test", "--tests"]
+args = ["test", "--tests", "--workspace"]
 
 [tasks.clean]
 dependencies = ["clean-rs", "clean-shaders"]
@@ -23,14 +23,14 @@ dependencies = ["clean-rs", "clean-shaders"]
 script_runner = "pwsh"
 script_extension = "ps1"
 script = """
-pwsh.exe -C "Remove-Item -Path "target" -Exclude "target/debug/deps" -Recurse -Force -ErrorAction Ignore"
+pwsh.exe -C "Remove-Item -Path target -Exclude target/debug/deps -Recurse -Force -ErrorAction Ignore"
 """
 
 [tasks.clean-shaders]
 script_runner = "pwsh"
 script_extension = "ps1"
 script = """
-pwsh.exe -C "Remove-Item -Path "shaders/*.spv" -Force -ErrorAction Ignore"
+pwsh.exe -C "Remove-Item -Path shaders/*.spv -Force -ErrorAction Ignore"
 """
 
 [tasks.format]

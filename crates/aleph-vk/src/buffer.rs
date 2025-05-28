@@ -5,7 +5,7 @@ use {
     bytemuck::Pod,
     derive_more::{Debug, Deref},
     gpu_allocator::vulkan::Allocation,
-    std::{cell::RefCell, mem, rc::Rc, sync::Arc},
+    std::{cell::RefCell, mem, sync::Arc},
     tracing::instrument,
 };
 pub use {gpu_allocator::MemoryLocation, vk::BufferUsageFlags};
@@ -138,7 +138,7 @@ pub struct Buffer {
     #[debug(skip)]
     allocator: Arc<Allocator>,
     #[debug("{:?}", allocation.as_ptr())]
-    allocation: Rc<RefCell<Allocation>>,
+    allocation: Arc<RefCell<Allocation>>,
     #[debug("{}b", size)]
     size: u64,
     name: String,
@@ -161,19 +161,18 @@ impl Buffer {
         let create_info = vk::BufferCreateInfo::default().size(size).usage(flags);
         let handle = unsafe { device.handle().create_buffer(&create_info, None) }?;
         let requirements = unsafe { device.handle().get_buffer_memory_requirements(handle) };
-        let allocation = Rc::new(RefCell::new(allocator.allocate_buffer(
+        let allocation = Arc::new(RefCell::new(allocator.allocate_buffer(
             handle,
             requirements,
             location,
             name.to_string(),
         )?));
 
-        let address = match location {
-            MemoryLocation::GpuOnly => {
-                let info = vk::BufferDeviceAddressInfo::default().buffer(handle);
-                unsafe { device.handle().get_buffer_device_address(&info) }
-            }
-            _ => DeviceAddress::default(),
+        let address = if flags.contains(vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS) {
+            let info = vk::BufferDeviceAddressInfo::default().buffer(handle);
+            unsafe { device.handle().get_buffer_device_address(&info) }
+        } else {
+            DeviceAddress::default()
         };
 
         let buffer = Self {
@@ -231,12 +230,13 @@ impl Buffer {
     }
 
     pub fn destroy(&mut self) {
-        unsafe { self.device.handle.destroy_buffer(self.handle, None) };
-
-        let allocation = mem::take(&mut self.allocation);
-        match Rc::try_unwrap(allocation) {
-            Ok(cell) => self.allocator.deallocate(cell.into_inner()),
-            Err(_) => log::warn!("Error dropping {self:?}, allocation still has references"),
+        if Arc::strong_count(&self.allocation) == 1 {
+            unsafe { self.device.handle.destroy_buffer(self.handle, None) };
+            let allocation = mem::take(&mut self.allocation);
+            if let Some(cell) = Arc::into_inner(allocation) {
+                let inner = cell.take();
+                self.allocator.deallocate(inner);
+            }
         }
     }
 }

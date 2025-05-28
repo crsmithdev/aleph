@@ -20,7 +20,7 @@ pub fn buffer_barrier(
         .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
         .size(buffer.size())
         .offset(0);
-    log::trace!("Created buffer memory barrier {barrier:?} for {buffer:?}");
+    // log::trace!("Created buffer memory barrier {barrier:?} for {buffer:?}");
     barrier
 }
 
@@ -35,7 +35,7 @@ pub fn memory_barrier<'a>(
         .dst_stage_mask(dst_stage_mask)
         .src_access_mask(src_access_mask)
         .dst_access_mask(dst_access_mask);
-    log::trace!("Created memory barrier {barrier:?}");
+    // log::trace!("Created memory barrier {barrier:?}");
     barrier
 }
 
@@ -66,6 +66,6 @@ pub fn image_memory_barrier(
         .new_layout(new_layout)
         .subresource_range(range);
 
-    log::trace!("Created image memory barrier {barrier:?} for {image:?}");
+    // log::trace!("Created image memory barrier {barrier:?} for {image:?}");
     barrier
 }

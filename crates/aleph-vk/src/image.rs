@@ -4,7 +4,7 @@ use {
     ash::vk::{self, Handle},
     derive_more::{Debug, Deref},
     gpu_allocator::vulkan::Allocation,
-    std::{mem, rc::Rc, sync::Arc},
+    std::{mem, sync::Arc},
 };
 
 #[derive(Clone, Debug)]
@@ -23,7 +23,7 @@ pub struct TextureInfo {
 pub struct Texture {
     #[deref]
     image: Image,
-    allocation: Rc<Allocation>,
+    allocation: Arc<Allocation>,
     allocator: Arc<Allocator>,
     sampler: Option<Sampler>,
 }
@@ -42,7 +42,7 @@ impl Texture {
         let image = unsafe { gpu.device().handle.create_image(image_info, None) }?;
         let requirements = unsafe { gpu.device().handle.get_image_memory_requirements(image) };
         let allocation =
-            Rc::new(gpu.allocator().allocate_image(image, requirements, &info.name)?);
+            Arc::new(gpu.allocator().allocate_image(image, requirements, &info.name)?);
 
         let handle = Image::new(
             image,
@@ -75,10 +75,12 @@ impl Texture {
     pub fn aspect_flags(&self) -> ImageAspectFlags { self.image.aspect_flags }
 
     fn destroy(&mut self) {
-        let allocation = mem::take(&mut self.allocation);
-        match Rc::try_unwrap(allocation) {
-            Ok(allocation) => self.allocator.deallocate(allocation),
-            Err(_) => log::warn!("Error dropping {self:?}, allocation still has references"),
+        if Arc::strong_count(&self.allocation) == 1 {
+            let allocation = mem::take(&mut self.allocation);
+            if let Some(cell) = Arc::into_inner(allocation) {
+                self.allocator.deallocate(cell);
+                self.image.destroy();
+            }
         }
     }
 }
@@ -160,13 +162,6 @@ impl Image {
             self.device.handle.destroy_image_view(self.view, None);
             self.device.handle.destroy_image(self.handle, None);
         }
-    }
-}
-
-impl Drop for Image {
-    fn drop(&mut self) {
-        log::trace!("Destroying image {}", self.name);
-        self.destroy();
     }
 }
 
