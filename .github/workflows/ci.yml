@@ -26,9 +26,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Install Vulkan SDK
-        uses: humbletim/install-vulkan-sdk@v1.2
+        uses: jakoch/install-vulkan-sdk-action@v1
         with:
-          version: 1.4.309.0
+          vulkan_version: 1.4.313.0
+          optional_components: com.lunarg.vulkan.vma
+          install_runtime: true
           cache: true
 
       - name: Install cargo-make

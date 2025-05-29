@@ -2,7 +2,7 @@ use {
     crate::{model::Light, Camera, CameraConfig, MeshHandle},
     anyhow::{anyhow, Result},
     derive_more::Debug,
-    glam::{Mat4, Vec3},
+    glam::Mat4,
     petgraph::graph::NodeIndex,
     std::{
         collections::HashMap,
@@ -84,6 +84,9 @@ pub struct Scene {
     graph: Graph,
     root: NodeHandle,
     indices: HashMap<NodeHandle, NodeIndex>,
+    /// Version counter that increments when scene content changes
+    /// Used to detect when renderer resources need to be updated
+    version: u64,
 }
 
 impl Default for Scene {
@@ -101,6 +104,7 @@ impl Default for Scene {
             graph,
             root: root_handle,
             indices,
+            version: 0,
         }
     }
 }
@@ -188,11 +192,22 @@ impl Scene {
     }
 
     pub fn clear(&mut self) { *self = Self::default(); }
+
+    /// Get the current version of the scene
+    pub fn version(&self) -> u64 {
+        self.version
+    }
+
+    /// Increment the scene version to signal that content has changed
+    fn increment_version(&mut self) {
+        self.version += 1;
+        log::trace!("Scene version incremented to {}", self.version);
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {super::*, glam::Vec3};
 
     #[test]
     fn test_node_creation() {
