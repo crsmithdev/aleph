@@ -1,13 +1,9 @@
 use {
     aleph_core::{
-        events::{Event, EventRegistry, Events, GuiEvent},
-        input::Input,
-        log,
-        system::{IntoSystem, Resources, Schedule, Scheduler, System},
-        Layer,
+        setup_logging, system::IntoSystem, Event, EventRegistry, Events, GuiEvent, Input, Layer,
+        Resources, Schedule, Scheduler, System, Window, WindowEvent,
     },
     anyhow::{anyhow, Result},
-    derive_more::Debug,
     human_panic::setup_panic,
     std::{
         sync::Arc,
@@ -15,18 +11,16 @@ use {
     },
     winit::{
         application::ApplicationHandler,
-        dpi::{PhysicalSize, Size},
-        event::WindowEvent,
         event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
-        window::{Window, WindowId},
+        window::WindowId,
     },
 };
 
-const DEFAULT_APP_NAME: &str = "Untitled (Aleph)";
-const DEFAULT_WINDOW_SIZE: Size = Size::Physical(PhysicalSize {
-    width: 1920,
-    height: 1200,
-});
+pub const DEFAULT_APP_NAME: &str = "Untitled (Aleph)";
+pub const DEFAULT_WINDOW_SIZE: winit::dpi::PhysicalSize<u32> = winit::dpi::PhysicalSize {
+    width: 1280,
+    height: 720,
+};
 
 #[derive(Clone, Debug)]
 pub struct AppConfig {
@@ -62,7 +56,7 @@ pub struct App {
 
 impl App {
     pub fn new(config: AppConfig) -> Self {
-        log::setup_logging();
+        setup_logging();
         setup_panic!();
 
         App {

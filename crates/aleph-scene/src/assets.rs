@@ -1,9 +1,11 @@
 use {
-    crate::{model::MeshInfo, Material},
+    crate::{Material, MeshInfo, Vertex},
     aleph_vk::{
-        sync, AccessFlags2, Buffer, CommandBuffer, Extent2D, Filter, Format, Gpu, ImageAspectFlags,
-        ImageLayout, ImageUsageFlags, PipelineStageFlags2, ResourcePool, Sampler,
-        SamplerAddressMode, SamplerMipmapMode, Texture, TextureInfo,
+        sync, AccessFlags2, Buffer, CommandBuffer, DescriptorBufferInfo, DescriptorImageInfo,
+        DescriptorPool, DescriptorSet, DescriptorSetLayout, DescriptorType, Device, Extent2D,
+        Filter, Format, Gpu, ImageAspectFlags, ImageLayout, ImageUsageFlags, PipelineStageFlags2,
+        ResourcePool, Sampler, SamplerAddressMode, SamplerMipmapMode, ShaderStageFlags, Texture,
+        TextureInfo, TypedBuffer, WriteDescriptorSet,
     },
     anyhow::{bail, Result},
     bytemuck::{Pod, Zeroable},
@@ -19,7 +21,9 @@ use {
             Arc,
         },
     },
+    tracing::instrument,
 };
+
 const WHITE: [u8; 4] = [255, 255, 255, 255];
 const NORMAL: [u8; 4] = [127, 127, 255, 255];
 static ASSET_HANDLE_COUNTER: AtomicU64 = AtomicU64::new(1);

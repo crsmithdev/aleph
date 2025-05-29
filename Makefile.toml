@@ -58,7 +58,7 @@ args = ["fmt", "--", "--emit=files"]
 
 [tasks.fix]
 command = "cargo"
-args = ["fix", "--allow-dirty", "--allow-staged"]
+args = ["fix", "--workspace",    "--allow-dirty", "--allow-staged"]
 
 [tasks.log]
 script_runner = "@shell"

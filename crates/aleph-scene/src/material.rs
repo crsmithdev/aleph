@@ -1,6 +1,6 @@
 use {
     crate::TextureHandle,
-    derive_more::derive::Debug,
+    derive_more::Debug,
     glam::{vec4, Vec4},
 };
 

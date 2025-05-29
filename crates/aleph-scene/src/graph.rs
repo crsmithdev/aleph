@@ -195,12 +195,6 @@ impl Scene {
 
     /// Get the current version of the scene
     pub fn version(&self) -> u64 { self.version }
-
-    /// Increment the scene version to signal that content has changed
-    // fn increment_version(&mut self) {
-    //     self.version += 1;
-    //     log::trace!("Scene version incremented to {}", self.version);
-    // }
 }
 
 #[cfg(test)]

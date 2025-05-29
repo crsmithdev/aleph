@@ -13,5 +13,5 @@ pub use crate::{
     camera::{Camera, CameraConfig},
     graph::{Node, Scene},
     material::Material,
-    model::Vertex,
+    model::{MeshInfo, Vertex},
 };
