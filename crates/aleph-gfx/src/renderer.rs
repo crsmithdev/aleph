@@ -8,8 +8,8 @@ use {
     },
     aleph_vk::{
         sync, AccessFlags2, CommandBuffer, CommandPool, Extent2D, Extent3D, Fence, Format, Gpu,
-        Handle as _, Image, ImageAspectFlags, ImageLayout, ImageUsageFlags, PipelineStageFlags2,
-        Semaphore, ShaderStageFlags, Texture, TextureInfo, TypedBuffer,
+        Handle as VkHandle, Image, ImageAspectFlags, ImageLayout, ImageUsageFlags,
+        PipelineStageFlags2, Semaphore, ShaderStageFlags, Texture, TextureInfo, TypedBuffer,
     },
     anyhow::Result,
     ash::vk::FenceCreateFlags,
@@ -170,9 +170,11 @@ pub struct Frame {
     pub acquire_semaphore: Semaphore,
     #[debug("{:#x}", present_semaphore.as_raw())]
     pub present_semaphore: Semaphore,
+    #[allow(dead_code)]
     #[debug("{:#x}", fence.as_raw())]
     pub fence: Fence,
     #[debug("{:#x}", cmd_pool.handle().as_raw())]
+    #[allow(dead_code)]
     pub cmd_pool: CommandPool,
     #[debug("{:#x}", cmd_buffer.handle().as_raw())]
     pub cmd_buffer: CommandBuffer,

@@ -1,5 +1,5 @@
 use {
-    crate::renderer::{GpuSceneData, RenderConfig, RenderContext},
+    crate::{GpuSceneData, RenderConfig, RenderContext},
     aleph_core::{
         events::GuiEvent,
         system::{Resources, Scheduler},
@@ -9,8 +9,7 @@ use {
     aleph_vk::{AttachmentLoadOp, AttachmentStoreOp, CommandPool, Extent2D, Format, Gpu},
     anyhow::Result,
     derive_more::Debug,
-    egui::{self},
-    egui_ash_renderer as egui_renderer, egui_extras, egui_winit,
+    egui, egui_ash_renderer as egui_renderer, egui_extras, egui_winit,
     glam::Vec4,
     gpu_allocator as ga,
     std::sync::{Arc, Mutex},

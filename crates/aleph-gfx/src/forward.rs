@@ -1,8 +1,5 @@
 use {
-    crate::{
-        renderer::{GpuPushConstantData, RenderObject},
-        Pipeline, PipelineBuilder, RenderContext,
-    },
+    crate::{GpuPushConstantData, Pipeline, PipelineBuilder, RenderContext, RenderObject},
     aleph_scene::{util, Vertex},
     aleph_vk::{
         image::Image, AttachmentLoadOp, AttachmentStoreOp, ColorComponentFlags, CommandBuffer,
