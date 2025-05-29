@@ -95,6 +95,7 @@ mod tests {
     };
 
     #[test]
+    #[cfg(feature = "gpu-tests")]
     fn test_buffer_allocation() {
         let gpu = test_gpu();
         let buffer = Buffer::new(
@@ -108,8 +109,8 @@ mod tests {
 
         assert!(buffer.is_ok());
     }
-
     #[test]
+    #[cfg(feature = "gpu-tests")]
     fn test_image_allocation() {
         let gpu = test_gpu();
         let texture = Texture::new(

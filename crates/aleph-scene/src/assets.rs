@@ -383,11 +383,3 @@ pub struct GpuMaterial {
     pub occlusion_texture: u32,
     pub padding0: f32,
 }
-
-#[cfg(test)]
-mod tests {
-    use aleph_vk::test::test_gpu;
-
-    #[test]
-    fn test_assets() { let _ = test_gpu(); }
-}

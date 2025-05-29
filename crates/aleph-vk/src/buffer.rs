@@ -274,8 +274,8 @@ mod tests {
         super::*,
         crate::{test::test_gpu, TypedBuffer},
     };
-
     #[test]
+    #[cfg(feature = "gpu-tests")]
     fn test_create_typed_buffer() {
         let gpu = test_gpu();
         let result = TypedBuffer::<i32>::new(
@@ -293,8 +293,8 @@ mod tests {
         assert!(result.size() == 1024 * mem::size_of::<i32>() as u64);
         assert!(result.type_size() == mem::size_of::<i32>());
     }
-
     #[test]
+    #[cfg(feature = "gpu-tests")]
     fn test_create_buffer() {
         let gpu = test_gpu();
         let buffer = Buffer::new(
@@ -311,8 +311,8 @@ mod tests {
         assert!(buffer.handle() != vk::Buffer::null());
         assert!(buffer.size() == 1024);
     }
-
     #[test]
+    #[cfg(feature = "gpu-tests")]
     fn test_typed_sub_buffer() {
         let gpu = test_gpu();
         let buffer = TypedBuffer::<i32>::new(

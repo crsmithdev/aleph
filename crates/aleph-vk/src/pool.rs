@@ -110,8 +110,8 @@ impl Poolable for Buffer {
 #[cfg(test)]
 mod tests {
     use {super::*, crate::test::test_gpu};
-
     #[test]
+    #[cfg(feature = "gpu-tests")]
     fn test_resource_pool() {
         let gpu = test_gpu();
         let mut pool = ResourcePool::<Buffer>::new(&gpu, 10, 5);

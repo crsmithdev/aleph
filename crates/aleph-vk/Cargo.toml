@@ -15,6 +15,10 @@ version = "0.1.0"
 [lib]
 doctest = false
 
+[features]
+default = ["gpu-tests"]
+gpu-tests = []
+
 [dependencies]
 egui.workspace = true
 glob.workspace = true

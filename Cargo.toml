@@ -14,9 +14,6 @@ members = [
     "crates/aleph-vk",
 ]
 
-[[example]]
-name = "demo"
-
 [workspace.dependencies]
 aleph-app = { path = "crates/aleph-app" }
 aleph-core = { path = "crates/aleph-core" }
@@ -75,3 +72,7 @@ tracing = { workspace = true }
 
 [lib]
 doctest = false
+
+[features]
+default = ["gpu-tests"]
+gpu-tests = []

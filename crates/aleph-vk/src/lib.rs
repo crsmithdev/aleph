@@ -53,5 +53,5 @@ pub mod test {
     static TEST_GPU: LazyLock<Arc<crate::gpu::Gpu>> =
         LazyLock::new(|| Arc::new(crate::gpu::Gpu::headless().expect("Error creating test GPU")));
 
-    pub fn test_gpu() -> &'static Arc<crate::Gpu> { &TEST_GPU }
+    pub fn test_() -> &'static Arc<crate::Gpu> { &TEST_GPU }
 }

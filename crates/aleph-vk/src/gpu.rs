@@ -208,8 +208,8 @@ pub unsafe extern "system" fn vulkan_debug_callback(
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
+    #[cfg(feature = "gpu-tests")]
     fn test_headless() {
         let gpu = Gpu::headless();
         assert!(gpu.is_ok());

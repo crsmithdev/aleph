@@ -17,7 +17,18 @@ args = ["run", "--example", "demo"]
 
 [tasks.test]
 command = "cargo"
-args = ["test", "--tests", "--workspace"]
+args = ["test", "--workspace"]
+
+[tasks.test-ci]
+script_runner = "pwsh"
+script_extension = "ps1"
+script = """
+cd crates\\aleph-app && cargo test && cd ..\\..
+cd crates\\aleph-core && cargo test && cd ..\\..
+cd crates\\aleph-scene && cargo test && cd ..\\..
+cd crates\\aleph-gfx && cargo test && cd ..\\..
+cd crates\\aleph-vk && cargo test && cd ..\\..
+"""
 
 [tasks.coverage]
 command = "cargo"
@@ -25,7 +36,7 @@ args = ["tarpaulin", "--ignore-tests", "--workspace", "--all-targets"]
 
 [tasks.clean]
 dependencies = ["clean-rs", "clean-shaders"]
-    
+
 [tasks.clean-rs]
 script_runner = "pwsh"
 script_extension = "ps1"
@@ -47,7 +58,7 @@ args = ["fmt", "--", "--emit=files"]
 
 [tasks.fix]
 command = "cargo"
-args = ["fix", "--allow-dirty", "--allow-staged"] 
+args = ["fix", "--allow-dirty", "--allow-staged"]
 
 [tasks.log]
 script_runner = "@shell"

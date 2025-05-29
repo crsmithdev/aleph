@@ -194,9 +194,7 @@ impl Scene {
     pub fn clear(&mut self) { *self = Self::default(); }
 
     /// Get the current version of the scene
-    pub fn version(&self) -> u64 {
-        self.version
-    }
+    pub fn version(&self) -> u64 { self.version }
 
     /// Increment the scene version to signal that content has changed
     fn increment_version(&mut self) {
