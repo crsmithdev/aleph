@@ -1,11 +1,10 @@
 use {
-    crate::{Material, MeshInfo, Vertex},
+    crate::{Material, MeshInfo},
     aleph_vk::{
-        sync, AccessFlags2, Buffer, CommandBuffer, DescriptorBufferInfo, DescriptorImageInfo,
-        DescriptorPool, DescriptorSet, DescriptorSetLayout, DescriptorType, Device, Extent2D,
+        sync, AccessFlags2, Buffer, CommandBuffer, Extent2D,
         Filter, Format, Gpu, ImageAspectFlags, ImageLayout, ImageUsageFlags, PipelineStageFlags2,
-        ResourcePool, Sampler, SamplerAddressMode, SamplerMipmapMode, ShaderStageFlags, Texture,
-        TextureInfo, TypedBuffer, WriteDescriptorSet,
+        ResourcePool, Sampler, SamplerAddressMode, SamplerMipmapMode, Texture,
+        TextureInfo,
     },
     anyhow::{bail, Result},
     bytemuck::{Pod, Zeroable},
@@ -21,7 +20,6 @@ use {
             Arc,
         },
     },
-    tracing::instrument,
 };
 
 const WHITE: [u8; 4] = [255, 255, 255, 255];
