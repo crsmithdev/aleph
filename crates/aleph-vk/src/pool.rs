@@ -1,7 +1,15 @@
 use {
-    crate::{Buffer, BufferUsageFlags, Gpu, MemoryLocation},
+    crate::{Buffer, Gpu},
+    anyhow::Result,
+    ash::vk::BufferUsageFlags,
     derive_more::derive::Debug,
-    std::{cell::RefCell, rc::Rc, sync::Arc},
+    gpu_allocator::MemoryLocation,
+    std::{
+        cell::RefCell,
+        collections::VecDeque,
+        rc::Rc,
+        sync::{Arc, Mutex},
+    },
 };
 
 pub trait Poolable {

@@ -5,7 +5,12 @@ use {
     },
     aleph_core::log,
     anyhow::Result,
-    ash::vk::{self, CommandBufferSubmitInfo, Extent2D},
+    ash::vk::{
+        self, Bool32, ColorSpaceKHR, CommandBufferSubmitInfo, DebugUtilsMessageSeverityFlagsEXT,
+        DebugUtilsMessageTypeFlagsEXT, DebugUtilsMessengerCallbackDataEXT, Extent2D, Fence,
+        FenceCreateFlags, FenceCreateInfo, Format, PipelineStageFlags2, Semaphore,
+        SemaphoreCreateInfo, SemaphoreSubmitInfo, FALSE,
+    },
     derive_more::Debug,
     std::{ffi, sync::Arc},
     tracing::instrument,
@@ -25,7 +30,7 @@ pub struct Gpu {
     pub(crate) debug_utils: DebugUtils,
     immediate_cmd_pool: CommandPool,
     immediate_cmd_buffer: CommandBuffer,
-    imm_fence: vk::Fence,
+    imm_fence: Fence,
 }
 
 impl Gpu {
@@ -33,7 +38,7 @@ impl Gpu {
         let instance = Instance::new()?;
         let device = Device::new(&instance)?;
         let debug_utils = DebugUtils::new(&instance, &device);
-        let extent = vk::Extent2D {
+        let extent = Extent2D {
             width: window.inner_size().width,
             height: window.inner_size().height,
         };
@@ -45,14 +50,14 @@ impl Gpu {
             &surface,
             &SwapchainInfo {
                 extent,
-                format: vk::Format::B8G8R8A8_SRGB,
-                color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
+                format: Format::B8G8R8A8_SRGB,
+                color_space: ColorSpaceKHR::SRGB_NONLINEAR,
                 vsync: true,
                 num_images: IN_FLIGHT_FRAMES,
             },
         )?;
 
-        let imm_fence = device.create_fence(vk::FenceCreateFlags::SIGNALED);
+        let imm_fence = device.create_fence(FenceCreateFlags::SIGNALED);
         let allocator = Arc::new(Allocator::new(&instance, &device)?);
         let imm_cmd_pool = CommandPool::new(&device, device.graphics_queue(), "immediate");
         let imm_cmd_buffer = imm_cmd_pool.create_command_buffer("immediate");
@@ -75,7 +80,7 @@ impl Gpu {
         let device = Device::new(&instance)?;
         let debug_utils = DebugUtils::new(&instance, &device);
 
-        let imm_fence = device.create_fence(vk::FenceCreateFlags::SIGNALED);
+        let imm_fence = device.create_fence(FenceCreateFlags::SIGNALED);
         let surface = Surface::headless(&instance);
         let swapchain = Swapchain::headless(&instance, &device)?;
         let allocator = Arc::new(Allocator::new(&instance, &device)?);
@@ -102,7 +107,7 @@ impl Gpu {
     pub fn immediate_cmd_buffer(&self) -> &CommandBuffer { &self.immediate_cmd_buffer }
 
     #[inline]
-    pub fn immediate_fence(&self) -> vk::Fence { self.imm_fence }
+    pub fn immediate_fence(&self) -> Fence { self.imm_fence }
 
     #[inline]
     pub fn debug_utils(&self) -> &DebugUtils { &self.debug_utils }
@@ -130,9 +135,9 @@ impl Gpu {
         &self,
         queue: &Queue,
         command_buffers: &[&CommandBuffer],
-        wait_semaphores: &[(vk::Semaphore, vk::PipelineStageFlags2)],
-        signal_semaphores: &[(vk::Semaphore, vk::PipelineStageFlags2)],
-        fence: vk::Fence,
+        wait_semaphores: &[(Semaphore, PipelineStageFlags2)],
+        signal_semaphores: &[(Semaphore, PipelineStageFlags2)],
+        fence: Fence,
     ) {
         log::trace!(
             "Submitting {:?} to {:?}, wait_semaphores: {:?}, signal_semaphores: {:?}, fence: {:?}",
@@ -145,15 +150,15 @@ impl Gpu {
 
         let cmd_infos = command_buffers
             .iter()
-            .map(|cb| vk::CommandBufferSubmitInfo::default().command_buffer(***cb))
+            .map(|cb| CommandBufferSubmitInfo::default().command_buffer(***cb))
             .collect::<Vec<_>>();
         let wait_semaphore_infos = wait_semaphores
             .iter()
-            .map(|(s, f)| vk::SemaphoreSubmitInfo::default().semaphore(*s).stage_mask(*f))
+            .map(|(s, f)| SemaphoreSubmitInfo::default().semaphore(*s).stage_mask(*f))
             .collect::<Vec<_>>();
         let signal_semaphore_infos = signal_semaphores
             .iter()
-            .map(|(s, f)| vk::SemaphoreSubmitInfo::default().semaphore(*s).stage_mask(*f))
+            .map(|(s, f)| SemaphoreSubmitInfo::default().semaphore(*s).stage_mask(*f))
             .collect::<Vec<_>>();
 
         self.device.queue_submit(
@@ -168,7 +173,7 @@ impl Gpu {
     #[instrument(skip_all)]
     pub fn execute(&self, callback: impl FnOnce(&CommandBuffer)) {
         let cmd_buffer = &self.immediate_cmd_buffer;
-        let fence = vk::Fence::null(); // self.imm_fence;
+        let fence = Fence::null(); // self.imm_fence;
         log::trace!("Executing {cmd_buffer:?} with fences: {fence:?}");
 
         // self.device.wait_for_fences(&[fence]);
@@ -186,23 +191,23 @@ impl Gpu {
 
 #[allow(clippy::missing_safety_doc)]
 pub unsafe extern "system" fn vulkan_debug_callback(
-    message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
-    _message_type: vk::DebugUtilsMessageTypeFlagsEXT,
-    p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
+    message_severity: DebugUtilsMessageSeverityFlagsEXT,
+    _message_type: DebugUtilsMessageTypeFlagsEXT,
+    p_callback_data: *const DebugUtilsMessengerCallbackDataEXT,
     _p_user_data: *mut ffi::c_void,
-) -> vk::Bool32 {
+) -> Bool32 {
     let message = ffi::CStr::from_ptr((*p_callback_data).p_message)
         .to_str()
         .unwrap_or("[Error parsing message data]");
 
     match message_severity {
-        vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => log::error!("{}", message),
-        vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => log::warn!("{}", message),
-        vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => log::trace!("{}", message),
+        DebugUtilsMessageSeverityFlagsEXT::ERROR => log::error!("{}", message),
+        DebugUtilsMessageSeverityFlagsEXT::WARNING => log::warn!("{}", message),
+        DebugUtilsMessageSeverityFlagsEXT::VERBOSE => log::trace!("{}", message),
         _ => log::info!("{}", message),
     }
 
-    vk::FALSE
+    FALSE
 }
 
 #[cfg(test)]

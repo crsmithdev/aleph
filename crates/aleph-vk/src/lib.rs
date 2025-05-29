@@ -15,7 +15,7 @@ pub(crate) const TIMEOUT_NS: u64 = 5_000_000_000;
 pub use {
     crate::{
         allocator::Allocator,
-        buffer::{Buffer, BufferUsageFlags, MemoryLocation, TypedBuffer},
+        buffer::{Buffer, TypedBuffer},
         command::{CommandBuffer, CommandPool},
         device::{Device, Queue, QueueFamily},
         gpu::Gpu,

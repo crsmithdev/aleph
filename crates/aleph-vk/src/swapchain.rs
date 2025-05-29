@@ -1,22 +1,28 @@
 use {
     crate::{image::Image, Device, Instance, Queue, TIMEOUT_NS},
-    anyhow::Result,
+    anyhow::{anyhow, bail, Result},
     ash::{
-        khr,
-        vk::{self, CompositeAlphaFlagsKHR, Handle, SurfaceTransformFlagsKHR},
+        khr::{self, surface, swapchain},
+        vk::{
+            self, ColorSpaceKHR, CompositeAlphaFlagsKHR, Extent2D, Fence, Format, Handle,
+            Image as VkImage, ImageAspectFlags, ImageUsageFlags, PresentInfoKHR, PresentModeKHR,
+            Result as VkResult, Semaphore, SharingMode, SurfaceCapabilitiesKHR, SurfaceFormatKHR,
+            SurfaceKHR, SurfaceTransformFlagsKHR, SwapchainCreateInfoKHR, SwapchainKHR,
+        },
     },
     derive_more::Debug,
     raw_window_handle::{HasDisplayHandle, HasWindowHandle},
-    std::sync::Mutex,
+    std::sync::{Arc, Mutex},
+    winit::window::Window,
 };
 
 pub const N_SWAPCHAIN_IMAGES: u32 = 3;
 
 #[derive(Clone, Copy, Debug)]
 pub struct SwapchainInfo {
-    pub extent: vk::Extent2D,
-    pub format: vk::Format,
-    pub color_space: vk::ColorSpaceKHR,
+    pub extent: Extent2D,
+    pub format: Format,
+    pub color_space: ColorSpaceKHR,
     pub vsync: bool,
     pub num_images: usize,
 }
@@ -50,12 +56,12 @@ impl Swapchain {
     pub fn headless(instance: &Instance, device: &Device) -> Result<Self> {
         let inner = Mutex::new(SwapchainInner::headless(instance, device)?);
         let info = SwapchainInfo {
-            extent: vk::Extent2D {
+            extent: Extent2D {
                 width: 1,
                 height: 1,
             },
-            format: vk::Format::B8G8R8A8_SRGB,
-            color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
+            format: Format::B8G8R8A8_SRGB,
+            color_space: ColorSpaceKHR::SRGB_NONLINEAR,
             vsync: true,
             num_images: 1,
         };
@@ -68,9 +74,9 @@ impl Swapchain {
         })
     }
 
-    pub fn extent(&self) -> vk::Extent2D { self.info.extent }
+    pub fn extent(&self) -> Extent2D { self.info.extent }
 
-    pub fn format(&self) -> vk::Format { self.info.format }
+    pub fn format(&self) -> Format { self.info.format }
 
     pub fn images(&self) -> Vec<Image> {
         self.inner
@@ -82,7 +88,7 @@ impl Swapchain {
 
     pub fn n_images(&self) -> usize { N_SWAPCHAIN_IMAGES as usize }
 
-    pub fn rebuild(&self, extent: vk::Extent2D) {
+    pub fn rebuild(&self, extent: Extent2D) {
         log::debug!("Rebuilding swapchain with extent: {:?}", extent);
         let mut inner = self
             .inner
@@ -101,7 +107,7 @@ impl Swapchain {
         .unwrap_or_else(|e| panic!("Error rebuilding swapchain: {e:?}"));
     }
 
-    pub fn acquire_next_image(&self, semaphore: vk::Semaphore) -> Result<(usize, bool)> {
+    pub fn acquire_next_image(&self, semaphore: Semaphore) -> Result<(usize, bool)> {
         self.inner
             .lock()
             .unwrap_or_else(|e| panic!("Error locking {:?}: {:?}", self.inner, e))
@@ -111,7 +117,7 @@ impl Swapchain {
     pub fn present(
         &self,
         queue: &Queue,
-        wait_semaphores: &[vk::Semaphore],
+        wait_semaphores: &[Semaphore],
         indices: &[u32],
     ) -> Result<bool> {
         self.inner
@@ -123,7 +129,7 @@ impl Swapchain {
 #[derive(Debug)]
 struct SwapchainInner {
     #[debug("{:#x}", handle.as_raw())]
-    handle: vk::SwapchainKHR,
+    handle: SwapchainKHR,
     #[debug("{:#x}", device.handle().handle().as_raw())]
     device: Device,
     #[debug("{:?}", images.iter().map(|v| format!("{:#x}", v.handle().as_raw())))]
@@ -139,28 +145,28 @@ impl SwapchainInner {
         device: &Device,
         surface: &Surface,
         info: &SwapchainInfo,
-        old_swapchain: Option<vk::SwapchainKHR>,
+        old_swapchain: Option<SwapchainKHR>,
     ) -> Result<Self> {
         let queue = device.graphics_queue();
         let indices = [queue.family.index];
         let in_flight_frames = N_SWAPCHAIN_IMAGES;
-        let capabilities: vk::SurfaceCapabilitiesKHR = unsafe {
+        let capabilities: SurfaceCapabilitiesKHR = unsafe {
             surface
                 .loader
                 .get_physical_device_surface_capabilities(device.physical_device, surface.inner)
         }?;
-        let mut swapchain_info = vk::SwapchainCreateInfoKHR::default()
+        let mut swapchain_info = SwapchainCreateInfoKHR::default()
             .surface(surface.inner)
             .min_image_count(in_flight_frames)
             .image_format(info.format)
             .image_color_space(info.color_space)
             .image_extent(capabilities.current_extent)
-            .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .image_sharing_mode(SharingMode::EXCLUSIVE)
             .image_array_layers(1)
-            .present_mode(vk::PresentModeKHR::FIFO)
+            .present_mode(PresentModeKHR::FIFO)
             .pre_transform(SurfaceTransformFlagsKHR::IDENTITY)
             .composite_alpha(CompositeAlphaFlagsKHR::OPAQUE)
-            .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST)
+            .image_usage(ImageUsageFlags::COLOR_ATTACHMENT | ImageUsageFlags::TRANSFER_DST)
             .queue_family_indices(&indices);
         if let Some(old_swapchain) = old_swapchain {
             swapchain_info = swapchain_info.old_swapchain(old_swapchain);
@@ -178,8 +184,8 @@ impl SwapchainInner {
                     device.clone(),
                     info.extent,
                     info.format,
-                    vk::ImageUsageFlags::TRANSFER_DST,
-                    vk::ImageAspectFlags::COLOR,
+                    ImageUsageFlags::TRANSFER_DST,
+                    ImageAspectFlags::COLOR,
                     &format!("swapchain{i:02}"),
                 )
             })
@@ -196,17 +202,17 @@ impl SwapchainInner {
 
     pub fn headless(instance: &Instance, device: &Device) -> Result<Self> {
         Ok(Self {
-            handle: vk::SwapchainKHR::null(),
+            handle: SwapchainKHR::null(),
             loader: khr::swapchain::Device::new(&instance.handle, &device.handle),
             device: device.clone(),
             images: vec![],
             info: SwapchainInfo {
-                extent: vk::Extent2D {
+                extent: Extent2D {
                     width: 1,
                     height: 1,
                 },
-                format: vk::Format::B8G8R8A8_SRGB,
-                color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
+                format: Format::B8G8R8A8_SRGB,
+                color_space: ColorSpaceKHR::SRGB_NONLINEAR,
                 vsync: true,
                 num_images: 1,
             },
@@ -222,13 +228,13 @@ impl SwapchainInner {
         };
     }
 
-    pub fn acquire_next_image(&self, semaphore: vk::Semaphore) -> Result<(usize, bool)> {
+    pub fn acquire_next_image(&self, semaphore: Semaphore) -> Result<(usize, bool)> {
         match unsafe {
-            self.loader.acquire_next_image(self.handle, TIMEOUT_NS, semaphore, vk::Fence::null())
+            self.loader.acquire_next_image(self.handle, TIMEOUT_NS, semaphore, Fence::null())
         } {
             Ok((index, needs_rebuild)) => Ok((index as usize, needs_rebuild)),
-            Err(err) if err == vk::Result::ERROR_OUT_OF_DATE_KHR => Ok((0, true)),
-            Err(err) if err == vk::Result::SUBOPTIMAL_KHR => Ok((0, true)),
+            Err(err) if err == VkResult::ERROR_OUT_OF_DATE_KHR => Ok((0, true)),
+            Err(err) if err == VkResult::SUBOPTIMAL_KHR => Ok((0, true)),
             Err(err) => Err(err.into()),
         }
     }
@@ -236,19 +242,19 @@ impl SwapchainInner {
     pub fn present(
         &self,
         queue: &Queue,
-        wait_semaphores: &[vk::Semaphore],
+        wait_semaphores: &[Semaphore],
         image_indices: &[u32],
     ) -> Result<bool> {
         let swapchains = &[self.handle];
-        let present_info = vk::PresentInfoKHR::default()
+        let present_info = PresentInfoKHR::default()
             .wait_semaphores(wait_semaphores)
             .swapchains(swapchains)
             .image_indices(image_indices);
 
         match unsafe { self.loader.queue_present(queue.handle, &present_info) } {
             Ok(needs_rebuild) => Ok(needs_rebuild),
-            Err(err) if err == vk::Result::ERROR_OUT_OF_DATE_KHR => Ok(true),
-            Err(err) if err == vk::Result::SUBOPTIMAL_KHR => Ok(true),
+            Err(err) if err == VkResult::ERROR_OUT_OF_DATE_KHR => Ok(true),
+            Err(err) if err == VkResult::SUBOPTIMAL_KHR => Ok(true),
             Err(err) => Err(err.into()),
         }
     }
@@ -261,7 +267,7 @@ impl Drop for SwapchainInner {
 #[derive(Clone, Debug)]
 pub struct Surface {
     #[debug("{:#x}", inner.as_raw())]
-    pub(crate) inner: vk::SurfaceKHR,
+    pub(crate) inner: SurfaceKHR,
 
     #[debug("{:#x}", loader.instance().as_raw())]
     pub(crate) loader: khr::surface::Instance,
@@ -270,13 +276,13 @@ pub struct Surface {
 impl Surface {
     pub fn headless(instance: &Instance) -> Self {
         Self {
-            inner: vk::SurfaceKHR::null(),
+            inner: SurfaceKHR::null(),
             loader: khr::surface::Instance::new(&instance.entry, &instance.handle),
         }
     }
 
     pub fn new(instance: &Instance, window: &winit::window::Window) -> Result<Self> {
-        let inner: vk::SurfaceKHR = unsafe {
+        let inner: SurfaceKHR = unsafe {
             ash_window::create_surface(
                 &instance.entry,
                 &instance.handle,

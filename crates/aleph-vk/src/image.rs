@@ -1,9 +1,15 @@
 use {
-    crate::{Allocator, Device, Extent2D, Format, Gpu, ImageAspectFlags, ImageUsageFlags},
+    crate::{Allocator, Device, Extent2D, Gpu},
     anyhow::Result,
-    ash::vk::{self, Handle},
+    ash::vk::{
+        self, ComponentMapping, ComponentSwizzle, Extent3D, Filter, Format, Handle,
+        Image as VkImage, ImageAspectFlags, ImageCreateInfo, ImageLayout, ImageSubresourceRange,
+        ImageTiling, ImageType, ImageUsageFlags, ImageView, ImageViewCreateInfo, ImageViewType,
+        MemoryRequirements, SampleCountFlags, Sampler as VkSampler, SamplerAddressMode,
+        SamplerCreateInfo, SamplerMipmapMode, SharingMode,
+    },
     derive_more::{Debug, Deref},
-    gpu_allocator::vulkan::Allocation,
+    gpu_allocator::{vulkan::Allocation, MemoryLocation},
     std::{mem, sync::Arc},
 };
 
@@ -30,15 +36,15 @@ pub struct Texture {
 
 impl Texture {
     pub fn new(gpu: &Gpu, info: &TextureInfo) -> Result<Self> {
-        let image_info = &vk::ImageCreateInfo::default()
-            .image_type(vk::ImageType::TYPE_2D)
+        let image_info = &ImageCreateInfo::default()
+            .image_type(ImageType::TYPE_2D)
             .format(info.format)
             .extent(info.extent.into())
             .mip_levels(1)
             .array_layers(1)
-            .samples(vk::SampleCountFlags::TYPE_1)
-            .tiling(vk::ImageTiling::OPTIMAL)
-            .usage(info.flags | vk::ImageUsageFlags::TRANSFER_DST);
+            .samples(SampleCountFlags::TYPE_1)
+            .tiling(ImageTiling::OPTIMAL)
+            .usage(info.flags | ImageUsageFlags::TRANSFER_DST);
         let image = unsafe { gpu.device().handle.create_image(image_info, None) }?;
         let requirements = unsafe { gpu.device().handle.get_image_memory_requirements(image) };
         let allocation =
@@ -64,9 +70,9 @@ impl Texture {
 
     pub fn name(&self) -> &str { &self.image.name }
 
-    pub fn handle(&self) -> vk::Image { self.image.handle }
+    pub fn handle(&self) -> VkImage { self.image.handle }
 
-    pub fn view(&self) -> vk::ImageView { self.image.view }
+    pub fn view(&self) -> ImageView { self.image.view }
 
     pub fn sampler(&self) -> Option<crate::Sampler> { self.sampler.clone() }
 
@@ -93,9 +99,9 @@ impl Drop for Texture {
 pub struct Image {
     name: String,
     #[debug("{:#x}", handle.as_raw())]
-    handle: vk::Image,
+    handle: VkImage,
     #[debug("{:#x}", view.as_raw())]
-    view: vk::ImageView,
+    view: ImageView,
     #[debug("{}x{}", extent.width, extent.height)]
     extent: Extent2D,
     format: Format,
@@ -106,7 +112,7 @@ pub struct Image {
 
 impl Image {
     pub fn new(
-        handle: vk::Image,
+        handle: VkImage,
         device: Device,
         extent: Extent2D,
         format: Format,
@@ -114,13 +120,13 @@ impl Image {
         aspect_flags: ImageAspectFlags,
         name: &str,
     ) -> Result<Self> {
-        let view_info = vk::ImageViewCreateInfo::default()
+        let view_info = ImageViewCreateInfo::default()
             .image(handle)
-            .view_type(vk::ImageViewType::TYPE_2D)
+            .view_type(ImageViewType::TYPE_2D)
             .format(format)
-            .components(vk::ComponentMapping::default())
+            .components(ComponentMapping::default())
             .subresource_range(
-                vk::ImageSubresourceRange::default()
+                ImageSubresourceRange::default()
                     .aspect_mask(aspect_flags)
                     .base_mip_level(0)
                     .level_count(1)
@@ -145,9 +151,9 @@ impl Image {
         Ok(image)
     }
 
-    pub fn handle(&self) -> vk::Image { self.handle }
+    pub fn handle(&self) -> VkImage { self.handle }
 
-    pub fn view(&self) -> vk::ImageView { self.view }
+    pub fn view(&self) -> ImageView { self.view }
 
     pub fn extent(&self) -> Extent2D { self.extent }
 
@@ -194,8 +200,8 @@ mod tests {
         assert_eq!(texture.format(), Format::R8G8B8A8_SRGB);
         assert_eq!(texture.aspect_flags(), ImageAspectFlags::COLOR);
         assert_eq!(texture.usage_flags(), ImageUsageFlags::TRANSFER_DST);
-        assert!(texture.handle() != vk::Image::null());
-        assert!(texture.view() != vk::ImageView::null());
+        assert!(texture.handle() != VkImage::null());
+        assert!(texture.view() != ImageView::null());
     }
     #[test]
     #[cfg(feature = "gpu-tests")]
@@ -204,28 +210,25 @@ mod tests {
         let device = gpu.device();
         let sampler = Sampler::new(
             &device,
-            vk::Filter::NEAREST,
-            vk::Filter::LINEAR,
-            vk::SamplerMipmapMode::NEAREST,
-            vk::SamplerAddressMode::CLAMP_TO_EDGE,
-            vk::SamplerAddressMode::MIRRORED_REPEAT,
+            Filter::NEAREST,
+            Filter::LINEAR,
+            SamplerMipmapMode::NEAREST,
+            SamplerAddressMode::CLAMP_TO_EDGE,
+            SamplerAddressMode::MIRRORED_REPEAT,
             "sampler_test",
         )
         .unwrap();
 
         assert_eq!(sampler.name(), "sampler_test");
-        assert_eq!(sampler.min_filter(), vk::Filter::NEAREST);
-        assert_eq!(sampler.mag_filter(), vk::Filter::LINEAR);
-        assert_eq!(sampler.mipmap_mode(), vk::SamplerMipmapMode::NEAREST);
-        assert_eq!(
-            sampler.address_mode_u(),
-            vk::SamplerAddressMode::CLAMP_TO_EDGE
-        );
+        assert_eq!(sampler.min_filter(), Filter::NEAREST);
+        assert_eq!(sampler.mag_filter(), Filter::LINEAR);
+        assert_eq!(sampler.mipmap_mode(), SamplerMipmapMode::NEAREST);
+        assert_eq!(sampler.address_mode_u(), SamplerAddressMode::CLAMP_TO_EDGE);
         assert_eq!(
             sampler.address_mode_v(),
-            vk::SamplerAddressMode::MIRRORED_REPEAT
+            SamplerAddressMode::MIRRORED_REPEAT
         );
-        assert!(sampler.handle() != vk::Sampler::null());
+        assert!(sampler.handle() != VkSampler::null());
     }
     #[test]
     #[cfg(feature = "gpu-tests")]
@@ -235,12 +238,12 @@ mod tests {
         let sampler = Sampler::default(&device).unwrap();
 
         assert_eq!(sampler.name(), "default");
-        assert_eq!(sampler.min_filter(), vk::Filter::LINEAR);
-        assert_eq!(sampler.mag_filter(), vk::Filter::LINEAR);
-        assert_eq!(sampler.mipmap_mode(), vk::SamplerMipmapMode::LINEAR);
-        assert_eq!(sampler.address_mode_u(), vk::SamplerAddressMode::REPEAT);
-        assert_eq!(sampler.address_mode_v(), vk::SamplerAddressMode::REPEAT);
-        assert!(sampler.handle() != vk::Sampler::null());
+        assert_eq!(sampler.min_filter(), Filter::LINEAR);
+        assert_eq!(sampler.mag_filter(), Filter::LINEAR);
+        assert_eq!(sampler.mipmap_mode(), SamplerMipmapMode::LINEAR);
+        assert_eq!(sampler.address_mode_u(), SamplerAddressMode::REPEAT);
+        assert_eq!(sampler.address_mode_v(), SamplerAddressMode::REPEAT);
+        assert!(sampler.handle() != VkSampler::null());
     }
 }
 
@@ -248,25 +251,25 @@ mod tests {
 pub struct Sampler {
     name: String,
     #[deref]
-    handle: vk::Sampler,
-    min_filter: vk::Filter,
-    mag_filter: vk::Filter,
-    mipmap_mode: vk::SamplerMipmapMode,
-    address_mode_u: vk::SamplerAddressMode,
-    address_mode_v: vk::SamplerAddressMode,
+    handle: VkSampler,
+    min_filter: Filter,
+    mag_filter: Filter,
+    mipmap_mode: SamplerMipmapMode,
+    address_mode_u: SamplerAddressMode,
+    address_mode_v: SamplerAddressMode,
 }
 
 impl Sampler {
     pub fn new(
         device: &Device,
-        min_filter: vk::Filter,
-        mag_filter: vk::Filter,
-        mipmap_mode: vk::SamplerMipmapMode,
-        address_mode_u: vk::SamplerAddressMode,
-        address_mode_v: vk::SamplerAddressMode,
+        min_filter: Filter,
+        mag_filter: Filter,
+        mipmap_mode: SamplerMipmapMode,
+        address_mode_u: SamplerAddressMode,
+        address_mode_v: SamplerAddressMode,
         name: &str,
     ) -> Result<Self> {
-        let create_info = vk::SamplerCreateInfo::default()
+        let create_info = SamplerCreateInfo::default()
             .mag_filter(min_filter)
             .min_filter(mag_filter)
             .address_mode_u(address_mode_u)
@@ -293,26 +296,26 @@ impl Sampler {
     pub fn default(device: &crate::Device) -> Result<Self> {
         Self::new(
             device,
-            vk::Filter::LINEAR,
-            vk::Filter::LINEAR,
-            vk::SamplerMipmapMode::LINEAR,
-            vk::SamplerAddressMode::REPEAT,
-            vk::SamplerAddressMode::REPEAT,
+            Filter::LINEAR,
+            Filter::LINEAR,
+            SamplerMipmapMode::LINEAR,
+            SamplerAddressMode::REPEAT,
+            SamplerAddressMode::REPEAT,
             "default",
         )
     }
 
     pub fn name(&self) -> &str { &self.name }
 
-    pub fn handle(&self) -> vk::Sampler { self.handle }
+    pub fn handle(&self) -> VkSampler { self.handle }
 
-    pub fn min_filter(&self) -> vk::Filter { self.min_filter }
+    pub fn min_filter(&self) -> Filter { self.min_filter }
 
-    pub fn mag_filter(&self) -> vk::Filter { self.mag_filter }
+    pub fn mag_filter(&self) -> Filter { self.mag_filter }
 
-    pub fn mipmap_mode(&self) -> vk::SamplerMipmapMode { self.mipmap_mode }
+    pub fn mipmap_mode(&self) -> SamplerMipmapMode { self.mipmap_mode }
 
-    pub fn address_mode_u(&self) -> vk::SamplerAddressMode { self.address_mode_u }
+    pub fn address_mode_u(&self) -> SamplerAddressMode { self.address_mode_u }
 
-    pub fn address_mode_v(&self) -> vk::SamplerAddressMode { self.address_mode_v }
+    pub fn address_mode_v(&self) -> SamplerAddressMode { self.address_mode_v }
 }

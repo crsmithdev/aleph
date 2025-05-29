@@ -1,14 +1,16 @@
 use {
     crate::{Allocator, Device, Gpu},
     anyhow::Result,
-    ash::vk::{self, DeviceAddress, Handle as _, MappedMemoryRange},
-    bytemuck::Pod,
+    ash::vk::{
+        Buffer as VkBuffer, BufferCreateInfo, BufferDeviceAddressInfo, BufferUsageFlags,
+        DeviceAddress, DeviceSize, Handle as _, MappedMemoryRange, MemoryRequirements, SharingMode,
+    },
+    bytemuck::{NoUninit, Pod},
     derive_more::{Debug, Deref},
-    gpu_allocator::vulkan::Allocation,
-    std::{cell::RefCell, mem, sync::Arc},
+    gpu_allocator::{vulkan::Allocation, MemoryLocation},
+    std::{cell::RefCell, marker::PhantomData, mem, ptr, slice, sync::Arc},
     tracing::instrument,
 };
-pub use {gpu_allocator::MemoryLocation, vk::BufferUsageFlags};
 
 #[derive(Clone, Debug, Deref)]
 pub struct TypedBuffer<T> {
@@ -43,7 +45,7 @@ impl<T: Pod> TypedBuffer<T> {
         Self::new(
             &gpu,
             size,
-            vk::BufferUsageFlags::INDEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
+            BufferUsageFlags::INDEX_BUFFER | BufferUsageFlags::TRANSFER_DST,
             MemoryLocation::CpuToGpu,
             name,
         )
@@ -52,7 +54,7 @@ impl<T: Pod> TypedBuffer<T> {
         Self::new(
             &gpu,
             size,
-            vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
+            BufferUsageFlags::VERTEX_BUFFER | BufferUsageFlags::TRANSFER_DST,
             MemoryLocation::CpuToGpu,
             name,
         )
@@ -61,7 +63,7 @@ impl<T: Pod> TypedBuffer<T> {
         Self::new(
             &gpu,
             size,
-            vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
+            BufferUsageFlags::STORAGE_BUFFER | BufferUsageFlags::TRANSFER_DST,
             MemoryLocation::GpuOnly,
             name,
         )
@@ -70,7 +72,7 @@ impl<T: Pod> TypedBuffer<T> {
         Self::new(
             &gpu,
             size,
-            vk::BufferUsageFlags::UNIFORM_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
+            BufferUsageFlags::UNIFORM_BUFFER | BufferUsageFlags::TRANSFER_DST,
             MemoryLocation::GpuOnly,
             name,
         )
@@ -80,7 +82,7 @@ impl<T: Pod> TypedBuffer<T> {
         Self::new(
             &gpu,
             size,
-            vk::BufferUsageFlags::UNIFORM_BUFFER,
+            BufferUsageFlags::UNIFORM_BUFFER,
             MemoryLocation::CpuToGpu,
             name,
         )
@@ -89,7 +91,7 @@ impl<T: Pod> TypedBuffer<T> {
         Self::new(
             &gpu,
             size,
-            vk::BufferUsageFlags::TRANSFER_SRC,
+            BufferUsageFlags::TRANSFER_SRC,
             MemoryLocation::CpuToGpu,
             name,
         )
@@ -98,7 +100,7 @@ impl<T: Pod> TypedBuffer<T> {
     pub fn new(
         gpu: &Gpu,
         len: usize,
-        flags: vk::BufferUsageFlags,
+        flags: BufferUsageFlags,
         location: MemoryLocation,
         name: &str,
     ) -> Result<Self> {
@@ -125,7 +127,7 @@ impl<T: Pod> TypedBuffer<T> {
     pub fn address(&self) -> DeviceAddress { self.buffer.address }
 
     #[inline]
-    pub fn handle(&self) -> vk::Buffer { self.buffer.handle }
+    pub fn handle(&self) -> VkBuffer { self.buffer.handle }
 
     #[inline]
     pub fn len(&self) -> usize { self.len }
@@ -159,7 +161,7 @@ pub struct Buffer {
     address: DeviceAddress,
     #[deref]
     #[debug("{:#x}", handle.as_raw())]
-    handle: vk::Buffer,
+    handle: VkBuffer,
     #[debug(skip)]
     device: Device,
     #[debug(skip)]
@@ -177,15 +179,15 @@ impl Buffer {
         device: &Device,
         allocator: &Arc<Allocator>,
         size: u64,
-        flags: vk::BufferUsageFlags,
+        flags: BufferUsageFlags,
         location: MemoryLocation,
         name: &str,
     ) -> Result<Self> {
         let name = name.to_string();
         let device = device.clone();
         let allocator = Arc::clone(&allocator);
-        let flags = flags | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
-        let create_info = vk::BufferCreateInfo::default().size(size).usage(flags);
+        let flags = flags | BufferUsageFlags::SHADER_DEVICE_ADDRESS;
+        let create_info = BufferCreateInfo::default().size(size).usage(flags);
         let handle = unsafe { device.handle().create_buffer(&create_info, None) }?;
         let requirements = unsafe { device.handle().get_buffer_memory_requirements(handle) };
         let allocation = Arc::new(RefCell::new(allocator.allocate_buffer(
@@ -195,8 +197,8 @@ impl Buffer {
             name.to_string(),
         )?));
 
-        let address = if flags.contains(vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS) {
-            let info = vk::BufferDeviceAddressInfo::default().buffer(handle);
+        let address = if flags.contains(BufferUsageFlags::SHADER_DEVICE_ADDRESS) {
+            let info = BufferDeviceAddressInfo::default().buffer(handle);
             unsafe { device.handle().get_buffer_device_address(&info) }
         } else {
             DeviceAddress::default()
@@ -222,7 +224,7 @@ impl Buffer {
     pub fn address(&self) -> DeviceAddress { self.address }
 
     #[inline]
-    pub fn handle(&self) -> vk::Buffer { self.handle }
+    pub fn handle(&self) -> VkBuffer { self.handle }
 
     #[inline]
     pub fn size(&self) -> u64 { self.size }
@@ -230,7 +232,7 @@ impl Buffer {
     #[inline]
     pub fn len(&self) -> usize { self.size as usize }
 
-    pub fn mapped_memory_range(&self) -> vk::MappedMemoryRange {
+    pub fn mapped_memory_range(&self) -> MappedMemoryRange {
         let atom_size = self.device.properties().limits.non_coherent_atom_size;
         let size = (self.size - 1) - ((self.size - 1) % atom_size) + atom_size;
 
@@ -288,7 +290,7 @@ mod tests {
         .unwrap();
 
         assert!(result.name() == "test");
-        assert!(result.handle() != vk::Buffer::null());
+        assert!(result.handle() != VkBuffer::null());
         assert!(result.len() == 1024);
         assert!(result.size() == 1024 * mem::size_of::<i32>() as u64);
         assert!(result.type_size() == mem::size_of::<i32>());
@@ -308,7 +310,7 @@ mod tests {
         .unwrap();
 
         assert!(buffer.name() == "test_buffer");
-        assert!(buffer.handle() != vk::Buffer::null());
+        assert!(buffer.handle() != VkBuffer::null());
         assert!(buffer.size() == 1024);
     }
     #[test]

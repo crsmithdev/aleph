@@ -1,11 +1,18 @@
 use {
     crate::{CommandBuffer, Device, Instance},
+    anyhow::Result,
     ash::{
         ext::debug_utils,
-        vk::{self, DebugUtilsLabelEXT, DebugUtilsMessageSeverityFlagsEXT, Handle},
+        vk::{
+            self, Bool32, DebugUtilsLabelEXT, DebugUtilsMessageSeverityFlagsEXT,
+            DebugUtilsMessageTypeFlagsEXT, DebugUtilsMessengerCallbackDataEXT,
+            DebugUtilsMessengerCreateInfoEXT, DebugUtilsMessengerEXT, DebugUtilsObjectNameInfoEXT,
+            Handle, FALSE,
+        },
     },
     derive_more::derive::Debug,
-    std::ffi,
+    std::{ffi, ptr, sync::Arc},
+    tracing::{error, trace, warn},
 };
 
 #[derive(Clone, Debug)]
@@ -14,24 +21,24 @@ pub struct DebugUtils {
     pub debug_instance: debug_utils::Instance,
     #[debug(skip)]
     pub debug_device: debug_utils::Device,
-    pub debug_callback: vk::DebugUtilsMessengerEXT,
+    pub debug_callback: DebugUtilsMessengerEXT,
 }
 
 impl DebugUtils {
     pub fn new(instance: &Instance, device: &Device) -> Self {
         let instance = instance.clone();
 
-        let debug_info = vk::DebugUtilsMessengerCreateInfoEXT::default()
+        let debug_info = DebugUtilsMessengerCreateInfoEXT::default()
             .message_severity(
-                vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
-                    | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING
-                    | vk::DebugUtilsMessageSeverityFlagsEXT::INFO,
+                DebugUtilsMessageSeverityFlagsEXT::ERROR
+                    | DebugUtilsMessageSeverityFlagsEXT::WARNING
+                    | DebugUtilsMessageSeverityFlagsEXT::INFO,
             )
             .message_type(
-                vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
-                    | vk::DebugUtilsMessageTypeFlagsEXT::DEVICE_ADDRESS_BINDING
-                    | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
-                    | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
+                DebugUtilsMessageTypeFlagsEXT::GENERAL
+                    | DebugUtilsMessageTypeFlagsEXT::DEVICE_ADDRESS_BINDING
+                    | DebugUtilsMessageTypeFlagsEXT::VALIDATION
+                    | DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
             )
             .pfn_user_callback(Some(vulkan_debug_callback));
         let debug_instance = debug_utils::Instance::new(&instance.entry, &*instance);
@@ -49,9 +56,8 @@ impl DebugUtils {
     pub fn set_debug_object_name(&self, handle: impl Handle, name: &str) {
         unsafe {
             let name_c = ffi::CString::new(name).unwrap();
-            let name_info = vk::DebugUtilsObjectNameInfoEXT::default()
-                .object_handle(handle)
-                .object_name(&name_c);
+            let name_info =
+                DebugUtilsObjectNameInfoEXT::default().object_handle(handle).object_name(&name_c);
             self.debug_device
                 .set_debug_utils_object_name(&name_info)
                 .expect(&format!("Could not set name '{}'", name));
@@ -76,11 +82,11 @@ impl DebugUtils {
 
 #[allow(clippy::missing_safety_doc)]
 pub unsafe extern "system" fn vulkan_debug_callback(
-    message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
-    _message_type: vk::DebugUtilsMessageTypeFlagsEXT,
-    p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
+    message_severity: DebugUtilsMessageSeverityFlagsEXT,
+    _message_type: DebugUtilsMessageTypeFlagsEXT,
+    p_callback_data: *const DebugUtilsMessengerCallbackDataEXT,
     _p_user_data: *mut ffi::c_void,
-) -> vk::Bool32 {
+) -> Bool32 {
     let message = ffi::CStr::from_ptr((*p_callback_data).p_message)
         .to_str()
         .unwrap_or("[Error parsing message data]");
@@ -92,5 +98,5 @@ pub unsafe extern "system" fn vulkan_debug_callback(
         _ => {}
     }
 
-    vk::FALSE
+    FALSE
 }
