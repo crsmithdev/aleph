@@ -76,7 +76,7 @@ fn input_system(mut scene: ResMut<Scene>, mut assets: ResMut<Assets>, input: Res
     if state.auto_rotate {
         scene.nodes_mut().for_each(|node| {
             if let NodeData::Mesh(_) = node.data {
-                node.rotate(ROTATION_FACTOR);
+                // node.rotate(ROTATION_FACTOR);
             }
         });
     }

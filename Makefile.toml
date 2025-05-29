@@ -1,6 +1,9 @@
 [config]
 default_to_workspace = false
 
+[env]
+CARGO_MAKE_COVERAGE_PROVIDER = "tarpaulin"
+
 [tasks.build]
 command = "cargo"
 args = ["build", "--examples"]
@@ -16,6 +19,10 @@ args = ["run", "--example", "demo"]
 command = "cargo"
 args = ["test", "--tests", "--workspace"]
 
+[tasks.coverage]
+command = "cargo"
+args = ["tarpaulin", "--ignore-tests", "--workspace", "--all-targets"]
+
 [tasks.clean]
 dependencies = ["clean-rs", "clean-shaders"]
     
@@ -23,7 +30,7 @@ dependencies = ["clean-rs", "clean-shaders"]
 script_runner = "pwsh"
 script_extension = "ps1"
 script = """
-pwsh.exe -C "Remove-Item -Path target -Exclude target/debug/deps -Recurse -Force -ErrorAction Ignore"
+pwsh.exe -C "Remove-Item -Path target -Forc -Recurse -ErrorAction Ignore"
 """
 
 [tasks.clean-shaders]
