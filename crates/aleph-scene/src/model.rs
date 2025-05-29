@@ -30,18 +30,6 @@ impl Vertex {
     }
 }
 
-// #[derive(Debug)]
-// pub struct Mesh {
-//     pub name: String,
-//     #[debug("{:#x}, ({} vertices)", vertex_buffer.handle().as_raw(), vertex_buffer.size())]
-//     pub vertex_buffer: TypedBuffer<Vertex>,
-//     pub vertex_count: u32,
-//     #[debug("{:#x}, ({} indices)", index_buffer.handle().as_raw(), index_buffer.size())]
-//     pub index_buffer: TypedBuffer<u32>,
-//     pub material: MaterialHandle,
-//     pub topology: PrimitiveTopology,
-// }
-
 #[derive(Clone, Debug, Default)]
 pub struct MeshInfo {
     pub name: String,

@@ -1,10 +1,10 @@
 use {
     crate::{CommandBuffer, Instance, TIMEOUT_NS},
-    anyhow::{anyhow, bail, Result},
+    anyhow::{anyhow, Result},
     ash::{
         ext, khr,
         vk::{
-            self, Buffer as VkBuffer, BufferDeviceAddressInfo, BufferMemoryBarrier2,
+            Buffer as VkBuffer, BufferDeviceAddressInfo, BufferMemoryBarrier2,
             CommandBuffer as VkCommandBuffer, CommandBufferAllocateInfo, CommandBufferLevel,
             CommandBufferSubmitInfo, CommandPool as VkCommandPool, CommandPoolCreateFlags,
             CommandPoolCreateInfo, CopyDescriptorSet, DependencyFlags, DependencyInfo,
@@ -13,7 +13,7 @@ use {
             DescriptorSetLayout, DescriptorSetLayoutBinding,
             DescriptorSetLayoutBindingFlagsCreateInfo, DescriptorSetLayoutCreateFlags,
             DescriptorSetLayoutCreateInfo, DescriptorSetVariableDescriptorCountAllocateInfo,
-            DeviceAddress, DeviceCreateInfo, DeviceQueueCreateInfo, Fence, FenceCreateFlags,
+            DeviceAddress, Fence, FenceCreateFlags,
             FenceCreateInfo, Filter, GraphicsPipelineCreateInfo, Handle, ImageMemoryBarrier2,
             MappedMemoryRange, MemoryBarrier2, PhysicalDevice,
             PhysicalDevice8BitStorageFeaturesKHR, PhysicalDeviceBufferDeviceAddressFeaturesKHR,
@@ -26,13 +26,12 @@ use {
             Sampler as VkSampler, SamplerAddressMode, SamplerCreateInfo, SamplerMipmapMode,
             Semaphore, SemaphoreCreateInfo, SemaphoreSubmitInfo, SemaphoreType,
             SemaphoreTypeCreateInfo, SemaphoreWaitInfo, ShaderModule, ShaderModuleCreateInfo,
-            SubmitInfo2, SurfaceKHR, WriteDescriptorSet, LOD_CLAMP_NONE,
+            SubmitInfo2, WriteDescriptorSet, LOD_CLAMP_NONE,
         },
         Device as AshDevice,
     },
     derive_more::{Debug, Deref},
-    std::{collections::HashSet, ffi, slice, sync::Arc},
-    tracing::info,
+    std::{ffi, slice},
 };
 
 const DEVICE_EXTENSIONS: [&ffi::CStr; 10] = [

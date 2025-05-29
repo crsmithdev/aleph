@@ -315,47 +315,6 @@ fn load_mesh(
     handles
 }
 
-// fn load_sampler(sampler: gltf::texture::Sampler, assets: &mut Assets) -> Sampler {
-//     use gltf::texture::{MagFilter, MinFilter, WrappingMode};
-//     let index = sampler.index().unwrap_or(usize::MAX);
-//     let min_filter = match sampler.min_filter() {
-//         Some(MinFilter::Nearest) => Filter::NEAREST,
-//         Some(MinFilter::NearestMipmapNearest) => Filter::NEAREST,
-//         Some(MinFilter::NearestMipmapLinear) => Filter::NEAREST,
-//         Some(MinFilter::Linear) => Filter::LINEAR,
-//         Some(MinFilter::LinearMipmapNearest) => Filter::LINEAR,
-//         Some(MinFilter::LinearMipmapLinear) => Filter::LINEAR,
-//         None => Filter::LINEAR,
-//     };
-//     let mag_filter = match sampler.mag_filter() {
-//         Some(MagFilter::Nearest) => Filter::NEAREST,
-//         Some(MagFilter::Linear) => Filter::LINEAR,
-//         None => Filter::LINEAR,
-//     };
-//     let address_mode_u = match sampler.wrap_s() {
-//         WrappingMode::ClampToEdge => SamplerAddressMode::CLAMP_TO_EDGE,
-//         WrappingMode::MirroredRepeat => SamplerAddressMode::MIRRORED_REPEAT,
-//         WrappingMode::Repeat => SamplerAddressMode::REPEAT,
-//     };
-//     let address_mode_y = match sampler.wrap_t() {
-//         WrappingMode::ClampToEdge => SamplerAddressMode::CLAMP_TO_EDGE,
-//         WrappingMode::MirroredRepeat => SamplerAddressMode::MIRRORED_REPEAT,
-//         WrappingMode::Repeat => SamplerAddressMode::REPEAT,
-//     };
-//     let mipmap_mode = match sampler.min_filter() {
-//         Some(MinFilter::Nearest) => SamplerMipmapMode::NEAREST,
-//         Some(MinFilter::NearestMipmapNearest) => SamplerMipmapMode::NEAREST,
-//         Some(MinFilter::NearestMipmapLinear) => SamplerMipmapMode::NEAREST,
-//         Some(MinFilter::Linear) => SamplerMipmapMode::LINEAR,
-//         Some(MinFilter::LinearMipmapNearest) => SamplerMipmapMode::LINEAR,
-//         Some(MinFilter::LinearMipmapLinear) => SamplerMipmapMode::LINEAR,
-//         _ => SamplerMipmapMode::LINEAR,
-//     };
-//     let name = match sampler.name() {
-//         Some(name) => format!("gltf-sampler-{index:02}-{name}"),
-//         None => format!("gltf-sampler-{index:02}"),
-//     };
-// }
 // #[cfg(test)]
 // mod tests {
 //  use {

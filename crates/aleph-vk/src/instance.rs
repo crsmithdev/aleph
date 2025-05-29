@@ -1,21 +1,18 @@
 use {
     crate::QueueFamily,
-    anyhow::{anyhow, Result},
+    anyhow::Result,
     ash::{
         ext::debug_utils,
         khr::{get_physical_device_properties2, surface, win32_surface},
         vk::{
             ApplicationInfo, DeviceCreateInfo, DeviceQueueCreateInfo, Handle, InstanceCreateFlags,
             InstanceCreateInfo, PhysicalDevice, PhysicalDeviceFeatures2, PhysicalDeviceProperties,
-            QueueFamilyProperties, StructureType, API_VERSION_1_3,
+            QueueFamilyProperties, API_VERSION_1_3,
         },
         Device as VkDevice, Entry, Instance as VkInstance,
     },
     derive_more::{Debug, Deref},
-    raw_window_handle::{HasDisplayHandle, HasWindowHandle},
-    std::{ffi, sync::Arc},
-    tracing::info,
-    winit::window::Window,
+    std::ffi,
 };
 
 const DEFAULT_APP_NAME: &ffi::CStr = c"Aleph";

@@ -1,19 +1,17 @@
 use {
     crate::{image::Image, Device, Instance, Queue, TIMEOUT_NS},
-    anyhow::{anyhow, bail, Result},
+    anyhow::Result,
     ash::{
-        khr::{self, surface, swapchain},
+        khr::{self},
         vk::{
-            self, ColorSpaceKHR, CompositeAlphaFlagsKHR, Extent2D, Fence, Format, Handle,
-            Image as VkImage, ImageAspectFlags, ImageUsageFlags, PresentInfoKHR, PresentModeKHR,
-            Result as VkResult, Semaphore, SharingMode, SurfaceCapabilitiesKHR, SurfaceFormatKHR,
+            ColorSpaceKHR, CompositeAlphaFlagsKHR, Extent2D, Fence, Format, Handle, ImageAspectFlags, ImageUsageFlags, PresentInfoKHR, PresentModeKHR,
+            Result as VkResult, Semaphore, SharingMode, SurfaceCapabilitiesKHR,
             SurfaceKHR, SurfaceTransformFlagsKHR, SwapchainCreateInfoKHR, SwapchainKHR,
         },
     },
     derive_more::Debug,
     raw_window_handle::{HasDisplayHandle, HasWindowHandle},
-    std::sync::{Arc, Mutex},
-    winit::window::Window,
+    std::sync::Mutex,
 };
 
 pub const N_SWAPCHAIN_IMAGES: u32 = 3;

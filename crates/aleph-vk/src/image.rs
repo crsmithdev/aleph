@@ -2,14 +2,13 @@ use {
     crate::{Allocator, Device, Extent2D, Gpu},
     anyhow::Result,
     ash::vk::{
-        self, ComponentMapping, ComponentSwizzle, Extent3D, Filter, Format, Handle,
-        Image as VkImage, ImageAspectFlags, ImageCreateInfo, ImageLayout, ImageSubresourceRange,
-        ImageTiling, ImageType, ImageUsageFlags, ImageView, ImageViewCreateInfo, ImageViewType,
-        MemoryRequirements, SampleCountFlags, Sampler as VkSampler, SamplerAddressMode,
-        SamplerCreateInfo, SamplerMipmapMode, SharingMode,
+        ComponentMapping, Filter, Format, Handle,
+        Image as VkImage, ImageAspectFlags, ImageCreateInfo, ImageSubresourceRange,
+        ImageTiling, ImageType, ImageUsageFlags, ImageView, ImageViewCreateInfo, ImageViewType, SampleCountFlags, Sampler as VkSampler, SamplerAddressMode,
+        SamplerCreateInfo, SamplerMipmapMode,
     },
     derive_more::{Debug, Deref},
-    gpu_allocator::{vulkan::Allocation, MemoryLocation},
+    gpu_allocator::vulkan::Allocation,
     std::{mem, sync::Arc},
 };
 

@@ -1,22 +1,19 @@
 pub use ash::vk::ImageLayout;
 use {
     crate::{Buffer, Device, Image, Queue},
-    anyhow::Result,
     ash::vk::{
         AccessFlags2, BlitImageInfo2, BufferCopy, BufferImageCopy, BufferMemoryBarrier2,
-        CommandBuffer as VkCommandBuffer, CommandBufferAllocateInfo, CommandBufferBeginInfo,
-        CommandBufferLevel, CommandBufferResetFlags, CommandBufferUsageFlags,
-        CommandPool as VkCommandPool, CommandPoolCreateFlags, CommandPoolCreateInfo,
-        CommandPoolResetFlags, CopyDescriptorSet, DependencyInfo, DescriptorSet, Extent2D,
-        Extent3D, Fence, Handle, ImageAspectFlags, ImageBlit2, ImageMemoryBarrier2,
-        ImageSubresourceLayers, ImageSubresourceRange, IndexType, MemoryBarrier2, Offset2D,
-        Offset3D, Pipeline, PipelineBindPoint, PipelineLayout, PipelineStageFlags,
+        CommandBuffer as VkCommandBuffer, CommandBufferBeginInfo, CommandBufferResetFlags,
+        CommandBufferUsageFlags, CommandPool as VkCommandPool, CopyDescriptorSet, DependencyInfo,
+        DescriptorSet, Extent2D, Extent3D, Handle, ImageAspectFlags, ImageBlit2,
+        ImageMemoryBarrier2, ImageSubresourceLayers, ImageSubresourceRange, IndexType,
+        MemoryBarrier2, Offset2D, Offset3D, Pipeline, PipelineBindPoint, PipelineLayout,
         PipelineStageFlags2, Rect2D, RenderingAttachmentInfo, RenderingInfo, ShaderStageFlags,
-        SubmitInfo, Viewport, WriteDescriptorSet,
+        Viewport, WriteDescriptorSet,
     },
     bytemuck::Pod,
     derive_more::{Debug, Deref},
-    std::{slice, sync::Arc},
+    std::slice,
 };
 
 #[derive(Clone, Debug, Deref)]

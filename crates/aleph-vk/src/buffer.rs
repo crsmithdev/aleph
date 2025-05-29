@@ -3,12 +3,12 @@ use {
     anyhow::Result,
     ash::vk::{
         Buffer as VkBuffer, BufferCreateInfo, BufferDeviceAddressInfo, BufferUsageFlags,
-        DeviceAddress, DeviceSize, Handle as _, MappedMemoryRange, MemoryRequirements, SharingMode,
+        DeviceAddress, Handle as _, MappedMemoryRange,
     },
-    bytemuck::{NoUninit, Pod},
+    bytemuck::Pod,
     derive_more::{Debug, Deref},
     gpu_allocator::{vulkan::Allocation, MemoryLocation},
-    std::{cell::RefCell, marker::PhantomData, mem, ptr, slice, sync::Arc},
+    std::{cell::RefCell, mem, sync::Arc},
     tracing::instrument,
 };
 

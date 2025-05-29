@@ -6,10 +6,9 @@ use {
     aleph_core::log,
     anyhow::Result,
     ash::vk::{
-        self, Bool32, ColorSpaceKHR, CommandBufferSubmitInfo, DebugUtilsMessageSeverityFlagsEXT,
+        Bool32, ColorSpaceKHR, CommandBufferSubmitInfo, DebugUtilsMessageSeverityFlagsEXT,
         DebugUtilsMessageTypeFlagsEXT, DebugUtilsMessengerCallbackDataEXT, Extent2D, Fence,
-        FenceCreateFlags, FenceCreateInfo, Format, PipelineStageFlags2, Semaphore,
-        SemaphoreCreateInfo, SemaphoreSubmitInfo, FALSE,
+        FenceCreateFlags, Format, PipelineStageFlags2, Semaphore, SemaphoreSubmitInfo, FALSE,
     },
     derive_more::Debug,
     std::{ffi, sync::Arc},

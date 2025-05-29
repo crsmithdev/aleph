@@ -1,14 +1,12 @@
 use {
     crate::{Buffer, Gpu},
-    anyhow::Result,
     ash::vk::BufferUsageFlags,
     derive_more::derive::Debug,
     gpu_allocator::MemoryLocation,
     std::{
         cell::RefCell,
-        collections::VecDeque,
         rc::Rc,
-        sync::{Arc, Mutex},
+        sync::Arc,
     },
 };
 

@@ -1,18 +1,16 @@
 use {
     crate::{CommandBuffer, Device, Instance},
-    anyhow::Result,
     ash::{
         ext::debug_utils,
         vk::{
-            self, Bool32, DebugUtilsLabelEXT, DebugUtilsMessageSeverityFlagsEXT,
+            Bool32, DebugUtilsLabelEXT, DebugUtilsMessageSeverityFlagsEXT,
             DebugUtilsMessageTypeFlagsEXT, DebugUtilsMessengerCallbackDataEXT,
             DebugUtilsMessengerCreateInfoEXT, DebugUtilsMessengerEXT, DebugUtilsObjectNameInfoEXT,
             Handle, FALSE,
         },
     },
     derive_more::derive::Debug,
-    std::{ffi, ptr, sync::Arc},
-    tracing::{error, trace, warn},
+    std::ffi,
 };
 
 #[derive(Clone, Debug)]
