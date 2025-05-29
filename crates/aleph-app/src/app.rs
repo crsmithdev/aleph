@@ -18,8 +18,8 @@ use {
 
 pub const DEFAULT_APP_NAME: &str = "Untitled (Aleph)";
 pub const DEFAULT_WINDOW_SIZE: winit::dpi::PhysicalSize<u32> = winit::dpi::PhysicalSize {
-    width: 1280,
-    height: 720,
+    width: 1920,
+    height: 1080,
 };
 
 #[derive(Clone, Debug)]

@@ -269,6 +269,7 @@ pub struct Renderer {
     rebuild_swapchain: bool,
     frame_idx: usize,
     frame_counter: usize,
+    last_scene_version: u64,
 
     // GPU resources
     resources: RendererResources,
@@ -336,6 +337,7 @@ impl Renderer {
             },
             material_map: HashMap::new(),
             prepared: false,
+            last_scene_version: 0,
         })
     }
 
@@ -359,6 +361,10 @@ impl Renderer {
         gui: &mut Gui,
         extent: Extent2D,
     ) -> Result<()> {
+        if scene.version() > self.last_scene_version {
+            self.last_scene_version = scene.version();
+            self.prepare_bindless(assets, scene);
+        }
         self.update_per_frame_data(scene, assets);
 
         if self.rebuild_swapchain {
@@ -374,6 +380,8 @@ impl Renderer {
             )?;
             self.rebuild_swapchain = false;
         }
+
+        let extent = self.gpu.swapchain().extent();
 
         let Frame {
             acquire_semaphore,
@@ -625,7 +633,6 @@ impl Renderer {
 
     #[instrument(skip_all)]
     pub fn prepare_bindless(&mut self, assets: &mut Assets, scene: &Scene) -> Result<()> {
-        self.gpu.device().wait_idle();
         let cmd = &self.gpu.immediate_cmd_buffer();
         cmd.begin();
 

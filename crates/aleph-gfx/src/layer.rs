@@ -37,11 +37,11 @@ fn update_system(
     mut renderer: ResMut<Renderer>,
     window: Res<Arc<Window>>,
 ) {
-    gui.handle_events(events.read());
-    if !renderer.prepared {
-        renderer.prepare_bindless(&mut assets, &scene).expect("Error preparing resources");
-        renderer.prepared = true;
-    }
+    // gui.handle_events(events.read());
+    // if !renderer.prepared {
+    //     renderer.prepare_bindless(&mut assets, &scene).expect("Error preparing resources");
+    //     renderer.prepared = true;
+    // }
     let extent = window.inner_size();
     let extent = Extent2D {
         width: extent.width,

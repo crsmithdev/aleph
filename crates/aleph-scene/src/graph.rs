@@ -91,10 +91,13 @@ pub struct Scene {
 
 impl Default for Scene {
     fn default() -> Self {
+        static COUNTER: AtomicU64 = AtomicU64::new(1);
         let mut graph = Graph::new();
         let root_node = Node::group("root");
         let root_handle = root_node.handle;
         let root_index = graph.add_node(root_node);
+        let version = COUNTER.fetch_add(1, Ordering::Relaxed);
+        log::debug!("Creating new scene with root node: {root_handle:?}, version: {version}");
 
         let mut indices = HashMap::new();
         indices.insert(root_handle, root_index);
@@ -104,7 +107,7 @@ impl Default for Scene {
             graph,
             root: root_handle,
             indices,
-            version: 0,
+            version,
         }
     }
 }
@@ -116,6 +119,8 @@ impl Scene {
             .copied()
             .ok_or_else(|| anyhow!("Node {handle:?} not found in index map"))
     }
+
+    pub fn version(&self) -> u64 { self.version }
 
     pub fn root(&self) -> NodeHandle { self.root }
 
@@ -192,9 +197,6 @@ impl Scene {
     }
 
     pub fn clear(&mut self) { *self = Self::default(); }
-
-    /// Get the current version of the scene
-    pub fn version(&self) -> u64 { self.version }
 }
 
 #[cfg(test)]
