@@ -7,8 +7,7 @@ use {
         Window,
     },
     aleph_scene::{assets::Assets, Scene},
-    aleph_vk::{Extent2D, Gpu},
-    ash::vk::Event,
+    aleph_vk::Gpu,
     std::sync::Arc,
 };
 

@@ -7,8 +7,8 @@ use {
         Assets, MaterialHandle, MeshHandle, Scene, Vertex,
     },
     aleph_vk::{
-        sync, AccessFlags2, CommandBuffer, CommandPool, Extent2D, Extent3D, Fence, Format, Gpu,
-        Handle as VkHandle, Image, ImageAspectFlags, ImageLayout, ImageUsageFlags,
+        sync, AccessFlags2, CommandBuffer, CommandPool, Extent2D, Fence, Format, Gpu,
+        Handle as VkHandle, ImageAspectFlags, ImageLayout, ImageUsageFlags,
         PipelineStageFlags2, Semaphore, ShaderStageFlags, Texture, TextureInfo, TypedBuffer,
     },
     anyhow::Result,
@@ -180,6 +180,29 @@ pub struct Frame {
     pub cmd_buffer: CommandBuffer,
 }
 
+impl Frame {
+    pub fn new(gpu: &Gpu) -> Self {
+        let cmd_pool = CommandPool::new(
+            gpu.device(),
+            gpu.device().graphics_queue(),
+            &format!("frame-pool"),
+        );
+        let cmd_buffer = cmd_pool.create_command_buffer(&format!("frame-cmd"));
+
+        let acquire_semaphore = gpu.device().create_semaphore();
+        let present_semaphore = gpu.device().create_semaphore();
+        let fence = gpu.device().create_fence(FenceCreateFlags::SIGNALED);
+
+        Frame {
+            cmd_pool,
+            acquire_semaphore,
+            present_semaphore,
+            cmd_buffer,
+            fence,
+        }
+    }
+}
+
 pub struct RenderContext<'a> {
     pub gpu: &'a Gpu,
     pub scene: &'a Scene,
@@ -205,35 +228,7 @@ pub struct RendererResources {
 }
 
 impl RendererResources {
-    pub fn new(gpu: &Arc<Gpu>, extent: Extent2D) -> Result<Self> {
-        // Create draw image
-
-        let draw_info = TextureInfo {
-            name: "draw".to_string(),
-            extent,
-            format: FORMAT_DRAW_IMAGE,
-            flags: ImageUsageFlags::COLOR_ATTACHMENT
-                | ImageUsageFlags::TRANSFER_DST
-                | ImageUsageFlags::TRANSFER_SRC,
-            aspect_flags: ImageAspectFlags::COLOR,
-            sampler: None,
-        };
-        let draw_image = Texture::new(gpu, &draw_info)?;
-
-        // Create depth image
-        let depth_info = TextureInfo {
-            name: "depth".to_string(),
-            extent,
-            format: FORMAT_DEPTH_IMAGE,
-            flags: ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
-                | ImageUsageFlags::TRANSFER_DST
-                | ImageUsageFlags::TRANSFER_SRC,
-            aspect_flags: ImageAspectFlags::DEPTH,
-            sampler: None,
-        };
-        let depth_image = Texture::new(gpu, &depth_info)?;
-
-        // Create buffers
+    pub fn new(gpu: &Arc<Gpu>) -> Result<Self> {
         let scene_buffer = TypedBuffer::shared_uniform(gpu, 1, "renderer-scene")?;
         let object_data_buffer = TypedBuffer::shared_uniform(gpu, 1, "renderer-object")?;
         let index_buffer = TypedBuffer::index(gpu, 1, "renderer-index")?;
@@ -295,8 +290,8 @@ impl Renderer {
     pub fn new(gpu: Arc<Gpu>) -> Result<Self> {
         let extent = gpu.swapchain().extent();
         let (draw_image, depth_image) = Self::create_attachments(&gpu, extent)?;
-        let frames = Self::create_frames(&gpu)?;
-        let resources = RendererResources::new(&gpu, extent)?;
+        let frames = Self::create_frames(&gpu);
+        let resources = RendererResources::new(&gpu)?;
         let forward_pipeline = ForwardPipeline::new(
             &gpu,
             &resources.binder.descriptor_layout(),
@@ -347,6 +342,9 @@ impl Renderer {
         })
     }
 
+    fn create_frames(gpu: &Arc<Gpu>) -> Vec<Frame> {
+        (0..N_FRAMES).map(|_| Frame::new(&gpu)).collect::<Vec<Frame>>()
+    }
     fn update_per_frame_data(&mut self, scene: &Scene, _assets: &Assets) {
         let view = scene.camera.view();
         let projection = scene.camera.projection();
@@ -399,7 +397,35 @@ impl Renderer {
         cmd_buffer.bind_index_buffer(&self.resources.index_buffer, 0);
         cmd_buffer.bind_vertex_buffer(&self.resources.vertex_buffer, 0);
 
-        self.transition_images_for_rendering(cmd_buffer, &self.draw_image, &self.depth_image);
+        cmd_buffer.pipeline_barrier(
+            &[],
+            &[],
+            &[sync::image_memory_barrier(
+                &self.draw_image,
+                PipelineStageFlags2::TOP_OF_PIPE,
+                AccessFlags2::NONE,
+                PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                ImageLayout::UNDEFINED,
+                ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            )],
+        );
+
+        cmd_buffer.pipeline_barrier(
+            &[],
+            &[],
+            &[sync::image_memory_barrier(
+                &self.depth_image,
+                PipelineStageFlags2::TOP_OF_PIPE,
+                AccessFlags2::NONE,
+                PipelineStageFlags2::EARLY_FRAGMENT_TESTS
+                    | PipelineStageFlags2::LATE_FRAGMENT_TESTS,
+                AccessFlags2::DEPTH_STENCIL_ATTACHMENT_READ
+                    | AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                ImageLayout::UNDEFINED,
+                ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            )],
+        );
 
         let context = RenderContext {
             gpu: &self.gpu,
@@ -418,17 +444,55 @@ impl Renderer {
         self.forward_pipeline.render(&context, &cmd_buffer)?;
         gui.draw(&context, &mut self.config, &mut self.scene_data)?;
 
+        cmd_buffer.pipeline_barrier(
+            &[],
+            &[],
+            &[sync::image_memory_barrier(
+                &self.draw_image,
+                PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                PipelineStageFlags2::TRANSFER,
+                AccessFlags2::TRANSFER_READ,
+                ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                ImageLayout::TRANSFER_SRC_OPTIMAL,
+            )],
+        );
+
+        cmd_buffer.pipeline_barrier(
+            &[],
+            &[],
+            &[sync::image_memory_barrier(
+                &swapchain_image,
+                PipelineStageFlags2::TOP_OF_PIPE,
+                AccessFlags2::NONE,
+                PipelineStageFlags2::TRANSFER,
+                AccessFlags2::TRANSFER_WRITE,
+                ImageLayout::UNDEFINED,
+                ImageLayout::TRANSFER_DST_OPTIMAL,
+            )],
+        );
+
         cmd_buffer.copy_image(
             &self.draw_image,
             swapchain_image,
             self.draw_image.extent().into(),
             swapchain_image.extent().into(),
         );
-
+        cmd_buffer.pipeline_barrier(
+            &[],
+            &[],
+            &[sync::image_memory_barrier(
+                &swapchain_image,
+                PipelineStageFlags2::TRANSFER,
+                AccessFlags2::TRANSFER_WRITE,
+                PipelineStageFlags2::BOTTOM_OF_PIPE,
+                AccessFlags2::NONE,
+                ImageLayout::TRANSFER_DST_OPTIMAL,
+                ImageLayout::PRESENT_SRC_KHR,
+            )],
+        );
         cmd_buffer.end();
 
-        // Submit and present
-        self.gpu.device().wait_idle();
         self.gpu.queue_submit(
             &self.gpu.device().graphics_queue(),
             &[cmd_buffer],
@@ -462,7 +526,7 @@ impl Renderer {
 
         self.extent = extent;
         self.gpu.rebuild_swapchain(extent);
-        self.frames = Self::create_frames(&self.gpu).unwrap();
+        self.frames = Self::create_frames(&self.gpu);
         let (draw_image, depth_image) = Self::create_attachments(&self.gpu, extent).unwrap();
         self.draw_image = draw_image;
         self.depth_image = depth_image;
@@ -474,43 +538,6 @@ impl Renderer {
         )
         .unwrap();
         self.rebuild_swapchain = false;
-    }
-
-    fn transition_images_for_rendering(
-        &self,
-        cmd_buffer: &CommandBuffer,
-        draw_image: &Texture,
-        depth_image: &Texture,
-    ) {
-        cmd_buffer.pipeline_barrier(
-            &[],
-            &[],
-            &[sync::image_memory_barrier(
-                draw_image,
-                PipelineStageFlags2::TOP_OF_PIPE,
-                AccessFlags2::NONE,
-                PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                ImageLayout::UNDEFINED,
-                ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-            )],
-        );
-
-        cmd_buffer.pipeline_barrier(
-            &[],
-            &[],
-            &[sync::image_memory_barrier(
-                depth_image,
-                PipelineStageFlags2::TOP_OF_PIPE,
-                AccessFlags2::NONE,
-                PipelineStageFlags2::EARLY_FRAGMENT_TESTS
-                    | PipelineStageFlags2::LATE_FRAGMENT_TESTS,
-                AccessFlags2::DEPTH_STENCIL_ATTACHMENT_READ
-                    | AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
-                ImageLayout::UNDEFINED,
-                ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-            )],
-        );
     }
 
     fn create_render_objects2(
@@ -631,7 +658,6 @@ impl Renderer {
     }
 
     pub fn create_attachments(gpu: &Gpu, extent: Extent2D) -> Result<(Texture, Texture)> {
-        // Recreate draw_image with the new extent
         let draw_info = TextureInfo {
             name: "draw".to_string(),
             extent,
@@ -642,9 +668,6 @@ impl Renderer {
             aspect_flags: ImageAspectFlags::COLOR,
             sampler: None,
         };
-        let draw_image = Texture::new(gpu, &draw_info)?;
-
-        // Create depth image
         let depth_info = TextureInfo {
             name: "depth".to_string(),
             extent,
@@ -655,30 +678,10 @@ impl Renderer {
             aspect_flags: ImageAspectFlags::DEPTH,
             sampler: None,
         };
+
+        let draw_image = Texture::new(gpu, &draw_info)?;
         let depth_image = Texture::new(gpu, &depth_info)?;
-        log::debug!("created attachments with extent: {:?}", extent);
 
         Ok((draw_image, depth_image))
-    }
-
-    fn create_frames(gpu: &Gpu) -> Result<Vec<Frame>> {
-        let mut frames = Vec::new();
-        for i in 0..N_FRAMES {
-            let name = format!("frame{i:02}");
-            let cmd_pool = CommandPool::new(gpu.device(), gpu.device().graphics_queue(), &name);
-            let swapchain_semaphore = gpu.device().create_semaphore();
-            let render_semaphore = gpu.device().create_semaphore();
-            let fence = gpu.device().create_fence(FenceCreateFlags::SIGNALED);
-            let cmd_buffer = cmd_pool.create_command_buffer(&name);
-
-            frames.push(Frame {
-                cmd_pool,
-                acquire_semaphore: swapchain_semaphore,
-                present_semaphore: render_semaphore,
-                cmd_buffer,
-                fence,
-            });
-        }
-        Ok(frames)
     }
 }
