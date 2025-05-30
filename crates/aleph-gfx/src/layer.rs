@@ -1,13 +1,14 @@
 use {
     crate::{Gui, Renderer},
     aleph_core::{
-        events::{EventReader, GuiEvent},
+        events::{EventReader, GuiEvent, ResizedEvent},
         layer::Layer,
         system::{Res, ResMut, Resources, Schedule, Scheduler},
         Window,
     },
     aleph_scene::{assets::Assets, Scene},
     aleph_vk::{Extent2D, Gpu},
+    ash::vk::Event,
     std::sync::Arc,
 };
 
@@ -31,21 +32,19 @@ impl Layer for RenderLayer {
 
 fn update_system(
     scene: Res<Scene>,
-    events: EventReader<GuiEvent>,
+    gui_events: EventReader<GuiEvent>,
+    resized_events: EventReader<ResizedEvent>,
     mut assets: ResMut<Assets>,
     mut gui: ResMut<Gui>,
     mut renderer: ResMut<Renderer>,
-    window: Res<Arc<Window>>,
 ) {
-    // gui.handle_events(events.read());
-    // if !renderer.prepared {
-    //     renderer.prepare_bindless(&mut assets, &scene).expect("Error preparing resources");
-    //     renderer.prepared = true;
-    // }
-    let extent = window.inner_size();
-    let extent = Extent2D {
-        width: extent.width,
-        height: extent.height,
-    };
-    renderer.render(&scene, &mut assets, &mut gui, extent).expect("execute renderer");
+    let gui_events = gui_events.read();
+    gui.handle_events(gui_events);
+
+    let resized_event = resized_events.last();
+    if let Some(event) = resized_event {
+        renderer.resize(event.width, event.height);
+    }
+
+    renderer.render(&scene, &mut assets, &mut gui).expect("execute renderer");
 }

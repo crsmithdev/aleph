@@ -1,7 +1,7 @@
 use {
     aleph_core::{
-        setup_logging, system::IntoSystem, Event, EventRegistry, Events, GuiEvent, Input, Layer,
-        Resources, Schedule, Scheduler, System, Window, WindowEvent,
+        events::ResizedEvent, setup_logging, system::IntoSystem, Event, EventRegistry, Events,
+        GuiEvent, Input, Layer, Resources, Schedule, Scheduler, System, Window, WindowEvent,
     },
     anyhow::{anyhow, Result},
     human_panic::setup_panic,
@@ -106,6 +106,7 @@ impl App {
 
         self.resources.add(Input::default());
         self.event_registry.register::<GuiEvent>(&mut self.resources);
+        self.event_registry.register::<ResizedEvent>(&mut self.resources);
 
         for layer in self.layers.iter_mut() {
             layer.register(&mut self.scheduler, &mut self.resources);
@@ -197,6 +198,14 @@ impl ApplicationHandler for AppHandler<'_> {
 
         let events = self.app.resources.get_mut::<Events<GuiEvent>>();
         events.write(GuiEvent(event.clone()));
+
+        if let WindowEvent::Resized(size) = event {
+            let events = self.app.resources.get_mut::<Events<ResizedEvent>>();
+            events.write(ResizedEvent {
+                width: size.width,
+                height: size.height,
+            });
+        }
 
         if let WindowEvent::CloseRequested = event {
             self.close_requested = true;

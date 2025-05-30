@@ -55,6 +55,7 @@ pub struct EventReader<'a, T: 'static> {
 
 impl<'a, T> EventReader<'a, T> {
     pub fn read(&self) -> impl Iterator<Item = &T> { self.events.read() }
+    pub fn last(&self) -> Option<&T> { self.events.last_frame.last() }
 }
 
 impl<'a, T> SystemParam for EventReader<'a, T> {
@@ -108,6 +109,12 @@ impl EventRegistry {
 
 pub struct GuiEvent(pub winit::event::WindowEvent);
 impl Event for GuiEvent {}
+
+pub struct ResizedEvent {
+    pub width: u32,
+    pub height: u32,
+}
+impl Event for ResizedEvent {}
 
 #[cfg(test)]
 mod test {

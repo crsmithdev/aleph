@@ -186,8 +186,8 @@ pub struct RenderContext<'a> {
     pub command_buffer: &'a CommandBuffer,
     pub scene_buffer: &'a TypedBuffer<GpuSceneData>,
     pub draw_image: &'a Texture,
-    pub render_extent: Extent2D,
     pub material_map: &'a HashMap<MaterialHandle, usize>,
+    pub render_extent: Extent2D,
     pub depth_image: &'a Texture,
     pub objects: &'a Vec<RenderObject>,
     pub binder: &'a ResourceBinder,
@@ -197,8 +197,6 @@ pub struct RenderContext<'a> {
 // GPU resource bundle for Renderer
 #[derive(Debug)]
 pub struct RendererResources {
-    pub draw_image: Texture,
-    pub depth_image: Texture,
     pub scene_buffer: TypedBuffer<GpuSceneData>,
     pub object_data_buffer: TypedBuffer<GpuObjectData>,
     pub index_buffer: TypedBuffer<u32>,
@@ -209,6 +207,7 @@ pub struct RendererResources {
 impl RendererResources {
     pub fn new(gpu: &Arc<Gpu>, extent: Extent2D) -> Result<Self> {
         // Create draw image
+
         let draw_info = TextureInfo {
             name: "draw".to_string(),
             extent,
@@ -248,8 +247,6 @@ impl RendererResources {
             .finish(gpu)?;
 
         Ok(Self {
-            draw_image,
-            depth_image,
             scene_buffer,
             object_data_buffer,
             index_buffer,
@@ -268,8 +265,13 @@ pub struct Renderer {
     forward_pipeline: ForwardPipeline,
     rebuild_swapchain: bool,
     frame_idx: usize,
+    pub extent: Extent2D,
     frame_counter: usize,
     last_scene_version: u64,
+
+    pub draw_image: Texture,
+    // draw_extent: Extent2D,
+    pub depth_image: Texture,
 
     // GPU resources
     resources: RendererResources,
@@ -291,14 +293,15 @@ pub struct Renderer {
 
 impl Renderer {
     pub fn new(gpu: Arc<Gpu>) -> Result<Self> {
-        let extent = gpu.swapchain().extent().into();
+        let extent = gpu.swapchain().extent();
+        let (draw_image, depth_image) = Self::create_attachments(&gpu, extent)?;
         let frames = Self::create_frames(&gpu)?;
         let resources = RendererResources::new(&gpu, extent)?;
         let forward_pipeline = ForwardPipeline::new(
             &gpu,
             &resources.binder.descriptor_layout(),
-            &resources.draw_image,
-            &resources.depth_image,
+            &draw_image,
+            &depth_image,
         )?;
         let scene_data = GpuSceneData {
             lights: LIGHTS,
@@ -313,6 +316,9 @@ impl Renderer {
             scene_data,
             rebuild_swapchain: false,
             frame_idx: 0,
+            draw_image,
+            depth_image,
+            extent,
             frame_counter: 0,
             render_objects: Vec::new(),
             config: RenderConfig {
@@ -359,29 +365,19 @@ impl Renderer {
         scene: &Scene,
         assets: &mut Assets,
         gui: &mut Gui,
-        extent: Extent2D,
+        // window_extent: Extent2D,
     ) -> Result<()> {
-        if scene.version() > self.last_scene_version {
-            self.last_scene_version = scene.version();
-            self.prepare_bindless(assets, scene);
-        }
         self.update_per_frame_data(scene, assets);
 
-        if self.rebuild_swapchain {
-            self.gpu.rebuild_swapchain(extent);
-            self.frames = Self::create_frames(&self.gpu)?;
-            let extent = self.gpu.swapchain().extent().into();
-            self.resources = RendererResources::new(&self.gpu, extent)?;
-            self.forward_pipeline = ForwardPipeline::new(
-                &self.gpu,
-                &self.resources.binder.descriptor_layout(),
-                &self.resources.draw_image,
-                &self.resources.depth_image,
-            )?;
-            self.rebuild_swapchain = false;
+        if scene.version() > self.last_scene_version {
+            self.last_scene_version = scene.version();
+            self.prepare_bindless(assets, scene)?;
         }
 
-        let extent = self.gpu.swapchain().extent();
+        if self.rebuild_swapchain {
+            let extent = self.gpu.swapchain().extent();
+            self.rebuild_swapchain(extent);
+        }
 
         let Frame {
             acquire_semaphore,
@@ -390,41 +386,28 @@ impl Renderer {
             ..
         } = &self.frames[self.frame_idx];
 
-        // Acquire next image
-        let (next_idx, rebuild_swapchain) =
+        let (next_image_index, rebuild_swapchain) =
             self.gpu.swapchain().acquire_next_image(*acquire_semaphore)?;
         self.rebuild_swapchain = rebuild_swapchain;
-
-        // Setup rendering
-        let draw_image = &self.resources.draw_image;
-        let depth_image = &self.resources.depth_image;
-        let (swapchain_image, swapchain_extent) = {
+        let swapchain_image = {
             let swapchain = self.gpu.swapchain();
-            (&swapchain.images()[next_idx], swapchain.extent())
-        };
-        let render_extent = Extent3D {
-            width: self.resources.draw_image.extent().width.min(swapchain_extent.width),
-            height: self.resources.draw_image.extent().height.min(swapchain_extent.height),
-            depth: 1,
+            &swapchain.images()[next_image_index]
         };
 
-        // Begin command buffer
         cmd_buffer.reset();
         cmd_buffer.begin();
         cmd_buffer.bind_index_buffer(&self.resources.index_buffer, 0);
         cmd_buffer.bind_vertex_buffer(&self.resources.vertex_buffer, 0);
 
-        // Transition images for rendering
-        self.transition_images_for_rendering(cmd_buffer, draw_image, depth_image);
+        self.transition_images_for_rendering(cmd_buffer, &self.draw_image, &self.depth_image);
 
-        // Render
         let context = RenderContext {
             gpu: &self.gpu,
             command_buffer: &cmd_buffer,
             scene_buffer: &self.resources.scene_buffer,
-            draw_image: &self.resources.draw_image,
-            depth_image: &self.resources.depth_image,
-            render_extent: swapchain_extent,
+            draw_image: &self.draw_image,
+            depth_image: &self.depth_image,
+            render_extent: self.extent,
             material_map: &self.material_map,
             binder: &self.resources.binder,
             scene,
@@ -435,13 +418,11 @@ impl Renderer {
         self.forward_pipeline.render(&context, &cmd_buffer)?;
         gui.draw(&context, &mut self.config, &mut self.scene_data)?;
 
-        // Blit to swapchain
-        self.blit_to_swapchain(
-            cmd_buffer,
-            draw_image,
+        cmd_buffer.copy_image(
+            &self.draw_image,
             swapchain_image,
-            render_extent,
-            swapchain_extent,
+            self.draw_image.extent().into(),
+            swapchain_image.extent().into(),
         );
 
         cmd_buffer.end();
@@ -460,7 +441,7 @@ impl Renderer {
         let rebuild_swapchain = self.gpu.swapchain().present(
             self.gpu.device().graphics_queue(),
             &[*present_semaphore],
-            &[next_idx as u32],
+            &[next_image_index as u32],
         )?;
 
         self.frame_counter += 1;
@@ -468,6 +449,31 @@ impl Renderer {
         self.rebuild_swapchain |= rebuild_swapchain;
 
         Ok(())
+    }
+
+    pub fn resize(&mut self, width: u32, height: u32) {
+        log::debug!("Resizing renderer to {}x{}", width, height);
+        let extent = Extent2D { width, height };
+        self.rebuild_swapchain(extent);
+    }
+
+    pub fn rebuild_swapchain(&mut self, extent: Extent2D) {
+        log::debug!("Rebuilding swapchain with extent: {:?}", extent);
+
+        self.extent = extent;
+        self.gpu.rebuild_swapchain(extent);
+        self.frames = Self::create_frames(&self.gpu).unwrap();
+        let (draw_image, depth_image) = Self::create_attachments(&self.gpu, extent).unwrap();
+        self.draw_image = draw_image;
+        self.depth_image = depth_image;
+        self.forward_pipeline = ForwardPipeline::new(
+            &self.gpu,
+            &self.resources.binder.descriptor_layout(),
+            &self.draw_image,
+            &self.depth_image,
+        )
+        .unwrap();
+        self.rebuild_swapchain = false;
     }
 
     fn transition_images_for_rendering(
@@ -505,72 +511,6 @@ impl Renderer {
                 ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
             )],
         );
-    }
-
-    fn blit_to_swapchain(
-        &self,
-        cmd_buffer: &CommandBuffer,
-        draw_image: &Image,
-        swapchain_image: &Image,
-        render_extent: Extent3D,
-        swapchain_extent: Extent2D,
-    ) {
-        self.gpu.debug_utils().begin_debug_label(cmd_buffer, "blit to swapchain");
-
-        // Transition draw image for transfer
-        cmd_buffer.pipeline_barrier(
-            &[],
-            &[],
-            &[sync::image_memory_barrier(
-                draw_image,
-                PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                PipelineStageFlags2::TRANSFER,
-                AccessFlags2::TRANSFER_READ,
-                ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-                ImageLayout::TRANSFER_SRC_OPTIMAL,
-            )],
-        );
-
-        // Transition swapchain image for transfer
-        cmd_buffer.pipeline_barrier(
-            &[],
-            &[],
-            &[sync::image_memory_barrier(
-                swapchain_image,
-                PipelineStageFlags2::TOP_OF_PIPE,
-                AccessFlags2::NONE,
-                PipelineStageFlags2::TRANSFER,
-                AccessFlags2::TRANSFER_WRITE,
-                ImageLayout::UNDEFINED,
-                ImageLayout::TRANSFER_DST_OPTIMAL,
-            )],
-        );
-
-        // Copy image
-        cmd_buffer.copy_image(
-            draw_image,
-            swapchain_image,
-            render_extent,
-            swapchain_extent.into(),
-        );
-
-        // Transition swapchain image for present
-        cmd_buffer.pipeline_barrier(
-            &[],
-            &[],
-            &[sync::image_memory_barrier(
-                swapchain_image,
-                PipelineStageFlags2::TRANSFER,
-                AccessFlags2::TRANSFER_WRITE,
-                PipelineStageFlags2::BOTTOM_OF_PIPE,
-                AccessFlags2::NONE,
-                ImageLayout::TRANSFER_DST_OPTIMAL,
-                ImageLayout::PRESENT_SRC_KHR,
-            )],
-        );
-
-        self.gpu.debug_utils().end_debug_label(cmd_buffer);
     }
 
     fn create_render_objects2(
@@ -688,6 +628,37 @@ impl Renderer {
 
         self.gpu.device().wait_idle();
         Ok(())
+    }
+
+    pub fn create_attachments(gpu: &Gpu, extent: Extent2D) -> Result<(Texture, Texture)> {
+        // Recreate draw_image with the new extent
+        let draw_info = TextureInfo {
+            name: "draw".to_string(),
+            extent,
+            format: FORMAT_DRAW_IMAGE,
+            flags: ImageUsageFlags::COLOR_ATTACHMENT
+                | ImageUsageFlags::TRANSFER_DST
+                | ImageUsageFlags::TRANSFER_SRC,
+            aspect_flags: ImageAspectFlags::COLOR,
+            sampler: None,
+        };
+        let draw_image = Texture::new(gpu, &draw_info)?;
+
+        // Create depth image
+        let depth_info = TextureInfo {
+            name: "depth".to_string(),
+            extent,
+            format: FORMAT_DEPTH_IMAGE,
+            flags: ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
+                | ImageUsageFlags::TRANSFER_DST
+                | ImageUsageFlags::TRANSFER_SRC,
+            aspect_flags: ImageAspectFlags::DEPTH,
+            sampler: None,
+        };
+        let depth_image = Texture::new(gpu, &depth_info)?;
+        log::debug!("created attachments with extent: {:?}", extent);
+
+        Ok((draw_image, depth_image))
     }
 
     fn create_frames(gpu: &Gpu) -> Result<Vec<Frame>> {
