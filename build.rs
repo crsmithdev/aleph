@@ -1,152 +1,79 @@
-use {
-    anyhow::Result,
-    shaderc as sc,
-    std::{
-        fs,
-        io::{Read, Write},
-        path::{Path, PathBuf},
-        process::exit,
-    },
-    tracing::{debug, error, info, instrument, warn},
-};
+use {anyhow::Result, slang::Downcast as _, std::fs};
 
-const SHADER_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/shaders");
+const INPUT_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "\\shaders");
+const OUTPUT_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "\\shaders\\compiled");
 
-fn read_file(path: &Path) -> String {
-    let mut out = String::new();
-    fs::File::open(path).unwrap().read_to_string(&mut out).unwrap();
-    out
-}
+fn get_files(dir: &str) -> Result<Vec<std::path::PathBuf>> {
+    let mut files = Vec::new();
+    let mut dirs = vec![std::path::PathBuf::from(dir)];
 
-fn write_file(path: &Path, binary: &[u8]) {
-    fs::File::create(path).unwrap().write_all(binary).unwrap();
-}
+    while !dirs.is_empty() {
+        let dir = dirs.pop().unwrap();
 
-fn resolve_include(
-    name: &str,
-    include_type: shaderc::IncludeType,
-    _src: &str,
-    _depth: usize,
-) -> std::result::Result<shaderc::ResolvedInclude, String> {
-    let content = match include_type {
-        sc::IncludeType::Relative => fs::read_to_string(name).map_err(|e| e.to_string()),
-        sc::IncludeType::Standard => {
-            let path = PathBuf::from(SHADER_DIR).join(name);
-            fs::read_to_string(&path).map_err(|e| e.to_string())
-        }
-    }?;
+        for entry in fs::read_dir(&dir)? {
+            let entry = entry?;
+            let path = entry.path();
 
-    Ok(sc::ResolvedInclude {
-        resolved_name: name.to_string(),
-        content,
-    })
-}
-
-#[instrument(skip(path, output), fields(shader = %path.display(), output = %output.display()))]
-fn compile_shader(path: &Path, output: &Path, kind: sc::ShaderKind) -> Result<()> {
-    let compiler = sc::Compiler::new().expect("Failed to create shader compiler");
-    let mut options = sc::CompileOptions::new().expect("Failed to create compiler options");
-
-    options.set_generate_debug_info();
-    options.set_optimization_level(shaderc::OptimizationLevel::Zero);
-    options.set_target_env(sc::TargetEnv::Vulkan, sc::EnvVersion::Vulkan1_3 as u32);
-    options.set_include_callback(resolve_include);
-
-    let source_content = read_file(path);
-    let binary = compiler
-        .compile_into_spirv(
-            &source_content,
-            kind,
-            path.as_os_str().to_str().unwrap(),
-            "main",
-            Some(&options),
-        )
-        .map_err(|e| {
-            error!("Shader compilation failed for {}: {}", path.display(), e);
-            anyhow::anyhow!(e)
-        })?;
-
-    // Check if output changed to avoid unnecessary rebuilds
-    if output.exists() {
-        let existing = fs::read(output).unwrap_or_default();
-        if existing == binary.as_binary_u8() {
-            debug!("Shader unchanged: {}", output.display());
-            return Ok(());
-        }
-    }
-
-    write_file(output, binary.as_binary_u8());
-    info!(
-        "Compiled shader: {} -> {}",
-        path.display(),
-        output.display()
-    );
-
-    Ok(())
-}
-
-#[instrument]
-fn compile_shaders() -> Result<()> {
-    let files = fs::read_dir(SHADER_DIR).map_err(|e| anyhow::anyhow!(e))?;
-    let mut compiled_count = 0;
-    let skipped_count = 0;
-
-    for entry in files {
-        let entry = entry.map_err(|e| anyhow::anyhow!(e))?;
-        let in_path = entry.path();
-
-        if in_path.is_dir() {
-            continue;
-        }
-
-        let extension = in_path
-            .extension()
-            .and_then(|e| e.to_str())
-            .ok_or(anyhow::anyhow!("Failed to read file extension"))?;
-
-        let shader_kind = match extension {
-            "vert" => sc::ShaderKind::Vertex,
-            "frag" => sc::ShaderKind::Fragment,
-            "comp" => sc::ShaderKind::Compute,
-            "geom" => sc::ShaderKind::Geometry,
-            "tesc" => sc::ShaderKind::TessControl,
-            "tese" => sc::ShaderKind::TessEvaluation,
-            _ => {
-                debug!("Skipping non-shader file: {}", in_path.display());
-                continue;
-            }
-        };
-
-        let filename = in_path
-            .file_name()
-            .and_then(|f| f.to_str())
-            .ok_or(anyhow::anyhow!("Failed to read filename"))?;
-
-        let out_path = Path::new(SHADER_DIR).join(format!("{filename}.spv"));
-
-        match compile_shader(&in_path, &out_path, shader_kind) {
-            Ok(_) => compiled_count += 1,
-            Err(e) => {
-                error!("Failed to compile shader {}: {}", in_path.display(), e);
-                return Err(e);
+            if path.is_dir() {
+                dirs.push(path);
+            } else {
+                let extension = path.extension().and_then(|e| e.to_str());
+                if let Some("slang") = extension {
+                    println!("{:?}", path);
+                    files.push(path);
+                }
             }
         }
     }
+    Ok(files)
+}
+fn compile_shaders(input: &str, output: &str) {
+    println!("?{} -> {}", input, output);
+    let global_session = slang::GlobalSession::new().unwrap();
 
-    info!(
-        "Shader compilation complete: {} compiled, {} skipped",
-        compiled_count, skipped_count
-    );
-    Ok(())
+    let search_path = std::ffi::CString::new(INPUT_DIR).unwrap();
+
+    let session_options = slang::CompilerOptions::default()
+        .optimization(slang::OptimizationLevel::High)
+        .matrix_layout_row(true);
+
+    let target_desc = slang::TargetDesc::default()
+        .format(slang::CompileTarget::Spirv)
+        .profile(global_session.find_profile("glsl_450"));
+
+    let targets = [target_desc];
+    let search_paths = [search_path.as_ptr()];
+
+    let session_desc = slang::SessionDesc::default()
+        .targets(&targets)
+        .search_paths(&search_paths)
+        .options(&session_options);
+
+    let session = global_session.create_session(&session_desc).unwrap();
+    let module = session.load_module("test").unwrap();
+    let entry_point = module.find_entry_point_by_name("computeMain").unwrap();
+
+    let program = session
+        .create_composite_component_type(&[
+            module.downcast().clone(),
+            entry_point.downcast().clone(),
+        ])
+        .unwrap();
+
+    let linked_program = program.link().unwrap();
+
+    let shader_bytecode = linked_program.entry_point_code(0, 0).unwrap();
+
+    fs::write(output, shader_bytecode.as_slice()).unwrap();
+    println!("!{} -> {}", input, output);
 }
 
 fn main() {
-    println!("{}", SHADER_DIR);
-    match compile_shaders() {
-        Ok(_) => println!("Shaders compiled successfully"),
-        Err(e) => {
-            eprintln!("Error compiling shaders: {e}");
-            exit(1);
-        }
-    };
+    let shaders = get_files(INPUT_DIR).expect("Failed to get shader files");
+    for file in shaders {
+        let input = file.to_string_lossy();
+        let output = file.file_name().expect("Failed to get file name").to_string_lossy();
+        let output = format!("{}\\{}", OUTPUT_DIR, output);
+        compile_shaders(&input, &output);
+    }
 }

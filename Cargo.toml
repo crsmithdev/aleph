@@ -46,6 +46,7 @@ palette = "0.7.6"
 raw-window-handle = "0.6.2"
 serde = { version = "1.0.130", features = ["derive"] }
 shaderc = "0.9.1"
+slang = { git = "https://github.com/FloatyMonkey/slang-rs.git" }
 smol_str = "0.2.2"
 tracing = "0.1.41"
 tracing-log = "0.2.0"
@@ -61,7 +62,7 @@ aleph-vk = { workspace = true }
 anyhow = { workspace = true }
 glam = { workspace = true }
 glob = { workspace = true }
-smol_str = { workspace = true }
+slang = { workspace = true }
 tracing = { workspace = true }
 
 [build-dependencies]
@@ -69,6 +70,7 @@ anyhow = { workspace = true }
 glob = { workspace = true }
 shaderc = { workspace = true }
 tracing = { workspace = true }
+slang = { workspace = true }
 
 [lib]
 doctest = false
