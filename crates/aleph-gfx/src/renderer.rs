@@ -8,8 +8,8 @@ use {
     },
     aleph_vk::{
         sync, AccessFlags2, CommandBuffer, CommandPool, Extent2D, Fence, Format, Gpu,
-        Handle as VkHandle, ImageAspectFlags, ImageLayout, ImageUsageFlags,
-        PipelineStageFlags2, Semaphore, ShaderStageFlags, Texture, TextureInfo, TypedBuffer,
+        Handle as VkHandle, ImageAspectFlags, ImageLayout, ImageUsageFlags, PipelineStageFlags2,
+        Semaphore, ShaderStageFlags, Texture, TextureInfo, TypedBuffer,
     },
     anyhow::Result,
     ash::vk::FenceCreateFlags,
@@ -346,8 +346,8 @@ impl Renderer {
         (0..N_FRAMES).map(|_| Frame::new(&gpu)).collect::<Vec<Frame>>()
     }
     fn update_per_frame_data(&mut self, scene: &Scene, _assets: &Assets) {
-        let view = scene.camera.view();
-        let projection = scene.camera.projection();
+        let view = scene.camera.view().transpose();
+        let projection = scene.camera.projection().transpose();
 
         self.scene_data.view = view;
         self.scene_data.projection = projection;

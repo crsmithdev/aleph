@@ -14,8 +14,8 @@ use {
 };
 
 const CLEAR_COLOR: [f32; 4] = [0.8, 0.8, 0.8, 1.0];
-const VERTEX_SHADER_PATH: &str = "shaders/forward.vert.spv";
-const FRAGMENT_SHADER_PATH: &str = "shaders/forward.frag.spv";
+const VERTEX_SHADER_PATH: &str = "shaders/compiled/forward.vert.spv";
+const FRAGMENT_SHADER_PATH: &str = "shaders/compiled/forward.frag.spv";
 
 #[derive(Debug)]
 pub struct ForwardPipeline {

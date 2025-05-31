@@ -42,6 +42,7 @@ human-panic = "2.0.1"
 humantime = "2.1.0"
 itertools = "0.14.0"
 log = "0.4"
+maplit = "1.0.2"
 palette = "0.7.6"
 raw-window-handle = "0.6.2"
 serde = { version = "1.0.130", features = ["derive"] }
@@ -71,6 +72,7 @@ glob = { workspace = true }
 shaderc = { workspace = true }
 tracing = { workspace = true }
 slang = { workspace = true }
+maplit = { workspace = true } 
 
 [lib]
 doctest = false
