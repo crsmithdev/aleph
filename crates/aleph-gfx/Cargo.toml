@@ -18,6 +18,7 @@ doctest = false
 [dependencies]
 aleph-core.workspace = true
 aleph-scene.workspace = true
+bitflags.workspace = true
 aleph-vk.workspace = true
 anyhow.workspace = true
 ash-window.workspace = true

@@ -4,6 +4,7 @@ use {
     bytemuck::{Pod, Zeroable},
     derive_more::Debug,
     glam::{Vec2, Vec3, Vec4},
+    petgraph::algo::k_shortest_path,
 };
 
 #[repr(C)]
@@ -136,11 +137,21 @@ impl MikktGeometry for MeshInfo {
 }
 
 #[repr(C)]
-#[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct Light {
     pub position: Vec3,
     pub intensity: f32,
     pub color: Vec4,
+}
+
+impl Default for Light {
+    fn default() -> Self {
+        Self {
+            position: Vec3::ZERO,
+            intensity: 10.0,
+            color: Vec4::new(5.0, 5.0, 5.0, 1.0),
+        }
+    }
 }
 
 // #[cfg(test)]

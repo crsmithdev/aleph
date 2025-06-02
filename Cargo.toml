@@ -53,6 +53,7 @@ tracing = "0.1.41"
 tracing-log = "0.2.0"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 winit = "0.30.5"
+bitflags = "2.9.1"
 
 [dependencies]
 aleph-app = { workspace = true }

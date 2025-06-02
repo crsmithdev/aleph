@@ -1,7 +1,7 @@
 use {
     maplit::hashmap,
     slang::{ComponentType, Downcast as _, GlobalSession, ResourceShape, Session, TypeKind},
-    std::{collections::HashMap, fs, path::Path, sync::LazyLock},
+    std::{collections::HashMap, fs, path::Path, process, sync::LazyLock},
 };
 
 const IGNORED: [&str; 1] = ["compiled"];
@@ -13,6 +13,7 @@ static ENTRY_POINTS: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
         "fragmentMain".to_string() => "frag".to_string(),
     }
 });
+
 fn main() {
     fs::create_dir_all(OUTPUT_DIR)
         .unwrap_or_else(|e| panic!("Error creating output directory {}: {}", OUTPUT_DIR, e));
@@ -23,6 +24,8 @@ fn main() {
     for path in &shader_files {
         compiler.compile(path);
     }
+
+    process::exit(0);
 }
 
 struct ShaderCompiler {
@@ -109,19 +112,6 @@ impl ShaderCompiler {
                 out_path.display(),
                 fn_name
             );
-        }
-    }
-
-    fn reflect(&self, linked: &ComponentType) {
-        let reflection = linked.layout(0).unwrap(); // Get reflection for target 0 (Vulkan)
-
-        // Get parameter count and iterate through them
-        let param_count = reflection.parameter_count();
-        for i in 0..param_count {
-            let param = reflection.parameter_by_index(i).unwrap();
-            let name = param.semantic_name();
-            let binding_info = param.binding_index();
-            let binding_space = param.binding_space();
         }
     }
 }

@@ -41,7 +41,7 @@ dependencies = ["clean-rs", "clean-shaders"]
 script_runner = "pwsh"
 script_extension = "ps1"
 script = """
-pwsh.exe -C "Remove-Item -Path target -Forc -Recurse -ErrorAction Ignore"
+pwsh.exe -C "Remove-Item -Path target -Force -Recurse -ErrorAction Ignore"
 """
 
 [tasks.clean-shaders]
@@ -52,6 +52,16 @@ pwsh.exe -C "Remove-Item -Path shaders/*.spv -Force -ErrorAction Ignore"
 """
 
 [tasks.format]
+dependencies = ["format-rs", "format-slang"]
+
+[tasks.format-slang]
+script_runner = "pwsh"
+script_extension = "ps1"
+script = """
+pwsh.exe -C "clang-format -i --style file shaders/*.slang"
+"""
+
+[tasks.format-rs]
 install_crate = "rustfmt"
 command = "cargo"
 args = ["fmt", "--", "--emit=files"]
@@ -60,7 +70,7 @@ args = ["fmt", "--", "--emit=files"]
 command = "cargo"
 args = ["fix", "--workspace",    "--allow-dirty", "--allow-staged"]
 
-[tasks.log]
+[tasks.debug-log]
 script_runner = "@shell"
 script = """
 cargo run --example demo *> log.txt

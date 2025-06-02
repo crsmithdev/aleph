@@ -1,10 +1,9 @@
 use {
     crate::{Buffer, Image},
     ash::vk::{
-            AccessFlags2, BufferMemoryBarrier2, ImageLayout, ImageMemoryBarrier2,
-            ImageSubresourceRange, MemoryBarrier2, PipelineStageFlags2,
-            QUEUE_FAMILY_IGNORED,
-        },
+        AccessFlags2, BufferMemoryBarrier2, ImageLayout, ImageMemoryBarrier2,
+        ImageSubresourceRange, MemoryBarrier2, PipelineStageFlags2, QUEUE_FAMILY_IGNORED,
+    },
 };
 
 pub fn buffer_barrier(

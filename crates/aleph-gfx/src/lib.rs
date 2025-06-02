@@ -11,7 +11,7 @@ pub use {
     layer::RenderLayer,
     pipeline::{Pipeline, PipelineBuilder},
     renderer::{
-        GpuPushConstantData, GpuSceneData, RenderConfig, RenderContext, RenderObject, Renderer,
+        GpuPushConstantData, GpuSceneData, RenderContext, RenderFlags, RenderObject, Renderer,
     },
     resource::{ResourceBinder, ResourceLayout},
 };

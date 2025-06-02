@@ -1,15 +1,14 @@
 use {
     crate::{Material, MeshInfo},
     aleph_vk::{
-        sync, AccessFlags2, Buffer, CommandBuffer, Extent2D,
-        Filter, Format, Gpu, ImageAspectFlags, ImageLayout, ImageUsageFlags, PipelineStageFlags2,
-        ResourcePool, Sampler, SamplerAddressMode, SamplerMipmapMode, Texture,
-        TextureInfo,
+        sync, AccessFlags2, Buffer, CommandBuffer, Extent2D, Filter, Format, Gpu, ImageAspectFlags,
+        ImageLayout, ImageUsageFlags, PipelineStageFlags2, ResourcePool, Sampler,
+        SamplerAddressMode, SamplerMipmapMode, Texture, TextureInfo,
     },
     anyhow::{bail, Result},
     bytemuck::{Pod, Zeroable},
     derive_more::Debug,
-    glam::{vec4, Vec4},
+    glam::{vec4, Vec2, Vec4},
     image::{ImageBuffer, Rgba},
     std::{
         collections::HashMap,
@@ -276,15 +275,15 @@ impl Assets {
 
         for (handle, material) in self.materials.iter() {
             materials.push(GpuMaterial {
-                color_texture: texture_index(material.color_texture),
-                normal_texture: texture_index(material.normal_texture),
-                metalrough_texture: texture_index(material.metalrough_texture),
-                occlusion_texture: texture_index(material.occlusion_texture),
+                color_index: texture_index(material.color_texture),
+                normal_index: texture_index(material.normal_texture),
+                metalrough_index: texture_index(material.metalrough_texture),
+                occlusion_index: texture_index(material.occlusion_texture),
                 color_factor: material.color_factor,
-                metallic_factor: material.metallic_factor,
-                roughness_factor: material.roughness_factor,
-                ao_strength: material.ao_strength,
-                padding0: 0.,
+                metal_factor: material.metallic_factor,
+                rough_factor: material.roughness_factor,
+                occlusion_strength: material.ao_strength,
+                _padding0: 0,
             });
             material_map.insert(*handle, materials.len() - 1);
         }
@@ -375,13 +374,13 @@ pub struct BindlessData {
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
 pub struct GpuMaterial {
+    pub color_index: u32,
+    pub normal_index: u32,
+    pub metalrough_index: u32,
+    pub occlusion_index: u32,
     pub color_factor: Vec4,
-    pub color_texture: u32,
-    pub normal_texture: u32,
-    pub metallic_factor: f32,
-    pub roughness_factor: f32,
-    pub metalrough_texture: u32,
-    pub ao_strength: f32,
-    pub occlusion_texture: u32,
-    pub padding0: f32,
+    pub metal_factor: f32,
+    pub rough_factor: f32,
+    pub occlusion_strength: f32,
+    pub _padding0: u32,
 }

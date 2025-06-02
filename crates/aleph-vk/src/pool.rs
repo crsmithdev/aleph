@@ -3,11 +3,7 @@ use {
     ash::vk::BufferUsageFlags,
     derive_more::derive::Debug,
     gpu_allocator::MemoryLocation,
-    std::{
-        cell::RefCell,
-        rc::Rc,
-        sync::Arc,
-    },
+    std::{cell::RefCell, rc::Rc, sync::Arc},
 };
 
 pub trait Poolable {

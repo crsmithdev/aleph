@@ -13,12 +13,36 @@ use {
     },
     anyhow::Result,
     ash::vk::FenceCreateFlags,
+    bitflags::bitflags,
     bytemuck::{Pod, Zeroable},
     derive_more::Debug,
     glam::{vec3, vec4, Mat4, Vec2, Vec3, Vec4},
     std::{collections::HashMap, sync::Arc},
     tracing::instrument,
 };
+bitflags! {
+    #[derive(Clone, Copy, Debug, Default)]
+    pub struct RenderFlags: u32 {
+        const DEBUG_COLOR       = 0b00000000_00000000_00000001;
+        const DEBUG_NORMALS     = 0b00000000_00000000_00000010;
+        const DEBUG_TANGENTS    = 0b00000000_00000000_00000100;
+        const DEBUG_METALLIC    = 0b00000000_00000000_00001000;
+        const DEBUG_ROUGHNESS   = 0b00000000_00000000_00010000;
+        const DEBUG_OCCLUSION   = 0b00000000_00000000_00100000;
+        const DEBUG_TEXCOORDS0  = 0b00000000_00000000_01000000;
+
+        const DEFAULT_COLOR     = 0b00000000_00000001_00000000;
+        const DEFAULT_NORMALS   = 0b00000000_00000010_00000000;
+        const DEFAULT_TANGENTS  = 0b00000000_00000100_00000000;
+        const DEFAULT_METALLIC  = 0b00000000_00001000_00000000;
+        const DEFAULT_ROUGHNESS = 0b00000000_00010000_00000000;
+        const DEFAULT_OCCLUSION = 0b00000000_00100000_00000000;
+
+        const DISABLE_TEXTURES  = 0b00000001_00000000_00000000;
+        const DISABLE_LIGHTS    = 0b00000010_00000000_00000000;
+
+    }
+}
 
 // Constants
 const FORMAT_DRAW_IMAGE: Format = Format::R16G16B16A16_SFLOAT;
@@ -133,7 +157,10 @@ pub struct GpuSceneData {
     pub vp: Mat4,
     pub camera_pos: Vec3,
     pub n_lights: u32,
-    pub config: GpuConfig,
+    pub flags: u32,
+    pub padding0: u32,
+    pub padding1: u32,
+    pub padding2: u32,
     pub lights: [Light; 4],
 }
 
@@ -353,7 +380,7 @@ impl Renderer {
         self.scene_data.projection = projection;
         self.scene_data.vp = projection * view.inverse();
         self.scene_data.camera_pos = scene.camera.position();
-        self.scene_data.config = GpuConfig::from(&self.config);
+        // self.scene_data.config = GpuConfig::from(&self.config);
         self.resources.scene_buffer.write(&[self.scene_data]);
     }
 
@@ -442,7 +469,7 @@ impl Renderer {
         };
 
         self.forward_pipeline.render(&context, &cmd_buffer)?;
-        gui.draw(&context, &mut self.config, &mut self.scene_data)?;
+        gui.draw(&context, &mut self.scene_data)?;
 
         cmd_buffer.pipeline_barrier(
             &[],

@@ -28,11 +28,16 @@ impl ResourceLayout {
         }
     }
 
-    pub fn storage_buffer(&mut self, index: usize, flags: ShaderStageFlags) -> &mut Self {
+    pub fn storage_buffer(
+        &mut self,
+        index: usize,
+        flags: ShaderStageFlags,
+        count: usize,
+    ) -> &mut Self {
         self.add_binding(UnboundResource {
             index,
             stage_flags: flags,
-            descriptor_count: 1,
+            descriptor_count: count,
             dimensionality: Dimensionality::Single,
             descriptor_type: DescriptorType::STORAGE_BUFFER,
             binding_flags: DescriptorBindingFlags::default(),

@@ -10,7 +10,7 @@ use {
 
 /*
 Suzanne: 112
-BoxTextured: 15
+BoxTextured: 14
 NormalTangentTest: 93
 */
 
@@ -193,7 +193,7 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Sample-Assets/Models/PotOfCoals/glTF/PotOfCoals.gltf",
     "submodules/glTF-Sample-Assets/Models/PotOfCoalsAnimationPointer/glTF/PotOfCoalsAnimationPointer.gltf",
 
-    "submodules/glTF-Sample-Assets/Models/PrimitiveModeNormalsTest/glTF/PrimitiveModeNormalsTest.gltf",                                 // 90
+    "submodules/glTF-Sample-Assets/Models/PrimitiveModeNormalsTest/glTF/PrimitiveModeNormalsTest.gltf",       //90                          // 90
     "submodules/glTF-Sample-Assets/Models/RecursiveSkeletons/glTF/RecursiveSkeletons.gltf",
     "submodules/glTF-Sample-Assets/Models/RiggedFigure/glTF/RiggedFigure.gltf",
     "submodules/glTF-Sample-Assets/Models/RiggedSimple/glTF/RiggedSimple.gltf",
@@ -226,7 +226,7 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Sample-Assets/Models/TextureTransformTest/glTF/TextureTransformTest.gltf",
     "submodules/glTF-Sample-Assets/Models/ToyCar/glTF/ToyCar.gltf",
 
-    "submodules/glTF-Sample-Assets/Models/TransmissionRoughnessTest/glTF/TransmissionRoughnessTest.gltf",                       
+    "submodules/glTF-Sample-Assets/Models/TransmissionRoughnessTest/glTF/TransmissionRoughnessTest.gltf",     //120                  
     "submodules/glTF-Sample-Assets/Models/TransmissionTest/glTF/TransmissionTest.gltf",
     "submodules/glTF-Sample-Assets/Models/TransmissionThinwallTestGrid/glTF/TransmissionThinwallTestGrid.gltf",
     "submodules/glTF-Sample-Assets/Models/Triangle/glTF/Triangle.gltf",
@@ -237,7 +237,7 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Sample-Assets/Models/VertexColorTest/glTF/VertexColorTest.gltf",
     "submodules/glTF-Sample-Assets/Models/VirtualCity/glTF/VirtualCity.gltf",
 
-    "submodules/glTF-Sample-Assets/Models/WaterBottle/glTF/WaterBottle.gltf",
+    "submodules/glTF-Sample-Assets/Models/WaterBottle/glTF/WaterBottle.gltf",                     // 130            
     "submodules/glTF-Sample-Assets/Models/XmpMetadataRoundedCube/glTF/XmpMetadataRoundedCube.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Accessor_Sparse/Accessor_Sparse_00.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Accessor_Sparse/Accessor_Sparse_01.gltf",
@@ -247,7 +247,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Asset-Generator/Output/Positive/Accessor_SparseType/Accessor_SparseType_01.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Accessor_SparseType/Accessor_SparseType_02.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Accessor_SparseType/Accessor_SparseType_03.gltf",
-    "submodules/glTF-Asset-Generator/Output/Positive/Accessor_SparseType/Accessor_SparseType_04.gltf",
+
+    "submodules/glTF-Asset-Generator/Output/Positive/Accessor_SparseType/Accessor_SparseType_04.gltf",  // 140
     "submodules/glTF-Asset-Generator/Output/Positive/Accessor_SparseType/Accessor_SparseType_05.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Accessor_SparseType/Accessor_SparseType_06.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Animation_Node/Animation_Node_00.gltf",
@@ -257,7 +258,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Asset-Generator/Output/Positive/Animation_Node/Animation_Node_04.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Animation_Node/Animation_Node_05.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Animation_NodeMisc/Animation_NodeMisc_00.gltf",
-    "submodules/glTF-Asset-Generator/Output/Positive/Animation_NodeMisc/Animation_NodeMisc_01.gltf",
+
+    "submodules/glTF-Asset-Generator/Output/Positive/Animation_NodeMisc/Animation_NodeMisc_01.gltf",    // 150
     "submodules/glTF-Asset-Generator/Output/Positive/Animation_NodeMisc/Animation_NodeMisc_02.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Animation_NodeMisc/Animation_NodeMisc_03.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Animation_NodeMisc/Animation_NodeMisc_04.gltf",
@@ -267,7 +269,9 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Asset-Generator/Output/Positive/Animation_NodeMisc/Animation_NodeMisc_08.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Animation_SamplerType/Animation_SamplerType_00.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Animation_SamplerType/Animation_SamplerType_01.gltf",
-    "submodules/glTF-Asset-Generator/Output/Positive/Animation_SamplerType/Animation_SamplerType_02.gltf",
+
+    "submodules/glTF-Asset-Generator/Output/Positive/Animation_SamplerType/Animation_SamplerType_02.gltf",      // 160
+    "submodules/glTF-Asset-Generator/Output/Positive/Animation_SamplerType/Animation_SamplerType_03.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Animation_Skin/Animation_Skin_00.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Animation_Skin/Animation_Skin_01.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Animation_Skin/Animation_Skin_02.gltf",
@@ -276,7 +280,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Asset-Generator/Output/Positive/Animation_Skin/Animation_Skin_05.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Animation_Skin/Animation_Skin_06.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Animation_Skin/Animation_Skin_07.gltf",
-    "submodules/glTF-Asset-Generator/Output/Positive/Animation_Skin/Animation_Skin_08.gltf",
+
+    "submodules/glTF-Asset-Generator/Output/Positive/Animation_Skin/Animation_Skin_08.gltf",        // 170
     "submodules/glTF-Asset-Generator/Output/Positive/Animation_Skin/Animation_Skin_09.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Animation_Skin/Animation_Skin_10.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Animation_Skin/Animation_Skin_11.gltf",
@@ -286,7 +291,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Asset-Generator/Output/Positive/Animation_SkinType/Animation_SkinType_03.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Buffer_Interleaved/Buffer_Interleaved_00.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Buffer_Interleaved/Buffer_Interleaved_01.gltf",
-    "submodules/glTF-Asset-Generator/Output/Positive/Buffer_Interleaved/Buffer_Interleaved_02.gltf",
+
+    "submodules/glTF-Asset-Generator/Output/Positive/Buffer_Interleaved/Buffer_Interleaved_02.gltf",        // 180
     "submodules/glTF-Asset-Generator/Output/Positive/Buffer_Interleaved/Buffer_Interleaved_03.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Buffer_Interleaved/Buffer_Interleaved_04.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Buffer_Misc/Buffer_Misc_00.gltf",
@@ -295,7 +301,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Asset-Generator/Output/Positive/Compatibility/Compatibility_02.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Compatibility/Compatibility_03.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Compatibility/Compatibility_04.gltf",
-    "submodules/glTF-Asset-Generator/Output/Positive/Compatibility/Compatibility_05.gltf",
+
+    "submodules/glTF-Asset-Generator/Output/Positive/Compatibility/Compatibility_05.gltf",          // 190
     "submodules/glTF-Asset-Generator/Output/Positive/Compatibility/Compatibility_06.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Instancing/Instancing_00.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Instancing/Instancing_01.gltf",
@@ -305,7 +312,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Asset-Generator/Output/Positive/Instancing/Instancing_05.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Instancing/Instancing_06.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Instancing/Instancing_07.gltf",
-    "submodules/glTF-Asset-Generator/Output/Positive/Instancing/Instancing_08.gltf",
+
+    "submodules/glTF-Asset-Generator/Output/Positive/Instancing/Instancing_08.gltf",        // 200
     "submodules/glTF-Asset-Generator/Output/Positive/Instancing/Instancing_09.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Instancing/Instancing_10.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Instancing/Instancing_11.gltf",
@@ -315,7 +323,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Asset-Generator/Output/Positive/Material/Material_01.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Material/Material_02.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Material/Material_03.gltf",
-    "submodules/glTF-Asset-Generator/Output/Positive/Material/Material_04.gltf",
+
+    "submodules/glTF-Asset-Generator/Output/Positive/Material/Material_04.gltf",        // 210
     "submodules/glTF-Asset-Generator/Output/Positive/Material/Material_05.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Material/Material_06.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Material/Material_07.gltf",
@@ -325,7 +334,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Asset-Generator/Output/Positive/Material_AlphaBlend/Material_AlphaBlend_03.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Material_AlphaBlend/Material_AlphaBlend_04.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Material_AlphaBlend/Material_AlphaBlend_05.gltf",
-    "submodules/glTF-Asset-Generator/Output/Positive/Material_AlphaBlend/Material_AlphaBlend_06.gltf",
+        
+    "submodules/glTF-Asset-Generator/Output/Positive/Material_AlphaBlend/Material_AlphaBlend_06.gltf",          // 220
     "submodules/glTF-Asset-Generator/Output/Positive/Material_AlphaMask/Material_AlphaMask_00.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Material_AlphaMask/Material_AlphaMask_01.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Material_AlphaMask/Material_AlphaMask_02.gltf",
@@ -335,7 +345,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Asset-Generator/Output/Positive/Material_AlphaMask/Material_AlphaMask_06.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Material_DoubleSided/Material_DoubleSided_00.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Material_DoubleSided/Material_DoubleSided_01.gltf",
-    "submodules/glTF-Asset-Generator/Output/Positive/Material_DoubleSided/Material_DoubleSided_02.gltf",
+
+    "submodules/glTF-Asset-Generator/Output/Positive/Material_DoubleSided/Material_DoubleSided_02.gltf",                // 230
     "submodules/glTF-Asset-Generator/Output/Positive/Material_DoubleSided/Material_DoubleSided_03.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Material_DoubleSided/Material_DoubleSided_04.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Material_MetallicRoughness/Material_MetallicRoughness_00.gltf",
@@ -345,7 +356,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Asset-Generator/Output/Positive/Material_MetallicRoughness/Material_MetallicRoughness_04.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Material_MetallicRoughness/Material_MetallicRoughness_05.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Material_MetallicRoughness/Material_MetallicRoughness_06.gltf",
-    "submodules/glTF-Asset-Generator/Output/Positive/Material_MetallicRoughness/Material_MetallicRoughness_07.gltf",
+
+    "submodules/glTF-Asset-Generator/Output/Positive/Material_MetallicRoughness/Material_MetallicRoughness_07.gltf",        // 240
     "submodules/glTF-Asset-Generator/Output/Positive/Material_MetallicRoughness/Material_MetallicRoughness_08.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Material_MetallicRoughness/Material_MetallicRoughness_09.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Material_MetallicRoughness/Material_MetallicRoughness_10.gltf",
@@ -355,7 +367,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Asset-Generator/Output/Positive/Material_Mixed/Material_Mixed_02.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Material_SpecularGlossiness/Material_SpecularGlossiness_00.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Material_SpecularGlossiness/Material_SpecularGlossiness_01.gltf",
-    "submodules/glTF-Asset-Generator/Output/Positive/Material_SpecularGlossiness/Material_SpecularGlossiness_02.gltf",
+
+    "submodules/glTF-Asset-Generator/Output/Positive/Material_SpecularGlossiness/Material_SpecularGlossiness_02.gltf",      // 250
     "submodules/glTF-Asset-Generator/Output/Positive/Material_SpecularGlossiness/Material_SpecularGlossiness_03.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Material_SpecularGlossiness/Material_SpecularGlossiness_04.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Material_SpecularGlossiness/Material_SpecularGlossiness_05.gltf",
@@ -365,7 +378,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Asset-Generator/Output/Positive/Material_SpecularGlossiness/Material_SpecularGlossiness_09.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Material_SpecularGlossiness/Material_SpecularGlossiness_10.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Material_SpecularGlossiness/Material_SpecularGlossiness_11.gltf",
-    "submodules/glTF-Asset-Generator/Output/Positive/Material_SpecularGlossiness/Material_SpecularGlossiness_12.gltf",
+
+    "submodules/glTF-Asset-Generator/Output/Positive/Material_SpecularGlossiness/Material_SpecularGlossiness_12.gltf",      // 260
     "submodules/glTF-Asset-Generator/Output/Positive/Material_SpecularGlossiness/Material_SpecularGlossiness_13.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitiveAttribute/Mesh_PrimitiveAttribute_00.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitiveAttribute/Mesh_PrimitiveAttribute_01.gltf",
@@ -375,7 +389,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitiveAttribute/Mesh_PrimitiveAttribute_05.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitiveAttribute/Mesh_PrimitiveAttribute_06.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitiveMode/Mesh_PrimitiveMode_00.gltf",
-    "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitiveMode/Mesh_PrimitiveMode_01.gltf",
+
+    "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitiveMode/Mesh_PrimitiveMode_01.gltf",        // 270
     "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitiveMode/Mesh_PrimitiveMode_02.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitiveMode/Mesh_PrimitiveMode_03.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitiveMode/Mesh_PrimitiveMode_04.gltf",
@@ -385,6 +400,7 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitiveMode/Mesh_PrimitiveMode_08.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitiveMode/Mesh_PrimitiveMode_09.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitiveMode/Mesh_PrimitiveMode_10.gltf",
+
     "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitiveMode/Mesh_PrimitiveMode_11.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitiveMode/Mesh_PrimitiveMode_12.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitiveMode/Mesh_PrimitiveMode_13.gltf",
@@ -395,7 +411,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitiveVertexColor/Mesh_PrimitiveVertexColor_02.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitiveVertexColor/Mesh_PrimitiveVertexColor_03.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitiveVertexColor/Mesh_PrimitiveVertexColor_04.gltf",
-    "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitiveVertexColor/Mesh_PrimitiveVertexColor_05.gltf",
+    
+    "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitiveVertexColor/Mesh_PrimitiveVertexColor_05.gltf",        // 280    
     "submodules/glTF-Asset-Generator/Output/Positive/Mesh_Primitives/Mesh_Primitives_00.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitivesUV/Mesh_PrimitivesUV_00.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitivesUV/Mesh_PrimitivesUV_01.gltf",
@@ -405,7 +422,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitivesUV/Mesh_PrimitivesUV_05.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitivesUV/Mesh_PrimitivesUV_06.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitivesUV/Mesh_PrimitivesUV_07.gltf",
-    "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitivesUV/Mesh_PrimitivesUV_08.gltf",
+
+    "submodules/glTF-Asset-Generator/Output/Positive/Mesh_PrimitivesUV/Mesh_PrimitivesUV_08.gltf",      // 290  
     "submodules/glTF-Asset-Generator/Output/Positive/Node_Attribute/Node_Attribute_00.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Node_Attribute/Node_Attribute_01.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Node_Attribute/Node_Attribute_02.gltf",
@@ -415,7 +433,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Asset-Generator/Output/Positive/Node_Attribute/Node_Attribute_06.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Node_Attribute/Node_Attribute_07.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Node_Attribute/Node_Attribute_08.gltf",
-    "submodules/glTF-Asset-Generator/Output/Positive/Node_NegativeScale/Node_NegativeScale_00.gltf",
+
+    "submodules/glTF-Asset-Generator/Output/Positive/Node_NegativeScale/Node_NegativeScale_00.gltf",            // 300
     "submodules/glTF-Asset-Generator/Output/Positive/Node_NegativeScale/Node_NegativeScale_01.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Node_NegativeScale/Node_NegativeScale_02.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Node_NegativeScale/Node_NegativeScale_03.gltf",
@@ -425,7 +444,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Asset-Generator/Output/Positive/Node_NegativeScale/Node_NegativeScale_07.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Node_NegativeScale/Node_NegativeScale_08.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Node_NegativeScale/Node_NegativeScale_09.gltf",
-    "submodules/glTF-Asset-Generator/Output/Positive/Node_NegativeScale/Node_NegativeScale_10.gltf",
+
+    "submodules/glTF-Asset-Generator/Output/Positive/Node_NegativeScale/Node_NegativeScale_10.gltf",                
     "submodules/glTF-Asset-Generator/Output/Positive/Node_NegativeScale/Node_NegativeScale_11.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Node_NegativeScale/Node_NegativeScale_12.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Texture_Sampler/Texture_Sampler_00.gltf",
@@ -435,7 +455,8 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Asset-Generator/Output/Positive/Texture_Sampler/Texture_Sampler_04.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Texture_Sampler/Texture_Sampler_05.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Texture_Sampler/Texture_Sampler_06.gltf",
-    "submodules/glTF-Asset-Generator/Output/Positive/Texture_Sampler/Texture_Sampler_07.gltf",
+
+    "submodules/glTF-Asset-Generator/Output/Positive/Texture_Sampler/Texture_Sampler_07.gltf",                  // 310      
     "submodules/glTF-Asset-Generator/Output/Positive/Texture_Sampler/Texture_Sampler_08.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Texture_Sampler/Texture_Sampler_09.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Texture_Sampler/Texture_Sampler_10.gltf",
@@ -443,52 +464,3 @@ const SCENE_PATHS: &[&str] = &[
     "submodules/glTF-Asset-Generator/Output/Positive/Texture_Sampler/Texture_Sampler_12.gltf",
     "submodules/glTF-Asset-Generator/Output/Positive/Texture_Sampler/Texture_Sampler_13.gltf",
 ];
-
-// fn glob_files(state: &mut State) {
-//     state.scene_paths = SCENE_PATHS
-//         .iter()
-//         .flat_map(|p| {
-//             glob::glob(p)
-//                 .expect("Failed to read glob")
-//                 .filter_map(|entry| entry.ok())
-//                 .map(|path| path.display().to_string())
-//                 .collect::<Vec<_>>()
-//         })
-//         .collect();
-
-//     log::info!("Found {} scene files", state.scene_paths.len());
-//     for (i, path) in state.scene_paths.iter().enumerate() {
-//         log::info!("  {} -> {}", i, path);
-//     }
-// }
-// // let x_axis = primitives::cube(5.0, 0.2, 0.2, [1.0, 0.0, 0.0, 1.0]);
-// // let x_handle = assets.add_mesh(x_axis).unwrap();
-// // let x_node = Node::new("cylinder", NodeType::Mesh(x_handle));
-// // let y_axis = primitives::cube(0.2, 5.0, 0.2, [0.0, 1.0, 0.0, 1.0]);
-// // let y_handle = assets.add_mesh(y_axis).unwrap();
-// // let y_node = Node::new("cylinder", NodeType::Mesh(y_handle));
-// // let z_axis = primitives::cube(0.2, 0.2, 5.0, [0.0, 0.0, 1.0, 1.0]);
-// // let z_handle = assets.add_mesh(z_axis).unwrap();
-// // let z_node = Node::new("cylinder", NodeType::Mesh(z_handle));
-
-// let x_cube = primitives::cube(1.0, 1.0, 1.0, [1.0, 1.0, 1.0, 1.0]);
-// let x_handle = assets.add_mesh(x_cube).unwrap();
-// let mut x_cube_node = Node::new("cube", NodeType::Mesh(x_handle));
-// x_cube_node.transform = glam::Mat4::from_translation(glam::Vec3::new(-5.0, 0.0, 0.0));
-
-// let y_cube = primitives::cube(1.0, 1.0, 1.0, [1.0, 1.0, 1.0, 1.0]);
-// let y_handle = assets.add_mesh(y_cube).unwrap();
-// let mut y_cube_node = Node::new("cube", NodeType::Mesh(y_handle));
-// y_cube_node.transform = glam::Mat4::from_translation(glam::Vec3::new(0.0, 4.0, 0.0));
-
-// let z_cube = primitives::cube(1.0, 1.0, 1.0, [1.0, 1.0, 1.0, 1.0]);
-// let z_handle = assets.add_mesh(z_cube).unwrap();
-// let mut z_cube_node = Node::new("cube", NodeType::Mesh(z_handle));
-// z_cube_node.transform = glam::Mat4::from_translation(glam::Vec3::new(0.0, 0.0, 3.0));
-
-// // scene.attach_root(x_node).unwrap();
-// // scene.attach_root(y_node).unwrap();
-// // scene.attach_root(z_node).unwrap();
-// scene.attach_root(x_cube_node).unwrap();
-// scene.attach_root(y_cube_node).unwrap();
-// scene.attach_root(z_cube_node).unwrap();

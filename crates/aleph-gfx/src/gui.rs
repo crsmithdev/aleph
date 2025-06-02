@@ -1,5 +1,5 @@
 use {
-    crate::{GpuSceneData, RenderConfig, RenderContext},
+    crate::{GpuSceneData, RenderContext, RenderFlags},
     aleph_core::{
         events::GuiEvent,
         system::{Resources, Scheduler},
@@ -93,12 +93,7 @@ impl Gui {
         Ok(gui)
     }
 
-    pub fn draw(
-        &mut self,
-        ctx: &RenderContext,
-        config: &mut RenderConfig,
-        scene_data: &mut GpuSceneData,
-    ) -> Result<()> {
+    pub fn draw(&mut self, ctx: &RenderContext, scene_data: &mut GpuSceneData) -> Result<()> {
         let color_attachments = &[util::color_attachment(
             ctx.draw_image,
             AttachmentLoadOp::LOAD,
@@ -124,7 +119,7 @@ impl Gui {
             shapes,
             pixels_per_point,
             ..
-        } = self.ctx.run(raw_input, |ctx| build_ui(ctx, config, scene_data));
+        } = self.ctx.run(raw_input, |ctx| build_ui(ctx, scene_data));
 
         self.state.handle_platform_output(&self.window, platform_output);
 
@@ -166,134 +161,95 @@ impl Gui {
     }
 }
 
-fn build_ui(ctx: &egui::Context, config: &mut RenderConfig, scene_data: &mut GpuSceneData) {
+fn build_ui(ctx: &egui::Context, scene: &mut GpuSceneData) {
     egui::Window::new("Shader Config")
         .max_width(350.)
         .default_width(350.)
         .resizable(false)
         .show(ctx, |ui| {
+            let flags = &mut scene.flags;
             ui.heading("Debug");
             ui.horizontal(|ui| {
-                ui.checkbox(&mut config.force_defaults, "Force defaults");
-                ui.checkbox(&mut config.debug_normals, "Debug normals");
-                ui.checkbox(&mut config.debug_tangents, "Debug tangents");
+                checkbox(ui, flags, RenderFlags::DEBUG_NORMALS, "Normals");
+                checkbox(ui, flags, RenderFlags::DEBUG_COLOR, "Color");
+                checkbox(ui, flags, RenderFlags::DEBUG_TANGENTS, "Tangents");
+                // checkbox(ui, flags, RenderFlags::DEBUG_BITANGENTS, "Bitangents");
             });
             ui.horizontal(|ui| {
-                ui.checkbox(&mut config.debug_bitangents, "Debug bitangents");
-                ui.checkbox(&mut config.debug_specular, "Debug specular");
-                ui.checkbox(&mut config.debug_normal_maps, "Disable normal maps");
+                checkbox(ui, flags, RenderFlags::DEBUG_METALLIC, "Metallic");
+                checkbox(ui, flags, RenderFlags::DEBUG_ROUGHNESS, "Roughness");
+                checkbox(ui, flags, RenderFlags::DEBUG_OCCLUSION, "Occlusion");
             });
-            ui.horizontal(|ui| {
-                ui.checkbox(&mut config.debug_color, "Debug color");
-                ui.checkbox(&mut config.debug_roughness, "Debug roughness");
-                ui.checkbox(&mut config.debug_metallic, "Disable metallic");
-            });
-            ui.horizontal(|ui| {
-                ui.checkbox(&mut config.debug_occlusion, "Debug occlusion");
-            });
-
-            ui.separator();
-            ui.heading("Lights");
-
-            ui.horizontal(|ui| {
-                ui.add(
-                    egui::Slider::new(&mut scene_data.n_lights, 0..=4)
-                        .step_by(1.0)
-                        .text("# Lights"),
-                );
-            });
-
-            light(ui, &mut scene_data.lights[0], 1);
-            light(ui, &mut scene_data.lights[1], 2);
-            light(ui, &mut scene_data.lights[2], 3);
-            light(ui, &mut scene_data.lights[3], 4);
-
-            ui.separator();
-            ui.heading("Material");
-            pbr_override_vec4(
-                ui,
-                &mut config.force_color,
-                &mut config.force_color_factor,
-                "Color",
-            );
-            pbr_override_scalar(
-                ui,
-                &mut config.force_metallic,
-                &mut config.force_metallic_factor,
-                "Metallic",
-            );
-            pbr_override_scalar(
-                ui,
-                &mut config.force_roughness,
-                &mut config.force_roughness_factor,
-                "Roughness",
-            );
-            pbr_override_scalar(
-                ui,
-                &mut config.force_ao,
-                &mut config.force_ao_strength,
-                "AO",
-            );
         });
 }
 
-fn light(ui: &mut egui::Ui, light: &mut Light, n: u32) {
-    egui::Grid::new(format!("light-{n:02}")).min_col_width(50.).max_col_width(250.).show(
-        ui,
-        |ui| {
-            ui.label(format!("Light {}", n));
-            ui.label("Position:");
-            drag_value(ui, &mut light.position.x, "x", 25.);
-            drag_value(ui, &mut light.position.y, "y", 25.);
-            drag_value(ui, &mut light.position.z, "z", 25.);
-            ui.end_row();
+fn checkbox(ui: &mut egui::Ui, flags: &mut u32, bit: RenderFlags, label: &str) {
+    let mut temp = RenderFlags::from_bits_truncate(*flags);
+    let mut value = temp.contains(bit);
 
-            ui.label("");
-            ui.label("Color:");
-            drag_value(ui, &mut light.color.x, "r", 255.);
-            drag_value(ui, &mut light.color.y, "g", 255.);
-            drag_value(ui, &mut light.color.z, "b", 255.);
-            drag_value(ui, &mut light.color.w, "a", 255.);
-            ui.end_row();
-        },
-    );
+    if ui.checkbox(&mut value, label).changed() {
+        temp.set(bit, value);
+        *flags = temp.bits();
+    }
 }
 
-fn drag_value(ui: &mut egui::Ui, value: &mut f32, label: &str, max: f32) {
-    let range = 0.0..=max;
-    let speed = max / 100.;
-    ui.horizontal(|ui| {
-        ui.label(label);
-        ui.add(egui::DragValue::new(value).speed(speed).range(range));
-    });
-}
+// fn light(ui: &mut egui::Ui, light: &mut Light, n: u32) {
+//     egui::Grid::new(format!("light-{n:02}")).min_col_width(50.).max_col_width(250.).show(
+//         ui,
+//         |ui| {
+//             ui.label(format!("Light {}", n));
+//             ui.label("Position:");
+//             drag_value(ui, &mut light.position.x, "x", 25.);
+//             drag_value(ui, &mut light.position.y, "y", 25.);
+//             drag_value(ui, &mut light.position.z, "z", 25.);
+//             ui.end_row();
 
-fn pbr_override_vec4(ui: &mut egui::Ui, flag: &mut bool, value: &mut Vec4, label: &str) {
-    egui::Grid::new(format!("override-scalar-{label}"))
-        .min_col_width(50.)
-        .max_col_width(250.)
-        .show(ui, |ui| {
-            ui.label(label);
-            ui.checkbox(flag, "Override?");
-            drag_value(ui, &mut value.x, "r", 1.);
-            drag_value(ui, &mut value.y, "g", 1.);
-            drag_value(ui, &mut value.z, "b", 1.);
-            drag_value(ui, &mut value.w, "a", 1.);
-            ui.end_row();
-        });
-}
+//             ui.label("");
+//             ui.label("Color:");
+//             drag_value(ui, &mut light.color.x, "r", 255.);
+//             drag_value(ui, &mut light.color.y, "g", 255.);
+//             drag_value(ui, &mut light.color.z, "b", 255.);
+//             drag_value(ui, &mut light.color.w, "a", 255.);
+//             ui.end_row();
+//         },
+//     );
+// }
 
-fn pbr_override_scalar(
-    ui: &mut egui::Ui,
-    flag: &mut bool,
-    mut value: &mut f32,
-    label: &str,
-) -> egui::Response {
-    ui.horizontal(|ui| {
-        ui.label("Override?");
-        ui.checkbox(flag, label);
-        drag_value(ui, &mut value, "r", 1.);
-        ui.end_row();
-    })
-    .response
-}
+// fn drag_value(ui: &mut egui::Ui, value: &mut f32, label: &str, max: f32) {
+//     let range = 0.0..=max;
+//     let speed = max / 100.;
+//     ui.horizontal(|ui| {
+//         ui.label(label);
+//         ui.add(egui::DragValue::new(value).speed(speed).range(range));
+//     });
+// }
+
+// fn pbr_override_vec4(ui: &mut egui::Ui, flag: &mut bool, value: &mut Vec4, label: &str) {
+//     egui::Grid::new(format!("override-scalar-{label}"))
+//         .min_col_width(50.)
+//         .max_col_width(250.)
+//         .show(ui, |ui| {
+//             ui.label(label);
+//             ui.checkbox(flag, "Override?");
+//             drag_value(ui, &mut value.x, "r", 1.);
+//             drag_value(ui, &mut value.y, "g", 1.);
+//             drag_value(ui, &mut value.z, "b", 1.);
+//             drag_value(ui, &mut value.w, "a", 1.);
+//             ui.end_row();
+//         });
+// }
+
+// fn pbr_override_scalar(
+//     ui: &mut egui::Ui,
+//     flag: &mut bool,
+//     mut value: &mut f32,
+//     label: &str,
+// ) -> egui::Response {
+//     ui.horizontal(|ui| {
+//         ui.label("Override?");
+//         ui.checkbox(flag, label);
+//         drag_value(ui, &mut value, "r", 1.);
+//         ui.end_row();
+//     })
+//     .response
+// }
