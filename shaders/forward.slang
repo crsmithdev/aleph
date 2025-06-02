@@ -42,7 +42,8 @@ FsInput vertexMain(VsInput input, uniform PushConstants object)
     output.wPosition = position.xyz;
     // output.normal = mul(input.normal, model);
     output.normal = input.normal; // Assuming input.normal is already in world space
-    output.tangent = float4(input.tangent.w, mul(input.tangent.xyz, model));
+    // output.tangent = float4(input.tangent.w, mul(input.tangent.xyz, model));
+    output.tangent = input.tangent;
     output.texCoords0 = float2(input.uvx, input.uvy);
     output.color = input.color;
     
