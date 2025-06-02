@@ -1,10 +1,10 @@
-const float PI = 3.1415926535897932384626433832795;
+static const float PI = 3.1415926535897932384626433832795;
 
 [[vk::binding(0, 0)]]
 ConstantBuffer<Scene> scene;
-[[vk::binding(0, 1)]]
+[[vk::binding(1, 0)]]
 ConstantBuffer<MaterialBlock> materials;
-[[vk::binding(0, 2)]]
+[[vk::binding(2, 0)]]
 Sampler2D textures[]; // Combined image samplers array
 
 struct Light
