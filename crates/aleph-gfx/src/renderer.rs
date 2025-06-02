@@ -325,6 +325,15 @@ impl Renderer {
             &draw_image,
             &depth_image,
         )?;
+        let flags: RenderFlags = RenderFlags::DEBUG_COLOR
+            | RenderFlags::DEFAULT_COLOR
+            | RenderFlags::DEFAULT_NORMALS
+            | RenderFlags::DEFAULT_TANGENTS
+            | RenderFlags::DEFAULT_METALLIC
+            | RenderFlags::DEFAULT_ROUGHNESS
+            | RenderFlags::DEFAULT_OCCLUSION
+            | RenderFlags::DISABLE_TEXTURES;
+        let flags = flags.bits();
         let scene_data = GpuSceneData {
             lights: LIGHTS,
             n_lights: 3,

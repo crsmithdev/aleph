@@ -170,15 +170,26 @@ fn build_ui(ctx: &egui::Context, scene: &mut GpuSceneData) {
             let flags = &mut scene.flags;
             ui.heading("Debug");
             ui.horizontal(|ui| {
-                checkbox(ui, flags, RenderFlags::DEBUG_NORMALS, "Normals");
                 checkbox(ui, flags, RenderFlags::DEBUG_COLOR, "Color");
+                checkbox(ui, flags, RenderFlags::DEBUG_NORMALS, "Normals");
                 checkbox(ui, flags, RenderFlags::DEBUG_TANGENTS, "Tangents");
-                // checkbox(ui, flags, RenderFlags::DEBUG_BITANGENTS, "Bitangents");
+                checkbox(ui, flags, RenderFlags::DEBUG_METALLIC, "Metallic");
             });
             ui.horizontal(|ui| {
-                checkbox(ui, flags, RenderFlags::DEBUG_METALLIC, "Metallic");
                 checkbox(ui, flags, RenderFlags::DEBUG_ROUGHNESS, "Roughness");
                 checkbox(ui, flags, RenderFlags::DEBUG_OCCLUSION, "Occlusion");
+                checkbox(ui, flags, RenderFlags::DEBUG_TEXCOORDS0, "TexCoords0");
+            });
+            ui.heading("Default");
+            ui.horizontal(|ui| {
+                checkbox(ui, flags, RenderFlags::DEFAULT_COLOR, "Color");
+                checkbox(ui, flags, RenderFlags::DEFAULT_NORMALS, "Normals");
+                checkbox(ui, flags, RenderFlags::DEFAULT_TANGENTS, "Tangents");
+                checkbox(ui, flags, RenderFlags::DEFAULT_METALLIC, "Metallic");
+            });
+            ui.horizontal(|ui| {
+                checkbox(ui, flags, RenderFlags::DEFAULT_ROUGHNESS, "Roughness");
+                checkbox(ui, flags, RenderFlags::DEFAULT_OCCLUSION, "Occlusion");
             });
         });
 }

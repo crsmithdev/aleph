@@ -1,4 +1,21 @@
 static const float PI = 3.1415926535897932384626433832795;
+#define DEBUG_COLOR ((scene.config & (1 << 0)) != 0)
+#define DEBUG_NORMALS ((scene.config & (1 << 1)) != 0)
+#define DEBUG_TANGENTS ((scene.config & (1 << 2)) != 0)
+#define DEBUG_METALLIC ((scene.config & (1 << 3)) != 0)
+#define DEBUG_ROUGHNESS ((scene.config & (1 << 4)) != 0)
+#define DEBUG_OCCLUSION ((scene.config & (1 << 5)) != 0)
+#define DEBUG_TEXCOORDS0 ((scene.config & (1 << 6)) != 0)
+
+#define DEFAULT_COLOR ((scene.config & (1 << 8)) != 0)
+#define DEFAULT_NORMALS ((scene.config & (1 << 9)) != 0)
+#define DEFAULT_TANGENTS ((scene.config & (1 << 10)) != 0)
+#define DEFAULT_METALLIC ((scene.config & (1 << 11)) != 0)
+#define DEFAULT_ROUGHNESS ((scene.config & (1 << 12)) != 0)
+#define DEFAULT_OCCLUSION ((scene.config & (1 << 13)) != 0)
+
+#define DISABLE_TEXTURES ((scene.config & (1 << 16)) != 0)
+#define DISABLE_LIGHTING ((scene.config & (1 << 17)) != 0)
 
 [[vk::binding(0, 0)]]
 ConstantBuffer<Scene> scene;
@@ -23,7 +40,8 @@ FsInput vertexMain(VsInput input, uniform PushConstants object)
 
     output.position = mul(scene.projection, mul(scene.view, position));
     output.wPosition = position.xyz;
-    output.normal = mul(input.normal, model);
+    // output.normal = mul(input.normal, model);
+    output.normal = input.normal; // Assuming input.normal is already in world space
     output.tangent = float4(input.tangent.w, mul(input.tangent.xyz, model));
     output.texCoords0 = float2(input.uvx, input.uvy);
     output.color = input.color;
@@ -34,26 +52,55 @@ FsInput vertexMain(VsInput input, uniform PushConstants object)
 [shader("fragment")]
 float4 fragmentMain(FsInput input, uniform PushConstants object) : SV_Target
 {
-    // Get material data and unpack using combined image samplers
-    MaterialData matData = materials.materials[object.materialIndex];
-    Material material = unpackMaterial(matData, input, scene.config);
-      // Simple lighting calculation
-    float3 viewDir = normalize(scene.cameraPos - input.wPosition);
-    float3 finalColor = float3(0.0);
-    
-    // Calculate lighting from all lights
+//   Material material = unpackMaterial(draw.materialIndex, input);
+
+
+
+  //   if DEBUG_COLOR {
+  //     color = material.color;
+  //   } else if DEBUG_NORMALS {
+  //     color = (input.normal);
+  //   } else if DEBUG_TANGENTS {
+  //     color = (input.tangent.xyz);
+  //   } else if DEBUG_METALLIC {
+  //     color = float3(material.metallic);
+  //   } else if DEBUG_ROUGHNESS {
+  //     color = float3(material.roughness);
+  //   } else if DEBUG_OCCLUSION {
+  //     color = float3(material.occlusion);
+  //   } else if DEBUG_TEXCOORDS0 {
+  //     color = float3(input.texCoords0, 1.0);
+  //   }
+
+  Material material = unpackMaterial(object.materialIndex, input);
+  // Simple lighting calculation
+  float3 viewDir = normalize(scene.cameraPos - input.wPosition);
+    float3 color = float3(0.0);
+
     for (uint i = 0; i < scene.n_lights && i < 4; ++i)
-    {
-        finalColor += calculateLight(scene.lights[i], material, input.wPosition, viewDir);
+            {
+        color += calculateLight(scene.lights[i], material, input.wPosition, viewDir);
     }
-    
-    // Add ambient
-    finalColor += material.color * 0.03 * material.occlusion;
-    
-    // Simple tone mapping
-    finalColor = finalColor / (finalColor + float3(1.0));
-    
-    return float4(finalColor, 1.0);
+
+    color += material.color * 0.03 * material.occlusion;
+    color = color / (color + float3(1.0));
+  
+    if DEBUG_COLOR {
+        color = material.color;
+    } else if DEBUG_NORMALS {
+        color = (input.normal);
+    } else if DEBUG_TANGENTS {
+        color = (input.tangent.xyz);
+    } else if DEBUG_METALLIC {
+        color = float3(material.metallic);
+    } else if DEBUG_ROUGHNESS {
+        color = float3(material.roughness);
+    } else if DEBUG_OCCLUSION {
+        color = float3(material.occlusion);
+    } else if DEBUG_TEXCOORDS0 {
+        color = float3(input.texCoords0, 1.0);
+    }
+    return float4(color, 1.0);
 }
 
 func calculateLight(light: Light, material: Material, worldPos: float3, viewDir: float3)->float3 {
@@ -80,29 +127,79 @@ func calculateLight(light: Light, material: Material, worldPos: float3, viewDir:
 
     return (kD * material.color / PI + specular) * lightRadiance * nDotL;
 }
+func unpackMaterial(index: uint, vertex: FsInput)->Material {
+    let materialData = materials.materials[index];
+    let uv = vertex.texCoords0;
 
-func unpackMaterial(data: MaterialData, input: FsInput, config: SceneConfig)->Material {
-    // float3 colorSample = sampleTexture2D(data.colorIndex, input.texCoords0).rgb;
-    float3 colorSample = textures[data.colorIndex].Sample(input.texCoords0).rgb;
-    float3 normalSample = textures[data.normalIndex].Sample(input.texCoords0).rgb;
-    float3 metalRoughSample = textures[data.metalRoughIndex].Sample(input.texCoords0).rgb;
-    float3 occlusionSample = textures[data.occlusionIndex].Sample(input.texCoords0).rgb;
-    
+    float3 colorSample = textures[materialData.colorIndex].Sample(uv).rgb;
+    float3 normalSample = textures[materialData.normalIndex].Sample(uv).rgb;
+    float metalSample = textures[materialData.metalRoughIndex].Sample(uv).b;
+    float roughSample = textures[materialData.metalRoughIndex].Sample(uv).g;
+    float occlusionSample = textures[materialData.occlusionIndex].Sample(uv).r;
+
+    // if DISABLE_TEXTURES {
+    //     colorSample = float3(1.0, 1.0, 1.0);
+    //     normalSample = float3(1.0, 1.0, 1.0);
+    //     metalSample = 1.0;
+    //     roughSample = 1.0;
+    //     occlusionSample = 1.0;
+    // }
+
     Material material;
-    material.color = colorSample * data.colorFactor; // TODO vertex colors
-    material.metallic = metalRoughSample.r * data.metalFactor;
-    material.roughness = metalRoughSample.g * data.roughFactor;
-    material.occlusion = occlusionSample.r * data.occlusionStrength;
+    material.color = colorSample;// * materialData.colorFactor; // TODO vertex colors
+    if DEFAULT_COLOR {
+        material.color = float3(1.0, 1.0, 1.0);
+    }
 
-    float3 tangentNormal = normalSample * 2.0 - 1.0;
-    float3 N = normalize(input.normal);
-    float3 T = normalize(input.tangent.xyz);
-    float3 B = normalize(cross(N, T)) * input.tangent.w;
+    float3 tangentNormal = normalize(normalSample * 2.0 - 1.0);
+    float3 N = normalize(vertex.normal);
+    float3 T = normalize(vertex.tangent.xyz);
+    float3 B = normalize(cross(N, T));
     float3x3 TBN = float3x3(T, B, N);
     material.normal = normalize(mul(tangentNormal, TBN));
-    
+    if DEFAULT_NORMALS {
+        material.normal = float3(0.5, 0.5, 1.0);
+    }
+
+    material.metallic = metalSample * materialData.metalFactor;
+    if DEFAULT_METALLIC {
+        material.metallic = 0.95;
+    }
+
+    material.roughness = roughSample * materialData.roughFactor;
+    if DEFAULT_ROUGHNESS {
+        material.roughness = 0.5;
+    }
+
+    material.occlusion = occlusionSample * materialData.occlusionStrength;
+    if DEFAULT_OCCLUSION {
+        material.occlusion = 1.0;
+    }
+
     return material;
 }
+// func unpackMaterial(data: MaterialData, input: FsInput, config: SceneConfig)->Material {
+//     // float3 colorSample = sampleTexture2D(data.colorIndex, input.texCoords0).rgb;
+//     float3 colorSample = textures[data.colorIndex].Sample(input.texCoords0).rgb;
+//     float3 normalSample = textures[data.normalIndex].Sample(input.texCoords0).rgb;
+//     float3 metalRoughSample = textures[data.metalRoughIndex].Sample(input.texCoords0).rgb;
+//     float3 occlusionSample = textures[data.occlusionIndex].Sample(input.texCoords0).rgb;
+    
+//     Material material;
+//     material.color = colorSample * data.colorFactor; // TODO vertex colors
+//     material.metallic = metalRoughSample.r * data.metalFactor;
+//     material.roughness = metalRoughSample.g * data.roughFactor;
+//     material.occlusion = occlusionSample.r * data.occlusionStrength;
+
+//     float3 tangentNormal = normalSample * 2.0 - 1.0;
+//     float3 N = normalize(input.normal);
+//     float3 T = normalize(input.tangent.xyz);
+//     float3 B = normalize(cross(N, T)) * input.tangent.w;
+//     float3x3 TBN = float3x3(T, B, N);
+//     material.normal = normalize(mul(tangentNormal, TBN));
+    
+//     return material;
+// }
 
 float3 distributionGGX(float3 normal, float3 halfDir, float roughness)
 {
@@ -172,8 +269,11 @@ struct Scene {
     float4x4 vp;
     float3 cameraPos;
     uint n_lights;
+    uint config;
+    uint padding0;
+    uint padding1;
+    uint padding2;
     Light lights[4];
-    SceneConfig config;
 };
 
 struct MaterialData {
@@ -225,23 +325,6 @@ struct SceneConfig
     float forceAoStrength;
 };
 
-// #define DEBUG_COLOR ((scene.config & (1 << 0)) != 0)
-// #define DEBUG_NORMALS ((scene.config & (1 << 1)) != 0)
-// #define DEBUG_TANGENTS ((scene.config & (1 << 2)) != 0)
-// #define DEBUG_METALLIC ((scene.config & (1 << 3)) != 0)
-// #define DEBUG_ROUGHNESS ((scene.config & (1 << 4)) != 0)
-// #define DEBUG_OCCLUSION ((scene.config & (1 << 5)) != 0)
-// #define DEBUG_TEXCOORDS0 ((scene.config & (1 << 6)) != 0)
-
-// #define DEFAULT_COLOR ((scene.config & (1 << 8)) != 0)
-// #define DEFAULT_NORMALS ((scene.config & (1 << 9)) != 0)
-// #define DEFAULT_TANGENTS ((scene.config & (1 << 10)) != 0)
-// #define DEFAULT_METALLIC ((scene.config & (1 << 11)) != 0)
-// #define DEFAULT_ROUGHNESS ((scene.config & (1 << 12)) != 0)
-// #define DEFAULT_OCCLUSION ((scene.config & (1 << 13)) != 0)
-
-// #define DISABLE_TEXTURES ((scene.config & (1 << 16)) != 0)
-// #define DISABLE_LIGHTING ((scene.config & (1 << 17)) != 0)
 
 // const float PI = 3.1415926535897932384626433832795;
 
