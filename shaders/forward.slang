@@ -110,7 +110,7 @@ func calculateLight(light: Light, material: Material, worldPos: float3, viewDir:
 
     float lightDistance = length(light.position - worldPos);
     float lightAttenuation = 1.0 / (lightDistance * lightDistance);
-    float3 lightRadiance = lightColor * lightAttenuation;
+    float3 lightRadiance = lightColor * lightAttenuation * 10;
 
     float3 F = fresnelSchlick(max(dot(halfDir, viewDir), 0.0), float3(0.04, 0.04, 0.04));
     float3 D = distributionGGX(material.normal, halfDir, material.roughness);
