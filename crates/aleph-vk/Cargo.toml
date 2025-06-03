@@ -20,6 +20,7 @@ default = ["gpu-tests"]
 gpu-tests = []
 
 [dependencies]
+assay.workspace = true
 egui.workspace = true
 glob.workspace = true
 glam.workspace = true

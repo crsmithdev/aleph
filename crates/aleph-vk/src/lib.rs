@@ -49,10 +49,31 @@ pub use {
 };
 
 pub mod test {
-    use std::sync::{Arc, LazyLock};
+    use std::sync::{Arc, LazyLock, Mutex, MutexGuard, PoisonError};
 
-    static TEST_GPU: LazyLock<Arc<crate::gpu::Gpu>> =
-        LazyLock::new(|| Arc::new(crate::gpu::Gpu::headless().expect("Error creating test GPU")));
+    static TEST_GPU: LazyLock<Arc<Mutex<crate::gpu::Gpu>>> = LazyLock::new(|| {
+        Arc::new(Mutex::new(
+            crate::gpu::Gpu::headless().expect("Error creating test GPU"),
+        ))
+    });
 
-    pub fn test_gpu() -> &'static Arc<crate::Gpu> { &TEST_GPU }
+    pub fn test_gpu() -> MutexGuard<'static, crate::gpu::Gpu> {
+        loop {
+            match TEST_GPU.lock() {
+                Ok(guard) => return guard,
+                Err(poisoned) => {
+                    eprintln!("Test GPU mutex was poisoned, recovering...");
+                    return poisoned.into_inner();
+                }
+            }
+        }
+    }
+
+    pub fn with_test_gpu<F, R>(f: F) -> R
+    where
+        F: FnOnce(&crate::gpu::Gpu) -> R,
+    {
+        let gpu = test_gpu();
+        f(&*gpu)
+    }
 }

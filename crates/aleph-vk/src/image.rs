@@ -162,8 +162,11 @@ impl Image {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "gpu-tests")]
+    use assay::assay;
     use {super::*, crate::test::test_gpu};
-    #[test]
+
+    #[assay]
     #[cfg(feature = "gpu-tests")]
     fn test_create_texture() {
         let gpu = test_gpu();
@@ -192,7 +195,7 @@ mod tests {
         assert!(texture.handle() != VkImage::null());
         assert!(texture.view() != ImageView::null());
     }
-    #[test]
+    #[assay]
     #[cfg(feature = "gpu-tests")]
     fn test_sampler_new() {
         let gpu = test_gpu();
@@ -219,7 +222,7 @@ mod tests {
         );
         assert!(sampler.handle() != VkSampler::null());
     }
-    #[test]
+    #[assay]
     #[cfg(feature = "gpu-tests")]
     fn test_sampler_default() {
         let gpu = test_gpu();

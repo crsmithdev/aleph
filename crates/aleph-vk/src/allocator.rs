@@ -185,169 +185,107 @@ impl Allocator {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "gpu-tests")]
+    use assay::assay;
     use {
         super::*,
-        crate::test::test_gpu,
+        crate::test::with_test_gpu,
         ash::vk::{BufferCreateInfo, BufferUsageFlags, SharingMode},
     };
 
-    #[test]
+    #[assay]
     #[cfg(feature = "gpu-tests")]
     fn test_buffer_allocation() {
-        let gpu = test_gpu();
-        let allocator = gpu.allocator();
+        with_test_gpu(|gpu| {
+            let allocator = gpu.allocator();
 
-        let create_info = BufferCreateInfo::default()
-            .size(1024)
-            .usage(BufferUsageFlags::VERTEX_BUFFER)
-            .sharing_mode(SharingMode::EXCLUSIVE);
+            let create_info = BufferCreateInfo::default()
+                .size(1024)
+                .usage(BufferUsageFlags::VERTEX_BUFFER)
+                .sharing_mode(SharingMode::EXCLUSIVE);
 
-        let buffer = unsafe { gpu.device().handle.create_buffer(&create_info, None) }
-            .expect("Failed to create buffer");
-        let requirements = unsafe { gpu.device().handle.get_buffer_memory_requirements(buffer) };
+            let buffer = unsafe { gpu.device().handle.create_buffer(&create_info, None) }
+                .expect("Failed to create buffer");
+            let requirements =
+                unsafe { gpu.device().handle.get_buffer_memory_requirements(buffer) };
 
-        let id = allocator
-            .allocate_buffer(buffer, requirements, MemoryLocation::CpuToGpu, "test")
-            .expect("Failed to allocate buffer");
+            let id = allocator
+                .allocate_buffer(buffer, requirements, MemoryLocation::CpuToGpu, "test")
+                .expect("Failed to allocate buffer");
 
-        let handle = allocator.get_buffer(id);
-        assert_eq!(handle, buffer);
+            let handle = allocator.get_buffer(id);
+            assert_eq!(handle, buffer);
+        });
     }
 
-    #[test]
+    #[assay]
     #[cfg(feature = "gpu-tests")]
     fn test_buffer_write() {
-        let gpu = test_gpu();
-        let allocator = gpu.allocator();
+        with_test_gpu(|gpu| {
+            let allocator = gpu.allocator();
 
-        let create_info = BufferCreateInfo::default()
-            .size(64)
-            .usage(BufferUsageFlags::UNIFORM_BUFFER)
-            .sharing_mode(SharingMode::EXCLUSIVE);
+            let create_info = BufferCreateInfo::default()
+                .size(64)
+                .usage(BufferUsageFlags::UNIFORM_BUFFER)
+                .sharing_mode(SharingMode::EXCLUSIVE);
 
-        let buffer = unsafe { gpu.device().handle.create_buffer(&create_info, None) }
-            .expect("Failed to create buffer");
-        let requirements = unsafe { gpu.device().handle.get_buffer_memory_requirements(buffer) };
+            let buffer = unsafe { gpu.device().handle.create_buffer(&create_info, None) }
+                .expect("Failed to create buffer");
+            let requirements =
+                unsafe { gpu.device().handle.get_buffer_memory_requirements(buffer) };
 
-        let id = allocator
-            .allocate_buffer(buffer, requirements, MemoryLocation::CpuToGpu, "write_test")
-            .expect("Failed to allocate buffer");
+            let id = allocator
+                .allocate_buffer(buffer, requirements, MemoryLocation::CpuToGpu, "write_test")
+                .expect("Failed to allocate buffer");
 
-        let data: [u32; 4] = [10, 20, 30, 40];
-        allocator.write_buffer(id, 0, &data).expect("Failed to write buffer");
+            let data: [u32; 4] = [10, 20, 30, 40];
+            allocator.write_buffer(id, 0, &data).expect("Failed to write buffer");
+        });
     }
 
-    #[test]
+    #[assay]
     #[cfg(feature = "gpu-tests")]
     fn test_image_allocation() {
-        let gpu = test_gpu();
-        let allocator = gpu.allocator();
+        with_test_gpu(|gpu| {
+            let allocator = gpu.allocator();
 
-        let create_info = ash::vk::ImageCreateInfo::default()
-            .image_type(ash::vk::ImageType::TYPE_2D)
-            .format(ash::vk::Format::R8G8B8A8_UNORM)
-            .extent(ash::vk::Extent3D {
-                width: 256,
-                height: 256,
-                depth: 1,
-            })
-            .mip_levels(1)
-            .array_layers(1)
-            .samples(ash::vk::SampleCountFlags::TYPE_1)
-            .tiling(ash::vk::ImageTiling::OPTIMAL)
-            .usage(ash::vk::ImageUsageFlags::COLOR_ATTACHMENT)
-            .sharing_mode(ash::vk::SharingMode::EXCLUSIVE);
+            let create_info = ash::vk::ImageCreateInfo::default()
+                .image_type(ash::vk::ImageType::TYPE_2D)
+                .format(ash::vk::Format::R8G8B8A8_UNORM)
+                .extent(ash::vk::Extent3D {
+                    width: 256,
+                    height: 256,
+                    depth: 1,
+                })
+                .mip_levels(1)
+                .array_layers(1)
+                .samples(ash::vk::SampleCountFlags::TYPE_1)
+                .tiling(ash::vk::ImageTiling::OPTIMAL)
+                .usage(ash::vk::ImageUsageFlags::COLOR_ATTACHMENT)
+                .sharing_mode(ash::vk::SharingMode::EXCLUSIVE);
 
-        let image = unsafe { gpu.device().handle.create_image(&create_info, None) }
-            .expect("Failed to create image");
-        let requirements = unsafe { gpu.device().handle.get_image_memory_requirements(image) };
+            let image = unsafe { gpu.device().handle.create_image(&create_info, None) }
+                .expect("Failed to create image");
+            let requirements = unsafe { gpu.device().handle.get_image_memory_requirements(image) };
 
-        let id = allocator
-            .allocate_image(image, requirements, "test_image")
-            .expect("Failed to allocate image");
+            let id = allocator
+                .allocate_image(image, requirements, "test_image")
+                .expect("Failed to allocate image");
 
-        let handle = allocator.get_image(id);
-        assert_eq!(handle, image);
+            let handle = allocator.get_image(id);
+            assert_eq!(handle, image);
+        });
     }
 
-    #[test]
+    #[assay]
     #[cfg(feature = "gpu-tests")]
     fn test_deallocate_buffer() {
-        let gpu = test_gpu();
-        let allocator = gpu.allocator();
+        with_test_gpu(|gpu| {
+            let allocator = gpu.allocator();
 
-        let create_info = BufferCreateInfo::default()
-            .size(512)
-            .usage(BufferUsageFlags::STORAGE_BUFFER)
-            .sharing_mode(SharingMode::EXCLUSIVE);
-
-        let buffer = unsafe { gpu.device().handle.create_buffer(&create_info, None) }
-            .expect("Failed to create buffer");
-        let requirements = unsafe { gpu.device().handle.get_buffer_memory_requirements(buffer) };
-
-        let id = allocator
-            .allocate_buffer(
-                buffer,
-                requirements,
-                MemoryLocation::CpuToGpu,
-                "dealloc_test",
-            )
-            .expect("Failed to allocate buffer");
-
-        allocator.deallocate(id);
-
-        // After deallocation, accessing should panic
-        std::panic::catch_unwind(|| allocator.get_buffer(id))
-            .expect_err("Should panic on invalid ID");
-    }
-
-    #[test]
-    #[cfg(feature = "gpu-tests")]
-    fn test_deallocate_image() {
-        let gpu = test_gpu();
-        let allocator = gpu.allocator();
-
-        let create_info = ash::vk::ImageCreateInfo::default()
-            .image_type(ash::vk::ImageType::TYPE_2D)
-            .format(ash::vk::Format::R8G8B8A8_UNORM)
-            .extent(ash::vk::Extent3D {
-                width: 128,
-                height: 128,
-                depth: 1,
-            })
-            .mip_levels(1)
-            .array_layers(1)
-            .samples(ash::vk::SampleCountFlags::TYPE_1)
-            .tiling(ash::vk::ImageTiling::OPTIMAL)
-            .usage(ash::vk::ImageUsageFlags::SAMPLED)
-            .sharing_mode(ash::vk::SharingMode::EXCLUSIVE);
-
-        let image = unsafe { gpu.device().handle.create_image(&create_info, None) }
-            .expect("Failed to create image");
-        let requirements = unsafe { gpu.device().handle.get_image_memory_requirements(image) };
-
-        let id = allocator
-            .allocate_image(image, requirements, "dealloc_image_test")
-            .expect("Failed to allocate image");
-
-        allocator.deallocate(id);
-
-        std::panic::catch_unwind(|| allocator.get_image(id))
-            .expect_err("Should panic on invalid ID");
-    }
-
-    #[test]
-    #[cfg(feature = "gpu-tests")]
-    fn test_multiple_allocations() {
-        let gpu = test_gpu();
-        let allocator = gpu.allocator();
-
-        let mut ids = Vec::new();
-
-        for i in 0..5 {
             let create_info = BufferCreateInfo::default()
-                .size(256 * (i + 1))
-                .usage(BufferUsageFlags::VERTEX_BUFFER)
+                .size(512)
+                .usage(BufferUsageFlags::STORAGE_BUFFER)
                 .sharing_mode(SharingMode::EXCLUSIVE);
 
             let buffer = unsafe { gpu.device().handle.create_buffer(&create_info, None) }
@@ -360,81 +298,124 @@ mod tests {
                     buffer,
                     requirements,
                     MemoryLocation::CpuToGpu,
-                    format!("multi_{}", i),
+                    "dealloc_test",
                 )
                 .expect("Failed to allocate buffer");
 
-            ids.push(id);
-        }
-
-        // Verify all allocations are accessible
-        for id in &ids {
-            allocator.get_buffer(*id);
-        }
-
-        // Clean up
-        for id in ids {
             allocator.deallocate(id);
-        }
+
+            std::panic::catch_unwind(|| allocator.get_buffer(id))
+                .expect_err("Should panic on invalid ID");
+        });
     }
 
-    #[test]
+    #[assay]
+    #[cfg(feature = "gpu-tests")]
+    fn test_deallocate_image() {
+        with_test_gpu(|gpu| {
+            let allocator = gpu.allocator();
+
+            let create_info = ash::vk::ImageCreateInfo::default()
+                .image_type(ash::vk::ImageType::TYPE_2D)
+                .format(ash::vk::Format::R8G8B8A8_UNORM)
+                .extent(ash::vk::Extent3D {
+                    width: 128,
+                    height: 128,
+                    depth: 1,
+                })
+                .mip_levels(1)
+                .array_layers(1)
+                .samples(ash::vk::SampleCountFlags::TYPE_1)
+                .tiling(ash::vk::ImageTiling::OPTIMAL)
+                .usage(ash::vk::ImageUsageFlags::SAMPLED)
+                .sharing_mode(ash::vk::SharingMode::EXCLUSIVE);
+
+            let image = unsafe { gpu.device().handle.create_image(&create_info, None) }
+                .expect("Failed to create image");
+            let requirements = unsafe { gpu.device().handle.get_image_memory_requirements(image) };
+
+            let id = allocator
+                .allocate_image(image, requirements, "dealloc_image_test")
+                .expect("Failed to allocate image");
+
+            allocator.deallocate(id);
+
+            std::panic::catch_unwind(|| allocator.get_image(id))
+                .expect_err("Should panic on invalid ID");
+        });
+    }
+
+    #[assay]
+    #[cfg(feature = "gpu-tests")]
+    fn test_multiple_allocations() {
+        with_test_gpu(|gpu| {
+            let allocator = gpu.allocator();
+
+            let mut ids = Vec::new();
+
+            for i in 0..5 {
+                let create_info = BufferCreateInfo::default()
+                    .size(256 * (i + 1))
+                    .usage(BufferUsageFlags::VERTEX_BUFFER)
+                    .sharing_mode(SharingMode::EXCLUSIVE);
+
+                let buffer = unsafe { gpu.device().handle.create_buffer(&create_info, None) }
+                    .expect("Failed to create buffer");
+                let requirements =
+                    unsafe { gpu.device().handle.get_buffer_memory_requirements(buffer) };
+
+                let id = allocator
+                    .allocate_buffer(
+                        buffer,
+                        requirements,
+                        MemoryLocation::CpuToGpu,
+                        format!("multi_{}", i),
+                    )
+                    .expect("Failed to allocate buffer");
+
+                ids.push(id);
+            }
+
+            for id in &ids {
+                allocator.get_buffer(*id);
+            }
+
+            for id in ids {
+                allocator.deallocate(id);
+            }
+        });
+    }
+
+    #[assay]
     #[cfg(feature = "gpu-tests")]
     fn test_write_buffer_offset() {
-        let gpu = test_gpu();
-        let allocator = gpu.allocator();
+        with_test_gpu(|gpu| {
+            let allocator = gpu.allocator();
 
-        let create_info = BufferCreateInfo::default()
-            .size(128)
-            .usage(BufferUsageFlags::UNIFORM_BUFFER)
-            .sharing_mode(SharingMode::EXCLUSIVE);
+            let create_info = BufferCreateInfo::default()
+                .size(128)
+                .usage(BufferUsageFlags::UNIFORM_BUFFER)
+                .sharing_mode(SharingMode::EXCLUSIVE);
 
-        let buffer = unsafe { gpu.device().handle.create_buffer(&create_info, None) }
-            .expect("Failed to create buffer");
-        let requirements = unsafe { gpu.device().handle.get_buffer_memory_requirements(buffer) };
+            let buffer = unsafe { gpu.device().handle.create_buffer(&create_info, None) }
+                .expect("Failed to create buffer");
+            let requirements =
+                unsafe { gpu.device().handle.get_buffer_memory_requirements(buffer) };
 
-        let id = allocator
-            .allocate_buffer(
-                buffer,
-                requirements,
-                MemoryLocation::CpuToGpu,
-                "offset_test",
-            )
-            .expect("Failed to allocate buffer");
+            let id = allocator
+                .allocate_buffer(
+                    buffer,
+                    requirements,
+                    MemoryLocation::CpuToGpu,
+                    "offset_test",
+                )
+                .expect("Failed to allocate buffer");
 
-        let data1: [u32; 2] = [100, 200];
-        let data2: [u32; 2] = [300, 400];
+            let data1: [u32; 2] = [100, 200];
+            let data2: [u32; 2] = [300, 400];
 
-        allocator.write_buffer(id, 0, &data1).expect("Failed to write at offset 0");
-        allocator.write_buffer(id, 8, &data2).expect("Failed to write at offset 8");
+            allocator.write_buffer(id, 0, &data1).expect("Failed to write at offset 0");
+            allocator.write_buffer(id, 8, &data2).expect("Failed to write at offset 8");
+        });
     }
-
-    // #[test]
-    // #[cfg(feature = "gpu-tests")]
-    // #[should_panic(expected = "Allocation is not a buffer")]
-    // fn test_get_mapped_ptr_on_image_panics() {
-    //     let gpu = test_gpu();
-    //     let allocator = gpu.allocator();
-
-    //     let create_info = ash::vk::ImageCreateInfo::default()
-    //         .image_type(ash::vk::ImageType::TYPE_2D)
-    //         .format(ash::vk::Format::R8G8B8A8_UNORM)
-    //         .extent(ash::vk::Extent3D { width: 64, height: 64, depth: 1 })
-    //         .mip_levels(1)
-    //         .array_layers(1)
-    //         .samples(ash::vk::SampleCountFlags::TYPE_1)
-    //         .tiling(ash::vk::ImageTiling::OPTIMAL)
-    //         .usage(ash::vk::ImageUsageFlags::COLOR_ATTACHMENT)
-    //         .sharing_mode(ash::vk::SharingMode::EXCLUSIVE);
-
-    //     let image = unsafe { gpu.device().handle.create_image(&create_info, None) }
-    //         .expect("Failed to create image");
-    //     let requirements = unsafe { gpu.device().handle.get_image_memory_requirements(image) };
-
-    //     let id = allocator
-    //         .allocate_image(image, requirements, "panic_test")
-    //         .expect("Failed to allocate image");
-
-    //     allocator.get_mapped_ptr(id).unwrap();
-    // }
 }

@@ -252,9 +252,9 @@ impl<T> Clone for TypedBuffer<T> {
 }
 #[cfg(test)]
 mod tests {
-    use {super::*, crate::test::test_gpu};
+    use {super::*, crate::test::test_gpu, assay::assay};
 
-    #[test]
+    #[assay]
     fn test_buffer_creation() {
         let gpu = test_gpu();
         let buffer = Buffer::new(
@@ -270,7 +270,7 @@ mod tests {
         assert_eq!(buffer.size(), 1024);
     }
 
-    #[test]
+    #[assay]
     fn test_typed_buffer_creation() {
         let gpu = test_gpu();
         let buffer = TypedBuffer::<u32>::new(
@@ -287,7 +287,7 @@ mod tests {
         assert_eq!(buffer.size_bytes(), 256 * 4);
     }
 
-    #[test]
+    #[assay]
     fn test_sub_allocation() {
         let gpu = test_gpu();
         let buffer = Buffer::new(
@@ -308,7 +308,7 @@ mod tests {
         assert_ne!(sub1.offset(), sub2.offset());
     }
 
-    #[test]
+    #[assay]
     fn test_buffer_write() {
         let gpu = test_gpu();
         let buffer = TypedBuffer::<u32>::staging(&gpu, 10, "write_test").unwrap();
@@ -317,7 +317,7 @@ mod tests {
         buffer.write_all(&data).unwrap();
     }
 
-    #[test]
+    #[assay]
     fn test_sub_buffer_write() {
         let gpu = test_gpu();
         let buffer = Buffer::new(
@@ -336,7 +336,7 @@ mod tests {
         sub.write_all(&data).unwrap();
     }
 
-    #[test]
+    #[assay]
     fn test_typed_buffer_convenience_methods() {
         let gpu = test_gpu();
 
@@ -346,7 +346,7 @@ mod tests {
         let _storage_buf = TypedBuffer::<u32>::storage(&gpu, 1000, "data").unwrap();
     }
 
-    #[test]
+    #[assay]
     fn test_buffer_clone() {
         let gpu = test_gpu();
         let buffer = TypedBuffer::<u32>::staging(&gpu, 10, "clone_test").unwrap();
