@@ -8,8 +8,7 @@ use {
         SamplerAddressMode, SamplerCreateInfo, SamplerMipmapMode,
     },
     derive_more::{Debug, Deref},
-    gpu_allocator::vulkan::Allocation,
-    std::{mem, sync::Arc},
+    std::sync::Arc,
 };
 
 #[derive(Clone, Debug)]
@@ -28,7 +27,7 @@ pub struct TextureInfo {
 pub struct Texture {
     #[deref]
     image: Image,
-    allocation: Arc<Allocation>,
+    allocation_id: crate::allocator::AllocationId,
     allocator: Arc<Allocator>,
     sampler: Option<Sampler>,
 }
@@ -46,8 +45,7 @@ impl Texture {
             .usage(info.flags | ImageUsageFlags::TRANSFER_DST);
         let image = unsafe { gpu.device().handle.create_image(image_info, None) }?;
         let requirements = unsafe { gpu.device().handle.get_image_memory_requirements(image) };
-        let allocation =
-            Arc::new(gpu.allocator().allocate_image(image, requirements, &info.name)?);
+        let allocation_id = gpu.allocator().allocate_image(image, requirements, &info.name)?;
 
         let handle = Image::new(
             image,
@@ -62,7 +60,7 @@ impl Texture {
         Ok(Self {
             image: handle,
             allocator: gpu.allocator().clone(),
-            allocation,
+            allocation_id,
             sampler: info.sampler.clone(),
         })
     }
@@ -78,22 +76,13 @@ impl Texture {
     pub fn format(&self) -> Format { self.image.format }
 
     pub fn aspect_flags(&self) -> ImageAspectFlags { self.image.aspect_flags }
-
-    fn destroy(&mut self) {
-        if Arc::strong_count(&self.allocation) == 1 {
-            let allocation = mem::take(&mut self.allocation);
-            if let Some(cell) = Arc::into_inner(allocation) {
-                self.allocator.deallocate(cell);
-                self.image.destroy();
-            }
-        }
+}
+impl Drop for Texture {
+    fn drop(&mut self) {
+        self.allocator.deallocate(self.allocation_id);
+        self.image.destroy();
     }
 }
-
-impl Drop for Texture {
-    fn drop(&mut self) { self.destroy(); }
-}
-
 #[derive(Clone, Debug)]
 pub struct Image {
     name: String,

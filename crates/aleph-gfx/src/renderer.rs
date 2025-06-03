@@ -7,9 +7,9 @@ use {
         Assets, MaterialHandle, MeshHandle, Scene, Vertex,
     },
     aleph_vk::{
-        sync, AccessFlags2, CommandBuffer, CommandPool, Extent2D, Fence, Format, Gpu,
-        Handle as VkHandle, ImageAspectFlags, ImageLayout, ImageUsageFlags, PipelineStageFlags2,
-        Semaphore, ShaderStageFlags, Texture, TextureInfo, TypedBuffer,
+        sync, AccessFlags2, CommandBuffer, CommandPool, DescriptorSetLayoutBinding, Extent2D,
+        Fence, Format, Gpu, Handle as VkHandle, ImageAspectFlags, ImageLayout, ImageUsageFlags,
+        PipelineStageFlags2, Semaphore, ShaderStageFlags, Texture, TextureInfo, TypedBuffer,
     },
     anyhow::Result,
     ash::vk::FenceCreateFlags,
@@ -53,7 +53,7 @@ const BIND_IDX_CONFIG: usize = 0;
 const BIND_IDX_SCENE: usize = 1;
 const BIND_IDX_MATERIAL: usize = 2;
 const BIND_IDX_TEXTURE: usize = 3;
-const N_FRAMES: usize = 2;
+const N_FRAMES: usize = 4;
 
 const LIGHTS: [Light; 4] = [
     Light {
@@ -200,12 +200,28 @@ pub struct RendererResources {
     pub binder: ResourceBinder,
 }
 
+struct RenderResource<'a, T> {
+    pub layout_binding: DescriptorSetLayoutBinding<'a>,
+    pub data: ResourceData<T>,
+}
+
+enum ResourceData<T> {
+    Buffer(TypedBuffer<u32>, T),
+    Texture(Texture, T),
+}
+
+impl<'a, T> RenderResource<'a, T> {
+    pub fn descriptor_set_layout_binding(&'a self) -> DescriptorSetLayoutBinding<'a> {
+        self.layout_binding
+    }
+}
+
 impl RendererResources {
     pub fn new(gpu: &Arc<Gpu>) -> Result<Self> {
         let scene_buffer = TypedBuffer::shared_uniform(gpu, 1, "renderer-scene")?;
         let scene_data = GpuSceneData {
             lights: LIGHTS,
-            n_lights: 1,
+            n_lights: 3,
             ..Default::default()
         };
         let config_buffer = TypedBuffer::shared_uniform(gpu, 1, "renderer-config")?;
@@ -301,16 +317,16 @@ impl Renderer {
         (0..N_FRAMES).map(|_| Frame::new(&gpu)).collect::<Vec<Frame>>()
     }
     fn update_per_frame_data(&mut self, scene: &Scene, _assets: &Assets) {
-        let view = scene.camera.view().transpose();
-        let projection = scene.camera.projection().transpose();
+        let view = scene.camera.view();
+        let projection = scene.camera.projection();
 
         self.resources.scene_data.view = view;
         self.resources.scene_data.projection = projection;
         self.resources.scene_data.vp = projection * view.inverse();
         self.resources.scene_data.camera_pos = scene.camera.position();
-        self.resources.scene_buffer.write(&[self.resources.scene_data]);
+        self.resources.scene_buffer.write(0, &[self.resources.scene_data]);
 
-        self.resources.config_buffer.write(&[self.resources.config_data]);
+        self.resources.config_buffer.write(0, &[self.resources.config_data]);
     }
 
     #[instrument(skip_all)]
@@ -350,7 +366,7 @@ impl Renderer {
 
         cmd_buffer.reset();
         cmd_buffer.begin();
-        cmd_buffer.bind_index_buffer(&self.resources.index_buffer, 0);
+        cmd_buffer.bind_index_buffer(&*self.resources.index_buffer, 0);
         cmd_buffer.bind_vertex_buffer(&self.resources.vertex_buffer, 0);
 
         cmd_buffer.pipeline_barrier(
@@ -548,8 +564,8 @@ impl Renderer {
             TypedBuffer::vertex(&self.gpu, all_vertices.len(), "shared_vertices")?;
         let mut index_buffer = TypedBuffer::index(&self.gpu, all_indices.len(), "shared_indices")?;
 
-        vertex_buffer.write(bytemuck::cast_slice(&all_vertices));
-        index_buffer.write(bytemuck::cast_slice(&all_indices));
+        vertex_buffer.write(0, bytemuck::cast_slice(&all_vertices));
+        index_buffer.write(0, bytemuck::cast_slice(&all_indices));
 
         Ok((objects, vertex_buffer, index_buffer))
     }
@@ -585,7 +601,7 @@ impl Renderer {
         self.render_objects = render_objects;
         self.resources.index_buffer = index_buffer;
         self.resources.vertex_buffer = vertex_buffer;
-        self.resources.object_data_buffer.write(&[object_data]);
+        self.resources.object_data_buffer.write(0, &[object_data]);
 
         // Update bindings
         self.resources
