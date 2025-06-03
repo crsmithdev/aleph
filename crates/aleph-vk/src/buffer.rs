@@ -6,47 +6,56 @@ use {
     },
     anyhow::Result,
     ash::vk::{BufferCreateInfo, BufferUsageFlags, SharingMode},
+    bytemuck::Pod,
     derive_more::Deref,
     gpu_allocator::MemoryLocation,
     std::sync::Arc,
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Buffer {
-    id: AllocationId,
+    handle: ash::vk::Buffer,
+    allocation: AllocationId,
     allocator: Arc<Allocator>,
     size: u64,
-    location: MemoryLocation,
-    freelist: Option<Arc<FreeList>>,
+    sub_allocations: Option<Arc<FreeList>>,
+    device: Device,
 }
 #[derive(Debug)]
 pub struct SubBuffer {
+    handle: ash::vk::Buffer,
     buffer_id: AllocationId,
     allocator: Arc<Allocator>,
-    pub(crate) freelist_id: FreeListId,
-    freelist: Arc<FreeList>,
+    sub_allocation: FreeListId,
+    sub_allocator: Arc<FreeList>,
     offset: u64,
     size: u64,
 }
 
 impl SubBuffer {
-    pub fn write<T: Copy>(&self, offset: u64, data: &[T]) -> Result<()> {
-        let absolute_offset = self.offset + offset;
-        self.allocator.write_buffer(self.buffer_id, absolute_offset, data)
-    }
+    pub fn write<T: Pod>(&self, data: &[T]) {
+        let mapped_ptr = self
+            .allocator
+            .get_mapped_ptr(self.buffer_id)
+            .unwrap_or_else(|e| panic!("Error writing to {self:?}: {e}"));
 
-    pub fn write_all<T: Copy>(&self, data: &[T]) -> Result<()> { self.write(0, data) }
+        unsafe {
+            let dst = mapped_ptr.add(self.offset as usize) as *mut T;
+            std::ptr::copy_nonoverlapping(data.as_ptr(), dst, data.len());
+        }
+    }
 
     pub fn offset(&self) -> u64 { self.offset }
 
     pub fn size(&self) -> u64 { self.size }
 
-    pub fn handle(&self) -> ash::vk::Buffer { self.allocator.get_buffer(self.buffer_id) }
+    pub fn handle(&self) -> ash::vk::Buffer { self.handle }
 }
 
 impl Drop for SubBuffer {
-    fn drop(&mut self) { self.freelist.free(self.freelist_id); }
+    fn drop(&mut self) { self.sub_allocator.free(self.sub_allocation); }
 }
+
 impl Buffer {
     pub fn new(
         device: &Device,
@@ -63,83 +72,63 @@ impl Buffer {
 
         let buffer = unsafe { device.handle.create_buffer(&create_info, None) }?;
         let requirements = unsafe { device.handle.get_buffer_memory_requirements(buffer) };
-
         let id = allocator.allocate_buffer(buffer, requirements, location, name)?;
 
         Ok(Self {
-            id,
+            handle: buffer,
+            device: device.clone(),
+            allocation: id,
             allocator: allocator.clone(),
             size,
-            location,
-            freelist: Some(FreeList::new(size)),
+            sub_allocations: Some(FreeList::new(size)),
         })
     }
 
-    pub fn sub_allocate(&self, size: u64, alignment: u64) -> Option<SubBuffer> {
-        let freelist = self.freelist.as_ref()?;
+    pub fn sub_buffer(&self, size: u64, alignment: u64) -> Option<SubBuffer> {
+        let freelist = self.sub_allocations.as_ref()?;
         let freelist_id = freelist.allocate(size, alignment)?;
         let offset = freelist.offset(freelist_id)?;
 
         Some(SubBuffer {
-            buffer_id: self.id,
+            handle: self.handle,
+            buffer_id: self.allocation,
             allocator: self.allocator.clone(),
-            freelist_id: freelist_id,
-            freelist: freelist.clone(),
+            sub_allocation: freelist_id,
+            sub_allocator: freelist.clone(),
             offset,
             size,
         })
     }
 
-    pub fn sub_free(&self, id: FreeListId) {
-        if let Some(ref freelist) = self.freelist {
+    pub fn free_sub_buffer(&self, id: FreeListId) {
+        if let Some(ref freelist) = self.sub_allocations {
             freelist.free(id);
         }
     }
 
-    pub fn sub_write<T: Copy>(&self, id: FreeListId, offset: u64, data: &[T]) -> Result<()> {
-        if let Some(ref freelist) = self.freelist {
-            if let Some(base_offset) = freelist.offset(id) {
-                let absolute_offset = base_offset + offset;
-                return self.allocator.write_buffer(self.id, absolute_offset, data);
-            }
-        }
-        panic!("Invalid sub-allocation ID: {:?}", id);
-    }
-
-    pub fn sub_offset(&self, id: FreeListId) -> Option<u64> {
-        self.freelist.as_ref().and_then(|fl| fl.offset(id))
-    }
-
-    pub fn sub_size(&self, id: FreeListId) -> Option<u64> {
-        self.freelist.as_ref().and_then(|fl| fl.size(id))
-    }
-
     pub fn write<T: Copy>(&self, offset: u64, data: &[T]) -> Result<()> {
-        self.allocator.write_buffer(self.id, offset, data)
+        let mapped_ptr = self.allocator.get_mapped_ptr(self.allocation)?;
+
+        unsafe {
+            let dst = mapped_ptr.add(offset as usize) as *mut T;
+            std::ptr::copy_nonoverlapping(data.as_ptr(), dst, data.len());
+        }
+
+        Ok(())
     }
 
-    pub fn write_all<T: Copy>(&self, data: &[T]) -> Result<()> { self.write(0, data) }
-
-    pub fn handle(&self) -> ash::vk::Buffer { self.allocator.get_buffer(self.id) }
+    pub fn handle(&self) -> ash::vk::Buffer { self.handle }
 
     pub fn size(&self) -> u64 { self.size }
 }
 
 impl Drop for Buffer {
-    fn drop(&mut self) { self.allocator.deallocate(self.id); }
-}
-
-impl Clone for Buffer {
-    fn clone(&self) -> Self {
-        Self {
-            id: self.id,
-            allocator: self.allocator.clone(),
-            size: self.size,
-            location: self.location,
-            freelist: self.freelist.clone(),
-        }
+    fn drop(&mut self) {
+        unsafe { self.device.handle.destroy_buffer(self.handle, None) };
+        self.allocator.deallocate_buffer(self.allocation);
     }
 }
+
 #[derive(Debug, Deref)]
 pub struct TypedBuffer<T> {
     #[deref]
@@ -235,9 +224,9 @@ impl<T: Copy> TypedBuffer<T> {
 
     pub fn handle(&self) -> ash::vk::Buffer { self.buffer.handle() }
 
-    pub fn size_bytes(&self) -> u64 { self.buffer.size() }
+    pub fn size(&self) -> u64 { self.buffer.size() }
 
-    pub fn count(&self) -> usize { (self.buffer.size() / std::mem::size_of::<T>() as u64) as usize }
+    pub fn len(&self) -> usize { (self.buffer.size() / std::mem::size_of::<T>() as u64) as usize }
 
     pub fn buffer(&self) -> &Buffer { &self.buffer }
 }
@@ -268,27 +257,11 @@ mod tests {
         .unwrap();
 
         assert_eq!(buffer.size(), 1024);
+        assert_ne!(buffer.handle(), ash::vk::Buffer::null());
     }
 
     #[assay]
-    fn test_typed_buffer_creation() {
-        let gpu = test_gpu();
-        let buffer = TypedBuffer::<u32>::new(
-            &gpu.device(),
-            &gpu.allocator(),
-            256,
-            BufferUsageFlags::STORAGE_BUFFER,
-            MemoryLocation::CpuToGpu,
-            "typed_test",
-        )
-        .unwrap();
-
-        assert_eq!(buffer.count(), 256);
-        assert_eq!(buffer.size_bytes(), 256 * 4);
-    }
-
-    #[assay]
-    fn test_sub_allocation() {
+    fn test_buffer_write() {
         let gpu = test_gpu();
         let buffer = Buffer::new(
             &gpu.device(),
@@ -296,25 +269,30 @@ mod tests {
             1024,
             BufferUsageFlags::STORAGE_BUFFER,
             MemoryLocation::CpuToGpu,
-            "sub_alloc_test",
+            "test_write_buffer",
         )
         .unwrap();
 
-        let sub1 = buffer.sub_allocate(256, 16).unwrap();
-        let sub2 = buffer.sub_allocate(128, 16).unwrap();
-
-        assert_eq!(sub1.size(), 256);
-        assert_eq!(sub2.size(), 128);
-        assert_ne!(sub1.offset(), sub2.offset());
+        let data = vec![1u32, 2, 3, 4];
+        buffer.write(0, &data).unwrap();
     }
 
     #[assay]
-    fn test_buffer_write() {
+    fn test_sub_buffer_allocation() {
         let gpu = test_gpu();
-        let buffer = TypedBuffer::<u32>::staging(&gpu, 10, "write_test").unwrap();
-        let data = vec![1u32, 2, 3, 4, 5];
+        let buffer = Buffer::new(
+            &gpu.device(),
+            &gpu.allocator(),
+            1024,
+            BufferUsageFlags::STORAGE_BUFFER,
+            MemoryLocation::CpuToGpu,
+            "test_parent_buffer",
+        )
+        .unwrap();
 
-        buffer.write_all(&data).unwrap();
+        let sub_buffer = buffer.sub_buffer(256, 16).unwrap();
+        assert_eq!(sub_buffer.size(), 256);
+        assert_eq!(sub_buffer.handle(), buffer.handle());
     }
 
     #[assay]
@@ -326,33 +304,75 @@ mod tests {
             1024,
             BufferUsageFlags::STORAGE_BUFFER,
             MemoryLocation::CpuToGpu,
-            "sub_write_test",
+            "test_sub_write_buffer",
         )
         .unwrap();
 
-        let sub = buffer.sub_allocate(64, 4).unwrap();
+        let sub_buffer = buffer.sub_buffer(256, 4).unwrap();
         let data = vec![42u32, 43, 44, 45];
-
-        sub.write_all(&data).unwrap();
+        sub_buffer.write(&data);
     }
 
     #[assay]
-    fn test_typed_buffer_convenience_methods() {
+    fn test_typed_buffer_vertex() {
         let gpu = test_gpu();
-
-        let _vertex_buf = TypedBuffer::<f32>::vertex(&gpu, 100, "vertices").unwrap();
-        let _index_buf = TypedBuffer::<u32>::index(&gpu, 50, "indices").unwrap();
-        let _uniform_buf = TypedBuffer::<[f32; 16]>::uniform(&gpu, 1, "mvp").unwrap();
-        let _storage_buf = TypedBuffer::<u32>::storage(&gpu, 1000, "data").unwrap();
+        let buffer: TypedBuffer<f32> = TypedBuffer::vertex(&gpu, 256, "test_vertex").unwrap();
+        assert_eq!(buffer.len(), 256);
+        assert_eq!(buffer.size(), 256 * 4);
     }
 
     #[assay]
-    fn test_buffer_clone() {
+    fn test_typed_buffer_index() {
         let gpu = test_gpu();
-        let buffer = TypedBuffer::<u32>::staging(&gpu, 10, "clone_test").unwrap();
-        let cloned = buffer.clone();
+        let buffer: TypedBuffer<u32> = TypedBuffer::index(&gpu, 100, "test_index").unwrap();
+        assert_eq!(buffer.len(), 100);
+        assert_eq!(buffer.size(), 400);
+    }
 
-        assert_eq!(buffer.count(), cloned.count());
-        assert_eq!(buffer.size_bytes(), cloned.size_bytes());
+    #[assay]
+    fn test_typed_buffer_storage() {
+        let gpu = test_gpu();
+        let buffer: TypedBuffer<u64> = TypedBuffer::storage(&gpu, 64, "test_storage").unwrap();
+        assert_eq!(buffer.len(), 64);
+        assert_eq!(buffer.size(), 512);
+    }
+
+    #[assay]
+    fn test_typed_buffer_write_all() {
+        let gpu = test_gpu();
+        let buffer: TypedBuffer<i32> = TypedBuffer::staging(&gpu, 4, "test_staging").unwrap();
+        let data = vec![-1, -2, -3, -4];
+        buffer.write_all(&data).unwrap();
+    }
+
+    #[assay]
+    fn test_typed_buffer_write_offset() {
+        let gpu = test_gpu();
+        let buffer: TypedBuffer<u16> =
+            TypedBuffer::shared_uniform(&gpu, 16, "test_uniform").unwrap();
+        let data = vec![0xDEAD, 0xBEEF];
+        buffer.write(2, &data).unwrap();
+    }
+
+    #[assay]
+    fn test_multiple_sub_buffers() {
+        let gpu = test_gpu();
+        let buffer = Buffer::new(
+            &gpu.device(),
+            &gpu.allocator(),
+            1024,
+            BufferUsageFlags::STORAGE_BUFFER,
+            MemoryLocation::CpuToGpu,
+            "test_multi_sub",
+        )
+        .unwrap();
+
+        let sub1 = buffer.sub_buffer(256, 4).unwrap();
+        let sub2 = buffer.sub_buffer(128, 4).unwrap();
+        let sub3 = buffer.sub_buffer(64, 4).unwrap();
+
+        assert_ne!(sub1.offset(), sub2.offset());
+        assert_ne!(sub2.offset(), sub3.offset());
+        assert!(sub1.offset() + sub1.size() <= buffer.size());
     }
 }

@@ -79,7 +79,7 @@ impl Texture {
 }
 impl Drop for Texture {
     fn drop(&mut self) {
-        self.allocator.deallocate(self.allocation_id);
+        self.allocator.deallocate_image(self.allocation_id);
         self.image.destroy();
     }
 }
