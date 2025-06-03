@@ -9,9 +9,15 @@ use {
 };
 
 /*
+Compare Base Color: 31
 Suzanne: 112
+Mesh Primitives 00: 281
+Texture Coordinate Test: 113
+Texture Encoding Test: 114
 BoxTextured: 14
-NormalTangentTest: 93
+NormalTangentTest: 85
+
+Material00: 207
 */
 
 const DEFAULT_SCENE: usize = 112;

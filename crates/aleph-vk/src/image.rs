@@ -106,6 +106,7 @@ pub struct Image {
     format: Format,
     usage_flags: ImageUsageFlags,
     aspect_flags: ImageAspectFlags,
+    #[debug(skip)]
     device: Device,
 }
 

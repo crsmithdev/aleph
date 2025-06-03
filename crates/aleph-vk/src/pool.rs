@@ -94,17 +94,19 @@ where
 
 impl Poolable for Buffer {
     fn new(gpu: &Gpu) -> Self {
-        Buffer::new(
+        let new = Buffer::new(
             &gpu.device(),
             &gpu.allocator(),
-            1024 * 1024 * 10,
+            1024 * 1024 * 20,
             BufferUsageFlags::TRANSFER_SRC,
             MemoryLocation::CpuToGpu,
             "staging",
         )
         .unwrap_or_else(|e| {
             panic!("Failed to create staging buffer: {:?}", e);
-        })
+        });
+        // println!("{}", new.size());
+        return new;
     }
 
     fn reset(&mut self, _gpu: &Gpu) {}

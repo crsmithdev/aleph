@@ -85,7 +85,7 @@ impl ForwardPipeline {
 
     fn draw_object(&self, cmd: &CommandBuffer, object: &RenderObject) -> Result<()> {
         let push_constants = GpuPushConstantData {
-            model: Mat4::IDENTITY,
+            model: object.transform,
             material_index: object.material as u32,
             _padding0: 0,
             _padding1: 0,

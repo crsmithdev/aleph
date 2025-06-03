@@ -4,6 +4,7 @@ use {
         AttachmentLoadOp, AttachmentStoreOp, ClearColorValue, ClearDepthStencilValue, ClearValue,
         Extent2D, Image, ImageLayout, RenderingAttachmentInfo, Viewport,
     },
+    glam::Vec3,
     image::EncodableLayout,
 };
 
@@ -75,13 +76,30 @@ pub fn rgb_to_rgba(data_rgb: &[u8], extent: Extent2D) -> Vec<u8> {
     dest.as_bytes().to_vec()
 }
 
-pub fn calculate_normals(vertices: &[Vertex], indices: &[u32]) -> Vec<glam::Vec3> {
+pub fn rg_to_rgba(data_rg: &[u8], extent: Extent2D) -> Vec<u8> {
+    let image = image::DynamicImage::ImageLumaA8(
+        image::ImageBuffer::from_raw(extent.width, extent.height, data_rg.to_vec()).expect("raw"),
+    );
+    let dest = image.to_rgba8();
+    dest.as_bytes().to_vec()
+}
+
+pub fn r_to_rgba(data_r: &[u8], extent: Extent2D) -> Vec<u8> {
+    image::DynamicImage::ImageLuma8(
+        image::ImageBuffer::from_raw(extent.width, extent.height, data_r.to_vec()).expect("raw"),
+    )
+    .to_rgba8()
+    .as_bytes()
+    .to_vec()
+}
+
+pub fn calculate_normals(vertices: &[Vec3], indices: &[u32]) -> Vec<glam::Vec3> {
     let mut normals = vec![glam::Vec3::ZERO; vertices.len()];
 
     for i in (0..indices.len()).step_by(3) {
-        let a = vertices[indices[i] as usize].position;
-        let b = vertices[indices[i + 1] as usize].position;
-        let c = vertices[indices[i + 2] as usize].position;
+        let a = vertices[indices[i] as usize];
+        let b = vertices[indices[i + 1] as usize];
+        let c = vertices[indices[i + 2] as usize];
         let ba = (b - a).normalize();
         let ca = (c - a).normalize();
         let normal = ba.cross(ca).normalize();

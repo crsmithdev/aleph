@@ -1,6 +1,6 @@
 use {
     crate::{Allocator, Device, Gpu},
-    anyhow::Result,
+    anyhow::{bail, Result},
     ash::vk::{
         Buffer as VkBuffer, BufferCreateInfo, BufferDeviceAddressInfo, BufferUsageFlags,
         DeviceAddress, Handle as _, MappedMemoryRange,
@@ -107,6 +107,10 @@ impl<T: Pod> TypedBuffer<T> {
         let type_size = mem::size_of::<T>();
         let bytes_size = (type_size * len) as u64;
 
+        println!("type: {:?}", std::any::type_name::<T>());
+        println!("type_size: {type_size}");
+        println!("bytes_size: {bytes_size}");
+        println!("len: {len}");
         let buffer = Buffer::new(
             gpu.device(),
             &gpu.allocator(),
@@ -183,6 +187,10 @@ impl Buffer {
         location: MemoryLocation,
         name: &str,
     ) -> Result<Self> {
+        if size == 0 {
+            bail!("Buffer size must be greater than 0")
+        }
+
         let name = name.to_string();
         let device = device.clone();
         let allocator = Arc::clone(&allocator);
@@ -247,6 +255,13 @@ impl Buffer {
     }
 
     pub fn write(&self, data: &[u8]) {
+        if data.len() > self.size as usize {
+            panic!(
+                "Data size ({}) exceeds buffer size ({})",
+                data.len(),
+                self.size
+            );
+        }
         let mut allocation = self.allocation.borrow_mut();
         let mapped =
             allocation.mapped_slice_mut().unwrap_or_else(|| panic!("Error mmapping buffer"));

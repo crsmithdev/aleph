@@ -90,15 +90,6 @@ impl MeshInfo {
         self.topology = topology;
         self
     }
-
-    //     if info.tangents.is_empty() {
-    //         if !calculate_tangents(&mut info) {
-    //             log::warn!("Error calculating tangents for mesh '{}'", info.name);
-    //         }
-    //     }
-    //     if info.normals.is_empty() {
-    //         info.normals = calculate_normals(&info.vertices, &info.indices);
-    //     };
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -1,6 +1,7 @@
 use {
     crate::{
         graph::{NodeData, NodeHandle},
+        mikktspace,
         model::MeshInfo,
         util, Assets, Material, MaterialHandle, MeshHandle, Node, Scene, TextureHandle,
     },
@@ -48,7 +49,13 @@ pub fn load_scene(path: &str, mut assets: &mut Assets) -> Result<Scene> {
     for gltf_node in gltf_scene.nodes() {
         load_node(gltf_node, scene.root(), &mut scene, &meshes)?;
     }
-    log::info!("Finished loading scene from {path:?}");
+    log::info!(
+        "Finished loading scene from {path:?}: {} meshes, {} materials, {} textures",
+        meshes.len(),
+        materials.len(),
+        textures.len()
+    );
+
     Ok(scene)
 }
 
@@ -169,6 +176,8 @@ fn load_texture(
     let bytes = match data.format {
         gltf::image::Format::R8G8B8A8 => data.pixels.clone(),
         gltf::image::Format::R8G8B8 => util::rgb_to_rgba(&data.pixels, extent),
+        gltf::image::Format::R8G8 => util::rg_to_rgba(&data.pixels, extent),
+        gltf::image::Format::R8 => util::r_to_rgba(&data.pixels, extent),
         _ => bail!("Unsupported image format: {:?}", data.format),
     };
     let format = match srgb {
@@ -269,6 +278,7 @@ fn load_mesh(
         let tangents = reader
             .read_tangents()
             .map_or(Vec::new(), |tangents| tangents.map(Vec4::from).collect());
+        println!("tangents[0]: {:?}", tangents.get(0));
         let colors = reader.read_colors(0).map_or(Vec::new(), |colors| {
             colors.into_rgba_f32().map(Vec4::from).collect::<Vec<_>>()
         });
@@ -290,8 +300,17 @@ fn load_mesh(
             gltf::mesh::Mode::TriangleFan => PrimitiveTopology::TRIANGLE_FAN,
         };
 
+        // if info.tangents.is_empty() {
+        //         if !calculate_tangents(&mut info) {
+        //             log::warn!("Error calculating tangents for mesh '{}'", info.name);
+        //         }
+        //     }
+        //     if info.normals.is_empty() {
+        //         info.normals = calculate_normals(&info.vertices, &info.indices);
+        //     };
+
         let name = format!("name{:02}-{:02}", mesh_index, primitive_index);
-        let info = MeshInfo {
+        let mut info = MeshInfo {
             indices,
             vertices,
             normals,
@@ -302,6 +321,16 @@ fn load_mesh(
             name,
             topology,
         };
+
+        if info.normals.is_empty() {
+            info.normals = util::calculate_normals(&info.vertices, &info.indices);
+        }
+        if info.tangents.is_empty() {
+            info.tangents = vec![Vec4::ZERO; info.vertices.len()];
+            if let false = mikktspace::calculate_tangents(&mut info) {
+                log::warn!("Error calculating tangents for mesh '{}'", info.name);
+            }
+        }
         log::debug!(
             "Loaded glTF mesh #{} primitive #{} -> {:?}",
             mesh_index,

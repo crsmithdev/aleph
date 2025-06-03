@@ -1,5 +1,5 @@
 use {
-    crate::{ForwardPipeline, Gui, Pipeline, ResourceBinder, ResourceLayout},
+    crate::{resource::U32Pack, ForwardPipeline, Gui, Pipeline, ResourceBinder, ResourceLayout},
     aleph_scene::{
         assets::{BindlessData, GpuMaterial},
         graph::NodeData,
@@ -23,23 +23,24 @@ use {
 bitflags! {
     #[derive(Clone, Copy, Debug, Default)]
     pub struct RenderFlags: u32 {
-        const DEBUG_COLOR       = 0b00000000_00000000_00000001;
-        const DEBUG_NORMALS     = 0b00000000_00000000_00000010;
-        const DEBUG_TANGENTS    = 0b00000000_00000000_00000100;
-        const DEBUG_METALLIC    = 0b00000000_00000000_00001000;
-        const DEBUG_ROUGHNESS   = 0b00000000_00000000_00010000;
-        const DEBUG_OCCLUSION   = 0b00000000_00000000_00100000;
-        const DEBUG_TEXCOORDS0  = 0b00000000_00000000_01000000;
+        const DEBUG_COLOR        = 0b00000000_00000000_00000001;
+        const DEBUG_NORMALS      = 0b00000000_00000000_00000010;
+        const DEBUG_TANGENTS     = 0b00000000_00000000_00000100;
+        const DEBUG_METALLIC     = 0b00000000_00000000_00001000;
+        const DEBUG_ROUGHNESS    = 0b00000000_00000000_00010000;
+        const DEBUG_OCCLUSION    = 0b00000000_00000000_00100000;
+        const DEBUG_TEXCOORDS0   = 0b00000000_00000000_01000000;
 
-        const DEFAULT_COLOR     = 0b00000000_00000001_00000000;
-        const DEFAULT_NORMALS   = 0b00000000_00000010_00000000;
-        const DEFAULT_TANGENTS  = 0b00000000_00000100_00000000;
-        const DEFAULT_METALLIC  = 0b00000000_00001000_00000000;
-        const DEFAULT_ROUGHNESS = 0b00000000_00010000_00000000;
-        const DEFAULT_OCCLUSION = 0b00000000_00100000_00000000;
+        const OVERRIDE_COLOR     = 0b00000000_00000001_00000000;
+        const OVERRIDE_NORMALS   = 0b00000000_00000010_00000000;
+        const OVERRIDE_TANGENTS  = 0b00000000_00000100_00000000;
+        const OVERRIDE_METALLIC  = 0b00000000_00001000_00000000;
+        const OVERRIDE_ROUGHNESS = 0b00000000_00010000_00000000;
+        const OVERRIDE_OCCLUSION = 0b00000000_00100000_00000000;
+        const OVERRIDE_LIGHTS    = 0b00000000_01000000_00000000;
 
-        const DISABLE_TEXTURES  = 0b00000001_00000000_00000000;
-        const DISABLE_LIGHTS    = 0b00000010_00000000_00000000;
+        const DISABLE_TEXTURES   = 0b00000001_00000000_00000000;
+        const DISABLE_TANGENTS   = 0b00000010_00000000_00000000;
 
     }
 }
@@ -48,9 +49,10 @@ bitflags! {
 const FORMAT_DRAW_IMAGE: Format = Format::R16G16B16A16_SFLOAT;
 const FORMAT_DEPTH_IMAGE: Format = Format::D32_SFLOAT;
 const SET_IDX_BINDLESS: usize = 0;
-const BIND_IDX_SCENE: usize = 0;
-const BIND_IDX_MATERIAL: usize = 1;
-const BIND_IDX_TEXTURE: usize = 2;
+const BIND_IDX_CONFIG: usize = 0;
+const BIND_IDX_SCENE: usize = 1;
+const BIND_IDX_MATERIAL: usize = 2;
+const BIND_IDX_TEXTURE: usize = 3;
 const N_FRAMES: usize = 2;
 
 const LIGHTS: [Light; 4] = [
@@ -93,8 +95,22 @@ pub struct GpuSceneData {
 
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
+pub struct GpuConfigData {
+    pub flags: u32,
+    pub override_metallic: f32,
+    pub override_roughness: f32,
+    pub override_occlusion: f32,
+    pub override_color: Vec4,
+    pub override_light0: Vec4,
+    pub override_light1: Vec4,
+    pub override_light2: Vec4,
+    pub override_light3: Vec4,
+}
+
+#[repr(C)]
+#[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
 pub struct GpuObjectData {
-    pub materials: [GpuMaterial; 10],
+    pub materials: [GpuMaterial; 32],
 }
 
 #[repr(C)]
@@ -175,6 +191,9 @@ pub struct RenderContext<'a> {
 #[derive(Debug)]
 pub struct RendererResources {
     pub scene_buffer: TypedBuffer<GpuSceneData>,
+    pub scene_data: GpuSceneData,
+    pub config_buffer: TypedBuffer<GpuConfigData>,
+    pub config_data: GpuConfigData,
     pub object_data_buffer: TypedBuffer<GpuObjectData>,
     pub index_buffer: TypedBuffer<u32>,
     pub vertex_buffer: TypedBuffer<Vertex>,
@@ -184,12 +203,23 @@ pub struct RendererResources {
 impl RendererResources {
     pub fn new(gpu: &Arc<Gpu>) -> Result<Self> {
         let scene_buffer = TypedBuffer::shared_uniform(gpu, 1, "renderer-scene")?;
+        let scene_data = GpuSceneData {
+            lights: LIGHTS,
+            n_lights: 1,
+            ..Default::default()
+        };
+        let config_buffer = TypedBuffer::shared_uniform(gpu, 1, "renderer-config")?;
         let object_data_buffer = TypedBuffer::shared_uniform(gpu, 1, "renderer-object")?;
         let index_buffer = TypedBuffer::index(gpu, 1, "renderer-index")?;
         let vertex_buffer = TypedBuffer::vertex(gpu, 1, "renderer-vertex")?;
+        let config_data = GpuConfigData {
+            flags: 0,
+            ..Default::default()
+        };
 
         // Create resource binder
         let binder = ResourceLayout::set(SET_IDX_BINDLESS)
+            .uniform_buffer(BIND_IDX_CONFIG, ShaderStageFlags::ALL_GRAPHICS)
             .uniform_buffer(BIND_IDX_SCENE, ShaderStageFlags::ALL_GRAPHICS)
             .uniform_buffer(BIND_IDX_MATERIAL, ShaderStageFlags::ALL_GRAPHICS)
             .texture_array(BIND_IDX_TEXTURE, ShaderStageFlags::ALL_GRAPHICS)
@@ -197,7 +227,10 @@ impl RendererResources {
 
         Ok(Self {
             scene_buffer,
+            scene_data,
+            config_buffer,
             object_data_buffer,
+            config_data,
             index_buffer,
             vertex_buffer,
             binder,
@@ -219,15 +252,12 @@ pub struct Renderer {
     last_scene_version: u64,
 
     pub draw_image: Texture,
-    // draw_extent: Extent2D,
     pub depth_image: Texture,
 
     // GPU resources
     resources: RendererResources,
 
     // Render data
-    #[debug(skip)]
-    scene_data: GpuSceneData,
     render_objects: Vec<RenderObject>,
     #[debug(skip)]
     material_map: HashMap<MaterialHandle, usize>,
@@ -235,7 +265,6 @@ pub struct Renderer {
     // State
     #[debug(skip)]
     pub gpu: Arc<Gpu>,
-    pub prepared: bool,
 }
 
 impl Renderer {
@@ -250,26 +279,12 @@ impl Renderer {
             &draw_image,
             &depth_image,
         )?;
-        let flags: RenderFlags = RenderFlags::DEBUG_COLOR
-            | RenderFlags::DEFAULT_COLOR
-            | RenderFlags::DEFAULT_NORMALS
-            | RenderFlags::DEFAULT_TANGENTS
-            | RenderFlags::DEFAULT_METALLIC
-            | RenderFlags::DEFAULT_ROUGHNESS
-            | RenderFlags::DEFAULT_OCCLUSION
-            | RenderFlags::DISABLE_TEXTURES;
-        let flags = flags.bits();
-        let scene_data = GpuSceneData {
-            lights: LIGHTS,
-            n_lights: 3,
-            ..Default::default()
-        };
+
         Ok(Self {
             gpu,
             frames,
             forward_pipeline,
             resources,
-            scene_data,
             rebuild_swapchain: false,
             frame_idx: 0,
             draw_image,
@@ -278,7 +293,6 @@ impl Renderer {
             frame_counter: 0,
             render_objects: Vec::new(),
             material_map: HashMap::new(),
-            prepared: false,
             last_scene_version: 0,
         })
     }
@@ -290,12 +304,13 @@ impl Renderer {
         let view = scene.camera.view().transpose();
         let projection = scene.camera.projection().transpose();
 
-        self.scene_data.view = view;
-        self.scene_data.projection = projection;
-        self.scene_data.vp = projection * view.inverse();
-        self.scene_data.camera_pos = scene.camera.position();
-        // self.scene_data.config = GpuConfig::from(&self.config);
-        self.resources.scene_buffer.write(&[self.scene_data]);
+        self.resources.scene_data.view = view;
+        self.resources.scene_data.projection = projection;
+        self.resources.scene_data.vp = projection * view.inverse();
+        self.resources.scene_data.camera_pos = scene.camera.position();
+        self.resources.scene_buffer.write(&[self.resources.scene_data]);
+
+        self.resources.config_buffer.write(&[self.resources.config_data]);
     }
 
     #[instrument(skip_all)]
@@ -383,7 +398,7 @@ impl Renderer {
         };
 
         self.forward_pipeline.render(&context, &cmd_buffer)?;
-        gui.draw(&context, &mut self.scene_data)?;
+        gui.draw(&context, &mut self.resources.config_data)?;
 
         cmd_buffer.pipeline_barrier(
             &[],
@@ -483,14 +498,14 @@ impl Renderer {
 
     fn create_render_objects2(
         &self,
-        transforms: &Vec<(MeshHandle, Mat4)>,
+        meshes: &Vec<(MeshHandle, Mat4)>,
         data: &BindlessData,
     ) -> Result<(Vec<RenderObject>, TypedBuffer<Vertex>, TypedBuffer<u32>)> {
         let mut objects = vec![];
         let mut all_vertices = vec![];
         let mut all_indices = vec![];
 
-        for (handle, transform) in transforms.iter() {
+        for (handle, transform) in meshes.iter() {
             let index = data.mesh_map.get(handle).unwrap();
             let mesh = data.meshes.get(*index).unwrap();
 
@@ -503,7 +518,7 @@ impl Renderer {
                 .map(|i| Vertex {
                     position: mesh.vertices[i],
                     normal: *mesh.normals.get(i).unwrap_or(&Vec3::ONE),
-                    tangent: *mesh.tangents.get(i).unwrap_or(&Vec4::ONE),
+                    tangent: *mesh.tangents.get(i).unwrap_or(&Vec4::ZERO),
                     color: *mesh.colors.get(i).unwrap_or(&Vec4::ONE),
                     uv_x: mesh.tex_coords0.get(i).unwrap_or(&Vec2::ZERO)[0],
                     uv_y: mesh.tex_coords0.get(i).unwrap_or(&Vec2::ZERO)[1],
@@ -547,7 +562,7 @@ impl Renderer {
         let bindless_data = assets.prepare_bindless(cmd)?;
 
         // Prepare materials
-        let mut materials_arr = [GpuMaterial::default(); 10];
+        let mut materials_arr = [GpuMaterial::default(); 32];
         for (i, material) in bindless_data.materials.iter().enumerate() {
             materials_arr[i] = *material;
         }
@@ -575,6 +590,7 @@ impl Renderer {
         // Update bindings
         self.resources
             .binder
+            .uniform_buffer(BIND_IDX_CONFIG, &self.resources.config_buffer, 0)
             .uniform_buffer(BIND_IDX_SCENE, &self.resources.scene_buffer, 0)
             .uniform_buffer(BIND_IDX_MATERIAL, &self.resources.object_data_buffer, 0)
             .texture_array(

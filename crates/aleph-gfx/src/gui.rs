@@ -1,17 +1,15 @@
 use {
-    crate::{GpuSceneData, RenderContext, RenderFlags},
+    crate::{renderer::GpuConfigData, RenderContext, RenderFlags},
     aleph_core::{
         events::GuiEvent,
         system::{Resources, Scheduler},
         Layer, Window,
     },
-    aleph_scene::{model::Light, util},
+    aleph_scene::util,
     aleph_vk::{AttachmentLoadOp, AttachmentStoreOp, CommandPool, Extent2D, Format, Gpu},
     anyhow::Result,
     derive_more::Debug,
-    egui, egui_ash_renderer as egui_renderer, egui_extras, egui_winit,
-    glam::Vec4,
-    gpu_allocator as ga,
+    egui, egui_ash_renderer as egui_renderer, egui_extras, egui_winit, gpu_allocator as ga,
     std::sync::{Arc, Mutex},
 };
 
@@ -93,7 +91,7 @@ impl Gui {
         Ok(gui)
     }
 
-    pub fn draw(&mut self, ctx: &RenderContext, scene_data: &mut GpuSceneData) -> Result<()> {
+    pub fn draw(&mut self, ctx: &RenderContext, config: &mut GpuConfigData) -> Result<()> {
         let color_attachments = &[util::color_attachment(
             ctx.draw_image,
             AttachmentLoadOp::LOAD,
@@ -119,7 +117,7 @@ impl Gui {
             shapes,
             pixels_per_point,
             ..
-        } = self.ctx.run(raw_input, |ctx| build_ui(ctx, scene_data));
+        } = self.ctx.run(raw_input, |ctx| build_ui(ctx, config));
 
         self.state.handle_platform_output(&self.window, platform_output);
 
@@ -161,13 +159,18 @@ impl Gui {
     }
 }
 
-fn build_ui(ctx: &egui::Context, scene: &mut GpuSceneData) {
+fn build_ui(ctx: &egui::Context, config: &mut GpuConfigData) {
     egui::Window::new("Shader Config")
         .max_width(350.)
         .default_width(350.)
         .resizable(false)
         .show(ctx, |ui| {
-            let flags = &mut scene.flags;
+            let flags = &mut config.flags;
+            ui.heading("Disable");
+            ui.horizontal(|ui| {
+                checkbox(ui, flags, RenderFlags::DISABLE_TEXTURES, "Textures");
+                checkbox(ui, flags, RenderFlags::DISABLE_TANGENTS, "Tangents");
+            });
             ui.heading("Debug");
             ui.horizontal(|ui| {
                 checkbox(ui, flags, RenderFlags::DEBUG_COLOR, "Color");
@@ -180,16 +183,82 @@ fn build_ui(ctx: &egui::Context, scene: &mut GpuSceneData) {
                 checkbox(ui, flags, RenderFlags::DEBUG_OCCLUSION, "Occlusion");
                 checkbox(ui, flags, RenderFlags::DEBUG_TEXCOORDS0, "TexCoords0");
             });
-            ui.heading("Default");
+            ui.heading("Override");
             ui.horizontal(|ui| {
-                checkbox(ui, flags, RenderFlags::DEFAULT_COLOR, "Color");
-                checkbox(ui, flags, RenderFlags::DEFAULT_NORMALS, "Normals");
-                checkbox(ui, flags, RenderFlags::DEFAULT_TANGENTS, "Tangents");
-                checkbox(ui, flags, RenderFlags::DEFAULT_METALLIC, "Metallic");
+                checkbox(ui, flags, RenderFlags::OVERRIDE_COLOR, "Color");
+                ui.add(
+                    egui::DragValue::new(&mut config.override_color.x)
+                        .speed(0.01)
+                        .range(0.0..=1.0)
+                        .prefix("R: "),
+                );
+                ui.add(
+                    egui::DragValue::new(&mut config.override_color.y)
+                        .speed(0.01)
+                        .range(0.0..=1.0)
+                        .prefix("G: "),
+                );
+                ui.add(
+                    egui::DragValue::new(&mut config.override_color.z)
+                        .speed(0.01)
+                        .range(0.0..=1.0)
+                        .prefix("B: "),
+                );
             });
             ui.horizontal(|ui| {
-                checkbox(ui, flags, RenderFlags::DEFAULT_ROUGHNESS, "Roughness");
-                checkbox(ui, flags, RenderFlags::DEFAULT_OCCLUSION, "Occlusion");
+                checkbox(ui, flags, RenderFlags::OVERRIDE_METALLIC, "Metallic");
+                ui.add(
+                    egui::DragValue::new(&mut config.override_metallic)
+                        .speed(0.01)
+                        .range(0.0..=1.0)
+                        .prefix("V: "),
+                );
+            });
+            ui.horizontal(|ui| {
+                checkbox(ui, flags, RenderFlags::OVERRIDE_ROUGHNESS, "Roughness");
+                ui.add(
+                    egui::DragValue::new(&mut config.override_roughness)
+                        .speed(0.01)
+                        .range(0.0..=1.0)
+                        .prefix("V: "),
+                );
+            });
+            ui.horizontal(|ui| {
+                checkbox(ui, flags, RenderFlags::OVERRIDE_OCCLUSION, "Occlusion");
+                ui.add(
+                    egui::DragValue::new(&mut config.override_occlusion)
+                        .speed(0.01)
+                        .range(0.0..=1.0)
+                        .prefix("V: "),
+                );
+            });
+            ui.heading("Lights");
+            ui.horizontal(|ui| {
+                checkbox(ui, flags, RenderFlags::OVERRIDE_LIGHTS, "Lights");
+                ui.add(
+                    egui::DragValue::new(&mut config.override_light0.x)
+                        .speed(0.01)
+                        .range(0.0..=255.0)
+                        .prefix("R: "),
+                );
+                ui.add(
+                    egui::DragValue::new(&mut config.override_light0.y)
+                        .speed(0.01)
+                        .range(0.0..=255.0)
+                        .prefix("G: "),
+                );
+                ui.add(
+                    egui::DragValue::new(&mut config.override_light0.z)
+                        .speed(0.01)
+                        .range(0.0..=2551.0)
+                        .prefix("B: "),
+                );
+                ui.add(
+                    egui::DragValue::new(&mut config.override_light0.w)
+                        .speed(0.01)
+                        .range(0.0..=255.0)
+                        .prefix("A: "),
+                );
             });
         });
 }
