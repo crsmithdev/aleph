@@ -1,5 +1,9 @@
 use {
-    crate::{allocator::AllocationId, Allocator, Device, Gpu},
+    crate::{
+        allocator::AllocationId,
+        freelist::{FreeList, FreeListId},
+        Allocator, Device, Gpu,
+    },
     anyhow::Result,
     ash::vk::{BufferCreateInfo, BufferUsageFlags, SharingMode},
     derive_more::Deref,
@@ -13,8 +17,36 @@ pub struct Buffer {
     allocator: Arc<Allocator>,
     size: u64,
     location: MemoryLocation,
+    freelist: Option<Arc<FreeList>>,
+}
+#[derive(Debug)]
+pub struct SubBuffer {
+    buffer_id: AllocationId,
+    allocator: Arc<Allocator>,
+    pub(crate) freelist_id: FreeListId,
+    freelist: Arc<FreeList>,
+    offset: u64,
+    size: u64,
 }
 
+impl SubBuffer {
+    pub fn write<T: Copy>(&self, offset: u64, data: &[T]) -> Result<()> {
+        let absolute_offset = self.offset + offset;
+        self.allocator.write_buffer(self.buffer_id, absolute_offset, data)
+    }
+
+    pub fn write_all<T: Copy>(&self, data: &[T]) -> Result<()> { self.write(0, data) }
+
+    pub fn offset(&self) -> u64 { self.offset }
+
+    pub fn size(&self) -> u64 { self.size }
+
+    pub fn handle(&self) -> ash::vk::Buffer { self.allocator.get_buffer(self.buffer_id) }
+}
+
+impl Drop for SubBuffer {
+    fn drop(&mut self) { self.freelist.free(self.freelist_id); }
+}
 impl Buffer {
     pub fn new(
         device: &Device,
@@ -39,7 +71,47 @@ impl Buffer {
             allocator: allocator.clone(),
             size,
             location,
+            freelist: Some(FreeList::new(size)),
         })
+    }
+
+    pub fn sub_allocate(&self, size: u64, alignment: u64) -> Option<SubBuffer> {
+        let freelist = self.freelist.as_ref()?;
+        let freelist_id = freelist.allocate(size, alignment)?;
+        let offset = freelist.offset(freelist_id)?;
+
+        Some(SubBuffer {
+            buffer_id: self.id,
+            allocator: self.allocator.clone(),
+            freelist_id: freelist_id,
+            freelist: freelist.clone(),
+            offset,
+            size,
+        })
+    }
+
+    pub fn sub_free(&self, id: FreeListId) {
+        if let Some(ref freelist) = self.freelist {
+            freelist.free(id);
+        }
+    }
+
+    pub fn sub_write<T: Copy>(&self, id: FreeListId, offset: u64, data: &[T]) -> Result<()> {
+        if let Some(ref freelist) = self.freelist {
+            if let Some(base_offset) = freelist.offset(id) {
+                let absolute_offset = base_offset + offset;
+                return self.allocator.write_buffer(self.id, absolute_offset, data);
+            }
+        }
+        panic!("Invalid sub-allocation ID: {:?}", id);
+    }
+
+    pub fn sub_offset(&self, id: FreeListId) -> Option<u64> {
+        self.freelist.as_ref().and_then(|fl| fl.offset(id))
+    }
+
+    pub fn sub_size(&self, id: FreeListId) -> Option<u64> {
+        self.freelist.as_ref().and_then(|fl| fl.size(id))
     }
 
     pub fn write<T: Copy>(&self, offset: u64, data: &[T]) -> Result<()> {
@@ -52,6 +124,7 @@ impl Buffer {
 
     pub fn size(&self) -> u64 { self.size }
 }
+
 impl Drop for Buffer {
     fn drop(&mut self) { self.allocator.deallocate(self.id); }
 }
@@ -63,6 +136,7 @@ impl Clone for Buffer {
             allocator: self.allocator.clone(),
             size: self.size,
             location: self.location,
+            freelist: self.freelist.clone(),
         }
     }
 }
@@ -181,56 +255,104 @@ mod tests {
     use {super::*, crate::test::test_gpu};
 
     #[test]
-    #[cfg(feature = "gpu-tests")]
     fn test_buffer_creation() {
         let gpu = test_gpu();
         let buffer = Buffer::new(
-            gpu.device(),
+            &gpu.device(),
             &gpu.allocator(),
             1024,
-            BufferUsageFlags::VERTEX_BUFFER,
-            MemoryLocation::CpuToGpu,
+            BufferUsageFlags::STORAGE_BUFFER,
+            MemoryLocation::GpuOnly,
             "test_buffer",
         )
-        .expect("Failed to create buffer");
+        .unwrap();
 
         assert_eq!(buffer.size(), 1024);
     }
 
     #[test]
-    #[cfg(feature = "gpu-tests")]
-    fn test_buffer_write() {
+    fn test_typed_buffer_creation() {
         let gpu = test_gpu();
-        let buffer = Buffer::new(
-            gpu.device(),
-            &gpu.allocator(),
-            64,
-            BufferUsageFlags::UNIFORM_BUFFER,
-            MemoryLocation::CpuToGpu,
-            "test_write_buffer",
-        )
-        .expect("Failed to create buffer");
-
-        let data: [u32; 4] = [1, 2, 3, 4];
-        buffer.write_all(&data).expect("Failed to write buffer");
-    }
-
-    #[test]
-    #[cfg(feature = "gpu-tests")]
-    fn test_buffer_clone() {
-        let gpu = test_gpu();
-        let buffer1 = Buffer::new(
-            gpu.device(),
+        let buffer = TypedBuffer::<u32>::new(
+            &gpu.device(),
             &gpu.allocator(),
             256,
             BufferUsageFlags::STORAGE_BUFFER,
             MemoryLocation::CpuToGpu,
-            "test_clone_buffer",
+            "typed_test",
         )
-        .expect("Failed to create buffer");
+        .unwrap();
 
-        let buffer2 = buffer1.clone();
-        assert_eq!(buffer1.handle(), buffer2.handle());
-        assert_eq!(buffer1.size(), buffer2.size());
+        assert_eq!(buffer.count(), 256);
+        assert_eq!(buffer.size_bytes(), 256 * 4);
+    }
+
+    #[test]
+    fn test_sub_allocation() {
+        let gpu = test_gpu();
+        let buffer = Buffer::new(
+            &gpu.device(),
+            &gpu.allocator(),
+            1024,
+            BufferUsageFlags::STORAGE_BUFFER,
+            MemoryLocation::CpuToGpu,
+            "sub_alloc_test",
+        )
+        .unwrap();
+
+        let sub1 = buffer.sub_allocate(256, 16).unwrap();
+        let sub2 = buffer.sub_allocate(128, 16).unwrap();
+
+        assert_eq!(sub1.size(), 256);
+        assert_eq!(sub2.size(), 128);
+        assert_ne!(sub1.offset(), sub2.offset());
+    }
+
+    #[test]
+    fn test_buffer_write() {
+        let gpu = test_gpu();
+        let buffer = TypedBuffer::<u32>::staging(&gpu, 10, "write_test").unwrap();
+        let data = vec![1u32, 2, 3, 4, 5];
+
+        buffer.write_all(&data).unwrap();
+    }
+
+    #[test]
+    fn test_sub_buffer_write() {
+        let gpu = test_gpu();
+        let buffer = Buffer::new(
+            &gpu.device(),
+            &gpu.allocator(),
+            1024,
+            BufferUsageFlags::STORAGE_BUFFER,
+            MemoryLocation::CpuToGpu,
+            "sub_write_test",
+        )
+        .unwrap();
+
+        let sub = buffer.sub_allocate(64, 4).unwrap();
+        let data = vec![42u32, 43, 44, 45];
+
+        sub.write_all(&data).unwrap();
+    }
+
+    #[test]
+    fn test_typed_buffer_convenience_methods() {
+        let gpu = test_gpu();
+
+        let _vertex_buf = TypedBuffer::<f32>::vertex(&gpu, 100, "vertices").unwrap();
+        let _index_buf = TypedBuffer::<u32>::index(&gpu, 50, "indices").unwrap();
+        let _uniform_buf = TypedBuffer::<[f32; 16]>::uniform(&gpu, 1, "mvp").unwrap();
+        let _storage_buf = TypedBuffer::<u32>::storage(&gpu, 1000, "data").unwrap();
+    }
+
+    #[test]
+    fn test_buffer_clone() {
+        let gpu = test_gpu();
+        let buffer = TypedBuffer::<u32>::staging(&gpu, 10, "clone_test").unwrap();
+        let cloned = buffer.clone();
+
+        assert_eq!(buffer.count(), cloned.count());
+        assert_eq!(buffer.size_bytes(), cloned.size_bytes());
     }
 }

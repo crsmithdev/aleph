@@ -3,6 +3,7 @@ pub mod buffer;
 pub mod command;
 pub mod debug;
 pub mod device;
+pub mod freelist;
 pub mod gpu;
 pub mod image;
 pub mod instance;
