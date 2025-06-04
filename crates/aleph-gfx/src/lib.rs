@@ -4,7 +4,6 @@ mod layer;
 mod pipeline;
 mod renderer;
 mod resource;
-mod resources2;
 
 pub use {
     forward::ForwardPipeline,

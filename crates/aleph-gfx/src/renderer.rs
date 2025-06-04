@@ -324,9 +324,9 @@ impl Renderer {
         self.resources.scene_data.projection = projection;
         self.resources.scene_data.vp = projection * view.inverse();
         self.resources.scene_data.camera_pos = scene.camera.position();
-        self.resources.scene_buffer.write(0, &[self.resources.scene_data]);
+        self.resources.scene_buffer.write(&[self.resources.scene_data]);
 
-        self.resources.config_buffer.write(0, &[self.resources.config_data]);
+        self.resources.config_buffer.write(&[self.resources.config_data]);
     }
 
     #[instrument(skip_all)]
@@ -560,12 +560,11 @@ impl Renderer {
         }
 
         // Create and populate buffers
-        let vertex_buffer =
-            TypedBuffer::vertex(&self.gpu, all_vertices.len(), "shared_vertices")?;
+        let vertex_buffer = TypedBuffer::vertex(&self.gpu, all_vertices.len(), "shared_vertices")?;
         let index_buffer = TypedBuffer::index(&self.gpu, all_indices.len(), "shared_indices")?;
 
-        vertex_buffer.write(0, bytemuck::cast_slice(&all_vertices));
-        index_buffer.write(0, bytemuck::cast_slice(&all_indices));
+        vertex_buffer.write(bytemuck::cast_slice(&all_vertices));
+        index_buffer.write(bytemuck::cast_slice(&all_indices));
 
         Ok((objects, vertex_buffer, index_buffer))
     }
@@ -601,7 +600,7 @@ impl Renderer {
         self.render_objects = render_objects;
         self.resources.index_buffer = index_buffer;
         self.resources.vertex_buffer = vertex_buffer;
-        self.resources.object_data_buffer.write(0, &[object_data]);
+        self.resources.object_data_buffer.write(&[object_data]);
 
         // Update bindings
         self.resources

@@ -216,7 +216,9 @@ impl<T: Copy> TypedBuffer<T> {
         })
     }
 
-    pub fn write(&self, offset: usize, data: &[T]) {
+    pub fn write(&self, data: &[T]) { self.buffer.write(0, data); }
+
+    pub fn write_offset(&self, offset: usize, data: &[T]) {
         let byte_offset = (offset * std::mem::size_of::<T>()) as u64;
         self.buffer.write(byte_offset, data);
     }
@@ -342,7 +344,7 @@ mod tests {
         let buffer: TypedBuffer<u16> =
             TypedBuffer::shared_uniform(&gpu, 16, "test_uniform").unwrap();
         let data = vec![0xDEAD, 0xBEEF];
-        buffer.write(2, &data);
+        buffer.write_offset(2, &data);
     }
 
     #[assay]
