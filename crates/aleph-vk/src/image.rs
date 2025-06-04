@@ -27,7 +27,7 @@ pub struct TextureInfo {
 pub struct Texture {
     #[deref]
     image: Image,
-    allocation_id: crate::allocator::AllocationId,
+    allocation_id: crate::allocator::AllocationHandle,
     allocator: Arc<Allocator>,
     sampler: Option<Sampler>,
 }

@@ -4,7 +4,6 @@ use {
     bytemuck::{Pod, Zeroable},
     derive_more::Debug,
     glam::{Vec2, Vec3, Vec4},
-    petgraph::algo::k_shortest_path,
 };
 
 #[repr(C)]
@@ -31,7 +30,7 @@ impl Vertex {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct MeshInfo {
     pub name: String,
     #[debug("{}", vertices.len())]

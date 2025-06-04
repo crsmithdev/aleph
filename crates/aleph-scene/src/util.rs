@@ -1,5 +1,4 @@
 use {
-    crate::Vertex,
     aleph_vk::{
         AttachmentLoadOp, AttachmentStoreOp, ClearColorValue, ClearDepthStencilValue, ClearValue,
         Extent2D, Image, ImageLayout, RenderingAttachmentInfo, Viewport,

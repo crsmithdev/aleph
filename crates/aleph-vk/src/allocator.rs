@@ -20,12 +20,12 @@ use {
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct AllocationId(u64);
+pub struct AllocationHandle(u64);
 
 #[derive(Debug)]
 pub struct Allocator {
     inner: Arc<Mutex<GpuAllocator>>,
-    entries: Arc<Mutex<HashMap<AllocationId, Allocation>>>,
+    entries: Arc<Mutex<HashMap<AllocationHandle, Allocation>>>,
     device: Device,
 }
 
@@ -47,10 +47,10 @@ impl Allocator {
         })
     }
 
-    fn next_id() -> AllocationId {
+    fn next_id() -> AllocationHandle {
         static COUNTER: AtomicU64 = AtomicU64::new(0);
         let id = COUNTER.fetch_add(1, Ordering::Relaxed);
-        AllocationId(id)
+        AllocationHandle(id)
     }
 
     pub fn allocate_buffer(
@@ -59,7 +59,7 @@ impl Allocator {
         requirements: MemoryRequirements,
         location: MemoryLocation,
         label: impl Into<String>,
-    ) -> Result<AllocationId> {
+    ) -> Result<AllocationHandle> {
         let allocation = {
             let mut allocator = self.inner.lock().expect("Could not acquire lock on allocator");
             allocator.allocate(&AllocationCreateDesc {
@@ -87,7 +87,7 @@ impl Allocator {
         image: VkImage,
         requirements: MemoryRequirements,
         label: &str,
-    ) -> Result<AllocationId> {
+    ) -> Result<AllocationHandle> {
         let allocation = {
             let mut allocator = self.inner.lock().expect("Failed to acquire allocator lock");
             allocator.allocate(&AllocationCreateDesc {
@@ -108,7 +108,7 @@ impl Allocator {
         Ok(id)
     }
 
-    pub fn deallocate_buffer(&self, id: AllocationId) {
+    pub fn deallocate_buffer(&self, id: AllocationHandle) {
         if let Some(allocation) =
             self.entries.lock().expect("Failed to acquire entries lock").remove(&id)
         {
@@ -117,7 +117,7 @@ impl Allocator {
         }
     }
 
-    pub fn deallocate_image(&self, id: AllocationId) {
+    pub fn deallocate_image(&self, id: AllocationHandle) {
         if let Some(allocation) =
             self.entries.lock().expect("Failed to acquire entries lock").remove(&id)
         {
@@ -126,7 +126,7 @@ impl Allocator {
         }
     }
 
-    pub(crate) fn get_mapped_ptr(&self, id: AllocationId) -> Result<*mut u8> {
+    pub(crate) fn get_mapped_ptr(&self, id: AllocationHandle) -> Result<*mut u8> {
         let entries = self.entries.lock().expect("Failed to acquire entries lock");
         let entry = entries.get(&id).expect("Invalid allocation ID");
 

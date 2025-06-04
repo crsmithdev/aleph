@@ -1,5 +1,5 @@
 use {
-    crate::{resource::U32Pack, ForwardPipeline, Gui, Pipeline, ResourceBinder, ResourceLayout},
+    crate::{ForwardPipeline, Gui, Pipeline, ResourceBinder, ResourceLayout},
     aleph_scene::{
         assets::{BindlessData, GpuMaterial},
         graph::NodeData,
@@ -560,9 +560,9 @@ impl Renderer {
         }
 
         // Create and populate buffers
-        let mut vertex_buffer =
+        let vertex_buffer =
             TypedBuffer::vertex(&self.gpu, all_vertices.len(), "shared_vertices")?;
-        let mut index_buffer = TypedBuffer::index(&self.gpu, all_indices.len(), "shared_indices")?;
+        let index_buffer = TypedBuffer::index(&self.gpu, all_indices.len(), "shared_indices")?;
 
         vertex_buffer.write(0, bytemuck::cast_slice(&all_vertices));
         index_buffer.write(0, bytemuck::cast_slice(&all_indices));

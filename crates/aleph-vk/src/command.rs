@@ -384,6 +384,18 @@ impl CommandBuffer {
             );
         };
     }
+
+    pub fn copy_buffer_to_image_region(&self, src: &Buffer, dst: &Image, region: &BufferImageCopy) {
+        unsafe {
+            self.device.handle.cmd_copy_buffer_to_image(
+                self.handle(),
+                src.handle(),
+                dst.handle(),
+                ImageLayout::TRANSFER_DST_OPTIMAL,
+                std::slice::from_ref(region),
+            );
+        }
+    }
 }
 
 impl Drop for CommandBuffer {

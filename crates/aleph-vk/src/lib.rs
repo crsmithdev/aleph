@@ -26,30 +26,31 @@ pub use {
         swapchain::{Surface, Swapchain, SwapchainInfo},
     },
     ash::vk::{
-        AccessFlags2, AttachmentLoadOp, AttachmentStoreOp, ClearColorValue, ClearDepthStencilValue,
-        ClearValue, ColorComponentFlags, CommandBufferSubmitInfo, CompareOp, CullModeFlags,
-        DescriptorBindingFlags, DescriptorBufferInfo, DescriptorImageInfo, DescriptorPool,
-        DescriptorPoolCreateFlags, DescriptorPoolSize, DescriptorSet, DescriptorSetLayout,
-        DescriptorSetLayoutBinding, DescriptorSetLayoutBindingFlagsCreateInfo,
-        DescriptorSetLayoutCreateFlags, DescriptorType, DeviceAddress, DynamicState, Extent2D,
-        Extent3D, Fence, Filter, Format, FrontFace, GraphicsPipelineCreateInfo, Handle,
-        ImageAspectFlags, ImageLayout, ImageUsageFlags, MappedMemoryRange, MemoryRequirements,
-        Pipeline as VkPipeline, PipelineBindPoint, PipelineColorBlendAttachmentState,
-        PipelineColorBlendStateCreateInfo, PipelineDepthStencilStateCreateFlags,
-        PipelineDepthStencilStateCreateInfo, PipelineDynamicStateCreateInfo,
-        PipelineInputAssemblyStateCreateInfo, PipelineLayout, PipelineMultisampleStateCreateInfo,
-        PipelineRasterizationStateCreateInfo, PipelineRenderingCreateInfo,
-        PipelineShaderStageCreateInfo, PipelineStageFlags2, PipelineTessellationStateCreateInfo,
-        PipelineVertexInputStateCreateInfo, PipelineViewportStateCreateInfo, PolygonMode,
-        PrimitiveTopology, PushConstantRange, Rect2D, RenderingAttachmentInfo, SampleCountFlags,
-        SamplerAddressMode, SamplerMipmapMode, Semaphore, SemaphoreSubmitInfo, ShaderModule,
-        ShaderStageFlags, StencilOpState, SubmitInfo2, VertexInputAttributeDescription,
-        VertexInputBindingDescription, Viewport, WriteDescriptorSet,
+        AccessFlags2, AttachmentLoadOp, AttachmentStoreOp, BufferImageCopy, BufferUsageFlags,
+        ClearColorValue, ClearDepthStencilValue, ClearValue, ColorComponentFlags,
+        CommandBufferSubmitInfo, CompareOp, CullModeFlags, DescriptorBindingFlags,
+        DescriptorBufferInfo, DescriptorImageInfo, DescriptorPool, DescriptorPoolCreateFlags,
+        DescriptorPoolSize, DescriptorSet, DescriptorSetLayout, DescriptorSetLayoutBinding,
+        DescriptorSetLayoutBindingFlagsCreateInfo, DescriptorSetLayoutCreateFlags, DescriptorType,
+        DeviceAddress, DynamicState, Extent2D, Extent3D, Fence, Filter, Format, FrontFace,
+        GraphicsPipelineCreateInfo, Handle, ImageAspectFlags, ImageLayout, ImageSubresourceLayers,
+        ImageUsageFlags, MappedMemoryRange, MemoryRequirements, Offset3D, Pipeline as VkPipeline,
+        PipelineBindPoint, PipelineColorBlendAttachmentState, PipelineColorBlendStateCreateInfo,
+        PipelineDepthStencilStateCreateFlags, PipelineDepthStencilStateCreateInfo,
+        PipelineDynamicStateCreateInfo, PipelineInputAssemblyStateCreateInfo, PipelineLayout,
+        PipelineMultisampleStateCreateInfo, PipelineRasterizationStateCreateInfo,
+        PipelineRenderingCreateInfo, PipelineShaderStageCreateInfo, PipelineStageFlags2,
+        PipelineTessellationStateCreateInfo, PipelineVertexInputStateCreateInfo,
+        PipelineViewportStateCreateInfo, PolygonMode, PrimitiveTopology, PushConstantRange, Rect2D,
+        RenderingAttachmentInfo, SampleCountFlags, SamplerAddressMode, SamplerMipmapMode,
+        Semaphore, SemaphoreSubmitInfo, ShaderModule, ShaderStageFlags, StencilOpState,
+        SubmitInfo2, VertexInputAttributeDescription, VertexInputBindingDescription, Viewport,
+        WriteDescriptorSet,
     },
 };
 
 pub mod test {
-    use std::sync::{Arc, LazyLock, Mutex, MutexGuard, PoisonError};
+    use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 
     static TEST_GPU: LazyLock<Arc<Mutex<crate::gpu::Gpu>>> = LazyLock::new(|| {
         Arc::new(Mutex::new(
@@ -67,13 +68,5 @@ pub mod test {
                 }
             }
         }
-    }
-
-    pub fn with_test_gpu<F, R>(f: F) -> R
-    where
-        F: FnOnce(&crate::gpu::Gpu) -> R,
-    {
-        let gpu = test_gpu();
-        f(&*gpu)
     }
 }

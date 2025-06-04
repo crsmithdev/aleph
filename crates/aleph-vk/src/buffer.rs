@@ -1,6 +1,6 @@
 use {
     crate::{
-        allocator::AllocationId,
+        allocator::AllocationHandle as AllocationId,
         freelist::{FreeList, FreeListId},
         Allocator, Device, Gpu,
     },
@@ -106,15 +106,16 @@ impl Buffer {
         }
     }
 
-    pub fn write<T: Copy>(&self, offset: u64, data: &[T]) -> Result<()> {
-        let mapped_ptr = self.allocator.get_mapped_ptr(self.allocation)?;
+    pub fn write<T: Copy>(&self, offset: u64, data: &[T]) {
+        let mapped_ptr = self
+            .allocator
+            .get_mapped_ptr(self.allocation)
+            .unwrap_or_else(|e| panic!("Error writing to buffer {self:?}: {e}"));
 
         unsafe {
             let dst = mapped_ptr.add(offset as usize) as *mut T;
             std::ptr::copy_nonoverlapping(data.as_ptr(), dst, data.len());
         }
-
-        Ok(())
     }
 
     pub fn handle(&self) -> ash::vk::Buffer { self.handle }
@@ -215,12 +216,10 @@ impl<T: Copy> TypedBuffer<T> {
         })
     }
 
-    pub fn write(&self, offset: usize, data: &[T]) -> Result<()> {
+    pub fn write(&self, offset: usize, data: &[T]) {
         let byte_offset = (offset * std::mem::size_of::<T>()) as u64;
-        self.buffer.write(byte_offset, data)
+        self.buffer.write(byte_offset, data);
     }
-
-    pub fn write_all(&self, data: &[T]) -> Result<()> { self.write(0, data) }
 
     pub fn handle(&self) -> ash::vk::Buffer { self.buffer.handle() }
 
@@ -274,7 +273,7 @@ mod tests {
         .unwrap();
 
         let data = vec![1u32, 2, 3, 4];
-        buffer.write(0, &data).unwrap();
+        buffer.write(0, &data);
     }
 
     #[assay]
@@ -338,20 +337,12 @@ mod tests {
     }
 
     #[assay]
-    fn test_typed_buffer_write_all() {
-        let gpu = test_gpu();
-        let buffer: TypedBuffer<i32> = TypedBuffer::staging(&gpu, 4, "test_staging").unwrap();
-        let data = vec![-1, -2, -3, -4];
-        buffer.write_all(&data).unwrap();
-    }
-
-    #[assay]
     fn test_typed_buffer_write_offset() {
         let gpu = test_gpu();
         let buffer: TypedBuffer<u16> =
             TypedBuffer::shared_uniform(&gpu, 16, "test_uniform").unwrap();
         let data = vec![0xDEAD, 0xBEEF];
-        buffer.write(2, &data).unwrap();
+        buffer.write(2, &data);
     }
 
     #[assay]
