@@ -1,5 +1,5 @@
 use {
-    crate::{allocator::AllocationHandle, Allocator, Device, Extent2D, Gpu},
+    crate::{Allocator, Device, Extent2D, Gpu},
     anyhow::Result,
     ash::vk::{
         ComponentMapping, Filter, Format, Handle, Image as VkImage, ImageAspectFlags,
@@ -8,8 +8,7 @@ use {
         SamplerAddressMode, SamplerCreateInfo, SamplerMipmapMode,
     },
     derive_more::{Debug, Deref},
-    gpu_allocator::vulkan::Allocation,
-    std::{mem, sync::Arc},
+    std::sync::Arc,
 };
 
 #[derive(Clone, Debug)]
@@ -28,7 +27,7 @@ pub struct TextureInfo {
 pub struct Texture {
     #[deref]
     image: Image,
-    allocation: AllocationHandle,
+    allocation_id: crate::allocator::AllocationHandle,
     allocator: Arc<Allocator>,
     sampler: Option<Sampler>,
 }
@@ -46,7 +45,7 @@ impl Texture {
             .usage(info.flags | ImageUsageFlags::TRANSFER_DST);
         let image = unsafe { gpu.device().handle.create_image(image_info, None) }?;
         let requirements = unsafe { gpu.device().handle.get_image_memory_requirements(image) };
-        let allocation = gpu.allocator().allocate_image(image, requirements, &info.name)?;
+        let allocation_id = gpu.allocator().allocate_image(image, requirements, &info.name)?;
 
         let handle = Image::new(
             image,
@@ -61,7 +60,7 @@ impl Texture {
         Ok(Self {
             image: handle,
             allocator: gpu.allocator().clone(),
-            allocation,
+            allocation_id,
             sampler: info.sampler.clone(),
         })
     }
@@ -78,10 +77,9 @@ impl Texture {
 
     pub fn aspect_flags(&self) -> ImageAspectFlags { self.image.aspect_flags }
 }
-
 impl Drop for Texture {
     fn drop(&mut self) {
-        self.allocator.deallocate_image(self.allocation);
+        self.allocator.deallocate_image(self.allocation_id);
         self.image.destroy();
     }
 }
@@ -164,8 +162,11 @@ impl Image {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "gpu-tests")]
+    use assay::assay;
     use {super::*, crate::test::test_gpu};
-    #[test]
+
+    #[assay]
     #[cfg(feature = "gpu-tests")]
     fn test_create_texture() {
         let gpu = test_gpu();
@@ -194,7 +195,7 @@ mod tests {
         assert!(texture.handle() != VkImage::null());
         assert!(texture.view() != ImageView::null());
     }
-    #[test]
+    #[assay]
     #[cfg(feature = "gpu-tests")]
     fn test_sampler_new() {
         let gpu = test_gpu();
@@ -221,7 +222,7 @@ mod tests {
         );
         assert!(sampler.handle() != VkSampler::null());
     }
-    #[test]
+    #[assay]
     #[cfg(feature = "gpu-tests")]
     fn test_sampler_default() {
         let gpu = test_gpu();
