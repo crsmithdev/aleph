@@ -18,7 +18,7 @@ pub struct Buffer {
     allocation: AllocationId,
     allocator: Arc<Allocator>,
     size: u64,
-    sub_allocations: Option<Arc<FreeList>>,
+    sub_allocations: Arc<FreeList>,
     device: Device,
 }
 #[derive(Debug)]
@@ -80,12 +80,12 @@ impl Buffer {
             allocation: id,
             allocator: allocator.clone(),
             size,
-            sub_allocations: Some(FreeList::new(size)),
+            sub_allocations: FreeList::new(size),
         })
     }
 
     pub fn sub_buffer(&self, size: u64, alignment: u64) -> Option<SubBuffer> {
-        let freelist = self.sub_allocations.as_ref()?;
+        let freelist = &self.sub_allocations;
         let freelist_id = freelist.allocate(size, alignment)?;
         let offset = freelist.offset(freelist_id)?;
 
@@ -100,10 +100,8 @@ impl Buffer {
         })
     }
 
-    pub fn free_sub_buffer(&self, id: FreeListId) {
-        if let Some(ref freelist) = self.sub_allocations {
-            freelist.free(id);
-        }
+    pub fn free_sub_buffer(&self, buffer: &SubBuffer) {
+        self.sub_allocations.free(buffer.sub_allocation);
     }
 
     pub fn write<T: Copy>(&self, offset: u64, data: &[T]) {

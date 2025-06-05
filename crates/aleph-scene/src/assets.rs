@@ -120,7 +120,6 @@ pub struct BindlessData {
     pub material_map: HashMap<MaterialHandle, usize>,
 }
 
-// --- TextureLoader ---
 #[derive(Debug)]
 struct TextureLoader {
     gpu: Arc<Gpu>,
@@ -227,6 +226,7 @@ impl Assets {
     }
     pub fn update(&mut self) { self.texture_loader.update(); }
     pub fn default_sampler(&self) -> Sampler { self.default_sampler.clone() }
+    pub fn default_material(&self) -> &Material { &self.default_material }
     pub fn create_sampler(
         &self,
         name: &str,
@@ -277,7 +277,7 @@ impl Assets {
             metallic_factor: 1.0,
             roughness_factor: 1.0,
             occlusion_texture: ao_texture,
-            ao_strength: 1.0,
+            occlusion_strength: 1.0,
         };
         let handle = self.add_material(material.clone());
         Ok((handle, material))
@@ -365,7 +365,7 @@ impl Assets {
                 color_factor: material.color_factor,
                 metal_factor: material.metallic_factor,
                 rough_factor: material.roughness_factor,
-                occlusion_strength: material.ao_strength,
+                occlusion_strength: material.occlusion_strength,
                 _padding0: 0,
             });
             material_map.insert(*handle, materials.len() - 1);
@@ -452,23 +452,10 @@ mod tests {
     }
     #[test]
     fn texture_loader_staging_suballocation() {
-        use {
-            aleph_vk::{Extent2D, Format, Gpu, ImageAspectFlags, ImageUsageFlags, TextureInfo},
-            std::sync::Arc,
-        };
+        use {aleph_vk::Gpu, std::sync::Arc};
         let gpu = Arc::new(Gpu::headless().unwrap());
         let loader = TextureLoader::new(gpu.clone());
-        let info = TextureInfo {
-            name: "test".to_string(),
-            extent: Extent2D {
-                width: 1,
-                height: 1,
-            },
-            flags: ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::SAMPLED,
-            aspect_flags: ImageAspectFlags::COLOR,
-            format: Format::R8G8B8A8_UNORM,
-            sampler: None,
-        };
+
         let data = vec![255u8, 0, 0, 255];
         let sub = loader.staging.sub_buffer(4, 256).expect("suballoc");
         sub.write(&data);

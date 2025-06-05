@@ -137,7 +137,7 @@ pub struct Light {
 impl Default for Light {
     fn default() -> Self {
         Self {
-            position: Vec3::ZERO,
+            position: Vec3::new(3.0, 3.0, 3.0),
             intensity: 10.0,
             color: Vec4::new(5.0, 5.0, 5.0, 1.0),
         }

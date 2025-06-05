@@ -1,5 +1,5 @@
 use {
-    crate::{Device, Instance},
+    crate::{acquire, Device, Instance},
     anyhow::Result,
     ash::vk::{Buffer as VkBuffer, Image as VkImage, MemoryRequirements},
     derive_more::Debug,
@@ -58,12 +58,12 @@ impl Allocator {
         buffer: VkBuffer,
         requirements: MemoryRequirements,
         location: MemoryLocation,
-        label: impl Into<String>,
+        label: &str,
     ) -> Result<AllocationHandle> {
         let allocation = {
-            let mut allocator = self.inner.lock().expect("Could not acquire lock on allocator");
+            let mut allocator = acquire!(self.inner);
             allocator.allocate(&AllocationCreateDesc {
-                name: &label.into(),
+                name: &label,
                 requirements,
                 location,
                 linear: true,
@@ -77,9 +77,9 @@ impl Allocator {
                 .bind_buffer_memory(buffer, allocation.memory(), allocation.offset())
         }?;
 
-        let id = Self::next_id();
-        self.entries.lock().expect("Failed to acquire entries lock").insert(id, allocation);
-        Ok(id)
+        let handle = Self::next_id();
+        acquire!(self.entries).insert(handle, allocation);
+        Ok(handle)
     }
 
     pub fn allocate_image(
@@ -89,7 +89,7 @@ impl Allocator {
         label: &str,
     ) -> Result<AllocationHandle> {
         let allocation = {
-            let mut allocator = self.inner.lock().expect("Failed to acquire allocator lock");
+            let mut allocator = acquire!(self.inner);
             allocator.allocate(&AllocationCreateDesc {
                 name: label,
                 requirements,
@@ -103,32 +103,28 @@ impl Allocator {
             self.device.handle.bind_image_memory(image, allocation.memory(), allocation.offset())
         }?;
 
-        let id = Self::next_id();
-        self.entries.lock().unwrap().insert(id, allocation);
-        Ok(id)
+        let handle = Self::next_id();
+        acquire!(self.entries).insert(handle, allocation);
+        Ok(handle)
     }
 
-    pub fn deallocate_buffer(&self, id: AllocationHandle) {
-        if let Some(allocation) =
-            self.entries.lock().expect("Failed to acquire entries lock").remove(&id)
-        {
-            let mut allocator = self.inner.lock().unwrap();
+    pub fn deallocate_buffer(&self, allocation: AllocationHandle) {
+        if let Some(allocation) = acquire!(self.entries).remove(&allocation) {
+            let mut allocator = acquire!(self.inner);
             allocator.free(allocation).unwrap();
         }
     }
 
-    pub fn deallocate_image(&self, id: AllocationHandle) {
-        if let Some(allocation) =
-            self.entries.lock().expect("Failed to acquire entries lock").remove(&id)
-        {
-            let mut allocator = self.inner.lock().unwrap();
+    pub fn deallocate_image(&self, allocation: AllocationHandle) {
+        if let Some(allocation) = acquire!(self.entries).remove(&allocation) {
+            let mut allocator = acquire!(self.inner);
             allocator.free(allocation).unwrap();
         }
     }
 
-    pub(crate) fn get_mapped_ptr(&self, id: AllocationHandle) -> Result<*mut u8> {
-        let entries = self.entries.lock().expect("Failed to acquire entries lock");
-        let entry = entries.get(&id).expect("Invalid allocation ID");
+    pub(crate) fn get_mapped_ptr(&self, allocation: AllocationHandle) -> Result<*mut u8> {
+        let entries = acquire!(self.entries);
+        let entry = entries.get(&allocation).expect("Invalid allocation ID");
 
         entry
             .mapped_ptr()
@@ -281,7 +277,7 @@ mod tests {
                     buffer,
                     requirements,
                     MemoryLocation::CpuToGpu,
-                    format!("unique_test_{}", i),
+                    &format!("unique_test_{}", i),
                 )
                 .expect("Failed to allocate buffer");
 

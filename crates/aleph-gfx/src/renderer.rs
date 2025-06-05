@@ -4,12 +4,12 @@ use {
         assets::{BindlessData, GpuMaterial},
         graph::NodeData,
         model::Light,
-        Assets, MaterialHandle, MeshHandle, Scene, Vertex,
+        Assets, Material, MaterialHandle, MeshHandle, Scene, Vertex,
     },
     aleph_vk::{
-        sync, AccessFlags2, CommandBuffer, CommandPool, DescriptorSetLayoutBinding, Extent2D,
-        Fence, Format, Gpu, Handle as VkHandle, ImageAspectFlags, ImageLayout, ImageUsageFlags,
-        PipelineStageFlags2, Semaphore, ShaderStageFlags, Texture, TextureInfo, TypedBuffer,
+        sync, AccessFlags2, CommandBuffer, CommandPool, Extent2D, Fence, Format, Gpu,
+        Handle as VkHandle, ImageAspectFlags, ImageLayout, ImageUsageFlags, PipelineStageFlags2,
+        Semaphore, ShaderStageFlags, Texture, TextureInfo, TypedBuffer,
     },
     anyhow::Result,
     ash::vk::FenceCreateFlags,
@@ -17,30 +17,31 @@ use {
     bytemuck::{Pod, Zeroable},
     derive_more::Debug,
     glam::{vec3, vec4, Mat4, Vec2, Vec3, Vec4},
-    std::{collections::HashMap, sync::Arc},
+    std::{collections::HashMap, default, sync::Arc},
     tracing::instrument,
 };
 bitflags! {
     #[derive(Clone, Copy, Debug, Default)]
     pub struct RenderFlags: u32 {
-        const DEBUG_COLOR        = 0b00000000_00000000_00000001;
-        const DEBUG_NORMALS      = 0b00000000_00000000_00000010;
-        const DEBUG_TANGENTS     = 0b00000000_00000000_00000100;
-        const DEBUG_METALLIC     = 0b00000000_00000000_00001000;
-        const DEBUG_ROUGHNESS    = 0b00000000_00000000_00010000;
-        const DEBUG_OCCLUSION    = 0b00000000_00000000_00100000;
-        const DEBUG_TEXCOORDS0   = 0b00000000_00000000_01000000;
+            const DEBUG_COLOR           = 0b00000000_00000000_00000001;
+            const DEBUG_NORMALS         = 0b00000000_00000000_00000010;
+            const DEBUG_TANGENTS        = 0b00000000_00000000_00000100;
+            const DEBUG_METALLIC        = 0b00000000_00000000_00001000;
+            const DEBUG_ROUGHNESS       = 0b00000000_00000000_00010000;
+            const DEBUG_OCCLUSION       = 0b00000000_00000000_00100000;
+            const DEBUG_TEXCOORDS0      = 0b00000000_00000000_01000000;
 
-        const OVERRIDE_COLOR     = 0b00000000_00000001_00000000;
-        const OVERRIDE_NORMALS   = 0b00000000_00000010_00000000;
-        const OVERRIDE_TANGENTS  = 0b00000000_00000100_00000000;
-        const OVERRIDE_METALLIC  = 0b00000000_00001000_00000000;
-        const OVERRIDE_ROUGHNESS = 0b00000000_00010000_00000000;
-        const OVERRIDE_OCCLUSION = 0b00000000_00100000_00000000;
-        const OVERRIDE_LIGHTS    = 0b00000000_01000000_00000000;
+            const DISABLE_COLOR_MAP     = 0b00000000_00000001_00000000;
+            const DISABLE_NORMAL_MAP    = 0b00000000_00000010_00000000;
+            const DISABLE_MR_MAP        = 0b00000000_00000100_00000000;
+            const DISABLE_OCCLUSION_MAP = 0b00000000_00001000_00000000;
+            const DISABLE_TANGENTS      = 0b00000000_00010000_00000000;
 
-        const DISABLE_TEXTURES   = 0b00000001_00000000_00000000;
-        const DISABLE_TANGENTS   = 0b00000010_00000000_00000000;
+            const OVERRIDE_COLOR        = 0b00000001_00000000_00000000;
+            const OVERRIDE_METAL        = 0b00000010_00000000_00000000;
+            const OVERRIDE_ROUGH        = 0b00000100_00000000_00000000;
+            const OVERRIDE_OCCLUSION    = 0b00001000_00000000_00000000;
+            const OVERRIDE_LIGHTS       = 0b00010000_00000000_00000000;
 
     }
 }
@@ -53,30 +54,8 @@ const BIND_IDX_CONFIG: usize = 0;
 const BIND_IDX_SCENE: usize = 1;
 const BIND_IDX_MATERIAL: usize = 2;
 const BIND_IDX_TEXTURE: usize = 3;
-const N_FRAMES: usize = 4;
-
-const LIGHTS: [Light; 4] = [
-    Light {
-        position: vec3(2., 2., 2.),
-        color: vec4(10., 10., 10., 10.),
-        intensity: 10.,
-    },
-    Light {
-        position: vec3(-2., -2., -2.),
-        color: vec4(10., 10., 10., 10.),
-        intensity: 10.,
-    },
-    Light {
-        position: vec3(-2., 2., 2.),
-        color: vec4(10., 10., 10., 10.),
-        intensity: 10.,
-    },
-    Light {
-        position: vec3(2., -2., -2.),
-        color: vec4(10., 10., 10., 10.),
-        intensity: 10.,
-    },
-];
+const N_FRAMES: usize = 2;
+const N_LIGHTS: usize = 4;
 
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
@@ -86,11 +65,7 @@ pub struct GpuSceneData {
     pub vp: Mat4,
     pub camera_pos: Vec3,
     pub n_lights: u32,
-    pub flags: u32,
-    pub padding0: u32,
-    pub padding1: u32,
-    pub padding2: u32,
-    pub lights: [Light; 4],
+    pub lights: [Light; N_LIGHTS],
 }
 
 #[repr(C)]
@@ -200,27 +175,10 @@ pub struct RendererResources {
     pub binder: ResourceBinder,
 }
 
-struct RenderResource<'a, T> {
-    pub layout_binding: DescriptorSetLayoutBinding<'a>,
-    pub data: ResourceData<T>,
-}
-
-enum ResourceData<T> {
-    Buffer(TypedBuffer<u32>, T),
-    Texture(Texture, T),
-}
-
-impl<'a, T> RenderResource<'a, T> {
-    pub fn descriptor_set_layout_binding(&'a self) -> DescriptorSetLayoutBinding<'a> {
-        self.layout_binding
-    }
-}
-
 impl RendererResources {
     pub fn new(gpu: &Arc<Gpu>) -> Result<Self> {
         let scene_buffer = TypedBuffer::shared_uniform(gpu, 1, "renderer-scene")?;
         let scene_data = GpuSceneData {
-            lights: LIGHTS,
             n_lights: 3,
             ..Default::default()
         };
@@ -281,6 +239,7 @@ pub struct Renderer {
     // State
     #[debug(skip)]
     pub gpu: Arc<Gpu>,
+    config: RenderConfig,
 }
 
 impl Renderer {
@@ -310,6 +269,7 @@ impl Renderer {
             render_objects: Vec::new(),
             material_map: HashMap::new(),
             last_scene_version: 0,
+            config: RenderConfig::default(),
         })
     }
 
@@ -656,4 +616,70 @@ impl Renderer {
 
         Ok((draw_image, depth_image))
     }
+}
+
+#[derive(Default, Debug, Clone, Copy)]
+pub struct RenderConfig {
+    pub color_factor: Option<Vec4>,
+    pub metal_factor: Option<f32>,
+    pub rough_factor: Option<f32>,
+    pub occlusion_strength: Option<f32>,
+    pub default_color_map: bool,
+    pub default_normal_map: bool,
+    pub default_metalrough_map: bool,
+    pub default_occlusion_map: bool,
+    pub output_override: RenderOutputOverride,
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenderOutputOverride {
+    #[default]
+    None,
+    Color,
+    Normals,
+    Tangents,
+    MetalRough,
+    Occlusion,
+    TexCoords0,
+}
+
+fn apply_overrides(material: Material, config: &RenderConfig, assets: &Assets) -> Material {
+    let default = assets.default_material();
+    let mut material = Material::default();
+
+    material.color_factor = match config.color_factor {
+        Some(value) => value,
+        None => material.color_factor,
+    };
+    material.metallic_factor = match config.metal_factor {
+        Some(value) => value,
+        None => material.metallic_factor,
+    };
+    material.roughness_factor = match config.rough_factor {
+        Some(value) => value,
+        None => material.roughness_factor,
+    };
+    material.occlusion_strength = match config.occlusion_strength {
+        Some(value) => value,
+        None => material.occlusion_strength,
+    };
+
+    material.color_texture = match config.default_color_map {
+        true => default.color_texture,
+        false => material.color_texture,
+    };
+    material.normal_texture = match config.default_normal_map {
+        true => default.normal_texture,
+        false => material.normal_texture,
+    };
+    material.metalrough_texture = match config.default_metalrough_map {
+        true => default.metalrough_texture,
+        false => material.metalrough_texture,
+    };
+    material.occlusion_texture = match config.default_occlusion_map {
+        true => default.occlusion_texture,
+        false => material.occlusion_texture,
+    };
+
+    material
 }

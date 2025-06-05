@@ -20,7 +20,7 @@ NormalTangentTest: 85
 Material00: 207
 */
 
-const DEFAULT_SCENE: usize = 112;
+const DEFAULT_SCENE: usize = 85;
 const SHIFT_FACTOR: usize = 10;
 const ROTATION_FACTOR: f32 = 0.01;
 const ZOOM_FACTOR: f32 = 0.1;

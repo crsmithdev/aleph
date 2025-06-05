@@ -14,7 +14,7 @@ pub struct Material {
     pub metallic_factor: f32,
     pub roughness_factor: f32,
     pub occlusion_texture: TextureHandle,
-    pub ao_strength: f32,
+    pub occlusion_strength: f32,
 }
 
 impl Default for Material {
@@ -28,7 +28,7 @@ impl Default for Material {
             metallic_factor: 1.0,
             roughness_factor: 1.0,
             occlusion_texture: TextureHandle::null(),
-            ao_strength: 1.0,
+            occlusion_strength: 1.0,
         }
     }
 }

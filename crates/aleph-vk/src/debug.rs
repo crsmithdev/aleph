@@ -41,8 +41,11 @@ impl DebugUtils {
             .pfn_user_callback(Some(vulkan_debug_callback));
         let debug_instance = debug_utils::Instance::new(&instance.entry, &*instance);
         let debug_device = debug_utils::Device::new(&*instance, &*device);
-        let debug_callback =
-            unsafe { debug_instance.create_debug_utils_messenger(&debug_info, None).unwrap() };
+        let debug_callback = unsafe {
+            debug_instance
+                .create_debug_utils_messenger(&debug_info, None)
+                .unwrap_or_else(|e| panic!("Failed to create debug utils messenger: {}", e))
+        };
 
         Self {
             debug_instance,
@@ -58,7 +61,7 @@ impl DebugUtils {
                 DebugUtilsObjectNameInfoEXT::default().object_handle(handle).object_name(&name_c);
             self.debug_device
                 .set_debug_utils_object_name(&name_info)
-                .expect(&format!("Could not set name '{}'", name));
+                .unwrap_or_else(|e| panic!("Error setting debug object {name:?}: {e}"));
         }
     }
 
@@ -74,6 +77,14 @@ impl DebugUtils {
     pub fn end_debug_label(&self, cmd_buffer: &CommandBuffer) {
         unsafe {
             self.debug_device.cmd_end_debug_utils_label(**cmd_buffer);
+        }
+    }
+}
+
+impl Drop for DebugUtils {
+    fn drop(&mut self) {
+        unsafe {
+            self.debug_instance.destroy_debug_utils_messenger(self.debug_callback, None);
         }
     }
 }

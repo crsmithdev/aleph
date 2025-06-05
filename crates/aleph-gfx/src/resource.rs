@@ -3,8 +3,8 @@ use {
         CommandBuffer, DescriptorBindingFlags, DescriptorBufferInfo, DescriptorImageInfo,
         DescriptorPoolCreateFlags, DescriptorPoolSize, DescriptorSet, DescriptorSetLayout,
         DescriptorSetLayoutBinding, DescriptorSetLayoutCreateFlags, DescriptorType, Gpu,
-        ImageLayout, PipelineLayout, Sampler, ShaderStageFlags, Texture, TypedBuffer,
-        WriteDescriptorSet,
+        ImageLayout, PipelineBindPoint, PipelineLayout, Sampler, ShaderStageFlags, Texture,
+        TypedBuffer, WriteDescriptorSet,
     },
     anyhow::Result,
     bytemuck::Pod,
@@ -15,11 +15,9 @@ pub struct ResourceLayout {
     resources: Vec<UnboundResource>,
     set: usize,
 }
-
+const MAX_DESCRIPTORS: u32 = 10000;
+const MAX_ARRAY_SIZE: usize = 128;
 impl ResourceLayout {
-    const N_DESCRIPTORS: u32 = 10000;
-    const N_VARIABLE_DESCRIPTORS: usize = 128;
-
     pub fn set(set: usize) -> Self {
         Self {
             resources: Vec::new(),
@@ -47,7 +45,7 @@ impl ResourceLayout {
         self.add_binding(UnboundResource {
             index,
             stage_flags: flags,
-            descriptor_count: Self::N_VARIABLE_DESCRIPTORS,
+            descriptor_count: MAX_ARRAY_SIZE,
             dimensionality: Dimensionality::Array,
             descriptor_type: DescriptorType::COMBINED_IMAGE_SAMPLER,
             binding_flags: DescriptorBindingFlags::default()
@@ -120,13 +118,13 @@ impl ResourceLayout {
 
         let pool_sizes = [
             DescriptorPoolSize::default()
-                .descriptor_count(Self::N_DESCRIPTORS)
+                .descriptor_count(MAX_DESCRIPTORS)
                 .ty(DescriptorType::UNIFORM_BUFFER),
             DescriptorPoolSize::default()
-                .descriptor_count(Self::N_DESCRIPTORS)
+                .descriptor_count(MAX_DESCRIPTORS)
                 .ty(DescriptorType::UNIFORM_BUFFER_DYNAMIC),
             DescriptorPoolSize::default()
-                .descriptor_count(Self::N_DESCRIPTORS)
+                .descriptor_count(MAX_DESCRIPTORS)
                 .ty(DescriptorType::COMBINED_IMAGE_SAMPLER),
         ];
 
@@ -141,9 +139,12 @@ impl ResourceLayout {
             .iter()
             .any(|b| b.dimensionality == Dimensionality::Array && b.descriptor_count > 1);
         let variable_descriptors = match has_variable_binding {
-            true => Some(
-                128.min(gpu.device().properties().limits.max_per_stage_descriptor_sampled_images),
-            ),
+            true => {
+                let limit =
+                    gpu.device().properties().limits.max_per_stage_descriptor_sampled_images;
+                let value = (MAX_ARRAY_SIZE as u32).min(limit);
+                Some(value)
+            }
             false => None,
         };
         log::debug!("Variable descriptors: {variable_descriptors:?}");
@@ -333,6 +334,7 @@ impl ResourceBinder {
     pub fn bind<'a>(&self, cmd: &CommandBuffer, pipeline_layout: PipelineLayout, offsets: &[u32]) {
         cmd.bind_descriptor_sets(
             pipeline_layout,
+            PipelineBindPoint::GRAPHICS,
             self.set_index,
             &[self.descriptor_set],
             offsets,

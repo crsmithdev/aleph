@@ -13,6 +13,12 @@ pub mod sync;
 
 pub(crate) const TIMEOUT_NS: u64 = 5_000_000_000;
 
+#[macro_export]
+macro_rules! acquire {
+    ($lock:expr) => {
+        $lock.lock().unwrap_or_else(|_| panic!("Failed to acquire lock"))
+    };
+}
 pub use {
     crate::{
         allocator::Allocator,

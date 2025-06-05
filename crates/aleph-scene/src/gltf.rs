@@ -241,7 +241,7 @@ fn load_material(
         metalrough_texture,
         normal_texture,
         occlusion_texture: ao_texture,
-        ao_strength,
+        occlusion_strength: ao_strength,
         color_factor: Vec4::from_array(pbr.base_color_factor()),
         metallic_factor: pbr.metallic_factor(),
         roughness_factor: pbr.roughness_factor(),
@@ -270,14 +270,18 @@ fn load_mesh(
         let vertices = reader
             .read_positions()
             .map_or(Vec::new(), |positions| positions.map(Vec3::from).collect());
-        let normals =
-            reader.read_normals().map_or(Vec::new(), |normals| normals.map(Vec3::from).collect());
-        let tex_coords0 = reader.read_tex_coords(0).map_or(Vec::new(), |coords| -> Vec<Vec2> {
-            coords.into_f32().map(Vec2::from).collect()
+        let normals = reader.read_normals().map_or(vec![Vec3::ZERO; vertices.len()], |normals| {
+            normals.map(Vec3::from).collect()
         });
-        let tangents = reader
-            .read_tangents()
-            .map_or(Vec::new(), |tangents| tangents.map(Vec4::from).collect());
+        let tex_coords0 = reader
+            .read_tex_coords(0)
+            .map_or(vec![Vec2::ZERO; vertices.len()], |coords| -> Vec<Vec2> {
+                coords.into_f32().map(Vec2::from).collect()
+            });
+        let tangents =
+            reader.read_tangents().map_or(vec![Vec4::ZERO; vertices.len()], |tangents| {
+                tangents.map(Vec4::from).collect()
+            });
         println!("tangents[0]: {:?}", tangents.get(0));
         let colors = reader.read_colors(0).map_or(Vec::new(), |colors| {
             colors.into_rgba_f32().map(Vec4::from).collect::<Vec<_>>()

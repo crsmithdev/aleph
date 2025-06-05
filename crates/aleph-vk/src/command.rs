@@ -213,9 +213,14 @@ impl CommandBuffer {
         }
     }
 
-    pub fn bind_vertex_buffer(&self, buffer: &Buffer, _offset: u64) {
+    pub fn bind_vertex_buffer(&self, buffer: &Buffer, offset: u64) {
         unsafe {
-            self.device.handle.cmd_bind_vertex_buffers(self.handle, 0, &[buffer.handle()], &[0]);
+            self.device.handle.cmd_bind_vertex_buffers(
+                self.handle,
+                0,
+                &[buffer.handle()],
+                &[offset],
+            );
         }
     }
 
@@ -245,6 +250,7 @@ impl CommandBuffer {
     pub fn bind_descriptor_sets(
         &self,
         layout: PipelineLayout,
+        bind_point: PipelineBindPoint,
         first_set: u32,
         sets: &[DescriptorSet],
         offsets: &[u32],
@@ -252,7 +258,7 @@ impl CommandBuffer {
         unsafe {
             self.device.handle.cmd_bind_descriptor_sets(
                 self.handle,
-                PipelineBindPoint::GRAPHICS,
+                bind_point,
                 layout,
                 first_set,
                 sets,

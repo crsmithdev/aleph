@@ -47,6 +47,10 @@ const DEVICE_EXTENSIONS: [&ffi::CStr; 10] = [
     khr::shader_non_semantic_info::NAME,
 ];
 
+const RANK_MAX: usize = 100;
+const RANK_MED: usize = 30;
+const RANK_MIN: usize = 5;
+
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
 pub struct QueueFamily {
@@ -163,7 +167,7 @@ impl Device {
 }
 
 impl Device {
-    fn rank_physical_device(instance: &Instance, physical_device: &PhysicalDevice) -> i32 {
+    fn rank_physical_device(instance: &Instance, physical_device: &PhysicalDevice) -> usize {
         let device_properties = instance.get_physical_device_properties(*physical_device);
         let queue_families = instance.get_physical_device_queue_family_properties(*physical_device);
 
@@ -173,41 +177,41 @@ impl Device {
             .into_iter()
             .find(|qf| qf.queue_flags.contains(QueueFlags::GRAPHICS))
         {
-            Some(_) => 10000,
+            Some(_) => RANK_MAX,
             None => 0,
         };
 
         score += match device_properties.device_type {
-            PhysicalDeviceType::INTEGRATED_GPU => 20,
-            PhysicalDeviceType::DISCRETE_GPU => 100,
-            PhysicalDeviceType::VIRTUAL_GPU => 1,
+            PhysicalDeviceType::INTEGRATED_GPU => RANK_MED,
+            PhysicalDeviceType::DISCRETE_GPU => RANK_MAX,
+            PhysicalDeviceType::VIRTUAL_GPU => RANK_MIN,
             _ => 0,
         };
 
         score
     }
 
-    fn rank_graphics_queue_family(queue_family: QueueFamilyProperties) -> i32 {
-        let mut score = 100;
+    fn rank_graphics_queue_family(queue_family: QueueFamilyProperties) -> usize {
+        let mut score = RANK_MAX;
         if queue_family.queue_flags.contains(QueueFlags::COMPUTE) {
-            score -= 10;
+            score -= RANK_MED;
         }
         if queue_family.queue_flags.contains(QueueFlags::SPARSE_BINDING) {
-            score -= 1;
+            score -= RANK_MIN;
         }
         score
     }
 
-    fn rank_transfer_queue_family(queue_family: QueueFamilyProperties) -> i32 {
-        let mut score = 100;
+    fn rank_transfer_queue_family(queue_family: QueueFamilyProperties) -> usize {
+        let mut score = RANK_MAX;
         if queue_family.queue_flags.contains(QueueFlags::GRAPHICS) {
-            score -= 20;
+            score -= RANK_MED;
         }
         if queue_family.queue_flags.contains(QueueFlags::COMPUTE) {
-            score -= 10;
+            score -= RANK_MED;
         }
         if queue_family.queue_flags.contains(QueueFlags::SPARSE_BINDING) {
-            score -= 1;
+            score -= RANK_MIN;
         }
         score
     }
