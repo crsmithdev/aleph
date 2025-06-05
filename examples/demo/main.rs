@@ -20,7 +20,7 @@ NormalTangentTest: 85
 Material00: 207
 */
 
-const DEFAULT_SCENE: usize = 112    ;
+const DEFAULT_SCENE: usize = 112;
 const SHIFT_FACTOR: usize = 10;
 const ROTATION_FACTOR: f32 = 0.01;
 const ZOOM_FACTOR: f32 = 0.1;
@@ -71,12 +71,14 @@ fn input_system(mut scene: ResMut<Scene>, mut assets: ResMut<Assets>, input: Res
 
     if input.mouse_button_held(&MouseButton::Right) {
         let delta = input.mouse_delta();
-        scene.camera.yaw_delta(delta.0 * n as f32 * ROTATION_FACTOR);
-        scene.camera.pitch_delta(delta.1 * n as f32 * ROTATION_FACTOR);
+        let camera = scene.cameras_mut().next().unwrap();
+        camera.yaw_delta(delta.0 * n as f32 * ROTATION_FACTOR);
+        camera.pitch_delta(delta.1 * n as f32 * ROTATION_FACTOR);
     }
 
     if let Some(delta) = input.mouse_scroll_delta() {
-        scene.camera.zoom(delta.1 * n as f32 * ZOOM_FACTOR);
+        let camera = scene.cameras_mut().next().unwrap();
+        camera.zoom(delta.1 * n as f32 * ZOOM_FACTOR);
     }
 
     if state.auto_rotate {

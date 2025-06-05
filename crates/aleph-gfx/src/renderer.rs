@@ -269,14 +269,17 @@ impl Renderer {
         (0..N_FRAMES).map(|_| Frame::new(&gpu)).collect::<Vec<Frame>>()
     }
     fn update_per_frame_data(&mut self, scene: &Scene, _assets: &Assets) {
-        let view = scene.camera.view().transpose();
-        let projection = scene.camera.projection().transpose();
+        let cameras = scene.cameras().take(1).collect::<Vec<_>>();
+        let camera = cameras[0];
+
+        let view = camera.view().transpose();
+        let projection = camera.projection().transpose();
         let lights = scene.lights().take(N_LIGHTS).collect::<Vec<_>>();
 
         self.resources.scene_data.view = view;
         self.resources.scene_data.projection = projection;
         self.resources.scene_data.vp = projection * view.inverse();
-        self.resources.scene_data.camera_pos = scene.camera.position();
+        self.resources.scene_data.camera_pos = camera.position();
         self.resources.scene_data.n_lights = N_LIGHTS as u32;
         self.resources.scene_data.lights[0] = **lights.get(0).unwrap_or(&&Light::default());
         self.resources.scene_data.lights[1] = **lights.get(1).unwrap_or(&&Light::default());

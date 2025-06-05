@@ -15,7 +15,7 @@ use {
 pub enum NodeData {
     Mesh(MeshHandle),
     Light(Light),
-    Camera(CameraConfig),
+    Camera(Camera),
     Group,
 }
 
@@ -45,9 +45,7 @@ impl Node {
 
     pub fn light(name: &str, light: Light) -> Self { Self::new(name, NodeData::Light(light)) }
 
-    pub fn camera(name: &str, config: CameraConfig) -> Self {
-        Self::new(name, NodeData::Camera(config))
-    }
+    pub fn camera(name: &str, camera: Camera) -> Self { Self::new(name, NodeData::Camera(camera)) }
 
     pub fn rotate(mut self, delta_y_radians: f32) -> Self {
         self.local_transform = Mat4::from_rotation_y(delta_y_radians) * self.local_transform;
@@ -80,7 +78,6 @@ pub type Graph = petgraph::Graph<Node, ()>;
 
 #[derive(Debug)]
 pub struct Scene {
-    pub camera: Camera,
     graph: Graph,
     root: NodeHandle,
     indices: HashMap<NodeHandle, NodeIndex>,
@@ -103,7 +100,6 @@ impl Default for Scene {
         indices.insert(root_handle, root_index);
 
         Self {
-            camera: Camera::new(CameraConfig::default()),
             graph,
             root: root_handle,
             indices,
@@ -210,6 +206,26 @@ impl Scene {
         self.graph.node_weights().filter_map(|node| {
             if let NodeData::Light(light) = &node.data {
                 Some(light)
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn cameras(&self) -> impl Iterator<Item = &Camera> {
+        self.graph.node_weights().filter_map(|node| {
+            if let NodeData::Camera(camera) = &node.data {
+                Some(camera)
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn cameras_mut(&mut self) -> impl Iterator<Item = &mut Camera> {
+        self.graph.node_weights_mut().filter_map(|node| {
+            if let NodeData::Camera(camera) = &mut node.data {
+                Some(camera)
             } else {
                 None
             }

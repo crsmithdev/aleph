@@ -3,7 +3,8 @@ use {
         graph::{NodeData, NodeHandle},
         mikktspace,
         model::{Light, MeshInfo},
-        util, Assets, Material, MaterialHandle, MeshHandle, Node, Scene, TextureHandle,
+        util, Assets, Camera, CameraConfig, Material, MaterialHandle, MeshHandle, Node, Scene,
+        TextureHandle,
     },
     aleph_vk::{
         Extent2D, Filter, Format, ImageAspectFlags, ImageUsageFlags, PrimitiveTopology, Sampler,
@@ -57,6 +58,10 @@ pub fn load_scene(path: &str, mut assets: &mut Assets) -> Result<Scene> {
     scene.attach(light2, scene.root())?;
     let light3 = Node::light("light3", Light::new(Vec3::new(3.0, 3.0, 0.0), color));
     scene.attach(light3, scene.root())?;
+
+    let camera = Camera::new(CameraConfig::default());
+    let node = Node::camera("camera", camera);
+    scene.attach(node, scene.root())?;
 
     log::info!(
         "Finished loading scene from {path:?}: {} meshes, {} materials, {} textures",
