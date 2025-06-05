@@ -325,7 +325,7 @@ impl TextureLoader {
         let staging = self.staging_pool.next();
         staging.write(data);
 
-        let memory_range = staging.mapped_memory_range();
+        // let memory_range = staging.mapped_memory_range();
         // self.gpu.device().flush_mapped_memory_ranges(&[memory_range]);
 
         cmd.pipeline_barrier(
