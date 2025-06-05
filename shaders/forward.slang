@@ -7,14 +7,22 @@ static const float PI = 3.1415926535897932384626433832795;
 #define DEBUG_ROUGHNESS ((config.flags & (1 << 4)) != 0)
 #define DEBUG_OCCLUSION ((config.flags & (1 << 5)) != 0)
 #define DEBUG_TEXCOORDS0 ((config.flags & (1 << 6)) != 0)
-#define OVERRIDE_COLOR ((config.flags & (1 << 8)) != 0)
-#define OVERRIDE_LIGHTS ((config.flags & (1 << 9)) != 0)
-#define OVERRIDE_TANGENTS ((config.flags & (1 << 10)) != 0)
-#define OVERRIDE_METALLIC ((config.flags & (1 << 11)) != 0)
-#define OVERRIDE_ROUGHNESS ((config.flags & (1 << 12)) != 0)
-#define OVERRIDE_OCCLUSION ((config.flags & (1 << 13)) != 0)
-#define DISABLE_TEXTURES ((config.flags & (1 << 16)) != 0)
-#define DISABLE_TANGENTS ((config.flags & (1 << 17)) != 0)
+
+#define DISABLE_COLOR_MAP ((config.flags & (1 << 8)) != 0)
+#define DISABLE_NORMAL_MAP ((config.flags & (1 << 9)) != 0)
+#define DISABLE_METAL_ROUGH_MAP ((config.flags & (1 << 10)) != 0)
+#define DISABLE_OCCLUSION_MAP ((config.flags & (1 << 11)) != 0)
+#define DISABLE_TANGENTS ((config.flags & (1 << 12)) != 0)
+
+#define OVERRIDE_COLOR ((config.flags & (1 << 16)) != 0)
+#define OVERRIDE_METALLIC ((config.flags & (1 << 17)) != 0)
+#define OVERRIDE_ROUGHNESS ((config.flags & (1 << 18)) != 0)
+#define OVERRIDE_OCCLUSION ((config.flags & (1 << 19)) != 0)
+#define OVERRIDE_LIGHTS ((config.flags & (1 << 20)) != 0)
+
+#define DEBUG_ANY ((config.flags & 0x0000000000000000FFFFFFFF) != 0)
+#define DISABLE_ANY ((config.flags & 0x00000000FFFFFFFF00000000) == 0)
+#define OVERRIDE_ANY ((config.flags & 0xFFFFFFFF0000000000000000) != 0)
 
 [[vk::binding(0, 0)]]
 ConstantBuffer<CpuConfig> config;
@@ -67,7 +75,7 @@ float4 fragmentMain(FsInput input, uniform PushConstants object) : SV_Target
     color += material.color * 0.03 * material.occlusion;
     color = color / (color + float3(1.0));
 
-    if DEBUG_COLOR {
+    if OVERRIDE_COLOR {
         color = material.color;
     } else if DEBUG_NORMALS {
         color = (material.normal);
@@ -113,60 +121,49 @@ func calculateLight(light: Light, material: Material, input: FsInput) ->float3 {
 
     return (kD * material.color / PI + specular) * lightRadiance * nDotL;
 }
-func unpackMaterial(index: uint, vertex: FsInput)->Material {
-    let materialData = materials.materials[index];
-    let uv = vertex.texCoords0;
+Material unpackMaterial(uint index, FsInput vertex) {
+  MaterialData materialData = materials.materials[index];
+  float2 uv = vertex.texCoords0;
 
-    float3 colorSample = textures[materialData.colorIndex].Sample(uv).rgb;
-    float3 normalSample = textures[materialData.normalIndex].Sample(uv).rgb;
-    float metalSample = textures[materialData.metalRoughIndex].Sample(uv).b;
-    float roughSample = textures[materialData.metalRoughIndex].Sample(uv).g;
-    float occlusionSample = textures[materialData.occlusionIndex].Sample(uv).r;
+  float3 colorSample = textures[materialData.colorIndex].Sample(uv).rgb;
+  if DISABLE_COLOR_MAP {
+    colorSample = float3(1.0, 1.0, 1.0);
+  }
+  float3 normalSample = textures[materialData.normalIndex].Sample(uv).rgb;
+  if DISABLE_NORMAL_MAP {
+    normalSample = float3(1.0, 1.0, 1.0); // Default normal facing up
+  }
+  float metalSample = textures[materialData.metalRoughIndex].Sample(uv).b;
+  if DISABLE_METAL_ROUGH_MAP {
+    metalSample = 1.0; // Default metallic value
+  }
+  float roughSample = textures[materialData.metalRoughIndex].Sample(uv).g;
+  if DISABLE_METAL_ROUGH_MAP {
+    roughSample = 1.0; // Default roughness value
+  }
+  float occlusionSample = textures[materialData.occlusionIndex].Sample(uv).r;
+  if DISABLE_OCCLUSION_MAP {
+    occlusionSample = 1.0; // Default occlusion value
+  }
 
-    if DISABLE_TEXTURES {
-      colorSample = float3(1.0, 1.0, 1.0);
-      normalSample = vertex.normal;//float3(1.0, 1.0, 1.0);
-        metalSample = 1.0;
-        roughSample = 1.0;
-        occlusionSample = 1.0;
-    }
-
-    Material material;
-    material.color = colorSample * materialData.colorFactor; // TODO vertex colors
-    if OVERRIDE_COLOR {
-        material.color = config.overrideColor.rgb;
-    }
-
-    float3 tangentNormal = normalize(normalSample * 2.0 - 1.0);
+  Material material;
+  float3 tangentNormal = normalize(normalSample * 2.0 - 1.0);
+  if (DISABLE_TANGENTS) {
+    material.normal = normalize(vertex.normal);
+  } else {
     float3 N = normalize(vertex.normal);
     float3 T = normalize(vertex.tangent.xyz);
-    float3 B = normalize(cross(N, T));
-    float3x3 TBN = float3x3(
-        T.x, B.x, N.x, // First row
-        T.y, B.y, N.y, // Second row
-        T.z, B.z, N.z  // Third row
-    );
+    float3 B = normalize(cross(N, T) * vertex.tangent.w);
+    float3x3 TBN = float3x3(T, B, N);
     material.normal = normalize(mul(tangentNormal, TBN));
-    if DISABLE_TANGENTS {
-      material.normal = tangentNormal;//mul(tangentNormal, N);
-    }
+  }
 
-    material.metallic = metalSample * materialData.metalFactor;
-    if OVERRIDE_METALLIC {
-        material.metallic = config.overrideMetallic;
-    }
+  material.color = OVERRIDE_COLOR ? config.overrideColor.rgb : colorSample * materialData.colorFactor;
+  material.metallic = OVERRIDE_METALLIC ? config.overrideMetallic : metalSample * materialData.metalFactor;
+  material.roughness = OVERRIDE_ROUGHNESS ? config.overrideRoughness : roughSample * materialData.roughFactor;
+  material.occlusion = OVERRIDE_OCCLUSION ? config.overrideOcclusion : occlusionSample * materialData.occlusionStrength;
 
-    material.roughness = roughSample * materialData.roughFactor;
-    if OVERRIDE_ROUGHNESS {
-        material.roughness = config.overrideRoughness;
-    }
-
-    material.occlusion = occlusionSample * materialData.occlusionStrength;
-    if OVERRIDE_OCCLUSION {
-        material.occlusion = config.overrideOcclusion;
-    }
-
-    return material;
+  return material;
 }
 
 float distributionGGX(float3 normal, float3 halfDir, float roughness)

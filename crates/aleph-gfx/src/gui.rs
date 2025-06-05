@@ -166,24 +166,25 @@ fn build_ui(ctx: &egui::Context, config: &mut GpuConfigData) {
         .resizable(false)
         .show(ctx, |ui| {
             let flags = &mut config.flags;
-            ui.heading("Disable");
-            ui.horizontal(|ui| {
-                checkbox(ui, flags, RenderFlags::DISABLE_TEXTURES, "Textures");
-                checkbox(ui, flags, RenderFlags::DISABLE_TANGENTS, "Tangents");
-            });
-            ui.heading("Debug");
+            ui.heading("Output Override:");
             ui.horizontal(|ui| {
                 checkbox(ui, flags, RenderFlags::DEBUG_COLOR, "Color");
                 checkbox(ui, flags, RenderFlags::DEBUG_NORMALS, "Normals");
                 checkbox(ui, flags, RenderFlags::DEBUG_TANGENTS, "Tangents");
                 checkbox(ui, flags, RenderFlags::DEBUG_METALLIC, "Metallic");
-            });
-            ui.horizontal(|ui| {
                 checkbox(ui, flags, RenderFlags::DEBUG_ROUGHNESS, "Roughness");
                 checkbox(ui, flags, RenderFlags::DEBUG_OCCLUSION, "Occlusion");
                 checkbox(ui, flags, RenderFlags::DEBUG_TEXCOORDS0, "TexCoords0");
             });
-            ui.heading("Override");
+            ui.heading("Disable:");
+            ui.horizontal(|ui| {
+                checkbox(ui, flags, RenderFlags::DISABLE_COLOR_MAP, "Color Map");
+                checkbox(ui, flags, RenderFlags::DISABLE_NORMAL_MAP, "Normal Map");
+                checkbox(ui, flags, RenderFlags::DISABLE_TANGENTS, "Tangents");
+                checkbox(ui, flags, RenderFlags::DISABLE_MR_MAP, "MetalRough Map");
+                checkbox(ui, flags, RenderFlags::DISABLE_OCCLUSION_MAP, "AO Map");
+            });
+            ui.heading("Override:");
             ui.horizontal(|ui| {
                 checkbox(ui, flags, RenderFlags::OVERRIDE_COLOR, "Color");
                 ui.add(
@@ -206,25 +207,21 @@ fn build_ui(ctx: &egui::Context, config: &mut GpuConfigData) {
                 );
             });
             ui.horizontal(|ui| {
-                checkbox(ui, flags, RenderFlags::OVERRIDE_METALLIC, "Metallic");
+                checkbox(ui, flags, RenderFlags::OVERRIDE_METAL, "Metal");
                 ui.add(
                     egui::DragValue::new(&mut config.override_metallic)
                         .speed(0.01)
                         .range(0.0..=1.0)
                         .prefix("V: "),
                 );
-            });
-            ui.horizontal(|ui| {
-                checkbox(ui, flags, RenderFlags::OVERRIDE_ROUGHNESS, "Roughness");
+                checkbox(ui, flags, RenderFlags::OVERRIDE_ROUGH, "Rough");
                 ui.add(
                     egui::DragValue::new(&mut config.override_roughness)
                         .speed(0.01)
                         .range(0.0..=1.0)
                         .prefix("V: "),
                 );
-            });
-            ui.horizontal(|ui| {
-                checkbox(ui, flags, RenderFlags::OVERRIDE_OCCLUSION, "Occlusion");
+                checkbox(ui, flags, RenderFlags::OVERRIDE_OCCLUSION, "AO");
                 ui.add(
                     egui::DragValue::new(&mut config.override_occlusion)
                         .speed(0.01)
@@ -232,32 +229,92 @@ fn build_ui(ctx: &egui::Context, config: &mut GpuConfigData) {
                         .prefix("V: "),
                 );
             });
-            ui.heading("Lights");
+            ui.heading("Light:");
             ui.horizontal(|ui| {
                 checkbox(ui, flags, RenderFlags::OVERRIDE_LIGHTS, "Lights");
+            });
+            ui.horizontal(|ui| {
+                ui.label("0:");
                 ui.add(
                     egui::DragValue::new(&mut config.override_light0.x)
-                        .speed(0.01)
+                        .speed(0.1)
                         .range(0.0..=255.0)
                         .prefix("R: "),
                 );
                 ui.add(
                     egui::DragValue::new(&mut config.override_light0.y)
-                        .speed(0.01)
+                        .speed(0.1)
                         .range(0.0..=255.0)
                         .prefix("G: "),
                 );
                 ui.add(
                     egui::DragValue::new(&mut config.override_light0.z)
-                        .speed(0.01)
-                        .range(0.0..=2551.0)
+                        .speed(0.1)
+                        .range(0.0..=255.0)
                         .prefix("B: "),
                 );
+            });
+            ui.horizontal(|ui| {
+                ui.label("1:");
                 ui.add(
-                    egui::DragValue::new(&mut config.override_light0.w)
-                        .speed(0.01)
+                    egui::DragValue::new(&mut config.override_light1.x)
+                        .speed(0.1)
                         .range(0.0..=255.0)
-                        .prefix("A: "),
+                        .prefix("R: "),
+                );
+                ui.add(
+                    egui::DragValue::new(&mut config.override_light1.y)
+                        .speed(0.1)
+                        .range(0.0..=255.0)
+                        .prefix("G: "),
+                );
+                ui.add(
+                    egui::DragValue::new(&mut config.override_light1.z)
+                        .speed(0.1)
+                        .range(0.0..=255.0)
+                        .prefix("B: "),
+                );
+            });
+            ui.horizontal(|ui| {
+                ui.label("2:");
+                ui.add(
+                    egui::DragValue::new(&mut config.override_light2.x)
+                        .speed(0.1)
+                        .range(0.0..=255.0)
+                        .prefix("R: "),
+                );
+                ui.add(
+                    egui::DragValue::new(&mut config.override_light2.y)
+                        .speed(0.1)
+                        .range(0.0..=255.0)
+                        .prefix("G: "),
+                );
+                ui.add(
+                    egui::DragValue::new(&mut config.override_light2.z)
+                        .speed(0.1)
+                        .range(0.0..=255.0)
+                        .prefix("B: "),
+                );
+            });
+            ui.horizontal(|ui| {
+                ui.label("3:");
+                ui.add(
+                    egui::DragValue::new(&mut config.override_light3.x)
+                        .speed(0.1)
+                        .range(0.0..=255.0)
+                        .prefix("R: "),
+                );
+                ui.add(
+                    egui::DragValue::new(&mut config.override_light3.y)
+                        .speed(0.1)
+                        .range(0.0..=255.0)
+                        .prefix("G: "),
+                );
+                ui.add(
+                    egui::DragValue::new(&mut config.override_light3.z)
+                        .speed(0.1)
+                        .range(0.0..=255.0)
+                        .prefix("B: "),
                 );
             });
         });
