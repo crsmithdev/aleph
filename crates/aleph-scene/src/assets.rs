@@ -321,7 +321,7 @@ impl TextureLoader {
         cmd: &CommandBuffer,
     ) -> Result<Texture> {
         let texture = Texture::new(&self.gpu, info)?;
-        let data = bytemuck::cast_slice(data);
+        let data: &[u8] = bytemuck::cast_slice(data);
         let staging = self.staging_pool.next();
         staging.write(data);
 

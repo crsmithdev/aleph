@@ -10,12 +10,26 @@ use {
         },
         AllocationSizes, AllocatorDebugSettings, MemoryLocation,
     },
-    std::sync::{Arc, Mutex},
+    std::{
+        collections::HashMap,
+        sync::{
+            atomic::{AtomicU64, Ordering},
+            Arc, Mutex,
+        },
+    },
 };
+macro_rules! acquire {
+    ($lock:expr) => {
+        $lock.lock().expect("Failed to acquire lock")
+    };
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AllocationHandle(u64);
 
 #[derive(Debug)]
 pub struct Allocator {
     inner: Arc<Mutex<GpuAllocator>>,
+    entries: Arc<Mutex<HashMap<AllocationHandle, Allocation>>>,
     device: Device,
 }
 
@@ -32,25 +46,34 @@ impl Allocator {
 
         Ok(Self {
             inner: Arc::new(Mutex::new(allocator)),
+            entries: Arc::new(Mutex::new(HashMap::new())),
             device: device.clone(),
         })
     }
 
-    pub(crate) fn allocate_buffer(
+    fn next_id() -> AllocationHandle {
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let id = COUNTER.fetch_add(1, Ordering::Relaxed);
+        AllocationHandle(id)
+    }
+
+    pub fn allocate_buffer(
         &self,
         buffer: VkBuffer,
         requirements: MemoryRequirements,
         location: MemoryLocation,
-        label: impl Into<String>,
-    ) -> Result<Allocation> {
-        let mut allocator = self.inner.lock().expect("Could not acquire lock on allocator");
-        let allocation = allocator.allocate(&AllocationCreateDesc {
-            name: &label.into(),
-            requirements,
-            location,
-            linear: true,
-            allocation_scheme: AllocationScheme::GpuAllocatorManaged,
-        })?;
+        label: &str,
+    ) -> Result<AllocationHandle> {
+        let allocation = {
+            let mut allocator = acquire!(self.inner);
+            allocator.allocate(&AllocationCreateDesc {
+                name: &label,
+                requirements,
+                location,
+                linear: true,
+                allocation_scheme: AllocationScheme::GpuAllocatorManaged,
+            })?
+        };
 
         unsafe {
             self.device
@@ -58,76 +81,214 @@ impl Allocator {
                 .bind_buffer_memory(buffer, allocation.memory(), allocation.offset())
         }?;
 
-        Ok(allocation)
+        let handle = Self::next_id();
+        acquire!(self.entries).insert(handle, allocation);
+        Ok(handle)
     }
 
-    pub(crate) fn allocate_image(
+    pub fn allocate_image(
         &self,
         image: VkImage,
         requirements: MemoryRequirements,
         label: &str,
-    ) -> Result<Allocation> {
-        let mut allocator = self.inner.lock().unwrap();
-        let allocation = allocator.allocate(&AllocationCreateDesc {
-            name: label,
-            requirements,
-            location: MemoryLocation::GpuOnly,
-            linear: false,
-            allocation_scheme: AllocationScheme::GpuAllocatorManaged,
-        })?;
+    ) -> Result<AllocationHandle> {
+        let allocation = {
+            let mut allocator = acquire!(self.inner);
+            allocator.allocate(&AllocationCreateDesc {
+                name: label,
+                requirements,
+                location: MemoryLocation::GpuOnly,
+                linear: false,
+                allocation_scheme: AllocationScheme::GpuAllocatorManaged,
+            })?
+        };
+
         unsafe {
             self.device.handle.bind_image_memory(image, allocation.memory(), allocation.offset())
         }?;
-        Ok(allocation)
+
+        let handle = Self::next_id();
+        acquire!(self.entries).insert(handle, allocation);
+        Ok(handle)
     }
 
-    pub fn deallocate(&self, allocation: Allocation) {
-        self.inner.lock().unwrap().free(allocation).unwrap();
+    pub fn deallocate_buffer(&self, allocation: AllocationHandle) {
+        if let Some(allocation) = acquire!(self.entries).remove(&allocation) {
+            let mut allocator = acquire!(self.inner);
+            allocator.free(allocation).unwrap();
+        }
+    }
+
+    pub fn deallocate_image(&self, allocation: AllocationHandle) {
+        if let Some(allocation) = acquire!(self.entries).remove(&allocation) {
+            let mut allocator = acquire!(self.inner);
+            allocator.free(allocation).unwrap();
+        }
+    }
+
+    pub(crate) fn get_mapped_ptr(&self, allocation: AllocationHandle) -> Result<*mut u8> {
+        let entries = acquire!(self.entries);
+        let entry = entries.get(&allocation).expect("Invalid allocation ID");
+
+        entry
+            .mapped_ptr()
+            .map(|ptr| ptr.cast::<u8>().as_ptr())
+            .ok_or_else(|| anyhow::anyhow!("Buffer is not mapped"))
     }
 }
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "gpu-tests")]
     use {
         super::*,
-        crate::{test::test_gpu, Buffer, Texture, TextureInfo},
-        ash::vk::{BufferUsageFlags, Extent2D, Format, ImageAspectFlags, ImageUsageFlags},
+        crate::test::test_gpu,
+        ash::vk::{BufferCreateInfo, BufferUsageFlags, SharingMode},
     };
 
     #[test]
     #[cfg(feature = "gpu-tests")]
-    fn test_buffer_allocation() {
+    fn test_allocator_creation() {
         let gpu = test_gpu();
-        let buffer = Buffer::new(
-            gpu.device(),
-            &gpu.allocator(),
-            1024,
-            BufferUsageFlags::VERTEX_BUFFER,
-            MemoryLocation::CpuToGpu,
-            "test_buffer",
-        );
-
-        assert!(buffer.is_ok());
+        let allocator = gpu.allocator();
+        assert!(!allocator.entries.lock().unwrap().is_empty() == false);
     }
+
     #[test]
     #[cfg(feature = "gpu-tests")]
-    fn test_image_allocation() {
+    fn test_buffer_allocation_and_deallocation() {
         let gpu = test_gpu();
-        let texture = Texture::new(
-            gpu,
-            &TextureInfo {
-                format: Format::R8G8B8A8_UNORM,
-                extent: Extent2D {
-                    width: 256,
-                    height: 256,
-                },
-                flags: ImageUsageFlags::SAMPLED | ImageUsageFlags::TRANSFER_DST,
-                aspect_flags: ImageAspectFlags::COLOR,
-                sampler: None,
-                name: "test_texture".to_string(),
-            },
-        );
+        let allocator = gpu.allocator();
 
-        assert!(texture.is_ok());
+        let buffer_info = BufferCreateInfo::default()
+            .size(1024)
+            .usage(BufferUsageFlags::VERTEX_BUFFER)
+            .sharing_mode(SharingMode::EXCLUSIVE);
+
+        let buffer = unsafe { gpu.device().handle.create_buffer(&buffer_info, None) }
+            .expect("Failed to create buffer");
+
+        let requirements = unsafe { gpu.device().handle.get_buffer_memory_requirements(buffer) };
+
+        let alloc_id = allocator
+            .allocate_buffer(
+                buffer,
+                requirements,
+                MemoryLocation::CpuToGpu,
+                "test_buffer",
+            )
+            .expect("Failed to allocate buffer");
+
+        assert!(allocator.entries.lock().unwrap().contains_key(&alloc_id));
+
+        allocator.deallocate_buffer(alloc_id);
+        assert!(!allocator.entries.lock().unwrap().contains_key(&alloc_id));
+
+        unsafe { gpu.device().handle.destroy_buffer(buffer, None) };
+    }
+
+    #[test]
+    #[cfg(feature = "gpu-tests")]
+    fn test_image_allocation_and_deallocation() {
+        let gpu = test_gpu();
+        let allocator = gpu.allocator();
+
+        let image_info = ash::vk::ImageCreateInfo::default()
+            .image_type(ash::vk::ImageType::TYPE_2D)
+            .format(ash::vk::Format::R8G8B8A8_UNORM)
+            .extent(ash::vk::Extent3D {
+                width: 256,
+                height: 256,
+                depth: 1,
+            })
+            .mip_levels(1)
+            .array_layers(1)
+            .samples(ash::vk::SampleCountFlags::TYPE_1)
+            .tiling(ash::vk::ImageTiling::OPTIMAL)
+            .usage(ash::vk::ImageUsageFlags::COLOR_ATTACHMENT)
+            .sharing_mode(SharingMode::EXCLUSIVE);
+
+        let image = unsafe { gpu.device().handle.create_image(&image_info, None) }
+            .expect("Failed to create image");
+
+        let requirements = unsafe { gpu.device().handle.get_image_memory_requirements(image) };
+
+        let alloc_id = allocator
+            .allocate_image(image, requirements, "test_image")
+            .expect("Failed to allocate image");
+
+        assert!(allocator.entries.lock().unwrap().contains_key(&alloc_id));
+
+        allocator.deallocate_image(alloc_id);
+        assert!(!allocator.entries.lock().unwrap().contains_key(&alloc_id));
+
+        unsafe { gpu.device().handle.destroy_image(image, None) };
+    }
+
+    #[test]
+    #[cfg(feature = "gpu-tests")]
+    fn test_mapped_ptr_access() {
+        let gpu = test_gpu();
+        let allocator = gpu.allocator();
+
+        let buffer_info = BufferCreateInfo::default()
+            .size(1024)
+            .usage(BufferUsageFlags::VERTEX_BUFFER)
+            .sharing_mode(SharingMode::EXCLUSIVE);
+
+        let buffer = unsafe { gpu.device().handle.create_buffer(&buffer_info, None) }
+            .expect("Failed to create buffer");
+
+        let requirements = unsafe { gpu.device().handle.get_buffer_memory_requirements(buffer) };
+
+        let alloc_id = allocator
+            .allocate_buffer(
+                buffer,
+                requirements,
+                MemoryLocation::CpuToGpu,
+                "mapped_test_buffer",
+            )
+            .expect("Failed to allocate buffer");
+
+        let ptr = allocator.get_mapped_ptr(alloc_id).expect("Failed to get mapped ptr");
+        assert!(!ptr.is_null());
+
+        allocator.deallocate_buffer(alloc_id);
+        unsafe { gpu.device().handle.destroy_buffer(buffer, None) };
+    }
+
+    #[test]
+    #[cfg(feature = "gpu-tests")]
+    fn test_allocation_id_uniqueness() {
+        let gpu = test_gpu();
+        let allocator = gpu.allocator();
+        let mut ids = std::collections::HashSet::new();
+
+        for i in 0..10 {
+            let buffer_info = BufferCreateInfo::default()
+                .size(64)
+                .usage(BufferUsageFlags::VERTEX_BUFFER)
+                .sharing_mode(SharingMode::EXCLUSIVE);
+
+            let buffer = unsafe { gpu.device().handle.create_buffer(&buffer_info, None) }
+                .expect("Failed to create buffer");
+
+            let requirements =
+                unsafe { gpu.device().handle.get_buffer_memory_requirements(buffer) };
+
+            let alloc_id = allocator
+                .allocate_buffer(
+                    buffer,
+                    requirements,
+                    MemoryLocation::CpuToGpu,
+                    &format!("unique_test_{}", i),
+                )
+                .expect("Failed to allocate buffer");
+
+            assert!(ids.insert(alloc_id), "Allocation ID should be unique");
+
+            allocator.deallocate_buffer(alloc_id);
+            unsafe { gpu.device().handle.destroy_buffer(buffer, None) };
+        }
     }
 }

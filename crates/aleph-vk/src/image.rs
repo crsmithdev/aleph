@@ -1,5 +1,5 @@
 use {
-    crate::{Allocator, Device, Extent2D, Gpu},
+    crate::{allocator::AllocationHandle, Allocator, Device, Extent2D, Gpu},
     anyhow::Result,
     ash::vk::{
         ComponentMapping, Filter, Format, Handle, Image as VkImage, ImageAspectFlags,
@@ -28,7 +28,7 @@ pub struct TextureInfo {
 pub struct Texture {
     #[deref]
     image: Image,
-    allocation: Arc<Allocation>,
+    allocation: AllocationHandle,
     allocator: Arc<Allocator>,
     sampler: Option<Sampler>,
 }
@@ -46,8 +46,7 @@ impl Texture {
             .usage(info.flags | ImageUsageFlags::TRANSFER_DST);
         let image = unsafe { gpu.device().handle.create_image(image_info, None) }?;
         let requirements = unsafe { gpu.device().handle.get_image_memory_requirements(image) };
-        let allocation =
-            Arc::new(gpu.allocator().allocate_image(image, requirements, &info.name)?);
+        let allocation = gpu.allocator().allocate_image(image, requirements, &info.name)?;
 
         let handle = Image::new(
             image,
@@ -78,22 +77,14 @@ impl Texture {
     pub fn format(&self) -> Format { self.image.format }
 
     pub fn aspect_flags(&self) -> ImageAspectFlags { self.image.aspect_flags }
-
-    fn destroy(&mut self) {
-        if Arc::strong_count(&self.allocation) == 1 {
-            let allocation = mem::take(&mut self.allocation);
-            if let Some(cell) = Arc::into_inner(allocation) {
-                self.allocator.deallocate(cell);
-                self.image.destroy();
-            }
-        }
-    }
 }
 
 impl Drop for Texture {
-    fn drop(&mut self) { self.destroy(); }
+    fn drop(&mut self) {
+        self.allocator.deallocate_image(self.allocation);
+        self.image.destroy();
+    }
 }
-
 #[derive(Clone, Debug)]
 pub struct Image {
     name: String,

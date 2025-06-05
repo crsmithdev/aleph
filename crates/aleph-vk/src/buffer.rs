@@ -1,5 +1,5 @@
 use {
-    crate::{Allocator, Device, Gpu},
+    crate::{allocator::AllocationHandle, Allocator, Device, Gpu},
     anyhow::{bail, Result},
     ash::vk::{
         Buffer as VkBuffer, BufferCreateInfo, BufferDeviceAddressInfo, BufferUsageFlags,
@@ -140,7 +140,10 @@ impl<T: Pod> TypedBuffer<T> {
     pub fn type_size(&self) -> usize { self.type_size }
 
     #[inline]
-    pub fn write(&mut self, data: &[T]) { self.buffer.write(bytemuck::cast_slice(data)) }
+    pub fn write(&mut self, data: &[T]) {
+        let bytes: &[u8] = bytemuck::cast_slice(data);
+        self.buffer.write(bytes);
+    }
 
     pub fn sub_buffer(&self, offset: usize, len: usize) -> TypedBufferView<T> {
         assert!(offset + len <= self.len);
@@ -149,13 +152,6 @@ impl<T: Pod> TypedBuffer<T> {
             len,
             _marker: std::marker::PhantomData,
         }
-    }
-}
-
-impl<T> Drop for TypedBuffer<T> {
-    fn drop(&mut self) {
-        log::debug!("Dropped buffer: {self:?}");
-        self.buffer.destroy();
     }
 }
 
@@ -170,8 +166,7 @@ pub struct Buffer {
     device: Device,
     #[debug(skip)]
     allocator: Arc<Allocator>,
-    #[debug("{:?}", allocation.as_ptr())]
-    allocation: Arc<RefCell<Allocation>>,
+    allocation: AllocationHandle,
     #[debug("{}b", size)]
     size: u64,
     name: String,
@@ -198,12 +193,7 @@ impl Buffer {
         let create_info = BufferCreateInfo::default().size(size).usage(flags);
         let handle = unsafe { device.handle().create_buffer(&create_info, None) }?;
         let requirements = unsafe { device.handle().get_buffer_memory_requirements(handle) };
-        let allocation = Arc::new(RefCell::new(allocator.allocate_buffer(
-            handle,
-            requirements,
-            location,
-            name.to_string(),
-        )?));
+        let allocation = allocator.allocate_buffer(handle, requirements, location, &name)?;
 
         let address = if flags.contains(BufferUsageFlags::SHADER_DEVICE_ADDRESS) {
             let info = BufferDeviceAddressInfo::default().buffer(handle);
@@ -241,47 +231,39 @@ impl Buffer {
     pub fn len(&self) -> usize { self.size as usize }
 
     pub fn mapped_memory_range(&self) -> MappedMemoryRange {
-        let atom_size = self.device.properties().limits.non_coherent_atom_size;
-        let size = (self.size - 1) - ((self.size - 1) % atom_size) + atom_size;
+        // let atom_size = self.device.properties().limits.non_coherent_atom_size;
+        // let size = (self.size - 1) - ((self.size - 1) % atom_size) + atom_size;
 
-        let (memory, offset) = {
-            let allocation = self.allocation.borrow();
-            let memory = unsafe { allocation.memory() };
-            let offset = allocation.offset();
-            (memory, offset)
-        };
+        // let (memory, offset) = {
+        //     let allocation = self.allocator.
+        //     let allocation = self.allocation.borrow();
+        //     let memory = unsafe { allocation.memory() };
+        //     let offset = allocation.offset();
+        //     (memory, offset)
+        // };
 
-        MappedMemoryRange::default().memory(memory).offset(offset).size(size)
+        // MappedMemoryRange::default().memory(memory).offset(offset).size(size)
+        MappedMemoryRange::default()
     }
 
-    pub fn write(&self, data: &[u8]) {
-        if data.len() > self.size as usize {
-            panic!(
-                "Data size ({}) exceeds buffer size ({})",
-                data.len(),
-                self.size
-            );
+    pub fn write<T: Copy>(&self, data: &[T]) {
+        let offset = 0;
+        let mapped_ptr = self
+            .allocator
+            .get_mapped_ptr(self.allocation)
+            .unwrap_or_else(|e| panic!("Error writing to buffer {self:?}: {e}"));
+
+        unsafe {
+            let dst = mapped_ptr.add(offset as usize) as *mut T;
+            std::ptr::copy_nonoverlapping(data.as_ptr(), dst, data.len());
         }
-        let mut allocation = self.allocation.borrow_mut();
-        let mapped =
-            allocation.mapped_slice_mut().unwrap_or_else(|| panic!("Error mmapping buffer"));
-
-        let bytes = bytemuck::cast_slice(data);
-        let size = mem::size_of_val(bytes);
-
-        log::trace!("Writing {size} bytes to {self:?}");
-        mapped[0..size].copy_from_slice(bytes);
     }
+}
 
-    pub fn destroy(&mut self) {
-        if Arc::strong_count(&self.allocation) == 1 {
-            unsafe { self.device.handle.destroy_buffer(self.handle, None) };
-            let allocation = mem::take(&mut self.allocation);
-            if let Some(cell) = Arc::into_inner(allocation) {
-                let inner = cell.take();
-                self.allocator.deallocate(inner);
-            }
-        }
+impl Drop for Buffer {
+    fn drop(&mut self) {
+        unsafe { self.device.handle.destroy_buffer(self.handle, None) };
+        self.allocator.deallocate_buffer(self.allocation);
     }
 }
 
