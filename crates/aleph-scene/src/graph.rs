@@ -196,6 +196,26 @@ impl Scene {
         self.graph.node_weights().filter(|node| matches!(node.data, NodeData::Mesh(_)))
     }
 
+    pub fn meshes(&self) -> impl Iterator<Item = &MeshHandle> {
+        self.graph.node_weights().filter_map(|node| {
+            if let NodeData::Mesh(mesh) = &node.data {
+                Some(mesh)
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn lights(&self) -> impl Iterator<Item = &Light> {
+        self.graph.node_weights().filter_map(|node| {
+            if let NodeData::Light(light) = &node.data {
+                Some(light)
+            } else {
+                None
+            }
+        })
+    }
+
     pub fn clear(&mut self) { *self = Self::default(); }
 }
 

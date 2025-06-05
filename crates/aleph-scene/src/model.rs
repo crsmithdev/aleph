@@ -130,17 +130,27 @@ impl MikktGeometry for MeshInfo {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct Light {
-    pub position: Vec3,
-    pub intensity: f32,
     pub color: Vec4,
+    pub position: Vec3,
+    pub _padding0: u32,
 }
 
 impl Default for Light {
     fn default() -> Self {
         Self {
-            position: Vec3::ZERO,
-            intensity: 10.0,
-            color: Vec4::new(5.0, 5.0, 5.0, 1.0),
+            position: Vec3::new(3.0, 3.0, 3.0),
+            color: Vec4::new(5.0, 5.0, 5.0, 5.0),
+            _padding0: 0,
+        }
+    }
+}
+
+impl Light {
+    pub fn new(position: Vec3, color: Vec4) -> Self {
+        Self {
+            position,
+            color,
+            _padding0: 0,
         }
     }
 }

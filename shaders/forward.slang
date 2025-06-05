@@ -60,21 +60,20 @@ float4 fragmentMain(FsInput input, uniform PushConstants object) : SV_Target
     float3 viewDir = normalize(scene.cameraPos - input.wPosition);
     float3 color = float3(0.0);
 
-    for (uint i = 0; i < scene.n_lights && i < 1; ++i) {
+    for (uint i = 0; i < scene.n_lights && i < scene.n_lights; ++i) {
         Light light;
         light.color = scene.lights[i].color;
-        // light.intensity = scene.lights[i].intensity;
         light.position = scene.lights[i].position;
         if OVERRIDE_LIGHTS {
-          if (i == 0) {
-            light.color = config.overrideLight0;
-          } else if (i == 1) {
-            light.color = config.overrideLight1;
-          } else if (i == 2) {
-            light.color = config.overrideLight2;
-          } else if (i == 3) {
-            light.color = config.overrideLight3;
-          }
+            if (i == 0) {
+                light.color = config.overrideLight0;
+            } else if (i == 1) {
+                light.color = config.overrideLight1;
+            } else if (i == 2) {
+                light.color = config.overrideLight2;
+            } else if (i == 3) {
+                light.color = config.overrideLight3;
+            }
         }   
         color += calculateLight(light, material, input);
     }
@@ -129,41 +128,41 @@ func calculateLight(light: Light, material: Material, input: FsInput) ->float3 {
     return (kD * material.color / PI + specular) * lightRadiance * nDotL;
 }
 Material unpackMaterial(uint index, FsInput vertex) {
-  MaterialData materialData = materials.materials[index];
-  float2 uv = vertex.texCoords0;
+    MaterialData materialData = materials.materials[index];
+    float2 uv = vertex.texCoords0;
 
-  float3 colorSample = textures[materialData.colorIndex].Sample(uv).rgb;
-  if DISABLE_COLOR_MAP {
-    colorSample = float3(1.0, 1.0, 1.0);
-  }
-  float3 normalSample = textures[materialData.normalIndex].Sample(uv).rgb;
-  if DISABLE_NORMAL_MAP {
-    normalSample = float3(1.0, 1.0, 1.0); // Default normal facing up
-  }
-  float metalSample = textures[materialData.metalRoughIndex].Sample(uv).b;
-  if DISABLE_METAL_ROUGH_MAP {
-    metalSample = 1.0; // Default metallic value
-  }
-  float roughSample = textures[materialData.metalRoughIndex].Sample(uv).g;
-  if DISABLE_METAL_ROUGH_MAP {
-    roughSample = 1.0; // Default roughness value
-  }
-  float occlusionSample = textures[materialData.occlusionIndex].Sample(uv).r;
-  if DISABLE_OCCLUSION_MAP {
-    occlusionSample = 1.0; // Default occlusion value
-  }
+    float3 colorSample = textures[materialData.colorIndex].Sample(uv).rgb;
+    if DISABLE_COLOR_MAP {
+        colorSample = float3(1.0, 1.0, 1.0);
+    }
+    float3 normalSample = textures[materialData.normalIndex].Sample(uv).rgb;
+    if DISABLE_NORMAL_MAP {
+        normalSample = float3(1.0, 1.0, 1.0); // Default normal facing up
+    }
+    float metalSample = textures[materialData.metalRoughIndex].Sample(uv).b;
+    if DISABLE_METAL_ROUGH_MAP {
+        metalSample = 1.0; // Default metallic value
+    }
+    float roughSample = textures[materialData.metalRoughIndex].Sample(uv).g;
+    if DISABLE_METAL_ROUGH_MAP {
+        roughSample = 1.0; // Default roughness value
+    }
+    float occlusionSample = textures[materialData.occlusionIndex].Sample(uv).r;
+    if DISABLE_OCCLUSION_MAP {
+        occlusionSample = 1.0; // Default occlusion value
+    }
 
-  Material material;
-  float3 tangentNormal = normalize(normalSample * 2.0 - 1.0);
-  if (DISABLE_TANGENTS) {
-    material.normal = normalize(vertex.normal);
-  } else {
-    float3 N = normalize(vertex.normal);
-    float3 T = normalize(vertex.tangent.xyz);
-    float3 B = normalize(cross(N, T) * vertex.tangent.w);
-    float3x3 TBN = float3x3(T, B, N);
-    material.normal = normalize(mul(tangentNormal, TBN));
-  }
+    Material material;
+    float3 tangentNormal = normalize(normalSample * 2.0 - 1.0);
+    if (DISABLE_TANGENTS) {
+        material.normal = normalize(vertex.normal);
+    } else {
+        float3 N = normalize(vertex.normal);
+        float3 T = normalize(vertex.tangent.xyz);
+        float3 B = normalize(cross(N, T) * vertex.tangent.w);
+        float3x3 TBN = float3x3(T, B, N);
+        material.normal = normalize(mul(tangentNormal, TBN));
+    }
 
   material.color = OVERRIDE_COLOR ? config.overrideColor.rgb : colorSample * materialData.colorFactor;
   material.metallic = OVERRIDE_METALLIC ? config.overrideMetallic : metalSample * materialData.metalFactor;
@@ -251,9 +250,6 @@ struct Scene {
     float4x4 vp;
     float3 cameraPos;
     uint n_lights;
-    uint padding0;
-    uint padding1;
-    uint padding2;
     Light lights[4];
 };
 
@@ -282,7 +278,7 @@ struct ObjectData {
 
 struct Light
 {
-    float3 position;
-    float intensity;
     float4 color;
+    float3 position;
+    uint _padding0;
 };

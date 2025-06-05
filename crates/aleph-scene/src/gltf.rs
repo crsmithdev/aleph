@@ -2,7 +2,7 @@ use {
     crate::{
         graph::{NodeData, NodeHandle},
         mikktspace,
-        model::MeshInfo,
+        model::{Light, MeshInfo},
         util, Assets, Material, MaterialHandle, MeshHandle, Node, Scene, TextureHandle,
     },
     aleph_vk::{
@@ -49,6 +49,15 @@ pub fn load_scene(path: &str, mut assets: &mut Assets) -> Result<Scene> {
     for gltf_node in gltf_scene.nodes() {
         load_node(gltf_node, scene.root(), &mut scene, &meshes)?;
     }
+
+    let color = Vec4::new(5.0, 5.0, 5.0, 5.0);
+    let light1 = Node::light("light1", Light::new(Vec3::new(0.0, 3.0, 3.0), color));
+    scene.attach(light1, scene.root())?;
+    let light2 = Node::light("light2", Light::new(Vec3::new(3.0, 0.0, 3.0), color));
+    scene.attach(light2, scene.root())?;
+    let light3 = Node::light("light3", Light::new(Vec3::new(3.0, 3.0, 0.0), color));
+    scene.attach(light3, scene.root())?;
+
     log::info!(
         "Finished loading scene from {path:?}: {} meshes, {} materials, {} textures",
         meshes.len(),
@@ -270,17 +279,19 @@ fn load_mesh(
         let vertices = reader
             .read_positions()
             .map_or(Vec::new(), |positions| positions.map(Vec3::from).collect());
-        let normals =
-            reader.read_normals().map_or(Vec::new(), |normals| normals.map(Vec3::from).collect());
-        let tex_coords0 = reader.read_tex_coords(0).map_or(Vec::new(), |coords| -> Vec<Vec2> {
-            coords.into_f32().map(Vec2::from).collect()
+        let normals = reader.read_normals().map_or(vec![Vec3::ZERO; vertices.len()], |normals| {
+            normals.map(Vec3::from).collect()
         });
-        let tangents = reader
-            .read_tangents()
-            .map_or(Vec::new(), |tangents| tangents.map(Vec4::from).collect());
-        println!("tangents[0]: {:?}", tangents.get(0));
-        let colors = reader.read_colors(0).map_or(Vec::new(), |colors| {
-            colors.into_rgba_f32().map(Vec4::from).collect::<Vec<_>>()
+        let tex_coords0 =
+            reader.read_tex_coords(0).map_or(vec![Vec2::ZERO; vertices.len()], |coords| {
+                coords.into_f32().map(Vec2::from).collect()
+            });
+        let tangents =
+            reader.read_tangents().map_or(vec![Vec4::ZERO; vertices.len()], |tangents| {
+                tangents.map(Vec4::from).collect()
+            });
+        let colors = reader.read_colors(0).map_or(vec![Vec4::ZERO; vertices.len()], |colors| {
+            colors.into_rgba_f32().map(Vec4::from).collect()
         });
 
         let indices = reader.read_indices().map(|idx| idx.into_u32().collect::<Vec<_>>()).unwrap();

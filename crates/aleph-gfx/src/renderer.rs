@@ -55,29 +55,7 @@ const BIND_IDX_SCENE: usize = 1;
 const BIND_IDX_MATERIAL: usize = 2;
 const BIND_IDX_TEXTURE: usize = 3;
 const N_FRAMES: usize = 2;
-
-const LIGHTS: [Light; 4] = [
-    Light {
-        position: vec3(2., 2., 2.),
-        color: vec4(10., 10., 10., 10.),
-        intensity: 10.,
-    },
-    Light {
-        position: vec3(-2., -2., -2.),
-        color: vec4(10., 10., 10., 10.),
-        intensity: 10.,
-    },
-    Light {
-        position: vec3(-2., 2., 2.),
-        color: vec4(10., 10., 10., 10.),
-        intensity: 10.,
-    },
-    Light {
-        position: vec3(2., -2., -2.),
-        color: vec4(10., 10., 10., 10.),
-        intensity: 10.,
-    },
-];
+const N_LIGHTS: usize = 4;
 
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
@@ -87,11 +65,7 @@ pub struct GpuSceneData {
     pub vp: Mat4,
     pub camera_pos: Vec3,
     pub n_lights: u32,
-    pub flags: u32,
-    pub padding0: u32,
-    pub padding1: u32,
-    pub padding2: u32,
-    pub lights: [Light; 4],
+    pub lights: [Light; N_LIGHTS],
 }
 
 #[repr(C)]
@@ -204,19 +178,12 @@ pub struct RendererResources {
 impl RendererResources {
     pub fn new(gpu: &Arc<Gpu>) -> Result<Self> {
         let scene_buffer = TypedBuffer::shared_uniform(gpu, 1, "renderer-scene")?;
-        let scene_data = GpuSceneData {
-            lights: LIGHTS,
-            n_lights: 1,
-            ..Default::default()
-        };
+        let scene_data = GpuSceneData::default();
         let config_buffer = TypedBuffer::shared_uniform(gpu, 1, "renderer-config")?;
         let object_data_buffer = TypedBuffer::shared_uniform(gpu, 1, "renderer-object")?;
         let index_buffer = TypedBuffer::index(gpu, 1, "renderer-index")?;
         let vertex_buffer = TypedBuffer::vertex(gpu, 1, "renderer-vertex")?;
-        let config_data = GpuConfigData {
-            flags: 0,
-            ..Default::default()
-        };
+        let config_data = GpuConfigData::default();
 
         // Create resource binder
         let binder = ResourceLayout::set(SET_IDX_BINDLESS)
@@ -304,13 +271,19 @@ impl Renderer {
     fn update_per_frame_data(&mut self, scene: &Scene, _assets: &Assets) {
         let view = scene.camera.view().transpose();
         let projection = scene.camera.projection().transpose();
+        let lights = scene.lights().take(N_LIGHTS).collect::<Vec<_>>();
 
         self.resources.scene_data.view = view;
         self.resources.scene_data.projection = projection;
         self.resources.scene_data.vp = projection * view.inverse();
         self.resources.scene_data.camera_pos = scene.camera.position();
-        self.resources.scene_buffer.write(&[self.resources.scene_data]);
+        self.resources.scene_data.n_lights = N_LIGHTS as u32;
+        self.resources.scene_data.lights[0] = **lights.get(0).unwrap_or(&&Light::default());
+        self.resources.scene_data.lights[1] = **lights.get(1).unwrap_or(&&Light::default());
+        self.resources.scene_data.lights[2] = **lights.get(2).unwrap_or(&&Light::default());
+        self.resources.scene_data.lights[3] = **lights.get(3).unwrap_or(&&Light::default());
 
+        self.resources.scene_buffer.write(&[self.resources.scene_data]);
         self.resources.config_buffer.write(&[self.resources.config_data]);
     }
 
