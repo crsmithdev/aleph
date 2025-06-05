@@ -1,6 +1,7 @@
 use {
     crate::{
         allocator::AllocationHandle as AllocationId,
+        freelist::{FreeList, FreeListId},
         // freelist::{FreeList, FreeListId},
         Allocator,
         Device,
@@ -20,43 +21,9 @@ pub struct Buffer {
     allocation: AllocationId,
     allocator: Arc<Allocator>,
     size: u64,
-    // sub_allocations: Arc<FreeList>,
+    sub_allocations: Arc<FreeList>,
     device: Device,
 }
-// #[derive(Debug)]
-// pub struct SubBuffer {
-//     handle: ash::vk::Buffer,
-//     buffer_id: AllocationId,
-//     allocator: Arc<Allocator>,
-//     sub_allocation: FreeListId,
-//     sub_allocator: Arc<FreeList>,
-//     offset: u64,
-//     size: u64,
-// }
-
-// impl SubBuffer {
-//     pub fn write<T: Pod>(&self, data: &[T]) {
-//         let mapped_ptr = self
-//             .allocator
-//             .get_mapped_ptr(self.buffer_id)
-//             .unwrap_or_else(|e| panic!("Error writing to {self:?}: {e}"));
-
-//         unsafe {
-//             let dst = mapped_ptr.add(self.offset as usize) as *mut T;
-//             std::ptr::copy_nonoverlapping(data.as_ptr(), dst, data.len());
-//         }
-//     }
-
-//     pub fn offset(&self) -> u64 { self.offset }
-
-//     pub fn size(&self) -> u64 { self.size }
-
-//     pub fn handle(&self) -> ash::vk::Buffer { self.handle }
-// }
-
-// impl Drop for SubBuffer {
-//     fn drop(&mut self) { self.sub_allocator.free(self.sub_allocation); }
-// }
 
 impl Buffer {
     pub fn new(
@@ -82,32 +49,31 @@ impl Buffer {
             allocation: id,
             allocator: allocator.clone(),
             size,
-            // sub_allocations: FreeList::new(size),
+            sub_allocations: FreeList::new(size),
         })
     }
 
-    // pub fn sub_buffer(&self, size: u64, alignment: u64) -> Option<SubBuffer> {
-    //     let freelist = &self.sub_allocations;
-    //     let freelist_id = freelist.allocate(size, alignment)?;
-    //     let offset = freelist.offset(freelist_id)?;
+    pub fn sub_buffer(&self, size: u64, alignment: u64) -> Option<SubBuffer> {
+        let freelist = &self.sub_allocations;
+        let freelist_id = freelist.allocate(size, alignment)?;
+        let offset = freelist.offset(freelist_id)?;
 
-    //     Some(SubBuffer {
-    //         handle: self.handle,
-    //         buffer_id: self.allocation,
-    //         allocator: self.allocator.clone(),
-    //         sub_allocation: freelist_id,
-    //         sub_allocator: freelist.clone(),
-    //         offset,
-    //         size,
-    //     })
-    // }
+        Some(SubBuffer {
+            handle: self.handle,
+            buffer_id: self.allocation,
+            allocator: self.allocator.clone(),
+            sub_allocation: freelist_id,
+            sub_allocator: freelist.clone(),
+            offset,
+            size,
+        })
+    }
 
-    // pub fn free_sub_buffer(&self, buffer: &SubBuffer) {
-    //     self.sub_allocations.free(buffer.sub_allocation);
-    // }
+    pub fn free_sub_buffer(&self, buffer: &SubBuffer) {
+        self.sub_allocations.free(buffer.sub_allocation);
+    }
 
-    pub fn write<T: Copy>(&self, data: &[T]) {
-        let offset = 0;
+    pub fn write_offset<T: Copy>(&self, offset: u64, data: &[T]) {
         let mapped_ptr = self
             .allocator
             .get_mapped_ptr(self.allocation)
@@ -118,6 +84,8 @@ impl Buffer {
             std::ptr::copy_nonoverlapping(data.as_ptr(), dst, data.len());
         }
     }
+
+    pub fn write<T: Pod>(&self, data: &[T]) { self.write_offset(0, data) }
 
     pub fn handle(&self) -> ash::vk::Buffer { self.handle }
 
@@ -131,14 +99,14 @@ impl Drop for Buffer {
     }
 }
 
-#[derive(Debug, Deref)]
-pub struct TypedBuffer<T> {
+#[derive(Clone, Debug, Deref)]
+pub struct TypedBuffer<T: Pod> {
     #[deref]
     buffer: Buffer,
     _phantom: std::marker::PhantomData<T>,
 }
 
-impl<T: Copy> TypedBuffer<T> {
+impl<T: Pod> TypedBuffer<T> {
     pub fn index(gpu: &Gpu, size: usize, name: &str) -> Result<Self> {
         Self::new(
             &gpu.device(),
@@ -233,14 +201,41 @@ impl<T: Copy> TypedBuffer<T> {
     pub fn buffer(&self) -> &Buffer { &self.buffer }
 }
 
-impl<T> Clone for TypedBuffer<T> {
-    fn clone(&self) -> Self {
-        Self {
-            buffer: self.buffer.clone(),
-            _phantom: std::marker::PhantomData,
+#[derive(Debug)]
+pub struct SubBuffer {
+    handle: ash::vk::Buffer,
+    buffer_id: AllocationId,
+    allocator: Arc<Allocator>,
+    sub_allocation: FreeListId,
+    sub_allocator: Arc<FreeList>,
+    offset: u64,
+    size: u64,
+}
+
+impl SubBuffer {
+    pub fn write<T: Pod>(&self, data: &[T]) {
+        let mapped_ptr = self
+            .allocator
+            .get_mapped_ptr(self.buffer_id)
+            .unwrap_or_else(|e| panic!("Error writing to {self:?}: {e}"));
+
+        unsafe {
+            let dst = mapped_ptr.add(self.offset as usize) as *mut T;
+            std::ptr::copy_nonoverlapping(data.as_ptr(), dst, data.len());
         }
     }
+
+    pub fn offset(&self) -> u64 { self.offset }
+
+    pub fn size(&self) -> u64 { self.size }
+
+    pub fn handle(&self) -> ash::vk::Buffer { self.handle }
 }
+
+impl Drop for SubBuffer {
+    fn drop(&mut self) { self.sub_allocator.free(self.sub_allocation); }
+}
+
 #[cfg(test)]
 mod tests {
     use {super::*, crate::test::test_gpu, assay::assay};
