@@ -54,6 +54,7 @@ tracing-log = "0.2.0"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 winit = "0.30.5"
 bitflags = "2.9.1"
+assay = "0.1.1" 
 
 [dependencies]
 aleph-app = { workspace = true }
@@ -62,6 +63,7 @@ aleph-gfx = { workspace = true }
 aleph-scene = { workspace = true }
 aleph-vk = { workspace = true }
 anyhow = { workspace = true }
+assay.workspace = true
 glam = { workspace = true }
 glob = { workspace = true }
 slang = { workspace = true }
