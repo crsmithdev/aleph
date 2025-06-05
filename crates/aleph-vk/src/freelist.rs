@@ -44,7 +44,14 @@ impl FreeList {
     }
 
     pub fn allocate(&self, size: u64, alignment: u64) -> Option<FreeListId> {
+        println!("allocate: size={}, alignment={}", size, alignment);
         let mut state = self.state.lock().unwrap();
+        for (_id, block) in &state.allocations {
+            println!("allocations: {:?}", block);
+        }
+        for block in &state.free_blocks {
+            println!("free blocks: {:?}", block);
+        }
 
         for (i, &block) in state.free_blocks.iter().enumerate() {
             let aligned_offset = (block.offset + alignment - 1) & !(alignment - 1);
