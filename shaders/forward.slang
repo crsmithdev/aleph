@@ -63,12 +63,19 @@ float4 fragmentMain(FsInput input, uniform PushConstants object) : SV_Target
     for (uint i = 0; i < scene.n_lights && i < 1; ++i) {
         Light light;
         light.color = scene.lights[i].color;
-        light.intensity = scene.lights[i].intensity;
-        light.position = scene.lights[i].position;  
+        // light.intensity = scene.lights[i].intensity;
+        light.position = scene.lights[i].position;
         if OVERRIDE_LIGHTS {
-            light.color = float4(100.0, 100.0, 100.0, 100.0);
-            light.intensity = 100.0;
-        }
+          if (i == 0) {
+            light.color = config.overrideLight0;
+          } else if (i == 1) {
+            light.color = config.overrideLight1;
+          } else if (i == 2) {
+            light.color = config.overrideLight2;
+          } else if (i == 3) {
+            light.color = config.overrideLight3;
+          }
+        }   
         color += calculateLight(light, material, input);
     }
 
@@ -101,7 +108,7 @@ func calculateLight(light: Light, material: Material, input: FsInput) ->float3 {
 
     float lightDistance = length(light.position - input.wPosition);
     float lightAttenuation = 1.0 / (lightDistance * lightDistance);
-    float3 lightRadiance = lightColor * lightAttenuation * light.intensity * 10.0;
+    float3 lightRadiance = lightColor * lightAttenuation;
 
     // Correct F0 calculation for PBR
     float3 F0 = lerp(float3(0.04, 0.04, 0.04), material.color.rgb, material.metallic);

@@ -253,6 +253,12 @@ fn build_ui(ctx: &egui::Context, config: &mut GpuConfigData) {
                         .range(0.0..=255.0)
                         .prefix("B: "),
                 );
+                ui.add(
+                    egui::DragValue::new(&mut config.override_light0.w)
+                        .speed(0.1)
+                        .range(0.0..=255.0)
+                        .prefix("A: "),
+                );
             });
             ui.horizontal(|ui| {
                 ui.label("1:");
@@ -273,6 +279,12 @@ fn build_ui(ctx: &egui::Context, config: &mut GpuConfigData) {
                         .speed(0.1)
                         .range(0.0..=255.0)
                         .prefix("B: "),
+                );
+                ui.add(
+                    egui::DragValue::new(&mut config.override_light1.w)
+                        .speed(0.1)
+                        .range(0.0..=255.0)
+                        .prefix("A: "),
                 );
             });
             ui.horizontal(|ui| {
@@ -295,6 +307,12 @@ fn build_ui(ctx: &egui::Context, config: &mut GpuConfigData) {
                         .range(0.0..=255.0)
                         .prefix("B: "),
                 );
+                ui.add(
+                    egui::DragValue::new(&mut config.override_light2.w)
+                        .speed(0.1)
+                        .range(0.0..=255.0)
+                        .prefix("A: "),
+                );
             });
             ui.horizontal(|ui| {
                 ui.label("3:");
@@ -315,6 +333,12 @@ fn build_ui(ctx: &egui::Context, config: &mut GpuConfigData) {
                         .speed(0.1)
                         .range(0.0..=255.0)
                         .prefix("B: "),
+                );
+                ui.add(
+                    egui::DragValue::new(&mut config.override_light3.w)
+                        .speed(0.1)
+                        .range(0.0..=255.0)
+                        .prefix("A: "),
                 );
             });
         });
