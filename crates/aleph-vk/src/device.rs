@@ -32,6 +32,7 @@ use {
     },
     derive_more::{Debug, Deref},
     std::{ffi, slice},
+    tracing::trace,
 };
 
 const DEVICE_EXTENSIONS: [&ffi::CStr; 10] = [
@@ -77,9 +78,13 @@ pub struct Device {
     #[deref]
     #[debug("{:#x}", handle.handle().as_raw())]
     pub(crate) handle: AshDevice, // TODO
+    #[debug("{:#x}", (*gfx_queue).as_raw())]
     pub(crate) gfx_queue: Queue,
+    #[debug("{:#x}", (*transfer_queue).as_raw())]
     pub(crate) transfer_queue: Queue,
+    #[debug("{:#x}", physical_device.as_raw())]
     pub(crate) physical_device: PhysicalDevice,
+    #[debug(skip)]
     properties: PhysicalDeviceProperties,
 }
 
@@ -534,5 +539,10 @@ impl Device {
                 .queue_submit2(**queue, slice::from_ref(&submit_info), fence)
                 .unwrap_or_else(|e| panic!("Error submitting {submit_info:?} to {queue:?}: {e}"))
         }
+    }
+
+    pub fn destroy(&mut self) {
+        unsafe { self.handle.destroy_device(None) };
+        trace!("Destroyed {self:?}");
     }
 }

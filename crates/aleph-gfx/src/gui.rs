@@ -6,7 +6,7 @@ use {
         Layer, Window,
     },
     aleph_scene::util,
-    aleph_vk::{AttachmentLoadOp, AttachmentStoreOp, CommandPool, Extent2D, Format, Gpu},
+    aleph_vk::{AttachmentLoadOp, AttachmentStoreOp, CommandPool, Device, Extent2D, Format, Gpu},
     anyhow::Result,
     derive_more::Debug,
     egui, egui_ash_renderer as egui_renderer, egui_extras, egui_winit, gpu_allocator as ga,
@@ -25,6 +25,7 @@ pub struct Gui {
     pool: CommandPool,
     window: Arc<winit::window::Window>,
     textures_to_free: Option<Vec<egui::TextureId>>,
+    device: Device,
 }
 
 impl Layer for Gui {
@@ -86,6 +87,7 @@ impl Gui {
             renderer,
             window: window.clone(),
             textures_to_free: None,
+            device: device.clone(),
             pool,
         };
         Ok(gui)
@@ -156,6 +158,11 @@ impl Gui {
         events.for_each(|event| {
             let _ = self.state.on_window_event(&self.window, &event.0);
         });
+    }
+
+    pub fn destroy(&mut self) {
+        self.device.wait_idle();
+        self.pool.destroy();
     }
 }
 
@@ -352,6 +359,10 @@ fn checkbox(ui: &mut egui::Ui, flags: &mut u32, bit: RenderFlags, label: &str) {
         temp.set(bit, value);
         *flags = temp.bits();
     }
+}
+
+impl Drop for Gui {
+    fn drop(&mut self) { self.destroy(); }
 }
 
 // fn light(ui: &mut egui::Ui, light: &mut Light, n: u32) {

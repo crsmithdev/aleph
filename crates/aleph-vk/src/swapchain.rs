@@ -13,6 +13,7 @@ use {
     derive_more::Debug,
     raw_window_handle::{HasDisplayHandle, HasWindowHandle},
     std::sync::Mutex,
+    tracing::trace,
 };
 
 pub const N_SWAPCHAIN_IMAGES: u32 = 3;
@@ -124,6 +125,12 @@ impl Swapchain {
             .unwrap_or_else(|e| panic!("Error acquiring lock for {:?}: {:?}", self.inner, e))
             .present(queue, wait_semaphores, indices)
     }
+
+    pub fn destroy(&mut self) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.destroy();
+        trace!("Destroyed {self:?}");
+    }
 }
 #[derive(Debug)]
 struct SwapchainInner {
@@ -152,10 +159,10 @@ impl SwapchainInner {
         let capabilities: SurfaceCapabilitiesKHR = unsafe {
             surface
                 .loader
-                .get_physical_device_surface_capabilities(device.physical_device, surface.inner)
+                .get_physical_device_surface_capabilities(device.physical_device, surface.handle)
         }?;
         let mut swapchain_info = SwapchainCreateInfoKHR::default()
-            .surface(surface.inner)
+            .surface(surface.handle)
             .min_image_count(in_flight_frames)
             .image_format(info.format)
             .image_color_space(info.color_space)
@@ -218,7 +225,7 @@ impl SwapchainInner {
         })
     }
 
-    pub fn destroy(&self) {
+    pub fn destroy(&mut self) {
         unsafe {
             self.loader.destroy_swapchain(self.handle, None);
             self.images
@@ -259,14 +266,10 @@ impl SwapchainInner {
     }
 }
 
-impl Drop for SwapchainInner {
-    fn drop(&mut self) { self.destroy(); }
-}
-
 #[derive(Clone, Debug)]
 pub struct Surface {
-    #[debug("{:#x}", inner.as_raw())]
-    pub(crate) inner: SurfaceKHR,
+    #[debug("{:#x}", handle.as_raw())]
+    pub(crate) handle: SurfaceKHR,
 
     #[debug("{:#x}", loader.instance().as_raw())]
     pub(crate) loader: khr::surface::Instance,
@@ -275,13 +278,13 @@ pub struct Surface {
 impl Surface {
     pub fn headless(instance: &Instance) -> Self {
         Self {
-            inner: SurfaceKHR::null(),
+            handle: SurfaceKHR::null(),
             loader: khr::surface::Instance::new(&instance.entry, &instance.handle),
         }
     }
 
     pub fn new(instance: &Instance, window: &winit::window::Window) -> Result<Self> {
-        let inner: SurfaceKHR = unsafe {
+        let handle: SurfaceKHR = unsafe {
             ash_window::create_surface(
                 &instance.entry,
                 &instance.handle,
@@ -292,6 +295,11 @@ impl Surface {
         };
 
         let loader = khr::surface::Instance::new(&instance.entry, &instance.handle);
-        Ok(Self { inner, loader })
+        Ok(Self { handle, loader })
+    }
+
+    pub(crate) fn destroy(&mut self) {
+        unsafe { self.loader.destroy_surface(self.handle, None) };
+        trace!("Destroyed {self:?}");
     }
 }

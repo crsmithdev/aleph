@@ -8,11 +8,12 @@ use {
     ash::vk::{
         Bool32, ColorSpaceKHR, CommandBufferSubmitInfo, DebugUtilsMessageSeverityFlagsEXT,
         DebugUtilsMessageTypeFlagsEXT, DebugUtilsMessengerCallbackDataEXT, Extent2D, Fence,
-        FenceCreateFlags, Format, PipelineStageFlags2, Semaphore, SemaphoreSubmitInfo, FALSE,
+        FenceCreateFlags, Format, Handle, PipelineStageFlags2, Semaphore, SemaphoreSubmitInfo,
+        FALSE,
     },
     derive_more::Debug,
     std::{ffi, sync::Arc},
-    tracing::instrument,
+    tracing::{instrument, trace},
     winit::window::Window,
 };
 
@@ -21,14 +22,23 @@ const IN_FLIGHT_FRAMES: usize = 2;
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct Gpu {
+    #[debug("{:#x}", (*instance).handle.handle().as_raw())]
     pub(crate) instance: Instance,
+    #[debug("{:#x}", (*surface).handle.as_raw())]
     pub(crate) surface: Surface,
+    #[debug("{:#x}", (*device).handle.handle().as_raw())]
     pub(crate) device: Device,
+    #[debug(skip)] // TODO make handle visible
     pub(crate) swapchain: Swapchain,
+    #[debug(skip)] // TODO figure out how to short log this
     pub(crate) allocator: Arc<Allocator>,
+    #[debug("{:#x}", (*debug_utils).instance.instance().as_raw())]
     pub(crate) debug_utils: DebugUtils,
+    #[debug("{:#x}", (*immediate_cmd_pool).as_raw())]
     immediate_cmd_pool: CommandPool,
+    #[debug("{:#x}", (*immediate_cmd_buffer).as_raw())]
     immediate_cmd_buffer: CommandBuffer,
+    #[debug("{:#x}", imm_fence.as_raw())]
     imm_fence: Fence,
 }
 
@@ -186,6 +196,26 @@ impl Gpu {
 
         self.device.queue_submit(self.device.graphics_queue(), cmd_infos, &[], &[], fence);
     }
+
+    pub fn destroy(&mut self) {
+        // Drop order: swapchain, command buffer/pool, allocator, debug utils, device, surface, instance
+        // (Fields are dropped in struct order, but we call destroy explicitly for clarity)
+        // Only call destroy on types that have a destroy method.
+        self.device.wait_idle();
+        self.swapchain.destroy();
+        self.surface.destroy();
+        self.immediate_cmd_buffer.destroy();
+        self.immediate_cmd_pool.destroy();
+        // // Allocator is Arc, so let Arc handle drop.
+        self.debug_utils.destroy();
+        self.device.destroy();
+        self.instance.destroy();
+        trace!("Destroyed {self:?}")
+    }
+}
+
+impl Drop for Gpu {
+    fn drop(&mut self) { self.destroy(); }
 }
 
 #[allow(clippy::missing_safety_doc)]

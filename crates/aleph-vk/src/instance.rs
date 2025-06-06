@@ -13,6 +13,7 @@ use {
     },
     derive_more::{Debug, Deref},
     std::ffi,
+    tracing::trace,
 };
 
 const DEFAULT_APP_NAME: &ffi::CStr = c"Aleph";
@@ -114,5 +115,12 @@ impl Instance {
             .push_next(features);
 
         Ok(unsafe { self.handle.create_device(physical_device, &device_info, None) }?)
+    }
+
+    pub fn destroy(&mut self) {
+        // unsafe {
+        // self.handle.destroy_instance(None);
+        // }
+        trace!("Destroyed {self:?}");
     }
 }

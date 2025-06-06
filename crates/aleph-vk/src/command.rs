@@ -14,6 +14,7 @@ use {
     bytemuck::Pod,
     derive_more::{Debug, Deref},
     std::slice,
+    tracing::trace,
 };
 
 #[derive(Clone, Debug, Deref)]
@@ -60,6 +61,22 @@ impl CommandPool {
     pub fn queue_family_index(&self) -> u32 { self.queue.family.index() }
 
     pub fn name(&self) -> &str { &self.name }
+
+    pub fn destroy(&mut self) {
+        if self.handle != VkCommandPool::null() {
+            self.device.wait_idle();
+
+            unsafe {
+                self.device.handle.destroy_command_pool(self.handle, None);
+            }
+            self.handle = VkCommandPool::null();
+            trace!("Destroyed {self:?}");
+        }
+    }
+}
+
+impl Drop for CommandPool {
+    fn drop(&mut self) { self.destroy(); }
 }
 
 #[allow(dead_code)]
@@ -384,10 +401,12 @@ impl CommandBuffer {
             );
         };
     }
+
+    pub fn destroy(&mut self) {
+        log::trace!("Destroying {self:?}");
+    }
 }
 
 impl Drop for CommandBuffer {
-    fn drop(&mut self) {
-        log::trace!("Dropped {self:?}");
-    }
+    fn drop(&mut self) { self.destroy(); }
 }

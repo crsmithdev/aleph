@@ -17,6 +17,7 @@ use {
             Arc, Mutex,
         },
     },
+    tracing::trace,
 };
 macro_rules! acquire {
     ($lock:expr) => {
@@ -135,6 +136,14 @@ impl Allocator {
             .map(|ptr| ptr.cast::<u8>().as_ptr())
             .ok_or_else(|| anyhow::anyhow!("Buffer is not mapped"))
     }
+
+    pub(crate) fn destroy(&self) {
+        trace!("Destroyed {self:?}");
+    }
+}
+
+impl Drop for Allocator {
+    fn drop(&mut self) { self.destroy() }
 }
 
 #[cfg(test)]

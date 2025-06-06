@@ -1,19 +1,23 @@
 use {
     crate::{AllocationHandle, Allocator, Device, Gpu},
     anyhow::Result,
-    ash::vk::{BufferCreateInfo, BufferUsageFlags, SharingMode},
+    ash::vk::{BufferCreateInfo, BufferUsageFlags, Handle, SharingMode},
     bytemuck::Pod,
-    derive_more::Deref,
+    derive_more::{Debug, Deref},
     gpu_allocator::MemoryLocation,
     std::sync::Arc,
+    tracing::trace,
 };
 
 #[derive(Clone, Debug)]
 pub struct Buffer {
+    #[debug("{:#x}", handle.as_raw())]
     handle: ash::vk::Buffer,
     allocation: AllocationHandle,
+    #[debug(skip)]
     allocator: Arc<Allocator>,
     size: u64,
+    #[debug(skip)]
     device: Device,
 }
 
@@ -61,13 +65,16 @@ impl Buffer {
     pub fn handle(&self) -> ash::vk::Buffer { self.handle }
 
     pub fn size(&self) -> u64 { self.size }
+
+    pub fn destroy(&mut self) {
+        unsafe { self.device.handle.destroy_buffer(self.handle, None) };
+        self.allocator.deallocate_buffer(self.allocation);
+        trace!("Destroyed {self:?}");
+    }
 }
 
 impl Drop for Buffer {
-    fn drop(&mut self) {
-        unsafe { self.device.handle.destroy_buffer(self.handle, None) };
-        self.allocator.deallocate_buffer(self.allocation);
-    }
+    fn drop(&mut self) { self.destroy(); }
 }
 
 #[derive(Clone, Debug, Deref)]

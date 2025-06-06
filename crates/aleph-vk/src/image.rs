@@ -9,6 +9,7 @@ use {
     },
     derive_more::{Debug, Deref},
     std::sync::Arc,
+    tracing::trace,
 };
 
 #[derive(Clone, Debug)]
@@ -76,12 +77,14 @@ impl Texture {
     pub fn format(&self) -> Format { self.image.format }
 
     pub fn aspect_flags(&self) -> ImageAspectFlags { self.image.aspect_flags }
-}
-impl Drop for Texture {
-    fn drop(&mut self) {
+
+    pub fn destroy(&mut self) {
         self.allocator.deallocate_image(self.allocation_id);
         self.image.destroy();
     }
+}
+impl Drop for Texture {
+    fn drop(&mut self) { self.destroy(); }
 }
 #[derive(Clone, Debug)]
 pub struct Image {
@@ -157,6 +160,7 @@ impl Image {
             self.device.handle.destroy_image_view(self.view, None);
             self.device.handle.destroy_image(self.handle, None);
         }
+        trace!("Destroyed {self:?}");
     }
 }
 

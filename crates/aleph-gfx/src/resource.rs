@@ -13,6 +13,7 @@ use {
         WriteDescriptorSet,
     },
     anyhow::Result,
+    ash::vk::FenceCreateFlags,
     bytemuck::{Pod, Zeroable},
     derive_more::Debug,
     glam::{Mat4, Vec2, Vec3, Vec4},
@@ -36,6 +37,7 @@ pub struct RendererResources {
     pub index_buffer: TypedBuffer<u32>,
     pub vertex_buffer: TypedBuffer<Vertex>,
     pub render_objects: Vec<RenderObject>,
+    pub fence: Fence,
     pub binder: ResourceBinder,
 }
 
@@ -48,6 +50,7 @@ impl RendererResources {
         let index_buffer = TypedBuffer::index(gpu, 1, "renderer-index")?;
         let vertex_buffer = TypedBuffer::vertex(gpu, 1, "renderer-vertex")?;
         let config_data = GpuConfigData::default();
+        let fence = gpu.device().create_fence(FenceCreateFlags::default());
         let render_objects = vec![];
 
         // Create resource binder
@@ -68,6 +71,7 @@ impl RendererResources {
             vertex_buffer,
             render_objects,
             binder,
+            fence,
         })
     }
 
@@ -142,16 +146,11 @@ impl RendererResources {
             .update(&gpu)?;
 
         cmd.end();
+        gpu.queue_submit(&gpu.device().graphics_queue(), &[cmd], &[], &[], self.fence);
+        gpu.device().wait_for_fences(&[self.fence]);
+        gpu.device().reset_fences(&[self.fence]);
 
-        gpu.queue_submit(
-            &gpu.device().graphics_queue(),
-            &[cmd],
-            &[],
-            &[],
-            Fence::null(),
-        );
-
-        gpu.device().wait_idle();
+        // gpu.device().wait_idle();
         Ok(())
     }
 

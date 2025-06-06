@@ -11,15 +11,16 @@ use {
     },
     derive_more::derive::Debug,
     std::ffi,
+    tracing::trace,
 };
 
 #[derive(Clone, Debug)]
 pub struct DebugUtils {
     #[debug(skip)]
-    pub debug_instance: debug_utils::Instance,
+    pub instance: debug_utils::Instance,
     #[debug(skip)]
-    pub debug_device: debug_utils::Device,
-    pub debug_callback: DebugUtilsMessengerEXT,
+    pub device: debug_utils::Device,
+    pub callback: DebugUtilsMessengerEXT,
 }
 
 impl DebugUtils {
@@ -45,9 +46,9 @@ impl DebugUtils {
             unsafe { debug_instance.create_debug_utils_messenger(&debug_info, None).unwrap() };
 
         Self {
-            debug_instance,
-            debug_device,
-            debug_callback,
+            instance: debug_instance,
+            device: debug_device,
+            callback: debug_callback,
         }
     }
 
@@ -56,7 +57,7 @@ impl DebugUtils {
             let name_c = ffi::CString::new(name).unwrap();
             let name_info =
                 DebugUtilsObjectNameInfoEXT::default().object_handle(handle).object_name(&name_c);
-            self.debug_device
+            self.device
                 .set_debug_utils_object_name(&name_info)
                 .expect(&format!("Could not set name '{}'", name));
         }
@@ -66,14 +67,21 @@ impl DebugUtils {
         unsafe {
             let name_c = ffi::CString::new(name).unwrap();
             let marker = DebugUtilsLabelEXT::default().label_name(&name_c);
-            self.debug_device.cmd_begin_debug_utils_label(**cmd_buffer, &marker);
+            self.device.cmd_begin_debug_utils_label(**cmd_buffer, &marker);
         }
         log::trace!("Began {name:?} in {:?}", cmd_buffer);
     }
 
     pub fn end_debug_label(&self, cmd_buffer: &CommandBuffer) {
         unsafe {
-            self.debug_device.cmd_end_debug_utils_label(**cmd_buffer);
+            self.device.cmd_end_debug_utils_label(**cmd_buffer);
+        }
+    }
+
+    pub fn destroy(&mut self) {
+        unsafe {
+            self.instance.destroy_debug_utils_messenger(self.callback, None);
+            trace!("Destroyed {self:?}");
         }
     }
 }
@@ -97,4 +105,8 @@ pub unsafe extern "system" fn vulkan_debug_callback(
     }
 
     FALSE
+}
+
+impl Drop for DebugUtils {
+    fn drop(&mut self) { self.destroy(); }
 }
