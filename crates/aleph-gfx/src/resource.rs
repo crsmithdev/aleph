@@ -11,19 +11,7 @@ use {
     derive_more::Debug,
     std::rc::Rc,
 };
-pub struct U32Pack {
-    pub value: u32,
-}
 
-impl U32Pack {
-    pub fn get(&self, index: usize) -> u8 { ((self.value >> (index * 8)) & 0xFF) as u8 }
-
-    pub fn set(&mut self, index: usize, value: u8) {
-        let shift = index * 8;
-        let mask = !(0xFF << shift);
-        self.value = (self.value & mask) | ((value as u32) << shift);
-    }
-}
 pub struct ResourceLayout {
     resources: Vec<UnboundResource>,
     set: usize,

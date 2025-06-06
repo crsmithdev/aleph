@@ -8,7 +8,6 @@ use {
         PushConstantRange, Rect2D, ShaderStageFlags, VkPipeline,
     },
     anyhow::Result,
-    glam::Mat4,
     std::mem,
     tracing::{instrument, warn},
 };

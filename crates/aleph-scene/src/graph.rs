@@ -1,5 +1,5 @@
 use {
-    crate::{model::Light, Camera, CameraConfig, MeshHandle},
+    crate::{model::Light, Camera, MeshHandle},
     anyhow::{anyhow, Result},
     derive_more::Debug,
     glam::Mat4,

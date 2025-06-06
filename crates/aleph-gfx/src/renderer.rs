@@ -1,5 +1,5 @@
 use {
-    crate::{resource::U32Pack, ForwardPipeline, Gui, Pipeline, ResourceBinder, ResourceLayout},
+    crate::{ForwardPipeline, Gui, Pipeline, ResourceBinder, ResourceLayout},
     aleph_scene::{
         assets::{BindlessData, GpuMaterial},
         graph::NodeData,
@@ -16,7 +16,7 @@ use {
     bitflags::bitflags,
     bytemuck::{Pod, Zeroable},
     derive_more::Debug,
-    glam::{vec3, vec4, Mat4, Vec2, Vec3, Vec4},
+    glam::{Mat4, Vec2, Vec3, Vec4},
     std::{collections::HashMap, sync::Arc},
     tracing::instrument,
 };
@@ -314,11 +314,14 @@ impl Renderer {
             acquire_semaphore,
             cmd_buffer,
             present_semaphore,
+            fence,
             ..
         } = &self.frames[self.frame_idx];
 
+        self.gpu.device().wait_for_fences(&[*fence]);
         let (next_image_index, rebuild_swapchain) =
             self.gpu.swapchain().acquire_next_image(*acquire_semaphore)?;
+        self.gpu.device().reset_fences(&[*fence]);
         self.rebuild_swapchain = rebuild_swapchain;
         let swapchain_image = {
             let swapchain = self.gpu.swapchain();
@@ -431,9 +434,8 @@ impl Renderer {
             &[cmd_buffer],
             &[(*acquire_semaphore, PipelineStageFlags2::ALL_COMMANDS)],
             &[(*present_semaphore, PipelineStageFlags2::ALL_COMMANDS)],
-            Fence::null(),
+            *fence,
         );
-        self.gpu.device().wait_idle();
 
         let rebuild_swapchain = self.gpu.swapchain().present(
             self.gpu.device().graphics_queue(),
@@ -521,9 +523,9 @@ impl Renderer {
         }
 
         // Create and populate buffers
-        let mut vertex_buffer =
+        let vertex_buffer =
             TypedBuffer::vertex(&self.gpu, all_vertices.len(), "shared_vertices")?;
-        let mut index_buffer = TypedBuffer::index(&self.gpu, all_indices.len(), "shared_indices")?;
+        let index_buffer = TypedBuffer::index(&self.gpu, all_indices.len(), "shared_indices")?;
 
         vertex_buffer.write(bytemuck::cast_slice(&all_vertices));
         index_buffer.write(bytemuck::cast_slice(&all_indices));

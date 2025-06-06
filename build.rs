@@ -1,6 +1,6 @@
 use {
     maplit::hashmap,
-    slang::{ComponentType, Downcast as _, GlobalSession, ResourceShape, Session, TypeKind},
+    slang::{Downcast as _, GlobalSession, Session},
     std::{collections::HashMap, fs, path::Path, process, sync::LazyLock},
 };
 

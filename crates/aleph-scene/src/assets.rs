@@ -8,7 +8,7 @@ use {
     anyhow::{bail, Result},
     bytemuck::{Pod, Zeroable},
     derive_more::Debug,
-    glam::{vec4, Vec2, Vec4},
+    glam::{vec4, Vec4},
     image::{ImageBuffer, Rgba},
     std::{
         collections::HashMap,

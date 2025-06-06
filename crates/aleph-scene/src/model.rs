@@ -4,7 +4,6 @@ use {
     bytemuck::{Pod, Zeroable},
     derive_more::Debug,
     glam::{Vec2, Vec3, Vec4},
-    petgraph::algo::k_shortest_path,
 };
 
 #[repr(C)]
