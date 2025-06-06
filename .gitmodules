@@ -3,4 +3,7 @@
 	url = https://github.com/KhronosGroup/glTF-Sample-Assets.git
 [submodule "submodules/glTF-Asset-Generator"]
 	path = submodules/glTF-Asset-Generator
-	url = https://github.com/KhronosGroup/glTF-Asset-Generator.git
+	url = https://github.com/KhronosGroup/glTF-Asset-Generator
+[submodule "submodules/glTF-Sample-Models"]
+	path = submodules/glTF-Sample-Models
+	url = https://github.com/KhronosGroup/glTF-Sample-Models
