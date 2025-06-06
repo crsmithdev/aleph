@@ -1,5 +1,5 @@
 use {
-    crate::{renderer::GpuConfigData, RenderContext, RenderFlags},
+    crate::{GpuConfigData, RenderContext, RenderFlags},
     aleph_core::{
         events::GuiEvent,
         system::{Resources, Scheduler},

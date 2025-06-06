@@ -10,8 +10,9 @@ pub use {
     gui::Gui,
     layer::RenderLayer,
     pipeline::{Pipeline, PipelineBuilder},
-    renderer::{
-        GpuPushConstantData, GpuSceneData, RenderContext, RenderFlags, RenderObject, Renderer,
+    renderer::{RenderContext, RenderFlags, Renderer},
+    resource::{
+        GpuConfigData, GpuPushConstantData, GpuSceneData, RenderObject, ResourceBinder,
+        ResourceLayout,
     },
-    resource::{ResourceBinder, ResourceLayout},
 };
