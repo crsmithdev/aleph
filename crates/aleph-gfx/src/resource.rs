@@ -96,6 +96,7 @@ impl RendererResources {
         self.config_buffer.write(&[self.config_data]);
     }
 
+    // TODO handle 0 mesh case
     pub fn prepare_bindless(
         &mut self,
         gpu: &Gpu,

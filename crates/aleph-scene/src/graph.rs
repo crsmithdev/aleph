@@ -1,8 +1,8 @@
 use {
-    crate::{model::Light, Camera, MeshHandle},
+    crate::{model::Light, Camera, CameraConfig, MeshHandle},
     anyhow::{anyhow, Result},
     derive_more::Debug,
-    glam::Mat4,
+    glam::{Mat4, Vec3, Vec4},
     petgraph::graph::NodeIndex,
     std::{
         collections::HashMap,
@@ -99,12 +99,26 @@ impl Default for Scene {
         let mut indices = HashMap::new();
         indices.insert(root_handle, root_index);
 
-        Self {
+        let mut scene = Self {
             graph,
             root: root_handle,
             indices,
             version,
-        }
+        };
+
+        let color = Vec4::new(5.0, 5.0, 5.0, 5.0);
+        let light0 = Node::light("light0", Light::new(Vec3::new(0.0, 3.0, 3.0), color));
+        scene.attach_to_root(light0).unwrap_or_else(|e| panic!("Failed to attach default light node: {e:?}"));
+        let light1 = Node::light("light1", Light::new(Vec3::new(3.0, 0.0, 3.0), color));
+        scene.attach_to_root(light1).unwrap_or_else(|e| panic!("Failed to attach default light node: {e:?}"));
+        let light2 = Node::light("light2", Light::new(Vec3::new(3.0, 3.0, 0.0), color));
+        scene.attach_to_root(light2).unwrap_or_else(|e| panic!("Failed to attach default light node: {e:?}"));
+
+        let camera = Camera::new(CameraConfig::default());
+        let node = Node::camera("camera", camera);
+        scene.attach_to_root(node).unwrap_or_else(|e| panic!("Failed to attach default camera node: {e:?}"));
+        scene
+
     }
 }
 

@@ -2,8 +2,8 @@ use {
     crate::{
         graph::{NodeData, NodeHandle},
         mikktspace,
-        model::{Light, MeshInfo},
-        util, Assets, Camera, CameraConfig, Material, MaterialHandle, MeshHandle, Node, Scene,
+        model::{MeshInfo},
+        util, Assets, Material, MaterialHandle, MeshHandle, Node, Scene,
         TextureHandle,
     },
     aleph_vk::{
@@ -51,17 +51,7 @@ pub fn load_scene(path: &str, mut assets: &mut Assets) -> Result<Scene> {
         load_node(gltf_node, scene.root(), &mut scene, &meshes)?;
     }
 
-    let color = Vec4::new(5.0, 5.0, 5.0, 5.0);
-    let light1 = Node::light("light1", Light::new(Vec3::new(0.0, 3.0, 3.0), color));
-    scene.attach(light1, scene.root())?;
-    let light2 = Node::light("light2", Light::new(Vec3::new(3.0, 0.0, 3.0), color));
-    scene.attach(light2, scene.root())?;
-    let light3 = Node::light("light3", Light::new(Vec3::new(3.0, 3.0, 0.0), color));
-    scene.attach(light3, scene.root())?;
 
-    let camera = Camera::new(CameraConfig::default());
-    let node = Node::camera("camera", camera);
-    scene.attach(node, scene.root())?;
 
     log::info!(
         "Finished loading scene from {path:?}: {} meshes, {} materials, {} textures",
