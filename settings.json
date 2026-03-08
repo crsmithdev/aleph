@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git:*)", "Bash(pnpm:*)", "Bash(npm:*)", "Bash(node:*)", "Bash(bun:*)",
+      "Bash(python3:*)", "Bash(uv:*)", "Bash(ruff:*)", "Bash(vitest:*)", "Bash(playwright:*)",
+      "Bash(ls:*)", "Bash(cat:*)", "Bash(grep:*)", "Bash(find:*)", "Bash(mkdir:*)",
+      "Bash(cp:*)", "Bash(mv:*)", "Bash(echo:*)", "Bash(jq:*)", "Bash(curl:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf /*)", "Bash(rm -rf ~*)", "Bash(dd:*)", "Bash(mkfs:*)",
+      "Bash(sudo rm:*)", "Bash(chmod 777:*)"
+    ],
+    "ask": [
+      "Bash(sudo:*)", "Bash(rm -rf:*)", "Bash(kill:*)", "Bash(killall:*)",
+      "Bash(pkill:*)", "Bash(systemctl:*)", "Bash(shutdown:*)", "Bash(reboot:*)"
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash ~/.claude/hooks/statusline.sh",
+    "timeout": 3000
+  },
+  "hooks": {
+    "SessionStart": [
+      { "command": "bash ~/.claude/hooks/session-start.sh", "timeout": 5000 }
+    ],
+    "UserPromptSubmit": [
+      { "command": "bash ~/.claude/hooks/rating-capture.sh", "timeout": 2000 },
+      { "command": "bash ~/.claude/hooks/format-reminder.sh", "timeout": 3000 }
+    ],
+    "Stop": [
+      { "command": "bash ~/.claude/hooks/sentiment-capture.sh", "timeout": 3000 },
+      { "command": "bash ~/.claude/hooks/session-summary.sh", "timeout": 3000 }
+    ],
+    "PostToolUse": [
+      { "matcher": "Edit|Write", "command": "bash ~/.claude/hooks/quality.sh", "timeout": 10000 }
+    ],
+    "Notification": [
+      { "command": "bash ~/.claude/hooks/notify.sh", "timeout": 3000 }
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "rules": [
+    {
+      "skill": "research",
+      "keywords": ["research", "investigate", "look into", "find out", "compare", "survey", "analyze"],
+      "paths": []
+    }
+  ]
+}
