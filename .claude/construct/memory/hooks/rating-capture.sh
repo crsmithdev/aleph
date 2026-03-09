@@ -1,6 +1,6 @@
 #!/bin/bash
-CPAI_DIR="${HOME}/.claude"
-RATINGS="${CPAI_DIR}/memory/signals/ratings.jsonl"
+CONSTRUCT_DIR="${HOME}/.claude/construct"
+RATINGS="${CONSTRUCT_DIR}/memory/signals/ratings.jsonl"
 mkdir -p "$(dirname "$RATINGS")"
 
 # Extract prompt and match rating in one python3 call.
@@ -29,5 +29,5 @@ if [ -n "$RESULT" ]; then
   CTX=$(echo "$RESULT" | cut -f2)
   TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   echo "{\"timestamp\":\"${TS}\",\"rating\":${RATING},\"type\":\"explicit\",\"context\":\"${CTX}\"}" >> "$RATINGS"
-  [ "$RATING" -le 3 ] && echo "[CPAI] Low rating (${RATING}) — note what went wrong in LEARNED.md"
+  [ "$RATING" -le 3 ] && echo "[Construct] Low rating (${RATING}) — note what went wrong in LEARNED.md"
 fi

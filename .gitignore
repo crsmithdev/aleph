@@ -1,4 +1,4 @@
 .claude/worktrees/
-memory/sessions/
-memory/snapshots/
-memory/signals/
+.claude/construct/memory/sessions/
+.claude/construct/memory/snapshots/
+.claude/construct/memory/signals/

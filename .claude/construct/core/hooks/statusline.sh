@@ -20,7 +20,7 @@ S="${MODEL}"
 [ -n "$BRANCH" ] && S="${S}  ⎇ ${BRANCH}"
 S="${S}  ${DIR}  [${BAR}] ${PCT}%"
 
-if [ "${CPAI_SHOW_BURNRATE}" = "1" ] && command -v ccusage &>/dev/null; then
+if [ "${CONSTRUCT_SHOW_BURNRATE}" = "1" ] && command -v ccusage &>/dev/null; then
   BURN=$(bun x ccusage statusline --cost-source cc 2>/dev/null | grep -oE '\$[0-9.]+/hr' | head -1)
   [ -n "$BURN" ] && S="${S}  ${BURN}"
 fi

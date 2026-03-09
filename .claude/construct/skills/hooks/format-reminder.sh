@@ -1,6 +1,6 @@
 #!/bin/bash
-CPAI_DIR="${HOME}/.claude"
-RULES_FILE="${CPAI_DIR}/skills/skill-rules.json"
+CONSTRUCT_DIR="${HOME}/.claude/construct"
+RULES_FILE="${CONSTRUCT_DIR}/skills/skill-rules.json"
 
 # Single python3 call: extract prompt, classify depth, match skills.
 # Outputs two lines: line 1 = depth message (or empty), line 2 = matched skills (or empty).
@@ -14,9 +14,9 @@ if len(words) < 3: sys.exit()
 # Depth classification
 arch = re.search(r'architect|redesign|refactor|migrate|schema|structure|plan|design|propose', prompt, re.I)
 if arch:
-    print('[CPAI] Depth: FULL — architectural keywords. Write ISC before proceeding.')
+    print('[Construct] Depth: FULL — architectural keywords. Write ISC before proceeding.')
 elif len(words) > 40:
-    print('[CPAI] Depth: FULL — complex request. Consider ISC.')
+    print('[Construct] Depth: FULL — complex request. Consider ISC.')
 else:
     print()
 

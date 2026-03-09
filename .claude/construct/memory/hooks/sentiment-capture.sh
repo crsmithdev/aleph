@@ -1,6 +1,6 @@
 #!/bin/bash
-CPAI_DIR="${HOME}/.claude"
-RATINGS="${CPAI_DIR}/memory/signals/ratings.jsonl"
+CONSTRUCT_DIR="${HOME}/.claude/construct"
+RATINGS="${CONSTRUCT_DIR}/memory/signals/ratings.jsonl"
 mkdir -p "$(dirname "$RATINGS")"
 
 # Extract last user message, skip if it's an explicit rating or too short.
@@ -22,7 +22,7 @@ except: pass
 [ -z "$MSG" ] && exit 0
 
 cat <<EOF
-[CPAI:SENTIMENT] Rate the user's satisfaction with this session on a scale of 1-10 based on their last message. Reply with ONLY a JSON line in this exact format, nothing else:
+[Construct:SENTIMENT] Rate the user's satisfaction with this session on a scale of 1-10 based on their last message. Reply with ONLY a JSON line in this exact format, nothing else:
 {"timestamp":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","rating":N,"type":"implicit","context":"LAST_MSG_SUMMARY"}
 
 Append that line to: ${RATINGS}

@@ -1,9 +1,9 @@
-# CPAI System Module
+# Construct System Module
 
 ## /verify
-For each installed pack, run its Post-install verification block from cpai.md.
+For each installed pack, run its Post-install verification block from construct.md.
 Report results as a clean ✓/✗/⚠ list grouped by pack.
-A pack is considered installed if its primary files are present (e.g. cpai-memory = memory/CONTEXT.md exists).
+A pack is considered installed if its primary files are present (e.g. construct-memory = memory/CONTEXT.md exists).
 Flag failures as ACTION REQUIRED. Warnings are informational.
 Flag CLAUDE.md files over 300 lines as a soft warning.
 
@@ -17,7 +17,7 @@ Collect and display:
 6. Memory size — session count, ratings count, snapshot count
 
 ## /update-learned
-If cpai-memory is not installed, say: "cpai-memory is not installed — /update-learned requires session summaries and LEARNED.md. Run /verify to check what's installed."
+If construct-memory is not installed, say: "construct-memory is not installed — /update-learned requires session summaries and LEARNED.md. Run /verify to check what's installed."
 Otherwise:
 1. Show last 5 session summaries from memory/sessions/
 2. Show last 10 entries from MEMORY.md
@@ -32,8 +32,8 @@ Otherwise:
 - Which identity files are in context
 - Which skills are active
 - Current project and phase from memory/CONTEXT.md (if installed)
-- Session count (if cpai-memory installed)
-- Unresolved snapshots in memory/snapshots/ (if cpai-memory installed)
+- Session count (if construct-memory installed)
+- Unresolved snapshots in memory/snapshots/ (if construct-memory installed)
 
 ## /clear-snapshot
 Delete named file from memory/snapshots/.

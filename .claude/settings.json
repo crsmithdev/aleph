@@ -17,26 +17,26 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "bash ~/.claude/hooks/statusline.sh",
+    "command": "bash ~/.claude/construct/core/hooks/statusline.sh",
     "timeout": 3000
   },
   "hooks": {
     "SessionStart": [
-      { "command": "bash ~/.claude/hooks/session-start.sh", "timeout": 5000 }
+      { "command": "bash ~/.claude/construct/memory/hooks/session-start.sh", "timeout": 5000 }
     ],
     "UserPromptSubmit": [
-      { "command": "bash ~/.claude/hooks/rating-capture.sh", "timeout": 2000 },
-      { "command": "bash ~/.claude/hooks/format-reminder.sh", "timeout": 3000 }
+      { "command": "bash ~/.claude/construct/memory/hooks/rating-capture.sh", "timeout": 2000 },
+      { "command": "bash ~/.claude/construct/skills/hooks/format-reminder.sh", "timeout": 3000 }
     ],
     "Stop": [
-      { "command": "bash ~/.claude/hooks/sentiment-capture.sh", "timeout": 3000 },
-      { "command": "bash ~/.claude/hooks/session-summary.sh", "timeout": 3000 }
+      { "command": "bash ~/.claude/construct/memory/hooks/sentiment-capture.sh", "timeout": 3000 },
+      { "command": "bash ~/.claude/construct/memory/hooks/session-summary.sh", "timeout": 3000 }
     ],
     "PostToolUse": [
-      { "matcher": "Edit|Write", "command": "bash ~/.claude/hooks/quality.sh", "timeout": 10000 }
+      { "matcher": "Edit|Write", "command": "bash ~/.claude/construct/dev/hooks/quality.sh", "timeout": 10000 }
     ],
     "Notification": [
-      { "command": "bash ~/.claude/hooks/notify.sh", "timeout": 3000 }
+      { "command": "bash ~/.claude/construct/dev/hooks/notify.sh", "timeout": 3000 }
     ]
   }
 }

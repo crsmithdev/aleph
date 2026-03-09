@@ -1,6 +1,6 @@
 #!/bin/bash
-CPAI_DIR="${HOME}/.claude"
-SESSIONS="${CPAI_DIR}/memory/sessions"
+CONSTRUCT_DIR="${HOME}/.claude/construct"
+SESSIONS="${CONSTRUCT_DIR}/memory/sessions"
 mkdir -p "$SESSIONS"
 
 INPUT=$(cat)
@@ -16,7 +16,7 @@ DATE=$(date -u +"%Y-%m-%d")
 FILE="${SESSIONS}/${DATE}-$(date -u +%H%M%S).md"
 
 cat <<EOF
-[CPAI:SESSION-SUMMARY] Write a session summary. Create the file ${FILE} with this format:
+[Construct:SESSION-SUMMARY] Write a session summary. Create the file ${FILE} with this format:
 
 # Session: ${DATE}
 

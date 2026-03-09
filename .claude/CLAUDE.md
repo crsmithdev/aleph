@@ -1,4 +1,4 @@
-# CPAI
+# Construct
 
 ## Behavior
 
@@ -33,7 +33,7 @@
 
 ## Pack Installation
 
-After installing or updating any CPAI pack, run that pack's **Post-install verification**
+After installing or updating any Construct pack, run that pack's **Post-install verification**
 steps in full before considering the work done. If any check fails, resolve it — do not
 move on and assume it will be fine later.
 
@@ -56,10 +56,10 @@ Six tools — opt-OUT for FULL tasks. For each, either use it or state why not.
 **MEMORY.md** (`~/.claude/MEMORY.md`) — Claude's scratch space. Written automatically.
 Treat as ephemeral working notes.
 
-**LEARNED.md** (`~/.claude/memory/LEARNED.md`) — Durable insights. Human-curated.
+**LEARNED.md** (`~/.claude/construct/memory/LEARNED.md`) — Durable insights. Human-curated.
 Promoted from MEMORY.md or session summaries via /update-learned.
 
-**CONTEXT.md** (`~/.claude/memory/CONTEXT.md`) — Current state. Update frequently.
+**CONTEXT.md** (`~/.claude/construct/memory/CONTEXT.md`) — Current state. Update frequently.
 Rule: if something in MEMORY.md is still true after 30 days, it belongs in LEARNED.md.
 
 ## Dev Conventions
