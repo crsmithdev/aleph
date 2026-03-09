@@ -1,5 +1,5 @@
 #!/bin/bash
-CONSTRUCT_DIR="${HOME}/.claude/construct"
+CONSTRUCT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 RULES_FILE="${CONSTRUCT_DIR}/skills/skill-rules.json"
 
 # Single python3 call: extract prompt, classify depth, match skills.

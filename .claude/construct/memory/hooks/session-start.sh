@@ -1,5 +1,5 @@
 #!/bin/bash
-CONSTRUCT_DIR="${HOME}/.claude/construct"
+CONSTRUCT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 CONTEXT="${CONSTRUCT_DIR}/memory/CONTEXT.md"
 LEARNED="${CONSTRUCT_DIR}/memory/LEARNED.md"
 SNAPSHOTS_DIR="${CONSTRUCT_DIR}/memory/snapshots"

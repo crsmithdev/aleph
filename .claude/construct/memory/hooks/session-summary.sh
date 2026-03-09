@@ -1,5 +1,5 @@
 #!/bin/bash
-CONSTRUCT_DIR="${HOME}/.claude/construct"
+CONSTRUCT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 SESSIONS="${CONSTRUCT_DIR}/memory/sessions"
 mkdir -p "$SESSIONS"
 

@@ -53,13 +53,13 @@ Six tools — opt-OUT for FULL tasks. For each, either use it or state why not.
 
 ## Memory Files
 
-**MEMORY.md** (`~/.claude/MEMORY.md`) — Claude's scratch space. Written automatically.
+**MEMORY.md** (`.claude/MEMORY.md`) — Claude's scratch space. Written automatically.
 Treat as ephemeral working notes.
 
-**LEARNED.md** (`~/.claude/construct/memory/LEARNED.md`) — Durable insights. Human-curated.
+**LEARNED.md** (`.claude/construct/memory/LEARNED.md`) — Durable insights. Human-curated.
 Promoted from MEMORY.md or session summaries via /update-learned.
 
-**CONTEXT.md** (`~/.claude/construct/memory/CONTEXT.md`) — Current state. Update frequently.
+**CONTEXT.md** (`.claude/construct/memory/CONTEXT.md`) — Current state. Update frequently.
 Rule: if something in MEMORY.md is still true after 30 days, it belongs in LEARNED.md.
 
 ## Dev Conventions

@@ -1,5 +1,5 @@
 #!/bin/bash
-CONSTRUCT_DIR="${HOME}/.claude/construct"
+CONSTRUCT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 RATINGS="${CONSTRUCT_DIR}/memory/signals/ratings.jsonl"
 mkdir -p "$(dirname "$RATINGS")"
 
