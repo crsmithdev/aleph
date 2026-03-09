@@ -1,14 +1,10 @@
 # Current Context
 
-## Active projects
+## Active Projects
 - **[project name]** — [1-line status]
 
-## Environment
-- [OS / hardware]
-- [Primary tools]
-
-## Current focus
+## Current Focus
 [What you're actively working on right now. Update regularly.]
 
-## Known constraints
+## Known Constraints
 [Blockers, dependencies, things waiting on external input.]

@@ -59,8 +59,23 @@ Treat as ephemeral working notes.
 **LEARNED.md** (`.claude/construct/memory/LEARNED.md`) — Durable insights. Human-curated.
 Promoted from MEMORY.md or session summaries via /update-learned.
 
-**CONTEXT.md** (`.claude/construct/memory/CONTEXT.md`) — Current state. Update frequently.
+**CONTEXT.md** (`.claude/construct/memory/CONTEXT.md`) — Active project state. Update frequently.
 Rule: if something in MEMORY.md is still true after 30 days, it belongs in LEARNED.md.
+
+## Identity Files
+
+Slow-changing files in `construct/core/identity/`:
+
+- **SOUL.md** — Purpose, values, mental models, biases. Rarely changes.
+- **IDENTITY.md** — Name, tone, personality, voice. Presentation layer.
+- **STYLE.md** — Output formatting, code conventions, commit style.
+- **USER.md** — Principal profile, environment, tech stack, working style.
+- **BOOTSTRAP.md** — Declarative session initialization sequence.
+
+## Spec Sync
+
+- After making changes to any Construct files, always update `spec.md` to match the current state before considering the task done.
+- Use `/spec diff` to check for drift, `/spec update` to update spec from disk, `/spec apply` to update disk from spec.
 
 ## Dev Conventions
 
