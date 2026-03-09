@@ -72,11 +72,6 @@ Slow-changing files in `construct/core/identity/`:
 - **USER.md** — Principal profile, environment, tech stack, working style.
 - **BOOTSTRAP.md** — Declarative session initialization sequence.
 
-## Spec Sync
-
-- After making changes to any Construct files, always update `spec.md` to match the current state before considering the task done.
-- Use `/spec diff` to check for drift, `/spec update` to update spec from disk, `/spec apply` to update disk from spec.
-
 ## Dev Conventions
 
 - Never proactively create README, docs, or tests unless explicitly requested.
