@@ -1,4 +1,0 @@
-{
-  "format": "prettier --write $FILE 2>/dev/null || echo '[quality] prettier not found, skipping'",
-  "lint":   "tsc --noEmit 2>/dev/null || echo '[quality] tsc not found, skipping'"
-}

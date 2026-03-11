@@ -17,12 +17,14 @@ Five packs, installed in order. Each is independent after its dependencies are m
 | Pack | Depends on | What it provides |
 |------|-----------|-----------------|
 | `construct-core` | — | CLAUDE.md, settings.json, statusline, optional identity files |
-| `construct-memory` | core | Session hooks, memory dirs, ratings, /dashboard, /update-learned |
-| `construct-dev` | core | Quality hook, notify hook, /worktree command |
+| `construct-memory` | core | Session hooks, memory dirs, ratings |
+| `construct-dev` | core | Quality hook, notify hook |
 | `construct-skills` | core | format-reminder, skill-rules.json, research example skill |
-| `construct-meta` | core | META.md, /common-ground, /verify commands |
+| `construct-meta` | core | /construct subcommands |
 
 Selective install: skip any optional pack you don't need. Core is always required.
+
+See [INSTALL.md](INSTALL.md) for installation, upgrade, and mandatory post-install verification.
 
 ## Directory Layout
 
@@ -34,7 +36,7 @@ Selective install: skip any optional pack you don't need. Core is always require
 ├── commands/                          # slash commands
 └── construct/
     ├── core/
-    │   ├── hooks/statusline.sh
+    │   ├── hooks/statusline.ts
     │   └── identity/                  # optional semantic identity layer
     │       ├── SOUL.md                # purpose, values, mental models
     │       ├── IDENTITY.md            # name, tone, personality
@@ -49,46 +51,39 @@ Selective install: skip any optional pack you don't need. Core is always require
     │   ├── signals/ratings.jsonl      # explicit + implicit ratings
     │   └── hooks/                     # session-start, rating-capture, sentiment-capture, session-summary
     ├── dev/
-    │   └── hooks/                     # quality.sh, notify.sh
+    │   └── hooks/                     # quality.ts, notify.ts
     ├── skills/
     │   ├── skill-rules.json           # keyword routing config
     │   ├── research/SKILL.md          # example skill
-    │   └── hooks/format-reminder.sh   # depth classification + skill eval
-    ├── eval/                          # functional tests (not a pack)
-    │   ├── test.sh                    # Layer 1 — hook unit tests
-    │   ├── compare.sh                 # Layer 2 — bare vs scaffolded via claude -p
-    │   └── fixture/                   # test fixtures
+    │   └── hooks/format-reminder.ts   # depth classification + skill eval
     └── meta/
-        └── META.md                    # cross-pack utilities reference
+        └── README.md                  # cross-pack utilities reference
 ```
 
 ## Hooks
 
 | Event | Hook | Pack | Purpose |
 |-------|------|------|---------|
-| StatusUpdate | statusline.sh | core | Model, branch, dir, context %, tokens, lines ±, cost, duration |
-| SessionStart | session-start.sh | memory | Surface focus, recent learnings, snapshots |
-| UserPromptSubmit | rating-capture.sh | memory | Capture explicit N/10 ratings |
-| UserPromptSubmit | format-reminder.sh | skills | Depth classification + keyword-matched skill eval |
-| Stop | sentiment-capture.sh | memory | Context-injected implicit satisfaction rating |
-| Stop | session-summary.sh | memory | Context-injected 3-bullet session summary |
-| PostToolUse | quality.sh | dev | Per-file lint/format on Edit/Write |
-| Notification | notify.sh | dev | WSL toast / macOS alert / terminal bell |
+| StatusUpdate | statusline.ts | core | Model, branch, dir, context %, tokens, lines ±, cost, duration |
+| SessionStart | session-start.ts | memory | Surface focus, recent learnings, snapshots |
+| UserPromptSubmit | rating-capture.ts | memory | Capture explicit N/10 ratings |
+| UserPromptSubmit | format-reminder.ts | skills | Depth classification + keyword-matched skill eval |
+| Stop | sentiment-capture.ts | memory | Heuristic implicit satisfaction rating |
+| Stop | session-summary.ts | memory | Structured 3-bullet session summary |
+| PostToolUse | quality.ts | dev | Per-file lint/format on Edit/Write |
+| Notification | notify.ts | dev | WSL toast / macOS alert / terminal bell |
 
-All hooks use context injection — they emit text that Claude processes inline. No API keys needed.
+No external API keys needed.
 
 ## Slash Commands
 
 | Command | Pack | Purpose |
 |---------|------|---------|
-| `/common-ground` | meta | Surfaces Claude's current mental model. Use at session start. |
-| `/worktree` | dev | Create isolated git worktree for a task |
-| `/verify` | meta | Run all pack post-install checks |
-| `/dashboard` | memory | Session signals, recent sessions, learned insights |
-| `/update-learned` | memory | Promote session insights to LEARNED.md |
-| `/context-report` | meta | Which files/skills are in context |
-| `/clear-snapshot` | meta | Manage memory/snapshots/ |
-| `/test` | eval | Functional tests — hook unit tests + bare-vs-scaffolded comparison |
+| `/construct install` | meta | Install/reinstall Construct globally to `~/.claude` |
+| `/construct verify` | meta | Run all pack post-install checks |
+| `/construct grasp` | meta | Surface Claude's current mental model + project commandments |
+| `/construct status` | meta | Context, identity files, skills, memory stats |
+| `/construct retain` | meta | Promote insights to LEARNED.md |
 
 ## Identity Architecture
 
@@ -99,7 +94,7 @@ Semantic/episodic split:
 
 ## Skills
 
-Domain-specific playbooks in `.claude/construct/skills/<name>/SKILL.md`. The `format-reminder.sh` hook reads `skill-rules.json` and only injects the forced-eval block for skills whose keywords match the current prompt. Ships with `research/` as a worked example.
+Domain-specific playbooks in `.claude/construct/skills/<name>/SKILL.md`. The `format-reminder.ts` hook reads `skill-rules.json` and matches skills whose keywords appear in the current prompt. Ships with `research/` as a worked example.
 
 ## CLAUDE.md Structure
 
@@ -114,11 +109,3 @@ Core behavioral rules are installed by construct-core. Each subsequent pack appe
 - `## Dev Conventions` — commit style, docs policy (dev pack)
 - `## Agent Personas` — Architect / Engineer / QATester (dev pack)
 - `## Worktree Convention` — isolated task sessions (dev pack)
-
-## Eval Suite
-
-Not a pack — lives at `construct/eval/` and is optional.
-
-**Layer 1** (`test.sh`): Hook unit tests. Tests each hook in isolation with crafted payloads. No Claude session needed. Run via `/test hooks`.
-
-**Layer 2** (`compare.sh`): Sends the same prompt via `claude -p` twice — once from a bare temp directory, once from the project root. Compares structural signals (ISC, depth, thinking tools, plan, verify) in each response. Run via `/test compare`.

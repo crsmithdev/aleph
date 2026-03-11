@@ -17,38 +17,38 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "bash .claude/construct/core/hooks/statusline.sh",
+    "command": "bun .claude/construct/core/hooks/statusline.ts",
     "timeout": 3000
   },
   "hooks": {
     "SessionStart": [
       {
         "hooks": [
-          { "type": "command", "command": "bash .claude/construct/memory/hooks/session-start.sh", "timeout": 5000 }
+          { "type": "command", "command": "bun .claude/construct/memory/hooks/session-start.ts", "timeout": 5000 }
         ]
       }
     ],
     "UserPromptSubmit": [
       {
         "hooks": [
-          { "type": "command", "command": "bash .claude/construct/memory/hooks/rating-capture.sh", "timeout": 2000 }
+          { "type": "command", "command": "bun .claude/construct/memory/hooks/rating-capture.ts", "timeout": 2000 }
         ]
       },
       {
         "hooks": [
-          { "type": "command", "command": "bash .claude/construct/skills/hooks/format-reminder.sh", "timeout": 3000 }
+          { "type": "command", "command": "bun .claude/construct/skills/hooks/format-reminder.ts", "timeout": 3000 }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "bash .claude/construct/memory/hooks/sentiment-capture.sh", "timeout": 3000 }
+          { "type": "command", "command": "bun .claude/construct/memory/hooks/sentiment-capture.ts", "timeout": 3000 }
         ]
       },
       {
         "hooks": [
-          { "type": "command", "command": "bash .claude/construct/memory/hooks/session-summary.sh", "timeout": 3000 }
+          { "type": "command", "command": "bun .claude/construct/memory/hooks/session-summary.ts", "timeout": 3000 }
         ]
       }
     ],
@@ -56,14 +56,14 @@
       {
         "matcher": "Edit|Write",
         "hooks": [
-          { "type": "command", "command": "bash .claude/construct/dev/hooks/quality.sh", "timeout": 10000 }
+          { "type": "command", "command": "bun .claude/construct/dev/hooks/quality.ts", "timeout": 10000 }
         ]
       }
     ],
     "Notification": [
       {
         "hooks": [
-          { "type": "command", "command": "bash .claude/construct/dev/hooks/notify.sh", "timeout": 3000 }
+          { "type": "command", "command": "bun .claude/construct/dev/hooks/notify.ts", "timeout": 3000 }
         ]
       }
     ]

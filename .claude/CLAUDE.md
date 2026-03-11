@@ -21,7 +21,7 @@
 **PLAN** — Agent sequence, execution pattern, parallel opportunities.
 **BUILD/EXECUTE** — Run. Independent subtasks via parallel Task() in a single message — serial execution is a failure mode.
 **VERIFY** — Check every ISC criterion explicitly. Don't claim done if criteria aren't met.
-**LEARN** — State what worked, what didn't. Durable insights -> LEARNED.md via /update-learned.
+**LEARN** — State what worked, what didn't. Durable insights -> LEARNED.md via /construct retain.
 
 ### Capability Selection (output in THINK phase)
 ```
@@ -33,9 +33,10 @@
 
 ## Pack Installation
 
-After installing or updating any Construct pack, run that pack's **Post-install verification**
-steps in full before considering the work done. If any check fails, resolve it — do not
-move on and assume it will be fine later.
+After installing or updating any Construct pack, read that pack's `INSTALL.md` and run every
+check listed there. Do not skip or summarize checks. Do not summarize, truncate, or paraphrase
+file contents when copying. If any check fails, resolve it — do not move on and assume it
+will be fine later.
 
 ## Thinking Tools
 
@@ -49,7 +50,7 @@ Six tools — opt-OUT for FULL tasks. For each, either use it or state why not.
 - **Prompting** — Meta-prompting. Use when constructing a complex prompt is the task.
 
 ---
-<!-- No hard line limit. Audit weekly for contradictions and dead rules. /verify flags files over 300 lines as a soft warning. -->
+<!-- No hard line limit. Audit weekly for contradictions and dead rules. /construct verify flags files over 300 lines as a soft warning. -->
 
 ## Memory Files
 
@@ -57,7 +58,7 @@ Six tools — opt-OUT for FULL tasks. For each, either use it or state why not.
 Treat as ephemeral working notes.
 
 **LEARNED.md** (`.claude/construct/memory/LEARNED.md`) — Durable insights. Human-curated.
-Promoted from MEMORY.md or session summaries via /update-learned.
+Promoted from MEMORY.md or session summaries via /construct retain.
 
 **CONTEXT.md** (`.claude/construct/memory/CONTEXT.md`) — Active project state. Update frequently.
 Rule: if something in MEMORY.md is still true after 30 days, it belongs in LEARNED.md.
@@ -87,13 +88,3 @@ Slow-changing files in `construct/core/identity/`:
 Architectural questions: Architect first, then Engineer.
 Non-trivial PRs: QATester at the end.
 
-## Worktree Convention
-
-- Each task gets its own worktree: `claude --worktree <task-slug>`
-- Worktree name = branch name = task slug
-- Never switch branches within an active session — open a new worktree instead
-- Long-running tasks survive session restarts in their worktree
-- Use /worktree to scaffold a new isolated session
-- Add `.claude/worktrees/` to `.gitignore`
-
-For parallel subagent work: add `isolation: worktree` to agent frontmatter.

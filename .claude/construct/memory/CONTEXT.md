@@ -1,10 +1,12 @@
 # Current Context
 
 ## Active Projects
-- **[project name]** — [1-line status]
+- **Construct** — personal AI infrastructure for Claude Code. Active development: refining packs, install workflow, documentation.
 
 ## Current Focus
-[What you're actively working on right now. Update regularly.]
+Stabilizing install/verify cycle. Recent changes: split docs into per-pack README.md + INSTALL.md, added /install and /grasp commands, separated project-root CLAUDE.md (commandments) from framework .claude/CLAUDE.md (deployed globally). Installer now dynamically preserves any ALL CAPS .md files in identity/ and memory/.
 
 ## Known Constraints
-[Blockers, dependencies, things waiting on external input.]
+- USER.md still has placeholder values (name, timezone, stack, etc.)
+- MEMORY.md at ~/.claude not yet created (auto-created on first session write)
+- Only 1 skill (research) — skill system is functional but underused
