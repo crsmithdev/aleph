@@ -12,6 +12,17 @@ This is the Construct source repo. The installed Construct rules come from `~/.c
 ## Dev workflow
 
 1. Edit source in `construct/` and `dotclaude/`
-2. Hooks fire locally via `.claude/settings.json` (paths point to `construct/`)
-3. Run `bun install.ts` to deploy to `~/.claude/`
-4. Run `bun test.ts` to verify
+2. Run `bun install.ts` to deploy to `~/.claude/`
+3. Run `bun test.ts` to verify
+
+## Critical: no duplication between .claude/ and ~/.claude/
+
+`.claude/` is dev-only config. `~/.claude/` is the installed runtime.
+Claude Code merges project-level `.claude/` with global `~/.claude/`, so anything
+present in both will fire/load twice. **Never** put hooks, commands, or settings
+in `.claude/` that duplicate what the installer deploys to `~/.claude/`.
+
+- **Hooks**: only in `~/.claude/settings.json` (via `dotclaude/settings.json` source)
+- **Commands**: only in `~/.claude/commands/` (via `dotclaude/commands/` source)
+- **CLAUDE.md**: `.claude/CLAUDE.md` is dev-context only (this file). Construct rules live in `dotclaude/CLAUDE.md`
+- **settings.json**: `.claude/settings.json` has permissions/statusline only. No hooks.
