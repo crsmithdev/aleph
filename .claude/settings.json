@@ -20,57 +20,5 @@
     "command": "ccstatusline",
     "timeout": 3000
   },
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          { "type": "command", "command": "bun construct/memory/hooks/session-start.ts", "timeout": 5000 }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          { "type": "command", "command": "bun construct/memory/hooks/rating-capture.ts", "timeout": 2000 }
-        ]
-      },
-      {
-        "hooks": [
-          { "type": "command", "command": "bun construct/skills/hooks/format-reminder.ts", "timeout": 3000 }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          { "type": "command", "command": "bun construct/skills/hooks/ralph-stop.ts", "timeout": 5000 }
-        ]
-      },
-      {
-        "hooks": [
-          { "type": "command", "command": "bun construct/memory/hooks/memory-gate.ts", "timeout": 5000 }
-        ]
-      },
-      {
-        "hooks": [
-          { "type": "command", "command": "bun construct/memory/hooks/session-summary.ts", "timeout": 3000 }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          { "type": "command", "command": "bun construct/dev/hooks/quality.ts", "timeout": 10000 }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "hooks": [
-          { "type": "command", "command": "bun construct/dev/hooks/notify.ts", "timeout": 3000 }
-        ]
-      }
-    ]
-  }
+  "hooks": {}
 }
