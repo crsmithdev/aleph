@@ -2,6 +2,8 @@
 
 A minimal, Claude Code-native personal AI infrastructure for a solo software engineer. Structured learning, signal capture, quality hooks, and skill routing — all built on hooks and CLAUDE.md rules, no external dependencies.
 
+A minimal, ergonomic Claude Code-native personal AI infrastructure, assistant, and life manager.  Structured learning, signal capture, quality hooks, and skill routing — all built on hooks and CLAUDE.md rules, no external dependencies.
+
 ## Design Principles
 
 - Claude Code is the runtime. No daemons, no Electron, no external servers.
@@ -10,66 +12,84 @@ A minimal, Claude Code-native personal AI infrastructure for a solo software eng
 - Minimal viable first. Expand when friction is felt, not in anticipation of it.
 - No external API keys required. All hooks use context injection.
 
-## Packs
+## Modules
 
-Five packs, installed in order. Each is independent after its dependencies are met.
+Six modules, installed in order. Each is independent after its dependencies are met.
 
-| Pack | Depends on | What it provides |
+| Module | Depends on | What it provides |
 |------|-----------|-----------------|
 | `construct-core` | — | CLAUDE.md, settings.json, statusline, optional identity files |
 | `construct-memory` | core | Session hooks, memory dirs, ratings |
 | `construct-dev` | core | Quality hook, notify hook |
 | `construct-skills` | core | format-reminder, skill-rules.json, research example skill |
 | `construct-meta` | core | /construct subcommands |
+| `construct-dashboard` | core | Goal/TODO tracking, web UI, MCP server |
 
-Selective install: skip any optional pack you don't need. Core is always required.
+All modules are deployed together. Core is always required; the others are inert if unused.
 
 See [INSTALL.md](INSTALL.md) for installation, upgrade, and mandatory post-install verification.
 
 ## Directory Layout
 
 ```
-.claude/
-├── CLAUDE.md                          # behavioral contract (core + pack sections)
-├── MEMORY.md                          # Claude's working notes (auto-written)
-├── settings.json                      # permissions, statusline, hooks
-├── commands/                          # slash commands
-└── construct/
-    ├── core/
-    │   ├── hooks/statusline.ts
-    │   └── identity/                  # optional semantic identity layer
-    │       ├── SOUL.md                # purpose, values, mental models
-    │       ├── IDENTITY.md            # name, tone, personality
-    │       ├── STYLE.md               # output formatting, conventions
-    │       ├── USER.md                # principal profile, environment
-    │       └── BOOTSTRAP.md           # session initialization sequence
-    ├── memory/
-    │   ├── CONTEXT.md                 # active project state
-    │   ├── LEARNED.md                 # durable insights
-    │   ├── sessions/                  # session summaries
-    │   ├── snapshots/                 # mental model snapshots
-    │   ├── signals/ratings.jsonl      # explicit + implicit ratings
-    │   └── hooks/                     # session-start, rating-capture, sentiment-capture, session-summary
-    ├── dev/
-    │   └── hooks/                     # quality.ts, notify.ts
-    ├── skills/
-    │   ├── skill-rules.json           # keyword routing config
-    │   ├── research/SKILL.md          # example skill
-    │   └── hooks/format-reminder.ts   # depth classification + skill eval
-    └── meta/
-        └── README.md                  # cross-pack utilities reference
+construct/                                # source modules (installed to ~/.claude/construct/)
+├── core/
+│   ├── hooks/                           # (none currently — statusline via ccstatusline)
+│   └── identity/                        # optional semantic identity layer
+│       ├── SOUL.md                      # purpose, values, mental models
+│       ├── IDENTITY.md                  # name, tone, personality
+│       ├── STYLE.md                     # output formatting, conventions
+│       ├── USER.md                      # principal profile, environment
+│       └── BOOTSTRAP.md                 # session initialization sequence
+├── memory/
+│   ├── sessions/                        # session summaries
+│   ├── signals/ratings.jsonl            # explicit + implicit ratings
+│   └── hooks/                           # session-start, rating-capture, session-summary, memory-gate
+├── dev/
+│   └── hooks/                           # quality.ts, notify.ts
+├── skills/
+│   ├── skill-rules.json                 # keyword routing config
+│   ├── hooks/format-reminder.ts         # depth classification + skill eval
+│   ├── research/SKILL.md               # research methodology
+│   ├── verification/SKILL.md           # verification-before-completion
+│   ├── debugging/SKILL.md              # systematic root cause debugging
+│   ├── subagent-dev/SKILL.md           # subagent-driven development
+│   ├── code-review/SKILL.md           # dead code, unused imports, code quality
+│   ├── docs-review/SKILL.md          # doc drift detection + /construct spec
+│   ├── instructions-review/SKILL.md  # instruction quality audit
+│   └── ralph-loop/SKILL.md            # autonomous iterative loop
+├── meta/
+│   └── README.md                        # cross-module utilities reference
+└── dashboard/
+    ├── api/                             # Fastify REST API + SQLite
+    ├── web/                             # React SPA (Vite + Tailwind)
+    ├── mcp/                             # MCP server for AI integration
+    └── shared/                          # Zod validators, shared types
+
+dotclaude/                                # install sources (installed to ~/.claude/)
+├── CLAUDE.md                            # behavioral contract (core + module sections)
+├── settings.json                        # permissions, statusline, hooks
+└── commands/
+    └── construct.md                     # slash command router
+
+.claude/                                  # dev-time config only
+├── CLAUDE.md                            # dev instructions (not installed)
+├── settings.json                        # local hook testing (paths point to construct/)
+├── commands/                            # dev slash commands
+└── MEMORY.md                            # ephemeral working notes
 ```
 
 ## Hooks
 
-| Event | Hook | Pack | Purpose |
+| Event | Hook | Module | Purpose |
 |-------|------|------|---------|
-| StatusUpdate | statusline.ts | core | Model, branch, dir, context %, tokens, lines ±, cost, duration |
-| SessionStart | session-start.ts | memory | Surface focus, recent learnings, snapshots |
+| StatusUpdate | ccstatusline | core | Model, branch, dir, context %, tokens, lines ±, cost, duration |
+| SessionStart | session-start.ts | memory | Surface last session summary |
 | UserPromptSubmit | rating-capture.ts | memory | Capture explicit N/10 ratings |
 | UserPromptSubmit | format-reminder.ts | skills | Depth classification + keyword-matched skill eval |
-| Stop | sentiment-capture.ts | memory | Heuristic implicit satisfaction rating |
-| Stop | session-summary.ts | memory | Structured 3-bullet session summary |
+| Stop | ralph-stop.ts | skills | Ralph loop iteration control |
+| Stop | memory-gate.ts | memory | Enforce memory_store before exit |
+| Stop | session-summary.ts | memory | Structured session summary |
 | PostToolUse | quality.ts | dev | Per-file lint/format on Edit/Write |
 | Notification | notify.ts | dev | WSL toast / macOS alert / terminal bell |
 
@@ -77,35 +97,52 @@ No external API keys needed.
 
 ## Slash Commands
 
-| Command | Pack | Purpose |
+| Command | Module | Purpose |
 |---------|------|---------|
 | `/construct install` | meta | Install/reinstall Construct globally to `~/.claude` |
-| `/construct verify` | meta | Run all pack post-install checks |
+| `/construct verify` | meta | Run all module post-install checks |
 | `/construct grasp` | meta | Surface Claude's current mental model + project commandments |
 | `/construct status` | meta | Context, identity files, skills, memory stats |
-| `/construct retain` | meta | Promote insights to LEARNED.md |
+| `/construct retain` | meta | Promote insights to semantic memory |
+| `/construct trace` | meta | Toggle hook tracing (or one-shot trace a command) |
+| `/construct spec diff` | skills | Show doc/code drift without changes |
+| `/construct spec update` | skills | Update docs from current code state |
+| `/construct spec apply` | skills | Update code to match doc specs |
+| `/construct ralph` | skills | Start autonomous iterative loop |
+| `/construct cancel-ralph` | skills | Cancel active Ralph loop |
+| `/construct audit` | meta | Full project audit: code, refs, instructions, docs, spec, stats |
 
 ## Identity Architecture
 
-Semantic/episodic split:
+Two layers:
 
-- **Semantic** (slow-changing): `SOUL.md`, `IDENTITY.md`, `STYLE.md`, `USER.md`, `BOOTSTRAP.md` — who you are, how you think, how you present. Optional files in construct-core.
-- **Episodic** (fast-changing): `CONTEXT.md`, `LEARNED.md` — what you're working on, what you've learned. Lives in construct-memory.
+- **Identity** (slow-changing): `SOUL.md`, `IDENTITY.md`, `STYLE.md`, `USER.md`, `BOOTSTRAP.md` — who you are, how you think, how you present. Optional files in construct-core.
+- **Memory** (fast-changing): semantic memory via mcp-memory-service — decisions, patterns, preferences. Automatic storage and retrieval.
 
 ## Skills
 
-Domain-specific playbooks in `.claude/construct/skills/<name>/SKILL.md`. The `format-reminder.ts` hook reads `skill-rules.json` and matches skills whose keywords appear in the current prompt. Ships with `research/` as a worked example.
+Domain-specific playbooks in `construct/skills/<name>/SKILL.md`. The `format-reminder.ts` hook reads `skill-rules.json` and matches skills whose keywords appear in the current prompt.
+
+| Skill | Purpose |
+|-------|---------|
+| `research` | Structured research methodology |
+| `verification` | Evidence-based completion verification |
+| `debugging` | 4-phase systematic root cause debugging |
+| `subagent-dev` | Parallel subagent execution with two-stage review |
+| `code-review` | Dead code, unused imports, silent failures, dead references |
+| `docs-review` | Documentation drift detection, spec completeness, `/construct spec` |
+| `instructions-review` | Instruction quality: vagueness, contradictions, duplication |
+| `ralph-loop` | Autonomous iterative development via Stop hook loop |
 
 ## CLAUDE.md Structure
 
-Core behavioral rules are installed by construct-core. Each subsequent pack appends its own `##` section:
+Core behavioral rules are installed by construct-core. Each subsequent module appends its own `##` section:
 
 - `## Behavior` — core behavioral contract
 - `## Task Execution` — depth levels, 7-phase algorithm, capability selection
 - `## Thinking Tools` — six opt-out tools for FULL tasks
-- `## Pack Installation` — post-install verification rule
-- `## Memory Files` — MEMORY.md / LEARNED.md / CONTEXT.md roles (memory pack)
-- `## Identity Files` — semantic identity layer reference (memory pack)
-- `## Dev Conventions` — commit style, docs policy (dev pack)
-- `## Agent Personas` — Architect / Engineer / QATester (dev pack)
-- `## Worktree Convention` — isolated task sessions (dev pack)
+- `## Module Installation` — post-install verification rule
+- `## Memory` — semantic memory usage (memory module)
+- `## Identity Files` — semantic identity layer reference (core)
+- `## Dev Conventions` — docs policy, references STYLE.md (dev module)
+- `## Agent Personas` — Architect / Engineer / QATester (dev module)

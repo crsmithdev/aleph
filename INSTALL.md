@@ -2,37 +2,36 @@
 
 ## MANDATORY: Read This Completely
 
-After installing or upgrading, you MUST run the post-install verification checks defined in each pack's `README.md`. Do not skip checks. Do not summarize checks. Run every single one and report the result.
+After installing or upgrading, you MUST run the post-install verification checks defined in each module's `INSTALL.md`. Do not skip checks. Do not summarize checks. Run every single one and report the result.
 
 When copying files during installation, copy them exactly. Do not summarize, truncate, or paraphrase file contents. Every file must arrive at the target byte-for-byte identical to the source.
 
 ## Prerequisites
 
-- `jq` (for settings.json merging)
-- `bun` (TypeScript runtime for hooks)
+- `bun` (TypeScript runtime for hooks and installer)
 
 ## New Install
 
 ```bash
 git clone <repo-url> ~/Construct
 cd ~/Construct
-bash install.sh
+bun install.ts
 ```
 
 The installer:
-1. Creates `~/.claude/construct/` and syncs the full tree
-2. Copies slash commands to `~/.claude/commands/`
-3. Creates `~/.claude/settings.json` with hooks and statusline
-4. Creates `~/.claude/CLAUDE.md` with the Construct section
+1. Syncs `construct/` tree to `~/.claude/construct/`
+2. Copies `dotclaude/commands/` to `~/.claude/commands/`
+3. Merges `dotclaude/settings.json` into `~/.claude/settings.json` (hooks and statusline)
+4. Updates `~/.claude/CLAUDE.md` with the Construct section from `dotclaude/CLAUDE.md`
 
-After install completes, run `/construct verify` in Claude Code. It reads each pack's `INSTALL.md` and executes the Post-install Verification checks listed there. Every check must pass.
+After install completes, run `/construct verify` in Claude Code. It reads each module's `INSTALL.md` and executes the Post-install Verification checks listed there. Every check must pass.
 
 ## Upgrade (reinstall)
 
 ```bash
 cd ~/Construct
 git pull
-bash install.sh
+bun install.ts
 ```
 
 ### What gets preserved
@@ -40,19 +39,18 @@ bash install.sh
 The installer automatically discovers and preserves any ALL CAPS `.md` file (filename matches `[A-Z_]+.md`) in two directories:
 
 - `construct/core/identity/` — e.g. `SOUL.md`, `IDENTITY.md`, `STYLE.md`, `USER.md`, `BOOTSTRAP.md`, plus any custom files you add (e.g. `PROJECTS.md`, `WORKFLOW.md`)
-- `construct/memory/` — e.g. `LEARNED.md`, `CONTEXT.md`, plus any custom files you add (e.g. `GOALS.md`, `DECISIONS.md`)
+- `construct/memory/` — any custom ALL CAPS `.md` files you add (e.g. `GOALS.md`, `DECISIONS.md`)
 
 Also preserved:
 - `memory/signals/ratings.jsonl` — rating history
 - `memory/sessions/` — session summaries
-- `memory/snapshots/` — mental model snapshots
-- `~/.claude/MEMORY.md` — Claude's working notes
+
 
 ### What gets overwritten
 
 Everything else in `construct/` is overwritten (hooks, skills, meta, dev, README/INSTALL files, non-ALLCAPS files). This is intentional — infrastructure updates cleanly, user data survives.
 
-For `settings.json`, only `hooks` and `statusLine` are replaced — permissions, model, and other settings are preserved. For `CLAUDE.md`, the `# Construct` section is replaced in-place; any user content above it is preserved.
+For `settings.json`, only `hooks` and `statusLine` are replaced — permissions, model, and other settings are preserved. For `CLAUDE.md`, the `# Construct` section is replaced in-place; any user content above or after it is preserved.
 
 ### Adding custom data files
 
@@ -73,23 +71,24 @@ After upgrade completes, run `/construct verify`. Pay special attention to the *
 
 ## Post-install Verification
 
-Checks are defined in each pack's `README.md`:
+Checks are defined in each module's `INSTALL.md`:
 
-| Pack | Checks | Detection |
+| Module | Checks | Detection |
 |------|--------|-----------|
-| construct-core | `.claude/construct/core/INSTALL.md` | `~/.claude/CLAUDE.md` exists |
-| construct-memory | `.claude/construct/memory/INSTALL.md` | `construct/memory/CONTEXT.md` exists |
-| construct-dev | `.claude/construct/dev/INSTALL.md` | `construct/dev/hooks/quality.ts` exists |
-| construct-skills | `.claude/construct/skills/INSTALL.md` | `construct/skills/skill-rules.json` exists |
-| construct-meta | `.claude/construct/meta/INSTALL.md` | `construct/meta/README.md` exists |
+| construct-core | `construct/core/INSTALL.md` | `~/.claude/CLAUDE.md` exists |
+| construct-memory | `construct/memory/INSTALL.md` | `construct/memory/hooks/session-start.ts` exists |
+| construct-dev | `construct/dev/INSTALL.md` | `construct/dev/hooks/quality.ts` exists |
+| construct-skills | `construct/skills/INSTALL.md` | `construct/skills/skill-rules.json` exists |
+| construct-meta | `construct/meta/INSTALL.md` | `construct/meta/README.md` exists |
+| construct-dashboard | `construct/dashboard/INSTALL.md` | `construct/dashboard/api/src/app.ts` exists |
 
-Each pack's INSTALL.md defines three categories of checks:
+Each module's INSTALL.md defines three categories of checks:
 - **Files** — expected files exist at the target
 - **Data** — preserved files were not overwritten (non-empty, content predates install)
 - **Functionality** — hooks exit 0 on trivial input, JSON is parseable, sections are present
 
-A pack is considered installed if its detection file exists. `/construct verify` runs checks only for installed packs.
+A module is considered installed if its detection file exists. `/construct verify` runs checks only for installed modules.
 
 Report format: `✓` pass, `✗` fail (ACTION REQUIRED), `⚠` warning (informational).
 
-Running these checks is not optional. Do not mark installation as complete until every check for every installed pack passes.
+Running these checks is not optional. Do not mark installation as complete until every check for every installed module passes.

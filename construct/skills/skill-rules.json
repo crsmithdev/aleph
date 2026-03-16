@@ -1,0 +1,36 @@
+{
+  "rules": [
+    {
+      "skill": "research",
+      "keywords": ["research", "investigate", "look into", "find out", "compare", "survey", "analyze"]
+    },
+    {
+      "skill": "verification",
+      "keywords": ["verify that", "verify it", "confirm passing", "validate that", "prove it works", "verification"]
+    },
+    {
+      "skill": "debugging",
+      "keywords": ["debug", "bug", "broken", "failing", "error", "crash", "exception", "traceback", "root cause", "bisect"]
+    },
+    {
+      "skill": "subagent-dev",
+      "keywords": ["subagent", "parallel tasks", "dispatch", "multi-task", "implementation plan", "execute plan"]
+    },
+    {
+      "skill": "docs-review",
+      "keywords": ["doc sync", "docs drift", "spec update", "spec apply", "spec diff", "documentation mismatch", "docs match"]
+    },
+    {
+      "skill": "ralph-loop",
+      "keywords": ["ralph", "ralph loop", "autonomous loop", "keep iterating", "iterate until"]
+    },
+    {
+      "skill": "code-review",
+      "keywords": ["dead code", "unused", "clean up", "cleanup", "simplify", "code quality", "code review", "lint"]
+    },
+    {
+      "skill": "instructions-review",
+      "keywords": ["audit instructions", "review rules", "contradictions", "vague instructions", "instruction quality"]
+    }
+  ]
+}

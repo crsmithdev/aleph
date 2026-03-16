@@ -2,16 +2,19 @@
 
 ## Commandments
 
-1. Prioritize simplicity, observability, automated testability, brevity of words and clarity of code.
-2. Never summarize, truncate, or paraphrase when copying files; verify copies byte-for-byte.
-3. Keep all documentation (installation instructions, verification checks, /grasp output, other essentials of how to work with the project) current as changes are made, so context can be cleared and resumed from docs alone.
-4. Remove things completely—clean up all references, unused files, and related artifacts.
-5. Avoid duplication; before adding something, check if it exists elsewhere, then update in place or move it completely.
-6. Do things in code (Typescript) instead of using AI instructions wherever possible.
+1. Favor simplicity, observability, testability, easy iteration. Write minimal, stable, debuggable code. No duplication, over-abstraction, or unnecessary complexity. Nothing fails silently.
+2. Code over AI instructions; if it can be done without AI, don't use AI. TypeScript over Bash wherever possible.
+3. Small, atomic changes that can be tested and reverted independently, frequent commits and usage of feature branches and worktrees.
+4. Verify completion before claiming it. Test real end-to-end behavior in the way a user would interact with the system, not pieces in isolation.
+5. Never summarize, truncate, or paraphrase when copying files; verify copies byte-for-byte.
+6. Remove completely: all references, unused files, related artifacts, and every other trace. See the `code-review` skill for the full process.
+7. All docs (README.md, INSTALL.md, SPEC.md, etc.) must match actual behavior with zero drift. SPEC.md should be behavior- and feature-oriented, enabling functional testing and diffing.
+8. Use memory (MCP), CLAUDE.md, and docs appropriately without duplicating information between layers. Clearing context and continuing in a new session should be instant — never re-learn the codebase.
+9. This runs on CLI in Claude Code and is globally installed. Don't touch ~/.claude unless installing. Source lives in `construct/` and `dotclaude/` at repo root; `.claude/` is dev config only. Project-root CLAUDE.md is project-specific.
 
-## Dev Notes
+## Testing Philosophy
 
-- `.claude/CLAUDE.md` is the Construct framework — gets installed globally to `~/.claude/CLAUDE.md`
-- This file (`CLAUDE.md` at project root) is for working on Construct itself
-- Do not shadow global slash commands
-- Remember: do not confuse the two CLAUDE.md files when editing
+- **Test behavior, not implementation.** If a refactor breaks your tests but not your code, the tests were wrong. Tests assert on observable outputs (stdout, exit codes, side effects), never internal state.
+- **Test edges and errors, not just the happy path.** Every error path the code handles should have a test that triggers it. Malformed input, missing files, empty data.
+- **Mock boundaries, not logic.** Only mock things that are slow, non-deterministic, or external. Hook tests pipe real JSON and check real output.
+- **CI is the source of truth.** `bun test.ts` runs in GitHub Actions on every push. If CI passes, the code works.
