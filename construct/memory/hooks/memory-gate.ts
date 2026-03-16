@@ -1,11 +1,10 @@
 #!/usr/bin/env bun
 import { existsSync, unlinkSync, writeFileSync } from "fs";
-import { resolve, dirname } from "path";
+import { resolve } from "path";
 import { trace } from "../../trace.ts";
 import { parseTranscript } from "../parse-transcript.ts";
 
-const root = resolve(dirname(Bun.main), "../..");
-const lockFile = resolve(root, "memory/.memory-gate.lock");
+const lockFile = resolve(Bun.env.HOME ?? "/tmp", ".claude/.memory-gate.lock");
 
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
