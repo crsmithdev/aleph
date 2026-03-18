@@ -1,5 +1,8 @@
 .claude/worktrees/
 .claude/commands/
+.claude/MEMORY.md
+.claude/settings.local.json
+.claude/*.local.md
 construct/memory/sessions/
 construct/memory/signals/
 construct/memory/.memory-gate.lock
