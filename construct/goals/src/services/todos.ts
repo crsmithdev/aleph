@@ -1,0 +1,161 @@
+import { nanoid } from 'nanoid';
+import { eq, and, lte, isNull, sql } from 'drizzle-orm';
+import type { Db } from '@construct/data';
+import { todos, goals } from '../schema.js';
+import { createTodoSchema, updateTodoSchema } from '../validators.js';
+import type { EventBus } from './event-bus.js';
+
+export function getTodosForDay(db: Db, date: string) {
+  const undoneDue = db
+    .select()
+    .from(todos)
+    .where(and(eq(todos.done, false), lte(todos.dueDate, date)))
+    .all();
+
+  const undoneNoDue = db
+    .select()
+    .from(todos)
+    .where(
+      and(
+        eq(todos.done, false),
+        isNull(todos.dueDate),
+        lte(sql`substr(${todos.createdAt}, 1, 10)`, date)
+      )
+    )
+    .all();
+
+  const completedToday = db
+    .select()
+    .from(todos)
+    .where(
+      and(
+        eq(todos.done, true),
+        sql`substr(${todos.updatedAt}, 1, 10) = ${date}`
+      )
+    )
+    .all();
+
+  const undoneMap = new Map<string, typeof todos.$inferSelect>();
+  for (const t of [...undoneDue, ...undoneNoDue]) {
+    undoneMap.set(t.id, t);
+  }
+
+  const allTodos = [...undoneMap.values(), ...completedToday];
+  const goalIds = [...new Set(allTodos.map((t) => t.goalId).filter(Boolean))] as string[];
+
+  const goalTitles = new Map<string, string>();
+  for (const goalId of goalIds) {
+    const goal = db.select({ id: goals.id, title: goals.title }).from(goals).where(eq(goals.id, goalId)).get();
+    if (goal) goalTitles.set(goal.id, goal.title);
+  }
+
+  const enrichTodo = (t: typeof todos.$inferSelect) => ({
+    ...t,
+    goalTitle: t.goalId ? (goalTitles.get(t.goalId) ?? null) : null,
+  });
+
+  const undoneList = [...undoneMap.values()].map(enrichTodo);
+  const overdue = undoneList.filter((t) => t.dueDate && t.dueDate < date);
+  const dueTodayOrNoDue = undoneList.filter((t) => !t.dueDate || t.dueDate === date);
+
+  return {
+    overdue,
+    todos: dueTodayOrNoDue,
+    completed: completedToday.map(enrichTodo),
+  };
+}
+
+export function getTodo(db: Db, id: string) {
+  return db.select().from(todos).where(eq(todos.id, id)).get() ?? null;
+}
+
+export function createTodo(db: Db, input: unknown, eventBus?: EventBus) {
+  const data = createTodoSchema.parse(input);
+  const id = nanoid();
+  const now = new Date().toISOString();
+
+  if (data.goalId) {
+    const goal = db.select().from(goals).where(eq(goals.id, data.goalId)).get();
+    if (!goal) throw new Error('Goal not found');
+  }
+
+  db.insert(todos)
+    .values({
+      id,
+      title: data.title,
+      note: data.note ?? null,
+      dueDate: data.dueDate ?? null,
+      goalId: data.goalId ?? null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .run();
+
+  if (data.goalId) {
+    eventBus?.emitMutation({
+      type: 'todo_linked',
+      goalId: data.goalId,
+      details: { todoId: id, todoTitle: data.title },
+      timestamp: now,
+    });
+  }
+
+  return db.select().from(todos).where(eq(todos.id, id)).get()!;
+}
+
+export function updateTodo(db: Db, id: string, input: unknown, eventBus?: EventBus) {
+  const existing = db.select().from(todos).where(eq(todos.id, id)).get();
+  if (!existing) return null;
+
+  const data = updateTodoSchema.parse(input);
+  const now = new Date().toISOString();
+
+  if (data.goalId !== undefined && data.goalId !== existing.goalId) {
+    if (existing.goalId) {
+      eventBus?.emitMutation({
+        type: 'todo_unlinked',
+        goalId: existing.goalId,
+        details: { todoId: existing.id, todoTitle: existing.title },
+        timestamp: now,
+      });
+    }
+    if (data.goalId) {
+      const goal = db.select().from(goals).where(eq(goals.id, data.goalId)).get();
+      if (!goal) throw new Error('Goal not found');
+      eventBus?.emitMutation({
+        type: 'todo_linked',
+        goalId: data.goalId,
+        details: { todoId: existing.id, todoTitle: data.title ?? existing.title },
+        timestamp: now,
+      });
+    }
+  }
+
+  const updateData: Partial<typeof todos.$inferInsert> = { updatedAt: now };
+  if (data.title !== undefined) updateData.title = data.title;
+  if (data.done !== undefined) updateData.done = data.done;
+  if (data.note !== undefined) updateData.note = data.note ?? null;
+  if (data.dueDate !== undefined) updateData.dueDate = data.dueDate ?? null;
+  if (data.goalId !== undefined) updateData.goalId = data.goalId ?? null;
+
+  db.update(todos).set(updateData).where(eq(todos.id, id)).run();
+
+  return db.select().from(todos).where(eq(todos.id, id)).get()!;
+}
+
+export function deleteTodo(db: Db, id: string, eventBus?: EventBus): boolean {
+  const existing = db.select().from(todos).where(eq(todos.id, id)).get();
+  if (!existing) return false;
+
+  if (existing.goalId) {
+    eventBus?.emitMutation({
+      type: 'todo_unlinked',
+      goalId: existing.goalId,
+      details: { todoId: existing.id, todoTitle: existing.title },
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  db.delete(todos).where(eq(todos.id, id)).run();
+  return true;
+}

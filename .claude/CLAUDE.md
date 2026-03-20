@@ -10,7 +10,7 @@ This is the Construct source repo. The installed Construct rules come from `~/.c
 
 1. Favor simplicity, observability, testability, easy iteration. Write minimal, stable, debuggable code. No duplication, over-abstraction, or unnecessary complexity. Nothing fails silently.
 2. Code over AI instructions; if it can be done without AI, don't use AI. TypeScript over Bash wherever possible.
-3. Small, atomic changes that can be tested and reverted independently, frequent commits and usage of feature branches and worktrees.
+3. Small, atomic changes that can be tested and reverted independently, frequent commits, feature branches, and worktrees. Push before context switches or session end.
 4. Verify completion before claiming it. Test real end-to-end behavior in the way a user would interact with the system, not pieces in isolation.
 5. Never summarize, truncate, or paraphrase when copying files; verify copies byte-for-byte.
 6. Remove completely: all references, unused files, related artifacts, and every other trace. See the `code-review` skill for the full process.
@@ -48,5 +48,5 @@ Claude Code merges `.claude/` (project) with `~/.claude/` (global) at runtime. I
 - `.claude/settings.json` may only contain permissions, statusline, and MCP server config — never hooks.
 
 **CLAUDE.md ownership** — rules must exist in exactly one place:
-- `dotclaude/CLAUDE.md` → install source for `~/.claude/CLAUDE.md`. Construct-managed behavioral rules (behavior, task execution, memory, personas, git conventions). Not loaded directly by Claude Code.
+- `dotclaude/CLAUDE.md` → install source for `~/.claude/CLAUDE.md`. Construct-managed behavioral rules (behavior, task execution, memory, git, personas). Not loaded directly by Claude Code.
 - `.claude/CLAUDE.md` → this file. Repo-specific dev rules (commandments, testing philosophy, dev workflow, directory map). Loaded at runtime, never installed.

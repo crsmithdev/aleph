@@ -62,8 +62,8 @@ function cleanup() {
   if (existsSync(lockFile)) unlinkSync(lockFile);
 }
 
-function extractMemoryStore(t: typeof transcript): string | null {
-  for (const msg of t!.messages) {
+function extractMemoryStore(t: NonNullable<typeof transcript>): string | null {
+  for (const msg of t.messages) {
     if (msg.role !== "assistant") continue;
     for (let i = 0; i < msg.toolUses.length; i++) {
       if (msg.toolUses[i].includes("memory_store")) {

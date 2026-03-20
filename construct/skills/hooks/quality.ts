@@ -5,7 +5,9 @@ import { execSync } from "child_process";
 import { trace } from "../../trace.ts";
 
 const TAG = "quality";
-const input = JSON.parse(await Bun.stdin.text());
+let input: any;
+try { input = JSON.parse(await Bun.stdin.text()); }
+catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(1); }
 const filePath = input.tool_input?.file_path ?? "";
 if (!filePath || !existsSync(filePath)) {
   trace(TAG, `skip: ${filePath ? "file not found" : "no file path"}`);
@@ -37,7 +39,9 @@ const config = projectRoot ? `${projectRoot}/.claude/quality.json` : "";
 
 if (config && existsSync(config)) {
   trace(TAG, `using project config: ${config}`);
-  const rules = JSON.parse(readFileSync(config, "utf8"));
+  let rules: any;
+  try { rules = JSON.parse(readFileSync(config, "utf8")); }
+  catch (e) { trace(TAG, `failed to parse quality.json: ${(e as Error).message}`); process.exit(0); }
   for (const key of ["format", "lint"] as const) {
     const cmd = rules[key];
     if (cmd) {

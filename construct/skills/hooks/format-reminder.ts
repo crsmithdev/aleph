@@ -8,7 +8,9 @@ const TAG = "format-reminder";
 const root = resolve(dirname(Bun.main), "../..");
 const rulesFile = resolve(root, "skills/skill-rules.json");
 
-const input = JSON.parse(await Bun.stdin.text());
+let input: any;
+try { input = JSON.parse(await Bun.stdin.text()); }
+catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(1); }
 const prompt = input.prompt ?? "";
 const words = prompt.split(/\s+/);
 trace(TAG, `prompt: ${words.length} words`);
@@ -18,12 +20,12 @@ if (words.length < 3) {
 }
 
 // Depth classification
-const archPattern = /architect|redesign|refactor|migrate|schema|structure|plan|propose/i;
+const archPattern = /\b(architect|redesign|refactor|migrate|schema|structure|plan|propose|authenticat\w*|authorizat\w*|integrat\w*|api.?endpoint|rename.?all|move.?all|replace.?all|across.?all|every.?file|all.?files|end.to.end|full.?stack)/i;
 if (archPattern.test(prompt)) {
   trace(TAG, "depth: FULL (architectural keywords)");
   console.log("[Construct] Depth: FULL — architectural keywords. Write ISC before proceeding.");
 } else if (words.length >= 40) {
-  trace(TAG, "depth: FULL (complex, >40 words)");
+  trace(TAG, "depth: FULL (complex, ≥40 words)");
   console.log("[Construct] Depth: FULL — complex request. Consider ISC.");
 } else {
   trace(TAG, "depth: QUICK");

@@ -14,19 +14,17 @@ Foundation module. Provides CLAUDE.md, settings.json, statusline, and optional i
   - `IDENTITY.md` — name, tone, personality
   - `STYLE.md` — output formatting, conventions
   - `USER.md` — principal profile, environment
-  - `BOOTSTRAP.md` — session initialization sequence
 
 ## Usage
 
 The statusline appears automatically at the bottom of Claude Code, showing model, git branch, directory, and context usage. No interaction needed.
 
-Identity files shape how Claude behaves across sessions:
+Identity files are loaded via `@path` imports in CLAUDE.md and shape how Claude behaves across sessions:
 
 - Edit `SOUL.md` to change Claude's values, priorities, or mental models
 - Edit `IDENTITY.md` to adjust tone, personality, or voice
 - Edit `STYLE.md` to change output formatting or code conventions
 - Edit `USER.md` to update your profile, tech stack, or working preferences
-- Edit `BOOTSTRAP.md` to change what happens at session start
 
 Changes take effect on the next session.
 

@@ -29,7 +29,16 @@ For each claim, check the truth source:
 - Behavior claims → run the command, check output
 - Directory layout → compare actual tree to documented tree
 
-### 3 — Report
+### 3 — Check spec completeness
+
+If a SPEC.md exists, verify it covers all discoverable features:
+- Every hook registered in settings.json has a corresponding SPEC entry
+- Every slash command has a corresponding SPEC entry
+- Every skill in skill-rules.json has a corresponding SPEC entry
+- Every module has a corresponding SPEC entry
+- Flag any feature that exists in code but is absent from the SPEC
+
+### 4 — Report
 
 For each claim:
 - `✓` — matches reality
@@ -44,6 +53,7 @@ Table: document, line, claim, actual state, suggested direction (update doc or u
 
 - Every document in scope read and claims extracted
 - Every claim verified against its truth source
+- Spec completeness checked against code/config
 - Report produced with evidence for each finding
 - No unverified claims remain
 

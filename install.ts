@@ -9,7 +9,7 @@ import { existsSync } from "node:fs";
 // Construct installer — deploys from repo to ~/.claude
 // Source: construct/ (modules), dotclaude/ (CLAUDE.md, settings.json, commands)
 // Preserves: ALL CAPS files in identity/, sessions/, ratings.jsonl
-// Overwrites: hooks, skills, meta, dev, commands, settings, CLAUDE.md
+// Overwrites: hooks, skills, meta, commands, settings, CLAUDE.md
 
 const REPO = dirname(resolve(Bun.argv[1]));
 const CONSTRUCT_SRC = join(REPO, "construct");
@@ -52,11 +52,13 @@ async function syncDir(srcDir: string, dstDir: string): Promise<void> {
 
   // Collect all relative paths in src
   const srcPaths = new Set<string>();
+  const SKIP_DIRS = new Set(["node_modules", "dist", ".bun"]);
   async function walk(dir: string, rel: string) {
     const entries = await readdir(dir, { withFileTypes: true });
     for (const e of entries) {
       const relPath = rel ? `${rel}/${e.name}` : e.name;
       if (e.isDirectory()) {
+        if (SKIP_DIRS.has(e.name)) continue;
         srcPaths.add(relPath);
         await walk(join(dir, e.name), relPath);
       } else {
@@ -66,8 +68,15 @@ async function syncDir(srcDir: string, dstDir: string): Promise<void> {
   }
   await walk(srcDir, "");
 
-  // Copy all from src to dst
-  await cp(srcDir, dstDir, { recursive: true, force: true });
+  // Copy all from src to dst, skipping node_modules/dist/.bun
+  await cp(srcDir, dstDir, {
+    recursive: true,
+    force: true,
+    filter: (src) => {
+      const base = src.split("/").pop()!;
+      return !SKIP_DIRS.has(base);
+    },
+  });
 
   // Delete files in dst not in src
   async function cleanDst(dir: string, rel: string) {
@@ -106,12 +115,18 @@ try {
     }
   }
 
-  // Back up ALL CAPS .md files from identity/
+  // Back up ALL CAPS .md files from identity/ and memory/
   await mkdir(join(backupDir, "core/identity"), { recursive: true });
+  await mkdir(join(backupDir, "memory"), { recursive: true });
 
   for (const f of await discoverAllCapsMd(join(DST, "construct/core/identity"))) {
     await cp(join(DST, "construct/core/identity", f), join(backupDir, "core/identity", f));
     console.log(`  preserved: core/identity/${f}`);
+  }
+
+  for (const f of await discoverAllCapsMd(join(DST, "construct/memory"))) {
+    await cp(join(DST, "construct/memory", f), join(backupDir, "memory", f));
+    console.log(`  preserved: memory/${f}`);
   }
 
   // 2. Sync construct/ tree (delete stale files, overwrite everything)
@@ -132,11 +147,24 @@ try {
   }
 
   // Restore ALL CAPS .md files
-  const backupIdentity = join(backupDir, "core/identity");
-  if (await exists(backupIdentity)) {
-    for (const f of await readdir(backupIdentity)) {
-      if (f.endsWith(".md")) {
-        await cp(join(backupIdentity, f), join(DST, "construct/core/identity", f));
+  for (const [subdir, target] of [
+    ["core/identity", join(DST, "construct/core/identity")],
+    ["memory", join(DST, "construct/memory")],
+  ]) {
+    const backupSub = join(backupDir, subdir);
+    if (await exists(backupSub)) {
+      for (const f of await readdir(backupSub)) {
+        if (f.endsWith(".md")) {
+          const src = join(backupSub, f);
+          const dst = join(target, f);
+          await cp(src, dst);
+          // Verify byte-size matches
+          const srcSize = (await stat(src)).size;
+          const dstSize = (await stat(dst)).size;
+          if (srcSize !== dstSize) {
+            console.error(`  ✗ size mismatch: ${f} (${srcSize} → ${dstSize})`);
+          }
+        }
       }
     }
   }
@@ -159,7 +187,8 @@ try {
 
   // Remove known Construct commands that are no longer in the repo
   const CONSTRUCT_COMMANDS = ["construct.md", "verify.md", "install.md", "test.md",
-    "worktree.md", "grasp.md", "status.md", "retain.md", "common-ground.md", "dashboard.md"];
+    "worktree.md", "grasp.md", "status.md", "retain.md", "common-ground.md", "dashboard.md",
+    "goal.md", "todo.md"];
   for (const f of CONSTRUCT_COMMANDS) {
     if (!repoCommands.has(f) && await exists(join(DST, "commands", f))) {
       await rm(join(DST, "commands", f));
@@ -202,7 +231,9 @@ try {
 
   // 6. Update CLAUDE.md — replace # Construct section, preserve content before AND after
   console.log("updating CLAUDE.md...");
-  const constructSection = await readFile(join(TEMPLATES, "CLAUDE.md"), "utf-8");
+  const rawSection = await readFile(join(TEMPLATES, "CLAUDE.md"), "utf-8");
+  // Strip source-only HTML comments — they're meaningless in the installed copy
+  const constructSection = rawSection.replace(/<!--[\s\S]*?-->\s*/g, "");
   const dstClaudeMd = join(DST, "CLAUDE.md");
 
   if (await exists(dstClaudeMd)) {
@@ -222,7 +253,9 @@ try {
         }
       }
 
-      const before = lines.slice(0, startIdx).join("\n");
+      // Clean stale Construct source comments from the user section
+      const before = lines.slice(0, startIdx).join("\n")
+        .replace(/<!--\s*SOURCE FILE[^>]*?-->\s*/g, "");
       const after = lines.slice(endIdx).join("\n");
 
       let result = "";
@@ -243,6 +276,29 @@ try {
     }
   } else {
     await writeFile(dstClaudeMd, constructSection);
+  }
+
+  // 7. Verify critical files — byte-size check on key infrastructure
+  const criticalFiles = [
+    "construct/skills/skill-rules.json",
+    "construct/trace.ts",
+    "construct/memory/parse-transcript.ts",
+  ];
+  let verifyFails = 0;
+  for (const rel of criticalFiles) {
+    const src = join(CONSTRUCT_SRC, rel.replace("construct/", ""));
+    const dst = join(DST, rel);
+    if (await exists(src) && await exists(dst)) {
+      const srcSize = (await stat(src)).size;
+      const dstSize = (await stat(dst)).size;
+      if (srcSize !== dstSize) {
+        console.error(`  ✗ size mismatch: ${rel} (src ${srcSize} → dst ${dstSize})`);
+        verifyFails++;
+      }
+    }
+  }
+  if (verifyFails > 0) {
+    console.error(`\n⚠ ${verifyFails} file(s) failed size verification`);
   }
 
   console.log();

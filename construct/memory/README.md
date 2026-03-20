@@ -11,6 +11,7 @@ Session hooks, memory directories, ratings capture, semantic memory.
 - `signals/ratings.jsonl` — explicit + implicit satisfaction ratings
 - `hooks/session-start.ts` — surfaces last session at SessionStart; prompts semantic memory search
 - `hooks/rating-capture.ts` — captures explicit N/10 ratings at UserPromptSubmit
+- `hooks/memory-gate.ts` — enforces quality `memory_store` call before exit on substantive sessions
 - `hooks/session-summary.ts` — context-injected session summary at Stop
 
 ## Usage

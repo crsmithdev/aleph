@@ -59,29 +59,25 @@ Execute: `bun construct/status.ts`
 
 Review recent work and promote durable insights to semantic memory.
 
-1. Show last 5 session summaries from memory/sessions/
-
-3. Ask which insights to store in semantic memory
-4. For each approved entry, call `memory_store` with appropriate tags and `memory_type`
+1. Show last 5 session summaries from `~/.claude/construct/memory/sessions/`
+2. Ask which insights to store in semantic memory
+3. For each approved entry, call `memory_store` with appropriate tags and `memory_type`
 
 
 ## `trace` (no additional arguments)
 
-Toggle hook tracing. The trace flag is the file `~/.claude/construct/.trace`.
+Toggle hook tracing.
 
-1. Check if `~/.claude/construct/.trace` exists
-2. If it exists: delete it, print `Trace: OFF`
-3. If it doesn't exist: create it (empty file), print `Trace: ON`
+Execute: `bun construct/trace-toggle.ts`
 
 ## `trace <command> [args]` (with additional arguments)
 
-Run a single command with tracing enabled, then restore previous state.
+One-shot trace: enable tracing, run the command, then restore previous state.
 
-1. Check if `~/.claude/construct/.trace` already exists (remember this as `was_on`)
-2. If not already on: create `~/.claude/construct/.trace`
-3. Print `Trace: ON (one-shot)`
-4. Run the command specified by the remaining arguments (e.g., `/construct trace status` runs `/construct status`)
-5. If `was_on` is false: delete `~/.claude/construct/.trace`, print `Trace: OFF`
+1. Run `bun construct/trace-toggle.ts` (captures current state and toggles)
+2. If output was "Trace: ON", run the command specified by the remaining arguments
+3. Run `bun construct/trace-toggle.ts` to restore previous state
+4. If output was "Trace: already ON", just run the command (tracing was already on, no toggle needed)
 
 ## `audit`
 
@@ -89,7 +85,7 @@ Full project audit. Run these three skills in order, then print a combined summa
 
 1. Run the `code-review` skill (full scan of all `.ts` files under `construct/` and the installer)
 2. Run the `instructions-review` skill
-3. Run the `docs-review` skill (including spec completeness checks)
+3. Run the `docs-review` skill
 
 After all three, ask: "Fix the code and reference issues now? (Instructions and docs require your review first.)"
 
@@ -104,5 +100,5 @@ Usage: /construct <subcommand>
   status        Show system status
   retain        Promote insights to semantic memory
   trace         Toggle hook tracing (or trace <cmd> for one-shot)
-  audit         Full project audit (code, refs, instructions, docs, spec, stats)
+  audit         Full project audit (code, refs, instructions, docs, spec)
 ```

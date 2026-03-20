@@ -2,11 +2,10 @@
 /**
  * Construct status — collects identity, skills, sessions, and ratings in parallel.
  */
-import { readdirSync, readFileSync, existsSync } from "fs";
-import { resolve, basename } from "path";
+import { readdirSync, readFileSync, existsSync, statSync } from "fs";
+import { resolve } from "path";
 
 const root = resolve(import.meta.dir);
-const home = Bun.env.HOME ?? "/tmp";
 
 interface Rating {
   timestamp: string;
@@ -75,7 +74,50 @@ out.push(`**Skills** (${skills.length}): ${skills.join(", ") || "none"}`);
 
 out.push("\n## Memory\n");
 out.push(`**Ratings**: ${ratings.explicit} explicit, ${ratings.avg !== null ? ratings.avg.toFixed(1) : "n/a"} avg`);
-out.push(`**Sessions**: ${sessionCount} total\n`);
+out.push(`**Sessions**: ${sessionCount} total`);
+
+// Memory size
+const sessionsSize = (() => {
+  const dir = resolve(root, "memory/sessions");
+  if (!existsSync(dir)) return 0;
+  return readdirSync(dir).filter(f => f.endsWith(".md")).reduce((sum, f) => {
+    try { return sum + statSync(resolve(dir, f)).size; } catch { return sum; }
+  }, 0);
+})();
+const ratingsSize = (() => {
+  const f = resolve(root, "memory/signals/ratings.jsonl");
+  try { return statSync(f).size; } catch { return 0; }
+})();
+const memoSize = (() => {
+  const db = resolve(Bun.env.HOME ?? "/tmp", ".local/share/mcp-memory/sqlite_vec.db");
+  try { return statSync(db).size; } catch { return 0; }
+})();
+const fmt = (b: number) => b < 1024 ? `${b}B` : b < 1048576 ? `${(b/1024).toFixed(1)}KB` : `${(b/1048576).toFixed(1)}MB`;
+out.push(`**Memory size**: sessions ${fmt(sessionsSize)}, ratings ${fmt(ratingsSize)}, semantic ${memoSize > 0 ? fmt(memoSize) : "n/a"}`);
+
+// Codebase stats
+out.push("\n## Codebase\n");
+const countFiles = (dir: string, ext: string): { files: number; lines: number } => {
+  if (!existsSync(dir)) return { files: 0, lines: 0 };
+  let files = 0, lines = 0;
+  const walk = (d: string) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      if (e.name === "node_modules" || e.name === "references" || e.name === ".git") continue;
+      const p = resolve(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith(ext)) {
+        files++;
+        try { lines += readFileSync(p, "utf-8").split("\n").length; } catch {}
+      }
+    }
+  };
+  walk(dir);
+  return { files, lines };
+};
+const ts = countFiles(resolve(root, ".."), ".ts");
+const md = countFiles(resolve(root, ".."), ".md");
+out.push(`**TypeScript**: ${ts.files} files, ${ts.lines} lines`);
+out.push(`**Docs**: ${md.files} files, ${md.lines} lines\n`);
 
 if (sessions.length > 0) {
   out.push("**Recent sessions**:");

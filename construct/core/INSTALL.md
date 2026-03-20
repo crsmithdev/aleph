@@ -7,7 +7,7 @@ All paths relative to `~/.claude/`. Run every check. Do not skip or summarize.
 - `CLAUDE.md` exists and contains `# Construct`
 - `settings.json` exists and is valid JSON (`jq . settings.json`)
 - `ccstatusline` is on PATH (`which ccstatusline`)
-- Identity files (⚠ if missing — optional): `SOUL.md`, `IDENTITY.md`, `STYLE.md`, `USER.md`, `BOOTSTRAP.md` in `construct/core/identity/`
+- Identity files (⚠ if missing — optional): `SOUL.md`, `IDENTITY.md`, `STYLE.md`, `USER.md` in `construct/core/identity/`
 
 ## Registration
 

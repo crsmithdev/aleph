@@ -18,13 +18,12 @@
 ### Depth Levels
 - **QUICK**: ≤2 files, straightforward change, deterministic outcome — proceed immediately
 - **FULL**: multi-file, architectural decision, or uncertain scope — run the 7-phase algorithm
-- **REVIEW**: before finalizing — verify against ISC, then LEARN
 
 ### 7-Phase Algorithm (FULL tasks)
-**OBSERVE** — Reverse-engineer true intent. Write ISC (Intent Success Criteria): numbered list, each stating "When [condition], [observable outcome]" — must be verifiable by running a command or checking a file.
+**OBSERVE** — Reverse-engineer true intent. Write ISC (Intent Success Criteria): numbered list (minimum 3), each stating "When [condition], [observable outcome]" — must be verifiable by running a command or checking a file.
 **THINK** — Validate capability selection against ISC (not the raw prompt). Select thinking tools; justify exclusions. Output capability block.
 **PLAN** — Agent sequence, execution pattern, parallel opportunities.
-**BUILD/EXECUTE** — Run. Independent subtasks via parallel Task() in a single message — serial execution is a failure mode.
+**BUILD/EXECUTE** — Run. Independent subtasks via parallel subagent dispatch in a single message — serial execution is a failure mode.
 **VERIFY** — Check every ISC criterion with fresh evidence (run the command, read the file). If any criterion fails, return to BUILD and fix it. Do not advance to LEARN until all pass.
 **LEARN** — State what worked, what didn't. Durable insights -> semantic memory via `memory_store`.
 
@@ -47,7 +46,7 @@ After any change that modifies behavior, use the `docs-review` skill to check fo
 
 ## Thinking Tools
 
-Six tools available for FULL tasks. For each, either use it or state why it's not needed for this task.
+Six conceptual frameworks available for FULL tasks. Use when the problem warrants it.
 
 - **Council** — Multi-perspective debate. Use when multiple valid approaches exist.
 - **RedTeam** — Adversarial: "What are the 3 most likely ways this fails?"
@@ -76,19 +75,16 @@ An MCP server provides persistent semantic memory across sessions. Use it automa
 
 **Before session end:** call `memory_store` once with a session summary: what was done, key decisions, current state (done/in-progress/blocked), and anything a future session needs to know. Tag: `session_context`.
 
-**Format:** Each memory_store call must include: `content` (1-3 sentences, specific and actionable), `tags` (from above), `memory_type` (decision, learning, pattern, error, or observation).
+**Format:** Each memory_store call must include: `content` (1-3 sentences, specific and actionable), `tags` (from above), `memory_type` — mapped from tags as follows: `decision` → decision, `preference` → observation, `error_resolution` → error, `pattern` → pattern, `learning` → learning, `session_context` → observation.
 
 **Do not store:** ephemeral task state, code snippets (they're in git), or anything derivable from the codebase.
 
-## Identity Files
+## Identity
 
-Slow-changing files in `construct/core/identity/`:
-
-- **SOUL.md** — Purpose, values, mental models, biases. Rarely changes.
-- **IDENTITY.md** — Name, tone, personality, voice. Presentation layer.
-- **STYLE.md** — Output formatting, code conventions.
-- **USER.md** — Principal profile, environment, tech stack, working style.
-- **BOOTSTRAP.md** — Declarative session initialization sequence.
+@construct/core/identity/SOUL.md
+@construct/core/identity/IDENTITY.md
+@construct/core/identity/STYLE.md
+@construct/core/identity/USER.md
 
 ## Git
 
@@ -96,7 +92,8 @@ Slow-changing files in `construct/core/identity/`:
 - Body only when the "why" isn't obvious from the diff
 - No emoji, no conventional-commit prefixes
 - Branch names: terse, use `feature/`, `fix/`, `refactor/`, or `docs/` prefix
-- Always work on a feature branch; commit after every verified change
+- Each logical change gets its own feature branch (use worktrees for parallel work)
+- Commit after every verified change; push after changes are accepted
 - Squash commits when merging
 
 ## Agent Personas

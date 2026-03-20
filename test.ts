@@ -258,7 +258,18 @@ check("depth: 'plan this' → FULL", skillTest("plan this feature out").depth ==
 check("depth: 'the design looks off' → QUICK", skillTest("the design looks off on the login button").depth === "QUICK");
 
 const longPrompt = "update the button color from blue to green in the header component and also change the font size to 14px and make sure the hover state matches the new brand guidelines that were shared in the design doc last week";
-check("depth: long non-architectural → FULL (>40 words)", skillTest(longPrompt).depth === "FULL");
+check("depth: long non-architectural → FULL (≥40 words)", skillTest(longPrompt).depth === "FULL");
+
+// Expanded keyword coverage
+check("depth: 'add authentication' → FULL", skillTest("add authentication to the API routes").depth === "FULL");
+check("depth: 'update all API endpoints' → FULL", skillTest("update all API endpoints to use the new schema").depth === "FULL");
+check("depth: 'rename all references' → FULL", skillTest("rename all references to the old module name").depth === "FULL");
+check("depth: 'end to end tests' → FULL", skillTest("write end to end tests for the checkout flow").depth === "FULL");
+check("depth: 'integrate stripe' → FULL", skillTest("integrate stripe payments into the app").depth === "FULL");
+check("depth: 'full stack feature' → FULL", skillTest("build a full stack feature for user profiles").depth === "FULL");
+// Should still be QUICK
+check("depth: 'fix the auth bug' → QUICK", skillTest("fix the auth bug on line 42").depth === "QUICK");
+check("depth: 'read the file' → QUICK", skillTest("read the API response handler").depth === "QUICK");
 
 // ── Session recall ───────────────────────────────────────────────────────────
 
@@ -457,6 +468,52 @@ run("skills/hooks/notify.ts", "complete event", '{"type":"complete"}');
 run("skills/hooks/notify.ts", "permission event", '{"type":"permission"}');
 run("skills/hooks/notify.ts", "idle event", '{"type":"idle"}');
 run("skills/hooks/notify.ts", "malformed", "not json", { expectExit: 1 });
+
+// ── Install preservation ─────────────────────────────────────────────────────
+
+console.log("\n--- install preservation ---");
+
+const sentinelPath = resolve(Bun.env.HOME!, ".claude/construct/core/identity/TEST_SENTINEL.md");
+const sentinelContent = "# Test Sentinel\n\nThis file tests upgrade preservation.\n";
+writeFileSync(sentinelPath, sentinelContent);
+check("install: sentinel file created", existsSync(sentinelPath));
+
+try {
+  execSync(`${BUN} ${resolve(ROOT, "install.ts")}`, { encoding: "utf-8", timeout: 30000, cwd: ROOT, stdio: "pipe" });
+  check("install: sentinel survived upgrade", existsSync(sentinelPath));
+  check("install: sentinel content preserved", readFileSync(sentinelPath, "utf-8") === sentinelContent);
+} catch (err: any) {
+  console.log(`\u2717 install: installer failed — ${err.message?.slice(0, 100)}`);
+  failed++;
+}
+try { unlinkSync(sentinelPath); } catch {}
+
+// ── Identity files ──────────────────────────────────────────────────────────
+
+console.log("\n--- identity files ---");
+
+const identityDir = resolve(ROOT, "construct/core/identity");
+const expectedIdentity = ["IDENTITY.md", "SOUL.md", "STYLE.md", "USER.md"];
+for (const f of expectedIdentity) {
+  const p = resolve(identityDir, f);
+  check(`identity: ${f} exists`, existsSync(p));
+  if (existsSync(p)) {
+    const content = readFileSync(p, "utf-8");
+    check(`identity: ${f} non-empty`, content.length > 10);
+  }
+}
+
+// Verify identity files exist at installed path and are non-empty
+// Note: installed files may differ from source (user customizations are preserved)
+const installedIdentityDir = resolve(Bun.env.HOME!, ".claude/construct/core/identity");
+if (existsSync(installedIdentityDir)) {
+  for (const f of expectedIdentity) {
+    const dst = resolve(installedIdentityDir, f);
+    if (existsSync(dst)) {
+      check(`identity: installed ${f} exists and non-empty`, readFileSync(dst, "utf-8").length > 10);
+    }
+  }
+}
 
 // ── Results ──────────────────────────────────────────────────────────────────
 

@@ -24,7 +24,7 @@ Depth classification, keyword-matched skill evaluation, skill routing config, qu
 Every prompt is automatically classified by depth:
 
 - **QUICK** — short, non-architectural requests. Claude proceeds immediately.
-- **FULL** — architectural keywords (`architect`, `redesign`, `migrate`, etc.) or complex requests (>40 words). Claude is reminded to write ISC before proceeding.
+- **FULL** — architectural keywords (`architect`, `redesign`, `migrate`, etc.) or complex requests (≥40 words). Claude is reminded to write ISC before proceeding.
 
 Prompts are also matched against skill keywords. When a match is found, Claude is told to activate the skill before responding. For example, asking Claude to "research the tradeoffs between X and Y" triggers the `research` skill.
 

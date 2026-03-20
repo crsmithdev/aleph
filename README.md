@@ -5,14 +5,14 @@ A minimal, ergonomic Claude Code-native personal AI infrastructure, assistant, a
 ## Design Principles
 
 - Claude Code is the runtime. No daemons, no Electron, no external servers.
-- Favor CLAUDE.md rules over code wherever behavior can be captured in text.
+- Favor code over AI instructions wherever behavior can be enforced programmatically.
 - Every component must earn its place. If native Claude Code already does it, don't replicate it.
 - Minimal viable first. Expand when friction is felt, not in anticipation of it.
 - No external API keys required. All hooks use context injection.
 
 ## Modules
 
-Five modules, installed in order. Each is independent after its dependencies are met.
+Seven modules, installed in order. Each is independent after its dependencies are met.
 
 | Module | Depends on | What it provides |
 |------|-----------|-----------------|
@@ -20,7 +20,9 @@ Five modules, installed in order. Each is independent after its dependencies are
 | `construct-memory` | core | Session hooks, memory dirs, ratings |
 | `construct-skills` | core | Skill routing, quality hook, notify hook, skill playbooks |
 | `construct-meta` | core | /construct subcommands |
-| `construct-dashboard` | core | Goal/TODO tracking, web UI, MCP server |
+| `construct-data` | — | Shared SQLite persistence layer |
+| `construct-goals` | data | Goal/TODO domain logic, MCP server, /goal and /todo commands |
+| `construct-ui` | data, goals | Web UI (Fastify API + React SPA) |
 
 All modules are deployed together. Core is always required; the rest are inert if unused.
 
@@ -36,8 +38,7 @@ construct/                                # source modules (installed to ~/.clau
 │       ├── SOUL.md                      # purpose, values, mental models
 │       ├── IDENTITY.md                  # name, tone, personality
 │       ├── STYLE.md                     # output formatting, conventions
-│       ├── USER.md                      # principal profile, environment
-│       └── BOOTSTRAP.md                 # session initialization sequence
+│       └── USER.md                      # principal profile, environment
 ├── memory/
 │   ├── sessions/                        # session summaries
 │   ├── signals/ratings.jsonl            # explicit + implicit ratings
@@ -58,22 +59,26 @@ construct/                                # source modules (installed to ~/.clau
 ├── meta/
 │   ├── README.md                        # cross-module utilities reference
 │   └── INSTALL.md                       # post-install checks
-└── dashboard/
-    ├── api/                             # Fastify REST API + SQLite
-    ├── web/                             # React SPA (Vite + Tailwind)
-    ├── mcp/                             # MCP server for AI integration
-    └── shared/                          # Zod validators, shared types
+├── data/
+│   └── src/client.ts                    # shared SQLite persistence
+├── goals/
+│   ├── src/                             # domain logic (services, schema, validators)
+│   └── mcp/                             # MCP server (direct SQLite, no HTTP)
+└── ui/
+    ├── api/                             # Fastify REST API (thin wrappers)
+    └── web/                             # React SPA (Vite + Tailwind)
 
 dotclaude/                                # install sources (installed to ~/.claude/)
 ├── CLAUDE.md                            # install source for ~/.claude/CLAUDE.md (not loaded directly)
 ├── settings.json                        # permissions, statusline, hooks
 └── commands/
-    └── construct.md                     # slash command router
+    ├── construct.md                     # slash command router
+    ├── goal.md                          # /goal slash command
+    └── todo.md                          # /todo slash command
 
 .claude/                                  # dev-time config only (never installed)
 ├── CLAUDE.md                            # dev-only rules, loaded at runtime for this repo
-├── settings.json                        # local hook testing (paths point to construct/)
-└── MEMORY.md                            # ephemeral working notes
+└── settings.json                        # permissions, statusline, MCP config (no hooks)
 ```
 
 ## Hooks
@@ -99,13 +104,15 @@ dotclaude/                                # install sources (installed to ~/.cla
 | `/construct status` | meta | Context, identity files, skills, memory stats |
 | `/construct retain` | meta | Promote insights to semantic memory |
 | `/construct trace` | meta | Toggle hook tracing (or one-shot trace a command) |
-| `/construct audit` | meta | Full project audit: code, refs, instructions, docs, spec, stats |
+| `/construct audit` | meta | Full project audit: code, refs, instructions, docs, spec |
+| `/goal` | goals | Manage goals: list, create, update, delete, show, done, archive |
+| `/todo` | goals | Manage todos: list, add, done, undone, delete, recurring |
 
 ## Identity Architecture
 
 Two layers:
 
-- **Identity** (slow-changing): `SOUL.md`, `IDENTITY.md`, `STYLE.md`, `USER.md`, `BOOTSTRAP.md` — who you are, how you think, how you present. Optional files in construct-core.
+- **Identity** (slow-changing): `SOUL.md`, `IDENTITY.md`, `STYLE.md`, `USER.md` — who you are, how you think, how you present. Loaded via `@path` imports in CLAUDE.md.
 - **Memory** (fast-changing): semantic memory via mcp-memory-service — decisions, patterns, preferences. Automatic storage and retrieval.
 
 ## Skills

@@ -3,8 +3,8 @@
   "scripts": {
     "test": "bun test.ts",
     "validate": "jq . dotclaude/settings.json > /dev/null && jq . construct/skills/skill-rules.json > /dev/null",
-    "dashboard": "npm run dev --prefix construct/dashboard",
-    "dashboard:build": "npm run build --prefix construct/dashboard",
-    "dashboard:test": "npm test --prefix construct/dashboard"
+    "ui": "npm run dev --prefix construct/ui",
+    "ui:build": "npm run build --prefix construct/ui",
+    "ui:e2e": "bun construct/ui/e2e/goal-flow.test.ts"
   }
 }

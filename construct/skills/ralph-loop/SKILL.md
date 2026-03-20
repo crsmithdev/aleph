@@ -32,7 +32,7 @@ Named after Ralph Wiggum — kind of dumb, kind of lovable, and he never gives u
 Iterations are dispatched as subagents. Parallel by default — if iterations don't depend on each other, dispatch them all at once in a single message.
 
 - **Independent work** (batch, research, ideation) → all iterations as parallel background agents
-- **Sequential work** (test-fix cycles, refinement) → dispatch one, read output, dispatch next. Use `isolation: "worktree"` if iterations modify the same files.
+- **Sequential work** (test-fix cycles, refinement) → dispatch one, read output, dispatch next
 - **Mixed** → group independent work into parallel batches, run batches sequentially
 
 ## Done when

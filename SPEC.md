@@ -26,12 +26,12 @@ Last session (<filename>):
 - Session count is the number of `.md` files in `memory/sessions/`.
 - The last session block is shown only when at least one session file exists. It displays the most recent session summary (minus the `# Session:` heading), indented.
 
-The BOOTSTRAP.md initialization sequence then runs silently: semantic memory search, session count, worktree detection, depth defaulting to QUICK.
+The session-start hook also detects git worktrees and prompts for a semantic memory search.
 
 ### During a session
 
 **Depth classification** — on every prompt (≥3 words), `format-reminder.ts` classifies depth:
-- FULL if prompt matches architectural keywords (`architect|redesign|refactor|migrate|schema|structure|plan|propose`) or is ≥40 words.
+- FULL if prompt matches architectural keywords (`architect|redesign|refactor|migrate|schema|structure|plan|propose|authenticat*|authorizat*|integrat*|api endpoint|rename all|move all|replace all|across all|every file|all files|end to end|full stack`) or is ≥40 words (inclusive).
 - QUICK otherwise (silent).
 - Output when FULL (architectural keywords): `[Construct] Depth: FULL — architectural keywords. Write ISC before proceeding.`
 - Output when FULL (≥40 words): `[Construct] Depth: FULL — complex request. Consider ISC.`
@@ -59,10 +59,10 @@ Ratings 1–3 trigger a console message: `[Construct] Low rating (N) — store w
 
 On `Stop`, two hooks fire in order:
 
-**1. Memory gate** (`memory-gate.ts`) — enforces `memory_store` before exit on substantive sessions:
+**1. Memory gate** (`memory-gate.ts`) — enforces quality `memory_store` before exit on substantive sessions:
 - Substantive = ≥6 messages AND ≥1 Edit/Write/Bash tool use.
-- If `memory_store` was called: allows exit.
-- If not: blocks exit once with a prompt to call `memory_store` with a session summary. On second Stop, allows exit regardless.
+- If `memory_store` was called AND passes quality check: allows exit. Quality check requires: Task indicator (or content >80 chars), Outcome keyword (`done`, `complete`, `in-progress`, `blocked`, etc.), Changes keyword (`change`, `edit`, `add`, `remove`, `update`, `fix`, etc.), and total content ≥50 chars. If any are missing, blocks with a rewrite prompt showing submitted content and missing fields.
+- If `memory_store` was not called: blocks exit once with a prompt to call `memory_store` with a session summary. On second Stop, allows exit regardless.
 
 **2. Session summary** (`session-summary.ts`) — writes a summary file if the session had ≥4 messages:
 - Output: `memory/sessions/YYYY-MM-DD-HHMMSS.md`:
@@ -169,7 +169,7 @@ Subcommands of `/construct`, routed by `commands/construct.md`:
 | `install` | Runs `bun install.ts`, then auto-runs `verify` |
 | `verify` | Reads each installed module's INSTALL.md, runs every check individually, reports ✓/✗/⚠ grouped by module |
 | `grasp` | Externalizes Claude's mental model: commandments (verbatim), project identity, stack, active work, key files, conventions, uncertainties. Ends with "Is any of this wrong or out of date?" |
-| `status` | Shows: identity files present, active skills, semantic memory context, session signals (rating counts + rolling average), last 5 sessions, memory size |
+| `status` | Shows: identity files, skills, ratings (count + avg), memory size (sessions, ratings, semantic db), codebase stats (TS/MD file + line counts), last 5 sessions |
 | `retain` | Shows last 5 session summaries. Prompts for which to promote to semantic memory via `memory_store` |
 | `trace` | Toggles `~/.claude/construct/.trace` flag file. With args: one-shot trace (enable, run command, restore previous state) |
 | `audit` | Three-skill project audit: code-review, instructions-review, docs-review. Auto-fixes code/refs with approval; instructions/docs presented for review |
@@ -213,7 +213,7 @@ done. run /verify to check installation.
 
 
 **Overwritten on upgrade:**
-- All hooks, skills, meta, dev files
+- All hooks, skills, meta files
 - README.md and INSTALL.md files within modules
 - Non-ALLCAPS files in construct/
 
@@ -227,7 +227,6 @@ Five optional files in `construct/core/identity/`, preserved on upgrade:
 | IDENTITY.md | Tone: terse by default, matches user energy, pragmatic engineer, no filler phrases, no hedging, pushes back when wrong, treats silence as permission |
 | STYLE.md | Output format: answer-first, bullets for 3+ items, `path:line` references, no headers in short responses. Code: functional where clear, early returns, match existing style |
 | USER.md | Principal profile: environment, working style, communication preferences. Partially filled template |
-| BOOTSTRAP.md | Session init sequence: memory search, session count, worktree detection, default to QUICK depth |
 
 ## Modules
 
@@ -288,23 +287,39 @@ Two memory layers: semantic (mcp-memory-service, decisions/patterns/preferences,
 - `construct/meta/README.md` — cross-module utilities reference
 - `~/.claude/commands/construct.md` — `/construct` slash command router
 
-### construct-dashboard
+### construct-data
 
-**Depends on:** construct-core
+**Depends on:** nothing
 
 **Provides:**
-- `construct/dashboard/api/` — Fastify 5 REST API with Drizzle ORM + better-sqlite3 (SQLite, WAL mode)
-- `construct/dashboard/web/` — React 19 SPA with Vite 6, Tailwind CSS v4, TanStack Query v5
-- `construct/dashboard/mcp/` — MCP server wrapping the REST API (stdio transport)
-- `construct/dashboard/shared/` — Zod validators and TypeScript types
+- `construct/data/src/client.ts` — `createDb(path?)` factory returning `{ db, sqlite }` with WAL mode and foreign keys
+- Default database path: `~/.claude/construct/data/construct.db` (overridable via `CONSTRUCT_DB_PATH` env var)
 
-**Data model:** goals, categories (many-to-many), notes (per-goal), todos (with due dates), recurring todos (daily/weekly/monthly with period-keyed completions), history logs, webhooks, API tokens.
+### construct-goals
 
-**Integration:** Construct interacts via the MCP server. MCP tools: list_goals, get_goal, create_goal, update_goal, delete_goal, list_categories, create_category, delete_category, list_notes, add_note, update_note, delete_note, list_todos, create_todo, update_todo, delete_todo, list_recurring_todos, create_recurring_todo, complete_recurring_todo, get_summary, get_history.
+**Depends on:** construct-data
 
-**Auth:** WebAuthn/Passkeys for web UI. API token (Bearer) auth for MCP/agent access. Dev bypass when no credentials registered.
+**Provides:**
+- `construct/goals/src/` — Domain logic: constants, types, validators, Drizzle schema, DDL, service functions
+- `construct/goals/mcp/` — MCP server with direct SQLite access (no HTTP dependency)
+- Service functions: listGoals, getGoal, createGoal, updateGoal, deleteGoal, setCategories, getTodosForDay, createTodo, updateTodo, deleteTodo, listCategories, createCategory, deleteCategory, listNotes, addNote, updateNote, deleteNote, listRecurringTodos, createRecurringTodo, completeRecurringTodo, uncompleteRecurringTodo, getHistory, getSummary
+- EventBus + HistoryService for mutation tracking
 
-**Running:** `npm run dev` from `construct/dashboard/` starts API on :3001 and Vite on :5173. `npm run build` builds shared → api → web. `npm test` runs Vitest integration tests.
+**Data model:** goals, categories (many-to-many), notes (per-goal), todos (with due dates), recurring todos (daily/weekly/monthly with period-keyed completions), history logs.
+
+**Integration:** CLI via `/goal` and `/todo` slash commands. MCP tools: list_goals, get_goal, create_goal, update_goal, delete_goal, list_categories, create_category, delete_category, list_notes, add_note, update_note, delete_note, list_todos, create_todo, update_todo, delete_todo, list_recurring_todos, create_recurring_todo, complete_recurring_todo, get_summary, get_history.
+
+### construct-ui
+
+**Depends on:** construct-data, construct-goals
+
+**Provides:**
+- `construct/ui/api/` — Fastify 5 REST API (thin wrappers calling @construct/goals services)
+- `construct/ui/web/` — React 19 SPA with Vite 6, Tailwind CSS v4, TanStack Query v5
+
+**No auth.** Single-user project — all routes are open.
+
+**Running:** `npm run dev` from `construct/ui/` starts API on :3001 and Vite on :5173. `npm run build` builds api → web. `npm test` runs Vitest integration tests.
 
 ## Hook Registration
 
@@ -334,7 +349,7 @@ The installer rewrites relative paths (`bun construct/...`) to absolute `$HOME`-
 ## Trace Mode
 
 - Flag file: `~/.claude/construct/.trace`
-- When present: hooks emit trace output to stderr
+- When present: hooks emit trace output to stdout (via `console.log`)
 - Default state: OFF (file does not exist)
 
 ## Module Detection
@@ -345,7 +360,9 @@ The installer rewrites relative paths (`bun construct/...`) to absolute `$HOME`-
 | construct-memory | `construct/memory/hooks/session-start.ts` |
 | construct-skills | `construct/skills/skill-rules.json` |
 | construct-meta | `construct/meta/README.md` |
-| construct-dashboard | `construct/dashboard/api/src/app.ts` |
+| construct-data | `construct/data/src/client.ts` |
+| construct-goals | `construct/goals/src/index.ts` |
+| construct-ui | `construct/ui/api/src/app.ts` |
 
 ## Verification
 

@@ -4,7 +4,9 @@ import { readFileSync } from "fs";
 import { trace } from "../../trace.ts";
 
 const TAG = "notify";
-const input = JSON.parse(await Bun.stdin.text());
+let input: any;
+try { input = JSON.parse(await Bun.stdin.text()); }
+catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(1); }
 const event = input.type ?? "unknown";
 trace(TAG, `event: ${event}`);
 
