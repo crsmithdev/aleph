@@ -18,7 +18,7 @@
     },
     {
       "skill": "docs-review",
-      "keywords": ["doc sync", "docs drift", "spec update", "spec apply", "spec diff", "documentation mismatch", "docs match"]
+      "keywords": ["doc sync", "docs drift", "documentation mismatch", "docs match"]
     },
     {
       "skill": "ralph-loop",

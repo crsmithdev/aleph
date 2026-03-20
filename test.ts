@@ -7,7 +7,7 @@ import { tmpdir } from "os";
 const ROOT = import.meta.dir;
 const BUN = process.argv[0];
 const hook = (path: string) => resolve(ROOT, "construct", path);
-const ratingsFile = resolve(ROOT, "construct/memory/signals/ratings.jsonl");
+const ratingsFile = resolve(tmpdir(), `construct-test-ratings-${process.pid}.jsonl`);
 const sessionsDir = resolve(ROOT, "construct/memory/sessions");
 mkdirSync(resolve(ROOT, "construct/memory/signals"), { recursive: true });
 mkdirSync(sessionsDir, { recursive: true });
@@ -17,14 +17,27 @@ let failed = 0;
 const infoResults: { name: string; pass: boolean }[] = [];
 
 // Run a hook, return stdout. Throws on unexpected exit code.
+const testEnv = { ...process.env, RATINGS_FILE: ratingsFile };
+const traceFile = resolve(ROOT, "construct/.trace");
+let lastTrace = ""; // captured trace output from most recent hook run
+
 function runHook(hookPath: string, stdin: string): string {
   try {
-    return execSync(
+    const result = execSync(
       `echo '${stdin.replace(/'/g, "'\\''")}' | ${BUN} ${hook(hookPath)} 2>/dev/null`,
-      { encoding: "utf-8", timeout: 15000, env: { ...process.env, CONSTRUCT_TRACE: "0" }, cwd: ROOT },
+      { encoding: "utf-8", timeout: 15000, env: testEnv, cwd: ROOT },
     );
+    // Split stdout from trace lines (trace goes to stdout via console.log)
+    const lines = result.split("\n");
+    const traceLines = lines.filter(l => l.startsWith("[trace:"));
+    const outLines = lines.filter(l => !l.startsWith("[trace:"));
+    lastTrace = traceLines.join("\n");
+    return outLines.join("\n");
   } catch (err: any) {
-    return err.stdout ?? "";
+    const out = err.stdout ?? "";
+    const lines = out.split("\n");
+    lastTrace = lines.filter((l: string) => l.startsWith("[trace:")).join("\n");
+    return lines.filter((l: string) => !l.startsWith("[trace:")).join("\n");
   }
 }
 
@@ -39,6 +52,7 @@ function check(name: string, pass: boolean, info = false) {
     passed++;
   } else {
     console.log(`\u2717 ${name}`);
+    if (lastTrace) console.log(`  trace: ${lastTrace.split("\n").join("\n  trace: ")}`);
     failed++;
   }
 }
@@ -48,12 +62,16 @@ function run(hookPath: string, name: string, stdin: string, opts: { expectExit?:
   const expectExit = opts.expectExit ?? 0;
   const label = `${hookPath.split("/").pop()!.replace(".ts", "")}: ${name}`;
   try {
-    const stdout = execSync(
+    const raw = execSync(
       `echo '${stdin.replace(/'/g, "'\\''")}' | ${BUN} ${hook(hookPath)} 2>/dev/null`,
-      { encoding: "utf-8", timeout: 15000, env: { ...process.env, CONSTRUCT_TRACE: "0" }, cwd: ROOT },
+      { encoding: "utf-8", timeout: 15000, env: testEnv, cwd: ROOT },
     );
+    const lines = raw.split("\n");
+    lastTrace = lines.filter(l => l.startsWith("[trace:")).join("\n");
+    const stdout = lines.filter(l => !l.startsWith("[trace:")).join("\n");
     if (expectExit !== 0) {
       console.log(`\u2717 ${label} \u2014 expected exit ${expectExit}, got 0`);
+      if (lastTrace) console.log(`  trace: ${lastTrace.split("\n").join("\n  trace: ")}`);
       failed++;
       return;
     }
@@ -61,6 +79,7 @@ function run(hookPath: string, name: string, stdin: string, opts: { expectExit?:
       for (const sub of opts.expectStdout) {
         if (!stdout.includes(sub)) {
           console.log(`\u2717 ${label} \u2014 stdout missing "${sub}"`);
+          if (lastTrace) console.log(`  trace: ${lastTrace.split("\n").join("\n  trace: ")}`);
           failed++;
           return;
         }
@@ -70,11 +89,14 @@ function run(hookPath: string, name: string, stdin: string, opts: { expectExit?:
     passed++;
   } catch (err: any) {
     const exitCode = err.status ?? 1;
+    const out = err.stdout ?? "";
+    lastTrace = out.split("\n").filter((l: string) => l.startsWith("[trace:")).join("\n");
     if (expectExit !== 0 && exitCode !== 0) {
       console.log(`\u2713 ${label}`);
       passed++;
     } else {
       console.log(`\u2717 ${label} \u2014 exited ${exitCode}`);
+      if (lastTrace) console.log(`  trace: ${lastTrace.split("\n").join("\n  trace: ")}`);
       failed++;
     }
   }
@@ -154,7 +176,7 @@ run("memory/hooks/session-summary.ts", "malformed", "not json", { expectExit: 1 
 // ── Memory gate ──────────────────────────────────────────────────────────────
 
 console.log("\n--- memory-gate ---");
-const gateLock = resolve(ROOT, "construct/memory/.memory-gate.lock");
+const gateLock = resolve(Bun.env.HOME ?? "/tmp", ".claude/.memory-gate.lock");
 
 // Substantive session without memory_store → should block
 const gateBlockFile = writeTempJsonl("gate-block", [
@@ -211,7 +233,7 @@ function skillTest(prompt: string): { skills: string[]; depth: string } {
 check("skill: 'debug the crash' → debugging", skillTest("debug the crash in auth module").skills.includes("debugging"));
 check("skill: 'investigate redis' → research", skillTest("investigate how redis handles eviction policies").skills.includes("research"));
 check("skill: 'verify the deploy' → verification", skillTest("verify that the deployment succeeded").skills.includes("verification"));
-check("skill: 'spec diff' → docs-review", skillTest("run spec diff on the memory module").skills.includes("docs-review"));
+check("skill: 'doc sync' → docs-review", skillTest("run doc sync on the memory module").skills.includes("docs-review"));
 
 // Should NOT match
 check("skill: 'add dark mode' → no skill", skillTest("add dark mode to the settings page").skills.length === 0);
@@ -315,21 +337,126 @@ if (newSessions.length === 0) {
 }
 try { unlinkSync(recallTranscript); } catch {}
 
+// ── Skill extensions ────────────────────────────────────────────────────────
+
+console.log("\n--- skill extensions ---");
+
+// format-reminder should include project extension content when .claude/skills/<skill>.md exists
+// The test runs from the repo root which has .claude/skills/code-review.md
+function extensionTest(prompt: string): string {
+  return runHook("skills/hooks/format-reminder.ts", JSON.stringify({ prompt }));
+}
+
+const crOut = extensionTest("run a code review on the hooks");
+check("extension: code-review includes base match", crOut.includes("Matched skills: code-review"));
+check("extension: code-review injects project content", crOut.includes("Project skill extensions") && crOut.includes("Hook integrity"));
+
+const dbgOut = extensionTest("debug the crash in the auth module");
+check("extension: debugging includes base match", dbgOut.includes("Matched skills: debugging"));
+check("extension: debugging injects project content", dbgOut.includes("construct trace"));
+
+// Skills without an extension file should NOT have extension content
+const resOut = extensionTest("investigate how redis handles eviction policies");
+check("extension: research has no project extension", !resOut.includes("Project skill extensions"));
+
+// ── Memory gate quality ─────────────────────────────────────────────────────
+
+console.log("\n--- memory-gate quality ---");
+
+// Good memory_store content → should pass
+const gateQualityPass = writeTempJsonl("gate-quality-pass", [
+  userMsg("fix the bug in auth"),
+  assistantMsg("found it", [{ name: "Edit", input: { file_path: "/src/auth.ts" } }]),
+  userMsg("ok"),
+  assistantMsg("storing", [{ name: "mcp__memory__memory_store", input: { content: "Task: fix auth bug causing 401 on token refresh. Done. Changed auth.ts to check token expiry before refresh call. Decided to fix at the middleware level rather than per-route." } }]),
+  userMsg("looks good"),
+  assistantMsg("running tests", [{ name: "Bash", input: { command: "bun test" } }]),
+  userMsg("nice"),
+  assistantMsg("done"),
+]);
+try { unlinkSync(gateLock); } catch {}
+const qualPassOut = runHook("memory/hooks/memory-gate.ts", JSON.stringify({ transcript_path: gateQualityPass }));
+check("gate-quality: good content passes", !qualPassOut.includes('"decision":"block"'));
+try { unlinkSync(gateLock); } catch {}
+try { unlinkSync(gateQualityPass); } catch {}
+
+// Thin memory_store content → should block
+const gateQualityBlock = writeTempJsonl("gate-quality-block", [
+  userMsg("fix the bug in auth"),
+  assistantMsg("found it", [{ name: "Edit", input: { file_path: "/src/auth.ts" } }]),
+  userMsg("ok"),
+  assistantMsg("storing", [{ name: "mcp__memory__memory_store", input: { content: "did some stuff" } }]),
+  userMsg("looks good"),
+  assistantMsg("running tests", [{ name: "Bash", input: { command: "bun test" } }]),
+  userMsg("nice"),
+  assistantMsg("done"),
+]);
+try { unlinkSync(gateLock); } catch {}
+const qualBlockOut = runHook("memory/hooks/memory-gate.ts", JSON.stringify({ transcript_path: gateQualityBlock }));
+check("gate-quality: thin content blocks", qualBlockOut.includes('"decision":"block"'));
+check("gate-quality: block shows submitted content", qualBlockOut.includes("did some stuff"));
+check("gate-quality: block lists missing fields", qualBlockOut.includes("Missing"));
+try { unlinkSync(gateLock); } catch {}
+try { unlinkSync(gateQualityBlock); } catch {}
+
+// Missing outcome keyword → should block
+const gateQualityNoOutcome = writeTempJsonl("gate-quality-no-outcome", [
+  userMsg("refactor the parser"),
+  assistantMsg("refactoring", [{ name: "Edit", input: { file_path: "/src/parser.ts" } }]),
+  userMsg("ok"),
+  assistantMsg("storing", [{ name: "mcp__memory__memory_store", input: { content: "Task: refactor parser module. Changed the tokenizer to use a streaming approach instead of buffering. This improves memory usage for large files." } }]),
+  userMsg("test it"),
+  assistantMsg("testing", [{ name: "Bash", input: { command: "bun test" } }]),
+  userMsg("good"),
+  assistantMsg("all set"),
+]);
+try { unlinkSync(gateLock); } catch {}
+const qualNoOutcomeOut = runHook("memory/hooks/memory-gate.ts", JSON.stringify({ transcript_path: gateQualityNoOutcome }));
+check("gate-quality: missing outcome blocks", qualNoOutcomeOut.includes('"decision":"block"'));
+check("gate-quality: identifies Outcome as missing", qualNoOutcomeOut.includes("Outcome"));
+try { unlinkSync(gateLock); } catch {}
+try { unlinkSync(gateQualityNoOutcome); } catch {}
+
+// ── Trace ───────────────────────────────────────────────────────────────────
+
+console.log("\n--- trace ---");
+
+// Enable tracing, run a hook, verify trace output appears
+writeFileSync(traceFile, "");
+const traceOut = runHook("memory/hooks/session-start.ts", "{}");
+check("trace: produces [trace:] output when enabled", lastTrace.includes("[trace:session-start]"));
+check("trace: includes hook name in output", lastTrace.includes("session-start"));
+// Trace and normal output are both present
+check("trace: normal output still works", traceOut.includes("Session Start"));
+
+// Disable tracing, verify no trace output
+try { unlinkSync(traceFile); } catch {}
+runHook("memory/hooks/session-start.ts", "{}");
+check("trace: no output when disabled", !lastTrace.includes("[trace:"));
+
+// Verify multiple hooks produce trace
+writeFileSync(traceFile, "");
+runHook("skills/hooks/format-reminder.ts", JSON.stringify({ prompt: "debug the crash in auth module" }));
+check("trace: format-reminder traces decisions", lastTrace.includes("[trace:format-reminder]"));
+runHook("memory/hooks/rating-capture.ts", JSON.stringify({ prompt: "7" }));
+check("trace: rating-capture traces matches", lastTrace.includes("[trace:rating-capture]"));
+try { unlinkSync(traceFile); } catch {}
+
 // ── Quality hook ─────────────────────────────────────────────────────────────
 
 console.log("\n--- quality ---");
-run("dev/hooks/quality.ts", "smoke", "{}");
-run("dev/hooks/quality.ts", "missing file", '{"tool_input":{"file_path":"/nonexistent/file.ts"}}');
-run("dev/hooks/quality.ts", "malformed", "not json", { expectExit: 1 });
+run("skills/hooks/quality.ts", "smoke", "{}");
+run("skills/hooks/quality.ts", "missing file", '{"tool_input":{"file_path":"/nonexistent/file.ts"}}');
+run("skills/hooks/quality.ts", "malformed", "not json", { expectExit: 1 });
 
 // ── Notify hook ──────────────────────────────────────────────────────────────
 
 console.log("\n--- notify ---");
-run("dev/hooks/notify.ts", "smoke", "{}");
-run("dev/hooks/notify.ts", "complete event", '{"type":"complete"}');
-run("dev/hooks/notify.ts", "permission event", '{"type":"permission"}');
-run("dev/hooks/notify.ts", "idle event", '{"type":"idle"}');
-run("dev/hooks/notify.ts", "malformed", "not json", { expectExit: 1 });
+run("skills/hooks/notify.ts", "smoke", "{}");
+run("skills/hooks/notify.ts", "complete event", '{"type":"complete"}');
+run("skills/hooks/notify.ts", "permission event", '{"type":"permission"}');
+run("skills/hooks/notify.ts", "idle event", '{"type":"idle"}');
+run("skills/hooks/notify.ts", "malformed", "not json", { expectExit: 1 });
 
 // ── Results ──────────────────────────────────────────────────────────────────
 
@@ -337,6 +464,9 @@ if (infoResults.length) {
   console.log("\n  Informational (not scored):");
   for (const c of infoResults) console.log(`  ${c.pass ? "\u2713" : "\u2717"} ${c.name}`);
 }
+
+// Clean up temp ratings file
+try { unlinkSync(ratingsFile); } catch {}
 
 const pct = Math.round((passed / (passed + failed)) * 100);
 console.log(`\n${passed} passed, ${failed} failed (${pct}%)`);

@@ -1,6 +1,6 @@
 # construct-skills
 
-Depth classification, keyword-matched skill evaluation, skill routing config.
+Depth classification, keyword-matched skill evaluation, skill routing config, quality hooks, notifications.
 
 **Depends on:** construct-core
 
@@ -8,15 +8,16 @@ Depth classification, keyword-matched skill evaluation, skill routing config.
 
 - `skill-rules.json` — keyword routing config
 - `hooks/format-reminder.ts` — depth classification + skill eval at UserPromptSubmit
+- `hooks/quality.ts` — per-file lint/format on Edit/Write (PostToolUse)
+- `hooks/notify.ts` — WSL toast / macOS alert / terminal bell (Notification)
 - `research/SKILL.md` — research methodology skill
 - `verification/SKILL.md` — verification-before-completion enforcement
 - `debugging/SKILL.md` — systematic 4-phase root cause debugging
 - `subagent-dev/SKILL.md` — subagent-driven development with two-stage review
 - `code-review/SKILL.md` — dead code, unused imports, code quality, dead references
-- `docs-review/SKILL.md` — documentation drift detection and `/construct spec` subcommands
+- `docs-review/SKILL.md` — documentation drift detection
 - `instructions-review/SKILL.md` — instruction quality: vagueness, contradictions, duplication
-- `ralph-loop/SKILL.md` — autonomous iterative development via Stop hook loop
-- `hooks/ralph-stop.ts` — Stop hook for Ralph loop iteration control
+- `ralph-loop/SKILL.md` — autonomous iterative development via subagent loops
 
 ## Usage
 

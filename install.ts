@@ -8,7 +8,7 @@ import { existsSync } from "node:fs";
 
 // Construct installer — deploys from repo to ~/.claude
 // Source: construct/ (modules), dotclaude/ (CLAUDE.md, settings.json, commands)
-// Preserves: ALL CAPS files in identity/ and memory/
+// Preserves: ALL CAPS files in identity/, sessions/, ratings.jsonl
 // Overwrites: hooks, skills, meta, dev, commands, settings, CLAUDE.md
 
 const REPO = dirname(resolve(Bun.argv[1]));
@@ -106,17 +106,12 @@ try {
     }
   }
 
-  // Back up ALL CAPS .md files from identity/ and memory/
+  // Back up ALL CAPS .md files from identity/
   await mkdir(join(backupDir, "core/identity"), { recursive: true });
-  await mkdir(join(backupDir, "memory"), { recursive: true });
 
   for (const f of await discoverAllCapsMd(join(DST, "construct/core/identity"))) {
     await cp(join(DST, "construct/core/identity", f), join(backupDir, "core/identity", f));
     console.log(`  preserved: core/identity/${f}`);
-  }
-  for (const f of await discoverAllCapsMd(join(DST, "construct/memory"))) {
-    await cp(join(DST, "construct/memory", f), join(backupDir, "memory", f));
-    console.log(`  preserved: memory/${f}`);
   }
 
   // 2. Sync construct/ tree (delete stale files, overwrite everything)
@@ -137,13 +132,11 @@ try {
   }
 
   // Restore ALL CAPS .md files
-  for (const subdir of ["core/identity", "memory"] as const) {
-    const backupSub = join(backupDir, subdir);
-    if (await exists(backupSub)) {
-      for (const f of await readdir(backupSub)) {
-        if (f.endsWith(".md")) {
-          await cp(join(backupSub, f), join(DST, "construct", subdir, f));
-        }
+  const backupIdentity = join(backupDir, "core/identity");
+  if (await exists(backupIdentity)) {
+    for (const f of await readdir(backupIdentity)) {
+      if (f.endsWith(".md")) {
+        await cp(join(backupIdentity, f), join(DST, "construct/core/identity", f));
       }
     }
   }

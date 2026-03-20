@@ -1,6 +1,6 @@
 ---
 name: construct
-description: Construct management — subcommands: install, verify, grasp, status, retain, trace, spec, ralph, audit
+description: Construct management — subcommands: install, verify, grasp, status, retain, trace, audit
 ---
 
 Route to the matching subcommand based on `$ARGUMENTS`:
@@ -23,7 +23,6 @@ Do not skip or summarize checks. Run each one individually and report the exact 
 Module INSTALL.md locations and detection:
 - `construct/core/INSTALL.md` — detected if `~/.claude/CLAUDE.md` exists
 - `construct/memory/INSTALL.md` — detected if `construct/memory/hooks/session-start.ts` exists
-- `construct/dev/INSTALL.md` — detected if `construct/dev/hooks/quality.ts` exists
 - `construct/skills/INSTALL.md` — detected if `construct/skills/skill-rules.json` exists
 - `construct/meta/INSTALL.md` — detected if `construct/meta/README.md` exists
 - `construct/dashboard/INSTALL.md` — detected if `construct/dashboard/api/src/app.ts` exists
@@ -36,7 +35,7 @@ Group results by module. Run Files, Data, and Verification checks for each modul
 Before any implementation, externalize your current model of this project.
 State each item explicitly. Say "uncertain" rather than guessing.
 
-**Commandments** — Read the `## Commandments` section from the project's CLAUDE.md. List each one verbatim. If there is no Commandments section, say so.
+**Commandments** — Read the `## Commandments` section from the project's CLAUDE.md (check both project root and `.claude/CLAUDE.md`). List each one verbatim. If there is no Commandments section, say so.
 
 **Project identity** — What is this? What phase is it in?
 
@@ -54,17 +53,7 @@ After producing this summary, ask: "Is any of this wrong or out of date?"
 
 ## `status`
 
-Collect and display:
-
-**Context**
-- Which identity files are present in `construct/core/identity/`
-- Which skills are active (list from `construct/skills/`)
-- Active project context from semantic memory (`memory_search`)
-
-**Memory**
-- Session signals — explicit rating count, rolling average from `ratings.jsonl`
-- Recent sessions — last 5 entries from `memory/sessions/`
-- Memory size — session count, ratings count
+Execute: `bun construct/status.ts`
 
 ## `retain`
 
@@ -94,72 +83,6 @@ Run a single command with tracing enabled, then restore previous state.
 4. Run the command specified by the remaining arguments (e.g., `/construct trace status` runs `/construct status`)
 5. If `was_on` is false: delete `~/.claude/construct/.trace`, print `Trace: OFF`
 
-## `spec diff`
-
-Show drift between documentation and actual file/code state without changing anything.
-
-1. Activate the `docs-review` skill
-2. Run the detection process on all docs in scope: SPEC.md, README.md, INSTALL.md (root + modules), CLAUDE.md (root + .claude/), and SKILL.md files under construct/skills/
-3. Output a table of all `✗` and `⚠` findings
-4. For each, show: document, line, claim, actual state, suggested direction (update doc or update code)
-
-## `spec update`
-
-Update documentation to match current file/code state.
-
-1. Run `spec diff` first to identify all drift
-2. For each `✗` finding, propose the fix (show old → new)
-3. Apply approved fixes
-4. Run `/construct verify` to confirm changes are correct
-
-## `spec apply`
-
-Update code/files to match documentation claims (reverse direction — use when docs describe intended behavior).
-
-1. Run `spec diff` first to identify all drift
-2. For each `✗` finding, determine if the doc or code is "right"
-3. For cases where the doc is intentional (new feature spec), modify code to match
-4. Run tests after each change
-5. Run `/construct verify` on the full result
-
-## `ralph "<prompt>" [--max-iterations N] [--completion-promise "TEXT"]`
-
-Start a Ralph loop — autonomous iterative development via the Stop hook.
-
-1. Parse arguments: extract prompt text, `--max-iterations` (default 0 = unlimited), `--completion-promise` (default none)
-2. Create `.claude/ralph-loop.local.md` with this exact format:
-   ```
-   ---
-   active: true
-   iteration: 1
-   max_iterations: <N>
-   completion_promise: "<TEXT>" (or null)
-   started_at: "<ISO 8601 UTC>"
-   ---
-
-   <prompt text>
-   ```
-3. Report activation:
-   ```
-   🔄 Ralph loop activated!
-   Iteration: 1
-   Max iterations: <N or unlimited>
-   Completion promise: <TEXT or none>
-   ```
-4. Begin working on the prompt. When you try to exit, the `ralph-stop.ts` Stop hook will block exit and feed the same prompt back.
-
-**Safety:** Always recommend `--max-iterations` as a safety net. Without it, the loop runs until completion promise is met.
-
-**Completion:** To signal done, output `<promise>TEXT</promise>` where TEXT exactly matches the completion promise. ONLY output this when the statement is genuinely true.
-
-## `cancel-ralph`
-
-Cancel the active Ralph loop.
-
-1. Check if `.claude/ralph-loop.local.md` exists
-2. If not found: say "No active Ralph loop found."
-3. If found: read the iteration count, delete the file, report "Cancelled Ralph loop (was at iteration N)."
-
 ## `audit`
 
 Full project audit. Run these three skills in order, then print a combined summary.
@@ -181,8 +104,5 @@ Usage: /construct <subcommand>
   status        Show system status
   retain        Promote insights to semantic memory
   trace         Toggle hook tracing (or trace <cmd> for one-shot)
-  spec          Doc sync — spec diff|update|apply
-  ralph         Start autonomous iterative loop
-  cancel-ralph  Cancel active Ralph loop
   audit         Full project audit (code, refs, instructions, docs, spec, stats)
 ```

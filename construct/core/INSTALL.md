@@ -6,10 +6,13 @@ All paths relative to `~/.claude/`. Run every check. Do not skip or summarize.
 
 - `CLAUDE.md` exists and contains `# Construct`
 - `settings.json` exists and is valid JSON (`jq . settings.json`)
-- Hook registration structure is nested: `hooks.<Event>[].hooks[].command`. To verify a hook is registered, use: `jq '.hooks.<Event>[]?.hooks[]?.command' settings.json | grep '<filename>'`
-- `settings.json` has a `statusLine` entry referencing `ccstatusline`
 - `ccstatusline` is on PATH (`which ccstatusline`)
 - Identity files (⚠ if missing — optional): `SOUL.md`, `IDENTITY.md`, `STYLE.md`, `USER.md`, `BOOTSTRAP.md` in `construct/core/identity/`
+
+## Registration
+
+- Hook registration structure is nested: `hooks.<Event>[].hooks[].command`. To verify a hook is registered, use: `jq '.hooks.<Event>[]?.hooks[]?.command' settings.json | grep '<filename>'`
+- `settings.json` has a `statusLine` entry referencing `ccstatusline`
 
 ## Data
 

@@ -1,25 +1,24 @@
-Well. ---
+---
 name: verification
-description: Use before claiming work is complete, fixed, or passing. Requires running verification commands and confirming output before making any success claims. Evidence before assertions, always. Activates automatically during VERIFY phase.
+description: Use before claiming work is complete, fixed, or passing. Requires running verification commands and confirming output. Evidence before assertions, always.
 ---
 
-# Verification Before Completion
+# Verification
 
 Claiming work is complete without verification is dishonesty, not efficiency.
 
-**Grounding:** SOUL.md values — *Correctness over speed*, *Honesty*, *Autonomy with accountability*. Mental model — *Map vs territory* (docs and comments lie; code and tests are the truth).
+## When to Use
 
-## The Iron Law
+- Before claiming work is complete, fixed, or passing
+- After any change that needs proof it works
 
-```
-NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION EVIDENCE
-```
+## Process
 
-If you haven't run the verification command in this message, you cannot claim it passes.
+### The Iron Law
 
-## The Gate
+**No completion claims without fresh verification evidence.** If you haven't run the verification command in this message, you cannot claim it passes.
 
-Before claiming any status:
+### The Gate
 
 1. **IDENTIFY** — what command proves this claim?
 2. **RUN** — execute the full command (fresh, not cached)
@@ -31,44 +30,33 @@ Before claiming any status:
 
 Skip any step = unverified claim.
 
-## Verification Requirements
+### Verification Requirements
 
 | Claim | Requires | Not sufficient |
 |-------|----------|----------------|
 | Tests pass | Test command output: 0 failures | Previous run, "should pass" |
 | Build succeeds | Build command: exit 0 | Linter passing |
 | Bug fixed | Reproduce original symptom: passes | Code changed, assumed fixed |
-| Install works | Run installer + /construct verify | "Files copied" |
-| Docs match behavior | Run /construct spec diff | "I updated the docs" |
-| Hook works | Pipe test input, check stdout | "Code looks correct" |
 
-## Red Flags — STOP
+### Red Flags — STOP
 
 You are about to make an unverified claim if you're thinking:
 
-- "Should work now" → RUN the verification
+- "Should work now" → run the command
 - "I'm confident" → confidence ≠ evidence
-- "Just this once" → no exceptions
+- "I just changed one line" → run the command
 - "The code looks right" → looking ≠ running
-- About to commit/push/PR without verification
-- Using "should", "probably", "seems to" about status
+- "The linter passed" → linter ≠ tests ≠ build
+- "The agent said it worked" → verify independently
 
-## Rationalization Prevention
+## Done when
 
-| Excuse | Response |
-|--------|----------|
-| "Should work now" | Run the command |
-| "I just changed one line" | Run the command |
-| "The linter passed" | Linter ≠ tests ≠ build |
-| "The agent said it worked" | Verify independently |
-| "It's a trivial change" | Trivial changes break things too |
+- Every claim backed by fresh command output in the same message
+- Exit codes checked, failure counts at zero
+- Evidence reported inline: `✓ [command] → [result]` or `✗ [command] → [actual vs expected]`
 
-## Integration
+## Principles
 
-This skill is the enforcement mechanism for the VERIFY phase of the 7-phase algorithm. When ISC criteria exist, check each one explicitly against fresh evidence. When no ISC exists (QUICK tasks), verify the specific claim being made.
-
-After verification, report evidence inline:
-```
-✓ [command] → [result summary]
-✗ [command] → [actual output, expected vs got]
-```
+- Evidence before assertions — no claim without fresh verification
+- Run the actual command, not a proxy (linter ≠ tests ≠ build)
+- When completion criteria exist, check each one explicitly against fresh evidence

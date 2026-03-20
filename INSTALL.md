@@ -13,8 +13,8 @@ When copying files during installation, copy them exactly. Do not summarize, tru
 ## New Install
 
 ```bash
-git clone <repo-url> ~/Construct
-cd ~/Construct
+git clone <repo-url> ~/construct
+cd ~/construct
 bun install.ts
 ```
 
@@ -29,7 +29,7 @@ After install completes, run `/construct verify` in Claude Code. It reads each m
 ## Upgrade (reinstall)
 
 ```bash
-cd ~/Construct
+cd ~/construct
 git pull
 bun install.ts
 ```
@@ -48,7 +48,7 @@ Also preserved:
 
 ### What gets overwritten
 
-Everything else in `construct/` is overwritten (hooks, skills, meta, dev, README/INSTALL files, non-ALLCAPS files). This is intentional — infrastructure updates cleanly, user data survives.
+Everything else in `construct/` is overwritten (hooks, skills, meta, README/INSTALL files, non-ALLCAPS files). This is intentional — infrastructure updates cleanly, user data survives.
 
 For `settings.json`, only `hooks` and `statusLine` are replaced — permissions, model, and other settings are preserved. For `CLAUDE.md`, the `# Construct` section is replaced in-place; any user content above or after it is preserved.
 
@@ -77,7 +77,6 @@ Checks are defined in each module's `INSTALL.md`:
 |------|--------|-----------|
 | construct-core | `construct/core/INSTALL.md` | `~/.claude/CLAUDE.md` exists |
 | construct-memory | `construct/memory/INSTALL.md` | `construct/memory/hooks/session-start.ts` exists |
-| construct-dev | `construct/dev/INSTALL.md` | `construct/dev/hooks/quality.ts` exists |
 | construct-skills | `construct/skills/INSTALL.md` | `construct/skills/skill-rules.json` exists |
 | construct-meta | `construct/meta/INSTALL.md` | `construct/meta/README.md` exists |
 | construct-dashboard | `construct/dashboard/INSTALL.md` | `construct/dashboard/api/src/app.ts` exists |

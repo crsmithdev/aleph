@@ -12,11 +12,19 @@ On `SessionStart`, the user sees:
 === Session Start ===
 Sessions: <N>
 
+Last session (<filename>):
+  - Intent: ...
+  - Outcome: ...
+  - Tools: ...; files: ...
+  - Edits: ...
+  - Messages: ...
+
 [memory] Search semantic memory (memory_search) for relevant project context before starting work.
 ====================
 ```
 
 - Session count is the number of `.md` files in `memory/sessions/`.
+- The last session block is shown only when at least one session file exists. It displays the most recent session summary (minus the `# Session:` heading), indented.
 
 The BOOTSTRAP.md initialization sequence then runs silently: semantic memory search, session count, worktree detection, depth defaulting to QUICK.
 
@@ -25,7 +33,8 @@ The BOOTSTRAP.md initialization sequence then runs silently: semantic memory sea
 **Depth classification** — on every prompt (≥3 words), `format-reminder.ts` classifies depth:
 - FULL if prompt matches architectural keywords (`architect|redesign|refactor|migrate|schema|structure|plan|propose`) or is ≥40 words.
 - QUICK otherwise (silent).
-- Output when FULL: `[Construct] Depth: FULL — architectural keywords. Write ISC before proceeding.`
+- Output when FULL (architectural keywords): `[Construct] Depth: FULL — architectural keywords. Write ISC before proceeding.`
+- Output when FULL (≥40 words): `[Construct] Depth: FULL — complex request. Consider ISC.`
 
 **Skill matching** — same hook checks prompt against `skill-rules.json` keywords. On match: `[Construct] Matched skills: <names>. Activate via Skill() before proceeding.` No match = silent.
 
@@ -48,24 +57,29 @@ Ratings 1–3 trigger a console message: `[Construct] Low rating (N) — store w
 
 ### Ending a session
 
-On `Stop`, three hooks fire in order:
+On `Stop`, two hooks fire in order:
 
-**1. Ralph stop** (`ralph-stop.ts`) — if `.claude/ralph-loop.local.md` exists and the loop is active:
-- Checks for completion promise match in the last assistant message.
-- If matched or max iterations reached: deletes state file, allows exit.
-- Otherwise: increments iteration counter, re-injects the prompt, blocks exit.
-- If no state file exists: does nothing, allows normal exit.
+**1. Memory gate** (`memory-gate.ts`) — enforces `memory_store` before exit on substantive sessions:
+- Substantive = ≥6 messages AND ≥1 Edit/Write/Bash tool use.
+- If `memory_store` was called: allows exit.
+- If not: blocks exit once with a prompt to call `memory_store` with a session summary. On second Stop, allows exit regardless.
 
 **2. Session summary** (`session-summary.ts`) — writes a summary file if the session had ≥4 messages:
 - Output: `memory/sessions/YYYY-MM-DD-HHMMSS.md`:
   ```markdown
   # Session: 2026-03-12
 
+  - Intent: <first user message text>
+  - Outcome: <last user message text>
+  - Milestones:
+    - <intermediate user messages>
   - Tools: Read, Edit, Bash, Glob, Grep; files: hooks/session-start.ts, memory/README.md
-  - Topics: <first 120 chars of user message 1>; <msg 2>; <msg 3>
-  - Messages: 12
+  - Edits: 5 tool calls, 3 files
+  - Messages: 12 (6 user, 6 assistant)
+  - Notes:
+    - <assistant message summaries>
   ```
-- Up to 5 tool names, 8 file paths (last 2 segments only), 3 topic strings.
+- Up to 8 tool names, 12 file paths, 4 milestones, 5 notes.
 - Fully silent.
 
 ## Statusline
@@ -86,7 +100,7 @@ On `Notification` events (`idle`, `permission`, `complete`):
 - **macOS**: `osascript display notification`.
 - **Fallback**: terminal bell (`\x07`).
 
-Messages: idle → "waiting for input", permission → "needs permission", complete → "finished the task".
+Messages: idle → "Claude is waiting for input", permission → "Claude needs permission to proceed", complete → "Claude finished the task".
 
 ## Skills
 
@@ -130,9 +144,9 @@ Hard stop: if 3+ consecutive fixes fail, escalate to human.
 
 ### docs-review
 
-**Activated by:** doc sync, docs drift, spec update, spec apply, spec diff, documentation mismatch, docs match
+**Activated by:** doc sync, docs drift, documentation mismatch, docs match
 
-**Behavior:** Enumerates every factual claim in docs (file paths, hook registrations, behavior claims, directory layout). Verifies each against truth source (filesystem, settings.json, command output). Checks spec completeness (hooks, commands, skills all documented). Reports ✓/✗/⚠ per claim. Used by `/construct spec` subcommands.
+**Behavior:** Enumerates every factual claim in docs (file paths, hook registrations, behavior claims, directory layout). Verifies each against truth source (filesystem, settings.json, command output). Checks spec completeness (hooks, commands, skills all documented). Reports ✓/✗/⚠ per claim.
 
 ### instructions-review
 
@@ -144,7 +158,7 @@ Hard stop: if 3+ consecutive fixes fail, escalate to human.
 
 **Activated by:** ralph, ralph loop, autonomous loop, keep iterating, iterate until
 
-**Behavior:** Creates `.claude/ralph-loop.local.md` state file. Claude works on the prompt; on exit, `ralph-stop.ts` intercepts, increments iteration, re-injects the prompt. Each iteration is context-isolated — shared state is the filesystem and git history, not the context window. Loop ends on: exact completion promise match in `<promise>` tags, max iterations reached, or `/construct cancel-ralph`.
+**Behavior:** Named after Ralph Wiggum — kind of dumb, kind of lovable, and he never gives up. Iterations are dispatched as subagents (parallel by default for independent work, sequential for dependent work). Progress lives in files, not context windows. Each agent writes to a known output location. Failures are data — the next agent learns from them.
 
 ## Slash Commands
 
@@ -158,12 +172,7 @@ Subcommands of `/construct`, routed by `commands/construct.md`:
 | `status` | Shows: identity files present, active skills, semantic memory context, session signals (rating counts + rolling average), last 5 sessions, memory size |
 | `retain` | Shows last 5 session summaries. Prompts for which to promote to semantic memory via `memory_store` |
 | `trace` | Toggles `~/.claude/construct/.trace` flag file. With args: one-shot trace (enable, run command, restore previous state) |
-| `spec diff` | Runs docs-review detection on all docs, outputs ✗/⚠ findings table (document, line, claim, actual state, suggested direction). No changes made |
-| `spec update` | Runs spec diff, proposes fixes for ✗ findings (old → new), applies approved fixes, runs verify |
-| `spec apply` | Runs spec diff, updates code/files to match doc claims (reverse direction), runs tests + verify |
-| `ralph` | Starts autonomous loop: creates state file, reports activation, begins work. Stop hook blocks exit and re-injects prompt each iteration |
-| `cancel-ralph` | Reads iteration count from state file, deletes it, reports "Cancelled Ralph loop (was at iteration N)" |
-| `audit` | Six-phase project audit: code quality, dead references, instructions clarity, doc drift, spec completeness, statistics. Auto-fixes code/refs with approval; instructions/docs presented for review |
+| `audit` | Three-skill project audit: code-review, instructions-review, docs-review. Auto-fixes code/refs with approval; instructions/docs presented for review |
 
 
 ## Installer
@@ -198,7 +207,7 @@ done. run /verify to check installation.
 ```
 
 **Preserved on upgrade:**
-- ALL CAPS `.md` files (`[A-Z_]+.md`) in `construct/core/identity/` and `construct/memory/`
+- ALL CAPS `.md` files (`[A-Z_]+.md`) in `construct/core/identity/`
 - `memory/signals/ratings.jsonl`
 - `memory/sessions/` contents
 
@@ -216,13 +225,13 @@ Five optional files in `construct/core/identity/`, preserved on upgrade:
 |------|----------------|
 | SOUL.md | Values and mental models: correctness over speed, simplicity, honesty, minimal footprint, YAGNI, blast radius awareness. Self-awareness of biases (over-engineering, completionism, verbosity, anchoring) |
 | IDENTITY.md | Tone: terse by default, matches user energy, pragmatic engineer, no filler phrases, no hedging, pushes back when wrong, treats silence as permission |
-| STYLE.md | Output format: answer-first, bullets for 3+ items, `path:line` references, no headers in short responses. Code: functional where clear, early returns, match existing style. Commits: imperative, lowercase, 50 chars, no emoji/prefixes |
+| STYLE.md | Output format: answer-first, bullets for 3+ items, `path:line` references, no headers in short responses. Code: functional where clear, early returns, match existing style |
 | USER.md | Principal profile: environment, working style, communication preferences. Partially filled template |
 | BOOTSTRAP.md | Session init sequence: memory search, session count, worktree detection, default to QUICK depth |
 
 ## Modules
 
-Six modules, installed in dependency order. Core is always required; the others are inert if unused.
+Five modules, installed in dependency order. Core is always required; the others are inert if unused.
 
 ### construct-core
 
@@ -242,18 +251,9 @@ Six modules, installed in dependency order. Core is always required; the others 
 - `construct/memory/hooks/` — session-start.ts, rating-capture.ts, memory-gate.ts, session-summary.ts
 - `construct/memory/sessions/` — session summary files
 - `construct/memory/signals/ratings.jsonl` — explicit + implicit rating history
-- CLAUDE.md sections: `## Memory` (with `### Semantic memory`, `### File-based memory`), `## Identity Files`
+- CLAUDE.md sections: `## Memory` (with `### Semantic memory (mcp-memory-service)`), `## Identity Files`
 
 Two memory layers: semantic (mcp-memory-service, decisions/patterns/preferences, searched on demand) and signals (ratings/session history, append-only file-based).
-
-### construct-dev
-
-**Depends on:** construct-core
-
-**Provides:**
-- `construct/dev/hooks/quality.ts` — PostToolUse auto-formatter (matcher: `Edit|Write`)
-- `construct/dev/hooks/notify.ts` — Notification alerts
-- CLAUDE.md sections: `## Dev Conventions`, `## Agent Personas`
 
 ### construct-skills
 
@@ -262,8 +262,10 @@ Two memory layers: semantic (mcp-memory-service, decisions/patterns/preferences,
 **Provides:**
 - `construct/skills/skill-rules.json` — keyword routing config (8 rules)
 - `construct/skills/hooks/format-reminder.ts` — UserPromptSubmit depth classification + skill matching
-- `construct/skills/hooks/ralph-stop.ts` — Stop hook for Ralph loop control
-- Nine skill playbooks in `construct/skills/<name>/SKILL.md`: research, verification, debugging, subagent-dev, code-review, docs-review, instructions-review, ralph-loop
+- `construct/skills/hooks/quality.ts` — PostToolUse auto-formatter (matcher: `Edit|Write`)
+- `construct/skills/hooks/notify.ts` — Notification alerts
+- CLAUDE.md section: `## Agent Personas`
+- Eight skill playbooks in `construct/skills/<name>/SKILL.md`: research, verification, debugging, subagent-dev, code-review, docs-review, instructions-review, ralph-loop
 
 **Skill routing keywords:**
 
@@ -274,7 +276,7 @@ Two memory layers: semantic (mcp-memory-service, decisions/patterns/preferences,
 | debugging | debug, bug, broken, failing, error, crash, exception, traceback, root cause, bisect |
 | subagent-dev | subagent, parallel tasks, dispatch, multi-task, implementation plan, execute plan |
 | code-review | dead code, unused, clean up, cleanup, simplify, code quality, code review, lint |
-| docs-review | doc sync, docs drift, spec update, spec apply, spec diff, documentation mismatch, docs match |
+| docs-review | doc sync, docs drift, documentation mismatch, docs match |
 | instructions-review | audit instructions, review rules, contradictions, vague instructions, instruction quality |
 | ralph-loop | ralph, ralph loop, autonomous loop, keep iterating, iterate until |
 
@@ -312,9 +314,9 @@ All hooks in `settings.json` under `hooks`:
 |-------|-----------------|----------|
 | SessionStart | memory/hooks/session-start.ts | 5000ms |
 | UserPromptSubmit | memory/hooks/rating-capture.ts, skills/hooks/format-reminder.ts | 2000ms, 3000ms |
-| Stop | skills/hooks/ralph-stop.ts, memory/hooks/memory-gate.ts, memory/hooks/session-summary.ts | 5000ms, 5000ms, 3000ms |
-| PostToolUse | dev/hooks/quality.ts (matcher: `Edit\|Write`) | 10000ms |
-| Notification | dev/hooks/notify.ts | 3000ms |
+| Stop | memory/hooks/memory-gate.ts, memory/hooks/session-summary.ts | 5000ms, 3000ms |
+| PostToolUse | skills/hooks/quality.ts (matcher: `Edit\|Write`) | 10000ms |
+| Notification | skills/hooks/notify.ts | 3000ms |
 
 No external API keys required. All hooks use context injection via stdin/stdout.
 
@@ -341,7 +343,6 @@ The installer rewrites relative paths (`bun construct/...`) to absolute `$HOME`-
 |------|---------------|
 | construct-core | `~/.claude/CLAUDE.md` |
 | construct-memory | `construct/memory/hooks/session-start.ts` |
-| construct-dev | `construct/dev/hooks/quality.ts` |
 | construct-skills | `construct/skills/skill-rules.json` |
 | construct-meta | `construct/meta/README.md` |
 | construct-dashboard | `construct/dashboard/api/src/app.ts` |

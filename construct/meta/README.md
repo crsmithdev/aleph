@@ -22,9 +22,7 @@ All subcommands are run as `/construct <subcommand>` in Claude Code:
 - `/construct retain` — review session summaries and promote durable insights to semantic memory
 - `/construct trace` — toggle hook tracing on/off (makes hooks emit diagnostic output)
 - `/construct trace CMD` — run a command with tracing temporarily enabled
-- `/construct spec diff` — show documentation/code drift
-- `/construct spec update` — update docs from current code state
-- `/construct spec apply` — update code to match doc specs
+- `/construct audit` — full project audit: code, refs, instructions, docs
 
 ## Verification
 

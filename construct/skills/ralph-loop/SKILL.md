@@ -1,13 +1,11 @@
 ---
 name: ralph-loop
-description: Use when a task needs iterative autonomous work — building features, getting tests to pass, batch processing, or any well-defined goal with clear completion criteria. Always execute iterations via parallel subagents, not the Stop hook loop.
+description: Use when a task needs iterative autonomous work — building features, getting tests to pass, batch processing, or any well-defined goal with clear completion criteria.
 ---
 
 # Ralph Loop
 
-Autonomous iterative development. Each iteration gets fresh context but sees all previous work in files and git history.
-
-**Grounding:** SOUL.md values — *Autonomy with accountability* (loop runs autonomously, completion promise enforces honesty). Mental model — *Blast radius* (each iteration is isolated; progress persists in filesystem, not context).
+Named after Ralph Wiggum — kind of dumb, kind of lovable, and he never gives up. Ralph loops are autonomous iterative development: each iteration gets fresh context but sees all previous work in files and git history.
 
 ## When to Use
 
@@ -22,40 +20,29 @@ Autonomous iterative development. Each iteration gets fresh context but sees all
 - Tasks requiring human judgment or design decisions mid-stream
 - One-shot operations (just do them directly)
 - Tasks with unclear or subjective success criteria
-- Production debugging (use the `debugging` skill instead)
+- Production debugging (use the debugging skill instead)
 
-## Execution: Always Use Subagents
+## Inputs
 
-Ralph iterations MUST be dispatched as parallel subagents, not as a Stop hook loop. The Stop hook loop blocks the conversation and burns context. Subagents run concurrently, each with a full context window.
+- Clear completion criteria (testable, not subjective)
+- Known output location for progress artifacts
 
-### For independent iterations (batch work, research, ideation):
+## Process
 
-Dispatch all iterations as parallel subagents in a single message. Each agent gets the full prompt plus its iteration number and any iteration-specific context.
+Iterations are dispatched as subagents. Parallel by default — if iterations don't depend on each other, dispatch them all at once in a single message.
 
-```
-Agent(prompt="Iteration 3/10: {task}. Check /output/ for work from other iterations. Write your result to /output/03-name.md", run_in_background=true)
-```
+- **Independent work** (batch, research, ideation) → all iterations as parallel background agents
+- **Sequential work** (test-fix cycles, refinement) → dispatch one, read output, dispatch next. Use `isolation: "worktree"` if iterations modify the same files.
+- **Mixed** → group independent work into parallel batches, run batches sequentially
 
-### For sequential iterations (test-fix cycles, refinement):
+## Done when
 
-Dispatch the first iteration. When it completes, read its output, then dispatch the next with the accumulated context. Use `isolation: "worktree"` if iterations modify the same files.
+- All completion criteria met with fresh verification evidence
+- No iterations still running or pending
+- Completion promise is honest — never claim done if any criterion is unmet
 
-### For mixed patterns:
+## Principles
 
-Group independent work into parallel batches. Run batches sequentially when later batches depend on earlier results.
-
-## Key Principles
-
-- **Parallel by default** — if iterations don't depend on each other, dispatch them all at once
-- **Progress lives in files** — not in context windows. Each agent writes to a known output location.
-- **Failures are data** — if an agent fails, its output explains why; the next agent can learn from it
-- **Completion promise is sacred** — NEVER claim completion unless all iterations are genuinely done
-
-## The Stop Hook (legacy fallback)
-
-The `/construct ralph` command and `ralph-stop.ts` Stop hook still exist for cases where the Stop hook pattern is explicitly needed (e.g., long-running single-threaded work that must survive context resets). But the default execution strategy is always subagents.
-
-## Commands
-
-- `/construct ralph "prompt" [--max-iterations N] [--completion-promise "TEXT"]` — start via Stop hook (legacy)
-- `/construct cancel-ralph` — cancel active Stop hook loop
+- Progress lives in files — not in context windows. Each agent writes to a known output location.
+- Failures are data — if an agent fails, its output explains why; the next agent can learn from it
+- Completion promise is sacred — never claim completion unless all iterations are genuinely done

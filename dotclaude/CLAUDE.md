@@ -1,3 +1,8 @@
+<!-- SOURCE FILE — not loaded directly by Claude Code.
+     This is the install source for ~/.claude/CLAUDE.md.
+     Changes here take effect after running: bun install.ts
+     Dev-only rules belong in .claude/CLAUDE.md, not here. -->
+
 # Construct
 
 ## Behavior
@@ -38,7 +43,7 @@ check listed there. Do not skip or summarize checks. Do not summarize, truncate,
 file contents when copying. If any check fails, resolve it — do not move on and assume it
 will be fine later.
 
-After any change that modifies behavior, use the `docs-review` skill (`/construct spec diff`) to check for documentation drift.
+After any change that modifies behavior, use the `docs-review` skill to check for documentation drift.
 
 ## Thinking Tools
 
@@ -81,15 +86,18 @@ Slow-changing files in `construct/core/identity/`:
 
 - **SOUL.md** — Purpose, values, mental models, biases. Rarely changes.
 - **IDENTITY.md** — Name, tone, personality, voice. Presentation layer.
-- **STYLE.md** — Output formatting, code conventions, commit style.
+- **STYLE.md** — Output formatting, code conventions.
 - **USER.md** — Principal profile, environment, tech stack, working style.
 - **BOOTSTRAP.md** — Declarative session initialization sequence.
 
-## Dev Conventions
+## Git
 
-- Never proactively create README, docs, or tests unless explicitly requested.
-- Ask before making architectural changes.
-- See `construct/core/identity/STYLE.md` for code style and commit message conventions.
+- Commit messages: imperative mood, lowercase, no trailing punctuation, 50 chars max
+- Body only when the "why" isn't obvious from the diff
+- No emoji, no conventional-commit prefixes
+- Branch names: terse, use `feature/`, `fix/`, `refactor/`, or `docs/` prefix
+- Always work on a feature branch; commit after every verified change
+- Squash commits when merging
 
 ## Agent Personas
 

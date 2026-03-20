@@ -1,13 +1,11 @@
 ---
 name: subagent-dev
-description: Use when executing multi-task implementation plans with independent tasks. Fresh subagent per task with two-stage review (spec compliance then code quality).
+description: Use when executing multi-task implementation plans with independent tasks. Fresh subagent per task with two-stage review.
 ---
 
 # Subagent-Driven Development
 
 Execute plans by dispatching a fresh subagent per task, with two-stage review after each.
-
-**Grounding:** SOUL.md values — *Autonomy with accountability* (agents act independently, reviews ensure quality). Mental model — *Blast radius* (isolated subagents can't corrupt main context).
 
 ## When to Use
 
@@ -21,19 +19,21 @@ Execute plans by dispatching a fresh subagent per task, with two-stage review af
 - Need to maintain conversation context across tasks
 - Single task — just do it directly
 
-## The Process
+## Inputs
 
-### 1. Load Plan and Create Tasks
+- An implementation plan with discrete tasks. If no plan exists, create one first.
 
-Read the plan. Extract all tasks with full text. Create TaskCreate entries for tracking.
+## Process
 
-### 2. Per Task: Implement → Review Spec → Review Quality
+### 1 — Load plan and create tasks
 
-For each task:
+Read the plan. Extract all tasks with full text. Create task entries for tracking.
+
+### 2 — Per task: implement → review spec → review quality
 
 **Dispatch implementer subagent:**
 - Provide: task description, relevant file paths, constraints, expected output
-- Never pass your full session history — construct exactly what the agent needs
+- Never pass full session history — construct exactly what the agent needs
 - Agent implements, tests, and commits
 
 **Dispatch spec reviewer subagent:**
@@ -42,17 +42,15 @@ For each task:
 - If gaps found → implementer fixes, re-review
 
 **Dispatch quality reviewer subagent:**
-- Provide: the diff + project conventions (from STYLE.md)
+- Provide: the diff + project conventions
 - Question: "Any quality issues? DRY/YAGNI violations? Missing edge cases?"
 - If issues found → implementer fixes, re-review
 
-### 3. Mark Complete
+### 3 — Mark complete
 
 After both reviews pass, mark task complete. Move to next task.
 
 ## Model Selection
-
-Use the least powerful model that handles each role:
 
 | Role | Complexity signal | Model |
 |------|------------------|-------|
@@ -62,10 +60,17 @@ Use the least powerful model that handles each role:
 | Quality reviewer | Always | sonnet |
 | Architecture/design | Broad codebase understanding | opus |
 
-## Key Rules
+## Done when
 
-- **Fresh context per agent** — never inherit session history
-- **One task per agent** — don't batch unrelated work
-- **Two-stage review is mandatory** — spec compliance first, then quality
-- **Stop on repeated failures** — if review fails 3 times, escalate to human
-- **Verify before claiming done** — use verification skill after all tasks complete
+- All tasks from the plan implemented
+- Every task passed both spec review and quality review
+- No task failed review more than twice (escalate on third failure)
+- All tasks marked complete in tracking
+
+## Principles
+
+- Fresh context per agent — never inherit session history
+- One task per agent — don't batch unrelated work
+- Two-stage review is mandatory — spec compliance first, then quality
+- Stop on repeated failures — if review fails 3 times, escalate to human
+- Verify before claiming done — use verification skill after all tasks complete
