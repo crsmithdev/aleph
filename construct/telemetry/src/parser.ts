@@ -127,9 +127,10 @@ function parseLine(line: string, project: string): SessionEntry[] {
       for (const block of content) {
         if (block.type === "tool_use") {
           const toolName = block.name as string;
+          const input = block.input as Record<string, unknown> | undefined;
           const isSkill = toolName === "Skill";
           const skillName = isSkill
-            ? ((block.input as Record<string, unknown>)?.skill as string) || undefined
+            ? (input?.skill as string) || undefined
             : undefined;
 
           entries.push({
@@ -140,6 +141,7 @@ function parseLine(line: string, project: string): SessionEntry[] {
             entryType: "tool_use",
             toolName,
             skillName,
+            toolParams: input || undefined,
           });
         }
       }
@@ -193,6 +195,9 @@ function parseLine(line: string, project: string): SessionEntry[] {
             entryType: "stop_hook_summary",
             hookCommand: (info.command as string) || undefined,
             hookDurationMs: (info.durationMs as number) || undefined,
+            hookExitCode: info.exitCode !== undefined ? (info.exitCode as number) : undefined,
+            hookOutput: (info.output as string) || undefined,
+            isError: (info.exitCode as number) !== 0 && info.exitCode !== undefined ? true : undefined,
           });
         }
       }

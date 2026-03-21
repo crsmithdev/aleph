@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
-import { useObsToolDetail } from '../../../api/observability-hooks';
+import { useObsSkillDetail } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
@@ -14,15 +14,15 @@ import { fmtNumber, fmtPct, shortDate, dateTime } from '../../../utils/format';
 
 type InvocationRow = { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown> };
 
-export function ToolDetailPage() {
+export function SkillDetailPage() {
   const { name: rawName } = useParams<{ name: string }>();
-  const toolName = decodeURIComponent(rawName ?? '');
+  const skillName = decodeURIComponent(rawName ?? '');
   const [days, setDays] = useState(30);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
-  const { data, isLoading, error, refetch } = useObsToolDetail(toolName, days);
+  const { data, isLoading, error, refetch } = useObsSkillDetail(skillName, days);
 
   if (isLoading) return <PageLoading />;
-  if (error || !data) return <ErrorState message="Failed to load tool details" retry={refetch} />;
+  if (error || !data) return <ErrorState message="Failed to load skill details" retry={refetch} />;
 
   const successRate = data.totalCount > 0
     ? ((data.totalCount - data.errorCount) / data.totalCount) * 100
@@ -73,12 +73,12 @@ export function ToolDetailPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link
-            to="/system/observability/tools"
+            to="/system/observability/skills"
             className="text-sm text-text-muted hover:text-text-primary transition-colors"
           >
-            &larr; Tools
+            &larr; Skills
           </Link>
-          <h1 className="text-xl font-semibold font-mono text-text-primary">{toolName}</h1>
+          <h1 className="text-xl font-semibold font-mono text-text-primary">{skillName}</h1>
         </div>
         <TimeRangeSelector value={days} onChange={setDays} />
       </div>
@@ -104,7 +104,7 @@ export function ToolDetailPage() {
             <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
             <YAxis {...axisProps} />
             <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
-            <Bar dataKey="count" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Calls" />
+            <Bar dataKey="count" fill={CHART_PALETTE[3]} radius={[2, 2, 0, 0]} name="Invocations" />
           </BarChart>
         </ChartContainer>
       )}

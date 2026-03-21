@@ -1,5 +1,6 @@
 import type {
   SessionEntry,
+  Granularity,
   ToolMetric,
   HookMetric,
   SkillMetric,
@@ -19,6 +20,7 @@ import type {
   SessionsData,
   ToolDetailData,
   HookDetailData,
+  SkillDetailData,
   MemoryUsageData,
 } from "./types.js";
 import { calculateCost } from "./pricing.js";
@@ -32,6 +34,18 @@ function hourKey(timestamp: string): number {
   return match ? parseInt(match[1], 10) : 0;
 }
 
+function bucketKey(timestamp: string, granularity: Granularity): string {
+  switch (granularity) {
+    case "minute":
+      return timestamp.slice(0, 16); // YYYY-MM-DDTHH:MM
+    case "hour":
+      return timestamp.slice(0, 13); // YYYY-MM-DDTHH
+    case "day":
+    default:
+      return timestamp.slice(0, 10); // YYYY-MM-DD
+  }
+}
+
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
   const idx = Math.floor((p / 100) * (sorted.length - 1));
@@ -42,6 +56,8 @@ export function aggregateOverview(entries: SessionEntry[]): OverviewData {
   const sessionIds = new Set<string>();
   let messages = 0;
   let toolCalls = 0;
+  let toolErrors = 0;
+  let hookErrors = 0;
   let totalCost = 0;
   const dayMap = new Map<string, { sessions: Set<string>; messages: number }>();
 
@@ -68,33 +84,57 @@ export function aggregateOverview(entries: SessionEntry[]): OverviewData {
     if (e.entryType === "tool_use") {
       toolCalls++;
     }
+
+    if (e.entryType === "tool_result" && e.isError) {
+      toolErrors++;
+    }
+
+    if (e.entryType === "stop_hook_summary" && e.isError) {
+      hookErrors++;
+    }
   }
 
   const byDay = [...dayMap.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, v]) => ({ date, sessions: v.sessions.size, messages: v.messages }));
 
-  return { sessions: sessionIds.size, messages, toolCalls, totalCost, byDay };
+  return { sessions: sessionIds.size, messages, toolCalls, toolErrors, hookErrors, totalCost, byDay };
 }
 
-export function aggregateTools(entries: SessionEntry[]): ToolsData {
-  const toolCounts = new Map<string, { count: number; errors: number }>();
+export function aggregateTools(entries: SessionEntry[], granularity: Granularity = "day"): ToolsData {
+  const toolCounts = new Map<string, { count: number; errors: number; lastUsed: string }>();
   const dayToolMap = new Map<string, Map<string, number>>();
+
+  // Build a map of tool_use entries by their position for error matching
+  const toolUseBySession = new Map<string, string[]>();
+  for (const e of entries) {
+    if (e.entryType === "tool_use" && e.toolName) {
+      if (!toolUseBySession.has(e.sessionId)) toolUseBySession.set(e.sessionId, []);
+      toolUseBySession.get(e.sessionId)!.push(e.toolName);
+    }
+  }
 
   for (const e of entries) {
     if (e.entryType === "tool_use" && e.toolName) {
-      const cur = toolCounts.get(e.toolName) || { count: 0, errors: 0 };
+      const cur = toolCounts.get(e.toolName) || { count: 0, errors: 0, lastUsed: "" };
       cur.count++;
+      if (!cur.lastUsed || e.timestamp > cur.lastUsed) cur.lastUsed = e.timestamp;
       toolCounts.set(e.toolName, cur);
 
-      const day = dateKey(e.timestamp);
-      if (!dayToolMap.has(day)) dayToolMap.set(day, new Map());
-      const dm = dayToolMap.get(day)!;
+      const bk = bucketKey(e.timestamp, granularity);
+      if (!dayToolMap.has(bk)) dayToolMap.set(bk, new Map());
+      const dm = dayToolMap.get(bk)!;
       dm.set(e.toolName, (dm.get(e.toolName) || 0) + 1);
     }
 
     if (e.entryType === "tool_result" && e.isError) {
-      // Can't attribute to specific tool without matching IDs, count as generic
+      // Count errors generically - attribute to most recently used tool in session
+      const sessionTools = toolUseBySession.get(e.sessionId);
+      if (sessionTools && sessionTools.length > 0) {
+        const lastTool = sessionTools[sessionTools.length - 1];
+        const cur = toolCounts.get(lastTool);
+        if (cur) cur.errors++;
+      }
     }
   }
 
@@ -105,6 +145,7 @@ export function aggregateTools(entries: SessionEntry[]): ToolsData {
       count: v.count,
       errorCount: v.errors,
       pct: total > 0 ? (v.count / total) * 100 : 0,
+      lastUsed: v.lastUsed,
     }))
     .sort((a, b) => b.count - a.count);
 
@@ -119,23 +160,34 @@ export function aggregateTools(entries: SessionEntry[]): ToolsData {
   return { ranked, byDay };
 }
 
-export function aggregateHooks(entries: SessionEntry[]): HooksData {
-  const hookMap = new Map<string, { event: string; durations: number[]; errors: number }>();
+export function aggregateHooks(entries: SessionEntry[], granularity: Granularity = "day"): HooksData {
+  const hookMap = new Map<string, { event: string; durations: number[]; errors: number; fullCommand: string }>();
+  const dayHookMap = new Map<string, Map<string, number>>();
 
   for (const e of entries) {
     if (e.entryType === "stop_hook_summary" && e.hookCommand) {
       const shortCmd = e.hookCommand.split("/").pop() || e.hookCommand;
-      const cur = hookMap.get(shortCmd) || { event: "", durations: [], errors: 0 };
+      const cur = hookMap.get(shortCmd) || { event: "", durations: [], errors: 0, fullCommand: e.hookCommand };
       if (e.hookDurationMs !== undefined) {
         cur.durations.push(e.hookDurationMs);
       }
+      if (e.isError) {
+        cur.errors++;
+      }
+      cur.fullCommand = e.hookCommand;
       hookMap.set(shortCmd, cur);
+
+      const bk = bucketKey(e.timestamp, granularity);
+      if (!dayHookMap.has(bk)) dayHookMap.set(bk, new Map());
+      const dm = dayHookMap.get(bk)!;
+      dm.set(shortCmd, (dm.get(shortCmd) || 0) + 1);
     }
 
     if (e.entryType === "hook_progress" && e.hookCommand) {
       const shortCmd = e.hookCommand.split("/").pop() || e.hookCommand;
-      const cur = hookMap.get(shortCmd) || { event: "", durations: [], errors: 0 };
+      const cur = hookMap.get(shortCmd) || { event: "", durations: [], errors: 0, fullCommand: e.hookCommand };
       cur.event = e.hookEvent || cur.event;
+      cur.fullCommand = e.hookCommand;
       hookMap.set(shortCmd, cur);
     }
   }
@@ -153,34 +205,48 @@ export function aggregateHooks(entries: SessionEntry[]): HooksData {
         p50Ms: Math.round(percentile(sorted, 50)),
         p95Ms: Math.round(percentile(sorted, 95)),
         errors: v.errors,
+        fullCommand: v.fullCommand,
       };
     })
     .sort((a, b) => b.count - a.count);
 
-  return { ranked };
+  const byDay = [...dayHookMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, hooks]) => ({
+      date,
+      count: [...hooks.values()].reduce((s, v) => s + v, 0),
+      hooks: Object.fromEntries(hooks),
+    }));
+
+  return { ranked, byDay };
 }
 
-export function aggregateSkills(entries: SessionEntry[]): SkillsData {
-  const skillCounts = new Map<string, number>();
+export function aggregateSkills(entries: SessionEntry[], granularity: Granularity = "day"): SkillsData {
+  const skillCounts = new Map<string, { count: number; errors: number; lastUsed: string }>();
   const daySkillMap = new Map<string, Map<string, number>>();
 
   for (const e of entries) {
     if (e.entryType === "tool_use" && e.skillName) {
-      skillCounts.set(e.skillName, (skillCounts.get(e.skillName) || 0) + 1);
+      const cur = skillCounts.get(e.skillName) || { count: 0, errors: 0, lastUsed: "" };
+      cur.count++;
+      if (!cur.lastUsed || e.timestamp > cur.lastUsed) cur.lastUsed = e.timestamp;
+      skillCounts.set(e.skillName, cur);
 
-      const day = dateKey(e.timestamp);
-      if (!daySkillMap.has(day)) daySkillMap.set(day, new Map());
-      const dm = daySkillMap.get(day)!;
+      const bk = bucketKey(e.timestamp, granularity);
+      if (!daySkillMap.has(bk)) daySkillMap.set(bk, new Map());
+      const dm = daySkillMap.get(bk)!;
       dm.set(e.skillName, (dm.get(e.skillName) || 0) + 1);
     }
   }
 
-  const total = [...skillCounts.values()].reduce((s, v) => s + v, 0);
+  const total = [...skillCounts.values()].reduce((s, v) => s + v.count, 0);
   const ranked: SkillMetric[] = [...skillCounts.entries()]
-    .map(([skill, count]) => ({
+    .map(([skill, v]) => ({
       skill,
-      count,
-      pct: total > 0 ? (count / total) * 100 : 0,
+      count: v.count,
+      pct: total > 0 ? (v.count / total) * 100 : 0,
+      errors: v.errors,
+      lastUsed: v.lastUsed,
     }))
     .sort((a, b) => b.count - a.count);
 
@@ -291,10 +357,10 @@ export function aggregateSessions(entries: SessionEntry[]): SessionsData {
 export function aggregateToolDetail(entries: SessionEntry[], toolName: string): ToolDetailData {
   const matched = entries.filter((e) => e.entryType === "tool_use" && e.toolName === toolName);
   const totalCount = matched.length;
-  const errorCount = 0; // tool_use entries don't carry error info directly
+  const errorCount = 0;
 
   const dayMap = new Map<string, Map<number, number>>();
-  const invocations: { timestamp: string; sessionId: string; project: string }[] = [];
+  const invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown> }[] = [];
 
   for (const e of matched) {
     const day = dateKey(e.timestamp);
@@ -303,7 +369,12 @@ export function aggregateToolDetail(entries: SessionEntry[], toolName: string): 
     const hour = hourKey(e.timestamp);
     hm.set(hour, (hm.get(hour) || 0) + 1);
 
-    invocations.push({ timestamp: e.timestamp, sessionId: e.sessionId, project: e.project });
+    invocations.push({
+      timestamp: e.timestamp,
+      sessionId: e.sessionId,
+      project: e.project,
+      params: e.toolParams,
+    });
   }
 
   const byDay = [...dayMap.entries()]
@@ -325,8 +396,9 @@ export function aggregateHookDetail(entries: SessionEntry[], hookName: string): 
   const durations: number[] = [];
   let event = "";
   let errors = 0;
+  let fullCommand = "";
   const dayMap = new Map<string, { durations: number[] }>();
-  const invocations: { timestamp: string; sessionId: string; durationMs: number }[] = [];
+  const invocations: { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string }[] = [];
 
   for (const e of entries) {
     if (e.entryType === "stop_hook_summary" && e.hookCommand) {
@@ -334,12 +406,20 @@ export function aggregateHookDetail(entries: SessionEntry[], hookName: string): 
       if (shortCmd !== hookName) continue;
       const dur = e.hookDurationMs ?? 0;
       durations.push(dur);
+      if (e.isError) errors++;
+      fullCommand = e.hookCommand;
 
       const day = dateKey(e.timestamp);
       if (!dayMap.has(day)) dayMap.set(day, { durations: [] });
       dayMap.get(day)!.durations.push(dur);
 
-      invocations.push({ timestamp: e.timestamp, sessionId: e.sessionId, durationMs: dur });
+      invocations.push({
+        timestamp: e.timestamp,
+        sessionId: e.sessionId,
+        durationMs: dur,
+        exitCode: e.hookExitCode,
+        output: e.hookOutput,
+      });
     }
 
     if (e.entryType === "hook_progress" && e.hookCommand) {
@@ -347,6 +427,7 @@ export function aggregateHookDetail(entries: SessionEntry[], hookName: string): 
       if (shortCmd === hookName && e.hookEvent) {
         event = e.hookEvent;
       }
+      fullCommand = e.hookCommand;
     }
   }
 
@@ -368,7 +449,38 @@ export function aggregateHookDetail(entries: SessionEntry[], hookName: string): 
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
     .slice(0, 200);
 
-  return { command: hookName, event, totalCount, avgMs, p50Ms, p95Ms, errors, byDay, invocations: recentInvocations };
+  return { command: hookName, event, totalCount, avgMs, p50Ms, p95Ms, errors, fullCommand, byDay, invocations: recentInvocations };
+}
+
+export function aggregateSkillDetail(entries: SessionEntry[], skillName: string): SkillDetailData {
+  const matched = entries.filter((e) => e.entryType === "tool_use" && e.skillName === skillName);
+  const totalCount = matched.length;
+  const errorCount = 0;
+
+  const dayMap = new Map<string, number>();
+  const invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown> }[] = [];
+
+  for (const e of matched) {
+    const day = dateKey(e.timestamp);
+    dayMap.set(day, (dayMap.get(day) || 0) + 1);
+
+    invocations.push({
+      timestamp: e.timestamp,
+      sessionId: e.sessionId,
+      project: e.project,
+      params: e.toolParams,
+    });
+  }
+
+  const byDay: TimeBucket[] = [...dayMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, count]) => ({ date, count }));
+
+  const recentInvocations = invocations
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+    .slice(0, 200);
+
+  return { skill: skillName, totalCount, errorCount, byDay, invocations: recentInvocations };
 }
 
 export function aggregateMemoryUsage(entries: SessionEntry[]): MemoryUsageData {

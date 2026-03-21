@@ -14,16 +14,24 @@ import {
   aggregateSessions,
   aggregateToolDetail,
   aggregateHookDetail,
+  aggregateSkillDetail,
   aggregateMemoryUsage,
 } from '@construct/telemetry';
+import type { Granularity, SessionEntry } from '@construct/telemetry';
 
-type DaysQuerystring = { days?: string };
-type ObsRequest = FastifyRequest<{ Querystring: DaysQuerystring }> & {
-  telemetryEntries: ReturnType<typeof parseSessionsForDays>;
+type QueryParams = { days?: string; granularity?: string; session?: string };
+type ObsRequest = FastifyRequest<{ Querystring: QueryParams }> & {
+  telemetryEntries: SessionEntry[];
+  granularity: Granularity;
 };
 
+function parseGranularity(raw?: string): Granularity {
+  if (raw === 'minute' || raw === 'hour' || raw === 'day') return raw;
+  return 'day';
+}
+
 function parseDaysPreHandler(
-  req: FastifyRequest<{ Querystring: DaysQuerystring }>,
+  req: FastifyRequest<{ Querystring: QueryParams }>,
   reply: { code: (n: number) => { send: (body: unknown) => void } },
   done: () => void,
 ) {
@@ -33,62 +41,133 @@ function parseDaysPreHandler(
     reply.code(400).send({ error: 'days must be an integer between 1 and 365' });
     return;
   }
-  (req as ObsRequest).telemetryEntries = parseSessionsForDays(days);
+  let entries = parseSessionsForDays(days);
+
+  // Filter by session if provided
+  const sessionFilter = req.query.session;
+  if (sessionFilter) {
+    entries = entries.filter((e) => e.sessionId === sessionFilter);
+  }
+
+  (req as ObsRequest).telemetryEntries = entries;
+  (req as ObsRequest).granularity = parseGranularity(req.query.granularity);
   done();
 }
 
+function timed<T>(fn: () => T): { result: T; queryTimeMs: number } {
+  const start = performance.now();
+  const result = fn();
+  const queryTimeMs = Math.round((performance.now() - start) * 100) / 100;
+  return { result, queryTimeMs };
+}
+
+function checkHookActive(fullCommand: string): boolean {
+  // Hook commands look like: bun /path/to/file.ts
+  const parts = fullCommand.split(/\s+/);
+  for (const part of parts) {
+    if (part.startsWith('/') && (part.endsWith('.ts') || part.endsWith('.js') || part.endsWith('.sh'))) {
+      return existsSync(part);
+    }
+  }
+  return false;
+}
+
+function checkToolActive(toolName: string, lastUsed?: string): boolean {
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  if (lastUsed) {
+    return new Date(lastUsed) >= sevenDaysAgo;
+  }
+  return false;
+}
+
 export const observabilityRoutes: FastifyPluginAsync = async (app) => {
-  app.get<{ Querystring: DaysQuerystring }>('/overview', { preHandler: parseDaysPreHandler }, async (req) => {
-    return aggregateOverview((req as ObsRequest).telemetryEntries);
+  app.get<{ Querystring: QueryParams }>('/overview', { preHandler: parseDaysPreHandler }, async (req) => {
+    const { result, queryTimeMs } = timed(() => aggregateOverview((req as ObsRequest).telemetryEntries));
+    return { ...result, queryTimeMs };
   });
 
-  app.get<{ Querystring: DaysQuerystring }>('/tools', { preHandler: parseDaysPreHandler }, async (req) => {
-    return aggregateTools((req as ObsRequest).telemetryEntries);
+  app.get<{ Querystring: QueryParams }>('/tools', { preHandler: parseDaysPreHandler }, async (req) => {
+    const obsReq = req as ObsRequest;
+    const { result, queryTimeMs } = timed(() => aggregateTools(obsReq.telemetryEntries, obsReq.granularity));
+    // Add active status
+    const ranked = result.ranked.map((t) => ({
+      ...t,
+      active: checkToolActive(t.name, t.lastUsed),
+    }));
+    return { ...result, ranked, queryTimeMs };
   });
 
-  app.get<{ Querystring: DaysQuerystring }>('/hooks', { preHandler: parseDaysPreHandler }, async (req) => {
-    return aggregateHooks((req as ObsRequest).telemetryEntries);
+  app.get<{ Querystring: QueryParams }>('/hooks', { preHandler: parseDaysPreHandler }, async (req) => {
+    const obsReq = req as ObsRequest;
+    const { result, queryTimeMs } = timed(() => aggregateHooks(obsReq.telemetryEntries, obsReq.granularity));
+    // Add active status by checking if hook file exists
+    const ranked = result.ranked.map((h) => ({
+      ...h,
+      active: h.fullCommand ? checkHookActive(h.fullCommand) : false,
+    }));
+    return { ...result, ranked, queryTimeMs };
   });
 
-  app.get<{ Querystring: DaysQuerystring }>('/skills', { preHandler: parseDaysPreHandler }, async (req) => {
-    return aggregateSkills((req as ObsRequest).telemetryEntries);
+  app.get<{ Querystring: QueryParams }>('/skills', { preHandler: parseDaysPreHandler }, async (req) => {
+    const obsReq = req as ObsRequest;
+    const { result, queryTimeMs } = timed(() => aggregateSkills(obsReq.telemetryEntries, obsReq.granularity));
+    return { ...result, queryTimeMs };
   });
 
-  app.get<{ Querystring: DaysQuerystring }>('/tokens', { preHandler: parseDaysPreHandler }, async (req) => {
-    return aggregateTokens((req as ObsRequest).telemetryEntries);
+  app.get<{ Querystring: QueryParams }>('/tokens', { preHandler: parseDaysPreHandler }, async (req) => {
+    const { result, queryTimeMs } = timed(() => aggregateTokens((req as ObsRequest).telemetryEntries));
+    return { ...result, queryTimeMs };
   });
 
-  app.get<{ Querystring: DaysQuerystring }>('/cost', { preHandler: parseDaysPreHandler }, async (req) => {
-    return aggregateCost((req as ObsRequest).telemetryEntries);
+  app.get<{ Querystring: QueryParams }>('/cost', { preHandler: parseDaysPreHandler }, async (req) => {
+    const { result, queryTimeMs } = timed(() => aggregateCost((req as ObsRequest).telemetryEntries));
+    return { ...result, queryTimeMs };
   });
 
-  app.get<{ Querystring: DaysQuerystring }>('/sessions', { preHandler: parseDaysPreHandler }, async (req) => {
-    return aggregateSessions((req as ObsRequest).telemetryEntries);
+  app.get<{ Querystring: QueryParams }>('/sessions', { preHandler: parseDaysPreHandler }, async (req) => {
+    const { result, queryTimeMs } = timed(() => aggregateSessions((req as ObsRequest).telemetryEntries));
+    return { ...result, queryTimeMs };
   });
 
-  app.get<{ Params: { name: string }; Querystring: DaysQuerystring }>(
+  app.get<{ Params: { name: string }; Querystring: QueryParams }>(
     '/tools/:name',
     { preHandler: parseDaysPreHandler },
     async (req) => {
       const toolName = decodeURIComponent(req.params.name);
-      return aggregateToolDetail((req as ObsRequest).telemetryEntries, toolName);
+      const { result, queryTimeMs } = timed(() => aggregateToolDetail((req as ObsRequest).telemetryEntries, toolName));
+      return { ...result, queryTimeMs };
     },
   );
 
-  app.get<{ Params: { name: string }; Querystring: DaysQuerystring }>(
+  app.get<{ Params: { name: string }; Querystring: QueryParams }>(
     '/hooks/:name',
     { preHandler: parseDaysPreHandler },
     async (req) => {
       const hookName = decodeURIComponent(req.params.name);
-      return aggregateHookDetail((req as ObsRequest).telemetryEntries, hookName);
+      const obsReq = req as ObsRequest;
+      const { result, queryTimeMs } = timed(() => aggregateHookDetail(obsReq.telemetryEntries, hookName));
+      const active = result.fullCommand ? checkHookActive(result.fullCommand) : false;
+      return { ...result, active, queryTimeMs };
     },
   );
 
-  app.get<{ Querystring: DaysQuerystring }>(
+  app.get<{ Params: { name: string }; Querystring: QueryParams }>(
+    '/skills/:name',
+    { preHandler: parseDaysPreHandler },
+    async (req) => {
+      const skillName = decodeURIComponent(req.params.name);
+      const { result, queryTimeMs } = timed(() => aggregateSkillDetail((req as ObsRequest).telemetryEntries, skillName));
+      return { ...result, queryTimeMs };
+    },
+  );
+
+  app.get<{ Querystring: QueryParams }>(
     '/memory/usage',
     { preHandler: parseDaysPreHandler },
     async (req) => {
-      return aggregateMemoryUsage((req as ObsRequest).telemetryEntries);
+      const { result, queryTimeMs } = timed(() => aggregateMemoryUsage((req as ObsRequest).telemetryEntries));
+      return { ...result, queryTimeMs };
     },
   );
 

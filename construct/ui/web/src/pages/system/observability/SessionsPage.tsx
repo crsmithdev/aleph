@@ -7,6 +7,7 @@ import { DataTable, type Column } from '../../../components/data/DataTable';
 import { TimeRangeSelector } from '../../../components/data/TimeRangeSelector';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
+import { QueryTiming } from '../../../components/data/QueryTiming';
 import { fmtNumber, shortDate } from '../../../utils/format';
 
 type ProjectRow = { project: string; sessions: number };
@@ -71,6 +72,8 @@ export function SessionsPage() {
         columns={projectColumns}
         keyField="project"
       />
+
+      <QueryTiming ms={data.queryTimeMs} />
     </div>
   );
 }

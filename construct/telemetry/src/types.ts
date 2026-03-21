@@ -11,12 +11,15 @@ export interface SessionEntry {
     | "turn_duration"
     | "tokens";
   toolName?: string;
+  toolParams?: Record<string, unknown>;
   skillName?: string;
   isError?: boolean;
   hookEvent?: string;
   hookName?: string;
   hookCommand?: string;
   hookDurationMs?: number;
+  hookExitCode?: number;
+  hookOutput?: string;
   turnDurationMs?: number;
   inputTokens?: number;
   outputTokens?: number;
@@ -30,11 +33,15 @@ export interface ParseOptions {
   baseDir?: string;
 }
 
+export type Granularity = "minute" | "hour" | "day";
+
 export interface ToolMetric {
   name: string;
   count: number;
   errorCount: number;
   pct: number;
+  active?: boolean;
+  lastUsed?: string;
 }
 
 export interface HookMetric {
@@ -45,12 +52,16 @@ export interface HookMetric {
   p50Ms: number;
   p95Ms: number;
   errors: number;
+  active?: boolean;
+  fullCommand?: string;
 }
 
 export interface SkillMetric {
   skill: string;
   count: number;
   pct: number;
+  errors: number;
+  lastUsed?: string;
 }
 
 export interface TimeBucket {
@@ -97,6 +108,8 @@ export interface OverviewData {
   sessions: number;
   messages: number;
   toolCalls: number;
+  toolErrors: number;
+  hookErrors: number;
   totalCost: number;
   byDay: SessionBucket[];
 }
@@ -108,6 +121,7 @@ export interface ToolsData {
 
 export interface HooksData {
   ranked: HookMetric[];
+  byDay: (TimeBucket & { hooks: Record<string, number> })[];
 }
 
 export interface SkillsData {
@@ -136,7 +150,7 @@ export interface ToolDetailData {
   totalCount: number;
   errorCount: number;
   byDay: (TimeBucket & { byHour: Record<number, number> })[];
-  invocations: { timestamp: string; sessionId: string; project: string }[];
+  invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown> }[];
 }
 
 export interface HookDetailData {
@@ -147,8 +161,17 @@ export interface HookDetailData {
   p50Ms: number;
   p95Ms: number;
   errors: number;
+  fullCommand?: string;
   byDay: { date: string; count: number; avgMs: number }[];
-  invocations: { timestamp: string; sessionId: string; durationMs: number }[];
+  invocations: { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string }[];
+}
+
+export interface SkillDetailData {
+  skill: string;
+  totalCount: number;
+  errorCount: number;
+  byDay: TimeBucket[];
+  invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown> }[];
 }
 
 export interface MemoryUsageData {

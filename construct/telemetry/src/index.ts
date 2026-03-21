@@ -1,6 +1,7 @@
 export type {
   SessionEntry,
   ParseOptions,
+  Granularity,
   ToolMetric,
   HookMetric,
   SkillMetric,
@@ -21,6 +22,7 @@ export type {
   StatusSummary,
   ToolDetailData,
   HookDetailData,
+  SkillDetailData,
   MemoryUsageData,
 } from "./types.js";
 
@@ -36,6 +38,7 @@ export {
   aggregateSessions,
   aggregateToolDetail,
   aggregateHookDetail,
+  aggregateSkillDetail,
   aggregateMemoryUsage,
 } from "./aggregator.js";
 

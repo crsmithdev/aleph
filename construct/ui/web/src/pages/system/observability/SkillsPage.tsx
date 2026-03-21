@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
-import { useObsTools } from '../../../api/observability-hooks';
+import { useObsSkills } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { DataTable, type Column } from '../../../components/data/DataTable';
@@ -12,33 +12,24 @@ import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } fro
 import { fmtNumber, fmtPct, shortDate } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
 
-type ToolRow = { name: string; count: number; errorCount: number; pct: number; active: boolean };
+type SkillRow = { skill: string; count: number; pct: number; errors: number };
 
-export function ToolsPage() {
+export function SkillsPage() {
   const [days, setDays] = useState(30);
   const [granularity, setGranularity] = useState<Granularity>('day');
-  const [hideInactive, setHideInactive] = useState(false);
   const navigate = useNavigate();
-  const { data, isLoading, error, refetch } = useObsTools(days, granularity);
+  const { data, isLoading, error, refetch } = useObsSkills(days, granularity);
 
   if (isLoading) return <PageLoading />;
-  if (error || !data) return <ErrorState message="Failed to load tools" retry={refetch} />;
+  if (error || !data) return <ErrorState message="Failed to load skills" retry={refetch} />;
 
-  const filtered = hideInactive ? data.ranked.filter((r) => r.active) : data.ranked;
-  const maxCount = Math.max(...filtered.map((r) => r.count), 1);
+  const maxCount = Math.max(...data.ranked.map((r) => r.count), 1);
 
-  const columns: Column<ToolRow>[] = [
+  const columns: Column<SkillRow>[] = [
     {
-      key: 'active',
-      label: 'Status',
-      render: (row) => (
-        <span className={cn('inline-block h-2 w-2 rounded-full', row.active ? 'bg-success' : 'bg-text-muted/30')} title={row.active ? 'Active' : 'Inactive'} />
-      ),
-    },
-    {
-      key: 'name',
-      label: 'Tool',
-      render: (row) => <span className="font-mono text-text-primary">{row.name}</span>,
+      key: 'skill',
+      label: 'Skill',
+      render: (row) => <span className="font-mono text-text-primary">{row.skill}</span>,
     },
     {
       key: 'count',
@@ -48,13 +39,13 @@ export function ToolsPage() {
       render: (row) => fmtNumber(row.count),
     },
     {
-      key: 'errorCount',
+      key: 'errors',
       label: 'Errors',
       align: 'right',
       sortable: true,
       render: (row) => (
-        <span className={cn(row.errorCount > 0 && 'text-error font-medium')}>
-          {row.errorCount > 0 ? fmtNumber(row.errorCount) : '-'}
+        <span className={cn(row.errors > 0 && 'text-error font-medium')}>
+          {row.errors > 0 ? fmtNumber(row.errors) : '-'}
         </span>
       ),
     },
@@ -83,36 +74,25 @@ export function ToolsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-semibold text-text-primary">Tools</h1>
-          <label className="flex items-center gap-1.5 text-xs text-text-muted cursor-pointer">
-            <input
-              type="checkbox"
-              checked={hideInactive}
-              onChange={(e) => setHideInactive(e.target.checked)}
-              className="rounded border-border-primary"
-            />
-            Hide inactive
-          </label>
-        </div>
+        <h1 className="text-xl font-semibold text-text-primary">Skills</h1>
         <TimeRangeSelector value={days} onChange={setDays} granularity={granularity} onGranularityChange={setGranularity} />
       </div>
 
-      <DataTable<ToolRow>
-        data={filtered}
+      <DataTable<SkillRow>
+        data={data.ranked}
         columns={columns}
-        keyField="name"
-        onRowClick={(row) => navigate(`/system/observability/tools/${encodeURIComponent(row.name)}`)}
+        keyField="skill"
+        onRowClick={(row) => navigate(`/system/observability/skills/${encodeURIComponent(row.skill)}`)}
       />
 
       {data.byDay.length > 0 && (
-        <ChartContainer title="Tool Calls Over Time">
+        <ChartContainer title="Skill Invocations Over Time">
           <BarChart data={data.byDay}>
             <CartesianGrid {...gridProps} />
             <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
             <YAxis {...axisProps} />
             <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
-            <Bar dataKey="count" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Calls" />
+            <Bar dataKey="count" fill={CHART_PALETTE[3]} radius={[2, 2, 0, 0]} name="Invocations" />
           </BarChart>
         </ChartContainer>
       )}
