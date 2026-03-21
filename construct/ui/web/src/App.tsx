@@ -17,6 +17,8 @@ import { HooksPage } from './pages/system/observability/HooksPage';
 import { HookDetailPage } from './pages/system/observability/HookDetailPage';
 import { TokensCostPage } from './pages/system/observability/TokensCostPage';
 import { SessionsPage } from './pages/system/observability/SessionsPage';
+import { SkillsPage } from './pages/system/observability/SkillsPage';
+import { SkillDetailPage } from './pages/system/observability/SkillDetailPage';
 import { MemoryPage } from './pages/system/observability/MemoryPage';
 import { SettingsPage } from './pages/system/SettingsPage';
 
@@ -49,6 +51,8 @@ export function App() {
               <Route path="/system/observability/tools/:name" element={<ToolDetailPage />} />
               <Route path="/system/observability/hooks" element={<HooksPage />} />
               <Route path="/system/observability/hooks/:name" element={<HookDetailPage />} />
+              <Route path="/system/observability/skills" element={<SkillsPage />} />
+              <Route path="/system/observability/skills/:name" element={<SkillDetailPage />} />
               <Route path="/system/observability/tokens" element={<TokensCostPage />} />
               <Route path="/system/observability/sessions" element={<SessionsPage />} />
               <Route path="/system/observability/memory" element={<MemoryPage />} />

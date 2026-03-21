@@ -5,9 +5,10 @@ import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { TimeRangeSelector } from '../../../components/data/TimeRangeSelector';
+import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtCurrency, shortDate } from '../../../utils/format';
+import { fmtNumber, fmtCurrency, fmtPct, shortDate } from '../../../utils/format';
 
 export function OverviewPage() {
   const [days, setDays] = useState(30);
@@ -16,6 +17,10 @@ export function OverviewPage() {
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load overview" retry={refetch} />;
 
+  const toolSuccessPct = data.toolCalls > 0
+    ? ((data.toolCalls - data.toolErrors) / data.toolCalls) * 100
+    : 100;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -23,10 +28,16 @@ export function OverviewPage() {
         <TimeRangeSelector value={days} onChange={setDays} />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <StatCard label="Sessions" value={fmtNumber(data.sessions)} />
         <StatCard label="Messages" value={fmtNumber(data.messages)} />
         <StatCard label="Tool Calls" value={fmtNumber(data.toolCalls)} />
+        <StatCard
+          label="Tool Success"
+          value={fmtPct(toolSuccessPct)}
+          accent={toolSuccessPct >= 99 ? 'success' : toolSuccessPct >= 95 ? 'warning' : 'error'}
+          detail={`${fmtNumber(data.toolErrors)} errors`}
+        />
         <StatCard label="Total Cost" value={fmtCurrency(data.totalCost)} accent="success" />
       </div>
 
@@ -54,6 +65,8 @@ export function OverviewPage() {
           />
         </AreaChart>
       </ChartContainer>
+
+      <QueryTiming ms={data.queryTimeMs} />
     </div>
   );
 }

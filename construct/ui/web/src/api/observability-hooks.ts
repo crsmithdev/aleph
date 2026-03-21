@@ -1,31 +1,58 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 
-function obsQuery<T>(endpoint: string, days: number) {
+type Granularity = 'minute' | 'hour' | 'day';
+
+interface ObsQueryOpts {
+  days: number;
+  granularity?: Granularity;
+  session?: string;
+}
+
+function obsQueryParams(opts: ObsQueryOpts): string {
+  const params = new URLSearchParams();
+  params.set('days', String(opts.days));
+  if (opts.granularity && opts.granularity !== 'day') params.set('granularity', opts.granularity);
+  if (opts.session) params.set('session', opts.session);
+  return params.toString();
+}
+
+function obsQuery<T>(endpoint: string, opts: ObsQueryOpts) {
   return useQuery<T>({
-    queryKey: ['observability', endpoint, days],
-    queryFn: () => api.get<T>(`/observability/${endpoint}?days=${days}`),
+    queryKey: ['observability', endpoint, opts.days, opts.granularity || 'day', opts.session || ''],
+    queryFn: () => api.get<T>(`/observability/${endpoint}?${obsQueryParams(opts)}`),
   });
 }
 
-export function useObsOverview(days: number) {
+export function useObsOverview(days: number, session?: string) {
   return obsQuery<{
     sessions: number;
     messages: number;
     toolCalls: number;
+    toolErrors: number;
+    hookErrors: number;
     totalCost: number;
     byDay: Array<{ date: string; sessions: number; messages: number }>;
-  }>('overview', days);
+    queryTimeMs: number;
+  }>('overview', { days, session });
 }
 
-export function useObsTools(days: number) {
+export function useObsTools(days: number, granularity?: Granularity, session?: string) {
   return obsQuery<{
-    ranked: Array<{ name: string; count: number; errorCount: number; pct: number }>;
+    ranked: Array<{
+      name: string;
+      count: number;
+      errorCount: number;
+      pct: number;
+      active: boolean;
+      lastUsed?: string;
+    }>;
     byDay: Array<{ date: string; count: number; tools: Record<string, number> }>;
-  }>('tools', days);
+    queryTimeMs: number;
+  }>('tools', { days, granularity, session });
 }
 
-export function useObsHooks(days: number) {
+export function useObsHooks(days: number, granularity?: Granularity, session?: string) {
   return obsQuery<{
     ranked: Array<{
       command: string;
@@ -35,18 +62,23 @@ export function useObsHooks(days: number) {
       p50Ms: number;
       p95Ms: number;
       errors: number;
+      active: boolean;
+      fullCommand?: string;
     }>;
-  }>('hooks', days);
+    byDay: Array<{ date: string; count: number; hooks: Record<string, number> }>;
+    queryTimeMs: number;
+  }>('hooks', { days, granularity, session });
 }
 
-export function useObsSkills(days: number) {
+export function useObsSkills(days: number, granularity?: Granularity, session?: string) {
   return obsQuery<{
-    ranked: Array<{ skill: string; count: number; pct: number }>;
+    ranked: Array<{ skill: string; count: number; pct: number; errors: number; lastUsed?: string }>;
     byDay: Array<{ date: string; count: number; skills: Record<string, number> }>;
-  }>('skills', days);
+    queryTimeMs: number;
+  }>('skills', { days, granularity, session });
 }
 
-export function useObsTokens(days: number) {
+export function useObsTokens(days: number, session?: string) {
   return obsQuery<{
     byDay: Array<{
       date: string;
@@ -55,23 +87,26 @@ export function useObsTokens(days: number) {
       cacheRead: number;
       cacheCreation: number;
     }>;
-  }>('tokens', days);
+    queryTimeMs: number;
+  }>('tokens', { days, session });
 }
 
-export function useObsCost(days: number) {
+export function useObsCost(days: number, session?: string) {
   return obsQuery<{
     totalUsd: number;
     byDay: Array<{ date: string; usd: number }>;
     byModel: Array<{ model: string; usd: number; pct: number }>;
-  }>('cost', days);
+    queryTimeMs: number;
+  }>('cost', { days, session });
 }
 
-export function useObsSessions(days: number) {
+export function useObsSessions(days: number, session?: string) {
   return obsQuery<{
     byDay: Array<{ date: string; sessions: number; messages: number }>;
     byProject: Array<{ project: string; sessions: number }>;
     byHour: Array<{ hour: number; count: number }>;
-  }>('sessions', days);
+    queryTimeMs: number;
+  }>('sessions', { days, session });
 }
 
 export function useObsMemory() {
@@ -95,7 +130,8 @@ export function useObsToolDetail(name: string, days: number) {
     totalCount: number;
     errorCount: number;
     byDay: Array<{ date: string; count: number; byHour: Record<number, number> }>;
-    invocations: Array<{ timestamp: string; sessionId: string; project: string }>;
+    invocations: Array<{ timestamp: string; sessionId: string; project: string; params?: Record<string, unknown> }>;
+    queryTimeMs: number;
   }>({
     queryKey: ['observability', 'tool-detail', name, days],
     queryFn: () => api.get(`/observability/tools/${encodeURIComponent(name)}?days=${days}`),
@@ -112,11 +148,29 @@ export function useObsHookDetail(name: string, days: number) {
     p50Ms: number;
     p95Ms: number;
     errors: number;
+    active: boolean;
+    fullCommand?: string;
     byDay: Array<{ date: string; count: number; avgMs: number }>;
-    invocations: Array<{ timestamp: string; sessionId: string; durationMs: number }>;
+    invocations: Array<{ timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string }>;
+    queryTimeMs: number;
   }>({
     queryKey: ['observability', 'hook-detail', name, days],
     queryFn: () => api.get(`/observability/hooks/${encodeURIComponent(name)}?days=${days}`),
+    enabled: !!name,
+  });
+}
+
+export function useObsSkillDetail(name: string, days: number) {
+  return useQuery<{
+    skill: string;
+    totalCount: number;
+    errorCount: number;
+    byDay: Array<{ date: string; count: number }>;
+    invocations: Array<{ timestamp: string; sessionId: string; project: string; params?: Record<string, unknown> }>;
+    queryTimeMs: number;
+  }>({
+    queryKey: ['observability', 'skill-detail', name, days],
+    queryFn: () => api.get(`/observability/skills/${encodeURIComponent(name)}?days=${days}`),
     enabled: !!name,
   });
 }
@@ -147,7 +201,8 @@ export function useObsMemoryUsage(days: number) {
     stores: number;
     searches: number;
     byDay: Array<{ date: string; stores: number; searches: number }>;
-  }>('memory/usage', days);
+    queryTimeMs: number;
+  }>('memory/usage', { days });
 }
 
 export function useTriggerSnapshot() {

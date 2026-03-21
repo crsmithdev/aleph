@@ -7,21 +7,27 @@ import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { TimeRangeSelector } from '../../../components/data/TimeRangeSelector';
+import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtMs, shortDate, dateTime } from '../../../utils/format';
+import { fmtNumber, fmtMs, fmtPct, shortDate, dateTime } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
 
-type InvocationRow = { timestamp: string; sessionId: string; durationMs: number };
+type InvocationRow = { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string };
 
 export function HookDetailPage() {
   const { name: rawName } = useParams<{ name: string }>();
   const hookName = decodeURIComponent(rawName ?? '');
   const [days, setDays] = useState(30);
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const { data, isLoading, error, refetch } = useObsHookDetail(hookName, days);
 
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load hook details" retry={refetch} />;
+
+  const successRate = data.totalCount > 0
+    ? ((data.totalCount - data.errors) / data.totalCount) * 100
+    : 100;
 
   const invocationColumns: Column<InvocationRow>[] = [
     {
@@ -39,6 +45,43 @@ export function HookDetailPage() {
           {fmtMs(row.durationMs)}
         </span>
       ),
+    },
+    {
+      key: 'exitCode',
+      label: 'Exit',
+      align: 'right',
+      render: (row) => {
+        if (row.exitCode === undefined) return <span className="text-text-muted">-</span>;
+        return (
+          <span className={cn('font-mono text-xs', row.exitCode !== 0 ? 'text-error font-medium' : 'text-text-muted')}>
+            {row.exitCode}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'output',
+      label: 'Output',
+      render: (row) => {
+        if (!row.output) return <span className="text-text-muted">-</span>;
+        const isExpanded = expandedRow === row.timestamp;
+        const short = row.output.length > 80 ? row.output.slice(0, 80) + '...' : row.output;
+        return (
+          <button
+            onClick={(e) => { e.stopPropagation(); setExpandedRow(isExpanded ? null : row.timestamp); }}
+            className={cn(
+              'text-left font-mono text-xs hover:text-text-primary max-w-md',
+              row.exitCode !== undefined && row.exitCode !== 0 ? 'text-error' : 'text-text-muted'
+            )}
+          >
+            {isExpanded ? (
+              <pre className="max-h-40 overflow-auto whitespace-pre-wrap">{row.output}</pre>
+            ) : (
+              short
+            )}
+          </button>
+        );
+      },
     },
     {
       key: 'sessionId',
@@ -61,11 +104,15 @@ export function HookDetailPage() {
           {data.event && (
             <span className="rounded-md bg-bg-tertiary px-2 py-0.5 text-xs text-text-muted">{data.event}</span>
           )}
+          <span className={cn(
+            'inline-block h-2.5 w-2.5 rounded-full',
+            data.active ? 'bg-success' : 'bg-text-muted/30'
+          )} title={data.active ? 'Active' : 'Removed'} />
         </div>
         <TimeRangeSelector value={days} onChange={setDays} />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <StatCard label="Total Executions" value={fmtNumber(data.totalCount)} />
         <StatCard label="Avg Latency" value={fmtMs(data.avgMs)} />
         <StatCard label="P50" value={fmtMs(data.p50Ms)} />
@@ -73,6 +120,12 @@ export function HookDetailPage() {
           label="P95"
           value={fmtMs(data.p95Ms)}
           accent={data.p95Ms > 500 ? 'warning' : 'default'}
+        />
+        <StatCard
+          label="Success Rate"
+          value={fmtPct(successRate)}
+          accent={successRate >= 99 ? 'success' : successRate >= 95 ? 'warning' : 'error'}
+          detail={data.errors > 0 ? `${fmtNumber(data.errors)} errors` : undefined}
         />
       </div>
 
@@ -101,6 +154,8 @@ export function HookDetailPage() {
           />
         </div>
       )}
+
+      <QueryTiming ms={data.queryTimeMs} />
     </div>
   );
 }

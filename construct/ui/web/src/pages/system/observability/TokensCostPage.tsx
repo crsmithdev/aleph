@@ -8,6 +8,7 @@ import { DataTable, type Column } from '../../../components/data/DataTable';
 import { TimeRangeSelector } from '../../../components/data/TimeRangeSelector';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
+import { QueryTiming } from '../../../components/data/QueryTiming';
 import { fmtCurrency, fmtNumber, fmtPct, shortDate } from '../../../utils/format';
 
 type ModelRow = { model: string; usd: number; pct: number };
@@ -124,6 +125,8 @@ export function TokensCostPage() {
         columns={modelColumns}
         keyField="model"
       />
+
+      <QueryTiming ms={(tokens.data.queryTimeMs || 0) + (cost.data.queryTimeMs || 0)} />
     </div>
   );
 }

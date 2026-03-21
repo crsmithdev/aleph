@@ -64,6 +64,7 @@ const sections: NavSection[] = [
           { to: '/system/observability/overview', label: 'Overview' },
           { to: '/system/observability/tools', label: 'Tools' },
           { to: '/system/observability/hooks', label: 'Hooks' },
+          { to: '/system/observability/skills', label: 'Skills' },
           { to: '/system/observability/tokens', label: 'Tokens & Cost' },
           { to: '/system/observability/sessions', label: 'Sessions' },
           { to: '/system/observability/memory', label: 'Memory' },
