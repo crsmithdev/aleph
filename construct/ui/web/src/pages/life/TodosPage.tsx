@@ -1,7 +1,7 @@
 import { useTodos } from '../../api/hooks';
 import { TodoQuickAdd } from '../../components/todos/TodoQuickAdd';
 import { TodoItem } from '../../components/todos/TodoItem';
-import { RecurringSection } from '../../components/todos/RecurringSection';
+import { HabitsSection } from '../../components/todos/HabitsSection';
 import { PageLoading } from '../../components/ui/Spinner';
 
 export function TodosPage() {
@@ -61,9 +61,9 @@ export function TodosPage() {
           <section>
             <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-2 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-accent inline-block" />
-              Recurring
+              Habits
             </h2>
-            <RecurringSection date={new Date().toISOString().slice(0, 10)} />
+            <HabitsSection date={new Date().toISOString().slice(0, 10)} />
           </section>
         </div>
       )}

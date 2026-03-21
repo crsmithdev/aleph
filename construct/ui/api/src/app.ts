@@ -11,7 +11,7 @@ import { goalRoutes } from './routes/goals.js';
 import { noteRoutes } from './routes/notes.js';
 import { historyRoutes } from './routes/history.js';
 import { todoRoutes } from './routes/todos.js';
-import { recurringTodoRoutes } from './routes/recurring-todos.js';
+import { habitRoutes } from './routes/habits.js';
 import { backupRoutes } from './routes/backup.js';
 import { summaryRoutes } from './routes/summary.js';
 import { webhookRoutes } from './routes/webhooks.js';
@@ -60,7 +60,7 @@ export async function createApp(opts?: { dbUrl?: string }) {
     await api.register(noteRoutes, { prefix: '/goals' });
     await api.register(historyRoutes, { prefix: '/goals' });
     await api.register(todoRoutes, { prefix: '/todos' });
-    await api.register(recurringTodoRoutes, { prefix: '/recurring-todos' });
+    await api.register(habitRoutes, { prefix: '/habits' });
     await api.register(backupRoutes, { prefix: '/backup' });
     await api.register(summaryRoutes, { prefix: '/summary' });
     await api.register(webhookRoutes, { prefix: '/webhooks' });

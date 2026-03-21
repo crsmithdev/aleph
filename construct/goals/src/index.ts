@@ -10,5 +10,5 @@ export * from './services/goals.js';
 export * from './services/todos.js';
 export * from './services/categories.js';
 export * from './services/notes.js';
-export * from './services/recurring-todos.js';
+export * from './services/habits.js';
 export * from './services/summary.js';

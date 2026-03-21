@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import { eq, and, lte, isNull, sql, desc } from 'drizzle-orm';
+import { eq, and, sql, desc } from 'drizzle-orm';
 import type { Db } from '@construct/data';
 import { todos, goals } from '../schema.js';
 import { createTodoSchema, updateTodoSchema } from '../validators.js';
@@ -48,22 +48,10 @@ export function getTodosActive(db: Db) {
 }
 
 export function getTodosForDay(db: Db, date: string) {
-  const undoneDue = db
+  const undone = db
     .select()
     .from(todos)
-    .where(and(eq(todos.done, false), lte(todos.dueDate, date)))
-    .all();
-
-  const undoneNoDue = db
-    .select()
-    .from(todos)
-    .where(
-      and(
-        eq(todos.done, false),
-        isNull(todos.dueDate),
-        lte(sql`substr(${todos.createdAt}, 1, 10)`, date)
-      )
-    )
+    .where(eq(todos.done, false))
     .all();
 
   const completedToday = db
@@ -77,12 +65,7 @@ export function getTodosForDay(db: Db, date: string) {
     )
     .all();
 
-  const undoneMap = new Map<string, typeof todos.$inferSelect>();
-  for (const t of [...undoneDue, ...undoneNoDue]) {
-    undoneMap.set(t.id, t);
-  }
-
-  const allTodos = [...undoneMap.values(), ...completedToday];
+  const allTodos = [...undone, ...completedToday];
   const goalIds = [...new Set(allTodos.map((t) => t.goalId).filter(Boolean))] as string[];
 
   const goalTitles = new Map<string, string>();
@@ -96,13 +79,8 @@ export function getTodosForDay(db: Db, date: string) {
     goalTitle: t.goalId ? (goalTitles.get(t.goalId) ?? null) : null,
   });
 
-  const undoneList = [...undoneMap.values()].map(enrichTodo);
-  const overdue = undoneList.filter((t) => t.dueDate && t.dueDate < date);
-  const dueTodayOrNoDue = undoneList.filter((t) => !t.dueDate || t.dueDate === date);
-
   return {
-    overdue,
-    todos: dueTodayOrNoDue,
+    todos: undone.map(enrichTodo),
     completed: completedToday.map(enrichTodo),
   };
 }
@@ -126,7 +104,6 @@ export function createTodo(db: Db, input: unknown, eventBus?: EventBus) {
       id,
       title: data.title,
       note: data.note ?? null,
-      dueDate: data.dueDate ?? null,
       goalId: data.goalId ?? null,
       createdAt: now,
       updatedAt: now,
@@ -177,7 +154,6 @@ export function updateTodo(db: Db, id: string, input: unknown, eventBus?: EventB
   if (data.title !== undefined) updateData.title = data.title;
   if (data.done !== undefined) updateData.done = data.done;
   if (data.note !== undefined) updateData.note = data.note ?? null;
-  if (data.dueDate !== undefined) updateData.dueDate = data.dueDate ?? null;
   if (data.goalId !== undefined) updateData.goalId = data.goalId ?? null;
 
   db.update(todos).set(updateData).where(eq(todos.id, id)).run();

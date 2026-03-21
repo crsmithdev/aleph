@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { useRecurringTodos, useCompleteRecurringTodo, useUncompleteRecurringTodo } from '../../api/hooks';
-import type { RecurringTodo } from '../../types';
+import { useHabits, useCompleteHabit, useUncompleteHabit } from '../../api/hooks';
+import type { Habit } from '../../types';
 
-function getPeriodKey(frequency: RecurringTodo['frequency'], date: string): string {
+function getPeriodKey(frequency: Habit['frequency'], date: string): string {
   const d = new Date(date + 'T00:00:00');
   if (frequency === 'daily') {
     return date;
@@ -20,40 +20,40 @@ function getPeriodKey(frequency: RecurringTodo['frequency'], date: string): stri
   return date;
 }
 
-function frequencyLabel(frequency: RecurringTodo['frequency']): string {
+function frequencyLabel(frequency: Habit['frequency']): string {
   return frequency.charAt(0).toUpperCase() + frequency.slice(1);
 }
 
-interface RecurringSectionProps {
+interface HabitsSectionProps {
   date: string;
 }
 
-export function RecurringSection({ date }: RecurringSectionProps) {
-  const { data: todos, isLoading } = useRecurringTodos();
-  const complete = useCompleteRecurringTodo();
-  const uncomplete = useUncompleteRecurringTodo();
+export function HabitsSection({ date }: HabitsSectionProps) {
+  const { data: habits, isLoading } = useHabits();
+  const complete = useCompleteHabit();
+  const uncomplete = useUncompleteHabit();
 
-  const active = todos?.filter((t) => t.active) ?? [];
+  const active = habits?.filter((h) => h.active) ?? [];
 
   if (isLoading) {
-    return <div className="text-sm text-gray-500 italic">Loading recurring todos...</div>;
+    return <div className="text-sm text-gray-500 italic">Loading habits...</div>;
   }
 
   if (active.length === 0) {
-    return <div className="text-sm text-gray-500 italic">No recurring todos.</div>;
+    return <div className="text-sm text-gray-500 italic">No habits.</div>;
   }
 
   return (
     <div className="space-y-2">
-      {active.map((todo) => {
-        const periodKey = getPeriodKey(todo.frequency, date);
+      {active.map((habit) => {
+        const periodKey = getPeriodKey(habit.frequency, date);
         return (
-          <RecurringTodoItem
-            key={todo.id}
-            todo={todo}
+          <HabitItem
+            key={habit.id}
+            habit={habit}
             periodKey={periodKey}
-            onComplete={() => complete.mutate({ id: todo.id, periodKey })}
-            onUncomplete={() => uncomplete.mutate({ id: todo.id, periodKey })}
+            onComplete={() => complete.mutate({ id: habit.id, periodKey })}
+            onUncomplete={() => uncomplete.mutate({ id: habit.id, periodKey })}
           />
         );
       })}
@@ -61,14 +61,14 @@ export function RecurringSection({ date }: RecurringSectionProps) {
   );
 }
 
-interface RecurringTodoItemProps {
-  todo: RecurringTodo;
+interface HabitItemProps {
+  habit: Habit;
   periodKey: string;
   onComplete: () => void;
   onUncomplete: () => void;
 }
 
-function RecurringTodoItem({ todo, onComplete, onUncomplete }: RecurringTodoItemProps) {
+function HabitItem({ habit, onComplete, onUncomplete }: HabitItemProps) {
   const [checked, setChecked] = useState(false);
 
   const handleToggle = () => {
@@ -90,10 +90,10 @@ function RecurringTodoItem({ todo, onComplete, onUncomplete }: RecurringTodoItem
       />
       <div className="flex-1 min-w-0 flex items-center gap-2">
         <span className={`text-sm ${checked ? 'line-through text-gray-500' : 'text-gray-200'}`}>
-          {todo.title}
+          {habit.title}
         </span>
         <span className="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">
-          {frequencyLabel(todo.frequency)}
+          {frequencyLabel(habit.frequency)}
         </span>
       </div>
     </div>

@@ -44,13 +44,12 @@ export interface Todo {
   title: string;
   done: boolean;
   note: string | null;
-  dueDate: string | null;
   goalId: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface RecurringTodo {
+export interface Habit {
   id: string;
   title: string;
   frequency: string;

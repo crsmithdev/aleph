@@ -36,14 +36,12 @@ export function applyDDL(sqlite: Sqlite): void {
       title TEXT NOT NULL,
       done INTEGER NOT NULL DEFAULT 0,
       note TEXT,
-      due_date TEXT,
       goal_id TEXT REFERENCES goals(id) ON DELETE SET NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_todos_goal ON todos(goal_id);
-    CREATE INDEX IF NOT EXISTS idx_todos_due_date ON todos(due_date);
-    CREATE TABLE IF NOT EXISTS recurring_todos (
+    CREATE TABLE IF NOT EXISTS habits (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
       frequency TEXT NOT NULL,
@@ -53,14 +51,14 @@ export function applyDDL(sqlite: Sqlite): void {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
-    CREATE TABLE IF NOT EXISTS recurring_todo_completions (
+    CREATE TABLE IF NOT EXISTS habit_completions (
       id TEXT PRIMARY KEY,
-      recurring_todo_id TEXT NOT NULL REFERENCES recurring_todos(id) ON DELETE CASCADE,
+      habit_id TEXT NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
       period_key TEXT NOT NULL,
       completed_at TEXT NOT NULL DEFAULT (datetime('now')),
-      UNIQUE(recurring_todo_id, period_key)
+      UNIQUE(habit_id, period_key)
     );
-    CREATE INDEX IF NOT EXISTS idx_rtc_recurring ON recurring_todo_completions(recurring_todo_id);
+    CREATE INDEX IF NOT EXISTS idx_hc_habit ON habit_completions(habit_id);
     CREATE TABLE IF NOT EXISTS history_logs (
       id TEXT PRIMARY KEY,
       goal_id TEXT NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
@@ -70,4 +68,25 @@ export function applyDDL(sqlite: Sqlite): void {
     );
     CREATE INDEX IF NOT EXISTS idx_history_goal ON history_logs(goal_id);
   `);
+
+  // Migration: drop due_date if it exists
+  // SQLite 3.35+ supports ALTER TABLE DROP COLUMN
+  try {
+    sqlite.exec('ALTER TABLE todos DROP COLUMN due_date');
+  } catch {
+    // Column doesn't exist on fresh installs — safe to ignore
+  }
+  sqlite.exec('DROP INDEX IF EXISTS idx_todos_due_date');
+
+  // Migration: rename recurring_todos -> habits, recurring_todo_completions -> habit_completions
+  try {
+    sqlite.exec('ALTER TABLE recurring_todos RENAME TO habits');
+  } catch {
+    // Table already renamed or doesn't exist
+  }
+  try {
+    sqlite.exec('ALTER TABLE recurring_todo_completions RENAME TO habit_completions');
+  } catch {
+    // Table already renamed or doesn't exist
+  }
 }

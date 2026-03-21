@@ -23,9 +23,9 @@ import {
   createTodo,
   updateTodo,
   deleteTodo,
-  listRecurringTodos,
-  createRecurringTodo,
-  completeRecurringTodo,
+  listHabits,
+  createHabit,
+  completeHabit,
   getHistory,
   getSummary,
 } from '@construct/goals';
@@ -220,7 +220,6 @@ server.tool(
   'Create a new todo item',
   {
     title: z.string().describe('Todo title'),
-    dueDate: z.string().optional().describe('Due date in YYYY-MM-DD format'),
     goalId: z.string().optional().describe('Goal ID to link this todo to'),
     note: z.string().optional().describe('Optional note'),
   },
@@ -238,7 +237,6 @@ server.tool(
     done: z.boolean().optional().describe('Mark as done or undone'),
     title: z.string().optional().describe('New title'),
     note: z.string().nullable().optional().describe('New note (null to clear)'),
-    dueDate: z.string().nullable().optional().describe('New due date YYYY-MM-DD (null to clear)'),
     goalId: z.string().nullable().optional().describe('New linked goal ID (null to unlink)'),
   },
   async (params) => {
@@ -260,39 +258,39 @@ server.tool(
   }
 );
 
-// ── Recurring Todos ──────────────────────────────────────────────────────────
+// ── Habits ───────────────────────────────────────────────────────────────────
 
-server.tool('list_recurring_todos', 'List all recurring todos with period status', {}, async () => {
-  const result = listRecurringTodos(db);
+server.tool('list_habits', 'List all habits with period status', {}, async () => {
+  const result = listHabits(db);
   return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
 });
 
 server.tool(
-  'create_recurring_todo',
-  'Create a new recurring todo',
+  'create_habit',
+  'Create a new habit',
   {
-    title: z.string().describe('Recurring todo title'),
+    title: z.string().describe('Habit title'),
     frequency: z.string().describe('Recurrence: daily, weekly, or monthly'),
     goalId: z.string().optional().describe('Goal ID to link to'),
     endDate: z.string().optional().describe('Optional end date YYYY-MM-DD'),
   },
   async (params) => {
-    const result = createRecurringTodo(db, params);
+    const result = createHabit(db, params);
     return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
   }
 );
 
 server.tool(
-  'complete_recurring_todo',
-  'Mark a recurring todo as complete for a period',
+  'complete_habit',
+  'Mark a habit as complete for a period',
   {
-    id: z.string().describe('Recurring todo ID'),
+    id: z.string().describe('Habit ID'),
     periodKey: z.string().describe('Period key (e.g. 2024-W01, 2024-01, 2024-01-15)'),
   },
   async (params) => {
-    const result = completeRecurringTodo(db, params.id, params.periodKey);
+    const result = completeHabit(db, params.id, params.periodKey);
     if ('error' in result) {
-      const msg = result.error === 'not_found' ? 'Recurring todo not found' : 'Already completed for this period';
+      const msg = result.error === 'not_found' ? 'Habit not found' : 'Already completed for this period';
       return { content: [{ type: 'text', text: msg }], isError: true };
     }
     return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };

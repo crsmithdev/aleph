@@ -33,13 +33,12 @@ interface Todo {
   title: string;
   done: boolean;
   note: string | null;
-  dueDate: string | null;
   goalId: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-interface RecurringTodo {
+interface Habit {
   id: string;
   title: string;
   frequency: string;
@@ -255,7 +254,7 @@ export function useCreateTodo() {
 export function useUpdateTodo() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: string; title?: string; completed?: boolean; date?: string; order?: number; goalId?: string | null }) =>
+    mutationFn: ({ id, ...data }: { id: string; title?: string; completed?: boolean; order?: number; goalId?: string | null }) =>
       api.patch<Todo>(`/todos/${id}`, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['todos'] });
@@ -273,60 +272,60 @@ export function useDeleteTodo() {
   });
 }
 
-// --- Recurring Todos ---
+// --- Habits ---
 
-export function useRecurringTodos() {
+export function useHabits() {
   return useQuery({
-    queryKey: ['recurring-todos'],
-    queryFn: () => api.get<RecurringTodo[]>('/recurring-todos'),
+    queryKey: ['habits'],
+    queryFn: () => api.get<Habit[]>('/habits'),
   });
 }
 
-export function useCreateRecurringTodo() {
+export function useCreateHabit() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { title: string; recurrence: string; goalId?: string }) =>
-      api.post<RecurringTodo>('/recurring-todos', data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['recurring-todos'] }),
+    mutationFn: (data: { title: string; frequency: string; goalId?: string }) =>
+      api.post<Habit>('/habits', data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['habits'] }),
   });
 }
 
-export function useUpdateRecurringTodo() {
+export function useUpdateHabit() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: string; title?: string; recurrence?: string; goalId?: string | null; active?: boolean }) =>
-      api.patch<RecurringTodo>(`/recurring-todos/${id}`, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['recurring-todos'] }),
+    mutationFn: ({ id, ...data }: { id: string; title?: string; frequency?: string; goalId?: string | null; active?: boolean }) =>
+      api.patch<Habit>(`/habits/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['habits'] }),
   });
 }
 
-export function useDeleteRecurringTodo() {
+export function useDeleteHabit() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.delete(`/recurring-todos/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['recurring-todos'] }),
+    mutationFn: (id: string) => api.delete(`/habits/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['habits'] }),
   });
 }
 
-export function useCompleteRecurringTodo() {
+export function useCompleteHabit() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, periodKey }: { id: string; periodKey: string }) =>
-      api.post<void>(`/recurring-todos/${id}/complete`, { periodKey }),
+      api.post<void>(`/habits/${id}/complete`, { periodKey }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['recurring-todos'] });
+      qc.invalidateQueries({ queryKey: ['habits'] });
       qc.invalidateQueries({ queryKey: ['todos'] });
     },
   });
 }
 
-export function useUncompleteRecurringTodo() {
+export function useUncompleteHabit() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, periodKey }: { id: string; periodKey: string }) =>
-      api.post<void>(`/recurring-todos/${id}/uncomplete`, { periodKey }),
+      api.post<void>(`/habits/${id}/uncomplete`, { periodKey }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['recurring-todos'] });
+      qc.invalidateQueries({ queryKey: ['habits'] });
       qc.invalidateQueries({ queryKey: ['todos'] });
     },
   });

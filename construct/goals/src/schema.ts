@@ -63,18 +63,16 @@ export const todos = sqliteTable(
     title: text('title').notNull(),
     done: integer('done', { mode: 'boolean' }).notNull().default(false),
     note: text('note'),
-    dueDate: text('due_date'),
     goalId: text('goal_id').references(() => goals.id, { onDelete: 'set null' }),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
   },
   (t) => ({
     goalIdx: index('todos_goal_idx').on(t.goalId),
-    dueDateIdx: index('todos_due_date_idx').on(t.dueDate),
   })
 );
 
-export const recurringTodos = sqliteTable('recurring_todos', {
+export const habits = sqliteTable('habits', {
   id: text('id').primaryKey(),
   title: text('title').notNull(),
   frequency: text('frequency').notNull(),
@@ -85,19 +83,19 @@ export const recurringTodos = sqliteTable('recurring_todos', {
   updatedAt: text('updated_at').notNull(),
 });
 
-export const recurringTodoCompletions = sqliteTable(
-  'recurring_todo_completions',
+export const habitCompletions = sqliteTable(
+  'habit_completions',
   {
     id: text('id').primaryKey(),
-    recurringTodoId: text('recurring_todo_id')
+    habitId: text('habit_id')
       .notNull()
-      .references(() => recurringTodos.id, { onDelete: 'cascade' }),
+      .references(() => habits.id, { onDelete: 'cascade' }),
     periodKey: text('period_key').notNull(),
     completedAt: text('completed_at').notNull(),
   },
   (t) => ({
-    recurringTodoIdx: index('rtc_recurring_todo_idx').on(t.recurringTodoId),
-    uniquePeriod: unique('rtc_unique_period').on(t.recurringTodoId, t.periodKey),
+    habitIdx: index('hc_habit_idx').on(t.habitId),
+    uniquePeriod: unique('hc_unique_period').on(t.habitId, t.periodKey),
   })
 );
 

@@ -1,37 +1,37 @@
 import type { FastifyPluginAsync } from 'fastify';
 import {
-  listRecurringTodos,
-  getRecurringTodo,
-  createRecurringTodo,
-  updateRecurringTodo,
-  deleteRecurringTodo,
-  completeRecurringTodo,
-  uncompleteRecurringTodo,
+  listHabits,
+  getHabit,
+  createHabit,
+  updateHabit,
+  deleteHabit,
+  completeHabit,
+  uncompleteHabit,
 } from '@construct/goals';
 
-export const recurringTodoRoutes: FastifyPluginAsync = async (app) => {
-  app.get('/', async () => listRecurringTodos(app.db));
+export const habitRoutes: FastifyPluginAsync = async (app) => {
+  app.get('/', async () => listHabits(app.db));
 
   app.get<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const result = getRecurringTodo(app.db, req.params.id);
-    if (!result) return reply.status(404).send({ error: 'Recurring todo not found' });
+    const result = getHabit(app.db, req.params.id);
+    if (!result) return reply.status(404).send({ error: 'Habit not found' });
     return result;
   });
 
   app.post('/', async (req, reply) => {
-    const result = createRecurringTodo(app.db, req.body);
+    const result = createHabit(app.db, req.body);
     return reply.status(201).send(result);
   });
 
   app.patch<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const result = updateRecurringTodo(app.db, req.params.id, req.body);
-    if (!result) return reply.status(404).send({ error: 'Recurring todo not found' });
+    const result = updateHabit(app.db, req.params.id, req.body);
+    if (!result) return reply.status(404).send({ error: 'Habit not found' });
     return result;
   });
 
   app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
-    const ok = deleteRecurringTodo(app.db, req.params.id);
-    if (!ok) return reply.status(404).send({ error: 'Recurring todo not found' });
+    const ok = deleteHabit(app.db, req.params.id);
+    if (!ok) return reply.status(404).send({ error: 'Habit not found' });
     return reply.status(204).send();
   });
 
@@ -40,9 +40,9 @@ export const recurringTodoRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const { periodKey } = req.body;
       if (!periodKey) return reply.status(400).send({ error: 'periodKey is required' });
-      const result = completeRecurringTodo(app.db, req.params.id, periodKey);
+      const result = completeHabit(app.db, req.params.id, periodKey);
       if ('error' in result) {
-        if (result.error === 'not_found') return reply.status(404).send({ error: 'Recurring todo not found' });
+        if (result.error === 'not_found') return reply.status(404).send({ error: 'Habit not found' });
         if (result.error === 'already_completed') return reply.status(409).send({ error: 'Already completed for this period' });
       }
       return result;
@@ -54,9 +54,9 @@ export const recurringTodoRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const { periodKey } = req.body;
       if (!periodKey) return reply.status(400).send({ error: 'periodKey is required' });
-      const result = uncompleteRecurringTodo(app.db, req.params.id, periodKey);
+      const result = uncompleteHabit(app.db, req.params.id, periodKey);
       if ('error' in result) {
-        if (result.error === 'not_found') return reply.status(404).send({ error: 'Recurring todo not found' });
+        if (result.error === 'not_found') return reply.status(404).send({ error: 'Habit not found' });
         if (result.error === 'no_completion') return reply.status(404).send({ error: 'No completion found for this period' });
       }
       return result;
