@@ -53,7 +53,7 @@ interface RecurringTodo {
 interface HistoryLog {
   id: string;
   goalId: string;
-  eventType: string;
+  eventType: import('../types').HistoryEvent;
   details: Record<string, unknown>;
   createdAt: string;
 }

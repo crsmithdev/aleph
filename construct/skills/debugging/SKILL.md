@@ -75,6 +75,16 @@ One variable at a time:
 - "This should work" (without understanding why)
 - "Let me just try..." (without hypothesis)
 
+### Common Rationalizations
+
+| Thought | Reality |
+|---------|---------|
+| "I know what's wrong" | Then state the hypothesis and test it. Skipping investigation costs more. |
+| "Quick fix, then investigate" | The quick fix masks the root cause. Now you have two problems. |
+| "It's probably just X" | "Probably" means you haven't checked. Check. |
+| "I don't have time to investigate" | You don't have time NOT to. Ad-hoc fixes take 4-8x longer. |
+| "This worked before, so it must be Y" | Correlation isn't causation. Bisect, don't guess. |
+
 ### Common Scenarios
 
 **Test passes locally, fails in CI:** Environment diff — check paths, CWD, env vars, installed binaries.

@@ -7,8 +7,9 @@ Manage goals via the goal-tracker MCP tools. Parse the user's intent from: $ARGU
 - **update <id> <fields>**: Call `update_goal`. Fields: title, priority, state, archived.
 - **delete <id>**: Call `delete_goal` after confirming.
 - **show <id>**: Call `get_goal`. Show full detail including categories, latest note, and recent history via `get_history`.
-- **done <id>**: Shortcut for `update_goal` with state=done.
 - **archive <id>**: Shortcut for `update_goal` with archived=true.
+
+For completion, use `/finish` instead.
 
 ## Output format
 

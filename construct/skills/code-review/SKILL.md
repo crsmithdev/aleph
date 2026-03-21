@@ -5,6 +5,17 @@ description: Scans for dead code, unused imports, silent failures, redundant log
 
 # Code Review
 
+## When to Use
+
+- After completing a feature or significant change
+- When cleaning up dead code, unused imports, or technical debt
+- Before merging — final quality pass
+
+## When NOT to Use
+
+- Mid-implementation — finish first, then review
+- Exploring or reading code — just read it
+
 ## Process
 
 ### 1 — Scan

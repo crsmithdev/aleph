@@ -48,7 +48,7 @@ export function TodoItem({ todo, isOverdue }: TodoItemProps) {
           )}
           {todo.goalTitle && todo.goalId && (
             <Link
-              to={`/goals/${todo.goalId}`}
+              to={`/life/goals/${todo.goalId}`}
               className="text-xs text-gray-500 hover:text-gray-300 truncate"
               onClick={(e) => e.stopPropagation()}
             >

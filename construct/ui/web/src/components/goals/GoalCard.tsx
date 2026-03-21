@@ -31,7 +31,7 @@ export function GoalCard({ goal }: GoalCardProps) {
 
   return (
     <div
-      onClick={() => navigate(`/goals/${goal.id}`)}
+      onClick={() => navigate(`/life/goals/${goal.id}`)}
       className="group flex items-start gap-3 bg-gray-900 border border-gray-800 rounded-lg px-4 py-3 cursor-pointer hover:border-gray-700 hover:bg-gray-900/80 transition-colors"
     >
       {/* Done toggle */}

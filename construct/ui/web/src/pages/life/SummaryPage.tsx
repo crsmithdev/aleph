@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { useSummary } from '../api/hooks';
+import { useSummary } from '../../api/hooks';
+import { StatCard } from '../../components/data/StatCard';
+import { PageLoading } from '../../components/ui/Spinner';
+import { ErrorState } from '../../components/ui/ErrorState';
+import { cn } from '../../utils/cn';
+import { toDateStr } from '../../utils/format';
 
 type Preset = 'this-week' | 'last-week' | 'this-month' | 'last-month' | 'this-quarter' | 'this-year' | 'custom';
-
-function toDateStr(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
 
 function getPresetRange(preset: Exclude<Preset, 'custom'>): { start: string; end: string } {
   const now = new Date();
@@ -131,11 +132,15 @@ export function SummaryPage() {
   return (
     <div className="max-w-3xl mx-auto space-y-6 py-6 px-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold text-gray-100">Summary</h1>
+        <h1 className="text-2xl font-bold text-text-primary">Summary</h1>
         <button
           onClick={handleExport}
           disabled={!data}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
+          className={cn(
+            'px-4 py-2 text-sm rounded-lg transition-colors',
+            'bg-accent hover:bg-accent-hover text-white',
+            'disabled:opacity-40 disabled:cursor-not-allowed'
+          )}
         >
           Export Markdown
         </button>
@@ -148,11 +153,12 @@ export function SummaryPage() {
             <button
               key={p.value}
               onClick={() => setPreset(p.value)}
-              className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+              className={cn(
+                'px-3 py-1.5 text-sm rounded-lg border transition-colors',
                 preset === p.value
-                  ? 'bg-blue-600 border-blue-600 text-white'
-                  : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-gray-200 hover:border-gray-700'
-              }`}
+                  ? 'bg-accent border-accent text-white'
+                  : 'bg-bg-secondary border-border-primary text-text-secondary hover:text-text-primary hover:border-border-secondary'
+              )}
             >
               {p.label}
             </button>
@@ -162,80 +168,53 @@ export function SummaryPage() {
         {preset === 'custom' && (
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-500">From:</label>
+              <label className="text-xs text-text-muted">From:</label>
               <input
                 type="date"
                 value={customStart}
                 onChange={(e) => setCustomStart(e.target.value)}
-                className="bg-gray-900 border border-gray-800 rounded px-2 py-1 text-sm text-gray-300 focus:outline-none focus:border-blue-600"
+                className="bg-bg-secondary border border-border-primary rounded px-2 py-1 text-sm text-text-secondary focus:outline-none focus:border-accent"
               />
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-500">To:</label>
+              <label className="text-xs text-text-muted">To:</label>
               <input
                 type="date"
                 value={customEnd}
                 onChange={(e) => setCustomEnd(e.target.value)}
-                className="bg-gray-900 border border-gray-800 rounded px-2 py-1 text-sm text-gray-300 focus:outline-none focus:border-blue-600"
+                className="bg-bg-secondary border border-border-primary rounded px-2 py-1 text-sm text-text-secondary focus:outline-none focus:border-accent"
               />
             </div>
           </div>
         )}
 
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-text-muted">
           {start} to {end}
         </div>
       </div>
 
       {/* Results */}
-      {isLoading && (
-        <div className="text-sm text-gray-500 italic">Loading summary...</div>
-      )}
+      {isLoading && <PageLoading />}
 
-      {isError && (
-        <div className="text-sm text-red-400">Failed to load summary data.</div>
-      )}
+      {isError && <ErrorState message="Failed to load summary data." />}
 
       {data && (
         <div className="space-y-4">
           {/* Stats grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <StatCard label="Goals Created" value={data.goalsCreated?.count ?? 0} color="blue" />
-            <StatCard label="Goals Completed" value={data.goalsCompleted?.count ?? 0} color="green" />
-            <StatCard label="Todos Done" value={data.todosCompleted?.count ?? 0} color="purple" />
-            <StatCard label="Notes Added" value={data.notesAdded?.count ?? 0} color="yellow" />
+            <StatCard label="Goals Created" value={data.goalsCreated?.count ?? 0} />
+            <StatCard label="Goals Completed" value={data.goalsCompleted?.count ?? 0} accent="success" />
+            <StatCard label="Todos Done" value={data.todosCompleted?.count ?? 0} />
+            <StatCard label="Notes Added" value={data.notesAdded?.count ?? 0} accent="warning" />
           </div>
 
           {(data.goalsStateChanged?.count ?? 0) > 0 && (
-            <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 space-y-2">
-              <h2 className="text-sm font-semibold text-gray-300">State Changes ({data.goalsStateChanged!.count})</h2>
+            <div className="bg-bg-secondary border border-border-primary rounded-lg p-4 space-y-2">
+              <h2 className="text-sm font-semibold text-text-secondary">State Changes ({data.goalsStateChanged!.count})</h2>
             </div>
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: number;
-  color: 'blue' | 'green' | 'purple' | 'yellow';
-}) {
-  const colorMap = {
-    blue: 'text-blue-400',
-    green: 'text-green-400',
-    purple: 'text-purple-400',
-    yellow: 'text-yellow-400',
-  };
-  return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 space-y-1">
-      <div className={`text-2xl font-bold ${colorMap[color]}`}>{value}</div>
-      <div className="text-xs text-gray-500">{label}</div>
     </div>
   );
 }

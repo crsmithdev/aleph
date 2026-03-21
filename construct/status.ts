@@ -4,6 +4,7 @@
  */
 import { readdirSync, readFileSync, existsSync, statSync } from "fs";
 import { resolve } from "path";
+import { getStatus } from "./telemetry/src/index.js";
 
 const root = resolve(import.meta.dir);
 
@@ -118,6 +119,26 @@ const ts = countFiles(resolve(root, ".."), ".ts");
 const md = countFiles(resolve(root, ".."), ".md");
 out.push(`**TypeScript**: ${ts.files} files, ${ts.lines} lines`);
 out.push(`**Docs**: ${md.files} files, ${md.lines} lines\n`);
+
+// Telemetry (last 7 days)
+out.push("## Telemetry (7d)\n");
+try {
+  const t = getStatus(7);
+  out.push(`**Sessions**: ${t.sessions} | **Messages**: ${t.messages} | **Tool calls**: ${t.toolCalls}`);
+  out.push(`**Cost**: $${t.totalCostUsd.toFixed(2)}`);
+  if (t.topTools.length > 0) {
+    out.push(`**Top tools**: ${t.topTools.map(t => `${t.name} (${t.count})`).join(", ")}`);
+  }
+  if (t.topHooks.length > 0) {
+    out.push(`**Top hooks**: ${t.topHooks.map(h => `${h.command} (${h.count}x, ${h.avgMs}ms avg)`).join(", ")}`);
+  }
+  if (t.topSkills.length > 0) {
+    out.push(`**Top skills**: ${t.topSkills.map(s => `${s.skill} (${s.count})`).join(", ")}`);
+  }
+} catch {
+  out.push("*no telemetry data*");
+}
+out.push("");
 
 if (sessions.length > 0) {
   out.push("**Recent sessions**:");

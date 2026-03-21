@@ -46,7 +46,18 @@ Read the plan. Extract all tasks with full text. Create task entries for trackin
 - Question: "Any quality issues? DRY/YAGNI violations? Missing edge cases?"
 - If issues found → implementer fixes, re-review
 
-### 3 — Mark complete
+### 3 — Handle status
+
+Implementer agents report one of four outcomes:
+
+| Status | Action |
+|--------|--------|
+| DONE | Proceed to reviews |
+| DONE_WITH_CONCERNS | Read flagged concerns before reviewing |
+| NEEDS_CONTEXT | Provide missing information, re-dispatch |
+| BLOCKED | Structural issue — expand context, decompose task, or escalate |
+
+### 4 — Mark complete
 
 After both reviews pass, mark task complete. Move to next task.
 
@@ -66,6 +77,10 @@ After both reviews pass, mark task complete. Move to next task.
 - Every task passed both spec review and quality review
 - No task failed review more than twice (escalate on third failure)
 - All tasks marked complete in tracking
+
+## Chains to
+
+- `finishing-branch` — after all tasks pass, merge or PR
 
 ## Principles
 

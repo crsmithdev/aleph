@@ -7,6 +7,16 @@ description: Detects drift between documentation and actual code/file state. Che
 
 Docs that don't match behavior are worse than no docs — they actively mislead.
 
+## When to Use
+
+- After changes that modify behavior, file structure, or configuration
+- Before release or merge — verify docs match reality
+- When docs feel stale or you suspect drift
+
+## When NOT to Use
+
+- Pure refactoring with no behavior change and no doc references affected
+
 ## Inputs
 
 - List of documents to check (or use project extension to define scope)

@@ -5,7 +5,20 @@ description: Construct management — subcommands: install, verify, grasp, statu
 
 Route to the matching subcommand based on `$ARGUMENTS`:
 
-## `install` (or no argument from project root with install.ts present)
+## No arguments
+
+List the custom slash commands installed by Construct. Read the `.md` files in `~/.claude/commands/` and print each one with its description (from the frontmatter `description` field):
+
+```
+Construct commands:
+  /construct    <description>
+  /goal         <description>
+  /todo         <description>
+```
+
+Use the actual descriptions from the frontmatter of each file. Pad command names to align descriptions.
+
+## `install`
 
 Run the Construct installer to deploy this repo globally to ~/.claude.
 
@@ -93,7 +106,10 @@ After all three, ask: "Fix the code and reference issues now? (Instructions and 
 
 If `$ARGUMENTS` doesn't match a subcommand, print:
 ```
+Unknown subcommand: <what they typed>
+
 Usage: /construct <subcommand>
+  (no args)     List installed Construct commands
   install       Deploy repo to ~/.claude
   verify        Run post-install checks
   grasp         Surface project understanding

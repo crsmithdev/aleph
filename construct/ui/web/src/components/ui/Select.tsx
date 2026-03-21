@@ -1,9 +1,11 @@
+import { cn } from '../../utils/cn';
+
 export function Select({
   label,
   value,
   onChange,
   options,
-  className = '',
+  className,
 }: {
   label?: string;
   value: string;
@@ -14,12 +16,16 @@ export function Select({
   return (
     <div className={className}>
       {label && (
-        <label className="block text-xs text-gray-400 mb-1">{label}</label>
+        <label className="block text-xs text-text-muted mb-1">{label}</label>
       )}
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-gray-800 border border-gray-700 rounded-md px-2.5 py-1.5 text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        className={cn(
+          'w-full bg-bg-tertiary border border-border-primary rounded-md',
+          'px-2.5 py-1.5 text-sm text-text-primary',
+          'focus:outline-none focus:ring-1 focus:ring-accent'
+        )}
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>

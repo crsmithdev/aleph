@@ -2,14 +2,13 @@ Manage todos via the goal-tracker MCP tools. Parse the user's intent from: $ARGU
 
 ## Actions
 
-- **list** (default if no args): Call `list_todos` with today's date. Show overdue, today, and completed sections.
-- **add <title>**: Call `create_todo`. Parse due date and goal link from context if mentioned.
-- **done <id>**: Call `update_todo` with done=true.
-- **undone <id>**: Call `update_todo` with done=false.
+- **no args → list**: Call `list_todos` with today's date. Show overdue, today, and completed sections.
+- **any other text → add**: Call `create_todo` with the text as the title. Parse due date and goal link from context if mentioned.
+- **recurring / recur / repeat**: Call `list_recurring_todos`. Show with period status.
+- **recurring add <title> <frequency>** (or "add recurring/repeating <title> every <freq>"): Call `create_recurring_todo`.
 - **delete <id>**: Call `delete_todo`.
-- **recurring**: Call `list_recurring_todos`. Show with period status.
-- **recurring add <title> <frequency>**: Call `create_recurring_todo`.
-- **recurring done <id>**: Call `complete_recurring_todo` with the current period key.
+
+For completion, use `/finish` instead.
 
 ## Output format
 

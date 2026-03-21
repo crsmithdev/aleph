@@ -123,6 +123,80 @@ function writeTempJsonl(name: string, lines: string[]): string {
 console.log("--- session-start ---");
 run("memory/hooks/session-start.ts", "smoke", "{}", { expectStdout: ["Session Start"] });
 
+// Morning briefing: no new sessions since last interactive → no digest
+{
+  const briefingMarker = resolve(sessionsDir, ".last-briefing");
+  try { unlinkSync(briefingMarker); } catch {}
+  // Add a session in the far future so it's always newest
+  const futureSession = resolve(sessionsDir, "9998-01-01-000000.md");
+  writeFileSync(futureSession, "# Session: 9998-01-01\n\n- Intent: test\n- Outcome: done\n- Tools: none; files: none\n- Edits: 0 tool calls, 0 files\n- Messages: 4 (2 user, 2 assistant)\n");
+  // Write marker pointing to the newest session (already seen)
+  writeFileSync(briefingMarker, "9998-01-01-000000.md");
+  const noDigestOut = runHook("memory/hooks/session-start.ts", "{}");
+  check("morning-briefing: no digest when no new sessions", !noDigestOut.includes("Background Work"));
+  // Preserve existing behavior
+  check("morning-briefing: still shows session count", noDigestOut.includes("Sessions:"));
+  check("morning-briefing: still shows last session header", noDigestOut.includes("Last session ("));
+  try { unlinkSync(futureSession); } catch {}
+  try { unlinkSync(briefingMarker); } catch {}
+}
+
+// Morning briefing: multiple new sessions since last interactive → digest shown
+{
+  const briefingMarker = resolve(sessionsDir, ".last-briefing");
+  try { unlinkSync(briefingMarker); } catch {}
+
+  // Session that was "last seen"
+  const oldSession = resolve(sessionsDir, "2000-01-01-000000.md");
+  writeFileSync(oldSession, "# Session: 2000-01-01\n\n- Intent: old work\n- Outcome: old done\n- Tools: none; files: none\n- Edits: 0 tool calls, 0 files\n- Messages: 4 (2 user, 2 assistant)\n");
+
+  // Two new background sessions
+  const bgSession1 = resolve(sessionsDir, "2000-01-02-100000.md");
+  writeFileSync(bgSession1, "# Session: 2000-01-02\n\n- Intent: fix auth bug\n- Outcome: auth fixed and tests pass\n- Tools: Read, Edit, Bash; files: src/auth.ts\n- Edits: 3 tool calls, 1 files\n- Messages: 6 (3 user, 3 assistant)\n");
+
+  const bgSession2 = resolve(sessionsDir, "2000-01-02-200000.md");
+  writeFileSync(bgSession2, "# Session: 2000-01-02\n\n- Intent: refactor parser\n- Outcome: parser refactored but tests pending\n- Tools: Edit, Bash; files: src/parser.ts\n- Edits: 2 tool calls, 1 files\n- Messages: 8 (4 user, 4 assistant)\n- Notes:\n  - Tests are still failing for edge cases\n");
+
+  // Mark old session as last seen
+  writeFileSync(briefingMarker, "2000-01-01-000000.md");
+
+  const digestOut = runHook("memory/hooks/session-start.ts", "{}");
+
+  // Completion contract: structured digest with sections
+  check("morning-briefing: shows background work header", digestOut.includes("Background Work"));
+  check("morning-briefing: shows completed work section", digestOut.includes("Completed") || digestOut.includes("Done"));
+  check("morning-briefing: shows in-progress section", digestOut.includes("In Progress") || digestOut.includes("pending") || digestOut.includes("failing"));
+  check("morning-briefing: includes session content (auth)", digestOut.includes("auth"));
+  check("morning-briefing: includes session content (parser)", digestOut.includes("parser"));
+  // Existing behavior preserved
+  check("morning-briefing: still shows Session Start", digestOut.includes("Session Start"));
+  check("morning-briefing: still shows session count", digestOut.includes("Sessions:"));
+
+  try { unlinkSync(oldSession); } catch {}
+  try { unlinkSync(bgSession1); } catch {}
+  try { unlinkSync(bgSession2); } catch {}
+  try { unlinkSync(briefingMarker); } catch {}
+}
+
+// Morning briefing: no marker file + multiple sessions → treat all as new (first run)
+{
+  const briefingMarker = resolve(sessionsDir, ".last-briefing");
+  try { unlinkSync(briefingMarker); } catch {}
+
+  const s1 = resolve(sessionsDir, "2000-02-01-000000.md");
+  const s2 = resolve(sessionsDir, "2000-02-01-010000.md");
+  writeFileSync(s1, "# Session: 2000-02-01\n\n- Intent: first session\n- Outcome: done\n- Tools: none; files: none\n- Edits: 0 tool calls, 0 files\n- Messages: 4 (2 user, 2 assistant)\n");
+  writeFileSync(s2, "# Session: 2000-02-01\n\n- Intent: second session background task\n- Outcome: completed background work\n- Tools: Bash; files: none\n- Edits: 0 tool calls, 0 files\n- Messages: 4 (2 user, 2 assistant)\n");
+
+  const noMarkerOut = runHook("memory/hooks/session-start.ts", "{}");
+  // With no marker and 2+ sessions, should show briefing
+  check("morning-briefing: no marker + multiple sessions shows briefing", noMarkerOut.includes("Background Work"));
+
+  try { unlinkSync(s1); } catch {}
+  try { unlinkSync(s2); } catch {}
+  try { unlinkSync(briefingMarker); } catch {}
+}
+
 // ── Rating capture ───────────────────────────────────────────────────────────
 
 console.log("\n--- rating-capture ---");

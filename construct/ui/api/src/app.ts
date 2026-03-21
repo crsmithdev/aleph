@@ -15,6 +15,7 @@ import { recurringTodoRoutes } from './routes/recurring-todos.js';
 import { backupRoutes } from './routes/backup.js';
 import { summaryRoutes } from './routes/summary.js';
 import { webhookRoutes } from './routes/webhooks.js';
+import { observabilityRoutes } from './routes/observability.js';
 import { EventBus, HistoryService, applyDDL } from '@construct/goals';
 import { webhooks } from './db/schema.js';
 import { existsSync } from 'fs';
@@ -63,6 +64,7 @@ export async function createApp(opts?: { dbUrl?: string }) {
     await api.register(backupRoutes, { prefix: '/backup' });
     await api.register(summaryRoutes, { prefix: '/summary' });
     await api.register(webhookRoutes, { prefix: '/webhooks' });
+    await api.register(observabilityRoutes, { prefix: '/observability' });
   }, { prefix: '/api' });
 
   const webDist = resolve(import.meta.dirname || '.', '../../web/dist');
@@ -79,6 +81,18 @@ export async function createApp(opts?: { dbUrl?: string }) {
   app.addHook('onReady', async () => {
     // Goals domain DDL
     applyDDL(sqlite);
+    // Observability DDL
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS obs_memory_snapshots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        taken_at TEXT NOT NULL DEFAULT (datetime('now')),
+        total INTEGER NOT NULL,
+        by_type TEXT NOT NULL,
+        health TEXT NOT NULL,
+        by_tag TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_obs_memory_taken_at ON obs_memory_snapshots(taken_at);
+    `);
     // Webhooks DDL (UI infrastructure)
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS webhooks (

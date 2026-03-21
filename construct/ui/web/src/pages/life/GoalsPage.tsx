@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { useGoals, useCategories, useCreateGoal } from '../api/hooks';
-import { GoalList } from '../components/goals/GoalList';
-import { GoalFilters, type GoalFilterState } from '../components/goals/GoalFilters';
-import { GoalForm } from '../components/goals/GoalForm';
-import { Modal } from '../components/ui/Modal';
-import { Button } from '../components/ui/Button';
+import { useGoals, useCategories, useCreateGoal } from '../../api/hooks';
+import { GoalList } from '../../components/goals/GoalList';
+import { GoalFilters, type GoalFilterState } from '../../components/goals/GoalFilters';
+import { GoalForm } from '../../components/goals/GoalForm';
+import { Modal } from '../../components/ui/Modal';
+import { Button } from '../../components/ui/Button';
+import { PageLoading } from '../../components/ui/Spinner';
+import { ErrorState } from '../../components/ui/ErrorState';
+import { cn } from '../../utils/cn';
 
 const defaultFilters: GoalFilterState = {
   state: '',
@@ -42,22 +45,22 @@ export function GoalsPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100">Goals</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h1 className="text-2xl font-bold text-text-primary">Goals</h1>
+          <p className="text-sm text-text-muted mt-0.5">
             {visibleGoals.length} goal{visibleGoals.length !== 1 ? 's' : ''}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setGroupBy(groupBy === 'none' ? 'category' : 'none')}
-            className={`px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
+            className={cn(
+              'px-2.5 py-1.5 rounded text-xs font-medium transition-colors',
               groupBy === 'category'
-                ? 'bg-blue-600/20 text-blue-400 border border-blue-600/40'
-                : 'text-gray-500 hover:text-gray-300 border border-gray-800 hover:border-gray-700'
-            }`}
+                ? 'bg-accent-subtle text-accent border border-accent/40'
+                : 'text-text-muted hover:text-text-secondary border border-border-primary hover:border-border-secondary'
+            )}
           >
             Group by category
           </button>
@@ -65,43 +68,20 @@ export function GoalsPage() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-gray-900 border border-gray-800 rounded-lg px-4 py-3">
-        <GoalFilters
-          filters={filters}
-          onChange={setFilters}
-          categories={categories}
-        />
+      <div className="bg-bg-secondary border border-border-primary rounded-lg px-4 py-3">
+        <GoalFilters filters={filters} onChange={setFilters} categories={categories} />
       </div>
 
-      {/* List */}
       {isLoading ? (
-        <div className="flex justify-center py-16">
-          <span className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-        </div>
+        <PageLoading />
       ) : isError ? (
-        <div className="text-center py-16 text-red-400 text-sm">
-          Failed to load goals.
-        </div>
+        <ErrorState message="Failed to load goals." />
       ) : (
-        <GoalList
-          goals={visibleGoals}
-          groupBy={groupBy}
-          categories={categories}
-        />
+        <GoalList goals={visibleGoals} groupBy={groupBy} categories={categories} />
       )}
 
-      {/* New goal modal */}
-      <Modal
-        open={newGoalOpen}
-        onClose={() => setNewGoalOpen(false)}
-        title="New goal"
-      >
-        <GoalForm
-          onSubmit={handleCreate}
-          onCancel={() => setNewGoalOpen(false)}
-          loading={createGoal.isPending}
-        />
+      <Modal open={newGoalOpen} onClose={() => setNewGoalOpen(false)} title="New goal">
+        <GoalForm onSubmit={handleCreate} onCancel={() => setNewGoalOpen(false)} loading={createGoal.isPending} />
       </Modal>
     </div>
   );

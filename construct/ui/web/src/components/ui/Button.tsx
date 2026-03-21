@@ -1,4 +1,5 @@
 import { type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { cn } from '../../utils/cn';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
@@ -12,22 +13,22 @@ export function Button({
   size = 'md',
   loading,
   children,
-  className = '',
+  className,
   disabled,
   ...props
 }: ButtonProps) {
   const base =
     'inline-flex items-center justify-center rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
   const variants = {
-    primary: 'bg-blue-600 hover:bg-blue-700 text-white',
-    secondary: 'bg-gray-700 hover:bg-gray-600 text-gray-200',
-    danger: 'bg-red-600 hover:bg-red-700 text-white',
-    ghost: 'hover:bg-gray-800 text-gray-400 hover:text-gray-200',
+    primary: 'bg-accent hover:bg-accent-hover text-white',
+    secondary: 'bg-bg-tertiary hover:bg-bg-hover text-text-secondary',
+    danger: 'bg-error hover:bg-red-600 text-white',
+    ghost: 'hover:bg-bg-tertiary text-text-muted hover:text-text-primary',
   };
   const sizes = { sm: 'px-2.5 py-1 text-xs', md: 'px-3.5 py-1.5 text-sm' };
   return (
     <button
-      className={`${base} ${variants[variant]} ${sizes[size]} ${className}`}
+      className={cn(base, variants[variant], sizes[size], className)}
       disabled={disabled || loading}
       {...props}
     >

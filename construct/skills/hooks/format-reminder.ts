@@ -23,10 +23,10 @@ if (words.length < 3) {
 const archPattern = /\b(architect|redesign|refactor|migrate|schema|structure|plan|propose|authenticat\w*|authorizat\w*|integrat\w*|api.?endpoint|rename.?all|move.?all|replace.?all|across.?all|every.?file|all.?files|end.to.end|full.?stack)/i;
 if (archPattern.test(prompt)) {
   trace(TAG, "depth: FULL (architectural keywords)");
-  console.log("[Construct] Depth: FULL — architectural keywords. Write ISC before proceeding.");
+  console.log("[Construct] Depth: FULL — architectural keywords. Use design-first pipeline.");
 } else if (words.length >= 40) {
   trace(TAG, "depth: FULL (complex, ≥40 words)");
-  console.log("[Construct] Depth: FULL — complex request. Consider ISC.");
+  console.log("[Construct] Depth: FULL — complex request. Consider design-first pipeline.");
 } else {
   trace(TAG, "depth: QUICK");
 }

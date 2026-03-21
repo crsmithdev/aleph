@@ -6,8 +6,8 @@
     "web"
   ],
   "scripts": {
-    "dev": "concurrently -n api,web -c blue,green \"bun --watch api/src/server.ts\" \"npm run dev -w web\"",
-    "build": "npm run build -w web",
+    "dev": "concurrently -n api,web -c blue,green \"bun --watch api/src/server.ts\" \"cd web && bun run dev\"",
+    "build": "cd web && bun run build",
     "test:e2e": "bun e2e/goal-flow.test.ts",
     "typecheck": "tsc -b"
   },

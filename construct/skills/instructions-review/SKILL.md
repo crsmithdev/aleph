@@ -5,7 +5,17 @@ description: Reviews AI instruction files for vagueness, contradictions, impossi
 
 # Instructions Audit
 
-> Instructions that are vague, contradictory, or impossible to follow are worse than no instructions — they erode trust in all instructions.
+Instructions that are vague, contradictory, or impossible to follow are worse than no instructions — they erode trust in all instructions.
+
+## When to Use
+
+- After adding or modifying instruction files (CLAUDE.md, identity, skills)
+- Periodic audit — instructions decay as code changes underneath them
+- When behavior seems inconsistent — may be conflicting instructions
+
+## When NOT to Use
+
+- Writing new instructions from scratch — just write them, audit later
 
 ## Inputs
 

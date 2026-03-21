@@ -34,10 +34,9 @@ if (storeContent && !quality?.pass) trace(TAG, `store content: ${storeContent.sl
 // Good memory — pass
 if (quality?.pass) { trace(TAG, "pass: quality ok"); cleanup(); process.exit(0); }
 
-// Already reminded once — don't loop forever
+// Already reminded once — don't loop forever (keep lock so it stays passed)
 if (existsSync(lockFile)) {
   trace(TAG, "pass: already reminded once");
-  cleanup();
   process.exit(0);
 }
 

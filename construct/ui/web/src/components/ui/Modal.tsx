@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useRef } from 'react';
+import { cn } from '../../utils/cn';
 
 export function Modal({
   open,
@@ -22,13 +23,18 @@ export function Modal({
     <dialog
       ref={ref}
       onClose={onClose}
-      className="bg-gray-900 text-gray-100 rounded-lg p-0 backdrop:bg-black/50 max-w-lg w-full"
+      className={cn(
+        'bg-bg-secondary text-text-primary rounded-lg p-0 backdrop:bg-black/50 max-w-lg w-full'
+      )}
     >
-      <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+      <div className="p-4 border-b border-border-primary flex items-center justify-between">
         <h2 className="text-lg font-semibold">{title}</h2>
         <button
           onClick={onClose}
-          className="text-gray-400 hover:text-gray-200 text-xl leading-none w-7 h-7 flex items-center justify-center rounded hover:bg-gray-800 transition-colors"
+          className={cn(
+            'text-text-muted hover:text-text-primary text-xl leading-none',
+            'w-7 h-7 flex items-center justify-center rounded hover:bg-bg-tertiary transition-colors'
+          )}
         >
           &times;
         </button>

@@ -8,7 +8,7 @@ All paths relative to `~/.claude/`. Run every check. Do not skip or summarize.
 - `construct/skills/hooks/format-reminder.ts` exists
 - `construct/skills/hooks/quality.ts` exists
 - `construct/skills/hooks/notify.ts` exists
-- SKILL.md files exist: `research`, `verification`, `debugging`, `subagent-dev`, `code-review`, `docs-review`, `instructions-review`, `ralph-loop`
+- SKILL.md files exist: `brainstorming`, `tdd`, `writing-plans`, `executing-plans`, `debugging`, `verification`, `subagent-dev`, `parallel-agents`, `finishing-branch`, `git-worktrees`, `code-review`, `docs-review`, `instructions-review`, `research`, `ralph-loop`
 
 ## Registration
 

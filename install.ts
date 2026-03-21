@@ -24,6 +24,43 @@ const PRESERVE = [
   "memory/sessions",
 ];
 
+// File extensions that should never be overwritten during sync (runtime data)
+const SKIP_EXTENSIONS = [".db", ".db-wal", ".db-shm"];
+
+const BACKUP_DIR = join(DST, "construct", "data", "backups");
+const MAX_BACKUPS = 5;
+
+/** Back up the DB before install, keeping the last N backups */
+async function backupDb(): Promise<void> {
+  const dbPath = join(DST, "construct", "data", "construct.db");
+  if (!(await exists(dbPath))) return;
+
+  await mkdir(BACKUP_DIR, { recursive: true });
+  const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  await cp(dbPath, join(BACKUP_DIR, `construct-${ts}.db`));
+
+  // Copy WAL if present (ensures consistent backup)
+  const walPath = dbPath + "-wal";
+  if (await exists(walPath)) {
+    await cp(walPath, join(BACKUP_DIR, `construct-${ts}.db-wal`));
+  }
+
+  console.log(`  backed up: construct-${ts}.db`);
+
+  // Prune old backups, keep last N
+  const files = (await readdir(BACKUP_DIR))
+    .filter((f) => f.startsWith("construct-") && f.endsWith(".db"))
+    .sort()
+    .reverse();
+
+  for (const f of files.slice(MAX_BACKUPS)) {
+    const stem = f.replace(/\.db$/, "");
+    await rm(join(BACKUP_DIR, f), { force: true });
+    await rm(join(BACKUP_DIR, stem + ".db-wal"), { force: true });
+    await rm(join(BACKUP_DIR, stem + ".db-shm"), { force: true });
+  }
+}
+
 /** Discover ALL CAPS .md data files in a directory (stem is [A-Z_]+ only) */
 async function discoverAllCapsMd(dir: string): Promise<string[]> {
   if (!existsSync(dir)) return [];
@@ -52,7 +89,7 @@ async function syncDir(srcDir: string, dstDir: string): Promise<void> {
 
   // Collect all relative paths in src
   const srcPaths = new Set<string>();
-  const SKIP_DIRS = new Set(["node_modules", "dist", ".bun"]);
+  const SKIP_DIRS = new Set(["node_modules", "dist", ".bun", "backups"]);
   async function walk(dir: string, rel: string) {
     const entries = await readdir(dir, { withFileTypes: true });
     for (const e of entries) {
@@ -68,13 +105,15 @@ async function syncDir(srcDir: string, dstDir: string): Promise<void> {
   }
   await walk(srcDir, "");
 
-  // Copy all from src to dst, skipping node_modules/dist/.bun
+  // Copy all from src to dst, skipping node_modules/dist/.bun and DB files
   await cp(srcDir, dstDir, {
     recursive: true,
     force: true,
     filter: (src) => {
       const base = src.split("/").pop()!;
-      return !SKIP_DIRS.has(base);
+      if (SKIP_DIRS.has(base)) return false;
+      if (SKIP_EXTENSIONS.some((ext) => base.endsWith(ext))) return false;
+      return true;
     },
   });
 
@@ -84,7 +123,7 @@ async function syncDir(srcDir: string, dstDir: string): Promise<void> {
     const entries = await readdir(dir, { withFileTypes: true });
     for (const e of entries) {
       const relPath = rel ? `${rel}/${e.name}` : e.name;
-      if (!srcPaths.has(relPath)) {
+      if (!srcPaths.has(relPath) && !SKIP_DIRS.has(e.name) && !SKIP_EXTENSIONS.some((ext) => e.name.endsWith(ext))) {
         await rm(join(dir, e.name), { recursive: true, force: true });
       } else if (e.isDirectory()) {
         await cleanDst(join(dir, e.name), relPath);
@@ -130,6 +169,11 @@ try {
   }
 
   // 2. Sync construct/ tree (delete stale files, overwrite everything)
+  // 2a. Back up DB before sync
+  console.log("backing up database...");
+  await backupDb();
+
+  //    DB files (*.db, *.db-wal, *.db-shm) are never overwritten
   console.log("syncing construct/...");
   await syncDir(CONSTRUCT_SRC, join(DST, "construct"));
 
@@ -188,7 +232,7 @@ try {
   // Remove known Construct commands that are no longer in the repo
   const CONSTRUCT_COMMANDS = ["construct.md", "verify.md", "install.md", "test.md",
     "worktree.md", "grasp.md", "status.md", "retain.md", "common-ground.md", "dashboard.md",
-    "goal.md", "todo.md"];
+    "goal.md", "todo.md", "finish.md"];
   for (const f of CONSTRUCT_COMMANDS) {
     if (!repoCommands.has(f) && await exists(join(DST, "commands", f))) {
       await rm(join(DST, "commands", f));

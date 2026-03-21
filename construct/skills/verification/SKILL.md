@@ -38,16 +38,16 @@ Skip any step = unverified claim.
 | Build succeeds | Build command: exit 0 | Linter passing |
 | Bug fixed | Reproduce original symptom: passes | Code changed, assumed fixed |
 
-### Red Flags — STOP
+### Common Rationalizations
 
-You are about to make an unverified claim if you're thinking:
-
-- "Should work now" → run the command
-- "I'm confident" → confidence ≠ evidence
-- "I just changed one line" → run the command
-- "The code looks right" → looking ≠ running
-- "The linter passed" → linter ≠ tests ≠ build
-- "The agent said it worked" → verify independently
+| Thought | Reality |
+|---------|---------|
+| "Should work now" | Run the command. |
+| "I'm confident" | Confidence is not evidence. |
+| "I just changed one line" | One line can break everything. Run the command. |
+| "The code looks right" | Looking is not running. |
+| "The linter passed" | Linter is not tests. Tests are not build. Run the right command. |
+| "The agent said it worked" | Verify independently. |
 
 ## Done when
 

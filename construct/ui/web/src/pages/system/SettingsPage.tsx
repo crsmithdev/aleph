@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useWebhooks, useCreateWebhook, useDeleteWebhook } from '../api/hooks';
-import { api } from '../api/client';
+import { useWebhooks, useCreateWebhook, useDeleteWebhook } from '../../api/hooks';
+import { api } from '../../api/client';
+import { cn } from '../../utils/cn';
 
 // --- Types ---
 
@@ -23,9 +24,9 @@ const ALL_EVENTS = [
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-800">
-        <h2 className="text-base font-semibold text-gray-200">{title}</h2>
+    <div className="bg-bg-secondary border border-border-primary rounded-lg overflow-hidden">
+      <div className="px-4 py-3 border-b border-border-primary">
+        <h2 className="text-base font-semibold text-text-primary">{title}</h2>
       </div>
       <div className="p-4 space-y-3">{children}</div>
     </div>
@@ -82,18 +83,24 @@ function BackupSection() {
         <button
           onClick={createBackup}
           disabled={creating}
-          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm rounded-lg transition-colors"
+          className={cn(
+            'px-3 py-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50',
+            'text-white text-sm rounded-lg transition-colors'
+          )}
         >
           {creating ? 'Creating...' : 'Create Backup'}
         </button>
         <button
           onClick={loadBackups}
           disabled={loading}
-          className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm rounded-lg transition-colors border border-gray-700"
+          className={cn(
+            'px-3 py-1.5 bg-bg-tertiary hover:bg-bg-hover',
+            'text-text-secondary text-sm rounded-lg transition-colors border border-border-primary'
+          )}
         >
           {loading ? 'Loading...' : 'Load Backups'}
         </button>
-        {message && <span className="text-xs text-gray-400">{message}</span>}
+        {message && <span className="text-xs text-text-muted">{message}</span>}
       </div>
 
       {backups.length > 0 && (
@@ -101,18 +108,18 @@ function BackupSection() {
           {backups.map((b) => (
             <div
               key={b.filename}
-              className="flex items-center justify-between p-2 bg-gray-800 rounded-lg"
+              className="flex items-center justify-between p-2 bg-bg-tertiary rounded-lg"
             >
               <div>
-                <div className="text-sm text-gray-200">{b.filename}</div>
-                <div className="text-xs text-gray-500">
+                <div className="text-sm text-text-primary">{b.filename}</div>
+                <div className="text-xs text-text-muted">
                   {new Date(b.createdAt).toLocaleString()}
                   {b.size !== undefined && ` · ${(b.size / 1024).toFixed(1)} KB`}
                 </div>
               </div>
               <button
                 onClick={() => restoreBackup(b.filename)}
-                className="text-xs text-blue-400 hover:text-blue-300 px-2 py-1 rounded hover:bg-gray-700 transition-colors"
+                className="text-xs text-accent hover:text-accent-muted px-2 py-1 rounded hover:bg-bg-hover transition-colors"
               >
                 Restore
               </button>
@@ -159,32 +166,32 @@ function WebhooksSection() {
 
   return (
     <Section title="Webhooks">
-      {isLoading && <div className="text-sm text-gray-500 italic">Loading...</div>}
+      {isLoading && <div className="text-sm text-text-muted italic">Loading...</div>}
 
       {webhooks && webhooks.length > 0 && (
         <div className="space-y-2">
           {webhooks.map((wh) => (
             <div
               key={wh.id}
-              className="flex items-start justify-between p-3 bg-gray-800 rounded-lg gap-3"
+              className="flex items-start justify-between p-3 bg-bg-tertiary rounded-lg gap-3"
             >
               <div className="min-w-0">
-                <div className="text-sm text-gray-200 truncate">{wh.url}</div>
+                <div className="text-sm text-text-primary truncate">{wh.url}</div>
                 <div className="flex flex-wrap gap-1 mt-1">
                   {wh.events.map((e) => (
                     <span
                       key={e}
-                      className="text-xs px-1.5 py-0.5 bg-gray-700 text-gray-400 rounded"
+                      className="text-xs px-1.5 py-0.5 bg-bg-hover text-text-muted rounded"
                     >
                       {e}
                     </span>
                   ))}
                 </div>
-                <div className="text-xs text-gray-600 mt-1">
+                <div className="text-xs text-text-muted mt-1">
                   {wh.active ? (
-                    <span className="text-green-500">active</span>
+                    <span className="text-success">active</span>
                   ) : (
-                    <span className="text-gray-500">inactive</span>
+                    <span className="text-text-muted">inactive</span>
                   )}
                   {' · '}
                   {new Date(wh.createdAt).toLocaleDateString()}
@@ -192,7 +199,7 @@ function WebhooksSection() {
               </div>
               <button
                 onClick={() => deleteWebhook.mutate(wh.id)}
-                className="text-gray-500 hover:text-red-400 text-lg flex-shrink-0"
+                className="text-text-muted hover:text-error text-lg flex-shrink-0"
                 title="Delete webhook"
               >
                 &times;
@@ -205,25 +212,29 @@ function WebhooksSection() {
       {!showForm ? (
         <button
           onClick={() => setShowForm(true)}
-          className="text-sm text-blue-400 hover:text-blue-300"
+          className="text-sm text-accent hover:text-accent-muted"
         >
           + Add Webhook
         </button>
       ) : (
-        <div className="space-y-3 border border-gray-700 rounded-lg p-3">
+        <div className="space-y-3 border border-border-secondary rounded-lg p-3">
           <div>
-            <label className="text-xs text-gray-500 block mb-1">URL</label>
+            <label className="text-xs text-text-muted block mb-1">URL</label>
             <input
               type="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://example.com/webhook"
-              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-600"
+              className={cn(
+                'w-full bg-bg-tertiary border border-border-primary rounded',
+                'px-2 py-1.5 text-sm text-text-primary placeholder-text-muted',
+                'focus:outline-none focus:border-accent'
+              )}
             />
           </div>
 
           <div>
-            <label className="text-xs text-gray-500 block mb-1">Events</label>
+            <label className="text-xs text-text-muted block mb-1">Events</label>
             <div className="flex flex-wrap gap-2">
               {ALL_EVENTS.map((event) => (
                 <label key={event} className="flex items-center gap-1.5 cursor-pointer">
@@ -231,22 +242,26 @@ function WebhooksSection() {
                     type="checkbox"
                     checked={selectedEvents.includes(event)}
                     onChange={() => toggleEvent(event)}
-                    className="h-3.5 w-3.5 rounded border-gray-600 bg-gray-800 text-blue-600"
+                    className="h-3.5 w-3.5 rounded border-border-primary bg-bg-tertiary text-accent"
                   />
-                  <span className="text-xs text-gray-400">{event}</span>
+                  <span className="text-xs text-text-muted">{event}</span>
                 </label>
               ))}
             </div>
           </div>
 
           <div>
-            <label className="text-xs text-gray-500 block mb-1">Secret (optional)</label>
+            <label className="text-xs text-text-muted block mb-1">Secret (optional)</label>
             <input
               type="text"
               value={secret}
               onChange={(e) => setSecret(e.target.value)}
               placeholder="Webhook secret for HMAC signing"
-              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-600"
+              className={cn(
+                'w-full bg-bg-tertiary border border-border-primary rounded',
+                'px-2 py-1.5 text-sm text-text-primary placeholder-text-muted',
+                'focus:outline-none focus:border-accent'
+              )}
             />
           </div>
 
@@ -254,7 +269,10 @@ function WebhooksSection() {
             <button
               onClick={handleCreate}
               disabled={!url.trim() || selectedEvents.length === 0 || createWebhook.isPending}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm rounded-lg transition-colors"
+              className={cn(
+                'px-3 py-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50',
+                'text-white text-sm rounded-lg transition-colors'
+              )}
             >
               {createWebhook.isPending ? 'Creating...' : 'Create'}
             </button>
@@ -265,7 +283,7 @@ function WebhooksSection() {
                 setSelectedEvents([]);
                 setSecret('');
               }}
-              className="px-3 py-1.5 text-gray-400 hover:text-gray-200 text-sm"
+              className="px-3 py-1.5 text-text-muted hover:text-text-primary text-sm"
             >
               Cancel
             </button>
@@ -281,7 +299,7 @@ function WebhooksSection() {
 export function SettingsPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-6 py-6 px-4">
-      <h1 className="text-2xl font-bold text-gray-100">Settings</h1>
+      <h1 className="text-2xl font-bold text-text-primary">Settings</h1>
 
       <BackupSection />
       <WebhooksSection />

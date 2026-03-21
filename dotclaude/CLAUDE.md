@@ -17,23 +17,16 @@
 
 ### Depth Levels
 - **QUICK**: ≤2 files, straightforward change, deterministic outcome — proceed immediately
-- **FULL**: multi-file, architectural decision, or uncertain scope — run the 7-phase algorithm
+- **FULL**: multi-file, architectural decision, or uncertain scope — use the design-first pipeline
 
-### 7-Phase Algorithm (FULL tasks)
-**OBSERVE** — Reverse-engineer true intent. Write ISC (Intent Success Criteria): numbered list (minimum 3), each stating "When [condition], [observable outcome]" — must be verifiable by running a command or checking a file.
-**THINK** — Validate capability selection against ISC (not the raw prompt). Select thinking tools; justify exclusions. Output capability block.
-**PLAN** — Agent sequence, execution pattern, parallel opportunities.
-**BUILD/EXECUTE** — Run. Independent subtasks via parallel subagent dispatch in a single message — serial execution is a failure mode.
-**VERIFY** — Check every ISC criterion with fresh evidence (run the command, read the file). If any criterion fails, return to BUILD and fix it. Do not advance to LEARN until all pass.
-**LEARN** — State what worked, what didn't. Durable insights -> semantic memory via `memory_store`.
-
-### Capability Selection (output in THINK phase)
-```
-CAPABILITY:
-| Thinking: [tools used — or NONE, justify each exclusion]
-| Primary:  [Architect|Engineer|QATester] — [why, tied to ISC #]
-| Pattern:  [Pipeline|Parallel|Solo]
-```
+### Design-First Pipeline (FULL tasks)
+1. **BRAINSTORM** — If specs are unclear or multiple valid approaches exist, explore context, ask clarifying questions, propose 2-3 approaches. Skip if the task has clear specs and a single obvious approach.
+2. **PLAN** — Write implementation plan: map files, break into testable tasks, each following write-test → verify-fail → implement → verify-pass → commit.
+3. **EXECUTE** — TDD per task. Subagent dispatch for independent tasks (parallel in a single message). Stop on blockers — don't guess.
+4. **REVIEW** — Spec compliance review, then quality review. Fix before proceeding.
+5. **VERIFY** — Fresh evidence for every completion claim.
+6. **FINISH** — Run full suite, then: merge / PR / keep / discard.
+7. **LEARN** — Durable insights → semantic memory via `memory_store`.
 
 ## Module Installation
 
@@ -43,17 +36,6 @@ file contents when copying. If any check fails, resolve it — do not move on an
 will be fine later.
 
 After any change that modifies behavior, use the `docs-review` skill to check for documentation drift.
-
-## Thinking Tools
-
-Six conceptual frameworks available for FULL tasks. Use when the problem warrants it.
-
-- **Council** — Multi-perspective debate. Use when multiple valid approaches exist.
-- **RedTeam** — Adversarial: "What are the 3 most likely ways this fails?"
-- **FirstPrinciples** — Challenge assumptions before building on them.
-- **Science** — Hypothesis -> experiment -> measure. Use for iterative/uncertain work.
-- **BeCreative** — Divergent exploration. Use when requirements are open-ended.
-- **Prompting** — Meta-prompting. Use when constructing a complex prompt is the task.
 
 ---
 <!-- No hard line limit. Audit weekly for contradictions and dead rules. /construct verify flags files over 300 lines as a soft warning. -->
