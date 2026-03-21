@@ -35,7 +35,10 @@ export function GoalForm({ initial, onSubmit, onCancel, loading }: GoalFormProps
         <input
           type="text"
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => {
+            const v = e.target.value;
+            setTitle(v.length > 0 ? v.charAt(0).toUpperCase() + v.slice(1) : v);
+          }}
           placeholder="Enter goal title…"
           autoFocus
           className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"

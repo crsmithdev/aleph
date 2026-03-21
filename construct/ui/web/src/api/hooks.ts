@@ -229,27 +229,25 @@ export function useHistory(goalId: string) {
 
 // --- Todos ---
 
-interface TodoDayResponse {
-  overdue: (Todo & { goalTitle?: string })[];
-  todos: (Todo & { goalTitle?: string })[];
+interface TodoActiveResponse {
+  active: (Todo & { goalTitle?: string })[];
   completed: (Todo & { goalTitle?: string })[];
 }
 
-export function useTodos(date?: string) {
-  const effectiveDate = date ?? new Date().toISOString().slice(0, 10);
+export function useTodos() {
   return useQuery({
-    queryKey: ['todos', effectiveDate],
-    queryFn: () => api.get<TodoDayResponse>(`/todos/day/${effectiveDate}`),
+    queryKey: ['todos'],
+    queryFn: () => api.get<TodoActiveResponse>('/todos/active'),
   });
 }
 
 export function useCreateTodo() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { title: string; date: string; goalId?: string; order?: number }) =>
+    mutationFn: (data: { title: string; goalId?: string }) =>
       api.post<Todo>('/todos', data),
-    onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: ['todos', vars.date] });
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['todos'] });
     },
   });
 }
