@@ -6,6 +6,67 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { cn } from '../../utils/cn';
 import { toDateStr } from '../../utils/format';
 
+function TodaySummary() {
+  const today = toDateStr(new Date());
+  const { data: summary, isLoading } = useSummary(today, today);
+  const [copied, setCopied] = useState(false);
+
+  const data = summary as {
+    goalsCompleted?: { count: number; items: Array<{ goalId: string; details: { title?: string; prevState?: string } }> };
+    todosCompleted?: { count: number; items: Array<{ title: string }> };
+  } | undefined;
+
+  const completedGoals = data?.goalsCompleted?.items ?? [];
+  const completedTodos = data?.todosCompleted?.items ?? [];
+
+  const hasAnything = completedGoals.length > 0 || completedTodos.length > 0;
+
+  const text = hasAnything
+    ? [
+        `Today — ${today}`,
+        '',
+        ...(completedGoals.length > 0
+          ? ['Goals completed:', ...completedGoals.map((g) => `  - ${g.details?.title ?? g.goalId}`), '']
+          : []),
+        ...(completedTodos.length > 0
+          ? ['Todos completed:', ...completedTodos.map((t) => `  - ${t.title}`)]
+          : []),
+      ].join('\n')
+    : `Nothing completed today yet — ${today}`;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div className="bg-bg-secondary border border-border-primary rounded-lg p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-text-primary">Today's Summary</h2>
+        <button
+          onClick={handleCopy}
+          disabled={isLoading}
+          className={cn(
+            'px-3 py-1 text-xs rounded-md border transition-colors',
+            copied
+              ? 'bg-success/10 border-success text-success'
+              : 'bg-bg-tertiary border-border-primary text-text-secondary hover:text-text-primary hover:border-border-secondary'
+          )}
+        >
+          {copied ? 'Copied!' : 'Copy'}
+        </button>
+      </div>
+      {isLoading ? (
+        <div className="text-xs text-text-muted">Loading...</div>
+      ) : (
+        <pre className="text-sm text-text-secondary whitespace-pre-wrap font-mono leading-relaxed">{text}</pre>
+      )}
+    </div>
+  );
+}
+
 type Preset = 'this-week' | 'last-week' | 'this-month' | 'last-month' | 'this-quarter' | 'this-year' | 'custom';
 
 function getPresetRange(preset: Exclude<Preset, 'custom'>): { start: string; end: string } {
@@ -145,6 +206,8 @@ export function SummaryPage() {
           Export Markdown
         </button>
       </div>
+
+      <TodaySummary />
 
       {/* Preset selector */}
       <div className="space-y-3">

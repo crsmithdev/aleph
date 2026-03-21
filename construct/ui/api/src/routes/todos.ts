@@ -1,7 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { getTodosForDay, getTodo, createTodo, updateTodo, deleteTodo } from '@construct/goals';
+import { getTodosActive, getTodosForDay, getTodo, createTodo, updateTodo, deleteTodo } from '@construct/goals';
 
 export const todoRoutes: FastifyPluginAsync = async (app) => {
+  app.get('/active', async () => {
+    return getTodosActive(app.db);
+  });
+
   app.get<{ Params: { date: string } }>('/day/:date', async (req, reply) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.date)) {
       return reply.status(400).send({ error: 'Invalid date format. Use YYYY-MM-DD.' });

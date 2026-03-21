@@ -2,13 +2,8 @@ import { useState } from 'react';
 import { useCreateTodo } from '../../api/hooks';
 import { useGoals } from '../../api/hooks';
 
-interface TodoQuickAddProps {
-  date: string;
-}
-
-export function TodoQuickAdd({ date }: TodoQuickAddProps) {
+export function TodoQuickAdd() {
   const [title, setTitle] = useState('');
-  const [dueDate, setDueDate] = useState('');
   const [goalId, setGoalId] = useState('');
   const [showExtras, setShowExtras] = useState(false);
 
@@ -22,13 +17,11 @@ export function TodoQuickAdd({ date }: TodoQuickAddProps) {
     createTodo.mutate(
       {
         title: title.trim(),
-        date,
         goalId: goalId || undefined,
       },
       {
         onSuccess: () => {
           setTitle('');
-          setDueDate('');
           setGoalId('');
           setShowExtras(false);
         },
@@ -42,7 +35,10 @@ export function TodoQuickAdd({ date }: TodoQuickAddProps) {
         <input
           type="text"
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => {
+            const v = e.target.value;
+            setTitle(v.length > 0 ? v.charAt(0).toUpperCase() + v.slice(1) : v);
+          }}
           onFocus={() => setShowExtras(true)}
           placeholder="Add a todo..."
           className="flex-1 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-600"
@@ -58,16 +54,6 @@ export function TodoQuickAdd({ date }: TodoQuickAddProps) {
 
       {showExtras && (
         <div className="flex gap-2 items-center flex-wrap">
-          <div className="flex items-center gap-1">
-            <label className="text-xs text-gray-500">Due:</label>
-            <input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="bg-gray-900 border border-gray-800 rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-blue-600"
-            />
-          </div>
-
           <div className="flex items-center gap-1">
             <label className="text-xs text-gray-500">Goal:</label>
             <select
@@ -88,7 +74,6 @@ export function TodoQuickAdd({ date }: TodoQuickAddProps) {
             type="button"
             onClick={() => {
               setShowExtras(false);
-              setDueDate('');
               setGoalId('');
             }}
             className="text-xs text-gray-500 hover:text-gray-400 ml-auto"

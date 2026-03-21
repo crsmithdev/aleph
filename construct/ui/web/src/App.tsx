@@ -34,7 +34,7 @@ export function App() {
           <Routes>
             <Route element={<Layout />}>
               {/* Redirects */}
-              <Route path="/" element={<Navigate to="/life/goals" replace />} />
+              <Route path="/" element={<Navigate to="/life/summary" replace />} />
 
               {/* Life */}
               <Route path="/life/goals" element={<GoalsPage />} />

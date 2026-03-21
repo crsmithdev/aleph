@@ -1,9 +1,51 @@
 import { nanoid } from 'nanoid';
-import { eq, and, lte, isNull, sql } from 'drizzle-orm';
+import { eq, and, lte, isNull, sql, desc } from 'drizzle-orm';
 import type { Db } from '@construct/data';
 import { todos, goals } from '../schema.js';
 import { createTodoSchema, updateTodoSchema } from '../validators.js';
 import type { EventBus } from './event-bus.js';
+
+export function getTodosActive(db: Db) {
+  const today = new Date().toISOString().slice(0, 10);
+
+  const activeTodos = db
+    .select()
+    .from(todos)
+    .where(eq(todos.done, false))
+    .orderBy(todos.createdAt)
+    .all();
+
+  const completedToday = db
+    .select()
+    .from(todos)
+    .where(
+      and(
+        eq(todos.done, true),
+        sql`substr(${todos.updatedAt}, 1, 10) = ${today}`
+      )
+    )
+    .orderBy(desc(todos.updatedAt))
+    .all();
+
+  const allTodos = [...activeTodos, ...completedToday];
+  const goalIds = [...new Set(allTodos.map((t) => t.goalId).filter(Boolean))] as string[];
+
+  const goalTitles = new Map<string, string>();
+  for (const goalId of goalIds) {
+    const goal = db.select({ id: goals.id, title: goals.title }).from(goals).where(eq(goals.id, goalId)).get();
+    if (goal) goalTitles.set(goal.id, goal.title);
+  }
+
+  const enrichTodo = (t: typeof todos.$inferSelect) => ({
+    ...t,
+    goalTitle: t.goalId ? (goalTitles.get(t.goalId) ?? null) : null,
+  });
+
+  return {
+    active: activeTodos.map(enrichTodo),
+    completed: completedToday.map(enrichTodo),
+  };
+}
 
 export function getTodosForDay(db: Db, date: string) {
   const undoneDue = db

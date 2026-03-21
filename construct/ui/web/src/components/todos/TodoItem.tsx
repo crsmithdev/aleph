@@ -6,10 +6,9 @@ import type { Todo } from '../../types';
 
 interface TodoItemProps {
   todo: Todo & { goalTitle?: string };
-  isOverdue?: boolean;
 }
 
-export function TodoItem({ todo, isOverdue }: TodoItemProps) {
+export function TodoItem({ todo }: TodoItemProps) {
   const [expanded, setExpanded] = useState(false);
   const [editingNote, setEditingNote] = useState(false);
   const [noteText, setNoteText] = useState(todo.note || '');
@@ -23,11 +22,7 @@ export function TodoItem({ todo, isOverdue }: TodoItemProps) {
   };
 
   return (
-    <div
-      className={`group flex items-start gap-3 p-3 rounded-lg bg-gray-900 border border-gray-800 ${
-        isOverdue && !todo.done ? 'border-l-2 border-l-red-500' : ''
-      }`}
-    >
+    <div className="group flex items-start gap-3 p-3 rounded-lg bg-gray-900 border border-gray-800">
       <input
         type="checkbox"
         checked={todo.done}
@@ -43,9 +38,6 @@ export function TodoItem({ todo, isOverdue }: TodoItemProps) {
           >
             {todo.title}
           </span>
-          {isOverdue && !todo.done && (
-            <span className="text-xs text-red-400 font-medium">overdue</span>
-          )}
           {todo.goalTitle && todo.goalId && (
             <Link
               to={`/life/goals/${todo.goalId}`}
@@ -54,11 +46,6 @@ export function TodoItem({ todo, isOverdue }: TodoItemProps) {
             >
               {todo.goalTitle}
             </Link>
-          )}
-          {todo.dueDate && (
-            <span className="text-xs text-gray-600">
-              {new Date(todo.dueDate + 'T00:00:00').toLocaleDateString()}
-            </span>
           )}
         </div>
 
