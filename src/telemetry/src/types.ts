@@ -14,6 +14,8 @@ export interface SessionEntry {
   toolParams?: Record<string, unknown>;
   skillName?: string;
   isError?: boolean;
+  errorMessage?: string;
+  toolUseId?: string;
   hookEvent?: string;
   hookName?: string;
   hookCommand?: string;
@@ -150,7 +152,7 @@ export interface ToolDetailData {
   totalCount: number;
   errorCount: number;
   byDay: (TimeBucket & { byHour: Record<number, number> })[];
-  invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; isError?: boolean }[];
+  invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; isError?: boolean; errorMessage?: string }[];
 }
 
 export interface HookDetailData {

@@ -142,6 +142,7 @@ function parseLine(line: string, project: string): SessionEntry[] {
             toolName,
             skillName,
             toolParams: input || undefined,
+            toolUseId: (block.id as string) || undefined,
           });
         }
       }
@@ -155,12 +156,20 @@ function parseLine(line: string, project: string): SessionEntry[] {
       if (Array.isArray(content)) {
         for (const block of content) {
           if (block.type === "tool_result" && block.is_error) {
+            const rawContent = block.content;
+            const errorMessage = typeof rawContent === "string"
+              ? rawContent.slice(0, 200)
+              : Array.isArray(rawContent)
+                ? (rawContent.find((b: any) => b.type === "text")?.text ?? "").slice(0, 200)
+                : undefined;
             entries.push({
               sessionId,
               timestamp,
               project,
               entryType: "tool_result",
               isError: true,
+              toolUseId: (block.tool_use_id as string) || undefined,
+              errorMessage: errorMessage || undefined,
             });
           }
         }

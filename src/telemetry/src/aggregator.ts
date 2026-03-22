@@ -355,27 +355,33 @@ export function aggregateSessions(entries: SessionEntry[]): SessionsData {
 }
 
 export function aggregateToolDetail(entries: SessionEntry[], toolName: string): ToolDetailData {
-  // Build a set of timestamps for tool_result errors attributed to this tool.
-  // tool_result errors follow the tool_use they belong to — match by session + proximity.
-  const errorTimestamps = new Set<string>();
-  const toolUseTimestamps: string[] = [];
+  // Map tool_use_id → timestamp for this tool, and collect error info by tool_use_id.
+  const useIdToTimestamp = new Map<string, string>();
+  const errorByUseId = new Map<string, string | undefined>(); // tool_use_id → errorMessage
 
   for (const e of entries) {
-    if (e.entryType === "tool_use" && e.toolName === toolName) {
-      toolUseTimestamps.push(e.timestamp);
+    if (e.entryType === "tool_use" && e.toolName === toolName && e.toolUseId) {
+      useIdToTimestamp.set(e.toolUseId, e.timestamp);
     }
-    if (e.entryType === "tool_result" && e.isError && e.toolName === toolName) {
-      errorTimestamps.add(e.timestamp);
+    if (e.entryType === "tool_result" && e.isError && e.toolUseId) {
+      errorByUseId.set(e.toolUseId, e.errorMessage);
     }
   }
 
-  // Also attribute errors by position: tool_result with isError following a tool_use of this tool
+  // Build error timestamps set, correlating by tool_use_id
+  const errorTimestamps = new Map<string, string | undefined>(); // timestamp → errorMessage
+  for (const [useId, msg] of errorByUseId) {
+    const ts = useIdToTimestamp.get(useId);
+    if (ts) errorTimestamps.set(ts, msg);
+  }
+
+  // Fallback: positional attribution for entries without tool_use_id
   let lastToolUseTs: string | null = null;
   for (const e of entries) {
     if (e.entryType === "tool_use" && e.toolName === toolName) {
       lastToolUseTs = e.timestamp;
-    } else if (e.entryType === "tool_result" && e.isError && lastToolUseTs) {
-      errorTimestamps.add(lastToolUseTs);
+    } else if (e.entryType === "tool_result" && e.isError && lastToolUseTs && !e.toolUseId) {
+      errorTimestamps.set(lastToolUseTs, e.errorMessage);
       lastToolUseTs = null;
     } else if (e.entryType === "tool_use") {
       lastToolUseTs = null;
@@ -387,7 +393,7 @@ export function aggregateToolDetail(entries: SessionEntry[], toolName: string): 
   let errorCount = 0;
 
   const dayMap = new Map<string, Map<number, number>>();
-  const invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; isError?: boolean }[] = [];
+  const invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; isError?: boolean; errorMessage?: string }[] = [];
 
   for (const e of matched) {
     const day = dateKey(e.timestamp);
@@ -405,6 +411,7 @@ export function aggregateToolDetail(entries: SessionEntry[], toolName: string): 
       project: e.project,
       params: e.toolParams,
       isError: isError || undefined,
+      errorMessage: isError ? errorTimestamps.get(e.timestamp) : undefined,
     });
   }
 

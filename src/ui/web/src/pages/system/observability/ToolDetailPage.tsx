@@ -13,7 +13,7 @@ import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } fro
 import { fmtNumber, fmtPct, shortDate, dateTime } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
 
-type InvocationRow = { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; isError?: boolean };
+type InvocationRow = { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; isError?: boolean; errorMessage?: string };
 
 export function ToolDetailPage() {
   const { name: rawName } = useParams<{ name: string }>();
@@ -58,6 +58,13 @@ export function ToolDetailPage() {
       label: 'Session',
       render: (row) => <span className="font-mono text-xs text-text-muted">{row.sessionId.slice(0, 8)}</span>,
     },
+    ...(data.errorCount > 0 ? [{
+      key: 'errorMessage',
+      label: 'Error',
+      render: (row: InvocationRow) => row.errorMessage
+        ? <span className="text-xs text-error truncate block max-w-xs" title={row.errorMessage}>{row.errorMessage.slice(0, 80)}{row.errorMessage.length > 80 ? '...' : ''}</span>
+        : <span className="text-text-muted">-</span>,
+    }] : []) as Column<InvocationRow>[],
     {
       key: 'params',
       label: 'Params',
