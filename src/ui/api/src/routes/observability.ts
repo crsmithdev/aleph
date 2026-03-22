@@ -16,6 +16,7 @@ import {
   aggregateHookDetail,
   aggregateSkillDetail,
   aggregateMemoryUsage,
+  aggregateHookEvents,
 } from '@construct/telemetry';
 import type { Granularity, SessionEntry } from '@construct/telemetry';
 
@@ -147,6 +148,12 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       return { ...result, queryTimeMs };
     },
   );
+
+  app.get<{ Querystring: QueryParams }>('/hooks/events', { preHandler: parseDaysPreHandler }, async (req) => {
+    const obsReq = req as ObsRequest;
+    const { result, queryTimeMs } = timed(() => aggregateHookEvents(obsReq.telemetryEntries));
+    return { ...result, queryTimeMs };
+  });
 
   app.get<{ Params: { name: string }; Querystring: QueryParams }>(
     '/hooks/:name',

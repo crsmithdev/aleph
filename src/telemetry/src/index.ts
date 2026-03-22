@@ -24,6 +24,9 @@ export type {
   HookDetailData,
   SkillDetailData,
   MemoryUsageData,
+  HookEventData,
+  HookEventSummary,
+  HookInvocation,
 } from "./types.js";
 
 export { parseAllSessions, parseSessionsForDays, clearCache } from "./parser.js";
@@ -40,6 +43,7 @@ export {
   aggregateHookDetail,
   aggregateSkillDetail,
   aggregateMemoryUsage,
+  aggregateHookEvents,
 } from "./aggregator.js";
 
 import { parseSessionsForDays } from "./parser.js";

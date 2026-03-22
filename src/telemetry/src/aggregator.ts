@@ -22,6 +22,8 @@ import type {
   HookDetailData,
   SkillDetailData,
   MemoryUsageData,
+  HookEventData,
+  HookInvocation,
 } from "./types.js";
 import { calculateCost } from "./pricing.js";
 
@@ -527,6 +529,108 @@ export function aggregateSkillDetail(entries: SessionEntry[], skillName: string)
     .slice(0, 200);
 
   return { skill: skillName, totalCount, errorCount, byDay, invocations: recentInvocations };
+}
+
+export function aggregateHookEvents(entries: SessionEntry[]): HookEventData {
+  // Track event → set of hooks and total count
+  const eventMap = new Map<string, { count: number; hooks: Set<string> }>();
+
+  // Track invocations grouped by (sessionId, timestamp) for stop_hook_summary
+  // and by (sessionId, timestamp) for hook_progress
+  const invocationMap = new Map<string, HookInvocation>();
+
+  // Process hook_progress entries to learn event→hook mappings and create invocations
+  for (const e of entries) {
+    if (e.entryType === "hook_progress" && e.hookEvent && e.hookCommand) {
+      const event = e.hookEvent;
+      const shortCmd = e.hookCommand.split("/").pop() || e.hookCommand;
+
+      if (!eventMap.has(event)) eventMap.set(event, { count: 0, hooks: new Set() });
+      const ev = eventMap.get(event)!;
+      ev.hooks.add(shortCmd);
+
+      // Key by session+timestamp for grouping
+      const key = `${e.sessionId}::${e.timestamp}::${event}`;
+      if (!invocationMap.has(key)) {
+        invocationMap.set(key, {
+          timestamp: e.timestamp,
+          sessionId: e.sessionId,
+          event,
+          hooks: [],
+        });
+        ev.count++;
+      }
+      const inv = invocationMap.get(key)!;
+      if (!inv.hooks.find((h) => h.command === shortCmd)) {
+        inv.hooks.push({ command: shortCmd });
+      }
+    }
+  }
+
+  // Process stop_hook_summary entries to enrich with timing data
+  // Group by sessionId+timestamp: a single stop_hook_summary event produces one entry per hook
+  const stopGroups = new Map<string, { timestamp: string; sessionId: string; hooks: Array<{ command: string; durationMs?: number; exitCode?: number; output?: string }> }>();
+
+  for (const e of entries) {
+    if (e.entryType === "stop_hook_summary" && e.hookCommand) {
+      const shortCmd = e.hookCommand.split("/").pop() || e.hookCommand;
+      const key = `${e.sessionId}::${e.timestamp}`;
+      if (!stopGroups.has(key)) {
+        stopGroups.set(key, { timestamp: e.timestamp, sessionId: e.sessionId, hooks: [] });
+      }
+      stopGroups.get(key)!.hooks.push({
+        command: shortCmd,
+        durationMs: e.hookDurationMs,
+        exitCode: e.hookExitCode,
+        output: e.hookOutput,
+      });
+    }
+  }
+
+  // Merge stop_hook_summary groups into invocations (under "Stop" event)
+  for (const [, group] of stopGroups) {
+    const event = "Stop";
+    const key = `${group.sessionId}::${group.timestamp}::${event}`;
+
+    if (!eventMap.has(event)) eventMap.set(event, { count: 0, hooks: new Set() });
+    const ev = eventMap.get(event)!;
+
+    if (!invocationMap.has(key)) {
+      invocationMap.set(key, {
+        timestamp: group.timestamp,
+        sessionId: group.sessionId,
+        event,
+        hooks: group.hooks,
+      });
+      ev.count++;
+    }
+
+    for (const h of group.hooks) {
+      ev.hooks.add(h.command);
+    }
+  }
+
+  // Also enrich hook_progress invocations with stop_hook_summary timing when keys overlap
+  // (they typically don't, but attempt to match by session+close timestamp)
+
+  const KNOWN_EVENTS = ["SessionStart", "UserPromptSubmit", "Stop", "PostToolUse", "Notification"];
+
+  const events = [...eventMap.entries()]
+    .map(([event, v]) => ({ event, count: v.count, hooks: [...v.hooks] }))
+    .sort((a, b) => {
+      const ai = KNOWN_EVENTS.indexOf(a.event);
+      const bi = KNOWN_EVENTS.indexOf(b.event);
+      if (ai !== -1 && bi !== -1) return ai - bi;
+      if (ai !== -1) return -1;
+      if (bi !== -1) return 1;
+      return a.event.localeCompare(b.event);
+    });
+
+  const invocations = [...invocationMap.values()]
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+    .slice(0, 500);
+
+  return { events, invocations };
 }
 
 export function aggregateMemoryUsage(entries: SessionEntry[]): MemoryUsageData {

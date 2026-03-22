@@ -139,6 +139,19 @@ export function useObsToolDetail(name: string, days: number) {
   });
 }
 
+export function useObsHookEvents(days: number) {
+  return obsQuery<{
+    events: Array<{ event: string; count: number; hooks: string[] }>;
+    invocations: Array<{
+      timestamp: string;
+      sessionId: string;
+      event: string;
+      hooks: Array<{ command: string; durationMs?: number; exitCode?: number; output?: string }>;
+    }>;
+    queryTimeMs: number;
+  }>('hooks/events', { days });
+}
+
 export function useObsHookDetail(name: string, days: number) {
   return useQuery<{
     command: string;

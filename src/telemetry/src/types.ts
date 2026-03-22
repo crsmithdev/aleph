@@ -182,6 +182,25 @@ export interface MemoryUsageData {
   byDay: { date: string; stores: number; searches: number }[];
 }
 
+export interface HookInvocation {
+  timestamp: string;
+  sessionId: string;
+  event: string;
+  hooks: Array<{ command: string; durationMs?: number; exitCode?: number; output?: string }>;
+}
+
+export interface HookEventSummary {
+  event: string;
+  count: number;
+  hooks: string[];
+}
+
+export interface HookEventData {
+  events: HookEventSummary[];
+  invocations: HookInvocation[];
+  queryTimeMs?: number;
+}
+
 export interface StatusSummary {
   sessions: number;
   messages: number;
