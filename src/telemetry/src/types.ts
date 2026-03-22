@@ -165,7 +165,7 @@ export interface HookDetailData {
   errors: number;
   fullCommand?: string;
   byDay: { date: string; count: number; avgMs: number }[];
-  invocations: { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string }[];
+  invocations: { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string }[];
 }
 
 export interface SkillDetailData {

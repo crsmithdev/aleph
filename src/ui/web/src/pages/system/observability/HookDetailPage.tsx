@@ -13,7 +13,7 @@ import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } fro
 import { fmtNumber, fmtMs, fmtPct, shortDate, dateTime } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
 
-type InvocationRow = { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string };
+type InvocationRow = { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string };
 
 export function HookDetailPage() {
   const { name: rawName } = useParams<{ name: string }>();
@@ -36,16 +36,23 @@ export function HookDetailPage() {
       label: 'Time',
       render: (row) => <span className="text-text-secondary">{dateTime(row.timestamp)}</span>,
     },
+    ...(data.invocations.some((inv: InvocationRow) => inv.trigger) ? [{
+      key: 'trigger',
+      label: 'Trigger',
+      render: (row: InvocationRow) => row.trigger
+        ? <span className="font-mono text-xs text-accent">{row.trigger}</span>
+        : <span className="text-text-muted">-</span>,
+    }] : []) as Column<InvocationRow>[],
     {
       key: 'durationMs',
       label: 'Duration',
       align: 'right',
       sortable: true,
-      render: (row) => (
+      render: (row) => row.durationMs > 0 ? (
         <span className={cn('font-mono text-xs', row.durationMs > 500 ? 'text-warning' : 'text-text-muted')}>
           {fmtMs(row.durationMs)}
         </span>
-      ),
+      ) : <span className="text-text-muted">-</span>,
     },
     {
       key: 'exitCode',

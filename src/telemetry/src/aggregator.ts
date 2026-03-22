@@ -445,8 +445,8 @@ export function aggregateHookDetail(entries: SessionEntry[], hookName: string): 
   let event = "";
   let errors = 0;
   let fullCommand = "";
-  const dayMap = new Map<string, { durations: number[] }>();
-  const invocations: { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string }[] = [];
+  const dayMap = new Map<string, { durations: number[]; count: number }>();
+  const invocations: { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string }[] = [];
 
   for (const e of entries) {
     if (e.entryType === "stop_hook_summary" && e.hookCommand) {
@@ -458,8 +458,10 @@ export function aggregateHookDetail(entries: SessionEntry[], hookName: string): 
       fullCommand = e.hookCommand;
 
       const day = dateKey(e.timestamp);
-      if (!dayMap.has(day)) dayMap.set(day, { durations: [] });
-      dayMap.get(day)!.durations.push(dur);
+      if (!dayMap.has(day)) dayMap.set(day, { durations: [], count: 0 });
+      const dm = dayMap.get(day)!;
+      dm.durations.push(dur);
+      dm.count++;
 
       invocations.push({
         timestamp: e.timestamp,
@@ -472,16 +474,31 @@ export function aggregateHookDetail(entries: SessionEntry[], hookName: string): 
 
     if (e.entryType === "hook_progress" && e.hookCommand) {
       const shortCmd = e.hookCommand.split("/").pop() || e.hookCommand;
-      if (shortCmd === hookName && e.hookEvent) {
-        event = e.hookEvent;
+      if (shortCmd === hookName) {
+        if (e.hookEvent) event = e.hookEvent;
+        fullCommand = e.hookCommand;
+
+        // Extract trigger from hookName (e.g. "PostToolUse:Edit" → "Edit")
+        const trigger = e.hookName?.includes(":") ? e.hookName.split(":").slice(1).join(":") : undefined;
+
+        invocations.push({
+          timestamp: e.timestamp,
+          sessionId: e.sessionId,
+          durationMs: 0,
+          trigger,
+        });
+
+        const day = dateKey(e.timestamp);
+        if (!dayMap.has(day)) dayMap.set(day, { durations: [], count: 0 });
+        dayMap.get(day)!.count++;
       }
-      fullCommand = e.hookCommand;
     }
   }
 
   const sorted = durations.slice().sort((a, b) => a - b);
-  const totalCount = sorted.length;
-  const avgMs = totalCount > 0 ? Math.round(sorted.reduce((s, d) => s + d, 0) / totalCount) : 0;
+  const totalCount = invocations.length;
+  const timedCount = sorted.length;
+  const avgMs = timedCount > 0 ? Math.round(sorted.reduce((s, d) => s + d, 0) / timedCount) : 0;
   const p50Ms = Math.round(percentile(sorted, 50));
   const p95Ms = Math.round(percentile(sorted, 95));
 
@@ -489,8 +506,8 @@ export function aggregateHookDetail(entries: SessionEntry[], hookName: string): 
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, v]) => ({
       date,
-      count: v.durations.length,
-      avgMs: Math.round(v.durations.reduce((s, d) => s + d, 0) / v.durations.length),
+      count: v.count,
+      avgMs: v.durations.length > 0 ? Math.round(v.durations.reduce((s, d) => s + d, 0) / v.durations.length) : 0,
     }));
 
   const recentInvocations = invocations
