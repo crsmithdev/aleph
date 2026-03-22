@@ -4,7 +4,7 @@ import { readdir, mkdir, cp, rm, stat, readFile, writeFile } from "node:fs/promi
 import { join, dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtemp } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, lstatSync } from "node:fs";
 
 // Construct installer — deploys from repo to ~/.claude
 // Source: construct/ (modules), dotclaude/ (CLAUDE.md, settings.json, commands)
@@ -12,7 +12,7 @@ import { existsSync } from "node:fs";
 // Overwrites: hooks, skills, meta, commands, settings, CLAUDE.md
 
 const REPO = dirname(resolve(Bun.argv[1]));
-const CONSTRUCT_SRC = join(REPO, "construct");
+const CONSTRUCT_SRC = join(REPO, "src");
 const TEMPLATES = join(REPO, "dotclaude");
 const DST = join(Bun.env.HOME!, ".claude");
 
@@ -140,73 +140,85 @@ console.log(`src: ${REPO}`);
 console.log(`dst: ${DST}`);
 console.log();
 
-// 1. Back up preserved files to temp dir
-console.log("backing up preserved files...");
+// Detect linked mode — skip sync if ~/.claude/construct is a symlink
+const constructDst = join(DST, "construct");
+const linked = (() => {
+  try { return lstatSync(constructDst).isSymbolicLink(); } catch { return false; }
+})();
+
+if (linked) {
+  console.log("linked mode — skipping backup/sync/restore (source is live)");
+} else {
+  // 1. Back up preserved files to temp dir
+  console.log("backing up preserved files...");
+}
 const backupDir = await mkdtemp(join(tmpdir(), "construct-backup-"));
 
 try {
-  for (const rel of PRESERVE) {
-    const src = join(DST, "construct", rel);
-    if (await exists(src)) {
-      const dst = join(backupDir, rel);
-      await mkdir(dirname(dst), { recursive: true });
-      await cp(src, dst, { recursive: true });
+  if (!linked) {
+    for (const rel of PRESERVE) {
+      const src = join(DST, "construct", rel);
+      if (await exists(src)) {
+        const dst = join(backupDir, rel);
+        await mkdir(dirname(dst), { recursive: true });
+        await cp(src, dst, { recursive: true });
+      }
     }
-  }
 
-  // Back up ALL CAPS .md files from identity/ and memory/
-  await mkdir(join(backupDir, "core/identity"), { recursive: true });
-  await mkdir(join(backupDir, "memory"), { recursive: true });
+    // Back up ALL CAPS .md files from identity/ and memory/
+    await mkdir(join(backupDir, "core/identity"), { recursive: true });
+    await mkdir(join(backupDir, "memory"), { recursive: true });
 
-  for (const f of await discoverAllCapsMd(join(DST, "construct/core/identity"))) {
-    await cp(join(DST, "construct/core/identity", f), join(backupDir, "core/identity", f));
-    console.log(`  preserved: core/identity/${f}`);
-  }
-
-  for (const f of await discoverAllCapsMd(join(DST, "construct/memory"))) {
-    await cp(join(DST, "construct/memory", f), join(backupDir, "memory", f));
-    console.log(`  preserved: memory/${f}`);
-  }
-
-  // 2. Sync construct/ tree (delete stale files, overwrite everything)
-  // 2a. Back up DB before sync
-  console.log("backing up database...");
-  await backupDb();
-
-  //    DB files (*.db, *.db-wal, *.db-shm) are never overwritten
-  console.log("syncing construct/...");
-  await syncDir(CONSTRUCT_SRC, join(DST, "construct"));
-
-  // 3. Restore preserved files from temp dir
-  console.log("restoring preserved files...");
-
-  for (const rel of PRESERVE) {
-    const backup = join(backupDir, rel);
-    if (await exists(backup)) {
-      const target = join(DST, "construct", rel);
-      await mkdir(dirname(target), { recursive: true });
-      await rm(target, { recursive: true, force: true });
-      await cp(backup, target, { recursive: true });
+    for (const f of await discoverAllCapsMd(join(DST, "construct/core/identity"))) {
+      await cp(join(DST, "construct/core/identity", f), join(backupDir, "core/identity", f));
+      console.log(`  preserved: core/identity/${f}`);
     }
-  }
 
-  // Restore ALL CAPS .md files
-  for (const [subdir, target] of [
-    ["core/identity", join(DST, "construct/core/identity")],
-    ["memory", join(DST, "construct/memory")],
-  ]) {
-    const backupSub = join(backupDir, subdir);
-    if (await exists(backupSub)) {
-      for (const f of await readdir(backupSub)) {
-        if (f.endsWith(".md")) {
-          const src = join(backupSub, f);
-          const dst = join(target, f);
-          await cp(src, dst);
-          // Verify byte-size matches
-          const srcSize = (await stat(src)).size;
-          const dstSize = (await stat(dst)).size;
-          if (srcSize !== dstSize) {
-            console.error(`  ✗ size mismatch: ${f} (${srcSize} → ${dstSize})`);
+    for (const f of await discoverAllCapsMd(join(DST, "construct/memory"))) {
+      await cp(join(DST, "construct/memory", f), join(backupDir, "memory", f));
+      console.log(`  preserved: memory/${f}`);
+    }
+
+    // 2. Sync construct/ tree (delete stale files, overwrite everything)
+    // 2a. Back up DB before sync
+    console.log("backing up database...");
+    await backupDb();
+
+    //    DB files (*.db, *.db-wal, *.db-shm) are never overwritten
+    console.log("syncing construct/...");
+    await syncDir(CONSTRUCT_SRC, join(DST, "construct"));
+
+    // 3. Restore preserved files from temp dir
+    console.log("restoring preserved files...");
+
+    for (const rel of PRESERVE) {
+      const backup = join(backupDir, rel);
+      if (await exists(backup)) {
+        const target = join(DST, "construct", rel);
+        await mkdir(dirname(target), { recursive: true });
+        await rm(target, { recursive: true, force: true });
+        await cp(backup, target, { recursive: true });
+      }
+    }
+
+    // Restore ALL CAPS .md files
+    for (const [subdir, target] of [
+      ["core/identity", join(DST, "construct/core/identity")],
+      ["memory", join(DST, "construct/memory")],
+    ]) {
+      const backupSub = join(backupDir, subdir);
+      if (await exists(backupSub)) {
+        for (const f of await readdir(backupSub)) {
+          if (f.endsWith(".md")) {
+            const src = join(backupSub, f);
+            const dst = join(target, f);
+            await cp(src, dst);
+            // Verify byte-size matches
+            const srcSize = (await stat(src)).size;
+            const dstSize = (await stat(dst)).size;
+            if (srcSize !== dstSize) {
+              console.error(`  ✗ size mismatch: ${f} (${srcSize} → ${dstSize})`);
+            }
           }
         }
       }
@@ -248,7 +260,7 @@ try {
   const home = Bun.env.HOME!;
   function fixPaths(obj: any): any {
     if (typeof obj === "string") {
-      return obj.replace(/^(bun|bash) construct\//, `$1 ${home}/.claude/construct/`);
+      return obj.replace(/^(bun|bash) src\//, `$1 ${home}/.claude/construct/`);
     }
     if (Array.isArray(obj)) return obj.map(fixPaths);
     if (obj && typeof obj === "object") {
@@ -322,27 +334,41 @@ try {
     await writeFile(dstClaudeMd, constructSection);
   }
 
-  // 7. Verify critical files — byte-size check on key infrastructure
-  const criticalFiles = [
-    "construct/skills/skill-rules.json",
-    "construct/trace.ts",
-    "construct/memory/parse-transcript.ts",
-  ];
-  let verifyFails = 0;
-  for (const rel of criticalFiles) {
-    const src = join(CONSTRUCT_SRC, rel.replace("construct/", ""));
-    const dst = join(DST, rel);
-    if (await exists(src) && await exists(dst)) {
-      const srcSize = (await stat(src)).size;
-      const dstSize = (await stat(dst)).size;
-      if (srcSize !== dstSize) {
-        console.error(`  ✗ size mismatch: ${rel} (src ${srcSize} → dst ${dstSize})`);
-        verifyFails++;
+  // 7. Verify critical files — byte-size check on key infrastructure (skip in linked mode)
+  if (!linked) {
+    const criticalFiles = [
+      "construct/skills/skill-rules.json",
+      "construct/trace.ts",
+      "construct/memory/parse-transcript.ts",
+    ];
+    let verifyFails = 0;
+    for (const rel of criticalFiles) {
+      const src = join(CONSTRUCT_SRC, rel.replace("construct/", ""));
+      const dst = join(DST, rel);
+      if (await exists(src) && await exists(dst)) {
+        const srcSize = (await stat(src)).size;
+        const dstSize = (await stat(dst)).size;
+        if (srcSize !== dstSize) {
+          console.error(`  ✗ size mismatch: ${rel} (src ${srcSize} → dst ${dstSize})`);
+          verifyFails++;
+        }
       }
     }
+    if (verifyFails > 0) {
+      console.error(`\n⚠ ${verifyFails} file(s) failed size verification`);
+    }
   }
-  if (verifyFails > 0) {
-    console.error(`\n⚠ ${verifyFails} file(s) failed size verification`);
+
+  // 8. Write build hash — git rev + dirty flag for version verification
+  console.log("writing build hash...");
+  try {
+    const rev = (await Bun.$`git -C ${REPO} rev-parse --short HEAD`.text()).trim();
+    const dirty = (await Bun.$`git -C ${REPO} diff --quiet HEAD`.exitCode) !== 0;
+    const hash = `${rev}${dirty ? "-dirty" : ""}`;
+    await writeFile(join(DST, "construct", ".build-hash"), hash + "\n");
+    console.log(`  build: ${hash}`);
+  } catch {
+    console.log("  skipped (not a git repo)");
   }
 
   console.log();

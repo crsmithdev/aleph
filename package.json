@@ -2,10 +2,10 @@
   "private": true,
   "scripts": {
     "test": "bun test.ts",
-    "validate": "jq . dotclaude/settings.json > /dev/null && jq . construct/skills/skill-rules.json > /dev/null",
-    "ui": "cd construct/ui && bun run dev",
-    "ui:build": "cd construct/ui && bun run build",
-    "ui:e2e": "bun construct/ui/e2e/goal-flow.test.ts",
-    "ui:e2e:obs": "bun construct/ui/e2e/observability-flow.test.ts"
+    "validate": "jq . dotclaude/settings.json > /dev/null && jq . src/skills/skill-rules.json > /dev/null",
+    "ui": "cd src/ui && bun run dev",
+    "ui:build": "cd src/ui && bun run build",
+    "ui:e2e": "bun src/ui/e2e/goal-flow.test.ts",
+    "ui:e2e:obs": "bun src/ui/e2e/observability-flow.test.ts"
   }
 }

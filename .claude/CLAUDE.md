@@ -16,7 +16,7 @@ This is the Construct source repo. The installed Construct rules come from `~/.c
 6. Remove completely: all references, unused files, related artifacts, and every other trace. See the `code-review` skill for the full process.
 7. All docs (README.md, INSTALL.md, SPEC.md, etc.) must match actual behavior with zero drift. SPEC.md should be behavior- and feature-oriented, enabling functional testing and diffing.
 8. Use memory (MCP), CLAUDE.md, and docs appropriately without duplicating information between layers. Clearing context and continuing in a new session should be instant — never re-learn the codebase.
-9. This runs on CLI in Claude Code and is globally installed. Don't touch ~/.claude unless installing. Source lives in `construct/` and `dotclaude/` at repo root; `.claude/` is dev config only. Project-root CLAUDE.md is project-specific.
+9. This runs on CLI in Claude Code and is globally installed. Don't touch ~/.claude unless installing. Source lives in `src/` and `dotclaude/` at repo root; `.claude/` is dev config only. Project-root CLAUDE.md is project-specific.
 
 ## Testing Philosophy
 
@@ -27,7 +27,7 @@ This is the Construct source repo. The installed Construct rules come from `~/.c
 
 ## Dev workflow
 
-1. Edit source in `construct/` and `dotclaude/`
+1. Edit source in `src/` and `dotclaude/`
 2. Run `bun install.ts` to deploy to `~/.claude/`
 3. Run `bun test.ts` to verify
 
@@ -35,7 +35,7 @@ This is the Construct source repo. The installed Construct rules come from `~/.c
 
 | Path | Purpose | Installs to | Method |
 |---|---|---|---|
-| `construct/` | Hook code, skills, identity files | `~/.claude/construct/` | Sync (overwrite + delete stale) |
+| `src/` | Hook code, skills, identity files | `~/.claude/construct/` | Sync (overwrite + delete stale) |
 | `dotclaude/` | CLAUDE.md rules, settings (hooks), commands | `~/.claude/` | Merge (overwrites Construct-owned content, preserves the rest) |
 | `.claude/` | Project-local dev config (this file, permissions, statusline) | nowhere — used at runtime | — |
 | `~/.claude/` | Installed runtime | — | Read-only; only written by `bun install.ts` |

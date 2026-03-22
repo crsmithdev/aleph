@@ -69,24 +69,33 @@ export function applyDDL(sqlite: Sqlite): void {
     CREATE INDEX IF NOT EXISTS idx_history_goal ON history_logs(goal_id);
   `);
 
-  // Migration: drop due_date if it exists
-  // SQLite 3.35+ supports ALTER TABLE DROP COLUMN
-  try {
-    sqlite.exec('ALTER TABLE todos DROP COLUMN due_date');
-  } catch {
-    // Column doesn't exist on fresh installs — safe to ignore
-  }
-  sqlite.exec('DROP INDEX IF EXISTS idx_todos_due_date');
+  // Migrations — guarded to only run when needed, never concurrently
+  // SQLite ALTER TABLE DROP COLUMN rebuilds the table internally;
+  // running it concurrently from two processes causes data loss.
 
-  // Migration: rename recurring_todos -> habits, recurring_todo_completions -> habit_completions
-  try {
-    sqlite.exec('ALTER TABLE recurring_todos RENAME TO habits');
-  } catch {
-    // Table already renamed or doesn't exist
+  const dueDateCount = sqlite.prepare("SELECT count(*) as c FROM pragma_table_info('todos') WHERE name='due_date'").get() as { c: number } | null;
+  if (dueDateCount && dueDateCount.c > 0) {
+    sqlite.exec('ALTER TABLE todos DROP COLUMN due_date');
+    sqlite.exec('DROP INDEX IF EXISTS idx_todos_due_date');
   }
-  try {
+
+  // Rename recurring_todos -> habits (only if old table exists AND new doesn't)
+  const hasOldTable = sqlite.prepare("SELECT count(*) as c FROM sqlite_master WHERE type='table' AND name='recurring_todos'").get() as { c: number } | null;
+  const hasNewTable = sqlite.prepare("SELECT count(*) as c FROM sqlite_master WHERE type='table' AND name='habits'").get() as { c: number } | null;
+  if (hasOldTable && hasOldTable.c > 0) {
+    if (hasNewTable && hasNewTable.c > 0) {
+      // Both exist — new table was created empty by CREATE IF NOT EXISTS, drop it and rename old
+      sqlite.exec('DROP TABLE habits');
+    }
+    sqlite.exec('ALTER TABLE recurring_todos RENAME TO habits');
+  }
+
+  const hasOldCompletions = sqlite.prepare("SELECT count(*) as c FROM sqlite_master WHERE type='table' AND name='recurring_todo_completions'").get() as { c: number } | null;
+  const hasNewCompletions = sqlite.prepare("SELECT count(*) as c FROM sqlite_master WHERE type='table' AND name='habit_completions'").get() as { c: number } | null;
+  if (hasOldCompletions && hasOldCompletions.c > 0) {
+    if (hasNewCompletions && hasNewCompletions.c > 0) {
+      sqlite.exec('DROP TABLE habit_completions');
+    }
     sqlite.exec('ALTER TABLE recurring_todo_completions RENAME TO habit_completions');
-  } catch {
-    // Table already renamed or doesn't exist
   }
 }

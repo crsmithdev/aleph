@@ -66,10 +66,39 @@ const [identity, skills, sessions, ratings, sessionCount] = await Promise.all([
   getSessionCount(),
 ]);
 
+// Build info
+function getBuildInfo(): string {
+  const hashFile = resolve(Bun.env.HOME!, ".claude/construct/.build-hash");
+  if (!existsSync(hashFile)) return "unknown";
+  const installed = readFileSync(hashFile, "utf-8").trim();
+
+  // Check if linked (symlink mode)
+  const { lstatSync } = require("fs");
+  try {
+    const constructDir = resolve(Bun.env.HOME!, ".claude/construct");
+    if (lstatSync(constructDir).isSymbolicLink()) return `${installed} (linked)`;
+  } catch {}
+
+  // Compare with current source hash
+  try {
+    const repoRoot = resolve(root, "..");
+    const rev = require("child_process").execSync("git rev-parse --short HEAD", { cwd: repoRoot, encoding: "utf-8" }).trim();
+    const dirty = require("child_process").spawnSync("git", ["diff", "--quiet", "HEAD"], { cwd: repoRoot }).status !== 0;
+    const current = `${rev}${dirty ? "-dirty" : ""}`;
+    if (current !== installed) return `${installed} (source: ${current} — drift)`;
+    return `${installed} (clean)`;
+  } catch {
+    return installed;
+  }
+}
+
 // Format output
 const out: string[] = [];
 
-out.push("## Context\n");
+out.push("## Build\n");
+out.push(`**Version**: ${getBuildInfo()}`);
+
+out.push("\n## Context\n");
 out.push(`**Identity files** (${identity.length}): ${identity.join(", ") || "none"}`);
 out.push(`**Skills** (${skills.length}): ${skills.join(", ") || "none"}`);
 

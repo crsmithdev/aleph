@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: construct/dashboard
+        working-directory: src/dashboard
     steps:
       - uses: actions/checkout@v4
 
@@ -57,7 +57,7 @@ jobs:
         run: jq . dotclaude/settings.json > /dev/null
 
       - name: Skill rules JSON valid
-        run: jq . construct/skills/skill-rules.json > /dev/null
+        run: jq . src/skills/skill-rules.json > /dev/null
 
       - name: Check hook files exist
         run: |

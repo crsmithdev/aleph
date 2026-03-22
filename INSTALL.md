@@ -19,7 +19,7 @@ bun install.ts
 ```
 
 The installer:
-1. Syncs `construct/` tree to `~/.claude/construct/`
+1. Syncs `src/` tree to `~/.claude/construct/`
 2. Copies `dotclaude/commands/` to `~/.claude/commands/`
 3. Merges `dotclaude/settings.json` into `~/.claude/settings.json` (hooks and statusline)
 4. Updates `~/.claude/CLAUDE.md` with the Construct section from `dotclaude/CLAUDE.md`
@@ -75,11 +75,11 @@ Checks are defined in each module's `INSTALL.md`:
 
 | Module | Checks | Detection |
 |------|--------|-----------|
-| construct-core | `construct/core/INSTALL.md` | `~/.claude/CLAUDE.md` exists |
-| construct-memory | `construct/memory/INSTALL.md` | `construct/memory/hooks/session-start.ts` exists |
-| construct-skills | `construct/skills/INSTALL.md` | `construct/skills/skill-rules.json` exists |
-| construct-meta | `construct/meta/INSTALL.md` | `construct/meta/README.md` exists |
-| construct-dashboard | `construct/dashboard/INSTALL.md` | `construct/dashboard/api/src/app.ts` exists |
+| construct-core | `src/core/INSTALL.md` | `~/.claude/CLAUDE.md` exists |
+| construct-memory | `src/memory/INSTALL.md` | `src/memory/hooks/session-start.ts` exists |
+| construct-skills | `src/skills/INSTALL.md` | `src/skills/skill-rules.json` exists |
+| construct-meta | `src/meta/INSTALL.md` | `src/meta/README.md` exists |
+| construct-dashboard | `src/dashboard/INSTALL.md` | `src/dashboard/api/src/app.ts` exists |
 
 Each module's INSTALL.md defines three categories of checks:
 - **Files** — expected files exist at the target
