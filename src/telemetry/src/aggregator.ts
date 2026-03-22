@@ -185,18 +185,25 @@ export function aggregateHooks(entries: SessionEntry[], granularity: Granularity
 
     if (e.entryType === "hook_progress" && e.hookCommand) {
       const shortCmd = e.hookCommand.split("/").pop() || e.hookCommand;
-      const cur = hookMap.get(shortCmd) || { event: "", durations: [], errors: 0, fullCommand: e.hookCommand };
+      const cur = hookMap.get(shortCmd) || { event: "", durations: [], errors: 0, fullCommand: e.hookCommand, progressCount: 0 };
       cur.event = e.hookEvent || cur.event;
       cur.fullCommand = e.hookCommand;
+      (cur as any).progressCount = ((cur as any).progressCount || 0) + 1;
       hookMap.set(shortCmd, cur);
+
+      const bk = bucketKey(e.timestamp, granularity);
+      if (!dayHookMap.has(bk)) dayHookMap.set(bk, new Map());
+      const dm = dayHookMap.get(bk)!;
+      dm.set(shortCmd, (dm.get(shortCmd) || 0) + 1);
     }
   }
 
   const ranked: HookMetric[] = [...hookMap.entries()]
     .map(([command, v]) => {
       const sorted = v.durations.slice().sort((a, b) => a - b);
-      const count = sorted.length;
-      const avgMs = count > 0 ? sorted.reduce((s, d) => s + d, 0) / count : 0;
+      const timedCount = sorted.length;
+      const count = timedCount || (v as any).progressCount || 0;
+      const avgMs = timedCount > 0 ? sorted.reduce((s, d) => s + d, 0) / timedCount : 0;
       return {
         command,
         event: v.event,
@@ -221,12 +228,13 @@ export function aggregateHooks(entries: SessionEntry[], granularity: Granularity
   return { ranked, byDay };
 }
 
-export function aggregateSkills(entries: SessionEntry[], granularity: Granularity = "day"): SkillsData {
+export function aggregateSkills(entries: SessionEntry[], granularity: Granularity = "day", validSkills?: Set<string>): SkillsData {
   const skillCounts = new Map<string, { count: number; errors: number; lastUsed: string }>();
   const daySkillMap = new Map<string, Map<string, number>>();
 
   for (const e of entries) {
     if (e.entryType === "tool_use" && e.skillName) {
+      if (validSkills && !validSkills.has(e.skillName)) continue;
       const cur = skillCounts.get(e.skillName) || { count: 0, errors: 0, lastUsed: "" };
       cur.count++;
       if (!cur.lastUsed || e.timestamp > cur.lastUsed) cur.lastUsed = e.timestamp;

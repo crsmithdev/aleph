@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { useObsSkills } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { DataTable, type Column } from '../../../components/data/DataTable';
-import { TimeRangeSelector, type Granularity } from '../../../components/data/TimeRangeSelector';
+import { type Granularity } from '../../../components/data/TimeRangeSelector';
+import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { ChartContainer } from '../../../components/charts/ChartContainer';
+import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtPct, shortDate } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
@@ -19,6 +20,7 @@ export function SkillsPage() {
   const [granularity, setGranularity] = useState<Granularity>('day');
   const navigate = useNavigate();
   const { data, isLoading, error, refetch } = useObsSkills(days, granularity);
+  const { chartType, setChartType } = useChartType('bar');
 
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load skills" retry={refetch} />;
@@ -73,10 +75,9 @@ export function SkillsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <ObsControlBar days={days} onDaysChange={setDays} granularity={granularity} onGranularityChange={setGranularity}>
         <h1 className="text-xl font-semibold text-text-primary">Skills</h1>
-        <TimeRangeSelector value={days} onChange={setDays} granularity={granularity} onGranularityChange={setGranularity} />
-      </div>
+      </ObsControlBar>
 
       <DataTable<SkillRow>
         data={data.ranked}
@@ -86,14 +87,24 @@ export function SkillsPage() {
       />
 
       {data.byDay.length > 0 && (
-        <ChartContainer title="Skill Invocations Over Time">
-          <BarChart data={data.byDay}>
-            <CartesianGrid {...gridProps} />
-            <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-            <YAxis {...axisProps} />
-            <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
-            <Bar dataKey="count" fill={CHART_PALETTE[3]} radius={[2, 2, 0, 0]} name="Invocations" />
-          </BarChart>
+        <ChartContainer title="Skill Invocations Over Time" chartType={chartType} onChartTypeChange={setChartType}>
+          {chartType === 'bar' ? (
+            <BarChart data={data.byDay}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+              <YAxis {...axisProps} />
+              <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+              <Bar dataKey="count" fill={CHART_PALETTE[3]} radius={[2, 2, 0, 0]} name="Invocations" />
+            </BarChart>
+          ) : (
+            <LineChart data={data.byDay}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+              <YAxis {...axisProps} />
+              <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+              <Line type="monotone" dataKey="count" stroke={CHART_PALETTE[3]} strokeWidth={2} dot={false} name="Invocations" />
+            </LineChart>
+          )}
         </ChartContainer>
       )}
 

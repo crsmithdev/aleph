@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { useObsHooks } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { DataTable, type Column } from '../../../components/data/DataTable';
-import { TimeRangeSelector, type Granularity } from '../../../components/data/TimeRangeSelector';
+import { type Granularity } from '../../../components/data/TimeRangeSelector';
+import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { ChartContainer } from '../../../components/charts/ChartContainer';
+import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtMs, fmtPct, shortDate } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
@@ -26,9 +27,10 @@ type HookRow = {
 export function HooksPage() {
   const [days, setDays] = useState(30);
   const [granularity, setGranularity] = useState<Granularity>('day');
-  const [hideInactive, setHideInactive] = useState(false);
+  const [hideInactive, setHideInactive] = useState(true);
   const navigate = useNavigate();
   const { data, isLoading, error, refetch } = useObsHooks(days, granularity);
+  const { chartType, setChartType } = useChartType('bar');
 
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load hooks" retry={refetch} />;
@@ -106,21 +108,10 @@ export function HooksPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-semibold text-text-primary">Hooks</h1>
-          <label className="flex items-center gap-1.5 text-xs text-text-muted cursor-pointer">
-            <input
-              type="checkbox"
-              checked={hideInactive}
-              onChange={(e) => setHideInactive(e.target.checked)}
-              className="rounded border-border-primary"
-            />
-            Hide removed
-          </label>
-        </div>
-        <TimeRangeSelector value={days} onChange={setDays} granularity={granularity} onGranularityChange={setGranularity} />
-      </div>
+      <ObsControlBar days={days} onDaysChange={setDays} granularity={granularity} onGranularityChange={setGranularity}>
+        <h1 className="text-xl font-semibold text-text-primary">Hooks</h1>
+        <FilterToggle label="Active only" active={hideInactive} onToggle={() => setHideInactive(!hideInactive)} />
+      </ObsControlBar>
 
       <DataTable<HookRow>
         data={filtered}
@@ -132,14 +123,24 @@ export function HooksPage() {
       />
 
       {data.byDay.length > 0 && (
-        <ChartContainer title="Hook Executions Over Time">
-          <BarChart data={data.byDay}>
-            <CartesianGrid {...gridProps} />
-            <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-            <YAxis {...axisProps} />
-            <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
-            <Bar dataKey="count" fill={CHART_PALETTE[2]} radius={[2, 2, 0, 0]} name="Executions" />
-          </BarChart>
+        <ChartContainer title="Hook Executions Over Time" chartType={chartType} onChartTypeChange={setChartType}>
+          {chartType === 'bar' ? (
+            <BarChart data={data.byDay}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+              <YAxis {...axisProps} />
+              <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+              <Bar dataKey="count" fill={CHART_PALETTE[2]} radius={[2, 2, 0, 0]} name="Executions" />
+            </BarChart>
+          ) : (
+            <LineChart data={data.byDay}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+              <YAxis {...axisProps} />
+              <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+              <Line type="monotone" dataKey="count" stroke={CHART_PALETTE[2]} strokeWidth={2} dot={false} name="Executions" />
+            </LineChart>
+          )}
         </ChartContainer>
       )}
 

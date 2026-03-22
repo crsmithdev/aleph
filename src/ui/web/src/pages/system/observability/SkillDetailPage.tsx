@@ -6,7 +6,7 @@ import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
-import { TimeRangeSelector } from '../../../components/data/TimeRangeSelector';
+import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
@@ -47,6 +47,7 @@ export function SkillDetailPage() {
     {
       key: 'params',
       label: 'Params',
+      width: '300px',
       render: (row) => {
         if (!row.params) return <span className="text-text-muted">-</span>;
         const isExpanded = expandedRow === row.timestamp;
@@ -55,12 +56,12 @@ export function SkillDetailPage() {
         return (
           <button
             onClick={(e) => { e.stopPropagation(); setExpandedRow(isExpanded ? null : row.timestamp); }}
-            className="text-left font-mono text-xs text-text-muted hover:text-text-primary"
+            className="w-full text-left font-mono text-xs text-text-muted hover:text-text-primary"
           >
             {isExpanded ? (
-              <pre className="max-h-40 overflow-auto whitespace-pre-wrap">{JSON.stringify(row.params, null, 2)}</pre>
+              <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all">{JSON.stringify(row.params, null, 2)}</pre>
             ) : (
-              short
+              <span className="block truncate">{short}</span>
             )}
           </button>
         );
@@ -70,18 +71,15 @@ export function SkillDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link
-            to="/system/observability/skills"
-            className="text-sm text-text-muted hover:text-text-primary transition-colors"
-          >
-            &larr; Skills
-          </Link>
-          <h1 className="text-xl font-semibold font-mono text-text-primary">{skillName}</h1>
-        </div>
-        <TimeRangeSelector value={days} onChange={setDays} />
-      </div>
+      <ObsControlBar days={days} onDaysChange={setDays}>
+        <Link
+          to="/system/observability/skills"
+          className="text-sm text-text-muted hover:text-text-primary transition-colors"
+        >
+          &larr; Skills
+        </Link>
+        <h1 className="text-xl font-semibold font-mono text-text-primary">{skillName}</h1>
+      </ObsControlBar>
 
       <div className="grid grid-cols-3 gap-4">
         <StatCard label="Total Invocations" value={fmtNumber(data.totalCount)} />

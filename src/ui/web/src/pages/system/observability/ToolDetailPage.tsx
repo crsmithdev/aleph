@@ -1,17 +1,16 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { useObsToolDetail } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
-import { TimeRangeSelector } from '../../../components/data/TimeRangeSelector';
+import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { ChartContainer } from '../../../components/charts/ChartContainer';
+import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtPct, shortDate, dateTime } from '../../../utils/format';
-import { cn } from '../../../utils/cn';
 
 type InvocationRow = { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; isError?: boolean; errorMessage?: string };
 
@@ -22,6 +21,7 @@ export function ToolDetailPage() {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [errorsOnly, setErrorsOnly] = useState(false);
   const { data, isLoading, error, refetch } = useObsToolDetail(toolName, days);
+  const { chartType, setChartType } = useChartType('bar');
 
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load tool details" retry={refetch} />;
@@ -68,6 +68,7 @@ export function ToolDetailPage() {
     {
       key: 'params',
       label: 'Params',
+      width: '300px',
       render: (row) => {
         if (!row.params) return <span className="text-text-muted">-</span>;
         const key = `${row.timestamp}-${row.sessionId}`;
@@ -77,12 +78,12 @@ export function ToolDetailPage() {
         return (
           <button
             onClick={(e) => { e.stopPropagation(); setExpandedRow(isExpanded ? null : key); }}
-            className="text-left font-mono text-xs text-text-muted hover:text-text-primary"
+            className="w-full text-left font-mono text-xs text-text-muted hover:text-text-primary"
           >
             {isExpanded ? (
-              <pre className="max-h-40 overflow-auto whitespace-pre-wrap">{JSON.stringify(row.params, null, 2)}</pre>
+              <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all">{JSON.stringify(row.params, null, 2)}</pre>
             ) : (
-              short
+              <span className="block truncate">{short}</span>
             )}
           </button>
         );
@@ -92,18 +93,23 @@ export function ToolDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link
-            to="/system/observability/tools"
-            className="text-sm text-text-muted hover:text-text-primary transition-colors"
-          >
-            &larr; Tools
-          </Link>
-          <h1 className="text-xl font-semibold font-mono text-text-primary">{toolName}</h1>
-        </div>
-        <TimeRangeSelector value={days} onChange={setDays} />
-      </div>
+      <ObsControlBar days={days} onDaysChange={setDays}>
+        <Link
+          to="/system/observability/tools"
+          className="text-sm text-text-muted hover:text-text-primary transition-colors"
+        >
+          &larr; Tools
+        </Link>
+        <h1 className="text-xl font-semibold font-mono text-text-primary">{toolName}</h1>
+        {data.errorCount > 0 && (
+          <FilterToggle
+            label="Errors only"
+            active={errorsOnly}
+            onToggle={() => setErrorsOnly(!errorsOnly)}
+            activeColor="error"
+          />
+        )}
+      </ObsControlBar>
 
       <div className="grid grid-cols-3 gap-4">
         <StatCard label="Total Invocations" value={fmtNumber(data.totalCount)} />
@@ -120,39 +126,32 @@ export function ToolDetailPage() {
       </div>
 
       {data.byDay.length > 0 && (
-        <ChartContainer title="Daily Usage">
-          <BarChart data={data.byDay}>
-            <CartesianGrid {...gridProps} />
-            <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-            <YAxis {...axisProps} />
-            <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
-            <Bar dataKey="count" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Calls" />
-          </BarChart>
+        <ChartContainer title="Daily Usage" chartType={chartType} onChartTypeChange={setChartType}>
+          {chartType === 'bar' ? (
+            <BarChart data={data.byDay}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+              <YAxis {...axisProps} />
+              <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+              <Bar dataKey="count" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Calls" />
+            </BarChart>
+          ) : (
+            <LineChart data={data.byDay}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+              <YAxis {...axisProps} />
+              <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+              <Line type="monotone" dataKey="count" stroke={CHART_PALETTE[0]} strokeWidth={2} dot={false} name="Calls" />
+            </LineChart>
+          )}
         </ChartContainer>
       )}
 
       {data.invocations.length > 0 && (
         <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-medium text-text-secondary">
-              Recent Invocations ({filteredInvocations.length}{errorsOnly ? ` of ${data.invocations.length}` : ''})
-            </h2>
-            <div className="flex items-center gap-3">
-              {data.errorCount > 0 && (
-                <button
-                  onClick={() => setErrorsOnly(!errorsOnly)}
-                  className={cn(
-                    'px-3 py-1 text-xs rounded-md border transition-colors',
-                    errorsOnly
-                      ? 'bg-error/10 border-error text-error'
-                      : 'bg-bg-tertiary border-border-primary text-text-muted hover:text-text-secondary'
-                  )}
-                >
-                  {errorsOnly ? 'Showing errors' : 'Errors only'}
-                </button>
-              )}
-            </div>
-          </div>
+          <h2 className="text-sm font-medium text-text-secondary mb-3">
+            Recent Invocations ({filteredInvocations.length}{errorsOnly ? ` of ${data.invocations.length}` : ''})
+          </h2>
           <DataTable<InvocationRow>
             data={filteredInvocations}
             columns={invocationColumns}

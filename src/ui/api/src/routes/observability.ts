@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { resolve } from 'path';
 import { homedir } from 'os';
-import { existsSync } from 'fs';
+import { existsSync, readdirSync } from 'fs';
 import { Database } from 'bun:sqlite';
 import {
   parseSessionsForDays,
@@ -111,7 +111,15 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Querystring: QueryParams }>('/skills', { preHandler: parseDaysPreHandler }, async (req) => {
     const obsReq = req as ObsRequest;
-    const { result, queryTimeMs } = timed(() => aggregateSkills(obsReq.telemetryEntries, obsReq.granularity));
+    const skillsDir = resolve(homedir(), '.claude/construct/skills');
+    const validSkills = new Set(
+      existsSync(skillsDir)
+        ? readdirSync(skillsDir, { withFileTypes: true })
+            .filter(d => d.isDirectory() && existsSync(resolve(skillsDir, d.name, 'SKILL.md')))
+            .map(d => d.name)
+        : []
+    );
+    const { result, queryTimeMs } = timed(() => aggregateSkills(obsReq.telemetryEntries, obsReq.granularity, validSkills.size > 0 ? validSkills : undefined));
     return { ...result, queryTimeMs };
   });
 

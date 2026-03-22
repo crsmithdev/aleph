@@ -60,7 +60,7 @@ export function DataTable<T>({
 
   return (
     <div className={cn('overflow-hidden rounded-lg border border-border-primary', className)}>
-      <table className="w-full text-sm">
+      <table className="w-full table-fixed text-sm">
         <thead>
           <tr className="border-b border-border-primary bg-bg-secondary">
             {columns.map((col) => (
@@ -102,6 +102,7 @@ export function DataTable<T>({
                     'px-4 py-2.5',
                     col.align === 'right' ? 'text-right' : 'text-left'
                   )}
+                  style={col.width ? { width: col.width, maxWidth: col.width } : undefined}
                 >
                   {col.render
                     ? col.render(row)
