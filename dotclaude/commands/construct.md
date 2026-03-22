@@ -110,9 +110,10 @@ After all three, ask: "Fix the code and reference issues now? (Instructions and 
 2. Check if `~/.claude/construct` is already a symlink. If so, print "Already linked → <target>" and stop.
 3. If `~/.claude/construct/` exists as a regular directory, back it up: `mv ~/.claude/construct ~/.claude/construct.bak`
 4. Create symlink: `ln -s <repo>/src ~/.claude/construct`
-5. Run the dotclaude merge steps only (settings.json merge + CLAUDE.md update + commands sync): `bun install.ts`
-6. Print "Linked: ~/.claude/construct → <repo>/src"
-7. Print "Note: run `/construct install` to return to copy mode."
+5. **Migrate data:** If `~/.claude/construct.bak/data/construct.db` exists, checkpoint its WAL and copy it (and signals/, sessions/) into `<repo>/src/data/` — but only if the destination DB is empty or missing. This prevents data loss when switching to linked mode. Use `PRAGMA wal_checkpoint(TRUNCATE)` before copying. Also copy `memory/signals/ratings.jsonl` and `memory/sessions/` if they exist in the backup.
+6. Run the dotclaude merge steps only (settings.json merge + CLAUDE.md update + commands sync): `bun install.ts`
+7. Print "Linked: ~/.claude/construct → <repo>/src"
+8. Print "Note: run `/construct install` to return to copy mode."
 
 ## `unlink`
 

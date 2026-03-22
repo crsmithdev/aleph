@@ -83,6 +83,77 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
+/** Migrate data from construct.bak into src/data/ when switching to linked mode.
+ *  Prevents data loss: the backup has the real DB, src/data/ may have a fresh empty one. */
+async function migrateDataFromBackup(): Promise<void> {
+  const bakDir = join(DST, "construct.bak");
+  if (!existsSync(bakDir)) return;
+
+  const { Database } = await import("bun:sqlite");
+
+  // Migrate construct.db
+  const bakDb = join(bakDir, "data", "construct.db");
+  const liveDb = join(CONSTRUCT_SRC, "data", "construct.db");
+  if (await exists(bakDb)) {
+    await mkdir(dirname(liveDb), { recursive: true });
+    const needsMigration = !(await exists(liveDb)) || (() => {
+      try {
+        const db = new Database(liveDb, { readonly: true });
+        const row = db.query("SELECT COUNT(*) as c FROM todos").get() as { c: number };
+        const goals = db.query("SELECT COUNT(*) as c FROM goals").get() as { c: number };
+        db.close();
+        return row.c === 0 && goals.c === 0;
+      } catch { return true; }
+    })();
+
+    if (needsMigration) {
+      // Checkpoint WAL in backup so all data is in the main file
+      try {
+        const db = new Database(bakDb);
+        db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+        db.close();
+      } catch {}
+      await cp(bakDb, liveDb);
+      // Remove any stale WAL/SHM at destination
+      for (const ext of ["-wal", "-shm"]) {
+        if (await exists(liveDb + ext)) await rm(liveDb + ext, { force: true });
+      }
+      console.log("  migrated data from construct.bak");
+    }
+  }
+
+  // Migrate ratings.jsonl
+  const bakRatings = join(bakDir, "memory", "signals", "ratings.jsonl");
+  const liveRatings = join(CONSTRUCT_SRC, "memory", "signals", "ratings.jsonl");
+  if (await exists(bakRatings)) {
+    await mkdir(dirname(liveRatings), { recursive: true });
+    const liveSize = (await exists(liveRatings)) ? (await stat(liveRatings)).size : 0;
+    const bakSize = (await stat(bakRatings)).size;
+    if (bakSize > liveSize) {
+      await cp(bakRatings, liveRatings);
+      console.log("  migrated ratings.jsonl from construct.bak");
+    }
+  }
+
+  // Migrate session files
+  const bakSessions = join(bakDir, "memory", "sessions");
+  const liveSessions = join(CONSTRUCT_SRC, "memory", "sessions");
+  if (existsSync(bakSessions)) {
+    await mkdir(liveSessions, { recursive: true });
+    const bakFiles = await readdir(bakSessions);
+    let copied = 0;
+    for (const f of bakFiles) {
+      if (!f.endsWith(".md")) continue;
+      const dst = join(liveSessions, f);
+      if (!(await exists(dst))) {
+        await cp(join(bakSessions, f), dst);
+        copied++;
+      }
+    }
+    if (copied > 0) console.log(`  migrated ${copied} session files from construct.bak`);
+  }
+}
+
 /** Sync srcDir to dstDir: copy everything from src, delete files in dst not in src */
 async function syncDir(srcDir: string, dstDir: string): Promise<void> {
   await mkdir(dstDir, { recursive: true });
@@ -148,6 +219,8 @@ const linked = (() => {
 
 if (linked) {
   console.log("linked mode — skipping backup/sync/restore (source is live)");
+  // Migrate data from construct.bak if the live DB is empty
+  await migrateDataFromBackup();
 } else {
   // 1. Back up preserved files to temp dir
   console.log("backing up preserved files...");
