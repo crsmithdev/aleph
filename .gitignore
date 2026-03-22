@@ -3,9 +3,8 @@
 .claude/MEMORY.md
 .claude/settings.local.json
 .claude/*.local.md
-construct/memory/sessions/
-construct/memory/signals/
-construct/memory/.memory-gate.lock
+src/memory/sessions/
+src/memory/signals/
 
 # Dashboard
 node_modules/
@@ -20,5 +19,5 @@ coverage/
 .vite/
 test-results/
 playwright-report/
-construct/dashboard/api/data/
+src/dashboard/api/data/
 references/

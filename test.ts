@@ -6,10 +6,10 @@ import { tmpdir } from "os";
 
 const ROOT = import.meta.dir;
 const BUN = process.argv[0];
-const hook = (path: string) => resolve(ROOT, "construct", path);
+const hook = (path: string) => resolve(ROOT, "src", path);
 const ratingsFile = resolve(tmpdir(), `construct-test-ratings-${process.pid}.jsonl`);
-const sessionsDir = resolve(ROOT, "construct/memory/sessions");
-mkdirSync(resolve(ROOT, "construct/memory/signals"), { recursive: true });
+const sessionsDir = resolve(ROOT, "src/memory/sessions");
+mkdirSync(resolve(ROOT, "src/memory/signals"), { recursive: true });
 mkdirSync(sessionsDir, { recursive: true });
 
 let passed = 0;
@@ -18,7 +18,7 @@ const infoResults: { name: string; pass: boolean }[] = [];
 
 // Run a hook, return stdout. Throws on unexpected exit code.
 const testEnv = { ...process.env, RATINGS_FILE: ratingsFile };
-const traceFile = resolve(ROOT, "construct/.trace");
+const traceFile = resolve(ROOT, "src/.trace");
 let lastTrace = ""; // captured trace output from most recent hook run
 
 function runHook(hookPath: string, stdin: string): string {
@@ -247,51 +247,6 @@ run("memory/hooks/session-summary.ts", "too few", JSON.stringify({ transcript_pa
 try { unlinkSync(tinyTranscript); } catch {}
 run("memory/hooks/session-summary.ts", "malformed", "not json", { expectExit: 1 });
 
-// ── Memory gate ──────────────────────────────────────────────────────────────
-
-console.log("\n--- memory-gate ---");
-const gateLock = resolve(Bun.env.HOME ?? "/tmp", ".claude/.memory-gate.lock");
-
-// Substantive session without memory_store → should block
-const gateBlockFile = writeTempJsonl("gate-block", [
-  userMsg("fix the bug"),
-  assistantMsg("found it", [{ name: "Read", input: { file_path: "/src/a.ts" } }]),
-  userMsg("ok"),
-  assistantMsg("fixing", [{ name: "Edit", input: { file_path: "/src/a.ts" } }]),
-  userMsg("test it"),
-  assistantMsg("running", [{ name: "Bash", input: { command: "bun test" } }]),
-  userMsg("good"),
-  assistantMsg("done"),
-]);
-try { unlinkSync(gateLock); } catch {}
-run("memory/hooks/memory-gate.ts", "blocks substantive session",
-  JSON.stringify({ transcript_path: gateBlockFile }), { expectStdout: ['"decision":"block"'] });
-try { unlinkSync(gateLock); } catch {}
-try { unlinkSync(gateBlockFile); } catch {}
-
-// Session with memory_store → should pass
-const gatePassFile = writeTempJsonl("gate-pass", [
-  userMsg("fix the bug"),
-  assistantMsg("found it", [{ name: "Edit", input: { file_path: "/src/a.ts" } }]),
-  userMsg("ok"),
-  assistantMsg("storing", [{ name: "mcp__memory__memory_store" }]),
-  userMsg("test it"),
-  assistantMsg("running", [{ name: "Bash", input: { command: "bun test" } }]),
-  userMsg("good"),
-  assistantMsg("done"),
-]);
-run("memory/hooks/memory-gate.ts", "passes with memory_store",
-  JSON.stringify({ transcript_path: gatePassFile }));
-try { unlinkSync(gatePassFile); } catch {}
-
-// Non-substantive session → should pass
-const gateSmallFile = writeTempJsonl("gate-small", [userMsg("hi"), assistantMsg("hello")]);
-run("memory/hooks/memory-gate.ts", "passes non-substantive",
-  JSON.stringify({ transcript_path: gateSmallFile }));
-try { unlinkSync(gateSmallFile); } catch {}
-
-run("memory/hooks/memory-gate.ts", "malformed", "not json", { expectExit: 1 });
-
 // ── Skill routing ────────────────────────────────────────────────────────────
 
 console.log("\n--- skill routing ---");
@@ -444,64 +399,6 @@ check("extension: debugging injects project content", dbgOut.includes("construct
 const resOut = extensionTest("investigate how redis handles eviction policies");
 check("extension: research has no project extension", !resOut.includes("Project skill extensions"));
 
-// ── Memory gate quality ─────────────────────────────────────────────────────
-
-console.log("\n--- memory-gate quality ---");
-
-// Good memory_store content → should pass
-const gateQualityPass = writeTempJsonl("gate-quality-pass", [
-  userMsg("fix the bug in auth"),
-  assistantMsg("found it", [{ name: "Edit", input: { file_path: "/src/auth.ts" } }]),
-  userMsg("ok"),
-  assistantMsg("storing", [{ name: "mcp__memory__memory_store", input: { content: "Task: fix auth bug causing 401 on token refresh. Done. Changed auth.ts to check token expiry before refresh call. Decided to fix at the middleware level rather than per-route." } }]),
-  userMsg("looks good"),
-  assistantMsg("running tests", [{ name: "Bash", input: { command: "bun test" } }]),
-  userMsg("nice"),
-  assistantMsg("done"),
-]);
-try { unlinkSync(gateLock); } catch {}
-const qualPassOut = runHook("memory/hooks/memory-gate.ts", JSON.stringify({ transcript_path: gateQualityPass }));
-check("gate-quality: good content passes", !qualPassOut.includes('"decision":"block"'));
-try { unlinkSync(gateLock); } catch {}
-try { unlinkSync(gateQualityPass); } catch {}
-
-// Thin memory_store content → should block
-const gateQualityBlock = writeTempJsonl("gate-quality-block", [
-  userMsg("fix the bug in auth"),
-  assistantMsg("found it", [{ name: "Edit", input: { file_path: "/src/auth.ts" } }]),
-  userMsg("ok"),
-  assistantMsg("storing", [{ name: "mcp__memory__memory_store", input: { content: "did some stuff" } }]),
-  userMsg("looks good"),
-  assistantMsg("running tests", [{ name: "Bash", input: { command: "bun test" } }]),
-  userMsg("nice"),
-  assistantMsg("done"),
-]);
-try { unlinkSync(gateLock); } catch {}
-const qualBlockOut = runHook("memory/hooks/memory-gate.ts", JSON.stringify({ transcript_path: gateQualityBlock }));
-check("gate-quality: thin content blocks", qualBlockOut.includes('"decision":"block"'));
-check("gate-quality: block shows submitted content", qualBlockOut.includes("did some stuff"));
-check("gate-quality: block lists missing fields", qualBlockOut.includes("Missing"));
-try { unlinkSync(gateLock); } catch {}
-try { unlinkSync(gateQualityBlock); } catch {}
-
-// Missing outcome keyword → should block
-const gateQualityNoOutcome = writeTempJsonl("gate-quality-no-outcome", [
-  userMsg("refactor the parser"),
-  assistantMsg("refactoring", [{ name: "Edit", input: { file_path: "/src/parser.ts" } }]),
-  userMsg("ok"),
-  assistantMsg("storing", [{ name: "mcp__memory__memory_store", input: { content: "Task: refactor parser module. Changed the tokenizer to use a streaming approach instead of buffering. This improves memory usage for large files." } }]),
-  userMsg("test it"),
-  assistantMsg("testing", [{ name: "Bash", input: { command: "bun test" } }]),
-  userMsg("good"),
-  assistantMsg("all set"),
-]);
-try { unlinkSync(gateLock); } catch {}
-const qualNoOutcomeOut = runHook("memory/hooks/memory-gate.ts", JSON.stringify({ transcript_path: gateQualityNoOutcome }));
-check("gate-quality: missing outcome blocks", qualNoOutcomeOut.includes('"decision":"block"'));
-check("gate-quality: identifies Outcome as missing", qualNoOutcomeOut.includes("Outcome"));
-try { unlinkSync(gateLock); } catch {}
-try { unlinkSync(gateQualityNoOutcome); } catch {}
-
 // ── Trace ───────────────────────────────────────────────────────────────────
 
 console.log("\n--- trace ---");
@@ -566,7 +463,7 @@ try { unlinkSync(sentinelPath); } catch {}
 
 console.log("\n--- identity files ---");
 
-const identityDir = resolve(ROOT, "construct/core/identity");
+const identityDir = resolve(ROOT, "src/core/identity");
 const expectedIdentity = ["IDENTITY.md", "SOUL.md", "STYLE.md", "USER.md"];
 for (const f of expectedIdentity) {
   const p = resolve(identityDir, f);

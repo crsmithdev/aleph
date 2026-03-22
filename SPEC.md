@@ -57,14 +57,9 @@ Ratings 1–3 trigger a console message: `[Construct] Low rating (N) — store w
 
 ### Ending a session
 
-On `Stop`, two hooks fire in order:
+On `Stop`, one hook fires:
 
-**1. Memory gate** (`memory-gate.ts`) — enforces quality `memory_store` before exit on substantive sessions:
-- Substantive = ≥6 messages AND ≥1 Edit/Write/Bash tool use.
-- If `memory_store` was called AND passes quality check: allows exit. Quality check requires: Task indicator (or content >80 chars), Outcome keyword (`done`, `complete`, `in-progress`, `blocked`, etc.), Changes keyword (`change`, `edit`, `add`, `remove`, `update`, `fix`, etc.), and total content ≥50 chars. If any are missing, blocks with a rewrite prompt showing submitted content and missing fields.
-- If `memory_store` was not called: blocks exit once with a prompt to call `memory_store` with a session summary. On second Stop, allows exit regardless.
-
-**2. Session summary** (`session-summary.ts`) — writes a summary file if the session had ≥4 messages:
+**Session summary** (`session-summary.ts`) — writes a summary file if the session had ≥4 messages:
 - Output: `memory/sessions/YYYY-MM-DD-HHMMSS.md`:
   ```markdown
   # Session: 2026-03-12
@@ -181,7 +176,7 @@ Subcommands of `/construct`, routed by `commands/construct.md`:
 
 **Steps:**
 1. **Backup** preserved files to `/tmp/construct-backup-XXXXX/`.
-2. **Sync** `construct/` tree destructively — copies everything from repo, deletes stale files in target.
+2. **Sync** `src/` tree destructively — copies everything from repo, deletes stale files in target.
 3. **Restore** backed-up preserved files over the fresh sync.
 4. **Sync commands** — installs from repo, removes known stale Construct commands. User-created commands untouched.
 5. **Merge settings.json** — replaces `hooks` and `statusLine` only. Rewrites relative paths to absolute `$HOME`-based paths. All other keys preserved.
@@ -247,7 +242,7 @@ Five modules, installed in dependency order. Core is always required; the others
 **Depends on:** construct-core
 
 **Provides:**
-- `construct/memory/hooks/` — session-start.ts, rating-capture.ts, memory-gate.ts, session-summary.ts
+- `construct/memory/hooks/` — session-start.ts, rating-capture.ts, session-summary.ts
 - `construct/memory/sessions/` — session summary files
 - `construct/memory/signals/ratings.jsonl` — explicit + implicit rating history
 - CLAUDE.md sections: `## Memory` (with `### Semantic memory (mcp-memory-service)`), `## Identity Files`
@@ -329,7 +324,7 @@ All hooks in `settings.json` under `hooks`:
 |-------|-----------------|----------|
 | SessionStart | memory/hooks/session-start.ts | 5000ms |
 | UserPromptSubmit | memory/hooks/rating-capture.ts, skills/hooks/format-reminder.ts | 2000ms, 3000ms |
-| Stop | memory/hooks/memory-gate.ts, memory/hooks/session-summary.ts | 5000ms, 3000ms |
+| Stop | memory/hooks/session-summary.ts | 3000ms |
 | PostToolUse | skills/hooks/quality.ts (matcher: `Edit\|Write`) | 10000ms |
 | Notification | skills/hooks/notify.ts | 3000ms |
 
@@ -344,7 +339,7 @@ Required top-level keys:
 
 Each hook group: `{ hooks: [{ type: "command", command: string, timeout: number }], matcher?: string }`
 
-The installer rewrites relative paths (`bun construct/...`) to absolute `$HOME`-based paths during install.
+The installer rewrites relative paths (`bun src/...`) to absolute `$HOME`-based paths during install.
 
 ## Trace Mode
 

@@ -31,7 +31,7 @@ See [INSTALL.md](INSTALL.md) for installation, upgrade, and mandatory post-insta
 ## Directory Layout
 
 ```
-construct/                                # source modules (installed to ~/.claude/construct/)
+src/                                      # source modules (installed to ~/.claude/construct/)
 ├── core/
 │   ├── hooks/                           # (none currently — statusline via ccstatusline)
 │   └── identity/                        # optional semantic identity layer
@@ -42,7 +42,7 @@ construct/                                # source modules (installed to ~/.clau
 ├── memory/
 │   ├── sessions/                        # session summaries
 │   ├── signals/ratings.jsonl            # explicit + implicit ratings
-│   └── hooks/                           # session-start, rating-capture, session-summary, memory-gate
+│   └── hooks/                           # session-start, rating-capture, session-summary
 ├── skills/
 │   ├── skill-rules.json                 # keyword routing config
 │   ├── hooks/format-reminder.ts         # depth classification + skill eval
@@ -89,7 +89,6 @@ dotclaude/                                # install sources (installed to ~/.cla
 | SessionStart | session-start.ts | memory | Surface last session summary |
 | UserPromptSubmit | rating-capture.ts | memory | Capture explicit N/10 ratings |
 | UserPromptSubmit | format-reminder.ts | skills | Depth classification + keyword-matched skill eval |
-| Stop | memory-gate.ts | memory | Enforce memory_store before exit |
 | Stop | session-summary.ts | memory | Structured session summary |
 | PostToolUse | quality.ts | skills | Per-file lint/format on Edit/Write |
 | Notification | notify.ts | skills | WSL toast / macOS alert / terminal bell |
@@ -117,7 +116,7 @@ Two layers:
 
 ## Skills
 
-Domain-specific playbooks in `construct/skills/<name>/SKILL.md`. The `format-reminder.ts` hook reads `skill-rules.json` and matches skills whose keywords appear in the current prompt.
+Domain-specific playbooks in `src/skills/<name>/SKILL.md`. The `format-reminder.ts` hook reads `skill-rules.json` and matches skills whose keywords appear in the current prompt.
 
 | Skill | Purpose |
 |-------|---------|
