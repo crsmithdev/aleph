@@ -683,3 +683,35 @@ export function aggregateMemoryUsage(entries: SessionEntry[]): MemoryUsageData {
 
   return { stores, searches, byDay };
 }
+
+export function getRecentEvents(
+  entries: SessionEntry[],
+  limit: number = 200,
+  offset: number = 0,
+  filters?: { entryType?: string; search?: string },
+): { events: SessionEntry[]; total: number } {
+  let filtered = entries;
+  if (filters?.entryType) {
+    filtered = filtered.filter((e) => e.entryType === filters.entryType);
+  }
+  if (filters?.search) {
+    const q = filters.search.toLowerCase();
+    filtered = filtered.filter((e) => {
+      const text = [
+        e.toolName,
+        e.skillName,
+        e.hookCommand,
+        e.hookEvent,
+        e.hookName,
+        e.errorMessage,
+        JSON.stringify(e.toolParams),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return text.includes(q);
+    });
+  }
+  const sorted = filtered.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  return { events: sorted.slice(offset, offset + limit), total: sorted.length };
+}

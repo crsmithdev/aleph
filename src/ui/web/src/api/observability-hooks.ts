@@ -209,6 +209,51 @@ export function useObsMemoryItems(filters: { type?: string; tag?: string; q?: st
   });
 }
 
+export function useObsEvents(
+  days: number,
+  filters: { entryType?: string; search?: string },
+  limit = 100,
+  offset = 0,
+) {
+  const params = new URLSearchParams();
+  params.set('days', String(days));
+  params.set('limit', String(limit));
+  params.set('offset', String(offset));
+  if (filters.entryType) params.set('type', filters.entryType);
+  if (filters.search) params.set('search', filters.search);
+  return useQuery<{
+    events: Array<{
+      sessionId: string;
+      timestamp: string;
+      project: string;
+      model?: string;
+      entryType: string;
+      toolName?: string;
+      toolParams?: Record<string, unknown>;
+      skillName?: string;
+      isError?: boolean;
+      errorMessage?: string;
+      toolUseId?: string;
+      hookEvent?: string;
+      hookName?: string;
+      hookCommand?: string;
+      hookDurationMs?: number;
+      hookExitCode?: number;
+      hookOutput?: string;
+      turnDurationMs?: number;
+      inputTokens?: number;
+      outputTokens?: number;
+      cacheReadTokens?: number;
+      cacheCreationTokens?: number;
+    }>;
+    total: number;
+    queryTimeMs: number;
+  }>({
+    queryKey: ['observability', 'events', days, filters, limit, offset],
+    queryFn: () => api.get(`/observability/events?${params.toString()}`),
+  });
+}
+
 export function useObsMemoryUsage(days: number) {
   return obsQuery<{
     stores: number;

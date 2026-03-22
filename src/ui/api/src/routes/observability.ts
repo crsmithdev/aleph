@@ -17,6 +17,7 @@ import {
   aggregateSkillDetail,
   aggregateMemoryUsage,
   aggregateHookEvents,
+  getRecentEvents,
 } from '@construct/telemetry';
 import type { Granularity, SessionEntry } from '@construct/telemetry';
 
@@ -225,6 +226,22 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       } finally {
         db?.close();
       }
+    },
+  );
+
+  app.get<{ Querystring: QueryParams & { type?: string; search?: string; limit?: string; offset?: string } }>(
+    '/events',
+    { preHandler: parseDaysPreHandler },
+    async (req) => {
+      const limit = Math.min(Math.max(parseInt(req.query.limit || '100', 10) || 100, 1), 500);
+      const offset = Math.max(parseInt(req.query.offset || '0', 10) || 0, 0);
+      const filters: { entryType?: string; search?: string } = {};
+      if (req.query.type) filters.entryType = req.query.type;
+      if (req.query.search) filters.search = req.query.search;
+      const { result, queryTimeMs } = timed(() =>
+        getRecentEvents((req as ObsRequest).telemetryEntries, limit, offset, filters),
+      );
+      return { ...result, queryTimeMs };
     },
   );
 

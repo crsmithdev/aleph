@@ -20,6 +20,7 @@ import { SessionsPage } from './pages/system/observability/SessionsPage';
 import { SkillsPage } from './pages/system/observability/SkillsPage';
 import { SkillDetailPage } from './pages/system/observability/SkillDetailPage';
 import { MemoryPage } from './pages/system/observability/MemoryPage';
+import { EventsPage } from './pages/system/observability/EventsPage';
 import { SettingsPage } from './pages/system/SettingsPage';
 
 const queryClient = new QueryClient({
@@ -55,6 +56,7 @@ export function App() {
               <Route path="/system/observability/skills/:name" element={<SkillDetailPage />} />
               <Route path="/system/observability/tokens" element={<TokensCostPage />} />
               <Route path="/system/observability/sessions" element={<SessionsPage />} />
+              <Route path="/system/observability/events" element={<EventsPage />} />
               <Route path="/system/observability/memory" element={<MemoryPage />} />
 
               {/* System — Settings */}

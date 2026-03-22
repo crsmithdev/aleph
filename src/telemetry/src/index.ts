@@ -44,6 +44,7 @@ export {
   aggregateSkillDetail,
   aggregateMemoryUsage,
   aggregateHookEvents,
+  getRecentEvents,
 } from "./aggregator.js";
 
 import { parseSessionsForDays } from "./parser.js";
