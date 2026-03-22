@@ -44,7 +44,7 @@ function BackupSection() {
   const loadBackups = async () => {
     setLoading(true);
     try {
-      const data = await api.get<Backup[]>('/backups');
+      const data = await api.get<Backup[]>('/backup/list');
       setBackups(data);
     } catch {
       setMessage('Failed to load backups.');
@@ -57,7 +57,7 @@ function BackupSection() {
     setCreating(true);
     setMessage('');
     try {
-      await api.post('/backups');
+      await api.post('/backup/create');
       setMessage('Backup created.');
       loadBackups();
     } catch {
@@ -70,7 +70,7 @@ function BackupSection() {
   const restoreBackup = async (filename: string) => {
     if (!confirm(`Restore backup "${filename}"? This will overwrite current data.`)) return;
     try {
-      await api.post(`/backups/${encodeURIComponent(filename)}/restore`);
+      await api.post('/backup/restore', { filename });
       setMessage('Backup restored. Refresh the page.');
     } catch {
       setMessage('Failed to restore backup.');

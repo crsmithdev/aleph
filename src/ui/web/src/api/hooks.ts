@@ -47,6 +47,9 @@ interface Habit {
   active: boolean;
   createdAt: string;
   updatedAt: string;
+  completedThisPeriod: boolean;
+  currentPeriodKey: string;
+  missedLastPeriod: boolean;
 }
 
 interface HistoryLog {
@@ -254,7 +257,7 @@ export function useCreateTodo() {
 export function useUpdateTodo() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: string; title?: string; done?: boolean; goalId?: string | null }) =>
+    mutationFn: ({ id, ...data }: { id: string; title?: string; done?: boolean; goalId?: string | null; note?: string | null }) =>
       api.patch<Todo>(`/todos/${id}`, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['todos'] });

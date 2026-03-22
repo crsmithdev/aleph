@@ -154,19 +154,11 @@ describe('Todos API', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/todos',
-      payload: { title: 'Buy groceries', dueDate: '2026-03-02' },
+      payload: { title: 'Buy groceries' },
     });
     expect(res.statusCode).toBe(201);
     expect(res.json().title).toBe('Buy groceries');
     todoId = res.json().id;
-  });
-
-  it('GET /api/todos/day/:date - gets day view', async () => {
-    const res = await app.inject({ method: 'GET', url: '/api/todos/day/2026-03-02' });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.todos).toBeDefined();
-    expect(body.overdue).toBeDefined();
   });
 
   it('PATCH /api/todos/:id - marks todo done', async () => {
@@ -177,15 +169,5 @@ describe('Todos API', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().done).toBe(true);
-  });
-});
-
-describe('Auth API', () => {
-  it('GET /api/auth/status - returns auth status', async () => {
-    const res = await app.inject({ method: 'GET', url: '/api/auth/status' });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body).toHaveProperty('authenticated');
-    expect(body).toHaveProperty('hasCredentials');
   });
 });

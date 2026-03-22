@@ -1,24 +1,5 @@
-import { useState } from 'react';
 import { useHabits, useCompleteHabit, useUncompleteHabit } from '../../api/hooks';
 import type { Habit } from '../../types';
-
-function getPeriodKey(frequency: Habit['frequency'], date: string): string {
-  const d = new Date(date + 'T00:00:00');
-  if (frequency === 'daily') {
-    return date;
-  }
-  if (frequency === 'weekly') {
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-    const monday = new Date(d);
-    monday.setDate(diff);
-    return monday.toISOString().slice(0, 10);
-  }
-  if (frequency === 'monthly') {
-    return date.slice(0, 7);
-  }
-  return date;
-}
 
 function frequencyLabel(frequency: Habit['frequency']): string {
   return frequency.charAt(0).toUpperCase() + frequency.slice(1);
@@ -28,7 +9,7 @@ interface HabitsSectionProps {
   date: string;
 }
 
-export function HabitsSection({ date }: HabitsSectionProps) {
+export function HabitsSection({ date: _date }: HabitsSectionProps) {
   const { data: habits, isLoading } = useHabits();
   const complete = useCompleteHabit();
   const uncomplete = useUncompleteHabit();
@@ -45,18 +26,15 @@ export function HabitsSection({ date }: HabitsSectionProps) {
 
   return (
     <div className="space-y-2">
-      {active.map((habit) => {
-        const periodKey = getPeriodKey(habit.frequency, date);
-        return (
-          <HabitItem
-            key={habit.id}
-            habit={habit}
-            periodKey={periodKey}
-            onComplete={() => complete.mutate({ id: habit.id, periodKey })}
-            onUncomplete={() => uncomplete.mutate({ id: habit.id, periodKey })}
-          />
-        );
-      })}
+      {active.map((habit) => (
+        <HabitItem
+          key={habit.id}
+          habit={habit}
+          periodKey={habit.currentPeriodKey}
+          onComplete={() => complete.mutate({ id: habit.id, periodKey: habit.currentPeriodKey })}
+          onUncomplete={() => uncomplete.mutate({ id: habit.id, periodKey: habit.currentPeriodKey })}
+        />
+      ))}
     </div>
   );
 }
@@ -69,7 +47,7 @@ interface HabitItemProps {
 }
 
 function HabitItem({ habit, onComplete, onUncomplete }: HabitItemProps) {
-  const [checked, setChecked] = useState(false);
+  const checked = habit.completedThisPeriod;
 
   const handleToggle = () => {
     if (checked) {
@@ -77,7 +55,6 @@ function HabitItem({ habit, onComplete, onUncomplete }: HabitItemProps) {
     } else {
       onComplete();
     }
-    setChecked(!checked);
   };
 
   return (

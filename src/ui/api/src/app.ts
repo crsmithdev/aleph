@@ -42,7 +42,15 @@ export async function createApp(opts?: { dbUrl?: string }) {
   const historyService = new HistoryService(db, eventBus);
   historyService.start();
 
-  await app.register(cors, { origin: true });
+  await app.register(cors, {
+    origin: (origin, cb) => {
+      if (!origin || origin === 'http://localhost' || origin.startsWith('http://localhost:')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Not allowed'), false);
+      }
+    },
+  });
 
   await app.register(swagger, {
     openapi: {

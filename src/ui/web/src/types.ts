@@ -58,6 +58,9 @@ export interface Habit {
   active: boolean;
   createdAt: string;
   updatedAt: string;
+  completedThisPeriod: boolean;
+  currentPeriodKey: string;
+  missedLastPeriod: boolean;
 }
 
 export interface HistoryLog {

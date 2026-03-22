@@ -32,13 +32,7 @@ export function TodoItem({ todo }: TodoItemProps) {
   };
 
   const saveNote = () => {
-    updateTodo.mutate({ id: todo.id, ...(noteText ? { title: todo.title } : {}) });
-    // Use direct patch for note since updateTodo schema may not include it
-    fetch(`/api/todos/${todo.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ note: noteText || null }),
-    });
+    updateTodo.mutate({ id: todo.id, note: noteText || null });
     setEditingNote(false);
   };
 
