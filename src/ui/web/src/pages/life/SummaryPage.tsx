@@ -187,7 +187,7 @@ export function SummaryPage() {
     a.href = url;
     a.download = `goal-summary-${start}-to-${end}.md`;
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   return (

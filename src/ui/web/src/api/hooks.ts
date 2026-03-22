@@ -1,64 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 
-// --- Types (inlined from @construct/goals) ---
-
-interface Goal {
-  id: string;
-  title: string;
-  priority: string;
-  state: string;
-  archived: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface Category {
-  id: string;
-  name: string;
-  color: string | null;
-  createdAt: string;
-}
-
-interface Note {
-  id: string;
-  goalId: string;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface Todo {
-  id: string;
-  title: string;
-  done: boolean;
-  note: string | null;
-  goalId: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface Habit {
-  id: string;
-  title: string;
-  frequency: string;
-  goalId: string | null;
-  endDate: string | null;
-  active: boolean;
-  createdAt: string;
-  updatedAt: string;
-  completedThisPeriod: boolean;
-  currentPeriodKey: string;
-  missedLastPeriod: boolean;
-}
-
-interface HistoryLog {
-  id: string;
-  goalId: string;
-  eventType: import('../types').HistoryEvent;
-  details: Record<string, unknown>;
-  createdAt: string;
-}
+import type { Goal, Category, Note, Todo, Habit, HistoryLog } from '../types';
 
 // --- Goals ---
 

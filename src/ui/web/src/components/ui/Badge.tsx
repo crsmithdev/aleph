@@ -42,24 +42,3 @@ export function StateBadge({ state }: { state: string }) {
     </span>
   );
 }
-
-export function CategoryBadge({
-  name,
-  color,
-}: {
-  name: string;
-  color?: string | null;
-}) {
-  return (
-    <span
-      className="px-2 py-0.5 rounded text-xs font-medium"
-      style={
-        color
-          ? { backgroundColor: `${color}20`, color }
-          : { backgroundColor: 'rgb(55 65 81)', color: 'rgb(209 213 219)' }
-      }
-    >
-      {name}
-    </span>
-  );
-}

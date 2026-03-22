@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Note } from '../../types';
 import { Button } from '../ui/Button';
 
@@ -23,6 +23,7 @@ function formatDateTime(iso: string) {
 export function NoteEditor({ note, onSave, onDelete, saving, deleting }: NoteEditorProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(note.content);
+  useEffect(() => setDraft(note.content), [note.content]);
 
   function handleSave() {
     if (!draft.trim()) return;

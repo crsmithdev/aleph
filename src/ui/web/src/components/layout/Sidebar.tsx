@@ -142,7 +142,7 @@ export function Sidebar() {
             </div>
             <div className="space-y-0.5">
               {section.items.map((item) => {
-                const isParentActive = location.pathname.startsWith(item.to);
+                const isParentActive = location.pathname === item.to || location.pathname.startsWith(item.to + '/');
                 return (
                   <div key={item.to}>
                     <SidebarLink to={item.children ? item.children[0].to : item.to} label={item.label} icon={item.icon} />

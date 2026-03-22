@@ -230,10 +230,10 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/memory/snapshot', async () => {
-    const { execSync } = await import('child_process');
+    const { execFileSync } = await import('child_process');
     try {
       const scriptPath = resolve(import.meta.dirname, '../../../../memory/obs-snapshot.ts');
-      execSync('bun ' + scriptPath, {
+      execFileSync('bun', [scriptPath], {
         timeout: 5000,
         stdio: 'pipe',
       });

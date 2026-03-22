@@ -116,7 +116,7 @@ export function GoalDetailPage() {
 
   function handleAddNote(e: React.FormEvent) {
     e.preventDefault();
-    if (!newNote.trim()) return;
+    if (!newNote.trim() || createNote.isPending) return;
     createNote.mutate({ content: newNote.trim() }, { onSuccess: () => setNewNote('') });
   }
 
@@ -242,7 +242,7 @@ export function GoalDetailPage() {
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
-                if (newNote.trim()) {
+                if (newNote.trim() && !createNote.isPending) {
                   createNote.mutate({ content: newNote.trim() }, { onSuccess: () => setNewNote('') });
                 }
               }
