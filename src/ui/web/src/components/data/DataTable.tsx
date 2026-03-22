@@ -15,6 +15,7 @@ interface DataTableProps<T> {
   columns: Column<T>[];
   keyField: keyof T;
   onRowClick?: (row: T) => void;
+  rowClassName?: (row: T) => string | undefined;
   emptyMessage?: string;
   className?: string;
   maxRows?: number;
@@ -25,6 +26,7 @@ export function DataTable<T>({
   columns,
   keyField,
   onRowClick,
+  rowClassName,
   emptyMessage = 'No data',
   className,
   maxRows,
@@ -89,7 +91,8 @@ export function DataTable<T>({
               onClick={onRowClick ? () => onRowClick(row) : undefined}
               className={cn(
                 'border-b border-border-primary/50 transition-colors',
-                onRowClick && 'cursor-pointer hover:bg-bg-tertiary'
+                onRowClick && 'cursor-pointer hover:bg-bg-tertiary',
+                rowClassName?.(row)
               )}
             >
               {columns.map((col) => (

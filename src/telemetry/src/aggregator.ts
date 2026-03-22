@@ -355,12 +355,39 @@ export function aggregateSessions(entries: SessionEntry[]): SessionsData {
 }
 
 export function aggregateToolDetail(entries: SessionEntry[], toolName: string): ToolDetailData {
+  // Build a set of timestamps for tool_result errors attributed to this tool.
+  // tool_result errors follow the tool_use they belong to — match by session + proximity.
+  const errorTimestamps = new Set<string>();
+  const toolUseTimestamps: string[] = [];
+
+  for (const e of entries) {
+    if (e.entryType === "tool_use" && e.toolName === toolName) {
+      toolUseTimestamps.push(e.timestamp);
+    }
+    if (e.entryType === "tool_result" && e.isError && e.toolName === toolName) {
+      errorTimestamps.add(e.timestamp);
+    }
+  }
+
+  // Also attribute errors by position: tool_result with isError following a tool_use of this tool
+  let lastToolUseTs: string | null = null;
+  for (const e of entries) {
+    if (e.entryType === "tool_use" && e.toolName === toolName) {
+      lastToolUseTs = e.timestamp;
+    } else if (e.entryType === "tool_result" && e.isError && lastToolUseTs) {
+      errorTimestamps.add(lastToolUseTs);
+      lastToolUseTs = null;
+    } else if (e.entryType === "tool_use") {
+      lastToolUseTs = null;
+    }
+  }
+
   const matched = entries.filter((e) => e.entryType === "tool_use" && e.toolName === toolName);
   const totalCount = matched.length;
-  const errorCount = 0;
+  let errorCount = 0;
 
   const dayMap = new Map<string, Map<number, number>>();
-  const invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown> }[] = [];
+  const invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; isError?: boolean }[] = [];
 
   for (const e of matched) {
     const day = dateKey(e.timestamp);
@@ -369,11 +396,15 @@ export function aggregateToolDetail(entries: SessionEntry[], toolName: string): 
     const hour = hourKey(e.timestamp);
     hm.set(hour, (hm.get(hour) || 0) + 1);
 
+    const isError = errorTimestamps.has(e.timestamp);
+    if (isError) errorCount++;
+
     invocations.push({
       timestamp: e.timestamp,
       sessionId: e.sessionId,
       project: e.project,
       params: e.toolParams,
+      isError: isError || undefined,
     });
   }
 

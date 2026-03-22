@@ -150,7 +150,7 @@ export interface ToolDetailData {
   totalCount: number;
   errorCount: number;
   byDay: (TimeBucket & { byHour: Record<number, number> })[];
-  invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown> }[];
+  invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; isError?: boolean }[];
 }
 
 export interface HookDetailData {

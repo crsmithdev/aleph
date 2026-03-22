@@ -11,14 +11,16 @@ import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtPct, shortDate, dateTime } from '../../../utils/format';
+import { cn } from '../../../utils/cn';
 
-type InvocationRow = { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown> };
+type InvocationRow = { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; isError?: boolean };
 
 export function ToolDetailPage() {
   const { name: rawName } = useParams<{ name: string }>();
   const toolName = decodeURIComponent(rawName ?? '');
   const [days, setDays] = useState(30);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  const [errorsOnly, setErrorsOnly] = useState(false);
   const { data, isLoading, error, refetch } = useObsToolDetail(toolName, days);
 
   if (isLoading) return <PageLoading />;
@@ -28,7 +30,19 @@ export function ToolDetailPage() {
     ? ((data.totalCount - data.errorCount) / data.totalCount) * 100
     : 100;
 
+  const filteredInvocations = errorsOnly
+    ? data.invocations.filter((inv: InvocationRow) => inv.isError)
+    : data.invocations;
+
   const invocationColumns: Column<InvocationRow>[] = [
+    {
+      key: 'status',
+      label: '',
+      width: '2rem',
+      render: (row) => row.isError
+        ? <span className="inline-block w-2 h-2 rounded-full bg-error" title="Error" />
+        : <span className="inline-block w-2 h-2 rounded-full bg-success/50" />,
+    },
     {
       key: 'timestamp',
       label: 'Time',
@@ -49,12 +63,13 @@ export function ToolDetailPage() {
       label: 'Params',
       render: (row) => {
         if (!row.params) return <span className="text-text-muted">-</span>;
-        const isExpanded = expandedRow === row.timestamp;
+        const key = `${row.timestamp}-${row.sessionId}`;
+        const isExpanded = expandedRow === key;
         const preview = JSON.stringify(row.params);
         const short = preview.length > 60 ? preview.slice(0, 60) + '...' : preview;
         return (
           <button
-            onClick={(e) => { e.stopPropagation(); setExpandedRow(isExpanded ? null : row.timestamp); }}
+            onClick={(e) => { e.stopPropagation(); setExpandedRow(isExpanded ? null : key); }}
             className="text-left font-mono text-xs text-text-muted hover:text-text-primary"
           >
             {isExpanded ? (
@@ -111,14 +126,32 @@ export function ToolDetailPage() {
 
       {data.invocations.length > 0 && (
         <div>
-          <h2 className="mb-3 text-sm font-medium text-text-secondary">
-            Recent Invocations ({data.invocations.length})
-          </h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-medium text-text-secondary">
+              Recent Invocations ({filteredInvocations.length}{errorsOnly ? ` of ${data.invocations.length}` : ''})
+            </h2>
+            <div className="flex items-center gap-3">
+              {data.errorCount > 0 && (
+                <button
+                  onClick={() => setErrorsOnly(!errorsOnly)}
+                  className={cn(
+                    'px-3 py-1 text-xs rounded-md border transition-colors',
+                    errorsOnly
+                      ? 'bg-error/10 border-error text-error'
+                      : 'bg-bg-tertiary border-border-primary text-text-muted hover:text-text-secondary'
+                  )}
+                >
+                  {errorsOnly ? 'Showing errors' : 'Errors only'}
+                </button>
+              )}
+            </div>
+          </div>
           <DataTable<InvocationRow>
-            data={data.invocations}
+            data={filteredInvocations}
             columns={invocationColumns}
             keyField="timestamp"
             maxRows={50}
+            rowClassName={(row) => row.isError ? 'bg-error/5' : undefined}
           />
         </div>
       )}
