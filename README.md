@@ -42,7 +42,7 @@ src/                                      # source modules (installed to ~/.clau
 ├── memory/
 │   ├── sessions/                        # session summaries
 │   ├── signals/ratings.jsonl            # explicit + implicit ratings
-│   └── hooks/                           # session-start, rating-capture, session-summary
+│   └── hooks/                           # session-start, rating-capture, session-summary, memory-extract
 ├── skills/
 │   ├── skill-rules.json                 # keyword routing config
 │   ├── hooks/format-reminder.ts         # depth classification + skill eval
@@ -90,6 +90,7 @@ dotclaude/                                # install sources (installed to ~/.cla
 | UserPromptSubmit | rating-capture.ts | memory | Capture explicit N/10 ratings |
 | UserPromptSubmit | format-reminder.ts | skills | Depth classification + keyword-matched skill eval |
 | Stop | session-summary.ts | memory | Structured session summary |
+| Stop | memory-extract.ts | memory | Auto-extract memories to semantic store |
 | PostToolUse | quality.ts | skills | Per-file lint/format on Edit/Write |
 | Notification | notify.ts | skills | WSL toast / macOS alert / terminal bell |
 

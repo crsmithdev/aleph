@@ -2,6 +2,7 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync, lstatSync, readlinkSync } from "fs";
 import { resolve, dirname } from "path";
 import { execSync } from "child_process";
+import { Database } from "bun:sqlite";
 import { trace } from "../../trace.ts";
 
 const TAG = "session-start";
@@ -161,6 +162,33 @@ try {
   }
 } catch {
   trace(TAG, "obs-snapshot spawn failed");
+}
+
+// Recall recent semantic memories (direct SQLite, no embedding model needed)
+const memDbPath = resolve(Bun.env.HOME ?? "/tmp", ".local/share/mcp-memory/sqlite_vec.db");
+try {
+  if (existsSync(memDbPath)) {
+    const memDb = new Database(memDbPath, { readonly: true });
+    const rows = memDb.query(`
+      SELECT content, memory_type, tags
+      FROM memories
+      WHERE deleted_at IS NULL
+      ORDER BY updated_at DESC
+      LIMIT 5
+    `).all() as Array<{ content: string; memory_type: string; tags: string }>;
+    memDb.close();
+
+    if (rows.length > 0) {
+      out.push("\n=== Recent Memories ===");
+      for (const r of rows) {
+        const content = r.content.replace(/\n/g, " ").slice(0, 200);
+        out.push(`  - [${r.memory_type}] ${content}`);
+      }
+    }
+    trace(TAG, `recalled ${rows.length} memories`);
+  }
+} catch (e) {
+  trace(TAG, `memory recall failed: ${(e as Error).message}`);
 }
 
 out.push("[memory] Search semantic memory (memory_search) for relevant project context before starting work.");

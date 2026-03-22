@@ -12,6 +12,10 @@ Session hooks, memory directories, ratings capture, semantic memory.
 - `hooks/session-start.ts` — surfaces last session at SessionStart; prompts semantic memory search
 - `hooks/rating-capture.ts` — captures explicit N/10 ratings at UserPromptSubmit
 - `hooks/session-summary.ts` — context-injected session summary at Stop
+- `hooks/memory-extract.ts` — automatic extraction of decisions, corrections, errors to semantic memory at Stop
+- `extract.ts` — extraction heuristics (session summaries, user corrections, error resolutions)
+- `memory-writer.py` — fire-and-forget Python script that stores extracted memories via mcp-memory-service
+- `memory-reader.py` — Python script for semantic memory search (used for manual queries)
 
 ## Usage
 

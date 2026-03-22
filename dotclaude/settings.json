@@ -45,6 +45,11 @@
         "hooks": [
           { "type": "command", "command": "bun src/memory/hooks/session-summary.ts", "timeout": 3000 }
         ]
+      },
+      {
+        "hooks": [
+          { "type": "command", "command": "bun src/memory/hooks/memory-extract.ts", "timeout": 5000 }
+        ]
       }
     ],
     "PostToolUse": [

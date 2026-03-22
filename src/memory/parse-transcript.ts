@@ -23,8 +23,13 @@ export interface TranscriptSummary {
   totalMessages: number;
 }
 
-export function parseTranscript(transcriptPath: string): TranscriptSummary | null {
+export interface ParseOptions {
+  textLimit?: number;  // max chars per text block (default 300)
+}
+
+export function parseTranscript(transcriptPath: string, opts?: ParseOptions): TranscriptSummary | null {
   if (!transcriptPath || !existsSync(transcriptPath)) return null;
+  const limit = opts?.textLimit ?? 300;
 
   const lines = readFileSync(transcriptPath, "utf8").trim().split("\n");
   const messages: ParsedMessage[] = [];
@@ -48,7 +53,7 @@ export function parseTranscript(transcriptPath: string): TranscriptSummary | nul
 
     for (const block of content) {
       if (block.type === "text" && typeof block.text === "string") {
-        texts.push(block.text.slice(0, 300));
+        texts.push(block.text.slice(0, limit));
       }
       if (block.type === "tool_use") {
         const name = block.name ?? "";
@@ -62,7 +67,7 @@ export function parseTranscript(transcriptPath: string): TranscriptSummary | nul
       }
     }
 
-    const text = texts.join(" ").replace(/\n/g, " ").trim().slice(0, 300);
+    const text = texts.join(" ").replace(/\n/g, " ").trim().slice(0, limit);
     const msg: ParsedMessage = { role: type as "user" | "assistant", text, toolUses, toolInputs };
     messages.push(msg);
 

@@ -57,9 +57,9 @@ Ratings 1–3 trigger a console message: `[Construct] Low rating (N) — store w
 
 ### Ending a session
 
-On `Stop`, one hook fires:
+On `Stop`, two hooks fire:
 
-**Session summary** (`session-summary.ts`) — writes a summary file if the session had ≥4 messages:
+**1. Session summary** (`session-summary.ts`) — writes a summary file if the session had ≥4 messages:
 - Output: `memory/sessions/YYYY-MM-DD-HHMMSS.md`:
   ```markdown
   # Session: 2026-03-12
@@ -76,6 +76,14 @@ On `Stop`, one hook fires:
   ```
 - Up to 8 tool names, 12 file paths, 4 milestones, 5 notes.
 - Fully silent.
+
+**2. Memory extraction** (`memory-extract.ts`) — auto-extracts high-value memories and stores them in semantic memory:
+- Skips if session is not substantive (<6 messages or no edits).
+- Skips if Claude already called `memory_store` voluntarily.
+- Extracts: session summary (intent → outcome + files), user corrections ("no", "don't", "instead"), error resolutions (error → fix pairs).
+- All auto-extracted memories tagged with `auto_extract` for filtering.
+- Spawns Python writer fire-and-forget (~7-8s in background). Non-blocking.
+- Dedup handled by mcp-memory-service (exact hash + semantic similarity).
 
 ## Statusline
 
@@ -242,7 +250,7 @@ Five modules, installed in dependency order. Core is always required; the others
 **Depends on:** construct-core
 
 **Provides:**
-- `construct/memory/hooks/` — session-start.ts, rating-capture.ts, session-summary.ts
+- `construct/memory/hooks/` — session-start.ts, rating-capture.ts, session-summary.ts, memory-extract.ts
 - `construct/memory/sessions/` — session summary files
 - `construct/memory/signals/ratings.jsonl` — explicit + implicit rating history
 - CLAUDE.md sections: `## Memory` (with `### Semantic memory (mcp-memory-service)`), `## Identity Files`
@@ -324,7 +332,7 @@ All hooks in `settings.json` under `hooks`:
 |-------|-----------------|----------|
 | SessionStart | memory/hooks/session-start.ts | 5000ms |
 | UserPromptSubmit | memory/hooks/rating-capture.ts, skills/hooks/format-reminder.ts | 2000ms, 3000ms |
-| Stop | memory/hooks/session-summary.ts | 3000ms |
+| Stop | memory/hooks/session-summary.ts, memory/hooks/memory-extract.ts | 3000ms, 5000ms |
 | PostToolUse | skills/hooks/quality.ts (matcher: `Edit\|Write`) | 10000ms |
 | Notification | skills/hooks/notify.ts | 3000ms |
 

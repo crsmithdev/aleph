@@ -247,6 +247,93 @@ run("memory/hooks/session-summary.ts", "too few", JSON.stringify({ transcript_pa
 try { unlinkSync(tinyTranscript); } catch {}
 run("memory/hooks/session-summary.ts", "malformed", "not json", { expectExit: 1 });
 
+// ── Memory extraction ───────────────────────────────────────────────────────
+
+console.log("\n--- memory-extract ---");
+
+// Substantive session without memory_store → should extract
+const extractFile = writeTempJsonl("extract-sub", [
+  userMsg("fix the auth bug"),
+  assistantMsg("found it", [{ name: "Read", input: { file_path: "/src/auth.ts" } }]),
+  userMsg("ok"),
+  assistantMsg("fixing", [{ name: "Edit", input: { file_path: "/src/auth.ts" } }]),
+  userMsg("test it"),
+  assistantMsg("running", [{ name: "Bash", input: { command: "bun test" } }]),
+  userMsg("good"),
+  assistantMsg("done"),
+]);
+run("memory/hooks/memory-extract.ts", "extracts from substantive session",
+  JSON.stringify({ transcript_path: extractFile }));
+try { unlinkSync(extractFile); } catch {}
+
+// Session with memory_store → should skip
+const extractStoreFile = writeTempJsonl("extract-store", [
+  userMsg("fix the auth bug"),
+  assistantMsg("found it", [{ name: "Edit", input: { file_path: "/src/auth.ts" } }]),
+  userMsg("ok"),
+  assistantMsg("storing", [{ name: "mcp__memory__memory_store", input: { content: "fixed auth" } }]),
+  userMsg("test it"),
+  assistantMsg("running", [{ name: "Bash", input: { command: "bun test" } }]),
+  userMsg("good"),
+  assistantMsg("done"),
+]);
+run("memory/hooks/memory-extract.ts", "skips when memory_store present",
+  JSON.stringify({ transcript_path: extractStoreFile }));
+try { unlinkSync(extractStoreFile); } catch {}
+
+// Non-substantive → should skip
+const extractSmall = writeTempJsonl("extract-small", [userMsg("hi"), assistantMsg("hello")]);
+run("memory/hooks/memory-extract.ts", "skips non-substantive",
+  JSON.stringify({ transcript_path: extractSmall }));
+try { unlinkSync(extractSmall); } catch {}
+
+// Malformed stdin
+run("memory/hooks/memory-extract.ts", "malformed stdin", "not json");
+
+// Heuristic tests via direct import
+{
+  const { parseTranscript } = await import("./src/memory/parse-transcript.ts");
+  const { extractMemories, hasMemoryStore, CORRECTION_RE } = await import("./src/memory/extract.ts");
+
+  // Correction detection
+  check("extract: detects 'no' correction", CORRECTION_RE.test("no, do it this way"));
+  check("extract: detects 'don't' correction", CORRECTION_RE.test("don't use that approach"));
+  check("extract: detects 'actually' correction", CORRECTION_RE.test("actually, use the other one"));
+  check("extract: ignores normal text", !CORRECTION_RE.test("looks good, thanks"));
+  check("extract: ignores 'notice'", !CORRECTION_RE.test("notice how it works"));
+
+  // Full extraction from transcript
+  const correctionFile = writeTempJsonl("extract-correction", [
+    userMsg("fix the auth bug"),
+    assistantMsg("I'll use mocks", [{ name: "Edit", input: { file_path: "/src/auth.ts" } }]),
+    userMsg("no, don't mock the database"),
+    assistantMsg("ok, using real db", [{ name: "Edit", input: { file_path: "/src/auth.ts" } }]),
+    userMsg("test it"),
+    assistantMsg("running", [{ name: "Bash", input: { command: "bun test" } }]),
+    userMsg("good"),
+    assistantMsg("done"),
+  ]);
+  const corrTranscript = parseTranscript(correctionFile, { textLimit: 1000 });
+  const corrMemories = extractMemories(corrTranscript!);
+  check("extract: finds correction in transcript", corrMemories.some(m => m.tags.includes("preference")));
+  check("extract: includes session summary", corrMemories.some(m => m.tags.includes("session_context")));
+  check("extract: correction content has user text", corrMemories.some(m => m.content.includes("don't mock")));
+  try { unlinkSync(correctionFile); } catch {}
+
+  // memory_store detection
+  const storeTranscript = parseTranscript(extractStoreFile);
+  // File was already deleted, so test with a fresh one
+  const storeFile2 = writeTempJsonl("extract-store2", [
+    userMsg("fix it"),
+    assistantMsg("storing", [{ name: "mcp__memory__memory_store", input: { content: "done" } }]),
+    userMsg("ok"),
+    assistantMsg("done", [{ name: "Bash", input: { command: "test" } }]),
+  ]);
+  const storeT = parseTranscript(storeFile2);
+  check("extract: detects memory_store in transcript", hasMemoryStore(storeT!));
+  try { unlinkSync(storeFile2); } catch {}
+}
+
 // ── Skill routing ────────────────────────────────────────────────────────────
 
 console.log("\n--- skill routing ---");
