@@ -58,7 +58,6 @@ export function applyDDL(sqlite: Sqlite): void {
       completed_at TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(habit_id, period_key)
     );
-    CREATE INDEX IF NOT EXISTS idx_hc_habit ON habit_completions(habit_id);
     CREATE TABLE IF NOT EXISTS history_logs (
       id TEXT PRIMARY KEY,
       goal_id TEXT NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
@@ -98,4 +97,13 @@ export function applyDDL(sqlite: Sqlite): void {
     }
     sqlite.exec('ALTER TABLE recurring_todo_completions RENAME TO habit_completions');
   }
+
+  // Rename recurring_todo_id -> habit_id in habit_completions
+  const hasOldCol = sqlite.prepare("SELECT count(*) as c FROM pragma_table_info('habit_completions') WHERE name='recurring_todo_id'").get() as { c: number } | null;
+  if (hasOldCol && hasOldCol.c > 0) {
+    sqlite.exec('ALTER TABLE habit_completions RENAME COLUMN recurring_todo_id TO habit_id');
+  }
+
+  // Create index after migrations (depends on habit_id column existing)
+  sqlite.exec('CREATE INDEX IF NOT EXISTS idx_hc_habit ON habit_completions(habit_id)');
 }
