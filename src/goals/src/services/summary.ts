@@ -2,9 +2,16 @@ import { and, gte, lte, sql, eq } from 'drizzle-orm';
 import type { Db } from '@construct/data';
 import { goals, todos, notes, historyLogs } from '../schema.js';
 
-export function getSummary(db: Db, start: string, end: string) {
-  const startTs = `${start}T00:00:00.000Z`;
-  const endTs = `${end}T23:59:59.999Z`;
+export function getSummary(db: Db, start: string, end: string, tzOffsetMinutes?: number) {
+  // Adjust query boundaries for timezone: timestamps are stored as UTC ISO strings,
+  // but start/end dates are in the user's local timezone.
+  const offsetMs = (tzOffsetMinutes ?? 0) * 60 * 1000;
+  const startDate = new Date(`${start}T00:00:00.000Z`);
+  const endDate = new Date(`${end}T23:59:59.999Z`);
+  startDate.setTime(startDate.getTime() + offsetMs);
+  endDate.setTime(endDate.getTime() + offsetMs);
+  const startTs = startDate.toISOString();
+  const endTs = endDate.toISOString();
 
   const goalsCreated = db
     .select()

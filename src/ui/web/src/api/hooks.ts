@@ -282,7 +282,7 @@ export function useUncompleteHabit() {
 export function useSummary(startDate: string, endDate: string) {
   return useQuery({
     queryKey: ['summary', startDate, endDate],
-    queryFn: () => api.get<unknown>(`/summary?start=${startDate}&end=${endDate}`),
+    queryFn: () => api.get<unknown>(`/summary?start=${startDate}&end=${endDate}&tz=${new Date().getTimezoneOffset()}`),
     enabled: !!startDate && !!endDate,
   });
 }
