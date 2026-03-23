@@ -11,15 +11,17 @@ import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtPct, shortDate, dateTime } from '../../../utils/format';
+import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 
-type InvocationRow = { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown> };
+type InvocationRow = { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; userRequest?: string };
 
 export function SkillDetailPage() {
   const { name: rawName } = useParams<{ name: string }>();
   const skillName = decodeURIComponent(rawName ?? '');
-  const [days, setDays] = useState(30);
+  const [range, setRange] = useState<TimeRange>('30d');
+  const [granularity, setGranularity] = useState<Granularity>('day');
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
-  const { data, isLoading, error, refetch } = useObsSkillDetail(skillName, days);
+  const { data, isLoading, error, refetch } = useObsSkillDetail(skillName, range);
 
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load skill details" retry={refetch} />;
@@ -45,9 +47,22 @@ export function SkillDetailPage() {
       render: (row) => <span className="font-mono text-xs text-text-muted">{row.sessionId.slice(0, 8)}</span>,
     },
     {
+      key: 'userRequest',
+      label: 'Request',
+      width: '300px',
+      render: (row) => {
+        if (!row.userRequest) return <span className="text-text-muted">-</span>;
+        const text = row.userRequest;
+        const short = text.length > 80 ? text.slice(0, 80) + '...' : text;
+        return (
+          <span className="text-xs text-text-secondary" title={text}>{short}</span>
+        );
+      },
+    },
+    {
       key: 'params',
       label: 'Params',
-      width: '300px',
+      width: '200px',
       render: (row) => {
         if (!row.params) return <span className="text-text-muted">-</span>;
         const isExpanded = expandedRow === row.timestamp;
@@ -71,15 +86,23 @@ export function SkillDetailPage() {
 
   return (
     <div className="space-y-6">
-      <ObsControlBar days={days} onDaysChange={setDays}>
-        <Link
-          to="/system/observability/skills"
-          className="text-sm text-text-muted hover:text-text-primary transition-colors"
-        >
-          &larr; Skills
-        </Link>
-        <h1 className="text-xl font-semibold font-mono text-text-primary">{skillName}</h1>
-      </ObsControlBar>
+      <ObsControlBar
+        title={
+          <div className="flex items-center gap-3">
+            <Link
+              to="/system/observability/skills"
+              className="text-sm text-text-muted hover:text-text-primary transition-colors"
+            >
+              &larr; Skills
+            </Link>
+            <h1 className="text-xl font-semibold font-mono text-text-primary">{skillName}</h1>
+          </div>
+        }
+        range={range}
+        onRangeChange={setRange}
+        granularity={granularity}
+        onGranularityChange={setGranularity}
+      />
 
       <div className="grid grid-cols-3 gap-4">
         <StatCard label="Total Invocations" value={fmtNumber(data.totalCount)} />

@@ -1,17 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 
+type TimeRange = 'session' | '1h' | '1d' | '7d' | '30d';
 type Granularity = 'minute' | 'hour' | 'day';
 
 interface ObsQueryOpts {
-  days: number;
+  range: TimeRange;
   granularity?: Granularity;
   session?: string;
 }
 
 function obsQueryParams(opts: ObsQueryOpts): string {
   const params = new URLSearchParams();
-  params.set('days', String(opts.days));
+  params.set('range', opts.range);
   if (opts.granularity && opts.granularity !== 'day') params.set('granularity', opts.granularity);
   if (opts.session) params.set('session', opts.session);
   return params.toString();
@@ -19,12 +20,12 @@ function obsQueryParams(opts: ObsQueryOpts): string {
 
 function obsQuery<T>(endpoint: string, opts: ObsQueryOpts) {
   return useQuery<T>({
-    queryKey: ['observability', endpoint, opts.days, opts.granularity || 'day', opts.session || ''],
+    queryKey: ['observability', endpoint, opts.range, opts.granularity || 'day', opts.session || ''],
     queryFn: () => api.get<T>(`/observability/${endpoint}?${obsQueryParams(opts)}`),
   });
 }
 
-export function useObsOverview(days: number, session?: string) {
+export function useObsOverview(range: TimeRange, session?: string) {
   return obsQuery<{
     sessions: number;
     messages: number;
@@ -34,10 +35,10 @@ export function useObsOverview(days: number, session?: string) {
     totalCost: number;
     byDay: Array<{ date: string; sessions: number; messages: number }>;
     queryTimeMs: number;
-  }>('overview', { days, session });
+  }>('overview', { range, session });
 }
 
-export function useObsTools(days: number, granularity?: Granularity, session?: string) {
+export function useObsTools(range: TimeRange, granularity?: Granularity, session?: string) {
   return obsQuery<{
     ranked: Array<{
       name: string;
@@ -49,10 +50,10 @@ export function useObsTools(days: number, granularity?: Granularity, session?: s
     }>;
     byDay: Array<{ date: string; count: number; tools: Record<string, number> }>;
     queryTimeMs: number;
-  }>('tools', { days, granularity, session });
+  }>('tools', { range, granularity, session });
 }
 
-export function useObsHooks(days: number, granularity?: Granularity, session?: string) {
+export function useObsHooks(range: TimeRange, granularity?: Granularity, session?: string) {
   return obsQuery<{
     ranked: Array<{
       command: string;
@@ -67,18 +68,18 @@ export function useObsHooks(days: number, granularity?: Granularity, session?: s
     }>;
     byDay: Array<{ date: string; count: number; hooks: Record<string, number> }>;
     queryTimeMs: number;
-  }>('hooks', { days, granularity, session });
+  }>('hooks', { range, granularity, session });
 }
 
-export function useObsSkills(days: number, granularity?: Granularity, session?: string) {
+export function useObsSkills(range: TimeRange, granularity?: Granularity, session?: string) {
   return obsQuery<{
     ranked: Array<{ skill: string; count: number; pct: number; errors: number; lastUsed?: string }>;
     byDay: Array<{ date: string; count: number; skills: Record<string, number> }>;
     queryTimeMs: number;
-  }>('skills', { days, granularity, session });
+  }>('skills', { range, granularity, session });
 }
 
-export function useObsTokens(days: number, session?: string) {
+export function useObsTokens(range: TimeRange, session?: string) {
   return obsQuery<{
     byDay: Array<{
       date: string;
@@ -88,25 +89,25 @@ export function useObsTokens(days: number, session?: string) {
       cacheCreation: number;
     }>;
     queryTimeMs: number;
-  }>('tokens', { days, session });
+  }>('tokens', { range, session });
 }
 
-export function useObsCost(days: number, session?: string) {
+export function useObsCost(range: TimeRange, session?: string) {
   return obsQuery<{
     totalUsd: number;
     byDay: Array<{ date: string; usd: number }>;
     byModel: Array<{ model: string; usd: number; pct: number }>;
     queryTimeMs: number;
-  }>('cost', { days, session });
+  }>('cost', { range, session });
 }
 
-export function useObsSessions(days: number, session?: string) {
+export function useObsSessions(range: TimeRange, session?: string) {
   return obsQuery<{
     byDay: Array<{ date: string; sessions: number; messages: number }>;
     byProject: Array<{ project: string; sessions: number }>;
     byHour: Array<{ hour: number; count: number }>;
     queryTimeMs: number;
-  }>('sessions', { days, session });
+  }>('sessions', { range, session });
 }
 
 export function useObsMemory() {
@@ -124,22 +125,22 @@ export function useObsMemory() {
   });
 }
 
-export function useObsToolDetail(name: string, days: number) {
+export function useObsToolDetail(name: string, range: TimeRange) {
   return useQuery<{
     name: string;
     totalCount: number;
     errorCount: number;
     byDay: Array<{ date: string; count: number; byHour: Record<number, number> }>;
-    invocations: Array<{ timestamp: string; sessionId: string; project: string; params?: Record<string, unknown> }>;
+    invocations: Array<{ timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; isError?: boolean; errorMessage?: string }>;
     queryTimeMs: number;
   }>({
-    queryKey: ['observability', 'tool-detail', name, days],
-    queryFn: () => api.get(`/observability/tools/${encodeURIComponent(name)}?days=${days}`),
+    queryKey: ['observability', 'tool-detail', name, range],
+    queryFn: () => api.get(`/observability/tools/${encodeURIComponent(name)}?range=${range}`),
     enabled: !!name,
   });
 }
 
-export function useObsHookEvents(days: number) {
+export function useObsHookEvents(range: TimeRange) {
   return obsQuery<{
     events: Array<{ event: string; count: number; hooks: string[] }>;
     invocations: Array<{
@@ -149,10 +150,10 @@ export function useObsHookEvents(days: number) {
       hooks: Array<{ command: string; durationMs?: number; exitCode?: number; output?: string }>;
     }>;
     queryTimeMs: number;
-  }>('hooks/events', { days });
+  }>('hooks/events', { range });
 }
 
-export function useObsHookDetail(name: string, days: number) {
+export function useObsHookDetail(name: string, range: TimeRange) {
   return useQuery<{
     command: string;
     event: string;
@@ -164,26 +165,26 @@ export function useObsHookDetail(name: string, days: number) {
     active: boolean;
     fullCommand?: string;
     byDay: Array<{ date: string; count: number; avgMs: number }>;
-    invocations: Array<{ timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string }>;
+    invocations: Array<{ timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string; isError?: boolean; errorMessage?: string }>;
     queryTimeMs: number;
   }>({
-    queryKey: ['observability', 'hook-detail', name, days],
-    queryFn: () => api.get(`/observability/hooks/${encodeURIComponent(name)}?days=${days}`),
+    queryKey: ['observability', 'hook-detail', name, range],
+    queryFn: () => api.get(`/observability/hooks/${encodeURIComponent(name)}?range=${range}`),
     enabled: !!name,
   });
 }
 
-export function useObsSkillDetail(name: string, days: number) {
+export function useObsSkillDetail(name: string, range: TimeRange) {
   return useQuery<{
     skill: string;
     totalCount: number;
     errorCount: number;
     byDay: Array<{ date: string; count: number }>;
-    invocations: Array<{ timestamp: string; sessionId: string; project: string; params?: Record<string, unknown> }>;
+    invocations: Array<{ timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; userRequest?: string }>;
     queryTimeMs: number;
   }>({
-    queryKey: ['observability', 'skill-detail', name, days],
-    queryFn: () => api.get(`/observability/skills/${encodeURIComponent(name)}?days=${days}`),
+    queryKey: ['observability', 'skill-detail', name, range],
+    queryFn: () => api.get(`/observability/skills/${encodeURIComponent(name)}?range=${range}`),
     enabled: !!name,
   });
 }
@@ -210,13 +211,13 @@ export function useObsMemoryItems(filters: { type?: string; tag?: string; q?: st
 }
 
 export function useObsEvents(
-  days: number,
+  range: TimeRange,
   filters: { entryType?: string; search?: string },
   limit = 100,
   offset = 0,
 ) {
   const params = new URLSearchParams();
-  params.set('days', String(days));
+  params.set('range', range);
   params.set('limit', String(limit));
   params.set('offset', String(offset));
   if (filters.entryType) params.set('type', filters.entryType);
@@ -249,18 +250,18 @@ export function useObsEvents(
     total: number;
     queryTimeMs: number;
   }>({
-    queryKey: ['observability', 'events', days, filters, limit, offset],
+    queryKey: ['observability', 'events', range, filters, limit, offset],
     queryFn: () => api.get(`/observability/events?${params.toString()}`),
   });
 }
 
-export function useObsMemoryUsage(days: number) {
+export function useObsMemoryUsage(range: TimeRange) {
   return obsQuery<{
     stores: number;
     searches: number;
     byDay: Array<{ date: string; stores: number; searches: number }>;
     queryTimeMs: number;
-  }>('memory/usage', { days });
+  }>('memory/usage', { range });
 }
 
 export function useTriggerSnapshot() {

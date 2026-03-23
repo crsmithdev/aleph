@@ -31,6 +31,12 @@ if (archPattern.test(prompt)) {
   trace(TAG, "depth: QUICK");
 }
 
+// Verification gate hint — remind Claude the Stop hook will check
+const isQuestion = /^\s*(what|how|why|when|where|who|is |are |can |does |do |should |could |would |which |tell me|explain|describe)\b/i.test(prompt);
+if (!isQuestion && words.length >= 5) {
+  console.log("[Construct] Verification gate active — changes require test evidence (end-to-end if possible) before completion.");
+}
+
 // Skill matching
 if (!existsSync(rulesFile)) {
   trace(TAG, "no skill-rules.json, skip skill matching");

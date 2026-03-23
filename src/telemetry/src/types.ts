@@ -9,7 +9,8 @@ export interface SessionEntry {
     | "hook_progress"
     | "stop_hook_summary"
     | "turn_duration"
-    | "tokens";
+    | "tokens"
+    | "user_message";
   toolName?: string;
   toolParams?: Record<string, unknown>;
   skillName?: string;
@@ -22,6 +23,7 @@ export interface SessionEntry {
   hookDurationMs?: number;
   hookExitCode?: number;
   hookOutput?: string;
+  userRequest?: string;
   turnDurationMs?: number;
   inputTokens?: number;
   outputTokens?: number;
@@ -165,7 +167,7 @@ export interface HookDetailData {
   errors: number;
   fullCommand?: string;
   byDay: { date: string; count: number; avgMs: number }[];
-  invocations: { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string }[];
+  invocations: { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string; isError?: boolean; errorMessage?: string }[];
 }
 
 export interface SkillDetailData {
@@ -173,7 +175,7 @@ export interface SkillDetailData {
   totalCount: number;
   errorCount: number;
   byDay: TimeBucket[];
-  invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown> }[];
+  invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; userRequest?: string }[];
 }
 
 export interface MemoryUsageData {

@@ -6,7 +6,7 @@
     },
     {
       "skill": "verification",
-      "keywords": ["verify that", "verify it", "confirm passing", "validate that", "prove it works", "verification"]
+      "keywords": ["verify", "verify that", "verify it", "confirm passing", "validate that", "prove it works", "verification"]
     },
     {
       "skill": "debugging",

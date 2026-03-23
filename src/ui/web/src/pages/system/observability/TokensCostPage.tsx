@@ -6,6 +6,7 @@ import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
+import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
@@ -14,9 +15,10 @@ import { fmtCurrency, fmtNumber, fmtPct, shortDate } from '../../../utils/format
 type ModelRow = { model: string; usd: number; pct: number };
 
 export function TokensCostPage() {
-  const [days, setDays] = useState(30);
-  const tokens = useObsTokens(days);
-  const cost = useObsCost(days);
+  const [range, setRange] = useState<TimeRange>('30d');
+  const [granularity, setGranularity] = useState<Granularity>('day');
+  const tokens = useObsTokens(range);
+  const cost = useObsCost(range);
   const { chartType: tokensChartType, setChartType: setTokensChartType } = useChartType('line');
   const { chartType: costChartType, setChartType: setCostChartType } = useChartType('line');
 
@@ -54,9 +56,7 @@ export function TokensCostPage() {
 
   return (
     <div className="space-y-6">
-      <ObsControlBar days={days} onDaysChange={setDays}>
-        <h1 className="text-xl font-semibold text-text-primary">Tokens & Cost</h1>
-      </ObsControlBar>
+      <ObsControlBar title={<h1 className="text-xl font-semibold text-text-primary">Tokens & Cost</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity} />
 
       <div className="grid grid-cols-2 gap-4">
         <StatCard label="Total Cost" value={fmtCurrency(cost.data.totalUsd)} accent="success" />

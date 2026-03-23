@@ -1,31 +1,36 @@
 import React from 'react';
 import { cn } from '../../utils/cn';
-import { TimeRangeSelector, type Granularity } from './TimeRangeSelector';
+import { TimeRangeSelector, type Granularity, type TimeRange } from './TimeRangeSelector';
 
 export interface ObsControlBarProps {
-  days: number;
-  onDaysChange: (days: number) => void;
+  title: React.ReactNode;
+  range: TimeRange;
+  onRangeChange: (range: TimeRange) => void;
   granularity?: Granularity;
   onGranularityChange?: (g: Granularity) => void;
   children?: React.ReactNode;
 }
 
 export function ObsControlBar({
-  days,
-  onDaysChange,
+  title,
+  range,
+  onRangeChange,
   granularity,
   onGranularityChange,
   children,
 }: ObsControlBarProps) {
   return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-3">{children}</div>
-      <TimeRangeSelector
-        value={days}
-        onChange={onDaysChange}
-        granularity={granularity}
-        onGranularityChange={onGranularityChange}
-      />
+    <div className="space-y-2">
+      <div>{title}</div>
+      <div className="sticky top-0 z-10 -mx-1 px-1 py-2 bg-bg-primary flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 flex-wrap">{children}</div>
+        <TimeRangeSelector
+          value={range}
+          onChange={onRangeChange}
+          granularity={granularity}
+          onGranularityChange={onGranularityChange}
+        />
+      </div>
     </div>
   );
 }

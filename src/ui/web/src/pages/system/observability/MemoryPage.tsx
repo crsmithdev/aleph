@@ -17,7 +17,7 @@ type MemoryItem = { id: string; content: string; memory_type: string; tags: stri
 export function MemoryPage() {
   const { data, isLoading, error, refetch } = useObsMemory();
   const snapshot = useTriggerSnapshot();
-  const usage = useObsMemoryUsage(30);
+  const usage = useObsMemoryUsage('30d');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('');

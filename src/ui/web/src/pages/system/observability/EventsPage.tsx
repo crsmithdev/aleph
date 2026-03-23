@@ -4,6 +4,7 @@ import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
+import { type TimeRange } from '../../../components/data/TimeRangeSelector';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { dateTime, fmtNumber, fmtMs } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
@@ -100,67 +101,105 @@ function getDetail(row: EventRow): string {
   }
 }
 
-function InfoCell({ row, expandedKey, onToggle }: { row: EventRow; expandedKey: string; onToggle: (k: string) => void }) {
-  const key = `${row.timestamp}-${row.sessionId}-${row.toolUseId ?? row.entryType}`;
-  const isExpanded = expandedKey === key;
-
-  let preview = '';
-  let full = '';
-
+function getInfoPreview(row: EventRow): string {
   if (row.entryType === 'tool_use' && row.toolParams) {
-    full = JSON.stringify(row.toolParams, null, 2);
-    preview = JSON.stringify(row.toolParams);
-    if (preview.length > 60) preview = preview.slice(0, 60) + '…';
-  } else if (row.entryType === 'stop_hook_summary' && row.hookOutput) {
-    full = row.hookOutput;
-    preview = row.hookOutput.slice(0, 60) + (row.hookOutput.length > 60 ? '…' : '');
-  } else if (row.entryType === 'tokens') {
-    const parts = [
+    const s = JSON.stringify(row.toolParams);
+    return s.length > 60 ? s.slice(0, 60) + '…' : s;
+  }
+  if (row.entryType === 'stop_hook_summary' && row.hookOutput) {
+    return row.hookOutput.slice(0, 60) + (row.hookOutput.length > 60 ? '…' : '');
+  }
+  if (row.entryType === 'tokens') {
+    return [
       row.inputTokens != null && `in:${fmtNumber(row.inputTokens)}`,
       row.outputTokens != null && `out:${fmtNumber(row.outputTokens)}`,
       row.cacheReadTokens != null && row.cacheReadTokens > 0 && `cr:${fmtNumber(row.cacheReadTokens)}`,
-    ].filter(Boolean);
-    preview = parts.join(' ');
-    full = preview;
-  } else if (row.entryType === 'hook_progress') {
-    preview = [row.hookEvent, row.hookName].filter(Boolean).join(' / ');
-    full = preview;
-  } else if (row.entryType === 'tool_result' && row.errorMessage) {
-    full = row.errorMessage;
-    preview = row.errorMessage.slice(0, 60) + (row.errorMessage.length > 60 ? '…' : '');
+    ].filter(Boolean).join(' ');
+  }
+  if (row.entryType === 'hook_progress') {
+    return [row.hookEvent, row.hookName].filter(Boolean).join(' / ');
+  }
+  if (row.entryType === 'tool_result' && row.errorMessage) {
+    return row.errorMessage.slice(0, 60) + (row.errorMessage.length > 60 ? '…' : '');
+  }
+  return '';
+}
+
+function rowKey(row: EventRow): string {
+  return `${row.timestamp}-${row.sessionId}-${row.toolUseId ?? row.entryType}`;
+}
+
+function ExpandedRow({ row }: { row: EventRow }) {
+  const sections: Array<{ label: string; content: string; isError?: boolean }> = [];
+
+  if (row.entryType === 'tool_use') {
+    if (row.toolName) sections.push({ label: 'Tool', content: row.toolName });
+    if (row.skillName) sections.push({ label: 'Skill', content: row.skillName });
+    if (row.toolParams) sections.push({ label: 'Parameters', content: JSON.stringify(row.toolParams, null, 2) });
+    if (row.toolUseId) sections.push({ label: 'Tool Use ID', content: row.toolUseId });
+  } else if (row.entryType === 'tool_result') {
+    if (row.toolName) sections.push({ label: 'Tool', content: row.toolName });
+    if (row.isError) sections.push({ label: 'Error', content: row.errorMessage ?? 'Unknown error', isError: true });
+    if (row.toolUseId) sections.push({ label: 'Tool Use ID', content: row.toolUseId });
+  } else if (row.entryType === 'hook_progress' || row.entryType === 'stop_hook_summary') {
+    if (row.hookEvent) sections.push({ label: 'Event', content: row.hookEvent });
+    if (row.hookName) sections.push({ label: 'Hook', content: row.hookName });
+    if (row.hookCommand) sections.push({ label: 'Command', content: row.hookCommand });
+    if (row.hookDurationMs != null) sections.push({ label: 'Duration', content: fmtMs(row.hookDurationMs) });
+    if (row.hookExitCode != null) sections.push({ label: 'Exit Code', content: String(row.hookExitCode), isError: row.hookExitCode !== 0 });
+    if (row.hookOutput) sections.push({ label: 'Output', content: row.hookOutput });
+  } else if (row.entryType === 'tokens') {
+    if (row.model) sections.push({ label: 'Model', content: row.model });
+    if (row.inputTokens != null) sections.push({ label: 'Input Tokens', content: fmtNumber(row.inputTokens) });
+    if (row.outputTokens != null) sections.push({ label: 'Output Tokens', content: fmtNumber(row.outputTokens) });
+    if (row.cacheReadTokens != null && row.cacheReadTokens > 0)
+      sections.push({ label: 'Cache Read', content: fmtNumber(row.cacheReadTokens) });
+    if (row.cacheCreationTokens != null && row.cacheCreationTokens > 0)
+      sections.push({ label: 'Cache Creation', content: fmtNumber(row.cacheCreationTokens) });
+  } else if (row.entryType === 'turn_duration') {
+    if (row.turnDurationMs != null) sections.push({ label: 'Duration', content: fmtMs(row.turnDurationMs) });
   }
 
-  if (!preview) return <span className="text-text-muted">—</span>;
+  sections.push({ label: 'Session', content: row.sessionId });
+  if (row.project) sections.push({ label: 'Project', content: row.project });
 
-  const isExpandable = full !== preview || full.includes('\n');
-
-  if (!isExpandable) {
-    return <span className="font-mono text-xs text-text-muted">{preview}</span>;
+  if (sections.length === 0) {
+    return <span className="text-text-muted text-xs">No additional data</span>;
   }
 
   return (
-    <button
-      onClick={(e) => { e.stopPropagation(); onToggle(isExpanded ? '' : key); }}
-      className="w-full text-left font-mono text-xs text-text-muted hover:text-text-primary"
-    >
-      {isExpanded ? (
-        <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all">{full}</pre>
-      ) : (
-        <span className="block truncate">{preview}</span>
-      )}
-    </button>
+    <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs max-w-2xl">
+      {sections.map((s) => (
+        <div key={s.label} className="contents">
+          <span className="text-text-muted font-medium whitespace-nowrap">{s.label}</span>
+          {s.content.includes('\n') || s.content.length > 80 ? (
+            <pre className={cn(
+              'font-mono whitespace-pre-wrap break-all max-h-48 overflow-auto rounded bg-bg-tertiary px-2 py-1',
+              s.isError && 'text-error'
+            )}>
+              {s.content}
+            </pre>
+          ) : (
+            <span className={cn('font-mono text-text-primary', s.isError && 'text-error font-medium')}>
+              {s.content}
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
   );
 }
 
 const PAGE_SIZE = 100;
 
 export function EventsPage() {
-  const [days, setDays] = useState(30);
+  const [range, setRange] = useState<TimeRange>('30d');
   const [activeType, setActiveType] = useState<EntryType | undefined>(undefined);
+  const [errorsOnly, setErrorsOnly] = useState(false);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [offset, setOffset] = useState(0);
-  const [expandedKey, setExpandedKey] = useState('');
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
   const debounceRef = { current: undefined as ReturnType<typeof setTimeout> | undefined };
 
@@ -179,11 +218,16 @@ export function EventsPage() {
   };
 
   const { data, isLoading, error, refetch } = useObsEvents(
-    days,
+    range,
     { entryType: activeType, search: debouncedSearch || undefined },
     PAGE_SIZE,
     offset,
   );
+
+  const allEvents = data?.events ?? [];
+  const events = errorsOnly ? allEvents.filter((e) => e.isError) : allEvents;
+  const total = errorsOnly ? events.length : (data?.total ?? 0);
+  const errorCount = allEvents.filter((e) => e.isError).length;
 
   const columns: Column<EventRow>[] = [
     {
@@ -213,7 +257,12 @@ export function EventsPage() {
     {
       key: 'info',
       label: 'Info',
-      render: (row) => <InfoCell row={row} expandedKey={expandedKey} onToggle={setExpandedKey} />,
+      render: (row) => {
+        const preview = getInfoPreview(row);
+        return preview
+          ? <span className="font-mono text-xs text-text-muted block truncate">{preview}</span>
+          : <span className="text-text-muted">—</span>;
+      },
     },
     {
       key: 'sessionId',
@@ -225,17 +274,14 @@ export function EventsPage() {
     },
   ];
 
-  const total = data?.total ?? 0;
-  const events = data?.events ?? [];
   const start = total === 0 ? 0 : offset + 1;
-  const end = Math.min(offset + PAGE_SIZE, total);
-  const hasPrev = offset > 0;
-  const hasNext = offset + PAGE_SIZE < total;
+  const end = errorsOnly ? total : Math.min(offset + PAGE_SIZE, total);
+  const hasPrev = !errorsOnly && offset > 0;
+  const hasNext = !errorsOnly && offset + PAGE_SIZE < (data?.total ?? 0);
 
   return (
     <div className="space-y-4">
-      <ObsControlBar days={days} onDaysChange={(d) => { setDays(d); setOffset(0); }}>
-        <h1 className="text-lg font-semibold text-text-primary">Events</h1>
+      <ObsControlBar title={<h1 className="text-lg font-semibold text-text-primary">Events</h1>} range={range} onRangeChange={(r) => { setRange(r); setOffset(0); }}>
         <div className="flex items-center gap-1.5 flex-wrap">
           {EVENT_TYPES.map((type) => (
             <FilterToggle
@@ -246,6 +292,14 @@ export function EventsPage() {
             />
           ))}
         </div>
+        {errorCount > 0 && (
+          <FilterToggle
+            label={`Errors (${errorCount})`}
+            active={errorsOnly}
+            onToggle={() => { setErrorsOnly(!errorsOnly); setOffset(0); }}
+            activeColor="error"
+          />
+        )}
         <input
           type="text"
           value={search}
@@ -267,32 +321,38 @@ export function EventsPage() {
                 ? 'No events'
                 : `Showing ${start}–${end} of ${fmtNumber(total)}`}
             </span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
-                disabled={!hasPrev}
-                className="px-3 py-1 text-xs rounded-md border border-border-primary text-text-secondary hover:text-text-primary hover:bg-bg-tertiary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => setOffset((o) => o + PAGE_SIZE)}
-                disabled={!hasNext}
-                className="px-3 py-1 text-xs rounded-md border border-border-primary text-text-secondary hover:text-text-primary hover:bg-bg-tertiary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                Next
-              </button>
-            </div>
+            {!errorsOnly && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
+                  disabled={!hasPrev}
+                  className="px-3 py-1 text-xs rounded-md border border-border-primary text-text-secondary hover:text-text-primary hover:bg-bg-tertiary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setOffset((o) => o + PAGE_SIZE)}
+                  disabled={!hasNext}
+                  className="px-3 py-1 text-xs rounded-md border border-border-primary text-text-secondary hover:text-text-primary hover:bg-bg-tertiary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </div>
 
           <DataTable<EventRow>
             data={events}
             columns={columns}
             keyField="timestamp"
+            rowKeyFn={rowKey}
             rowClassName={(row) => row.isError ? 'bg-error/5' : undefined}
+            expandedKey={expandedKey}
+            onExpandToggle={setExpandedKey}
+            renderExpanded={(row) => <ExpandedRow row={row} />}
           />
 
-          {total > PAGE_SIZE && (
+          {!errorsOnly && total > PAGE_SIZE && (
             <div className="flex items-center justify-between pt-1">
               <span className="text-xs text-text-muted">
                 {`Showing ${start}–${end} of ${fmtNumber(total)}`}

@@ -312,18 +312,41 @@ try {
       }
     }
   }
+
+  // Register skills from src/skills/*/SKILL.md as commands
+  const skillsDir = join(CONSTRUCT_SRC, "skills");
+  if (await exists(skillsDir)) {
+    for (const d of await readdir(skillsDir, { withFileTypes: true })) {
+      if (!d.isDirectory()) continue;
+      const skillFile = join(skillsDir, d.name, "SKILL.md");
+      if (await exists(skillFile)) {
+        const cmdName = `${d.name}.md`;
+        if (!repoCommands.has(cmdName)) {
+          await cp(skillFile, join(DST, "commands", cmdName));
+          repoCommands.add(cmdName);
+        }
+      }
+    }
+  }
   console.log(`  installed: ${repoCommands.size ? [...repoCommands].join(" ") : "none"}`);
 
-  // Remove known Construct commands that are no longer in the repo
-  const CONSTRUCT_COMMANDS = ["construct.md", "verify.md", "install.md", "test.md",
-    "worktree.md", "grasp.md", "status.md", "retain.md", "common-ground.md", "dashboard.md",
-    "goal.md", "todo.md", "finish.md"];
-  for (const f of CONSTRUCT_COMMANDS) {
+  // Remove stale Construct-owned commands using manifest
+  const manifestPath = join(DST, "commands", ".construct-managed");
+  const previouslyManaged = new Set<string>();
+  if (await exists(manifestPath)) {
+    const content = await readFile(manifestPath, "utf-8");
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed) previouslyManaged.add(trimmed);
+    }
+  }
+  for (const f of previouslyManaged) {
     if (!repoCommands.has(f) && await exists(join(DST, "commands", f))) {
       await rm(join(DST, "commands", f));
       console.log(`  removed stale: ${f}`);
     }
   }
+  await writeFile(manifestPath, [...repoCommands].sort().join("\n") + "\n");
 
   // 5. Merge settings.json — replace hooks + statusLine, preserve everything else
   console.log("merging settings.json...");

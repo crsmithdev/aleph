@@ -5,14 +5,16 @@ import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
+import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtCurrency, fmtPct, shortDate } from '../../../utils/format';
 
 export function OverviewPage() {
-  const [days, setDays] = useState(30);
-  const { data, isLoading, error, refetch } = useObsOverview(days);
+  const [range, setRange] = useState<TimeRange>('30d');
+  const [granularity, setGranularity] = useState<Granularity>('day');
+  const { data, isLoading, error, refetch } = useObsOverview(range);
   const { chartType, setChartType } = useChartType('line');
 
   if (isLoading) return <PageLoading />;
@@ -24,9 +26,7 @@ export function OverviewPage() {
 
   return (
     <div className="space-y-6">
-      <ObsControlBar days={days} onDaysChange={setDays}>
-        <h1 className="text-xl font-semibold text-text-primary">Overview</h1>
-      </ObsControlBar>
+      <ObsControlBar title={<h1 className="text-xl font-semibold text-text-primary">Overview</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity} />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <StatCard label="Sessions" value={fmtNumber(data.sessions)} />

@@ -1,5 +1,13 @@
 {
   "private": true,
+  "workspaces": [
+    "src/data",
+    "src/goals",
+    "src/telemetry",
+    "src/ui",
+    "src/ui/api",
+    "src/ui/web"
+  ],
   "scripts": {
     "test": "bun test.ts",
     "validate": "jq . dotclaude/settings.json > /dev/null && jq . src/skills/skill-rules.json > /dev/null",

@@ -5,7 +5,7 @@ import { useObsTools } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { DataTable, type Column } from '../../../components/data/DataTable';
-import { type Granularity } from '../../../components/data/TimeRangeSelector';
+import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
@@ -16,11 +16,11 @@ import { cn } from '../../../utils/cn';
 type ToolRow = { name: string; count: number; errorCount: number; pct: number; active: boolean };
 
 export function ToolsPage() {
-  const [days, setDays] = useState(30);
+  const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
   const [hideInactive, setHideInactive] = useState(true);
   const navigate = useNavigate();
-  const { data, isLoading, error, refetch } = useObsTools(days, granularity);
+  const { data, isLoading, error, refetch } = useObsTools(range, granularity);
   const { chartType, setChartType } = useChartType('bar');
 
   if (isLoading) return <PageLoading />;
@@ -84,8 +84,7 @@ export function ToolsPage() {
 
   return (
     <div className="space-y-6">
-      <ObsControlBar days={days} onDaysChange={setDays} granularity={granularity} onGranularityChange={setGranularity}>
-        <h1 className="text-xl font-semibold text-text-primary">Tools</h1>
+      <ObsControlBar title={<h1 className="text-xl font-semibold text-text-primary">Tools</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity}>
         <FilterToggle label="Active only" active={hideInactive} onToggle={() => setHideInactive(!hideInactive)} />
       </ObsControlBar>
 

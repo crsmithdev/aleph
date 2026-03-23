@@ -43,6 +43,11 @@
     "Stop": [
       {
         "hooks": [
+          { "type": "command", "command": "bun src/skills/hooks/verify-gate.ts", "timeout": 3000 }
+        ]
+      },
+      {
+        "hooks": [
           { "type": "command", "command": "bun src/memory/hooks/session-summary.ts", "timeout": 3000 }
         ]
       },

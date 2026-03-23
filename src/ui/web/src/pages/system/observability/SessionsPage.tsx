@@ -5,6 +5,7 @@ import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
+import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
@@ -14,8 +15,9 @@ type ProjectRow = { project: string; sessions: number };
 type HourRow = { hour: number; count: number };
 
 export function SessionsPage() {
-  const [days, setDays] = useState(30);
-  const { data, isLoading, error, refetch } = useObsSessions(days);
+  const [range, setRange] = useState<TimeRange>('30d');
+  const [granularity, setGranularity] = useState<Granularity>('day');
+  const { data, isLoading, error, refetch } = useObsSessions(range);
   const { chartType, setChartType } = useChartType('bar');
 
   if (isLoading) return <PageLoading />;
@@ -43,9 +45,7 @@ export function SessionsPage() {
 
   return (
     <div className="space-y-6">
-      <ObsControlBar days={days} onDaysChange={setDays}>
-        <h1 className="text-xl font-semibold text-text-primary">Sessions</h1>
-      </ObsControlBar>
+      <ObsControlBar title={<h1 className="text-xl font-semibold text-text-primary">Sessions</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity} />
 
       <ChartContainer title="Daily Sessions" chartType={chartType} onChartTypeChange={setChartType}>
         {chartType === 'bar' ? (

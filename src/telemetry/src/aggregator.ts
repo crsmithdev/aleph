@@ -107,12 +107,11 @@ export function aggregateTools(entries: SessionEntry[], granularity: Granularity
   const toolCounts = new Map<string, { count: number; errors: number; lastUsed: string }>();
   const dayToolMap = new Map<string, Map<string, number>>();
 
-  // Build a map of tool_use entries by their position for error matching
-  const toolUseBySession = new Map<string, string[]>();
+  // Map toolUseId → toolName for error attribution
+  const useIdToTool = new Map<string, string>();
   for (const e of entries) {
-    if (e.entryType === "tool_use" && e.toolName) {
-      if (!toolUseBySession.has(e.sessionId)) toolUseBySession.set(e.sessionId, []);
-      toolUseBySession.get(e.sessionId)!.push(e.toolName);
+    if (e.entryType === "tool_use" && e.toolName && e.toolUseId) {
+      useIdToTool.set(e.toolUseId, e.toolName);
     }
   }
 
@@ -130,11 +129,10 @@ export function aggregateTools(entries: SessionEntry[], granularity: Granularity
     }
 
     if (e.entryType === "tool_result" && e.isError) {
-      // Count errors generically - attribute to most recently used tool in session
-      const sessionTools = toolUseBySession.get(e.sessionId);
-      if (sessionTools && sessionTools.length > 0) {
-        const lastTool = sessionTools[sessionTools.length - 1];
-        const cur = toolCounts.get(lastTool);
+      // Attribute error to the tool that produced it via toolUseId
+      const toolName = e.toolUseId ? useIdToTool.get(e.toolUseId) : undefined;
+      if (toolName) {
+        const cur = toolCounts.get(toolName);
         if (cur) cur.errors++;
       }
     }
@@ -190,13 +188,18 @@ export function aggregateHooks(entries: SessionEntry[], granularity: Granularity
       const cur = hookMap.get(shortCmd) || { event: "", durations: [], errors: 0, fullCommand: e.hookCommand, progressCount: 0 };
       cur.event = e.hookEvent || cur.event;
       cur.fullCommand = e.hookCommand;
-      (cur as any).progressCount = ((cur as any).progressCount || 0) + 1;
       hookMap.set(shortCmd, cur);
 
-      const bk = bucketKey(e.timestamp, granularity);
-      if (!dayHookMap.has(bk)) dayHookMap.set(bk, new Map());
-      const dm = dayHookMap.get(bk)!;
-      dm.set(shortCmd, (dm.get(shortCmd) || 0) + 1);
+      // Stop hooks are already counted via stop_hook_summary — only count
+      // non-Stop hook_progress entries to avoid double-counting
+      if (e.hookEvent !== "Stop") {
+        (cur as any).progressCount = ((cur as any).progressCount || 0) + 1;
+
+        const bk = bucketKey(e.timestamp, granularity);
+        if (!dayHookMap.has(bk)) dayHookMap.set(bk, new Map());
+        const dm = dayHookMap.get(bk)!;
+        dm.set(shortCmd, (dm.get(shortCmd) || 0) + 1);
+      }
     }
   }
 
@@ -446,7 +449,7 @@ export function aggregateHookDetail(entries: SessionEntry[], hookName: string): 
   let errors = 0;
   let fullCommand = "";
   const dayMap = new Map<string, { durations: number[]; count: number }>();
-  const invocations: { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string }[] = [];
+  const invocations: { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string; isError?: boolean; errorMessage?: string }[] = [];
 
   for (const e of entries) {
     if (e.entryType === "stop_hook_summary" && e.hookCommand) {
@@ -469,6 +472,8 @@ export function aggregateHookDetail(entries: SessionEntry[], hookName: string): 
         durationMs: dur,
         exitCode: e.hookExitCode,
         output: e.hookOutput,
+        isError: e.isError,
+        errorMessage: e.errorMessage,
       });
     }
 
@@ -534,6 +539,7 @@ export function aggregateSkillDetail(entries: SessionEntry[], skillName: string)
       sessionId: e.sessionId,
       project: e.project,
       params: e.toolParams,
+      userRequest: e.userRequest,
     });
   }
 

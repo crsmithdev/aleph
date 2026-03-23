@@ -5,6 +5,18 @@ import type { SessionEntry, ParseOptions } from "./types.js";
 
 const DEFAULT_BASE = join(homedir(), ".claude", "projects");
 
+const slashCommands = new Set<string>(
+  (() => {
+    try {
+      return readdirSync(join(homedir(), ".claude", "commands"))
+        .filter((f) => f.endsWith(".md"))
+        .map((f) => f.replace(/\.md$/, ""));
+    } catch {
+      return [];
+    }
+  })(),
+);
+
 interface CacheEntry {
   mtimeMs: number;
   entries: SessionEntry[];
@@ -89,7 +101,7 @@ function projectFromPath(filePath: string): string {
   return basename(dirname(filePath));
 }
 
-function parseLine(line: string, project: string): SessionEntry[] {
+function parseLine(line: string, project: string, fallbackSessionId?: string): SessionEntry[] {
   const entries: SessionEntry[] = [];
   let raw: Record<string, unknown>;
   try {
@@ -98,7 +110,7 @@ function parseLine(line: string, project: string): SessionEntry[] {
     return entries;
   }
 
-  const sessionId = (raw.sessionId as string) || "unknown";
+  const sessionId = (raw.sessionId as string) || fallbackSessionId || "unknown";
   const timestamp = (raw.timestamp as string) || "";
 
   if (raw.type === "assistant") {
@@ -129,8 +141,9 @@ function parseLine(line: string, project: string): SessionEntry[] {
           const toolName = block.name as string;
           const input = block.input as Record<string, unknown> | undefined;
           const isSkill = toolName === "Skill";
-          const skillName = isSkill
-            ? (input?.skill as string) || undefined
+          const rawSkill = isSkill ? (input?.skill as string) || undefined : undefined;
+          const skillName = rawSkill
+            ? slashCommands.has(rawSkill) ? `/${rawSkill}` : rawSkill
             : undefined;
 
           entries.push({
@@ -152,9 +165,17 @@ function parseLine(line: string, project: string): SessionEntry[] {
   if (raw.type === "user") {
     const message = raw.message as Record<string, unknown> | undefined;
     if (message) {
-      const content = message.content as Array<Record<string, unknown>> | undefined;
-      if (Array.isArray(content)) {
-        for (const block of content) {
+      const content = message.content;
+      // Extract user message text
+      let userText: string | undefined;
+      if (typeof content === "string") {
+        userText = content;
+      } else if (Array.isArray(content)) {
+        const textParts: string[] = [];
+        for (const block of content as Array<Record<string, unknown>>) {
+          if (block.type === "text" && typeof block.text === "string") {
+            textParts.push(block.text);
+          }
           if (block.type === "tool_result" && block.is_error) {
             const rawContent = block.content;
             const errorMessage = typeof rawContent === "string"
@@ -173,6 +194,16 @@ function parseLine(line: string, project: string): SessionEntry[] {
             });
           }
         }
+        if (textParts.length > 0) userText = textParts.join("\n");
+      }
+      if (userText) {
+        entries.push({
+          sessionId,
+          timestamp,
+          project,
+          entryType: "user_message",
+          userRequest: userText.slice(0, 500),
+        });
       }
     }
   }
@@ -195,8 +226,12 @@ function parseLine(line: string, project: string): SessionEntry[] {
   if (raw.type === "system") {
     if (raw.subtype === "stop_hook_summary") {
       const hookInfos = raw.hookInfos as Array<Record<string, unknown>> | undefined;
+      const hookErrors = raw.hookErrors as string[] | undefined;
+      const hasHookErrors = Array.isArray(hookErrors) && hookErrors.length > 0;
+
       if (Array.isArray(hookInfos)) {
         for (const info of hookInfos) {
+          const exitCode = info.exitCode !== undefined ? (info.exitCode as number) : undefined;
           entries.push({
             sessionId,
             timestamp,
@@ -204,11 +239,21 @@ function parseLine(line: string, project: string): SessionEntry[] {
             entryType: "stop_hook_summary",
             hookCommand: (info.command as string) || undefined,
             hookDurationMs: (info.durationMs as number) || undefined,
-            hookExitCode: info.exitCode !== undefined ? (info.exitCode as number) : undefined,
+            hookExitCode: exitCode,
             hookOutput: (info.output as string) || undefined,
-            isError: (info.exitCode as number) !== 0 && info.exitCode !== undefined ? true : undefined,
+            isError: (exitCode !== undefined && exitCode !== 0) || hasHookErrors || undefined,
+            errorMessage: hasHookErrors ? hookErrors.join("\n").slice(0, 200) : undefined,
           });
         }
+      } else if (hasHookErrors) {
+        entries.push({
+          sessionId,
+          timestamp,
+          project,
+          entryType: "stop_hook_summary",
+          isError: true,
+          errorMessage: hookErrors.join("\n").slice(0, 200),
+        });
       }
     }
 
@@ -226,6 +271,18 @@ function parseLine(line: string, project: string): SessionEntry[] {
   return entries;
 }
 
+function sessionIdFromPath(filePath: string): string | undefined {
+  const name = basename(filePath, ".jsonl");
+  // UUID pattern: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(name)) {
+    return name;
+  }
+  // Subagent files: agent-<id>.jsonl — derive parent session from directory
+  const parent = basename(dirname(dirname(filePath)));
+  if (/^[0-9a-f]{8}-/.test(parent)) return parent;
+  return undefined;
+}
+
 function parseFile(filePath: string, project: string): SessionEntry[] {
   const stat = statSync(filePath);
   const cached = fileCache.get(filePath);
@@ -240,10 +297,25 @@ function parseFile(filePath: string, project: string): SessionEntry[] {
     return [];
   }
 
-  const entries: SessionEntry[] = [];
+  const fallbackSessionId = sessionIdFromPath(filePath);
+  const rawEntries: SessionEntry[] = [];
   for (const line of content.split("\n")) {
     if (!line.trim()) continue;
-    entries.push(...parseLine(line, project));
+    rawEntries.push(...parseLine(line, project, fallbackSessionId));
+  }
+
+  // Attach last user message to skill invocations, then strip user_message entries
+  const lastUserMsg = new Map<string, string>();
+  const entries: SessionEntry[] = [];
+  for (const e of rawEntries) {
+    if (e.entryType === "user_message") {
+      if (e.userRequest) lastUserMsg.set(e.sessionId, e.userRequest);
+      continue;
+    }
+    if (e.entryType === "tool_use" && e.skillName) {
+      e.userRequest = lastUserMsg.get(e.sessionId);
+    }
+    entries.push(e);
   }
 
   fileCache.set(filePath, { mtimeMs: stat.mtimeMs, entries });

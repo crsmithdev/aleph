@@ -21,7 +21,7 @@ import {
 } from '@construct/telemetry';
 import type { Granularity, SessionEntry } from '@construct/telemetry';
 
-type QueryParams = { days?: string; granularity?: string; session?: string };
+type QueryParams = { days?: string; range?: string; granularity?: string; session?: string };
 type ObsRequest = FastifyRequest<{ Querystring: QueryParams }> & {
   telemetryEntries: SessionEntry[];
   granularity: Granularity;
@@ -32,20 +32,48 @@ function parseGranularity(raw?: string): Granularity {
   return 'day';
 }
 
+function rangeToDays(range?: string): number | undefined {
+  switch (range) {
+    case '1h': return 1;      // parse 1 day, filter later
+    case '1d': return 1;
+    case '7d': return 7;
+    case '30d': return 30;
+    case 'session': return 7; // parse 7 days, filter to latest session
+    default: return undefined;
+  }
+}
+
 function parseDaysPreHandler(
   req: FastifyRequest<{ Querystring: QueryParams }>,
   reply: { code: (n: number) => { send: (body: unknown) => void } },
   done: () => void,
 ) {
-  const raw = req.query.days || '30';
-  const days = parseInt(raw, 10);
-  if (Number.isNaN(days) || days < 1 || days > 365) {
-    reply.code(400).send({ error: 'days must be an integer between 1 and 365' });
+  const range = req.query.range;
+  const days = range ? rangeToDays(range) : parseInt(req.query.days || '30', 10);
+  if (!days || Number.isNaN(days) || days < 1 || days > 365) {
+    reply.code(400).send({ error: 'invalid days or range parameter' });
     return;
   }
   let entries = parseSessionsForDays(days);
 
-  // Filter by session if provided
+  // For 1h range, filter to entries within the last hour
+  if (range === '1h') {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    entries = entries.filter((e) => e.timestamp >= oneHourAgo);
+  }
+
+  // For session range, filter to the most recent session
+  if (range === 'session') {
+    const latest = entries.reduce((best, e) => (e.timestamp > best ? e.timestamp : best), '');
+    if (latest) {
+      const latestSession = entries.find((e) => e.timestamp === latest)?.sessionId;
+      if (latestSession) {
+        entries = entries.filter((e) => e.sessionId === latestSession);
+      }
+    }
+  }
+
+  // Filter by explicit session if provided
   const sessionFilter = req.query.session;
   if (sessionFilter) {
     entries = entries.filter((e) => e.sessionId === sessionFilter);
@@ -113,15 +141,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Querystring: QueryParams }>('/skills', { preHandler: parseDaysPreHandler }, async (req) => {
     const obsReq = req as ObsRequest;
-    const skillsDir = resolve(homedir(), '.claude/construct/skills');
-    const validSkills = new Set(
-      existsSync(skillsDir)
-        ? readdirSync(skillsDir, { withFileTypes: true })
-            .filter(d => d.isDirectory() && existsSync(resolve(skillsDir, d.name, 'SKILL.md')))
-            .map(d => d.name)
-        : []
-    );
-    const { result, queryTimeMs } = timed(() => aggregateSkills(obsReq.telemetryEntries, obsReq.granularity, validSkills.size > 0 ? validSkills : undefined));
+    const { result, queryTimeMs } = timed(() => aggregateSkills(obsReq.telemetryEntries, obsReq.granularity));
     return { ...result, queryTimeMs };
   });
 

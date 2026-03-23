@@ -6,7 +6,7 @@ import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
-import { type Granularity } from '../../../components/data/TimeRangeSelector';
+import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
@@ -34,14 +34,14 @@ type InvocationRow = {
 
 type ViewMode = 'by-hook' | 'by-event';
 
-function ByHookView({ days, granularity, hideInactive, onHideInactiveChange }: {
-  days: number;
+function ByHookView({ range, granularity, hideInactive, onHideInactiveChange }: {
+  range: TimeRange;
   granularity: Granularity;
   hideInactive: boolean;
   onHideInactiveChange: (v: boolean) => void;
 }) {
   const navigate = useNavigate();
-  const { data, isLoading, error, refetch } = useObsHooks(days, granularity);
+  const { data, isLoading, error, refetch } = useObsHooks(range, granularity);
   const { chartType, setChartType } = useChartType('bar');
 
   if (isLoading) return <PageLoading />;
@@ -160,8 +160,8 @@ function ByHookView({ days, granularity, hideInactive, onHideInactiveChange }: {
   );
 }
 
-function ByEventView({ days }: { days: number }) {
-  const { data, isLoading, error, refetch } = useObsHookEvents(days);
+function ByEventView({ range }: { range: TimeRange }) {
+  const { data, isLoading, error, refetch } = useObsHookEvents(range);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [eventFilter, setEventFilter] = useState<string | null>(null);
 
@@ -210,12 +210,6 @@ function ByEventView({ days }: { days: number }) {
                       <span className={cn('text-text-muted', h.durationMs > 500 && 'text-warning')}>
                         {fmtMs(h.durationMs)}
                       </span>
-                    )}
-                    {h.exitCode !== undefined && h.exitCode !== 0 && (
-                      <span className="text-error font-medium">exit {h.exitCode}</span>
-                    )}
-                    {h.output && (
-                      <span className="truncate max-w-xs text-text-muted">{h.output.slice(0, 60)}</span>
                     )}
                   </div>
                 ))}
@@ -298,15 +292,14 @@ function ByEventView({ days }: { days: number }) {
 }
 
 export function HooksPage() {
-  const [days, setDays] = useState(30);
+  const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
   const [hideInactive, setHideInactive] = useState(true);
   const [view, setView] = useState<ViewMode>('by-hook');
 
   return (
     <div className="space-y-6">
-      <ObsControlBar days={days} onDaysChange={setDays} granularity={granularity} onGranularityChange={setGranularity}>
-        <h1 className="text-xl font-semibold text-text-primary">Hooks</h1>
+      <ObsControlBar title={<h1 className="text-xl font-semibold text-text-primary">Hooks</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity}>
         <div className="flex items-center gap-1 rounded-md border border-border-primary bg-bg-secondary p-0.5">
           <button
             onClick={() => setView('by-hook')}
@@ -335,13 +328,13 @@ export function HooksPage() {
 
       {view === 'by-hook' ? (
         <ByHookView
-          days={days}
+          range={range}
           granularity={granularity}
           hideInactive={hideInactive}
           onHideInactiveChange={setHideInactive}
         />
       ) : (
-        <ByEventView days={days} />
+        <ByEventView range={range} />
       )}
     </div>
   );

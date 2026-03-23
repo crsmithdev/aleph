@@ -5,7 +5,7 @@ import { useObsSkills } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { DataTable, type Column } from '../../../components/data/DataTable';
-import { type Granularity } from '../../../components/data/TimeRangeSelector';
+import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
@@ -16,10 +16,10 @@ import { cn } from '../../../utils/cn';
 type SkillRow = { skill: string; count: number; pct: number; errors: number };
 
 export function SkillsPage() {
-  const [days, setDays] = useState(30);
+  const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
   const navigate = useNavigate();
-  const { data, isLoading, error, refetch } = useObsSkills(days, granularity);
+  const { data, isLoading, error, refetch } = useObsSkills(range, granularity);
   const { chartType, setChartType } = useChartType('bar');
 
   if (isLoading) return <PageLoading />;
@@ -75,9 +75,7 @@ export function SkillsPage() {
 
   return (
     <div className="space-y-6">
-      <ObsControlBar days={days} onDaysChange={setDays} granularity={granularity} onGranularityChange={setGranularity}>
-        <h1 className="text-xl font-semibold text-text-primary">Skills</h1>
-      </ObsControlBar>
+      <ObsControlBar title={<h1 className="text-xl font-semibold text-text-primary">Skills</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity} />
 
       <DataTable<SkillRow>
         data={data.ranked}

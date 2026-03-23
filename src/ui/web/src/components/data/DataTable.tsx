@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import React, { useState, type ReactNode } from 'react';
 import { cn } from '../../utils/cn';
 
 export interface Column<T> {
@@ -16,6 +16,10 @@ interface DataTableProps<T> {
   keyField: keyof T;
   onRowClick?: (row: T) => void;
   rowClassName?: (row: T) => string | undefined;
+  expandedKey?: string | null;
+  onExpandToggle?: (key: string | null) => void;
+  renderExpanded?: (row: T) => ReactNode;
+  rowKeyFn?: (row: T) => string;
   emptyMessage?: string;
   className?: string;
   maxRows?: number;
@@ -27,6 +31,10 @@ export function DataTable<T>({
   keyField,
   onRowClick,
   rowClassName,
+  expandedKey,
+  onExpandToggle,
+  renderExpanded,
+  rowKeyFn,
   emptyMessage = 'No data',
   className,
   maxRows,
@@ -85,32 +93,51 @@ export function DataTable<T>({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr
-              key={String(row[keyField])}
-              onClick={onRowClick ? () => onRowClick(row) : undefined}
-              className={cn(
-                'border-b border-border-primary/50 transition-colors',
-                onRowClick && 'cursor-pointer hover:bg-bg-tertiary',
-                rowClassName?.(row)
-              )}
-            >
-              {columns.map((col) => (
-                <td
-                  key={col.key}
+          {rows.map((row) => {
+            const rowKey = rowKeyFn ? rowKeyFn(row) : String(row[keyField]);
+            const isExpanded = renderExpanded && expandedKey === rowKey;
+            const handleClick = onExpandToggle
+              ? () => onExpandToggle(isExpanded ? null : rowKey)
+              : onRowClick
+                ? () => onRowClick(row)
+                : undefined;
+
+            return (
+              <React.Fragment key={rowKey}>
+                <tr
+                  onClick={handleClick}
                   className={cn(
-                    'px-4 py-2.5',
-                    col.align === 'right' ? 'text-right' : 'text-left'
+                    'border-b border-border-primary/50 transition-colors',
+                    (onRowClick || onExpandToggle) && 'cursor-pointer hover:bg-bg-tertiary',
+                    isExpanded && 'bg-bg-tertiary/50',
+                    rowClassName?.(row)
                   )}
-                  style={col.width ? { width: col.width, maxWidth: col.width } : undefined}
                 >
-                  {col.render
-                    ? col.render(row)
-                    : String((row as Record<string, unknown>)[col.key] ?? '')}
-                </td>
-              ))}
-            </tr>
-          ))}
+                  {columns.map((col) => (
+                    <td
+                      key={col.key}
+                      className={cn(
+                        'px-4 py-2.5',
+                        col.align === 'right' ? 'text-right' : 'text-left'
+                      )}
+                      style={col.width ? { width: col.width, maxWidth: col.width } : undefined}
+                    >
+                      {col.render
+                        ? col.render(row)
+                        : String((row as Record<string, unknown>)[col.key] ?? '')}
+                    </td>
+                  ))}
+                </tr>
+                {isExpanded && (
+                  <tr className="border-b border-border-primary/50 bg-bg-secondary/50">
+                    <td colSpan={columns.length} className="px-4 py-3">
+                      {renderExpanded(row)}
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>

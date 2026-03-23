@@ -6,22 +6,24 @@ import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
-import { ObsControlBar } from '../../../components/data/ObsControlBar';
+import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtMs, fmtPct, shortDate, dateTime } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
+import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 
-type InvocationRow = { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string };
+type InvocationRow = { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string; isError?: boolean; errorMessage?: string };
 
 export function HookDetailPage() {
   const { name: rawName } = useParams<{ name: string }>();
   const hookName = decodeURIComponent(rawName ?? '');
-  const [days, setDays] = useState(30);
-  const [expandedRow, setExpandedRow] = useState<string | null>(null);
-  const { data, isLoading, error, refetch } = useObsHookDetail(hookName, days);
+  const [range, setRange] = useState<TimeRange>('30d');
+  const [granularity, setGranularity] = useState<Granularity>('day');
+  const { data, isLoading, error, refetch } = useObsHookDetail(hookName, range);
   const { chartType, setChartType } = useChartType('bar');
+  const [errorsOnly, setErrorsOnly] = useState(false);
 
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load hook details" retry={refetch} />;
@@ -30,7 +32,19 @@ export function HookDetailPage() {
     ? ((data.totalCount - data.errors) / data.totalCount) * 100
     : 100;
 
+  const filteredInvocations = errorsOnly
+    ? data.invocations.filter((inv: InvocationRow) => inv.isError)
+    : data.invocations;
+
   const invocationColumns: Column<InvocationRow>[] = [
+    {
+      key: 'status',
+      label: '',
+      width: '2rem',
+      render: (row) => row.isError
+        ? <span className="inline-block w-2 h-2 rounded-full bg-error" title={row.errorMessage || `Exit code ${row.exitCode}`} />
+        : <span className="inline-block w-2 h-2 rounded-full bg-success/50" />,
+    },
     {
       key: 'timestamp',
       label: 'Time',
@@ -44,6 +58,15 @@ export function HookDetailPage() {
         : <span className="text-text-muted">-</span>,
     }] : []) as Column<InvocationRow>[],
     {
+      key: 'exitCode',
+      label: 'Exit',
+      width: '3rem',
+      align: 'right',
+      render: (row) => row.exitCode != null
+        ? <span className={cn('font-mono text-xs', row.exitCode !== 0 ? 'text-error font-medium' : 'text-text-muted')}>{row.exitCode}</span>
+        : <span className="text-text-muted">-</span>,
+    },
+    {
       key: 'durationMs',
       label: 'Duration',
       align: 'right',
@@ -54,44 +77,15 @@ export function HookDetailPage() {
         </span>
       ) : <span className="text-text-muted">-</span>,
     },
-    {
-      key: 'exitCode',
-      label: 'Exit',
-      align: 'right',
-      render: (row) => {
-        if (row.exitCode === undefined) return <span className="text-text-muted">-</span>;
-        return (
-          <span className={cn('font-mono text-xs', row.exitCode !== 0 ? 'text-error font-medium' : 'text-text-muted')}>
-            {row.exitCode}
-          </span>
-        );
+    ...(data.invocations.some((inv: InvocationRow) => inv.output || inv.errorMessage) ? [{
+      key: 'message',
+      label: 'Message',
+      render: (row: InvocationRow) => {
+        const msg = row.errorMessage || row.output;
+        if (!msg) return <span className="text-text-muted">-</span>;
+        return <span className={cn('font-mono text-xs truncate block max-w-xs', row.isError ? 'text-error' : 'text-text-muted')} title={msg}>{msg.slice(0, 80)}{msg.length > 80 ? '...' : ''}</span>;
       },
-    },
-    {
-      key: 'output',
-      label: 'Output',
-      width: '300px',
-      render: (row) => {
-        if (!row.output) return <span className="text-text-muted">-</span>;
-        const isExpanded = expandedRow === row.timestamp;
-        const short = row.output.length > 80 ? row.output.slice(0, 80) + '...' : row.output;
-        return (
-          <button
-            onClick={(e) => { e.stopPropagation(); setExpandedRow(isExpanded ? null : row.timestamp); }}
-            className={cn(
-              'w-full text-left font-mono text-xs hover:text-text-primary',
-              row.exitCode !== undefined && row.exitCode !== 0 ? 'text-error' : 'text-text-muted'
-            )}
-          >
-            {isExpanded ? (
-              <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all">{row.output}</pre>
-            ) : (
-              <span className="block truncate">{short}</span>
-            )}
-          </button>
-        );
-      },
-    },
+    }] : []) as Column<InvocationRow>[],
     {
       key: 'sessionId',
       label: 'Session',
@@ -101,21 +95,38 @@ export function HookDetailPage() {
 
   return (
     <div className="space-y-6">
-      <ObsControlBar days={days} onDaysChange={setDays}>
-        <Link
-          to="/system/observability/hooks"
-          className="text-sm text-text-muted hover:text-text-primary transition-colors"
-        >
-          &larr; Hooks
-        </Link>
-        <h1 className="text-xl font-semibold font-mono text-text-primary">{hookName}</h1>
-        {data.event && (
-          <span className="rounded-md bg-bg-tertiary px-2 py-0.5 text-xs text-text-muted">{data.event}</span>
+      <ObsControlBar
+        title={
+          <div className="flex items-center gap-3">
+            <Link
+              to="/system/observability/hooks"
+              className="text-sm text-text-muted hover:text-text-primary transition-colors"
+            >
+              &larr; Hooks
+            </Link>
+            <h1 className="text-xl font-semibold font-mono text-text-primary">{hookName}</h1>
+            {data.event && (
+              <span className="rounded-md bg-bg-tertiary px-2 py-0.5 text-xs text-text-muted">{data.event}</span>
+            )}
+            <span className={cn(
+              'inline-block h-2.5 w-2.5 rounded-full',
+              data.active ? 'bg-success' : 'bg-text-muted/30'
+            )} title={data.active ? 'Active' : 'Removed'} />
+          </div>
+        }
+        range={range}
+        onRangeChange={setRange}
+        granularity={granularity}
+        onGranularityChange={setGranularity}
+      >
+        {data.errors > 0 && (
+          <FilterToggle
+            label="Errors only"
+            active={errorsOnly}
+            onToggle={() => setErrorsOnly(!errorsOnly)}
+            activeColor="error"
+          />
         )}
-        <span className={cn(
-          'inline-block h-2.5 w-2.5 rounded-full',
-          data.active ? 'bg-success' : 'bg-text-muted/30'
-        )} title={data.active ? 'Active' : 'Removed'} />
       </ObsControlBar>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
@@ -160,13 +171,14 @@ export function HookDetailPage() {
       {data.invocations.length > 0 && (
         <div>
           <h2 className="mb-3 text-sm font-medium text-text-secondary">
-            Recent Executions ({data.invocations.length})
+            Recent Executions ({filteredInvocations.length}{errorsOnly ? ` of ${data.invocations.length}` : ''})
           </h2>
           <DataTable<InvocationRow>
-            data={data.invocations}
+            data={filteredInvocations}
             columns={invocationColumns}
             keyField="timestamp"
             maxRows={50}
+            rowClassName={(row) => row.isError ? 'bg-error/5' : undefined}
           />
         </div>
       )}

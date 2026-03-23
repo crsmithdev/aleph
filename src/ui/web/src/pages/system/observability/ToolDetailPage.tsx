@@ -11,16 +11,18 @@ import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtPct, shortDate, dateTime } from '../../../utils/format';
+import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 
 type InvocationRow = { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; isError?: boolean; errorMessage?: string };
 
 export function ToolDetailPage() {
   const { name: rawName } = useParams<{ name: string }>();
   const toolName = decodeURIComponent(rawName ?? '');
-  const [days, setDays] = useState(30);
+  const [range, setRange] = useState<TimeRange>('30d');
+  const [granularity, setGranularity] = useState<Granularity>('day');
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [errorsOnly, setErrorsOnly] = useState(false);
-  const { data, isLoading, error, refetch } = useObsToolDetail(toolName, days);
+  const { data, isLoading, error, refetch } = useObsToolDetail(toolName, range);
   const { chartType, setChartType } = useChartType('bar');
 
   if (isLoading) return <PageLoading />;
@@ -93,14 +95,23 @@ export function ToolDetailPage() {
 
   return (
     <div className="space-y-6">
-      <ObsControlBar days={days} onDaysChange={setDays}>
-        <Link
-          to="/system/observability/tools"
-          className="text-sm text-text-muted hover:text-text-primary transition-colors"
-        >
-          &larr; Tools
-        </Link>
-        <h1 className="text-xl font-semibold font-mono text-text-primary">{toolName}</h1>
+      <ObsControlBar
+        title={
+          <div className="flex items-center gap-3">
+            <Link
+              to="/system/observability/tools"
+              className="text-sm text-text-muted hover:text-text-primary transition-colors"
+            >
+              &larr; Tools
+            </Link>
+            <h1 className="text-xl font-semibold font-mono text-text-primary">{toolName}</h1>
+          </div>
+        }
+        range={range}
+        onRangeChange={setRange}
+        granularity={granularity}
+        onGranularityChange={setGranularity}
+      >
         {data.errorCount > 0 && (
           <FilterToggle
             label="Errors only"

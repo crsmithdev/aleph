@@ -1,16 +1,17 @@
 import { cn } from '../../utils/cn';
 
-const presets = [
-  { label: '1d', value: 1 },
-  { label: '7d', value: 7 },
-  { label: '30d', value: 30 },
-  { label: '90d', value: 90 },
-] as const;
-
+export type TimeRange = 'session' | '1h' | '1d' | '7d' | '30d';
 export type Granularity = 'minute' | 'hour' | 'day';
 
+const presets: { label: string; value: TimeRange }[] = [
+  { label: 'Session', value: 'session' },
+  { label: '1h', value: '1h' },
+  { label: '1d', value: '1d' },
+  { label: '7d', value: '7d' },
+  { label: '30d', value: '30d' },
+];
+
 const granularities: { label: string; value: Granularity }[] = [
-  { label: 'Min', value: 'minute' },
   { label: 'Hour', value: 'hour' },
   { label: 'Day', value: 'day' },
 ];
@@ -22,8 +23,8 @@ export function TimeRangeSelector({
   onGranularityChange,
   className,
 }: {
-  value: number;
-  onChange: (days: number) => void;
+  value: TimeRange;
+  onChange: (range: TimeRange) => void;
   granularity?: Granularity;
   onGranularityChange?: (g: Granularity) => void;
   className?: string;
