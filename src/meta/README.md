@@ -15,8 +15,7 @@ Note: the command file itself lives at `~/.claude/commands/construct.md`, outsid
 
 All subcommands are run as `/construct <subcommand>` in Claude Code:
 
-- `/construct install` — deploy modules globally from this repo to `~/.claude/`
-- `/construct verify` — run post-install checks for all modules, reports pass/fail
+- `/construct install` — deploy modules globally from this repo to `~/.claude/`, then runs post-install checks for all modules
 - `/construct grasp` — have Claude surface its understanding of the active project before starting work
 - `/construct status` — show system status: sessions, signals, memory stats
 - `/construct retain` — review session summaries and promote durable insights to semantic memory

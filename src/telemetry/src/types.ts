@@ -10,7 +10,8 @@ export interface SessionEntry {
     | "stop_hook_summary"
     | "turn_duration"
     | "tokens"
-    | "user_message";
+    | "user_message"
+    | "compact_boundary";
   toolName?: string;
   toolParams?: Record<string, unknown>;
   skillName?: string;
@@ -25,6 +26,13 @@ export interface SessionEntry {
   hookOutput?: string;
   userRequest?: string;
   turnDurationMs?: number;
+  compactTrigger?: string;
+  compactPreTokens?: number;
+  role?: "user" | "assistant";
+  gitBranch?: string;
+  cwd?: string;
+  linesAdded?: number;
+  linesRemoved?: number;
   inputTokens?: number;
   outputTokens?: number;
   cacheReadTokens?: number;
@@ -46,6 +54,24 @@ export interface ToolMetric {
   pct: number;
   active?: boolean;
   lastUsed?: string;
+  avgMs?: number;
+  p50Ms?: number;
+  p95Ms?: number;
+}
+
+export interface CompactionData {
+  totalCompactions: number;
+  totalTokensAtCompaction: number;
+  avgPreTokens: number;
+  byDay: TimeBucket[];
+  events: Array<{ timestamp: string; sessionId: string; trigger: string; preTokens: number }>;
+}
+
+export interface ApiDurationData {
+  avgMs: number;
+  p50Ms: number;
+  p95Ms: number;
+  byDay: Array<{ date: string; avgMs: number; count: number }>;
 }
 
 export interface HookMetric {
@@ -96,6 +122,8 @@ export interface SessionBucket {
   date: string;
   sessions: number;
   messages: number;
+  userMessages?: number;
+  assistantMessages?: number;
 }
 
 export interface ProjectBucket {
@@ -134,6 +162,11 @@ export interface SkillsData {
 }
 
 export interface TokensData {
+  cacheEfficiency: number;
+  totalInput: number;
+  totalOutput: number;
+  totalCacheRead: number;
+  totalCacheCreation: number;
   byDay: TokenBucket[];
 }
 
@@ -143,10 +176,34 @@ export interface CostData {
   byModel: ModelCost[];
 }
 
+export interface SessionMetric {
+  sessionId: string;
+  project: string;
+  durationMs: number;
+  userMessages: number;
+  assistantMessages: number;
+  toolCalls: number;
+  cost: number;
+  linesAdded: number;
+  linesRemoved: number;
+  commits: number;
+  compactions: number;
+  firstTimestamp: string;
+  lastTimestamp: string;
+  gitBranch?: string;
+}
+
 export interface SessionsData {
   byDay: SessionBucket[];
   byProject: ProjectBucket[];
   byHour: HourBucket[];
+  sessions: SessionMetric[];
+  avgDurationMs: number;
+  totalUserMessages: number;
+  totalAssistantMessages: number;
+  totalLinesAdded: number;
+  totalLinesRemoved: number;
+  totalCommits: number;
 }
 
 export interface ToolDetailData {

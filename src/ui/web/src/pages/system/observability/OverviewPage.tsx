@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
-import { useObsOverview } from '../../../api/observability-hooks';
+import { useObsOverview, useObsCompaction, useObsApiDuration, useObsSessions } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
@@ -9,12 +9,15 @@ import { type TimeRange, type Granularity } from '../../../components/data/TimeR
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtCurrency, fmtPct, shortDate } from '../../../utils/format';
+import { fmtNumber, fmtCurrency, fmtPct, fmtMs, shortDate, granLabel } from '../../../utils/format';
 
 export function OverviewPage() {
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
-  const { data, isLoading, error, refetch } = useObsOverview(range);
+  const { data, isLoading, error, refetch } = useObsOverview(range, granularity);
+  const compaction = useObsCompaction(range, granularity);
+  const apiDuration = useObsApiDuration(range, granularity);
+  const sessions = useObsSessions(range, granularity);
   const { chartType, setChartType } = useChartType('line');
 
   if (isLoading) return <PageLoading />;
@@ -41,7 +44,29 @@ export function OverviewPage() {
         <StatCard label="Total Cost" value={fmtCurrency(data.totalCost)} accent="success" />
       </div>
 
-      <ChartContainer title="Daily Activity" chartType={chartType} onChartTypeChange={setChartType}>
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+        {apiDuration.data && (
+          <>
+            <StatCard label="API Latency (avg)" value={fmtMs(apiDuration.data.avgMs)} />
+            <StatCard label="API Latency (p95)" value={fmtMs(apiDuration.data.p95Ms)} accent={apiDuration.data.p95Ms > 30000 ? 'warning' : undefined} />
+          </>
+        )}
+        {compaction.data && (
+          <StatCard
+            label="Compactions"
+            value={fmtNumber(compaction.data.totalCompactions)}
+            detail={compaction.data.avgPreTokens > 0 ? `avg ${fmtNumber(compaction.data.avgPreTokens)} tokens` : undefined}
+          />
+        )}
+        {sessions.data && (
+          <>
+            <StatCard label="Lines Changed" value={`+${fmtNumber(sessions.data.totalLinesAdded)} / -${fmtNumber(sessions.data.totalLinesRemoved)}`} />
+            <StatCard label="Commits" value={fmtNumber(sessions.data.totalCommits)} />
+          </>
+        )}
+      </div>
+
+      <ChartContainer title={granLabel(granularity, "Activity")} chartType={chartType} onChartTypeChange={setChartType}>
         {chartType === 'bar' ? (
           <BarChart data={data.byDay}>
             <CartesianGrid {...gridProps} />

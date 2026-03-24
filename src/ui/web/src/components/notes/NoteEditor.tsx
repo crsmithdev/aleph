@@ -37,9 +37,9 @@ export function NoteEditor({ note, onSave, onDelete, saving, deleting }: NoteEdi
   }
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg p-3 group">
+    <div className="bg-bg-secondary border border-border-primary rounded-lg p-3 group">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs text-gray-500">{formatDateTime(note.createdAt)}</span>
+        <span className="text-xs text-text-muted">{formatDateTime(note.createdAt)}</span>
         {!editing && (
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <Button
@@ -69,7 +69,7 @@ export function NoteEditor({ note, onSave, onDelete, saving, deleting }: NoteEdi
             onChange={(e) => setDraft(e.target.value)}
             rows={4}
             autoFocus
-            className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+            className="w-full bg-bg-tertiary border border-border-secondary rounded-md px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-accent resize-y"
           />
           <div className="flex gap-2 justify-end">
             <Button variant="ghost" size="sm" onClick={handleCancel}>
@@ -87,7 +87,7 @@ export function NoteEditor({ note, onSave, onDelete, saving, deleting }: NoteEdi
           </div>
         </div>
       ) : (
-        <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">
+        <p className="text-sm text-text-secondary whitespace-pre-wrap leading-relaxed">
           {note.content}
         </p>
       )}

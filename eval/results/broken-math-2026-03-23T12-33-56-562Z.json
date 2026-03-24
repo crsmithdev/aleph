@@ -1,0 +1,16 @@
+[
+  {
+    "scenario": "broken-math",
+    "hookVariant": "hook-on",
+    "taskSuccess": false,
+    "testsRun": false,
+    "verificationSkillUsed": false,
+    "hookBlocked": false,
+    "editsMade": false,
+    "durationMs": 14027,
+    "exitCode": 0,
+    "model": "sonnet",
+    "timestamp": "2026-03-23T12:33:42.494Z",
+    "toolCalls": []
+  }
+]

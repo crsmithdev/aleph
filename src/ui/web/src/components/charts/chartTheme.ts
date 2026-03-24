@@ -29,5 +29,12 @@ export const axisProps = {
 };
 
 export function labelFormatter(label: unknown): string {
-  return typeof label === 'string' ? label.slice(5) : String(label);
+  if (typeof label !== 'string') return String(label);
+  // Sub-day keys: "2025-03-23T14" → "03-23 14:00", "2025-03-23T14:30" → "03-23 14:30"
+  if (label.length > 10 && label.includes('T')) {
+    const timePart = label.slice(11);
+    return label.slice(5, 10) + ' ' + (timePart.length <= 2 ? timePart + ':00' : timePart);
+  }
+  // Day keys: "2025-03-23" → "03-23"
+  return label.slice(5);
 }

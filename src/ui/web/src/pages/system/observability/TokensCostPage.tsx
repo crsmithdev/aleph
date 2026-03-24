@@ -10,15 +10,15 @@ import { type TimeRange, type Granularity } from '../../../components/data/TimeR
 import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { fmtCurrency, fmtNumber, fmtPct, shortDate } from '../../../utils/format';
+import { fmtCurrency, fmtNumber, fmtPct, shortDate, granLabel, rangeToDays } from '../../../utils/format';
 
 type ModelRow = { model: string; usd: number; pct: number };
 
 export function TokensCostPage() {
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
-  const tokens = useObsTokens(range);
-  const cost = useObsCost(range);
+  const tokens = useObsTokens(range, granularity);
+  const cost = useObsCost(range, granularity);
   const { chartType: tokensChartType, setChartType: setTokensChartType } = useChartType('line');
   const { chartType: costChartType, setChartType: setCostChartType } = useChartType('line');
 
@@ -28,8 +28,9 @@ export function TokensCostPage() {
   if (cost.error || !cost.data)
     return <ErrorState message="Failed to load cost data" retry={cost.refetch} />;
 
-  const avgDaily = cost.data.byDay.length > 0
-    ? cost.data.totalUsd / cost.data.byDay.length
+  const days = rangeToDays(range);
+  const avgDaily = days > 0
+    ? cost.data.totalUsd / days
     : 0;
 
   const modelColumns: Column<ModelRow>[] = [
@@ -58,12 +59,19 @@ export function TokensCostPage() {
     <div className="space-y-6">
       <ObsControlBar title={<h1 className="text-xl font-semibold text-text-primary">Tokens & Cost</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity} />
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Total Cost" value={fmtCurrency(cost.data.totalUsd)} accent="success" />
-        <StatCard label="Avg Daily" value={fmtCurrency(avgDaily)} />
+        <StatCard label="Avg / Day" value={fmtCurrency(avgDaily)} />
+        <StatCard
+          label="Cache Efficiency"
+          value={fmtPct(tokens.data.cacheEfficiency)}
+          accent={tokens.data.cacheEfficiency >= 80 ? 'success' : tokens.data.cacheEfficiency >= 50 ? 'warning' : 'error'}
+          detail={`${fmtNumber(tokens.data.totalCacheRead)} read / ${fmtNumber(tokens.data.totalCacheCreation)} created`}
+        />
+        <StatCard label="Total Tokens" value={fmtNumber(tokens.data.totalInput + tokens.data.totalOutput)} detail={`${fmtNumber(tokens.data.totalInput)} in / ${fmtNumber(tokens.data.totalOutput)} out`} />
       </div>
 
-      <ChartContainer title="Tokens per Day" chartType={tokensChartType} onChartTypeChange={setTokensChartType}>
+      <ChartContainer title={granLabel(granularity, "Tokens")} chartType={tokensChartType} onChartTypeChange={setTokensChartType}>
         {tokensChartType === 'bar' ? (
           <BarChart data={tokens.data.byDay}>
             <CartesianGrid {...gridProps} />
@@ -89,7 +97,7 @@ export function TokensCostPage() {
         )}
       </ChartContainer>
 
-      <ChartContainer title="Cost per Day" chartType={costChartType} onChartTypeChange={setCostChartType}>
+      <ChartContainer title={granLabel(granularity, "Cost")} chartType={costChartType} onChartTypeChange={setCostChartType}>
         {costChartType === 'bar' ? (
           <BarChart data={cost.data.byDay}>
             <CartesianGrid {...gridProps} />

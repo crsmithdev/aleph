@@ -67,15 +67,21 @@ function TodaySummary() {
   );
 }
 
-type Preset = 'this-week' | 'last-week' | 'this-month' | 'last-month' | 'this-quarter' | 'this-year' | 'custom';
+type Preset = 'today' | 'yesterday' | 'this-week' | 'last-week' | 'custom';
 
 function getPresetRange(preset: Exclude<Preset, 'custom'>): { start: string; end: string } {
   const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
   const day = now.getDay();
 
   switch (preset) {
+    case 'today': {
+      return { start: toDateStr(now), end: toDateStr(now) };
+    }
+    case 'yesterday': {
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      return { start: toDateStr(yesterday), end: toDateStr(yesterday) };
+    }
     case 'this-week': {
       const monday = new Date(now);
       monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
@@ -91,31 +97,6 @@ function getPresetRange(preset: Exclude<Preset, 'custom'>): { start: string; end
       const sunday = new Date(monday);
       sunday.setDate(monday.getDate() + 6);
       return { start: toDateStr(monday), end: toDateStr(sunday) };
-    }
-    case 'this-month': {
-      return {
-        start: toDateStr(new Date(year, month, 1)),
-        end: toDateStr(new Date(year, month + 1, 0)),
-      };
-    }
-    case 'last-month': {
-      return {
-        start: toDateStr(new Date(year, month - 1, 1)),
-        end: toDateStr(new Date(year, month, 0)),
-      };
-    }
-    case 'this-quarter': {
-      const q = Math.floor(month / 3);
-      return {
-        start: toDateStr(new Date(year, q * 3, 1)),
-        end: toDateStr(new Date(year, q * 3 + 3, 0)),
-      };
-    }
-    case 'this-year': {
-      return {
-        start: toDateStr(new Date(year, 0, 1)),
-        end: toDateStr(new Date(year, 11, 31)),
-      };
     }
   }
 }
@@ -134,39 +115,17 @@ type SummaryData = {
   notesAdded?: SummaryBucket;
 };
 
-function buildMarkdown(data: SummaryData, start: string, end: string): string {
-  const lines: string[] = [
-    `# Goal Tracker Summary`,
-    `**Period:** ${start} to ${end}`,
-    '',
-    '## Goals',
-    `- Created: ${data.goalsCreated?.count ?? 0}`,
-    `- Completed: ${data.goalsCompleted?.count ?? 0}`,
-    `- State changes: ${data.goalsStateChanged?.count ?? 0}`,
-    '',
-    '## Todos',
-    `- Completed: ${data.todosCompleted?.count ?? 0}`,
-    '',
-    '## Notes',
-    `- Added: ${data.notesAdded?.count ?? 0}`,
-  ];
-
-  return lines.join('\n');
-}
-
 const PRESETS: { label: string; value: Preset }[] = [
+  { label: 'Today', value: 'today' },
+  { label: 'Yesterday', value: 'yesterday' },
   { label: 'This Week', value: 'this-week' },
   { label: 'Last Week', value: 'last-week' },
-  { label: 'This Month', value: 'this-month' },
-  { label: 'Last Month', value: 'last-month' },
-  { label: 'This Quarter', value: 'this-quarter' },
-  { label: 'This Year', value: 'this-year' },
   { label: 'Custom', value: 'custom' },
 ];
 
 export function SummaryPage() {
-  const [preset, setPreset] = useState<Preset>('this-week');
-  const defaultRange = getPresetRange('this-week');
+  const [preset, setPreset] = useState<Preset>('today');
+  const defaultRange = getPresetRange('today');
   const [customStart, setCustomStart] = useState(defaultRange.start);
   const [customEnd, setCustomEnd] = useState(defaultRange.end);
 
@@ -178,36 +137,9 @@ export function SummaryPage() {
   const { data: summary, isLoading, isError } = useSummary(start, end);
   const data = summary as SummaryData | undefined;
 
-  const handleExport = () => {
-    if (!data) return;
-    const md = buildMarkdown(data, start, end);
-    const blob = new Blob([md], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `goal-summary-${start}-to-${end}.md`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  };
-
   return (
-    <div className="max-w-3xl mx-auto space-y-6 py-6 px-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold text-text-primary">Summary</h1>
-        <button
-          onClick={handleExport}
-          disabled={!data}
-          className={cn(
-            'px-4 py-2 text-sm rounded-lg transition-colors',
-            'bg-accent hover:bg-accent-hover text-white',
-            'disabled:opacity-40 disabled:cursor-not-allowed'
-          )}
-        >
-          Export Markdown
-        </button>
-      </div>
-
-      <TodaySummary />
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold text-text-primary">Summary</h1>
 
       {/* Preset selector */}
       <div className="space-y-3">
@@ -278,6 +210,8 @@ export function SummaryPage() {
           )}
         </div>
       )}
+
+      <TodaySummary />
     </div>
   );
 }

@@ -9,6 +9,7 @@ import type {
   CostBucket,
   ModelCost,
   SessionBucket,
+  SessionMetric,
   ProjectBucket,
   HourBucket,
   OverviewData,
@@ -24,6 +25,8 @@ import type {
   MemoryUsageData,
   HookEventData,
   HookInvocation,
+  CompactionData,
+  ApiDurationData,
 } from "./types.js";
 import { calculateCost } from "./pricing.js";
 
@@ -54,7 +57,7 @@ function percentile(sorted: number[], p: number): number {
   return sorted[Math.max(0, idx)];
 }
 
-export function aggregateOverview(entries: SessionEntry[]): OverviewData {
+export function aggregateOverview(entries: SessionEntry[], granularity: Granularity = "day"): OverviewData {
   const sessionIds = new Set<string>();
   let messages = 0;
   let toolCalls = 0;
@@ -64,7 +67,7 @@ export function aggregateOverview(entries: SessionEntry[]): OverviewData {
   const dayMap = new Map<string, { sessions: Set<string>; messages: number }>();
 
   for (const e of entries) {
-    const day = dateKey(e.timestamp);
+    const day = bucketKey(e.timestamp, granularity);
     if (!dayMap.has(day)) dayMap.set(day, { sessions: new Set(), messages: 0 });
     const bucket = dayMap.get(day)!;
 
@@ -104,22 +107,40 @@ export function aggregateOverview(entries: SessionEntry[]): OverviewData {
 }
 
 export function aggregateTools(entries: SessionEntry[], granularity: Granularity = "day"): ToolsData {
-  const toolCounts = new Map<string, { count: number; errors: number; lastUsed: string }>();
+  const toolCounts = new Map<string, { count: number; errors: number; lastUsed: string; durations: number[] }>();
   const dayToolMap = new Map<string, Map<string, number>>();
 
-  // Map toolUseId → toolName for error attribution
-  const useIdToTool = new Map<string, string>();
+  // Map toolUseId → { toolName, timestamp } for error attribution and latency
+  const useIdToTool = new Map<string, { toolName: string; timestamp: string }>();
   for (const e of entries) {
     if (e.entryType === "tool_use" && e.toolName && e.toolUseId) {
-      useIdToTool.set(e.toolUseId, e.toolName);
+      useIdToTool.set(e.toolUseId, { toolName: e.toolName, timestamp: e.timestamp });
+    }
+  }
+
+  // Map toolUseId → result timestamp for latency calculation
+  const resultTimestamps = new Map<string, string>();
+  for (const e of entries) {
+    if (e.entryType === "tool_result" && e.toolUseId) {
+      resultTimestamps.set(e.toolUseId, e.timestamp);
     }
   }
 
   for (const e of entries) {
     if (e.entryType === "tool_use" && e.toolName) {
-      const cur = toolCounts.get(e.toolName) || { count: 0, errors: 0, lastUsed: "" };
+      const cur = toolCounts.get(e.toolName) || { count: 0, errors: 0, lastUsed: "", durations: [] };
       cur.count++;
       if (!cur.lastUsed || e.timestamp > cur.lastUsed) cur.lastUsed = e.timestamp;
+
+      // Calculate latency if we have a matching tool_result
+      if (e.toolUseId) {
+        const resultTs = resultTimestamps.get(e.toolUseId);
+        if (resultTs) {
+          const durationMs = new Date(resultTs).getTime() - new Date(e.timestamp).getTime();
+          if (durationMs >= 0 && durationMs < 600000) cur.durations.push(durationMs);
+        }
+      }
+
       toolCounts.set(e.toolName, cur);
 
       const bk = bucketKey(e.timestamp, granularity);
@@ -129,10 +150,9 @@ export function aggregateTools(entries: SessionEntry[], granularity: Granularity
     }
 
     if (e.entryType === "tool_result" && e.isError) {
-      // Attribute error to the tool that produced it via toolUseId
-      const toolName = e.toolUseId ? useIdToTool.get(e.toolUseId) : undefined;
-      if (toolName) {
-        const cur = toolCounts.get(toolName);
+      const info = e.toolUseId ? useIdToTool.get(e.toolUseId) : undefined;
+      if (info) {
+        const cur = toolCounts.get(info.toolName);
         if (cur) cur.errors++;
       }
     }
@@ -140,13 +160,20 @@ export function aggregateTools(entries: SessionEntry[], granularity: Granularity
 
   const total = [...toolCounts.values()].reduce((s, v) => s + v.count, 0);
   const ranked: ToolMetric[] = [...toolCounts.entries()]
-    .map(([name, v]) => ({
-      name,
-      count: v.count,
-      errorCount: v.errors,
-      pct: total > 0 ? (v.count / total) * 100 : 0,
-      lastUsed: v.lastUsed,
-    }))
+    .map(([name, v]) => {
+      const sorted = v.durations.slice().sort((a, b) => a - b);
+      const avgMs = sorted.length > 0 ? Math.round(sorted.reduce((s, d) => s + d, 0) / sorted.length) : undefined;
+      return {
+        name,
+        count: v.count,
+        errorCount: v.errors,
+        pct: total > 0 ? (v.count / total) * 100 : 0,
+        lastUsed: v.lastUsed,
+        avgMs,
+        p50Ms: sorted.length > 0 ? Math.round(percentile(sorted, 50)) : undefined,
+        p95Ms: sorted.length > 0 ? Math.round(percentile(sorted, 95)) : undefined,
+      };
+    })
     .sort((a, b) => b.count - a.count);
 
   const byDay = [...dayToolMap.entries()]
@@ -274,26 +301,38 @@ export function aggregateSkills(entries: SessionEntry[], granularity: Granularit
   return { ranked, byDay };
 }
 
-export function aggregateTokens(entries: SessionEntry[]): TokensData {
+export function aggregateTokens(entries: SessionEntry[], granularity: Granularity = "day"): TokensData {
   const dayMap = new Map<string, TokenBucket>();
+  let totalInput = 0, totalOutput = 0, totalCacheRead = 0, totalCacheCreation = 0;
 
   for (const e of entries) {
     if (e.entryType === "tokens") {
-      const day = dateKey(e.timestamp);
+      const day = bucketKey(e.timestamp, granularity);
       const cur = dayMap.get(day) || { date: day, input: 0, output: 0, cacheRead: 0, cacheCreation: 0 };
-      cur.input += e.inputTokens || 0;
-      cur.output += e.outputTokens || 0;
-      cur.cacheRead += e.cacheReadTokens || 0;
-      cur.cacheCreation += e.cacheCreationTokens || 0;
+      const input = e.inputTokens || 0;
+      const output = e.outputTokens || 0;
+      const cacheRead = e.cacheReadTokens || 0;
+      const cacheCreation = e.cacheCreationTokens || 0;
+      cur.input += input;
+      cur.output += output;
+      cur.cacheRead += cacheRead;
+      cur.cacheCreation += cacheCreation;
       dayMap.set(day, cur);
+      totalInput += input;
+      totalOutput += output;
+      totalCacheRead += cacheRead;
+      totalCacheCreation += cacheCreation;
     }
   }
 
+  const cacheTotal = totalCacheRead + totalCacheCreation;
+  const cacheEfficiency = cacheTotal > 0 ? (totalCacheRead / cacheTotal) * 100 : 0;
+
   const byDay = [...dayMap.values()].sort((a, b) => a.date.localeCompare(b.date));
-  return { byDay };
+  return { cacheEfficiency, totalInput, totalOutput, totalCacheRead, totalCacheCreation, byDay };
 }
 
-export function aggregateCost(entries: SessionEntry[]): CostData {
+export function aggregateCost(entries: SessionEntry[], granularity: Granularity = "day"): CostData {
   let totalUsd = 0;
   const dayMap = new Map<string, number>();
   const modelMap = new Map<string, number>();
@@ -309,7 +348,7 @@ export function aggregateCost(entries: SessionEntry[]): CostData {
       );
       totalUsd += cost;
 
-      const day = dateKey(e.timestamp);
+      const day = bucketKey(e.timestamp, granularity);
       dayMap.set(day, (dayMap.get(day) || 0) + cost);
       modelMap.set(e.model, (modelMap.get(e.model) || 0) + cost);
     }
@@ -330,19 +369,77 @@ export function aggregateCost(entries: SessionEntry[]): CostData {
   return { totalUsd, byDay, byModel };
 }
 
-export function aggregateSessions(entries: SessionEntry[]): SessionsData {
-  const dayMap = new Map<string, { sessions: Set<string>; messages: number }>();
+export function aggregateSessions(entries: SessionEntry[], granularity: Granularity = "day"): SessionsData {
+  const dayMap = new Map<string, { sessions: Set<string>; messages: number; userMessages: number; assistantMessages: number }>();
   const projectMap = new Map<string, Set<string>>();
   const hourMap = new Map<number, number>();
 
+  // Per-session tracking
+  const sessionMap = new Map<string, {
+    project: string;
+    firstTs: string; lastTs: string;
+    userMessages: number; assistantMessages: number;
+    toolCalls: number; cost: number;
+    linesAdded: number; linesRemoved: number;
+    commits: number; compactions: number;
+    gitBranch?: string;
+  }>();
+
+  function getSession(sessionId: string, project: string, timestamp: string) {
+    if (!sessionMap.has(sessionId)) {
+      sessionMap.set(sessionId, {
+        project, firstTs: timestamp, lastTs: timestamp,
+        userMessages: 0, assistantMessages: 0,
+        toolCalls: 0, cost: 0,
+        linesAdded: 0, linesRemoved: 0,
+        commits: 0, compactions: 0,
+      });
+    }
+    const s = sessionMap.get(sessionId)!;
+    if (timestamp < s.firstTs) s.firstTs = timestamp;
+    if (timestamp > s.lastTs) s.lastTs = timestamp;
+    return s;
+  }
+
   for (const e of entries) {
-    const day = dateKey(e.timestamp);
-    if (!dayMap.has(day)) dayMap.set(day, { sessions: new Set(), messages: 0 });
+    const day = bucketKey(e.timestamp, granularity);
+    if (!dayMap.has(day)) dayMap.set(day, { sessions: new Set(), messages: 0, userMessages: 0, assistantMessages: 0 });
     const bucket = dayMap.get(day)!;
     bucket.sessions.add(e.sessionId);
 
+    const sess = getSession(e.sessionId, e.project, e.timestamp);
+    if (e.gitBranch) sess.gitBranch = e.gitBranch;
+
     if (e.entryType === "tokens") {
       bucket.messages++;
+      bucket.assistantMessages++;
+      sess.assistantMessages++;
+      sess.cost += calculateCost(
+        e.model || "", e.inputTokens || 0, e.outputTokens || 0,
+        e.cacheReadTokens || 0, e.cacheCreationTokens || 0,
+      );
+    }
+
+    if (e.entryType === "user_message") {
+      bucket.messages++;
+      bucket.userMessages++;
+      sess.userMessages++;
+    }
+
+    if (e.entryType === "tool_use") {
+      sess.toolCalls++;
+      if (e.linesAdded) sess.linesAdded += e.linesAdded;
+      if (e.linesRemoved) sess.linesRemoved += e.linesRemoved;
+
+      // Detect git commits
+      if (e.toolName === "Bash" && e.toolParams?.command &&
+          /\bgit\s+commit\b/.test(e.toolParams.command as string)) {
+        sess.commits++;
+      }
+    }
+
+    if (e.entryType === "compact_boundary") {
+      sess.compactions++;
     }
 
     if (!projectMap.has(e.project)) projectMap.set(e.project, new Set());
@@ -354,7 +451,10 @@ export function aggregateSessions(entries: SessionEntry[]): SessionsData {
 
   const byDay: SessionBucket[] = [...dayMap.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, v]) => ({ date, sessions: v.sessions.size, messages: v.messages }));
+    .map(([date, v]) => ({
+      date, sessions: v.sessions.size, messages: v.messages,
+      userMessages: v.userMessages, assistantMessages: v.assistantMessages,
+    }));
 
   const byProject: ProjectBucket[] = [...projectMap.entries()]
     .map(([project, sessions]) => ({ project, sessions: sessions.size }))
@@ -364,7 +464,38 @@ export function aggregateSessions(entries: SessionEntry[]): SessionsData {
     .sort(([a], [b]) => a - b)
     .map(([hour, count]) => ({ hour, count }));
 
-  return { byDay, byProject, byHour };
+  const sessions: SessionMetric[] = [...sessionMap.entries()]
+    .map(([sessionId, s]) => ({
+      sessionId,
+      project: s.project,
+      durationMs: new Date(s.lastTs).getTime() - new Date(s.firstTs).getTime(),
+      userMessages: s.userMessages,
+      assistantMessages: s.assistantMessages,
+      toolCalls: s.toolCalls,
+      cost: s.cost,
+      linesAdded: s.linesAdded,
+      linesRemoved: s.linesRemoved,
+      commits: s.commits,
+      compactions: s.compactions,
+      firstTimestamp: s.firstTs,
+      lastTimestamp: s.lastTs,
+      gitBranch: s.gitBranch,
+    }))
+    .sort((a, b) => b.lastTimestamp.localeCompare(a.lastTimestamp));
+
+  const durations = sessions.map((s) => s.durationMs).filter((d) => d > 0);
+  const avgDurationMs = durations.length > 0 ? Math.round(durations.reduce((s, d) => s + d, 0) / durations.length) : 0;
+  const totalUserMessages = sessions.reduce((s, v) => s + v.userMessages, 0);
+  const totalAssistantMessages = sessions.reduce((s, v) => s + v.assistantMessages, 0);
+  const totalLinesAdded = sessions.reduce((s, v) => s + v.linesAdded, 0);
+  const totalLinesRemoved = sessions.reduce((s, v) => s + v.linesRemoved, 0);
+  const totalCommits = sessions.reduce((s, v) => s + v.commits, 0);
+
+  return {
+    byDay, byProject, byHour, sessions,
+    avgDurationMs, totalUserMessages, totalAssistantMessages,
+    totalLinesAdded, totalLinesRemoved, totalCommits,
+  };
 }
 
 export function aggregateToolDetail(entries: SessionEntry[], toolName: string): ToolDetailData {
@@ -528,7 +659,7 @@ export function aggregateSkillDetail(entries: SessionEntry[], skillName: string)
   const errorCount = 0;
 
   const dayMap = new Map<string, number>();
-  const invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown> }[] = [];
+  const invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; userRequest?: string }[] = [];
 
   for (const e of matched) {
     const day = dateKey(e.timestamp);
@@ -656,7 +787,7 @@ export function aggregateHookEvents(entries: SessionEntry[]): HookEventData {
   return { events, invocations };
 }
 
-export function aggregateMemoryUsage(entries: SessionEntry[]): MemoryUsageData {
+export function aggregateMemoryUsage(entries: SessionEntry[], granularity: Granularity = "day"): MemoryUsageData {
   let stores = 0;
   let searches = 0;
   const dayMap = new Map<string, { stores: number; searches: number }>();
@@ -669,7 +800,7 @@ export function aggregateMemoryUsage(entries: SessionEntry[]): MemoryUsageData {
 
     if (!isStore && !isSearch) continue;
 
-    const day = dateKey(e.timestamp);
+    const day = bucketKey(e.timestamp, granularity);
     if (!dayMap.has(day)) dayMap.set(day, { stores: 0, searches: 0 });
     const bucket = dayMap.get(day)!;
 
@@ -688,6 +819,66 @@ export function aggregateMemoryUsage(entries: SessionEntry[]): MemoryUsageData {
     .map(([date, v]) => ({ date, stores: v.stores, searches: v.searches }));
 
   return { stores, searches, byDay };
+}
+
+export function aggregateCompaction(entries: SessionEntry[], granularity: Granularity = "day"): CompactionData {
+  const dayMap = new Map<string, number>();
+  const events: CompactionData["events"] = [];
+  let totalTokensAtCompaction = 0;
+
+  for (const e of entries) {
+    if (e.entryType !== "compact_boundary") continue;
+    const preTokens = e.compactPreTokens || 0;
+    totalTokensAtCompaction += preTokens;
+    events.push({
+      timestamp: e.timestamp,
+      sessionId: e.sessionId,
+      trigger: e.compactTrigger || "unknown",
+      preTokens,
+    });
+    const day = bucketKey(e.timestamp, granularity);
+    dayMap.set(day, (dayMap.get(day) || 0) + 1);
+  }
+
+  const totalCompactions = events.length;
+  const avgPreTokens = totalCompactions > 0 ? Math.round(totalTokensAtCompaction / totalCompactions) : 0;
+
+  const byDay: TimeBucket[] = [...dayMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, count]) => ({ date, count }));
+
+  return { totalCompactions, totalTokensAtCompaction, avgPreTokens, byDay, events: events.sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 100) };
+}
+
+export function aggregateApiDuration(entries: SessionEntry[], granularity: Granularity = "day"): ApiDurationData {
+  const allDurations: number[] = [];
+  const dayMap = new Map<string, number[]>();
+
+  for (const e of entries) {
+    if (e.entryType !== "turn_duration" || !e.turnDurationMs) continue;
+    allDurations.push(e.turnDurationMs);
+    const day = bucketKey(e.timestamp, granularity);
+    if (!dayMap.has(day)) dayMap.set(day, []);
+    dayMap.get(day)!.push(e.turnDurationMs);
+  }
+
+  const sorted = allDurations.slice().sort((a, b) => a - b);
+  const avgMs = sorted.length > 0 ? Math.round(sorted.reduce((s, d) => s + d, 0) / sorted.length) : 0;
+
+  const byDay = [...dayMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, durations]) => ({
+      date,
+      avgMs: Math.round(durations.reduce((s, d) => s + d, 0) / durations.length),
+      count: durations.length,
+    }));
+
+  return {
+    avgMs,
+    p50Ms: Math.round(percentile(sorted, 50)),
+    p95Ms: Math.round(percentile(sorted, 95)),
+    byDay,
+  };
 }
 
 export function getRecentEvents(

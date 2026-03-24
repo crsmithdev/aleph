@@ -17,11 +17,11 @@ export function HabitsSection({ date: _date }: HabitsSectionProps) {
   const active = habits?.filter((h) => h.active) ?? [];
 
   if (isLoading) {
-    return <div className="text-sm text-gray-500 italic">Loading habits...</div>;
+    return <div className="text-sm text-text-muted italic">Loading habits...</div>;
   }
 
   if (active.length === 0) {
-    return <div className="text-sm text-gray-500 italic">No habits.</div>;
+    return <div className="text-sm text-text-muted italic">No habits.</div>;
   }
 
   return (
@@ -58,18 +58,18 @@ function HabitItem({ habit, onComplete, onUncomplete }: HabitItemProps) {
   };
 
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-900 border border-gray-800">
+    <div className="flex items-center gap-3 p-3 rounded-lg bg-bg-secondary border border-border-primary">
       <input
         type="checkbox"
         checked={checked}
         onChange={handleToggle}
-        className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-blue-600 focus:ring-blue-500 cursor-pointer"
+        className="h-4 w-4 rounded border-border-secondary bg-bg-tertiary text-accent focus:ring-accent cursor-pointer"
       />
       <div className="flex-1 min-w-0 flex items-center gap-2">
-        <span className={`text-sm ${checked ? 'line-through text-gray-500' : 'text-gray-200'}`}>
+        <span className={`text-sm ${checked ? 'line-through text-text-muted' : 'text-text-primary'}`}>
           {habit.title}
         </span>
-        <span className="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">
+        <span className="text-xs px-1.5 py-0.5 rounded bg-bg-tertiary text-text-muted border border-border-secondary">
           {frequencyLabel(habit.frequency)}
         </span>
       </div>

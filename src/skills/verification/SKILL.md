@@ -1,6 +1,6 @@
 ---
 name: verification
-description: Use before claiming work is complete, fixed, or passing. Requires running verification commands and confirming output. Evidence before assertions, always.
+description: Use before claiming work is complete, fixed, or passing. Requires e2e verification against the running system plus an artifact. Evidence before assertions, always.
 ---
 
 # Verification
@@ -16,17 +16,18 @@ Claiming work is complete without verification is dishonesty, not efficiency.
 
 ### The Iron Law
 
-**No completion claims without fresh verification evidence.** If you haven't run the verification command in this message, you cannot claim it passes.
+**No completion claims without fresh e2e evidence.** If you haven't run the real system and produced an artifact in this message, you cannot claim it works.
 
 ### The Gate
 
-1. **IDENTIFY** — what command proves this claim?
-2. **RUN** — execute the full command (fresh, not cached)
-3. **READ** — full output, check exit code, count failures
-4. **VERIFY** — does output confirm the claim?
+1. **IDENTIFY** — what running system or browser interaction proves this claim?
+2. **START** — start the dev server or run the actual system
+3. **INTERACT** — use Playwright, Chrome DevTools MCP, or direct CLI interaction
+4. **CAPTURE** — save a screenshot or pipe output to a file as the artifact
+5. **VERIFY** — does the artifact confirm the claim?
    - NO → state actual status with evidence
    - YES → state claim WITH evidence
-5. **ONLY THEN** — make the claim
+6. **ONLY THEN** — make the claim
 
 Skip any step = unverified claim.
 
@@ -34,29 +35,45 @@ Skip any step = unverified claim.
 
 | Claim | Requires | Not sufficient |
 |-------|----------|----------------|
-| Tests pass | Test command output: 0 failures | Previous run, "should pass" |
-| Build succeeds | Build command: exit 0 | Linter passing |
-| Bug fixed | Reproduce original symptom: passes | Code changed, assumed fixed |
+| UI change works | Dev server running + browser interaction + screenshot | Unit tests, "looks right" |
+| Bug fixed | Reproduce original symptom in running system | Code changed, assumed fixed |
+| Feature complete | End-to-end flow through real system + artifact | All tests passing |
+| CLI works | Run the actual binary, capture output to file | Reading the source |
 
-### Common Rationalizations
+### The Enforcement System
 
-| Thought | Reality |
-|---------|---------|
-| "Should work now" | Run the command. |
-| "I'm confident" | Confidence is not evidence. |
-| "I just changed one line" | One line can break everything. Run the command. |
-| "The code looks right" | Looking is not running. |
-| "The linter passed" | Linter is not tests. Tests are not build. Run the right command. |
-| "The agent said it worked" | Verify independently. |
+Two mechanisms enforce this:
+
+**format-reminder.ts** (primary) — injects the e2e requirement into every actionable prompt before work starts. You see this at the top of each task.
+
+**verify-gate.ts** (Stop hook) — checks the transcript after each turn for e2e evidence and an artifact. Gets one reminder; cannot hard-block.
+
+### What Satisfies the Gate
+
+**E2E evidence** (any one):
+- Playwright, Cypress, or Puppeteer run
+- `bun/npm run dev`, `next dev`, `vite dev`
+- `bun/node ... server` (any server process)
+- Chrome DevTools MCP calls (`mcp__chrome-devtools__*`)
+- Playwright/browser MCP calls
+
+**Artifact** (any one):
+- `--screenshot` flag or `.png`/`.jpg` file saved
+- Output captured to file: `> file.txt` or `tee`
+- `mcp__chrome-devtools__take_screenshot`
+
+Unit tests (`bun test`, `jest`, `pytest`, `cargo test`, etc.) satisfy **neither** requirement.
 
 ## Done when
 
-- Every claim backed by fresh command output in the same message
-- Exit codes checked, failure counts at zero
-- Evidence reported inline: `✓ [command] → [result]` or `✗ [command] → [actual vs expected]`
+- Dev server or real system was started this turn
+- Browser or CLI interaction confirmed the behavior
+- Artifact (screenshot or captured output) exists as proof
+- Every claim is backed by that evidence, reported inline
 
 ## Principles
 
-- Evidence before assertions — no claim without fresh verification
-- Run the actual command, not a proxy (linter ≠ tests ≠ build)
-- When completion criteria exist, check each one explicitly against fresh evidence
+- Evidence before assertions — no claim without fresh e2e verification
+- The running system is the truth; source code and tests are not
+- Unit tests verify logic; only the real system verifies the feature
+- One screenshot beats a thousand "should work" assertions

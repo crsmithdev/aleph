@@ -1,0 +1,171 @@
+[
+  {
+    "scenario": "todo-app",
+    "variant": "with-hook",
+    "taskSuccess": true,
+    "unitTestsRun": false,
+    "e2eEvidence": true,
+    "artifactCreated": true,
+    "gateBlocks": 0,
+    "editsMade": true,
+    "durationMs": 50879,
+    "model": "claude-sonnet-4-6",
+    "timestamp": "2026-03-23T19:56:59.375Z",
+    "toolCalls": [
+      "Glob",
+      "Glob",
+      "Read",
+      "Edit",
+      "Edit",
+      "Bash",
+      "Bash",
+      "Bash",
+      "Bash",
+      "Bash"
+    ],
+    "e2eSignals": [
+      "bun server.ts &\nsleep 1\necho \"Server started\"",
+      "bun server.ts &\nSERVER_PID=$!\necho \"PID: $SERVER_PID\"\nsleep 2\necho \"Server shoul"
+    ],
+    "artifacts": [
+      "bash:cat > /tmp/eval-todo-app-aZtUmE/verify-output.txt << 'EOF'\n="
+    ],
+    "stopMessages": [
+      "Both bugs are fixed and verified. Here's a summary:\n\n---\n\n### Bug 1 — Checkbox toggle always setting `done = false`\n**File:** `server.ts`, line 128  \n**Fix:** `todo.done = false` → `todo.done = !todo.done`  \n**Verified:** Toggling a todo flips it `false→true` and back `true→false` correctly.\n\n---\n\n#"
+    ]
+  },
+  {
+    "scenario": "todo-app",
+    "variant": "bare",
+    "taskSuccess": true,
+    "unitTestsRun": false,
+    "e2eEvidence": false,
+    "artifactCreated": false,
+    "gateBlocks": 0,
+    "editsMade": true,
+    "durationMs": 19204,
+    "model": "claude-sonnet-4-6",
+    "timestamp": "2026-03-23T19:57:51.799Z",
+    "toolCalls": [
+      "Glob",
+      "Read",
+      "Edit",
+      "Edit"
+    ],
+    "e2eSignals": [],
+    "artifacts": [],
+    "stopMessages": []
+  },
+  {
+    "scenario": "todo-app",
+    "variant": "with-hook",
+    "taskSuccess": true,
+    "unitTestsRun": false,
+    "e2eEvidence": true,
+    "artifactCreated": true,
+    "gateBlocks": 0,
+    "editsMade": true,
+    "durationMs": 43664,
+    "model": "claude-sonnet-4-6",
+    "timestamp": "2026-03-23T19:58:12.560Z",
+    "toolCalls": [
+      "Glob",
+      "Glob",
+      "Read",
+      "Edit",
+      "Edit",
+      "Bash",
+      "Bash",
+      "Bash",
+      "Bash"
+    ],
+    "e2eSignals": [
+      "bun server.ts &\nsleep 1\necho \"Server started\"",
+      "bun server.ts &\nsleep 1\necho \"Server started\""
+    ],
+    "artifacts": [
+      "bash:{\n  echo \"=== Bug Fix Verification ===\"\n  echo \"\"\n\n  echo \"-"
+    ],
+    "stopMessages": [
+      "Both bugs are fixed and verified. Here's a summary:\n\n## Bugs Fixed\n\n### Bug 1: Toggle didn't work (line 128)\n- **Before:** `todo.done = false;` — always set `done` to `false`, so checking a todo never persisted it as done\n- **After:** `todo.done = !todo.done;` — correctly flips the boolean each time"
+    ]
+  },
+  {
+    "scenario": "todo-app",
+    "variant": "bare",
+    "taskSuccess": true,
+    "unitTestsRun": false,
+    "e2eEvidence": false,
+    "artifactCreated": false,
+    "gateBlocks": 0,
+    "editsMade": true,
+    "durationMs": 16498,
+    "model": "claude-sonnet-4-6",
+    "timestamp": "2026-03-23T19:58:57.780Z",
+    "toolCalls": [
+      "Glob",
+      "Read",
+      "Edit",
+      "Edit"
+    ],
+    "e2eSignals": [],
+    "artifacts": [],
+    "stopMessages": []
+  },
+  {
+    "scenario": "todo-app",
+    "variant": "with-hook",
+    "taskSuccess": true,
+    "unitTestsRun": false,
+    "e2eEvidence": true,
+    "artifactCreated": true,
+    "gateBlocks": 0,
+    "editsMade": true,
+    "durationMs": 40601,
+    "model": "claude-sonnet-4-6",
+    "timestamp": "2026-03-23T19:59:15.829Z",
+    "toolCalls": [
+      "Glob",
+      "Glob",
+      "Read",
+      "Read",
+      "Edit",
+      "Edit",
+      "Bash",
+      "Bash",
+      "Bash"
+    ],
+    "e2eSignals": [
+      "bun server.ts &\nsleep 1\necho \"Server started\"",
+      "fuser -k 3847/tcp 2>/dev/null; sleep 1; bun server.ts &\nsleep 2\necho \"Server sta"
+    ],
+    "artifacts": [
+      "bash:{\n  echo \"=== Test 1: GET /api/todos (initial empty list) =="
+    ],
+    "stopMessages": [
+      "Both bugs are fixed and verified. Here's a summary:\n\n---\n\n### Bugs Fixed\n\n**Bug 1 — Toggle always set `done=false`** (`server.ts` line 128)\n- **Before:** `todo.done = false;`\n- **After:** `todo.done = !todo.done;`\n- **Verified:** Test 5 shows toggling returns `\"done\":true`, Test 6 shows toggling aga"
+    ]
+  },
+  {
+    "scenario": "todo-app",
+    "variant": "bare",
+    "taskSuccess": true,
+    "unitTestsRun": false,
+    "e2eEvidence": false,
+    "artifactCreated": false,
+    "gateBlocks": 0,
+    "editsMade": true,
+    "durationMs": 18156,
+    "model": "claude-sonnet-4-6",
+    "timestamp": "2026-03-23T19:59:57.984Z",
+    "toolCalls": [
+      "Glob",
+      "Read",
+      "Edit",
+      "Edit"
+    ],
+    "e2eSignals": [],
+    "artifacts": [],
+    "stopMessages": []
+  }
+]

@@ -1,7 +1,6 @@
 import { useTodos } from '../../api/hooks';
 import { TodoQuickAdd } from '../../components/todos/TodoQuickAdd';
 import { TodoItem } from '../../components/todos/TodoItem';
-import { HabitsSection } from '../../components/todos/HabitsSection';
 import { PageLoading } from '../../components/ui/Spinner';
 
 export function TodosPage() {
@@ -11,7 +10,7 @@ export function TodosPage() {
   const completed = data?.completed ?? [];
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 py-6 px-4">
+    <div className="space-y-6">
       <h1 className="text-2xl font-bold text-text-primary">TODOs</h1>
 
       <TodoQuickAdd />
@@ -58,13 +57,6 @@ export function TodosPage() {
             </section>
           )}
 
-          <section>
-            <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-2 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-accent inline-block" />
-              Habits
-            </h2>
-            <HabitsSection date={new Date().toISOString().slice(0, 10)} />
-          </section>
         </div>
       )}
     </div>

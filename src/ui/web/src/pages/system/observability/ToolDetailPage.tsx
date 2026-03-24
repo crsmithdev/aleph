@@ -10,7 +10,7 @@ import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControl
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtPct, shortDate, dateTime } from '../../../utils/format';
+import { fmtNumber, fmtPct, shortDate, dateTime, granLabel } from '../../../utils/format';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 
 type InvocationRow = { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; isError?: boolean; errorMessage?: string };
@@ -137,7 +137,7 @@ export function ToolDetailPage() {
       </div>
 
       {data.byDay.length > 0 && (
-        <ChartContainer title="Daily Usage" chartType={chartType} onChartTypeChange={setChartType}>
+        <ChartContainer title={granLabel(granularity, "Usage")} chartType={chartType} onChartTypeChange={setChartType}>
           {chartType === 'bar' ? (
             <BarChart data={data.byDay}>
               <CartesianGrid {...gridProps} />

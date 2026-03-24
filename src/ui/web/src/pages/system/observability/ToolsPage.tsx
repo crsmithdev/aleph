@@ -10,10 +10,10 @@ import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControl
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtPct, shortDate } from '../../../utils/format';
+import { fmtNumber, fmtPct, fmtMs, shortDate } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
 
-type ToolRow = { name: string; count: number; errorCount: number; pct: number; active: boolean };
+type ToolRow = { name: string; count: number; errorCount: number; pct: number; active: boolean; avgMs?: number; p50Ms?: number; p95Ms?: number };
 
 export function ToolsPage() {
   const [range, setRange] = useState<TimeRange>('30d');
@@ -68,9 +68,23 @@ export function ToolsPage() {
       render: (row) => fmtPct(row.pct),
     },
     {
+      key: 'avgMs',
+      label: 'Avg',
+      align: 'right',
+      sortable: true,
+      render: (row) => row.avgMs !== undefined ? fmtMs(row.avgMs) : <span className="text-text-tertiary">—</span>,
+    },
+    {
+      key: 'p95Ms',
+      label: 'P95',
+      align: 'right',
+      sortable: true,
+      render: (row) => row.p95Ms !== undefined ? <span className={cn(row.p95Ms > 5000 && 'text-warning')}>{fmtMs(row.p95Ms)}</span> : <span className="text-text-tertiary">—</span>,
+    },
+    {
       key: 'bar',
       label: '',
-      width: '25%',
+      width: '20%',
       render: (row) => (
         <div className="h-2 w-full rounded-full bg-bg-tertiary">
           <div

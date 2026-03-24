@@ -10,6 +10,7 @@ export type {
   CostBucket,
   ModelCost,
   SessionBucket,
+  SessionMetric,
   ProjectBucket,
   HourBucket,
   OverviewData,
@@ -27,6 +28,8 @@ export type {
   HookEventData,
   HookEventSummary,
   HookInvocation,
+  CompactionData,
+  ApiDurationData,
 } from "./types.js";
 
 export { parseAllSessions, parseSessionsForDays, clearCache } from "./parser.js";
@@ -44,6 +47,8 @@ export {
   aggregateSkillDetail,
   aggregateMemoryUsage,
   aggregateHookEvents,
+  aggregateCompaction,
+  aggregateApiDuration,
   getRecentEvents,
 } from "./aggregator.js";
 

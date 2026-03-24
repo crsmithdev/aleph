@@ -65,21 +65,21 @@ export function GoalFilters({ filters, onChange, categories }: GoalFiltersProps)
         options={categoryOptions}
         className="min-w-36"
       />
-      <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer pb-0.5">
+      <label className="flex items-center gap-2 text-sm text-text-muted cursor-pointer pb-0.5">
         <input
           type="checkbox"
           checked={filters.showArchived}
           onChange={(e) => set('showArchived', e.target.checked)}
-          className="accent-blue-500"
+          className="accent-accent"
         />
         Archived
       </label>
-      <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer pb-0.5">
+      <label className="flex items-center gap-2 text-sm text-text-muted cursor-pointer pb-0.5">
         <input
           type="checkbox"
           checked={filters.showCompleted}
           onChange={(e) => set('showCompleted', e.target.checked)}
-          className="accent-blue-500"
+          className="accent-accent"
         />
         Completed
       </label>

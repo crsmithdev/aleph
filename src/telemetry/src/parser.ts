@@ -113,6 +113,9 @@ function parseLine(line: string, project: string, fallbackSessionId?: string): S
   const sessionId = (raw.sessionId as string) || fallbackSessionId || "unknown";
   const timestamp = (raw.timestamp as string) || "";
 
+  const gitBranch = (raw.gitBranch as string) || undefined;
+  const cwd = (raw.cwd as string) || undefined;
+
   if (raw.type === "assistant") {
     const message = raw.message as Record<string, unknown> | undefined;
     if (!message) return entries;
@@ -127,10 +130,13 @@ function parseLine(line: string, project: string, fallbackSessionId?: string): S
         project,
         model,
         entryType: "tokens",
+        role: "assistant",
         inputTokens: usage.input_tokens || 0,
         outputTokens: usage.output_tokens || 0,
         cacheReadTokens: usage.cache_read_input_tokens || 0,
         cacheCreationTokens: usage.cache_creation_input_tokens || 0,
+        gitBranch,
+        cwd,
       });
     }
 
@@ -146,6 +152,19 @@ function parseLine(line: string, project: string, fallbackSessionId?: string): S
             ? slashCommands.has(rawSkill) ? `/${rawSkill}` : rawSkill
             : undefined;
 
+          // Estimate lines changed for Edit tools
+          let linesAdded: number | undefined;
+          let linesRemoved: number | undefined;
+          if (toolName === "Edit" && input) {
+            const oldStr = (input.old_string as string) || "";
+            const newStr = (input.new_string as string) || "";
+            linesRemoved = oldStr.split("\n").length;
+            linesAdded = newStr.split("\n").length;
+          } else if (toolName === "Write" && input) {
+            const content = (input.content as string) || "";
+            linesAdded = content.split("\n").length;
+          }
+
           entries.push({
             sessionId,
             timestamp,
@@ -156,13 +175,17 @@ function parseLine(line: string, project: string, fallbackSessionId?: string): S
             skillName,
             toolParams: input || undefined,
             toolUseId: (block.id as string) || undefined,
+            linesAdded,
+            linesRemoved,
+            gitBranch,
+            cwd,
           });
         }
       }
     }
   }
 
-  if (raw.type === "user") {
+  if (raw.type === "user" && !raw.isCompactSummary) {
     const message = raw.message as Record<string, unknown> | undefined;
     if (message) {
       const content = message.content;
@@ -266,6 +289,18 @@ function parseLine(line: string, project: string, fallbackSessionId?: string): S
         turnDurationMs: (raw.durationMs as number) || undefined,
       });
     }
+
+    if (raw.subtype === "compact_boundary") {
+      const meta = raw.compactMetadata as Record<string, unknown> | undefined;
+      entries.push({
+        sessionId,
+        timestamp,
+        project,
+        entryType: "compact_boundary",
+        compactTrigger: (meta?.trigger as string) || "unknown",
+        compactPreTokens: (meta?.preTokens as number) || undefined,
+      });
+    }
   }
 
   return entries;
@@ -304,13 +339,12 @@ function parseFile(filePath: string, project: string): SessionEntry[] {
     rawEntries.push(...parseLine(line, project, fallbackSessionId));
   }
 
-  // Attach last user message to skill invocations, then strip user_message entries
+  // Attach last user message to skill invocations; keep user_message entries
   const lastUserMsg = new Map<string, string>();
   const entries: SessionEntry[] = [];
   for (const e of rawEntries) {
     if (e.entryType === "user_message") {
       if (e.userRequest) lastUserMsg.set(e.sessionId, e.userRequest);
-      continue;
     }
     if (e.entryType === "tool_use" && e.skillName) {
       e.userRequest = lastUserMsg.get(e.sessionId);

@@ -1,0 +1,25 @@
+[
+  {
+    "scenario": "broken-math",
+    "variant": "with-hook",
+    "taskSuccess": true,
+    "unitTestsRun": true,
+    "e2eEvidence": false,
+    "artifactCreated": false,
+    "hookBlocked": true,
+    "hookBlockCount": 1,
+    "editsMade": true,
+    "durationMs": 27084,
+    "model": "claude-sonnet-4-6",
+    "timestamp": "2026-03-23T15:22:55.373Z",
+    "toolCalls": [
+      "Glob",
+      "Read",
+      "Read",
+      "Edit",
+      "Bash"
+    ],
+    "e2eSignals": [],
+    "artifacts": []
+  }
+]

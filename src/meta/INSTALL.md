@@ -6,7 +6,7 @@ All paths relative to `~/.claude/`. Run every check. Do not skip or summarize.
 
 - `construct/meta/README.md` exists
 - `commands/construct.md` exists
-- `commands/construct.md` contains subcommands: `install`, `verify`, `grasp`, `status`, `retain`, `trace`, `audit`
+- `commands/construct.md` contains subcommands: `install`, `grasp`, `status`, `retain`, `trace`, `audit`
 
 ## Data
 

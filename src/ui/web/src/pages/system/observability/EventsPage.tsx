@@ -247,10 +247,11 @@ export function EventsPage() {
     {
       key: 'detail',
       label: 'Detail',
+      width: '140px',
       render: (row) => {
         const detail = getDetail(row);
         return detail
-          ? <span className="font-mono text-xs text-text-primary truncate block max-w-xs">{detail}</span>
+          ? <span className="font-mono text-xs text-text-primary truncate block">{detail}</span>
           : <span className="text-text-muted">—</span>;
       },
     },

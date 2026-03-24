@@ -10,8 +10,9 @@ import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControl
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtMs, fmtPct, shortDate, dateTime } from '../../../utils/format';
+import { fmtNumber, fmtMs, fmtPct, shortDate, dateTime, granLabel } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
+import { CodeBlock } from '../../../components/data/CodeBlock';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 
 type InvocationRow = { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string; isError?: boolean; errorMessage?: string };
@@ -147,7 +148,7 @@ export function HookDetailPage() {
       </div>
 
       {data.byDay.length > 0 && (
-        <ChartContainer title="Daily Executions" chartType={chartType} onChartTypeChange={setChartType}>
+        <ChartContainer title={granLabel(granularity, "Executions")} chartType={chartType} onChartTypeChange={setChartType}>
           {chartType === 'bar' ? (
             <BarChart data={data.byDay}>
               <CartesianGrid {...gridProps} />
@@ -181,6 +182,13 @@ export function HookDetailPage() {
             rowClassName={(row) => row.isError ? 'bg-error/5' : undefined}
           />
         </div>
+      )}
+
+      {data.sourceCode && (
+        <CodeBlock
+          code={data.sourceCode}
+          filename={data.fullCommand?.split(/\s+/).find((p: string) => p.startsWith('/'))?.split('/').pop()}
+        />
       )}
 
       <QueryTiming ms={data.queryTimeMs} />

@@ -31,7 +31,7 @@ export function GoalForm({ initial, onSubmit, onCancel, loading }: GoalFormProps
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div>
-        <label className="block text-xs text-gray-400 mb-1">Title</label>
+        <label className="block text-xs text-text-muted mb-1">Title</label>
         <input
           type="text"
           value={title}
@@ -41,7 +41,7 @@ export function GoalForm({ initial, onSubmit, onCancel, loading }: GoalFormProps
           }}
           placeholder="Enter goal title…"
           autoFocus
-          className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full bg-bg-secondary border border-border-primary rounded-md px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-accent"
         />
       </div>
       <div className="grid grid-cols-2 gap-3">

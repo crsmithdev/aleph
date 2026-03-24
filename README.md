@@ -52,10 +52,17 @@ src/                                      # source modules (installed to ~/.clau
 │   ├── verification/SKILL.md           # verification-before-completion
 │   ├── debugging/SKILL.md              # systematic root cause debugging
 │   ├── subagent-dev/SKILL.md           # subagent-driven development
-│   ├── code-review/SKILL.md           # dead code, unused imports, code quality
-│   ├── docs-review/SKILL.md          # doc drift detection
-│   ├── instructions-review/SKILL.md  # instruction quality audit
-│   └── ralph-loop/SKILL.md            # autonomous iterative loop
+│   ├── code-review/SKILL.md            # dead code, unused imports, code quality
+│   ├── docs-review/SKILL.md            # doc drift detection
+│   ├── instructions-review/SKILL.md    # instruction quality audit
+│   ├── ralph-loop/SKILL.md             # autonomous iterative loop
+│   ├── brainstorming/SKILL.md          # design-first exploration with approval gates
+│   ├── tdd/SKILL.md                    # red-green-refactor test-driven development
+│   ├── writing-plans/SKILL.md          # implementation plan creation with TDD task breakdown
+│   ├── executing-plans/SKILL.md        # inline plan execution with checkpoints
+│   ├── finishing-branch/SKILL.md       # branch integration: merge / PR / keep / discard
+│   ├── git-worktrees/SKILL.md          # isolated worktree setup for parallel work
+│   └── parallel-agents/SKILL.md        # dispatch independent failures to parallel agents
 ├── meta/
 │   ├── README.md                        # cross-module utilities reference
 │   └── INSTALL.md                       # post-install checks
@@ -74,7 +81,8 @@ dotclaude/                                # install sources (installed to ~/.cla
 └── commands/
     ├── construct.md                     # slash command router
     ├── goal.md                          # /goal slash command
-    └── todo.md                          # /todo slash command
+    ├── todo.md                          # /todo slash command
+    └── finish.md                        # /finish slash command
 
 .claude/                                  # dev-time config only (never installed)
 ├── CLAUDE.md                            # dev-only rules, loaded at runtime for this repo
@@ -89,6 +97,7 @@ dotclaude/                                # install sources (installed to ~/.cla
 | SessionStart | session-start.ts | memory | Surface last session summary |
 | UserPromptSubmit | rating-capture.ts | memory | Capture explicit N/10 ratings |
 | UserPromptSubmit | format-reminder.ts | skills | Depth classification + keyword-matched skill eval |
+| Stop | verify-gate.ts | skills | E2e verification gate: checks for browser evidence + artifact when files were edited |
 | Stop | session-summary.ts | memory | Structured session summary |
 | Stop | memory-extract.ts | memory | Auto-extract memories to semantic store |
 | PostToolUse | quality.ts | skills | Per-file lint/format on Edit/Write |
@@ -98,8 +107,7 @@ dotclaude/                                # install sources (installed to ~/.cla
 
 | Command | Module | Purpose |
 |---------|------|---------|
-| `/construct install` | meta | Install/reinstall Construct globally to `~/.claude` |
-| `/construct verify` | meta | Run all module post-install checks |
+| `/construct install` | meta | Install/reinstall Construct globally to `~/.claude` (includes post-install checks) |
 | `/construct grasp` | meta | Surface Claude's current mental model + project commandments |
 | `/construct status` | meta | Context, identity files, skills, memory stats |
 | `/construct retain` | meta | Promote insights to semantic memory |
@@ -107,6 +115,7 @@ dotclaude/                                # install sources (installed to ~/.cla
 | `/construct audit` | meta | Full project audit: code, refs, instructions, docs, spec |
 | `/goal` | goals | Manage goals: list, create, update, delete, show, done, archive |
 | `/todo` | goals | Manage todos: list, add, done, undone, delete, recurring |
+| `/finish` | goals | Mark a todo or goal as done; undo completion; complete recurring todos |
 
 ## Identity Architecture
 
@@ -129,6 +138,13 @@ Domain-specific playbooks in `src/skills/<name>/SKILL.md`. The `format-reminder.
 | `docs-review` | Documentation drift detection, spec completeness |
 | `instructions-review` | Instruction quality: vagueness, contradictions, duplication |
 | `ralph-loop` | Autonomous iterative development via subagent loops |
+| `brainstorming` | Design-first exploration: propose approaches, get approval before building |
+| `tdd` | Red-green-refactor cycle; no production code without a failing test first |
+| `writing-plans` | Break work into testable tasks with file mappings and TDD steps |
+| `executing-plans` | Execute a written plan inline with checkpoints; stop on blockers |
+| `finishing-branch` | Verify then integrate: merge, PR, keep, or discard a feature branch |
+| `git-worktrees` | Set up isolated worktrees for parallel feature work |
+| `parallel-agents` | Dispatch 3+ independent failures to parallel agents for concurrent investigation |
 
 ## CLAUDE.md Structure
 

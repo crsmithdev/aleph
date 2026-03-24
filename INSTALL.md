@@ -24,7 +24,7 @@ The installer:
 3. Merges `dotclaude/settings.json` into `~/.claude/settings.json` (hooks and statusline)
 4. Updates `~/.claude/CLAUDE.md` with the Construct section from `dotclaude/CLAUDE.md`
 
-After install completes, run `/construct verify` in Claude Code. It reads each module's `INSTALL.md` and executes the Post-install Verification checks listed there. Every check must pass.
+After install completes, run `/construct install` in Claude Code. It runs the installer and then automatically reads each module's `INSTALL.md` and executes the Post-install Verification checks listed there. Every check must pass.
 
 ## Upgrade (reinstall)
 
@@ -67,7 +67,7 @@ To add a new preserved file, create it with an ALL CAPS name in either `identity
 ~/.claude/construct/memory/MyNotes.md      # mixed case
 ```
 
-After upgrade completes, run `/construct verify`. Pay special attention to the **Data** checks — they confirm preserved files were not lost or zeroed out.
+After upgrade completes, run `/construct install`. Pay special attention to the **Data** checks — they confirm preserved files were not lost or zeroed out.
 
 ## Post-install Verification
 
@@ -79,14 +79,16 @@ Checks are defined in each module's `INSTALL.md`:
 | construct-memory | `src/memory/INSTALL.md` | `src/memory/hooks/session-start.ts` exists |
 | construct-skills | `src/skills/INSTALL.md` | `src/skills/skill-rules.json` exists |
 | construct-meta | `src/meta/INSTALL.md` | `src/meta/README.md` exists |
-| construct-dashboard | `src/dashboard/INSTALL.md` | `src/dashboard/api/src/app.ts` exists |
+| construct-data | `src/data/INSTALL.md` | `src/data/src/client.ts` exists |
+| construct-goals | `src/goals/INSTALL.md` | `src/goals/src/index.ts` exists |
+| construct-ui | `src/ui/INSTALL.md` | `src/ui/api/src/app.ts` exists |
 
 Each module's INSTALL.md defines three categories of checks:
 - **Files** — expected files exist at the target
 - **Data** — preserved files were not overwritten (non-empty, content predates install)
 - **Functionality** — hooks exit 0 on trivial input, JSON is parseable, sections are present
 
-A module is considered installed if its detection file exists. `/construct verify` runs checks only for installed modules.
+A module is considered installed if its detection file exists. `/construct install` runs checks only for installed modules.
 
 Report format: `✓` pass, `✗` fail (ACTION REQUIRED), `⚠` warning (informational).
 

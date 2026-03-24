@@ -1,28 +1,43 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { useObsMemory, useObsMemoryItems, useObsMemoryUsage, useTriggerSnapshot } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
-import { ChartContainer } from '../../../components/charts/ChartContainer';
+import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
-import { fmtNumber, shortDate, relativeTime } from '../../../utils/format';
+import { ObsControlBar } from '../../../components/data/ObsControlBar';
+import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
+import { fmtNumber, shortDate, relativeTime, granLabel, rangeToDays } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
 
 type TypeRow = { type: string; count: number };
 type TagRow = { tag: string; count: number };
 type MemoryItem = { id: string; content: string; memory_type: string; tags: string; created_at: string; updated_at: string };
 
+function bucketKey(ts: string, gran: Granularity): string {
+  switch (gran) {
+    case 'minute': return ts.slice(0, 16);
+    case 'hour': return ts.slice(0, 13);
+    case 'day': return ts.slice(0, 10);
+  }
+}
+
 export function MemoryPage() {
+  const [range, setRange] = useState<TimeRange>('30d');
+  const [granularity, setGranularity] = useState<Granularity>('day');
   const { data, isLoading, error, refetch } = useObsMemory();
   const snapshot = useTriggerSnapshot();
-  const usage = useObsMemoryUsage('30d');
+  const usage = useObsMemoryUsage(range, granularity);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [tagFilter, setTagFilter] = useState('');
   const [activeSearch, setActiveSearch] = useState({ q: '', type: '', tag: '' });
+
+  const usageChart = useChartType('bar');
+  const trendChart = useChartType('line');
 
   const items = useObsMemoryItems({
     q: activeSearch.q || undefined,
@@ -30,6 +45,21 @@ export function MemoryPage() {
     tag: activeSearch.tag || undefined,
     limit: 50,
   });
+
+  // Filter trend data by selected time range (must be before early returns)
+  const trendData = useMemo(() => {
+    if (!data) return [];
+    const allSnapshots = data.snapshots.slice().reverse();
+    const days = rangeToDays(range);
+    const cutoff = new Date(Date.now() - days * 86400000).toISOString();
+    const filtered = allSnapshots.filter((s) => s.takenAt >= cutoff);
+    const buckets = new Map<string, { date: string; total: number }>();
+    for (const s of filtered) {
+      const key = bucketKey(s.takenAt, granularity);
+      buckets.set(key, { date: s.takenAt, total: s.total });
+    }
+    return Array.from(buckets.values());
+  }, [data, range, granularity]);
 
   function handleSearch() {
     setActiveSearch({ q: searchQuery, type: typeFilter, tag: tagFilter });
@@ -43,17 +73,14 @@ export function MemoryPage() {
   const typeRows: TypeRow[] = latest
     ? Object.entries(latest.byType).map(([type, count]) => ({ type, count }))
     : [];
+  const typeOptions = typeRows.map((r) => r.type);
 
   const tagRows: TagRow[] = latest
     ? Object.entries(latest.byTag)
         .map(([tag, count]) => ({ tag, count }))
         .sort((a, b) => b.count - a.count)
     : [];
-
-  const trendData = data.snapshots.slice().reverse().map((s) => ({
-    date: s.takenAt,
-    total: s.total,
-  }));
+  const tagOptions = tagRows.map((r) => r.tag);
 
   const typeColumns: Column<TypeRow>[] = [
     {
@@ -119,20 +146,28 @@ export function MemoryPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-text-primary">Memory</h1>
-        <button
-          onClick={() => snapshot.mutate()}
-          disabled={snapshot.isPending}
-          className={cn(
-            'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-            'bg-accent text-white hover:bg-accent-hover',
-            'disabled:opacity-50 disabled:cursor-not-allowed'
-          )}
-        >
-          {snapshot.isPending ? 'Taking Snapshot...' : 'Take Snapshot'}
-        </button>
-      </div>
+      <ObsControlBar
+        title={
+          <div className="flex items-center justify-between w-full">
+            <h1 className="text-xl font-semibold text-text-primary">Memory</h1>
+            <button
+              onClick={() => snapshot.mutate()}
+              disabled={snapshot.isPending}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                'bg-accent text-white hover:bg-accent-hover',
+                'disabled:opacity-50 disabled:cursor-not-allowed'
+              )}
+            >
+              {snapshot.isPending ? 'Taking Snapshot...' : 'Take Snapshot'}
+            </button>
+          </div>
+        }
+        range={range}
+        onRangeChange={setRange}
+        granularity={granularity}
+        onGranularityChange={setGranularity}
+      />
 
       {/* Stats */}
       {latest && (
@@ -150,8 +185,8 @@ export function MemoryPage() {
           />
           {usage.data && (
             <>
-              <StatCard label="Stores (30d)" value={fmtNumber(usage.data.stores)} accent="success" />
-              <StatCard label="Searches (30d)" value={fmtNumber(usage.data.searches)} />
+              <StatCard label={`Stores (${range})`} value={fmtNumber(usage.data.stores)} accent="success" />
+              <StatCard label={`Searches (${range})`} value={fmtNumber(usage.data.searches)} />
             </>
           )}
         </div>
@@ -159,16 +194,32 @@ export function MemoryPage() {
 
       {/* Usage chart */}
       {usage.data && usage.data.byDay.length > 0 && (
-        <ChartContainer title="Memory Operations (30d)">
-          <BarChart data={usage.data.byDay}>
-            <CartesianGrid {...gridProps} />
-            <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-            <YAxis {...axisProps} />
-            <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
-            <Legend />
-            <Bar dataKey="stores" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Stores" />
-            <Bar dataKey="searches" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Searches" />
-          </BarChart>
+        <ChartContainer
+          title={granLabel(granularity, "Memory Operations")}
+          chartType={usageChart.chartType}
+          onChartTypeChange={usageChart.setChartType}
+        >
+          {usageChart.chartType === 'bar' ? (
+            <BarChart data={usage.data.byDay}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+              <YAxis {...axisProps} />
+              <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+              <Legend />
+              <Bar dataKey="stores" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Stores" />
+              <Bar dataKey="searches" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Searches" />
+            </BarChart>
+          ) : (
+            <LineChart data={usage.data.byDay}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+              <YAxis {...axisProps} />
+              <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+              <Legend />
+              <Line type="monotone" dataKey="stores" stroke={CHART_PALETTE[1]} strokeWidth={2} dot={false} name="Stores" />
+              <Line type="monotone" dataKey="searches" stroke={CHART_PALETTE[0]} strokeWidth={2} dot={false} name="Searches" />
+            </LineChart>
+          )}
         </ChartContainer>
       )}
 
@@ -199,14 +250,28 @@ export function MemoryPage() {
 
       {/* Memory count trend */}
       {trendData.length > 1 && (
-        <ChartContainer title="Memory Count Over Time">
-          <LineChart data={trendData}>
-            <CartesianGrid {...gridProps} />
-            <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-            <YAxis {...axisProps} />
-            <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
-            <Line type="monotone" dataKey="total" stroke={CHART_PALETTE[0]} strokeWidth={2} dot={false} name="Memories" />
-          </LineChart>
+        <ChartContainer
+          title="Memory Count Over Time"
+          chartType={trendChart.chartType}
+          onChartTypeChange={trendChart.setChartType}
+        >
+          {trendChart.chartType === 'line' ? (
+            <LineChart data={trendData}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+              <YAxis {...axisProps} />
+              <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+              <Line type="monotone" dataKey="total" stroke={CHART_PALETTE[0]} strokeWidth={2} dot={false} name="Memories" />
+            </LineChart>
+          ) : (
+            <BarChart data={trendData}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+              <YAxis {...axisProps} />
+              <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+              <Bar dataKey="total" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Memories" />
+            </BarChart>
+          )}
         </ChartContainer>
       )}
 
@@ -222,20 +287,22 @@ export function MemoryPage() {
             placeholder="Search by keyword..."
             className="flex-1 rounded-md border border-border-primary bg-bg-tertiary px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent"
           />
-          <input
-            type="text"
+          <select
             value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            placeholder="Type"
-            className="w-28 rounded-md border border-border-primary bg-bg-tertiary px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent"
-          />
-          <input
-            type="text"
+            onChange={(e) => { setTypeFilter(e.target.value); setActiveSearch((s) => ({ ...s, type: e.target.value })); }}
+            className="w-36 rounded-md border border-border-primary bg-bg-tertiary px-3 py-1.5 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+          >
+            <option value="">All Types</option>
+            {typeOptions.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <select
             value={tagFilter}
-            onChange={(e) => setTagFilter(e.target.value)}
-            placeholder="Tag"
-            className="w-28 rounded-md border border-border-primary bg-bg-tertiary px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent"
-          />
+            onChange={(e) => { setTagFilter(e.target.value); setActiveSearch((s) => ({ ...s, tag: e.target.value })); }}
+            className="w-36 rounded-md border border-border-primary bg-bg-tertiary px-3 py-1.5 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+          >
+            <option value="">All Tags</option>
+            {tagOptions.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
           <button
             onClick={handleSearch}
             className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover transition-colors"

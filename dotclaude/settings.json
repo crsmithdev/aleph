@@ -48,6 +48,11 @@
       },
       {
         "hooks": [
+          { "type": "command", "command": "bun src/skills/hooks/context-monitor.ts", "timeout": 3000 }
+        ]
+      },
+      {
+        "hooks": [
           { "type": "command", "command": "bun src/memory/hooks/session-summary.ts", "timeout": 3000 }
         ]
       },
@@ -57,11 +62,32 @@
         ]
       }
     ],
+    "PreToolUse": [
+      {
+        "matcher": "mcp__.*(?:execute_sql|apply_migration|run_query)",
+        "hooks": [
+          { "type": "command", "command": "bun src/skills/hooks/db-guard.ts", "timeout": 3000 }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
         "hooks": [
           { "type": "command", "command": "bun src/skills/hooks/quality.ts", "timeout": 10000 }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          { "type": "command", "command": "bun src/skills/hooks/tsc-gate.ts", "timeout": 15000 }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          { "type": "command", "command": "bun src/skills/hooks/precompact-backup.ts", "timeout": 5000 }
         ]
       }
     ],

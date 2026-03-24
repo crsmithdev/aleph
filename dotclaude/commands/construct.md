@@ -1,6 +1,6 @@
 ---
 name: construct
-description: Construct management — subcommands: install, verify, grasp, status, retain, trace, audit, link, unlink
+description: Construct management — subcommands: install, grasp, status, retain, trace, audit
 ---
 
 Route to the matching subcommand based on `$ARGUMENTS`:
@@ -26,9 +26,7 @@ Execute: `bun install.ts`
 
 If the user passes `--dry-run`, prepend each destructive step with `echo "[dry-run]"` instead of executing.
 
-After the script completes, run `/construct verify` to confirm the installation.
-
-## `verify`
+After the script completes, run the post-install verification checks automatically:
 
 For each installed module, read its INSTALL.md and run every check listed there.
 Do not skip or summarize checks. Run each one individually and report the exact result.
@@ -102,29 +100,6 @@ Full project audit. Run these three skills in order, then print a combined summa
 
 After all three, ask: "Fix the code and reference issues now? (Instructions and docs require your review first.)"
 
-## `link`
-
-**Dev-only.** Symlinks `~/.claude/construct/` to the repo's `src/` directory so source edits are immediately live at runtime. Must be run from the Construct repo root.
-
-1. Check that `src/` exists in the current working directory. If not, print "Run this from the Construct repo root." and stop.
-2. Check if `~/.claude/construct` is already a symlink. If so, print "Already linked → <target>" and stop.
-3. If `~/.claude/construct/` exists as a regular directory, back it up: `mv ~/.claude/construct ~/.claude/construct.bak`
-4. Create symlink: `ln -s <repo>/src ~/.claude/construct`
-5. **Migrate data:** If `~/.claude/construct.bak/data/construct.db` exists, checkpoint its WAL and copy it (and signals/, sessions/) into `<repo>/src/data/` — but only if the destination DB is empty or missing. This prevents data loss when switching to linked mode. Use `PRAGMA wal_checkpoint(TRUNCATE)` before copying. Also copy `memory/signals/ratings.jsonl` and `memory/sessions/` if they exist in the backup.
-6. Run the dotclaude merge steps only (settings.json merge + CLAUDE.md update + commands sync): `bun install.ts`
-7. Print "Linked: ~/.claude/construct → <repo>/src"
-8. Print "Note: run `/construct install` to return to copy mode."
-
-## `unlink`
-
-Removes the dev symlink and does a full install.
-
-1. Check if `~/.claude/construct` is a symlink. If not, print "Not linked." and stop.
-2. Remove the symlink: `rm ~/.claude/construct`
-3. If `~/.claude/construct.bak` exists, restore it: `mv ~/.claude/construct.bak ~/.claude/construct`
-4. Run a full install: `bun install.ts`
-5. Print "Unlinked. Full install completed."
-
 ## No match
 
 If `$ARGUMENTS` doesn't match a subcommand, print:
@@ -133,13 +108,10 @@ Unknown subcommand: <what they typed>
 
 Usage: /construct <subcommand>
   (no args)     List installed Construct commands
-  install       Deploy repo to ~/.claude
-  verify        Run post-install checks
+  install       Deploy repo to ~/.claude (includes post-install checks)
   grasp         Surface project understanding
   status        Show system status
   retain        Promote insights to semantic memory
   trace         Toggle hook tracing (or trace <cmd> for one-shot)
   audit         Full project audit (code, refs, instructions, docs, spec)
-  link          Symlink source for dev (repo root only)
-  unlink        Remove symlink, full install
 ```

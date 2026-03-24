@@ -3,7 +3,6 @@ import { useGoals, useCategories, useCreateGoal } from '../../api/hooks';
 import { GoalList } from '../../components/goals/GoalList';
 import { GoalFilters, type GoalFilterState } from '../../components/goals/GoalFilters';
 import { GoalForm } from '../../components/goals/GoalForm';
-import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
@@ -64,9 +63,15 @@ export function GoalsPage() {
           >
             Group by category
           </button>
-          <Button onClick={() => setNewGoalOpen(true)}>+ New goal</Button>
+          <Button onClick={() => setNewGoalOpen(!newGoalOpen)}>+ New goal</Button>
         </div>
       </div>
+
+      {newGoalOpen && (
+        <div className="bg-bg-secondary border border-border-primary rounded-lg p-4">
+          <GoalForm onSubmit={handleCreate} onCancel={() => setNewGoalOpen(false)} loading={createGoal.isPending} />
+        </div>
+      )}
 
       <div className="bg-bg-secondary border border-border-primary rounded-lg px-4 py-3">
         <GoalFilters filters={filters} onChange={setFilters} categories={categories} />
@@ -80,9 +85,6 @@ export function GoalsPage() {
         <GoalList goals={visibleGoals} groupBy={groupBy} categories={categories} />
       )}
 
-      <Modal open={newGoalOpen} onClose={() => setNewGoalOpen(false)} title="New goal">
-        <GoalForm onSubmit={handleCreate} onCancel={() => setNewGoalOpen(false)} loading={createGoal.isPending} />
-      </Modal>
     </div>
   );
 }

@@ -33,8 +33,10 @@ The session-start hook also detects git worktrees and prompts for a semantic mem
 **Depth classification** — on every prompt (≥3 words), `format-reminder.ts` classifies depth:
 - FULL if prompt matches architectural keywords (`architect|redesign|refactor|migrate|schema|structure|plan|propose|authenticat*|authorizat*|integrat*|api endpoint|rename all|move all|replace all|across all|every file|all files|end to end|full stack`) or is ≥40 words (inclusive).
 - QUICK otherwise (silent).
-- Output when FULL (architectural keywords): `[Construct] Depth: FULL — architectural keywords. Write ISC before proceeding.`
-- Output when FULL (≥40 words): `[Construct] Depth: FULL — complex request. Consider ISC.`
+- Output when FULL (architectural keywords): `[Construct] Depth: FULL — architectural keywords. Use design-first pipeline.`
+- Output when FULL (≥40 words): `[Construct] Depth: FULL — complex request. Consider design-first pipeline.`
+
+**Verification gate injection** — same hook injects e2e requirements for non-question prompts ≥5 words: `[Construct] Verification gate active — after making changes, you MUST verify end-to-end: 1. Start the dev server or run the actual system 2. Interact with it (Playwright, Chrome DevTools, or run the CLI) 3. Produce an artifact: screenshot or captured output saved to a file`. Unit tests alone are not sufficient. The Stop hook checks for e2e evidence.
 
 **Skill matching** — same hook checks prompt against `skill-rules.json` keywords. On match: `[Construct] Matched skills: <names>. Activate via Skill() before proceeding.` No match = silent.
 
@@ -57,9 +59,17 @@ Ratings 1–3 trigger a console message: `[Construct] Low rating (N) — store w
 
 ### Ending a session
 
-On `Stop`, two hooks fire:
+On `Stop`, three hooks fire:
 
-**1. Session summary** (`session-summary.ts`) — writes a summary file if the session had ≥4 messages:
+**1. Verification gate** (`verify-gate.ts`, 3000ms) — checks whether the current turn included e2e evidence and an artifact when files were edited:
+- Scans the current turn (from last user message onward) for edits (Edit, Write, NotebookEdit tool uses).
+- If no edits: skips silently.
+- If edits present: checks for e2e signals (devserver startup, Playwright/Cypress, browser MCP tools) and artifacts (screenshots, saved output).
+- If both e2e evidence and artifact are found: passes silently.
+- Otherwise: emits a one-shot reminder listing edited files and what was missing. Fires only once (`stop_hook_active` prevents re-triggering).
+- The real enforcement is in `format-reminder.ts` (UserPromptSubmit) which injects e2e requirements proactively. This hook validates compliance.
+
+**2. Session summary** (`session-summary.ts`) — writes a summary file if the session had ≥4 messages:
 - Output: `memory/sessions/YYYY-MM-DD-HHMMSS.md`:
   ```markdown
   # Session: 2026-03-12
@@ -77,7 +87,7 @@ On `Stop`, two hooks fire:
 - Up to 8 tool names, 12 file paths, 4 milestones, 5 notes.
 - Fully silent.
 
-**2. Memory extraction** (`memory-extract.ts`) — auto-extracts high-value memories and stores them in semantic memory:
+**3. Memory extraction** (`memory-extract.ts`) — auto-extracts high-value memories and stores them in semantic memory:
 - Skips if session is not substantive (<6 messages or no edits).
 - Skips if Claude already called `memory_store` voluntarily.
 - Extracts: session summary (intent → outcome + files), user corrections ("no", "don't", "instead"), error resolutions (error → fix pairs).
@@ -113,7 +123,7 @@ Skills are domain-specific playbooks activated by keyword matching. Each lives i
 
 **Activated by:** research, investigate, look into, find out, compare, survey, analyze
 
-**Behavior:** Claude defines scope as ISC criteria before searching. Fires parallel searches. Requires fetching full source pages (not snippets). Synthesizes against original questions with inline source links. Notes gaps explicitly. Conflicting evidence must not be omitted.
+**Behavior:** Claude defines scope as concrete criteria before searching. Fires parallel searches. Requires fetching full source pages (not snippets). Synthesizes against original questions with inline source links. Notes gaps explicitly. Conflicting evidence must not be omitted.
 
 ### verification
 
@@ -163,6 +173,48 @@ Hard stop: if 3+ consecutive fixes fail, escalate to human.
 
 **Behavior:** Named after Ralph Wiggum — kind of dumb, kind of lovable, and he never gives up. Iterations are dispatched as subagents (parallel by default for independent work, sequential for dependent work). Progress lives in files, not context windows. Each agent writes to a known output location. Failures are data — the next agent learns from them.
 
+### brainstorming
+
+**Activated by:** brainstorm, design first, design session, explore approaches, propose options, design doc
+
+**Behavior:** Design before building. Explores context, asks one clarifying question at a time, proposes 2-3 approaches each with trade-offs (not just pros). Presents design scaled to complexity. User must approve before implementation begins. For non-trivial work, writes a design doc capturing decisions for the plan phase. Chains to `writing-plans`.
+
+### tdd
+
+**Activated by:** tdd, test driven, test first, red green refactor, write test first, failing test
+
+**Behavior:** The Iron Law — no production code without a failing test first. RED-GREEN-REFACTOR cycle: write one minimal failing test → verify it fails → write simplest passing code → verify all tests pass → refactor on green → commit. One behavior per test, observable outputs only. Hard stop conditions: if caught writing code before a failing test, start over from RED.
+
+### writing-plans
+
+**Activated by:** write plan, create plan, implementation plan, plan out, break down into tasks
+
+**Behavior:** Maps every file to be created or modified, breaks work into tasks each following TDD cycle, orders tasks by dependencies (independent tasks marked for parallel execution). Each task is self-contained with exact file paths, expected commands, and clear success criteria. Chains to `subagent-dev` or `executing-plans`.
+
+### executing-plans
+
+**Activated by:** execute plan, run plan, follow plan, work through plan
+
+**Behavior:** Loads and reviews the plan, flags problems before starting. Executes each task in order: mark in-progress → TDD cycle → run specified verifications → commit → mark complete. Stops immediately on blockers (missing dependency, unexpected failure, unclear instruction, plan conflict) — does not guess or work around. Chains to `finishing-branch`.
+
+### finishing-branch
+
+**Activated by:** finish branch, merge branch, create pr, ready to merge, branch done
+
+**Behavior:** Runs full test suite first — does not proceed if any fail. Identifies base branch. Presents four options: Merge (squash merge → delete branch), PR (push + gh pr create → report URL), Keep (push if needed → report name), Discard (requires typed confirmation → delete). Cleans up worktree for Merge and Discard. Never merges with failing tests.
+
+### git-worktrees
+
+**Activated by:** worktree, create worktree, isolated branch, parallel branch
+
+**Behavior:** Chooses directory (checks `.worktrees/` or `worktrees/` first, then CLAUDE.md conventions). Verifies gitignore before creating inside project. Creates with `git worktree add <path> -b <branch>`. Auto-detects and runs package manager install (bun/npm/cargo/pip). Runs baseline test suite — if tests fail before any changes, investigates before proceeding.
+
+### parallel-agents
+
+**Activated by:** parallel debug, parallel investigation, multiple failures, independent failures
+
+**Behavior:** Groups failures into independent domains (each domain maps to a specific subsystem, test file, or component). Crafts focused prompts for each agent with scope, goal, constraints, and output format — no session history passed. Dispatches all agents in a single message for true parallelism. Integrates results, checks for conflicts between agent outputs, then runs full test suite to verify combined fixes.
+
 ## Slash Commands
 
 Subcommands of `/construct`, routed by `commands/construct.md`:
@@ -176,6 +228,14 @@ Subcommands of `/construct`, routed by `commands/construct.md`:
 | `retain` | Shows last 5 session summaries. Prompts for which to promote to semantic memory via `memory_store` |
 | `trace` | Toggles `~/.claude/construct/.trace` flag file. With args: one-shot trace (enable, run command, restore previous state) |
 | `audit` | Three-skill project audit: code-review, instructions-review, docs-review. Auto-fixes code/refs with approval; instructions/docs presented for review |
+
+Top-level commands (not `/construct` subcommands):
+
+| Command | Module | Behavior |
+|---------|--------|----------|
+| `/goal` | goals | Manage goals: list, create, update, delete, show, done, archive |
+| `/todo` | goals | Manage todos: list, add, done, undone, delete, recurring |
+| `/finish` | goals | Mark a todo or goal as done; undo completion; complete recurring todos |
 
 
 ## Installer
@@ -206,7 +266,7 @@ syncing commands...
 merging settings.json...
 updating CLAUDE.md...
 
-done. run /verify to check installation.
+done.
 ```
 
 **Preserved on upgrade:**
@@ -222,7 +282,7 @@ done. run /verify to check installation.
 
 ## Identity Layer
 
-Five optional files in `construct/core/identity/`, preserved on upgrade:
+Four optional files in `construct/core/identity/`, preserved on upgrade:
 
 | File | What it changes |
 |------|----------------|
@@ -233,7 +293,7 @@ Five optional files in `construct/core/identity/`, preserved on upgrade:
 
 ## Modules
 
-Five modules, installed in dependency order. Core is always required; the others are inert if unused.
+Seven modules, installed in dependency order. Core is always required; the others are inert if unused.
 
 ### construct-core
 
@@ -262,12 +322,13 @@ Two memory layers: semantic (mcp-memory-service, decisions/patterns/preferences,
 **Depends on:** construct-core
 
 **Provides:**
-- `construct/skills/skill-rules.json` — keyword routing config (8 rules)
-- `construct/skills/hooks/format-reminder.ts` — UserPromptSubmit depth classification + skill matching
+- `construct/skills/skill-rules.json` — keyword routing config (15 rules)
+- `construct/skills/hooks/format-reminder.ts` — UserPromptSubmit depth classification + verification gate injection + skill matching
 - `construct/skills/hooks/quality.ts` — PostToolUse auto-formatter (matcher: `Edit|Write`)
 - `construct/skills/hooks/notify.ts` — Notification alerts
+- `construct/skills/hooks/verify-gate.ts` — Stop hook: e2e verification gate
 - CLAUDE.md section: `## Agent Personas`
-- Eight skill playbooks in `construct/skills/<name>/SKILL.md`: research, verification, debugging, subagent-dev, code-review, docs-review, instructions-review, ralph-loop
+- Fifteen skill playbooks in `construct/skills/<name>/SKILL.md`: research, verification, debugging, subagent-dev, code-review, docs-review, instructions-review, ralph-loop, brainstorming, tdd, writing-plans, executing-plans, finishing-branch, git-worktrees, parallel-agents
 
 **Skill routing keywords:**
 
@@ -276,11 +337,18 @@ Two memory layers: semantic (mcp-memory-service, decisions/patterns/preferences,
 | research | research, investigate, look into, find out, compare, survey, analyze |
 | verification | verify that, verify it, confirm passing, validate that, prove it works, verification |
 | debugging | debug, bug, broken, failing, error, crash, exception, traceback, root cause, bisect |
-| subagent-dev | subagent, parallel tasks, dispatch, multi-task, implementation plan, execute plan |
+| subagent-dev | subagent, parallel tasks, dispatch, multi-task |
 | code-review | dead code, unused, clean up, cleanup, simplify, code quality, code review, lint |
 | docs-review | doc sync, docs drift, documentation mismatch, docs match |
 | instructions-review | audit instructions, review rules, contradictions, vague instructions, instruction quality |
 | ralph-loop | ralph, ralph loop, autonomous loop, keep iterating, iterate until |
+| brainstorming | brainstorm, design first, design session, explore approaches, propose options, design doc |
+| tdd | tdd, test driven, test first, red green refactor, write test first, failing test |
+| writing-plans | write plan, create plan, implementation plan, plan out, break down into tasks |
+| executing-plans | execute plan, run plan, follow plan, work through plan |
+| finishing-branch | finish branch, merge branch, create pr, ready to merge, branch done |
+| git-worktrees | worktree, create worktree, isolated branch, parallel branch |
+| parallel-agents | parallel debug, parallel investigation, multiple failures, independent failures |
 
 ### construct-meta
 
@@ -332,7 +400,7 @@ All hooks in `settings.json` under `hooks`:
 |-------|-----------------|----------|
 | SessionStart | memory/hooks/session-start.ts | 5000ms |
 | UserPromptSubmit | memory/hooks/rating-capture.ts, skills/hooks/format-reminder.ts | 2000ms, 3000ms |
-| Stop | memory/hooks/session-summary.ts, memory/hooks/memory-extract.ts | 3000ms, 5000ms |
+| Stop | skills/hooks/verify-gate.ts, memory/hooks/session-summary.ts, memory/hooks/memory-extract.ts | 3000ms, 3000ms, 5000ms |
 | PostToolUse | skills/hooks/quality.ts (matcher: `Edit\|Write`) | 10000ms |
 | Notification | skills/hooks/notify.ts | 3000ms |
 

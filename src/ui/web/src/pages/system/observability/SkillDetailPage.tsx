@@ -10,7 +10,8 @@ import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtPct, shortDate, dateTime } from '../../../utils/format';
+import { fmtNumber, fmtPct, shortDate, dateTime, granLabel } from '../../../utils/format';
+import { CodeBlock } from '../../../components/data/CodeBlock';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 
 type InvocationRow = { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; userRequest?: string };
@@ -119,7 +120,7 @@ export function SkillDetailPage() {
       </div>
 
       {data.byDay.length > 0 && (
-        <ChartContainer title="Daily Usage">
+        <ChartContainer title={granLabel(granularity, "Usage")}>
           <BarChart data={data.byDay}>
             <CartesianGrid {...gridProps} />
             <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
@@ -142,6 +143,13 @@ export function SkillDetailPage() {
             maxRows={50}
           />
         </div>
+      )}
+
+      {data.sourceContent && (
+        <CodeBlock
+          code={data.sourceContent}
+          filename={`${skillName}.md`}
+        />
       )}
 
       <QueryTiming ms={data.queryTimeMs} />

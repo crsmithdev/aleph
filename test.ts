@@ -573,6 +573,321 @@ if (existsSync(installedIdentityDir)) {
   }
 }
 
+// ── Verification gate ─────────────────────────────────────────────────────────
+
+console.log("\n--- verify-gate ---");
+
+// Helper: build a verify-gate input with a temp transcript
+function verifyGate(transcriptLines: string[], stopHookActive: any = false): string {
+  const path = writeTempJsonl("vgate", transcriptLines);
+  const stdin = JSON.stringify({ transcript_path: path, stop_hook_active: stopHookActive });
+  const out = runHook("skills/hooks/verify-gate.ts", stdin);
+  try { unlinkSync(path); } catch {}
+  return out;
+}
+
+// --- Core behavior: E2E + artifact required ---
+
+// Edits without any verification → should block
+{
+  const out = verifyGate([
+    userMsg("fix the bug"),
+    assistantMsg("fixing", [{ name: "Edit", input: { file_path: "/src/foo.ts" } }]),
+  ]);
+  check("vgate: blocks edits without e2e evidence", out.includes("Verification gate"));
+  check("vgate: block message shows file", out.includes("foo.ts"));
+  check("vgate: block mentions e2e", out.includes("e2e") || out.includes("end-to-end"));
+}
+
+// Edits + Playwright + screenshot → should pass
+{
+  const out = verifyGate([
+    userMsg("fix the bug"),
+    assistantMsg("fixing", [{ name: "Edit", input: { file_path: "/src/foo.ts" } }]),
+    assistantMsg("running e2e", [{ name: "Bash", input: { command: "npx playwright test --screenshot" } }]),
+  ]);
+  check("vgate: passes with playwright + screenshot", !out.includes("Verification gate"));
+}
+
+// Edits + devserver + chrome screenshot → should pass
+{
+  const out = verifyGate([
+    userMsg("fix the bug"),
+    assistantMsg("fixing", [{ name: "Edit", input: { file_path: "/src/foo.ts" } }]),
+    assistantMsg("starting server", [{ name: "Bash", input: { command: "bun run dev" } }]),
+    assistantMsg("checking", [{ name: "mcp__chrome-devtools__take_screenshot" }]),
+  ]);
+  check("vgate: passes with devserver + chrome screenshot", !out.includes("Verification gate"));
+}
+
+// Edits + unit tests only → should block (unit tests don't count)
+{
+  const out = verifyGate([
+    userMsg("fix the bug"),
+    assistantMsg("fixing", [{ name: "Edit", input: { file_path: "/src/foo.ts" } }]),
+    assistantMsg("testing", [{ name: "Bash", input: { command: "bun test" } }]),
+  ]);
+  check("vgate: blocks edits with only unit tests", out.includes("Verification gate"));
+}
+
+// Edits + npm test → should block
+{
+  const out = verifyGate([
+    userMsg("fix it"),
+    assistantMsg("fixing", [{ name: "Edit", input: { file_path: "/src/foo.ts" } }]),
+    assistantMsg("testing", [{ name: "Bash", input: { command: "npm test" } }]),
+  ]);
+  check("vgate: blocks npm test (unit tests)", out.includes("Verification gate"));
+}
+
+// No edits → should pass silently
+{
+  const out = verifyGate([
+    userMsg("explain the code"),
+    assistantMsg("here's what it does", [{ name: "Read", input: { file_path: "/src/foo.ts" } }]),
+  ]);
+  check("vgate: passes read-only session", !out.includes("Verification gate"));
+}
+
+// Pure text, no tools → should pass
+{
+  const out = verifyGate([
+    userMsg("what is a monad"),
+    assistantMsg("a monoid in the category of endofunctors"),
+  ]);
+  check("vgate: passes pure-text conversation", !out.includes("Verification gate"));
+}
+
+// --- E2E signal detection ---
+
+// Cypress e2e command
+{
+  const out = verifyGate([
+    userMsg("fix it"),
+    assistantMsg("fixing", [{ name: "Edit", input: { file_path: "/src/foo.ts" } }]),
+    assistantMsg("e2e", [{ name: "Bash", input: { command: "npx cypress run --screenshot" } }]),
+  ]);
+  check("vgate: detects cypress as e2e", !out.includes("Verification gate"));
+}
+
+// bun run e2e
+{
+  const out = verifyGate([
+    userMsg("fix it"),
+    assistantMsg("fixing", [{ name: "Edit", input: { file_path: "/src/foo.ts" } }]),
+    assistantMsg("e2e", [{ name: "Bash", input: { command: "bun run e2e > results.txt" } }]),
+  ]);
+  check("vgate: detects 'bun run e2e' as e2e", !out.includes("Verification gate"));
+}
+
+// next dev (devserver)
+{
+  const out = verifyGate([
+    userMsg("fix it"),
+    assistantMsg("fixing", [{ name: "Edit", input: { file_path: "/src/foo.ts" } }]),
+    assistantMsg("server", [{ name: "Bash", input: { command: "next dev" } }]),
+    assistantMsg("screenshot", [{ name: "mcp__chrome-devtools__take_screenshot" }]),
+  ]);
+  check("vgate: detects next dev as e2e", !out.includes("Verification gate"));
+}
+
+// vite dev
+{
+  const out = verifyGate([
+    userMsg("fix it"),
+    assistantMsg("fixing", [{ name: "Edit", input: { file_path: "/src/foo.ts" } }]),
+    assistantMsg("server", [{ name: "Bash", input: { command: "vite dev" } }]),
+    assistantMsg("screenshot", [{ name: "mcp__chrome-devtools__take_screenshot" }]),
+  ]);
+  check("vgate: detects vite dev as e2e", !out.includes("Verification gate"));
+}
+
+// Chrome DevTools interaction (not just screenshot)
+{
+  const out = verifyGate([
+    userMsg("fix it"),
+    assistantMsg("fixing", [{ name: "Edit", input: { file_path: "/src/foo.ts" } }]),
+    assistantMsg("clicking", [{ name: "mcp__chrome-devtools__click" }]),
+    assistantMsg("screenshot", [{ name: "mcp__chrome-devtools__take_screenshot" }]),
+  ]);
+  check("vgate: chrome devtools click + screenshot passes", !out.includes("Verification gate"));
+}
+
+// E2E without artifact → should block (need both)
+{
+  const out = verifyGate([
+    userMsg("fix it"),
+    assistantMsg("fixing", [{ name: "Edit", input: { file_path: "/src/foo.ts" } }]),
+    assistantMsg("server", [{ name: "Bash", input: { command: "bun run dev" } }]),
+  ]);
+  check("vgate: blocks e2e without artifact", out.includes("Verification gate"));
+  check("vgate: block mentions artifact", out.includes("artifact"));
+}
+
+// Artifact without E2E → should block (need both)
+{
+  const out = verifyGate([
+    userMsg("fix it"),
+    assistantMsg("fixing", [{ name: "Edit", input: { file_path: "/src/foo.ts" } }]),
+    assistantMsg("saving", [{ name: "Bash", input: { command: "echo 'done' > results.txt" } }]),
+  ]);
+  check("vgate: blocks artifact without e2e", out.includes("Verification gate"));
+}
+
+// --- stop_hook_active loop prevention ---
+
+{
+  const out = verifyGate([
+    userMsg("fix it"),
+    assistantMsg("done", [{ name: "Edit", input: { file_path: "/src/foo.ts" } }]),
+  ], true);
+  check("vgate: skips when stop_hook_active=true", !out.includes("Verification gate"));
+}
+
+{
+  const out = verifyGate([
+    userMsg("fix it"),
+    assistantMsg("done", [{ name: "Edit", input: { file_path: "/src/foo.ts" } }]),
+  ], "true");
+  check("vgate: skips when stop_hook_active='true' (string truthy)", !out.includes("Verification gate"));
+}
+
+// --- Turn scoping ---
+
+// E2E in PREVIOUS turn, edits in current → should block
+{
+  const out = verifyGate([
+    userMsg("first task"),
+    assistantMsg("verified", [
+      { name: "Bash", input: { command: "npx playwright test --screenshot" } },
+    ]),
+    userMsg("second task"),
+    assistantMsg("editing", [{ name: "Edit", input: { file_path: "/src/bar.ts" } }]),
+  ]);
+  check("vgate: blocks when e2e was in previous turn", out.includes("Verification gate"));
+}
+
+// E2E before edits in same turn → should pass
+{
+  const out = verifyGate([
+    userMsg("fix the bug"),
+    assistantMsg("checking first", [{ name: "Bash", input: { command: "npx playwright test --screenshot" } }]),
+    assistantMsg("now fixing", [{ name: "Edit", input: { file_path: "/src/foo.ts" } }]),
+  ]);
+  check("vgate: passes e2e-before-edit ordering", !out.includes("Verification gate"));
+}
+
+// --- Edit tool coverage ---
+
+{
+  const out = verifyGate([
+    userMsg("create a file"),
+    assistantMsg("creating", [{ name: "Write", input: { file_path: "/src/new.ts" } }]),
+  ]);
+  check("vgate: detects Write tool as edit", out.includes("Verification gate"));
+}
+
+{
+  const out = verifyGate([
+    userMsg("edit the notebook"),
+    assistantMsg("editing", [{ name: "NotebookEdit", input: { file_path: "/nb.ipynb" } }]),
+  ]);
+  check("vgate: detects NotebookEdit as edit", out.includes("Verification gate"));
+}
+
+// --- Known gaps (informational) ---
+
+{
+  const out = verifyGate([
+    userMsg("write a file"),
+    assistantMsg("writing via bash", [{ name: "Bash", input: { command: "echo 'hello' > /src/foo.ts" } }]),
+  ]);
+  check("vgate: Bash file writes bypass gate (known gap)", !out.includes("Verification gate"), true);
+}
+
+{
+  const out = verifyGate([
+    userMsg("fix it"),
+    assistantMsg("dispatching", [{ name: "Agent", input: { prompt: "fix the bug" } }]),
+  ]);
+  check("vgate: Agent tool edits bypass gate (known gap)", !out.includes("Verification gate"), true);
+}
+
+// --- Transcript edge cases ---
+
+{
+  const out = verifyGate([]);
+  check("vgate: empty transcript passes", !out.includes("Verification gate"));
+}
+
+{
+  const out = verifyGate([
+    assistantMsg("editing", [{ name: "Edit", input: { file_path: "/src/foo.ts" } }]),
+  ]);
+  check("vgate: no user message still detects edits", out.includes("Verification gate"));
+}
+
+{
+  const path = writeTempJsonl("vgate-malformed", [
+    userMsg("fix it"),
+    "not valid json at all",
+    "}{garbage",
+    assistantMsg("editing", [{ name: "Edit", input: { file_path: "/src/foo.ts" } }]),
+  ]);
+  const stdin = JSON.stringify({ transcript_path: path });
+  const out = runHook("skills/hooks/verify-gate.ts", stdin);
+  check("vgate: handles malformed JSON lines gracefully", out.includes("Verification gate"));
+  try { unlinkSync(path); } catch {}
+}
+
+// --- File tracking ---
+
+{
+  const out = verifyGate([
+    userMsg("fix it"),
+    assistantMsg("edit 1", [{ name: "Edit", input: { file_path: "/src/foo.ts" } }]),
+    assistantMsg("edit 2", [{ name: "Edit", input: { file_path: "/src/foo.ts" } }]),
+    assistantMsg("edit 3", [{ name: "Edit", input: { file_path: "/src/foo.ts" } }]),
+  ]);
+  check("vgate: deduplicates file paths", out.includes("Verification gate"));
+  const match = out.match(/\(([^)]+)\)/);
+  if (match) {
+    const count = (match[1].match(/foo\.ts/g) ?? []).length;
+    check("vgate: file appears only once in message", count === 1);
+  } else {
+    check("vgate: file appears only once in message", false);
+  }
+}
+
+{
+  const edits = Array.from({ length: 15 }, (_, i) =>
+    assistantMsg(`edit ${i}`, [{ name: "Edit", input: { file_path: `/src/file${i}.ts` } }])
+  );
+  const out = verifyGate([userMsg("big refactor"), ...edits]);
+  check("vgate: blocks with many files", out.includes("Verification gate"));
+  const match = out.match(/\(([^)]+)\)/);
+  if (match) {
+    const fileCount = match[1].split(",").length;
+    check("vgate: caps displayed files at 10", fileCount <= 10);
+  } else {
+    check("vgate: caps displayed files at 10", false);
+  }
+}
+
+{
+  const out = verifyGate([
+    userMsg("fix it"),
+    assistantMsg("editing", [{ name: "Edit", input: {} }]),
+  ]);
+  check("vgate: edit with no file_path still triggers gate", out.includes("Verification gate"));
+}
+
+// --- Missing/invalid stdin ---
+
+run("skills/hooks/verify-gate.ts", "malformed stdin", "not json");
+run("skills/hooks/verify-gate.ts", "empty object", "{}");
+run("skills/hooks/verify-gate.ts", "missing transcript_path", '{"stop_hook_active": false}');
+
 // ── Results ──────────────────────────────────────────────────────────────────
 
 if (infoResults.length) {

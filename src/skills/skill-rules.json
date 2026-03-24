@@ -29,8 +29,20 @@
       "keywords": ["dead code", "unused", "clean up", "cleanup", "simplify", "code quality", "code review", "lint"]
     },
     {
-      "skill": "instructions-review",
-      "keywords": ["audit instructions", "review rules", "contradictions", "vague instructions", "instruction quality"]
+      "skill": "hooks-review",
+      "keywords": ["review hooks", "audit hooks", "hook check", "hook review"]
+    },
+    {
+      "skill": "commands-review",
+      "keywords": ["review commands", "audit commands", "command check", "slash command review"]
+    },
+    {
+      "skill": "skills-review",
+      "keywords": ["review skills", "audit skills", "skill check", "skill quality"]
+    },
+    {
+      "skill": "config-review",
+      "keywords": ["review config", "audit config", "settings review", "config check", "settings audit"]
     },
     {
       "skill": "brainstorming",

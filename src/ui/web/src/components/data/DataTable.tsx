@@ -93,7 +93,7 @@ export function DataTable<T>({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
+          {rows.map((row, index) => {
             const rowKey = rowKeyFn ? rowKeyFn(row) : String(row[keyField]);
             const isExpanded = renderExpanded && expandedKey === rowKey;
             const handleClick = onExpandToggle
@@ -108,6 +108,7 @@ export function DataTable<T>({
                   onClick={handleClick}
                   className={cn(
                     'border-b border-border-primary/50 transition-colors',
+                    index % 2 === 1 && 'bg-bg-secondary/30',
                     (onRowClick || onExpandToggle) && 'cursor-pointer hover:bg-bg-tertiary',
                     isExpanded && 'bg-bg-tertiary/50',
                     rowClassName?.(row)

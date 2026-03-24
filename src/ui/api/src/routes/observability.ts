@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { resolve } from 'path';
 import { homedir } from 'os';
-import { existsSync, readdirSync } from 'fs';
+import { existsSync, readdirSync, readFileSync } from 'fs';
 import { Database } from 'bun:sqlite';
 import {
   parseSessionsForDays,
@@ -17,6 +17,8 @@ import {
   aggregateSkillDetail,
   aggregateMemoryUsage,
   aggregateHookEvents,
+  aggregateCompaction,
+  aggregateApiDuration,
   getRecentEvents,
 } from '@construct/telemetry';
 import type { Granularity, SessionEntry } from '@construct/telemetry';
@@ -91,15 +93,29 @@ function timed<T>(fn: () => T): { result: T; queryTimeMs: number } {
   return { result, queryTimeMs };
 }
 
-function checkHookActive(fullCommand: string): boolean {
-  // Hook commands look like: bun /path/to/file.ts
+function extractHookPath(fullCommand: string): string | undefined {
   const parts = fullCommand.split(/\s+/);
   for (const part of parts) {
     if (part.startsWith('/') && (part.endsWith('.ts') || part.endsWith('.js') || part.endsWith('.sh'))) {
-      return existsSync(part);
+      return part;
     }
   }
-  return false;
+  return undefined;
+}
+
+function checkHookActive(fullCommand: string): boolean {
+  const path = extractHookPath(fullCommand);
+  return path ? existsSync(path) : false;
+}
+
+function readHookSource(fullCommand: string): string | undefined {
+  const path = extractHookPath(fullCommand);
+  if (!path || !existsSync(path)) return undefined;
+  try {
+    return readFileSync(path, 'utf-8');
+  } catch {
+    return undefined;
+  }
 }
 
 function checkToolActive(toolName: string, lastUsed?: string): boolean {
@@ -113,7 +129,8 @@ function checkToolActive(toolName: string, lastUsed?: string): boolean {
 
 export const observabilityRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: QueryParams }>('/overview', { preHandler: parseDaysPreHandler }, async (req) => {
-    const { result, queryTimeMs } = timed(() => aggregateOverview((req as ObsRequest).telemetryEntries));
+    const obsReq = req as ObsRequest;
+    const { result, queryTimeMs } = timed(() => aggregateOverview(obsReq.telemetryEntries, obsReq.granularity));
     return { ...result, queryTimeMs };
   });
 
@@ -146,17 +163,20 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get<{ Querystring: QueryParams }>('/tokens', { preHandler: parseDaysPreHandler }, async (req) => {
-    const { result, queryTimeMs } = timed(() => aggregateTokens((req as ObsRequest).telemetryEntries));
+    const obsReq = req as ObsRequest;
+    const { result, queryTimeMs } = timed(() => aggregateTokens(obsReq.telemetryEntries, obsReq.granularity));
     return { ...result, queryTimeMs };
   });
 
   app.get<{ Querystring: QueryParams }>('/cost', { preHandler: parseDaysPreHandler }, async (req) => {
-    const { result, queryTimeMs } = timed(() => aggregateCost((req as ObsRequest).telemetryEntries));
+    const obsReq = req as ObsRequest;
+    const { result, queryTimeMs } = timed(() => aggregateCost(obsReq.telemetryEntries, obsReq.granularity));
     return { ...result, queryTimeMs };
   });
 
   app.get<{ Querystring: QueryParams }>('/sessions', { preHandler: parseDaysPreHandler }, async (req) => {
-    const { result, queryTimeMs } = timed(() => aggregateSessions((req as ObsRequest).telemetryEntries));
+    const obsReq = req as ObsRequest;
+    const { result, queryTimeMs } = timed(() => aggregateSessions(obsReq.telemetryEntries, obsReq.granularity));
     return { ...result, queryTimeMs };
   });
 
@@ -184,7 +204,8 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       const obsReq = req as ObsRequest;
       const { result, queryTimeMs } = timed(() => aggregateHookDetail(obsReq.telemetryEntries, hookName));
       const active = result.fullCommand ? checkHookActive(result.fullCommand) : false;
-      return { ...result, active, queryTimeMs };
+      const sourceCode = result.fullCommand ? readHookSource(result.fullCommand) : undefined;
+      return { ...result, active, sourceCode, queryTimeMs };
     },
   );
 
@@ -194,7 +215,12 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     async (req) => {
       const skillName = decodeURIComponent(req.params.name);
       const { result, queryTimeMs } = timed(() => aggregateSkillDetail((req as ObsRequest).telemetryEntries, skillName));
-      return { ...result, queryTimeMs };
+      // Read skill/command source from ~/.claude/commands/<name>.md
+      const commandPath = resolve(homedir(), '.claude/commands', `${skillName}.md`);
+      const sourceContent = existsSync(commandPath)
+        ? (() => { try { return readFileSync(commandPath, 'utf-8'); } catch { return undefined; } })()
+        : undefined;
+      return { ...result, sourceContent, queryTimeMs };
     },
   );
 
@@ -202,7 +228,8 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     '/memory/usage',
     { preHandler: parseDaysPreHandler },
     async (req) => {
-      const { result, queryTimeMs } = timed(() => aggregateMemoryUsage((req as ObsRequest).telemetryEntries));
+      const obsReq = req as ObsRequest;
+      const { result, queryTimeMs } = timed(() => aggregateMemoryUsage(obsReq.telemetryEntries, obsReq.granularity));
       return { ...result, queryTimeMs };
     },
   );
@@ -239,7 +266,16 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       let db: Database | null = null;
       try {
         db = new Database(dbPath, { readonly: true });
-        const items = db.query(sql).all(...params);
+        const rows = db.query(sql).all(...params) as Array<Record<string, unknown>>;
+        const items = rows.map((row) => ({
+          ...row,
+          created_at: typeof row.created_at === 'number'
+            ? new Date(row.created_at * 1000).toISOString()
+            : row.created_at,
+          updated_at: typeof row.updated_at === 'number'
+            ? new Date(row.updated_at * 1000).toISOString()
+            : row.updated_at,
+        }));
         return { items };
       } catch {
         return { items: [] };
@@ -248,6 +284,18 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       }
     },
   );
+
+  app.get<{ Querystring: QueryParams }>('/compaction', { preHandler: parseDaysPreHandler }, async (req) => {
+    const obsReq = req as ObsRequest;
+    const { result, queryTimeMs } = timed(() => aggregateCompaction(obsReq.telemetryEntries, obsReq.granularity));
+    return { ...result, queryTimeMs };
+  });
+
+  app.get<{ Querystring: QueryParams }>('/api-duration', { preHandler: parseDaysPreHandler }, async (req) => {
+    const obsReq = req as ObsRequest;
+    const { result, queryTimeMs } = timed(() => aggregateApiDuration(obsReq.telemetryEntries, obsReq.granularity));
+    return { ...result, queryTimeMs };
+  });
 
   app.get<{ Querystring: QueryParams & { type?: string; search?: string; limit?: string; offset?: string } }>(
     '/events',
@@ -279,6 +327,48 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
         byTag: JSON.parse(r.by_tag),
       })),
     };
+  });
+
+  app.get('/db-stats', async () => {
+    const { statSync } = await import('fs');
+    const constructDbPath = resolve(homedir(), '.claude', 'construct', 'data', 'construct.db');
+    const memoryDbPath = resolve(homedir(), '.local/share/mcp-memory/sqlite_vec.db');
+
+    type DbInfo = {
+      name: string;
+      path: string;
+      sizeBytes: number;
+      walSizeBytes: number;
+      tables: Array<{ name: string; rows: number }>;
+    };
+
+    function getDbInfo(name: string, dbPath: string): DbInfo | null {
+      if (!existsSync(dbPath)) return null;
+      const stat = statSync(dbPath);
+      const walPath = dbPath + '-wal';
+      const walSize = existsSync(walPath) ? statSync(walPath).size : 0;
+      let db: Database | null = null;
+      try {
+        db = new Database(dbPath, { readonly: true });
+        const tableNames = db.query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all() as Array<{ name: string }>;
+        const tables = tableNames.map((t) => {
+          const countRow = db!.query(`SELECT count(*) as c FROM "${t.name}"`).get() as { c: number };
+          return { name: t.name, rows: countRow.c };
+        });
+        return { name, path: dbPath, sizeBytes: stat.size, walSizeBytes: walSize, tables };
+      } catch {
+        return { name, path: dbPath, sizeBytes: stat.size, walSizeBytes: walSize, tables: [] };
+      } finally {
+        db?.close();
+      }
+    }
+
+    const databases = [
+      getDbInfo('construct', constructDbPath),
+      getDbInfo('memory', memoryDbPath),
+    ].filter(Boolean);
+
+    return { databases };
   });
 
   app.post('/memory/snapshot', async () => {

@@ -32,7 +32,7 @@ export function GoalCard({ goal }: GoalCardProps) {
   return (
     <div
       onClick={() => navigate(`/life/goals/${goal.id}`)}
-      className="group flex items-start gap-3 bg-gray-900 border border-gray-800 rounded-lg px-4 py-3 cursor-pointer hover:border-gray-700 hover:bg-gray-900/80 transition-colors"
+      className="group flex items-start gap-3 bg-bg-secondary border border-border-primary rounded-lg px-4 py-3 cursor-pointer hover:border-border-secondary hover:bg-bg-secondary/80 transition-colors"
     >
       {/* Done toggle */}
       <button
@@ -41,7 +41,7 @@ export function GoalCard({ goal }: GoalCardProps) {
         className={`mt-0.5 flex-shrink-0 w-4.5 h-4.5 rounded-full border-2 flex items-center justify-center transition-colors ${
           isDone
             ? 'border-emerald-500 bg-emerald-500'
-            : 'border-gray-600 hover:border-emerald-500'
+            : 'border-border-primary hover:border-emerald-500'
         }`}
         style={{ width: '1.125rem', height: '1.125rem' }}
       >
@@ -56,12 +56,12 @@ export function GoalCard({ goal }: GoalCardProps) {
         <div className="flex items-start justify-between gap-2 flex-wrap">
           <span
             className={`text-sm font-medium leading-snug ${
-              isDone ? 'text-gray-500 line-through' : 'text-gray-100 group-hover:text-white'
+              isDone ? 'text-text-muted line-through' : 'text-text-primary group-hover:text-white'
             }`}
           >
             {goal.title}
           </span>
-          <span className="text-xs text-gray-600 flex-shrink-0">
+          <span className="text-xs text-text-disabled flex-shrink-0">
             {formatDate(goal.updatedAt)}
           </span>
         </div>
@@ -73,14 +73,14 @@ export function GoalCard({ goal }: GoalCardProps) {
             <CategoryChip key={cat.id} name={cat.name} color={cat.color} />
           ))}
           {goal.archived && (
-            <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-800 text-gray-500">
+            <span className="px-2 py-0.5 rounded text-xs font-medium bg-bg-tertiary text-text-muted">
               archived
             </span>
           )}
         </div>
 
         {goal.latestNote && (
-          <p className="mt-1.5 text-xs text-gray-500 line-clamp-1">
+          <p className="mt-1.5 text-xs text-text-muted line-clamp-1">
             {goal.latestNote.content}
           </p>
         )}

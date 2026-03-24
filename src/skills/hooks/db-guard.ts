@@ -1,0 +1,38 @@
+#!/usr/bin/env bun
+import { trace } from "../../trace.ts";
+
+const TAG = "db-guard";
+let input: any;
+try { input = JSON.parse(await Bun.stdin.text()); }
+catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(1); }
+
+const toolName = input.tool_name ?? "";
+const toolInput = input.tool_input ?? {};
+
+// Only inspect SQL-related MCP tools
+if (!toolName.includes("execute_sql") && !toolName.includes("apply_migration") && !toolName.includes("run_query")) {
+  process.exit(0);
+}
+
+// Extract SQL from common parameter names
+const sql = (toolInput.query || toolInput.sql || toolInput.statement || toolInput.content || "").toString().toUpperCase();
+if (!sql) { trace(TAG, "no SQL found in tool input"); process.exit(0); }
+
+// Destructive patterns to block
+const patterns: Array<{ regex: RegExp; description: string }> = [
+  { regex: /\bDROP\s+(TABLE|DATABASE|SCHEMA)\b/, description: "DROP TABLE/DATABASE/SCHEMA" },
+  { regex: /\bTRUNCATE\s+/, description: "TRUNCATE" },
+  { regex: /\bDELETE\s+FROM\s+\S+\s*(?:;|$)/, description: "DELETE without WHERE clause" },
+  { regex: /\bALTER\s+TABLE\s+\S+\s+DROP\s+COLUMN\b/, description: "ALTER TABLE DROP COLUMN" },
+];
+
+for (const { regex, description } of patterns) {
+  if (regex.test(sql)) {
+    console.log(`🛑 Blocked: ${description} detected in SQL query. This is a destructive operation that requires manual execution.`);
+    trace(TAG, `blocked: ${description}`);
+    process.exit(2);
+  }
+}
+
+trace(TAG, "sql ok");
+process.exit(0);

@@ -38,12 +38,6 @@ export function TodoItem({ todo }: TodoItemProps) {
 
   return (
     <div className="group flex items-start gap-3 p-3 rounded-lg bg-bg-secondary border border-border-primary">
-      <input
-        type="checkbox"
-        checked={todo.done}
-        onChange={() => updateTodo.mutate({ id: todo.id, done: !todo.done })}
-        className="mt-0.5 h-4 w-4 rounded border-border-secondary bg-bg-tertiary text-accent focus:ring-accent cursor-pointer"
-      />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           {editingTitle ? (
@@ -61,7 +55,7 @@ export function TodoItem({ todo }: TodoItemProps) {
           ) : (
             <span
               className={`text-sm cursor-pointer ${todo.done ? 'line-through text-text-muted' : 'text-text-primary'}`}
-              onClick={() => setEditingTitle(true)}
+              onClick={() => !todo.done && setEditingTitle(true)}
               onContextMenu={(e) => { e.preventDefault(); setExpanded(!expanded); }}
               role="button"
             >
@@ -112,13 +106,28 @@ export function TodoItem({ todo }: TodoItemProps) {
         )}
       </div>
 
-      <button
-        onClick={() => deleteTodo.mutate(todo.id)}
-        className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-error text-lg leading-none transition-opacity flex-shrink-0"
-        title="Delete"
-      >
-        &times;
-      </button>
+      {!todo.done && (
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button
+            onClick={() => updateTodo.mutate({ id: todo.id, done: true })}
+            className="p-1 rounded text-text-muted hover:text-success hover:bg-success/10 transition-colors"
+            title="Complete"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+          </button>
+          <button
+            onClick={() => deleteTodo.mutate(todo.id)}
+            className="p-1 rounded text-text-muted hover:text-error hover:bg-error/10 transition-colors"
+            title="Delete"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

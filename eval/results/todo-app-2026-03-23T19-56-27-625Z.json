@@ -1,0 +1,56 @@
+[
+  {
+    "scenario": "todo-app",
+    "variant": "with-hook",
+    "taskSuccess": true,
+    "unitTestsRun": false,
+    "e2eEvidence": true,
+    "artifactCreated": true,
+    "gateBlocks": 0,
+    "editsMade": true,
+    "durationMs": 34495,
+    "model": "claude-sonnet-4-6",
+    "timestamp": "2026-03-23T19:55:32.352Z",
+    "toolCalls": [
+      "Glob",
+      "Glob",
+      "Read",
+      "Read",
+      "Edit",
+      "Edit",
+      "Bash",
+      "Bash"
+    ],
+    "e2eSignals": [
+      "bun server.ts &\nsleep 1\necho \"Server started\""
+    ],
+    "artifacts": [
+      "bash:{\n  echo \"=== 1. GET /api/todos (should return empty array) "
+    ],
+    "stopMessages": [
+      "Both bugs are fixed and verified. Here's the summary:\n\n## Bugs Fixed\n\n### Bug 1: Toggle always set `done = false`\n**File:** `server.ts` line 128  \n**Fix:** Changed `todo.done = false` → `todo.done = !todo.done`  \n**Verification:** PATCH `/api/todos/1/toggle` first call returns `\"done\":true` ✅, secon"
+    ]
+  },
+  {
+    "scenario": "todo-app",
+    "variant": "bare",
+    "taskSuccess": true,
+    "unitTestsRun": false,
+    "e2eEvidence": false,
+    "artifactCreated": false,
+    "gateBlocks": 0,
+    "editsMade": true,
+    "durationMs": 17699,
+    "model": "claude-sonnet-4-6",
+    "timestamp": "2026-03-23T19:56:08.398Z",
+    "toolCalls": [
+      "Glob",
+      "Read",
+      "Edit",
+      "Edit"
+    ],
+    "e2eSignals": [],
+    "artifacts": [],
+    "stopMessages": []
+  }
+]

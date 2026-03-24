@@ -51,21 +51,21 @@ export function CategoryManager({ goalId, currentCategories }: CategoryManagerPr
       <div className="relative" ref={dropdownRef}>
         <button
           onClick={() => setOpen((v) => !v)}
-          className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-xs text-gray-500 border border-gray-700 border-dashed hover:border-gray-500 hover:text-gray-400 transition-colors"
+          className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-xs text-text-muted border border-border-secondary border-dashed hover:border-border-primary hover:text-text-secondary transition-colors"
         >
           <span className="text-base leading-none">+</span> Add
         </button>
 
         {open && (
-          <div className="absolute top-full left-0 mt-1 z-20 bg-gray-800 border border-gray-700 rounded-lg shadow-xl min-w-40 py-1">
+          <div className="absolute top-full left-0 mt-1 z-20 bg-bg-tertiary border border-border-secondary rounded-lg shadow-xl min-w-40 py-1">
             {available.length === 0 ? (
-              <p className="px-3 py-2 text-xs text-gray-500">No more categories</p>
+              <p className="px-3 py-2 text-xs text-text-muted">No more categories</p>
             ) : (
               available.map((cat) => (
                 <button
                   key={cat.id}
                   onClick={() => add(cat.id)}
-                  className="w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                  className="w-full text-left px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-secondary flex items-center gap-2 transition-colors"
                 >
                   <span
                     className="w-2 h-2 rounded-full flex-shrink-0"

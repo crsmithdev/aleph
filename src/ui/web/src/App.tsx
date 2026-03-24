@@ -7,6 +7,7 @@ import { Layout } from './components/layout/Layout';
 import { GoalsPage } from './pages/life/GoalsPage';
 import { GoalDetailPage } from './pages/life/GoalDetailPage';
 import { TodosPage } from './pages/life/TodosPage';
+import { HabitsPage } from './pages/life/HabitsPage';
 import { SummaryPage } from './pages/life/SummaryPage';
 
 // System pages
@@ -21,6 +22,7 @@ import { SkillsPage } from './pages/system/observability/SkillsPage';
 import { SkillDetailPage } from './pages/system/observability/SkillDetailPage';
 import { MemoryPage } from './pages/system/observability/MemoryPage';
 import { EventsPage } from './pages/system/observability/EventsPage';
+import { DbStatsPage } from './pages/system/observability/DbStatsPage';
 import { SettingsPage } from './pages/system/SettingsPage';
 
 const queryClient = new QueryClient({
@@ -43,6 +45,7 @@ export function App() {
               <Route path="/life/goals" element={<GoalsPage />} />
               <Route path="/life/goals/:id" element={<GoalDetailPage />} />
               <Route path="/life/todos" element={<TodosPage />} />
+              <Route path="/life/habits" element={<HabitsPage />} />
               <Route path="/life/summary" element={<SummaryPage />} />
 
               {/* System — Observability */}
@@ -58,6 +61,7 @@ export function App() {
               <Route path="/system/observability/sessions" element={<SessionsPage />} />
               <Route path="/system/observability/events" element={<EventsPage />} />
               <Route path="/system/observability/memory" element={<MemoryPage />} />
+              <Route path="/system/observability/db" element={<DbStatsPage />} />
 
               {/* System — Settings */}
               <Route path="/system/settings" element={<SettingsPage />} />

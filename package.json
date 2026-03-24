@@ -15,5 +15,8 @@
     "ui:build": "cd src/ui && bun run build",
     "ui:e2e": "bun src/ui/e2e/goal-flow.test.ts",
     "ui:e2e:obs": "bun src/ui/e2e/observability-flow.test.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.81"
   }
 }

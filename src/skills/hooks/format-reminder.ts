@@ -31,10 +31,14 @@ if (archPattern.test(prompt)) {
   trace(TAG, "depth: QUICK");
 }
 
-// Verification gate hint — remind Claude the Stop hook will check
+// Verification gate — inject e2e requirements for non-questions
 const isQuestion = /^\s*(what|how|why|when|where|who|is |are |can |does |do |should |could |would |which |tell me|explain|describe)\b/i.test(prompt);
 if (!isQuestion && words.length >= 5) {
-  console.log("[Construct] Verification gate active — changes require test evidence (end-to-end if possible) before completion.");
+  console.log(`[Construct] Verification gate active — after making changes, you MUST verify end-to-end:
+1. Start the dev server or run the actual system
+2. Interact with it (Playwright, Chrome DevTools, or run the CLI)
+3. Produce an artifact: screenshot or captured output saved to a file
+Unit tests alone are not sufficient. The Stop hook will check for e2e evidence.`);
 }
 
 // Skill matching
