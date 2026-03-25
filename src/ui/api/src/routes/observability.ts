@@ -19,6 +19,7 @@ import {
   aggregateHookEvents,
   aggregateCompaction,
   aggregateApiDuration,
+  aggregateSessionTrace,
   getRecentEvents,
 } from '@construct/telemetry';
 import type { Granularity, SessionEntry } from '@construct/telemetry';
@@ -179,6 +180,16 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     const { result, queryTimeMs } = timed(() => aggregateSessions(obsReq.telemetryEntries, obsReq.granularity));
     return { ...result, queryTimeMs };
   });
+
+  app.get<{ Params: { id: string }; Querystring: QueryParams }>(
+    '/sessions/:id/trace',
+    { preHandler: parseDaysPreHandler },
+    async (req) => {
+      const sessionId = decodeURIComponent(req.params.id);
+      const { result, queryTimeMs } = timed(() => aggregateSessionTrace((req as ObsRequest).telemetryEntries, sessionId));
+      return { ...result, queryTimeMs };
+    },
+  );
 
   app.get<{ Params: { name: string }; Querystring: QueryParams }>(
     '/tools/:name',

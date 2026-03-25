@@ -23,6 +23,8 @@ import { SkillDetailPage } from './pages/system/observability/SkillDetailPage';
 import { MemoryPage } from './pages/system/observability/MemoryPage';
 import { EventsPage } from './pages/system/observability/EventsPage';
 import { DbStatsPage } from './pages/system/observability/DbStatsPage';
+import { SessionTracePage } from './pages/system/observability/SessionTracePage';
+import { TurnTracePage } from './pages/system/observability/TurnTracePage';
 import { SettingsPage } from './pages/system/SettingsPage';
 
 const queryClient = new QueryClient({
@@ -59,6 +61,8 @@ export function App() {
               <Route path="/system/observability/skills/:name" element={<SkillDetailPage />} />
               <Route path="/system/observability/tokens" element={<TokensCostPage />} />
               <Route path="/system/observability/sessions" element={<SessionsPage />} />
+              <Route path="/system/observability/sessions/:id" element={<SessionTracePage />} />
+              <Route path="/system/observability/sessions/:id/turns/:turnIndex" element={<TurnTracePage />} />
               <Route path="/system/observability/events" element={<EventsPage />} />
               <Route path="/system/observability/memory" element={<MemoryPage />} />
               <Route path="/system/observability/db" element={<DbStatsPage />} />

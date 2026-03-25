@@ -27,6 +27,9 @@ import type {
   HookInvocation,
   CompactionData,
   ApiDurationData,
+  TraceData,
+  TraceSpan,
+  TraceTurn,
 } from "./types.js";
 import { calculateCost } from "./pricing.js";
 
@@ -911,4 +914,173 @@ export function getRecentEvents(
   }
   const sorted = filtered.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   return { events: sorted.slice(offset, offset + limit), total: sorted.length };
+}
+
+export function aggregateSessionTrace(entries: SessionEntry[], sessionId: string): TraceData {
+  const sessionEntries = entries
+    .filter((e) => e.sessionId === sessionId)
+    .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+  if (sessionEntries.length === 0) {
+    return { sessionId, project: "", turns: [], totalDurationMs: 0, totalTokens: 0, totalCost: 0 };
+  }
+
+  const project = sessionEntries[0].project;
+
+  // Build toolUseId → result timestamp map
+  const resultTimestamps = new Map<string, string>();
+  const resultErrors = new Map<string, { isError: boolean; errorMessage?: string }>();
+  for (const e of sessionEntries) {
+    if (e.entryType === "tool_result" && e.toolUseId) {
+      resultTimestamps.set(e.toolUseId, e.timestamp);
+      if (e.isError) resultErrors.set(e.toolUseId, { isError: true, errorMessage: e.errorMessage });
+    }
+  }
+
+  // Split entries into turns at each user_message
+  const turnBoundaries: number[] = [];
+  for (let i = 0; i < sessionEntries.length; i++) {
+    if (sessionEntries[i].entryType === "user_message") turnBoundaries.push(i);
+  }
+
+  const turns: TraceTurn[] = [];
+  let totalTokens = 0;
+  let totalCost = 0;
+
+  for (let t = 0; t < turnBoundaries.length; t++) {
+    const startIdx = turnBoundaries[t];
+    const endIdx = t + 1 < turnBoundaries.length ? turnBoundaries[t + 1] : sessionEntries.length;
+    const turnEntries = sessionEntries.slice(startIdx, endIdx);
+    const turnStart = new Date(turnEntries[0].timestamp).getTime();
+    const userMessage = turnEntries[0].userRequest || "";
+
+    const spans: TraceSpan[] = [];
+    let turnTokens = 0;
+    let turnCost = 0;
+    let turnModel: string | undefined;
+    let turnDurationMs = 0;
+    let spanCounter = 0;
+
+    for (const e of turnEntries) {
+      const offsetMs = new Date(e.timestamp).getTime() - turnStart;
+
+      if (e.entryType === "tool_use" && e.toolName) {
+        let durationMs = 0;
+        let isError = false;
+        let detail: string | undefined;
+
+        if (e.toolUseId) {
+          const resultTs = resultTimestamps.get(e.toolUseId);
+          if (resultTs) {
+            durationMs = new Date(resultTs).getTime() - new Date(e.timestamp).getTime();
+            if (durationMs < 0 || durationMs > 600000) durationMs = 0;
+          }
+          const err = resultErrors.get(e.toolUseId);
+          if (err) {
+            isError = true;
+            detail = err.errorMessage;
+          }
+        }
+
+        // Summarize params for detail
+        if (!detail && e.toolParams) {
+          const keys = Object.keys(e.toolParams);
+          if (keys.length <= 3) {
+            const parts = keys.map((k) => {
+              const v = e.toolParams![k];
+              const s = typeof v === "string" ? v : JSON.stringify(v);
+              return `${k}: ${s && s.length > 60 ? s.slice(0, 60) + "..." : s}`;
+            });
+            detail = parts.join(", ");
+          } else {
+            detail = keys.join(", ");
+          }
+        }
+
+        spans.push({
+          id: `span-${t}-${spanCounter++}`,
+          kind: "tool",
+          label: e.skillName ? `Skill(${e.skillName})` : e.toolName,
+          startMs: offsetMs,
+          durationMs,
+          isError: isError || undefined,
+          detail,
+          toolUseId: e.toolUseId,
+        });
+      }
+
+      if (e.entryType === "stop_hook_summary" && e.hookCommand) {
+        const shortCmd = e.hookCommand.split("/").pop() || e.hookCommand;
+        spans.push({
+          id: `span-${t}-${spanCounter++}`,
+          kind: "hook",
+          label: shortCmd,
+          startMs: offsetMs,
+          durationMs: e.hookDurationMs || 0,
+          isError: e.isError || undefined,
+          detail: e.hookOutput || e.errorMessage,
+        });
+      }
+
+      if (e.entryType === "hook_progress" && e.hookCommand) {
+        const shortCmd = e.hookCommand.split("/").pop() || e.hookCommand;
+        // hook_progress doesn't have duration — use a small placeholder
+        spans.push({
+          id: `span-${t}-${spanCounter++}`,
+          kind: "hook",
+          label: `${e.hookEvent || "hook"}: ${shortCmd}`,
+          startMs: offsetMs,
+          durationMs: 0,
+          detail: e.hookOutput,
+        });
+      }
+
+      if (e.entryType === "tokens") {
+        const tokens = (e.inputTokens || 0) + (e.outputTokens || 0);
+        const cost = calculateCost(
+          e.model || "",
+          e.inputTokens || 0,
+          e.outputTokens || 0,
+          e.cacheReadTokens || 0,
+          e.cacheCreationTokens || 0,
+        );
+        turnTokens += tokens;
+        turnCost += cost;
+        totalTokens += tokens;
+        totalCost += cost;
+        if (e.model) turnModel = e.model;
+      }
+
+      if (e.entryType === "turn_duration" && e.turnDurationMs) {
+        turnDurationMs = e.turnDurationMs;
+      }
+    }
+
+    // Infer turn duration from spans if not available
+    if (turnDurationMs === 0 && spans.length > 0) {
+      turnDurationMs = Math.max(...spans.map((s) => s.startMs + s.durationMs));
+    }
+    // Fallback: use timestamp range
+    if (turnDurationMs === 0 && turnEntries.length > 1) {
+      turnDurationMs = new Date(turnEntries[turnEntries.length - 1].timestamp).getTime() - turnStart;
+    }
+
+    turns.push({
+      index: t,
+      userMessage,
+      startTime: turnEntries[0].timestamp,
+      durationMs: turnDurationMs,
+      spans: spans.sort((a, b) => a.startMs - b.startMs),
+      tokenCount: turnTokens || undefined,
+      cost: turnCost || undefined,
+      model: turnModel,
+    });
+  }
+
+  const totalDurationMs = turns.length > 0
+    ? new Date(sessionEntries[sessionEntries.length - 1].timestamp).getTime() -
+      new Date(sessionEntries[0].timestamp).getTime()
+    : 0;
+
+  return { sessionId, project, turns, totalDurationMs, totalTokens, totalCost };
 }

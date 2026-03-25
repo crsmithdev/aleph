@@ -317,6 +317,40 @@ export function useObsApiDuration(range: TimeRange, granularity?: Granularity, s
   }>('api-duration', { range, granularity, session });
 }
 
+export function useObsSessionTrace(sessionId: string, range: TimeRange) {
+  return useQuery<{
+    sessionId: string;
+    project: string;
+    turns: Array<{
+      index: number;
+      userMessage: string;
+      startTime: string;
+      durationMs: number;
+      spans: Array<{
+        id: string;
+        kind: 'tool' | 'hook' | 'token';
+        label: string;
+        startMs: number;
+        durationMs: number;
+        isError?: boolean;
+        detail?: string;
+        toolUseId?: string;
+      }>;
+      tokenCount?: number;
+      cost?: number;
+      model?: string;
+    }>;
+    totalDurationMs: number;
+    totalTokens: number;
+    totalCost: number;
+    queryTimeMs: number;
+  }>({
+    queryKey: ['observability', 'session-trace', sessionId, range],
+    queryFn: () => api.get(`/observability/sessions/${encodeURIComponent(sessionId)}/trace?range=${range}`),
+    enabled: !!sessionId,
+  });
+}
+
 export function useObsDbStats() {
   return useQuery<{
     databases: Array<{

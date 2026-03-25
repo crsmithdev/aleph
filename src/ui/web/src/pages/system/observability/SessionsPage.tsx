@@ -10,6 +10,7 @@ import { type TimeRange, type Granularity } from '../../../components/data/TimeR
 import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
+import { useNavigate } from 'react-router-dom';
 import { fmtNumber, fmtMs, fmtCurrency, shortDate, granLabel, relativeTime } from '../../../utils/format';
 
 type ProjectRow = { project: string; sessions: number };
@@ -41,6 +42,7 @@ function fmtDuration(ms: number): string {
 }
 
 export function SessionsPage() {
+  const navigate = useNavigate();
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
   const { data, isLoading, error, refetch } = useObsSessions(range, granularity);
@@ -197,6 +199,7 @@ export function SessionsPage() {
         data={data.sessions.slice(0, 50)}
         columns={sessionColumns}
         keyField="sessionId"
+        onRowClick={(row) => navigate(`/system/observability/sessions/${encodeURIComponent(row.sessionId)}`)}
       />
 
       <DataTable<ProjectRow>

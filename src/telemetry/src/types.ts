@@ -269,3 +269,34 @@ export interface StatusSummary {
   topHooks: HookMetric[];
   topSkills: SkillMetric[];
 }
+
+export interface TraceSpan {
+  id: string;
+  kind: "tool" | "hook" | "token";
+  label: string;
+  startMs: number;
+  durationMs: number;
+  isError?: boolean;
+  detail?: string;
+  toolUseId?: string;
+}
+
+export interface TraceTurn {
+  index: number;
+  userMessage: string;
+  startTime: string;
+  durationMs: number;
+  spans: TraceSpan[];
+  tokenCount?: number;
+  cost?: number;
+  model?: string;
+}
+
+export interface TraceData {
+  sessionId: string;
+  project: string;
+  turns: TraceTurn[];
+  totalDurationMs: number;
+  totalTokens: number;
+  totalCost: number;
+}

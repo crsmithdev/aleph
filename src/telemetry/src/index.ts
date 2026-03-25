@@ -30,6 +30,9 @@ export type {
   HookInvocation,
   CompactionData,
   ApiDurationData,
+  TraceData,
+  TraceSpan,
+  TraceTurn,
 } from "./types.js";
 
 export { parseAllSessions, parseSessionsForDays, clearCache } from "./parser.js";
@@ -49,6 +52,7 @@ export {
   aggregateHookEvents,
   aggregateCompaction,
   aggregateApiDuration,
+  aggregateSessionTrace,
   getRecentEvents,
 } from "./aggregator.js";
 
