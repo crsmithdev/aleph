@@ -1,27 +1,31 @@
 import type { HistoryLog, HistoryEvent } from '../../types';
 
 const eventMeta: Record<HistoryEvent, { label: string; color: string; dot: string }> = {
-  goal_created:    { label: 'Goal created',      color: 'text-accent',      dot: 'bg-blue-500' },
-  goal_updated:    { label: 'Goal updated',       color: 'text-text-muted',  dot: 'bg-gray-500' },
-  state_change:    { label: 'State changed',      color: 'text-purple-400',  dot: 'bg-purple-500' },
-  priority_change: { label: 'Priority changed',   color: 'text-orange-400',  dot: 'bg-orange-500' },
-  category_added:  { label: 'Category added',     color: 'text-success',     dot: 'bg-green-500' },
-  category_removed:{ label: 'Category removed',   color: 'text-error',       dot: 'bg-red-500' },
-  note_added:      { label: 'Note added',         color: 'text-teal-400',    dot: 'bg-teal-500' },
-  note_edited:     { label: 'Note edited',        color: 'text-teal-300',    dot: 'bg-teal-400' },
-  note_deleted:    { label: 'Note deleted',       color: 'text-error',       dot: 'bg-red-500' },
-  todo_linked:     { label: 'Todo linked',        color: 'text-indigo-400',  dot: 'bg-indigo-500' },
-  todo_unlinked:   { label: 'Todo unlinked',      color: 'text-text-muted',  dot: 'bg-gray-500' },
-  archived:        { label: 'Archived',           color: 'text-text-muted',  dot: 'bg-gray-600' },
-  unarchived:      { label: 'Unarchived',         color: 'text-text-secondary', dot: 'bg-gray-400' },
+  goal_created:    { label: 'Created',            color: 'text-accent',         dot: 'bg-blue-500' },
+  goal_updated:    { label: '',                    color: 'text-text-muted',     dot: 'bg-gray-500' },
+  state_change:    { label: 'State changed',       color: 'text-purple-400',     dot: 'bg-purple-500' },
+  priority_change: { label: 'Priority changed',    color: 'text-orange-400',     dot: 'bg-orange-500' },
+  category_added:  { label: 'Added category',      color: 'text-success',        dot: 'bg-green-500' },
+  category_removed:{ label: 'Removed category',    color: 'text-error',          dot: 'bg-red-500' },
+  note_added:      { label: 'Added note',          color: 'text-teal-400',       dot: 'bg-teal-500' },
+  note_edited:     { label: 'Edited note',         color: 'text-teal-300',       dot: 'bg-teal-400' },
+  note_deleted:    { label: 'Deleted note',        color: 'text-error',          dot: 'bg-red-500' },
+  todo_linked:     { label: 'Linked todo',         color: 'text-indigo-400',     dot: 'bg-indigo-500' },
+  todo_unlinked:   { label: 'Unlinked todo',       color: 'text-text-muted',     dot: 'bg-gray-500' },
+  archived:        { label: 'Archived',            color: 'text-text-muted',     dot: 'bg-gray-600' },
+  unarchived:      { label: 'Unarchived',          color: 'text-text-secondary', dot: 'bg-gray-400' },
 };
+
+function titleCase(str: string): string {
+  return str.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 function formatDetails(eventType: HistoryEvent, details: Record<string, unknown>): string | null {
   if (eventType === 'state_change' && details.from && details.to) {
-    return `${String(details.from).replace(/_/g, ' ')} → ${String(details.to).replace(/_/g, ' ')}`;
+    return `${titleCase(String(details.from))} → ${titleCase(String(details.to))}`;
   }
   if (eventType === 'priority_change' && details.from && details.to) {
-    return `${details.from} → ${details.to}`;
+    return `${titleCase(String(details.from))} → ${titleCase(String(details.to))}`;
   }
   if (eventType === 'category_added' && details.categoryName) {
     return String(details.categoryName);
@@ -29,18 +33,29 @@ function formatDetails(eventType: HistoryEvent, details: Record<string, unknown>
   if (eventType === 'category_removed' && details.categoryName) {
     return String(details.categoryName);
   }
-  if ((eventType === 'goal_updated' || eventType === 'goal_created') && details.title) {
+  if (eventType === 'goal_created' && details.title) {
     return String(details.title);
   }
   return null;
 }
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleString(undefined, {
+function formatRelativeTime(iso: string): string {
+  const now = Date.now();
+  const then = new Date(iso).getTime();
+  const diffMs = now - then;
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHr = Math.floor(diffMin / 60);
+  const diffDays = Math.floor(diffHr / 24);
+
+  if (diffHr < 1) return `${Math.max(1, diffMin)}m ago`;
+  if (diffHr < 24) return `${diffHr}h ago`;
+  if (diffDays < 30) return `${diffDays}d ago`;
+
+  return new Date(iso).toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+    year: diffDays > 365 ? 'numeric' : undefined,
   });
 }
 
@@ -55,9 +70,9 @@ export function HistoryTimeline({ entries }: HistoryTimelineProps) {
     );
   }
 
-  const sorted = [...entries].sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-  );
+  const sorted = [...entries]
+    .filter((e) => e.eventType !== 'goal_updated')
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return (
     <ol className="relative border-l border-border-primary ml-2 flex flex-col gap-4">
@@ -79,7 +94,7 @@ export function HistoryTimeline({ entries }: HistoryTimelineProps) {
               {detail && (
                 <span className="text-xs text-text-muted">{detail}</span>
               )}
-              <span className="text-xs text-text-disabled ml-auto">{formatTime(entry.createdAt)}</span>
+              <span className="text-xs text-text-disabled ml-auto">{formatRelativeTime(entry.createdAt)}</span>
             </div>
           </li>
         );

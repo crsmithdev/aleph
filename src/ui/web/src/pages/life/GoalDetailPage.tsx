@@ -9,8 +9,9 @@ import {
   useDeleteNote,
   useHistory,
   useUpdateGoal,
+  useCreateTodo,
 } from '../../api/hooks';
-import { PriorityBadge, StateBadge } from '../../components/ui/Badge';
+import { priorityColors, stateColors } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { CategoryManager } from '../../components/goals/CategoryManager';
 import { NoteEditor } from '../../components/notes/NoteEditor';
@@ -27,6 +28,8 @@ const stateOptions = GOAL_STATE.map((s) => ({
   value: s,
   label: s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
 }));
+
+type AddType = 'note' | 'todo';
 
 function InlineEdit({
   value,
@@ -78,7 +81,8 @@ function InlineEdit({
 
 export function GoalDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
-  const [newNote, setNewNote] = useState('');
+  const [newContent, setNewContent] = useState('');
+  const [addType, setAddType] = useState<AddType>('note');
 
   const { data: goal, isLoading, isError } = useGoal(id);
   const { data: notes = [] } = useNotes(id);
@@ -86,6 +90,7 @@ export function GoalDetailPage() {
 
   const updateGoal = useUpdateGoal();
   const createNote = useCreateNote(id);
+  const createTodo = useCreateTodo();
   const updateNote = useUpdateNote(id);
   const deleteNote = useDeleteNote(id);
 
@@ -110,14 +115,16 @@ export function GoalDetailPage() {
     updateGoal.mutate({ id, ...data });
   }
 
-  function handleToggleDone() {
-    handleUpdate({ state: isDone ? 'actionable' : 'done' });
-  }
-
-  function handleAddNote(e: React.FormEvent) {
+  function handleAdd(e: React.FormEvent) {
     e.preventDefault();
-    if (!newNote.trim() || createNote.isPending) return;
-    createNote.mutate({ content: newNote.trim() }, { onSuccess: () => setNewNote('') });
+    if (!newContent.trim()) return;
+    if (addType === 'note') {
+      if (createNote.isPending) return;
+      createNote.mutate({ content: newContent.trim() }, { onSuccess: () => setNewContent('') });
+    } else {
+      if (createTodo.isPending) return;
+      createTodo.mutate({ title: newContent.trim(), goalId: id }, { onSuccess: () => setNewContent('') });
+    }
   }
 
   const sortedNotes = [...notes].sort(
@@ -139,80 +146,41 @@ export function GoalDetailPage() {
 
       {/* Goal header */}
       <div className="bg-bg-secondary border border-border-primary rounded-lg p-5 flex flex-col gap-4">
-        <div className="flex items-start gap-3">
-          {/* Done toggle */}
-          <button
-            onClick={handleToggleDone}
-            title={isDone ? 'Mark not done' : 'Mark done'}
-            className={cn(
-              'mt-1.5 flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
-              isDone
-                ? 'border-success bg-success'
-                : 'border-border-secondary hover:border-success'
-            )}
-          >
-            {isDone && (
-              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 10 10">
-                <path d="M1.5 5l2.5 2.5 4.5-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            )}
-          </button>
+        <InlineEdit value={goal.title} onSave={(title) => handleUpdate({ title })} />
 
-          <div className="flex-1 min-w-0">
-            <InlineEdit value={goal.title} onSave={(title) => handleUpdate({ title })} />
-          </div>
-
-          {goal.archived && (
-            <span className="px-2 py-0.5 rounded text-xs bg-bg-tertiary text-text-muted flex-shrink-0">
-              archived
-            </span>
-          )}
-        </div>
-
-        {/* Meta row */}
+        {/* Meta row — priority and state as colored selects, no duplicate badges */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-text-muted">Priority</span>
-            <select
-              value={goal.priority}
-              onChange={(e) => handleUpdate({ priority: e.target.value })}
-              className="bg-transparent border-none text-xs focus:outline-none cursor-pointer text-text-secondary"
-            >
-              {priorityOptions.map((o) => (
-                <option key={o.value} value={o.value} className="bg-bg-secondary">
-                  {o.label}
-                </option>
-              ))}
-            </select>
-            <PriorityBadge priority={goal.priority} />
-          </div>
-
-          <span className="text-border-secondary">&middot;</span>
-
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-text-muted">State</span>
-            <select
-              value={goal.state}
-              onChange={(e) => handleUpdate({ state: e.target.value })}
-              className="bg-transparent border-none text-xs focus:outline-none cursor-pointer text-text-secondary"
-            >
-              {stateOptions.map((o) => (
-                <option key={o.value} value={o.value} className="bg-bg-secondary">
-                  {o.label}
-                </option>
-              ))}
-            </select>
-            <StateBadge state={goal.state} />
-          </div>
-
-          <span className="text-border-secondary">&middot;</span>
-
-          <button
-            onClick={() => handleUpdate({ archived: !goal.archived })}
-            className="text-xs text-text-muted hover:text-text-secondary transition-colors"
+          <select
+            value={goal.priority}
+            onChange={(e) => handleUpdate({ priority: e.target.value })}
+            className={cn(
+              'px-2 py-0.5 rounded text-xs font-medium border-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent appearance-none pr-5',
+              priorityColors[goal.priority] ?? 'bg-bg-tertiary text-text-muted',
+            )}
+            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M0 2l4 4 4-4' fill='%23888'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px center' }}
           >
-            {goal.archived ? 'Unarchive' : 'Archive'}
-          </button>
+            {priorityOptions.map((o) => (
+              <option key={o.value} value={o.value} className="bg-bg-secondary text-text-primary">
+                {o.label}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={goal.state}
+            onChange={(e) => handleUpdate({ state: e.target.value })}
+            className={cn(
+              'px-2 py-0.5 rounded text-xs font-medium capitalize border-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent appearance-none pr-5',
+              stateColors[goal.state] ?? 'bg-bg-tertiary text-text-muted',
+            )}
+            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M0 2l4 4 4-4' fill='%23888'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px center' }}
+          >
+            {stateOptions.map((o) => (
+              <option key={o.value} value={o.value} className="bg-bg-secondary text-text-primary">
+                {o.label}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Categories */}
@@ -225,45 +193,99 @@ export function GoalDetailPage() {
         </div>
       </div>
 
-      {/* Notes section */}
-      <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider">
-          Notes
-        </h2>
+      {/* Action buttons */}
+      <div className="flex items-center gap-2">
+        <Button
+          variant={isDone ? 'secondary' : 'primary'}
+          size="sm"
+          onClick={() => handleUpdate({ state: isDone ? 'actionable' : 'done' })}
+        >
+          {isDone ? 'Reopen' : 'Finish'}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => handleUpdate({ archived: !goal.archived })}
+        >
+          {goal.archived ? 'Unarchive' : 'Archive'}
+        </Button>
+      </div>
 
-        {/* Add note form */}
-        <form onSubmit={handleAddNote} className="flex flex-col gap-2">
-          <textarea
-            value={newNote}
-            onChange={(e) => setNewNote(e.target.value)}
-            placeholder="Add a note..."
-            rows={3}
-            className="w-full bg-bg-secondary border border-border-primary rounded-lg px-3 py-2.5 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-accent resize-y"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                if (newNote.trim() && !createNote.isPending) {
-                  createNote.mutate({ content: newNote.trim() }, { onSuccess: () => setNewNote('') });
+      {/* Add content section */}
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider">
+            Add
+          </h2>
+          <div className="flex rounded-md overflow-hidden border border-border-primary">
+            {(['note', 'todo'] as const).map((type) => (
+              <button
+                key={type}
+                onClick={() => setAddType(type)}
+                className={cn(
+                  'px-2.5 py-0.5 text-xs font-medium transition-colors capitalize',
+                  addType === type
+                    ? 'bg-accent text-white'
+                    : 'bg-bg-secondary text-text-muted hover:text-text-secondary',
+                )}
+              >
+                {type}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <form onSubmit={handleAdd} className="flex flex-col gap-2">
+          {addType === 'note' ? (
+            <textarea
+              value={newContent}
+              onChange={(e) => setNewContent(e.target.value)}
+              placeholder="Add a note..."
+              rows={3}
+              className="w-full bg-bg-secondary border border-border-primary rounded-lg px-3 py-2.5 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-accent resize-y"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  if (newContent.trim()) handleAdd(e);
                 }
-              }
-            }}
-          />
+              }}
+            />
+          ) : (
+            <input
+              value={newContent}
+              onChange={(e) => setNewContent(e.target.value)}
+              placeholder="Add a todo..."
+              className="w-full bg-bg-secondary border border-border-primary rounded-lg px-3 py-2.5 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-accent"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (newContent.trim()) handleAdd(e);
+                }
+              }}
+            />
+          )}
           <div className="flex justify-between items-center">
-            <span className="text-xs text-text-muted">Ctrl/Cmd+Enter to submit</span>
+            <span className="text-xs text-text-muted">
+              {addType === 'note' ? 'Ctrl/Cmd+Enter to submit' : 'Enter to submit'}
+            </span>
             <Button
               type="submit"
               size="sm"
-              loading={createNote.isPending}
-              disabled={!newNote.trim()}
+              loading={createNote.isPending || createTodo.isPending}
+              disabled={!newContent.trim()}
             >
-              Add note
+              Add {addType}
             </Button>
           </div>
         </form>
+      </section>
 
-        {sortedNotes.length === 0 ? (
-          <p className="text-sm text-text-muted py-2">No notes yet.</p>
-        ) : (
+      {/* Notes section */}
+      {sortedNotes.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider">
+            Notes
+          </h2>
           <div className="flex flex-col gap-2">
             {sortedNotes.map((note) => (
               <NoteEditor
@@ -276,8 +298,8 @@ export function GoalDetailPage() {
               />
             ))}
           </div>
-        )}
-      </section>
+        </section>
+      )}
 
       {/* History section */}
       <section className="flex flex-col gap-3">

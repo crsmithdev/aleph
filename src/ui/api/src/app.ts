@@ -20,6 +20,7 @@ import { EventBus, HistoryService, applyDDL } from '@construct/goals';
 import { webhooks } from './db/schema.js';
 import { existsSync } from 'fs';
 import { resolve } from 'path';
+import { createLogStream } from './logger.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -30,7 +31,21 @@ declare module 'fastify' {
 }
 
 export async function createApp(opts?: { dbUrl?: string }) {
-  const app = Fastify({ logger: opts?.dbUrl === ':memory:' ? false : true });
+  const enableLogger = opts?.dbUrl !== ':memory:';
+  const app = Fastify({
+    logger: enableLogger ? { stream: createLogStream() } : false,
+    disableRequestLogging: enableLogger,
+  });
+
+  if (enableLogger) {
+    app.addHook('onResponse', (req, reply, done) => {
+      const ms = reply.elapsedTime < 1000
+        ? `${Math.round(reply.elapsedTime)}ms`
+        : `${(reply.elapsedTime / 1000).toFixed(1)}s`;
+      req.log.info(`${req.method} ${req.url} → ${reply.statusCode} (${ms})`);
+      done();
+    });
+  }
 
   const { db, sqlite } = createDb(opts?.dbUrl || config.databaseUrl);
   app.decorate('db', db);
