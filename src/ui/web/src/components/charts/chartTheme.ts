@@ -1,3 +1,5 @@
+import { shortDate } from '../../utils/format';
+
 export const CHART_PALETTE = [
   'var(--chart-1)',
   'var(--chart-2)',
@@ -28,13 +30,19 @@ export const axisProps = {
   axisLine: false as const,
 };
 
+export const legendProps = {
+  wrapperStyle: { fontSize: 11 },
+};
+
 export function labelFormatter(label: unknown): string {
   if (typeof label !== 'string') return String(label);
-  // Sub-day keys: "2025-03-23T14" → "03-23 14:00", "2025-03-23T14:30" → "03-23 14:30"
-  if (label.length > 10 && label.includes('T')) {
-    const timePart = label.slice(11);
-    return label.slice(5, 10) + ' ' + (timePart.length <= 2 ? timePart + ':00' : timePart);
+  // Delegate to shortDate for consistent formatting
+  try {
+    if (label.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(label)) {
+      return shortDate(label);
+    }
+  } catch (e) {
+    console.warn('labelFormatter: failed to format date', label, e);
   }
-  // Day keys: "2025-03-23" → "03-23"
-  return label.slice(5);
+  return label;
 }

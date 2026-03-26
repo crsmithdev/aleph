@@ -70,6 +70,7 @@ export function useObsHooks(range: TimeRange, granularity?: Granularity, session
       fullCommand?: string;
     }>;
     byDay: Array<{ date: string; count: number; hooks: Record<string, number> }>;
+    unused: Array<{ command: string; event: string }>;
     queryTimeMs: number;
   }>('hooks', { range, granularity, session });
 }
@@ -78,6 +79,7 @@ export function useObsSkills(range: TimeRange, granularity?: Granularity, sessio
   return obsQuery<{
     ranked: Array<{ skill: string; count: number; pct: number; errors: number; lastUsed?: string }>;
     byDay: Array<{ date: string; count: number; skills: Record<string, number> }>;
+    unused: string[];
     queryTimeMs: number;
   }>('skills', { range, granularity, session });
 }
@@ -113,7 +115,7 @@ export function useObsSessions(range: TimeRange, granularity?: Granularity, sess
   return obsQuery<{
     byDay: Array<{ date: string; sessions: number; messages: number; userMessages?: number; assistantMessages?: number }>;
     byProject: Array<{ project: string; sessions: number }>;
-    byHour: Array<{ hour: number; count: number }>;
+    byActivity: Array<{ date: string; count: number }>;
     sessions: Array<{
       sessionId: string;
       project: string;
@@ -129,6 +131,8 @@ export function useObsSessions(range: TimeRange, granularity?: Granularity, sess
       firstTimestamp: string;
       lastTimestamp: string;
       gitBranch?: string;
+      parentSessionId?: string;
+      hasSubagents?: boolean;
     }>;
     avgDurationMs: number;
     totalUserMessages: number;
@@ -335,11 +339,13 @@ export function useObsSessionTrace(sessionId: string, range: TimeRange) {
         isError?: boolean;
         detail?: string;
         toolUseId?: string;
+        subagentSessionId?: string;
       }>;
       tokenCount?: number;
       cost?: number;
       model?: string;
     }>;
+    parentSessionId?: string;
     totalDurationMs: number;
     totalTokens: number;
     totalCost: number;

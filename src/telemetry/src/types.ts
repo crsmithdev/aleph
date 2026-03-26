@@ -1,5 +1,6 @@
 export interface SessionEntry {
   sessionId: string;
+  parentSessionId?: string;
   timestamp: string;
   project: string;
   model?: string;
@@ -33,6 +34,7 @@ export interface SessionEntry {
   cwd?: string;
   linesAdded?: number;
   linesRemoved?: number;
+  toolDurationMs?: number;
   inputTokens?: number;
   outputTokens?: number;
   cacheReadTokens?: number;
@@ -178,6 +180,7 @@ export interface CostData {
 
 export interface SessionMetric {
   sessionId: string;
+  parentSessionId?: string;
   project: string;
   durationMs: number;
   userMessages: number;
@@ -191,12 +194,13 @@ export interface SessionMetric {
   firstTimestamp: string;
   lastTimestamp: string;
   gitBranch?: string;
+  hasSubagents?: boolean;
 }
 
 export interface SessionsData {
   byDay: SessionBucket[];
   byProject: ProjectBucket[];
-  byHour: HourBucket[];
+  byActivity: TimeBucket[];
   sessions: SessionMetric[];
   avgDurationMs: number;
   totalUserMessages: number;
@@ -279,6 +283,7 @@ export interface TraceSpan {
   isError?: boolean;
   detail?: string;
   toolUseId?: string;
+  subagentSessionId?: string;
 }
 
 export interface TraceTurn {
@@ -294,6 +299,7 @@ export interface TraceTurn {
 
 export interface TraceData {
   sessionId: string;
+  parentSessionId?: string;
   project: string;
   turns: TraceTurn[];
   totalDurationMs: number;

@@ -37,9 +37,9 @@ export function TodoItem({ todo }: TodoItemProps) {
   };
 
   return (
-    <div className="group flex items-start gap-3 p-3 rounded-lg bg-bg-secondary border border-border-primary">
+    <div className="group flex items-center gap-3 p-3 rounded-lg bg-bg-secondary border border-border-primary">
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
           {editingTitle ? (
             <input
               ref={titleRef}
@@ -61,15 +61,6 @@ export function TodoItem({ todo }: TodoItemProps) {
             >
               {todo.title}
             </span>
-          )}
-          {todo.goalTitle && todo.goalId && (
-            <Link
-              to={`/life/goals/${todo.goalId}`}
-              className="text-xs text-text-muted hover:text-text-secondary truncate"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {todo.goalTitle}
-            </Link>
           )}
         </div>
 
@@ -105,6 +96,16 @@ export function TodoItem({ todo }: TodoItemProps) {
           </div>
         )}
       </div>
+
+      {todo.goalTitle && todo.goalId && (
+        <Link
+          to={`/goals/${todo.goalId}`}
+          className="text-xs text-text-muted hover:text-text-secondary truncate max-w-[12rem] flex-shrink-0"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {todo.goalTitle}
+        </Link>
+      )}
 
       {!todo.done && (
         <div className="flex items-center gap-1 flex-shrink-0">

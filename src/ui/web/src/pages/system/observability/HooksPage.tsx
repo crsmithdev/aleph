@@ -4,14 +4,13 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } 
 import { useObsHooks, useObsHookEvents } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
-import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtMs, fmtPct, shortDate, dateTime, granLabel } from '../../../utils/format';
+import { fmtNumber, fmtMs, fmtPct, shortDate, dateTime } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
 
 type HookRow = {
@@ -34,11 +33,13 @@ type InvocationRow = {
 
 type ViewMode = 'by-hook' | 'by-event';
 
-function ByHookView({ range, granularity, hideInactive, onHideInactiveChange }: {
+function ByHookView({ range, granularity, hideInactive, onHideInactiveChange, showUnused, onShowUnusedChange }: {
   range: TimeRange;
   granularity: Granularity;
   hideInactive: boolean;
   onHideInactiveChange: (v: boolean) => void;
+  showUnused: boolean;
+  onShowUnusedChange: (v: boolean) => void;
 }) {
   const navigate = useNavigate();
   const { data, isLoading, error, refetch } = useObsHooks(range, granularity);
@@ -47,7 +48,11 @@ function ByHookView({ range, granularity, hideInactive, onHideInactiveChange }: 
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load hooks" retry={refetch} />;
 
-  const filtered = hideInactive ? data.ranked.filter((r) => r.active) : data.ranked;
+  const unusedRows: HookRow[] = (data.unused || []).map(h => ({
+    command: h.command, event: h.event, count: 0, avgMs: 0, p50Ms: 0, p95Ms: 0, errors: 0, active: true,
+  }));
+  let filtered = hideInactive ? data.ranked.filter((r) => r.active) : data.ranked;
+  if (showUnused) filtered = [...filtered, ...unusedRows];
 
   const columns: Column<HookRow>[] = [
     {
@@ -60,7 +65,12 @@ function ByHookView({ range, granularity, hideInactive, onHideInactiveChange }: 
     {
       key: 'command',
       label: 'Hook',
-      render: (row) => <span className="font-mono text-text-primary">{row.command}</span>,
+      render: (row) => (
+        <span className={cn('font-mono', row.count === 0 ? 'text-text-muted' : 'text-text-primary')}>
+          {row.command}
+          {row.count === 0 && <span className="ml-2 text-[10px] text-text-disabled uppercase">unused</span>}
+        </span>
+      ),
     },
     {
       key: 'event',
@@ -81,7 +91,7 @@ function ByHookView({ range, granularity, hideInactive, onHideInactiveChange }: 
       sortable: true,
       render: (row) => (
         <span className={cn(row.errors > 0 && 'text-error font-medium')}>
-          {row.errors > 0 ? fmtNumber(row.errors) : '-'}
+          {row.errors > 0 ? fmtNumber(row.errors) : '—'}
         </span>
       ),
     },
@@ -122,6 +132,9 @@ function ByHookView({ range, granularity, hideInactive, onHideInactiveChange }: 
     <>
       <div className="flex items-center gap-3">
         <FilterToggle label="Active only" active={hideInactive} onToggle={() => onHideInactiveChange(!hideInactive)} />
+        {unusedRows.length > 0 && (
+          <FilterToggle label={`Unused (${unusedRows.length})`} active={showUnused} onToggle={() => onShowUnusedChange(!showUnused)} />
+        )}
       </div>
 
       <DataTable<HookRow>
@@ -129,7 +142,7 @@ function ByHookView({ range, granularity, hideInactive, onHideInactiveChange }: 
         columns={columns}
         keyField="command"
         onRowClick={(row) =>
-          navigate(`/system/observability/hooks/${encodeURIComponent(row.command)}`)
+          navigate(`/observability/hooks/${encodeURIComponent(row.command)}`)
         }
       />
 
@@ -192,7 +205,7 @@ function ByEventView({ range }: { range: TimeRange }) {
       label: 'Hooks fired',
       render: (row) => {
         const isExpanded = expandedRow === row.timestamp;
-        if (row.hooks.length === 0) return <span className="text-text-muted">-</span>;
+        if (row.hooks.length === 0) return <span className="text-text-muted">—</span>;
         return (
           <button
             onClick={(e) => {
@@ -295,11 +308,12 @@ export function HooksPage() {
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
   const [hideInactive, setHideInactive] = useState(true);
+  const [showUnused, setShowUnused] = useState(true);
   const [view, setView] = useState<ViewMode>('by-hook');
 
   return (
     <div className="space-y-6">
-      <ObsControlBar title={<h1 className="text-xl font-semibold text-text-primary">Hooks</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity}>
+      <ObsControlBar title={<h1 className="text-2xl font-bold text-text-primary">Hooks</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity}>
         <div className="flex items-center gap-1 rounded-md border border-border-primary bg-bg-secondary p-0.5">
           <button
             onClick={() => setView('by-hook')}
@@ -332,6 +346,8 @@ export function HooksPage() {
           granularity={granularity}
           hideInactive={hideInactive}
           onHideInactiveChange={setHideInactive}
+          showUnused={showUnused}
+          onShowUnusedChange={setShowUnused}
         />
       ) : (
         <ByEventView range={range} />

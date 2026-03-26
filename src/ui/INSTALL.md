@@ -15,4 +15,3 @@ All paths relative to `~/.claude/construct/ui/`. Run every check. Do not skip or
 ## Build
 
 - `npm run build` completes without errors (run from ui directory)
-- `npm test` passes (Vitest API integration tests)

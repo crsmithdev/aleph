@@ -40,35 +40,45 @@ export function App() {
         <BrowserRouter>
           <Routes>
             <Route element={<Layout />}>
-              {/* Redirects */}
-              <Route path="/" element={<Navigate to="/life/summary" replace />} />
+              {/* Root redirect */}
+              <Route path="/" element={<Navigate to="/summary" replace />} />
+
+              {/* Backward compat redirects */}
+              <Route path="/life/summary" element={<Navigate to="/summary" replace />} />
+              <Route path="/life/goals" element={<Navigate to="/goals" replace />} />
+              <Route path="/life/goals/:id" element={<Navigate to="/goals/:id" replace />} />
+              <Route path="/life/todos" element={<Navigate to="/todos" replace />} />
+              <Route path="/life/habits" element={<Navigate to="/habits" replace />} />
+              <Route path="/system/observability" element={<Navigate to="/observability" replace />} />
+              <Route path="/system/observability/*" element={<Navigate to="/observability/*" replace />} />
+              <Route path="/system/settings" element={<Navigate to="/settings" replace />} />
 
               {/* Life */}
-              <Route path="/life/goals" element={<GoalsPage />} />
-              <Route path="/life/goals/:id" element={<GoalDetailPage />} />
-              <Route path="/life/todos" element={<TodosPage />} />
-              <Route path="/life/habits" element={<HabitsPage />} />
-              <Route path="/life/summary" element={<SummaryPage />} />
+              <Route path="/summary" element={<SummaryPage />} />
+              <Route path="/goals" element={<GoalsPage />} />
+              <Route path="/goals/:id" element={<GoalDetailPage />} />
+              <Route path="/todos" element={<TodosPage />} />
+              <Route path="/habits" element={<HabitsPage />} />
 
-              {/* System — Observability */}
-              <Route path="/system/observability" element={<Navigate to="/system/observability/overview" replace />} />
-              <Route path="/system/observability/overview" element={<OverviewPage />} />
-              <Route path="/system/observability/tools" element={<ToolsPage />} />
-              <Route path="/system/observability/tools/:name" element={<ToolDetailPage />} />
-              <Route path="/system/observability/hooks" element={<HooksPage />} />
-              <Route path="/system/observability/hooks/:name" element={<HookDetailPage />} />
-              <Route path="/system/observability/skills" element={<SkillsPage />} />
-              <Route path="/system/observability/skills/:name" element={<SkillDetailPage />} />
-              <Route path="/system/observability/tokens" element={<TokensCostPage />} />
-              <Route path="/system/observability/sessions" element={<SessionsPage />} />
-              <Route path="/system/observability/sessions/:id" element={<SessionTracePage />} />
-              <Route path="/system/observability/sessions/:id/turns/:turnIndex" element={<TurnTracePage />} />
-              <Route path="/system/observability/events" element={<EventsPage />} />
-              <Route path="/system/observability/memory" element={<MemoryPage />} />
-              <Route path="/system/observability/db" element={<DbStatsPage />} />
+              {/* Observability */}
+              <Route path="/observability" element={<Navigate to="/observability/overview" replace />} />
+              <Route path="/observability/overview" element={<OverviewPage />} />
+              <Route path="/observability/tools" element={<ToolsPage />} />
+              <Route path="/observability/tools/:name" element={<ToolDetailPage />} />
+              <Route path="/observability/hooks" element={<HooksPage />} />
+              <Route path="/observability/hooks/:name" element={<HookDetailPage />} />
+              <Route path="/observability/skills" element={<SkillsPage />} />
+              <Route path="/observability/skills/:name" element={<SkillDetailPage />} />
+              <Route path="/observability/tokens" element={<TokensCostPage />} />
+              <Route path="/observability/sessions" element={<SessionsPage />} />
+              <Route path="/observability/sessions/:id" element={<SessionTracePage />} />
+              <Route path="/observability/sessions/:id/turns/:turnIndex" element={<TurnTracePage />} />
+              <Route path="/observability/events" element={<EventsPage />} />
+              <Route path="/observability/memory" element={<MemoryPage />} />
+              <Route path="/observability/db" element={<DbStatsPage />} />
 
-              {/* System — Settings */}
-              <Route path="/system/settings" element={<SettingsPage />} />
+              {/* Settings */}
+              <Route path="/settings" element={<SettingsPage />} />
             </Route>
           </Routes>
         </BrowserRouter>

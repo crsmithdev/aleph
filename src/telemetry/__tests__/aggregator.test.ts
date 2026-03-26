@@ -159,9 +159,9 @@ describe("aggregator", () => {
       expect(sessions.byProject.length).toBeGreaterThan(0);
     });
 
-    it("counts by hour", () => {
+    it("counts by activity bucket", () => {
       const sessions = aggregateSessions(entries);
-      expect(sessions.byHour.length).toBeGreaterThan(0);
+      expect(sessions.byActivity.length).toBeGreaterThan(0);
     });
   });
 

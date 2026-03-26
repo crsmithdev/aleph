@@ -36,7 +36,7 @@ export function DbStatsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold text-text-primary">Database</h1>
+      <h1 className="text-2xl font-bold text-text-primary">Database</h1>
 
       {data.databases.map((db) => {
         const totalRows = db.tables.reduce((sum, t) => sum + t.rows, 0);

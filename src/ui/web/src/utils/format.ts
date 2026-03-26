@@ -3,10 +3,20 @@ import { format, formatDistanceToNow, addDays as addDaysFn, subDays as subDaysFn
 export function shortDate(iso: string): string {
   // Handle sub-day bucket keys: YYYY-MM-DDTHH or YYYY-MM-DDTHH:MM
   if (iso.length > 10 && iso.includes('T')) {
-    const d = new Date(iso.length === 13 ? iso + ':00' : iso);
-    return format(d, 'MM-dd HH:mm');
+    if (iso.includes(':')) {
+      // YYYY-MM-DDTHH:MM → "2:30pm"
+      const d = new Date(iso);
+      return format(d, 'h:mmaaa');
+    }
+    // YYYY-MM-DDTHH → "3/23 2pm"
+    const d = new Date(iso + ':00');
+    const month = d.getMonth() + 1;
+    const day = d.getDate();
+    return `${month}/${day} ${format(d, 'haaa')}`;
   }
-  return format(new Date(iso), 'MM-dd');
+  // YYYY-MM-DD → "3/23"
+  const d = new Date(iso);
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
 }
 
 export function longDate(iso: string): string {
@@ -14,7 +24,12 @@ export function longDate(iso: string): string {
 }
 
 export function dateTime(iso: string): string {
-  return format(new Date(iso), 'MMM d, yyyy h:mm a');
+  const d = new Date(iso);
+  const currentYear = new Date().getFullYear();
+  if (d.getFullYear() === currentYear) {
+    return format(d, 'MMM d, h:mmaaa');
+  }
+  return format(d, 'MMM d yyyy, h:mmaaa');
 }
 
 export function relativeTime(iso: string): string {
@@ -58,6 +73,18 @@ export function granLabel(granularity: string, noun: string): string {
     case 'hour': return `Hourly ${noun}`;
     default: return `Daily ${noun}`;
   }
+}
+
+export function fmtToolName(name: string): string {
+  if (name.startsWith('mcp__')) {
+    const parts = name.slice(5).split('__');
+    if (parts.length >= 2) {
+      const server = parts[0];
+      const action = parts.slice(1).join(' ').replace(/_/g, ' ');
+      return `${server} / ${action}`;
+    }
+  }
+  return name;
 }
 
 export function rangeToDays(range: string): number {

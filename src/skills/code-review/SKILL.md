@@ -32,6 +32,8 @@ Sweep all modified/created files for:
 | Silent failures | `catch {}` or `catch { return null }` when caller needs context. |
 | Misnamed identifiers | Name doesn't match behavior. |
 | Redundant logic | Could be shorter without losing clarity. |
+| Questionable abstractions | Abstraction with low reuse, legacy abstractions with low use |
+| Complexity debt | Wrappers/shims/indirection that once served multiple callers but now serve one. Functions extracted "for reuse" but called from exactly one place. Parameterization that's never varied (always-default args, config with one value). Barrel re-exports that just add an import hop. Interfaces wrapping a single primitive. Measure: if inlining it saves lines and loses nothing, flag it. |
 
 ### 2 — Verify before removing
 

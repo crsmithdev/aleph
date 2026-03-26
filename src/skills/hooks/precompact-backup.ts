@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { join, basename } from "path";
-import { homedir } from "os";
 import { trace } from "../../trace.ts";
+import { claudePaths } from "../../paths.ts";
 
 const TAG = "precompact-backup";
 let input: any;
@@ -12,7 +12,7 @@ catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.e
 const transcriptPath = input.transcript_path;
 if (!transcriptPath) { trace(TAG, "no transcript path"); process.exit(0); }
 
-const backupDir = join(homedir(), ".claude", "transcript-backups");
+const backupDir = join(claudePaths.root, "transcript-backups");
 if (!existsSync(backupDir)) {
   mkdirSync(backupDir, { recursive: true });
 }

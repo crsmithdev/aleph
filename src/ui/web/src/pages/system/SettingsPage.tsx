@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '../../api/client';
 import { cn } from '../../utils/cn';
 
@@ -8,6 +8,42 @@ type Backup = {
   filename: string;
   createdAt: string;
   size?: number;
+};
+
+type SystemInfo = {
+  git: {
+    revision: string;
+    short: string;
+    dirty: boolean;
+    branch: string;
+    commitCount: string;
+    commitsSinceTag: string;
+    lastCommit: string;
+    lastCommitDate: string;
+  };
+  paths: {
+    repo: string;
+    claudeRoot: string;
+    construct: string;
+    commands: string;
+    skills: string;
+    db: string;
+    memoryDb: string;
+    sessions: string;
+    ratings: string;
+    backups: string;
+  };
+  install: {
+    timestamp: string;
+    bunVersion: string;
+    platform: string;
+    arch: string;
+  };
+  runtime: {
+    nodeEnv: string;
+    port: number;
+    dbSizeBytes: number;
+  };
 };
 
 // --- Section wrapper ---
@@ -20,6 +56,96 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       </div>
       <div className="p-4 space-y-3">{children}</div>
     </div>
+  );
+}
+
+const ABSENT = new Set(['unknown', 'n/a', 'dev', '-', '']);
+
+function InfoGrid({ rows, dimAfter }: { rows: [string, string][]; dimAfter?: number }) {
+  return (
+    <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
+      {rows.map(([key, value], i) => {
+        const absent = ABSENT.has(value);
+        const dim = dimAfter != null && i >= dimAfter;
+        return (
+          <React.Fragment key={key}>
+            <span className={`text-xs whitespace-nowrap ${absent || dim ? 'text-text-muted/50' : 'text-text-muted'}`}>{key}</span>
+            <span className={`font-mono text-xs truncate ${absent ? 'text-text-muted/40' : dim ? 'text-text-muted/70' : 'text-text-primary'}`} title={value}>
+              {absent ? '–' : value}
+            </span>
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1048576).toFixed(1)} MB`;
+}
+
+function formatTimestamp(ts: string): string {
+  if (ts === 'unknown' || ts === 'dev') return ts;
+  try {
+    const d = new Date(ts);
+    return isNaN(d.getTime()) ? ts : d.toLocaleString();
+  } catch { return ts; }
+}
+
+// --- System Info Section ---
+
+function SystemInfoSection() {
+  const [info, setInfo] = useState<SystemInfo | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    api.get<SystemInfo>('/system/info').then(setInfo).catch(() => setError(true));
+  }, []);
+
+  if (error) return <Section title="System"><span className="text-xs text-error">Failed to load system info</span></Section>;
+  if (!info) return <Section title="System"><span className="text-xs text-text-muted">Loading...</span></Section>;
+
+  const buildTag = `${info.git.short}${info.git.dirty ? '-dirty' : ''}`;
+
+  return (
+    <>
+      <Section title="Build">
+        <InfoGrid rows={[
+          ['Revision', `${buildTag} (${info.git.branch})`],
+          ['Commits', `${info.git.commitCount} total${info.git.commitsSinceTag !== 'n/a' ? `, ${info.git.commitsSinceTag}` : ''}`],
+          ['Last Commit', info.git.lastCommit],
+          ['Commit Date', info.git.lastCommitDate],
+          ['Installed', formatTimestamp(info.install.timestamp)],
+          ['Bun', info.install.bunVersion],
+          ['Platform', `${info.install.platform} / ${info.install.arch}`],
+        ]} />
+      </Section>
+
+      <Section title="Paths">
+        <InfoGrid rows={[
+          ['CLAUDE_ROOT', info.paths.claudeRoot],
+          ['Source Repo', info.paths.repo],
+          ['Construct', info.paths.construct],
+          ['Commands', info.paths.commands],
+          ['Skills', info.paths.skills],
+          ['Construct DB', info.paths.db],
+          ['Memory DB', info.paths.memoryDb],
+          ['Sessions', info.paths.sessions],
+          ['Ratings', info.paths.ratings],
+          ['Backups', info.paths.backups],
+        ]} dimAfter={1} />
+      </Section>
+
+      <Section title="Runtime">
+        <InfoGrid rows={[
+          ['Environment', info.runtime.nodeEnv],
+          ['API Port', String(info.runtime.port)],
+          ['DB Size', formatBytes(info.runtime.dbSizeBytes)],
+        ]} />
+      </Section>
+    </>
   );
 }
 
@@ -111,7 +237,7 @@ function BackupSection() {
                 <div className="text-sm text-text-primary">{b.filename}</div>
                 <div className="text-xs text-text-muted">
                   {new Date(b.createdAt).toLocaleString()}
-                  {b.size !== undefined && ` · ${(b.size / 1024).toFixed(1)} KB`}
+                  {b.size !== undefined && ` · ${formatBytes(b.size)}`}
                 </div>
               </div>
               <button
@@ -134,7 +260,7 @@ export function SettingsPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-text-primary">Settings</h1>
-
+      <SystemInfoSection />
       <BackupSection />
     </div>
   );

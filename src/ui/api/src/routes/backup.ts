@@ -1,9 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'fs';
-import { join, resolve } from 'path';
-import { homedir } from 'os';
+import { resolve, join } from 'path';
+import { dataPaths } from '@construct/data';
 
-const DEFAULT_DB_PATH = join(homedir(), '.claude', 'construct', 'data', 'construct.db');
+const DEFAULT_DB_PATH = dataPaths.db;
 
 export const backupRoutes: FastifyPluginAsync = async (app) => {
   const dbPath = process.env.CONSTRUCT_DB_PATH || DEFAULT_DB_PATH;

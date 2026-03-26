@@ -6,18 +6,19 @@ import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
-import { ObsControlBar } from '../../../components/data/ObsControlBar';
+import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtPct, shortDate } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
 
-type SkillRow = { skill: string; count: number; pct: number; errors: number };
+type SkillRow = { skill: string; count: number; pct: number; errors: number; unused?: boolean };
 
 export function SkillsPage() {
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
+  const [showUnused, setShowUnused] = useState(true);
   const navigate = useNavigate();
   const { data, isLoading, error, refetch } = useObsSkills(range, granularity);
   const { chartType, setChartType } = useChartType('bar');
@@ -25,13 +26,20 @@ export function SkillsPage() {
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load skills" retry={refetch} />;
 
+  const unusedRows: SkillRow[] = (data.unused || []).map(s => ({ skill: s, count: 0, pct: 0, errors: 0, unused: true }));
+  const allRows = showUnused ? [...data.ranked, ...unusedRows] : data.ranked;
   const maxCount = Math.max(...data.ranked.map((r) => r.count), 1);
 
   const columns: Column<SkillRow>[] = [
     {
       key: 'skill',
       label: 'Skill',
-      render: (row) => <span className="font-mono text-text-primary">{row.skill}</span>,
+      render: (row) => (
+        <span className={cn('font-mono', row.unused ? 'text-text-muted' : 'text-text-primary')}>
+          {row.skill}
+          {row.unused && <span className="ml-2 text-[10px] text-text-disabled uppercase">unused</span>}
+        </span>
+      ),
     },
     {
       key: 'count',
@@ -75,13 +83,18 @@ export function SkillsPage() {
 
   return (
     <div className="space-y-6">
-      <ObsControlBar title={<h1 className="text-xl font-semibold text-text-primary">Skills</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity} />
+      <ObsControlBar title={<h1 className="text-2xl font-bold text-text-primary">Skills</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity}>
+        {unusedRows.length > 0 && (
+          <FilterToggle label={`Unused (${unusedRows.length})`} active={showUnused} onToggle={() => setShowUnused(!showUnused)} />
+        )}
+      </ObsControlBar>
 
       <DataTable<SkillRow>
-        data={data.ranked}
+        data={allRows}
         columns={columns}
         keyField="skill"
-        onRowClick={(row) => navigate(`/system/observability/skills/${encodeURIComponent(row.skill)}`)}
+        onRowClick={(row) => !row.unused && navigate(`/observability/skills/${encodeURIComponent(row.skill)}`)}
+        rowClassName={(row) => row.unused ? 'opacity-50' : undefined}
       />
 
       {data.byDay.length > 0 && (

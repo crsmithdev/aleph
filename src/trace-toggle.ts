@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 import { existsSync, writeFileSync, unlinkSync } from "fs";
 import { resolve } from "path";
+import { claudePaths } from "./paths.ts";
 
-const home = Bun.env.HOME ?? "/tmp";
-const traceFile = resolve(home, ".claude/construct/.trace");
+const traceFile = resolve(claudePaths.construct, ".trace");
 
 if (existsSync(traceFile)) {
   unlinkSync(traceFile);

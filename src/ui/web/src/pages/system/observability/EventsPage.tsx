@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useObsEvents } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
@@ -6,7 +6,7 @@ import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { type TimeRange } from '../../../components/data/TimeRangeSelector';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { dateTime, fmtNumber, fmtMs } from '../../../utils/format';
+import { dateTime, fmtNumber, fmtMs, fmtToolName } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
 
 type EntryType =
@@ -85,7 +85,7 @@ function TypeBadge({ type, isError }: { type: string; isError?: boolean }) {
 function getDetail(row: EventRow): string {
   switch (row.entryType) {
     case 'tool_use':
-      return row.skillName ? `Skill: ${row.skillName}` : (row.toolName ?? '');
+      return row.skillName ? `Skill: ${row.skillName}` : (row.toolName ? fmtToolName(row.toolName) : '');
     case 'tool_result':
       return row.isError ? (row.errorMessage?.slice(0, 60) ?? 'error') : 'ok';
     case 'hook_progress':
@@ -126,19 +126,19 @@ function getInfoPreview(row: EventRow): string {
 }
 
 function rowKey(row: EventRow): string {
-  return `${row.timestamp}-${row.sessionId}-${row.toolUseId ?? row.entryType}`;
+  return `${row.timestamp}-${row.sessionId}-${row.toolUseId ?? ''}-${row.hookCommand ?? ''}-${row.entryType}`;
 }
 
 function ExpandedRow({ row }: { row: EventRow }) {
   const sections: Array<{ label: string; content: string; isError?: boolean }> = [];
 
   if (row.entryType === 'tool_use') {
-    if (row.toolName) sections.push({ label: 'Tool', content: row.toolName });
+    if (row.toolName) sections.push({ label: 'Tool', content: fmtToolName(row.toolName) });
     if (row.skillName) sections.push({ label: 'Skill', content: row.skillName });
     if (row.toolParams) sections.push({ label: 'Parameters', content: JSON.stringify(row.toolParams, null, 2) });
     if (row.toolUseId) sections.push({ label: 'Tool Use ID', content: row.toolUseId });
   } else if (row.entryType === 'tool_result') {
-    if (row.toolName) sections.push({ label: 'Tool', content: row.toolName });
+    if (row.toolName) sections.push({ label: 'Tool', content: fmtToolName(row.toolName) });
     if (row.isError) sections.push({ label: 'Error', content: row.errorMessage ?? 'Unknown error', isError: true });
     if (row.toolUseId) sections.push({ label: 'Tool Use ID', content: row.toolUseId });
   } else if (row.entryType === 'hook_progress' || row.entryType === 'stop_hook_summary') {
@@ -201,7 +201,7 @@ export function EventsPage() {
   const [offset, setOffset] = useState(0);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
-  const debounceRef = { current: undefined as ReturnType<typeof setTimeout> | undefined };
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const handleSearch = useCallback((value: string) => {
     setSearch(value);
@@ -282,7 +282,7 @@ export function EventsPage() {
 
   return (
     <div className="space-y-4">
-      <ObsControlBar title={<h1 className="text-lg font-semibold text-text-primary">Events</h1>} range={range} onRangeChange={(r) => { setRange(r); setOffset(0); }}>
+      <ObsControlBar title={<h1 className="text-2xl font-bold text-text-primary">Events</h1>} range={range} onRangeChange={(r) => { setRange(r); setOffset(0); }}>
         <div className="flex items-center gap-1.5 flex-wrap">
           {EVENT_TYPES.map((type) => (
             <FilterToggle

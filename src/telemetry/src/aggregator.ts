@@ -11,7 +11,7 @@ import type {
   SessionBucket,
   SessionMetric,
   ProjectBucket,
-  HourBucket,
+
   OverviewData,
   ToolsData,
   HooksData,
@@ -121,11 +121,11 @@ export function aggregateTools(entries: SessionEntry[], granularity: Granularity
     }
   }
 
-  // Map toolUseId → result timestamp for latency calculation
-  const resultTimestamps = new Map<string, string>();
+  // Map toolUseId → result info for latency calculation
+  const resultInfo = new Map<string, { timestamp: string; durationMs?: number }>();
   for (const e of entries) {
     if (e.entryType === "tool_result" && e.toolUseId) {
-      resultTimestamps.set(e.toolUseId, e.timestamp);
+      resultInfo.set(e.toolUseId, { timestamp: e.timestamp, durationMs: e.toolDurationMs });
     }
   }
 
@@ -135,12 +135,12 @@ export function aggregateTools(entries: SessionEntry[], granularity: Granularity
       cur.count++;
       if (!cur.lastUsed || e.timestamp > cur.lastUsed) cur.lastUsed = e.timestamp;
 
-      // Calculate latency if we have a matching tool_result
+      // Calculate latency: prefer explicit duration, fall back to timestamp diff
       if (e.toolUseId) {
-        const resultTs = resultTimestamps.get(e.toolUseId);
-        if (resultTs) {
-          const durationMs = new Date(resultTs).getTime() - new Date(e.timestamp).getTime();
-          if (durationMs >= 0 && durationMs < 600000) cur.durations.push(durationMs);
+        const result = resultInfo.get(e.toolUseId);
+        if (result) {
+          const durationMs = result.durationMs ?? (new Date(result.timestamp).getTime() - new Date(e.timestamp).getTime());
+          if (durationMs >= 0 && durationMs < 3600000) cur.durations.push(durationMs);
         }
       }
 
@@ -375,27 +375,30 @@ export function aggregateCost(entries: SessionEntry[], granularity: Granularity 
 export function aggregateSessions(entries: SessionEntry[], granularity: Granularity = "day"): SessionsData {
   const dayMap = new Map<string, { sessions: Set<string>; messages: number; userMessages: number; assistantMessages: number }>();
   const projectMap = new Map<string, Set<string>>();
-  const hourMap = new Map<number, number>();
+  const activityMap = new Map<string, number>();
 
   // Per-session tracking
   const sessionMap = new Map<string, {
     project: string;
+    parentSessionId?: string;
     firstTs: string; lastTs: string;
     userMessages: number; assistantMessages: number;
     toolCalls: number; cost: number;
     linesAdded: number; linesRemoved: number;
     commits: number; compactions: number;
+    hasSubagents: boolean;
     gitBranch?: string;
   }>();
 
-  function getSession(sessionId: string, project: string, timestamp: string) {
+  function getSession(sessionId: string, project: string, timestamp: string, parentSessionId?: string) {
     if (!sessionMap.has(sessionId)) {
       sessionMap.set(sessionId, {
-        project, firstTs: timestamp, lastTs: timestamp,
+        project, parentSessionId, firstTs: timestamp, lastTs: timestamp,
         userMessages: 0, assistantMessages: 0,
         toolCalls: 0, cost: 0,
         linesAdded: 0, linesRemoved: 0,
         commits: 0, compactions: 0,
+        hasSubagents: false,
       });
     }
     const s = sessionMap.get(sessionId)!;
@@ -410,7 +413,7 @@ export function aggregateSessions(entries: SessionEntry[], granularity: Granular
     const bucket = dayMap.get(day)!;
     bucket.sessions.add(e.sessionId);
 
-    const sess = getSession(e.sessionId, e.project, e.timestamp);
+    const sess = getSession(e.sessionId, e.project, e.timestamp, e.parentSessionId);
     if (e.gitBranch) sess.gitBranch = e.gitBranch;
 
     if (e.entryType === "tokens") {
@@ -431,6 +434,7 @@ export function aggregateSessions(entries: SessionEntry[], granularity: Granular
 
     if (e.entryType === "tool_use") {
       sess.toolCalls++;
+      if (e.toolName === "Agent") sess.hasSubagents = true;
       if (e.linesAdded) sess.linesAdded += e.linesAdded;
       if (e.linesRemoved) sess.linesRemoved += e.linesRemoved;
 
@@ -448,8 +452,8 @@ export function aggregateSessions(entries: SessionEntry[], granularity: Granular
     if (!projectMap.has(e.project)) projectMap.set(e.project, new Set());
     projectMap.get(e.project)!.add(e.sessionId);
 
-    const hour = hourKey(e.timestamp);
-    hourMap.set(hour, (hourMap.get(hour) || 0) + 1);
+    const actKey = bucketKey(e.timestamp, granularity);
+    activityMap.set(actKey, (activityMap.get(actKey) || 0) + 1);
   }
 
   const byDay: SessionBucket[] = [...dayMap.entries()]
@@ -463,13 +467,14 @@ export function aggregateSessions(entries: SessionEntry[], granularity: Granular
     .map(([project, sessions]) => ({ project, sessions: sessions.size }))
     .sort((a, b) => b.sessions - a.sessions);
 
-  const byHour: HourBucket[] = [...hourMap.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([hour, count]) => ({ hour, count }));
+  const byActivity: TimeBucket[] = [...activityMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, count]) => ({ date, count }));
 
   const sessions: SessionMetric[] = [...sessionMap.entries()]
     .map(([sessionId, s]) => ({
       sessionId,
+      parentSessionId: s.parentSessionId,
       project: s.project,
       durationMs: new Date(s.lastTs).getTime() - new Date(s.firstTs).getTime(),
       userMessages: s.userMessages,
@@ -483,6 +488,7 @@ export function aggregateSessions(entries: SessionEntry[], granularity: Granular
       firstTimestamp: s.firstTs,
       lastTimestamp: s.lastTs,
       gitBranch: s.gitBranch,
+      hasSubagents: s.hasSubagents,
     }))
     .sort((a, b) => b.lastTimestamp.localeCompare(a.lastTimestamp));
 
@@ -495,7 +501,7 @@ export function aggregateSessions(entries: SessionEntry[], granularity: Granular
   const totalCommits = sessions.reduce((s, v) => s + v.commits, 0);
 
   return {
-    byDay, byProject, byHour, sessions,
+    byDay, byProject, byActivity, sessions,
     avgDurationMs, totalUserMessages, totalAssistantMessages,
     totalLinesAdded, totalLinesRemoved, totalCommits,
   };
@@ -585,10 +591,15 @@ export function aggregateHookDetail(entries: SessionEntry[], hookName: string): 
   const dayMap = new Map<string, { durations: number[]; count: number }>();
   const invocations: { timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string; isError?: boolean; errorMessage?: string }[] = [];
 
+  // Track whether stop_hook_summary entries exist for this hook.
+  // If they do, hook_progress entries are duplicates and should not produce invocation rows.
+  let hasStopSummary = false;
+
   for (const e of entries) {
     if (e.entryType === "stop_hook_summary" && e.hookCommand) {
       const shortCmd = e.hookCommand.split("/").pop() || e.hookCommand;
       if (shortCmd !== hookName) continue;
+      hasStopSummary = true;
       const dur = e.hookDurationMs ?? 0;
       durations.push(dur);
       if (e.isError) errors++;
@@ -616,6 +627,16 @@ export function aggregateHookDetail(entries: SessionEntry[], hookName: string): 
       if (shortCmd === hookName) {
         if (e.hookEvent) event = e.hookEvent;
         fullCommand = e.hookCommand;
+      }
+    }
+  }
+
+  // For non-Stop hooks, stop_hook_summary is never emitted — use hook_progress entries instead.
+  if (!hasStopSummary) {
+    for (const e of entries) {
+      if (e.entryType === "hook_progress" && e.hookCommand) {
+        const shortCmd = e.hookCommand.split("/").pop() || e.hookCommand;
+        if (shortCmd !== hookName) continue;
 
         // Extract trigger from hookName (e.g. "PostToolUse:Edit" → "Edit")
         const trigger = e.hookName?.includes(":") ? e.hookName.split(":").slice(1).join(":") : undefined;
@@ -926,13 +947,35 @@ export function aggregateSessionTrace(entries: SessionEntry[], sessionId: string
   }
 
   const project = sessionEntries[0].project;
+  const parentSessionId = sessionEntries[0].parentSessionId;
 
-  // Build toolUseId → result timestamp map
+  // Build map of subagent sessions belonging to this parent, keyed by first timestamp
+  const subagentTimes: { sessionId: string; firstTs: number; lastTs: number }[] = [];
+  const subSessionMap = new Map<string, { firstTs: number; lastTs: number }>();
+  for (const e of entries) {
+    if (e.parentSessionId === sessionId && e.sessionId !== sessionId) {
+      const ts = new Date(e.timestamp).getTime();
+      const existing = subSessionMap.get(e.sessionId);
+      if (!existing) {
+        subSessionMap.set(e.sessionId, { firstTs: ts, lastTs: ts });
+      } else {
+        if (ts < existing.firstTs) existing.firstTs = ts;
+        if (ts > existing.lastTs) existing.lastTs = ts;
+      }
+    }
+  }
+  for (const [sid, times] of subSessionMap) {
+    subagentTimes.push({ sessionId: sid, ...times });
+  }
+
+  // Build toolUseId → result timestamp and duration maps
   const resultTimestamps = new Map<string, string>();
+  const resultDurations = new Map<string, number>();
   const resultErrors = new Map<string, { isError: boolean; errorMessage?: string }>();
   for (const e of sessionEntries) {
     if (e.entryType === "tool_result" && e.toolUseId) {
       resultTimestamps.set(e.toolUseId, e.timestamp);
+      if (e.toolDurationMs) resultDurations.set(e.toolUseId, e.toolDurationMs);
       if (e.isError) resultErrors.set(e.toolUseId, { isError: true, errorMessage: e.errorMessage });
     }
   }
@@ -970,10 +1013,11 @@ export function aggregateSessionTrace(entries: SessionEntry[], sessionId: string
         let detail: string | undefined;
 
         if (e.toolUseId) {
-          const resultTs = resultTimestamps.get(e.toolUseId);
-          if (resultTs) {
-            durationMs = new Date(resultTs).getTime() - new Date(e.timestamp).getTime();
-            if (durationMs < 0 || durationMs > 600000) durationMs = 0;
+          const result = resultTimestamps.get(e.toolUseId);
+          if (result) {
+            const explicitMs = resultDurations.get(e.toolUseId);
+            durationMs = explicitMs ?? (new Date(result).getTime() - new Date(e.timestamp).getTime());
+            if (durationMs < 0 || durationMs > 3600000) durationMs = 0;
           }
           const err = resultErrors.get(e.toolUseId);
           if (err) {
@@ -984,16 +1028,35 @@ export function aggregateSessionTrace(entries: SessionEntry[], sessionId: string
 
         // Summarize params for detail
         if (!detail && e.toolParams) {
-          const keys = Object.keys(e.toolParams);
-          if (keys.length <= 3) {
-            const parts = keys.map((k) => {
-              const v = e.toolParams![k];
-              const s = typeof v === "string" ? v : JSON.stringify(v);
-              return `${k}: ${s && s.length > 60 ? s.slice(0, 60) + "..." : s}`;
-            });
-            detail = parts.join(", ");
+          if (e.toolName === "Agent") {
+            const desc = e.toolParams.description as string | undefined;
+            const prompt = e.toolParams.prompt as string | undefined;
+            detail = desc || (prompt && prompt.length > 100 ? prompt.slice(0, 100) + "..." : prompt) || undefined;
           } else {
-            detail = keys.join(", ");
+            const keys = Object.keys(e.toolParams);
+            if (keys.length <= 3) {
+              const parts = keys.map((k) => {
+                const v = e.toolParams![k];
+                const s = typeof v === "string" ? v : JSON.stringify(v);
+                return `${k}: ${s && s.length > 60 ? s.slice(0, 60) + "..." : s}`;
+              });
+              detail = parts.join(", ");
+            } else {
+              detail = keys.join(", ");
+            }
+          }
+        }
+
+        // For Agent tool calls, find the matching subagent session by time overlap
+        let subagentSessionId: string | undefined;
+        if (e.toolName === "Agent" && durationMs > 0) {
+          const toolStart = new Date(e.timestamp).getTime();
+          const toolEnd = toolStart + durationMs;
+          for (const sub of subagentTimes) {
+            if (sub.firstTs >= toolStart - 2000 && sub.firstTs <= toolEnd + 2000) {
+              subagentSessionId = sub.sessionId;
+              break;
+            }
           }
         }
 
@@ -1006,6 +1069,7 @@ export function aggregateSessionTrace(entries: SessionEntry[], sessionId: string
           isError: isError || undefined,
           detail,
           toolUseId: e.toolUseId,
+          subagentSessionId,
         });
       }
 
@@ -1082,5 +1146,5 @@ export function aggregateSessionTrace(entries: SessionEntry[], sessionId: string
       new Date(sessionEntries[0].timestamp).getTime()
     : 0;
 
-  return { sessionId, project, turns, totalDurationMs, totalTokens, totalCost };
+  return { sessionId, parentSessionId, project, turns, totalDurationMs, totalTokens, totalCost };
 }

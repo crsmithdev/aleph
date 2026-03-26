@@ -1,12 +1,13 @@
 #!/usr/bin/env bun
-import { appendFileSync, mkdirSync } from "fs";
+import { appendFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { trace } from "../../trace.ts";
+import { dataPaths, ensureDataDirs } from "../../paths.ts";
 
 const TAG = "rating-capture";
 const root = resolve(dirname(Bun.main), "../..");
-const ratingsFile = Bun.env.RATINGS_FILE ?? resolve(root, "memory/signals/ratings.jsonl");
-mkdirSync(dirname(ratingsFile), { recursive: true });
+const ratingsFile = Bun.env.RATINGS_FILE ?? dataPaths.ratings;
+ensureDataDirs();
 
 let input: any;
 const raw = await Bun.stdin.text();

@@ -24,7 +24,7 @@ export function TodoQuickAdd() {
           const v = e.target.value;
           setTitle(v.length > 0 ? v.charAt(0).toUpperCase() + v.slice(1) : v);
         }}
-        placeholder="Add a todo..."
+        placeholder="Add a Todo..."
         className="flex-1 bg-bg-secondary border border-border-primary rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent"
       />
       <button

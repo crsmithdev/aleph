@@ -28,6 +28,8 @@
   --color-error: var(--c-error);
   --color-error-muted: var(--c-error-muted);
   --color-links: var(--c-links);
+  --color-agent: var(--c-agent);
+  --color-agent-border: var(--c-agent-border);
 }
 
 :root {
@@ -54,6 +56,8 @@
   --c-error: #E53935;
   --c-error-muted: rgb(229 57 53 / 0.15);
   --c-links: #00BCD4;
+  --c-agent: #c8ccd0;
+  --c-agent-border: #b0b5ba;
 
   --chart-1: #6182B8;
   --chart-2: #91B859;
@@ -93,6 +97,8 @@
   --c-error: #f87171;
   --c-error-muted: rgb(248 113 113 / 0.15);
   --c-links: #5eead4;
+  --c-agent: #3d4f63;
+  --c-agent-border: #4a5f75;
 
   --chart-1: #38bdf8;
   --chart-2: #86efac;

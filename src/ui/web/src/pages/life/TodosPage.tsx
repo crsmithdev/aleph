@@ -11,7 +11,7 @@ export function TodosPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-text-primary">TODOs</h1>
+      <h1 className="text-2xl font-bold text-text-primary">Todos</h1>
 
       <TodoQuickAdd />
 
@@ -31,7 +31,7 @@ export function TodosPage() {
             </h2>
             <div className="space-y-2">
               {active.length === 0 ? (
-                <div className="text-sm text-text-muted italic py-2">No active todos.</div>
+                <div className="text-sm text-text-muted italic py-2">No active Todos.</div>
               ) : (
                 active.map((todo) => (
                   <TodoItem key={todo.id} todo={todo} />

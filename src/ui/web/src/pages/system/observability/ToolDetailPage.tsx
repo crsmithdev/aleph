@@ -10,7 +10,7 @@ import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControl
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtPct, shortDate, dateTime, granLabel } from '../../../utils/format';
+import { fmtNumber, fmtPct, shortDate, dateTime, granLabel, fmtToolName } from '../../../utils/format';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 
 type InvocationRow = { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; isError?: boolean; errorMessage?: string };
@@ -38,14 +38,6 @@ export function ToolDetailPage() {
 
   const invocationColumns: Column<InvocationRow>[] = [
     {
-      key: 'status',
-      label: '',
-      width: '2rem',
-      render: (row) => row.isError
-        ? <span className="inline-block w-2 h-2 rounded-full bg-error" title="Error" />
-        : <span className="inline-block w-2 h-2 rounded-full bg-success/50" />,
-    },
-    {
       key: 'timestamp',
       label: 'Time',
       render: (row) => <span className="text-text-secondary">{dateTime(row.timestamp)}</span>,
@@ -58,6 +50,7 @@ export function ToolDetailPage() {
     {
       key: 'sessionId',
       label: 'Session',
+      width: '90px',
       render: (row) => <span className="font-mono text-xs text-text-muted">{row.sessionId.slice(0, 8)}</span>,
     },
     ...(data.errorCount > 0 ? [{
@@ -65,14 +58,13 @@ export function ToolDetailPage() {
       label: 'Error',
       render: (row: InvocationRow) => row.errorMessage
         ? <span className="text-xs text-error truncate block max-w-xs" title={row.errorMessage}>{row.errorMessage.slice(0, 80)}{row.errorMessage.length > 80 ? '...' : ''}</span>
-        : <span className="text-text-muted">-</span>,
+        : <span className="text-text-muted">—</span>,
     }] : []) as Column<InvocationRow>[],
     {
       key: 'params',
       label: 'Params',
-      width: '300px',
       render: (row) => {
-        if (!row.params) return <span className="text-text-muted">-</span>;
+        if (!row.params) return <span className="text-text-muted">—</span>;
         const key = `${row.timestamp}-${row.sessionId}`;
         const isExpanded = expandedRow === key;
         const preview = JSON.stringify(row.params);
@@ -99,12 +91,12 @@ export function ToolDetailPage() {
         title={
           <div className="flex items-center gap-3">
             <Link
-              to="/system/observability/tools"
+              to="/observability/tools"
               className="text-sm text-text-muted hover:text-text-primary transition-colors"
             >
               &larr; Tools
             </Link>
-            <h1 className="text-xl font-semibold font-mono text-text-primary">{toolName}</h1>
+            <h1 className="text-2xl font-bold font-mono text-text-primary">{fmtToolName(toolName!)}</h1>
           </div>
         }
         range={range}

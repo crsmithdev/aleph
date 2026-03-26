@@ -21,6 +21,8 @@ type TurnRow = {
   tokenCount: number;
   cost: number;
   model?: string;
+  hasSubagent: boolean;
+  hasTools: boolean;
 };
 
 function fmtDuration(ms: number): string {
@@ -44,6 +46,8 @@ export function SessionTracePage() {
   const sessionId = decodeURIComponent(rawId ?? '');
   const navigate = useNavigate();
   const [range] = useState<TimeRange>('30d');
+  const [toolOnly, setToolOnly] = useState(false);
+  const [subagentOnly, setSubagentOnly] = useState(false);
   const { data, isLoading, error, refetch } = useObsSessionTrace(sessionId, range);
 
   if (isLoading) return <PageLoading />;
@@ -64,7 +68,14 @@ export function SessionTracePage() {
     tokenCount: t.tokenCount || 0,
     cost: t.cost || 0,
     model: t.model,
+    hasSubagent: t.spans.some((s) => s.kind === 'tool' && s.label === 'Agent'),
+    hasTools: t.spans.some((s) => s.kind === 'tool'),
   }));
+  const subagentTurnCount = turnRows.filter((r) => r.hasSubagent).length;
+  const toolTurnCount = turnRows.filter((r) => r.hasTools).length;
+  let filteredRows = turnRows;
+  if (toolOnly) filteredRows = filteredRows.filter((r) => r.hasTools);
+  if (subagentOnly) filteredRows = filteredRows.filter((r) => r.hasSubagent);
 
   const turnColumns: Column<TurnRow>[] = [
     {
@@ -145,7 +156,7 @@ export function SessionTracePage() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Link
-          to="/system/observability/sessions"
+          to="/observability/sessions"
           className="text-sm text-text-muted hover:text-text-primary transition-colors"
         >
           &larr; Sessions
@@ -154,6 +165,14 @@ export function SessionTracePage() {
         <span className="font-mono text-xs text-text-muted">{sessionId.slice(0, 8)}</span>
         {data.project && (
           <span className="rounded-md bg-bg-tertiary px-2 py-0.5 text-xs text-text-muted">{data.project}</span>
+        )}
+        {data.parentSessionId && (
+          <Link
+            to={`/observability/sessions/${encodeURIComponent(data.parentSessionId)}`}
+            className="text-xs text-accent hover:underline"
+          >
+            Parent session &rarr;
+          </Link>
         )}
       </div>
 
@@ -171,15 +190,45 @@ export function SessionTracePage() {
       </div>
 
       <div>
-        <h2 className="mb-3 text-sm font-medium text-text-secondary">
-          Turns ({turnRows.length})
-        </h2>
+        <div className="mb-3 flex items-center gap-3">
+          <h2 className="text-sm font-medium text-text-secondary">
+            Turns ({filteredRows.length !== turnRows.length ? `${filteredRows.length} / ` : ''}{turnRows.length})
+          </h2>
+          {toolTurnCount < turnRows.length && (
+            <button
+              onClick={() => setToolOnly(!toolOnly)}
+              className={cn(
+                'flex items-center gap-1.5 rounded px-2 py-1 text-xs border transition-colors',
+                toolOnly
+                  ? 'border-accent/40 bg-accent/10 text-accent'
+                  : 'border-border-primary bg-bg-secondary text-text-muted',
+              )}
+            >
+              Tool
+              <span className="text-text-disabled">({toolTurnCount})</span>
+            </button>
+          )}
+          {subagentTurnCount > 0 && (
+            <button
+              onClick={() => setSubagentOnly(!subagentOnly)}
+              className={cn(
+                'flex items-center gap-1.5 rounded px-2 py-1 text-xs border transition-colors',
+                subagentOnly
+                  ? 'border-accent/40 bg-accent/10 text-accent'
+                  : 'border-border-primary bg-bg-secondary text-text-muted',
+              )}
+            >
+              Subagent
+              <span className="text-text-disabled">({subagentTurnCount})</span>
+            </button>
+          )}
+        </div>
         <DataTable<TurnRow>
-          data={turnRows}
+          data={filteredRows}
           columns={turnColumns}
           keyField="index"
-          onRowClick={(row) => navigate(`/system/observability/sessions/${encodeURIComponent(sessionId)}/turns/${row.index}`)}
-          rowClassName={(row) => row.errorCount > 0 ? 'bg-error/5' : undefined}
+          onRowClick={(row) => navigate(`/observability/sessions/${encodeURIComponent(sessionId)}/turns/${row.index}`)}
+          rowClassName={(row) => row.errorCount > 0 ? 'bg-error/5' : row.hasSubagent ? 'bg-accent/5' : undefined}
         />
       </div>
 

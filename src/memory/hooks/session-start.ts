@@ -1,37 +1,22 @@
 #!/usr/bin/env bun
-import { existsSync, readFileSync, readdirSync, writeFileSync, lstatSync, readlinkSync } from "fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { execSync } from "child_process";
 import { Database } from "bun:sqlite";
 import { trace } from "../../trace.ts";
+import { dataPaths, externalPaths } from "../../paths.ts";
 
 const TAG = "session-start";
 const root = resolve(dirname(Bun.main), "../..");
-const sessionsDir = resolve(root, "memory/sessions");
+const sessionsDir = dataPaths.sessions;
 const briefingMarker = resolve(sessionsDir, ".last-briefing");
 
 const out: string[] = ["=== Session Start ==="];
 
-// Dev-mode link check: warn if in construct repo without symlink
+// Dev-mode check: remind to install after editing source
 const cwd = process.cwd();
-const constructLink = resolve(Bun.env.HOME ?? "/tmp", ".claude/construct");
 if (existsSync(resolve(cwd, "src/trace.ts")) && existsSync(resolve(cwd, "install.ts"))) {
-  try {
-    const isLink = lstatSync(constructLink).isSymbolicLink();
-    if (isLink) {
-      const target = readlinkSync(constructLink);
-      const expectedTarget = resolve(cwd, "src");
-      if (resolve(target) !== expectedTarget) {
-        out.push(`\n⚠ LINK MISMATCH: ~/.claude/construct → ${target} (expected ${expectedTarget})`);
-      }
-    } else {
-      out.push("\n⚠ DEV MODE: You're in the Construct repo but ~/.claude/construct is not linked.");
-      out.push("  Run /construct link to symlink source for live editing.");
-      out.push("  Without this, edits to src/ won't take effect until you run /construct install.\n");
-    }
-  } catch {
-    trace(TAG, "link check failed");
-  }
+  out.push("\n⚠ DEV MODE: Edits to src/ won't take effect until you run /construct install.\n");
 }
 
 // Session count
@@ -76,18 +61,18 @@ if (newSessions.length > 0) {
 
     const intentLine = lines.find(l => l.startsWith("- Intent:"))?.replace("- Intent:", "").trim() ?? "";
     const outcomeLine = lines.find(l => l.startsWith("- Outcome:"))?.replace("- Outcome:", "").trim() ?? "";
-    const notesLines = lines
-      .filter(l => l.trim().startsWith("- ") && lines.indexOf(l) > lines.findIndex(l2 => l2 === "- Notes:"))
+    const notesIdx = lines.findIndex(l => l.trimStart() === "- Notes:");
+    const notesLines = notesIdx === -1 ? [] : lines
+      .slice(notesIdx + 1)
+      .filter(l => l.trim().startsWith("- "))
       .map(l => l.trim().replace(/^- /, ""));
 
     const lowerOutcome = outcomeLine.toLowerCase();
-    const lowerContent = content.toLowerCase();
 
     // Classify by outcome keywords
     const isBlocked =
       lowerOutcome.includes("blocked") ||
-      lowerOutcome.includes("stuck") ||
-      lowerContent.includes("blocked");
+      lowerOutcome.includes("stuck");
     const isInProgress =
       !isBlocked && (
         lowerOutcome.includes("pending") ||
@@ -165,7 +150,7 @@ try {
 }
 
 // Recall recent semantic memories (direct SQLite, no embedding model needed)
-const memDbPath = resolve(Bun.env.HOME ?? "/tmp", ".local/share/mcp-memory/sqlite_vec.db");
+const memDbPath = externalPaths.memoryDb;
 try {
   if (existsSync(memDbPath)) {
     const memDb = new Database(memDbPath, { readonly: true });

@@ -39,14 +39,6 @@ export function HookDetailPage() {
 
   const invocationColumns: Column<InvocationRow>[] = [
     {
-      key: 'status',
-      label: '',
-      width: '2rem',
-      render: (row) => row.isError
-        ? <span className="inline-block w-2 h-2 rounded-full bg-error" title={row.errorMessage || `Exit code ${row.exitCode}`} />
-        : <span className="inline-block w-2 h-2 rounded-full bg-success/50" />,
-    },
-    {
       key: 'timestamp',
       label: 'Time',
       render: (row) => <span className="text-text-secondary">{dateTime(row.timestamp)}</span>,
@@ -56,7 +48,7 @@ export function HookDetailPage() {
       label: 'Trigger',
       render: (row: InvocationRow) => row.trigger
         ? <span className="font-mono text-xs text-accent">{row.trigger}</span>
-        : <span className="text-text-muted">-</span>,
+        : <span className="text-text-muted">—</span>,
     }] : []) as Column<InvocationRow>[],
     {
       key: 'exitCode',
@@ -65,7 +57,7 @@ export function HookDetailPage() {
       align: 'right',
       render: (row) => row.exitCode != null
         ? <span className={cn('font-mono text-xs', row.exitCode !== 0 ? 'text-error font-medium' : 'text-text-muted')}>{row.exitCode}</span>
-        : <span className="text-text-muted">-</span>,
+        : <span className="text-text-muted">—</span>,
     },
     {
       key: 'durationMs',
@@ -76,14 +68,14 @@ export function HookDetailPage() {
         <span className={cn('font-mono text-xs', row.durationMs > 500 ? 'text-warning' : 'text-text-muted')}>
           {fmtMs(row.durationMs)}
         </span>
-      ) : <span className="text-text-muted">-</span>,
+      ) : <span className="text-text-muted">—</span>,
     },
     ...(data.invocations.some((inv: InvocationRow) => inv.output || inv.errorMessage) ? [{
       key: 'message',
       label: 'Message',
       render: (row: InvocationRow) => {
         const msg = row.errorMessage || row.output;
-        if (!msg) return <span className="text-text-muted">-</span>;
+        if (!msg) return <span className="text-text-muted">—</span>;
         return <span className={cn('font-mono text-xs truncate block max-w-xs', row.isError ? 'text-error' : 'text-text-muted')} title={msg}>{msg.slice(0, 80)}{msg.length > 80 ? '...' : ''}</span>;
       },
     }] : []) as Column<InvocationRow>[],
@@ -100,12 +92,12 @@ export function HookDetailPage() {
         title={
           <div className="flex items-center gap-3">
             <Link
-              to="/system/observability/hooks"
+              to="/observability/hooks"
               className="text-sm text-text-muted hover:text-text-primary transition-colors"
             >
               &larr; Hooks
             </Link>
-            <h1 className="text-xl font-semibold font-mono text-text-primary">{hookName}</h1>
+            <h1 className="text-2xl font-bold font-mono text-text-primary">{hookName}</h1>
             {data.event && (
               <span className="rounded-md bg-bg-tertiary px-2 py-0.5 text-xs text-text-muted">{data.event}</span>
             )}

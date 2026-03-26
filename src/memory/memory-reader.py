@@ -8,7 +8,7 @@ import asyncio
 import os
 import sys
 
-DB_PATH = os.path.expanduser("~/.local/share/mcp-memory/sqlite_vec.db")
+DB_PATH = os.environ.get("MEMORY_DB_PATH", os.path.expanduser("~/.local/share/mcp-memory/sqlite_vec.db"))
 
 
 async def main():

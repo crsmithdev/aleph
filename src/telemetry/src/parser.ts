@@ -1,14 +1,14 @@
 import { readdirSync, statSync, readFileSync } from "fs";
 import { join, basename, dirname } from "path";
-import { homedir } from "os";
 import type { SessionEntry, ParseOptions } from "./types.js";
+import { claudePaths } from "@construct/data";
 
-const DEFAULT_BASE = join(homedir(), ".claude", "projects");
+const DEFAULT_BASE = claudePaths.projects;
 
 const slashCommands = new Set<string>(
   (() => {
     try {
-      return readdirSync(join(homedir(), ".claude", "commands"))
+      return readdirSync(claudePaths.commands)
         .filter((f) => f.endsWith(".md"))
         .map((f) => f.replace(/\.md$/, ""));
     } catch {
@@ -199,22 +199,39 @@ function parseLine(line: string, project: string, fallbackSessionId?: string): S
           if (block.type === "text" && typeof block.text === "string") {
             textParts.push(block.text);
           }
-          if (block.type === "tool_result" && block.is_error) {
-            const rawContent = block.content;
-            const errorMessage = typeof rawContent === "string"
-              ? rawContent.slice(0, 200)
-              : Array.isArray(rawContent)
-                ? (rawContent.find((b: any) => b.type === "text")?.text ?? "").slice(0, 200)
-                : undefined;
-            entries.push({
-              sessionId,
-              timestamp,
-              project,
-              entryType: "tool_result",
-              isError: true,
-              toolUseId: (block.tool_use_id as string) || undefined,
-              errorMessage: errorMessage || undefined,
-            });
+          if (block.type === "tool_result") {
+            const toolUseId = (block.tool_use_id as string) || undefined;
+            // Extract explicit duration from toolUseResult (e.g. Agent subagent calls)
+            const toolUseResult = (raw as Record<string, unknown>).toolUseResult as Record<string, unknown> | undefined;
+            const toolDurationMs = toolUseResult?.totalDurationMs as number | undefined;
+
+            if (block.is_error) {
+              const rawContent = block.content;
+              const errorMessage = typeof rawContent === "string"
+                ? rawContent.slice(0, 200)
+                : Array.isArray(rawContent)
+                  ? (rawContent.find((b: any) => b.type === "text")?.text ?? "").slice(0, 200)
+                  : undefined;
+              entries.push({
+                sessionId,
+                timestamp,
+                project,
+                entryType: "tool_result",
+                isError: true,
+                toolUseId,
+                errorMessage: errorMessage || undefined,
+                toolDurationMs,
+              });
+            } else if (toolUseId) {
+              entries.push({
+                sessionId,
+                timestamp,
+                project,
+                entryType: "tool_result",
+                toolUseId,
+                toolDurationMs,
+              });
+            }
           }
         }
         if (textParts.length > 0) userText = textParts.join("\n");
@@ -312,7 +329,14 @@ function sessionIdFromPath(filePath: string): string | undefined {
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(name)) {
     return name;
   }
-  // Subagent files: agent-<id>.jsonl — derive parent session from directory
+  // Subagent files: agent-<id>.jsonl — use filename as unique session ID
+  if (name.startsWith("agent-")) return name;
+  return undefined;
+}
+
+function parentSessionIdFromPath(filePath: string): string | undefined {
+  // Only subagent files in <parentSessionId>/subagents/ have a parent
+  if (!filePath.includes("/subagents/")) return undefined;
   const parent = basename(dirname(dirname(filePath)));
   if (/^[0-9a-f]{8}-/.test(parent)) return parent;
   return undefined;
@@ -333,6 +357,7 @@ function parseFile(filePath: string, project: string): SessionEntry[] {
   }
 
   const fallbackSessionId = sessionIdFromPath(filePath);
+  const parentId = parentSessionIdFromPath(filePath);
   const rawEntries: SessionEntry[] = [];
   for (const line of content.split("\n")) {
     if (!line.trim()) continue;
@@ -343,6 +368,10 @@ function parseFile(filePath: string, project: string): SessionEntry[] {
   const lastUserMsg = new Map<string, string>();
   const entries: SessionEntry[] = [];
   for (const e of rawEntries) {
+    if (parentId) {
+      e.parentSessionId = parentId;
+      e.sessionId = fallbackSessionId || e.sessionId;
+    }
     if (e.entryType === "user_message") {
       if (e.userRequest) lastUserMsg.set(e.sessionId, e.userRequest);
     }

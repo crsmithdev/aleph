@@ -6,7 +6,7 @@ import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
-import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
+import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps } from '../../../components/charts/chartTheme';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { fmtNumber, shortDate, relativeTime, granLabel, rangeToDays } from '../../../utils/format';
@@ -149,7 +149,7 @@ export function MemoryPage() {
       <ObsControlBar
         title={
           <div className="flex items-center justify-between w-full">
-            <h1 className="text-xl font-semibold text-text-primary">Memory</h1>
+            <h1 className="text-2xl font-bold text-text-primary">Memory</h1>
             <button
               onClick={() => snapshot.mutate()}
               disabled={snapshot.isPending}
@@ -205,7 +205,7 @@ export function MemoryPage() {
               <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
               <YAxis {...axisProps} />
               <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
-              <Legend />
+              <Legend {...legendProps} />
               <Bar dataKey="stores" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Stores" />
               <Bar dataKey="searches" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Searches" />
             </BarChart>
@@ -215,7 +215,7 @@ export function MemoryPage() {
               <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
               <YAxis {...axisProps} />
               <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
-              <Legend />
+              <Legend {...legendProps} />
               <Line type="monotone" dataKey="stores" stroke={CHART_PALETTE[1]} strokeWidth={2} dot={false} name="Stores" />
               <Line type="monotone" dataKey="searches" stroke={CHART_PALETTE[0]} strokeWidth={2} dot={false} name="Searches" />
             </LineChart>

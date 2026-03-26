@@ -2,6 +2,7 @@
   "private": true,
   "workspaces": [
     "src/data",
+    "src/eval",
     "src/goals",
     "src/telemetry",
     "src/ui",
@@ -11,12 +12,10 @@
   "scripts": {
     "test": "bun test.ts",
     "validate": "jq . dotclaude/settings.json > /dev/null && jq . src/skills/skill-rules.json > /dev/null",
-    "ui": "cd src/ui && bun run dev",
+    "dev": "cd src/ui && bun run dev",
     "ui:build": "cd src/ui && bun run build",
     "ui:e2e": "bun src/ui/e2e/goal-flow.test.ts",
     "ui:e2e:obs": "bun src/ui/e2e/observability-flow.test.ts"
   },
-  "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.81"
-  }
+  "dependencies": {}
 }

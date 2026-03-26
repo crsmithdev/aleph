@@ -1,13 +1,14 @@
 #!/usr/bin/env bun
-import { mkdirSync, writeFileSync } from "fs";
+import { writeFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { trace } from "../../trace.ts";
+import { dataPaths, ensureDataDirs } from "../../paths.ts";
 import { parseTranscript } from "../parse-transcript.ts";
 
 const TAG = "session-summary";
 const root = resolve(dirname(Bun.main), "../..");
-const sessionsDir = resolve(root, "memory/sessions");
-mkdirSync(sessionsDir, { recursive: true });
+const sessionsDir = dataPaths.sessions;
+ensureDataDirs();
 
 let input: any;
 const raw = await Bun.stdin.text();

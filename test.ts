@@ -8,8 +8,9 @@ const ROOT = import.meta.dir;
 const BUN = process.argv[0];
 const hook = (path: string) => resolve(ROOT, "src", path);
 const ratingsFile = resolve(tmpdir(), `construct-test-ratings-${process.pid}.jsonl`);
-const sessionsDir = resolve(ROOT, "src/memory/sessions");
-mkdirSync(resolve(ROOT, "src/memory/signals"), { recursive: true });
+const testDataRoot = resolve(tmpdir(), `construct-test-data-${process.pid}`);
+const sessionsDir = resolve(testDataRoot, "sessions");
+mkdirSync(resolve(testDataRoot, "signals"), { recursive: true });
 mkdirSync(sessionsDir, { recursive: true });
 
 let passed = 0;
@@ -17,7 +18,7 @@ let failed = 0;
 const infoResults: { name: string; pass: boolean }[] = [];
 
 // Run a hook, return stdout. Throws on unexpected exit code.
-const testEnv = { ...process.env, RATINGS_FILE: ratingsFile };
+const testEnv = { ...process.env, RATINGS_FILE: ratingsFile, CONSTRUCT_DATA_ROOT: testDataRoot };
 const traceFile = resolve(ROOT, "src/.trace");
 let lastTrace = ""; // captured trace output from most recent hook run
 

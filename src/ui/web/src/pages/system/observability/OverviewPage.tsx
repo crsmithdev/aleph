@@ -29,7 +29,7 @@ export function OverviewPage() {
 
   return (
     <div className="space-y-6">
-      <ObsControlBar title={<h1 className="text-xl font-semibold text-text-primary">Overview</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity} />
+      <ObsControlBar title={<h1 className="text-2xl font-bold text-text-primary">Overview</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity} />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <StatCard label="Sessions" value={fmtNumber(data.sessions)} />
@@ -60,7 +60,7 @@ export function OverviewPage() {
         )}
         {sessions.data && (
           <>
-            <StatCard label="Lines Changed" value={`+${fmtNumber(sessions.data.totalLinesAdded)} / -${fmtNumber(sessions.data.totalLinesRemoved)}`} />
+            <StatCard label="Lines Changed" value={<><span className="text-green-400">+{fmtNumber(sessions.data.totalLinesAdded)}</span><span className="text-text-muted"> / </span><span className="text-red-400">-{fmtNumber(sessions.data.totalLinesRemoved)}</span></>} />
             <StatCard label="Commits" value={fmtNumber(sessions.data.totalCommits)} />
           </>
         )}

@@ -5,11 +5,11 @@
  */
 import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync } from "fs";
-import { dirname, join } from "path";
-import { homedir } from "os";
+import { dirname } from "path";
+import { dataPaths, externalPaths } from "../paths.ts";
 
-const constructDbPath = join(homedir(), ".claude", "construct", "data", "construct.db");
-const memoryDbPath = join(homedir(), ".local", "share", "mcp-memory", "sqlite_vec.db");
+const constructDbPath = dataPaths.db;
+const memoryDbPath = externalPaths.memoryDb;
 
 function ensureTable(db: Database): void {
   db.exec(`
@@ -97,6 +97,6 @@ try {
 
   constructDb.close();
 } catch (err) {
-  // Fire-and-forget — don't crash the session
-  if (process.env.DEBUG) console.error("obs-snapshot error:", err);
+  console.error("obs-snapshot error:", (err as Error).message ?? err);
+  process.exit(1);
 }

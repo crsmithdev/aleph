@@ -8,7 +8,7 @@ import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
-import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
+import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { fmtCurrency, fmtNumber, fmtPct, shortDate, granLabel, rangeToDays } from '../../../utils/format';
 
@@ -57,7 +57,7 @@ export function TokensCostPage() {
 
   return (
     <div className="space-y-6">
-      <ObsControlBar title={<h1 className="text-xl font-semibold text-text-primary">Tokens & Cost</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity} />
+      <ObsControlBar title={<h1 className="text-2xl font-bold text-text-primary">Tokens & Cost</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity} />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Total Cost" value={fmtCurrency(cost.data.totalUsd)} accent="success" />
@@ -66,9 +66,9 @@ export function TokensCostPage() {
           label="Cache Efficiency"
           value={fmtPct(tokens.data.cacheEfficiency)}
           accent={tokens.data.cacheEfficiency >= 80 ? 'success' : tokens.data.cacheEfficiency >= 50 ? 'warning' : 'error'}
-          detail={`${fmtNumber(tokens.data.totalCacheRead)} read / ${fmtNumber(tokens.data.totalCacheCreation)} created`}
+          detailContent={<><span className="text-success font-medium">{fmtNumber(tokens.data.totalCacheRead)}</span><span className="text-text-muted"> read / </span><span className="text-warning font-medium">{fmtNumber(tokens.data.totalCacheCreation)}</span><span className="text-text-muted"> created</span></>}
         />
-        <StatCard label="Total Tokens" value={fmtNumber(tokens.data.totalInput + tokens.data.totalOutput)} detail={`${fmtNumber(tokens.data.totalInput)} in / ${fmtNumber(tokens.data.totalOutput)} out`} />
+        <StatCard label="Total Tokens" value={fmtNumber(tokens.data.totalInput + tokens.data.totalOutput)} detailContent={<><span className="text-text-secondary font-medium">{fmtNumber(tokens.data.totalInput)}</span><span className="text-text-muted"> in / </span><span className="text-text-secondary font-medium">{fmtNumber(tokens.data.totalOutput)}</span><span className="text-text-muted"> out</span></>} />
       </div>
 
       <ChartContainer title={granLabel(granularity, "Tokens")} chartType={tokensChartType} onChartTypeChange={setTokensChartType}>
@@ -78,7 +78,7 @@ export function TokensCostPage() {
             <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
             <YAxis {...axisProps} tickFormatter={fmtNumber} />
             <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
-            <Legend />
+            <Legend {...legendProps} />
             <Bar dataKey="input" stackId="tokens" fill={CHART_PALETTE[0]} name="Input" />
             <Bar dataKey="output" stackId="tokens" fill={CHART_PALETTE[1]} name="Output" />
             <Bar dataKey="cacheRead" stackId="tokens" fill={CHART_PALETTE[2]} name="Cache Read" />
@@ -89,7 +89,7 @@ export function TokensCostPage() {
             <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
             <YAxis {...axisProps} tickFormatter={fmtNumber} />
             <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
-            <Legend />
+            <Legend {...legendProps} />
             <Area type="monotone" dataKey="input" stackId="tokens" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} name="Input" />
             <Area type="monotone" dataKey="output" stackId="tokens" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} name="Output" />
             <Area type="monotone" dataKey="cacheRead" stackId="tokens" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.3} name="Cache Read" />

@@ -10,7 +10,7 @@ import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControl
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtPct, fmtMs, shortDate } from '../../../utils/format';
+import { fmtNumber, fmtPct, fmtMs, shortDate, fmtToolName } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
 
 type ToolRow = { name: string; count: number; errorCount: number; pct: number; active: boolean; avgMs?: number; p50Ms?: number; p95Ms?: number };
@@ -40,7 +40,7 @@ export function ToolsPage() {
     {
       key: 'name',
       label: 'Tool',
-      render: (row) => <span className="font-mono text-text-primary">{row.name}</span>,
+      render: (row) => <span className="font-mono text-text-primary">{fmtToolName(row.name)}</span>,
     },
     {
       key: 'count',
@@ -98,7 +98,7 @@ export function ToolsPage() {
 
   return (
     <div className="space-y-6">
-      <ObsControlBar title={<h1 className="text-xl font-semibold text-text-primary">Tools</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity}>
+      <ObsControlBar title={<h1 className="text-2xl font-bold text-text-primary">Tools</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity}>
         <FilterToggle label="Active only" active={hideInactive} onToggle={() => setHideInactive(!hideInactive)} />
       </ObsControlBar>
 
@@ -106,7 +106,7 @@ export function ToolsPage() {
         data={filtered}
         columns={columns}
         keyField="name"
-        onRowClick={(row) => navigate(`/system/observability/tools/${encodeURIComponent(row.name)}`)}
+        onRowClick={(row) => navigate(`/observability/tools/${encodeURIComponent(row.name)}`)}
       />
 
       {data.byDay.length > 0 && (

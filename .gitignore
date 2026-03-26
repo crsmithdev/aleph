@@ -6,6 +6,10 @@
 src/memory/sessions/
 src/memory/signals/
 
+# Dev environment
+.dev/
+docs/SCRATCH.md
+
 # Dashboard
 node_modules/
 dist/
@@ -20,4 +24,4 @@ coverage/
 test-results/
 playwright-report/
 src/dashboard/api/data/
-references/
+evidence/

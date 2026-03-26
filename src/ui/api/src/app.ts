@@ -18,8 +18,10 @@ import { webhookRoutes } from './routes/webhooks.js';
 import { observabilityRoutes } from './routes/observability.js';
 import { EventBus, HistoryService, applyDDL } from '@construct/goals';
 import { webhooks } from './db/schema.js';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync, statSync } from 'fs';
 import { resolve } from 'path';
+import { execSync } from 'child_process';
+import { claudePaths, dataPaths, getMemoryDbPath } from '@construct/data';
 import { createLogStream } from './logger.js';
 
 declare module 'fastify' {
@@ -28,6 +30,52 @@ declare module 'fastify' {
     sqlite: ReturnType<typeof createDb>['sqlite'];
     eventBus: EventBus;
   }
+}
+
+function parseManifest(path: string): Record<string, Record<string, string>> {
+  try {
+    const content = readFileSync(path, 'utf-8');
+    const sections: Record<string, Record<string, string>> = {};
+    let current = '';
+    for (const line of content.split('\n')) {
+      if (line.startsWith('#') || !line.trim()) continue;
+      const sectionMatch = line.match(/^\[(.+)]$/);
+      if (sectionMatch) { current = sectionMatch[1]; sections[current] = {}; continue; }
+      const kvMatch = line.match(/^(\S+) = (.*)$/);
+      if (kvMatch && current) sections[current][kvMatch[1]] = kvMatch[2];
+    }
+    return sections;
+  } catch { return {}; }
+}
+
+function git(cmd: string, cwd?: string): string {
+  try {
+    return execSync(`git ${cmd}`, { cwd, encoding: 'utf-8', timeout: 5000 }).trim();
+  } catch { return ''; }
+}
+
+function liveGitInfo(repoDir: string): Record<string, string> {
+  const short = git('rev-parse --short HEAD', repoDir);
+  if (!short) return {};
+  return {
+    revision: git('rev-parse HEAD', repoDir),
+    short,
+    dirty: String(git('status --porcelain', repoDir).length > 0),
+    branch: git('rev-parse --abbrev-ref HEAD', repoDir),
+    commit_count: git('rev-list --count HEAD', repoDir),
+    commits_since_tag: git('describe --tags --abbrev=0 HEAD', repoDir)
+      ? git('rev-list --count $(git describe --tags --abbrev=0 HEAD)..HEAD', repoDir)
+      : 'n/a',
+    last_commit: git('log -1 --format=%s', repoDir),
+    last_commit_date: git('log -1 --format=%ci', repoDir),
+  };
+}
+
+function detectRepoDir(): string | undefined {
+  // In dev, api/src/app.ts is at src/ui/api/src/app.ts — repo root is 4 levels up
+  const candidate = resolve(import.meta.dirname || '.', '../../../..');
+  if (existsSync(resolve(candidate, '.git'))) return candidate;
+  return undefined;
 }
 
 export async function createApp(opts?: { dbUrl?: string }) {
@@ -88,6 +136,57 @@ export async function createApp(opts?: { dbUrl?: string }) {
     await api.register(summaryRoutes, { prefix: '/summary' });
     await api.register(webhookRoutes, { prefix: '/webhooks' });
     await api.register(observabilityRoutes, { prefix: '/observability' });
+
+    api.get('/system/info', async function () {
+      const manifest = parseManifest(claudePaths.manifest);
+      const hasManifest = Object.keys(manifest).length > 0;
+      const repoDir = manifest.paths?.repo ?? detectRepoDir();
+      const liveGit = !hasManifest && repoDir ? liveGitInfo(repoDir) : {};
+      const g = hasManifest ? manifest.git ?? {} : liveGit;
+
+      const runtimeDbPath = app.sqlite.filename;
+      const dbSize = (() => {
+        try { return statSync(runtimeDbPath).size; } catch { return 0; }
+      })();
+
+      const isDev = !hasManifest;
+
+      return {
+        git: {
+          revision: g.revision ?? 'unknown',
+          short: g.short ?? 'unknown',
+          dirty: g.dirty === 'true',
+          branch: g.branch ?? 'unknown',
+          commitCount: g.commit_count ?? 'unknown',
+          commitsSinceTag: g.commits_since_tag ?? 'n/a',
+          lastCommit: g.last_commit ?? 'unknown',
+          lastCommitDate: g.last_commit_date ?? 'unknown',
+        },
+        paths: {
+          repo: repoDir ?? 'unknown',
+          claudeRoot: manifest.paths?.claude_root ?? claudePaths.root,
+          construct: manifest.paths?.construct ?? claudePaths.construct,
+          commands: manifest.paths?.commands ?? claudePaths.commands,
+          skills: manifest.paths?.skills ?? claudePaths.skills,
+          db: runtimeDbPath,
+          memoryDb: (manifest.paths?.memory_db) ?? getMemoryDbPath(),
+          sessions: (manifest.paths?.sessions) ?? dataPaths.sessions,
+          ratings: (manifest.paths?.ratings) ?? dataPaths.ratings,
+          backups: (manifest.paths?.backups) ?? dataPaths.backups,
+        },
+        install: {
+          timestamp: manifest.install?.timestamp ?? (isDev ? 'dev' : 'unknown'),
+          bunVersion: manifest.install?.bun_version ?? (isDev ? Bun.version : 'unknown'),
+          platform: manifest.install?.platform ?? process.platform,
+          arch: manifest.install?.arch ?? process.arch,
+        },
+        runtime: {
+          nodeEnv: process.env.NODE_ENV || (isDev ? 'development' : 'unknown'),
+          port: config.port,
+          dbSizeBytes: dbSize,
+        },
+      };
+    });
   }, { prefix: '/api' });
 
   const webDist = resolve(import.meta.dirname || '.', '../../web/dist');

@@ -19,8 +19,8 @@ Seven modules, installed in order. Each is independent after its dependencies ar
 | `construct-core` | — | CLAUDE.md, settings.json, statusline, optional identity files |
 | `construct-memory` | core | Session hooks, memory dirs, ratings |
 | `construct-skills` | core | Skill routing, quality hook, notify hook, skill playbooks |
-| `construct-meta` | core | /construct subcommands |
 | `construct-data` | — | Shared SQLite persistence layer |
+| `construct-eval` | — | Agent SDK eval harness, test scenarios |
 | `construct-goals` | data | Goal/TODO domain logic, MCP server, /goal and /todo commands |
 | `construct-ui` | data, goals | Web UI (Fastify API + React SPA) |
 
@@ -63,9 +63,10 @@ src/                                      # source modules (installed to ~/.clau
 │   ├── finishing-branch/SKILL.md       # branch integration: merge / PR / keep / discard
 │   ├── git-worktrees/SKILL.md          # isolated worktree setup for parallel work
 │   └── parallel-agents/SKILL.md        # dispatch independent failures to parallel agents
-├── meta/
-│   ├── README.md                        # cross-module utilities reference
-│   └── INSTALL.md                       # post-install checks
+├── eval/
+│   ├── runner.ts                        # Agent SDK eval harness
+│   ├── scenarios/                       # test scenarios (broken-math, todo-app, todo-feature)
+│   └── results/                         # eval run results (JSON)
 ├── data/
 │   └── src/client.ts                    # shared SQLite persistence
 ├── goals/
@@ -79,7 +80,6 @@ dotclaude/                                # install sources (installed to ~/.cla
 ├── CLAUDE.md                            # install source for ~/.claude/CLAUDE.md (not loaded directly)
 ├── settings.json                        # permissions, statusline, hooks
 └── commands/
-    ├── construct.md                     # slash command router
     ├── goal.md                          # /goal slash command
     ├── todo.md                          # /todo slash command
     └── finish.md                        # /finish slash command
@@ -107,12 +107,10 @@ dotclaude/                                # install sources (installed to ~/.cla
 
 | Command | Module | Purpose |
 |---------|------|---------|
-| `/construct install` | meta | Install/reinstall Construct globally to `~/.claude` (includes post-install checks) |
-| `/construct grasp` | meta | Surface Claude's current mental model + project commandments |
-| `/construct status` | meta | Context, identity files, skills, memory stats |
-| `/construct retain` | meta | Promote insights to semantic memory |
-| `/construct trace` | meta | Toggle hook tracing (or one-shot trace a command) |
-| `/construct audit` | meta | Full project audit: code, refs, instructions, docs, spec |
+| `/install` | core | Install/reinstall Construct globally to `~/.claude` (includes post-install checks) |
+| `/gist` | core | Surface Claude's current mental model + project understanding |
+| `/trace` | core | Toggle hook tracing (or one-shot trace a command) |
+| `/audit` | core | Full project audit: code, refs, instructions, docs, spec |
 | `/goal` | goals | Manage goals: list, create, update, delete, show, done, archive |
 | `/todo` | goals | Manage todos: list, add, done, undone, delete, recurring |
 | `/finish` | goals | Mark a todo or goal as done; undo completion; complete recurring todos |

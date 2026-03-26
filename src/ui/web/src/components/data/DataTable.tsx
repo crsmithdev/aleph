@@ -118,7 +118,7 @@ export function DataTable<T>({
                     <td
                       key={col.key}
                       className={cn(
-                        'px-4 py-2.5',
+                        'px-4 py-2.5 align-middle',
                         col.align === 'right' ? 'text-right' : 'text-left'
                       )}
                       style={col.width ? { width: col.width, maxWidth: col.width } : undefined}

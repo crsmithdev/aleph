@@ -11,7 +11,7 @@ import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtPct, shortDate, dateTime, granLabel } from '../../../utils/format';
-import { CodeBlock } from '../../../components/data/CodeBlock';
+import { MarkdownBlock } from '../../../components/data/MarkdownBlock';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 
 type InvocationRow = { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; userRequest?: string };
@@ -52,7 +52,7 @@ export function SkillDetailPage() {
       label: 'Request',
       width: '300px',
       render: (row) => {
-        if (!row.userRequest) return <span className="text-text-muted">-</span>;
+        if (!row.userRequest) return <span className="text-text-muted">—</span>;
         const text = row.userRequest;
         const short = text.length > 80 ? text.slice(0, 80) + '...' : text;
         return (
@@ -65,7 +65,7 @@ export function SkillDetailPage() {
       label: 'Params',
       width: '200px',
       render: (row) => {
-        if (!row.params) return <span className="text-text-muted">-</span>;
+        if (!row.params) return <span className="text-text-muted">—</span>;
         const isExpanded = expandedRow === row.timestamp;
         const preview = JSON.stringify(row.params);
         const short = preview.length > 60 ? preview.slice(0, 60) + '...' : preview;
@@ -91,12 +91,12 @@ export function SkillDetailPage() {
         title={
           <div className="flex items-center gap-3">
             <Link
-              to="/system/observability/skills"
+              to="/observability/skills"
               className="text-sm text-text-muted hover:text-text-primary transition-colors"
             >
               &larr; Skills
             </Link>
-            <h1 className="text-xl font-semibold font-mono text-text-primary">{skillName}</h1>
+            <h1 className="text-2xl font-bold font-mono text-text-primary">{skillName}</h1>
           </div>
         }
         range={range}
@@ -146,8 +146,8 @@ export function SkillDetailPage() {
       )}
 
       {data.sourceContent && (
-        <CodeBlock
-          code={data.sourceContent}
+        <MarkdownBlock
+          content={data.sourceContent}
           filename={`${skillName}.md`}
         />
       )}

@@ -1,0 +1,15 @@
+{
+  "name": "@construct/eval",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "runner.ts",
+  "scripts": {
+    "eval": "bun runner.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.81"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

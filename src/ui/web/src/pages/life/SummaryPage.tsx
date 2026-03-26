@@ -4,11 +4,16 @@ import { StatCard } from '../../components/data/StatCard';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { cn } from '../../utils/cn';
-import { toDateStr } from '../../utils/format';
+import { toDateStr, longDate } from '../../utils/format';
 
-function TodaySummary() {
-  const today = toDateStr(new Date());
-  const { data: summary, isLoading } = useSummary(today, today);
+interface PeriodSummaryProps {
+  start: string;
+  end: string;
+  heading: string;
+}
+
+function PeriodSummary({ start, end, heading }: PeriodSummaryProps) {
+  const { data: summary, isLoading } = useSummary(start, end);
   const [copied, setCopied] = useState(false);
 
   const data = summary as {
@@ -21,9 +26,11 @@ function TodaySummary() {
 
   const hasAnything = completedGoals.length > 0 || completedTodos.length > 0;
 
+  const dateLabel = start === end ? start : `${start} to ${end}`;
+
   const text = hasAnything
     ? [
-        `Today — ${today}`,
+        `${heading} — ${dateLabel}`,
         '',
         ...(completedGoals.length > 0
           ? ['Goals completed:', ...completedGoals.map((g) => `  - ${g.details?.title ?? g.goalId}`), '']
@@ -32,7 +39,7 @@ function TodaySummary() {
           ? ['Todos completed:', ...completedTodos.map((t) => `  - ${t.title}`)]
           : []),
       ].join('\n')
-    : `Nothing completed today yet — ${today}`;
+    : `Nothing completed — ${dateLabel}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(text).then(() => {
@@ -44,7 +51,7 @@ function TodaySummary() {
   return (
     <div className="bg-bg-secondary border border-border-primary rounded-lg p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-text-primary">Today's Summary</h2>
+        <h2 className="text-sm font-semibold text-text-primary">{heading}</h2>
         <button
           onClick={handleCopy}
           disabled={isLoading}
@@ -101,6 +108,16 @@ function getPresetRange(preset: Exclude<Preset, 'custom'>): { start: string; end
   }
 }
 
+function getPresetHeading(preset: Preset): string {
+  switch (preset) {
+    case 'today': return "Today's Summary";
+    case 'yesterday': return "Yesterday's Summary";
+    case 'this-week': return "This Week's Summary";
+    case 'last-week': return "Last Week's Summary";
+    case 'custom': return 'Period Summary';
+  }
+}
+
 interface SummaryBucket {
   count: number;
   items: Array<Record<string, unknown>>;
@@ -137,9 +154,19 @@ export function SummaryPage() {
   const { data: summary, isLoading, isError } = useSummary(start, end);
   const data = summary as SummaryData | undefined;
 
+  const dateDisplay =
+    start === end
+      ? longDate(start)
+      : `${longDate(start)} – ${longDate(end)}`;
+
+  const heading = getPresetHeading(preset);
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-text-primary">Summary</h1>
+      <div className="flex items-baseline gap-4">
+        <h1 className="text-2xl font-bold text-text-primary">Summary</h1>
+        <span className="text-sm text-text-muted">{dateDisplay}</span>
+      </div>
 
       {/* Preset selector */}
       <div className="space-y-3">
@@ -182,10 +209,6 @@ export function SummaryPage() {
             </div>
           </div>
         )}
-
-        <div className="text-xs text-text-muted">
-          {start} to {end}
-        </div>
       </div>
 
       {/* Results */}
@@ -199,7 +222,7 @@ export function SummaryPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <StatCard label="Goals Created" value={data.goalsCreated?.count ?? 0} />
             <StatCard label="Goals Completed" value={data.goalsCompleted?.count ?? 0} accent="success" />
-            <StatCard label="Todos Done" value={data.todosCompleted?.count ?? 0} />
+            <StatCard label="Todos Completed" value={data.todosCompleted?.count ?? 0} />
             <StatCard label="Notes Added" value={data.notesAdded?.count ?? 0} accent="warning" />
           </div>
 
@@ -211,7 +234,7 @@ export function SummaryPage() {
         </div>
       )}
 
-      <TodaySummary />
+      <PeriodSummary start={start} end={end} heading={heading} />
     </div>
   );
 }

@@ -78,8 +78,8 @@ Checks are defined in each module's `INSTALL.md`:
 | construct-core | `src/core/INSTALL.md` | `~/.claude/CLAUDE.md` exists |
 | construct-memory | `src/memory/INSTALL.md` | `src/memory/hooks/session-start.ts` exists |
 | construct-skills | `src/skills/INSTALL.md` | `src/skills/skill-rules.json` exists |
-| construct-meta | `src/meta/INSTALL.md` | `src/meta/README.md` exists |
 | construct-data | `src/data/INSTALL.md` | `src/data/src/client.ts` exists |
+| construct-eval | `src/eval/INSTALL.md` | `src/eval/runner.ts` exists |
 | construct-goals | `src/goals/INSTALL.md` | `src/goals/src/index.ts` exists |
 | construct-ui | `src/ui/INSTALL.md` | `src/ui/api/src/app.ts` exists |
 

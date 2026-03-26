@@ -5,6 +5,7 @@
 import { readdirSync, readFileSync, existsSync, statSync } from "fs";
 import { resolve } from "path";
 import { getStatus } from "./telemetry/src/index.js";
+import { claudePaths, dataPaths, externalPaths } from "./paths.ts";
 
 const root = resolve(import.meta.dir);
 
@@ -35,14 +36,14 @@ async function getSkills(): Promise<string[]> {
 }
 
 async function getRecentSessions(count: number): Promise<SessionInfo[]> {
-  const dir = resolve(root, "memory/sessions");
+  const dir = dataPaths.sessions;
   if (!existsSync(dir)) return [];
   const files = readdirSync(dir).filter(f => f.endsWith(".md")).sort().slice(-count);
   return files.map(f => ({ file: f, content: readFileSync(resolve(dir, f), "utf-8") }));
 }
 
 async function getRatings(): Promise<{ total: number; explicit: number; avg: number | null }> {
-  const file = resolve(root, "memory/signals/ratings.jsonl");
+  const file = dataPaths.ratings;
   if (!existsSync(file)) return { total: 0, explicit: 0, avg: null };
   const lines = readFileSync(file, "utf-8").trim().split("\n").filter(Boolean);
   const ratings: Rating[] = lines.map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
@@ -52,7 +53,7 @@ async function getRatings(): Promise<{ total: number; explicit: number; avg: num
 }
 
 async function getSessionCount(): Promise<number> {
-  const dir = resolve(root, "memory/sessions");
+  const dir = dataPaths.sessions;
   if (!existsSync(dir)) return 0;
   return readdirSync(dir).filter(f => f.endsWith(".md")).length;
 }
@@ -66,29 +67,30 @@ const [identity, skills, sessions, ratings, sessionCount] = await Promise.all([
   getSessionCount(),
 ]);
 
-// Build info
+// Build info from .manifest
 function getBuildInfo(): string {
-  const hashFile = resolve(Bun.env.HOME!, ".claude/construct/.build-hash");
-  if (!existsSync(hashFile)) return "unknown";
-  const installed = readFileSync(hashFile, "utf-8").trim();
+  const manifestFile = claudePaths.manifest;
+  if (!existsSync(manifestFile)) return "unknown";
+  const content = readFileSync(manifestFile, "utf-8");
 
-  // Check if linked (symlink mode)
-  const { lstatSync } = require("fs");
-  try {
-    const constructDir = resolve(Bun.env.HOME!, ".claude/construct");
-    if (lstatSync(constructDir).isSymbolicLink()) return `${installed} (linked)`;
-  } catch {}
+  const get = (key: string): string | undefined =>
+    content.match(new RegExp(`^${key} = (.+)$`, "m"))?.[1];
+
+  const installed = get("short") ?? "unknown";
+  const dirty = get("dirty") === "true" ? "-dirty" : "";
+  const tag = `${installed}${dirty}`;
 
   // Compare with current source hash
   try {
     const repoRoot = resolve(root, "..");
     const rev = require("child_process").execSync("git rev-parse --short HEAD", { cwd: repoRoot, encoding: "utf-8" }).trim();
-    const dirty = require("child_process").spawnSync("git", ["diff", "--quiet", "HEAD"], { cwd: repoRoot }).status !== 0;
-    const current = `${rev}${dirty ? "-dirty" : ""}`;
-    if (current !== installed) return `${installed} (source: ${current} — drift)`;
-    return `${installed} (clean)`;
-  } catch {
-    return installed;
+    const srcDirty = require("child_process").spawnSync("git", ["diff", "--quiet", "HEAD"], { cwd: repoRoot }).status !== 0;
+    const current = `${rev}${srcDirty ? "-dirty" : ""}`;
+    if (current !== tag) return `${tag} (source: ${current} — drift)`;
+    return `${tag} (clean)`;
+  } catch (e) {
+    console.error(`drift check failed: ${(e as Error).message?.slice(0, 60)}`);
+    return tag;
   }
 }
 
@@ -108,18 +110,18 @@ out.push(`**Sessions**: ${sessionCount} total`);
 
 // Memory size
 const sessionsSize = (() => {
-  const dir = resolve(root, "memory/sessions");
+  const dir = dataPaths.sessions;
   if (!existsSync(dir)) return 0;
   return readdirSync(dir).filter(f => f.endsWith(".md")).reduce((sum, f) => {
     try { return sum + statSync(resolve(dir, f)).size; } catch { return sum; }
   }, 0);
 })();
 const ratingsSize = (() => {
-  const f = resolve(root, "memory/signals/ratings.jsonl");
+  const f = dataPaths.ratings;
   try { return statSync(f).size; } catch { return 0; }
 })();
 const memoSize = (() => {
-  const db = resolve(Bun.env.HOME ?? "/tmp", ".local/share/mcp-memory/sqlite_vec.db");
+  const db = externalPaths.memoryDb;
   try { return statSync(db).size; } catch { return 0; }
 })();
 const fmt = (b: number) => b < 1024 ? `${b}B` : b < 1048576 ? `${(b/1024).toFixed(1)}KB` : `${(b/1048576).toFixed(1)}MB`;

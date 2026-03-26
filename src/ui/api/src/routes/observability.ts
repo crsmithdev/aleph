@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { resolve } from 'path';
-import { homedir } from 'os';
-import { existsSync, readdirSync, readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
+import { claudePaths, dataPaths, getMemoryDbPath } from '@construct/data';
 import { Database } from 'bun:sqlite';
 import {
   parseSessionsForDays,
@@ -114,12 +114,47 @@ function readHookSource(fullCommand: string): string | undefined {
   if (!path || !existsSync(path)) return undefined;
   try {
     return readFileSync(path, 'utf-8');
-  } catch {
+  } catch (e) {
+    console.error(`Failed to read hook source ${path}: ${(e as Error).message}`);
     return undefined;
   }
 }
 
-function checkToolActive(toolName: string, lastUsed?: string): boolean {
+function getRegisteredSkills(): string[] {
+  const rulesPath = resolve(claudePaths.skills, 'skill-rules.json');
+  if (!existsSync(rulesPath)) return [];
+  try {
+    const data = JSON.parse(readFileSync(rulesPath, 'utf-8'));
+    return (data.rules || []).map((r: { skill: string }) => r.skill);
+  } catch (e) {
+    console.error(`Failed to parse skill-rules.json: ${(e as Error).message}`);
+    return [];
+  }
+}
+
+function getRegisteredHooks(): Array<{ command: string; event: string }> {
+  const settingsPath = resolve(claudePaths.root, 'settings.json');
+  if (!existsSync(settingsPath)) return [];
+  try {
+    const settings = JSON.parse(readFileSync(settingsPath, 'utf-8'));
+    const hooks: Array<{ command: string; event: string }> = [];
+    for (const [event, entries] of Object.entries(settings.hooks || {})) {
+      for (const entry of entries as Array<{ hooks?: Array<{ command: string }>; command?: string }>) {
+        const cmds = entry.hooks?.map(h => h.command) ?? (entry.command ? [entry.command] : []);
+        for (const raw of cmds) {
+          const cmd = raw.split('/').pop()?.replace(/\.ts$/, '') || raw;
+          hooks.push({ command: cmd, event });
+        }
+      }
+    }
+    return hooks;
+  } catch (e) {
+    console.error(`Failed to parse settings.json hooks: ${(e as Error).message}`);
+    return [];
+  }
+}
+
+function checkToolActive(_toolName: string, lastUsed?: string): boolean {
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   if (lastUsed) {
@@ -154,13 +189,20 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       ...h,
       active: h.fullCommand ? checkHookActive(h.fullCommand) : false,
     }));
-    return { ...result, ranked, queryTimeMs };
+    const registered = getRegisteredHooks();
+    const normalize = (cmd: string) => cmd.replace(/\.(ts|sh)$/, '');
+    const usedCommands = new Set(ranked.map(h => normalize(h.command)));
+    const unused = registered.filter(h => !usedCommands.has(normalize(h.command)));
+    return { ...result, ranked, unused, queryTimeMs };
   });
 
   app.get<{ Querystring: QueryParams }>('/skills', { preHandler: parseDaysPreHandler }, async (req) => {
     const obsReq = req as ObsRequest;
     const { result, queryTimeMs } = timed(() => aggregateSkills(obsReq.telemetryEntries, obsReq.granularity));
-    return { ...result, queryTimeMs };
+    const registered = getRegisteredSkills();
+    const usedNames = new Set(result.ranked.map(s => s.skill.replace(/^\//, '')));
+    const unused = registered.filter(s => !usedNames.has(s));
+    return { ...result, unused, queryTimeMs };
   });
 
   app.get<{ Querystring: QueryParams }>('/tokens', { preHandler: parseDaysPreHandler }, async (req) => {
@@ -226,11 +268,15 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     async (req) => {
       const skillName = decodeURIComponent(req.params.name);
       const { result, queryTimeMs } = timed(() => aggregateSkillDetail((req as ObsRequest).telemetryEntries, skillName));
-      // Read skill/command source from ~/.claude/commands/<name>.md
-      const commandPath = resolve(homedir(), '.claude/commands', `${skillName}.md`);
-      const sourceContent = existsSync(commandPath)
-        ? (() => { try { return readFileSync(commandPath, 'utf-8'); } catch { return undefined; } })()
-        : undefined;
+      // Normalize skillName: strip leading slash added by parser for known commands
+      const normalizedSkillName = skillName.startsWith('/') ? skillName.slice(1) : skillName;
+      const skillMdPath = resolve(claudePaths.skills, normalizedSkillName, 'SKILL.md');
+      const commandPath = resolve(claudePaths.commands, `${normalizedSkillName}.md`);
+      function tryRead(path: string): string | undefined {
+        if (!existsSync(path)) return undefined;
+        try { return readFileSync(path, 'utf-8'); } catch { return undefined; }
+      }
+      const sourceContent = tryRead(skillMdPath) ?? tryRead(commandPath);
       return { ...result, sourceContent, queryTimeMs };
     },
   );
@@ -248,7 +294,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: { type?: string; tag?: string; q?: string; limit?: string } }>(
     '/memory/items',
     async (req) => {
-      const dbPath = resolve(homedir(), '.local/share/mcp-memory/sqlite_vec.db');
+      const dbPath = getMemoryDbPath();
       if (!existsSync(dbPath)) {
         return { items: [] };
       }
@@ -288,8 +334,9 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
             : row.updated_at,
         }));
         return { items };
-      } catch {
-        return { items: [] };
+      } catch (err) {
+        app.log.error(`memory/items query failed: ${(err as Error).message}`);
+        return { items: [], error: 'query failed' };
       } finally {
         db?.close();
       }
@@ -342,8 +389,8 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
 
   app.get('/db-stats', async () => {
     const { statSync } = await import('fs');
-    const constructDbPath = resolve(homedir(), '.claude', 'construct', 'data', 'construct.db');
-    const memoryDbPath = resolve(homedir(), '.local/share/mcp-memory/sqlite_vec.db');
+    const constructDbPath = dataPaths.db;
+    const memoryDbPath = getMemoryDbPath();
 
     type DbInfo = {
       name: string;

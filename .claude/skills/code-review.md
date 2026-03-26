@@ -16,6 +16,11 @@ All `.ts` files under `src/` and the installer (`install.ts`, `test.ts`).
 - Nothing in `.claude/` duplicates what's in `dotclaude/` (double-fire risk)
 - CLAUDE.md rules exist in exactly one location per the ownership table
 
+### Backwards-compat cruft
+- Look for shims, wrappers, or fallbacks kept "for backwards compat" that nothing reads anymore
+- Check for old file paths, renamed exports, deprecated aliases, or stale config keys
+- If the only consumer was removed, the compat layer is dead — remove it
+
 ### Install roundtrip
 - Run `bun install.ts` && `bun test.ts` after review
 - Installed copies match sources byte-for-byte
