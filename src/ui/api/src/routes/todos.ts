@@ -1,8 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { getTodosActive, getTodo, createTodo, updateTodo, deleteTodo } from '@construct/goals';
+import { getTodosActive, getTodosAll, getTodo, createTodo, updateTodo, deleteTodo, promoteTodoToGoal } from '@construct/goals';
 
 export const todoRoutes: FastifyPluginAsync = async (app) => {
-  app.get('/active', async () => {
+  app.get<{ Querystring: { includeScheduled?: string } }>('/active', async (req) => {
+    if (req.query.includeScheduled === 'true') {
+      return getTodosAll(app.db);
+    }
     return getTodosActive(app.db);
   });
 
@@ -31,6 +34,12 @@ export const todoRoutes: FastifyPluginAsync = async (app) => {
       if (err.message === 'Goal not found') return reply.status(400).send({ error: err.message });
       throw err;
     }
+  });
+
+  app.post<{ Params: { id: string } }>('/:id/promote', async (req, reply) => {
+    const result = promoteTodoToGoal(app.db, req.params.id, app.eventBus);
+    if (!result) return reply.status(404).send({ error: 'Todo not found' });
+    return result;
   });
 
   app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {

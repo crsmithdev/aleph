@@ -35,12 +35,14 @@ export const updateNoteSchema = z.object({
 export const createTodoSchema = z.object({
   title: z.string().min(1).max(200),
   note: z.string().nullable().optional(),
+  dueDate: z.string().nullable().optional(),
   goalId: z.string().nullable().optional(),
 });
 
 export const updateTodoSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   note: z.string().nullable().optional(),
+  dueDate: z.string().nullable().optional(),
   goalId: z.string().nullable().optional(),
   done: z.boolean().optional(),
 });

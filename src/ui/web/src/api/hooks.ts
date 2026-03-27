@@ -179,10 +179,10 @@ interface TodoActiveResponse {
   completed: (Todo & { goalTitle?: string })[];
 }
 
-export function useTodos() {
+export function useTodos(includeScheduled?: boolean) {
   return useQuery({
-    queryKey: ['todos'],
-    queryFn: () => api.get<TodoActiveResponse>('/todos/active'),
+    queryKey: ['todos', { includeScheduled }],
+    queryFn: () => api.get<TodoActiveResponse>(`/todos/active${includeScheduled ? '?includeScheduled=true' : ''}`),
   });
 }
 
@@ -200,7 +200,7 @@ export function useCreateTodo() {
 export function useUpdateTodo() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: string; title?: string; done?: boolean; goalId?: string | null; note?: string | null }) =>
+    mutationFn: ({ id, ...data }: { id: string; title?: string; done?: boolean; goalId?: string | null; note?: string | null; dueDate?: string | null }) =>
       api.patch<Todo>(`/todos/${id}`, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['todos'] });
@@ -214,6 +214,17 @@ export function useDeleteTodo() {
     mutationFn: (id: string) => api.delete(`/todos/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['todos'] });
+    },
+  });
+}
+
+export function usePromoteTodo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.post<Goal>(`/todos/${id}/promote`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['todos'] });
+      qc.invalidateQueries({ queryKey: ['goals'] });
     },
   });
 }

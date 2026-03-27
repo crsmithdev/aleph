@@ -10,7 +10,7 @@ export type Frequency = typeof FREQUENCY[number];
 export const HISTORY_EVENT = [
   'state_change', 'priority_change', 'category_added', 'category_removed',
   'note_added', 'note_edited', 'note_deleted', 'todo_linked', 'todo_unlinked',
-  'archived', 'unarchived', 'goal_created', 'goal_updated'
+  'archived', 'unarchived', 'goal_created', 'goal_updated', 'promoted_from_todo'
 ] as const;
 export type HistoryEvent = typeof HISTORY_EVENT[number];
 
@@ -44,6 +44,7 @@ export interface Todo {
   title: string;
   done: boolean;
   note: string | null;
+  dueDate: string | null;
   goalId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -61,6 +62,14 @@ export interface Habit {
   completedThisPeriod: boolean;
   currentPeriodKey: string;
   missedLastPeriod: boolean;
+}
+
+export interface GoalMeta {
+  categories?: Category[];
+  latestNote?: { content: string } | null;
+  todoCount?: number;
+  noteCount?: number;
+  habitCount?: number;
 }
 
 export interface HistoryLog {

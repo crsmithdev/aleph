@@ -1,11 +1,60 @@
 import { nanoid } from 'nanoid';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import type { Db } from '@construct/data';
-import { todos, goals } from '../schema.js';
+import { todos, goals, notes } from '../schema.js';
 import { createTodoSchema, updateTodoSchema } from '../validators.js';
 import type { EventBus } from './event-bus.js';
+import { attachMeta } from './goals.js';
+import type { GoalWithMeta } from '../types.js';
 
 export function getTodosActive(db: Db) {
+  const today = new Date().toISOString().slice(0, 10);
+
+  const allUndone = db
+    .select()
+    .from(todos)
+    .where(eq(todos.done, false))
+    .orderBy(todos.createdAt)
+    .all();
+
+  const activeTodos = allUndone.filter(
+    (t) => t.dueDate === null || t.dueDate === undefined || t.dueDate <= today
+  );
+
+  const completedToday = db
+    .select()
+    .from(todos)
+    .where(
+      and(
+        eq(todos.done, true),
+        sql`substr(${todos.updatedAt}, 1, 10) = ${today}`
+      )
+    )
+    .orderBy(desc(todos.updatedAt))
+    .all();
+
+  const allTodos = [...activeTodos, ...completedToday];
+  const goalIds = [...new Set(allTodos.map((t) => t.goalId).filter(Boolean))] as string[];
+
+  const goalTitles = new Map<string, string>();
+  for (const goalId of goalIds) {
+    const goal = db.select({ id: goals.id, title: goals.title }).from(goals).where(eq(goals.id, goalId)).get();
+    if (goal) goalTitles.set(goal.id, goal.title);
+  }
+
+  const enrichTodo = (t: typeof todos.$inferSelect) => ({
+    ...t,
+    dueDate: t.dueDate ?? null,
+    goalTitle: t.goalId ? (goalTitles.get(t.goalId) ?? null) : null,
+  });
+
+  return {
+    active: activeTodos.map(enrichTodo),
+    completed: completedToday.map(enrichTodo),
+  };
+}
+
+export function getTodosAll(db: Db) {
   const today = new Date().toISOString().slice(0, 10);
 
   const activeTodos = db
@@ -38,6 +87,7 @@ export function getTodosActive(db: Db) {
 
   const enrichTodo = (t: typeof todos.$inferSelect) => ({
     ...t,
+    dueDate: t.dueDate ?? null,
     goalTitle: t.goalId ? (goalTitles.get(t.goalId) ?? null) : null,
   });
 
@@ -104,6 +154,7 @@ export function createTodo(db: Db, input: unknown, eventBus?: EventBus) {
       id,
       title: data.title,
       note: data.note ?? null,
+      dueDate: data.dueDate ?? null,
       goalId: data.goalId ?? null,
       createdAt: now,
       updatedAt: now,
@@ -154,11 +205,62 @@ export function updateTodo(db: Db, id: string, input: unknown, eventBus?: EventB
   if (data.title !== undefined) updateData.title = data.title;
   if (data.done !== undefined) updateData.done = data.done;
   if (data.note !== undefined) updateData.note = data.note ?? null;
+  if (data.dueDate !== undefined) updateData.dueDate = data.dueDate ?? null;
   if (data.goalId !== undefined) updateData.goalId = data.goalId ?? null;
 
   db.update(todos).set(updateData).where(eq(todos.id, id)).run();
 
   return db.select().from(todos).where(eq(todos.id, id)).get()!;
+}
+
+export function promoteTodoToGoal(db: Db, id: string, eventBus?: EventBus): GoalWithMeta | null {
+  const existing = db.select().from(todos).where(eq(todos.id, id)).get();
+  if (!existing) return null;
+
+  const now = new Date().toISOString();
+  const goalId = nanoid();
+
+  if (existing.goalId) {
+    eventBus?.emitMutation({
+      type: 'todo_unlinked',
+      goalId: existing.goalId,
+      details: { todoId: existing.id, todoTitle: existing.title },
+      timestamp: now,
+    });
+  }
+
+  db.insert(goals).values({
+    id: goalId,
+    title: existing.title,
+    priority: 'medium',
+    state: 'not_started',
+    archived: false,
+    createdAt: existing.createdAt,
+    updatedAt: now,
+  }).run();
+
+  if (existing.note) {
+    db.insert(notes).values({
+      id: nanoid(),
+      goalId,
+      content: existing.note,
+      createdAt: existing.createdAt,
+      updatedAt: now,
+    }).run();
+  }
+
+  eventBus?.emitMutation({
+    type: 'promoted_from_todo',
+    goalId,
+    details: { todoId: existing.id, todoTitle: existing.title, originalCreatedAt: existing.createdAt },
+    timestamp: now,
+  });
+
+  db.delete(todos).where(eq(todos.id, id)).run();
+
+  const goal = db.select().from(goals).where(eq(goals.id, goalId)).get()!;
+  const [withMeta] = attachMeta(db, [goal]);
+  return withMeta;
 }
 
 export function deleteTodo(db: Db, id: string, eventBus?: EventBus): boolean {

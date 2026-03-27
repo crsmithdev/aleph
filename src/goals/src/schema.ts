@@ -63,6 +63,7 @@ export const todos = sqliteTable(
     title: text('title').notNull(),
     done: integer('done', { mode: 'boolean' }).notNull().default(false),
     note: text('note'),
+    dueDate: text('due_date'),
     goalId: text('goal_id').references(() => goals.id, { onDelete: 'set null' }),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),

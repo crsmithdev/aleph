@@ -36,6 +36,7 @@ export function applyDDL(sqlite: Sqlite): void {
       title TEXT NOT NULL,
       done INTEGER NOT NULL DEFAULT 0,
       note TEXT,
+      due_date TEXT,
       goal_id TEXT REFERENCES goals(id) ON DELETE SET NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -72,10 +73,10 @@ export function applyDDL(sqlite: Sqlite): void {
   // SQLite ALTER TABLE DROP COLUMN rebuilds the table internally;
   // running it concurrently from two processes causes data loss.
 
-  const dueDateCount = sqlite.prepare("SELECT count(*) as c FROM pragma_table_info('todos') WHERE name='due_date'").get() as { c: number } | null;
-  if (dueDateCount && dueDateCount.c > 0) {
-    sqlite.exec('ALTER TABLE todos DROP COLUMN due_date');
-    sqlite.exec('DROP INDEX IF EXISTS idx_todos_due_date');
+  const dueDateExists = sqlite.prepare("SELECT count(*) as c FROM pragma_table_info('todos') WHERE name='due_date'").get() as { c: number } | null;
+  if (!dueDateExists || dueDateExists.c === 0) {
+    sqlite.exec('ALTER TABLE todos ADD COLUMN due_date TEXT');
+    sqlite.exec('CREATE INDEX IF NOT EXISTS idx_todos_due_date ON todos(due_date)');
   }
 
   // Rename recurring_todos -> habits (only if old table exists AND new doesn't)
