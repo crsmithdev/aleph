@@ -65,4 +65,7 @@ export interface HistoryLog {
 export interface GoalWithMeta extends Goal {
   categories: Category[];
   latestNote: Note | null;
+  todoCount: number;
+  noteCount: number;
+  habitCount: number;
 }

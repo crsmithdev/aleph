@@ -76,8 +76,8 @@ export function applyDDL(sqlite: Sqlite): void {
   const dueDateExists = sqlite.prepare("SELECT count(*) as c FROM pragma_table_info('todos') WHERE name='due_date'").get() as { c: number } | null;
   if (!dueDateExists || dueDateExists.c === 0) {
     sqlite.exec('ALTER TABLE todos ADD COLUMN due_date TEXT');
-    sqlite.exec('CREATE INDEX IF NOT EXISTS idx_todos_due_date ON todos(due_date)');
   }
+  sqlite.exec('CREATE INDEX IF NOT EXISTS idx_todos_due_date ON todos(due_date)');
 
   // Rename recurring_todos -> habits (only if old table exists AND new doesn't)
   const hasOldTable = sqlite.prepare("SELECT count(*) as c FROM sqlite_master WHERE type='table' AND name='recurring_todos'").get() as { c: number } | null;

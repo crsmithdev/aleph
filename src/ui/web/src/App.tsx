@@ -23,6 +23,8 @@ import { SkillDetailPage } from './pages/system/observability/SkillDetailPage';
 import { MemoryPage } from './pages/system/observability/MemoryPage';
 import { EventsPage } from './pages/system/observability/EventsPage';
 import { DbStatsPage } from './pages/system/observability/DbStatsPage';
+import { CompliancePage } from './pages/system/observability/CompliancePage';
+import { SubagentsPage } from './pages/system/observability/SubagentsPage';
 import { SessionTracePage } from './pages/system/observability/SessionTracePage';
 import { TurnTracePage } from './pages/system/observability/TurnTracePage';
 import { SettingsPage } from './pages/system/SettingsPage';
@@ -70,12 +72,14 @@ export function App() {
               <Route path="/observability/skills" element={<SkillsPage />} />
               <Route path="/observability/skills/:name" element={<SkillDetailPage />} />
               <Route path="/observability/tokens" element={<TokensCostPage />} />
+              <Route path="/observability/subagents" element={<SubagentsPage />} />
               <Route path="/observability/sessions" element={<SessionsPage />} />
               <Route path="/observability/sessions/:id" element={<SessionTracePage />} />
               <Route path="/observability/sessions/:id/turns/:turnIndex" element={<TurnTracePage />} />
               <Route path="/observability/events" element={<EventsPage />} />
               <Route path="/observability/memory" element={<MemoryPage />} />
               <Route path="/observability/db" element={<DbStatsPage />} />
+              <Route path="/observability/compliance" element={<CompliancePage />} />
 
               {/* Settings */}
               <Route path="/settings" element={<SettingsPage />} />

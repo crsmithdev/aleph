@@ -176,9 +176,9 @@ export function TurnTracePage() {
       <div className="flex items-center gap-3">
         <Link
           to={`/observability/sessions/${encodeURIComponent(sessionId)}`}
-          className="text-sm text-text-muted hover:text-text-primary transition-colors"
+          className="text-xl text-text-muted hover:text-text-primary transition-colors"
         >
-          &larr; Session {sessionId.slice(0, 8)}
+          &lsaquo;
         </Link>
         <h1 className="text-xl font-semibold text-text-primary">Turn #{turnIndex + 1}</h1>
         <div className="flex items-center gap-1 ml-auto">

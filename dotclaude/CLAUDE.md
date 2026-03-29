@@ -17,16 +17,8 @@
 
 ### Depth Levels
 - **QUICK**: ≤2 files, straightforward change, deterministic outcome — proceed immediately
-- **FULL**: multi-file, architectural decision, or uncertain scope — use the design-first pipeline
+- **FULL**: multi-file, architectural decision, or uncertain scope — use the `build` skill
 
-### Design-First Pipeline (FULL tasks)
-1. **BRAINSTORM** — If specs are unclear or multiple valid approaches exist, explore context, ask clarifying questions, propose 2-3 approaches. Skip if the task has clear specs and a single obvious approach.
-2. **PLAN** — Write implementation plan: map files, break into testable tasks, each following write-test → verify-fail → implement → verify-pass → commit.
-3. **EXECUTE** — TDD per task. Subagent dispatch for independent tasks (parallel in a single message). Stop on blockers — don't guess.
-4. **REVIEW** — Spec compliance review, then quality review. Fix before proceeding.
-5. **VERIFY** — Fresh evidence for every completion claim.
-6. **FINISH** — Run full suite, then: merge / PR / keep / discard.
-7. **LEARN** — Durable insights → semantic memory via `memory_store`.
 
 ## Module Installation
 
@@ -75,7 +67,8 @@ An MCP server provides persistent semantic memory across sessions. Use it automa
 - No emoji, no conventional-commit prefixes
 - Branch names: terse, use `feature/`, `fix/`, `refactor/`, or `docs/` prefix
 - Each logical change gets its own feature branch (use worktrees for parallel work)
-- Commit after every verified change; push after changes are accepted
+- Commit after every verified change; never declare work done with uncommitted changes
+- Push after changes are accepted
 - Squash commits when merging
 
 ## Agent Personas

@@ -12,17 +12,18 @@ A minimal, ergonomic Claude Code-native personal AI infrastructure, assistant, a
 
 ## Modules
 
-Seven modules, installed in order. Each is independent after its dependencies are met.
+Eight modules, installed in order. Each is independent after its dependencies are met.
 
 | Module | Depends on | What it provides |
 |------|-----------|-----------------|
 | `construct-core` | — | CLAUDE.md, settings.json, statusline, optional identity files |
 | `construct-memory` | core | Session hooks, memory dirs, ratings |
 | `construct-skills` | core | Skill routing, quality hook, notify hook, skill playbooks |
-| `construct-data` | — | Shared SQLite persistence layer |
+| `construct-data` | — | Shared SQLite persistence layer, path resolution |
+| `construct-telemetry` | data | JSONL parser, aggregator, pricing, CLI status |
 | `construct-eval` | — | Agent SDK eval harness, test scenarios |
 | `construct-goals` | data | Goal/TODO domain logic, MCP server, /goal and /todo commands |
-| `construct-ui` | data, goals | Web UI (Fastify API + React SPA) |
+| `construct-ui` | data, goals, telemetry | Web UI (Fastify API + React SPA) |
 
 All modules are deployed together. Core is always required; the rest are inert if unused.
 
@@ -47,28 +48,21 @@ src/                                      # source modules (installed to ~/.clau
 │   ├── skill-rules.json                 # keyword routing config
 │   ├── hooks/format-reminder.ts         # depth classification + skill eval
 │   ├── hooks/quality.ts                 # per-file lint/format on Edit/Write
+│   ├── hooks/verify-gate.ts             # e2e verification gate
+│   ├── hooks/context-monitor.ts         # context window usage warning
+│   ├── hooks/tsc-gate.ts                # TypeScript type-check on Edit/Write
+│   ├── hooks/db-guard.ts                # block destructive SQL operations
+│   ├── hooks/precompact-backup.ts       # transcript backup before compaction
 │   ├── hooks/notify.ts                  # WSL toast / macOS alert / terminal bell
-│   ├── research/SKILL.md               # research methodology
-│   ├── verification/SKILL.md           # verification-before-completion
-│   ├── debugging/SKILL.md              # systematic root cause debugging
-│   ├── subagent-dev/SKILL.md           # subagent-driven development
-│   ├── code-review/SKILL.md            # dead code, unused imports, code quality
-│   ├── docs-review/SKILL.md            # doc drift detection
-│   ├── instructions-review/SKILL.md    # instruction quality audit
-│   ├── ralph-loop/SKILL.md             # autonomous iterative loop
-│   ├── brainstorming/SKILL.md          # design-first exploration with approval gates
-│   ├── tdd/SKILL.md                    # red-green-refactor test-driven development
-│   ├── writing-plans/SKILL.md          # implementation plan creation with TDD task breakdown
-│   ├── executing-plans/SKILL.md        # inline plan execution with checkpoints
-│   ├── finishing-branch/SKILL.md       # branch integration: merge / PR / keep / discard
-│   ├── git-worktrees/SKILL.md          # isolated worktree setup for parallel work
-│   └── parallel-agents/SKILL.md        # dispatch independent failures to parallel agents
+│   └── */SKILL.md                       # 18 skill playbooks (see Skills section)
 ├── eval/
 │   ├── runner.ts                        # Agent SDK eval harness
 │   ├── scenarios/                       # test scenarios (broken-math, todo-app, todo-feature)
 │   └── results/                         # eval run results (JSON)
+├── telemetry/
+│   └── src/                             # JSONL parser, aggregator, pricing, types
 ├── data/
-│   └── src/client.ts                    # shared SQLite persistence
+│   └── src/                             # shared SQLite persistence, path resolution
 ├── goals/
 │   ├── src/                             # domain logic (services, schema, validators)
 │   └── mcp/                             # MCP server (direct SQLite, no HTTP)
@@ -80,6 +74,7 @@ dotclaude/                                # install sources (installed to ~/.cla
 ├── CLAUDE.md                            # install source for ~/.claude/CLAUDE.md (not loaded directly)
 ├── settings.json                        # permissions, statusline, hooks
 └── commands/
+    ├── gist.md                          # /gist slash command
     ├── goal.md                          # /goal slash command
     ├── todo.md                          # /todo slash command
     └── finish.md                        # /finish slash command
@@ -93,27 +88,42 @@ dotclaude/                                # install sources (installed to ~/.cla
 
 | Event | Hook | Module | Purpose |
 |-------|------|------|---------|
-| StatusUpdate | ccstatusline | core | Model, branch, dir, context %, tokens, lines ±, cost, duration |
-| SessionStart | session-start.ts | memory | Surface last session summary |
+| SessionStart | session-start.ts | memory | Surface last session summary, background work briefing |
 | UserPromptSubmit | rating-capture.ts | memory | Capture explicit N/10 ratings |
-| UserPromptSubmit | format-reminder.ts | skills | Depth classification + keyword-matched skill eval |
-| Stop | verify-gate.ts | skills | E2e verification gate: checks for browser evidence + artifact when files were edited |
+| UserPromptSubmit | format-reminder.ts | skills | Depth classification + verification gate + skill matching |
+| Stop | verify-gate.ts | skills | E2e verification gate |
+| Stop | context-monitor.ts | skills | Context window usage warning (80%/90%) |
 | Stop | session-summary.ts | memory | Structured session summary |
 | Stop | memory-extract.ts | memory | Auto-extract memories to semantic store |
+| PreToolUse | db-guard.ts | skills | Block destructive SQL operations |
 | PostToolUse | quality.ts | skills | Per-file lint/format on Edit/Write |
+| PostToolUse | tsc-gate.ts | skills | TypeScript type-check on Edit/Write |
+| PreCompact | precompact-backup.ts | skills | Transcript backup before compaction |
 | Notification | notify.ts | skills | WSL toast / macOS alert / terminal bell |
+
+The statusline (`ccstatusline`) is configured via the `statusLine` key in settings.json, not as a hook.
 
 ## Slash Commands
 
+### Installed globally (`dotclaude/commands/` -> `~/.claude/commands/`)
+
 | Command | Module | Purpose |
 |---------|------|---------|
-| `/install` | core | Install/reinstall Construct globally to `~/.claude` (includes post-install checks) |
 | `/gist` | core | Surface Claude's current mental model + project understanding |
-| `/trace` | core | Toggle hook tracing (or one-shot trace a command) |
-| `/audit` | core | Full project audit: code, refs, instructions, docs, spec |
 | `/goal` | goals | Manage goals: list, create, update, delete, show, done, archive |
 | `/todo` | goals | Manage todos: list, add, done, undone, delete, recurring |
 | `/finish` | goals | Mark a todo or goal as done; undo completion; complete recurring todos |
+
+### Project-level (`.claude/commands/` — Construct repo only)
+
+| Command | Purpose |
+|---------|---------|
+| `/install` | Deploy repo to `~/.claude` with post-install verification |
+| `/trace` | Toggle hook tracing (or one-shot trace a command) |
+| `/audit` | Full project audit: code, refs, instructions, docs, spec |
+| `/devserver` | Start UI dev server on ports 5174/3002 |
+| `/todo` | File review items into `docs/TODO.md` |
+| `/instructions-review` | Audit instruction files for vagueness, contradictions, duplication |
 
 ## Identity Architecture
 
@@ -131,18 +141,16 @@ Domain-specific playbooks in `src/skills/<name>/SKILL.md`. The `format-reminder.
 | `research` | Structured research methodology |
 | `verification` | Evidence-based completion verification |
 | `debugging` | 4-phase systematic root cause debugging |
-| `subagent-dev` | Parallel subagent execution with two-stage review |
+| `build` | Unified implementation lifecycle: design, plan, TDD execute, review, finish |
 | `code-review` | Dead code, unused imports, silent failures, dead references |
 | `docs-review` | Documentation drift detection, spec completeness |
-| `instructions-review` | Instruction quality: vagueness, contradictions, duplication |
+| `hooks-review` | Hook script correctness, safety, settings.json alignment |
+| `commands-review` | Slash command clarity, registration, completeness |
+| `skills-review` | SKILL.md quality, skill-rules.json alignment |
+| `config-review` | settings.json and CLAUDE.md consistency |
 | `ralph-loop` | Autonomous iterative development via subagent loops |
-| `brainstorming` | Design-first exploration: propose approaches, get approval before building |
-| `tdd` | Red-green-refactor cycle; no production code without a failing test first |
-| `writing-plans` | Break work into testable tasks with file mappings and TDD steps |
-| `executing-plans` | Execute a written plan inline with checkpoints; stop on blockers |
 | `finishing-branch` | Verify then integrate: merge, PR, keep, or discard a feature branch |
 | `git-worktrees` | Set up isolated worktrees for parallel feature work |
-| `parallel-agents` | Dispatch 3+ independent failures to parallel agents for concurrent investigation |
 
 ## CLAUDE.md Structure
 

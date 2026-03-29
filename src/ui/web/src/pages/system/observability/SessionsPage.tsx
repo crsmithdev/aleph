@@ -11,7 +11,7 @@ import { ChartContainer, useChartType } from '../../../components/charts/ChartCo
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { useNavigate } from 'react-router-dom';
-import { fmtNumber, fmtMs, fmtCurrency, shortDate, granLabel, relativeTime } from '../../../utils/format';
+import { fmtNumber, fmtMs, fmtCurrency, shortDate, granLabel, relativeTime, fmtProject } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
 
 type ProjectRow = { project: string; sessions: number };
@@ -67,7 +67,7 @@ export function SessionsPage() {
     {
       key: 'project',
       label: 'Project',
-      render: (row) => <span className="font-mono text-text-primary">{row.project}</span>,
+      render: (row) => <span className="font-mono text-text-primary">{fmtProject(row.project)}</span>,
     },
     {
       key: 'sessions',
@@ -88,10 +88,11 @@ export function SessionsPage() {
     {
       key: 'project',
       label: 'Project',
+      sortable: true,
       render: (row) => (
         <span className="font-mono text-text-primary text-xs">
           {row.parentSessionId && <span className="text-text-muted mr-1">↳</span>}
-          {row.project}
+          {fmtProject(row.project)}
         </span>
       ),
     },

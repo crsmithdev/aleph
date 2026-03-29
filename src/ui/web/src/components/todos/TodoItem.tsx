@@ -7,28 +7,13 @@ interface TodoItemProps {
   todo: Todo & { goalTitle?: string };
 }
 
-function formatDueDate(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00');
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-function getDueDateStatus(dateStr: string | null): 'overdue' | 'today' | 'future' | null {
-  if (!dateStr) return null;
-  const today = new Date().toISOString().slice(0, 10);
-  if (dateStr < today) return 'overdue';
-  if (dateStr === today) return 'today';
-  return 'future';
-}
-
 export function TodoItem({ todo }: TodoItemProps) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleText, setTitleText] = useState(todo.title);
   const [expanded, setExpanded] = useState(false);
   const [editingNote, setEditingNote] = useState(false);
   const [noteText, setNoteText] = useState(todo.note || '');
-  const [editingDueDate, setEditingDueDate] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
-  const dueDateRef = useRef<HTMLInputElement>(null);
   const updateTodo = useUpdateTodo();
   const deleteTodo = useDeleteTodo();
   const promoteTodo = usePromoteTodo();
@@ -36,10 +21,6 @@ export function TodoItem({ todo }: TodoItemProps) {
   useEffect(() => {
     if (editingTitle) titleRef.current?.focus();
   }, [editingTitle]);
-
-  useEffect(() => {
-    if (editingDueDate) dueDateRef.current?.focus();
-  }, [editingDueDate]);
 
   const saveTitle = () => {
     const trimmed = titleText.trim();
@@ -55,22 +36,6 @@ export function TodoItem({ todo }: TodoItemProps) {
     updateTodo.mutate({ id: todo.id, note: noteText || null });
     setEditingNote(false);
   };
-
-  const saveDueDate = (value: string) => {
-    updateTodo.mutate({ id: todo.id, dueDate: value || null });
-    setEditingDueDate(false);
-  };
-
-  const clearDueDate = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    updateTodo.mutate({ id: todo.id, dueDate: null });
-  };
-
-  const dueDateStatus = getDueDateStatus(todo.dueDate);
-  const dueDateColorClass =
-    dueDateStatus === 'overdue' ? 'text-error' :
-    dueDateStatus === 'today' ? 'text-accent' :
-    'text-text-muted';
 
   return (
     <div className="group flex items-center gap-3 p-3 rounded-lg bg-bg-secondary border border-border-primary">
@@ -132,47 +97,6 @@ export function TodoItem({ todo }: TodoItemProps) {
           </div>
         )}
       </div>
-
-      {editingDueDate ? (
-        <input
-          ref={dueDateRef}
-          type="date"
-          defaultValue={todo.dueDate ?? ''}
-          onBlur={(e) => saveDueDate(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') saveDueDate((e.target as HTMLInputElement).value);
-            if (e.key === 'Escape') setEditingDueDate(false);
-          }}
-          className="text-xs bg-bg-tertiary border border-border-secondary rounded px-1.5 py-0.5 text-text-primary focus:outline-none focus:border-accent flex-shrink-0"
-        />
-      ) : todo.dueDate ? (
-        <div className={`flex items-center gap-1 flex-shrink-0 ${dueDateColorClass}`}>
-          <span
-            className="text-xs cursor-pointer hover:opacity-80"
-            onClick={() => !todo.done && setEditingDueDate(true)}
-            title={dueDateStatus === 'overdue' ? 'Overdue' : dueDateStatus === 'today' ? 'Due today' : 'Scheduled'}
-          >
-            {formatDueDate(todo.dueDate)}
-          </span>
-          {!todo.done && (
-            <button
-              onClick={clearDueDate}
-              className="text-text-muted hover:text-error leading-none opacity-0 group-hover:opacity-100 transition-opacity"
-              title="Clear due date"
-            >
-              ×
-            </button>
-          )}
-        </div>
-      ) : !todo.done ? (
-        <button
-          onClick={() => setEditingDueDate(true)}
-          className="text-xs text-text-muted hover:text-text-secondary flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-          title="Set due date"
-        >
-          + date
-        </button>
-      ) : null}
 
       {todo.goalTitle && todo.goalId && (
         <Link

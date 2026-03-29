@@ -541,6 +541,43 @@ try {
   await Bun.$`systemctl --user daemon-reload`.quiet().nothrow();
   await Bun.$`systemctl --user restart construct-ui`.quiet().nothrow();
 
+  // 11. Verify database health — run DDL and smoke-test each table
+  console.log("verifying database...");
+  const dbVerifyPath = join(DATA_DIR, "construct.db");
+  if (await exists(dbVerifyPath)) {
+    try {
+      const { Database } = await import("bun:sqlite");
+      const db = new Database(dbVerifyPath);
+      db.exec("PRAGMA journal_mode=WAL");
+
+      // Run DDL to ensure migrations apply cleanly
+      const { applyDDL } = await import(join(DST, "construct/goals/src/ddl.ts"));
+      applyDDL(db);
+
+      // Smoke-test: SELECT from every core table
+      const tables = ["goals", "categories", "notes", "todos", "habits", "habit_completions", "history_logs", "goal_categories"];
+      for (const table of tables) {
+        const row = db.prepare(`SELECT count(*) as c FROM ${table}`).get() as { c: number };
+        if (row.c < 0) throw new Error(`Invalid count for ${table}`);
+      }
+
+      // Verify due_date column exists on todos
+      const cols = db.prepare("SELECT name FROM pragma_table_info('todos')").all() as { name: string }[];
+      const colNames = cols.map((c) => c.name);
+      if (!colNames.includes("due_date")) {
+        throw new Error("todos table missing due_date column after DDL");
+      }
+
+      db.close();
+      console.log("  ✓ DDL applied, all tables accessible");
+    } catch (e) {
+      console.error(`  ✗ database verification failed: ${(e as Error).message}`);
+      console.error("  ACTION REQUIRED: check DDL migrations and database integrity");
+    }
+  } else {
+    console.log("  ⚠ no database found (will be created on first API start)");
+  }
+
   console.log();
   console.log("done.");
 } finally {

@@ -12,7 +12,8 @@ export interface SessionEntry {
     | "turn_duration"
     | "tokens"
     | "user_message"
-    | "compact_boundary";
+    | "compact_boundary"
+    | "directive";
   toolName?: string;
   toolParams?: Record<string, unknown>;
   skillName?: string;
@@ -30,6 +31,8 @@ export interface SessionEntry {
   compactTrigger?: string;
   compactPreTokens?: number;
   role?: "user" | "assistant";
+  directive?: string;
+  directiveFollowed?: boolean;
   gitBranch?: string;
   cwd?: string;
   linesAdded?: number;
@@ -305,4 +308,54 @@ export interface TraceData {
   totalDurationMs: number;
   totalTokens: number;
   totalCost: number;
+}
+
+export interface ComplianceMetric {
+  directive: string;
+  total: number;
+  followed: number;
+  rate: number;
+}
+
+export interface ComplianceData {
+  overall: { total: number; followed: number; rate: number };
+  byDirective: ComplianceMetric[];
+  byDay: { date: string; total: number; followed: number; rate: number }[];
+  violations: { sessionId: string; timestamp: string; directive: string; project?: string }[];
+}
+
+export interface SubagentInvocation {
+  timestamp: string;
+  sessionId: string;
+  project: string;
+  description?: string;
+  subagentType?: string;
+  runInBackground?: boolean;
+  model?: string;
+  durationMs?: number;
+  isError?: boolean;
+  errorMessage?: string;
+  subagentSessionId?: string;
+}
+
+export interface SubagentTypeBucket {
+  subagentType: string;
+  count: number;
+  pct: number;
+  avgMs: number;
+  p95Ms: number;
+  errors: number;
+}
+
+export interface SubagentsData {
+  activeNow: number;
+  totalDispatches: number;
+  backgroundDispatches: number;
+  parentSessionCount: number;
+  avgMs: number;
+  p50Ms: number;
+  p95Ms: number;
+  byDay: { date: string; count: number; backgroundCount: number; foregroundCount: number }[];
+  byType: SubagentTypeBucket[];
+  recent: SubagentInvocation[];
 }

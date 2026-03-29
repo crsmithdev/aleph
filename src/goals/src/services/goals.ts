@@ -1,7 +1,7 @@
 import { nanoid } from 'nanoid';
 import { eq, inArray, desc } from 'drizzle-orm';
 import type { Db } from '@construct/data';
-import { goals, goalCategories, categories, notes } from '../schema.js';
+import { goals, goalCategories, categories, notes, todos, habits } from '../schema.js';
 import { createGoalSchema, updateGoalSchema } from '../validators.js';
 import type { EventBus } from './event-bus.js';
 import type { GoalWithMeta } from '../types.js';
@@ -45,9 +45,37 @@ export function attachMeta(db: Db, goalRows: GoalRow[]): GoalWithMeta[] {
     .all();
 
   const latestNoteByGoal = new Map<string, typeof notes.$inferSelect>();
+  const noteCountByGoal = new Map<string, number>();
   for (const note of noteRows) {
     if (!latestNoteByGoal.has(note.goalId)) {
       latestNoteByGoal.set(note.goalId, note);
+    }
+    noteCountByGoal.set(note.goalId, (noteCountByGoal.get(note.goalId) ?? 0) + 1);
+  }
+
+  const todoRows = db
+    .select({ goalId: todos.goalId })
+    .from(todos)
+    .where(inArray(todos.goalId, ids))
+    .all();
+
+  const todoCountByGoal = new Map<string, number>();
+  for (const todo of todoRows) {
+    if (todo.goalId) {
+      todoCountByGoal.set(todo.goalId, (todoCountByGoal.get(todo.goalId) ?? 0) + 1);
+    }
+  }
+
+  const habitRows = db
+    .select({ goalId: habits.goalId })
+    .from(habits)
+    .where(inArray(habits.goalId, ids))
+    .all();
+
+  const habitCountByGoal = new Map<string, number>();
+  for (const habit of habitRows) {
+    if (habit.goalId) {
+      habitCountByGoal.set(habit.goalId, (habitCountByGoal.get(habit.goalId) ?? 0) + 1);
     }
   }
 
@@ -55,6 +83,9 @@ export function attachMeta(db: Db, goalRows: GoalRow[]): GoalWithMeta[] {
     ...g,
     categories: catsByGoal.get(g.id) ?? [],
     latestNote: latestNoteByGoal.get(g.id) ?? null,
+    todoCount: todoCountByGoal.get(g.id) ?? 0,
+    noteCount: noteCountByGoal.get(g.id) ?? 0,
+    habitCount: habitCountByGoal.get(g.id) ?? 0,
   }));
 }
 

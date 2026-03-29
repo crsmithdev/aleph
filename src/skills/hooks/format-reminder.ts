@@ -1,8 +1,10 @@
 #!/usr/bin/env bun
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync, appendFileSync, mkdirSync, writeFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { execSync } from "child_process";
 import { trace } from "../../trace.ts";
+import { reportHook } from "../../hook-report.ts";
+import { dataPaths } from "../../paths.ts";
 
 const TAG = "format-reminder";
 const root = resolve(dirname(Bun.main), "../..");
@@ -11,6 +13,7 @@ const rulesFile = resolve(root, "skills/skill-rules.json");
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
 catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(1); }
+reportHook(TAG, "UserPromptSubmit", input.session_id);
 const prompt = input.prompt ?? "";
 const words = prompt.split(/\s+/);
 trace(TAG, `prompt: ${words.length} words`);
@@ -21,6 +24,7 @@ if (words.length < 3) {
 
 // Depth classification
 const archPattern = /\b(architect|redesign|refactor|migrate|schema|structure|plan|propose|authenticat\w*|authorizat\w*|integrat\w*|api.?endpoint|rename.?all|move.?all|replace.?all|across.?all|every.?file|all.?files|end.to.end|full.?stack)/i;
+const isFull = archPattern.test(prompt) || words.length >= 40;
 if (archPattern.test(prompt)) {
   trace(TAG, "depth: FULL (architectural keywords)");
   console.log("[Construct] Depth: FULL — architectural keywords. Use design-first pipeline.");
@@ -60,6 +64,39 @@ const matched = rules
   .map((r: any) => r.skill);
 
 trace(TAG, `skill match: ${matched.length ? matched.join(", ") : "none"}`);
+
+// Write directive signal (before early exit so full/dispatch are captured even with no skill match)
+const directives: string[] = [];
+if (isFull) directives.push("full");
+if (isFull && !isQuestion) directives.push("dispatch");
+for (const skill of matched) directives.push(`skill:${skill}`);
+if (directives.length > 0) {
+  const sessionId = input.session_id ?? "unknown";
+  try {
+    mkdirSync(dirname(dataPaths.directives), { recursive: true });
+    const line = JSON.stringify({ ts: new Date().toISOString(), sessionId, directives, promptWords: words.length });
+    appendFileSync(dataPaths.directives, line + "\n");
+    trace(TAG, `directive signal written: ${directives.join(", ")}`);
+  } catch (e) {
+    trace(TAG, `directive signal write failed: ${(e as Error).message}`);
+  }
+
+  // Write dispatch marker — PreToolUse dispatch-gate.ts will block Edit/Write until cleared
+  if (directives.includes("dispatch") && sessionId !== "unknown") {
+    try {
+      writeFileSync(`/tmp/construct-dispatch-${sessionId}`, new Date().toISOString());
+      trace(TAG, `dispatch marker written for session ${sessionId}`);
+    } catch (e) {
+      trace(TAG, `dispatch marker write failed: ${(e as Error).message}`);
+    }
+    console.log(`[Construct] DISPATCH MODE — this task must be dispatched to background Agent(s).
+- Create task(s) via TaskCreate for visibility
+- Dispatch each as Agent (run_in_background: true)
+- Respond to the user immediately — don't wait for completion
+- Use /inline to override and work directly`);
+  }
+}
+
 if (!matched.length) { trace(TAG, "no skills matched, exiting"); process.exit(0); }
 
 // Check for project-local skill extensions

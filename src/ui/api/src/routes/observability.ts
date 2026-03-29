@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { resolve } from 'path';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, readdirSync } from 'fs';
 import { claudePaths, dataPaths, getMemoryDbPath } from '@construct/data';
 import { Database } from 'bun:sqlite';
 import {
@@ -21,6 +21,8 @@ import {
   aggregateApiDuration,
   aggregateSessionTrace,
   getRecentEvents,
+  aggregateCompliance,
+  aggregateSubagents,
 } from '@construct/telemetry';
 import type { Granularity, SessionEntry } from '@construct/telemetry';
 
@@ -120,6 +122,26 @@ function readHookSource(fullCommand: string): string | undefined {
   }
 }
 
+function readSelfReportedHookCounts(startDate?: string): Map<string, { count: number; event: string }> {
+  const counts = new Map<string, { count: number; event: string }>();
+  const hookEventsPath = resolve(dataPaths.signals, 'hook-events.jsonl');
+  if (!existsSync(hookEventsPath)) return counts;
+  try {
+    const lines = readFileSync(hookEventsPath, 'utf-8').split('\n').filter(Boolean);
+    for (const line of lines) {
+      try {
+        const entry = JSON.parse(line) as { ts: string; hook: string; event: string };
+        if (startDate && entry.ts < startDate) continue;
+        const key = entry.hook.endsWith('.ts') ? entry.hook : entry.hook + '.ts';
+        const cur = counts.get(key) || { count: 0, event: entry.event };
+        cur.count++;
+        counts.set(key, cur);
+      } catch {}
+    }
+  } catch {}
+  return counts;
+}
+
 function getRegisteredSkills(): string[] {
   const rulesPath = resolve(claudePaths.skills, 'skill-rules.json');
   if (!existsSync(rulesPath)) return [];
@@ -130,6 +152,67 @@ function getRegisteredSkills(): string[] {
     console.error(`Failed to parse skill-rules.json: ${(e as Error).message}`);
     return [];
   }
+}
+
+function projectIdToPath(projectId: string): string | undefined {
+  // -home-crsmi-construct → /home/crsmi/construct
+  // Try progressively joining segments with / vs -
+  const raw = projectId.replace(/^-/, '/').replace(/-/g, '/');
+  if (existsSync(raw)) return raw;
+  // Fallback: try keeping last segments hyphenated
+  const parts = projectId.replace(/^-/, '').split('-');
+  for (let split = 3; split <= parts.length; split++) {
+    const path = '/' + parts.slice(0, split).join('/');
+    if (existsSync(path)) return path;
+  }
+  return undefined;
+}
+
+function getCommandNames(): Set<string> {
+  const names = new Set<string>();
+  // Global commands
+  try {
+    for (const f of readdirSync(claudePaths.commands)) {
+      if (f.endsWith('.md')) names.add(f.replace(/\.md$/, ''));
+    }
+  } catch {}
+  // Project-local commands: scan known project dirs
+  try {
+    for (const dir of readdirSync(claudePaths.projects)) {
+      const projectPath = projectIdToPath(dir);
+      if (!projectPath) continue;
+      const localCmds = resolve(projectPath, '.claude', 'commands');
+      try {
+        for (const f of readdirSync(localCmds)) {
+          if (f.endsWith('.md')) names.add(f.replace(/\.md$/, ''));
+        }
+      } catch {}
+    }
+  } catch {}
+  return names;
+}
+
+function findSkillSource(name: string, projects?: string[]): string | undefined {
+  const normalized = name.startsWith('/') ? name.slice(1) : name;
+  function tryRead(path: string): string | undefined {
+    if (!existsSync(path)) return undefined;
+    try { return readFileSync(path, 'utf-8'); } catch { return undefined; }
+  }
+  // Check skill SKILL.md
+  const skillMd = tryRead(resolve(claudePaths.skills, normalized, 'SKILL.md'));
+  if (skillMd) return skillMd;
+  // Check global command
+  const globalCmd = tryRead(resolve(claudePaths.commands, `${normalized}.md`));
+  if (globalCmd) return globalCmd;
+  // Check project-local commands
+  const projectDirs = projects ?? [];
+  for (const projectId of projectDirs) {
+    const projectPath = projectIdToPath(projectId);
+    if (!projectPath) continue;
+    const localCmd = tryRead(resolve(projectPath, '.claude', 'commands', `${normalized}.md`));
+    if (localCmd) return localCmd;
+  }
+  return undefined;
 }
 
 function getRegisteredHooks(): Array<{ command: string; event: string }> {
@@ -184,8 +267,24 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: QueryParams }>('/hooks', { preHandler: parseDaysPreHandler }, async (req) => {
     const obsReq = req as ObsRequest;
     const { result, queryTimeMs } = timed(() => aggregateHooks(obsReq.telemetryEntries, obsReq.granularity));
-    // Add active status by checking if hook file exists
-    const ranked = result.ranked.map((h) => ({
+
+    // Merge self-reported hook events (for hooks on events Claude Code doesn't log)
+    const days = rangeToDays(req.query.range) || rangeToDays(req.query.days ? `${req.query.days}d` : undefined) || 30;
+    const startDate = new Date(Date.now() - days * 86400000).toISOString();
+    const selfReported = readSelfReportedHookCounts(startDate);
+    const rankedMap = new Map(result.ranked.map((h) => [h.command, h]));
+    for (const [hook, { count, event }] of selfReported) {
+      const existing = rankedMap.get(hook);
+      if (existing) {
+        existing.count = Math.max(existing.count, count);
+        if (!existing.event) existing.event = event;
+      } else {
+        rankedMap.set(hook, { command: hook, event, count, avgMs: 0, p50Ms: 0, p95Ms: 0, errors: 0, fullCommand: hook });
+      }
+    }
+    const merged = [...rankedMap.values()].sort((a, b) => b.count - a.count);
+
+    const ranked = merged.map((h) => ({
       ...h,
       active: h.fullCommand ? checkHookActive(h.fullCommand) : false,
     }));
@@ -199,10 +298,23 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: QueryParams }>('/skills', { preHandler: parseDaysPreHandler }, async (req) => {
     const obsReq = req as ObsRequest;
     const { result, queryTimeMs } = timed(() => aggregateSkills(obsReq.telemetryEntries, obsReq.granularity));
-    const registered = getRegisteredSkills();
+    const registeredSkills = new Set(getRegisteredSkills());
+    const commandNames = getCommandNames();
     const usedNames = new Set(result.ranked.map(s => s.skill.replace(/^\//, '')));
-    const unused = registered.filter(s => !usedNames.has(s));
-    return { ...result, unused, queryTimeMs };
+    const unusedSkills = [...registeredSkills].filter(s => !usedNames.has(s)).map(s => ({ name: s, type: 'skill' as const }));
+    const unusedCommands = [...commandNames].filter(s => !usedNames.has(s) && !registeredSkills.has(s)).map(s => ({ name: s, type: 'command' as const }));
+    const unused = [...unusedSkills, ...unusedCommands];
+    const ranked = result.ranked.map(s => {
+      const bare = s.skill.replace(/^\//, '');
+      const isCommand = commandNames.has(bare);
+      const isSkill = registeredSkills.has(bare);
+      return {
+        ...s,
+        type: isCommand ? 'command' as const : 'skill' as const,
+        registered: isCommand || isSkill,
+      };
+    });
+    return { ...result, ranked, unused, queryTimeMs };
   });
 
   app.get<{ Querystring: QueryParams }>('/tokens', { preHandler: parseDaysPreHandler }, async (req) => {
@@ -267,17 +379,14 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     { preHandler: parseDaysPreHandler },
     async (req) => {
       const skillName = decodeURIComponent(req.params.name);
-      const { result, queryTimeMs } = timed(() => aggregateSkillDetail((req as ObsRequest).telemetryEntries, skillName));
-      // Normalize skillName: strip leading slash added by parser for known commands
-      const normalizedSkillName = skillName.startsWith('/') ? skillName.slice(1) : skillName;
-      const skillMdPath = resolve(claudePaths.skills, normalizedSkillName, 'SKILL.md');
-      const commandPath = resolve(claudePaths.commands, `${normalizedSkillName}.md`);
-      function tryRead(path: string): string | undefined {
-        if (!existsSync(path)) return undefined;
-        try { return readFileSync(path, 'utf-8'); } catch { return undefined; }
-      }
-      const sourceContent = tryRead(skillMdPath) ?? tryRead(commandPath);
-      return { ...result, sourceContent, queryTimeMs };
+      const obsReq = req as ObsRequest;
+      const { result, queryTimeMs } = timed(() => aggregateSkillDetail(obsReq.telemetryEntries, skillName));
+      const projects = [...new Set(result.invocations?.map((i: { project: string }) => i.project) ?? [])];
+      const sourceContent = findSkillSource(skillName, projects);
+      const commandNames = getCommandNames();
+      const bare = skillName.startsWith('/') ? skillName.slice(1) : skillName;
+      const type = commandNames.has(bare) ? 'command' as const : 'skill' as const;
+      return { ...result, sourceContent, type, queryTimeMs };
     },
   );
 
@@ -427,6 +536,37 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     ].filter(Boolean);
 
     return { databases };
+  });
+
+  app.get('/db-schema/:db/:table', async (request) => {
+    const { db: dbName, table } = request.params as { db: string; table: string };
+    const dbPath = dbName === 'construct' ? dataPaths.db : dbName === 'memory' ? getMemoryDbPath() : null;
+    if (!dbPath || !existsSync(dbPath)) return { columns: [] };
+
+    let db: Database | null = null;
+    try {
+      db = new Database(dbPath, { readonly: true });
+      const columns = db.query(`PRAGMA table_info("${table.replace(/"/g, '')}")`).all() as Array<{
+        cid: number; name: string; type: string; notnull: number; dflt_value: string | null; pk: number;
+      }>;
+      return { columns: columns.map(c => ({ name: c.name, type: c.type, notnull: !!c.notnull, pk: !!c.pk, defaultValue: c.dflt_value })) };
+    } catch {
+      return { columns: [] };
+    } finally {
+      db?.close();
+    }
+  });
+
+  app.get<{ Querystring: QueryParams }>('/compliance', { preHandler: parseDaysPreHandler }, async (req) => {
+    const obsReq = req as ObsRequest;
+    const { result, queryTimeMs } = timed(() => aggregateCompliance(obsReq.telemetryEntries, obsReq.granularity));
+    return { ...result, queryTimeMs };
+  });
+
+  app.get<{ Querystring: QueryParams }>('/subagents', { preHandler: parseDaysPreHandler }, async (req) => {
+    const obsReq = req as ObsRequest;
+    const { result, queryTimeMs } = timed(() => aggregateSubagents(obsReq.telemetryEntries, obsReq.granularity));
+    return { ...result, queryTimeMs };
   });
 
   app.post('/memory/snapshot', async () => {

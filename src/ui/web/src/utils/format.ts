@@ -87,6 +87,15 @@ export function fmtToolName(name: string): string {
   return name;
 }
 
+export function fmtProject(raw: string): string {
+  // "-home-crsmi-construct" → "crsmi/construct"
+  // Strip leading /home/<user>/ or -home-<user>- prefix, then join with /
+  const cleaned = raw.replace(/^-/, '').replace(/^home-/, '');
+  const parts = cleaned.split('-').filter(Boolean);
+  if (parts.length >= 2) return parts.join('/');
+  return raw;
+}
+
 export function rangeToDays(range: string): number {
   switch (range) {
     case '1h': return 1;

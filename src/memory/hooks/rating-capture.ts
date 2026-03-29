@@ -2,6 +2,7 @@
 import { appendFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { trace } from "../../trace.ts";
+import { reportHook } from "../../hook-report.ts";
 import { dataPaths, ensureDataDirs } from "../../paths.ts";
 
 const TAG = "rating-capture";
@@ -13,6 +14,7 @@ let input: any;
 const raw = await Bun.stdin.text();
 try { input = JSON.parse(raw); }
 catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}, raw: ${raw.slice(0, 100)}`); process.exit(1); }
+reportHook(TAG, "UserPromptSubmit", input.session_id);
 const prompt = (input.prompt ?? "").trim();
 if (!prompt) {
   trace(TAG, "skip: empty prompt");

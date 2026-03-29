@@ -23,6 +23,7 @@ import {
   createTodo,
   updateTodo,
   deleteTodo,
+  promoteTodoToGoal,
   listHabits,
   createHabit,
   completeHabit,
@@ -255,6 +256,17 @@ server.tool(
     const ok = deleteTodo(db, params.id, eventBus);
     if (!ok) return { content: [{ type: 'text', text: 'Todo not found' }], isError: true };
     return { content: [{ type: 'text', text: 'Todo deleted successfully' }] };
+  }
+);
+
+server.tool(
+  'promote_todo',
+  'Promote a todo to a goal. The todo is deleted and a new goal is created with the same title, note, and creation date. Any existing goal association is removed.',
+  { id: z.string().describe('Todo ID to promote') },
+  async (params) => {
+    const result = promoteTodoToGoal(db, params.id, eventBus);
+    if (!result) return { content: [{ type: 'text', text: 'Todo not found' }], isError: true };
+    return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
   }
 );
 

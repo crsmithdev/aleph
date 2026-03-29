@@ -22,6 +22,7 @@ type HookRow = {
   p95Ms: number;
   errors: number;
   active: boolean;
+  successRate: number;
 };
 
 type InvocationRow = {
@@ -48,23 +49,21 @@ function ByHookView({ range, granularity, hideInactive, onHideInactiveChange, sh
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load hooks" retry={refetch} />;
 
-  const unusedRows: HookRow[] = (data.unused || []).map(h => ({
-    command: h.command, event: h.event, count: 0, avgMs: 0, p50Ms: 0, p95Ms: 0, errors: 0, active: true,
+  const rankedWithRate: HookRow[] = data.ranked.map(r => ({
+    ...r,
+    successRate: r.count > 0 ? ((r.count - r.errors) / r.count) * 100 : 100,
   }));
-  let filtered = hideInactive ? data.ranked.filter((r) => r.active) : data.ranked;
+  const unusedRows: HookRow[] = (data.unused || []).map(h => ({
+    command: h.command, event: h.event, count: 0, avgMs: 0, p50Ms: 0, p95Ms: 0, errors: 0, active: true, successRate: 100,
+  }));
+  let filtered = hideInactive ? rankedWithRate.filter((r) => r.active) : rankedWithRate;
   if (showUnused) filtered = [...filtered, ...unusedRows];
 
   const columns: Column<HookRow>[] = [
     {
-      key: 'active',
-      label: 'Status',
-      render: (row) => (
-        <span className={cn('inline-block h-2 w-2 rounded-full', row.active ? 'bg-success' : 'bg-text-muted/30')} title={row.active ? 'Active' : 'Removed'} />
-      ),
-    },
-    {
       key: 'command',
       label: 'Hook',
+      sortable: true,
       render: (row) => (
         <span className={cn('font-mono', row.count === 0 ? 'text-text-muted' : 'text-text-primary')}>
           {row.command}
@@ -99,14 +98,12 @@ function ByHookView({ range, granularity, hideInactive, onHideInactiveChange, sh
       key: 'successRate',
       label: 'Success',
       align: 'right',
-      render: (row) => {
-        const rate = row.count > 0 ? ((row.count - row.errors) / row.count) * 100 : 100;
-        return (
-          <span className={cn(rate < 95 && 'text-warning', rate < 80 && 'text-error')}>
-            {fmtPct(rate)}
-          </span>
-        );
-      },
+      sortable: true,
+      render: (row) => (
+        <span className={cn(row.successRate < 95 && 'text-warning', row.successRate < 80 && 'text-error')}>
+          {fmtPct(row.successRate)}
+        </span>
+      ),
     },
     {
       key: 'avgMs',

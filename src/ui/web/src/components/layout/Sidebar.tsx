@@ -63,9 +63,11 @@ const items: NavItem[] = [
       { to: '/observability/skills', label: 'Skills' },
       { to: '/observability/tokens', label: 'Tokens & Cost' },
       { to: '/observability/sessions', label: 'Sessions' },
+      { to: '/observability/subagents', label: 'Subagents' },
       { to: '/observability/events', label: 'Events' },
       { to: '/observability/memory', label: 'Memory' },
       { to: '/observability/db', label: 'Database' },
+      { to: '/observability/compliance', label: 'Compliance' },
     ],
   },
   {

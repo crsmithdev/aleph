@@ -672,3 +672,271 @@ describe("e2e telemetry pipeline", () => {
     });
   }
 });
+
+// ── Compliance aggregation ─────────���──────────────────────────────────────────
+
+describe("compliance aggregation", () => {
+  const { aggregateCompliance } = require("../src/aggregator.js") as typeof import("../src/aggregator.js");
+
+  const baseDirective = (overrides: Partial<SessionEntry>): SessionEntry => ({
+    sessionId: "sess-1",
+    timestamp: "2026-03-27T10:00:00.000Z",
+    project: "test",
+    entryType: "directive",
+    directive: "dispatch",
+    directiveFollowed: true,
+    ...overrides,
+  });
+
+  it("counts followed and unfollowed directives correctly", () => {
+    const entries: SessionEntry[] = [
+      baseDirective({ directive: "dispatch", directiveFollowed: true }),
+      baseDirective({ directive: "dispatch", directiveFollowed: false, sessionId: "sess-2" }),
+      baseDirective({ directive: "full", directiveFollowed: true }),
+      baseDirective({ directive: "full", directiveFollowed: true, sessionId: "sess-2" }),
+    ];
+    const result = aggregateCompliance(entries, "day");
+
+    expect(result.overall.total).toBe(4);
+    expect(result.overall.followed).toBe(3);
+    expect(result.overall.rate).toBeCloseTo(0.75, 2);
+  });
+
+  it("groups by directive with worst-first sort", () => {
+    const entries: SessionEntry[] = [
+      baseDirective({ directive: "dispatch", directiveFollowed: false }),
+      baseDirective({ directive: "dispatch", directiveFollowed: false, sessionId: "sess-2" }),
+      baseDirective({ directive: "full", directiveFollowed: true }),
+      baseDirective({ directive: "full", directiveFollowed: true, sessionId: "sess-2" }),
+    ];
+    const result = aggregateCompliance(entries, "day");
+
+    expect(result.byDirective.length).toBe(2);
+    // Worst first: dispatch has 0% compliance
+    expect(result.byDirective[0].directive).toBe("dispatch");
+    expect(result.byDirective[0].rate).toBe(0);
+    expect(result.byDirective[1].directive).toBe("full");
+    expect(result.byDirective[1].rate).toBe(1);
+  });
+
+  it("groups by day and sorts chronologically", () => {
+    const entries: SessionEntry[] = [
+      baseDirective({ timestamp: "2026-03-26T10:00:00.000Z", directiveFollowed: true }),
+      baseDirective({ timestamp: "2026-03-27T10:00:00.000Z", directiveFollowed: false }),
+      baseDirective({ timestamp: "2026-03-27T14:00:00.000Z", directiveFollowed: true }),
+    ];
+    const result = aggregateCompliance(entries, "day");
+
+    expect(result.byDay.length).toBe(2);
+    expect(result.byDay[0].date).toBe("2026-03-26");
+    expect(result.byDay[0].rate).toBe(1);
+    expect(result.byDay[1].date).toBe("2026-03-27");
+    expect(result.byDay[1].total).toBe(2);
+    expect(result.byDay[1].followed).toBe(1);
+  });
+
+  it("collects violations with newest first, capped at 100", () => {
+    const entries: SessionEntry[] = [
+      baseDirective({ directiveFollowed: false, timestamp: "2026-03-27T08:00:00.000Z", sessionId: "s1" }),
+      baseDirective({ directiveFollowed: false, timestamp: "2026-03-27T12:00:00.000Z", sessionId: "s2" }),
+      baseDirective({ directiveFollowed: true, timestamp: "2026-03-27T14:00:00.000Z", sessionId: "s3" }),
+    ];
+    const result = aggregateCompliance(entries, "day");
+
+    expect(result.violations.length).toBe(2);
+    expect(result.violations[0].sessionId).toBe("s2"); // newest first
+    expect(result.violations[1].sessionId).toBe("s1");
+  });
+
+  it("handles empty entries", () => {
+    const result = aggregateCompliance([], "day");
+    expect(result.overall.total).toBe(0);
+    expect(result.overall.rate).toBe(0);
+    expect(result.byDirective).toEqual([]);
+    expect(result.violations).toEqual([]);
+  });
+
+  it("ignores non-directive entries", () => {
+    const entries: SessionEntry[] = [
+      { sessionId: "s1", timestamp: "2026-03-27T10:00:00.000Z", project: "test", entryType: "tool_use", toolName: "Agent" },
+      baseDirective({ directiveFollowed: true }),
+    ];
+    const result = aggregateCompliance(entries, "day");
+    expect(result.overall.total).toBe(1);
+  });
+});
+
+// ── Subagent aggregation ─────────────────────────────────────���────────────────
+
+describe("subagent aggregation", () => {
+  const { aggregateSubagents } = require("../src/aggregator.js") as typeof import("../src/aggregator.js");
+
+  const parentSessionId = "parent-sess-1";
+  const childSessionId = "agent-abc123";
+  const baseTs = "2026-03-27T10:00:00.000Z";
+  const baseTsMs = new Date(baseTs).getTime();
+
+  function agentToolUse(overrides: Partial<SessionEntry> = {}): SessionEntry {
+    return {
+      sessionId: parentSessionId,
+      timestamp: baseTs,
+      project: "test",
+      entryType: "tool_use",
+      toolName: "Agent",
+      toolUseId: "tu_1",
+      toolParams: {
+        description: "refactor auth module",
+        subagent_type: "general-purpose",
+        run_in_background: true,
+        model: "sonnet",
+      },
+      ...overrides,
+    };
+  }
+
+  function toolResult(toolUseId: string, durationMs: number, isError = false): SessionEntry {
+    return {
+      sessionId: parentSessionId,
+      timestamp: new Date(baseTsMs + durationMs).toISOString(),
+      project: "test",
+      entryType: "tool_result",
+      toolUseId,
+      toolDurationMs: durationMs,
+      isError,
+      errorMessage: isError ? "agent failed" : undefined,
+    };
+  }
+
+  function childEntry(ts: string): SessionEntry {
+    return {
+      sessionId: childSessionId,
+      parentSessionId,
+      timestamp: ts,
+      project: "test",
+      entryType: "tool_use",
+      toolName: "Read",
+    };
+  }
+
+  it("counts dispatches and background ratio", () => {
+    const entries: SessionEntry[] = [
+      agentToolUse({ toolUseId: "tu_1", toolParams: { run_in_background: true, subagent_type: "general-purpose" } }),
+      toolResult("tu_1", 5000),
+      agentToolUse({ toolUseId: "tu_2", toolParams: { run_in_background: false, subagent_type: "Explore" }, timestamp: new Date(baseTsMs + 10000).toISOString() }),
+      toolResult("tu_2", 3000),
+    ];
+    const result = aggregateSubagents(entries, "day");
+
+    expect(result.totalDispatches).toBe(2);
+    expect(result.backgroundDispatches).toBe(1);
+    expect(result.parentSessionCount).toBe(1);
+  });
+
+  it("computes duration percentiles", () => {
+    const entries: SessionEntry[] = [];
+    const durations = [1000, 2000, 3000, 5000, 8000, 10000, 15000, 20000, 25000, 30000];
+    for (let i = 0; i < durations.length; i++) {
+      const ts = new Date(baseTsMs + i * 60000).toISOString();
+      entries.push(agentToolUse({ toolUseId: `tu_${i}`, timestamp: ts }));
+      entries.push(toolResult(`tu_${i}`, durations[i]));
+    }
+    const result = aggregateSubagents(entries, "day");
+
+    expect(result.totalDispatches).toBe(10);
+    expect(result.avgMs).toBe(11900); // mean of durations
+    expect(result.p50Ms).toBeGreaterThan(0);
+    expect(result.p95Ms).toBeGreaterThanOrEqual(result.p50Ms);
+  });
+
+  it("groups by subagent type", () => {
+    const entries: SessionEntry[] = [
+      agentToolUse({ toolUseId: "tu_1", toolParams: { subagent_type: "Explore" } }),
+      toolResult("tu_1", 2000),
+      agentToolUse({ toolUseId: "tu_2", toolParams: { subagent_type: "Explore" }, timestamp: new Date(baseTsMs + 5000).toISOString() }),
+      toolResult("tu_2", 3000),
+      agentToolUse({ toolUseId: "tu_3", toolParams: { subagent_type: "Plan" }, timestamp: new Date(baseTsMs + 10000).toISOString() }),
+      toolResult("tu_3", 1000),
+    ];
+    const result = aggregateSubagents(entries, "day");
+
+    expect(result.byType.length).toBe(2);
+    const explore = result.byType.find(t => t.subagentType === "Explore");
+    const plan = result.byType.find(t => t.subagentType === "Plan");
+    expect(explore?.count).toBe(2);
+    expect(plan?.count).toBe(1);
+    expect(explore!.pct + plan!.pct).toBe(100);
+  });
+
+  it("matches child sessions by timestamp overlap", () => {
+    const entries: SessionEntry[] = [
+      agentToolUse({ toolUseId: "tu_1" }),
+      toolResult("tu_1", 10000),
+      // Child session entries within the Agent call duration
+      childEntry(new Date(baseTsMs + 500).toISOString()),
+      childEntry(new Date(baseTsMs + 5000).toISOString()),
+      childEntry(new Date(baseTsMs + 9000).toISOString()),
+    ];
+    const result = aggregateSubagents(entries, "day");
+
+    expect(result.recent.length).toBe(1);
+    expect(result.recent[0].subagentSessionId).toBe(childSessionId);
+  });
+
+  it("groups by day correctly", () => {
+    const day1 = "2026-03-26T10:00:00.000Z";
+    const day2 = "2026-03-27T10:00:00.000Z";
+    const entries: SessionEntry[] = [
+      agentToolUse({ toolUseId: "tu_1", timestamp: day1, toolParams: { run_in_background: true } }),
+      toolResult("tu_1", 5000),
+      agentToolUse({ toolUseId: "tu_2", timestamp: day2, toolParams: { run_in_background: false } }),
+      toolResult("tu_2", 3000),
+      agentToolUse({ toolUseId: "tu_3", timestamp: day2, toolParams: { run_in_background: true } }),
+      toolResult("tu_3", 4000),
+    ];
+    const result = aggregateSubagents(entries, "day");
+
+    expect(result.byDay.length).toBe(2);
+    expect(result.byDay[0].date).toBe("2026-03-26");
+    expect(result.byDay[0].count).toBe(1);
+    expect(result.byDay[0].backgroundCount).toBe(1);
+    expect(result.byDay[1].date).toBe("2026-03-27");
+    expect(result.byDay[1].count).toBe(2);
+    expect(result.byDay[1].backgroundCount).toBe(1);
+    expect(result.byDay[1].foregroundCount).toBe(1);
+  });
+
+  it("tracks errors in type buckets", () => {
+    const entries: SessionEntry[] = [
+      agentToolUse({ toolUseId: "tu_1", toolParams: { subagent_type: "general-purpose" } }),
+      toolResult("tu_1", 5000, true),
+    ];
+    const result = aggregateSubagents(entries, "day");
+
+    expect(result.byType[0].errors).toBe(1);
+    expect(result.recent[0].isError).toBe(true);
+  });
+
+  it("handles empty entries", () => {
+    const result = aggregateSubagents([], "day");
+    expect(result.totalDispatches).toBe(0);
+    expect(result.activeNow).toBe(0);
+    expect(result.avgMs).toBe(0);
+    expect(result.byDay).toEqual([]);
+    expect(result.byType).toEqual([]);
+    expect(result.recent).toEqual([]);
+  });
+
+  it("recent invocations sorted newest first and capped at 100", () => {
+    const entries: SessionEntry[] = [];
+    for (let i = 0; i < 110; i++) {
+      const ts = new Date(baseTsMs + i * 60000).toISOString();
+      entries.push(agentToolUse({ toolUseId: `tu_${i}`, timestamp: ts, toolParams: { description: `task ${i}`, subagent_type: "general-purpose" } }));
+      entries.push(toolResult(`tu_${i}`, 1000));
+    }
+    const result = aggregateSubagents(entries, "day");
+
+    expect(result.recent.length).toBe(100);
+    // Newest first
+    expect(result.recent[0].timestamp).toBe(new Date(baseTsMs + 109 * 60000).toISOString());
+  });
+});

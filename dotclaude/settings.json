@@ -48,7 +48,17 @@
       },
       {
         "hooks": [
+          { "type": "command", "command": "bun ~/.claude/construct/skills/hooks/compliance-check.ts", "timeout": 5000 }
+        ]
+      },
+      {
+        "hooks": [
           { "type": "command", "command": "bun src/skills/hooks/context-monitor.ts", "timeout": 3000 }
+        ]
+      },
+      {
+        "hooks": [
+          { "type": "command", "command": "bun src/skills/hooks/dirty-tree-check.ts", "timeout": 5000 }
         ]
       },
       {
@@ -67,6 +77,12 @@
         "matcher": "mcp__.*(?:execute_sql|apply_migration|run_query)",
         "hooks": [
           { "type": "command", "command": "bun src/skills/hooks/db-guard.ts", "timeout": 3000 }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          { "type": "command", "command": "bun src/skills/hooks/dispatch-gate.ts", "timeout": 2000 }
         ]
       }
     ],

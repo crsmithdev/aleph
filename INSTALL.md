@@ -41,9 +41,7 @@ The installer automatically discovers and preserves any ALL CAPS `.md` file (fil
 - `construct/core/identity/` — e.g. `SOUL.md`, `IDENTITY.md`, `STYLE.md`, `USER.md`, plus any custom files you add (e.g. `PROJECTS.md`, `WORKFLOW.md`)
 - `construct/memory/` — any custom ALL CAPS `.md` files you add (e.g. `GOALS.md`, `DECISIONS.md`)
 
-Also preserved:
-- `memory/signals/ratings.jsonl` — rating history
-- `memory/sessions/` — session summaries
+All data under `~/.claude/data/` (databases, sessions, signals, backups) is preserved automatically — the installer never touches this directory. It only syncs `~/.claude/construct/` (code) and `~/.claude/commands/` (commands).
 
 
 ### What gets overwritten

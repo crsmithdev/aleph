@@ -77,7 +77,7 @@ export function useObsHooks(range: TimeRange, granularity?: Granularity, session
 
 export function useObsSkills(range: TimeRange, granularity?: Granularity, session?: string) {
   return obsQuery<{
-    ranked: Array<{ skill: string; count: number; pct: number; errors: number; lastUsed?: string }>;
+    ranked: Array<{ skill: string; count: number; pct: number; errors: number; lastUsed?: string; type: 'command' | 'skill'; registered: boolean }>;
     byDay: Array<{ date: string; count: number; skills: Record<string, number> }>;
     unused: string[];
     queryTimeMs: number;
@@ -217,6 +217,7 @@ export function useObsSkillDetail(name: string, range: TimeRange) {
     byDay: Array<{ date: string; count: number }>;
     invocations: Array<{ timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; userRequest?: string }>;
     sourceContent?: string;
+    type?: 'command' | 'skill';
     queryTimeMs: number;
   }>({
     queryKey: ['observability', 'skill-detail', name, range],
@@ -369,6 +370,81 @@ export function useObsDbStats() {
   }>({
     queryKey: ['observability', 'db-stats'],
     queryFn: () => api.get('/observability/db-stats'),
+  });
+}
+
+export function useObsDbSchema(db: string, table: string) {
+  return useQuery<{
+    columns: Array<{ name: string; type: string; notnull: boolean; pk: boolean; defaultValue: string | null }>;
+  }>({
+    queryKey: ['observability', 'db-schema', db, table],
+    queryFn: () => api.get(`/observability/db-schema/${encodeURIComponent(db)}/${encodeURIComponent(table)}`),
+    enabled: !!db && !!table,
+  });
+}
+
+interface ComplianceMetric {
+  directive: string;
+  total: number;
+  followed: number;
+  rate: number;
+}
+
+export interface ComplianceData {
+  overall: { total: number; followed: number; rate: number };
+  byDirective: ComplianceMetric[];
+  byDay: { date: string; total: number; followed: number; rate: number }[];
+  violations: { sessionId: string; timestamp: string; directive: string; project?: string }[];
+  queryTimeMs?: number;
+}
+
+export function useObsCompliance(range: TimeRange, granularity?: Granularity) {
+  return obsQuery<ComplianceData>('compliance', { range, granularity });
+}
+
+export interface SubagentInvocation {
+  timestamp: string;
+  sessionId: string;
+  project: string;
+  description?: string;
+  subagentType?: string;
+  runInBackground?: boolean;
+  model?: string;
+  durationMs?: number;
+  isError?: boolean;
+  errorMessage?: string;
+  subagentSessionId?: string;
+}
+
+export interface SubagentTypeBucket {
+  subagentType: string;
+  count: number;
+  pct: number;
+  avgMs: number;
+  p95Ms: number;
+  errors: number;
+}
+
+export interface SubagentsData {
+  activeNow: number;
+  totalDispatches: number;
+  backgroundDispatches: number;
+  parentSessionCount: number;
+  avgMs: number;
+  p50Ms: number;
+  p95Ms: number;
+  byDay: { date: string; count: number; backgroundCount: number; foregroundCount: number }[];
+  byType: SubagentTypeBucket[];
+  recent: SubagentInvocation[];
+  queryTimeMs?: number;
+}
+
+export function useObsSubagents(range: TimeRange, granularity?: Granularity) {
+  const shouldPoll = range === '1h' || range === '1d';
+  return useQuery<SubagentsData>({
+    queryKey: ['observability', 'subagents', range, granularity || 'day'],
+    queryFn: () => api.get<SubagentsData>(`/observability/subagents?${obsQueryParams({ range, granularity })}`),
+    refetchInterval: shouldPoll ? 10_000 : undefined,
   });
 }
 

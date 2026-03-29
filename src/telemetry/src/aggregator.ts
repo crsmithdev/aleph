@@ -30,6 +30,11 @@ import type {
   TraceData,
   TraceSpan,
   TraceTurn,
+  ComplianceData,
+  ComplianceMetric,
+  SubagentsData,
+  SubagentInvocation,
+  SubagentTypeBucket,
 } from "./types.js";
 import { calculateCost } from "./pricing.js";
 
@@ -1147,4 +1152,207 @@ export function aggregateSessionTrace(entries: SessionEntry[], sessionId: string
     : 0;
 
   return { sessionId, parentSessionId, project, turns, totalDurationMs, totalTokens, totalCost };
+}
+
+export function aggregateCompliance(entries: SessionEntry[], granularity: Granularity): ComplianceData {
+  const dirEntries = entries.filter((e) => e.entryType === "directive");
+
+  const byDir = new Map<string, { total: number; followed: number }>();
+  const byDay = new Map<string, { total: number; followed: number }>();
+  const violations: ComplianceData["violations"] = [];
+
+  let overallTotal = 0;
+  let overallFollowed = 0;
+
+  for (const e of dirEntries) {
+    const dir = e.directive ?? "unknown";
+    const followed = e.directiveFollowed === true;
+    const day = bucketKey(e.timestamp, granularity);
+
+    overallTotal++;
+    if (followed) overallFollowed++;
+
+    const dm = byDir.get(dir) ?? { total: 0, followed: 0 };
+    dm.total++;
+    if (followed) dm.followed++;
+    byDir.set(dir, dm);
+
+    const bm = byDay.get(day) ?? { total: 0, followed: 0 };
+    bm.total++;
+    if (followed) bm.followed++;
+    byDay.set(day, bm);
+
+    if (!followed) {
+      violations.push({ sessionId: e.sessionId, timestamp: e.timestamp, directive: dir, project: e.project });
+    }
+  }
+
+  const byDirective: ComplianceMetric[] = [...byDir.entries()]
+    .map(([directive, { total, followed }]) => ({ directive, total, followed, rate: total > 0 ? followed / total : 0 }))
+    .sort((a, b) => a.rate - b.rate);
+
+  const byDayArr = [...byDay.entries()]
+    .map(([date, { total, followed }]) => ({ date, total, followed, rate: total > 0 ? followed / total : 0 }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  violations.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+  return {
+    overall: { total: overallTotal, followed: overallFollowed, rate: overallTotal > 0 ? overallFollowed / overallTotal : 0 },
+    byDirective,
+    byDay: byDayArr,
+    violations: violations.slice(0, 100),
+  };
+}
+
+export function aggregateSubagents(entries: SessionEntry[], granularity: Granularity = "day"): SubagentsData {
+  // Build subagent session time map: parentSessionId → [{ sessionId, firstTs, lastTs }]
+  const subSessionMap = new Map<string, Map<string, { firstTs: number; lastTs: number }>>();
+  for (const e of entries) {
+    if (!e.parentSessionId || e.sessionId === e.parentSessionId) continue;
+    const ts = new Date(e.timestamp).getTime();
+    let parentMap = subSessionMap.get(e.parentSessionId);
+    if (!parentMap) {
+      parentMap = new Map();
+      subSessionMap.set(e.parentSessionId, parentMap);
+    }
+    const existing = parentMap.get(e.sessionId);
+    if (!existing) {
+      parentMap.set(e.sessionId, { firstTs: ts, lastTs: ts });
+    } else {
+      if (ts < existing.firstTs) existing.firstTs = ts;
+      if (ts > existing.lastTs) existing.lastTs = ts;
+    }
+  }
+
+  // Build toolUseId → result info
+  const resultMap = new Map<string, { durationMs?: number; isError?: boolean; errorMessage?: string }>();
+  for (const e of entries) {
+    if (e.entryType === "tool_result" && e.toolUseId) {
+      resultMap.set(e.toolUseId, {
+        durationMs: e.toolDurationMs,
+        isError: e.isError,
+        errorMessage: e.errorMessage,
+      });
+    }
+  }
+
+  // Collect Agent tool_use entries
+  const agentCalls = entries.filter((e) => e.entryType === "tool_use" && e.toolName === "Agent");
+
+  const durations: number[] = [];
+  const parentSessions = new Set<string>();
+  const dayBuckets = new Map<string, { count: number; bg: number; fg: number }>();
+  const typeBuckets = new Map<string, { count: number; durations: number[]; errors: number }>();
+  const recent: SubagentInvocation[] = [];
+  let backgroundCount = 0;
+  const now = Date.now();
+  let activeNow = 0;
+
+  for (const e of agentCalls) {
+    const params = e.toolParams ?? {};
+    const description = params.description as string | undefined;
+    const subagentType = (params.subagent_type as string | undefined) || "unspecified";
+    const runInBackground = params.run_in_background as boolean | undefined;
+    const model = params.model as string | undefined;
+
+    const result = e.toolUseId ? resultMap.get(e.toolUseId) : undefined;
+    const durationMs = result?.durationMs;
+    const isError = result?.isError;
+    const errorMessage = result?.errorMessage;
+
+    // Match to subagent session
+    let subagentSessionId: string | undefined;
+    const parentChildren = subSessionMap.get(e.sessionId);
+    if (parentChildren && durationMs && durationMs > 0) {
+      const toolStart = new Date(e.timestamp).getTime();
+      const toolEnd = toolStart + durationMs;
+      for (const [sid, times] of parentChildren) {
+        if (times.firstTs >= toolStart - 2000 && times.firstTs <= toolEnd + 2000) {
+          subagentSessionId = sid;
+          break;
+        }
+      }
+    }
+
+    // Active now: child session started in last 5min with last activity within 1min
+    if (subagentSessionId && parentChildren) {
+      const childTimes = parentChildren.get(subagentSessionId);
+      if (childTimes && childTimes.firstTs >= now - 5 * 60 * 1000 && childTimes.lastTs >= now - 60 * 1000) {
+        activeNow++;
+      }
+    }
+
+    parentSessions.add(e.sessionId);
+    if (runInBackground) backgroundCount++;
+    if (durationMs && durationMs > 0) durations.push(durationMs);
+
+    // Day buckets
+    const day = bucketKey(e.timestamp, granularity);
+    const db = dayBuckets.get(day) ?? { count: 0, bg: 0, fg: 0 };
+    db.count++;
+    if (runInBackground) db.bg++;
+    else db.fg++;
+    dayBuckets.set(day, db);
+
+    // Type buckets
+    const tb = typeBuckets.get(subagentType) ?? { count: 0, durations: [], errors: 0 };
+    tb.count++;
+    if (durationMs && durationMs > 0) tb.durations.push(durationMs);
+    if (isError) tb.errors++;
+    typeBuckets.set(subagentType, tb);
+
+    // Recent invocations
+    recent.push({
+      timestamp: e.timestamp,
+      sessionId: e.sessionId,
+      project: e.project,
+      description,
+      subagentType,
+      runInBackground,
+      model,
+      durationMs,
+      isError,
+      errorMessage,
+      subagentSessionId,
+    });
+  }
+
+  // Sort and compute stats
+  durations.sort((a, b) => a - b);
+  const avgMs = durations.length > 0 ? Math.round(durations.reduce((s, d) => s + d, 0) / durations.length) : 0;
+
+  const byDay = [...dayBuckets.entries()]
+    .map(([date, { count, bg, fg }]) => ({ date, count, backgroundCount: bg, foregroundCount: fg }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const totalDispatches = agentCalls.length;
+  const byType: SubagentTypeBucket[] = [...typeBuckets.entries()]
+    .map(([subagentType, { count, durations: d, errors }]) => {
+      d.sort((a, b) => a - b);
+      return {
+        subagentType,
+        count,
+        pct: totalDispatches > 0 ? Math.round((count / totalDispatches) * 100) : 0,
+        avgMs: d.length > 0 ? Math.round(d.reduce((s, v) => s + v, 0) / d.length) : 0,
+        p95Ms: percentile(d, 95),
+        errors,
+      };
+    })
+    .sort((a, b) => b.count - a.count);
+
+  recent.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+  return {
+    activeNow,
+    totalDispatches,
+    backgroundDispatches: backgroundCount,
+    parentSessionCount: parentSessions.size,
+    avgMs,
+    p50Ms: percentile(durations, 50),
+    p95Ms: percentile(durations, 95),
+    byDay,
+    byType,
+    recent: recent.slice(0, 100),
+  };
 }

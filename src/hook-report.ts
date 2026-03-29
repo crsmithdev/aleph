@@ -1,0 +1,11 @@
+import { appendFileSync, mkdirSync } from "fs";
+import { dirname } from "path";
+import { dataPaths } from "./data/src/paths.ts";
+
+export function reportHook(hook: string, event: string, sessionId?: string): void {
+  try {
+    mkdirSync(dirname(dataPaths.hookEvents), { recursive: true });
+    const line = JSON.stringify({ ts: new Date().toISOString(), hook, event, sessionId: sessionId ?? "unknown" });
+    appendFileSync(dataPaths.hookEvents, line + "\n");
+  } catch {}
+}

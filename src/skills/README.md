@@ -10,14 +10,9 @@ Depth classification, keyword-matched skill evaluation, skill routing config, qu
 - `hooks/format-reminder.ts` — depth classification + skill eval at UserPromptSubmit
 - `hooks/quality.ts` — per-file lint/format on Edit/Write (PostToolUse)
 - `hooks/notify.ts` — WSL toast / macOS alert / terminal bell (Notification)
-- `brainstorming/SKILL.md` — design-first workflow with approval gates
-- `tdd/SKILL.md` — RED-GREEN-REFACTOR test-driven development
-- `writing-plans/SKILL.md` — structured implementation plan creation
-- `executing-plans/SKILL.md` — plan execution with verification checkpoints
+- `build/SKILL.md` — unified implementation lifecycle: design, plan, TDD execute, review, finish
 - `debugging/SKILL.md` — systematic 4-phase root cause debugging
 - `verification/SKILL.md` — verification-before-completion enforcement
-- `subagent-dev/SKILL.md` — subagent-driven development with two-stage review
-- `parallel-agents/SKILL.md` — parallel agent dispatch for independent failures
 - `finishing-branch/SKILL.md` — end-of-branch workflow (merge/PR/keep/discard)
 - `git-worktrees/SKILL.md` — isolated worktree setup and teardown
 - `code-review/SKILL.md` — dead code, unused imports, code quality, dead references

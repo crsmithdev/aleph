@@ -2,6 +2,8 @@
 
 Behavior-oriented spec for functional testing and drift detection. Every claim here is testable.
 
+For the telemetry system architecture, see [TELEMETRY.md](TELEMETRY.md).
+
 ## Session Lifecycle
 
 ### Starting a session
@@ -23,387 +25,303 @@ Last session (<filename>):
 ====================
 ```
 
-- Session count is the number of `.md` files in `memory/sessions/`.
-- The last session block is shown only when at least one session file exists. It displays the most recent session summary (minus the `# Session:` heading), indented.
-
-The session-start hook also detects git worktrees and prompts for a semantic memory search.
+- Session count is the number of `.md` files in `data/sessions/`.
+- The last session block is shown only when at least one session file exists.
+- If sessions occurred since the last interactive session, a background work summary is shown classifying them as completed/in-progress/blocked.
+- The 5 most recent semantic memories are recalled from the memory DB and displayed.
+- The hook also detects git worktrees and displays the branch name.
 
 ### During a session
 
-**Depth classification** — on every prompt (≥3 words), `format-reminder.ts` classifies depth:
-- FULL if prompt matches architectural keywords (`architect|redesign|refactor|migrate|schema|structure|plan|propose|authenticat*|authorizat*|integrat*|api endpoint|rename all|move all|replace all|across all|every file|all files|end to end|full stack`) or is ≥40 words (inclusive).
+**Depth classification** — on every prompt (>=3 words), `format-reminder.ts` classifies depth:
+- FULL if prompt matches architectural keywords (`architect|redesign|refactor|migrate|schema|structure|plan|propose|authenticat*|authorizat*|integrat*|api endpoint|rename all|move all|replace all|across all|every file|all files|end to end|full stack`) or is >=40 words.
 - QUICK otherwise (silent).
 - Output when FULL (architectural keywords): `[Construct] Depth: FULL — architectural keywords. Use design-first pipeline.`
-- Output when FULL (≥40 words): `[Construct] Depth: FULL — complex request. Consider design-first pipeline.`
+- Output when FULL (>=40 words): `[Construct] Depth: FULL — complex request. Consider design-first pipeline.`
 
-**Verification gate injection** — same hook injects e2e requirements for non-question prompts ≥5 words: `[Construct] Verification gate active — after making changes, you MUST verify end-to-end: 1. Start the dev server or run the actual system 2. Interact with it (Playwright, Chrome DevTools, or run the CLI) 3. Produce an artifact: screenshot or captured output saved to a file`. Unit tests alone are not sufficient. The Stop hook checks for e2e evidence.
+**Verification gate injection** — same hook injects e2e requirements for non-question prompts >=5 words: `[Construct] Verification gate active — after making changes, you MUST verify end-to-end: 1. Start the dev server or run the actual system 2. Interact with it (Playwright, Chrome DevTools, or run the CLI) 3. Produce an artifact: screenshot or captured output saved to a file`. Unit tests alone are not sufficient. The Stop hook checks for e2e evidence.
 
-**Skill matching** — same hook checks prompt against `skill-rules.json` keywords. On match: `[Construct] Matched skills: <names>. Activate via Skill() before proceeding.` No match = silent.
+**Skill matching** — same hook checks prompt against `skill-rules.json` keywords. On match: `[Construct] Matched skills: <names>. Activate via Skill() before proceeding.` No match = silent. Project-local skill extensions (`.claude/skills/<skill>.md`) are appended to the base skill when matched.
 
 **Rating capture** — on every prompt, `rating-capture.ts` checks for explicit ratings:
-1. Standalone integer 1–10 as the entire prompt
+1. Standalone integer 1-10 as the entire prompt
 2. N/10 pattern anywhere (e.g. `8/10`)
-3. Words "rate"/"rating" plus a 1–10 digit
+3. Words "rate"/"rating" plus a 1-10 digit
 
-Matched ratings are appended to `memory/signals/ratings.jsonl`:
+Matched ratings are appended to `data/signals/ratings.jsonl`:
 ```json
 {"timestamp":"<ISO>","rating":8,"type":"explicit","context":"<first 100 chars>"}
 ```
-Ratings 1–3 trigger a console message: `[Construct] Low rating (N) — store what went wrong via memory_store`. Ratings 4–10 are silent.
+Ratings 1-3 trigger a console message: `[Construct] Low rating (N) — store what went wrong via memory_store`. Ratings 4-10 are silent.
 
 **Quality hook** — after every `Edit` or `Write` tool use, `quality.ts` auto-formats the saved file:
 - If `.claude/quality.json` exists in the project, runs its `format` and `lint` commands with `$FILE` substituted.
-- Otherwise, extension-based defaults: `.py` → ruff, `.ts/.tsx/.js/.jsx` → prettier, `.go` → gofmt, `.rs` → rustfmt.
+- Otherwise, extension-based defaults: `.py` -> ruff, `.ts/.tsx/.js/.jsx` -> prettier, `.go` -> gofmt, `.rs` -> rustfmt.
 - Skips silently if the formatter binary isn't installed.
-- All output is suppressed; failures are silent. The file is modified in place.
+- Failures are logged to trace and printed to stderr.
+
+**TypeScript gate** — after every `Edit` or `Write` on `.ts/.tsx` files, `tsc-gate.ts` finds the nearest `tsconfig.json` and runs `tsc --noEmit`. If errors are found, prints a summary of up to 5 errors.
+
+**Database guard** — before any MCP SQL tool call (`execute_sql`, `apply_migration`, `run_query`), `db-guard.ts` blocks destructive operations: `DROP TABLE/DATABASE/SCHEMA`, `TRUNCATE`, `DELETE FROM` without WHERE, `ALTER TABLE DROP COLUMN`.
 
 ### Ending a session
 
-On `Stop`, three hooks fire:
+On `Stop`, four hooks fire:
 
-**1. Verification gate** (`verify-gate.ts`, 3000ms) — checks whether the current turn included e2e evidence and an artifact when files were edited:
-- Scans the current turn (from last user message onward) for edits (Edit, Write, NotebookEdit tool uses).
+**1. Verification gate** (`verify-gate.ts`) — checks whether the current turn included e2e evidence and an artifact when files were edited:
 - If no edits: skips silently.
 - If edits present: checks for e2e signals (devserver startup, Playwright/Cypress, browser MCP tools) and artifacts (screenshots, saved output).
 - If both e2e evidence and artifact are found: passes silently.
-- Otherwise: emits a one-shot reminder listing edited files and what was missing. Fires only once (`stop_hook_active` prevents re-triggering).
-- The real enforcement is in `format-reminder.ts` (UserPromptSubmit) which injects e2e requirements proactively. This hook validates compliance.
+- Otherwise: emits a one-shot reminder listing edited files and what was missing.
 
-**2. Session summary** (`session-summary.ts`) — writes a summary file if the session had ≥4 messages:
-- Output: `memory/sessions/YYYY-MM-DD-HHMMSS.md`:
-  ```markdown
-  # Session: 2026-03-12
+**2. Context monitor** (`context-monitor.ts`) — reads token usage from the last assistant message. Warns at 80% of context limit, critical alert at 90%.
 
-  - Intent: <first user message text>
-  - Outcome: <last user message text>
-  - Milestones:
-    - <intermediate user messages>
-  - Tools: Read, Edit, Bash, Glob, Grep; files: hooks/session-start.ts, memory/README.md
-  - Edits: 5 tool calls, 3 files
-  - Messages: 12 (6 user, 6 assistant)
-  - Notes:
-    - <assistant message summaries>
-  ```
-- Up to 8 tool names, 12 file paths, 4 milestones, 5 notes.
-- Fully silent.
+**3. Session summary** (`session-summary.ts`) — writes a summary file if the session had >=4 messages:
+- Output: `data/sessions/YYYY-MM-DD-HHMMSS.md`
+- Contains: intent, outcome, milestones, tools used, files edited, message counts, assistant notes.
 
-**3. Memory extraction** (`memory-extract.ts`) — auto-extracts high-value memories and stores them in semantic memory:
+**4. Memory extraction** (`memory-extract.ts`) — auto-extracts high-value memories and stores them in semantic memory:
 - Skips if session is not substantive (<6 messages or no edits).
 - Skips if Claude already called `memory_store` voluntarily.
-- Extracts: session summary (intent → outcome + files), user corrections ("no", "don't", "instead"), error resolutions (error → fix pairs).
-- All auto-extracted memories tagged with `auto_extract` for filtering.
-- Spawns Python writer fire-and-forget (~7-8s in background). Non-blocking.
-- Dedup handled by mcp-memory-service (exact hash + semantic similarity).
+- Extracts: session summary, user corrections, error resolutions.
+- All auto-extracted memories tagged with `auto_extract`.
+
+**Pre-compaction backup** (`precompact-backup.ts`) — on `PreCompact`, copies the current transcript JSONL to `~/.claude/transcript-backups/` before Claude compacts the conversation.
 
 ## Statusline
 
-Rendered continuously via `StatusUpdate` event. Shows:
+Rendered continuously via `StatusUpdate` event:
 
 ```
 <model name>  ⎇ <git branch>  <dir name>  [████░░░░░░] 42%
 ```
 
-- Uses external `ccstatusline` binary directly (no fallback wrapper).
-- Shows: model display name, git branch, cwd, context window bar + percentage.
+Uses `ccstatusline` binary. Shows model display name, git branch, cwd, context window bar + percentage.
 
 ## Notifications
 
 On `Notification` events (`idle`, `permission`, `complete`):
-- **WSL** (detected via `/proc/version`): Windows Toast via PowerShell WinRT APIs.
+- **WSL**: Windows Toast via PowerShell WinRT APIs.
 - **macOS**: `osascript display notification`.
-- **Fallback**: terminal bell (`\x07`).
-
-Messages: idle → "Claude is waiting for input", permission → "Claude needs permission to proceed", complete → "Claude finished the task".
+- **Fallback**: terminal bell.
 
 ## Skills
 
 Skills are domain-specific playbooks activated by keyword matching. Each lives in `construct/skills/<name>/SKILL.md`.
 
-### research
-
-**Activated by:** research, investigate, look into, find out, compare, survey, analyze
-
-**Behavior:** Claude defines scope as concrete criteria before searching. Fires parallel searches. Requires fetching full source pages (not snippets). Synthesizes against original questions with inline source links. Notes gaps explicitly. Conflicting evidence must not be omitted.
-
-### verification
-
-**Activated by:** verify that, verify it, confirm passing, validate that, prove it works, verification
-
-**Behavior:** The Iron Law — no completion claim without same-message evidence. Claude must run the verification command fresh and report inline: `✓ [command] → [result]` or `✗ [command] → [actual vs expected]`. "Should work", "looks right", and "linter passed" are explicitly insufficient.
-
-### debugging
-
-**Activated by:** debug, bug, broken, failing, error, crash, exception, traceback, root cause, bisect
-
-**Behavior:** Four phases:
-1. Root cause investigation — read errors, reproduce, trace call chain to origin (never fix at symptom site).
-2. Pattern analysis — find working examples, compare.
-3. Hypothesis + test — one variable at a time, predict before changing.
-4. Implementation — failing test first, then fix, then regression suite.
-
-Hard stop: if 3+ consecutive fixes fail, escalate to human.
-
-### subagent-dev
-
-**Activated by:** subagent, parallel tasks, dispatch, multi-task, implementation plan, execute plan
-
-**Behavior:** Each independent task gets a fresh subagent with exactly the context it needs (no session history). Two mandatory review stages per task: spec compliance (haiku), then code quality (sonnet). Failures trigger implementer rework + re-review. Single task = skip this skill, just do it directly. Stop-on-3-failures rule.
-
-### code-review
-
-**Activated by:** dead code, unused, clean up, cleanup, simplify, code quality, code review, lint
-
-**Behavior:** Scans files for 8 categories: unused imports, unreferenced functions, commented-out code, orphaned files, duplicate utilities, silent failures, misnamed identifiers, redundant logic. Verifies each candidate is truly dead (project-wide search). Removes one category at a time with test verification. Also checks dead references in configs/docs. Reports what was removed and what was flagged.
-
-### docs-review
-
-**Activated by:** doc sync, docs drift, documentation mismatch, docs match
-
-**Behavior:** Enumerates every factual claim in docs (file paths, hook registrations, behavior claims, directory layout). Verifies each against truth source (filesystem, settings.json, command output). Checks spec completeness (hooks, commands, skills all documented). Reports ✓/✗/⚠ per claim.
-
-### instructions-review
-
-**Activated by:** audit instructions, review rules, contradictions, vague instructions, instruction quality
-
-**Behavior:** Reads all instruction files (CLAUDE.md, identity files, SKILL.md, command files). Checks for five problems: vague/ambiguous instructions, contradictions between files, impossible instructions (referencing nonexistent things), duplication across files, missing essential information. Reports by file, sorted by severity.
-
-### ralph-loop
-
-**Activated by:** ralph, ralph loop, autonomous loop, keep iterating, iterate until
-
-**Behavior:** Named after Ralph Wiggum — kind of dumb, kind of lovable, and he never gives up. Iterations are dispatched as subagents (parallel by default for independent work, sequential for dependent work). Progress lives in files, not context windows. Each agent writes to a known output location. Failures are data — the next agent learns from them.
-
-### brainstorming
-
-**Activated by:** brainstorm, design first, design session, explore approaches, propose options, design doc
-
-**Behavior:** Design before building. Explores context, asks one clarifying question at a time, proposes 2-3 approaches each with trade-offs (not just pros). Presents design scaled to complexity. User must approve before implementation begins. For non-trivial work, writes a design doc capturing decisions for the plan phase. Chains to `writing-plans`.
-
-### tdd
-
-**Activated by:** tdd, test driven, test first, red green refactor, write test first, failing test
-
-**Behavior:** The Iron Law — no production code without a failing test first. RED-GREEN-REFACTOR cycle: write one minimal failing test → verify it fails → write simplest passing code → verify all tests pass → refactor on green → commit. One behavior per test, observable outputs only. Hard stop conditions: if caught writing code before a failing test, start over from RED.
-
-### writing-plans
-
-**Activated by:** write plan, create plan, implementation plan, plan out, break down into tasks
-
-**Behavior:** Maps every file to be created or modified, breaks work into tasks each following TDD cycle, orders tasks by dependencies (independent tasks marked for parallel execution). Each task is self-contained with exact file paths, expected commands, and clear success criteria. Chains to `subagent-dev` or `executing-plans`.
-
-### executing-plans
-
-**Activated by:** execute plan, run plan, follow plan, work through plan
-
-**Behavior:** Loads and reviews the plan, flags problems before starting. Executes each task in order: mark in-progress → TDD cycle → run specified verifications → commit → mark complete. Stops immediately on blockers (missing dependency, unexpected failure, unclear instruction, plan conflict) — does not guess or work around. Chains to `finishing-branch`.
-
-### finishing-branch
-
-**Activated by:** finish branch, merge branch, create pr, ready to merge, branch done
-
-**Behavior:** Runs full test suite first — does not proceed if any fail. Identifies base branch. Presents four options: Merge (squash merge → delete branch), PR (push + gh pr create → report URL), Keep (push if needed → report name), Discard (requires typed confirmation → delete). Cleans up worktree for Merge and Discard. Never merges with failing tests.
-
-### git-worktrees
-
-**Activated by:** worktree, create worktree, isolated branch, parallel branch
-
-**Behavior:** Chooses directory (checks `.worktrees/` or `worktrees/` first, then CLAUDE.md conventions). Verifies gitignore before creating inside project. Creates with `git worktree add <path> -b <branch>`. Auto-detects and runs package manager install (bun/npm/cargo/pip). Runs baseline test suite — if tests fail before any changes, investigates before proceeding.
-
-### parallel-agents
-
-**Activated by:** parallel debug, parallel investigation, multiple failures, independent failures
-
-**Behavior:** Groups failures into independent domains (each domain maps to a specific subsystem, test file, or component). Crafts focused prompts for each agent with scope, goal, constraints, and output format — no session history passed. Dispatches all agents in a single message for true parallelism. Integrates results, checks for conflicts between agent outputs, then runs full test suite to verify combined fixes.
+| Skill | Activated by | Purpose |
+|---|---|---|
+| research | research, investigate, compare, survey | Structured research with parallel search and source evaluation |
+| verification | verify that, confirm passing, prove it works | Iron-law gate: no completion claim without running evidence |
+| debugging | debug, bug, broken, failing, error, crash | Four-phase root-cause-first methodology |
+| build | build, implement, add feature, refactor, overhaul | Unified implementation lifecycle: design, plan, TDD execute, review, finish |
+| code-review | dead code, unused, clean up, code review | Scan for 9 categories of issues, verify before removing |
+| docs-review | doc sync, docs drift, documentation mismatch | Verify every factual claim in docs against truth sources |
+| hooks-review | hook review, hook audit | Review hook scripts for correctness, safety, and settings.json alignment |
+| commands-review | command review, command audit | Review slash command definitions for clarity and registration |
+| skills-review | skill review, skill audit | Review SKILL.md files for quality and skill-rules.json alignment |
+| config-review | config review, settings review | Review settings.json and CLAUDE.md for consistency |
+| ralph-loop | ralph, autonomous loop, keep iterating | Iterative autonomous development via subagents |
+| finishing-branch | finish branch, merge branch, create pr | Verify tests, present merge/PR/keep/discard options |
+| git-worktrees | worktree, create worktree, isolated branch | Set up isolated worktree with dependency install and baseline tests |
 
 ## Slash Commands
 
-| Command | Module | Behavior |
-|---------|--------|----------|
-| `/install` | core | Runs `bun install.ts`, then auto-runs post-install verification |
-| `/gist` | core | Surface Claude's current mental model + project understanding |
-| `/trace` | core | Toggle hook tracing (or one-shot trace a command) |
-| `/audit` | core | Full project audit: code, refs, instructions, docs, spec |
-| `/goal` | goals | Manage goals: list, create, update, delete, show, done, archive |
-| `/todo` | goals | Manage todos: list, add, done, undone, delete, recurring |
-| `/finish` | goals | Mark a todo or goal as done; undo completion; complete recurring todos |
+### Installed globally (`dotclaude/commands/` -> `~/.claude/commands/`)
 
+| Command | Behavior |
+|---------|----------|
+| `/gist` | Surface Claude's current mental model + project understanding |
+| `/goal` | Manage goals: list, create, update, delete, show, done, archive |
+| `/todo` | Manage todos: list, add, done, undone, delete |
+| `/finish` | Mark a todo or goal as done |
+
+### Project-level (`.claude/commands/` — Construct repo only)
+
+| Command | Behavior |
+|---------|----------|
+| `/install` | Runs `bun install.ts`, then auto-runs post-install verification |
+| `/trace` | Toggle hook tracing (or one-shot trace a command) |
+| `/audit` | Full project audit: code, refs, instructions, docs, spec |
+| `/devserver` | Kill dev ports, start UI dev server in background |
+| `/todo` | File items from review output into `docs/TODO.md` |
+| `/instructions-review` | Audit instruction files for vagueness, contradictions, duplication |
+
+## UI — Life Pages
+
+### Summary (`/summary`)
+
+Daily activity digest. Shows stat cards (goals created/completed, todos completed, notes added) and a plain-text summary block for the selected period. Presets: Today, Yesterday, This Week, Last Week, Custom (date pickers). Copy button exports the summary as plain text.
+
+### Goals (`/goals`)
+
+Browse and manage goals. Filterable by state, priority, and category. Toggles for archived and completed goals. Group-by-category view with colour-coded section headers. Inline goal creation form.
+
+### Goal Detail (`/goals/:id`)
+
+Full goal view with inline-editable title, priority/state selects, category management (add/remove chips with colour picker), notes (add/edit/delete with Markdown), and a history timeline of all changes. Finish/reopen and archive/unarchive actions.
+
+### Todos (`/todos`)
+
+Daily task list split into Active and Completed Today sections. Quick-add bar at top. Each todo supports inline title editing, note expansion, completion, deletion, and linked goal display.
+
+### Habits (`/habits`)
+
+Daily/weekly/monthly habit tracker. Create habits with frequency selection. Toggle completion for the current period. Shows streak count (gold <7d, green >=7d) and missed-period warnings. Inactive habits dimmed at bottom.
+
+## UI — Observability Pages
+
+All observability pages share a control bar with time range selector (Session/1h/1d/7d/30d), optional granularity picker (Hour/Day), and filter toggles. Each page shows server-side query timing.
+
+For the data behind these pages, see [TELEMETRY.md](TELEMETRY.md).
+
+### Overview (`/observability/overview`)
+
+Dashboard with stat cards: Sessions, Messages, Tool Calls, Tool Success %, Total Cost, API Latency (avg + p95), Compactions, Lines Changed, Commits. Area/bar chart of messages and sessions over time.
+
+### Tools (`/observability/tools`)
+
+Ranked tool table: status dot, name, count, errors, %, avg/p95 latency, usage bar. Chart of tool calls over time. "Active only" filter. Click to drill down.
+
+### Tool Detail (`/observability/tools/:name`)
+
+Stats: invocations, errors, success rate. Chart over time. Table of recent invocations with expandable params JSON. "Errors only" filter. Error rows highlighted.
+
+### Hooks (`/observability/hooks`)
+
+Two views toggled by segmented control:
+- **By Hook**: ranked table (status, command, event, count, errors, success %, timing), chart over time, active/unused filters.
+- **By Event**: event summary cards (count + registered hooks), filterable invocation table with expandable per-hook timing.
+
+### Hook Detail (`/observability/hooks/:name`)
+
+Stats: executions, avg/p50/p95 latency, success rate. Chart over time. Recent executions table with exit codes, duration, output. Hook source code viewer at bottom.
+
+### Skills (`/observability/skills`)
+
+Ranked skill table with usage bars. Unused skills shown dimmed. Chart over time. Click to drill down.
+
+### Skill Detail (`/observability/skills/:name`)
+
+Stats: invocations, errors, success rate. Chart over time. Recent invocations table with user request context. Full skill source rendered as Markdown.
+
+### Tokens & Cost (`/observability/tokens`)
+
+Stats: total cost, daily average, cache efficiency %, total tokens (input/output). Stacked area chart of token types per day. Cost chart per day. Model cost breakdown table.
+
+### Sessions (`/observability/sessions`)
+
+Stats: session count, avg duration, user/assistant messages, lines changed, commits. Daily session chart. Activity chart. Session table (up to 50) with duration, messages, tools, cost, lines, commits, branch. Subagent sessions shown indented. "Subagent" and "Dispatcher" filter toggles. Sessions-by-project table.
+
+### Session Trace (`/observability/sessions/:id`)
+
+Turn-by-turn breakdown: duration, turns, tool calls, hook runs, tokens, cost. Turn table with prompt preview, tools, hooks, errors, cost. "Tool" and "Subagent" filters. Click to drill into individual turns.
+
+### Turn Trace (`/observability/sessions/:id/turns/:turnIndex`)
+
+Deepest drill-down. User prompt text. Stats: duration, tools, hooks, tokens, cost, errors. Colour-coded sequence bar (waterfall): blue=tool, purple=hook, red=error, dark=LLM thinking. Event table with type, name, start offset, duration, % of total. Expandable detail (tool params JSON, subagent links). "Internal" toggle to show/hide LLM thinking segments. Prev/next turn navigation.
+
+### Events (`/observability/events`)
+
+Raw event log. Paginated table (100/page): time, type badge, detail, info preview, session. Event type filter toggles, errors filter, debounced search. Expandable row details (full params, hook output, error messages, token breakdowns).
+
+### Memory (`/observability/memory`)
+
+Stats from latest snapshot: total memories, health score, stale count, store/search counts. Store+search operations chart. By-type and top-tags tables (clickable to filter browser). Memory count trend chart. Memory browser: searchable/filterable list of individual items with content preview, type, age, tags. "Take Snapshot" button.
+
+### Database (`/observability/db`)
+
+Per-database: file size, WAL size (warning if >10MB), table count, total rows. Table-level row counts.
+
+## UI — Settings (`/settings`)
+
+### Build
+
+Git revision (short hash + branch), commit count, last commit message + date, install timestamp (greyed dash if absent), Bun version, platform/arch.
+
+### Paths
+
+`CLAUDE_ROOT` shown prominently. All derived paths (source repo, construct, commands, skills, databases, sessions, ratings, backups) shown dimmed. Absent values displayed as a greyed dash.
+
+### Runtime
+
+Node environment, API port, DB size on disk.
+
+### Backup
+
+List of existing backups with filename, creation date, file size. Create and restore controls.
 
 ## Installer
 
 **Invocation:** `bun install.ts` from repo root.
 
 **Steps:**
-1. **Backup** preserved files to `/tmp/construct-backup-XXXXX/`.
-2. **Sync** `src/` tree destructively — copies everything from repo, deletes stale files in target.
-3. **Restore** backed-up preserved files over the fresh sync.
-4. **Sync commands** — installs from repo, removes known stale Construct commands. User-created commands untouched.
-5. **Merge settings.json** — replaces `hooks` and `statusLine` only. Rewrites relative paths to absolute `$HOME`-based paths. All other keys preserved.
-6. **Update CLAUDE.md** — replaces `# Construct` section in-place. Content before and after preserved. Appends if no section exists.
+1. Ensure data directories exist (`data/{sessions,signals,backups}`)
+2. Migrate data from old locations (one-time)
+3. Back up preserved files (ALL CAPS `.md` in `core/identity/` and `memory/`) to temp dir
+4. Back up the database (last 5 backups kept)
+5. Stop UI service
+6. Sync `src/` -> `~/.claude/construct/` (overwrite + delete stale, skip `.db` files and `node_modules`)
+7. Install UI dependencies
+8. Restore preserved files (byte-size verified)
+9. Sync commands from `dotclaude/commands/` and register skills as commands
+10. Merge `settings.json` — replaces `hooks` and `statusLine` only, rewrites paths to absolute
+11. Update `CLAUDE.md` — replaces `# Construct` section in-place, preserves surrounding content
+12. Verify critical files (byte-size check)
+13. Write build manifest (git info, paths, timestamps)
+14. Restart UI service
 
-**User sees:**
-```
-=== Construct Installer ===
-src: /home/.../Construct
-dst: /home/.../.claude
+**Preserved on upgrade:** ALL CAPS `.md` files in `core/identity/` and `memory/`.
 
-backing up preserved files...
-  preserved: core/identity/SOUL.md
-  ...
-syncing construct/...
-restoring preserved files...
-syncing commands...
-  installed: construct.md
-merging settings.json...
-updating CLAUDE.md...
+**Overwritten on upgrade:** all hooks, skills, meta files, non-ALLCAPS files in construct/.
 
-done.
-```
+## Path Resolution
 
-**Preserved on upgrade:**
-- ALL CAPS `.md` files (`[A-Z_]+.md`) in `construct/core/identity/`
-- `memory/signals/ratings.jsonl`
-- `memory/sessions/` contents
+All paths derive from a single root: `CLAUDE_ROOT` (env var, defaults to `~/.claude`).
 
+| Path | Derivation |
+|---|---|
+| `construct/` | `CLAUDE_ROOT/construct` |
+| `commands/` | `CLAUDE_ROOT/commands` |
+| `data/` | `CLAUDE_ROOT/data` (overridable via `CONSTRUCT_DATA_ROOT`) |
+| `data/construct.db` | `DATA_ROOT/construct.db` |
+| `data/memory/sqlite_vec.db` | `DATA_ROOT/memory/sqlite_vec.db` (overridable via `MEMORY_DB_PATH`) |
+| `data/sessions/` | `DATA_ROOT/sessions` |
+| `data/signals/ratings.jsonl` | `DATA_ROOT/signals/ratings.jsonl` |
+| `data/backups/` | `DATA_ROOT/backups` |
 
-**Overwritten on upgrade:**
-- All hooks, skills, meta files
-- README.md and INSTALL.md files within modules
-- Non-ALLCAPS files in construct/
+**Dev isolation:** when running from the source repo (detected by presence of both `install.ts` and `src/data/src/paths.ts` at or above cwd), `CLAUDE_ROOT` auto-defaults to `<repo>/.dev/` instead of `~/.claude`. This prevents accidental production writes during development.
 
 ## Identity Layer
 
 Four optional files in `construct/core/identity/`, preserved on upgrade:
 
-| File | What it changes |
-|------|----------------|
-| SOUL.md | Values and mental models: correctness over speed, simplicity, honesty, minimal footprint, YAGNI, blast radius awareness. Self-awareness of biases (over-engineering, completionism, verbosity, anchoring) |
-| IDENTITY.md | Tone: terse by default, matches user energy, pragmatic engineer, no filler phrases, no hedging, pushes back when wrong, treats silence as permission |
-| STYLE.md | Output format: answer-first, bullets for 3+ items, `path:line` references, no headers in short responses. Code: functional where clear, early returns, match existing style |
-| USER.md | Principal profile: environment, working style, communication preferences. Partially filled template |
-
-## Modules
-
-Seven modules, installed in dependency order. Core is always required; the others are inert if unused.
-
-### construct-core
-
-**Depends on:** nothing
-
-**Provides:**
-- `~/.claude/CLAUDE.md` with `# Construct` section (sections: `## Behavior`, `## Task Execution`, `## Module Installation`, `## Thinking Tools`)
-- `~/.claude/settings.json` (permissions, statusline, hooks)
-- `ccstatusline` external binary (StatusUpdate event, 3000ms timeout)
-- `construct/core/identity/` — optional identity files (see [Identity Layer](#identity-layer))
-
-### construct-memory
-
-**Depends on:** construct-core
-
-**Provides:**
-- `construct/memory/hooks/` — session-start.ts, rating-capture.ts, session-summary.ts, memory-extract.ts
-- `construct/memory/sessions/` — session summary files
-- `construct/memory/signals/ratings.jsonl` — explicit + implicit rating history
-- CLAUDE.md sections: `## Memory` (with `### Semantic memory (mcp-memory-service)`), `## Identity Files`
-
-Two memory layers: semantic (mcp-memory-service, decisions/patterns/preferences, searched on demand) and signals (ratings/session history, append-only file-based).
-
-### construct-skills
-
-**Depends on:** construct-core
-
-**Provides:**
-- `construct/skills/skill-rules.json` — keyword routing config (15 rules)
-- `construct/skills/hooks/format-reminder.ts` — UserPromptSubmit depth classification + verification gate injection + skill matching
-- `construct/skills/hooks/quality.ts` — PostToolUse auto-formatter (matcher: `Edit|Write`)
-- `construct/skills/hooks/notify.ts` — Notification alerts
-- `construct/skills/hooks/verify-gate.ts` — Stop hook: e2e verification gate
-- CLAUDE.md section: `## Agent Personas`
-- Fifteen skill playbooks in `construct/skills/<name>/SKILL.md`: research, verification, debugging, subagent-dev, code-review, docs-review, instructions-review, ralph-loop, brainstorming, tdd, writing-plans, executing-plans, finishing-branch, git-worktrees, parallel-agents
-
-**Skill routing keywords:**
-
-| Skill | Keywords |
-|-------|----------|
-| research | research, investigate, look into, find out, compare, survey, analyze |
-| verification | verify that, verify it, confirm passing, validate that, prove it works, verification |
-| debugging | debug, bug, broken, failing, error, crash, exception, traceback, root cause, bisect |
-| subagent-dev | subagent, parallel tasks, dispatch, multi-task |
-| code-review | dead code, unused, clean up, cleanup, simplify, code quality, code review, lint |
-| docs-review | doc sync, docs drift, documentation mismatch, docs match |
-| instructions-review | audit instructions, review rules, contradictions, vague instructions, instruction quality |
-| ralph-loop | ralph, ralph loop, autonomous loop, keep iterating, iterate until |
-| brainstorming | brainstorm, design first, design session, explore approaches, propose options, design doc |
-| tdd | tdd, test driven, test first, red green refactor, write test first, failing test |
-| writing-plans | write plan, create plan, implementation plan, plan out, break down into tasks |
-| executing-plans | execute plan, run plan, follow plan, work through plan |
-| finishing-branch | finish branch, merge branch, create pr, ready to merge, branch done |
-| git-worktrees | worktree, create worktree, isolated branch, parallel branch |
-| parallel-agents | parallel debug, parallel investigation, multiple failures, independent failures |
-
-### construct-data
-
-**Depends on:** nothing
-
-**Provides:**
-- `construct/data/src/client.ts` — `createDb(path?)` factory returning `{ db, sqlite }` with WAL mode and foreign keys
-- Default database path: `~/.claude/construct/data/construct.db` (overridable via `CONSTRUCT_DB_PATH` env var)
-
-### construct-goals
-
-**Depends on:** construct-data
-
-**Provides:**
-- `construct/goals/src/` — Domain logic: constants, types, validators, Drizzle schema, DDL, service functions
-- `construct/goals/mcp/` — MCP server with direct SQLite access (no HTTP dependency)
-- Service functions: listGoals, getGoal, createGoal, updateGoal, deleteGoal, setCategories, getTodosForDay, createTodo, updateTodo, deleteTodo, listCategories, createCategory, deleteCategory, listNotes, addNote, updateNote, deleteNote, listRecurringTodos, createRecurringTodo, completeRecurringTodo, uncompleteRecurringTodo, getHistory, getSummary
-- EventBus + HistoryService for mutation tracking
-
-**Data model:** goals, categories (many-to-many), notes (per-goal), todos (with due dates), recurring todos (daily/weekly/monthly with period-keyed completions), history logs.
-
-**Integration:** CLI via `/goal` and `/todo` slash commands. MCP tools: list_goals, get_goal, create_goal, update_goal, delete_goal, list_categories, create_category, delete_category, list_notes, add_note, update_note, delete_note, list_todos, create_todo, update_todo, delete_todo, list_recurring_todos, create_recurring_todo, complete_recurring_todo, get_summary, get_history.
-
-### construct-ui
-
-**Depends on:** construct-data, construct-goals
-
-**Provides:**
-- `construct/ui/api/` — Fastify 5 REST API (thin wrappers calling @construct/goals services)
-- `construct/ui/web/` — React 19 SPA with Vite 6, Tailwind CSS v4, TanStack Query v5
-
-**No auth.** Single-user project — all routes are open.
-
-**Running:** `npm run dev` from `construct/ui/` starts API on :3001 and Vite on :5173. `npm run build` builds api → web. `npm test` runs Vitest integration tests.
+| File | Purpose |
+|------|---------|
+| SOUL.md | Values, mental models, known biases |
+| IDENTITY.md | Tone, personality, boundaries |
+| STYLE.md | Code and communication formatting |
+| USER.md | Principal profile, environment, preferences |
 
 ## Hook Registration
 
-All hooks in `settings.json` under `hooks`:
+All hooks in `settings.json`:
 
 | Event | Hooks (in order) | Timeouts |
 |-------|-----------------|----------|
 | SessionStart | memory/hooks/session-start.ts | 5000ms |
 | UserPromptSubmit | memory/hooks/rating-capture.ts, skills/hooks/format-reminder.ts | 2000ms, 3000ms |
-| Stop | skills/hooks/verify-gate.ts, memory/hooks/session-summary.ts, memory/hooks/memory-extract.ts | 3000ms, 3000ms, 5000ms |
-| PostToolUse | skills/hooks/quality.ts (matcher: `Edit\|Write`) | 10000ms |
+| Stop | skills/hooks/verify-gate.ts, skills/hooks/context-monitor.ts, memory/hooks/session-summary.ts, memory/hooks/memory-extract.ts | 3000ms, 3000ms, 3000ms, 5000ms |
+| PreToolUse | skills/hooks/db-guard.ts (matcher: `mcp__.*(?:execute_sql\|apply_migration\|run_query)`) | 3000ms |
+| PostToolUse | skills/hooks/quality.ts (matcher: `Edit\|Write`), skills/hooks/tsc-gate.ts (matcher: `Edit\|Write`) | 10000ms, 15000ms |
+| PreCompact | skills/hooks/precompact-backup.ts | 5000ms |
 | Notification | skills/hooks/notify.ts | 3000ms |
-
-No external API keys required. All hooks use context injection via stdin/stdout.
-
-## settings.json Structure
-
-Required top-level keys:
-- `permissions` — `allow`, `deny`, `ask` arrays of permission patterns
-- `statusLine` — `{ type: "command", command: string, timeout: number }`
-- `hooks` — event name → array of hook group objects
-
-Each hook group: `{ hooks: [{ type: "command", command: string, timeout: number }], matcher?: string }`
-
-The installer rewrites relative paths (`bun src/...`) to absolute `$HOME`-based paths during install.
 
 ## Trace Mode
 
 - Flag file: `~/.claude/construct/.trace`
-- When present: hooks emit trace output to stdout (via `console.log`)
-- Default state: OFF (file does not exist)
+- When present: hooks emit trace output to stdout via `trace()` calls
+- Toggled by `/trace` command or `src/trace-toggle.ts`
 
 ## Module Detection
 
@@ -416,10 +334,3 @@ The installer rewrites relative paths (`bun src/...`) to absolute `$HOME`-based 
 | construct-eval | `construct/eval/runner.ts` |
 | construct-goals | `construct/goals/src/index.ts` |
 | construct-ui | `construct/ui/api/src/app.ts` |
-
-## Verification
-
-Each module's INSTALL.md defines three categories of checks:
-- **Files** — expected files exist at target paths
-- **Data** — preserved files are non-empty and intact after upgrade
-- **Functionality** — hooks exit 0 on trivial input, JSON is parseable, CLAUDE.md sections present

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { execSync } from "child_process";
-import { readFileSync, readdirSync, existsSync, mkdirSync, writeFileSync, unlinkSync } from "fs";
+import { readFileSync, readdirSync, existsSync, mkdirSync, writeFileSync, unlinkSync, appendFileSync } from "fs";
 import { resolve } from "path";
 import { tmpdir } from "os";
 
@@ -888,6 +888,273 @@ function verifyGate(transcriptLines: string[], stopHookActive: any = false): str
 run("skills/hooks/verify-gate.ts", "malformed stdin", "not json");
 run("skills/hooks/verify-gate.ts", "empty object", "{}");
 run("skills/hooks/verify-gate.ts", "missing transcript_path", '{"stop_hook_active": false}');
+
+// ── Dispatch gate ───────────────────────────────────────────────────────────
+
+console.log("\n--- dispatch-gate ---");
+
+// No marker → allow (exit 0)
+run("skills/hooks/dispatch-gate.ts", "no marker allows",
+  JSON.stringify({ session_id: `test-nomarker-${process.pid}`, tool_name: "Edit" }));
+
+// With marker → block (exit 2)
+{
+  const gateSessionId = `test-gate-${process.pid}`;
+  const gateMarker = `/tmp/construct-dispatch-${gateSessionId}`;
+  writeFileSync(gateMarker, new Date().toISOString());
+  run("skills/hooks/dispatch-gate.ts", "marker blocks edit",
+    JSON.stringify({ session_id: gateSessionId, tool_name: "Edit" }),
+    { expectExit: 2, expectStdout: ["Dispatch required"] });
+  try { unlinkSync(gateMarker); } catch {}
+}
+
+// No session_id → allow
+run("skills/hooks/dispatch-gate.ts", "no session_id allows",
+  JSON.stringify({ tool_name: "Edit" }));
+
+// Malformed stdin → allow (exit 0, not crash)
+run("skills/hooks/dispatch-gate.ts", "malformed stdin allows", "not json");
+
+// ── Compliance check ────────────────────────────────────────────────────────
+
+console.log("\n--- compliance-check ---");
+
+{
+  const signalsDir = resolve(testDataRoot, "signals");
+  const directivesFile = resolve(signalsDir, "directives.jsonl");
+  const complianceFile = resolve(signalsDir, "compliance.jsonl");
+
+  // Clean slate
+  try { unlinkSync(directivesFile); } catch {}
+  try { unlinkSync(complianceFile); } catch {}
+
+  // Write directives for a compliant session (dispatch + full)
+  writeFileSync(directivesFile, JSON.stringify({
+    ts: new Date().toISOString(),
+    sessionId: "test-compliant",
+    directives: ["dispatch", "full"],
+    promptWords: 15,
+  }) + "\n");
+
+  // Create transcript WITH Agent + Skill calls → should be compliant
+  const compliantTranscript = writeTempJsonl("compliant", [
+    userMsg("refactor the auth module to use passkeys"),
+    assistantMsg("dispatching to background agent", [
+      { name: "Agent", input: { prompt: "refactor auth", run_in_background: true } },
+    ]),
+    assistantMsg("activating skill", [
+      { name: "Skill", input: { skill: "build" } },
+    ]),
+  ]);
+
+  runHook("skills/hooks/compliance-check.ts", JSON.stringify({
+    session_id: "test-compliant",
+    transcript_path: compliantTranscript,
+  }));
+  try { unlinkSync(compliantTranscript); } catch {}
+
+  // Verify compliance records
+  if (existsSync(complianceFile)) {
+    const records = readFileSync(complianceFile, "utf-8").trim().split("\n").map(l => JSON.parse(l));
+    check("compliance: dispatch=true when Agent used",
+      records.some((r: any) => r.directive === "dispatch" && r.followed === true));
+    check("compliance: full=true when Skill used",
+      records.some((r: any) => r.directive === "full" && r.followed === true));
+    check("compliance: sessionId matches",
+      records.every((r: any) => r.sessionId === "test-compliant"));
+    check("compliance: timestamp present",
+      records.every((r: any) => r.ts && !isNaN(Date.parse(r.ts))));
+  } else {
+    check("compliance: file created", false);
+    check("compliance: dispatch=true when Agent used", false);
+    check("compliance: full=true when Skill used", false);
+    check("compliance: sessionId matches", false);
+    check("compliance: timestamp present", false);
+  }
+
+  // Non-compliant session: directive says dispatch but no Agent call
+  try { unlinkSync(complianceFile); } catch {}
+  appendFileSync(directivesFile, JSON.stringify({
+    ts: new Date().toISOString(),
+    sessionId: "test-noncompliant",
+    directives: ["dispatch"],
+    promptWords: 20,
+  }) + "\n");
+
+  const nonCompliantTranscript = writeTempJsonl("noncompliant", [
+    userMsg("refactor the auth module to use passkeys"),
+    assistantMsg("I will do it inline", [
+      { name: "Edit", input: { file_path: "/src/auth.ts" } },
+    ]),
+  ]);
+
+  runHook("skills/hooks/compliance-check.ts", JSON.stringify({
+    session_id: "test-noncompliant",
+    transcript_path: nonCompliantTranscript,
+  }));
+  try { unlinkSync(nonCompliantTranscript); } catch {}
+
+  if (existsSync(complianceFile)) {
+    const ncRecords = readFileSync(complianceFile, "utf-8").trim().split("\n").map(l => JSON.parse(l));
+    check("compliance: dispatch=false when no Agent",
+      ncRecords.some((r: any) => r.directive === "dispatch" && r.followed === false));
+  } else {
+    check("compliance: dispatch=false when no Agent", false);
+  }
+
+  // Dispatch marker cleanup: compliance-check should delete the marker
+  {
+    const cleanupSessionId = `test-cleanup-${process.pid}`;
+    const cleanupMarker = `/tmp/construct-dispatch-${cleanupSessionId}`;
+    writeFileSync(cleanupMarker, new Date().toISOString());
+
+    // Write a directive for this session
+    appendFileSync(directivesFile, JSON.stringify({
+      ts: new Date().toISOString(),
+      sessionId: cleanupSessionId,
+      directives: ["dispatch"],
+      promptWords: 10,
+    }) + "\n");
+
+    const cleanupTranscript = writeTempJsonl("cleanup", [
+      userMsg("refactor it"),
+      assistantMsg("dispatching", [{ name: "Agent", input: { prompt: "do it" } }]),
+    ]);
+
+    runHook("skills/hooks/compliance-check.ts", JSON.stringify({
+      session_id: cleanupSessionId,
+      transcript_path: cleanupTranscript,
+    }));
+    try { unlinkSync(cleanupTranscript); } catch {}
+
+    check("compliance: dispatch marker cleaned up", !existsSync(cleanupMarker));
+  }
+
+  // No directives for session → skip silently
+  {
+    try { unlinkSync(complianceFile); } catch {}
+    const noDirectiveTranscript = writeTempJsonl("nodirective", [
+      userMsg("fix a typo"),
+      assistantMsg("done", [{ name: "Edit", input: { file_path: "/src/foo.ts" } }]),
+    ]);
+    runHook("skills/hooks/compliance-check.ts", JSON.stringify({
+      session_id: "test-no-directives-ever",
+      transcript_path: noDirectiveTranscript,
+    }));
+    try { unlinkSync(noDirectiveTranscript); } catch {}
+    check("compliance: no output when no directives for session", !existsSync(complianceFile));
+  }
+
+  // Skill directive compliance
+  {
+    try { unlinkSync(complianceFile); } catch {}
+    appendFileSync(directivesFile, JSON.stringify({
+      ts: new Date().toISOString(),
+      sessionId: "test-skill-directive",
+      directives: ["skill:verification"],
+      promptWords: 12,
+    }) + "\n");
+
+    const skillTranscript = writeTempJsonl("skill-directive", [
+      userMsg("verify the deploy"),
+      assistantMsg("activating verification", [
+        { name: "Skill", input: { skill: "verification" } },
+      ]),
+    ]);
+
+    runHook("skills/hooks/compliance-check.ts", JSON.stringify({
+      session_id: "test-skill-directive",
+      transcript_path: skillTranscript,
+    }));
+    try { unlinkSync(skillTranscript); } catch {}
+
+    if (existsSync(complianceFile)) {
+      const skillRecords = readFileSync(complianceFile, "utf-8").trim().split("\n").map(l => JSON.parse(l));
+      check("compliance: skill:verification=true when Skill(verification) used",
+        skillRecords.some((r: any) => r.directive === "skill:verification" && r.followed === true));
+    } else {
+      check("compliance: skill:verification=true when Skill(verification) used", false);
+    }
+  }
+
+  // Clean up
+  try { unlinkSync(directivesFile); } catch {}
+  try { unlinkSync(complianceFile); } catch {}
+}
+
+// ── Directive signal writing ────────────────────────────────────────────────
+
+console.log("\n--- directive signals ---");
+
+{
+  const signalsDir = resolve(testDataRoot, "signals");
+  const directivesFile = resolve(signalsDir, "directives.jsonl");
+  try { unlinkSync(directivesFile); } catch {}
+
+  // Architectural prompt → should write dispatch + full directives
+  runHook("skills/hooks/format-reminder.ts", JSON.stringify({
+    prompt: "refactor the authentication module to use a completely new pattern across all files",
+    session_id: "test-directive-write",
+  }));
+
+  if (existsSync(directivesFile)) {
+    const lines = readFileSync(directivesFile, "utf-8").trim().split("\n").filter(Boolean);
+    const record = JSON.parse(lines[lines.length - 1]);
+    check("directive: written for architectural prompt", record.sessionId === "test-directive-write");
+    check("directive: includes dispatch", record.directives.includes("dispatch"));
+    check("directive: includes full", record.directives.includes("full"));
+    check("directive: has promptWords", record.promptWords > 0);
+  } else {
+    check("directive: written for architectural prompt", false);
+    check("directive: includes dispatch", false);
+    check("directive: includes full", false);
+    check("directive: has promptWords", false);
+  }
+
+  // Quick prompt → no directive written
+  const linesBefore = existsSync(directivesFile)
+    ? readFileSync(directivesFile, "utf-8").trim().split("\n").filter(Boolean).length
+    : 0;
+  runHook("skills/hooks/format-reminder.ts", JSON.stringify({
+    prompt: "fix the typo on line 42",
+    session_id: "test-no-directive",
+  }));
+  const linesAfter = existsSync(directivesFile)
+    ? readFileSync(directivesFile, "utf-8").trim().split("\n").filter(Boolean).length
+    : 0;
+  check("directive: not written for quick prompt", linesAfter === linesBefore);
+
+  // Question prompt → full but no dispatch
+  runHook("skills/hooks/format-reminder.ts", JSON.stringify({
+    prompt: "how does the authentication module work and what is the overall architecture of the system",
+    session_id: "test-question-directive",
+  }));
+  if (existsSync(directivesFile)) {
+    const lines = readFileSync(directivesFile, "utf-8").trim().split("\n").filter(Boolean);
+    const record = JSON.parse(lines[lines.length - 1]);
+    check("directive: question gets full but not dispatch",
+      record.directives.includes("full") && !record.directives.includes("dispatch"));
+  } else {
+    check("directive: question gets full but not dispatch", false);
+  }
+
+  // Dispatch marker creation
+  {
+    const markerSessionId = `test-marker-${process.pid}`;
+    const markerPath = `/tmp/construct-dispatch-${markerSessionId}`;
+    try { unlinkSync(markerPath); } catch {}
+
+    runHook("skills/hooks/format-reminder.ts", JSON.stringify({
+      prompt: "refactor the entire authentication system to use OAuth2",
+      session_id: markerSessionId,
+    }));
+
+    check("directive: dispatch marker created", existsSync(markerPath));
+    try { unlinkSync(markerPath); } catch {}
+  }
+
+  try { unlinkSync(directivesFile); } catch {}
+}
 
 // ── Results ──────────────────────────────────────────────────────────────────
 

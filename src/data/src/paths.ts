@@ -38,6 +38,9 @@ export const dataPaths = {
   sessions: resolve(DATA_ROOT, "sessions"),
   signals: resolve(DATA_ROOT, "signals"),
   ratings: resolve(DATA_ROOT, "signals", "ratings.jsonl"),
+  directives: resolve(DATA_ROOT, "signals", "directives.jsonl"),
+  compliance: resolve(DATA_ROOT, "signals", "compliance.jsonl"),
+  hookEvents: resolve(DATA_ROOT, "signals", "hook-events.jsonl"),
 };
 
 const MEMORY_DIR = resolve(DATA_ROOT, "memory");

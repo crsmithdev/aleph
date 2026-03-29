@@ -33,6 +33,11 @@ export type {
   TraceData,
   TraceSpan,
   TraceTurn,
+  ComplianceData,
+  ComplianceMetric,
+  SubagentsData,
+  SubagentInvocation,
+  SubagentTypeBucket,
 } from "./types.js";
 
 export { parseAllSessions, parseSessionsForDays, clearCache } from "./parser.js";
@@ -54,6 +59,8 @@ export {
   aggregateApiDuration,
   aggregateSessionTrace,
   getRecentEvents,
+  aggregateCompliance,
+  aggregateSubagents,
 } from "./aggregator.js";
 
 import { parseSessionsForDays } from "./parser.js";

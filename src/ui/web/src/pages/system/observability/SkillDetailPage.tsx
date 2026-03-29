@@ -13,6 +13,7 @@ import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } fro
 import { fmtNumber, fmtPct, shortDate, dateTime, granLabel } from '../../../utils/format';
 import { MarkdownBlock } from '../../../components/data/MarkdownBlock';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
+import { cn } from '../../../utils/cn';
 
 type InvocationRow = { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; userRequest?: string };
 
@@ -26,6 +27,9 @@ export function SkillDetailPage() {
 
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load skill details" retry={refetch} />;
+
+  const isCommand = data.type === 'command';
+  const displayName = isCommand && !skillName.startsWith('/') ? `/${skillName}` : skillName;
 
   const successRate = data.totalCount > 0
     ? ((data.totalCount - data.errorCount) / data.totalCount) * 100
@@ -96,7 +100,15 @@ export function SkillDetailPage() {
             >
               &larr; Skills
             </Link>
-            <h1 className="text-2xl font-bold font-mono text-text-primary">{skillName}</h1>
+            <h1 className="text-2xl font-bold font-mono text-text-primary">{displayName}</h1>
+            <span className={cn(
+              'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+              isCommand
+                ? 'bg-accent/10 text-accent border border-accent/20'
+                : 'bg-purple-500/10 text-purple-400 border border-purple-500/20',
+            )}>
+              {isCommand ? 'command' : 'skill'}
+            </span>
           </div>
         }
         range={range}
@@ -145,11 +157,17 @@ export function SkillDetailPage() {
         </div>
       )}
 
-      {data.sourceContent && (
+      {data.sourceContent ? (
         <MarkdownBlock
           content={data.sourceContent}
-          filename={`${skillName}.md`}
+          filename={isCommand ? `${skillName}.md` : `${skillName}/SKILL.md`}
         />
+      ) : (
+        <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3">
+          <p className="text-sm text-warning">
+            Source file not found — no {isCommand ? 'command .md' : 'SKILL.md'} file found for <span className="font-mono">{displayName}</span>
+          </p>
+        </div>
       )}
 
       <QueryTiming ms={data.queryTimeMs} />

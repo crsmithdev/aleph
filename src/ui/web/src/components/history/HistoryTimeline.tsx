@@ -12,8 +12,9 @@ const eventMeta: Record<HistoryEvent, { label: string; color: string; dot: strin
   note_deleted:    { label: 'Deleted note',        color: 'text-error',          dot: 'bg-red-500' },
   todo_linked:     { label: 'Linked todo',         color: 'text-indigo-400',     dot: 'bg-indigo-500' },
   todo_unlinked:   { label: 'Unlinked todo',       color: 'text-text-muted',     dot: 'bg-gray-500' },
-  archived:        { label: 'Archived',            color: 'text-text-muted',     dot: 'bg-gray-600' },
-  unarchived:      { label: 'Unarchived',          color: 'text-text-secondary', dot: 'bg-gray-400' },
+  archived:           { label: 'Archived',            color: 'text-text-muted',     dot: 'bg-gray-600' },
+  unarchived:         { label: 'Unarchived',          color: 'text-text-secondary', dot: 'bg-gray-400' },
+  promoted_from_todo: { label: 'Promoted from todo',  color: 'text-accent',         dot: 'bg-blue-500' },
 };
 
 function titleCase(str: string): string {
@@ -35,6 +36,9 @@ function formatDetails(eventType: HistoryEvent, details: Record<string, unknown>
   }
   if (eventType === 'goal_created' && details.title) {
     return String(details.title);
+  }
+  if ((eventType === 'todo_linked' || eventType === 'todo_unlinked') && details.todoTitle) {
+    return String(details.todoTitle);
   }
   return null;
 }

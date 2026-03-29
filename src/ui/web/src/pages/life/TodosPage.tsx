@@ -1,30 +1,17 @@
-import { useState } from 'react';
 import { useTodos } from '../../api/hooks';
 import { TodoQuickAdd } from '../../components/todos/TodoQuickAdd';
 import { TodoItem } from '../../components/todos/TodoItem';
 import { PageLoading } from '../../components/ui/Spinner';
 
 export function TodosPage() {
-  const [includeScheduled, setIncludeScheduled] = useState(false);
-  const { data, isLoading } = useTodos(includeScheduled);
+  const { data, isLoading } = useTodos();
 
   const active = data?.active ?? [];
   const completed = data?.completed ?? [];
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-text-primary">Todos</h1>
-        <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={includeScheduled}
-            onChange={(e) => setIncludeScheduled(e.target.checked)}
-            className="rounded border-border-secondary accent-accent"
-          />
-          Show scheduled
-        </label>
-      </div>
+      <h1 className="text-2xl font-bold text-text-primary">Todos</h1>
 
       <TodoQuickAdd />
 

@@ -5,7 +5,7 @@ import { CategoryChip } from '../categories/CategoryChip';
 import { useUpdateGoal } from '../../api/hooks';
 
 interface GoalCardProps {
-  goal: Goal & { categories?: Category[]; latestNote?: { content: string } };
+  goal: Goal & { categories?: Category[]; latestNote?: { content: string } | null; todoCount?: number; noteCount?: number; habitCount?: number };
 }
 
 function formatDate(iso: string) {
@@ -79,11 +79,17 @@ export function GoalCard({ goal }: GoalCardProps) {
           )}
         </div>
 
-        {goal.latestNote && (
-          <p className="mt-1.5 text-xs text-text-muted line-clamp-1">
-            {goal.latestNote.content}
-          </p>
-        )}
+        {(() => {
+          const parts: string[] = [];
+          if (goal.todoCount) parts.push(`${goal.todoCount} ${goal.todoCount === 1 ? 'todo' : 'todos'}`);
+          if (goal.noteCount) parts.push(`${goal.noteCount} ${goal.noteCount === 1 ? 'note' : 'notes'}`);
+          if (goal.habitCount) parts.push(`${goal.habitCount} ${goal.habitCount === 1 ? 'habit' : 'habits'}`);
+          return parts.length > 0 ? (
+            <p className="mt-1.5 text-xs text-text-disabled">
+              {parts.join(' · ')}
+            </p>
+          ) : null;
+        })()}
       </div>
     </div>
   );

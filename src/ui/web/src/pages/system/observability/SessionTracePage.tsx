@@ -92,7 +92,7 @@ export function SessionTracePage() {
     },
     {
       key: 'userMessage',
-      label: 'Prompt',
+      label: 'Turn',
       render: (row) => {
         const clean = cleanMessage(row.userMessage);
         return clean
@@ -105,7 +105,6 @@ export function SessionTracePage() {
       label: 'Tools',
       align: 'right',
       width: '4rem',
-      sortable: true,
       render: (row) => row.toolCount > 0 ? fmtNumber(row.toolCount) : <span className="text-text-tertiary">&mdash;</span>,
     },
     {
@@ -113,7 +112,6 @@ export function SessionTracePage() {
       label: 'Hooks',
       align: 'right',
       width: '4rem',
-      sortable: true,
       render: (row) => row.hookCount > 0 ? fmtNumber(row.hookCount) : <span className="text-text-tertiary">&mdash;</span>,
     },
     {
@@ -121,7 +119,6 @@ export function SessionTracePage() {
       label: 'Errors',
       align: 'right',
       width: '4rem',
-      sortable: true,
       render: (row) => row.errorCount > 0
         ? <span className="text-error font-medium">{row.errorCount}</span>
         : <span className="text-text-tertiary">&mdash;</span>,
@@ -131,7 +128,6 @@ export function SessionTracePage() {
       label: 'Tokens',
       align: 'right',
       width: '5rem',
-      sortable: true,
       render: (row) => row.tokenCount > 0 ? fmtNumber(row.tokenCount) : <span className="text-text-tertiary">&mdash;</span>,
     },
     {
@@ -139,7 +135,6 @@ export function SessionTracePage() {
       label: 'Cost',
       align: 'right',
       width: '5rem',
-      sortable: true,
       render: (row) => row.cost > 0 ? fmtCurrency(row.cost) : <span className="text-text-tertiary">&mdash;</span>,
     },
     {
@@ -147,7 +142,6 @@ export function SessionTracePage() {
       label: 'Duration',
       align: 'right',
       width: '5rem',
-      sortable: true,
       render: (row) => <span className={cn('font-mono text-xs', row.durationMs > 30000 ? 'text-warning' : 'text-text-muted')}>{fmtMs(row.durationMs)}</span>,
     },
   ];
@@ -157,12 +151,13 @@ export function SessionTracePage() {
       <div className="flex items-center gap-3">
         <Link
           to="/observability/sessions"
-          className="text-sm text-text-muted hover:text-text-primary transition-colors"
+          className="text-xl text-text-muted hover:text-text-primary transition-colors"
         >
-          &larr; Sessions
+          &laquo;
         </Link>
-        <h1 className="text-xl font-semibold text-text-primary">Session Detail</h1>
-        <span className="font-mono text-xs text-text-muted">{sessionId.slice(0, 8)}</span>
+        <h1 className="text-xl font-semibold text-text-primary">
+          Session <span className="font-mono text-xl text-accent">{sessionId.slice(0, 8)}</span>
+        </h1>
         {data.project && (
           <span className="rounded-md bg-bg-tertiary px-2 py-0.5 text-xs text-text-muted">{data.project}</span>
         )}

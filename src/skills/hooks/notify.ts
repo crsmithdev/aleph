@@ -2,11 +2,13 @@
 import { execSync } from "child_process";
 import { readFileSync } from "fs";
 import { trace } from "../../trace.ts";
+import { reportHook } from "../../hook-report.ts";
 
 const TAG = "notify";
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
 catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(1); }
+reportHook(TAG, "Notification", input.session_id);
 const event = input.type ?? "unknown";
 trace(TAG, `event: ${event}`);
 

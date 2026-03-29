@@ -1,6 +1,10 @@
 {
   "rules": [
     {
+      "skill": "build",
+      "keywords": ["build", "implement", "add feature", "create feature", "new feature", "refactor", "redesign", "overhaul"]
+    },
+    {
       "skill": "research",
       "keywords": ["research", "investigate", "look into", "find out", "compare", "survey", "analyze"]
     },
@@ -11,10 +15,6 @@
     {
       "skill": "debugging",
       "keywords": ["debug", "bug", "broken", "failing", "error", "crash", "exception", "traceback", "root cause", "bisect"]
-    },
-    {
-      "skill": "subagent-dev",
-      "keywords": ["subagent", "parallel tasks", "dispatch", "multi-task"]
     },
     {
       "skill": "docs-review",
@@ -45,32 +45,12 @@
       "keywords": ["review config", "audit config", "settings review", "config check", "settings audit"]
     },
     {
-      "skill": "brainstorming",
-      "keywords": ["brainstorm", "design first", "design session", "explore approaches", "propose options", "design doc"]
-    },
-    {
-      "skill": "tdd",
-      "keywords": ["tdd", "test driven", "test first", "red green refactor", "write test first", "failing test"]
-    },
-    {
-      "skill": "writing-plans",
-      "keywords": ["write plan", "create plan", "implementation plan", "plan out", "break down into tasks"]
-    },
-    {
-      "skill": "executing-plans",
-      "keywords": ["execute plan", "run plan", "follow plan", "work through plan"]
-    },
-    {
       "skill": "finishing-branch",
       "keywords": ["finish branch", "merge branch", "create pr", "ready to merge", "branch done"]
     },
     {
       "skill": "git-worktrees",
       "keywords": ["worktree", "create worktree", "isolated branch", "parallel branch"]
-    },
-    {
-      "skill": "parallel-agents",
-      "keywords": ["parallel debug", "parallel investigation", "multiple failures", "independent failures"]
     }
   ]
 }

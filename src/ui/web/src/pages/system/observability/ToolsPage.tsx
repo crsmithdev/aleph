@@ -31,15 +31,9 @@ export function ToolsPage() {
 
   const columns: Column<ToolRow>[] = [
     {
-      key: 'active',
-      label: 'Status',
-      render: (row) => (
-        <span className={cn('inline-block h-2 w-2 rounded-full', row.active ? 'bg-success' : 'bg-text-muted/30')} title={row.active ? 'Active' : 'Inactive'} />
-      ),
-    },
-    {
       key: 'name',
       label: 'Tool',
+      sortable: true,
       render: (row) => <span className="font-mono text-text-primary">{fmtToolName(row.name)}</span>,
     },
     {

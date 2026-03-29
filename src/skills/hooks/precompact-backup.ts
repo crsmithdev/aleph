@@ -2,12 +2,14 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { join, basename } from "path";
 import { trace } from "../../trace.ts";
+import { reportHook } from "../../hook-report.ts";
 import { claudePaths } from "../../paths.ts";
 
 const TAG = "precompact-backup";
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
 catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(0); }
+reportHook(TAG, "PreCompact", input.session_id);
 
 const transcriptPath = input.transcript_path;
 if (!transcriptPath) { trace(TAG, "no transcript path"); process.exit(0); }
