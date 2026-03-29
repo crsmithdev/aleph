@@ -81,14 +81,14 @@ if (directives.length > 0) {
     trace(TAG, `directive signal write failed: ${(e as Error).message}`);
   }
 
-  // Write dispatch marker — PreToolUse dispatch-gate.ts will block Edit/Write until cleared
-  if (directives.includes("dispatch") && sessionId !== "unknown") {
+  // Write session ID to a known path so /inline can create the override signal
+  if (sessionId !== "unknown") {
     try {
-      writeFileSync(`/tmp/construct-dispatch-${sessionId}`, new Date().toISOString());
-      trace(TAG, `dispatch marker written for session ${sessionId}`);
-    } catch (e) {
-      trace(TAG, `dispatch marker write failed: ${(e as Error).message}`);
-    }
+      writeFileSync(`${dataPaths.signals}/current-session-id`, sessionId);
+    } catch {}
+  }
+
+  if (directives.includes("dispatch") && sessionId !== "unknown") {
     console.log(`[Construct] DISPATCH MODE — this task must be dispatched to background Agent(s).
 - Create task(s) via TaskCreate for visibility
 - Dispatch each as Agent (run_in_background: true)
