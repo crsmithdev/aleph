@@ -80,7 +80,11 @@ Fix before proceeding.
 
 Run the full test suite. Use the `verification` skill. No green, no merge.
 
-### 6 — Finish
+### 6 — Commit
+
+Commit all changes on the feature branch. Every logical unit from the Execute phase should already be committed individually; this final commit captures any remaining Review/Verify fixes.
+
+### 7 — Finish
 
 Use the `finishing-branch` skill: verify → merge / PR / keep / discard.
 

@@ -58,11 +58,6 @@
       },
       {
         "hooks": [
-          { "type": "command", "command": "bun src/skills/hooks/dirty-tree-check.ts", "timeout": 5000 }
-        ]
-      },
-      {
-        "hooks": [
           { "type": "command", "command": "bun src/memory/hooks/session-summary.ts", "timeout": 3000 }
         ]
       },
@@ -83,6 +78,12 @@
         "matcher": "Edit|Write",
         "hooks": [
           { "type": "command", "command": "bun src/skills/hooks/dispatch-gate.ts", "timeout": 2000 }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          { "type": "command", "command": "bun src/skills/hooks/commit-nudge.ts", "timeout": 5000 }
         ]
       }
     ],

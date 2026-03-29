@@ -13,7 +13,7 @@ ensureDataDirs();
 let input: any;
 const raw = await Bun.stdin.text();
 try { input = JSON.parse(raw); }
-catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}, raw: ${raw.slice(0, 100)}`); process.exit(1); }
+catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}, raw: ${raw.slice(0, 100)}`); process.exit(0); }
 const transcript = parseTranscript(input.transcript_path);
 
 if (!transcript || transcript.totalMessages < 4) {
