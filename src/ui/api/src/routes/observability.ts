@@ -24,11 +24,11 @@ import {
   aggregateCompliance,
   aggregateSubagents,
 } from '@construct/telemetry';
-import type { Granularity, SessionEntry } from '@construct/telemetry';
+import type { Granularity, TelemetryEvent } from '@construct/telemetry';
 
 type QueryParams = { days?: string; range?: string; granularity?: string; session?: string };
 type ObsRequest = FastifyRequest<{ Querystring: QueryParams }> & {
-  telemetryEntries: SessionEntry[];
+  telemetryEntries: TelemetryEvent[];
   granularity: Granularity;
 };
 
@@ -64,16 +64,16 @@ function parseDaysPreHandler(
   // For 1h range, filter to entries within the last hour
   if (range === '1h') {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    entries = entries.filter((e) => e.timestamp >= oneHourAgo);
+    entries = entries.filter((e) => e.ts >= oneHourAgo);
   }
 
   // For session range, filter to the most recent session
   if (range === 'session') {
-    const latest = entries.reduce((best, e) => (e.timestamp > best ? e.timestamp : best), '');
+    const latest = entries.reduce((best, e) => (e.ts > best ? e.ts : best), '');
     if (latest) {
-      const latestSession = entries.find((e) => e.timestamp === latest)?.sessionId;
+      const latestSession = entries.find((e) => e.ts === latest)?.sid;
       if (latestSession) {
-        entries = entries.filter((e) => e.sessionId === latestSession);
+        entries = entries.filter((e) => e.sid === latestSession);
       }
     }
   }
@@ -81,7 +81,7 @@ function parseDaysPreHandler(
   // Filter by explicit session if provided
   const sessionFilter = req.query.session;
   if (sessionFilter) {
-    entries = entries.filter((e) => e.sessionId === sessionFilter);
+    entries = entries.filter((e) => e.sid === sessionFilter);
   }
 
   (req as ObsRequest).telemetryEntries = entries;

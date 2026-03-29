@@ -1,3 +1,11 @@
+/**
+ * Telemetry v2 — public API.
+ *
+ * Facade that maintains the same export surface as v1 but routes through
+ * the adapter (Claude Code JSONL → TelemetryEvent[]) and reducers.
+ */
+
+// Re-export all output types (unchanged from v1)
 export type {
   SessionEntry,
   ParseOptions,
@@ -40,46 +48,58 @@ export type {
   SubagentTypeBucket,
 } from "./types.js";
 
-export { parseAllSessions, parseSessionsForDays, clearCache } from "./parser.js";
-export { calculateCost, getKnownModels } from "./pricing.js";
-export {
-  aggregateOverview,
-  aggregateTools,
-  aggregateHooks,
-  aggregateSkills,
-  aggregateTokens,
-  aggregateCost,
-  aggregateSessions,
-  aggregateToolDetail,
-  aggregateHookDetail,
-  aggregateSkillDetail,
-  aggregateMemoryUsage,
-  aggregateHookEvents,
-  aggregateCompaction,
-  aggregateApiDuration,
-  aggregateSessionTrace,
-  getRecentEvents,
-  aggregateCompliance,
-  aggregateSubagents,
-} from "./aggregator.js";
+// Re-export new types
+export type { TelemetryEvent } from "./event.js";
 
-import { parseSessionsForDays } from "./parser.js";
+export { calculateCost, getKnownModels } from "./pricing.js";
+
+// Adapter (replaces parser)
+export { adaptAllSessions, adaptSessionsForDays, clearCache } from "./adapter.js";
+
+// Backward-compatible aliases
+export { adaptAllSessions as parseAllSessions, adaptSessionsForDays as parseSessionsForDays } from "./adapter.js";
+
+// Reducers (replace aggregator) — exported under both old and new names
+export {
+  reduceOverview as aggregateOverview,
+  reduceTools as aggregateTools,
+  reduceHooks as aggregateHooks,
+  reduceSkills as aggregateSkills,
+  reduceTokens as aggregateTokens,
+  reduceCost as aggregateCost,
+  reduceSessions as aggregateSessions,
+  reduceToolDetail as aggregateToolDetail,
+  reduceHookDetail as aggregateHookDetail,
+  reduceSkillDetail as aggregateSkillDetail,
+  reduceMemoryUsage as aggregateMemoryUsage,
+  reduceHookEvents as aggregateHookEvents,
+  reduceCompaction as aggregateCompaction,
+  reduceApiDuration as aggregateApiDuration,
+  reduceSessionTrace as aggregateSessionTrace,
+  reduceRecentEvents as getRecentEvents,
+  reduceCompliance as aggregateCompliance,
+  reduceSubagents as aggregateSubagents,
+} from "./reducers.js";
+
+// -- getStatus convenience function --
+
+import { adaptSessionsForDays } from "./adapter.js";
 import {
-  aggregateOverview,
-  aggregateTools,
-  aggregateHooks,
-  aggregateSkills,
-  aggregateCost,
-} from "./aggregator.js";
+  reduceOverview,
+  reduceTools,
+  reduceHooks,
+  reduceSkills,
+  reduceCost,
+} from "./reducers.js";
 import type { StatusSummary } from "./types.js";
 
 export function getStatus(days = 7): StatusSummary {
-  const entries = parseSessionsForDays(days);
-  const overview = aggregateOverview(entries);
-  const tools = aggregateTools(entries);
-  const hooks = aggregateHooks(entries);
-  const skills = aggregateSkills(entries);
-  const cost = aggregateCost(entries);
+  const events = adaptSessionsForDays(days);
+  const overview = reduceOverview(events);
+  const tools = reduceTools(events);
+  const hooks = reduceHooks(events);
+  const skills = reduceSkills(events);
+  const cost = reduceCost(events);
 
   return {
     sessions: overview.sessions,
