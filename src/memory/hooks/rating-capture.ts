@@ -12,13 +12,11 @@
  * No match → exit 0 silently.
  */
 import { appendFileSync } from "fs";
-import { resolve, dirname } from "path";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 import { dataPaths, ensureDataDirs } from "../../paths.ts";
 
 const TAG = "rating-capture";
-const root = resolve(dirname(Bun.main), "../..");
 const ratingsFile = Bun.env.RATINGS_FILE ?? dataPaths.ratings;
 ensureDataDirs();
 
