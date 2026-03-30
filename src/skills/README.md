@@ -17,7 +17,6 @@ Depth classification, keyword-matched skill evaluation, skill routing config, qu
 - `git-worktrees/SKILL.md` — isolated worktree setup and teardown
 - `code-review/SKILL.md` — dead code, unused imports, code quality, dead references
 - `docs-review/SKILL.md` — documentation drift detection
-- `instructions-review/SKILL.md` — instruction quality: vagueness, contradictions, duplication
 - `research/SKILL.md` — research methodology skill
 - `ralph-loop/SKILL.md` — autonomous iterative development via subagent loops
 

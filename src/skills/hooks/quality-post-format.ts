@@ -18,8 +18,9 @@ import { existsSync, readFileSync } from "fs";
 import { dirname, extname } from "path";
 import { execSync } from "child_process";
 import { trace } from "../../trace.ts";
+import { reportHook } from "../../hook-report.ts";
 
-const TAG = "quality";
+const TAG = "quality-post-format";
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
 catch (e) {
@@ -28,6 +29,7 @@ catch (e) {
   trace(TAG, msg);
   process.exit(1);
 }
+reportHook(TAG, "PostToolUse", input.session_id);
 const filePath = input.tool_input?.file_path ?? "";
 if (!filePath || !existsSync(filePath)) {
   trace(TAG, `skip: ${filePath ? "file not found" : "no file path"}`);

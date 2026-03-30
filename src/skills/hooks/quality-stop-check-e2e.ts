@@ -19,6 +19,7 @@
  */
 import { readFileSync, writeFileSync, existsSync, unlinkSync } from "fs";
 import { trace } from "../../trace.ts";
+import { reportHook } from "../../hook-report.ts";
 import { dataPaths, ensureDataDirs } from "../../data/src/paths.ts";
 import { E2E_CMD, ARTIFACT_CMD, UNIT_TEST_CMD, HOOK_INVOCATION } from "../../eval/patterns.ts";
 
@@ -27,6 +28,7 @@ const TAG = "quality-stop-check-e2e";
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
 catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(0); }
+reportHook(TAG, "Stop", input.session_id);
 
 if (input.stop_hook_active) {
   trace(TAG, "skip: stop_hook_active (already reminded once)");

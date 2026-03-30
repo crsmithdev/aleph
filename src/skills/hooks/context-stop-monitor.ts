@@ -16,11 +16,13 @@
  */
 import { readFileSync } from "fs";
 import { trace } from "../../trace.ts";
+import { reportHook } from "../../hook-report.ts";
 
 const TAG = "context-stop-monitor";
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
 catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(0); }
+reportHook(TAG, "Stop", input.session_id);
 
 const transcriptPath = input.transcript_path;
 if (!transcriptPath) { trace(TAG, "no transcript path"); process.exit(0); }

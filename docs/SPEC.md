@@ -145,7 +145,6 @@ Skills are domain-specific playbooks activated by keyword matching. Each lives i
 | `/audit` | Full project audit: code, refs, instructions, docs, spec |
 | `/devserver` | Kill dev ports, start UI dev server in background |
 | `/todo` | File items from review output into `docs/TODO.md` |
-| `/instructions-review` | Audit instruction files for vagueness, contradictions, duplication |
 
 ## UI — Life Pages
 

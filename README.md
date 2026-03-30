@@ -123,7 +123,6 @@ The statusline (`ccstatusline`) is configured via the `statusLine` key in settin
 | `/audit` | Full project audit: code, refs, instructions, docs, spec |
 | `/devserver` | Start UI dev server on ports 5174/3002 |
 | `/todo` | File review items into `docs/TODO.md` |
-| `/instructions-review` | Audit instruction files for vagueness, contradictions, duplication |
 
 ## Identity Architecture
 

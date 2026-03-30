@@ -18,7 +18,7 @@
     },
     {
       "skill": "docs-review",
-      "keywords": ["doc sync", "docs drift", "documentation mismatch", "docs match"]
+      "keywords": ["doc sync", "docs drift", "documentation mismatch", "docs match", "check docs", "review docs", "docs review", "verify docs", "documentation review"]
     },
     {
       "skill": "ralph-loop",
@@ -46,7 +46,7 @@
     },
     {
       "skill": "finishing-branch",
-      "keywords": ["finish branch", "merge branch", "create pr", "ready to merge", "branch done"]
+      "keywords": ["finish branch", "merge branch", "create pr", "ready to merge", "branch done", "pull request", "open pr", "make pr", "submit pr"]
     },
     {
       "skill": "git-worktrees",

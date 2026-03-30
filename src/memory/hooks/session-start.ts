@@ -25,6 +25,11 @@ import { trace } from "../../trace.ts";
 import { dataPaths, externalPaths } from "../../paths.ts";
 
 const TAG = "session-start";
+
+let input: any;
+try { input = JSON.parse(await Bun.stdin.text()); }
+catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(0); }
+
 const root = resolve(dirname(Bun.main), "../..");
 const sessionsDir = dataPaths.sessions;
 const briefingMarker = resolve(sessionsDir, ".last-briefing");
@@ -32,7 +37,7 @@ const briefingMarker = resolve(sessionsDir, ".last-briefing");
 const out: string[] = ["=== Session Start ==="];
 
 // Dev-mode check: remind to install after editing source
-const cwd = process.cwd();
+const cwd = input.cwd ?? process.cwd();
 if (existsSync(resolve(cwd, "src/trace.ts")) && existsSync(resolve(cwd, "install.ts"))) {
   out.push("\n⚠ DEV MODE: Edits to src/ won't take effect until you run /construct install.\n");
 }
@@ -197,3 +202,5 @@ try {
 out.push("[memory] Search semantic memory (memory_search) for relevant project context before starting work.");
 out.push("====================");
 console.log(out.join("\n"));
+
+process.exit(0);
