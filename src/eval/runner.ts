@@ -15,7 +15,7 @@
 import type { StopHookInput, HookCallback } from "@anthropic-ai/claude-agent-sdk";
 import { mkdirSync, writeFileSync } from "fs";
 import { resolve } from "path";
-import { runEval, formatResult, type EvalResult } from "./harness.ts";
+import { runEval, emptyResult, formatResult, type EvalResult } from "./harness.ts";
 
 const RESULTS_DIR = resolve(import.meta.dir, "results");
 
@@ -82,20 +82,13 @@ function makeVerifyGate(tracker: { result: EvalResult; stopMessages: string[] })
 async function runTrial(scenario: string, variant: string, model: string, maxTurns: number): Promise<TrialRecord> {
   const stopMessages: string[] = [];
 
-  // For with-hook, we need a shared result ref for the gate to read signals from the tracker.
-  // runEval creates its own result internally, but the gate needs to see it during execution.
-  // Solution: run with-hook using a custom gate that tracks its own state, then merge.
-  const gateResult: EvalResult = {
-    taskSuccess: false, toolCalls: [], editsMade: false,
-    agentDispatched: false, unitTestsRun: false,
-    e2eEvidence: false, artifactCreated: false,
-    gateBlocks: 0, e2eSignals: [], artifacts: [], durationMs: 0,
-  };
+  const sharedResult = emptyResult();
 
   const evalResult = await runEval({
     scenario,
     model,
     maxTurns,
+    result: sharedResult,
     ...(variant === "with-hook" ? {
       promptSuffix: `IMPORTANT: After fixing the code, you MUST verify end-to-end:
 1. Start the dev server (e.g. bun server.ts)
@@ -103,13 +96,10 @@ async function runTrial(scenario: string, variant: string, model: string, maxTur
 3. Save the verification output to a file (e.g. > verify-output.txt) or take a screenshot
 4. Only THEN report your results. Unit tests alone are not sufficient.`,
       hooks: {
-        Stop: [{ hooks: [makeVerifyGate({ result: gateResult, stopMessages })] }],
+        Stop: [{ hooks: [makeVerifyGate({ result: sharedResult, stopMessages })] }],
       },
     } : {}),
   });
-
-  // Merge gate blocks (the gate hook tracks on gateResult, eval tracks on evalResult)
-  evalResult.gateBlocks = gateResult.gateBlocks;
 
   return {
     ...evalResult,

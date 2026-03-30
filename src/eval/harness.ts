@@ -7,14 +7,14 @@
  *   2. Agent SDK evals — launch Claude in a sandbox, wire up enforcement
  *      hooks, observe behavioral compliance. Used by eval tests.
  *
- * Also: temp dir management, transcript builders, assertions.
+ * Also: temp dir management, transcript builders, assertions, telemetry.
  */
 import { execSync } from "child_process";
 import {
-  mkdtempSync, mkdirSync, writeFileSync, readFileSync,
+  mkdtempSync, mkdirSync, writeFileSync, readFileSync, appendFileSync,
   existsSync, unlinkSync, rmSync, cpSync,
 } from "fs";
-import { join, resolve } from "path";
+import { join, resolve, dirname } from "path";
 import { tmpdir } from "os";
 import {
   query,
@@ -216,7 +216,7 @@ export interface EvalResult {
   error?: string;
 }
 
-function emptyResult(): EvalResult {
+export function emptyResult(): EvalResult {
   return {
     taskSuccess: false, toolCalls: [], editsMade: false,
     agentDispatched: false, unitTestsRun: false,
@@ -266,6 +266,34 @@ export function makeTracker(result: EvalResult): HookCallback {
   };
 }
 
+// ── Eval telemetry ──────────────────────────────────────────────
+
+/** A hook event entry, matching the format of hook-events.jsonl. */
+export interface HookEvent {
+  ts: string;
+  hook: string;
+  event: string;
+  sessionId: string;
+  [key: string]: unknown;
+}
+
+/** Append a hook event to a JSONL telemetry file. */
+export function writeHookEvent(path: string, event: HookEvent) {
+  mkdirSync(dirname(path), { recursive: true });
+  appendFileSync(path, JSON.stringify(event) + "\n");
+}
+
+/** Read all hook events from a JSONL file. */
+export function readHookEvents(path: string): HookEvent[] {
+  if (!existsSync(path)) return [];
+  return readFileSync(path, "utf-8").trim().split("\n")
+    .filter(Boolean)
+    .map(line => { try { return JSON.parse(line); } catch { return null; } })
+    .filter((e): e is HookEvent => e !== null);
+}
+
+// ── Eval config and runner ──────────────────────────────────────
+
 export interface EvalConfig {
   scenario: string;
   prompt?: string;
@@ -274,6 +302,10 @@ export interface EvalConfig {
   maxTurns?: number;
   hooks?: Partial<Record<"PreToolUse" | "PostToolUse" | "Stop", HookCallbackMatcher[]>>;
   systemPrompt?: string;
+  /** Pass a shared result object so custom hooks can read tracker signals (e.g. editsMade). */
+  result?: EvalResult;
+  /** Path to write hook telemetry JSONL. If set, eval hooks write events here. */
+  telemetryPath?: string;
 }
 
 /**
@@ -285,7 +317,7 @@ export interface EvalConfig {
  */
 export async function runEval(config: EvalConfig): Promise<EvalResult> {
   const sandbox = setupSandbox(config.scenario);
-  const result = emptyResult();
+  const result = config.result ?? emptyResult();
   const start = Date.now();
 
   let prompt = config.prompt ?? readTaskPrompt(config.scenario);
@@ -293,9 +325,25 @@ export async function runEval(config: EvalConfig): Promise<EvalResult> {
 
   const tracker = makeTracker(result);
 
+  // Wrap tracker to also emit telemetry if configured
+  const trackerWithTelemetry: HookCallback = async (input, toolUseID, opts) => {
+    const out = await tracker(input, toolUseID, opts);
+    if (config.telemetryPath) {
+      const { tool_name } = input as PostToolUseHookInput;
+      writeHookEvent(config.telemetryPath, {
+        ts: new Date().toISOString(),
+        hook: "eval-tracker",
+        event: "PostToolUse",
+        sessionId: (input as any).session_id ?? "eval",
+        tool: tool_name,
+      });
+    }
+    return out;
+  };
+
   const hooks: Record<string, HookCallbackMatcher[]> = {
     PostToolUse: [
-      { hooks: [tracker] },
+      { hooks: [trackerWithTelemetry] },
       ...(config.hooks?.PostToolUse ?? []),
     ],
     ...(config.hooks?.PreToolUse ? { PreToolUse: config.hooks.PreToolUse } : {}),

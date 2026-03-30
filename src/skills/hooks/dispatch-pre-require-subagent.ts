@@ -34,6 +34,7 @@ if (!sessionId) {
 const overridePath = `${dataPaths.signals}/inline-override-${sessionId}`;
 if (existsSync(overridePath)) {
   trace(TAG, "inline override active, allow");
+  reportHook(`${TAG}:inline-override`, "PreToolUse", sessionId);
   process.exit(0);
 }
 

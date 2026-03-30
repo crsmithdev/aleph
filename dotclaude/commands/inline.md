@@ -12,6 +12,8 @@ fi
 SID=$(cat "$SIGNALS/current-session-id" 2>/dev/null)
 if [ -n "$SID" ]; then
   touch "$SIGNALS/inline-override-$SID"
+  # Write telemetry event
+  echo "{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%S.000Z)\",\"hook\":\"inline-override\",\"event\":\"activated\",\"sessionId\":\"$SID\"}" >> "$SIGNALS/hook-events.jsonl"
   echo "Inline override active for session $SID"
 else
   echo "ERROR: No session ID found at $SIGNALS/current-session-id"
