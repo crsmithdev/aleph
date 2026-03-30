@@ -30,8 +30,6 @@ import type {
   TraceData,
   TraceSpan,
   TraceTurn,
-  ComplianceData,
-  ComplianceMetric,
   SubagentsData,
   SubagentInvocation,
   SubagentTypeBucket,
@@ -1152,57 +1150,6 @@ export function aggregateSessionTrace(entries: SessionEntry[], sessionId: string
     : 0;
 
   return { sessionId, parentSessionId, project, turns, totalDurationMs, totalTokens, totalCost };
-}
-
-export function aggregateCompliance(entries: SessionEntry[], granularity: Granularity): ComplianceData {
-  const dirEntries = entries.filter((e) => e.entryType === "directive");
-
-  const byDir = new Map<string, { total: number; followed: number }>();
-  const byDay = new Map<string, { total: number; followed: number }>();
-  const violations: ComplianceData["violations"] = [];
-
-  let overallTotal = 0;
-  let overallFollowed = 0;
-
-  for (const e of dirEntries) {
-    const dir = e.directive ?? "unknown";
-    const followed = e.directiveFollowed === true;
-    const day = bucketKey(e.timestamp, granularity);
-
-    overallTotal++;
-    if (followed) overallFollowed++;
-
-    const dm = byDir.get(dir) ?? { total: 0, followed: 0 };
-    dm.total++;
-    if (followed) dm.followed++;
-    byDir.set(dir, dm);
-
-    const bm = byDay.get(day) ?? { total: 0, followed: 0 };
-    bm.total++;
-    if (followed) bm.followed++;
-    byDay.set(day, bm);
-
-    if (!followed) {
-      violations.push({ sessionId: e.sessionId, timestamp: e.timestamp, directive: dir, project: e.project });
-    }
-  }
-
-  const byDirective: ComplianceMetric[] = [...byDir.entries()]
-    .map(([directive, { total, followed }]) => ({ directive, total, followed, rate: total > 0 ? followed / total : 0 }))
-    .sort((a, b) => a.rate - b.rate);
-
-  const byDayArr = [...byDay.entries()]
-    .map(([date, { total, followed }]) => ({ date, total, followed, rate: total > 0 ? followed / total : 0 }))
-    .sort((a, b) => a.date.localeCompare(b.date));
-
-  violations.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-
-  return {
-    overall: { total: overallTotal, followed: overallFollowed, rate: overallTotal > 0 ? overallFollowed / overallTotal : 0 },
-    byDirective,
-    byDay: byDayArr,
-    violations: violations.slice(0, 100),
-  };
 }
 
 export function aggregateSubagents(entries: SessionEntry[], granularity: Granularity = "day"): SubagentsData {

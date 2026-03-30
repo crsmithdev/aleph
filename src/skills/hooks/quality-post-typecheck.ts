@@ -4,7 +4,7 @@ import { dirname, extname } from "path";
 import { execSync } from "child_process";
 import { trace } from "../../trace.ts";
 
-const TAG = "tsc-gate";
+const TAG = "quality-post-typecheck";
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
 catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(1); }

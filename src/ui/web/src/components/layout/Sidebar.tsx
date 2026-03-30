@@ -67,7 +67,6 @@ const items: NavItem[] = [
       { to: '/observability/events', label: 'Events' },
       { to: '/observability/memory', label: 'Memory' },
       { to: '/observability/db', label: 'Database' },
-      { to: '/observability/compliance', label: 'Compliance' },
     ],
   },
   {

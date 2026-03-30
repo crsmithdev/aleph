@@ -2,7 +2,7 @@
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 
-const TAG = "db-guard";
+const TAG = "isolation-pre-block-destructive-sql";
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
 catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(1); }

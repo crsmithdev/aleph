@@ -44,9 +44,9 @@ Skip any step = unverified claim.
 
 Two mechanisms enforce this:
 
-**format-reminder.ts** (primary) — injects the e2e requirement into every actionable prompt before work starts. You see this at the top of each task.
+**routing-submit-classify.ts** (primary) — injects the e2e requirement into every actionable prompt before work starts. You see this at the top of each task.
 
-**verify-gate.ts** (Stop hook) — checks the transcript after each turn for e2e evidence and an artifact. Gets one reminder; cannot hard-block.
+**quality-stop-check-e2e.ts** (Stop hook) — checks the transcript after each turn for e2e evidence and an artifact. Gets one reminder; cannot hard-block.
 
 ### What Satisfies the Gate
 

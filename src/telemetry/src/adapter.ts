@@ -6,9 +6,9 @@
  * If Claude Code changes its log format, only this file needs updating.
  */
 
-import { readdirSync, statSync, readFileSync, existsSync } from "fs";
+import { readdirSync, statSync, readFileSync } from "fs";
 import { join, basename, dirname } from "path";
-import { claudePaths, dataPaths } from "@construct/data";
+import { claudePaths } from "@construct/data";
 import type { TelemetryEvent } from "./event.js";
 
 const DEFAULT_BASE = claudePaths.projects;
@@ -371,9 +371,6 @@ export function adaptAllSessions(opts?: AdaptOptions): TelemetryEvent[] {
     allEvents.push(...adaptFile(file, project));
   }
 
-  // Also read compliance file
-  allEvents.push(...adaptComplianceFile());
-
   return allEvents;
 }
 
@@ -383,35 +380,3 @@ export function adaptSessionsForDays(days: number, opts?: Omit<AdaptOptions, "si
   return adaptAllSessions({ ...opts, since });
 }
 
-// ---------------------------------------------------------------------------
-// Compliance file adapter
-// ---------------------------------------------------------------------------
-
-function adaptComplianceFile(): TelemetryEvent[] {
-  const compliancePath = dataPaths.compliance;
-  if (!existsSync(compliancePath)) return [];
-
-  const events: TelemetryEvent[] = [];
-  let content: string;
-  try { content = readFileSync(compliancePath, "utf-8"); } catch { return events; }
-
-  for (const line of content.split("\n")) {
-    if (!line.trim()) continue;
-    let raw: Record<string, unknown>;
-    try { raw = JSON.parse(line); } catch { continue; }
-
-    events.push({
-      ts: (raw.ts as string) || "",
-      sid: (raw.sessionId as string) || "unknown",
-      kind: "directive",
-      name: (raw.directive as string) || "unknown",
-      data: {
-        project: "unknown",
-        directive: (raw.directive as string) || undefined,
-        followed: typeof raw.followed === "boolean" ? raw.followed : undefined,
-      },
-    });
-  }
-
-  return events;
-}

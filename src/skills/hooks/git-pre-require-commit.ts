@@ -15,7 +15,7 @@ import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 import { dataPaths } from "../../paths.ts";
 
-const TAG = "commit-nudge";
+const TAG = "git-pre-require-commit";
 const WARN_THRESHOLD = 8;
 const BLOCK_THRESHOLD = 15;
 
@@ -49,7 +49,7 @@ if (dirtyCount < WARN_THRESHOLD) {
   process.exit(0);
 }
 
-const markerPath = `${dataPaths.signals}/commit-nudge-${input.session_id}`;
+const markerPath = `${dataPaths.signals}/git-pre-require-commit-${input.session_id}`;
 
 if (dirtyCount >= BLOCK_THRESHOLD) {
   trace(TAG, `BLOCKED: ${dirtyCount} dirty files ≥ ${BLOCK_THRESHOLD}`);
@@ -67,6 +67,6 @@ console.log(`[Construct] ${dirtyCount} uncommitted files. Consider committing th
 process.exit(0);
 
 function cleanupMarker(sessionId: string) {
-  const path = `${dataPaths.signals}/commit-nudge-${sessionId}`;
+  const path = `${dataPaths.signals}/git-pre-require-commit-${sessionId}`;
   try { if (existsSync(path)) unlinkSync(path); } catch {}
 }

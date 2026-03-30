@@ -6,7 +6,7 @@ import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 import { dataPaths } from "../../paths.ts";
 
-const TAG = "format-reminder";
+const TAG = "routing-submit-classify";
 const root = resolve(dirname(Bun.main), "../..");
 const rulesFile = resolve(root, "skills/skill-rules.json");
 

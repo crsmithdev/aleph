@@ -51,7 +51,7 @@ interface TelemetryEvent {
 
 **One line of JSONL:**
 ```json
-{"ts":"2026-03-28T14:30:00.000Z","sid":"abc-123","kind":"hook","name":"format-reminder","ms":45,"data":{"event":"UserPromptSubmit","exitCode":0,"output":"[Construct] Depth: QUICK"}}
+{"ts":"2026-03-28T14:30:00.000Z","sid":"abc-123","kind":"hook","name":"routing-submit-classify","ms":45,"data":{"event":"UserPromptSubmit","exitCode":0,"output":"[Construct] Depth: QUICK"}}
 ```
 
 ## Schema catalog
@@ -183,16 +183,6 @@ interface MessageData {
 }
 ```
 
-### `directive` — Compliance check result
-
-Emitted by: compliance-check hook
-
-```typescript
-interface DirectiveData {
-  directive: string
-  followed: boolean
-}
-```
 
 ### `subagent` — Subagent dispatch
 
@@ -248,7 +238,7 @@ Hook scripts print telemetry lines to stdout prefixed with `[T]` to distinguish 
 
 ```
 [Construct] Depth: FULL — complex request.
-[T]{"ts":"...","sid":"...","kind":"hook","name":"format-reminder","ms":32,"data":{"event":"UserPromptSubmit","exitCode":0}}
+[T]{"ts":"...","sid":"...","kind":"hook","name":"routing-submit-classify","ms":32,"data":{"event":"UserPromptSubmit","exitCode":0}}
 ```
 
 The hook harness (or a post-hook processor) strips the `[T]` prefix and appends to the day's event file. Non-`[T]` lines pass through to Claude Code as normal hook output.
@@ -412,7 +402,7 @@ Big-bang cutover. Replace the existing telemetry pipeline in one pass.
 3. Add `[T]` stdout protocol to the hook capture logic. Update hooks to emit structured events.
 4. Write reducers that consume `TelemetryEvent[]`. One reducer per API endpoint concern.
 5. Rewire API endpoints to: read events (adapter + Construct JSONL) → reduce → return.
-6. Remove old parser (`parseLine`, `SessionEntry`), duplicate JSONL parsers (`parse-transcript.ts`, `compliance-check.ts`, `verify-gate.ts`, `context-monitor.ts`), and all dead types.
+6. Remove old parser (`parseLine`, `SessionEntry`), duplicate JSONL parsers (`parse-transcript.ts`, `compliance-check.ts`, `quality-stop-check-e2e.ts`, `context-stop-monitor.ts`), and all dead types.
 7. Add SQLite cache layer and daily rollup job.
 8. Enrich: hooks emit `git`, `rating`, `skill` events with real data.
 
@@ -427,7 +417,7 @@ Big-bang cutover. Replace the existing telemetry pipeline in one pass.
 
 | Problem | Current code | v2 fix |
 |---|---|---|
-| 5 independent JSONL parsers | `parser.ts`, `parse-transcript.ts`, `compliance-check.ts`, `verify-gate.ts`, `context-monitor.ts` | One adapter + shared event stream |
+| 5 independent JSONL parsers | `parser.ts`, `parse-transcript.ts`, `compliance-check.ts`, `quality-stop-check-e2e.ts`, `context-stop-monitor.ts` | One adapter + shared event stream |
 | Tool duration inferred from timestamps | `aggregator.ts:147` — `new Date(result.timestamp) - new Date(toolUse.timestamp)` | `ms` field on `tool_result` events (from Claude Code's `totalDurationMs` or timestamp diff done once in the adapter) |
 | Git commits detected by regex | `aggregator.ts:447` — `/\bgit\s+commit\b/` on Bash command strings | `kind: "git"` events emitted by PostToolUse hook |
 | Lines changed estimated from string splitting | `parser.ts:158-166` — split `old_string`/`new_string` on `\n` | Still estimated, but computed once in the adapter and stored as `linesAdded`/`linesRemoved` on the `tool` event |

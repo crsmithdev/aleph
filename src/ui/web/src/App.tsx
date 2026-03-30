@@ -23,7 +23,6 @@ import { SkillDetailPage } from './pages/system/observability/SkillDetailPage';
 import { MemoryPage } from './pages/system/observability/MemoryPage';
 import { EventsPage } from './pages/system/observability/EventsPage';
 import { DbStatsPage } from './pages/system/observability/DbStatsPage';
-import { CompliancePage } from './pages/system/observability/CompliancePage';
 import { SubagentsPage } from './pages/system/observability/SubagentsPage';
 import { SessionTracePage } from './pages/system/observability/SessionTracePage';
 import { TurnTracePage } from './pages/system/observability/TurnTracePage';
@@ -79,8 +78,6 @@ export function App() {
               <Route path="/observability/events" element={<EventsPage />} />
               <Route path="/observability/memory" element={<MemoryPage />} />
               <Route path="/observability/db" element={<DbStatsPage />} />
-              <Route path="/observability/compliance" element={<CompliancePage />} />
-
               {/* Settings */}
               <Route path="/settings" element={<SettingsPage />} />
             </Route>

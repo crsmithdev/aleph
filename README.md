@@ -46,14 +46,14 @@ src/                                      # source modules (installed to ~/.clau
 │   └── hooks/                           # session-start, rating-capture, session-summary, memory-extract
 ├── skills/
 │   ├── skill-rules.json                 # keyword routing config
-│   ├── hooks/format-reminder.ts         # depth classification + skill eval
-│   ├── hooks/quality.ts                 # per-file lint/format on Edit/Write
-│   ├── hooks/verify-gate.ts             # e2e verification gate
-│   ├── hooks/context-monitor.ts         # context window usage warning
-│   ├── hooks/tsc-gate.ts                # TypeScript type-check on Edit/Write
-│   ├── hooks/db-guard.ts                # block destructive SQL operations
-│   ├── hooks/precompact-backup.ts       # transcript backup before compaction
-│   ├── hooks/notify.ts                  # WSL toast / macOS alert / terminal bell
+│   ├── hooks/routing-submit-classify.ts         # depth classification + skill eval
+│   ├── hooks/quality-post-format.ts                 # per-file lint/format on Edit/Write
+│   ├── hooks/quality-stop-check-e2e.ts             # e2e verification gate
+│   ├── hooks/context-stop-monitor.ts         # context window usage warning
+│   ├── hooks/quality-post-typecheck.ts                # TypeScript type-check on Edit/Write
+│   ├── hooks/isolation-pre-block-destructive-sql.ts                # block destructive SQL operations
+│   ├── hooks/context-precompact-backup.ts       # transcript backup before compaction
+│   ├── hooks/notify-event-toast.ts                  # WSL toast / macOS alert / terminal bell
 │   └── */SKILL.md                       # 18 skill playbooks (see Skills section)
 ├── eval/
 │   ├── runner.ts                        # Agent SDK eval harness
@@ -90,16 +90,16 @@ dotclaude/                                # install sources (installed to ~/.cla
 |-------|------|------|---------|
 | SessionStart | session-start.ts | memory | Surface last session summary, background work briefing |
 | UserPromptSubmit | rating-capture.ts | memory | Capture explicit N/10 ratings |
-| UserPromptSubmit | format-reminder.ts | skills | Depth classification + verification gate + skill matching |
-| Stop | verify-gate.ts | skills | E2e verification gate |
-| Stop | context-monitor.ts | skills | Context window usage warning (80%/90%) |
+| UserPromptSubmit | routing-submit-classify.ts | skills | Depth classification + verification gate + skill matching |
+| Stop | quality-stop-check-e2e.ts | skills | E2e verification gate |
+| Stop | context-stop-monitor.ts | skills | Context window usage warning (80%/90%) |
 | Stop | session-summary.ts | memory | Structured session summary |
 | Stop | memory-extract.ts | memory | Auto-extract memories to semantic store |
-| PreToolUse | db-guard.ts | skills | Block destructive SQL operations |
-| PostToolUse | quality.ts | skills | Per-file lint/format on Edit/Write |
-| PostToolUse | tsc-gate.ts | skills | TypeScript type-check on Edit/Write |
-| PreCompact | precompact-backup.ts | skills | Transcript backup before compaction |
-| Notification | notify.ts | skills | WSL toast / macOS alert / terminal bell |
+| PreToolUse | isolation-pre-block-destructive-sql.ts | skills | Block destructive SQL operations |
+| PostToolUse | quality-post-format.ts | skills | Per-file lint/format on Edit/Write |
+| PostToolUse | quality-post-typecheck.ts | skills | TypeScript type-check on Edit/Write |
+| PreCompact | context-precompact-backup.ts | skills | Transcript backup before compaction |
+| Notification | notify-event-toast.ts | skills | WSL toast / macOS alert / terminal bell |
 
 The statusline (`ccstatusline`) is configured via the `statusLine` key in settings.json, not as a hook.
 
@@ -134,7 +134,7 @@ Two layers:
 
 ## Skills
 
-Domain-specific playbooks in `src/skills/<name>/SKILL.md`. The `format-reminder.ts` hook reads `skill-rules.json` and matches skills whose keywords appear in the current prompt.
+Domain-specific playbooks in `src/skills/<name>/SKILL.md`. The `routing-submit-classify.ts` hook reads `skill-rules.json` and matches skills whose keywords appear in the current prompt.
 
 | Skill | Purpose |
 |-------|---------|

@@ -1,7 +1,7 @@
-import { readdirSync, statSync, readFileSync, existsSync } from "fs";
+import { readdirSync, statSync, readFileSync } from "fs";
 import { join, basename, dirname } from "path";
 import type { SessionEntry, ParseOptions } from "./types.js";
-import { claudePaths, dataPaths } from "@construct/data";
+import { claudePaths } from "@construct/data";
 
 const DEFAULT_BASE = claudePaths.projects;
 
@@ -385,41 +385,6 @@ function parseFile(filePath: string, project: string): SessionEntry[] {
   return entries;
 }
 
-export function parseComplianceFiles(): SessionEntry[] {
-  const compliancePath = dataPaths.compliance;
-  if (!existsSync(compliancePath)) return [];
-
-  const entries: SessionEntry[] = [];
-  let content: string;
-  try {
-    content = readFileSync(compliancePath, "utf-8");
-  } catch {
-    return entries;
-  }
-
-  for (const line of content.split("\n")) {
-    if (!line.trim()) continue;
-    let raw: Record<string, unknown>;
-    try { raw = JSON.parse(line); } catch { continue; }
-
-    const sessionId = (raw.sessionId as string) || "unknown";
-    const timestamp = (raw.ts as string) || "";
-    const directive = (raw.directive as string) || undefined;
-    const directiveFollowed = typeof raw.followed === "boolean" ? raw.followed : undefined;
-
-    entries.push({
-      sessionId,
-      timestamp,
-      project: "unknown",
-      entryType: "directive",
-      directive,
-      directiveFollowed,
-    });
-  }
-
-  return entries;
-}
-
 export function parseAllSessions(opts?: ParseOptions): SessionEntry[] {
   const baseDir = opts?.baseDir || DEFAULT_BASE;
   const files = discoverJsonlFiles(baseDir, opts?.since);
@@ -431,7 +396,6 @@ export function parseAllSessions(opts?: ParseOptions): SessionEntry[] {
     allEntries.push(...parseFile(file, project));
   }
 
-  allEntries.push(...parseComplianceFiles());
 
   return allEntries;
 }

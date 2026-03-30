@@ -21,7 +21,6 @@ import {
   aggregateApiDuration,
   aggregateSessionTrace,
   getRecentEvents,
-  aggregateCompliance,
   aggregateSubagents,
 } from '@construct/telemetry';
 import type { Granularity, TelemetryEvent } from '@construct/telemetry';
@@ -555,12 +554,6 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     } finally {
       db?.close();
     }
-  });
-
-  app.get<{ Querystring: QueryParams }>('/compliance', { preHandler: parseDaysPreHandler }, async (req) => {
-    const obsReq = req as ObsRequest;
-    const { result, queryTimeMs } = timed(() => aggregateCompliance(obsReq.telemetryEntries, obsReq.granularity));
-    return { ...result, queryTimeMs };
   });
 
   app.get<{ Querystring: QueryParams }>('/subagents', { preHandler: parseDaysPreHandler }, async (req) => {

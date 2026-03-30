@@ -85,7 +85,7 @@ describe("aggregator", () => {
       const hooks = aggregateHooks(entries);
       expect(hooks.ranked.length).toBeGreaterThan(0);
       const formatHook = hooks.ranked.find((h) =>
-        h.command.includes("format-reminder"),
+        h.command.includes("routing-submit-classify"),
       );
       expect(formatHook).toBeDefined();
       expect(formatHook!.count).toBeGreaterThanOrEqual(1);

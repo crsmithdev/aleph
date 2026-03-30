@@ -61,9 +61,11 @@ For each task, follow the TDD cycle strictly:
 5. **REFACTOR** — Clean up on green. Commit.
 
 **Dispatch strategy:**
+- Every Agent call MUST include `isolation: "worktree"` — no exceptions
 - Independent tasks → parallel subagents (one task per agent, fresh context, no session history)
-- Sequential/coupled tasks → inline, one at a time
+- Sequential/coupled tasks → inline via `/inline`, one at a time
 - Use haiku for simple 1-2 file tasks, sonnet for multi-file integration
+- The main session orchestrates — it reads, plans, dispatches, and reviews. It never edits files directly.
 
 **Stop on blockers.** Do not guess. Do not work around. Flag and wait.
 
@@ -101,6 +103,16 @@ Restart from RED if you catch yourself:
 - Writing production code before a failing test exists
 - Skipping verify-RED ("I know it'll fail")
 - Writing a test after the code
+
+## Isolation Rules
+
+The main session is an orchestrator. All file modifications go through subagents in worktrees.
+
+- **Main session**: Read, Grep, Glob, Bash (read-only), Agent, TaskCreate/Update — no Edit, no Write
+- **Subagents**: Edit, Write, Bash (all) — always in worktrees via `isolation: "worktree"`
+- **Override**: `/inline` disables the dispatch gate for the current session when inline work is genuinely needed
+
+The dispatch-pre-require-subagent hook enforces this — Edit/Write in the main session will be blocked unless `/inline` is active.
 
 ## Done when
 

@@ -7,9 +7,9 @@ Depth classification, keyword-matched skill evaluation, skill routing config, qu
 ## Contents
 
 - `skill-rules.json` — keyword routing config
-- `hooks/format-reminder.ts` — depth classification + skill eval at UserPromptSubmit
-- `hooks/quality.ts` — per-file lint/format on Edit/Write (PostToolUse)
-- `hooks/notify.ts` — WSL toast / macOS alert / terminal bell (Notification)
+- `hooks/routing-submit-classify.ts` — depth classification + skill eval at UserPromptSubmit
+- `hooks/quality-post-format.ts` — per-file lint/format on Edit/Write (PostToolUse)
+- `hooks/notify-event-toast.ts` — WSL toast / macOS alert / terminal bell (Notification)
 - `build/SKILL.md` — unified implementation lifecycle: design, plan, TDD execute, review, finish
 - `debugging/SKILL.md` — systematic 4-phase root cause debugging
 - `verification/SKILL.md` — verification-before-completion enforcement

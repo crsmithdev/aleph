@@ -23,7 +23,6 @@ import type {
   CompactionData,
   ApiDurationData,
   TraceData, TraceSpan, TraceTurn,
-  ComplianceData, ComplianceMetric,
   SubagentsData, SubagentInvocation, SubagentTypeBucket,
 } from "./types.js";
 import { calculateCost } from "./pricing.js";
@@ -1054,50 +1053,6 @@ export function reduceRecentEvents(
   });
 
   return { events: mapped, total: sorted.length };
-}
-
-// ---------------------------------------------------------------------------
-// Compliance
-// ---------------------------------------------------------------------------
-
-export function reduceCompliance(events: TelemetryEvent[], granularity: Granularity): ComplianceData {
-  const dirEvents = events.filter((e) => e.kind === "directive");
-  const byDir = new Map<string, { total: number; followed: number }>();
-  const byDay = new Map<string, { total: number; followed: number }>();
-  const violations: ComplianceData["violations"] = [];
-  let overallTotal = 0, overallFollowed = 0;
-
-  for (const e of dirEvents) {
-    const dir = (e.data?.directive as string) ?? "unknown";
-    const followed = e.data?.followed === true;
-    const day = bucketKey(e.ts, granularity);
-
-    overallTotal++;
-    if (followed) overallFollowed++;
-
-    const dm = byDir.get(dir) ?? { total: 0, followed: 0 };
-    dm.total++; if (followed) dm.followed++;
-    byDir.set(dir, dm);
-
-    const bm = byDay.get(day) ?? { total: 0, followed: 0 };
-    bm.total++; if (followed) bm.followed++;
-    byDay.set(day, bm);
-
-    if (!followed) {
-      violations.push({ sessionId: e.sid, timestamp: e.ts, directive: dir, project: (e.data?.project as string) });
-    }
-  }
-
-  return {
-    overall: { total: overallTotal, followed: overallFollowed, rate: overallTotal > 0 ? overallFollowed / overallTotal : 0 },
-    byDirective: [...byDir.entries()]
-      .map(([directive, { total, followed }]) => ({ directive, total, followed, rate: total > 0 ? followed / total : 0 }))
-      .sort((a, b) => a.rate - b.rate),
-    byDay: [...byDay.entries()]
-      .map(([date, { total, followed }]) => ({ date, total, followed, rate: total > 0 ? followed / total : 0 }))
-      .sort((a, b) => a.date.localeCompare(b.date)),
-    violations: violations.sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 100),
-  };
 }
 
 // ---------------------------------------------------------------------------

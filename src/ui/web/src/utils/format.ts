@@ -87,6 +87,16 @@ export function fmtToolName(name: string): string {
   return name;
 }
 
+export function parseToolSource(name: string): { server: string; tool: string } {
+  if (name.startsWith('mcp__')) {
+    const parts = name.slice(5).split('__');
+    if (parts.length >= 2) {
+      return { server: parts[0], tool: parts.slice(1).join('_') };
+    }
+  }
+  return { server: 'builtin', tool: name };
+}
+
 export function fmtProject(raw: string): string {
   // "-home-crsmi-construct" → "crsmi/construct"
   // Strip leading /home/<user>/ or -home-<user>- prefix, then join with /

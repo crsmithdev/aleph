@@ -41,8 +41,6 @@ export type {
   TraceData,
   TraceSpan,
   TraceTurn,
-  ComplianceData,
-  ComplianceMetric,
   SubagentsData,
   SubagentInvocation,
   SubagentTypeBucket,
@@ -77,7 +75,6 @@ export {
   reduceApiDuration as aggregateApiDuration,
   reduceSessionTrace as aggregateSessionTrace,
   reduceRecentEvents as getRecentEvents,
-  reduceCompliance as aggregateCompliance,
   reduceSubagents as aggregateSubagents,
 } from "./reducers.js";
 

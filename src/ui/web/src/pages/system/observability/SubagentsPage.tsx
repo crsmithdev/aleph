@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
-import { useObsSubagents, useObsCompliance, type SubagentsData, type SubagentTypeBucket, type SubagentInvocation } from '../../../api/observability-hooks';
+import { useObsSubagents, type SubagentsData, type SubagentTypeBucket, type SubagentInvocation } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
@@ -11,14 +11,9 @@ import { type TimeRange, type Granularity } from '../../../components/data/TimeR
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { fmtNumber, fmtMs, fmtPct, relativeTime, shortDate, granLabel } from '../../../utils/format';
+import { fmtNumber, fmtMs, relativeTime, shortDate, granLabel } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
 
-function complianceColor(rate: number): string {
-  if (rate >= 0.8) return 'text-success';
-  if (rate >= 0.5) return 'text-warning';
-  return 'text-error';
-}
 
 export function SubagentsPage() {
   const navigate = useNavigate();
@@ -26,7 +21,6 @@ export function SubagentsPage() {
   const [granularity, setGranularity] = useState<Granularity>('day');
   const [bgOnly, setBgOnly] = useState(false);
   const { data, isLoading, error, refetch } = useObsSubagents(range, granularity);
-  const { data: complianceData } = useObsCompliance(range, granularity);
 
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load subagent data" retry={refetch} />;
@@ -129,7 +123,6 @@ export function SubagentsPage() {
     },
   ];
 
-  const dispatchRate = complianceData?.byDirective?.find((d) => d.directive === 'dispatch')?.rate;
 
   return (
     <div className="space-y-6">
@@ -153,7 +146,7 @@ export function SubagentsPage() {
         </button>
       </ObsControlBar>
 
-      <div className="grid grid-cols-5 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <StatCard
           label="Active Now"
           value={<span className={data.activeNow > 0 ? 'text-accent' : ''}>{fmtNumber(data.activeNow)}</span>}
@@ -164,18 +157,6 @@ export function SubagentsPage() {
           label="Avg Duration"
           value={fmtMs(data.avgMs)}
           detail={`p95: ${fmtMs(data.p95Ms)}`}
-        />
-        <StatCard
-          label="Dispatch Compliance"
-          value={
-            dispatchRate !== undefined ? (
-              <Link to="/observability/compliance" className={cn(complianceColor(dispatchRate), 'hover:underline')}>
-                {fmtPct(dispatchRate * 100)}
-              </Link>
-            ) : (
-              <span className="text-text-tertiary">—</span>
-            )
-          }
         />
       </div>
 

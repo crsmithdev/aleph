@@ -5,7 +5,7 @@ import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 import { claudePaths } from "../../paths.ts";
 
-const TAG = "precompact-backup";
+const TAG = "context-precompact-backup";
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
 catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(0); }

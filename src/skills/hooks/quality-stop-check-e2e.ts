@@ -6,15 +6,15 @@
  * (devserver, Playwright, browser interaction) AND an artifact
  * (screenshot or captured output).
  *
- * This hook gets ONE chance to remind — Stop hooks only retry once.
- * The real enforcement comes from format-reminder.ts (UserPromptSubmit)
- * which injects verification requirements into every actionable prompt.
- * This hook validates compliance and gives a last-chance nudge.
+ * When verification is missing, writes a marker file that
+ * quality-pre-require-e2e.ts reads to hard-block the next Edit/Write.
+ * When verification passes, clears the marker.
  */
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, unlinkSync } from "fs";
 import { trace } from "../../trace.ts";
+import { dataPaths, ensureDataDirs } from "../../data/src/paths.ts";
 
-const TAG = "verify-gate";
+const TAG = "quality-stop-check-e2e";
 
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
@@ -58,6 +58,9 @@ const ARTIFACT_CMD = /--screenshot|screenshot|\.png|\.jpg|\.jpeg|> .*\.(txt|log|
 // Unit test runners — do NOT count as e2e
 const UNIT_TEST_CMD = /^(?:bun test|npm test|npx jest|npx vitest|vitest|jest|pytest|cargo test|go test|dotnet test)(?:\s|$)/;
 
+// Direct hook invocations — testing the hook script is NOT e2e
+const HOOK_INVOCATION = /bun\s+src\/skills\/hooks\//;
+
 for (let i = turnStart; i < lines.length; i++) {
   let parsed: any;
   try { parsed = JSON.parse(lines[i]); } catch { continue; }
@@ -79,10 +82,10 @@ for (let i = turnStart; i < lines.length; i++) {
     // E2E signals from Bash commands
     if (name === "Bash") {
       const cmd = (blockInput?.command as string) ?? "";
-      if (E2E_CMD.test(cmd) && !UNIT_TEST_CMD.test(cmd.trim())) {
+      if (E2E_CMD.test(cmd) && !UNIT_TEST_CMD.test(cmd.trim()) && !HOOK_INVOCATION.test(cmd)) {
         e2eSignals.push(cmd.slice(0, 80));
       }
-      if (ARTIFACT_CMD.test(cmd)) {
+      if (ARTIFACT_CMD.test(cmd) && !HOOK_INVOCATION.test(cmd)) {
         artifacts.push("bash:" + cmd.slice(0, 60));
       }
     }
@@ -102,7 +105,14 @@ for (let i = turnStart; i < lines.length; i++) {
   }
 }
 
+const markerPath = `${dataPaths.signals}/require-e2e`;
+
 if (!hasEdits) {
+  // No edits this turn — clear any existing marker
+  if (existsSync(markerPath)) {
+    unlinkSync(markerPath);
+    trace(TAG, "cleared marker: no edits this turn");
+  }
   trace(TAG, "skip: no edits in current turn");
   process.exit(0);
 }
@@ -111,18 +121,25 @@ const hasE2E = e2eSignals.length > 0;
 const hasArtifact = artifacts.length > 0;
 
 if (hasE2E && hasArtifact) {
+  // Verification passed — clear marker if it exists
+  if (existsSync(markerPath)) {
+    unlinkSync(markerPath);
+    trace(TAG, "cleared marker: verification passed");
+  }
   trace(TAG, `pass: e2e=[${e2eSignals[0]}] artifact=[${artifacts[0]}]`);
   process.exit(0);
 }
 
-// --- One-shot reminder ---
+// --- Write marker for PreToolUse gate ---
 
 const files = [...new Set(editedFiles)].slice(0, 10).join(", ");
 const missing: string[] = [];
 if (!hasE2E) missing.push("e2e verification (start the dev server and interact with the running app)");
 if (!hasArtifact) missing.push("artifact (screenshot or output saved to a file)");
 
-trace(TAG, `BLOCKED: edits to [${files}] missing [${missing.join(", ")}]`);
+ensureDataDirs();
+writeFileSync(markerPath, JSON.stringify({ files, missing, ts: new Date().toISOString() }));
+trace(TAG, `marker written: edits to [${files}] missing [${missing.join(", ")}]`);
 
 console.log(`[Construct] Verification gate: you edited files (${files}) without e2e evidence.
 
@@ -133,5 +150,5 @@ Before completing, you must:
 2. Interact with it to confirm your changes work
 3. Save a screenshot or capture output to a file as proof
 
-This is your one reminder — the gate cannot block you again.
+The next Edit/Write will be BLOCKED until verification evidence appears in the transcript.
 Unit tests alone (bun test, jest, pytest) do not satisfy the gate.`);

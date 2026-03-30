@@ -33,7 +33,7 @@ Last session (<filename>):
 
 ### During a session
 
-**Depth classification** — on every prompt (>=3 words), `format-reminder.ts` classifies depth:
+**Depth classification** — on every prompt (>=3 words), `routing-submit-classify.ts` classifies depth:
 - FULL if prompt matches architectural keywords (`architect|redesign|refactor|migrate|schema|structure|plan|propose|authenticat*|authorizat*|integrat*|api endpoint|rename all|move all|replace all|across all|every file|all files|end to end|full stack`) or is >=40 words.
 - QUICK otherwise (silent).
 - Output when FULL (architectural keywords): `[Construct] Depth: FULL — architectural keywords. Use design-first pipeline.`
@@ -54,27 +54,27 @@ Matched ratings are appended to `data/signals/ratings.jsonl`:
 ```
 Ratings 1-3 trigger a console message: `[Construct] Low rating (N) — store what went wrong via memory_store`. Ratings 4-10 are silent.
 
-**Quality hook** — after every `Edit` or `Write` tool use, `quality.ts` auto-formats the saved file:
+**Quality hook** — after every `Edit` or `Write` tool use, `quality-post-format.ts` auto-formats the saved file:
 - If `.claude/quality.json` exists in the project, runs its `format` and `lint` commands with `$FILE` substituted.
 - Otherwise, extension-based defaults: `.py` -> ruff, `.ts/.tsx/.js/.jsx` -> prettier, `.go` -> gofmt, `.rs` -> rustfmt.
 - Skips silently if the formatter binary isn't installed.
 - Failures are logged to trace and printed to stderr.
 
-**TypeScript gate** — after every `Edit` or `Write` on `.ts/.tsx` files, `tsc-gate.ts` finds the nearest `tsconfig.json` and runs `tsc --noEmit`. If errors are found, prints a summary of up to 5 errors.
+**TypeScript gate** — after every `Edit` or `Write` on `.ts/.tsx` files, `quality-post-typecheck.ts` finds the nearest `tsconfig.json` and runs `tsc --noEmit`. If errors are found, prints a summary of up to 5 errors.
 
-**Database guard** — before any MCP SQL tool call (`execute_sql`, `apply_migration`, `run_query`), `db-guard.ts` blocks destructive operations: `DROP TABLE/DATABASE/SCHEMA`, `TRUNCATE`, `DELETE FROM` without WHERE, `ALTER TABLE DROP COLUMN`.
+**Database guard** — before any MCP SQL tool call (`execute_sql`, `apply_migration`, `run_query`), `isolation-pre-block-destructive-sql.ts` blocks destructive operations: `DROP TABLE/DATABASE/SCHEMA`, `TRUNCATE`, `DELETE FROM` without WHERE, `ALTER TABLE DROP COLUMN`.
 
 ### Ending a session
 
 On `Stop`, four hooks fire:
 
-**1. Verification gate** (`verify-gate.ts`) — checks whether the current turn included e2e evidence and an artifact when files were edited:
+**1. Verification gate** (`quality-stop-check-e2e.ts`) — checks whether the current turn included e2e evidence and an artifact when files were edited:
 - If no edits: skips silently.
 - If edits present: checks for e2e signals (devserver startup, Playwright/Cypress, browser MCP tools) and artifacts (screenshots, saved output).
 - If both e2e evidence and artifact are found: passes silently.
 - Otherwise: emits a one-shot reminder listing edited files and what was missing.
 
-**2. Context monitor** (`context-monitor.ts`) — reads token usage from the last assistant message. Warns at 80% of context limit, critical alert at 90%.
+**2. Context monitor** (`context-stop-monitor.ts`) — reads token usage from the last assistant message. Warns at 80% of context limit, critical alert at 90%.
 
 **3. Session summary** (`session-summary.ts`) — writes a summary file if the session had >=4 messages:
 - Output: `data/sessions/YYYY-MM-DD-HHMMSS.md`
@@ -86,7 +86,7 @@ On `Stop`, four hooks fire:
 - Extracts: session summary, user corrections, error resolutions.
 - All auto-extracted memories tagged with `auto_extract`.
 
-**Pre-compaction backup** (`precompact-backup.ts`) — on `PreCompact`, copies the current transcript JSONL to `~/.claude/transcript-backups/` before Claude compacts the conversation.
+**Pre-compaction backup** (`context-precompact-backup.ts`) — on `PreCompact`, copies the current transcript JSONL to `~/.claude/transcript-backups/` before Claude compacts the conversation.
 
 ## Statusline
 
@@ -310,12 +310,12 @@ All hooks in `settings.json`:
 | Event | Hooks (in order) | Timeouts |
 |-------|-----------------|----------|
 | SessionStart | memory/hooks/session-start.ts | 5000ms |
-| UserPromptSubmit | memory/hooks/rating-capture.ts, skills/hooks/format-reminder.ts | 2000ms, 3000ms |
-| Stop | skills/hooks/verify-gate.ts, skills/hooks/context-monitor.ts, memory/hooks/session-summary.ts, memory/hooks/memory-extract.ts | 3000ms, 3000ms, 3000ms, 5000ms |
-| PreToolUse | skills/hooks/db-guard.ts (matcher: `mcp__.*(?:execute_sql\|apply_migration\|run_query)`) | 3000ms |
-| PostToolUse | skills/hooks/quality.ts (matcher: `Edit\|Write`), skills/hooks/tsc-gate.ts (matcher: `Edit\|Write`) | 10000ms, 15000ms |
-| PreCompact | skills/hooks/precompact-backup.ts | 5000ms |
-| Notification | skills/hooks/notify.ts | 3000ms |
+| UserPromptSubmit | memory/hooks/rating-capture.ts, skills/hooks/routing-submit-classify.ts | 2000ms, 3000ms |
+| Stop | skills/hooks/quality-stop-check-e2e.ts, skills/hooks/context-stop-monitor.ts, memory/hooks/session-summary.ts, memory/hooks/memory-extract.ts | 3000ms, 3000ms, 3000ms, 5000ms |
+| PreToolUse | skills/hooks/isolation-pre-block-destructive-sql.ts (matcher: `mcp__.*(?:execute_sql\|apply_migration\|run_query)`) | 3000ms |
+| PostToolUse | skills/hooks/quality-post-format.ts (matcher: `Edit\|Write`), skills/hooks/quality-post-typecheck.ts (matcher: `Edit\|Write`) | 10000ms, 15000ms |
+| PreCompact | skills/hooks/context-precompact-backup.ts | 5000ms |
+| Notification | skills/hooks/notify-event-toast.ts | 3000ms |
 
 ## Trace Mode
 

@@ -22,11 +22,14 @@ const CLAUDE_ROOT = detectClaudeRoot();
 const DATA_ROOT = process.env.CONSTRUCT_DATA_ROOT || resolve(CLAUDE_ROOT, "data");
 const CONSTRUCT_ROOT = resolve(CLAUDE_ROOT, "construct");
 
+// In dev mode, read transcripts from production (read-only) so the dev UI has real data.
+const PROD_CLAUDE = resolve(homedir(), ".claude");
+
 export const claudePaths = {
   root: CLAUDE_ROOT,
   construct: CONSTRUCT_ROOT,
   commands: resolve(CLAUDE_ROOT, "commands"),
-  projects: resolve(CLAUDE_ROOT, "projects"),
+  projects: resolve(PROD_CLAUDE, "projects"),
   manifest: resolve(CONSTRUCT_ROOT, ".manifest"),
   skills: resolve(CONSTRUCT_ROOT, "skills"),
 };
@@ -39,7 +42,6 @@ export const dataPaths = {
   signals: resolve(DATA_ROOT, "signals"),
   ratings: resolve(DATA_ROOT, "signals", "ratings.jsonl"),
   directives: resolve(DATA_ROOT, "signals", "directives.jsonl"),
-  compliance: resolve(DATA_ROOT, "signals", "compliance.jsonl"),
   hookEvents: resolve(DATA_ROOT, "signals", "hook-events.jsonl"),
 };
 

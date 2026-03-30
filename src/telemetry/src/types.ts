@@ -310,20 +310,6 @@ export interface TraceData {
   totalCost: number;
 }
 
-export interface ComplianceMetric {
-  directive: string;
-  total: number;
-  followed: number;
-  rate: number;
-}
-
-export interface ComplianceData {
-  overall: { total: number; followed: number; rate: number };
-  byDirective: ComplianceMetric[];
-  byDay: { date: string; total: number; followed: number; rate: number }[];
-  violations: { sessionId: string; timestamp: string; directive: string; project?: string }[];
-}
-
 export interface SubagentInvocation {
   timestamp: string;
   sessionId: string;

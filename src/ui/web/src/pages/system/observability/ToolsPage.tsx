@@ -10,10 +10,11 @@ import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControl
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtPct, fmtMs, shortDate, fmtToolName } from '../../../utils/format';
+import { fmtNumber, fmtPct, fmtMs, shortDate, parseToolSource } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
 
-type ToolRow = { name: string; count: number; errorCount: number; pct: number; active: boolean; avgMs?: number; p50Ms?: number; p95Ms?: number };
+type RawToolRow = { name: string; count: number; errorCount: number; pct: number; active: boolean; avgMs?: number; p50Ms?: number; p95Ms?: number };
+type ToolRow = RawToolRow & { server: string; tool: string };
 
 export function ToolsPage() {
   const [range, setRange] = useState<TimeRange>('30d');
@@ -26,15 +27,26 @@ export function ToolsPage() {
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load tools" retry={refetch} />;
 
-  const filtered = hideInactive ? data.ranked.filter((r) => r.active) : data.ranked;
+  const enriched: ToolRow[] = data.ranked.map((r) => ({ ...r, ...parseToolSource(r.name) }));
+  const filtered = hideInactive ? enriched.filter((r) => r.active) : enriched;
   const maxCount = Math.max(...filtered.map((r) => r.count), 1);
 
   const columns: Column<ToolRow>[] = [
     {
-      key: 'name',
+      key: 'server',
+      label: 'Server',
+      sortable: true,
+      render: (row) => {
+        return row.server === 'builtin'
+          ? <span className="font-mono text-text-tertiary">{row.server}</span>
+          : <span className="font-mono text-text-primary">{row.server}</span>;
+      },
+    },
+    {
+      key: 'tool',
       label: 'Tool',
       sortable: true,
-      render: (row) => <span className="font-mono text-text-primary">{fmtToolName(row.name)}</span>,
+      render: (row) => <span className="font-mono text-text-primary">{row.tool}</span>,
     },
     {
       key: 'count',
