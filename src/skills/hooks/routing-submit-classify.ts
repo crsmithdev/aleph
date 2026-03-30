@@ -36,7 +36,7 @@ catch (e) {
   const msg = `[${TAG}] stdin parse failed: ${(e as Error).message}`;
   console.error(msg);
   trace(TAG, msg);
-  process.exit(1);
+  process.exit(0);
 }
 reportHook(TAG, "UserPromptSubmit", input.session_id);
 const prompt = input.prompt ?? "";
@@ -81,7 +81,7 @@ try {
 } catch (e) {
   trace(TAG, `failed to parse skill-rules.json: ${(e as Error).message}`);
   console.error(`[Construct] Failed to parse skill-rules.json: ${e}`);
-  process.exit(1);
+  process.exit(0);
 }
 const lp = prompt.toLowerCase();
 const matched = rules

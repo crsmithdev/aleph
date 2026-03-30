@@ -60,5 +60,5 @@ try {
   }
 } catch (e) {
   trace(TAG, `notification failed: ${(e as Error).message?.slice(0, 100)}, falling back to bell`);
-  process.stdout.write("\x07");
+  process.stderr.write("\x07");
 }

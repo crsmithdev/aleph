@@ -27,7 +27,7 @@ catch (e) {
   const msg = `[${TAG}] stdin parse failed: ${(e as Error).message}, raw: ${raw.slice(0, 100)}`;
   console.error(msg);
   trace(TAG, msg);
-  process.exit(1);
+  process.exit(0);
 }
 reportHook(TAG, "UserPromptSubmit", input.session_id);
 const prompt = (input.prompt ?? "").trim();

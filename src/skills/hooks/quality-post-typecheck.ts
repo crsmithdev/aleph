@@ -16,6 +16,7 @@ import { existsSync } from "fs";
 import { dirname, extname } from "path";
 import { execSync } from "child_process";
 import { trace } from "../../trace.ts";
+import { reportHook } from "../../hook-report.ts";
 
 const TAG = "quality-post-typecheck";
 let input: any;
@@ -26,6 +27,7 @@ catch (e) {
   trace(TAG, msg);
   process.exit(1);
 }
+reportHook(TAG, "PostToolUse", input.session_id);
 
 const filePath = input.tool_input?.file_path ?? "";
 if (!filePath) { trace(TAG, "no file path"); process.exit(0); }
@@ -89,7 +91,7 @@ try {
     const suffix = errorCount > 5 ? `\n... and ${errorCount - 5} more errors` : "";
     console.log(`⚠ TypeScript: ${errorCount} error${errorCount === 1 ? "" : "s"} found after editing ${filePath}\n${preview}${suffix}`);
     trace(TAG, `${errorCount} type errors`);
-    process.exit(1);
+    process.exit(2);
   }
   trace(TAG, "tsc exited non-zero but no TS errors found");
 }

@@ -12,16 +12,14 @@
  * 3. Write {date}-{time}.md to sessions dir with: intent, outcome,
  *    milestones, tools, file list, edit count, message counts, notes.
  *
- * Never blocks. Exits 0 on success or skip, exits 1 only on stdin parse failure.
+ * Never blocks. Exits 0 on all paths.
  */
 import { writeFileSync } from "fs";
-import { resolve, dirname } from "path";
 import { trace } from "../../trace.ts";
 import { dataPaths, ensureDataDirs } from "../../paths.ts";
 import { parseTranscript } from "../parse-transcript.ts";
 
 const TAG = "session-summary";
-const root = resolve(dirname(Bun.main), "../..");
 const sessionsDir = dataPaths.sessions;
 ensureDataDirs();
 
@@ -32,7 +30,7 @@ catch (e) {
   const msg = `[${TAG}] stdin parse failed: ${(e as Error).message}, raw: ${raw.slice(0, 100)}`;
   console.error(msg);
   trace(TAG, msg);
-  process.exit(1);
+  process.exit(0);
 }
 const transcript = parseTranscript(input.transcript_path);
 
