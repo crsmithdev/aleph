@@ -228,7 +228,7 @@ const lowResult = ratingTest("2");
 check("rating: low rating warns", lowResult.rating === 2 && lowResult.output.includes("Low rating"));
 
 // Error handling
-run("memory/hooks/rating-capture.ts", "malformed", "not json", { expectExit: 1 });
+run("memory/hooks/rating-capture.ts", "malformed", "not json", { expectExit: 0 });
 
 // ── Session summary ──────────────────────────────────────────────────────────
 
@@ -239,7 +239,7 @@ const tinyTranscript = writeTempJsonl("tiny", [
 ]);
 run("memory/hooks/session-summary.ts", "too few", JSON.stringify({ transcript_path: tinyTranscript }));
 try { unlinkSync(tinyTranscript); } catch {}
-run("memory/hooks/session-summary.ts", "malformed", "not json", { expectExit: 1 });
+run("memory/hooks/session-summary.ts", "malformed", "not json", { expectExit: 0 });
 
 // ── Memory extraction ───────────────────────────────────────────────────────
 
@@ -355,7 +355,7 @@ check("skill: 'I see an error' → debugging", skillTest("I see an error when ru
 // Error handling
 run("skills/hooks/routing-submit-classify.ts", "smoke", "{}" );
 run("skills/hooks/routing-submit-classify.ts", "short skip", '{"prompt":"do it"}');
-run("skills/hooks/routing-submit-classify.ts", "malformed", "not json", { expectExit: 1 });
+run("skills/hooks/routing-submit-classify.ts", "malformed", "not json", { expectExit: 0 });
 
 // ── Depth classification ─────────────────────────────────────────────────────
 
@@ -462,8 +462,8 @@ try { unlinkSync(recallTranscript); } catch {}
 
 console.log("\n--- skill extensions ---");
 
-// routing-submit-classify should include project extension content when .claude/skills/<skill>.md exists
-// The test runs from the repo root which has .claude/skills/code-review.md
+// routing-submit-classify should include project extension content when .claude/skill-extensions/<skill>.md exists
+// The test runs from the repo root which has .claude/skill-extensions/code-review.md
 function extensionTest(prompt: string): string {
   return runHook("skills/hooks/routing-submit-classify.ts", JSON.stringify({ prompt }));
 }
@@ -925,8 +925,8 @@ console.log("\n--- dispatch-pre-require-subagent ---");
 run("skills/hooks/dispatch-pre-require-subagent.ts", "no session_id allows",
   JSON.stringify({ tool_name: "Edit" }));
 
-// Malformed stdin → allow (exit 0, not crash)
-run("skills/hooks/dispatch-pre-require-subagent.ts", "malformed stdin allows", "not json");
+// Malformed stdin → fail closed (exit 1, security gate)
+run("skills/hooks/dispatch-pre-require-subagent.ts", "malformed stdin blocks", "not json", { expectExit: 1 });
 
 // ── Directive signal writing ────────────────────────────────────────────────
 

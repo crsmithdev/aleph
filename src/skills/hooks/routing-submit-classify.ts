@@ -130,7 +130,7 @@ trace(TAG, `project root: ${projectRoot ?? "none"}`);
 const extensions: string[] = [];
 if (projectRoot) {
   for (const skill of matched) {
-    const extPath = resolve(projectRoot, `.claude/skills/${skill}.md`);
+    const extPath = resolve(projectRoot, `.claude/skill-extensions/${skill}.md`);
     if (existsSync(extPath)) {
       const content = readFileSync(extPath, "utf8").trim();
       if (content) {
