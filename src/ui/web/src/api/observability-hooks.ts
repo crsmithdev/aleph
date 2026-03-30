@@ -68,9 +68,14 @@ export function useObsHooks(range: TimeRange, granularity?: Granularity, session
       errors: number;
       active: boolean;
       fullCommand?: string;
+      blocking?: boolean;
+      gate?: string;
+      markerFile?: string;
+      description?: string;
     }>;
     byDay: Array<{ date: string; count: number; hooks: Record<string, number> }>;
-    unused: Array<{ command: string; event: string }>;
+    unused: Array<{ command: string; event: string; blocking?: boolean; gate?: string; markerFile?: string; description?: string }>;
+    markerStats?: Record<string, { writes: number; clears: number; activeNow: boolean }>;
     queryTimeMs: number;
   }>('hooks', { range, granularity, session });
 }

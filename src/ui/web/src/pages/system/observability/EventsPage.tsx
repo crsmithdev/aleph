@@ -15,7 +15,10 @@ type EntryType =
   | 'hook_progress'
   | 'stop_hook_summary'
   | 'tokens'
-  | 'turn_duration';
+  | 'turn_duration'
+  | 'directive'
+  | 'user_message'
+  | 'compact_boundary';
 
 type EventRow = {
   sessionId: string;
@@ -40,6 +43,11 @@ type EventRow = {
   outputTokens?: number;
   cacheReadTokens?: number;
   cacheCreationTokens?: number;
+  directives?: string[];
+  promptWords?: number;
+  userRequest?: string;
+  compactTrigger?: string;
+  compactPreTokens?: number;
 };
 
 const EVENT_TYPES: EntryType[] = [
@@ -49,6 +57,9 @@ const EVENT_TYPES: EntryType[] = [
   'stop_hook_summary',
   'tokens',
   'turn_duration',
+  'directive',
+  'user_message',
+  'compact_boundary',
 ];
 
 const TYPE_LABELS: Record<EntryType, string> = {
@@ -58,6 +69,9 @@ const TYPE_LABELS: Record<EntryType, string> = {
   stop_hook_summary: 'stop_hook',
   tokens: 'tokens',
   turn_duration: 'turn',
+  directive: 'directive',
+  user_message: 'message',
+  compact_boundary: 'compact',
 };
 
 function TypeBadge({ type, isError }: { type: string; isError?: boolean }) {
@@ -70,6 +84,9 @@ function TypeBadge({ type, isError }: { type: string; isError?: boolean }) {
     stop_hook_summary: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
     tokens: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
     turn_duration: 'bg-bg-tertiary text-text-muted border-border-primary',
+    directive: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+    user_message: 'bg-teal-500/10 text-teal-400 border-teal-500/20',
+    compact_boundary: 'bg-pink-500/10 text-pink-400 border-pink-500/20',
   };
 
   const label = TYPE_LABELS[type as EntryType] ?? type;
@@ -96,6 +113,12 @@ function getDetail(row: EventRow): string {
       return row.model ?? '';
     case 'turn_duration':
       return row.turnDurationMs != null ? fmtMs(row.turnDurationMs) : '';
+    case 'directive':
+      return row.directives?.join(', ') ?? '';
+    case 'user_message':
+      return row.userRequest?.slice(0, 60) ?? '';
+    case 'compact_boundary':
+      return row.compactTrigger ?? '';
     default:
       return '';
   }
@@ -122,11 +145,17 @@ function getInfoPreview(row: EventRow): string {
   if (row.entryType === 'tool_result' && row.errorMessage) {
     return row.errorMessage.slice(0, 60) + (row.errorMessage.length > 60 ? '…' : '');
   }
+  if (row.entryType === 'directive' && row.promptWords) {
+    return `${row.promptWords} words`;
+  }
+  if (row.entryType === 'compact_boundary' && row.compactPreTokens) {
+    return `${fmtNumber(row.compactPreTokens)} tokens`;
+  }
   return '';
 }
 
-function rowKey(row: EventRow): string {
-  return `${row.timestamp}-${row.sessionId}-${row.toolUseId ?? ''}-${row.hookCommand ?? ''}-${row.entryType}`;
+function rowKey(row: EventRow & { _idx?: number }): string {
+  return `${row.timestamp}-${row.sessionId}-${row.toolUseId ?? ''}-${row.hookCommand ?? ''}-${row.entryType}-${row._idx ?? 0}`;
 }
 
 function ExpandedRow({ row }: { row: EventRow }) {
@@ -158,6 +187,14 @@ function ExpandedRow({ row }: { row: EventRow }) {
       sections.push({ label: 'Cache Creation', content: fmtNumber(row.cacheCreationTokens) });
   } else if (row.entryType === 'turn_duration') {
     if (row.turnDurationMs != null) sections.push({ label: 'Duration', content: fmtMs(row.turnDurationMs) });
+  } else if (row.entryType === 'directive') {
+    if (row.directives?.length) sections.push({ label: 'Directives', content: row.directives.join(', ') });
+    if (row.promptWords != null) sections.push({ label: 'Prompt Words', content: String(row.promptWords) });
+  } else if (row.entryType === 'user_message') {
+    if (row.userRequest) sections.push({ label: 'Message', content: row.userRequest });
+  } else if (row.entryType === 'compact_boundary') {
+    if (row.compactTrigger) sections.push({ label: 'Trigger', content: row.compactTrigger });
+    if (row.compactPreTokens != null) sections.push({ label: 'Pre-Compact Tokens', content: fmtNumber(row.compactPreTokens) });
   }
 
   sections.push({ label: 'Session', content: row.sessionId });
@@ -224,7 +261,7 @@ export function EventsPage() {
     offset,
   );
 
-  const allEvents = data?.events ?? [];
+  const allEvents = (data?.events ?? []).map((e: EventRow, i: number) => ({ ...e, _idx: i }));
   const events = errorsOnly ? allEvents.filter((e) => e.isError) : allEvents;
   const total = errorsOnly ? events.length : (data?.total ?? 0);
   const errorCount = allEvents.filter((e) => e.isError).length;

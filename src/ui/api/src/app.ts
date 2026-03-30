@@ -171,6 +171,8 @@ export async function createApp(opts?: { dbUrl?: string }) {
           db: runtimeDbPath,
           memoryDb: (manifest.paths?.memory_db) ?? getMemoryDbPath(),
           sessions: (manifest.paths?.sessions) ?? dataPaths.sessions,
+          telemetry: claudePaths.projects,
+          signals: dataPaths.signals,
           ratings: (manifest.paths?.ratings) ?? dataPaths.ratings,
           backups: (manifest.paths?.backups) ?? dataPaths.backups,
         },

@@ -245,6 +245,111 @@ function checkToolActive(_toolName: string, lastUsed?: string): boolean {
   return false;
 }
 
+type HookMeta = {
+  blocking: boolean;
+  gate?: string;
+  markerFile?: string;
+  description: string;
+};
+
+const HOOK_METADATA: Record<string, HookMeta> = {
+  'dispatch-pre-require-subagent': {
+    blocking: true,
+    gate: 'dispatch',
+    description: 'Blocks Edit/Write in main session unless inline override or subagent',
+  },
+  'dispatch-stop-remind': {
+    blocking: false,
+    gate: 'dispatch',
+    description: 'Reminds to dispatch tasks to background agents',
+  },
+  'isolation-pre-block-prod-edit': {
+    blocking: true,
+    description: 'Blocks edits to production ~/.claude paths from dev repo',
+  },
+  'isolation-pre-block-destructive-sql': {
+    blocking: true,
+    description: 'Blocks destructive SQL (DROP, TRUNCATE, DELETE without WHERE)',
+  },
+  'quality-stop-check-e2e': {
+    blocking: false,
+    gate: 'e2e-verification',
+    markerFile: 'require-e2e',
+    description: 'Checks for e2e verification evidence; writes marker when missing',
+  },
+  'quality-pre-require-e2e': {
+    blocking: true,
+    gate: 'e2e-verification',
+    markerFile: 'require-e2e',
+    description: 'Blocks Edit/Write when e2e verification marker is present',
+  },
+  'git-pre-require-commit': {
+    blocking: true,
+    gate: 'commit-nudge',
+    markerFile: 'git-pre-require-commit-{sessionId}',
+    description: 'Groups dirty files by directory; warns at 3 groups, blocks at 5',
+  },
+  'quality-post-format': {
+    blocking: false,
+    description: 'Post-tool formatting quality checks',
+  },
+  'quality-post-typecheck': {
+    blocking: false,
+    description: 'Runs tsc type-check after Edit/Write on .ts files',
+  },
+  'routing-submit-classify': {
+    blocking: false,
+    gate: 'dispatch',
+    description: 'Classifies prompt depth, matches skills, writes directives',
+  },
+  'context-stop-monitor': {
+    blocking: false,
+    description: 'Monitors context window usage at stop',
+  },
+  'context-precompact-backup': {
+    blocking: false,
+    description: 'Backs up transcript before context compaction',
+  },
+  'notify-event-toast': {
+    blocking: false,
+    description: 'Sends desktop toast notifications for events',
+  },
+};
+
+function readMarkerFileStats(): Record<string, { writes: number; clears: number; activeNow: boolean }> {
+  const stats: Record<string, { writes: number; clears: number; activeNow: boolean }> = {};
+  // Check require-e2e marker
+  const e2eMarker = resolve(dataPaths.signals, 'require-e2e');
+  stats['require-e2e'] = { writes: 0, clears: 0, activeNow: existsSync(e2eMarker) };
+
+  // Read hook trace log for marker write/clear counts
+  const traceLog = resolve(dataPaths.signals, 'hook-trace.log');
+  if (existsSync(traceLog)) {
+    try {
+      const content = readFileSync(traceLog, 'utf-8');
+      const e2eWrites = (content.match(/marker written/g) || []).length;
+      const e2eClears = (content.match(/cleared marker/g) || []).length;
+      stats['require-e2e'].writes = e2eWrites;
+      stats['require-e2e'].clears = e2eClears;
+    } catch {}
+  }
+
+  // Check git commit markers
+  try {
+    const signalFiles = readdirSync(dataPaths.signals);
+    const commitMarkers = signalFiles.filter(f => f.startsWith('git-pre-require-commit-'));
+    stats['git-pre-require-commit'] = {
+      writes: 0,
+      clears: 0,
+      activeNow: commitMarkers.length > 0,
+    };
+  } catch {
+    stats['git-pre-require-commit'] = { writes: 0, clears: 0, activeNow: false };
+  }
+
+  return stats;
+}
+
 export const observabilityRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: QueryParams }>('/overview', { preHandler: parseDaysPreHandler }, async (req) => {
     const obsReq = req as ObsRequest;
@@ -283,15 +388,33 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     }
     const merged = [...rankedMap.values()].sort((a, b) => b.count - a.count);
 
-    const ranked = merged.map((h) => ({
-      ...h,
-      active: h.fullCommand ? checkHookActive(h.fullCommand) : false,
-    }));
+    const markerStats = readMarkerFileStats();
+    const ranked = merged.map((h) => {
+      const name = h.command.replace(/\.ts$/, '');
+      const meta = HOOK_METADATA[name];
+      return {
+        ...h,
+        active: h.fullCommand ? checkHookActive(h.fullCommand) : false,
+        blocking: meta?.blocking ?? false,
+        gate: meta?.gate,
+        markerFile: meta?.markerFile,
+        description: meta?.description,
+      };
+    });
     const registered = getRegisteredHooks();
     const normalize = (cmd: string) => cmd.replace(/\.(ts|sh)$/, '');
     const usedCommands = new Set(ranked.map(h => normalize(h.command)));
-    const unused = registered.filter(h => !usedCommands.has(normalize(h.command)));
-    return { ...result, ranked, unused, queryTimeMs };
+    const unused = registered.filter(h => !usedCommands.has(normalize(h.command))).map(h => {
+      const meta = HOOK_METADATA[normalize(h.command)];
+      return {
+        ...h,
+        blocking: meta?.blocking ?? false,
+        gate: meta?.gate,
+        markerFile: meta?.markerFile,
+        description: meta?.description,
+      };
+    });
+    return { ...result, ranked, unused, markerStats, queryTimeMs };
   });
 
   app.get<{ Querystring: QueryParams }>('/skills', { preHandler: parseDaysPreHandler }, async (req) => {
@@ -305,8 +428,8 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     const unused = [...unusedSkills, ...unusedCommands];
     const ranked = result.ranked.map(s => {
       const bare = s.skill.replace(/^\//, '');
-      const isCommand = commandNames.has(bare);
       const isSkill = registeredSkills.has(bare);
+      const isCommand = commandNames.has(bare) && !isSkill;
       return {
         ...s,
         type: isCommand ? 'command' as const : 'skill' as const,

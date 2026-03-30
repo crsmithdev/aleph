@@ -23,7 +23,13 @@ type HookRow = {
   errors: number;
   active: boolean;
   successRate: number;
+  blocking?: boolean;
+  gate?: string;
+  markerFile?: string;
+  description?: string;
 };
+
+type MarkerStats = Record<string, { writes: number; clears: number; activeNow: boolean }>;
 
 type InvocationRow = {
   timestamp: string;
@@ -49,12 +55,14 @@ function ByHookView({ range, granularity, hideInactive, onHideInactiveChange, sh
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load hooks" retry={refetch} />;
 
+  const markerStats: MarkerStats = data.markerStats || {};
   const rankedWithRate: HookRow[] = data.ranked.map(r => ({
     ...r,
     successRate: r.count > 0 ? ((r.count - r.errors) / r.count) * 100 : 100,
   }));
   const unusedRows: HookRow[] = (data.unused || []).map(h => ({
     command: h.command, event: h.event, count: 0, avgMs: 0, p50Ms: 0, p95Ms: 0, errors: 0, active: true, successRate: 100,
+    blocking: h.blocking, gate: h.gate, markerFile: h.markerFile, description: h.description,
   }));
   let filtered = hideInactive ? rankedWithRate.filter((r) => r.active) : rankedWithRate;
   if (showUnused) filtered = [...filtered, ...unusedRows];
@@ -75,6 +83,35 @@ function ByHookView({ range, granularity, hideInactive, onHideInactiveChange, sh
       key: 'event',
       label: 'Event',
       render: (row) => <span className="text-text-secondary">{row.event}</span>,
+    },
+    {
+      key: 'blocking',
+      label: 'Mode',
+      width: '7rem',
+      render: (row) => (
+        <div className="flex items-center gap-1.5">
+          {row.blocking ? (
+            <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-error/10 text-error border border-error/20">
+              blocking
+            </span>
+          ) : (
+            <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-bg-tertiary text-text-muted border border-border-primary">
+              passive
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'gate',
+      label: 'Gate',
+      width: '8rem',
+      render: (row) => row.gate ? (
+        <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-mono bg-purple-500/10 text-purple-400 border border-purple-500/20">
+          {row.gate}
+          {row.markerFile && <span title={`Marker: ${row.markerFile}`}>&#x2691;</span>}
+        </span>
+      ) : <span className="text-text-muted">—</span>,
     },
     {
       key: 'count',
@@ -142,6 +179,48 @@ function ByHookView({ range, granularity, hideInactive, onHideInactiveChange, sh
           navigate(`/observability/hooks/${encodeURIComponent(row.command)}`)
         }
       />
+
+      {Object.keys(markerStats).length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium text-text-secondary">Gate Markers</h3>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {Object.entries(markerStats).map(([name, stats]) => {
+              const catchRate = stats.writes > 0 ? ((stats.writes - stats.clears) / stats.writes * 100) : 0;
+              return (
+                <div key={name} className="rounded-lg border border-border-primary bg-bg-secondary p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xs text-text-primary">{name}</span>
+                    <span className={cn(
+                      'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium',
+                      stats.activeNow
+                        ? 'bg-warning/10 text-warning border border-warning/20'
+                        : 'bg-success/10 text-success border border-success/20',
+                    )}>
+                      {stats.activeNow ? 'active' : 'clear'}
+                    </span>
+                  </div>
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <span className="text-text-muted">Writes</span>
+                      <div className="font-medium text-text-primary">{fmtNumber(stats.writes)}</div>
+                    </div>
+                    <div>
+                      <span className="text-text-muted">Clears</span>
+                      <div className="font-medium text-text-primary">{fmtNumber(stats.clears)}</div>
+                    </div>
+                    <div>
+                      <span className="text-text-muted">Catch %</span>
+                      <div className={cn('font-medium', catchRate > 50 ? 'text-warning' : 'text-text-primary')}>
+                        {stats.writes > 0 ? fmtPct(catchRate) : '—'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {data.byDay.length > 0 && (
         <ChartContainer title="Hook Executions Over Time" chartType={chartType} onChartTypeChange={setChartType}>

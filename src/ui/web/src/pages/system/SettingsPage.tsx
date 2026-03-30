@@ -30,6 +30,8 @@ type SystemInfo = {
     db: string;
     memoryDb: string;
     sessions: string;
+    telemetry: string;
+    signals: string;
     ratings: string;
     backups: string;
   };
@@ -133,6 +135,8 @@ function SystemInfoSection() {
           ['Construct DB', info.paths.db],
           ['Memory DB', info.paths.memoryDb],
           ['Sessions', info.paths.sessions],
+          ['Telemetry', info.paths.telemetry],
+          ['Signals', info.paths.signals],
           ['Ratings', info.paths.ratings],
           ['Backups', info.paths.backups],
         ]} dimAfter={1} />
