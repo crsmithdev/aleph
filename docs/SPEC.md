@@ -320,7 +320,7 @@ All hooks in `settings.json`:
 
 - Flag file: `~/.claude/construct/.trace`
 - When present: hooks emit trace output to stdout via `trace()` calls
-- Toggled by `/trace` command or `src/trace-toggle.ts`
+- Toggled by `/trace` command
 
 ## Module Detection
 
