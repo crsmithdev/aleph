@@ -14,8 +14,8 @@ This is the Construct source repo. The installed Construct rules come from `~/.c
 4. Make small, atomic changes that can be tested and reverted independently, frequent commits, feature branches, and worktrees. Push before context switches or session end.  Push code frequently and avoid accumulating un-commited changes.
 5. Never claim something is finished or fixed unless you have tested it on the devserver, and looked at the actual data that the page contains.  Do not assume correctness, skip tests, or finish unless **all** tests are passing.
 6. Never summarize, truncate, or paraphrase when copying files; verify copies byte-for-byte.
-8. When removing something, remove it completely: all references, unused files, related artifacts, and every other trace.  Do not let orphaned / 'legacy' features pile up if outdated.
-7. All docs (README.md, INSTALL.md, SPEC.md, etc.) must match actual behavior with zero drift. SPEC.md should be behavior- and feature-oriented, enabling functional testing and diffing.
+7. When removing something, remove it completely: all references, unused files, related artifacts, and every other trace.  Do not let orphaned / 'legacy' features pile up if outdated.
+8. All docs (README.md, INSTALL.md, SPEC.md, etc.) must match actual behavior with zero drift. SPEC.md should be behavior- and feature-oriented, enabling functional testing and diffing.
 9. Use memory (MCP), CLAUDE.md, and docs appropriately without duplicating information between layers. Clearing context and continuing in a new session should be instant — never re-learn the codebase.
 10. Rigorously keep dev (this repo) isolated from production (`~/.claude`).  Everything:  modules, SQLite DB, telemetry DB, memory mcp server, etc. must be different between both environments.  Never write to `~/.claude` unless installing, and never test against it either, all testing should be done in the dev environment.
 
