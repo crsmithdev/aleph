@@ -1047,7 +1047,7 @@ export function reduceRecentEvents(
       return { ...base, entryType: "compact_boundary", compactTrigger: d.trigger, compactPreTokens: d.preTokens };
     }
     if (e.kind === "directive") {
-      return { ...base, entryType: "directive", directive: d.directive, directiveFollowed: d.followed };
+      return { ...base, entryType: "directive", directives: d.directives, promptWords: d.promptWords };
     }
     return { ...base, entryType: e.kind };
   });

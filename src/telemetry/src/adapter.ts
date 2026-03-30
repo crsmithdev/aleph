@@ -6,9 +6,9 @@
  * If Claude Code changes its log format, only this file needs updating.
  */
 
-import { readdirSync, statSync, readFileSync } from "fs";
+import { readdirSync, statSync, readFileSync, existsSync } from "fs";
 import { join, basename, dirname } from "path";
-import { claudePaths } from "@construct/data";
+import { claudePaths, dataPaths } from "@construct/data";
 import type { TelemetryEvent } from "./event.js";
 
 const DEFAULT_BASE = claudePaths.projects;
@@ -360,6 +360,37 @@ export interface AdaptOptions {
   baseDir?: string;
 }
 
+function readDirectives(since?: Date): TelemetryEvent[] {
+  const filePath = dataPaths.directives;
+  if (!existsSync(filePath)) return [];
+  const cached = fileCache.get(filePath);
+  const stat = statSync(filePath);
+  if (cached && cached.mtimeMs === stat.mtimeMs) return cached.events;
+
+  const events: TelemetryEvent[] = [];
+  try {
+    const lines = readFileSync(filePath, "utf-8").split("\n").filter(Boolean);
+    for (const line of lines) {
+      try {
+        const entry = JSON.parse(line) as { ts: string; sessionId: string; directives: string[]; promptWords: number };
+        if (since && entry.ts < since.toISOString()) continue;
+        events.push({
+          ts: entry.ts,
+          sid: entry.sessionId,
+          kind: "directive",
+          name: entry.directives.join(", "),
+          data: {
+            directives: entry.directives,
+            promptWords: entry.promptWords,
+          },
+        });
+      } catch {}
+    }
+  } catch {}
+  fileCache.set(filePath, { mtimeMs: stat.mtimeMs, events });
+  return events;
+}
+
 export function adaptAllSessions(opts?: AdaptOptions): TelemetryEvent[] {
   const baseDir = opts?.baseDir || DEFAULT_BASE;
   const files = discoverJsonlFiles(baseDir, opts?.since);
@@ -371,6 +402,7 @@ export function adaptAllSessions(opts?: AdaptOptions): TelemetryEvent[] {
     allEvents.push(...adaptFile(file, project));
   }
 
+  allEvents.push(...readDirectives(opts?.since));
   return allEvents;
 }
 
