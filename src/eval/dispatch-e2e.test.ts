@@ -2,24 +2,27 @@
 /**
  * Dispatch gate eval.
  *
- * Launches Claude via the Agent SDK with a PreToolUse hook that blocks
- * direct Edit/Write in the main session (simulating the dispatch gate).
- * Verifies that Claude adapts by dispatching work to a subagent, and
- * that correct telemetry is written.
+ * Launches Claude via the Agent SDK with programmatic hooks that delegate
+ * to the real dispatch-pre-require-subagent.ts script as a subprocess.
+ * The real script writes telemetry to hook-events.jsonl and enforces
+ * the dispatch gate, just like production.
+ *
+ * Verifies:
+ *   - Claude adapts to the gate by dispatching to a subagent
+ *   - The real hook script wrote events to hook-events.jsonl
  *
  * Usage:
  *   bun src/eval/dispatch-e2e.test.ts
  *   bun src/eval/dispatch-e2e.test.ts --model claude-sonnet-4-6
  *   bun src/eval/dispatch-e2e.test.ts --scenario broken-math
  */
-import type { PreToolUseHookInput, HookCallback } from "@anthropic-ai/claude-agent-sdk";
+import { rmSync, existsSync, mkdirSync, mkdtempSync } from "fs";
 import { join } from "path";
-import { mkdtempSync } from "fs";
 import { tmpdir } from "os";
 import {
-  runEval, emptyResult, createResults, check, printAndExit, formatResult,
-  writeHookEvent, readHookEvents,
-  type EvalResult, type HookEvent,
+  runEval, emptyResult, realDispatchHooks,
+  createResults, check, printAndExit, formatResult,
+  readHookEvents,
 } from "./harness.ts";
 
 const args = process.argv.slice(2);
@@ -27,66 +30,26 @@ const model = args.includes("--model") ? args[args.indexOf("--model") + 1] : und
 const scenario = args.includes("--scenario") ? args[args.indexOf("--scenario") + 1] : "broken-math";
 
 const r = createResults();
-const telemetryDir = mkdtempSync(join(tmpdir(), "eval-telemetry-"));
 
 console.log(`\n=== Dispatch gate eval ===`);
 console.log(`scenario: ${scenario}, model: ${model ?? "default (haiku)"}\n`);
 
-// ── Dispatch gate hook ──────────────────────────────────────────
+// ── Run with real dispatch gate ─────────────────────────────────
 
-function makeDispatchGate(telemetryPath: string): HookCallback {
-  return async (input) => {
-    const { tool_name, agent_id, session_id } = input as PreToolUseHookInput & { agent_id?: string; session_id?: string };
+console.log("--- With dispatch gate (real hooks) ---");
 
-    if (tool_name !== "Edit" && tool_name !== "Write" && tool_name !== "NotebookEdit") {
-      return {};
-    }
+// Pre-create data root so the real hooks and the eval share it
+const gateDataRoot = mkdtempSync(join(tmpdir(), "eval-data-"));
+mkdirSync(join(gateDataRoot, "signals"), { recursive: true });
 
-    // Subagents have agent_id set — allow them through
-    if (agent_id) {
-      writeHookEvent(telemetryPath, {
-        ts: new Date().toISOString(),
-        hook: "dispatch-gate",
-        event: "PreToolUse",
-        sessionId: session_id ?? "eval",
-        decision: "allow",
-        reason: "subagent",
-      });
-      return {};
-    }
-
-    writeHookEvent(telemetryPath, {
-      ts: new Date().toISOString(),
-      hook: "dispatch-gate",
-      event: "PreToolUse",
-      sessionId: session_id ?? "eval",
-      decision: "block",
-      reason: "main-session-edit",
-    });
-
-    return {
-      decision: "block" as const,
-      reason: "Dispatch required: use the Agent tool to delegate file edits to a subagent. Do not edit files directly in the main session.",
-    };
-  };
-}
-
-// ── Run with gate ───────────────────────────────────────────────
-
-console.log("--- With dispatch gate ---");
-
-const gateTelemetry = join(telemetryDir, "with-gate.jsonl");
 const sharedResult = emptyResult();
-
-const withGate = await runEval({
+const { result: withGate, telemetry: gateTelemetry } = await runEval({
   scenario,
   model,
   result: sharedResult,
-  telemetryPath: join(telemetryDir, "with-gate-tracker.jsonl"),
+  dataRoot: gateDataRoot,
+  hooks: realDispatchHooks(gateDataRoot),
   promptSuffix: `IMPORTANT: You have a dispatch gate active. Direct file edits (Edit/Write) will be blocked in your main session. You MUST use the Agent tool to dispatch file modifications to a subagent. The subagent can edit freely.`,
-  hooks: {
-    PreToolUse: [{ hooks: [makeDispatchGate(gateTelemetry)] }],
-  },
 });
 
 console.log(formatResult("with-gate", withGate));
@@ -97,10 +60,7 @@ if (withGate.error) console.log(`      error: ${withGate.error}`);
 
 console.log("\n--- Without dispatch gate (baseline) ---");
 
-const bare = await runEval({
-  scenario, model,
-  telemetryPath: join(telemetryDir, "bare-tracker.jsonl"),
-});
+const { result: bare, telemetry: bareTelemetry } = await runEval({ scenario, model });
 
 console.log(formatResult("bare", bare));
 if (bare.error) console.log(`      error: ${bare.error}`);
@@ -122,38 +82,33 @@ if (withGate.agentDispatched && !bare.agentDispatched) {
   check(r, "gate variant used Agent tool", true);
 }
 
-// ── Telemetry assertions ────────────────────────────────────────
+// ── Real hook telemetry assertions ──────────────────────────────
 
-console.log("\n--- Telemetry assertions ---");
+console.log("\n--- Hook telemetry assertions ---");
 
-const gateEvents = readHookEvents(gateTelemetry);
-const trackerEvents = readHookEvents(join(telemetryDir, "with-gate-tracker.jsonl"));
-const bareTrackerEvents = readHookEvents(join(telemetryDir, "bare-tracker.jsonl"));
+const hookEventsPath = join(gateDataRoot, "signals", "hook-events.jsonl");
+const gateEvents = readHookEvents(hookEventsPath);
 
-check(r, "gate telemetry: events written", gateEvents.length > 0, `got ${gateEvents.length}`);
-// Block events only appear if Claude tried to edit directly before dispatching.
-// If Claude dispatched immediately, only allow events exist — that's fine.
-const hasBlockOrAllow = gateEvents.some(e => e.decision === "block" || e.decision === "allow");
-check(r, "gate telemetry: has block or allow decisions", hasBlockOrAllow,
-  `decisions: ${gateEvents.map(e => e.decision).join(",")}`);
+check(r, "real hooks: hook-events.jsonl exists", existsSync(hookEventsPath));
+check(r, "real hooks: events written", gateEvents.length > 0, `got ${gateEvents.length}`);
 
-check(r, "tracker telemetry: events written for with-gate", trackerEvents.length > 0, `got ${trackerEvents.length}`);
-check(r, "tracker telemetry: events written for bare", bareTrackerEvents.length > 0, `got ${bareTrackerEvents.length}`);
+const dispatchEvents = gateEvents.filter(e => e.hook === "dispatch-pre-require-subagent");
+check(r, "real hooks: dispatch-pre-require-subagent fired",
+  dispatchEvents.length > 0, `got ${dispatchEvents.length}`);
+check(r, "real hooks: events have PreToolUse type",
+  dispatchEvents.every(e => e.event === "PreToolUse"));
+check(r, "real hooks: events have sessionId",
+  dispatchEvents.every(e => typeof e.sessionId === "string" && e.sessionId.length > 0));
+check(r, "real hooks: events have timestamps",
+  dispatchEvents.every(e => typeof e.ts === "string" && e.ts.length > 0));
 
-check(r, "tracker telemetry: has PostToolUse events",
-  trackerEvents.every(e => e.event === "PostToolUse"));
+// Bare run has no hooks
+const bareEvents = readHookEvents(bareTelemetry.hookEventsPath);
+check(r, "bare: no hook events written", bareEvents.length === 0, `got ${bareEvents.length}`);
 
-check(r, "tracker telemetry: records tool names",
-  trackerEvents.some(e => typeof e.tool === "string" && e.tool.length > 0));
+// ── Cleanup ─────────────────────────────────────────────────────
 
-check(r, "tracker telemetry: has timestamps",
-  trackerEvents.every(e => typeof e.ts === "string" && e.ts.length > 0));
-
-// If gate allowed subagent edits, those should show up too
-if (withGate.agentDispatched) {
-  const allowEvents = gateEvents.filter(e => e.decision === "allow" && e.reason === "subagent");
-  check(r, "gate telemetry: has subagent allow events", allowEvents.length > 0,
-    `allow-subagent: ${allowEvents.length}`);
-}
+rmSync(gateDataRoot, { recursive: true, force: true });
+rmSync(bareTelemetry.dataRoot, { recursive: true, force: true });
 
 printAndExit(r);

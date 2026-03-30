@@ -13,7 +13,7 @@
  *   bun src/eval/runner.ts --model claude-sonnet-4-6
  */
 import type { StopHookInput, HookCallback } from "@anthropic-ai/claude-agent-sdk";
-import { mkdirSync, writeFileSync } from "fs";
+import { mkdirSync, writeFileSync, rmSync } from "fs";
 import { resolve } from "path";
 import { runEval, emptyResult, formatResult, type EvalResult } from "./harness.ts";
 
@@ -84,7 +84,7 @@ async function runTrial(scenario: string, variant: string, model: string, maxTur
 
   const sharedResult = emptyResult();
 
-  const evalResult = await runEval({
+  const { result: evalResult, telemetry } = await runEval({
     scenario,
     model,
     maxTurns,
@@ -100,6 +100,8 @@ async function runTrial(scenario: string, variant: string, model: string, maxTur
       },
     } : {}),
   });
+
+  rmSync(telemetry.dataRoot, { recursive: true, force: true });
 
   return {
     ...evalResult,

@@ -4,8 +4,9 @@
  * Two layers:
  *   1. Hook subprocess testing — run hook scripts with crafted stdin,
  *      assert on exit codes and stdout. Used by test.ts.
- *   2. Agent SDK evals — launch Claude in a sandbox, wire up enforcement
- *      hooks, observe behavioral compliance. Used by eval tests.
+ *   2. Agent SDK evals — launch Claude in a sandbox with real hook scripts
+ *      registered via settings.json. Programmatic hooks observe behavior;
+ *      real hooks do enforcement and write telemetry.
  *
  * Also: temp dir management, transcript builders, assertions, telemetry.
  */
@@ -28,6 +29,7 @@ import { E2E_CMD, ARTIFACT_CMD, UNIT_TEST_CMD } from "./patterns.ts";
 
 const BUN = process.argv[0];
 const EVAL_ROOT = resolve(import.meta.dir);
+const REPO_ROOT = resolve(EVAL_ROOT, "../..");
 const SCENARIOS_DIR = resolve(EVAL_ROOT, "scenarios");
 
 // ── Temp environment ────────────────────────────────────────────
@@ -41,7 +43,7 @@ export interface TestEnv {
 
 /** Create an isolated temp directory with a signals subdirectory. */
 export function createTestEnv(prefix: string, root?: string): TestEnv {
-  const resolvedRoot = root ?? resolve(import.meta.dir, "../..");
+  const resolvedRoot = root ?? REPO_ROOT;
   const tmpBase = mkdtempSync(join(tmpdir(), `construct-${prefix}-`));
   const signalsDir = join(tmpBase, "signals");
   mkdirSync(signalsDir, { recursive: true });
@@ -198,6 +200,163 @@ export function readTaskPrompt(scenarioName: string): string {
   return readFileSync(resolve(SCENARIOS_DIR, scenarioName, "task.md"), "utf8").trim();
 }
 
+// ── Sandbox hook registration ───────────────────────────────────
+
+/** Hook types that can be registered in settings.json. */
+export type HookEventName = "PreToolUse" | "PostToolUse" | "Stop" | "UserPromptSubmit";
+
+export interface SandboxHook {
+  event: HookEventName;
+  command: string;
+  matcher?: string;
+  timeout?: number;
+}
+
+/**
+ * Write a .claude/settings.json into the sandbox with real hook scripts.
+ * Commands use absolute paths to the repo's hook scripts so they resolve
+ * from any sandbox cwd. CONSTRUCT_DATA_ROOT must be set in the env so
+ * hooks write telemetry to the sandbox's data dir, not production.
+ */
+export function registerSandboxHooks(sandbox: string, hooks: SandboxHook[]) {
+  const grouped: Record<string, any[]> = {};
+  for (const h of hooks) {
+    if (!grouped[h.event]) grouped[h.event] = [];
+    const entry: any = {
+      hooks: [{
+        type: "command",
+        command: h.command,
+        timeout: h.timeout ?? 3000,
+      }],
+    };
+    if (h.matcher) entry.matcher = h.matcher;
+    grouped[h.event].push(entry);
+  }
+
+  const claudeDir = join(sandbox, ".claude");
+  mkdirSync(claudeDir, { recursive: true });
+  writeFileSync(join(claudeDir, "settings.json"), JSON.stringify({ hooks: grouped }, null, 2));
+}
+
+/** Resolve absolute path to a hook script in the construct repo. */
+export function hookCmd(hookPath: string): string {
+  return `bun ${resolve(REPO_ROOT, "src", hookPath)}`;
+}
+
+/** Standard dispatch gate hooks pointing to real scripts. */
+export function dispatchHooks(): SandboxHook[] {
+  return [
+    { event: "UserPromptSubmit", command: hookCmd("skills/hooks/routing-submit-classify.ts") },
+    { event: "PreToolUse", matcher: "Edit|Write", command: hookCmd("skills/hooks/dispatch-pre-require-subagent.ts") },
+  ];
+}
+
+/** Standard quality gate hooks pointing to real scripts. */
+export function qualityHooks(): SandboxHook[] {
+  return [
+    { event: "UserPromptSubmit", command: hookCmd("skills/hooks/routing-submit-classify.ts") },
+    { event: "Stop", command: hookCmd("skills/hooks/quality-stop-check-e2e.ts") },
+    { event: "PreToolUse", matcher: "Edit|Write", command: hookCmd("skills/hooks/quality-pre-require-e2e.ts") },
+  ];
+}
+
+/**
+ * Create a PreToolUse hook callback that delegates to a real hook script.
+ * Runs the script as a subprocess with the same stdin the SDK provides,
+ * plus CONSTRUCT_DATA_ROOT set to the eval's data dir. The script's
+ * exit code determines the SDK's decision (exit 2 = block).
+ */
+export function realHookCallback(hookPath: string, dataRoot: string): HookCallback {
+  const absHook = resolve(REPO_ROOT, "src", hookPath);
+  return async (input) => {
+    const stdin = JSON.stringify(input);
+    const escaped = stdin.replace(/'/g, "'\\''");
+    try {
+      const stdout = execSync(
+        `echo '${escaped}' | bun ${absHook} 2>/dev/null`,
+        {
+          encoding: "utf-8",
+          timeout: 5000,
+          env: { ...process.env, CONSTRUCT_DATA_ROOT: dataRoot },
+          cwd: REPO_ROOT,
+        },
+      );
+      // exit 0 = allow, stdout may contain messages
+      if (stdout.trim()) return { systemMessage: stdout.trim() };
+      return {};
+    } catch (err: any) {
+      const exitCode = err.status ?? 1;
+      const stdout = (err.stdout ?? "").trim();
+      if (exitCode === 2) {
+        // Hook wants to block
+        return { decision: "block" as const, reason: stdout || "Hook blocked" };
+      }
+      // Other exit codes = allow (hook errored)
+      return {};
+    }
+  };
+}
+
+/** Create a Stop hook callback that delegates to a real hook script. */
+export function realStopHookCallback(hookPath: string, dataRoot: string): HookCallback {
+  const absHook = resolve(REPO_ROOT, "src", hookPath);
+  return async (input) => {
+    const stdin = JSON.stringify(input);
+    const escaped = stdin.replace(/'/g, "'\\''");
+    try {
+      const stdout = execSync(
+        `echo '${escaped}' | bun ${absHook} 2>/dev/null`,
+        {
+          encoding: "utf-8",
+          timeout: 5000,
+          env: { ...process.env, CONSTRUCT_DATA_ROOT: dataRoot },
+          cwd: REPO_ROOT,
+        },
+      );
+      if (stdout.trim()) return { systemMessage: stdout.trim() };
+      return {};
+    } catch (err: any) {
+      return {};
+    }
+  };
+}
+
+/**
+ * Build programmatic SDK hooks that delegate to real hook scripts.
+ * The real scripts run as subprocesses and write telemetry to dataRoot.
+ */
+export function realDispatchHooks(dataRoot: string): Partial<Record<"PreToolUse" | "PostToolUse" | "Stop" | "UserPromptSubmit", HookCallbackMatcher[]>> {
+  // Capture the SDK session ID on first prompt and write current-session-id
+  const captureSessionId: HookCallback = async (input) => {
+    const sid = (input as any).session_id;
+    if (sid) {
+      mkdirSync(join(dataRoot, "signals"), { recursive: true });
+      writeFileSync(join(dataRoot, "signals", "current-session-id"), sid);
+    }
+    return {};
+  };
+
+  return {
+    UserPromptSubmit: [{ hooks: [captureSessionId] }],
+    PreToolUse: [{
+      matcher: "Edit|Write",
+      hooks: [realHookCallback("skills/hooks/dispatch-pre-require-subagent.ts", dataRoot)],
+    }],
+  };
+}
+
+export function realQualityHooks(dataRoot: string): Partial<Record<"PreToolUse" | "PostToolUse" | "Stop", HookCallbackMatcher[]>> {
+  return {
+    Stop: [{
+      hooks: [realStopHookCallback("skills/hooks/quality-stop-check-e2e.ts", dataRoot)],
+    }],
+    PreToolUse: [{
+      matcher: "Edit|Write",
+      hooks: [realHookCallback("skills/hooks/quality-pre-require-e2e.ts", dataRoot)],
+    }],
+  };
+}
+
 // ── Agent SDK eval runner ───────────────────────────────────────
 
 /** Behavioral signals collected during an eval trial. */
@@ -300,54 +459,70 @@ export interface EvalConfig {
   promptSuffix?: string;
   model?: string;
   maxTurns?: number;
-  hooks?: Partial<Record<"PreToolUse" | "PostToolUse" | "Stop", HookCallbackMatcher[]>>;
+  /** Programmatic SDK hooks — used for behavioral tracking and custom gates. */
+  hooks?: Partial<Record<"PreToolUse" | "PostToolUse" | "Stop" | "UserPromptSubmit", HookCallbackMatcher[]>>;
   systemPrompt?: string;
-  /** Pass a shared result object so custom hooks can read tracker signals (e.g. editsMade). */
+  /** Pass a shared result object so custom hooks can read tracker signals. */
   result?: EvalResult;
-  /** Path to write hook telemetry JSONL. If set, eval hooks write events here. */
-  telemetryPath?: string;
+  /** Pre-created data root — if set, hooks and env use this dir for telemetry. */
+  dataRoot?: string;
+  /** Real hook scripts to register in the sandbox's settings.json. */
+  sandboxHooks?: SandboxHook[];
+}
+
+/** Paths to telemetry files written by real hooks during an eval. */
+export interface EvalTelemetry {
+  /** Path to hook-events.jsonl written by real hooks via reportHook(). */
+  hookEventsPath: string;
+  /** Path to the signals directory (marker files, etc.). */
+  signalsDir: string;
+  /** Path to the CONSTRUCT_DATA_ROOT used during the eval. */
+  dataRoot: string;
 }
 
 /**
  * Run Claude in a sandbox scenario and collect behavioral signals.
  *
- * Sets up a git-initialized sandbox from the scenario, launches Claude
- * via the Agent SDK, observes tool usage through hooks, and checks
- * task success by running `bun test` in the sandbox afterward.
+ * Sets up a git-initialized sandbox, optionally registers real hook scripts
+ * via settings.json, launches Claude via the Agent SDK, and observes
+ * behavior through both programmatic hooks (EvalResult) and real hook
+ * telemetry (hook-events.jsonl, marker files).
+ *
+ * Returns { result, telemetry } — the telemetry paths remain valid after
+ * return (the data dir is NOT cleaned up; callers should clean up).
  */
-export async function runEval(config: EvalConfig): Promise<EvalResult> {
+export async function runEval(config: EvalConfig): Promise<{ result: EvalResult; telemetry: EvalTelemetry }> {
   const sandbox = setupSandbox(config.scenario);
   const result = config.result ?? emptyResult();
   const start = Date.now();
+
+  // Isolated data dir for this eval — hooks write here, not to production
+  const dataRoot = config.dataRoot ?? mkdtempSync(join(tmpdir(), "eval-data-"));
+  const signalsDir = join(dataRoot, "signals");
+  mkdirSync(signalsDir, { recursive: true });
+  const hookEventsPath = join(signalsDir, "hook-events.jsonl");
+
+  const telemetry: EvalTelemetry = { hookEventsPath, signalsDir, dataRoot };
+
+  // Register real hook scripts in sandbox settings.json
+  if (config.sandboxHooks?.length) {
+    registerSandboxHooks(sandbox, config.sandboxHooks);
+  }
 
   let prompt = config.prompt ?? readTaskPrompt(config.scenario);
   if (config.promptSuffix) prompt += "\n\n" + config.promptSuffix;
 
   const tracker = makeTracker(result);
 
-  // Wrap tracker to also emit telemetry if configured
-  const trackerWithTelemetry: HookCallback = async (input, toolUseID, opts) => {
-    const out = await tracker(input, toolUseID, opts);
-    if (config.telemetryPath) {
-      const { tool_name } = input as PostToolUseHookInput;
-      writeHookEvent(config.telemetryPath, {
-        ts: new Date().toISOString(),
-        hook: "eval-tracker",
-        event: "PostToolUse",
-        sessionId: (input as any).session_id ?? "eval",
-        tool: tool_name,
-      });
-    }
-    return out;
-  };
-
+  // Programmatic hooks — tracker always runs; additional hooks from config
   const hooks: Record<string, HookCallbackMatcher[]> = {
     PostToolUse: [
-      { hooks: [trackerWithTelemetry] },
+      { hooks: [tracker] },
       ...(config.hooks?.PostToolUse ?? []),
     ],
     ...(config.hooks?.PreToolUse ? { PreToolUse: config.hooks.PreToolUse } : {}),
     ...(config.hooks?.Stop ? { Stop: config.hooks.Stop } : {}),
+    ...(config.hooks?.UserPromptSubmit ? { UserPromptSubmit: config.hooks.UserPromptSubmit } : {}),
   };
 
   try {
@@ -361,6 +536,7 @@ export async function runEval(config: EvalConfig): Promise<EvalResult> {
         allowDangerouslySkipPermissions: true,
         persistSession: false,
         systemPrompt: config.systemPrompt,
+        env: { ...process.env, CONSTRUCT_DATA_ROOT: dataRoot },
         hooks,
       },
     });
@@ -382,9 +558,10 @@ export async function runEval(config: EvalConfig): Promise<EvalResult> {
     result.durationMs = Date.now() - start;
   } finally {
     rmSync(sandbox, { recursive: true, force: true });
+    // NOTE: dataRoot is NOT cleaned up — caller reads telemetry, then cleans up
   }
 
-  return result;
+  return { result, telemetry };
 }
 
 /** Format a single eval result as a one-line summary. */
