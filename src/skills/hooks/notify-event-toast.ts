@@ -1,4 +1,18 @@
 #!/usr/bin/env bun
+/**
+ * Notification hook: desktop toast.
+ *
+ * Fires on Claude Code notification events (idle, permission, complete).
+ *
+ * 1. Parse event type from stdin JSON.
+ * 2. Map event to a human-readable message (fallback: generic attention message).
+ * 3. Detect platform: WSL (via /proc/version) or native macOS.
+ * 4. WSL → PowerShell toast notification via Windows.UI.Notifications.
+ *    macOS → osascript display notification.
+ * 5. On failure → fall back to terminal bell (\x07).
+ *
+ * Never blocks. Does not exit non-zero on notification failure.
+ */
 import { execSync } from "child_process";
 import { readFileSync } from "fs";
 import { trace } from "../../trace.ts";
@@ -7,7 +21,12 @@ import { reportHook } from "../../hook-report.ts";
 const TAG = "notify";
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
-catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(1); }
+catch (e) {
+  const msg = `[${TAG}] stdin parse failed: ${(e as Error).message}`;
+  console.error(msg);
+  trace(TAG, msg);
+  process.exit(1);
+}
 reportHook(TAG, "Notification", input.session_id);
 const event = input.type ?? "unknown";
 trace(TAG, `event: ${event}`);

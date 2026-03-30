@@ -2,9 +2,12 @@
 /**
  * PreToolUse gate: blocks Edit/Write when the require-e2e marker exists.
  *
- * The marker is written by quality-stop-check-e2e.ts when a turn has edits
- * but lacks e2e verification evidence. This hook reads the marker and
- * hard-blocks (exit 2) until verification clears it.
+ * 1. Check signals/require-e2e marker file.
+ *    Missing → exit 0 (allow, no pending verification needed).
+ * 2. Read marker JSON for context (which files were edited, what's missing).
+ * 3. Emit detailed instructions (start server, interact, save artifact).
+ * 4. Exit 2 (hard block). The marker is written by quality-stop-check-e2e.ts
+ *    when edits lack e2e evidence, and cleared when evidence appears.
  */
 import { existsSync, readFileSync } from "fs";
 import { trace } from "../../trace.ts";

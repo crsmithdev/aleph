@@ -1,4 +1,19 @@
 #!/usr/bin/env bun
+/**
+ * PostToolUse hook: auto-formatter.
+ *
+ * Fires after Edit/Write. Formats the edited file using project or language defaults.
+ *
+ * 1. Extract file_path from tool_input; skip if missing or file doesn't exist.
+ * 2. Check for project-level config at {git_root}/.claude/quality.json.
+ *    If found → run its `format` and `lint` commands with $FILE substitution, then exit.
+ * 3. Otherwise, pick formatters by file extension:
+ *    .py → ruff check --fix + ruff format
+ *    .ts/.tsx/.js/.jsx → prettier --write
+ *    .go → gofmt -w
+ *    .rs → rustfmt
+ * 4. Skip formatters not on PATH. Formatter failures are logged but don't block (exit 0).
+ */
 import { existsSync, readFileSync } from "fs";
 import { dirname, extname } from "path";
 import { execSync } from "child_process";
@@ -7,7 +22,12 @@ import { trace } from "../../trace.ts";
 const TAG = "quality";
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
-catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(1); }
+catch (e) {
+  const msg = `[${TAG}] stdin parse failed: ${(e as Error).message}`;
+  console.error(msg);
+  trace(TAG, msg);
+  process.exit(1);
+}
 const filePath = input.tool_input?.file_path ?? "";
 if (!filePath || !existsSync(filePath)) {
   trace(TAG, `skip: ${filePath ? "file not found" : "no file path"}`);

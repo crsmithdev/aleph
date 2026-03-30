@@ -1,4 +1,16 @@
 #!/usr/bin/env bun
+/**
+ * Stop hook: periodic dispatch reminder.
+ *
+ * Fires every time Claude stops. Maintains a persistent counter in signals/.
+ *
+ * 1. Read counter from signals/dispatch-stop-remind-count (default 1 if missing).
+ * 2. Increment and write back.
+ * 3. Every 5th stop → emit a reminder that the main session should orchestrate,
+ *    not implement directly.
+ *
+ * Never blocks (always exit 0). Informational only.
+ */
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { dirname } from "path";
 import { trace } from "../../trace.ts";

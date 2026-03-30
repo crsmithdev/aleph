@@ -1,4 +1,19 @@
 #!/usr/bin/env bun
+/**
+ * Stop hook: session summary writer.
+ *
+ * Fires at session end. Parses the transcript and writes a structured
+ * markdown summary to the sessions directory.
+ *
+ * 1. Parse transcript via parseTranscript(); skip if < 4 messages.
+ * 2. Extract: tool usage counts, edited files, first user text (intent),
+ *    last user text (outcome), intermediate user texts (milestones),
+ *    and first few assistant texts (notes).
+ * 3. Write {date}-{time}.md to sessions dir with: intent, outcome,
+ *    milestones, tools, file list, edit count, message counts, notes.
+ *
+ * Never blocks. Exits 0 on success or skip, exits 1 only on stdin parse failure.
+ */
 import { writeFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { trace } from "../../trace.ts";
@@ -13,7 +28,12 @@ ensureDataDirs();
 let input: any;
 const raw = await Bun.stdin.text();
 try { input = JSON.parse(raw); }
-catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}, raw: ${raw.slice(0, 100)}`); process.exit(1); }
+catch (e) {
+  const msg = `[${TAG}] stdin parse failed: ${(e as Error).message}, raw: ${raw.slice(0, 100)}`;
+  console.error(msg);
+  trace(TAG, msg);
+  process.exit(1);
+}
 const transcript = parseTranscript(input.transcript_path);
 
 if (!transcript || transcript.totalMessages < 4) {

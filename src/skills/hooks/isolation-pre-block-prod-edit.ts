@@ -1,4 +1,17 @@
 #!/usr/bin/env bun
+/**
+ * PreToolUse hook: production edit blocker.
+ *
+ * Prevents writing to ~/.claude/construct/ when running from the dev repo.
+ *
+ * 1. Extract file_path from tool_input; skip if missing.
+ * 2. Resolve both the target file and ~/.claude/construct/ to real paths.
+ * 3. If the file is NOT under production construct → exit 0 (allow).
+ * 4. If the file IS under production construct, check if cwd is the dev repo
+ *    (has install.ts + src/data/src/paths.ts).
+ * 5. Dev repo + prod target → exit 2 (hard block). Use install.ts to deploy.
+ *    Not dev repo → exit 0 (allow, this is a production session editing its own files).
+ */
 import { realpathSync } from "fs";
 import { resolve } from "path";
 import { homedir } from "os";
@@ -9,7 +22,12 @@ import { reportHook } from "../../hook-report.ts";
 const TAG = "isolation-pre-block-prod-edit";
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
-catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(1); }
+catch (e) {
+  const msg = `[${TAG}] stdin parse failed: ${(e as Error).message}`;
+  console.error(msg);
+  trace(TAG, msg);
+  process.exit(1);
+}
 reportHook(TAG, "PreToolUse", input.session_id);
 
 const filePath: string | undefined = input.tool_input?.file_path;

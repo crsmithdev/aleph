@@ -1,4 +1,16 @@
 #!/usr/bin/env bun
+/**
+ * PreCompact hook: transcript backup.
+ *
+ * Fires before Claude compacts context. Saves the full transcript so no
+ * information is permanently lost during compression.
+ *
+ * 1. Read transcript_path from stdin JSON.
+ * 2. Create backup dir at {claude_root}/transcript-backups/ if needed.
+ * 3. Copy the transcript file to {session}_{ISO-timestamp}.jsonl.
+ *
+ * Never blocks (always exit 0). Backup failure is logged but not fatal.
+ */
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { join, basename } from "path";
 import { trace } from "../../trace.ts";

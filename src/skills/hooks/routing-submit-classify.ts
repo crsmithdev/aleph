@@ -1,4 +1,24 @@
 #!/usr/bin/env bun
+/**
+ * UserPromptSubmit hook: request classifier and skill router.
+ *
+ * Runs on every user prompt submission. Three responsibilities:
+ *
+ * 1. DEPTH CLASSIFICATION — scan prompt for architectural keywords or length ≥40 words.
+ *    FULL → emit design-first pipeline recommendation.
+ *    QUICK → no output.
+ *
+ * 2. VERIFICATION GATE — for non-question prompts ≥5 words, inject e2e verification
+ *    requirements into the system message so the Stop hook can enforce them.
+ *
+ * 3. SKILL MATCHING — load skills/skill-rules.json, match prompt keywords against rules,
+ *    emit matched skill names for Claude to activate via Skill(). Also check for
+ *    project-local skill extensions at .claude/skills/{skill}.md.
+ *
+ * Writes directive signals (full, dispatch, skill:{name}) to the directives log.
+ * Writes current session ID to signals/ for the dispatch gate to read.
+ * If depth=FULL and not a question → emit DISPATCH MODE instructions.
+ */
 import { existsSync, readFileSync, appendFileSync, mkdirSync, writeFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { execSync } from "child_process";
@@ -12,7 +32,12 @@ const rulesFile = resolve(root, "skills/skill-rules.json");
 
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
-catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(1); }
+catch (e) {
+  const msg = `[${TAG}] stdin parse failed: ${(e as Error).message}`;
+  console.error(msg);
+  trace(TAG, msg);
+  process.exit(1);
+}
 reportHook(TAG, "UserPromptSubmit", input.session_id);
 const prompt = input.prompt ?? "";
 const words = prompt.split(/\s+/);

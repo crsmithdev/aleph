@@ -14,8 +14,8 @@
  * a screenshot of the hooks dashboard as proof.
  *
  * Usage:
- *   bun src/eval/quality-gate-e2e.test.ts
- *   bun src/eval/quality-gate-e2e.test.ts --model claude-sonnet-4-6
+ *   bun src/eval/combined-gates.eval.ts
+ *   bun src/eval/combined-gates.eval.ts --model claude-sonnet-4-6
  */
 import { rmSync, existsSync, mkdirSync } from "fs";
 import { join, resolve } from "path";

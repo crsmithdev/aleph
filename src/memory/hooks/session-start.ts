@@ -1,4 +1,22 @@
 #!/usr/bin/env bun
+/**
+ * SessionStart hook: session briefing and context loading.
+ *
+ * Fires once when a new Claude session starts. Assembles a briefing message
+ * printed to stdout that Claude reads as initial context.
+ *
+ * 1. Dev-mode check — if cwd has install.ts + src/, warn about needing /install.
+ * 2. Count session files in the sessions directory.
+ * 3. Detect git worktree (branch name if in a worktree).
+ * 4. Morning briefing — read session summaries since last briefing marker,
+ *    classify each as completed/in-progress/blocked by outcome keywords.
+ * 5. Print last session summary (intent, outcome, milestones, notes).
+ * 6. Fire-and-forget obs-snapshot.ts for observability.
+ * 7. Recall 5 most recent semantic memories from SQLite (direct query, no embedding).
+ * 8. Emit reminder to search semantic memory for project context.
+ *
+ * Never blocks (always exit 0). All failures are swallowed with trace logging.
+ */
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { execSync } from "child_process";

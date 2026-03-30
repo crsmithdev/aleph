@@ -110,7 +110,7 @@ Computes ground-truth metrics independently from raw JSONL, then verifies system
 
 Evals launch Claude via the Agent SDK in a sandboxed scenario. Programmatic hooks delegate to real hook scripts as subprocesses — the scripts write telemetry to `hook-events.jsonl` and marker files, identical to production.
 
-### `dispatch-e2e.test.ts`
+### `dispatch-gate.eval.ts`
 
 Tests that the dispatch gate forces Claude to use the Agent tool instead of editing directly.
 
@@ -142,7 +142,7 @@ Tests that the dispatch gate forces Claude to use the Agent tool instead of edit
 | Bare: no events | No hooks = no telemetry | Empty file |
 | Gate forced dispatch | Agent used only with gate, not bare | A/B comparison |
 
-### `quality-gate-e2e.test.ts`
+### `combined-gates.eval.ts`
 
 Combined dispatch + quality gate eval. Tests the full production flow: orchestrator dispatches to subagent, then must verify e2e before stopping.
 

@@ -1,4 +1,17 @@
 #!/usr/bin/env bun
+/**
+ * PostToolUse hook: TypeScript type-checker.
+ *
+ * Fires after Edit/Write on .ts/.tsx/.js/.jsx files.
+ *
+ * 1. Extract file_path from tool_input; skip if missing or non-TS/JS extension.
+ * 2. Find git repo root from the file's directory.
+ * 3. Walk up from the file to find the nearest tsconfig.json (or .app/.build variants).
+ * 4. Run `tsc --noEmit` against that tsconfig.
+ * 5. If type errors found → exit 1 with error preview (up to 5 lines).
+ *    If clean → exit 0.
+ *    If tsc missing or no tsconfig → exit 0 (skip silently).
+ */
 import { existsSync } from "fs";
 import { dirname, extname } from "path";
 import { execSync } from "child_process";
@@ -7,7 +20,12 @@ import { trace } from "../../trace.ts";
 const TAG = "quality-post-typecheck";
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
-catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(1); }
+catch (e) {
+  const msg = `[${TAG}] stdin parse failed: ${(e as Error).message}`;
+  console.error(msg);
+  trace(TAG, msg);
+  process.exit(1);
+}
 
 const filePath = input.tool_input?.file_path ?? "";
 if (!filePath) { trace(TAG, "no file path"); process.exit(0); }

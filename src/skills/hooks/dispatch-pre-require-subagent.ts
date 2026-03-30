@@ -3,12 +3,13 @@
  * PreToolUse hook: dispatch gate.
  *
  * Always-on gate that blocks Edit/Write in the main session by default.
- * Two conditions allow the edit through:
- *   1. The /inline override signal is present for this session.
- *   2. The session_id differs from the recorded main-session ID (i.e. this
- *      is a subagent), in which case the gate does not apply.
  *
- * If neither condition is met, the edit is blocked (exit 2).
+ * 1. Parse stdin JSON for session_id and tool_name. No session_id → exit 0 (allow).
+ * 2. Check signals/inline-override-{session_id} exists → exit 0 (inline override active).
+ * 3. Read signals/current-session-id (written by routing-submit-classify.ts).
+ *    - File missing → treat as subagent, exit 0 (allow).
+ *    - session_id ≠ main session → subagent, exit 0 (allow).
+ *    - session_id = main session → exit 2 (hard block, must dispatch via Agent tool).
  */
 import { existsSync, readFileSync } from "fs";
 import { trace } from "../../trace.ts";

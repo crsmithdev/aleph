@@ -1,8 +1,18 @@
 #!/usr/bin/env bun
 /**
- * Automatic memory extraction — non-blocking Stop hook.
- * Parses session transcript, extracts high-value memories via heuristics,
- * spawns memory-writer.py fire-and-forget to store them in semantic memory.
+ * Stop hook: automatic memory extraction.
+ *
+ * Non-blocking. Extracts high-value memories from the session transcript
+ * and persists them to semantic memory via a Python subprocess.
+ *
+ * 1. Parse transcript via parseTranscript().
+ * 2. Skip if not substantive (< 6 messages or < 1 edit).
+ * 3. Skip if Claude already called memory_store (avoid duplicates).
+ * 4. Run extractMemories() heuristics to find decisions, corrections, patterns.
+ * 5. If memories found and Python venv exists → spawn memory-writer.py
+ *    fire-and-forget with JSON on stdin. Unref the process so it doesn't block exit.
+ *
+ * Never blocks (always exit 0). Missing Python or empty transcript → silent skip.
  */
 import { existsSync } from "fs";
 import { resolve, dirname } from "path";

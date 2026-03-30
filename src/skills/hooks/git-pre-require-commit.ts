@@ -2,13 +2,15 @@
 /**
  * PreToolUse hook: commit nudge.
  *
- * Fires on Edit/Write. Groups dirty files by top-level source directory
- * to detect multiple unrelated logical changes.
+ * Fires on Edit/Write. Detects when uncommitted changes span too many
+ * unrelated areas, nudging or blocking until a commit is made.
  *
- *   - Warn: when ≥ WARN_GROUPS distinct directory groups are dirty.
- *   - Block: when ≥ BLOCK_GROUPS distinct groups are dirty.
- *
- * A successful `git commit` resets both tiers (marker is stale once groups shrink).
+ * 1. Run `git status --porcelain` in the session's cwd.
+ *    Clean tree → clear marker, exit 0.
+ * 2. Group dirty files by first 2 path segments (e.g. "src/telemetry").
+ * 3. < WARN_GROUPS (3) → exit 0 silently.
+ * 4. ≥ BLOCK_GROUPS (5) → exit 2 (hard block with list of areas).
+ * 5. Between WARN and BLOCK → write marker, emit advisory, exit 0.
  */
 import { execSync } from "child_process";
 import { existsSync, writeFileSync, unlinkSync, mkdirSync } from "fs";

@@ -1,4 +1,16 @@
 #!/usr/bin/env bun
+/**
+ * UserPromptSubmit hook: session rating capture.
+ *
+ * Scans each user prompt for a numeric rating (1-10). Three patterns:
+ *   - Standalone number: "7"
+ *   - Slash notation: "8/10"
+ *   - Keyword + number: "rate 6", "rating 9"
+ *
+ * If matched → append JSON entry to ratings file (timestamp, rating, context).
+ * If rating ≤ 3 → emit a reminder to store what went wrong via memory_store.
+ * No match → exit 0 silently.
+ */
 import { appendFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { trace } from "../../trace.ts";
@@ -13,7 +25,12 @@ ensureDataDirs();
 let input: any;
 const raw = await Bun.stdin.text();
 try { input = JSON.parse(raw); }
-catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}, raw: ${raw.slice(0, 100)}`); process.exit(1); }
+catch (e) {
+  const msg = `[${TAG}] stdin parse failed: ${(e as Error).message}, raw: ${raw.slice(0, 100)}`;
+  console.error(msg);
+  trace(TAG, msg);
+  process.exit(1);
+}
 reportHook(TAG, "UserPromptSubmit", input.session_id);
 const prompt = (input.prompt ?? "").trim();
 if (!prompt) {

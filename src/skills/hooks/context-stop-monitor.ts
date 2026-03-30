@@ -1,4 +1,19 @@
 #!/usr/bin/env bun
+/**
+ * Stop hook: context window usage monitor.
+ *
+ * Fires after each Claude response. Reads the transcript to find the most
+ * recent assistant message with token usage data.
+ *
+ * 1. Parse transcript, scan from end for assistant message with usage block.
+ * 2. Sum input_tokens + cache_read + cache_creation for total context usage.
+ * 3. Detect context window size: 200k base, auto-upgrades to 1M if usage > 95% of base.
+ * 4. At ≥90% → emit critical warning (compact or new session).
+ *    At ≥80% → emit advisory warning.
+ *    Below 80% → silent.
+ *
+ * Never blocks (always exit 0). Informational only.
+ */
 import { readFileSync } from "fs";
 import { trace } from "../../trace.ts";
 

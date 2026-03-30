@@ -3,12 +3,19 @@
  * Stop hook: verification gate.
  *
  * Checks whether the current turn included e2e verification evidence
- * (devserver, Playwright, browser interaction) AND an artifact
- * (screenshot or captured output).
+ * AND an artifact (screenshot or captured output).
  *
- * When verification is missing, writes a marker file that
- * quality-pre-require-e2e.ts reads to hard-block the next Edit/Write.
- * When verification passes, clears the marker.
+ * 1. Skip if stop_hook_active (already reminded once this turn).
+ * 2. Read transcript, find current turn boundary (last real user message with text).
+ * 3. Scan assistant messages from turnStart forward:
+ *    - Track Edit/Write/NotebookEdit as "edits" (with file paths).
+ *    - Track Bash commands matching E2E_CMD (devserver, curl, playwright) as e2e signals.
+ *    - Track Bash commands matching ARTIFACT_CMD (output redirect, screenshot) as artifacts.
+ *    - Track Chrome DevTools / Playwright MCP calls as e2e signals + artifacts.
+ * 4. No edits this turn → clear marker, exit 0.
+ * 5. Edits + e2e + artifact → clear marker, exit 0 (verification passed).
+ * 6. Edits but missing e2e or artifact → write require-e2e marker with details,
+ *    emit instructions. quality-pre-require-e2e.ts reads this to hard-block Edit/Write.
  */
 import { readFileSync, writeFileSync, existsSync, unlinkSync } from "fs";
 import { trace } from "../../trace.ts";

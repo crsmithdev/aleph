@@ -12,9 +12,9 @@
  *   - The real hook script wrote events to hook-events.jsonl
  *
  * Usage:
- *   bun src/eval/dispatch-e2e.test.ts
- *   bun src/eval/dispatch-e2e.test.ts --model claude-sonnet-4-6
- *   bun src/eval/dispatch-e2e.test.ts --scenario broken-math
+ *   bun src/eval/dispatch-gate.eval.ts
+ *   bun src/eval/dispatch-gate.eval.ts --model claude-sonnet-4-6
+ *   bun src/eval/dispatch-gate.eval.ts --scenario broken-math
  */
 import { rmSync, existsSync, mkdirSync, mkdtempSync } from "fs";
 import { join } from "path";

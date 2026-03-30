@@ -1,11 +1,27 @@
 #!/usr/bin/env bun
+/**
+ * PreToolUse hook: destructive SQL blocker.
+ *
+ * Inspects MCP tool calls that execute SQL (execute_sql, apply_migration,
+ * run_query). Extracts the SQL string from common parameter names, converts
+ * to uppercase, and checks against a blocklist of destructive patterns:
+ *   DROP TABLE/DATABASE/SCHEMA, TRUNCATE, DELETE without WHERE, ALTER DROP COLUMN.
+ *
+ * Non-SQL tools or safe queries → exit 0 (allow).
+ * Destructive match → exit 2 (hard block with description of what was caught).
+ */
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 
 const TAG = "isolation-pre-block-destructive-sql";
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
-catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(1); }
+catch (e) {
+  const msg = `[${TAG}] stdin parse failed: ${(e as Error).message}`;
+  console.error(msg);
+  trace(TAG, msg);
+  process.exit(1);
+}
 reportHook(TAG, "PreToolUse", input.session_id);
 
 const toolName = input.tool_name ?? "";
