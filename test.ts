@@ -761,6 +761,21 @@ function verifyGate(transcriptLines: string[], stopHookActive: any = false): str
   check("vgate: blocks when e2e was in previous turn", out.includes("Verification gate"));
 }
 
+// Tool-result user messages (empty content) should NOT create a turn boundary
+{
+  // Simulates real transcript: user prompt, then edit + tool-result pairs, then text-only stop
+  const toolResultUser = JSON.stringify({ type: "user", message: { role: "user", content: [] } });
+  const out = verifyGate([
+    userMsg("fix the bug"),
+    assistantMsg("reading", [{ name: "Read", input: { file_path: "/src/foo.ts" } }]),
+    toolResultUser,
+    assistantMsg("fixing", [{ name: "Edit", input: { file_path: "/src/foo.ts" } }]),
+    toolResultUser,
+    assistantMsg("done, the bug is fixed"),
+  ]);
+  check("vgate: tool-result user messages don't split turn", out.includes("Verification gate"));
+}
+
 // E2E before edits in same turn → should pass
 {
   const out = verifyGate([

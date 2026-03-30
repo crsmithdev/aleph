@@ -34,12 +34,18 @@ if (!transcriptPath || !existsSync(transcriptPath)) {
 
 const lines = readFileSync(transcriptPath, "utf8").trim().split("\n");
 
-// Find current turn (from last user message onward)
+// Find current turn (from last real user message onward).
+// Tool-result messages also have type "user" but with empty or missing text content —
+// skip those so the turn boundary is the actual user prompt.
 let turnStart = 0;
 for (let i = lines.length - 1; i >= 0; i--) {
   try {
     const parsed = JSON.parse(lines[i]);
-    if (parsed.type === "user") { turnStart = i; break; }
+    if (parsed.type !== "user") continue;
+    const content = parsed.message?.content;
+    if (!Array.isArray(content) || content.length === 0) continue;
+    const hasText = content.some((b: any) => b.type === "text" && b.text?.trim());
+    if (hasText) { turnStart = i; break; }
   } catch { continue; }
 }
 
