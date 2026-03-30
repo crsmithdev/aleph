@@ -103,15 +103,8 @@ function run(hookPath: string, name: string, stdin: string, opts: { expectExit?:
   }
 }
 
-// JSONL transcript helpers
-function userMsg(text: string) {
-  return JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "text", text }] } });
-}
-function assistantMsg(text: string, toolUses: { name: string; input?: Record<string, any> }[] = []) {
-  const content: any[] = [{ type: "text", text }];
-  for (const t of toolUses) content.push({ type: "tool_use", name: t.name, input: t.input ?? {}, id: `toolu_${Math.random().toString(36).slice(2)}` });
-  return JSON.stringify({ type: "assistant", message: { role: "assistant", content } });
-}
+// JSONL transcript helpers — re-exported from shared harness
+import { userMsg, assistantMsg } from "./src/eval/harness.ts";
 
 function writeTempJsonl(name: string, lines: string[]): string {
   const path = resolve(tmpdir(), `test-${name}-${Date.now()}.jsonl`);

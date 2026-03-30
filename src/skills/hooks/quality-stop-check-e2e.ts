@@ -13,6 +13,7 @@
 import { readFileSync, writeFileSync, existsSync, unlinkSync } from "fs";
 import { trace } from "../../trace.ts";
 import { dataPaths, ensureDataDirs } from "../../data/src/paths.ts";
+import { E2E_CMD, ARTIFACT_CMD, UNIT_TEST_CMD, HOOK_INVOCATION } from "../../eval/patterns.ts";
 
 const TAG = "quality-stop-check-e2e";
 
@@ -49,17 +50,6 @@ const editedFiles: string[] = [];
 const e2eSignals: string[] = [];
 const artifacts: string[] = [];
 
-// E2E: devserver startup, Playwright/Cypress, browser automation
-const E2E_CMD = /playwright|cypress|puppeteer|(?:bun|npm|npx|yarn|pnpm)\s+(?:run\s+)?(?:e2e|integration|playwright)|(?:bun|npm|npx)\s+(?:run\s+)?dev\b|next\s+dev|vite\s+dev|(?:bun|node)\s+.*server/i;
-
-// Artifact: screenshot or saved output
-const ARTIFACT_CMD = /--screenshot|screenshot|\.png|\.jpg|\.jpeg|> .*\.(txt|log|html|json)|tee\s/i;
-
-// Unit test runners — do NOT count as e2e
-const UNIT_TEST_CMD = /^(?:bun test|npm test|npx jest|npx vitest|vitest|jest|pytest|cargo test|go test|dotnet test)(?:\s|$)/;
-
-// Direct hook invocations — testing the hook script is NOT e2e
-const HOOK_INVOCATION = /bun\s+src\/skills\/hooks\//;
 
 for (let i = turnStart; i < lines.length; i++) {
   let parsed: any;

@@ -44,12 +44,17 @@
 | `observability-flow.test.ts` | Seeds obs_memory_snapshots in DB, starts API + Vite dev server, opens browser, verifies observability dashboard renders |
 | `telemetry-e2e.test.ts` | Computes ground-truth metrics from raw fixture JSONL (no system imports), then verifies system parser+aggregator produce matching results |
 
-## Hook e2e tests (`src/skills/hooks/__tests__/`)
+## Behavioral evals (`src/eval/`)
+
+Evals launch Claude via the Agent SDK, give it a task in a sandboxed scenario, and observe whether hook-based enforcement changes behavior.
 
 | File | What it covers |
 |---|---|
-| `dispatch-e2e.test.ts` | Full dispatch lifecycle (48 checks): routing classifier → directives + session marker, dispatch gate blocks main session / allows subagents, inline override toggle, stop reminder counter (every 5th), hook event reporting, edge cases (no marker, malformed stdin, empty session ID) |
-| `quality-gate-e2e.test.ts` | Full quality gate lifecycle (51 checks): stop hook marker creation (edits without e2e), marker clearing (playwright/cypress/devserver/chrome-devtools + artifacts), pre-tool gate block/allow, no-edit scenarios, stop_hook_active bypass, e2e signal detection (bun run e2e, next dev, chrome devtools), malformed input, hook invocation exclusion |
+| `dispatch-e2e.test.ts` | Dispatch gate eval: blocks direct Edit/Write in main session, verifies Claude dispatches to subagent via Agent tool |
+| `quality-gate-e2e.test.ts` | Quality gate eval: Stop hook blocks completion without e2e evidence, verifies Claude runs e2e verification and creates artifacts |
+| `runner.ts` | Multi-trial A/B runner: compares with-hook vs bare across N trials, saves results as JSON |
+| `harness.ts` | Shared eval infrastructure: sandbox setup, Agent SDK runner, tool classification, assertions |
+| `patterns.ts` | Detection regexes (E2E_CMD, ARTIFACT_CMD, UNIT_TEST_CMD) shared by evals and hooks |
 
 ## Eval scenarios (`src/eval/scenarios/`)
 
