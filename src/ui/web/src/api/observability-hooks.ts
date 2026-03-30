@@ -138,6 +138,7 @@ export function useObsSessions(range: TimeRange, granularity?: Granularity, sess
       gitBranch?: string;
       parentSessionId?: string;
       hasSubagents?: boolean;
+      gateInfo?: { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; mode: 'dispatched' | 'inline' | 'none' };
     }>;
     avgDurationMs: number;
     totalUserMessages: number;
@@ -355,6 +356,7 @@ export function useObsSessionTrace(sessionId: string, range: TimeRange) {
     totalDurationMs: number;
     totalTokens: number;
     totalCost: number;
+    gateInfo?: { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; mode: 'dispatched' | 'inline' | 'none' };
     queryTimeMs: number;
   }>({
     queryKey: ['observability', 'session-trace', sessionId, range],

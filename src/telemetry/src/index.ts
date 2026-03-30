@@ -44,6 +44,7 @@ export type {
   SubagentsData,
   SubagentInvocation,
   SubagentTypeBucket,
+  GateInfo,
 } from "./types.js";
 
 // Re-export new types

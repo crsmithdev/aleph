@@ -32,6 +32,7 @@ type SessionRow = {
   lastTimestamp: string;
   gitBranch?: string;
   parentSessionId?: string;
+  gateInfo?: { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; mode: 'dispatched' | 'inline' | 'none' };
 };
 
 function fmtDuration(ms: number): string {
@@ -156,6 +157,17 @@ export function SessionsPage() {
       key: 'gitBranch',
       label: 'Branch',
       render: (row) => row.gitBranch ? <span className="font-mono text-text-secondary text-xs">{row.gitBranch}</span> : <span className="text-text-tertiary">—</span>,
+    },
+    {
+      key: 'gateInfo',
+      label: 'Mode',
+      width: '5rem',
+      render: (row) => {
+        if (!row.gateInfo) return <span className="text-text-tertiary">—</span>;
+        if (row.gateInfo.mode === 'inline') return <span className="rounded bg-yellow-500/15 px-1.5 py-0.5 text-xs text-yellow-400">inline</span>;
+        if (row.gateInfo.mode === 'dispatched') return <span className="rounded bg-purple-500/15 px-1.5 py-0.5 text-xs text-purple-400">dispatched</span>;
+        return <span className="text-text-tertiary">—</span>;
+      },
     },
   ];
 

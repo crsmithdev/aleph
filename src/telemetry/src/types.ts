@@ -181,6 +181,13 @@ export interface CostData {
   byModel: ModelCost[];
 }
 
+export interface GateInfo {
+  inlineOverride: boolean;
+  dispatchBlocks: number;
+  dispatchAllows: number;
+  mode: "dispatched" | "inline" | "none";
+}
+
 export interface SessionMetric {
   sessionId: string;
   parentSessionId?: string;
@@ -198,6 +205,7 @@ export interface SessionMetric {
   lastTimestamp: string;
   gitBranch?: string;
   hasSubagents?: boolean;
+  gateInfo?: GateInfo;
 }
 
 export interface SessionsData {
@@ -308,6 +316,7 @@ export interface TraceData {
   totalDurationMs: number;
   totalTokens: number;
   totalCost: number;
+  gateInfo?: GateInfo;
 }
 
 export interface SubagentInvocation {

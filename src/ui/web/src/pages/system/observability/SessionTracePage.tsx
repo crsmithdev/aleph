@@ -169,6 +169,21 @@ export function SessionTracePage() {
             Parent session &rarr;
           </Link>
         )}
+        {data.gateInfo?.mode === 'inline' && (
+          <span className="rounded-md bg-yellow-500/15 px-2 py-0.5 text-xs font-medium text-yellow-400 border border-yellow-500/30">
+            inline
+          </span>
+        )}
+        {data.gateInfo?.mode === 'dispatched' && (
+          <span className="rounded-md bg-purple-500/15 px-2 py-0.5 text-xs font-medium text-purple-400 border border-purple-500/30">
+            dispatched
+          </span>
+        )}
+        {data.gateInfo && data.gateInfo.dispatchBlocks > 0 && (
+          <span className="text-xs text-text-muted">
+            {data.gateInfo.dispatchBlocks} block{data.gateInfo.dispatchBlocks !== 1 ? 's' : ''}
+          </span>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
