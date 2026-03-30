@@ -16,7 +16,7 @@ All hook scripts live in `src/skills/hooks/`. They are registered in `dotclaude/
 | Isolation | isolation-pre-block-prod-edit | PreToolUse | `isolation-pre-block-prod-edit.ts` | Closed | — | Blocks edits to production from dev repo |
 | Dispatch | dispatch-pre-require-subagent | PreToolUse | `dispatch-pre-require-subagent.ts` | Closed | build | Blocks inline edits in main session |
 | Dispatch | dispatch-stop-remind | Stop | `dispatch-stop-remind.ts` | Open | build | Reminds "you're the orchestrator" every 5 turns |
-| Git | git-pre-require-commit | PreToolUse | `git-pre-require-commit.ts` | Closed @15 | — | Warns at 8 dirty files, blocks at 15 |
+| Git | git-pre-require-commit | PreToolUse | `git-pre-require-commit.ts` | Closed @5 groups | — | Groups dirty files by directory; warns at 3, blocks at 5 |
 | Notifications | notify-event-toast | Notification | `notify-event-toast.ts` | Open | — | Sends OS toast on idle/permission/complete |
 | Routing | routing-submit-classify | UserPromptSubmit | `routing-submit-classify.ts` | Open | all | Classifies depth, matches skills, injects directives |
 
@@ -65,9 +65,9 @@ Only PreToolUse hooks can fail closed. All other hook events (Stop, PostToolUse,
 
 ### Git — "Commit frequently, don't accumulate drift"
 
-**git-pre-require-commit** fires on PreToolUse for Edit/Write. Runs `git status --porcelain` and counts dirty files. Warns at 8 dirty files, hard-blocks at 15. Tracks state via a marker file in signals that clears after a successful commit.
+**git-pre-require-commit** fires on PreToolUse for Edit/Write. Runs `git status --porcelain` and groups dirty files by their top-level directory (first 2 path segments, e.g. `src/telemetry`). Warns at 3 distinct groups, hard-blocks at 5. This detects multiple unrelated logical changes better than raw file counts — editing 10 files in `src/ui/` is one change, but touching `src/ui/`, `src/telemetry/`, and `docs/` is three.
 
-**Enforceability:** Strong at the upper bound. The 8-file warning is advisory only.
+**Enforceability:** Strong at the upper bound. The 3-group warning is advisory only.
 
 ### Notifications — "Alert the human"
 

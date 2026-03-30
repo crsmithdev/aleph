@@ -2,22 +2,24 @@
 /**
  * PreToolUse hook: commit nudge.
  *
- * Fires on Edit/Write. Two-tier enforcement:
- *   - Warn: when dirty files ≥ WARN_THRESHOLD, print a reminder and write a marker.
- *   - Block: when dirty files ≥ BLOCK_THRESHOLD, exit(2) to prevent the edit.
+ * Fires on Edit/Write. Groups dirty files by top-level source directory
+ * to detect multiple unrelated logical changes.
  *
- * A successful `git commit` resets both tiers (marker is stale once the tree shrinks).
+ *   - Warn: when ≥ WARN_GROUPS distinct directory groups are dirty.
+ *   - Block: when ≥ BLOCK_GROUPS distinct groups are dirty.
+ *
+ * A successful `git commit` resets both tiers (marker is stale once groups shrink).
  */
 import { execSync } from "child_process";
-import { existsSync, writeFileSync, readFileSync, unlinkSync, mkdirSync } from "fs";
+import { existsSync, writeFileSync, unlinkSync, mkdirSync } from "fs";
 import { dirname } from "path";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 import { dataPaths } from "../../paths.ts";
 
 const TAG = "git-pre-require-commit";
-const WARN_THRESHOLD = 8;
-const BLOCK_THRESHOLD = 15;
+const WARN_GROUPS = 3;
+const BLOCK_GROUPS = 5;
 
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
@@ -27,43 +29,57 @@ reportHook(TAG, "PreToolUse", input.session_id);
 const cwd = input.cwd;
 if (!cwd) { trace(TAG, "no cwd, skip"); process.exit(0); }
 
-// Count dirty files
-let dirtyCount = 0;
+let statusLines: string[];
 try {
   const status = execSync("git status --porcelain", { cwd, encoding: "utf8", timeout: 5000 }).trim();
   if (!status) {
-    // Clean tree — remove any stale marker
     cleanupMarker(input.session_id);
     trace(TAG, "clean tree, allow");
     process.exit(0);
   }
-  dirtyCount = status.split("\n").filter(Boolean).length;
+  statusLines = status.split("\n").filter(Boolean);
 } catch (e) {
   trace(TAG, `git status failed: ${(e as Error).message}`);
   process.exit(0);
 }
 
-trace(TAG, `dirty files: ${dirtyCount}`);
+// Group files by logical directory (first 2 path segments, e.g. "src/telemetry")
+const groups = new Set<string>();
+for (const line of statusLines) {
+  // git status --porcelain: XY flags then space(s) then filename
+  const file = line.replace(/^[A-Z? !]{1,2}\s+/, "").replace(/^"(.*)"$/, "$1");
+  const parts = file.split("/");
+  if (parts.length >= 2) {
+    groups.add(`${parts[0]}/${parts[1]}`);
+  } else {
+    groups.add(parts[0]);
+  }
+}
 
-if (dirtyCount < WARN_THRESHOLD) {
+const groupCount = groups.size;
+const fileCount = statusLines.length;
+const groupList = [...groups].sort().join(", ");
+trace(TAG, `${fileCount} dirty files across ${groupCount} groups: ${groupList}`);
+
+if (groupCount < WARN_GROUPS) {
   process.exit(0);
 }
 
 const markerPath = `${dataPaths.signals}/git-pre-require-commit-${input.session_id}`;
 
-if (dirtyCount >= BLOCK_THRESHOLD) {
-  trace(TAG, `BLOCKED: ${dirtyCount} dirty files ≥ ${BLOCK_THRESHOLD}`);
-  console.log(`[Construct] ${dirtyCount} uncommitted files — commit your current logical change before continuing. This edit is blocked until the working tree is smaller.`);
+if (groupCount >= BLOCK_GROUPS) {
+  trace(TAG, `BLOCKED: ${groupCount} groups ≥ ${BLOCK_GROUPS}`);
+  console.log(`[Construct] ${fileCount} uncommitted files across ${groupCount} unrelated areas (${groupList}). Commit your current logical change before continuing.`);
   process.exit(2);
 }
 
-// Warn tier: print reminder, write marker if not already present
+// Warn tier
 if (!existsSync(markerPath)) {
   mkdirSync(dirname(markerPath), { recursive: true });
-  writeFileSync(markerPath, JSON.stringify({ ts: new Date().toISOString(), count: dirtyCount }));
+  writeFileSync(markerPath, JSON.stringify({ ts: new Date().toISOString(), groups: groupCount, files: fileCount, areas: groupList }));
 }
-trace(TAG, `warn: ${dirtyCount} dirty files`);
-console.log(`[Construct] ${dirtyCount} uncommitted files. Consider committing the current logical change before starting the next one.`);
+trace(TAG, `warn: ${groupCount} groups`);
+console.log(`[Construct] ${fileCount} uncommitted files across ${groupCount} areas (${groupList}). Consider committing before starting a new logical change.`);
 process.exit(0);
 
 function cleanupMarker(sessionId: string) {
