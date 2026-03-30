@@ -266,58 +266,42 @@ export function qualityHooks(): SandboxHook[] {
  * plus CONSTRUCT_DATA_ROOT set to the eval's data dir. The script's
  * exit code determines the SDK's decision (exit 2 = block).
  */
+/**
+ * Run a real hook script as a subprocess, passing the SDK's input as stdin.
+ * Uses execSync with `input` option to avoid shell escaping issues.
+ */
+function execHook(absHook: string, dataRoot: string, input: any): { stdout: string; exitCode: number } {
+  const stdin = JSON.stringify(input);
+  try {
+    const stdout = execSync(`bun ${absHook}`, {
+      input: stdin,
+      encoding: "utf-8",
+      timeout: 5000,
+      env: { ...process.env, CONSTRUCT_DATA_ROOT: dataRoot },
+      cwd: REPO_ROOT,
+    });
+    return { stdout: stdout.trim(), exitCode: 0 };
+  } catch (err: any) {
+    return { stdout: (err.stdout ?? "").trim(), exitCode: err.status ?? 1 };
+  }
+}
+
 export function realHookCallback(hookPath: string, dataRoot: string): HookCallback {
   const absHook = resolve(REPO_ROOT, "src", hookPath);
   return async (input) => {
-    const stdin = JSON.stringify(input);
-    const escaped = stdin.replace(/'/g, "'\\''");
-    try {
-      const stdout = execSync(
-        `echo '${escaped}' | bun ${absHook} 2>/dev/null`,
-        {
-          encoding: "utf-8",
-          timeout: 5000,
-          env: { ...process.env, CONSTRUCT_DATA_ROOT: dataRoot },
-          cwd: REPO_ROOT,
-        },
-      );
-      // exit 0 = allow, stdout may contain messages
-      if (stdout.trim()) return { systemMessage: stdout.trim() };
-      return {};
-    } catch (err: any) {
-      const exitCode = err.status ?? 1;
-      const stdout = (err.stdout ?? "").trim();
-      if (exitCode === 2) {
-        // Hook wants to block
-        return { decision: "block" as const, reason: stdout || "Hook blocked" };
-      }
-      // Other exit codes = allow (hook errored)
-      return {};
-    }
+    const { stdout, exitCode } = execHook(absHook, dataRoot, input);
+    if (exitCode === 2) return { decision: "block" as const, reason: stdout || "Hook blocked" };
+    if (stdout) return { systemMessage: stdout };
+    return {};
   };
 }
 
-/** Create a Stop hook callback that delegates to a real hook script. */
 export function realStopHookCallback(hookPath: string, dataRoot: string): HookCallback {
   const absHook = resolve(REPO_ROOT, "src", hookPath);
   return async (input) => {
-    const stdin = JSON.stringify(input);
-    const escaped = stdin.replace(/'/g, "'\\''");
-    try {
-      const stdout = execSync(
-        `echo '${escaped}' | bun ${absHook} 2>/dev/null`,
-        {
-          encoding: "utf-8",
-          timeout: 5000,
-          env: { ...process.env, CONSTRUCT_DATA_ROOT: dataRoot },
-          cwd: REPO_ROOT,
-        },
-      );
-      if (stdout.trim()) return { systemMessage: stdout.trim() };
-      return {};
-    } catch (err: any) {
-      return {};
-    }
+    const { stdout } = execHook(absHook, dataRoot, input);
+    if (stdout) return { systemMessage: stdout };
+    return {};
   };
 }
 
@@ -364,6 +348,7 @@ export interface EvalResult {
   taskSuccess: boolean;
   toolCalls: string[];
   editsMade: boolean;
+  filesChanged: string[];
   agentDispatched: boolean;
   unitTestsRun: boolean;
   e2eEvidence: boolean;
@@ -378,7 +363,7 @@ export interface EvalResult {
 export function emptyResult(): EvalResult {
   return {
     taskSuccess: false, toolCalls: [], editsMade: false,
-    agentDispatched: false, unitTestsRun: false,
+    filesChanged: [], agentDispatched: false, unitTestsRun: false,
     e2eEvidence: false, artifactCreated: false,
     gateBlocks: 0, e2eSignals: [], artifacts: [], durationMs: 0,
   };
@@ -534,7 +519,7 @@ export async function runEval(config: EvalConfig): Promise<{ result: EvalResult;
         maxTurns: config.maxTurns ?? 30,
         permissionMode: "bypassPermissions",
         allowDangerouslySkipPermissions: true,
-        persistSession: false,
+        persistSession: true,
         systemPrompt: config.systemPrompt,
         env: { ...process.env, CONSTRUCT_DATA_ROOT: dataRoot },
         hooks,
@@ -546,6 +531,12 @@ export async function runEval(config: EvalConfig): Promise<{ result: EvalResult;
     }
 
     result.durationMs = Date.now() - start;
+
+    // Check which files were modified in the sandbox
+    try {
+      const diff = execSync("git diff --name-only HEAD", { cwd: sandbox, encoding: "utf-8", timeout: 5000 }).trim();
+      if (diff) result.filesChanged = diff.split("\n").filter(Boolean);
+    } catch {}
 
     try {
       execSync("bun test", { cwd: sandbox, stdio: "pipe", timeout: 15000 });

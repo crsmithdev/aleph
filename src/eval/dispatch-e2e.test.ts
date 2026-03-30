@@ -71,10 +71,12 @@ console.log("\n--- Behavioral assertions ---");
 
 check(r, "with-gate: Claude dispatched to subagent", withGate.agentDispatched);
 check(r, "with-gate: task succeeded", withGate.taskSuccess);
-check(r, "with-gate: edits were made (via subagent)", withGate.editsMade);
+check(r, "with-gate: files changed in sandbox", withGate.filesChanged.length > 0,
+  `changed: [${withGate.filesChanged.join(", ")}]`);
 
 check(r, "bare: task succeeded", bare.taskSuccess);
-check(r, "bare: edits were made", bare.editsMade);
+check(r, "bare: files changed in sandbox", bare.filesChanged.length > 0,
+  `changed: [${bare.filesChanged.join(", ")}]`);
 
 if (withGate.agentDispatched && !bare.agentDispatched) {
   check(r, "gate forced dispatch (Agent used only with gate)", true);
