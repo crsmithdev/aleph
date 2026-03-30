@@ -28,7 +28,6 @@ Feature superset drawn from note-taking (Obsidian, Logseq, SiYuan, AFFiNE, Jopli
 - **Idea incubation** — seed half-formed ideas; background agents explore feasibility, find prior art, sketch implementations, and return with a "here's what this could look like" package
 
 ## Writing & Editing
-- **Markdown editing** — full CommonMark + extensions (tables, footnotes, math, diagrams)
 - **Rich text / WYSIWYG** — formatted editing without seeing markup
 - **Block-based editing** — each paragraph/image/embed is a movable block
 - **Outliner mode** — bullet-based hierarchical note structure (indent/outdent)
