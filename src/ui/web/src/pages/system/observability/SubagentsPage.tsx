@@ -95,7 +95,7 @@ export function SubagentsPage() {
     {
       key: 'runInBackground',
       label: 'BG',
-      align: 'center',
+      align: 'right',
       render: (row) => row.runInBackground
         ? <span className="text-xs px-1.5 py-0.5 rounded bg-accent/20 text-accent">bg</span>
         : <span className="text-xs text-text-tertiary">fg</span>,
@@ -103,7 +103,7 @@ export function SubagentsPage() {
     {
       key: 'isError',
       label: 'Status',
-      align: 'center',
+      align: 'right',
       render: (row) => row.isError
         ? <span className="text-xs px-1.5 py-0.5 rounded bg-error/20 text-error">error</span>
         : <span className="text-xs px-1.5 py-0.5 rounded bg-success/20 text-success">ok</span>,
