@@ -311,8 +311,8 @@ All hooks in `settings.json`:
 |-------|-----------------|----------|
 | SessionStart | memory/hooks/session-start.ts | 5000ms |
 | UserPromptSubmit | memory/hooks/rating-capture.ts, skills/hooks/routing-submit-classify.ts | 2000ms, 3000ms |
-| Stop | skills/hooks/quality-stop-check-e2e.ts, skills/hooks/context-stop-monitor.ts, memory/hooks/session-summary.ts, memory/hooks/memory-extract.ts | 3000ms, 3000ms, 3000ms, 5000ms |
-| PreToolUse | skills/hooks/isolation-pre-block-destructive-sql.ts (matcher: `mcp__.*(?:execute_sql\|apply_migration\|run_query)`) | 3000ms |
+| Stop | skills/hooks/quality-stop-check-e2e.ts, skills/hooks/dispatch-stop-remind.ts, skills/hooks/context-stop-monitor.ts, memory/hooks/session-summary.ts, memory/hooks/memory-extract.ts | 3000ms, 2000ms, 3000ms, 3000ms, 5000ms |
+| PreToolUse | skills/hooks/dispatch-pre-require-subagent.ts, skills/hooks/git-pre-require-commit.ts, skills/hooks/quality-pre-require-e2e.ts (matcher: `Edit\|Write`), skills/hooks/isolation-pre-block-prod-edit.ts, skills/hooks/isolation-pre-block-destructive-sql.ts (matcher: `mcp__.*(?:execute_sql\|apply_migration\|run_query)`) | 3000ms, 3000ms, 3000ms, 3000ms, 3000ms |
 | PostToolUse | skills/hooks/quality-post-format.ts (matcher: `Edit\|Write`), skills/hooks/quality-post-typecheck.ts (matcher: `Edit\|Write`) | 10000ms, 15000ms |
 | PreCompact | skills/hooks/context-precompact-backup.ts | 5000ms |
 | Notification | skills/hooks/notify-event-toast.ts | 3000ms |
