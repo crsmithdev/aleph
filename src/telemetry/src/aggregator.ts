@@ -1,6 +1,5 @@
 import type {
   SessionEntry,
-  Granularity,
   ToolMetric,
   HookMetric,
   SkillMetric,
@@ -36,26 +35,25 @@ import type {
 } from "./types.js";
 import { calculateCost } from "./pricing.js";
 
-function dateKey(timestamp: string): string {
-  return timestamp.slice(0, 10);
-}
-
 function hourKey(timestamp: string): number {
   const match = timestamp.match(/T(\d{2}):/);
   return match ? parseInt(match[1], 10) : 0;
 }
 
-function bucketKey(timestamp: string, granularity: Granularity): string {
-  switch (granularity) {
-    case "minute":
-      return timestamp.slice(0, 16); // YYYY-MM-DDTHH:MM
-    case "hour":
-      return timestamp.slice(0, 13); // YYYY-MM-DDTHH
-    case "day":
-    default:
-      return timestamp.slice(0, 10); // YYYY-MM-DD
-  }
+function bucketKey(timestamp: string): string {
+  return timestamp.slice(0, 10); // YYYY-MM-DD
 }
+
+const shortNameCache = new Map<string, string>();
+function shortName(cmd: string): string {
+  const cached = shortNameCache.get(cmd);
+  if (cached !== undefined) return cached;
+  const result = cmd.split("/").pop() || cmd;
+  shortNameCache.set(cmd, result);
+  return result;
+}
+
+const KNOWN_EVENTS = ["SessionStart", "UserPromptSubmit", "Stop", "PostToolUse", "Notification"];
 
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
@@ -63,7 +61,7 @@ function percentile(sorted: number[], p: number): number {
   return sorted[Math.max(0, idx)];
 }
 
-export function aggregateOverview(entries: SessionEntry[], granularity: Granularity = "day"): OverviewData {
+export function aggregateOverview(entries: SessionEntry[]): OverviewData {
   const sessionIds = new Set<string>();
   let messages = 0;
   let toolCalls = 0;
@@ -73,7 +71,7 @@ export function aggregateOverview(entries: SessionEntry[], granularity: Granular
   const dayMap = new Map<string, { sessions: Set<string>; messages: number }>();
 
   for (const e of entries) {
-    const day = bucketKey(e.timestamp, granularity);
+    const day = bucketKey(e.timestamp);
     if (!dayMap.has(day)) dayMap.set(day, { sessions: new Set(), messages: 0 });
     const bucket = dayMap.get(day)!;
 
@@ -112,19 +110,11 @@ export function aggregateOverview(entries: SessionEntry[], granularity: Granular
   return { sessions: sessionIds.size, messages, toolCalls, toolErrors, hookErrors, totalCost, byDay };
 }
 
-export function aggregateTools(entries: SessionEntry[], granularity: Granularity = "day"): ToolsData {
+export function aggregateTools(entries: SessionEntry[]): ToolsData {
   const toolCounts = new Map<string, { count: number; errors: number; lastUsed: string; durations: number[] }>();
   const dayToolMap = new Map<string, Map<string, number>>();
 
-  // Map toolUseId → { toolName, timestamp } for error attribution and latency
-  const useIdToTool = new Map<string, { toolName: string; timestamp: string }>();
-  for (const e of entries) {
-    if (e.entryType === "tool_use" && e.toolName && e.toolUseId) {
-      useIdToTool.set(e.toolUseId, { toolName: e.toolName, timestamp: e.timestamp });
-    }
-  }
-
-  // Map toolUseId → result info for latency calculation
+  // resultInfo must be pre-built (tool_result follows tool_use in the stream)
   const resultInfo = new Map<string, { timestamp: string; durationMs?: number }>();
   for (const e of entries) {
     if (e.entryType === "tool_result" && e.toolUseId) {
@@ -132,8 +122,13 @@ export function aggregateTools(entries: SessionEntry[], granularity: Granularity
     }
   }
 
+  // useIdToTool is built inline (tool_use always precedes its tool_result)
+  const useIdToTool = new Map<string, { toolName: string; timestamp: string }>();
+
   for (const e of entries) {
     if (e.entryType === "tool_use" && e.toolName) {
+      if (e.toolUseId) useIdToTool.set(e.toolUseId, { toolName: e.toolName, timestamp: e.timestamp });
+
       const cur = toolCounts.get(e.toolName) || { count: 0, errors: 0, lastUsed: "", durations: [] };
       cur.count++;
       if (!cur.lastUsed || e.timestamp > cur.lastUsed) cur.lastUsed = e.timestamp;
@@ -149,7 +144,7 @@ export function aggregateTools(entries: SessionEntry[], granularity: Granularity
 
       toolCounts.set(e.toolName, cur);
 
-      const bk = bucketKey(e.timestamp, granularity);
+      const bk = bucketKey(e.timestamp);
       if (!dayToolMap.has(bk)) dayToolMap.set(bk, new Map());
       const dm = dayToolMap.get(bk)!;
       dm.set(e.toolName, (dm.get(e.toolName) || 0) + 1);
@@ -193,14 +188,14 @@ export function aggregateTools(entries: SessionEntry[], granularity: Granularity
   return { ranked, byDay };
 }
 
-export function aggregateHooks(entries: SessionEntry[], granularity: Granularity = "day"): HooksData {
-  const hookMap = new Map<string, { event: string; durations: number[]; errors: number; fullCommand: string }>();
+export function aggregateHooks(entries: SessionEntry[]): HooksData {
+  const hookMap = new Map<string, { event: string; durations: number[]; errors: number; fullCommand: string; progressCount: number }>();
   const dayHookMap = new Map<string, Map<string, number>>();
 
   for (const e of entries) {
     if (e.entryType === "stop_hook_summary" && e.hookCommand) {
-      const shortCmd = e.hookCommand.split("/").pop() || e.hookCommand;
-      const cur = hookMap.get(shortCmd) || { event: "", durations: [], errors: 0, fullCommand: e.hookCommand };
+      const shortCmd = shortName(e.hookCommand);
+      const cur = hookMap.get(shortCmd) || { event: "", durations: [], errors: 0, fullCommand: e.hookCommand, progressCount: 0 };
       if (e.hookDurationMs !== undefined) {
         cur.durations.push(e.hookDurationMs);
       }
@@ -210,14 +205,14 @@ export function aggregateHooks(entries: SessionEntry[], granularity: Granularity
       cur.fullCommand = e.hookCommand;
       hookMap.set(shortCmd, cur);
 
-      const bk = bucketKey(e.timestamp, granularity);
+      const bk = bucketKey(e.timestamp);
       if (!dayHookMap.has(bk)) dayHookMap.set(bk, new Map());
       const dm = dayHookMap.get(bk)!;
       dm.set(shortCmd, (dm.get(shortCmd) || 0) + 1);
     }
 
     if (e.entryType === "hook_progress" && e.hookCommand) {
-      const shortCmd = e.hookCommand.split("/").pop() || e.hookCommand;
+      const shortCmd = shortName(e.hookCommand);
       const cur = hookMap.get(shortCmd) || { event: "", durations: [], errors: 0, fullCommand: e.hookCommand, progressCount: 0 };
       cur.event = e.hookEvent || cur.event;
       cur.fullCommand = e.hookCommand;
@@ -226,9 +221,9 @@ export function aggregateHooks(entries: SessionEntry[], granularity: Granularity
       // Stop hooks are already counted via stop_hook_summary — only count
       // non-Stop hook_progress entries to avoid double-counting
       if (e.hookEvent !== "Stop") {
-        (cur as any).progressCount = ((cur as any).progressCount || 0) + 1;
+        cur.progressCount++;
 
-        const bk = bucketKey(e.timestamp, granularity);
+        const bk = bucketKey(e.timestamp);
         if (!dayHookMap.has(bk)) dayHookMap.set(bk, new Map());
         const dm = dayHookMap.get(bk)!;
         dm.set(shortCmd, (dm.get(shortCmd) || 0) + 1);
@@ -240,7 +235,7 @@ export function aggregateHooks(entries: SessionEntry[], granularity: Granularity
     .map(([command, v]) => {
       const sorted = v.durations.slice().sort((a, b) => a - b);
       const timedCount = sorted.length;
-      const count = timedCount || (v as any).progressCount || 0;
+      const count = timedCount || v.progressCount || 0;
       const avgMs = timedCount > 0 ? sorted.reduce((s, d) => s + d, 0) / timedCount : 0;
       return {
         command,
@@ -266,19 +261,18 @@ export function aggregateHooks(entries: SessionEntry[], granularity: Granularity
   return { ranked, byDay };
 }
 
-export function aggregateSkills(entries: SessionEntry[], granularity: Granularity = "day", validSkills?: Set<string>): SkillsData {
+export function aggregateSkills(entries: SessionEntry[]): SkillsData {
   const skillCounts = new Map<string, { count: number; errors: number; lastUsed: string }>();
   const daySkillMap = new Map<string, Map<string, number>>();
 
   for (const e of entries) {
     if (e.entryType === "tool_use" && e.skillName) {
-      if (validSkills && !validSkills.has(e.skillName)) continue;
       const cur = skillCounts.get(e.skillName) || { count: 0, errors: 0, lastUsed: "" };
       cur.count++;
       if (!cur.lastUsed || e.timestamp > cur.lastUsed) cur.lastUsed = e.timestamp;
       skillCounts.set(e.skillName, cur);
 
-      const bk = bucketKey(e.timestamp, granularity);
+      const bk = bucketKey(e.timestamp);
       if (!daySkillMap.has(bk)) daySkillMap.set(bk, new Map());
       const dm = daySkillMap.get(bk)!;
       dm.set(e.skillName, (dm.get(e.skillName) || 0) + 1);
@@ -307,13 +301,13 @@ export function aggregateSkills(entries: SessionEntry[], granularity: Granularit
   return { ranked, byDay };
 }
 
-export function aggregateTokens(entries: SessionEntry[], granularity: Granularity = "day"): TokensData {
+export function aggregateTokens(entries: SessionEntry[]): TokensData {
   const dayMap = new Map<string, TokenBucket>();
   let totalInput = 0, totalOutput = 0, totalCacheRead = 0, totalCacheCreation = 0;
 
   for (const e of entries) {
     if (e.entryType === "tokens") {
-      const day = bucketKey(e.timestamp, granularity);
+      const day = bucketKey(e.timestamp);
       const cur = dayMap.get(day) || { date: day, input: 0, output: 0, cacheRead: 0, cacheCreation: 0 };
       const input = e.inputTokens || 0;
       const output = e.outputTokens || 0;
@@ -338,7 +332,7 @@ export function aggregateTokens(entries: SessionEntry[], granularity: Granularit
   return { cacheEfficiency, totalInput, totalOutput, totalCacheRead, totalCacheCreation, byDay };
 }
 
-export function aggregateCost(entries: SessionEntry[], granularity: Granularity = "day"): CostData {
+export function aggregateCost(entries: SessionEntry[]): CostData {
   let totalUsd = 0;
   const dayMap = new Map<string, number>();
   const modelMap = new Map<string, number>();
@@ -354,7 +348,7 @@ export function aggregateCost(entries: SessionEntry[], granularity: Granularity 
       );
       totalUsd += cost;
 
-      const day = bucketKey(e.timestamp, granularity);
+      const day = bucketKey(e.timestamp);
       dayMap.set(day, (dayMap.get(day) || 0) + cost);
       modelMap.set(e.model, (modelMap.get(e.model) || 0) + cost);
     }
@@ -375,7 +369,7 @@ export function aggregateCost(entries: SessionEntry[], granularity: Granularity 
   return { totalUsd, byDay, byModel };
 }
 
-export function aggregateSessions(entries: SessionEntry[], granularity: Granularity = "day"): SessionsData {
+export function aggregateSessions(entries: SessionEntry[]): SessionsData {
   const dayMap = new Map<string, { sessions: Set<string>; messages: number; userMessages: number; assistantMessages: number }>();
   const projectMap = new Map<string, Set<string>>();
   const activityMap = new Map<string, number>();
@@ -411,7 +405,7 @@ export function aggregateSessions(entries: SessionEntry[], granularity: Granular
   }
 
   for (const e of entries) {
-    const day = bucketKey(e.timestamp, granularity);
+    const day = bucketKey(e.timestamp);
     if (!dayMap.has(day)) dayMap.set(day, { sessions: new Set(), messages: 0, userMessages: 0, assistantMessages: 0 });
     const bucket = dayMap.get(day)!;
     bucket.sessions.add(e.sessionId);
@@ -455,7 +449,7 @@ export function aggregateSessions(entries: SessionEntry[], granularity: Granular
     if (!projectMap.has(e.project)) projectMap.set(e.project, new Set());
     projectMap.get(e.project)!.add(e.sessionId);
 
-    const actKey = bucketKey(e.timestamp, granularity);
+    const actKey = bucketKey(e.timestamp);
     activityMap.set(actKey, (activityMap.get(actKey) || 0) + 1);
   }
 
@@ -552,7 +546,7 @@ export function aggregateToolDetail(entries: SessionEntry[], toolName: string): 
   const invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; isError?: boolean; errorMessage?: string }[] = [];
 
   for (const e of matched) {
-    const day = dateKey(e.timestamp);
+    const day = bucketKey(e.timestamp);
     if (!dayMap.has(day)) dayMap.set(day, new Map());
     const hm = dayMap.get(day)!;
     const hour = hourKey(e.timestamp);
@@ -600,7 +594,7 @@ export function aggregateHookDetail(entries: SessionEntry[], hookName: string): 
 
   for (const e of entries) {
     if (e.entryType === "stop_hook_summary" && e.hookCommand) {
-      const shortCmd = e.hookCommand.split("/").pop() || e.hookCommand;
+      const shortCmd = shortName(e.hookCommand);
       if (shortCmd !== hookName) continue;
       hasStopSummary = true;
       const dur = e.hookDurationMs ?? 0;
@@ -608,7 +602,7 @@ export function aggregateHookDetail(entries: SessionEntry[], hookName: string): 
       if (e.isError) errors++;
       fullCommand = e.hookCommand;
 
-      const day = dateKey(e.timestamp);
+      const day = bucketKey(e.timestamp);
       if (!dayMap.has(day)) dayMap.set(day, { durations: [], count: 0 });
       const dm = dayMap.get(day)!;
       dm.durations.push(dur);
@@ -626,7 +620,7 @@ export function aggregateHookDetail(entries: SessionEntry[], hookName: string): 
     }
 
     if (e.entryType === "hook_progress" && e.hookCommand) {
-      const shortCmd = e.hookCommand.split("/").pop() || e.hookCommand;
+      const shortCmd = shortName(e.hookCommand);
       if (shortCmd === hookName) {
         if (e.hookEvent) event = e.hookEvent;
         fullCommand = e.hookCommand;
@@ -638,7 +632,7 @@ export function aggregateHookDetail(entries: SessionEntry[], hookName: string): 
   if (!hasStopSummary) {
     for (const e of entries) {
       if (e.entryType === "hook_progress" && e.hookCommand) {
-        const shortCmd = e.hookCommand.split("/").pop() || e.hookCommand;
+        const shortCmd = shortName(e.hookCommand);
         if (shortCmd !== hookName) continue;
 
         // Extract trigger from hookName (e.g. "PostToolUse:Edit" → "Edit")
@@ -651,7 +645,7 @@ export function aggregateHookDetail(entries: SessionEntry[], hookName: string): 
           trigger,
         });
 
-        const day = dateKey(e.timestamp);
+        const day = bucketKey(e.timestamp);
         if (!dayMap.has(day)) dayMap.set(day, { durations: [], count: 0 });
         dayMap.get(day)!.count++;
       }
@@ -683,13 +677,12 @@ export function aggregateHookDetail(entries: SessionEntry[], hookName: string): 
 export function aggregateSkillDetail(entries: SessionEntry[], skillName: string): SkillDetailData {
   const matched = entries.filter((e) => e.entryType === "tool_use" && e.skillName === skillName);
   const totalCount = matched.length;
-  const errorCount = 0;
 
   const dayMap = new Map<string, number>();
   const invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; userRequest?: string }[] = [];
 
   for (const e of matched) {
-    const day = dateKey(e.timestamp);
+    const day = bucketKey(e.timestamp);
     dayMap.set(day, (dayMap.get(day) || 0) + 1);
 
     invocations.push({
@@ -709,7 +702,7 @@ export function aggregateSkillDetail(entries: SessionEntry[], skillName: string)
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
     .slice(0, 200);
 
-  return { skill: skillName, totalCount, errorCount, byDay, invocations: recentInvocations };
+  return { skill: skillName, totalCount, byDay, invocations: recentInvocations };
 }
 
 export function aggregateHookEvents(entries: SessionEntry[]): HookEventData {
@@ -719,12 +712,14 @@ export function aggregateHookEvents(entries: SessionEntry[]): HookEventData {
   // Track invocations grouped by (sessionId, timestamp) for stop_hook_summary
   // and by (sessionId, timestamp) for hook_progress
   const invocationMap = new Map<string, HookInvocation>();
+  // Dedup hooks per invocation key: key → Set of command strings already added
+  const invocationHookSets = new Map<string, Set<string>>();
 
   // Process hook_progress entries to learn event→hook mappings and create invocations
   for (const e of entries) {
     if (e.entryType === "hook_progress" && e.hookEvent && e.hookCommand) {
       const event = e.hookEvent;
-      const shortCmd = e.hookCommand.split("/").pop() || e.hookCommand;
+      const shortCmd = shortName(e.hookCommand);
 
       if (!eventMap.has(event)) eventMap.set(event, { count: 0, hooks: new Set() });
       const ev = eventMap.get(event)!;
@@ -739,10 +734,13 @@ export function aggregateHookEvents(entries: SessionEntry[]): HookEventData {
           event,
           hooks: [],
         });
+        invocationHookSets.set(key, new Set());
         ev.count++;
       }
       const inv = invocationMap.get(key)!;
-      if (!inv.hooks.find((h) => h.command === shortCmd)) {
+      const hookSet = invocationHookSets.get(key)!;
+      if (!hookSet.has(shortCmd)) {
+        hookSet.add(shortCmd);
         inv.hooks.push({ command: shortCmd });
       }
     }
@@ -754,7 +752,7 @@ export function aggregateHookEvents(entries: SessionEntry[]): HookEventData {
 
   for (const e of entries) {
     if (e.entryType === "stop_hook_summary" && e.hookCommand) {
-      const shortCmd = e.hookCommand.split("/").pop() || e.hookCommand;
+      const shortCmd = shortName(e.hookCommand);
       const key = `${e.sessionId}::${e.timestamp}`;
       if (!stopGroups.has(key)) {
         stopGroups.set(key, { timestamp: e.timestamp, sessionId: e.sessionId, hooks: [] });
@@ -791,11 +789,6 @@ export function aggregateHookEvents(entries: SessionEntry[]): HookEventData {
     }
   }
 
-  // Also enrich hook_progress invocations with stop_hook_summary timing when keys overlap
-  // (they typically don't, but attempt to match by session+close timestamp)
-
-  const KNOWN_EVENTS = ["SessionStart", "UserPromptSubmit", "Stop", "PostToolUse", "Notification"];
-
   const events = [...eventMap.entries()]
     .map(([event, v]) => ({ event, count: v.count, hooks: [...v.hooks] }))
     .sort((a, b) => {
@@ -814,7 +807,7 @@ export function aggregateHookEvents(entries: SessionEntry[]): HookEventData {
   return { events, invocations };
 }
 
-export function aggregateMemoryUsage(entries: SessionEntry[], granularity: Granularity = "day"): MemoryUsageData {
+export function aggregateMemoryUsage(entries: SessionEntry[]): MemoryUsageData {
   let stores = 0;
   let searches = 0;
   const dayMap = new Map<string, { stores: number; searches: number }>();
@@ -827,7 +820,7 @@ export function aggregateMemoryUsage(entries: SessionEntry[], granularity: Granu
 
     if (!isStore && !isSearch) continue;
 
-    const day = bucketKey(e.timestamp, granularity);
+    const day = bucketKey(e.timestamp);
     if (!dayMap.has(day)) dayMap.set(day, { stores: 0, searches: 0 });
     const bucket = dayMap.get(day)!;
 
@@ -848,7 +841,7 @@ export function aggregateMemoryUsage(entries: SessionEntry[], granularity: Granu
   return { stores, searches, byDay };
 }
 
-export function aggregateCompaction(entries: SessionEntry[], granularity: Granularity = "day"): CompactionData {
+export function aggregateCompaction(entries: SessionEntry[]): CompactionData {
   const dayMap = new Map<string, number>();
   const events: CompactionData["events"] = [];
   let totalTokensAtCompaction = 0;
@@ -863,7 +856,7 @@ export function aggregateCompaction(entries: SessionEntry[], granularity: Granul
       trigger: e.compactTrigger || "unknown",
       preTokens,
     });
-    const day = bucketKey(e.timestamp, granularity);
+    const day = bucketKey(e.timestamp);
     dayMap.set(day, (dayMap.get(day) || 0) + 1);
   }
 
@@ -877,14 +870,14 @@ export function aggregateCompaction(entries: SessionEntry[], granularity: Granul
   return { totalCompactions, totalTokensAtCompaction, avgPreTokens, byDay, events: events.sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 100) };
 }
 
-export function aggregateApiDuration(entries: SessionEntry[], granularity: Granularity = "day"): ApiDurationData {
+export function aggregateApiDuration(entries: SessionEntry[]): ApiDurationData {
   const allDurations: number[] = [];
   const dayMap = new Map<string, number[]>();
 
   for (const e of entries) {
     if (e.entryType !== "turn_duration" || !e.turnDurationMs) continue;
     allDurations.push(e.turnDurationMs);
-    const day = bucketKey(e.timestamp, granularity);
+    const day = bucketKey(e.timestamp);
     if (!dayMap.has(day)) dayMap.set(day, []);
     dayMap.get(day)!.push(e.turnDurationMs);
   }
@@ -921,23 +914,44 @@ export function getRecentEvents(
   if (filters?.search) {
     const q = filters.search.toLowerCase();
     filtered = filtered.filter((e) => {
-      const text = [
-        e.toolName,
-        e.skillName,
-        e.hookCommand,
-        e.hookEvent,
-        e.hookName,
-        e.errorMessage,
-        JSON.stringify(e.toolParams),
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return text.includes(q);
+      const fields = [e.toolName, e.skillName, e.hookCommand, e.hookEvent, e.hookName, e.errorMessage];
+      for (const f of fields) {
+        if (f && f.toLowerCase().includes(q)) return true;
+      }
+      if (e.toolParams) {
+        for (const v of Object.values(e.toolParams)) {
+          const s = typeof v === "string" ? v : JSON.stringify(v);
+          if (s.toLowerCase().includes(q)) return true;
+        }
+      }
+      return false;
     });
   }
+
+  const total = filtered.length;
+  if (limit < total / 2) {
+    // Partial sort: maintain a bounded sorted array of size limit+offset
+    const needed = limit + offset;
+    const top: SessionEntry[] = [];
+    for (const e of filtered) {
+      if (top.length < needed) {
+        top.push(e);
+        if (top.length === needed) {
+          top.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+        }
+      } else if (e.timestamp > top[top.length - 1].timestamp) {
+        top[top.length - 1] = e;
+        // Re-sort only the tail to maintain order (insertion sort on small array)
+        for (let i = top.length - 1; i > 0 && top[i].timestamp > top[i - 1].timestamp; i--) {
+          const tmp = top[i]; top[i] = top[i - 1]; top[i - 1] = tmp;
+        }
+      }
+    }
+    return { events: top.slice(offset, offset + limit), total };
+  }
+
   const sorted = filtered.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-  return { events: sorted.slice(offset, offset + limit), total: sorted.length };
+  return { events: sorted.slice(offset, offset + limit), total };
 }
 
 export function aggregateSessionTrace(entries: SessionEntry[], sessionId: string): TraceData {
@@ -1077,7 +1091,7 @@ export function aggregateSessionTrace(entries: SessionEntry[], sessionId: string
       }
 
       if (e.entryType === "stop_hook_summary" && e.hookCommand) {
-        const shortCmd = e.hookCommand.split("/").pop() || e.hookCommand;
+        const shortCmd = shortName(e.hookCommand);
         spans.push({
           id: `span-${t}-${spanCounter++}`,
           kind: "hook",
@@ -1090,7 +1104,7 @@ export function aggregateSessionTrace(entries: SessionEntry[], sessionId: string
       }
 
       if (e.entryType === "hook_progress" && e.hookCommand) {
-        const shortCmd = e.hookCommand.split("/").pop() || e.hookCommand;
+        const shortCmd = shortName(e.hookCommand);
         // hook_progress doesn't have duration — use a small placeholder
         spans.push({
           id: `span-${t}-${spanCounter++}`,
@@ -1152,7 +1166,7 @@ export function aggregateSessionTrace(entries: SessionEntry[], sessionId: string
   return { sessionId, parentSessionId, project, turns, totalDurationMs, totalTokens, totalCost };
 }
 
-export function aggregateSubagents(entries: SessionEntry[], granularity: Granularity = "day"): SubagentsData {
+export function aggregateSubagents(entries: SessionEntry[]): SubagentsData {
   // Build subagent session time map: parentSessionId → [{ sessionId, firstTs, lastTs }]
   const subSessionMap = new Map<string, Map<string, { firstTs: number; lastTs: number }>>();
   for (const e of entries) {
@@ -1235,7 +1249,7 @@ export function aggregateSubagents(entries: SessionEntry[], granularity: Granula
     if (durationMs && durationMs > 0) durations.push(durationMs);
 
     // Day buckets
-    const day = bucketKey(e.timestamp, granularity);
+    const day = bucketKey(e.timestamp);
     const db = dayBuckets.get(day) ?? { count: 0, bg: 0, fg: 0 };
     db.count++;
     if (runInBackground) db.bg++;

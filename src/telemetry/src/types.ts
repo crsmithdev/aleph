@@ -240,7 +240,6 @@ export interface HookDetailData {
 export interface SkillDetailData {
   skill: string;
   totalCount: number;
-  errorCount: number;
   byDay: TimeBucket[];
   invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; userRequest?: string }[];
 }

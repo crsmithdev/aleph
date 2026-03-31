@@ -731,7 +731,7 @@ describe("subagent aggregation", () => {
       agentToolUse({ toolUseId: "tu_2", toolParams: { run_in_background: false, subagent_type: "Explore" }, timestamp: new Date(baseTsMs + 10000).toISOString() }),
       toolResult("tu_2", 3000),
     ];
-    const result = aggregateSubagents(entries, "day");
+    const result = aggregateSubagents(entries);
 
     expect(result.totalDispatches).toBe(2);
     expect(result.backgroundDispatches).toBe(1);
@@ -746,7 +746,7 @@ describe("subagent aggregation", () => {
       entries.push(agentToolUse({ toolUseId: `tu_${i}`, timestamp: ts }));
       entries.push(toolResult(`tu_${i}`, durations[i]));
     }
-    const result = aggregateSubagents(entries, "day");
+    const result = aggregateSubagents(entries);
 
     expect(result.totalDispatches).toBe(10);
     expect(result.avgMs).toBe(11900); // mean of durations
@@ -763,7 +763,7 @@ describe("subagent aggregation", () => {
       agentToolUse({ toolUseId: "tu_3", toolParams: { subagent_type: "Plan" }, timestamp: new Date(baseTsMs + 10000).toISOString() }),
       toolResult("tu_3", 1000),
     ];
-    const result = aggregateSubagents(entries, "day");
+    const result = aggregateSubagents(entries);
 
     expect(result.byType.length).toBe(2);
     const explore = result.byType.find(t => t.subagentType === "Explore");
@@ -782,7 +782,7 @@ describe("subagent aggregation", () => {
       childEntry(new Date(baseTsMs + 5000).toISOString()),
       childEntry(new Date(baseTsMs + 9000).toISOString()),
     ];
-    const result = aggregateSubagents(entries, "day");
+    const result = aggregateSubagents(entries);
 
     expect(result.recent.length).toBe(1);
     expect(result.recent[0].subagentSessionId).toBe(childSessionId);
@@ -799,7 +799,7 @@ describe("subagent aggregation", () => {
       agentToolUse({ toolUseId: "tu_3", timestamp: day2, toolParams: { run_in_background: true } }),
       toolResult("tu_3", 4000),
     ];
-    const result = aggregateSubagents(entries, "day");
+    const result = aggregateSubagents(entries);
 
     expect(result.byDay.length).toBe(2);
     expect(result.byDay[0].date).toBe("2026-03-26");
@@ -816,14 +816,14 @@ describe("subagent aggregation", () => {
       agentToolUse({ toolUseId: "tu_1", toolParams: { subagent_type: "general-purpose" } }),
       toolResult("tu_1", 5000, true),
     ];
-    const result = aggregateSubagents(entries, "day");
+    const result = aggregateSubagents(entries);
 
     expect(result.byType[0].errors).toBe(1);
     expect(result.recent[0].isError).toBe(true);
   });
 
   it("handles empty entries", () => {
-    const result = aggregateSubagents([], "day");
+    const result = aggregateSubagents([]);
     expect(result.totalDispatches).toBe(0);
     expect(result.activeNow).toBe(0);
     expect(result.avgMs).toBe(0);
@@ -839,7 +839,7 @@ describe("subagent aggregation", () => {
       entries.push(agentToolUse({ toolUseId: `tu_${i}`, timestamp: ts, toolParams: { description: `task ${i}`, subagent_type: "general-purpose" } }));
       entries.push(toolResult(`tu_${i}`, 1000));
     }
-    const result = aggregateSubagents(entries, "day");
+    const result = aggregateSubagents(entries);
 
     expect(result.recent.length).toBe(100);
     // Newest first

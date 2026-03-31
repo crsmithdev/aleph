@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { nanoid } from 'nanoid';
-import * as schema from '../apps/api/src/db/schema.js';
+import * as schema from '../api/src/db/schema.js';
 import { mkdirSync } from 'fs';
 
 const dbPath = process.env.DATABASE_URL || './data/goals.db';
