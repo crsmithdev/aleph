@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "bun:test";
+import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { resolve, join } from "path";
 import { mkdirSync, copyFileSync, rmSync } from "fs";
 import { tmpdir } from "os";
@@ -29,11 +29,16 @@ function setupFixtureDir(): string {
 
 describe("aggregator", () => {
   let entries: SessionEntry[];
+  let baseDir: string;
 
   beforeEach(() => {
     clearCache();
-    const baseDir = setupFixtureDir();
+    baseDir = setupFixtureDir();
     entries = parseAllSessions({ baseDir });
+  });
+
+  afterEach(() => {
+    rmSync(baseDir, { recursive: true, force: true });
   });
 
   describe("aggregateOverview", () => {

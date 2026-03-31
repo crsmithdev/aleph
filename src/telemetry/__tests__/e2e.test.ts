@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, beforeAll } from "bun:test";
+import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { resolve, join } from "path";
-import { mkdirSync, cpSync, rmSync, readdirSync, existsSync } from "fs";
+import { mkdirSync, cpSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { parseAllSessions, clearCache } from "../src/parser.js";
 import {
@@ -228,6 +228,10 @@ describe("e2e telemetry pipeline", () => {
         clearCache();
         baseDir = setupTempDir(session.dir);
         entries = parseAllSessions({ baseDir });
+      });
+
+      afterEach(() => {
+        rmSync(baseDir, { recursive: true, force: true });
       });
 
       describe("parser", () => {
@@ -642,13 +646,9 @@ describe("e2e telemetry pipeline", () => {
 
         it("overview messages matches tokens total entries", () => {
           const overview = aggregateOverview(entries);
-          const tokensData = aggregateTokens(entries);
           // Messages in overview = token entries (one per assistant response)
-          expect(overview.messages).toBe(
-            tokensData.byDay.reduce((s, d) => s + d.input + d.output + d.cacheRead + d.cacheCreation, 0) > 0
-              ? overview.messages
-              : 0,
-          );
+          const tokenEntryCount = entries.filter((e) => e.entryType === "tokens").length;
+          expect(overview.messages).toBe(tokenEntryCount);
         });
 
         it("overview cost matches cost aggregator total", () => {

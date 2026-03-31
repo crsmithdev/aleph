@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "bun:test";
+import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { resolve } from "path";
 import { parseAllSessions, clearCache } from "../src/parser.js";
 
@@ -6,7 +6,7 @@ const fixturesDir = resolve(import.meta.dir, "../fixtures");
 
 // The fixture is a single JSONL file. To test parsing, we set up a
 // temp directory structure that mimics ~/.claude/projects/<project>/<session>.jsonl
-import { mkdirSync, copyFileSync, rmSync, writeFileSync } from "fs";
+import { mkdirSync, copyFileSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 
@@ -24,7 +24,7 @@ function setupFixtureDir(): string {
 function cleanupDir(dir: string): void {
   try {
     rmSync(dir, { recursive: true, force: true });
-  } catch {}
+  } catch (e) { console.error('cleanupDir failed:', e); }
 }
 
 describe("parser", () => {
@@ -33,6 +33,10 @@ describe("parser", () => {
   beforeEach(() => {
     clearCache();
     baseDir = setupFixtureDir();
+  });
+
+  afterEach(() => {
+    cleanupDir(baseDir);
   });
 
   it("discovers and parses JSONL files", () => {
