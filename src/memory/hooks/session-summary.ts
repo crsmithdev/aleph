@@ -17,6 +17,7 @@
 import { writeFileSync } from "fs";
 import { resolve } from "path";
 import { trace } from "../../trace.ts";
+import { reportHook } from "../../hook-report.ts";
 import { dataPaths, ensureDataDirs } from "../../paths.ts";
 import { parseTranscript } from "../parse-transcript.ts";
 
@@ -33,6 +34,7 @@ catch (e) {
   trace(TAG, msg);
   process.exit(0);
 }
+reportHook(TAG, "Stop", input.session_id);
 const transcript = parseTranscript(input.transcript_path);
 
 if (!transcript || transcript.totalMessages < 4) {

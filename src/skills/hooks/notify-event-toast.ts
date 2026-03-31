@@ -18,7 +18,7 @@ import { readFileSync } from "fs";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 
-const TAG = "notify";
+const TAG = "notify-event-toast";
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
 catch (e) {

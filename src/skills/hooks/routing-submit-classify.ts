@@ -150,6 +150,7 @@ if (extensions.length) {
 }
 trace(TAG, `output: ${out[0].slice(0, 80)}`);
 console.log(out.join(""));
+process.exit(0);
 
 function findProjectRoot(): string | null {
   try {

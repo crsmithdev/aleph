@@ -105,3 +105,4 @@ for (const [bin, args] of matched) {
   }
 }
 trace(TAG, "done");
+process.exit(0);

@@ -5,7 +5,7 @@ Read the current session ID and create the inline override signal:
 ```bash
 # Detect signals dir (dev vs production)
 if [ -f "./install.ts" ] && [ -f "./src/data/src/paths.ts" ]; then
-  SIGNALS=".dev/data/signals"
+  SIGNALS="$(pwd)/.dev/data/signals"
 else
   SIGNALS="$HOME/.claude/data/signals"
 fi

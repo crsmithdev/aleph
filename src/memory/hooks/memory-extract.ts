@@ -17,6 +17,7 @@
 import { existsSync } from "fs";
 import { resolve, dirname } from "path";
 import { trace } from "../../trace.ts";
+import { reportHook } from "../../hook-report.ts";
 import { parseTranscript } from "../parse-transcript.ts";
 import { extractMemories, hasMemoryStore } from "../extract.ts";
 
@@ -31,6 +32,7 @@ let input: any;
 const raw = await Bun.stdin.text();
 try { input = JSON.parse(raw); }
 catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(0); }
+reportHook(TAG, "Stop", input.session_id);
 
 const transcript = parseTranscript(input.transcript_path, { textLimit: 1000 });
 if (!transcript) { trace(TAG, "skip: no transcript"); process.exit(0); }

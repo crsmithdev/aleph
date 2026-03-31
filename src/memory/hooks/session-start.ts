@@ -22,6 +22,7 @@ import { resolve, dirname } from "path";
 import { execSync } from "child_process";
 import { Database } from "bun:sqlite";
 import { trace } from "../../trace.ts";
+import { reportHook } from "../../hook-report.ts";
 import { dataPaths, externalPaths } from "../../paths.ts";
 
 const TAG = "session-start";
@@ -29,6 +30,7 @@ const TAG = "session-start";
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
 catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(0); }
+reportHook(TAG, "SessionStart", input.session_id);
 
 const root = resolve(dirname(Bun.main), "../..");
 const sessionsDir = dataPaths.sessions;
