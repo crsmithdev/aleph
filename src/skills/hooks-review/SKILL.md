@@ -21,7 +21,7 @@ All `.ts`/`.js`/`.sh` files registered as hooks in settings.json, plus settings.
 
 **Registration vs implementation** — Every hook in settings.json points to a file that exists. Every hook file is registered in settings.json. Event types (PreToolUse, PostToolUse, Stop, etc.) match what the script expects.
 
-**TypeScript over Bash** — Hooks should be TypeScript (`.ts`) not shell scripts. If a hook is Bash, flag it — can this be rewritten in TypeScript? (Commandment 2: code over AI instructions, TypeScript over Bash.)
+**TypeScript over Bash** — Hooks should be TypeScript (`.ts`) not shell scripts. If a hook is Bash, flag it — can this be rewritten in TypeScript? (Code over AI instructions; TypeScript over Bash.)
 
 **No silent failures** — Hook must not swallow errors. Stderr should be captured. Non-zero exit codes must be intentional, not accidental crashes. JSON parse failures must be handled. (Commandment 1: nothing fails silently.)
 
