@@ -62,28 +62,17 @@ Code-level improvements, fixes, and bugs. Managed via `/todo`.
 ## Hooks
 
 - [ ] [low] [redundant logic] `parse-transcript.ts:56,70` double truncation — blocks truncated individually then join truncated again
-- [ ] [low] [misnamed identifiers] `extract.ts:73` lambda param `t` shadows outer `t: TranscriptSummary`
-- [ ] [low] [duplicate utilities] Duplicate intent-to-outcome derivation in `session-summary.ts:35` and `extract.ts:36` — extract shared function
 
 ## Consolidation
 
 Duplicated logic across files — extract to shared utilities:
 
-- [ ] [medium] [duplicate utilities] `fmtDuration` — duplicated in `SessionsPage.tsx:37`, `SessionTracePage.tsx:28`; move to `utils/format.ts`
-- [ ] [medium] [duplicate utilities] `formatBytes`/`fmtBytes` — duplicated in `SettingsPage.tsx:76`, `DbStatsPage.tsx:8`; move to `utils/format.ts`
-- [ ] [low] [duplicate utilities] `cleanMessage` — duplicated in `SessionTracePage.tsx`, `TurnTracePage.tsx`; move to `utils/format.ts`
 - [ ] [low] [duplicate utilities] Local date formatters in `GoalCard.tsx`, `NoteEditor.tsx`, `HistoryTimeline.tsx` — use existing `utils/format.ts` exports
 - [ ] [low] [duplicate utilities] Priority/state option arrays derived identically in `GoalForm.tsx:14` and `GoalFilters.tsx:19` — share
 - [ ] [low] [duplicate utilities] Trace-line splitting in `test.ts` (`runHook` + `run` x2) — extract `splitTrace()`
-- [ ] [low] [misnamed identifiers] Fallback grey RGB values hardcoded in both `CategoryChip.tsx` and `GoalList.tsx:63` with subtle mismatch
 
 ## Cleanup
 
-- [ ] [medium] [orphaned files] Delete `src/ui/shared/dist/` — orphaned compiled artifacts, no source or package.json
-- [ ] [medium] [orphaned files] Rebuild or delete `src/ui/api/dist/` — stale, references routes/services that no longer exist
-- [ ] [low] [misnamed identifiers] Fix `src/ui/scripts/seed.ts:4` broken import — `../apps/api/` should be `../api/`
-- [ ] [low] [complexity debt] Delete `src/paths.ts` re-export shim — hooks can import from `@construct/data` directly
-- [ ] [low] [duplicate utilities] `getMemoryDbPath()` duplicates `externalPaths.memoryDb` getter — pick one (`data/src/paths.ts:29`)
 - [ ] [low] [complexity debt] `ensureDataDirs` in paths module mixes side effects with path resolution — inline at call sites or move
 
 ## Docs
@@ -92,7 +81,4 @@ _(none)_
 
 ## Tests
 
-- [ ] [medium] [redundant logic] `e2e.test.ts:643` tautological assertion — `expect(x).toBe(x)`, always passes, tests nothing
-- [ ] [low] [unused imports] Unused imports in test files: `writeFileSync` in `parser.test.ts:9`, `beforeAll`/`readdirSync`/`existsSync` in `e2e.test.ts`
-- [ ] [low] [silent failure] Temp directories created in `beforeEach` never cleaned up in `parser.test.ts`, `aggregator.test.ts`, `e2e.test.ts`
-- [ ] [low] [silent failure] `cleanupDir` in `parser.test.ts:24` has empty `catch {}` — swallows errors silently
+_(none)_
