@@ -474,7 +474,7 @@ check("extension: code-review injects project content", crOut.includes("Project 
 
 const dbgOut = extensionTest("debug the crash in the auth module");
 check("extension: debugging includes base match", dbgOut.includes("Matched skills: debugging"));
-check("extension: debugging injects project content", dbgOut.includes("construct trace"));
+check("extension: debugging injects project content", dbgOut.includes("telemetry"));
 
 // Skills without an extension file should NOT have extension content
 const resOut = extensionTest("investigate how redis handles eviction policies");
