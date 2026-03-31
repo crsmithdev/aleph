@@ -31,7 +31,7 @@ Configuration files control permissions, hooks, MCP servers, and behavioral rule
 **CLAUDE.md ownership** — Rules exist in exactly one CLAUDE.md file:
   - `dotclaude/CLAUDE.md` → behavioral rules (installed to `~/.claude/CLAUDE.md`)
   - `.claude/CLAUDE.md` → dev-only rules (loaded at runtime, never installed)
-  - No rule duplicated between the two. (Commandment 8.)
+  - No rule duplicated between the two. (No duplication between layers.)
 
 **Permission scope** — Are permissions as narrow as practical? Flag anything dangerously broad (e.g. `Bash(*)` without justification).
 
