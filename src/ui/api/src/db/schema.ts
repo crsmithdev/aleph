@@ -4,6 +4,7 @@ import {
   integer,
 } from 'drizzle-orm/sqlite-core';
 
+// DDL source of truth: see onReady hook in app.ts
 export const webhooks = sqliteTable('webhooks', {
   id: text('id').primaryKey(),
   url: text('url').notNull(),

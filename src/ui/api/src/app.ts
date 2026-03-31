@@ -3,7 +3,7 @@ import cors from '@fastify/cors';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import fastifyStatic from '@fastify/static';
-import { createDb } from './db/client.js';
+import { createDb } from '@construct/data';
 import { config } from './config.js';
 import { errorHandler } from './plugins/error-handler.js';
 import { categoryRoutes } from './routes/categories.js';
@@ -32,22 +32,6 @@ declare module 'fastify' {
   }
 }
 
-function parseManifest(path: string): Record<string, Record<string, string>> {
-  try {
-    const content = readFileSync(path, 'utf-8');
-    const sections: Record<string, Record<string, string>> = {};
-    let current = '';
-    for (const line of content.split('\n')) {
-      if (line.startsWith('#') || !line.trim()) continue;
-      const sectionMatch = line.match(/^\[(.+)]$/);
-      if (sectionMatch) { current = sectionMatch[1]; sections[current] = {}; continue; }
-      const kvMatch = line.match(/^(\S+) = (.*)$/);
-      if (kvMatch && current) sections[current][kvMatch[1]] = kvMatch[2];
-    }
-    return sections;
-  } catch { return {}; }
-}
-
 function git(cmd: string, cwd?: string): string {
   try {
     return execSync(`git ${cmd}`, { cwd, encoding: 'utf-8', timeout: 5000 }).trim();
@@ -57,35 +41,34 @@ function git(cmd: string, cwd?: string): string {
 function liveGitInfo(repoDir: string): Record<string, string> {
   const short = git('rev-parse --short HEAD', repoDir);
   if (!short) return {};
-  return {
-    revision: git('rev-parse HEAD', repoDir),
-    short,
-    dirty: String(git('status --porcelain', repoDir).length > 0),
-    branch: git('rev-parse --abbrev-ref HEAD', repoDir),
-    commit_count: git('rev-list --count HEAD', repoDir),
-    commits_since_tag: git('describe --tags --abbrev=0 HEAD', repoDir)
-      ? git('rev-list --count $(git describe --tags --abbrev=0 HEAD)..HEAD', repoDir)
-      : 'n/a',
-    last_commit: git('log -1 --format=%s', repoDir),
-    last_commit_date: git('log -1 --format=%ci', repoDir),
-  };
-}
 
-function detectRepoDir(): string | undefined {
-  // In dev, api/src/app.ts is at src/ui/api/src/app.ts — repo root is 4 levels up
-  const candidate = resolve(import.meta.dirname || '.', '../../../..');
-  if (existsSync(resolve(candidate, '.git'))) return candidate;
-  return undefined;
+  // One call for hash, refs/branch info, subject, date
+  const logLine = git('log -1 --format=%H%n%D%n%s%n%ci', repoDir);
+  const [revision, refs, last_commit, last_commit_date] = logLine.split('\n');
+
+  // Extract branch from refs string (e.g. "HEAD -> main, origin/main")
+  const branchMatch = refs?.match(/HEAD -> ([^,]+)/);
+  const branch = branchMatch ? branchMatch[1] : git('rev-parse --abbrev-ref HEAD', repoDir);
+
+  const dirty = String(git('status --porcelain', repoDir).length > 0);
+  const commit_count = git('rev-list --count HEAD', repoDir);
+
+  const latestTag = git('describe --tags --abbrev=0 HEAD', repoDir);
+  const commits_since_tag = latestTag
+    ? git(`rev-list --count ${latestTag}..HEAD`, repoDir)
+    : 'n/a';
+
+  return { revision, short, dirty, branch, commit_count, commits_since_tag, last_commit, last_commit_date };
 }
 
 export async function createApp(opts?: { dbUrl?: string }) {
-  const enableLogger = opts?.dbUrl !== ':memory:';
+  const customLogging = opts?.dbUrl !== ':memory:';
   const app = Fastify({
-    logger: enableLogger ? { stream: createLogStream() } : false,
-    disableRequestLogging: enableLogger,
+    logger: customLogging ? { stream: createLogStream() } : false,
+    disableRequestLogging: customLogging,
   });
 
-  if (enableLogger) {
+  if (customLogging) {
     app.addHook('onResponse', (req, reply, done) => {
       const ms = reply.elapsedTime < 1000
         ? `${Math.round(reply.elapsedTime)}ms`
@@ -138,9 +121,28 @@ export async function createApp(opts?: { dbUrl?: string }) {
     await api.register(observabilityRoutes, { prefix: '/observability' });
 
     api.get('/system/info', async function () {
-      const manifest = parseManifest(claudePaths.manifest);
+      // Parse manifest: INI-like file with [section] headers and key = value pairs
+      let manifest: Record<string, Record<string, string>> = {};
+      try {
+        const content = readFileSync(claudePaths.manifest, 'utf-8');
+        let current = '';
+        for (const line of content.split('\n')) {
+          if (line.startsWith('#') || !line.trim()) continue;
+          const sectionMatch = line.match(/^\[(.+)]$/);
+          if (sectionMatch) { current = sectionMatch[1]; manifest[current] = {}; continue; }
+          const kvMatch = line.match(/^(\S+) = (.*)$/);
+          if (kvMatch && current) manifest[current][kvMatch[1]] = kvMatch[2];
+        }
+      } catch { manifest = {}; }
+
       const hasManifest = Object.keys(manifest).length > 0;
-      const repoDir = manifest.paths?.repo ?? detectRepoDir();
+
+      // Detect repo dir: in dev, app.ts is at src/ui/api/src/app.ts — repo root is 4 levels up
+      const repoDir = manifest.paths?.repo ?? (() => {
+        const candidate = resolve(import.meta.dirname || '.', '../../../..');
+        return existsSync(resolve(candidate, '.git')) ? candidate : undefined;
+      })();
+
       const liveGit = !hasManifest && repoDir ? liveGitInfo(repoDir) : {};
       const g = hasManifest ? manifest.git ?? {} : liveGit;
 
@@ -217,7 +219,7 @@ export async function createApp(opts?: { dbUrl?: string }) {
       );
       CREATE INDEX IF NOT EXISTS idx_obs_memory_taken_at ON obs_memory_snapshots(taken_at);
     `);
-    // Webhooks DDL (UI infrastructure)
+    // Webhooks DDL (UI infrastructure) — schema types: see db/schema.ts
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS webhooks (
         id TEXT PRIMARY KEY,
