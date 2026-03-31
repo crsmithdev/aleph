@@ -27,13 +27,13 @@ All `.md` files in `dotclaude/commands/` (installed to `~/.claude/commands/`) an
 
 **Behavior description** — Does the prompt accurately describe what the command will do? Would an agent follow it correctly with no other context?
 
-**Duplication** — Does this command overlap with another command or a skill? Should they be merged? Commands must not shadow global slash commands. (Commandment 8: no duplication between layers.)
+**Duplication** — Does this command overlap with another command or a skill? Should they be merged? Commands must not shadow global slash commands. (No duplication between layers.)
 
-**References** — Does the command reference tools, files, MCP servers, or APIs that exist? Are referenced skills registered in skill-rules.json? (Commandment 1: nothing fails silently.)
+**References** — Does the command reference tools, files, MCP servers, or APIs that exist? Are referenced skills registered in skill-rules.json? (Nothing fails silently.)
 
 **Source location** — Command source lives in `dotclaude/commands/`, not `.claude/commands/` (unless intentionally project-local). Commands install to `~/.claude/commands/` via merge. (Source in `dotclaude/`, never `.claude/` for shared commands.)
 
-**Orphans** — No command files that aren't reachable via the slash command interface. No references to commands that don't exist. (Commandment 6: remove completely.)
+**Orphans** — No command files that aren't reachable via the slash command interface. No references to commands that don't exist. (Remove completely — no orphaned artifacts.)
 
 <!-- PROJECT-SPECIFIC CRITERIA
 Add your own checks below:
