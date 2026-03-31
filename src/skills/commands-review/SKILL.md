@@ -15,7 +15,7 @@ Slash commands are the user-facing interface to skills and automation. Unclear o
 
 ## Scope
 
-All `.md` files in `dotclaude/commands/`.
+All `.md` files in `dotclaude/commands/` (installed to `~/.claude/commands/`) and `.claude/commands/` (project-local commands loaded at runtime).
 
 ## Checks
 
