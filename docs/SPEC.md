@@ -317,12 +317,6 @@ All hooks in `settings.json`:
 | PreCompact | skills/hooks/context-precompact-backup.ts | 5000ms |
 | Notification | skills/hooks/notify-event-toast.ts | 3000ms |
 
-## Trace Mode
-
-- Flag file: `~/.claude/construct/.trace`
-- When present: hooks emit trace output to stdout via `trace()` calls
-- Toggled by `/trace` command
-
 ## Module Detection
 
 | Module | Detection file |
