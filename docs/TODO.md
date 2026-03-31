@@ -29,18 +29,7 @@ Code-level improvements, fixes, and bugs. Managed via `/todo`.
 ## API
 
 - [ ] [medium] [redundant logic] `parseDaysPreHandler` loads all entries into memory then filters — add pagination or streaming (`routes/observability.ts`)
-- [ ] [medium] [redundant logic] Memory items search uses `LIKE '%text%'` (no index) — migrate to FTS5 (`routes/observability.ts:270-276`)
-- [ ] [medium] [unreferenced functions] Restore endpoint is a stub — does validation but returns without copying the file (`routes/backup.ts:50-51`)
-- [ ] [low] [complexity debt] Delete `db/client.ts` — wrapper re-exports `createDb` from `@construct/data` with zero modification; callers can import directly
-- [ ] [low] [duplicate utilities] Schema in `db/schema.ts` duplicated by raw `CREATE TABLE` in `app.ts:220-230` — pick one source of truth
-- [ ] [low] [redundant logic] `liveGitInfo` spawns up to 9 sequential subprocesses — consolidate into fewer git calls (`app.ts:57-72`)
-- [ ] [low] [complexity debt] `parseManifest` and `detectRepoDir` are single-use functions — inline them (`app.ts`)
-- [ ] [low] [misnamed identifiers] `disableRequestLogging: enableLogger` — inverted flag name is confusing (`app.ts:85`)
-- [ ] [low] [duplicate utilities] `tryRead` in observability routes reinvents `readHookSource` from the same file (`routes/observability.ts:268-271`)
 - [ ] [low] [redundant logic] `rangeToDays('1h')` returns 1 (same as `'1d'`) — loads full day for 1h request, filters wastefully (`routes/observability.ts:40-41`)
-- [ ] [low] [redundant logic] `statSync` dynamically imported despite being available as a static import (`routes/observability.ts:383`)
-- [ ] [low] [redundant logic] `|| undefined` on `databaseUrl` is a no-op (`config.ts:4`)
-- [ ] [medium] [orphaned files] Delete `services/webhook-dispatcher.ts` — entire class is dead code, never instantiated
 
 ## Database
 
