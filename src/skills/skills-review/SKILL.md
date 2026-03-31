@@ -25,7 +25,7 @@ All `SKILL.md` files in `src/skills/*/`, plus `src/skills/skill-rules.json`.
 
 **Vague or ambiguous** — Could the process steps be interpreted multiple ways? Would two agents do different things given the same input? Suggest concrete rewrites.
 
-**Contradictions** — Does this skill conflict with another skill, with CLAUDE.md rules, or with Commandments? Cite both locations. (Commandment 8: no duplication between layers.)
+**Contradictions** — Does this skill conflict with another skill, with CLAUDE.md rules, or with Commandments? Cite both locations. (No duplication between memory, CLAUDE.md, and docs.)
 
 **Impossible instructions** — References tools, files, MCP servers, or patterns that don't exist? Check that referenced paths exist on disk. (Commandment 1: nothing fails silently.)
 
