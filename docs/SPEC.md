@@ -143,7 +143,6 @@ Skills are domain-specific playbooks activated by keyword matching. Each lives i
 | Command | Behavior |
 |---------|----------|
 | `/install` | Runs `bun install.ts`, then auto-runs post-install verification |
-| `/trace` | Toggle hook tracing (or one-shot trace a command) |
 | `/audit` | Full project audit: code, refs, instructions, docs, spec |
 | `/devserver` | Kill dev ports, start UI dev server in background |
 | `/todo` | File items from review output into `docs/TODO.md` |
