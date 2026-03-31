@@ -634,7 +634,7 @@ export function reduceSkillDetail(events: TelemetryEvent[], skillName: string): 
     .map(([date, count]) => ({ date, count }));
 
   return {
-    skill: skillName, totalCount: matched.length, errorCount: 0, byDay,
+    skill: skillName, totalCount: matched.length, byDay,
     invocations: invocations.sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 200),
   };
 }
