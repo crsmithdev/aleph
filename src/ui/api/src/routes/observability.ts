@@ -575,22 +575,30 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       const limit = Math.min(Math.max(parseInt(req.query.limit || '50', 10) || 50, 1), 500);
       const conditions: string[] = [];
       const params: (string | number)[] = [];
+      const useFts = !!req.query.q;
 
       if (req.query.type) {
-        conditions.push('memory_type = ?');
+        conditions.push('m.memory_type = ?');
         params.push(req.query.type);
       }
       if (req.query.tag) {
-        conditions.push("tags LIKE '%' || ? || '%'");
+        // tags column has no FTS index; use instr to avoid LIKE wildcard interpretation
+        conditions.push('instr(m.tags, ?) > 0');
         params.push(req.query.tag);
       }
       if (req.query.q) {
-        conditions.push("content LIKE '%' || ? || '%'");
+        // memory_content_fts is an FTS5 content table (trigram tokenizer) kept in sync
+        // by triggers on the memories table. Join it instead of scanning content with LIKE.
+        conditions.push('memory_content_fts MATCH ?');
         params.push(req.query.q);
       }
 
       const where = conditions.length > 0 ? ' WHERE ' + conditions.join(' AND ') : '';
-      const sql = `SELECT id, content, memory_type, tags, created_at, updated_at FROM memories${where} ORDER BY created_at DESC LIMIT ?`;
+      // When FTS is active, join the virtual table so MATCH applies to the right context.
+      const from = useFts
+        ? 'memories m JOIN memory_content_fts ON memory_content_fts.rowid = m.id'
+        : 'memories m';
+      const sql = `SELECT m.id, m.content, m.memory_type, m.tags, m.created_at, m.updated_at FROM ${from}${where} ORDER BY m.created_at DESC LIMIT ?`;
       params.push(limit);
 
       let db: Database | null = null;
