@@ -24,7 +24,7 @@ Configuration files control permissions, hooks, MCP servers, and behavioral rule
 
 ## Checks
 
-**Source vs installed drift** — Does `~/.claude/settings.json` match what `dotclaude/settings.json` would produce after merge? Has someone edited the installed file directly instead of the source? (Commandment 9: source in `src/` and `dotclaude/`.)
+**Source vs installed drift** — Does `~/.claude/settings.json` match what `dotclaude/settings.json` would produce after merge? Has someone edited the installed file directly instead of the source? (Source in `src/` and `dotclaude/`, never edit installed files directly.)
 
 **No duplication across layers** — Same hook, command, or setting in both `.claude/` and `dotclaude/`? This causes double-firing. `.claude/settings.json` may only contain permissions, statusline, and MCP server config — never hooks.
 
