@@ -48,6 +48,8 @@ export const backupRoutes: FastifyPluginAsync = async (app) => {
       const src = join(backupDir, filename);
       if (!existsSync(src)) return reply.status(404).send({ error: 'Backup not found' });
 
+      app.sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+      copyFileSync(src, dbPath);
       return { restored: true, message: 'Restart required to complete restore' };
     }
   );
