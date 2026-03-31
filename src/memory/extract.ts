@@ -12,6 +12,12 @@ export interface ExtractedMemory {
 
 export const CORRECTION_RE = /^(no[,.\s]|don'?t\b|stop\b|not that\b|instead\b|actually[,\s]|wait[,\s]|undo\b|revert\b|wrong\b)/i;
 
+export function deriveIntentOutcome(t: TranscriptSummary): { intent: string; outcome: string } {
+  const intent = t.firstUserText || "unknown task";
+  const outcome = t.userTexts.length > 1 ? t.userTexts[t.userTexts.length - 1] : intent;
+  return { intent, outcome };
+}
+
 export function hasMemoryStore(t: TranscriptSummary): boolean {
   for (const msg of t.messages) {
     if (msg.role !== "assistant") continue;
@@ -32,8 +38,7 @@ export function extractMemories(t: TranscriptSummary): ExtractedMemory[] {
 }
 
 function buildSessionSummary(t: TranscriptSummary): ExtractedMemory | null {
-  const intent = t.firstUserText || "unknown task";
-  const outcome = t.userTexts.length > 1 ? t.userTexts[t.userTexts.length - 1] : intent;
+  const { intent, outcome } = deriveIntentOutcome(t);
   const files = [...t.editedFiles].slice(0, 5).join(", ");
   const fileStr = files ? ` Files: ${files}.` : "";
 
@@ -70,7 +75,7 @@ function extractErrorResolutions(t: TranscriptSummary): ExtractedMemory[] {
     const fixMsg = t.messages[i + 1];
     if (!fixMsg || fixMsg.role !== "assistant") continue;
 
-    const hasFix = fixMsg.toolUses.some(t => t === "Edit" || t === "Write" || t === "Bash");
+    const hasFix = fixMsg.toolUses.some(tool => tool === "Edit" || tool === "Write" || tool === "Bash");
     if (!hasFix) continue;
 
     const looksLikeError = errorMsg.text.length > 10 &&

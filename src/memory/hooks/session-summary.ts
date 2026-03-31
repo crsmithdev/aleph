@@ -20,6 +20,7 @@ import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 import { dataPaths, ensureDataDirs } from "../../data/src/paths.ts";
 import { parseTranscript } from "../parse-transcript.ts";
+import { deriveIntentOutcome } from "../extract.ts";
 
 const TAG = "session-summary";
 const sessionsDir = dataPaths.sessions;
@@ -44,7 +45,7 @@ if (!transcript || transcript.totalMessages < 4) {
 
 trace(TAG, `messages: ${transcript.totalMessages}`);
 
-const { toolCounts, editedFiles, firstUserText, userTexts, assistantTexts } = transcript;
+const { toolCounts, editedFiles, userTexts, assistantTexts } = transcript;
 
 const editCount = (toolCounts["Edit"] ?? 0) + (toolCounts["Write"] ?? 0);
 const toolStr = Object.keys(toolCounts).slice(0, 8).join(", ") || "none";
@@ -52,8 +53,7 @@ const fileStr = [...editedFiles].slice(0, 12).join(", ") || "none";
 const users = transcript.messages.filter(m => m.role === "user").length;
 const assistants = transcript.messages.filter(m => m.role === "assistant").length;
 
-const intent = firstUserText || "none";
-const outcome = userTexts.length > 1 ? userTexts[userTexts.length - 1] : intent;
+const { intent, outcome } = deriveIntentOutcome(transcript);
 const intermediateMilestones = userTexts.slice(1, -1);
 const milestonesStr = intermediateMilestones.slice(0, 4).map(l => `  - ${l}`).join("\n");
 const notesStr = assistantTexts.slice(0, 5).map(l => `  - ${l}`).join("\n");
