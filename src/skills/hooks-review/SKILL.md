@@ -23,7 +23,7 @@ All `.ts`/`.js`/`.sh` files registered as hooks in settings.json, plus settings.
 
 **TypeScript over Bash** — Hooks should be TypeScript (`.ts`) not shell scripts. If a hook is Bash, flag it — can this be rewritten in TypeScript? (Code over AI instructions; TypeScript over Bash.)
 
-**No silent failures** — Hook must not swallow errors. Stderr should be captured. Non-zero exit codes must be intentional, not accidental crashes. JSON parse failures must be handled. (Commandment 1: nothing fails silently.)
+**No silent failures** — Hook must not swallow errors. Stderr should be captured. Non-zero exit codes must be intentional, not accidental crashes. JSON parse failures must be handled. (Nothing fails silently.)
 
 **Input/output contract** — Hook reads stdin JSON correctly. Exit codes are intentional (0 = pass, 2 = block for PreToolUse). Stdout output is meaningful and concise.
 
