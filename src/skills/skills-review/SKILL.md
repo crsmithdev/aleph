@@ -19,7 +19,7 @@ All `SKILL.md` files in `src/skills/*/`, plus `src/skills/skill-rules.json`.
 
 ## Checks
 
-**Registration** — Every skill directory has a matching entry in skill-rules.json. Keywords are specific enough to avoid false triggers and broad enough to catch real use. No orphaned directories without rules. No rules pointing to missing skills. (Commandment 6: remove completely.)
+**Registration** — Every skill directory has a matching entry in skill-rules.json. Keywords are specific enough to avoid false triggers and broad enough to catch real use. No orphaned directories without rules. No rules pointing to missing skills. (Remove completely — no orphaned artifacts.)
 
 **Code over instructions** — If a skill's process describes mechanical steps that could be scripted (file scanning, pattern matching, counting), those steps should be in code, not instructions. The skill prompt should handle judgment; code handles mechanics. (Commandment 2: code over AI instructions.)
 
