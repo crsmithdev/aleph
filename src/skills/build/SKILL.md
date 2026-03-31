@@ -109,7 +109,7 @@ Restart from RED if you catch yourself:
 The main session is an orchestrator. All file modifications go through subagents in worktrees.
 
 - **Main session**: Read, Grep, Glob, Bash (read-only), Agent, TaskCreate/Update — no Edit, no Write
-- **Subagents**: Edit, Write, Bash (all) — always in worktrees via `isolation: "worktree"`
+- **Subagents**: Edit, Write, Bash (all) — always in worktrees via `isolation: "worktree"` (verify this parameter exists in the Agent tool schema before relying on it)
 - **Override**: `/inline` disables the dispatch gate for the current session when inline work is genuinely needed
 
 The dispatch-pre-require-subagent hook enforces this — Edit/Write in the main session will be blocked unless `/inline` is active.

@@ -31,7 +31,7 @@ All `.md` files in `dotclaude/commands/` (installed to `~/.claude/commands/`) an
 
 **References** — Does the command reference tools, files, MCP servers, or APIs that exist? Are referenced skills registered in skill-rules.json? (Commandment 1: nothing fails silently.)
 
-**Source location** — Command source lives in `dotclaude/commands/`, never in `.claude/commands/`. Commands install to `~/.claude/commands/` via merge. (Commandment 9.)
+**Source location** — Command source lives in `dotclaude/commands/`, not `.claude/commands/` (unless intentionally project-local). Commands install to `~/.claude/commands/` via merge. (Source in `dotclaude/`, never `.claude/` for shared commands.)
 
 **Orphans** — No command files that aren't reachable via the slash command interface. No references to commands that don't exist. (Commandment 6: remove completely.)
 
