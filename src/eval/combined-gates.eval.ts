@@ -22,8 +22,7 @@ import { join, resolve } from "path";
 import {
   runEval, emptyResult, realDispatchHooks, realQualityHooks,
   createResults, check, printAndExit, formatResult,
-  readHookEvents, readJsonSafe,
-  type EvalResult,
+  readHookEvents,
 } from "./harness.ts";
 
 const args = process.argv.slice(2);

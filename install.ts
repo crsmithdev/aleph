@@ -19,10 +19,6 @@ const DST = join(Bun.env.HOME!, ".claude");
 
 const INFRA_FILES = new Set(["README.md", "INSTALL.md"]);
 
-// Static preserved paths (relative to construct/)
-// Note: data (DB, sessions, signals) lives in ~/.claude/data/ and is never touched by sync
-const PRESERVE: string[] = [];
-
 // File extensions that should never be overwritten during sync (runtime data)
 const SKIP_EXTENSIONS = [".db", ".db-wal", ".db-shm"];
 
@@ -203,15 +199,6 @@ console.log("backing up preserved files...");
 const backupDir = await mkdtemp(join(tmpdir(), "construct-backup-"));
 
 try {
-  for (const rel of PRESERVE) {
-    const src = join(DST, "construct", rel);
-    if (await exists(src)) {
-      const dst = join(backupDir, rel);
-      await mkdir(dirname(dst), { recursive: true });
-      await cp(src, dst, { recursive: true });
-    }
-  }
-
   // Back up ALL CAPS .md files from identity/ and memory/
   await mkdir(join(backupDir, "core/identity"), { recursive: true });
   await mkdir(join(backupDir, "memory"), { recursive: true });
@@ -251,16 +238,6 @@ try {
 
   // 4. Restore preserved files from temp dir
   console.log("restoring preserved files...");
-
-  for (const rel of PRESERVE) {
-    const backup = join(backupDir, rel);
-    if (await exists(backup)) {
-      const target = join(DST, "construct", rel);
-      await mkdir(dirname(target), { recursive: true });
-      await rm(target, { recursive: true, force: true });
-      await cp(backup, target, { recursive: true });
-    }
-  }
 
   // Restore ALL CAPS .md files
   for (const [subdir, target] of [

@@ -12,10 +12,9 @@
  * 5. Dev repo + prod target → exit 2 (hard block). Use install.ts to deploy.
  *    Not dev repo → exit 0 (allow, this is a production session editing its own files).
  */
-import { realpathSync } from "fs";
+import { realpathSync, existsSync } from "fs";
 import { resolve } from "path";
 import { homedir } from "os";
-import { existsSync } from "fs";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 
