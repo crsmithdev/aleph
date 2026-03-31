@@ -31,7 +31,7 @@ All `.ts`/`.js`/`.sh` files registered as hooks in settings.json, plus settings.
 
 **Idempotency** — Hook produces the same result if fired twice. No append-only side effects that compound.
 
-**Source location** — Hook source lives in `src/skills/hooks/`, not in `.claude/` or `dotclaude/`. Hooks are installed to `~/.claude/` via `bun install.ts`. (Commandment 9: source in `src/`, never `.claude/`.)
+**Source location** — Hook source lives in `src/skills/hooks/`, not in `.claude/` or `dotclaude/`. Hooks are installed to `~/.claude/` via `bun install.ts`. (Source in `src/`, never `.claude/`.)
 
 **No duplication across layers** — The same hook must not exist in both `.claude/settings.json` and `dotclaude/settings.json`. If it does, it fires twice. `.claude/settings.json` may only contain permissions, statusline, and MCP config — never hooks.
 
