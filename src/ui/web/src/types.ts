@@ -62,6 +62,7 @@ export interface Habit {
   completedThisPeriod: boolean;
   currentPeriodKey: string;
   missedLastPeriod: boolean;
+  streak?: number;
 }
 
 export interface GoalMeta {

@@ -164,6 +164,8 @@ export function TurnTracePage() {
       ? (s.durationMs / visibleTotalMs) * 100
       : 100 / visibleSegments.length,
   }));
+  const eventSegments = showInternal ? segments : segments.filter((s) => s.kind !== 'agent');
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -287,9 +289,7 @@ export function TurnTracePage() {
       </div>
 
       {/* Event table */}
-      {(() => {
-        const eventSegments = showInternal ? segments : segments.filter((s) => s.kind !== 'agent');
-        return (
+      {(
           <div className="rounded-lg border border-border-primary bg-bg-primary overflow-hidden">
             <table className="w-full">
               <thead>
@@ -391,8 +391,7 @@ export function TurnTracePage() {
               </tbody>
             </table>
           </div>
-        );
-      })()}
+      )}
 
       {/* Empty state */}
       {turn.spans.length === 0 && (

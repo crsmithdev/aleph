@@ -229,6 +229,40 @@ function ExpandedRow({ row }: { row: EventRow }) {
 
 const PAGE_SIZE = 100;
 
+function Pagination({ start, end, total, hasPrev, hasNext, onPrev, onNext }: {
+  start: number;
+  end: number;
+  total: number;
+  hasPrev: boolean;
+  hasNext: boolean;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-sm text-text-muted">
+        {total === 0 ? 'No events' : `Showing ${start}–${end} of ${fmtNumber(total)}`}
+      </span>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={onPrev}
+          disabled={!hasPrev}
+          className="px-3 py-1 text-xs rounded-md border border-border-primary text-text-secondary hover:text-text-primary hover:bg-bg-tertiary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          Previous
+        </button>
+        <button
+          onClick={onNext}
+          disabled={!hasNext}
+          className="px-3 py-1 text-xs rounded-md border border-border-primary text-text-secondary hover:text-text-primary hover:bg-bg-tertiary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function EventsPage() {
   const [range, setRange] = useState<TimeRange>('30d');
   const [activeType, setActiveType] = useState<EntryType | undefined>(undefined);
@@ -353,31 +387,22 @@ export function EventsPage() {
         <ErrorState message="Failed to load events" retry={refetch} />
       ) : (
         <>
-          <div className="flex items-center justify-between">
+          {!errorsOnly && (
+            <Pagination
+              start={start}
+              end={end}
+              total={total}
+              hasPrev={hasPrev}
+              hasNext={hasNext}
+              onPrev={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
+              onNext={() => setOffset((o) => o + PAGE_SIZE)}
+            />
+          )}
+          {errorsOnly && (
             <span className="text-sm text-text-muted">
-              {total === 0
-                ? 'No events'
-                : `Showing ${start}–${end} of ${fmtNumber(total)}`}
+              {total === 0 ? 'No events' : `Showing ${start}–${end} of ${fmtNumber(total)}`}
             </span>
-            {!errorsOnly && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
-                  disabled={!hasPrev}
-                  className="px-3 py-1 text-xs rounded-md border border-border-primary text-text-secondary hover:text-text-primary hover:bg-bg-tertiary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  Previous
-                </button>
-                <button
-                  onClick={() => setOffset((o) => o + PAGE_SIZE)}
-                  disabled={!hasNext}
-                  className="px-3 py-1 text-xs rounded-md border border-border-primary text-text-secondary hover:text-text-primary hover:bg-bg-tertiary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  Next
-                </button>
-              </div>
-            )}
-          </div>
+          )}
 
           <DataTable<EventRow>
             data={events}
@@ -391,26 +416,16 @@ export function EventsPage() {
           />
 
           {!errorsOnly && total > PAGE_SIZE && (
-            <div className="flex items-center justify-between pt-1">
-              <span className="text-xs text-text-muted">
-                {`Showing ${start}–${end} of ${fmtNumber(total)}`}
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
-                  disabled={!hasPrev}
-                  className="px-3 py-1 text-xs rounded-md border border-border-primary text-text-secondary hover:text-text-primary hover:bg-bg-tertiary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  Previous
-                </button>
-                <button
-                  onClick={() => setOffset((o) => o + PAGE_SIZE)}
-                  disabled={!hasNext}
-                  className="px-3 py-1 text-xs rounded-md border border-border-primary text-text-secondary hover:text-text-primary hover:bg-bg-tertiary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  Next
-                </button>
-              </div>
+            <div className="pt-1">
+              <Pagination
+                start={start}
+                end={end}
+                total={total}
+                hasPrev={hasPrev}
+                hasNext={hasNext}
+                onPrev={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
+                onNext={() => setOffset((o) => o + PAGE_SIZE)}
+              />
             </div>
           )}
         </>
