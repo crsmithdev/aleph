@@ -20,9 +20,5 @@
     "command": "ccstatusline",
     "timeout": 3000
   },
-  "hooks": {},
-  "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": [
-    "goal-tracker"
-  ]
+  "enableAllProjectMcpServers": true
 }

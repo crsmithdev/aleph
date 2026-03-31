@@ -53,8 +53,6 @@ Code-level improvements, fixes, and bugs. Managed via `/todo`.
 
 - [ ] [medium] [misnamed identifiers] `ringColor` in `ColorDots.tsx:42` is not a CSS property — selected ring color is a no-op
 - [ ] [medium] [redundant logic] `CategoryManager.tsx:72-74` color update only invalidates one goal's cache, not all goals using that category
-- [ ] [medium] [unreferenced functions] `granularity` state declared but never consumed in HookDetailPage, SkillDetailPage, ToolDetailPage — control bar shows a picker with no effect
-- [ ] [medium] [misnamed identifiers] `GoalDetailPage.tsx:249` passes `KeyboardEvent` to handler typed as `FormEvent` — works by accident
 - [ ] [medium] [redundant logic] `errorsOnly` filter is client-side while pagination is server-side — count/display mismatch (`EventsPage.tsx:228`)
 - [ ] [low] [misnamed identifiers] `SessionTracePage.tsx:48` and `TurnTracePage.tsx:144` use `useState` for a value that never changes — should be const
 - [ ] [low] [redundant logic] `SummaryPage.tsx` parent and child both call `useSummary` with same args — pass data as prop instead
@@ -71,13 +69,11 @@ Code-level improvements, fixes, and bugs. Managed via `/todo`.
 - [ ] [low] [complexity debt] Remove `useChartType` hook — it's `useState` with a type narrowing, no encapsulated logic (`ChartContainer.tsx:36-39`)
 - [ ] [low] [complexity debt] `tooltipStyle()` is a zero-arg function returning a static object — make it a `const` (`chartTheme.ts:11-19`)
 - [ ] [low] [misnamed identifiers] `streak` type cast in `HabitsPage.tsx:77` — update `Habit` type instead of inline `as` hack
-- [ ] [low] [unreferenced functions] `HabitsSection` accepts `date` prop but ignores it; `HabitItem` accepts `periodKey` but ignores it
 
 ## Hooks
 
 - [ ] [low] [unused imports] `session-summary.ts:9` and `rating-capture.ts:8` — unused `root` variable and `dirname` import
 - [ ] [low] [redundant logic] `parse-transcript.ts:56,70` double truncation — blocks truncated individually then join truncated again
-- [ ] [low] [commented-out code] `context-monitor.ts:39` `CONTEXT_LIMIT` comment promises dynamic check that doesn't exist
 - [ ] [low] [misnamed identifiers] `extract.ts:73` lambda param `t` shadows outer `t: TranscriptSummary`
 - [ ] [low] [duplicate utilities] Duplicate intent-to-outcome derivation in `session-summary.ts:35` and `extract.ts:36` — extract shared function
 
@@ -88,7 +84,6 @@ Duplicated logic across files — extract to shared utilities:
 - [ ] [medium] [duplicate utilities] `fmtDuration` — duplicated in `SessionsPage.tsx:37`, `SessionTracePage.tsx:28`; move to `utils/format.ts`
 - [ ] [medium] [duplicate utilities] `formatBytes`/`fmtBytes` — duplicated in `SettingsPage.tsx:76`, `DbStatsPage.tsx:8`; move to `utils/format.ts`
 - [ ] [low] [duplicate utilities] `cleanMessage` — duplicated in `SessionTracePage.tsx`, `TurnTracePage.tsx`; move to `utils/format.ts`
-- [ ] [low] [duplicate utilities] `titleCase` — duplicated in `HistoryTimeline.tsx:19`, `GoalFilters.tsx:23`, `GoalForm.tsx:17`; extract to `utils/format.ts`
 - [ ] [low] [duplicate utilities] Local date formatters in `GoalCard.tsx`, `NoteEditor.tsx`, `HistoryTimeline.tsx` — use existing `utils/format.ts` exports
 - [ ] [low] [duplicate utilities] Priority/state option arrays derived identically in `GoalForm.tsx:14` and `GoalFilters.tsx:19` — share
 - [ ] [low] [duplicate utilities] Trace-line splitting in `test.ts` (`runHook` + `run` x2) — extract `splitTrace()`
@@ -101,7 +96,6 @@ Duplicated logic across files — extract to shared utilities:
 - [ ] [low] [misnamed identifiers] Fix `src/ui/scripts/seed.ts:4` broken import — `../apps/api/` should be `../api/`
 - [ ] [low] [complexity debt] Delete `src/paths.ts` re-export shim — hooks can import from `@construct/data` directly
 - [ ] [low] [unreferenced functions] Remove `PRESERVE` scaffolding from `install.ts` — empty array, loops never execute (`install.ts:24,206,255`)
-- [ ] [low] [unreferenced functions] Remove dead `storeTranscript` assignment in `test.ts:325`
 - [ ] [low] [duplicate utilities] `getMemoryDbPath()` duplicates `externalPaths.memoryDb` getter — pick one (`data/src/paths.ts:29`)
 - [ ] [low] [complexity debt] `ensureDataDirs` in paths module mixes side effects with path resolution — inline at call sites or move
 

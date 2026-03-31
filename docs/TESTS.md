@@ -8,18 +8,22 @@
 
 | Section | What it covers |
 |---|---|
-| morning-briefing | Session digest rendering: background work, session counts, last session header |
-| rating | Rating extraction from user messages (standalone numbers, "7/10", false positives) |
-| extract | Correction detection regex, memory extraction from transcripts |
-| skill | Skill routing classifier (debugging, research, verification, docs-review, code-review) |
-| depth | Depth classifier (QUICK vs FULL) for prompt complexity |
-| recall | Session recall: summarizing past work, detecting unfinished tasks |
-| extension | Skill extension injection (code-review, debugging project extensions) |
+| session-start | Session digest rendering: background work, session counts, last session header |
+| rating-capture | Rating extraction from user messages (standalone numbers, "7/10", false positives) |
+| session-summary | Correction detection regex, memory extraction from transcripts |
+| memory-extract | Memory extraction from transcripts |
+| skill routing | Skill routing classifier (debugging, research, verification, docs-review, code-review) |
+| depth classification | Depth classifier (QUICK vs FULL) for prompt complexity |
+| session recall | Session recall: summarizing past work, detecting unfinished tasks |
+| skill extensions | Skill extension injection (code-review, debugging project extensions) |
 | trace | Hook tracing output (`[trace:]` lines) |
-| install | Installer sentinel file preservation across upgrades |
-| identity | Identity files exist, are non-empty, and install correctly |
-| vgate | Verification gate (`quality-stop-check-e2e.ts`): blocks edits without e2e evidence, detects playwright/cypress/devserver/chrome-devtools, requires artifacts, deduplicates files, handles malformed JSON, tool-result user messages don't split turns, known gaps (Bash writes, Agent edits) |
-| directive | Dispatch directive writing: architectural prompts get `dispatch`+`full`, quick prompts skip, questions get `full` only |
+| quality | Quality hook tests |
+| notify | Notify hook tests |
+| install preservation | Installer sentinel file preservation across upgrades |
+| identity files | Identity files exist, are non-empty, and install correctly |
+| quality-stop-check-e2e | Verification gate (`quality-stop-check-e2e.ts`): blocks edits without e2e evidence, detects playwright/cypress/devserver/chrome-devtools, requires artifacts, deduplicates files, handles malformed JSON, tool-result user messages don't split turns, known gaps (Bash writes, Agent edits) |
+| dispatch-pre-require-subagent | Dispatch gate hook: blocks Edit/Write in main session, allows subagent edits |
+| directive signals | Dispatch directive writing: architectural prompts get `dispatch`+`full`, quick prompts skip, questions get `full` only |
 
 ## Telemetry unit tests (`src/telemetry/__tests__/`)
 

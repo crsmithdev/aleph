@@ -24,7 +24,7 @@ The installer:
 3. Merges `dotclaude/settings.json` into `~/.claude/settings.json` (hooks and statusline)
 4. Updates `~/.claude/CLAUDE.md` with the Construct section from `dotclaude/CLAUDE.md`
 
-After install completes, run `/construct install` in Claude Code. It runs the installer and then automatically reads each module's `INSTALL.md` and executes the Post-install Verification checks listed there. Every check must pass.
+After install completes, run `/install` in Claude Code. It runs the installer and then automatically reads each module's `INSTALL.md` and executes the Post-install Verification checks listed there. Every check must pass.
 
 ## Upgrade (reinstall)
 
@@ -65,7 +65,7 @@ To add a new preserved file, create it with an ALL CAPS name in either `identity
 ~/.claude/construct/memory/MyNotes.md      # mixed case
 ```
 
-After upgrade completes, run `/construct install`. Pay special attention to the **Data** checks — they confirm preserved files were not lost or zeroed out.
+After upgrade completes, run `/install`. Pay special attention to the **Data** checks — they confirm preserved files were not lost or zeroed out.
 
 ## Post-install Verification
 
