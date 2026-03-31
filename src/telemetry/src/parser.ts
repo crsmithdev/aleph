@@ -4,6 +4,7 @@ import type { SessionEntry, ParseOptions } from "./types.js";
 import { claudePaths } from "@construct/data";
 
 const DEFAULT_BASE = claudePaths.projects;
+const PROJECTS_DIRNAME = basename(claudePaths.projects);
 
 const slashCommands = new Set<string>(
   (() => {
@@ -94,7 +95,7 @@ function projectFromPath(filePath: string): string {
   // Path: baseDir/projectName/sessionId.jsonl
   // or:   baseDir/projectName/sessionId/subagents/agent.jsonl
   const parts = filePath.split("/");
-  const projectsIdx = parts.indexOf("projects");
+  const projectsIdx = parts.indexOf(PROJECTS_DIRNAME);
   if (projectsIdx >= 0 && projectsIdx + 1 < parts.length) {
     return parts[projectsIdx + 1];
   }
@@ -342,10 +343,20 @@ function parentSessionIdFromPath(filePath: string): string | undefined {
   return undefined;
 }
 
-function parseFile(filePath: string, project: string): SessionEntry[] {
-  const stat = statSync(filePath);
+function parseFile(filePath: string, project: string, since?: Date): SessionEntry[] {
+  let stat: ReturnType<typeof statSync>;
+  try {
+    stat = statSync(filePath);
+  } catch {
+    return [];
+  }
+
   const cached = fileCache.get(filePath);
   if (cached && cached.mtimeMs === stat.mtimeMs) {
+    if (since) {
+      const cutoff = since.toISOString();
+      return cached.entries.filter((e) => e.timestamp >= cutoff);
+    }
     return cached.entries;
   }
 
@@ -382,6 +393,11 @@ function parseFile(filePath: string, project: string): SessionEntry[] {
   }
 
   fileCache.set(filePath, { mtimeMs: stat.mtimeMs, entries });
+
+  if (since) {
+    const cutoff = since.toISOString();
+    return entries.filter((e) => e.timestamp >= cutoff);
+  }
   return entries;
 }
 
@@ -393,15 +409,8 @@ export function parseAllSessions(opts?: ParseOptions): SessionEntry[] {
   for (const file of files) {
     const project = projectFromPath(file);
     if (opts?.projects && !opts.projects.includes(project)) continue;
-    allEntries.push(...parseFile(file, project));
+    allEntries.push(...parseFile(file, project, opts?.since));
   }
 
-
   return allEntries;
-}
-
-export function parseSessionsForDays(days: number, opts?: Omit<ParseOptions, "since">): SessionEntry[] {
-  const since = new Date();
-  since.setDate(since.getDate() - days);
-  return parseAllSessions({ ...opts, since });
 }

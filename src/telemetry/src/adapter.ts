@@ -8,24 +8,35 @@
 
 import { readdirSync, statSync, readFileSync, existsSync } from "fs";
 import { join, basename, dirname } from "path";
-import { claudePaths, dataPaths } from "@construct/data";
+import { claudePaths, dataPaths, createDb } from "@construct/data";
 import type { TelemetryEvent } from "./event.js";
 
 const DEFAULT_BASE = claudePaths.projects;
+const PROJECTS_DIRNAME = basename(claudePaths.projects);
 
 // ---------------------------------------------------------------------------
-// File discovery
+// SQLite-backed file cache
 // ---------------------------------------------------------------------------
 
-interface CacheEntry {
-  mtimeMs: number;
-  events: TelemetryEvent[];
-}
+const { sqlite: cacheDb } = createDb(dataPaths.db);
+cacheDb.exec(`
+  CREATE TABLE IF NOT EXISTS telemetry_cache (
+    file_path TEXT PRIMARY KEY,
+    mtime_ms INTEGER NOT NULL,
+    size INTEGER NOT NULL,
+    events TEXT NOT NULL
+  )
+`);
 
-const fileCache = new Map<string, CacheEntry>();
+const insertCache = cacheDb.prepare(
+  `INSERT OR REPLACE INTO telemetry_cache (file_path, mtime_ms, size, events) VALUES (?, ?, ?, ?)`
+);
+const selectCache = cacheDb.prepare(
+  `SELECT mtime_ms, size, events FROM telemetry_cache WHERE file_path = ?`
+);
 
 export function clearCache(): void {
-  fileCache.clear();
+  cacheDb.exec("DELETE FROM telemetry_cache");
 }
 
 function discoverJsonlFiles(baseDir: string, since?: Date): string[] {
@@ -78,7 +89,7 @@ function discoverJsonlFiles(baseDir: string, since?: Date): string[] {
 
 function projectFromPath(filePath: string): string {
   const parts = filePath.split("/");
-  const projectsIdx = parts.indexOf("projects");
+  const projectsIdx = parts.indexOf(PROJECTS_DIRNAME);
   if (projectsIdx >= 0 && projectsIdx + 1 < parts.length) return parts[projectsIdx + 1];
   return basename(dirname(filePath));
 }
@@ -318,10 +329,23 @@ function adaptLine(
 // File-level adaptation with caching
 // ---------------------------------------------------------------------------
 
-function adaptFile(filePath: string, project: string): TelemetryEvent[] {
-  const stat = statSync(filePath);
-  const cached = fileCache.get(filePath);
-  if (cached && cached.mtimeMs === stat.mtimeMs) return cached.events;
+function adaptFile(filePath: string, project: string, since?: Date): TelemetryEvent[] {
+  let stat: ReturnType<typeof statSync>;
+  try {
+    stat = statSync(filePath);
+  } catch {
+    return [];
+  }
+
+  const cached = selectCache.get(filePath) as { mtime_ms: number; size: number; events: string } | undefined;
+  if (cached && cached.mtime_ms === stat.mtimeMs && cached.size === stat.size) {
+    const events = JSON.parse(cached.events) as TelemetryEvent[];
+    if (since) {
+      const cutoff = since.toISOString();
+      return events.filter((e) => e.ts >= cutoff);
+    }
+    return events;
+  }
 
   let content: string;
   try { content = readFileSync(filePath, "utf-8"); } catch { return []; }
@@ -346,7 +370,12 @@ function adaptFile(filePath: string, project: string): TelemetryEvent[] {
     }
   }
 
-  fileCache.set(filePath, { mtimeMs: stat.mtimeMs, events: rawEvents });
+  insertCache.run(filePath, stat.mtimeMs, stat.size, JSON.stringify(rawEvents));
+
+  if (since) {
+    const cutoff = since.toISOString();
+    return rawEvents.filter((e) => e.ts >= cutoff);
+  }
   return rawEvents;
 }
 
@@ -399,7 +428,7 @@ export function adaptAllSessions(opts?: AdaptOptions): TelemetryEvent[] {
   for (const file of files) {
     const project = projectFromPath(file);
     if (opts?.projects && !opts.projects.includes(project)) continue;
-    allEvents.push(...adaptFile(file, project));
+    allEvents.push(...adaptFile(file, project, opts?.since));
   }
 
   allEvents.push(...readDirectives(opts?.since));
