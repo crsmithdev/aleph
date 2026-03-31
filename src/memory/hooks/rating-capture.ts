@@ -14,7 +14,7 @@
 import { appendFileSync } from "fs";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
-import { dataPaths, ensureDataDirs } from "../../paths.ts";
+import { dataPaths, ensureDataDirs } from "../../data/src/paths.ts";
 
 const TAG = "rating-capture";
 const ratingsFile = Bun.env.RATINGS_FILE ?? dataPaths.ratings;

@@ -17,7 +17,7 @@ import { existsSync, writeFileSync, unlinkSync, mkdirSync } from "fs";
 import { dirname } from "path";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
-import { dataPaths } from "../../paths.ts";
+import { dataPaths } from "../../data/src/paths.ts";
 
 const TAG = "git-pre-require-commit";
 const WARN_GROUPS = 3;

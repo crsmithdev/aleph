@@ -20,7 +20,7 @@
 import { readFileSync, writeFileSync, existsSync, unlinkSync } from "fs";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
-import { dataPaths, ensureDataDirs } from "../../paths.ts";
+import { dataPaths, ensureDataDirs } from "../../data/src/paths.ts";
 import { E2E_CMD, ARTIFACT_CMD, UNIT_TEST_CMD, HOOK_INVOCATION } from "../../eval/patterns.ts";
 
 const TAG = "quality-stop-check-e2e";

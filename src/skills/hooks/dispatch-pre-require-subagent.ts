@@ -14,7 +14,7 @@
 import { existsSync, readFileSync } from "fs";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
-import { dataPaths } from "../../paths.ts";
+import { dataPaths } from "../../data/src/paths.ts";
 
 const TAG = "dispatch-pre-require-subagent";
 

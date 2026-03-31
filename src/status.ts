@@ -6,7 +6,7 @@ import { readdirSync, readFileSync, existsSync, statSync } from "fs";
 import { resolve } from "path";
 import { execSync, spawnSync } from "child_process";
 import { getStatus } from "./telemetry/src/index.js";
-import { claudePaths, dataPaths, externalPaths } from "./paths.ts";
+import { claudePaths, dataPaths, externalPaths } from "./data/src/paths.ts";
 
 const root = resolve(import.meta.dir);
 

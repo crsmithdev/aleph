@@ -15,7 +15,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { join, basename } from "path";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
-import { claudePaths } from "../../paths.ts";
+import { claudePaths } from "../../data/src/paths.ts";
 
 const TAG = "context-precompact-backup";
 let input: any;

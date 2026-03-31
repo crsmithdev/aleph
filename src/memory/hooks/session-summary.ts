@@ -18,7 +18,7 @@ import { writeFileSync } from "fs";
 import { resolve } from "path";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
-import { dataPaths, ensureDataDirs } from "../../paths.ts";
+import { dataPaths, ensureDataDirs } from "../../data/src/paths.ts";
 import { parseTranscript } from "../parse-transcript.ts";
 
 const TAG = "session-summary";

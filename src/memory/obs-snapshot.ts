@@ -6,7 +6,7 @@
 import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync } from "fs";
 import { dirname } from "path";
-import { dataPaths, externalPaths } from "../paths.ts";
+import { dataPaths, externalPaths } from "../data/src/paths.ts";
 
 const constructDbPath = dataPaths.db;
 const memoryDbPath = externalPaths.memoryDb;

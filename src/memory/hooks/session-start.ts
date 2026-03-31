@@ -23,7 +23,7 @@ import { execSync } from "child_process";
 import { Database } from "bun:sqlite";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
-import { dataPaths, externalPaths } from "../../paths.ts";
+import { dataPaths, externalPaths } from "../../data/src/paths.ts";
 
 const TAG = "session-start";
 

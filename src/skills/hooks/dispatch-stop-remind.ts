@@ -15,7 +15,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { dirname } from "path";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
-import { dataPaths } from "../../paths.ts";
+import { dataPaths } from "../../data/src/paths.ts";
 
 const TAG = "dispatch-stop-remind";
 

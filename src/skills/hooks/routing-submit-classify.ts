@@ -24,7 +24,7 @@ import { resolve, dirname } from "path";
 import { execSync } from "child_process";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
-import { dataPaths } from "../../paths.ts";
+import { dataPaths } from "../../data/src/paths.ts";
 
 const TAG = "routing-submit-classify";
 const root = resolve(dirname(Bun.main), "../..");
