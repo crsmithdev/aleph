@@ -109,7 +109,7 @@ On `Notification` events (`idle`, `permission`, `complete`):
 
 ## Skills
 
-Skills are domain-specific playbooks activated by keyword matching. Each lives in `construct/skills/<name>/SKILL.md`.
+Skills are domain-specific playbooks activated by keyword matching. Each lives in `src/skills/<name>/SKILL.md` (source) and is installed to `construct/skills/<name>/SKILL.md`.
 
 | Skill | Activated by | Purpose |
 |---|---|---|
@@ -211,7 +211,7 @@ Stats: total cost, daily average, cache efficiency %, total tokens (input/output
 
 ### Sessions (`/observability/sessions`)
 
-Stats: session count, avg duration, user/assistant messages, lines changed, commits. Daily session chart. Activity chart. Session table (up to 50) with duration, messages, tools, cost, lines, commits, branch. Subagent sessions shown indented. "Subagent" and "Dispatcher" filter toggles. Sessions-by-project table.
+Stats: session count, avg duration, user/assistant messages, lines changed, commits. Daily session chart. Activity chart. Session table (up to 50) with duration, messages, tools, cost, lines, commits, branch, and Gate Mode column showing `inline` (yellow) / `dispatched` (purple) / `—` badges per session. Subagent sessions shown indented. "Subagent" and "Dispatcher" filter toggles. Sessions-by-project table.
 
 ### Session Trace (`/observability/sessions/:id`)
 
