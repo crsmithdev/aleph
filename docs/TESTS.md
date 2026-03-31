@@ -205,3 +205,6 @@ Multi-trial A/B runner. Runs N trials comparing `with-hook` (quality gate Stop h
 ## Coverage gaps
 
 - **Git hooks** (`git-pre-require-commit.ts`) — no tests
+- **Isolation hook** (`isolation-pre-block-prod-edit.ts`) — no tests
+- **Dispatch stop remind** (`dispatch-stop-remind.ts`) — no tests
+- **Quality pre gate** (`quality-pre-require-e2e.ts`) — no tests
