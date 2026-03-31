@@ -24,21 +24,6 @@ Code-level improvements, fixes, and bugs. Managed via `/todo`.
 - [ ] [medium] [misnamed identifiers] `ringColor` in `ColorDots.tsx:42` is not a CSS property — selected ring color is a no-op
 - [ ] [medium] [redundant logic] `CategoryManager.tsx:72-74` color update only invalidates one goal's cache, not all goals using that category
 - [ ] [medium] [redundant logic] `errorsOnly` filter is client-side while pagination is server-side — count/display mismatch (`EventsPage.tsx:228`)
-- [ ] [low] [misnamed identifiers] `SessionTracePage.tsx:48` and `TurnTracePage.tsx:144` use `useState` for a value that never changes — should be const
-- [ ] [low] [redundant logic] `SummaryPage.tsx` parent and child both call `useSummary` with same args — pass data as prop instead
-- [ ] [low] [redundant logic] `modelColumns` defined inside render path, re-created every render — lift to module scope (`TokensCostPage.tsx:36`)
-- [ ] [low] [redundant logic] `accentColors` map re-created every render inside `StatCard` — lift to module scope (`StatCard.tsx:27`)
-- [ ] [low] [redundant logic] `ChartContainer.tsx:9` `fill={active ? 'currentColor' : 'currentColor'}` — both branches identical
-- [ ] [low] [redundant logic] `MemoryPage.tsx:292,300` type/tag selects bypass the "commit on Search" pattern — inconsistent with text search
-- [ ] [low] [duplicate utilities] Pagination controls duplicated above and below table — extract component (`EventsPage.tsx:326-378`)
-- [ ] [low] [complexity debt] `hideInactive`/`showUnused` state lifted to `HooksPage` but only used in `ByHookView` — push down
-- [ ] [low] [redundant logic] `TurnTracePage.tsx:297` IIFE to render event table — extract component or hoist the `const`
-- [ ] [low] [unreferenced functions] Delete `useGoalCategories` hook — never imported (`hooks.ts:95`)
-- [ ] [low] [complexity debt] Inline `obsQueryParams` into `obsQuery` — only called from one place (`observability-hooks.ts:13`)
-- [ ] [low] [complexity debt] Delete `src/ui/web/src/utils/cn.ts` — `cn()` is just `clsx()` with no `twMerge`; replace 28 imports with direct `clsx`
-- [ ] [low] [complexity debt] Remove `useChartType` hook — it's `useState` with a type narrowing, no encapsulated logic (`ChartContainer.tsx:36-39`)
-- [ ] [low] [complexity debt] `tooltipStyle()` is a zero-arg function returning a static object — make it a `const` (`chartTheme.ts:11-19`)
-- [ ] [low] [misnamed identifiers] `streak` type cast in `HabitsPage.tsx:77` — update `Habit` type instead of inline `as` hack
 
 ## Hooks
 
