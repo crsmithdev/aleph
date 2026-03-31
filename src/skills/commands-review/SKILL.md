@@ -45,7 +45,7 @@ Add your own checks below:
 
 ## Process
 
-1. List all command files in `dotclaude/commands/`
+1. List all command files in `dotclaude/commands/` and `.claude/commands/`
 2. Read each fully
 3. Run each check above
 4. Cross-reference with skills — does any command duplicate a skill's trigger?
