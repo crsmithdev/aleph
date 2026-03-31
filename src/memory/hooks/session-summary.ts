@@ -15,6 +15,7 @@
  * Never blocks. Exits 0 on all paths.
  */
 import { writeFileSync } from "fs";
+import { resolve } from "path";
 import { trace } from "../../trace.ts";
 import { dataPaths, ensureDataDirs } from "../../paths.ts";
 import { parseTranscript } from "../parse-transcript.ts";
