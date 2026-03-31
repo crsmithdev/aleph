@@ -66,21 +66,23 @@ Ratings 1-3 trigger a console message: `[Construct] Low rating (N) — store wha
 
 ### Ending a session
 
-On `Stop`, four hooks fire:
+On `Stop`, five hooks fire:
 
 **1. Verification gate** (`quality-stop-check-e2e.ts`) — checks whether the current turn included e2e evidence and an artifact when files were edited:
 - If no edits: skips silently.
 - If edits present: checks for e2e signals (devserver startup, Playwright/Cypress, browser MCP tools) and artifacts (screenshots, saved output).
 - If both e2e evidence and artifact are found: passes silently.
-- Otherwise: emits a one-shot reminder listing edited files and what was missing.
+- Otherwise: writes a `require-e2e` marker file and emits a one-shot reminder listing edited files and what was missing. The next Edit or Write tool call is hard-blocked (exit 2) by `quality-pre-require-e2e.ts` until e2e evidence is provided.
 
-**2. Context monitor** (`context-stop-monitor.ts`) — reads token usage from the last assistant message. Warns at 80% of context limit, critical alert at 90%.
+**2. Dispatch reminder** (`dispatch-stop-remind.ts`) — if the session ran inline (gate bypassed), emits a reminder to use dispatched mode for future tasks.
 
-**3. Session summary** (`session-summary.ts`) — writes a summary file if the session had >=4 messages:
+**3. Context monitor** (`context-stop-monitor.ts`) — reads token usage from the last assistant message. Warns at 80% of context limit, critical alert at 90%.
+
+**4. Session summary** (`session-summary.ts`) — writes a summary file if the session had >=4 messages:
 - Output: `data/sessions/YYYY-MM-DD-HHMMSS.md`
 - Contains: intent, outcome, milestones, tools used, files edited, message counts, assistant notes.
 
-**4. Memory extraction** (`memory-extract.ts`) — auto-extracts high-value memories and stores them in semantic memory:
+**5. Memory extraction** (`memory-extract.ts`) — auto-extracts high-value memories and stores them in semantic memory:
 - Skips if session is not substantive (<6 messages or no edits).
 - Skips if Claude already called `memory_store` voluntarily.
 - Extracts: session summary, user corrections, error resolutions.
@@ -133,8 +135,8 @@ Skills are domain-specific playbooks activated by keyword matching. Each lives i
 |---------|----------|
 | `/gist` | Surface Claude's current mental model + project understanding |
 | `/goal` | Manage goals: list, create, update, delete, show, done, archive |
-| `/todo` | Manage todos: list, add, done, undone, delete |
-| `/finish` | Mark a todo or goal as done |
+| `/todo` | Manage todos: list, add, recurring, delete |
+| `/finish` | Mark a todo or goal as done (done/undone operations) |
 
 ### Project-level (`.claude/commands/` — Construct repo only)
 
