@@ -10,7 +10,7 @@ import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, lege
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { fmtNumber, shortDate, relativeTime, granLabel, rangeToDays } from '../../../utils/format';
-import { cn } from '../../../utils/cn';
+import { clsx } from 'clsx';
 
 type TypeRow = { type: string; count: number };
 type TagRow = { tag: string; count: number };
@@ -153,7 +153,7 @@ export function MemoryPage() {
             <button
               onClick={() => snapshot.mutate()}
               disabled={snapshot.isPending}
-              className={cn(
+              className={clsx(
                 'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
                 'bg-accent text-white hover:bg-accent-hover',
                 'disabled:opacity-50 disabled:cursor-not-allowed'

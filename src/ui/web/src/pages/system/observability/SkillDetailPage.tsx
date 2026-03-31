@@ -13,7 +13,7 @@ import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } fro
 import { fmtNumber, fmtPct, shortDate, dateTime, granLabel } from '../../../utils/format';
 import { MarkdownBlock } from '../../../components/data/MarkdownBlock';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
-import { cn } from '../../../utils/cn';
+import { clsx } from 'clsx';
 
 type InvocationRow = { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; userRequest?: string };
 
@@ -101,7 +101,7 @@ export function SkillDetailPage() {
               &larr; Skills
             </Link>
             <h1 className="text-2xl font-bold font-mono text-text-primary">{displayName}</h1>
-            <span className={cn(
+            <span className={clsx(
               'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
               isCommand
                 ? 'bg-accent/10 text-accent border border-accent/20'

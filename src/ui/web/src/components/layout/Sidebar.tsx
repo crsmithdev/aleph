@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { cn } from '../../utils/cn';
+import { clsx } from 'clsx';
 import { ThemeToggle } from './ThemeToggle';
 
 interface NavItem {
@@ -86,7 +86,7 @@ function SidebarLink({ to, label, icon, depth = 0 }: { to: string; label: string
     <NavLink
       to={to}
       className={({ isActive }) =>
-        cn(
+        clsx(
           'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors',
           depth > 0 && 'pl-9',
           isActive
@@ -107,7 +107,7 @@ export function Sidebar() {
 
   return (
     <aside
-      className={cn(
+      className={clsx(
         'flex flex-col border-r border-border-primary bg-bg-secondary transition-[width] duration-200',
         collapsed ? 'w-14' : 'w-60'
       )}
@@ -124,7 +124,7 @@ export function Sidebar() {
           className="rounded-md p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-tertiary transition-colors"
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          <svg className={cn('h-4 w-4 transition-transform', collapsed && 'rotate-180')} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+          <svg className={clsx('h-4 w-4 transition-transform', collapsed && 'rotate-180')} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5" />
           </svg>
         </button>
@@ -153,7 +153,7 @@ export function Sidebar() {
             key={item.to}
             to={item.children ? item.children[0].to : item.to}
             className={({ isActive }) =>
-              cn(
+              clsx(
                 'flex items-center justify-center rounded-md p-2 transition-colors',
                 isActive
                   ? 'bg-blue-500/10 text-blue-400'

@@ -11,7 +11,7 @@ import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtPct, fmtMs, shortDate, parseToolSource } from '../../../utils/format';
-import { cn } from '../../../utils/cn';
+import { clsx } from 'clsx';
 
 type RawToolRow = { name: string; count: number; errorCount: number; pct: number; active: boolean; avgMs?: number; p50Ms?: number; p95Ms?: number };
 type ToolRow = RawToolRow & { server: string; tool: string };
@@ -61,7 +61,7 @@ export function ToolsPage() {
       align: 'right',
       sortable: true,
       render: (row) => (
-        <span className={cn(row.errorCount > 0 && 'text-error font-medium')}>
+        <span className={clsx(row.errorCount > 0 && 'text-error font-medium')}>
           {row.errorCount > 0 ? fmtNumber(row.errorCount) : '-'}
         </span>
       ),
@@ -85,7 +85,7 @@ export function ToolsPage() {
       label: 'P95',
       align: 'right',
       sortable: true,
-      render: (row) => row.p95Ms !== undefined ? <span className={cn(row.p95Ms > 5000 && 'text-warning')}>{fmtMs(row.p95Ms)}</span> : <span className="text-text-tertiary">—</span>,
+      render: (row) => row.p95Ms !== undefined ? <span className={clsx(row.p95Ms > 5000 && 'text-warning')}>{fmtMs(row.p95Ms)}</span> : <span className="text-text-tertiary">—</span>,
     },
     {
       key: 'bar',

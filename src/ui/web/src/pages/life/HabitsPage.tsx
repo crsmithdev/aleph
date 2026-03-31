@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useHabits, useCreateHabit, useCompleteHabit, useUncompleteHabit, useUpdateHabit, useDeleteHabit } from '../../api/hooks';
 import { PageLoading } from '../../components/ui/Spinner';
-import { cn } from '../../utils/cn';
+import { clsx } from 'clsx';
 import type { Habit } from '../../types';
 
 function frequencyLabel(f: string) {
@@ -56,7 +56,7 @@ function HabitCreateForm({ onCreated }: { onCreated?: () => void }) {
 function StreakBadge({ streak }: { streak: number }) {
   if (streak === 0) return null;
   return (
-    <span className={cn(
+    <span className={clsx(
       'inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full',
       streak >= 7 ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning'
     )}>
@@ -98,7 +98,7 @@ function HabitRow({ habit }: { habit: Habit }) {
     <div className="group flex items-center gap-3 p-3 rounded-lg bg-bg-secondary border border-border-primary">
       <button
         onClick={handleToggle}
-        className={cn(
+        className={clsx(
           'flex-shrink-0 h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors',
           checked
             ? 'bg-success border-success text-white'
@@ -127,7 +127,7 @@ function HabitRow({ habit }: { habit: Habit }) {
           />
         ) : (
           <span
-            className={cn('text-sm cursor-pointer', checked ? 'line-through text-text-muted' : 'text-text-primary')}
+            className={clsx('text-sm cursor-pointer', checked ? 'line-through text-text-muted' : 'text-text-primary')}
             onClick={() => setEditing(true)}
           >
             {habit.title}

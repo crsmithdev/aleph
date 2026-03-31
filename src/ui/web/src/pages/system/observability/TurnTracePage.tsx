@@ -7,7 +7,7 @@ import { StatCard } from '../../../components/data/StatCard';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { type TimeRange } from '../../../components/data/TimeRangeSelector';
 import { fmtNumber, fmtMs, fmtCurrency, fmtToolName, cleanMessage } from '../../../utils/format';
-import { cn } from '../../../utils/cn';
+import { clsx } from 'clsx';
 
 type Span = {
   id: string;
@@ -229,7 +229,7 @@ export function TurnTracePage() {
         </span>
         <button
           onClick={() => setShowInternal(!showInternal)}
-          className={cn(
+          className={clsx(
             'flex items-center gap-1.5 rounded px-1.5 py-0.5 border transition-colors',
             showInternal
               ? 'border-border-primary bg-bg-secondary text-text-muted'
@@ -242,7 +242,7 @@ export function TurnTracePage() {
         {turn.model && (
           <span className="ml-auto font-mono">{turn.model}</span>
         )}
-        <span className={cn(!turn.model && 'ml-auto', 'text-text-disabled font-mono')}>
+        <span className={clsx(!turn.model && 'ml-auto', 'text-text-disabled font-mono')}>
           {showInternal ? fmtMs(turn.durationMs) : fmtMs(turn.durationMs - internalMs)} {showInternal ? 'total' : 'active'}
         </span>
       </div>
@@ -261,7 +261,7 @@ export function TurnTracePage() {
               return (
                 <div
                   key={seg.id}
-                  className={cn(
+                  className={clsx(
                     'relative flex flex-col items-center justify-center overflow-hidden transition-all border-r border-bg-primary/50',
                     styles.bg,
                     isSelected && 'ring-2 ring-accent ring-inset z-10',
@@ -272,12 +272,12 @@ export function TurnTracePage() {
                   title={`${seg.label}: ${fmtMs(seg.durationMs)}`}
                 >
                   {showLabel && (
-                    <span className={cn('text-[10px] font-mono truncate px-0.5 leading-tight', styles.text)}>
+                    <span className={clsx('text-[10px] font-mono truncate px-0.5 leading-tight', styles.text)}>
                       {seg.label}
                     </span>
                   )}
                   {showDuration && (
-                    <span className={cn('text-[9px] font-mono leading-tight', seg.kind === 'agent' ? 'text-white/70' : 'text-text-muted/70')}>
+                    <span className={clsx('text-[9px] font-mono leading-tight', seg.kind === 'agent' ? 'text-white/70' : 'text-text-muted/70')}>
                       {fmtMs(seg.durationMs)}
                     </span>
                   )}
@@ -312,7 +312,7 @@ export function TurnTracePage() {
                   return (
                     <React.Fragment key={seg.id}>
                     <tr
-                      className={cn(
+                      className={clsx(
                         'group cursor-pointer transition-colors border-b border-border-primary/40 last:border-b-0',
                         isSelected ? 'bg-bg-tertiary' : 'hover:bg-bg-secondary/40',
                       )}
@@ -322,14 +322,14 @@ export function TurnTracePage() {
                         {i + 1}
                       </td>
                       <td className="px-4 py-2.5 align-top">
-                        <span className={cn(
+                        <span className={clsx(
                           'inline-flex items-center px-1.5 py-px rounded text-[10px] font-semibold uppercase tracking-wide leading-tight',
                           styles.bg, 'border', styles.border, styles.text,
                         )}>
                           {seg.kind}
                         </span>
                       </td>
-                      <td className={cn(
+                      <td className={clsx(
                         'px-4 py-2.5 font-mono text-xs truncate max-w-0 align-top',
                         seg.isError ? 'text-error' : 'text-text-primary',
                       )}>
@@ -346,13 +346,13 @@ export function TurnTracePage() {
                       <td className="px-4 py-2.5 text-right font-mono text-xs text-text-disabled align-top">
                         {seg.span ? fmtMs(seg.span.startMs) : '—'}
                       </td>
-                      <td className={cn(
+                      <td className={clsx(
                         'px-4 py-2.5 text-right font-mono text-xs align-top',
                         seg.durationMs === 0 ? 'text-text-disabled' : 'text-text-primary',
                       )}>
                         {fmtMs(seg.durationMs)}
                       </td>
-                      <td className={cn(
+                      <td className={clsx(
                         'px-4 py-2.5 text-right font-mono text-[11px] align-top',
                         pct < 1 ? 'text-text-disabled' : pct > 50 ? 'text-accent' : 'text-text-muted',
                       )}>
@@ -360,7 +360,7 @@ export function TurnTracePage() {
                       </td>
                       <td className="px-4 py-2.5 pr-4 text-right align-top">
                         {(seg.detail || seg.subagentSessionId) && (
-                          <span className={cn(
+                          <span className={clsx(
                             'inline-block text-[10px] text-text-disabled transition-transform',
                             isSelected && 'rotate-90',
                           )}>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../api/client';
 import { fmtBytes } from '../../utils/format';
-import { cn } from '../../utils/cn';
+import { clsx } from 'clsx';
 
 // --- Types ---
 
@@ -201,7 +201,7 @@ function BackupSection() {
         <button
           onClick={createBackup}
           disabled={creating}
-          className={cn(
+          className={clsx(
             'px-3 py-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50',
             'text-white text-sm rounded-lg transition-colors'
           )}
@@ -211,7 +211,7 @@ function BackupSection() {
         <button
           onClick={loadBackups}
           disabled={loading}
-          className={cn(
+          className={clsx(
             'p-1.5 bg-bg-tertiary hover:bg-bg-hover disabled:opacity-50',
             'text-text-secondary rounded-lg transition-colors border border-border-primary'
           )}

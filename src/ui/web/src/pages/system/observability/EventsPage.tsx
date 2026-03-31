@@ -7,7 +7,7 @@ import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControl
 import { type TimeRange } from '../../../components/data/TimeRangeSelector';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { dateTime, fmtNumber, fmtMs, fmtToolName } from '../../../utils/format';
-import { cn } from '../../../utils/cn';
+import { clsx } from 'clsx';
 
 type EntryType =
   | 'tool_use'
@@ -93,7 +93,7 @@ function TypeBadge({ type, isError }: { type: string; isError?: boolean }) {
   const cls = classes[type] ?? 'bg-bg-tertiary text-text-muted border-border-primary';
 
   return (
-    <span className={cn('inline-block px-1.5 py-0.5 text-[10px] font-mono rounded border whitespace-nowrap', cls)}>
+    <span className={clsx('inline-block px-1.5 py-0.5 text-[10px] font-mono rounded border whitespace-nowrap', cls)}>
       {label}
     </span>
   );
@@ -210,14 +210,14 @@ function ExpandedRow({ row }: { row: EventRow }) {
         <div key={s.label} className="contents">
           <span className="text-text-muted font-medium whitespace-nowrap">{s.label}</span>
           {s.content.includes('\n') || s.content.length > 80 ? (
-            <pre className={cn(
+            <pre className={clsx(
               'font-mono whitespace-pre-wrap break-all max-h-48 overflow-auto rounded bg-bg-tertiary px-2 py-1',
               s.isError && 'text-error'
             )}>
               {s.content}
             </pre>
           ) : (
-            <span className={cn('font-mono text-text-primary', s.isError && 'text-error font-medium')}>
+            <span className={clsx('font-mono text-text-primary', s.isError && 'text-error font-medium')}>
               {s.content}
             </span>
           )}

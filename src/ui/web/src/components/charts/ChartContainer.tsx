@@ -1,5 +1,5 @@
 import { ResponsiveContainer } from 'recharts';
-import { cn } from '../../utils/cn';
+import { clsx } from 'clsx';
 import type { ReactNode } from 'react';
 
 function BarChartIcon({ active }: { active: boolean }) {
@@ -50,7 +50,7 @@ export function ChartContainer({
   const showToggle = chartType !== undefined && onChartTypeChange !== undefined;
 
   return (
-    <div className={cn('rounded-lg border border-border-primary bg-bg-secondary p-4', className)}>
+    <div className={clsx('rounded-lg border border-border-primary bg-bg-secondary p-4', className)}>
       {(title || showToggle) && (
         <div className="mb-3 flex items-center justify-between">
           {title && <h3 className="text-sm font-medium text-text-secondary">{title}</h3>}
@@ -58,7 +58,7 @@ export function ChartContainer({
             <div className="flex items-center gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
               <button
                 onClick={() => onChartTypeChange('line')}
-                className={cn(
+                className={clsx(
                   'flex items-center rounded px-1.5 py-1 text-text-muted transition-colors hover:text-text-primary',
                   chartType === 'line' && 'bg-bg-secondary text-text-primary shadow-sm'
                 )}
@@ -68,7 +68,7 @@ export function ChartContainer({
               </button>
               <button
                 onClick={() => onChartTypeChange('bar')}
-                className={cn(
+                className={clsx(
                   'flex items-center rounded px-1.5 py-1 text-text-muted transition-colors hover:text-text-primary',
                   chartType === 'bar' && 'bg-bg-secondary text-text-primary shadow-sm'
                 )}

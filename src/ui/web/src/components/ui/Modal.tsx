@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useRef } from 'react';
-import { cn } from '../../utils/cn';
+import { clsx } from 'clsx';
 
 export function Modal({
   open,
@@ -23,7 +23,7 @@ export function Modal({
     <dialog
       ref={ref}
       onClose={onClose}
-      className={cn(
+      className={clsx(
         'bg-bg-secondary text-text-primary rounded-lg p-0 backdrop:bg-black/50 max-w-lg w-full'
       )}
     >
@@ -31,7 +31,7 @@ export function Modal({
         <h2 className="text-lg font-semibold">{title}</h2>
         <button
           onClick={onClose}
-          className={cn(
+          className={clsx(
             'text-text-muted hover:text-text-primary text-xl leading-none',
             'w-7 h-7 flex items-center justify-center rounded hover:bg-bg-tertiary transition-colors'
           )}

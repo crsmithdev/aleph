@@ -12,7 +12,7 @@ import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { fmtNumber, fmtMs, relativeTime, shortDate, granLabel } from '../../../utils/format';
-import { cn } from '../../../utils/cn';
+import { clsx } from 'clsx';
 
 
 export function SubagentsPage() {
@@ -134,7 +134,7 @@ export function SubagentsPage() {
         onGranularityChange={setGranularity}
       >
         <button
-          className={cn(
+          className={clsx(
             'px-3 py-1 text-xs rounded-md border transition-colors',
             bgOnly
               ? 'bg-accent/20 border-accent text-accent'

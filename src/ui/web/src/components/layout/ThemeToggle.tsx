@@ -1,5 +1,5 @@
 import { useTheme } from '../../theme';
-import { cn } from '../../utils/cn';
+import { clsx } from 'clsx';
 
 export function ThemeToggle({ collapsed }: { collapsed?: boolean }) {
   const { theme, toggle } = useTheme();
@@ -7,7 +7,7 @@ export function ThemeToggle({ collapsed }: { collapsed?: boolean }) {
   return (
     <button
       onClick={toggle}
-      className={cn(
+      className={clsx(
         'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
         'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
       )}

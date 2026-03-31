@@ -6,7 +6,7 @@ import { GoalForm } from '../../components/goals/GoalForm';
 import { Button } from '../../components/ui/Button';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
-import { cn } from '../../utils/cn';
+import { clsx } from 'clsx';
 
 const defaultFilters: GoalFilterState = {
   state: '',
@@ -54,7 +54,7 @@ export function GoalsPage() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setGroupBy(groupBy === 'none' ? 'category' : 'none')}
-            className={cn(
+            className={clsx(
               'px-2.5 py-1.5 rounded text-xs font-medium transition-colors',
               groupBy === 'category'
                 ? 'bg-accent-subtle text-accent border border-accent/40'

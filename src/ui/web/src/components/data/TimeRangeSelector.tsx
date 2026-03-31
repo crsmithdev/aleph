@@ -1,4 +1,4 @@
-import { cn } from '../../utils/cn';
+import { clsx } from 'clsx';
 
 export type TimeRange = 'session' | '1h' | '1d' | '7d' | '30d';
 export type Granularity = 'minute' | 'hour' | 'day';
@@ -30,14 +30,14 @@ export function TimeRangeSelector({
   className?: string;
 }) {
   return (
-    <div className={cn('flex items-center gap-3', className)}>
+    <div className={clsx('flex items-center gap-3', className)}>
       {onGranularityChange && granularity && (
         <div className="flex gap-1 border-r border-border-primary pr-3">
           {granularities.map((g) => (
             <button
               key={g.value}
               onClick={() => onGranularityChange(g.value)}
-              className={cn(
+              className={clsx(
                 'rounded-md px-2 py-1 text-xs font-medium transition-colors',
                 granularity === g.value
                   ? 'bg-bg-tertiary text-text-primary'
@@ -54,7 +54,7 @@ export function TimeRangeSelector({
           <button
             key={p.value}
             onClick={() => onChange(p.value)}
-            className={cn(
+            className={clsx(
               'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
               value === p.value
                 ? 'bg-accent text-white'

@@ -26,7 +26,7 @@ import { CategoryManager } from '../../components/goals/CategoryManager';
 import { NoteEditor } from '../../components/notes/NoteEditor';
 import { HistoryTimeline } from '../../components/history/HistoryTimeline';
 import { PageLoading } from '../../components/ui/Spinner';
-import { cn } from '../../utils/cn';
+import { clsx } from 'clsx';
 
 const priorityOptions = PRIORITY.map((p) => ({
   value: p,
@@ -285,7 +285,7 @@ export function GoalDetailPage() {
             <select
               value={goal.priority}
               onChange={(e) => handleUpdate({ priority: e.target.value })}
-              className={cn(
+              className={clsx(
                 'px-2 py-0.5 rounded text-xs font-medium border-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent appearance-none pr-5',
                 priorityColors[goal.priority] ?? 'bg-bg-tertiary text-text-muted',
               )}
@@ -298,7 +298,7 @@ export function GoalDetailPage() {
             <select
               value={goal.state}
               onChange={(e) => handleUpdate({ state: e.target.value })}
-              className={cn(
+              className={clsx(
                 'px-2 py-0.5 rounded text-xs font-medium capitalize border-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent appearance-none pr-5',
                 stateColors[goal.state] ?? 'bg-bg-tertiary text-text-muted',
               )}
@@ -385,11 +385,11 @@ export function GoalDetailPage() {
           <div className="flex flex-col gap-1">
             {linkedTodos.map((todo) => (
               <div key={todo.id} className="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary border border-border-primary rounded group">
-                <span className={cn('flex-1 text-sm', todo.done ? 'line-through text-text-disabled' : 'text-text-primary')}>
+                <span className={clsx('flex-1 text-sm', todo.done ? 'line-through text-text-disabled' : 'text-text-primary')}>
                   {todo.title}
                 </span>
                 {todo.dueDate && (
-                  <span className={cn('text-xs', todo.dueDate < new Date().toISOString().slice(0, 10) ? 'text-red-400' : 'text-text-disabled')}>
+                  <span className={clsx('text-xs', todo.dueDate < new Date().toISOString().slice(0, 10) ? 'text-red-400' : 'text-text-disabled')}>
                     {new Date(todo.dueDate + 'T00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                   </span>
                 )}

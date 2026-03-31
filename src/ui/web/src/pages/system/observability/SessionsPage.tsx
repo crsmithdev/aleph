@@ -12,7 +12,7 @@ import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, lege
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { useNavigate } from 'react-router-dom';
 import { fmtNumber, fmtMs, fmtCurrency, shortDate, granLabel, relativeTime, fmtProject, fmtDuration } from '../../../utils/format';
-import { cn } from '../../../utils/cn';
+import { clsx } from 'clsx';
 
 type ProjectRow = { project: string; sessions: number };
 type ActivityRow = { date: string; count: number };
@@ -214,7 +214,7 @@ export function SessionsPage() {
         {childCount > 0 && (
           <button
             onClick={() => setIncludeChildSubagents(!includeChildSubagents)}
-            className={cn(
+            className={clsx(
               'flex items-center gap-1.5 rounded px-2 py-1 text-xs border transition-colors',
               includeChildSubagents
                 ? 'border-accent/40 bg-accent/10 text-accent'
@@ -228,7 +228,7 @@ export function SessionsPage() {
         {spawnerCount > 0 && (
           <button
             onClick={() => setOnlyWithSubagents(!onlyWithSubagents)}
-            className={cn(
+            className={clsx(
               'flex items-center gap-1.5 rounded px-2 py-1 text-xs border transition-colors',
               onlyWithSubagents
                 ? 'border-accent/40 bg-accent/10 text-accent'

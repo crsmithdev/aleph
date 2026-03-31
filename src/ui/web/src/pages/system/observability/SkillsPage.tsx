@@ -11,7 +11,7 @@ import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtPct, shortDate } from '../../../utils/format';
-import { cn } from '../../../utils/cn';
+import { clsx } from 'clsx';
 
 type SkillRow = {
   skill: string;
@@ -62,7 +62,7 @@ export function SkillsPage() {
       label: 'Name',
       sortable: true,
       render: (row) => (
-        <span className={cn('font-mono', row.unused ? 'text-text-muted' : 'text-text-primary')}>
+        <span className={clsx('font-mono', row.unused ? 'text-text-muted' : 'text-text-primary')}>
           {displayName(row)}
           {row.unused && <span className="ml-2 text-[10px] text-text-disabled uppercase">unused</span>}
         </span>
@@ -74,7 +74,7 @@ export function SkillsPage() {
       sortable: true,
       width: '6rem',
       render: (row) => (
-        <span className={cn(
+        <span className={clsx(
           'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
           row.type === 'command'
             ? 'bg-accent/10 text-accent border border-accent/20'
@@ -105,7 +105,7 @@ export function SkillsPage() {
       render: (row) => (
         <div className="h-2 w-full rounded-full bg-bg-tertiary">
           <div
-            className={cn('h-2 rounded-full', row.type === 'command' ? 'bg-accent' : 'bg-purple-500')}
+            className={clsx('h-2 rounded-full', row.type === 'command' ? 'bg-accent' : 'bg-purple-500')}
             style={{ width: `${(row.count / maxCount) * 100}%` }}
           />
         </div>
@@ -126,7 +126,7 @@ export function SkillsPage() {
           <button
             key={t}
             onClick={() => setTypeFilter(t)}
-            className={cn(
+            className={clsx(
               'flex items-center gap-1.5 rounded px-2 py-1 text-xs border transition-colors',
               typeFilter === t
                 ? 'border-accent/40 bg-accent/10 text-accent'

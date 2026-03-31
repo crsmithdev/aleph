@@ -3,7 +3,7 @@ import { useSummary } from '../../api/hooks';
 import { StatCard } from '../../components/data/StatCard';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
-import { cn } from '../../utils/cn';
+import { clsx } from 'clsx';
 import { toDateStr, longDate } from '../../utils/format';
 
 type PeriodSummaryData = {
@@ -56,7 +56,7 @@ function PeriodSummary({ start, end, heading, data, isLoading }: PeriodSummaryPr
         <button
           onClick={handleCopy}
           disabled={isLoading}
-          className={cn(
+          className={clsx(
             'px-3 py-1 text-xs rounded-md border transition-colors',
             copied
               ? 'bg-success/10 border-success text-success'
@@ -176,7 +176,7 @@ export function SummaryPage() {
             <button
               key={p.value}
               onClick={() => setPreset(p.value)}
-              className={cn(
+              className={clsx(
                 'px-3 py-1.5 text-sm rounded-lg border transition-colors',
                 preset === p.value
                   ? 'bg-accent border-accent text-white'

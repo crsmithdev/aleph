@@ -11,7 +11,7 @@ import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtMs, fmtPct, shortDate, dateTime } from '../../../utils/format';
-import { cn } from '../../../utils/cn';
+import { clsx } from 'clsx';
 
 type HookRow = {
   command: string;
@@ -71,7 +71,7 @@ function ByHookView({ range, granularity }: {
       label: 'Hook',
       sortable: true,
       render: (row) => (
-        <span className={cn('font-mono', row.count === 0 ? 'text-text-muted' : 'text-text-primary')}>
+        <span className={clsx('font-mono', row.count === 0 ? 'text-text-muted' : 'text-text-primary')}>
           {row.command}
           {row.count === 0 && <span className="ml-2 text-[10px] text-text-disabled uppercase">unused</span>}
         </span>
@@ -124,7 +124,7 @@ function ByHookView({ range, granularity }: {
       align: 'right',
       sortable: true,
       render: (row) => (
-        <span className={cn(row.errors > 0 && 'text-error font-medium')}>
+        <span className={clsx(row.errors > 0 && 'text-error font-medium')}>
           {row.errors > 0 ? fmtNumber(row.errors) : '—'}
         </span>
       ),
@@ -135,7 +135,7 @@ function ByHookView({ range, granularity }: {
       align: 'right',
       sortable: true,
       render: (row) => (
-        <span className={cn(row.successRate < 95 && 'text-warning', row.successRate < 80 && 'text-error')}>
+        <span className={clsx(row.successRate < 95 && 'text-warning', row.successRate < 80 && 'text-error')}>
           {fmtPct(row.successRate)}
         </span>
       ),
@@ -153,7 +153,7 @@ function ByHookView({ range, granularity }: {
       align: 'right',
       sortable: true,
       render: (row) => (
-        <span className={cn(row.p95Ms > 500 && 'text-warning')}>
+        <span className={clsx(row.p95Ms > 500 && 'text-warning')}>
           {fmtMs(row.p95Ms)}
         </span>
       ),
@@ -188,7 +188,7 @@ function ByHookView({ range, granularity }: {
                 <div key={name} className="rounded-lg border border-border-primary bg-bg-secondary p-3">
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-xs text-text-primary">{name}</span>
-                    <span className={cn(
+                    <span className={clsx(
                       'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium',
                       stats.activeNow
                         ? 'bg-warning/10 text-warning border border-warning/20'
@@ -208,7 +208,7 @@ function ByHookView({ range, granularity }: {
                     </div>
                     <div>
                       <span className="text-text-muted">Catch %</span>
-                      <div className={cn('font-medium', catchRate > 50 ? 'text-warning' : 'text-text-primary')}>
+                      <div className={clsx('font-medium', catchRate > 50 ? 'text-warning' : 'text-text-primary')}>
                         {stats.writes > 0 ? fmtPct(catchRate) : '—'}
                       </div>
                     </div>
@@ -294,7 +294,7 @@ function ByEventView({ range }: { range: TimeRange }) {
                   <div key={i} className="flex items-center gap-2 text-xs">
                     <span className="font-mono text-text-primary">{h.command}</span>
                     {h.durationMs !== undefined && (
-                      <span className={cn('text-text-muted', h.durationMs > 500 && 'text-warning')}>
+                      <span className={clsx('text-text-muted', h.durationMs > 500 && 'text-warning')}>
                         {fmtMs(h.durationMs)}
                       </span>
                     )}
@@ -325,7 +325,7 @@ function ByEventView({ range }: { range: TimeRange }) {
             <button
               key={ev.event}
               onClick={() => setEventFilter(eventFilter === ev.event ? null : ev.event)}
-              className={cn(
+              className={clsx(
                 'rounded-lg border p-4 text-left transition-colors',
                 eventFilter === ev.event
                   ? 'border-accent bg-accent/10'
@@ -389,7 +389,7 @@ export function HooksPage() {
         <div className="flex items-center gap-1 rounded-md border border-border-primary bg-bg-secondary p-0.5">
           <button
             onClick={() => setView('by-hook')}
-            className={cn(
+            className={clsx(
               'rounded px-2.5 py-1 text-xs transition-colors',
               view === 'by-hook'
                 ? 'bg-accent text-white'
@@ -400,7 +400,7 @@ export function HooksPage() {
           </button>
           <button
             onClick={() => setView('by-event')}
-            className={cn(
+            className={clsx(
               'rounded px-2.5 py-1 text-xs transition-colors',
               view === 'by-event'
                 ? 'bg-accent text-white'

@@ -8,7 +8,7 @@ import { DataTable, type Column } from '../../../components/data/DataTable';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { type TimeRange } from '../../../components/data/TimeRangeSelector';
 import { fmtNumber, fmtMs, fmtCurrency, dateTime, fmtDuration, cleanMessage } from '../../../utils/format';
-import { cn } from '../../../utils/cn';
+import { clsx } from 'clsx';
 
 type TurnRow = {
   index: number;
@@ -126,7 +126,7 @@ export function SessionTracePage() {
       label: 'Duration',
       align: 'right',
       width: '5rem',
-      render: (row) => <span className={cn('font-mono text-xs', row.durationMs > 30000 ? 'text-warning' : 'text-text-muted')}>{fmtMs(row.durationMs)}</span>,
+      render: (row) => <span className={clsx('font-mono text-xs', row.durationMs > 30000 ? 'text-warning' : 'text-text-muted')}>{fmtMs(row.durationMs)}</span>,
     },
   ];
 
@@ -191,7 +191,7 @@ export function SessionTracePage() {
           {toolTurnCount < turnRows.length && (
             <button
               onClick={() => setToolOnly(!toolOnly)}
-              className={cn(
+              className={clsx(
                 'flex items-center gap-1.5 rounded px-2 py-1 text-xs border transition-colors',
                 toolOnly
                   ? 'border-accent/40 bg-accent/10 text-accent'
@@ -205,7 +205,7 @@ export function SessionTracePage() {
           {subagentTurnCount > 0 && (
             <button
               onClick={() => setSubagentOnly(!subagentOnly)}
-              className={cn(
+              className={clsx(
                 'flex items-center gap-1.5 rounded px-2 py-1 text-xs border transition-colors',
                 subagentOnly
                   ? 'border-accent/40 bg-accent/10 text-accent'

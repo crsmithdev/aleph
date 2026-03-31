@@ -1,4 +1,4 @@
-import { cn } from '../../utils/cn';
+import { clsx } from 'clsx';
 
 const PRESET_COLORS = [
   '#ef4444', // red
@@ -30,7 +30,7 @@ export function ColorDots({
           key={color}
           type="button"
           onClick={(e) => { e.stopPropagation(); onSelect(color); }}
-          className={cn(
+          className={clsx(
             'rounded-full flex-shrink-0 transition-all',
             dotSize,
             selected === color

@@ -1,4 +1,4 @@
-import { cn } from '../../utils/cn';
+import { clsx } from 'clsx';
 
 export const priorityColors: Record<string, string> = {
   low: 'bg-bg-tertiary text-text-muted',
@@ -19,7 +19,7 @@ export const stateColors: Record<string, string> = {
 export function PriorityBadge({ priority }: { priority: string }) {
   return (
     <span
-      className={cn(
+      className={clsx(
         'px-2 py-0.5 rounded text-xs font-medium',
         priorityColors[priority] ?? 'bg-bg-tertiary text-text-muted'
       )}
@@ -33,7 +33,7 @@ export function StateBadge({ state }: { state: string }) {
   const label = state.replace(/_/g, ' ');
   return (
     <span
-      className={cn(
+      className={clsx(
         'px-2 py-0.5 rounded text-xs font-medium capitalize',
         stateColors[state] ?? 'bg-bg-tertiary text-text-muted'
       )}

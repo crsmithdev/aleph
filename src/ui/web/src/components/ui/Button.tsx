@@ -1,5 +1,5 @@
 import { type ButtonHTMLAttributes, type ReactNode } from 'react';
-import { cn } from '../../utils/cn';
+import { clsx } from 'clsx';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
@@ -28,7 +28,7 @@ export function Button({
   const sizes = { sm: 'px-2.5 py-1 text-xs', md: 'px-3.5 py-1.5 text-sm' };
   return (
     <button
-      className={cn(base, variants[variant], sizes[size], className)}
+      className={clsx(base, variants[variant], sizes[size], className)}
       disabled={disabled || loading}
       {...props}
     >

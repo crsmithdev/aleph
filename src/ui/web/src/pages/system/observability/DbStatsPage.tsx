@@ -5,7 +5,7 @@ import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { fmtNumber, fmtBytes } from '../../../utils/format';
-import { cn } from '../../../utils/cn';
+import { clsx } from 'clsx';
 type TableRow = { name: string; rows: number };
 
 function SchemaView({ db, table }: { db: string; table: string }) {
@@ -27,7 +27,7 @@ function SchemaView({ db, table }: { db: string; table: string }) {
         {data.columns.map((col) => (
           <tr key={col.name} className="border-t border-border-primary/30">
             <td className="py-1 pr-4 font-mono text-text-primary">{col.name}</td>
-            <td className={cn('py-1 pr-4 font-mono', 'text-text-secondary')}>{col.type || 'any'}</td>
+            <td className={clsx('py-1 pr-4 font-mono', 'text-text-secondary')}>{col.type || 'any'}</td>
             <td className="py-1 pr-4 text-text-muted">
               {col.pk && <span className="mr-2 text-accent font-medium">PK</span>}
               {col.notnull && <span className="mr-2">NOT NULL</span>}

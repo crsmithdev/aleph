@@ -1,5 +1,5 @@
 import React from 'react';
-import { cn } from '../../utils/cn';
+import { clsx } from 'clsx';
 import { TimeRangeSelector, type Granularity, type TimeRange } from './TimeRangeSelector';
 
 export interface ObsControlBarProps {
@@ -59,7 +59,7 @@ export function FilterToggle({
   return (
     <button
       onClick={onToggle}
-      className={cn(
+      className={clsx(
         'px-3 py-1 text-xs rounded-md border transition-colors',
         active
           ? activeColorClasses[activeColor]

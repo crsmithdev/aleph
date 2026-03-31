@@ -65,20 +65,30 @@ export function cleanupTestEnv(te: TestEnv) {
 export interface HookResult {
   stdout: string;
   exitCode: number;
+  trace: string;
 }
 
-/** Run a hook as a subprocess, piping stdin. Returns stdout and exit code. */
+function splitTrace(raw: string): { stdout: string; trace: string } {
+  const lines = raw.split("\n");
+  const traceLines = lines.filter(l => l.startsWith("[trace:"));
+  const outLines = lines.filter(l => !l.startsWith("[trace:"));
+  return { stdout: outLines.join("\n"), trace: traceLines.join("\n") };
+}
+
+/** Run a hook as a subprocess, piping stdin. Returns stdout, trace, and exit code. */
 export function runHook(te: TestEnv, hookPath: string, stdin: string): HookResult {
   const absHook = join(te.root, "src", hookPath);
   const escaped = stdin.replace(/'/g, "'\\''");
   try {
-    const stdout = execSync(
+    const raw = execSync(
       `echo '${escaped}' | ${BUN} ${absHook} 2>/dev/null`,
       { encoding: "utf-8", timeout: 15000, env: te.env, cwd: te.root },
     );
-    return { stdout, exitCode: 0 };
+    const { stdout, trace } = splitTrace(raw);
+    return { stdout, trace, exitCode: 0 };
   } catch (err: any) {
-    return { stdout: err.stdout ?? "", exitCode: err.status ?? 1 };
+    const { stdout, trace } = splitTrace(err.stdout ?? "");
+    return { stdout, trace, exitCode: err.status ?? 1 };
   }
 }
 
@@ -144,10 +154,11 @@ export interface TestResults {
   passed: number;
   failed: number;
   failures: string[];
+  info: { name: string; pass: boolean }[];
 }
 
 export function createResults(): TestResults {
-  return { passed: 0, failed: 0, failures: [] };
+  return { passed: 0, failed: 0, failures: [], info: [] };
 }
 
 /** Assert a named boolean condition. Prints ✓/✗ and tracks results. */
@@ -163,8 +174,46 @@ export function check(r: TestResults, name: string, ok: boolean, detail?: string
   }
 }
 
+/** Record an informational check (not scored). */
+export function checkInfo(r: TestResults, name: string, ok: boolean) {
+  r.info.push({ name, pass: ok });
+}
+
+/** Run a hook and assert exit code + stdout substrings. */
+export function runAndCheck(
+  te: TestEnv, r: TestResults,
+  hookPath: string, name: string, stdin: string,
+  opts: { expectExit?: number; expectStdout?: string[] } = {},
+): HookResult {
+  const expectExit = opts.expectExit ?? 0;
+  const label = `${hookPath.split("/").pop()!.replace(".ts", "")}: ${name}`;
+  const result = runHook(te, hookPath, stdin);
+  if (expectExit !== 0 && result.exitCode !== 0) {
+    check(r, label, true);
+  } else if (expectExit !== 0 && result.exitCode === 0) {
+    check(r, label, false, `expected exit ${expectExit}, got 0`);
+  } else if (expectExit === 0 && result.exitCode !== 0) {
+    check(r, label, false, `exited ${result.exitCode}`);
+  } else if (opts.expectStdout) {
+    for (const sub of opts.expectStdout) {
+      if (!result.stdout.includes(sub)) {
+        check(r, label, false, `stdout missing "${sub}"`);
+        return result;
+      }
+    }
+    check(r, label, true);
+  } else {
+    check(r, label, true);
+  }
+  return result;
+}
+
 /** Print summary and exit with appropriate code. */
 export function printAndExit(r: TestResults): never {
+  if (r.info.length > 0) {
+    console.log("\n  Informational (not scored):");
+    for (const c of r.info) console.log(`  ${c.pass ? "✓" : "✗"} ${c.name}`);
+  }
   console.log(`\n${"=".repeat(50)}`);
   console.log(`${r.passed} passed, ${r.failed} failed`);
   if (r.failures.length > 0) {
@@ -172,6 +221,17 @@ export function printAndExit(r: TestResults): never {
     for (const f of r.failures) console.log(`  - ${f}`);
   }
   process.exit(r.failed > 0 ? 1 : 0);
+}
+
+/** Print summary without exiting. Returns exit code. */
+export function printSummary(r: TestResults): number {
+  if (r.info.length > 0) {
+    console.log("\n  Informational (not scored):");
+    for (const c of r.info) console.log(`  ${c.pass ? "✓" : "✗"} ${c.name}`);
+  }
+  const pct = r.passed + r.failed > 0 ? Math.round((r.passed / (r.passed + r.failed)) * 100) : 100;
+  console.log(`\n${r.passed} passed, ${r.failed} failed (${pct}%)`);
+  return r.failed > 0 ? 1 : 0;
 }
 
 // ── Sandbox / scenario management ───────────────────────────────

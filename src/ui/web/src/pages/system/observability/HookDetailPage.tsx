@@ -11,7 +11,7 @@ import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtMs, fmtPct, shortDate, dateTime, granLabel } from '../../../utils/format';
-import { cn } from '../../../utils/cn';
+import { clsx } from 'clsx';
 import { CodeBlock } from '../../../components/data/CodeBlock';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 
@@ -56,7 +56,7 @@ export function HookDetailPage() {
       width: '3rem',
       align: 'right',
       render: (row) => row.exitCode != null
-        ? <span className={cn('font-mono text-xs', row.exitCode !== 0 ? 'text-error font-medium' : 'text-text-muted')}>{row.exitCode}</span>
+        ? <span className={clsx('font-mono text-xs', row.exitCode !== 0 ? 'text-error font-medium' : 'text-text-muted')}>{row.exitCode}</span>
         : <span className="text-text-muted">—</span>,
     },
     {
@@ -65,7 +65,7 @@ export function HookDetailPage() {
       align: 'right',
       sortable: true,
       render: (row) => row.durationMs > 0 ? (
-        <span className={cn('font-mono text-xs', row.durationMs > 500 ? 'text-warning' : 'text-text-muted')}>
+        <span className={clsx('font-mono text-xs', row.durationMs > 500 ? 'text-warning' : 'text-text-muted')}>
           {fmtMs(row.durationMs)}
         </span>
       ) : <span className="text-text-muted">—</span>,
@@ -76,7 +76,7 @@ export function HookDetailPage() {
       render: (row: InvocationRow) => {
         const msg = row.errorMessage || row.output;
         if (!msg) return <span className="text-text-muted">—</span>;
-        return <span className={cn('font-mono text-xs truncate block max-w-xs', row.isError ? 'text-error' : 'text-text-muted')} title={msg}>{msg.slice(0, 80)}{msg.length > 80 ? '...' : ''}</span>;
+        return <span className={clsx('font-mono text-xs truncate block max-w-xs', row.isError ? 'text-error' : 'text-text-muted')} title={msg}>{msg.slice(0, 80)}{msg.length > 80 ? '...' : ''}</span>;
       },
     }] : []) as Column<InvocationRow>[],
     {
@@ -101,7 +101,7 @@ export function HookDetailPage() {
             {data.event && (
               <span className="rounded-md bg-bg-tertiary px-2 py-0.5 text-xs text-text-muted">{data.event}</span>
             )}
-            <span className={cn(
+            <span className={clsx(
               'inline-block h-2.5 w-2.5 rounded-full',
               data.active ? 'bg-success' : 'bg-text-muted/30'
             )} title={data.active ? 'Active' : 'Removed'} />

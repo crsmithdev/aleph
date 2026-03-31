@@ -1,5 +1,5 @@
 import React, { useState, type ReactNode } from 'react';
-import { cn } from '../../utils/cn';
+import { clsx } from 'clsx';
 
 export interface Column<T> {
   key: string;
@@ -67,14 +67,14 @@ export function DataTable<T>({
   }
 
   return (
-    <div className={cn('overflow-hidden rounded-lg border border-border-primary', className)}>
+    <div className={clsx('overflow-hidden rounded-lg border border-border-primary', className)}>
       <table className="w-full table-fixed text-sm">
         <thead>
           <tr className="border-b border-border-primary bg-bg-secondary">
             {columns.map((col) => (
               <th
                 key={col.key}
-                className={cn(
+                className={clsx(
                   'px-4 py-2.5 text-xs font-medium text-text-muted',
                   col.align === 'right' ? 'text-right' : 'text-left',
                   col.sortable && 'cursor-pointer select-none hover:text-text-secondary'
@@ -106,7 +106,7 @@ export function DataTable<T>({
               <React.Fragment key={rowKey}>
                 <tr
                   onClick={handleClick}
-                  className={cn(
+                  className={clsx(
                     'border-b border-border-primary/50 transition-colors',
                     index % 2 === 1 && 'bg-bg-secondary/30',
                     (onRowClick || onExpandToggle) && 'cursor-pointer hover:bg-bg-tertiary',
@@ -117,7 +117,7 @@ export function DataTable<T>({
                   {columns.map((col) => (
                     <td
                       key={col.key}
-                      className={cn(
+                      className={clsx(
                         'px-4 py-2.5 align-middle',
                         col.align === 'right' ? 'text-right' : 'text-left'
                       )}
