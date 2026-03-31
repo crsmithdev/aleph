@@ -21,7 +21,7 @@ All `SKILL.md` files in `src/skills/*/`, plus `src/skills/skill-rules.json`.
 
 **Registration** — Every skill directory has a matching entry in skill-rules.json. Keywords are specific enough to avoid false triggers and broad enough to catch real use. No orphaned directories without rules. No rules pointing to missing skills. (Remove completely — no orphaned artifacts.)
 
-**Code over instructions** — If a skill's process describes mechanical steps that could be scripted (file scanning, pattern matching, counting), those steps should be in code, not instructions. The skill prompt should handle judgment; code handles mechanics. (Commandment 2: code over AI instructions.)
+**Code over instructions** — If a skill's process describes mechanical steps that could be scripted (file scanning, pattern matching, counting), those steps should be in code, not instructions. The skill prompt should handle judgment; code handles mechanics. (Code over AI instructions; TypeScript over Bash.)
 
 **Vague or ambiguous** — Could the process steps be interpreted multiple ways? Would two agents do different things given the same input? Suggest concrete rewrites.
 
