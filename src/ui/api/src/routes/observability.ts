@@ -142,7 +142,7 @@ function readSessionGateInfo(): Map<string, SessionGateInfo> {
         const info = map.get(sid)!;
         if (entry.hook === 'inline-override') {
           info.inlineOverride = true;
-        } else if (entry.hook === 'dispatch-pre-require-subagent') {
+        } else if (entry.hook === 'dispatch-pre-require-subagent' && entry.event === 'PreToolUse') {
           info.dispatchBlocks++;
         } else if (entry.hook === 'dispatch-pre-require-subagent:inline-override') {
           info.inlineOverride = true;

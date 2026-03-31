@@ -21,8 +21,6 @@ const TAG = "dispatch-pre-require-subagent";
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
 catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(1); }
-reportHook(TAG, "PreToolUse", input.session_id);
-
 const sessionId = input.session_id ?? "";
 const toolName = input.tool_name ?? "";
 
@@ -54,5 +52,6 @@ if (existsSync(currentSessionIdPath)) {
 }
 
 trace(TAG, `BLOCKED: ${toolName} — main session without inline override`);
+reportHook(TAG, "PreToolUse", sessionId);
 console.log(`[Construct] Dispatch required — this task should be dispatched to a background Agent (run_in_background: true). Use /inline to override for this session.`);
 process.exit(2);
