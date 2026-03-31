@@ -62,6 +62,3 @@ export function calculateCost(
   );
 }
 
-export function getKnownModels(): string[] {
-  return Object.keys(PRICING);
-}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { calculateCost, getKnownModels } from "../src/pricing.js";
+import { calculateCost } from "../src/pricing.js";
 
 describe("pricing", () => {
   it("calculates sonnet cost correctly", () => {
@@ -30,14 +30,6 @@ describe("pricing", () => {
   it("returns 0 for unknown model", () => {
     const cost = calculateCost("gpt-4", 1_000_000, 1_000_000, 0, 0);
     expect(cost).toBe(0);
-  });
-
-  it("returns known models", () => {
-    const models = getKnownModels();
-    expect(models.length).toBeGreaterThan(0);
-    expect(models.some((m) => m.includes("opus"))).toBe(true);
-    expect(models.some((m) => m.includes("sonnet"))).toBe(true);
-    expect(models.some((m) => m.includes("haiku"))).toBe(true);
   });
 
   it("matches model prefixes correctly", () => {

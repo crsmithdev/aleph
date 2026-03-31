@@ -20,7 +20,6 @@ export type {
   SessionBucket,
   SessionMetric,
   ProjectBucket,
-  HourBucket,
   OverviewData,
   ToolsData,
   HooksData,
@@ -50,7 +49,7 @@ export type {
 // Re-export new types
 export type { TelemetryEvent } from "./event.js";
 
-export { calculateCost, getKnownModels } from "./pricing.js";
+export { calculateCost } from "./pricing.js";
 
 // Adapter (replaces parser)
 export { adaptAllSessions, adaptSessionsForDays, clearCache } from "./adapter.js";

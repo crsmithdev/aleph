@@ -136,11 +136,6 @@ export interface ProjectBucket {
   sessions: number;
 }
 
-export interface HourBucket {
-  hour: number;
-  count: number;
-}
-
 export interface OverviewData {
   sessions: number;
   messages: number;
