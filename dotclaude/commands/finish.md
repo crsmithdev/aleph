@@ -1,3 +1,6 @@
+---
+description: Mark a todo or goal as done
+---
 Mark a todo or goal as done via the goal-tracker MCP tools. Parse the user's intent from: $ARGUMENTS
 
 ## Actions

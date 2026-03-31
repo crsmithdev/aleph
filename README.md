@@ -46,15 +46,20 @@ src/                                      # source modules (installed to ~/.clau
 │   └── hooks/                           # session-start, rating-capture, session-summary, memory-extract
 ├── skills/
 │   ├── skill-rules.json                 # keyword routing config
-│   ├── hooks/routing-submit-classify.ts         # depth classification + skill eval
-│   ├── hooks/quality-post-format.ts                 # per-file lint/format on Edit/Write
-│   ├── hooks/quality-stop-check-e2e.ts             # e2e verification gate
-│   ├── hooks/context-stop-monitor.ts         # context window usage warning
-│   ├── hooks/quality-post-typecheck.ts                # TypeScript type-check on Edit/Write
-│   ├── hooks/isolation-pre-block-destructive-sql.ts                # block destructive SQL operations
-│   ├── hooks/context-precompact-backup.ts       # transcript backup before compaction
-│   ├── hooks/notify-event-toast.ts                  # WSL toast / macOS alert / terminal bell
-│   └── */SKILL.md                       # 18 skill playbooks (see Skills section)
+│   ├── hooks/routing-submit-classify.ts  # depth classification + skill matching
+│   ├── hooks/quality-post-format.ts      # per-file lint/format on Edit/Write
+│   ├── hooks/quality-post-typecheck.ts   # TypeScript type-check on Edit/Write
+│   ├── hooks/quality-stop-check-e2e.ts   # e2e verification gate
+│   ├── hooks/quality-pre-require-e2e.ts  # deferred hard-block on unverified edits
+│   ├── hooks/context-stop-monitor.ts     # context window usage warning
+│   ├── hooks/context-precompact-backup.ts # transcript backup before compaction
+│   ├── hooks/dispatch-pre-require-subagent.ts # dispatch gate for main session
+│   ├── hooks/dispatch-stop-remind.ts     # dispatch mode reminder on stop
+│   ├── hooks/git-pre-require-commit.ts   # require git commit before more edits
+│   ├── hooks/isolation-pre-block-destructive-sql.ts # block destructive SQL
+│   ├── hooks/isolation-pre-block-prod-edit.ts # block prod edits from dev
+│   ├── hooks/notify-event-toast.ts       # WSL toast / macOS alert / terminal bell
+│   └── */SKILL.md                        # 13 skill playbooks (see Skills section)
 ├── eval/
 │   ├── runner.ts                        # Agent SDK eval harness
 │   ├── scenarios/                       # test scenarios (broken-math, todo-app, todo-feature)
@@ -77,7 +82,8 @@ dotclaude/                                # install sources (installed to ~/.cla
     ├── gist.md                          # /gist slash command
     ├── goal.md                          # /goal slash command
     ├── todo.md                          # /todo slash command
-    └── finish.md                        # /finish slash command
+    ├── finish.md                        # /finish slash command
+    └── inline.md                        # /inline dispatch gate override
 
 .claude/                                  # dev-time config only (never installed)
 ├── CLAUDE.md                            # dev-only rules, loaded at runtime for this repo
@@ -92,10 +98,15 @@ dotclaude/                                # install sources (installed to ~/.cla
 | UserPromptSubmit | rating-capture.ts | memory | Capture explicit N/10 ratings |
 | UserPromptSubmit | routing-submit-classify.ts | skills | Depth classification + verification gate + skill matching |
 | Stop | quality-stop-check-e2e.ts | skills | E2e verification gate |
+| Stop | dispatch-stop-remind.ts | skills | Dispatch mode reminder |
 | Stop | context-stop-monitor.ts | skills | Context window usage warning (80%/90%) |
 | Stop | session-summary.ts | memory | Structured session summary |
 | Stop | memory-extract.ts | memory | Auto-extract memories to semantic store |
+| PreToolUse | dispatch-pre-require-subagent.ts | skills | Block Edit/Write in main session (dispatch gate) |
+| PreToolUse | git-pre-require-commit.ts | skills | Require commit before more edits |
+| PreToolUse | quality-pre-require-e2e.ts | skills | Deferred hard-block after verification gate |
 | PreToolUse | isolation-pre-block-destructive-sql.ts | skills | Block destructive SQL operations |
+| PreToolUse | isolation-pre-block-prod-edit.ts | skills | Block production edits from dev repo |
 | PostToolUse | quality-post-format.ts | skills | Per-file lint/format on Edit/Write |
 | PostToolUse | quality-post-typecheck.ts | skills | TypeScript type-check on Edit/Write |
 | PreCompact | context-precompact-backup.ts | skills | Transcript backup before compaction |
@@ -110,19 +121,18 @@ The statusline (`ccstatusline`) is configured via the `statusLine` key in settin
 | Command | Module | Purpose |
 |---------|------|---------|
 | `/gist` | core | Surface Claude's current mental model + project understanding |
-| `/goal` | goals | Manage goals: list, create, update, delete, show, done, archive |
-| `/todo` | goals | Manage todos: list, add, done, undone, delete, recurring |
+| `/goal` | goals | Manage goals: list, create, update, delete, show, archive |
+| `/todo` | goals | Manage todos: list, add, recurring |
 | `/finish` | goals | Mark a todo or goal as done; undo completion; complete recurring todos |
+| `/inline` | skills | Override dispatch gate for the current session |
 
 ### Project-level (`.claude/commands/` — Construct repo only)
 
 | Command | Purpose |
 |---------|---------|
 | `/install` | Deploy repo to `~/.claude` with post-install verification |
-| `/trace` | Toggle hook tracing (or one-shot trace a command) |
-| `/audit` | Full project audit: code, refs, instructions, docs, spec |
+| `/audit` | Full project audit: code, docs |
 | `/devserver` | Start UI dev server on ports 5174/3002 |
-| `/todo` | File review items into `docs/TODO.md` |
 
 ## Identity Architecture
 

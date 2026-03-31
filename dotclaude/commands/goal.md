@@ -1,3 +1,6 @@
+---
+description: Manage goals (list, create, update, delete)
+---
 Manage goals via the goal-tracker MCP tools. Parse the user's intent from: $ARGUMENTS
 
 ## Actions

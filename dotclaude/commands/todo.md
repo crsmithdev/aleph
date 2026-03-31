@@ -1,3 +1,6 @@
+---
+description: Manage todos (list, add, recurring)
+---
 Manage todos via the goal-tracker MCP tools. Parse the user's intent from: $ARGUMENTS
 
 ## Actions
