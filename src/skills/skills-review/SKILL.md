@@ -27,7 +27,7 @@ All `SKILL.md` files in `src/skills/*/`, plus `src/skills/skill-rules.json`.
 
 **Contradictions** — Does this skill conflict with another skill, with CLAUDE.md rules, or with Commandments? Cite both locations. (No duplication between memory, CLAUDE.md, and docs.)
 
-**Impossible instructions** — References tools, files, MCP servers, or patterns that don't exist? Check that referenced paths exist on disk. (Commandment 1: nothing fails silently.)
+**Impossible instructions** — References tools, files, MCP servers, or patterns that don't exist? Check that referenced paths exist on disk. (Nothing fails silently.)
 
 **When to Use / When NOT to Use** — Are the trigger conditions clear and non-overlapping with other skills?
 
