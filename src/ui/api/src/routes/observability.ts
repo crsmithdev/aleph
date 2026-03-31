@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { resolve } from 'path';
-import { existsSync, readFileSync, readdirSync } from 'fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { claudePaths, dataPaths, getMemoryDbPath } from '@construct/data';
 import { Database } from 'bun:sqlite';
 import {
@@ -110,15 +110,15 @@ function checkHookActive(fullCommand: string): boolean {
   return path ? existsSync(path) : false;
 }
 
+function tryRead(path: string): string | undefined {
+  if (!existsSync(path)) return undefined;
+  try { return readFileSync(path, 'utf-8'); } catch { return undefined; }
+}
+
 function readHookSource(fullCommand: string): string | undefined {
   const path = extractHookPath(fullCommand);
-  if (!path || !existsSync(path)) return undefined;
-  try {
-    return readFileSync(path, 'utf-8');
-  } catch (e) {
-    console.error(`Failed to read hook source ${path}: ${(e as Error).message}`);
-    return undefined;
-  }
+  if (!path) return undefined;
+  return tryRead(path);
 }
 
 interface SessionGateInfo {
@@ -233,10 +233,6 @@ function getCommandNames(): Set<string> {
 
 function findSkillSource(name: string, projects?: string[]): string | undefined {
   const normalized = name.startsWith('/') ? name.slice(1) : name;
-  function tryRead(path: string): string | undefined {
-    if (!existsSync(path)) return undefined;
-    try { return readFileSync(path, 'utf-8'); } catch { return undefined; }
-  }
   // Check skill SKILL.md
   const skillMd = tryRead(resolve(claudePaths.skills, normalized, 'SKILL.md'));
   if (skillMd) return skillMd;
@@ -665,7 +661,6 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/db-stats', async () => {
-    const { statSync } = await import('fs');
     const constructDbPath = dataPaths.db;
     const memoryDbPath = getMemoryDbPath();
 
