@@ -15,7 +15,7 @@ export function CategoryChip({
       style={
         color
           ? { backgroundColor: `${color}20`, color }
-          : { backgroundColor: 'rgb(55 65 81)', color: 'rgb(209 213 219)' }
+          : { backgroundColor: 'rgb(55 65 81)', color: 'rgb(156 163 175)' }
       }
     >
       {onColorClick && (

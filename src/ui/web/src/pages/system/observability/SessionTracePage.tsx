@@ -7,7 +7,7 @@ import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { type TimeRange } from '../../../components/data/TimeRangeSelector';
-import { fmtNumber, fmtMs, fmtCurrency, dateTime } from '../../../utils/format';
+import { fmtNumber, fmtMs, fmtCurrency, dateTime, fmtDuration, cleanMessage } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
 
 type TurnRow = {
@@ -24,22 +24,6 @@ type TurnRow = {
   hasSubagent: boolean;
   hasTools: boolean;
 };
-
-function fmtDuration(ms: number): string {
-  if (ms < 60000) return fmtMs(ms);
-  const mins = Math.floor(ms / 60000);
-  if (mins < 60) return `${mins}m`;
-  const hours = Math.floor(mins / 60);
-  const remMins = mins % 60;
-  return remMins > 0 ? `${hours}h ${remMins}m` : `${hours}h`;
-}
-
-function cleanMessage(msg: string): string {
-  return msg
-    .replace(/<[^>]+>/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
 
 export function SessionTracePage() {
   const { id: rawId } = useParams<{ id: string }>();

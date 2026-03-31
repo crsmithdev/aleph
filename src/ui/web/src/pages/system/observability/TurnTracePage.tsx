@@ -6,7 +6,7 @@ import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { type TimeRange } from '../../../components/data/TimeRangeSelector';
-import { fmtNumber, fmtMs, fmtCurrency, fmtToolName } from '../../../utils/format';
+import { fmtNumber, fmtMs, fmtCurrency, fmtToolName, cleanMessage } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
 
 type Span = {
@@ -122,13 +122,6 @@ function SubagentDetail({ sessionId, range }: { sessionId: string; range: TimeRa
       )}
     </div>
   );
-}
-
-function cleanMessage(msg: string): string {
-  return msg
-    .replace(/<[^>]+>/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
 }
 
 function cleanDetail(detail: string): string {

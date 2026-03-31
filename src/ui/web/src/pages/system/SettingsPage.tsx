@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../api/client';
+import { fmtBytes } from '../../utils/format';
 import { cn } from '../../utils/cn';
 
 // --- Types ---
@@ -81,13 +82,6 @@ function InfoGrid({ rows, dimAfter }: { rows: [string, string][]; dimAfter?: num
     </div>
   );
 }
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1048576).toFixed(1)} MB`;
-}
-
 function formatTimestamp(ts: string): string {
   if (ts === 'unknown' || ts === 'dev') return ts;
   try {
@@ -146,7 +140,7 @@ function SystemInfoSection() {
         <InfoGrid rows={[
           ['Environment', info.runtime.nodeEnv],
           ['API Port', String(info.runtime.port)],
-          ['DB Size', formatBytes(info.runtime.dbSizeBytes)],
+          ['DB Size', fmtBytes(info.runtime.dbSizeBytes)],
         ]} />
       </Section>
     </>
@@ -241,7 +235,7 @@ function BackupSection() {
                 <div className="text-sm text-text-primary">{b.filename}</div>
                 <div className="text-xs text-text-muted">
                   {new Date(b.createdAt).toLocaleString()}
-                  {b.size !== undefined && ` · ${formatBytes(b.size)}`}
+                  {b.size !== undefined && ` · ${fmtBytes(b.size)}`}
                 </div>
               </div>
               <button

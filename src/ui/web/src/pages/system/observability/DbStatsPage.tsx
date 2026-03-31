@@ -4,15 +4,8 @@ import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
-import { fmtNumber } from '../../../utils/format';
+import { fmtNumber, fmtBytes } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
-
-function fmtBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 type TableRow = { name: string; rows: number };
 
 function SchemaView({ db, table }: { db: string; table: string }) {

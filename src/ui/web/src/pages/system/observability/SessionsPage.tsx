@@ -11,7 +11,7 @@ import { ChartContainer, useChartType } from '../../../components/charts/ChartCo
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { useNavigate } from 'react-router-dom';
-import { fmtNumber, fmtMs, fmtCurrency, shortDate, granLabel, relativeTime, fmtProject } from '../../../utils/format';
+import { fmtNumber, fmtMs, fmtCurrency, shortDate, granLabel, relativeTime, fmtProject, fmtDuration } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
 
 type ProjectRow = { project: string; sessions: number };
@@ -34,16 +34,6 @@ type SessionRow = {
   parentSessionId?: string;
   gateInfo?: { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; mode: 'dispatched' | 'inline' | 'none' };
 };
-
-function fmtDuration(ms: number): string {
-  if (ms < 60000) return fmtMs(ms);
-  const mins = Math.floor(ms / 60000);
-  if (mins < 60) return `${mins}m`;
-  const hours = Math.floor(mins / 60);
-  const remMins = mins % 60;
-  return remMins > 0 ? `${hours}h ${remMins}m` : `${hours}h`;
-}
-
 export function SessionsPage() {
   const navigate = useNavigate();
   const [range, setRange] = useState<TimeRange>('30d');
