@@ -21,7 +21,7 @@ All `.md` files in `dotclaude/commands/` (installed to `~/.claude/commands/`) an
 
 **Clarity** — Would a user understand what this command does from the name and description alone? Is the name intuitive?
 
-**Code over instructions** — If the command's behavior could be implemented in TypeScript (a hook, a script, an API call) rather than a prompt, it should be. Prompt-only commands are appropriate for judgment tasks; mechanical tasks belong in code. (Commandment 2: code over AI instructions, TypeScript over Bash.)
+**Code over instructions** — If the command's behavior could be implemented in TypeScript (a hook, a script, an API call) rather than a prompt, it should be. Prompt-only commands are appropriate for judgment tasks; mechanical tasks belong in code. (Code over AI instructions; TypeScript over Bash.)
 
 **Arguments** — If the command accepts arguments, are they documented? Are defaults sensible? Does `$ARGUMENTS` get parsed correctly?
 
