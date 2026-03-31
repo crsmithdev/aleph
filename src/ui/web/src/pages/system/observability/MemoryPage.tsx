@@ -5,7 +5,7 @@ import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
-import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
+import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps } from '../../../components/charts/chartTheme';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
@@ -36,8 +36,8 @@ export function MemoryPage() {
   const [tagFilter, setTagFilter] = useState('');
   const [activeSearch, setActiveSearch] = useState({ q: '', type: '', tag: '' });
 
-  const usageChart = useChartType('bar');
-  const trendChart = useChartType('line');
+  const [usageChartType, setUsageChartType] = useState<'bar' | 'line'>('bar');
+  const [trendChartType, setTrendChartType] = useState<'bar' | 'line'>('line');
 
   const items = useObsMemoryItems({
     q: activeSearch.q || undefined,
@@ -196,10 +196,10 @@ export function MemoryPage() {
       {usage.data && usage.data.byDay.length > 0 && (
         <ChartContainer
           title={granLabel(granularity, "Memory Operations")}
-          chartType={usageChart.chartType}
-          onChartTypeChange={usageChart.setChartType}
+          chartType={usageChartType}
+          onChartTypeChange={setUsageChartType}
         >
-          {usageChart.chartType === 'bar' ? (
+          {usageChartType === 'bar' ? (
             <BarChart data={usage.data.byDay}>
               <CartesianGrid {...gridProps} />
               <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
@@ -252,10 +252,10 @@ export function MemoryPage() {
       {trendData.length > 1 && (
         <ChartContainer
           title="Memory Count Over Time"
-          chartType={trendChart.chartType}
-          onChartTypeChange={trendChart.setChartType}
+          chartType={trendChartType}
+          onChartTypeChange={setTrendChartType}
         >
-          {trendChart.chartType === 'line' ? (
+          {trendChartType === 'line' ? (
             <LineChart data={trendData}>
               <CartesianGrid {...gridProps} />
               <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
@@ -289,7 +289,7 @@ export function MemoryPage() {
           />
           <select
             value={typeFilter}
-            onChange={(e) => { setTypeFilter(e.target.value); setActiveSearch((s) => ({ ...s, type: e.target.value })); }}
+            onChange={(e) => setTypeFilter(e.target.value)}
             className="w-36 rounded-md border border-border-primary bg-bg-tertiary px-3 py-1.5 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
           >
             <option value="">All Types</option>
@@ -297,7 +297,7 @@ export function MemoryPage() {
           </select>
           <select
             value={tagFilter}
-            onChange={(e) => { setTagFilter(e.target.value); setActiveSearch((s) => ({ ...s, tag: e.target.value })); }}
+            onChange={(e) => setTagFilter(e.target.value)}
             className="w-36 rounded-md border border-border-primary bg-bg-tertiary px-3 py-1.5 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
           >
             <option value="">All Tags</option>

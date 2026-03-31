@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { ResponsiveContainer } from 'recharts';
 import { cn } from '../../utils/cn';
 import type { ReactNode } from 'react';
@@ -31,11 +30,6 @@ function LineChartIcon({ active }: { active: boolean }) {
       <circle cx="13" cy="3" r="1.5" fill="currentColor" fillOpacity={active ? 1 : 0.4} />
     </svg>
   );
-}
-
-export function useChartType(defaultType: 'bar' | 'line' = 'line') {
-  const [chartType, setChartType] = useState<'bar' | 'line'>(defaultType);
-  return { chartType, setChartType };
 }
 
 export function ChartContainer({

@@ -8,7 +8,7 @@ import { DataTable, type Column } from '../../../components/data/DataTable';
 import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
+import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtMs, fmtPct, shortDate, dateTime } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
@@ -40,17 +40,15 @@ type InvocationRow = {
 
 type ViewMode = 'by-hook' | 'by-event';
 
-function ByHookView({ range, granularity, hideInactive, onHideInactiveChange, showUnused, onShowUnusedChange }: {
+function ByHookView({ range, granularity }: {
   range: TimeRange;
   granularity: Granularity;
-  hideInactive: boolean;
-  onHideInactiveChange: (v: boolean) => void;
-  showUnused: boolean;
-  onShowUnusedChange: (v: boolean) => void;
 }) {
   const navigate = useNavigate();
   const { data, isLoading, error, refetch } = useObsHooks(range, granularity);
-  const { chartType, setChartType } = useChartType('bar');
+  const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
+  const [hideInactive, setHideInactive] = useState(true);
+  const [showUnused, setShowUnused] = useState(true);
 
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load hooks" retry={refetch} />;
@@ -165,9 +163,9 @@ function ByHookView({ range, granularity, hideInactive, onHideInactiveChange, sh
   return (
     <>
       <div className="flex items-center gap-3">
-        <FilterToggle label="Active only" active={hideInactive} onToggle={() => onHideInactiveChange(!hideInactive)} />
+        <FilterToggle label="Active only" active={hideInactive} onToggle={() => setHideInactive(!hideInactive)} />
         {unusedRows.length > 0 && (
-          <FilterToggle label={`Unused (${unusedRows.length})`} active={showUnused} onToggle={() => onShowUnusedChange(!showUnused)} />
+          <FilterToggle label={`Unused (${unusedRows.length})`} active={showUnused} onToggle={() => setShowUnused(!showUnused)} />
         )}
       </div>
 
@@ -383,8 +381,6 @@ function ByEventView({ range }: { range: TimeRange }) {
 export function HooksPage() {
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
-  const [hideInactive, setHideInactive] = useState(true);
-  const [showUnused, setShowUnused] = useState(true);
   const [view, setView] = useState<ViewMode>('by-hook');
 
   return (
@@ -417,14 +413,7 @@ export function HooksPage() {
       </ObsControlBar>
 
       {view === 'by-hook' ? (
-        <ByHookView
-          range={range}
-          granularity={granularity}
-          hideInactive={hideInactive}
-          onHideInactiveChange={setHideInactive}
-          showUnused={showUnused}
-          onShowUnusedChange={setShowUnused}
-        />
+        <ByHookView range={range} granularity={granularity} />
       ) : (
         <ByEventView range={range} />
       )}

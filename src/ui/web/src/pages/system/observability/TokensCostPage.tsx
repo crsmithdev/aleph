@@ -7,7 +7,7 @@ import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
-import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
+import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { fmtCurrency, fmtNumber, fmtPct, shortDate, granLabel, rangeToDays } from '../../../utils/format';
@@ -41,8 +41,8 @@ export function TokensCostPage() {
   const [granularity, setGranularity] = useState<Granularity>('day');
   const tokens = useObsTokens(range, granularity);
   const cost = useObsCost(range, granularity);
-  const { chartType: tokensChartType, setChartType: setTokensChartType } = useChartType('line');
-  const { chartType: costChartType, setChartType: setCostChartType } = useChartType('line');
+  const [tokensChartType, setTokensChartType] = useState<'bar' | 'line'>('line');
+  const [costChartType, setCostChartType] = useState<'bar' | 'line'>('line');
 
   if (tokens.isLoading || cost.isLoading) return <PageLoading />;
   if (tokens.error || !tokens.data)

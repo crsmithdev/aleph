@@ -7,7 +7,7 @@ import { StatCard } from '../../../components/data/StatCard';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
+import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtCurrency, fmtPct, fmtMs, shortDate, granLabel } from '../../../utils/format';
 
@@ -18,7 +18,7 @@ export function OverviewPage() {
   const compaction = useObsCompaction(range, granularity);
   const apiDuration = useObsApiDuration(range, granularity);
   const sessions = useObsSessions(range, granularity);
-  const { chartType, setChartType } = useChartType('line');
+  const [chartType, setChartType] = useState<'bar' | 'line'>('line');
 
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load overview" retry={refetch} />;

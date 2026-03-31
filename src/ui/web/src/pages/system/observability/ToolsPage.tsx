@@ -8,7 +8,7 @@ import { DataTable, type Column } from '../../../components/data/DataTable';
 import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
+import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtPct, fmtMs, shortDate, parseToolSource } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
@@ -22,7 +22,7 @@ export function ToolsPage() {
   const [hideInactive, setHideInactive] = useState(true);
   const navigate = useNavigate();
   const { data, isLoading, error, refetch } = useObsTools(range, granularity);
-  const { chartType, setChartType } = useChartType('bar');
+  const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
 
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load tools" retry={refetch} />;

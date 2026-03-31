@@ -8,7 +8,7 @@ import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
+import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtMs, fmtPct, shortDate, dateTime, granLabel } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
@@ -23,7 +23,7 @@ export function HookDetailPage() {
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
   const { data, isLoading, error, refetch } = useObsHookDetail(hookName, range);
-  const { chartType, setChartType } = useChartType('bar');
+  const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
   const [errorsOnly, setErrorsOnly] = useState(false);
 
   if (isLoading) return <PageLoading />;

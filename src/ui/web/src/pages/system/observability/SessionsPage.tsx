@@ -7,7 +7,7 @@ import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
-import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
+import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { useNavigate } from 'react-router-dom';
@@ -39,7 +39,7 @@ export function SessionsPage() {
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
   const { data, isLoading, error, refetch } = useObsSessions(range, granularity);
-  const { chartType, setChartType } = useChartType('bar');
+  const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
   const [includeChildSubagents, setIncludeChildSubagents] = useState(false);
   const [onlyWithSubagents, setOnlyWithSubagents] = useState(false);
 

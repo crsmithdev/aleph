@@ -8,7 +8,7 @@ import { DataTable, type Column } from '../../../components/data/DataTable';
 import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { ChartContainer, useChartType } from '../../../components/charts/ChartContainer';
+import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtPct, shortDate } from '../../../utils/format';
 import { cn } from '../../../utils/cn';
@@ -32,7 +32,7 @@ export function SkillsPage() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const navigate = useNavigate();
   const { data, isLoading, error, refetch } = useObsSkills(range, granularity);
-  const { chartType, setChartType } = useChartType('bar');
+  const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
 
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load skills" retry={refetch} />;
