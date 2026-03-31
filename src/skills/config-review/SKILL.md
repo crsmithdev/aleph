@@ -41,7 +41,7 @@ Configuration files control permissions, hooks, MCP servers, and behavioral rule
 
 **Environment variables** — Referenced env vars are documented and have defaults or error messages when missing.
 
-**Information layering** — Is information stored at the right layer? Ephemeral state → tasks/conversation. Durable insights → semantic memory (MCP). Project conventions → CLAUDE.md. Behavioral rules → dotclaude/CLAUDE.md. (Commandment 8: no duplication between memory, CLAUDE.md, and docs.)
+**Information layering** — Is information stored at the right layer? Ephemeral state → tasks/conversation. Durable insights → semantic memory (MCP). Project conventions → CLAUDE.md. Behavioral rules → dotclaude/CLAUDE.md. (No duplication between memory, CLAUDE.md, and docs.)
 
 <!-- PROJECT-SPECIFIC CRITERIA
 Add your own checks below:
