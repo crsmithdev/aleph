@@ -229,7 +229,7 @@ function ByHookView({ range, granularity, hideInactive, onHideInactiveChange, sh
               <CartesianGrid {...gridProps} />
               <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
               <YAxis {...axisProps} />
-              <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+              <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
               <Bar dataKey="count" fill={CHART_PALETTE[2]} radius={[2, 2, 0, 0]} name="Executions" />
             </BarChart>
           ) : (
@@ -237,7 +237,7 @@ function ByHookView({ range, granularity, hideInactive, onHideInactiveChange, sh
               <CartesianGrid {...gridProps} />
               <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
               <YAxis {...axisProps} />
-              <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+              <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
               <Line type="monotone" dataKey="count" stroke={CHART_PALETTE[2]} strokeWidth={2} dot={false} name="Executions" />
             </LineChart>
           )}

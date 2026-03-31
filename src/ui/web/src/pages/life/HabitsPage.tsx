@@ -74,7 +74,7 @@ function HabitRow({ habit }: { habit: Habit }) {
   const [editTitle, setEditTitle] = useState(habit.title);
 
   const checked = habit.completedThisPeriod;
-  const streak = (habit as Habit & { streak?: number }).streak ?? 0;
+  const streak = habit.streak ?? 0;
 
   const handleToggle = () => {
     if (checked) {

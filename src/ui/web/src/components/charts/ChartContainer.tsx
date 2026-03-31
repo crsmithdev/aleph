@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 function BarChartIcon({ active }: { active: boolean }) {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect x="1" y="7" width="3" height="8" rx="0.5" fill={active ? 'currentColor' : 'currentColor'} fillOpacity={active ? 1 : 0.4} />
+      <rect x="1" y="7" width="3" height="8" rx="0.5" fill="currentColor" fillOpacity={active ? 1 : 0.4} />
       <rect x="6" y="4" width="3" height="11" rx="0.5" fill="currentColor" fillOpacity={active ? 1 : 0.4} />
       <rect x="11" y="1" width="3" height="14" rx="0.5" fill="currentColor" fillOpacity={active ? 1 : 0.4} />
     </svg>

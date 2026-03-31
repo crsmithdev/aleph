@@ -72,7 +72,7 @@ export function OverviewPage() {
             <CartesianGrid {...gridProps} />
             <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
             <YAxis {...axisProps} />
-            <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+            <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
             <Bar dataKey="messages" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Messages" />
             <Bar dataKey="sessions" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Sessions" />
           </BarChart>
@@ -81,7 +81,7 @@ export function OverviewPage() {
             <CartesianGrid {...gridProps} />
             <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
             <YAxis {...axisProps} />
-            <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+            <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
             <Area type="monotone" dataKey="messages" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.15} name="Messages" />
             <Area type="monotone" dataKey="sessions" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.15} name="Sessions" />
           </AreaChart>

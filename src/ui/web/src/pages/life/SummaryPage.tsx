@@ -6,20 +6,21 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { cn } from '../../utils/cn';
 import { toDateStr, longDate } from '../../utils/format';
 
+type PeriodSummaryData = {
+  goalsCompleted?: { count: number; items: Array<{ goalId: string; details: { title?: string; prevState?: string } }> };
+  todosCompleted?: { count: number; items: Array<{ title: string }> };
+};
+
 interface PeriodSummaryProps {
   start: string;
   end: string;
   heading: string;
+  data: PeriodSummaryData | undefined;
+  isLoading: boolean;
 }
 
-function PeriodSummary({ start, end, heading }: PeriodSummaryProps) {
-  const { data: summary, isLoading } = useSummary(start, end);
+function PeriodSummary({ start, end, heading, data, isLoading }: PeriodSummaryProps) {
   const [copied, setCopied] = useState(false);
-
-  const data = summary as {
-    goalsCompleted?: { count: number; items: Array<{ goalId: string; details: { title?: string; prevState?: string } }> };
-    todosCompleted?: { count: number; items: Array<{ title: string }> };
-  } | undefined;
 
   const completedGoals = data?.goalsCompleted?.items ?? [];
   const completedTodos = data?.todosCompleted?.items ?? [];
@@ -234,7 +235,7 @@ export function SummaryPage() {
         </div>
       )}
 
-      <PeriodSummary start={start} end={end} heading={heading} />
+      <PeriodSummary start={start} end={end} heading={heading} data={data as PeriodSummaryData | undefined} isLoading={isLoading} />
     </div>
   );
 }

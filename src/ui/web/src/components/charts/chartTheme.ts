@@ -8,15 +8,13 @@ export const CHART_PALETTE = [
   'var(--chart-5)',
 ];
 
-export function tooltipStyle() {
-  return {
-    background: 'var(--chart-tooltip-bg)',
-    border: '1px solid var(--chart-tooltip-border)',
-    borderRadius: 8,
-    fontSize: 12,
-    color: 'var(--text-primary)',
-  };
-}
+export const tooltipStyle = {
+  background: 'var(--chart-tooltip-bg)',
+  border: '1px solid var(--chart-tooltip-border)',
+  borderRadius: 8,
+  fontSize: 12,
+  color: 'var(--text-primary)',
+};
 
 export const gridProps = {
   strokeDasharray: '3 3',

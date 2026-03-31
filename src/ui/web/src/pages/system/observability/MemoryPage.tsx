@@ -204,7 +204,7 @@ export function MemoryPage() {
               <CartesianGrid {...gridProps} />
               <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
               <YAxis {...axisProps} />
-              <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+              <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
               <Legend {...legendProps} />
               <Bar dataKey="stores" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Stores" />
               <Bar dataKey="searches" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Searches" />
@@ -214,7 +214,7 @@ export function MemoryPage() {
               <CartesianGrid {...gridProps} />
               <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
               <YAxis {...axisProps} />
-              <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+              <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
               <Legend {...legendProps} />
               <Line type="monotone" dataKey="stores" stroke={CHART_PALETTE[1]} strokeWidth={2} dot={false} name="Stores" />
               <Line type="monotone" dataKey="searches" stroke={CHART_PALETTE[0]} strokeWidth={2} dot={false} name="Searches" />
@@ -260,7 +260,7 @@ export function MemoryPage() {
               <CartesianGrid {...gridProps} />
               <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
               <YAxis {...axisProps} />
-              <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+              <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
               <Line type="monotone" dataKey="total" stroke={CHART_PALETTE[0]} strokeWidth={2} dot={false} name="Memories" />
             </LineChart>
           ) : (
@@ -268,7 +268,7 @@ export function MemoryPage() {
               <CartesianGrid {...gridProps} />
               <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
               <YAxis {...axisProps} />
-              <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+              <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
               <Bar dataKey="total" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Memories" />
             </BarChart>
           )}

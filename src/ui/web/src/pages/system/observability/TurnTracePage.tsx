@@ -134,7 +134,7 @@ export function TurnTracePage() {
   const { id: rawId, turnIndex: rawTurnIndex } = useParams<{ id: string; turnIndex: string }>();
   const sessionId = decodeURIComponent(rawId ?? '');
   const turnIndex = parseInt(rawTurnIndex ?? '0', 10);
-  const [range] = useState<TimeRange>('30d');
+  const range: TimeRange = '30d';
   const [selectedSpan, setSelectedSpan] = useState<string | null>(null);
   const [showInternal, setShowInternal] = useState(true);
   const { data, isLoading, error, refetch } = useObsSessionTrace(sessionId, range);

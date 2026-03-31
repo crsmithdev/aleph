@@ -137,7 +137,7 @@ export function SkillDetailPage() {
             <CartesianGrid {...gridProps} />
             <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
             <YAxis {...axisProps} />
-            <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+            <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
             <Bar dataKey="count" fill={CHART_PALETTE[3]} radius={[2, 2, 0, 0]} name="Invocations" />
           </BarChart>
         </ChartContainer>

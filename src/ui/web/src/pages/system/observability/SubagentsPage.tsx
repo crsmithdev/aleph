@@ -166,7 +166,7 @@ export function SubagentsPage() {
             <CartesianGrid {...gridProps} />
             <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
             <YAxis {...axisProps} />
-            <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+            <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
             <Legend {...legendProps} />
             <Bar dataKey="backgroundCount" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Background" stackId="a" />
             <Bar dataKey="foregroundCount" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Foreground" stackId="a" />

@@ -9,6 +9,13 @@ function highlightNumbers(text: string): ReactNode[] {
   );
 }
 
+const accentColors: Record<'default' | 'success' | 'warning' | 'error', string> = {
+  default: 'text-accent',
+  success: 'text-success',
+  warning: 'text-warning',
+  error: 'text-error',
+};
+
 export function StatCard({
   label,
   value,
@@ -24,12 +31,6 @@ export function StatCard({
   accent?: 'default' | 'success' | 'warning' | 'error';
   className?: string;
 }) {
-  const accentColors = {
-    default: 'text-accent',
-    success: 'text-success',
-    warning: 'text-warning',
-    error: 'text-error',
-  };
 
   return (
     <div className={cn('rounded-lg border border-border-primary bg-bg-secondary p-4', className)}>

@@ -14,6 +14,28 @@ import { fmtCurrency, fmtNumber, fmtPct, shortDate, granLabel, rangeToDays } fro
 
 type ModelRow = { model: string; usd: number; pct: number };
 
+const modelColumns: Column<ModelRow>[] = [
+  {
+    key: 'model',
+    label: 'Model',
+    render: (row) => <span className="font-mono text-text-primary">{row.model}</span>,
+  },
+  {
+    key: 'usd',
+    label: 'Cost',
+    align: 'right',
+    sortable: true,
+    render: (row) => fmtCurrency(row.usd),
+  },
+  {
+    key: 'pct',
+    label: '%',
+    align: 'right',
+    sortable: true,
+    render: (row) => fmtPct(row.pct),
+  },
+];
+
 export function TokensCostPage() {
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
@@ -32,28 +54,6 @@ export function TokensCostPage() {
   const avgDaily = days > 0
     ? cost.data.totalUsd / days
     : 0;
-
-  const modelColumns: Column<ModelRow>[] = [
-    {
-      key: 'model',
-      label: 'Model',
-      render: (row) => <span className="font-mono text-text-primary">{row.model}</span>,
-    },
-    {
-      key: 'usd',
-      label: 'Cost',
-      align: 'right',
-      sortable: true,
-      render: (row) => fmtCurrency(row.usd),
-    },
-    {
-      key: 'pct',
-      label: '%',
-      align: 'right',
-      sortable: true,
-      render: (row) => fmtPct(row.pct),
-    },
-  ];
 
   return (
     <div className="space-y-6">
@@ -77,7 +77,7 @@ export function TokensCostPage() {
             <CartesianGrid {...gridProps} />
             <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
             <YAxis {...axisProps} tickFormatter={fmtNumber} />
-            <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+            <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
             <Legend {...legendProps} />
             <Bar dataKey="input" stackId="tokens" fill={CHART_PALETTE[0]} name="Input" />
             <Bar dataKey="output" stackId="tokens" fill={CHART_PALETTE[1]} name="Output" />
@@ -88,7 +88,7 @@ export function TokensCostPage() {
             <CartesianGrid {...gridProps} />
             <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
             <YAxis {...axisProps} tickFormatter={fmtNumber} />
-            <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+            <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
             <Legend {...legendProps} />
             <Area type="monotone" dataKey="input" stackId="tokens" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} name="Input" />
             <Area type="monotone" dataKey="output" stackId="tokens" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} name="Output" />
@@ -103,7 +103,7 @@ export function TokensCostPage() {
             <CartesianGrid {...gridProps} />
             <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
             <YAxis {...axisProps} tickFormatter={(v: number) => `$${v.toFixed(2)}`} />
-            <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} formatter={(value) => [fmtCurrency(Number(value ?? 0)), 'Cost']} />
+            <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(value) => [fmtCurrency(Number(value ?? 0)), 'Cost']} />
             <Bar dataKey="usd" fill={CHART_PALETTE[3]} radius={[2, 2, 0, 0]} name="Cost" />
           </BarChart>
         ) : (
@@ -111,7 +111,7 @@ export function TokensCostPage() {
             <CartesianGrid {...gridProps} />
             <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
             <YAxis {...axisProps} tickFormatter={(v: number) => `$${v.toFixed(2)}`} />
-            <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} formatter={(value) => [fmtCurrency(Number(value ?? 0)), 'Cost']} />
+            <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(value) => [fmtCurrency(Number(value ?? 0)), 'Cost']} />
             <Line type="monotone" dataKey="usd" stroke={CHART_PALETTE[3]} strokeWidth={2} dot={false} name="Cost" />
           </LineChart>
         )}

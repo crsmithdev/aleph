@@ -122,7 +122,7 @@ export function ToolsPage() {
               <CartesianGrid {...gridProps} />
               <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
               <YAxis {...axisProps} />
-              <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+              <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
               <Bar dataKey="count" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Calls" />
             </BarChart>
           ) : (
@@ -130,7 +130,7 @@ export function ToolsPage() {
               <CartesianGrid {...gridProps} />
               <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
               <YAxis {...axisProps} />
-              <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+              <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
               <Line type="monotone" dataKey="count" stroke={CHART_PALETTE[0]} strokeWidth={2} dot={false} name="Calls" />
             </LineChart>
           )}

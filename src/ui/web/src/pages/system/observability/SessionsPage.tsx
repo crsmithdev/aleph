@@ -180,7 +180,7 @@ export function SessionsPage() {
             <CartesianGrid {...gridProps} />
             <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
             <YAxis {...axisProps} />
-            <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+            <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
             <Legend {...legendProps} />
             <Bar dataKey="sessions" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Sessions" />
             <Bar dataKey="userMessages" fill={CHART_PALETTE[2]} radius={[2, 2, 0, 0]} name="User Msgs" />
@@ -191,7 +191,7 @@ export function SessionsPage() {
             <CartesianGrid {...gridProps} />
             <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
             <YAxis {...axisProps} />
-            <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+            <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
             <Legend {...legendProps} />
             <Line type="monotone" dataKey="sessions" stroke={CHART_PALETTE[0]} strokeWidth={2} dot={false} name="Sessions" />
             <Line type="monotone" dataKey="userMessages" stroke={CHART_PALETTE[2]} strokeWidth={2} dot={false} name="User Msgs" />
@@ -205,7 +205,7 @@ export function SessionsPage() {
           <CartesianGrid {...gridProps} />
           <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
           <YAxis {...axisProps} />
-          <Tooltip contentStyle={tooltipStyle()} labelFormatter={labelFormatter} />
+          <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
           <Bar dataKey="count" fill={CHART_PALETTE[2]} radius={[2, 2, 0, 0]} name="Events" />
         </BarChart>
       </ChartContainer>

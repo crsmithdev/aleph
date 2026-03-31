@@ -29,7 +29,7 @@ export function SessionTracePage() {
   const { id: rawId } = useParams<{ id: string }>();
   const sessionId = decodeURIComponent(rawId ?? '');
   const navigate = useNavigate();
-  const [range] = useState<TimeRange>('30d');
+  const range: TimeRange = '30d';
   const [toolOnly, setToolOnly] = useState(false);
   const [subagentOnly, setSubagentOnly] = useState(false);
   const { data, isLoading, error, refetch } = useObsSessionTrace(sessionId, range);
