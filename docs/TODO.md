@@ -72,7 +72,6 @@ Code-level improvements, fixes, and bugs. Managed via `/todo`.
 
 ## Hooks
 
-- [ ] [low] [unused imports] `session-summary.ts:9` and `rating-capture.ts:8` — unused `root` variable and `dirname` import
 - [ ] [low] [redundant logic] `parse-transcript.ts:56,70` double truncation — blocks truncated individually then join truncated again
 - [ ] [low] [misnamed identifiers] `extract.ts:73` lambda param `t` shadows outer `t: TranscriptSummary`
 - [ ] [low] [duplicate utilities] Duplicate intent-to-outcome derivation in `session-summary.ts:35` and `extract.ts:36` — extract shared function
@@ -95,7 +94,6 @@ Duplicated logic across files — extract to shared utilities:
 - [ ] [medium] [orphaned files] Rebuild or delete `src/ui/api/dist/` — stale, references routes/services that no longer exist
 - [ ] [low] [misnamed identifiers] Fix `src/ui/scripts/seed.ts:4` broken import — `../apps/api/` should be `../api/`
 - [ ] [low] [complexity debt] Delete `src/paths.ts` re-export shim — hooks can import from `@construct/data` directly
-- [ ] [low] [unreferenced functions] Remove `PRESERVE` scaffolding from `install.ts` — empty array, loops never execute (`install.ts:24,206,255`)
 - [ ] [low] [duplicate utilities] `getMemoryDbPath()` duplicates `externalPaths.memoryDb` getter — pick one (`data/src/paths.ts:29`)
 - [ ] [low] [complexity debt] `ensureDataDirs` in paths module mixes side effects with path resolution — inline at call sites or move
 
