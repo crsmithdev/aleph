@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
 /**
- * Stop hook: verification gate.
+ * Stop hook: e2e verification advisory.
  *
  * Checks whether the current turn included e2e verification evidence
- * AND an artifact (screenshot or captured output).
+ * AND an artifact (screenshot or captured output). Advisory only —
+ * emits a reminder but does not block future edits.
  *
  * 1. Skip if stop_hook_active (already reminded once this turn).
  * 2. Read transcript, find current turn boundary (last real user message with text).
@@ -12,15 +13,13 @@
  *    - Track Bash commands matching E2E_CMD (devserver, curl, playwright) as e2e signals.
  *    - Track Bash commands matching ARTIFACT_CMD (output redirect, screenshot) as artifacts.
  *    - Track Chrome DevTools / Playwright MCP calls as e2e signals + artifacts.
- * 4. No edits this turn → clear marker, exit 0.
- * 5. Edits + e2e + artifact → clear marker, exit 0 (verification passed).
- * 6. Edits but missing e2e or artifact → write require-e2e marker with details,
- *    emit instructions. quality-pre-require-e2e.ts reads this to hard-block Edit/Write.
+ * 4. No edits this turn → exit 0.
+ * 5. Edits + e2e + artifact → exit 0 (verification passed).
+ * 6. Edits but missing e2e or artifact → emit advisory reminder, exit 0.
  */
-import { readFileSync, writeFileSync, existsSync, unlinkSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
-import { dataPaths, ensureDataDirs } from "../../data/src/paths.ts";
 import { E2E_CMD, ARTIFACT_CMD, UNIT_TEST_CMD, HOOK_INVOCATION } from "../../eval/patterns.ts";
 
 const TAG = "quality-stop-check-e2e";
@@ -64,7 +63,6 @@ let hasEdits = false;
 const editedFiles: string[] = [];
 const e2eSignals: string[] = [];
 const artifacts: string[] = [];
-
 
 for (let i = turnStart; i < lines.length; i++) {
   let parsed: any;
@@ -110,14 +108,7 @@ for (let i = turnStart; i < lines.length; i++) {
   }
 }
 
-const markerPath = `${dataPaths.signals}/require-e2e`;
-
 if (!hasEdits) {
-  // No edits this turn — clear any existing marker
-  if (existsSync(markerPath)) {
-    unlinkSync(markerPath);
-    trace(TAG, "cleared marker: no edits this turn");
-  }
   trace(TAG, "skip: no edits in current turn");
   process.exit(0);
 }
@@ -126,36 +117,27 @@ const hasE2E = e2eSignals.length > 0;
 const hasArtifact = artifacts.length > 0;
 
 if (hasE2E && hasArtifact) {
-  // Verification passed — clear marker if it exists
-  if (existsSync(markerPath)) {
-    unlinkSync(markerPath);
-    trace(TAG, "cleared marker: verification passed");
-  }
   trace(TAG, `pass: e2e=[${e2eSignals[0]}] artifact=[${artifacts[0]}]`);
   process.exit(0);
 }
 
-// --- Write marker for PreToolUse gate ---
-
+// Advisory reminder only — no marker, no blocking
 const files = [...new Set(editedFiles)].slice(0, 10).join(", ");
 const missing: string[] = [];
 if (!hasE2E) missing.push("e2e verification (start the dev server and interact with the running app)");
 if (!hasArtifact) missing.push("artifact (screenshot or output saved to a file)");
 
-ensureDataDirs();
-writeFileSync(markerPath, JSON.stringify({ files, missing, ts: new Date().toISOString() }));
-trace(TAG, `marker written: edits to [${files}] missing [${missing.join(", ")}]`);
+trace(TAG, `advisory: edits to [${files}] missing [${missing.join(", ")}]`);
 
-console.log(`[Construct] Verification gate: you edited files (${files}) without e2e evidence.
+console.log(`[Construct] Advisory: you edited files (${files}) without e2e evidence.
 
 Missing: ${missing.join("; ")}
 
-Before completing, you must:
+Consider verifying before claiming work is done:
 1. Start the dev server or run the real system
 2. Interact with it to confirm your changes work
 3. Save a screenshot or capture output to a file as proof
 
-The next Edit/Write will be BLOCKED until verification evidence appears in the transcript.
-Unit tests alone (bun test, jest, pytest) do not satisfy the gate.`);
+Unit tests (bun test, jest, pytest) are not e2e verification.`);
 
 process.exit(0);

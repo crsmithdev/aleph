@@ -1,6 +1,6 @@
 ---
 name: verification
-description: Use before claiming work is complete, fixed, or passing. Requires e2e verification against the running system plus an artifact. Evidence before assertions, always.
+description: Use before claiming work is complete, fixed, or passing. Requires e2e verification against the running system plus an artifact. When this skill is active, e2e is mandatory — not optional.
 ---
 
 # Verification
@@ -11,6 +11,7 @@ Claiming work is complete without verification is dishonesty, not efficiency.
 
 - Before claiming work is complete, fixed, or passing
 - After any change that needs proof it works
+- When the user or prompt explicitly requires end-to-end confirmation
 
 ## Process
 
@@ -40,13 +41,13 @@ Skip any step = unverified claim.
 | Feature complete | End-to-end flow through real system + artifact | All tests passing |
 | CLI works | Run the actual binary, capture output to file | Reading the source |
 
-### The Enforcement System
+### How This Skill Works
 
-Two mechanisms enforce this:
+This skill is the explicit opt-in mechanism for mandatory e2e verification. When `/verification` is invoked (or matched by keywords), e2e is **required** — not advisory.
 
-**routing-submit-classify.ts** (primary) — injects the e2e requirement into every actionable prompt before work starts. You see this at the top of each task.
+The Stop hook (`quality-stop-check-e2e.ts`) provides a gentle reminder when edits lack e2e evidence, but does not block. This skill overrides that — if it's active, skipping e2e is not an option.
 
-**quality-stop-check-e2e.ts** (Stop hook) — checks the transcript after each turn for e2e evidence and an artifact. Gets one reminder; cannot hard-block.
+The UserPromptSubmit hook emits a tip about e2e for all actionable prompts. That tip is informational only.
 
 ### What Satisfies the Gate
 

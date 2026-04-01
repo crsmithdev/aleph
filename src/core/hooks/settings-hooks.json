@@ -94,16 +94,6 @@
             "timeout": 5000
           }
         ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun src/skills/hooks/quality-pre-require-e2e.ts",
-            "timeout": 2000
-          }
-        ]
       }
     ],
     "PostToolUse": [

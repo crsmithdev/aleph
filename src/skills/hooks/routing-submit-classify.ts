@@ -61,11 +61,11 @@ if (archPattern.test(prompt)) {
 // Verification gate — inject e2e requirements for non-questions
 const isQuestion = /^\s*(what|how|why|when|where|who|is |are |can |does |do |should |could |would |which |tell me|explain|describe)\b/i.test(prompt);
 if (!isQuestion && words.length >= 5) {
-  console.log(`[Construct] Verification gate active — after making changes, you MUST verify end-to-end:
+  console.log(`[Construct] Tip: after making changes, consider verifying end-to-end:
 1. Start the dev server or run the actual system
 2. Interact with it (Playwright, Chrome DevTools, or run the CLI)
 3. Produce an artifact: screenshot or captured output saved to a file
-Unit tests alone are not sufficient. The Stop hook will check for e2e evidence.`);
+Unit tests alone are not e2e verification. Use /verification to make e2e a requirement.`);
 }
 
 // Skill matching

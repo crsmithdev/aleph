@@ -1,16 +1,15 @@
 #!/usr/bin/env bun
 /**
- * PreToolUse hook: commit nudge.
+ * PreToolUse hook: commit advisory.
  *
  * Fires on Edit/Write. Detects when uncommitted changes span too many
- * unrelated areas, nudging or blocking until a commit is made.
+ * unrelated areas and emits an advisory suggesting a commit. Never blocks.
  *
  * 1. Run `git status --porcelain` in the session's cwd.
  *    Clean tree → clear marker, exit 0.
  * 2. Group dirty files by first 2 path segments (e.g. "src/telemetry").
  * 3. < WARN_GROUPS (3) → exit 0 silently.
- * 4. ≥ BLOCK_GROUPS (5) → exit 2 (hard block with list of areas).
- * 5. Between WARN and BLOCK → write marker, emit advisory, exit 0.
+ * 4. ≥ WARN_GROUPS → write marker, emit advisory, exit 0.
  */
 import { execSync } from "child_process";
 import { existsSync, writeFileSync, unlinkSync, mkdirSync } from "fs";
@@ -21,7 +20,6 @@ import { dataPaths } from "../../data/src/paths.ts";
 
 const TAG = "git-pre-require-commit";
 const WARN_GROUPS = 3;
-const BLOCK_GROUPS = 5;
 
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
@@ -69,18 +67,12 @@ if (groupCount < WARN_GROUPS) {
 
 const markerPath = `${dataPaths.signals}/git-pre-require-commit-${input.session_id}`;
 
-if (groupCount >= BLOCK_GROUPS) {
-  trace(TAG, `BLOCKED: ${groupCount} groups ≥ ${BLOCK_GROUPS}`);
-  console.error(`[Construct] ${fileCount} uncommitted files across ${groupCount} unrelated areas (${groupList}). Commit your current logical change before continuing.`);
-  process.exit(2);
-}
-
-// Warn tier
+// Advisory only — never block
 if (!existsSync(markerPath)) {
   mkdirSync(dirname(markerPath), { recursive: true });
   writeFileSync(markerPath, JSON.stringify({ ts: new Date().toISOString(), groups: groupCount, files: fileCount, areas: groupList }));
 }
-trace(TAG, `warn: ${groupCount} groups`);
+trace(TAG, `advisory: ${groupCount} groups`);
 console.log(`[Construct] ${fileCount} uncommitted files across ${groupCount} areas (${groupList}). Consider committing before starting a new logical change.`);
 process.exit(0);
 
