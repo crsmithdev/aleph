@@ -33,15 +33,26 @@ export class OllamaProvider implements LLMProvider {
 
   async searchWeb(model: string, query: string): Promise<WebSearchResult> {
     const actualModel = model || this.model;
-    const result = await this.complete(actualModel, [
-      `Research the following topic and provide detailed, factual information.`,
-      `Include specific data points, names, dates, and any relevant details you know about:`,
-      `\n"${query}"`,
-    ].join(' '), 4096);
+
+    // Fetch real web results, then have the local model synthesize them
+    const webResults = await fetchSearchResults(query);
+
+    let prompt: string;
+    if (webResults.length > 0) {
+      const resultsText = webResults
+        .map((r, i) => `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.snippet}`)
+        .join('\n\n');
+      prompt = `Based on the following web search results, answer the question: "${query}"\n\nSearch results:\n${resultsText}\n\nProvide a concise summary of what the search results say. Stick to the provided information.`;
+    } else {
+      // No search API configured — fall back to model knowledge with a warning
+      prompt = `Research the following topic: "${query}"\n\nNote: No web search is available. Answer from your training knowledge only, and be explicit about any uncertainty.`;
+    }
+
+    const result = await this.complete(actualModel, prompt, 4096);
 
     return {
       text: result.text,
-      sourceUrls: [],
+      sourceUrls: webResults.map(r => r.url).filter(Boolean),
       promptTokens: result.promptTokens,
       completionTokens: result.completionTokens,
       model: result.model,
