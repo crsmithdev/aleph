@@ -23,6 +23,7 @@ export interface SessionConfig {
   diminishing_returns_window: number;
   min_delay_between_steps_ms: number;
   max_steps_per_hour: number;
+  max_concurrent_threads: number;
   model: string;
   models: {
     cheap: string;
