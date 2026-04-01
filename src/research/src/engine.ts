@@ -559,7 +559,11 @@ Respond with ONLY "true" if this is a duplicate or near-duplicate, "false" other
 
     if (thread.depth >= thread.max_depth) {
       threads.updateThread(this.sqlite, thread.id, { status: 'exhausted' });
+      return;
     }
+
+    // Not exhausted — reset to queued so other threads can compete by priority
+    threads.updateThread(this.sqlite, thread.id, { status: 'queued' });
   }
 
   private async maybePerturbate(
