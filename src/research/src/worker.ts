@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 import { createDb } from '@construct/data';
 import { applyResearchDDL } from './ddl.js';
-import { ResearchEngine, AnthropicProvider } from './engine.js';
+import { ResearchEngine, AnthropicProvider, type LLMProvider } from './engine.js';
+import { OllamaProvider } from './providers/ollama.js';
 import { Heartbeat, StepRateLimiter, isInActiveWindow, msUntilNextWindow } from './scheduler.js';
 import * as jobs from './services/jobs.js';
 import * as sessions from './services/sessions.js';
@@ -39,9 +40,22 @@ try {
 }
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
-if (!apiKey) {
-  console.error('[worker] ANTHROPIC_API_KEY not set');
+const ollamaModel = process.env.OLLAMA_MODEL;
+const ollamaBaseUrl = process.env.OLLAMA_BASE_URL;
+
+if (!apiKey && !ollamaModel) {
+  console.error('[worker] Set ANTHROPIC_API_KEY or OLLAMA_MODEL');
   process.exit(1);
+}
+
+function buildProvider(session: { config: { model?: string; providers?: { primary?: string } } }): LLMProvider {
+  const primary = session.config.providers?.primary;
+  const model = session.config.model;
+  if (primary === 'ollama' || (!apiKey && ollamaModel)) {
+    return new OllamaProvider({ model: model || ollamaModel || 'qwen2.5:0.5b', baseUrl: ollamaBaseUrl });
+  }
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set');
+  return new AnthropicProvider(apiKey);
 }
 
 const { sqlite } = createDb();
@@ -147,7 +161,7 @@ async function executeJob(job: import('./types.js').ResearchJob): Promise<void> 
   try {
     const engine = new ResearchEngine({
       sqlite,
-      provider: new AnthropicProvider(apiKey),
+      provider: buildProvider(session),
       maxIterations,
       signal: controller.signal,
       onIteration: (i) => {

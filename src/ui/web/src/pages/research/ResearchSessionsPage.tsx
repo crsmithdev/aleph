@@ -43,7 +43,11 @@ export function ResearchSessionsPage() {
     setTestStatus('Creating session...');
     const session = await createSession.mutateAsync({
       seed_query: 'What are the key differences between bun and deno runtimes?',
-      config: { max_thread_depth: 1 },
+      config: {
+        max_thread_depth: 1,
+        model: 'qwen2.5:0.5b',
+        providers: { primary: 'ollama' },
+      },
     });
     setTestStatus('Starting run...');
     await runResearch.mutateAsync({ sessionId: session.id, iterations: 3 });
