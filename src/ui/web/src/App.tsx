@@ -28,6 +28,10 @@ import { SessionTracePage } from './pages/system/observability/SessionTracePage'
 import { TurnTracePage } from './pages/system/observability/TurnTracePage';
 import { SettingsPage } from './pages/system/SettingsPage';
 
+// Research pages
+import { ResearchSessionsPage } from './pages/research/ResearchSessionsPage';
+import { ResearchSessionDetailPage } from './pages/research/ResearchSessionDetailPage';
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: { staleTime: 30_000, retry: 1 },
@@ -78,6 +82,10 @@ export function App() {
               <Route path="/observability/events" element={<EventsPage />} />
               <Route path="/observability/memory" element={<MemoryPage />} />
               <Route path="/observability/db" element={<DbStatsPage />} />
+              {/* Research */}
+              <Route path="/research" element={<ResearchSessionsPage />} />
+              <Route path="/research/:id" element={<ResearchSessionDetailPage />} />
+
               {/* Settings */}
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
