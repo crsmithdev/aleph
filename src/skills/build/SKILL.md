@@ -63,7 +63,7 @@ For each task, follow the TDD cycle strictly:
 **Dispatch strategy:**
 - Every Agent call MUST include `isolation: "worktree"` — no exceptions
 - Independent tasks → parallel subagents (one task per agent, fresh context, no session history)
-- Sequential/coupled tasks → inline via `/inline`, one at a time
+- Sequential/coupled tasks → inline, one at a time
 - Use haiku for simple 1-2 file tasks, sonnet for multi-file integration
 - The main session orchestrates — it reads, plans, dispatches, and reviews. It never edits files directly.
 
@@ -110,9 +110,6 @@ The main session is an orchestrator. All file modifications go through subagents
 
 - **Main session**: Read, Grep, Glob, Bash (read-only), Agent, TaskCreate/Update — no Edit, no Write
 - **Subagents**: Edit, Write, Bash (all) — always in worktrees via `isolation: "worktree"` (verify this parameter exists in the Agent tool schema before relying on it)
-- **Override**: `/inline` disables the dispatch gate for the current session when inline work is genuinely needed
-
-The dispatch-pre-require-subagent hook enforces this — Edit/Write in the main session will be blocked unless `/inline` is active.
 
 ## Done when
 

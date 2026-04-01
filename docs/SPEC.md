@@ -62,7 +62,7 @@ Ratings 1-3 trigger a console message: `[Construct] Low rating (N) — store wha
 
 **TypeScript gate** — after every `Edit` or `Write` on `.ts/.tsx` files, `quality-post-typecheck.ts` finds the nearest `tsconfig.json` and runs `tsc --noEmit`. If errors are found, prints a summary of up to 5 errors.
 
-**Database guard** — before any MCP SQL tool call (`execute_sql`, `apply_migration`, `run_query`), `isolation-pre-block-destructive-sql.ts` blocks destructive operations: `DROP TABLE/DATABASE/SCHEMA`, `TRUNCATE`, `DELETE FROM` without WHERE, `ALTER TABLE DROP COLUMN`.
+**SQL guard** — before any MCP SQL tool call (`execute_sql`, `apply_migration`, `run_query`), `isolation-pre-block-destructive-sql.ts` blocks destructive operations: `DROP TABLE/DATABASE/SCHEMA`, `TRUNCATE`, `DELETE FROM` without WHERE, `ALTER TABLE DROP COLUMN`.
 
 ### Ending a session
 
@@ -129,7 +129,7 @@ Skills are domain-specific playbooks activated by keyword matching. Each lives i
 
 ## Slash Commands
 
-### Installed globally (`dotclaude/commands/` -> `~/.claude/commands/`)
+### Installed globally (`src/commands/` -> `~/.claude/commands/`)
 
 | Command | Behavior |
 |---------|----------|
@@ -145,6 +145,7 @@ Skills are domain-specific playbooks activated by keyword matching. Each lives i
 | `/install` | Runs `bun install.ts`, then auto-runs post-install verification |
 | `/audit` | Full project audit: code, refs, instructions, docs, spec |
 | `/devserver` | Kill dev ports, start UI dev server in background |
+| `/link` | Symlink `~/.claude/construct` to repo `src/` for live development |
 | `/todo` | File items from review output into `docs/TODO.md` |
 
 ## UI — Life Pages
@@ -256,7 +257,7 @@ List of existing backups with filename, creation date, file size. Create and res
 **Invocation:** `bun install.ts` from repo root.
 
 **Steps:**
-1. Ensure data directories exist (`data/{sessions,signals,backups}`)
+1. Ensure data directories exist (`~/.construct/{sessions,signals,backups,memory}`)
 2. Migrate data from old locations (one-time)
 3. Back up preserved files (ALL CAPS `.md` in `core/identity/` and `memory/`) to temp dir
 4. Back up the database (last 5 backups kept)
@@ -277,20 +278,18 @@ List of existing backups with filename, creation date, file size. Create and res
 
 ## Path Resolution
 
-All paths derive from a single root: `CLAUDE_ROOT` (env var, defaults to `~/.claude`).
+Two roots: `~/.claude` for code/config, `~/.construct` for user data.
 
-| Path | Derivation |
+| Path | Location |
 |---|---|
-| `construct/` | `CLAUDE_ROOT/construct` |
-| `commands/` | `CLAUDE_ROOT/commands` |
-| `data/` | `CLAUDE_ROOT/data` (overridable via `CONSTRUCT_DATA_ROOT`) |
-| `data/construct.db` | `DATA_ROOT/construct.db` |
-| `data/memory/sqlite_vec.db` | `DATA_ROOT/memory/sqlite_vec.db` (overridable via `MEMORY_DB_PATH`) |
-| `data/sessions/` | `DATA_ROOT/sessions` |
-| `data/signals/ratings.jsonl` | `DATA_ROOT/signals/ratings.jsonl` |
-| `data/backups/` | `DATA_ROOT/backups` |
-
-**Dev isolation:** when running from the source repo (detected by presence of both `install.ts` and `src/data/src/paths.ts` at or above cwd), `CLAUDE_ROOT` auto-defaults to `<repo>/.dev/` instead of `~/.claude`. This prevents accidental production writes during development.
+| `construct/` | `~/.claude/construct` |
+| `commands/` | `~/.claude/commands` |
+| `projects/` | `~/.claude/projects` |
+| `construct.db` | `~/.construct/construct.db` (overridable via `CONSTRUCT_DATA_ROOT`) |
+| `memory/sqlite_vec.db` | `~/.construct/memory/sqlite_vec.db` (overridable via `MEMORY_DB_PATH`) |
+| `sessions/` | `~/.construct/sessions` |
+| `signals/ratings.jsonl` | `~/.construct/signals/ratings.jsonl` |
+| `backups/` | `~/.construct/backups` |
 
 ## Identity Layer
 
@@ -312,7 +311,7 @@ All hooks in `settings.json`:
 | SessionStart | memory/hooks/session-start.ts | 5000ms |
 | UserPromptSubmit | memory/hooks/rating-capture.ts, skills/hooks/routing-submit-classify.ts | 2000ms, 3000ms |
 | Stop | skills/hooks/quality-stop-check-e2e.ts, skills/hooks/dispatch-stop-remind.ts, skills/hooks/context-stop-monitor.ts, memory/hooks/session-summary.ts, memory/hooks/memory-extract.ts | 3000ms, 2000ms, 3000ms, 3000ms, 5000ms |
-| PreToolUse | skills/hooks/dispatch-pre-require-subagent.ts, skills/hooks/git-pre-require-commit.ts, skills/hooks/quality-pre-require-e2e.ts (matcher: `Edit\|Write`), skills/hooks/isolation-pre-block-prod-edit.ts, skills/hooks/isolation-pre-block-destructive-sql.ts (matcher: `mcp__.*(?:execute_sql\|apply_migration\|run_query)`) | 3000ms, 3000ms, 3000ms, 3000ms, 3000ms |
+| PreToolUse | skills/hooks/dispatch-pre-require-subagent.ts, skills/hooks/git-pre-require-commit.ts, skills/hooks/quality-pre-require-e2e.ts (matcher: `Edit\|Write`), skills/hooks/isolation-pre-block-destructive-sql.ts (matcher: `mcp__.*(?:execute_sql\|apply_migration\|run_query)`) | 3000ms, 3000ms, 3000ms, 3000ms |
 | PostToolUse | skills/hooks/quality-post-format.ts (matcher: `Edit\|Write`), skills/hooks/quality-post-typecheck.ts (matcher: `Edit\|Write`) | 10000ms, 15000ms |
 | PreCompact | skills/hooks/context-precompact-backup.ts | 5000ms |
 | Notification | skills/hooks/notify-event-toast.ts | 3000ms |

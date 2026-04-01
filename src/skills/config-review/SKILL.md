@@ -15,21 +15,21 @@ Configuration files control permissions, hooks, MCP servers, and behavioral rule
 
 ## Scope
 
-- `dotclaude/settings.json` (install source for hooks, settings)
+- `src/core/hooks/settings-hooks.json` (install source for hooks, settings)
 - `.claude/settings.json` (project-local: permissions, statusline, MCP only)
 - `~/.claude/settings.json` (installed global)
-- `dotclaude/CLAUDE.md` (install source for behavioral rules)
+- `src/core/CLAUDE.md` (install source for behavioral rules)
 - `.claude/CLAUDE.md` (project-local dev rules)
 - `~/.claude/CLAUDE.md` (installed global)
 
 ## Checks
 
-**Source vs installed drift** — Does `~/.claude/settings.json` match what `dotclaude/settings.json` would produce after merge? Has someone edited the installed file directly instead of the source? (Source in `src/` and `dotclaude/`, never edit installed files directly.)
+**Source vs installed drift** — Does `~/.claude/settings.json` match what `src/core/hooks/settings-hooks.json` would produce after merge? Has someone edited the installed file directly instead of the source? (Source in `src/` and `src/`, never edit installed files directly.)
 
-**No duplication across layers** — Same hook, command, or setting in both `.claude/` and `dotclaude/`? This causes double-firing. `.claude/settings.json` may only contain permissions, statusline, and MCP server config — never hooks.
+**No duplication across layers** — Same hook, command, or setting in both `.claude/` and `src/`? This causes double-firing. `.claude/settings.json` may only contain permissions, statusline, and MCP server config — never hooks.
 
 **CLAUDE.md ownership** — Rules exist in exactly one CLAUDE.md file:
-  - `dotclaude/CLAUDE.md` → behavioral rules (installed to `~/.claude/CLAUDE.md`)
+  - `src/core/CLAUDE.md` → behavioral rules (installed to `~/.claude/CLAUDE.md`)
   - `.claude/CLAUDE.md` → dev-only rules (loaded at runtime, never installed)
   - No rule duplicated between the two. (No duplication between layers.)
 
@@ -41,7 +41,7 @@ Configuration files control permissions, hooks, MCP servers, and behavioral rule
 
 **Environment variables** — Referenced env vars are documented and have defaults or error messages when missing.
 
-**Information layering** — Is information stored at the right layer? Ephemeral state → tasks/conversation. Durable insights → semantic memory (MCP). Project conventions → CLAUDE.md. Behavioral rules → dotclaude/CLAUDE.md. (No duplication between memory, CLAUDE.md, and docs.)
+**Information layering** — Is information stored at the right layer? Ephemeral state → tasks/conversation. Durable insights → semantic memory (MCP). Project conventions → CLAUDE.md. Behavioral rules → src/core/CLAUDE.md. (No duplication between memory, CLAUDE.md, and docs.)
 
 <!-- PROJECT-SPECIFIC CRITERIA
 Add your own checks below:

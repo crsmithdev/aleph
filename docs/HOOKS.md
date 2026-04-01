@@ -1,6 +1,6 @@
 # Hooks
 
-All hook scripts live in `src/skills/hooks/`. They are registered in `dotclaude/settings.json` and installed to `~/.claude/settings.json` via `bun install.ts`.
+All hook scripts live in `src/skills/hooks/`. They are registered in `src/core/hooks/settings-hooks.json` and installed to `~/.claude/settings.json` via `bun install.ts`.
 
 ## Enforcement table
 
@@ -13,7 +13,6 @@ All hook scripts live in `src/skills/hooks/`. They are registered in `dotclaude/
 | Context | context-stop-monitor | Stop | `context-stop-monitor.ts` | Open | — | Warns at 80%/90% token usage |
 | Context | context-precompact-backup | PreCompact | `context-precompact-backup.ts` | Open | — | Copies transcript before compaction |
 | Isolation | isolation-pre-block-destructive-sql | PreToolUse | `isolation-pre-block-destructive-sql.ts` | Closed | — | Blocks destructive SQL |
-| Isolation | isolation-pre-block-prod-edit | PreToolUse | `isolation-pre-block-prod-edit.ts` | Closed | — | Blocks edits to production from dev repo |
 | Dispatch | dispatch-pre-require-subagent | PreToolUse | `dispatch-pre-require-subagent.ts` | Closed | build | Blocks inline edits in main session |
 | Dispatch | dispatch-stop-remind | Stop | `dispatch-stop-remind.ts` | Open | build | Reminds "you're the orchestrator" every 5 turns |
 | Git | git-pre-require-commit | PreToolUse | `git-pre-require-commit.ts` | Closed @5 groups | — | Groups dirty files by directory; warns at 3, blocks at 5 |
@@ -47,13 +46,11 @@ Only PreToolUse hooks can fail closed. All other hook events (Stop, PostToolUse,
 
 **Enforceability:** None. Pure information and operational backup.
 
-### Isolation — "Never write to production from the dev repo"
+### Isolation — "Guard against destructive operations"
 
 **isolation-pre-block-destructive-sql** fires on PreToolUse for SQL MCP tools (`execute_sql`, `apply_migration`, `run_query`). Blocks `DROP TABLE/DATABASE/SCHEMA`, `TRUNCATE`, `DELETE FROM` without WHERE, and `ALTER TABLE DROP COLUMN`.
 
-**isolation-pre-block-prod-edit** fires on PreToolUse for Edit/Write. Resolves the target path and checks if it falls under `~/.claude/construct/`. If running from the dev repo (detected by presence of `install.ts`), blocks the edit.
-
-**Enforceability:** Strong. Both are hard PreToolUse blocks.
+**Enforceability:** Strong. Hard PreToolUse block.
 
 ### Dispatch — "Main session delegates, doesn't execute"
 
@@ -93,4 +90,4 @@ For deferred enforcement (a non-PreToolUse hook writes a marker, a PreToolUse ho
 
 ## Summary
 
-5 hard gates (all PreToolUse), 8 open advisories. Hard enforcement covers e2e verification (deferred), edits in the main session, production path protection, destructive SQL, and commit discipline. Everything else relies on Claude's compliance.
+4 hard gates (all PreToolUse), 8 open advisories. Hard enforcement covers e2e verification (deferred), edits in the main session, destructive SQL, and commit discipline. Everything else relies on Claude's compliance.

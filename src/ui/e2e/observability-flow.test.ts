@@ -116,22 +116,22 @@ async function runTests(webPort: number) {
   await page.waitForSelector('text=Observability', { timeout: 15000 });
   check('observability page loads', true);
 
-  await page.waitForSelector('text=Sessions', { timeout: 10000 });
+  await page.waitForSelector('text=Messages', { timeout: 10000 });
   check('sessions stat card visible', await page.isVisible('text=Sessions'));
   check('messages stat card visible', await page.isVisible('text=Messages'));
   check('tool calls stat card visible', await page.isVisible('text=Tool Calls'));
   check('total cost stat card visible', await page.isVisible('text=Total Cost'));
 
-  // Verify real data loaded (non-zero values)
-  const sessionEl = page.locator('.text-blue-400.text-2xl').first();
-  const sessionText = await sessionEl.textContent();
+  // Verify real data loaded (non-zero values) — locate Sessions stat card value
+  const sessionEl = page.locator('div:has(div:text-is("Sessions")) .text-accent').first();
+  const sessionText = await sessionEl.textContent({ timeout: 5000 }).catch(() => null);
   check('session count is non-zero', sessionText !== null && sessionText !== '0');
 
   check('daily activity chart exists', await page.isVisible('text=Daily Activity'));
 
-  // === Tools Tab ===
-  console.log('\n--- tools tab ---');
-  await page.click('button:has-text("Tools")');
+  // === Tools Page ===
+  console.log('\n--- tools page ---');
+  await page.goto(`${baseUrl}/observability/tools`);
   await page.waitForSelector('th:has-text("Tool")', { timeout: 5000 });
   check('tools table loads', true);
 
@@ -139,37 +139,37 @@ async function runTests(webPort: number) {
   check('Bash tool in table', toolsTable?.includes('Bash') ?? false);
   check('Read tool in table', toolsTable?.includes('Read') ?? false);
 
-  // === Hooks Tab ===
-  console.log('\n--- hooks tab ---');
-  await page.click('button:has-text("Hooks")');
+  // === Hooks Page ===
+  console.log('\n--- hooks page ---');
+  await page.goto(`${baseUrl}/observability/hooks`);
   await page.waitForTimeout(1500);
   const hasHookTable = await page.isVisible('th:has-text("Hook")');
   const hasNoHooks = await page.isVisible('text=No hook data');
-  check('hooks tab shows data or empty message', hasHookTable || hasNoHooks);
+  check('hooks page shows data or empty message', hasHookTable || hasNoHooks);
 
   if (hasHookTable) {
     check('hook count column visible', await page.isVisible('th:has-text("Count")'));
     check('hook p95 column visible', await page.isVisible('th:has-text("P95")'));
   }
 
-  // === Tokens & Cost Tab ===
-  console.log('\n--- tokens & cost tab ---');
-  await page.click('button:has-text("Tokens & Cost")');
-  await page.waitForSelector('text=Tokens per Day', { timeout: 5000 });
-  check('tokens & cost tab loads', true);
+  // === Tokens Page ===
+  console.log('\n--- tokens page ---');
+  await page.goto(`${baseUrl}/observability/tokens`);
+  await page.waitForSelector('text=Daily Tokens', { timeout: 5000 });
+  check('tokens page loads', true);
   check('total cost card visible', await page.isVisible('text=Total Cost'));
-  check('avg daily card visible', await page.isVisible('text=Avg Daily'));
-  check('tokens chart visible', await page.isVisible('text=Tokens per Day'));
-  check('cost chart visible', await page.isVisible('text=Cost per Day'));
+  check('avg daily card visible', await page.isVisible('text=Avg / Day'));
+  check('tokens chart visible', await page.isVisible('text=Daily Tokens'));
+  check('cost chart visible', await page.isVisible('text=Daily Cost'));
 
   const modelTable = await page.isVisible('th:has-text("Model")');
   check('model breakdown table visible', modelTable);
 
-  // === Memory Tab ===
-  console.log('\n--- memory tab ---');
-  await page.click('button:has-text("Memory")');
+  // === Memory Page ===
+  console.log('\n--- memory page ---');
+  await page.goto(`${baseUrl}/observability/memory`);
   await page.waitForSelector('text=Total Memories', { timeout: 5000 });
-  check('memory tab loads', true);
+  check('memory page loads', true);
   check('total memories card visible', await page.isVisible('text=Total Memories'));
   check('health score card visible', await page.isVisible('text=Health Score'));
   check('stale card visible', await page.isVisible('text=Stale'));
@@ -177,25 +177,25 @@ async function runTests(webPort: number) {
   check('top tags section visible', await page.isVisible('text=Top Tags'));
   check('take snapshot button visible', await page.isVisible('text=Take Snapshot'));
 
-  // Check seeded data values
-  const memoryTotal = await page.locator('.text-blue-400.text-2xl').first().textContent();
+  // Check seeded data values — memory total stat card value
+  const memoryTotal = await page.locator('div:has(div:text-is("Total Memories")) .text-accent').first().textContent({ timeout: 5000 }).catch(() => null);
   check('memory total shows 35', memoryTotal === '35');
 
   // Check trend chart (2 snapshots = shows trend)
-  check('memory trend chart visible', await page.isVisible('text=Memory Count Trend'));
+  check('memory trend chart visible', await page.isVisible('text=Memory Count Over Time'));
 
   // === Time Range Selector ===
   console.log('\n--- time range selector ---');
-  await page.click('button:has-text("Overview")');
-  await page.waitForSelector('text=Sessions', { timeout: 5000 });
+  await page.goto(`${baseUrl}/observability/overview`);
+  await page.waitForSelector('text=Messages', { timeout: 5000 });
 
   await page.click('button:has-text("7d")');
   await page.waitForTimeout(800);
   check('7d preset works', true);
 
-  await page.click('button:has-text("90d")');
+  await page.click('button:has-text("30d")');
   await page.waitForTimeout(800);
-  check('90d preset works', true);
+  check('30d preset works', true);
 
   // === Console Errors Check ===
   console.log('\n--- console errors ---');
@@ -203,8 +203,8 @@ async function runTests(webPort: number) {
   page.on('console', (msg) => {
     if (msg.type() === 'error') consoleErrors.push(msg.text());
   });
-  await page.goto(`${baseUrl}/observability`);
-  await page.waitForSelector('text=Sessions', { timeout: 10000 });
+  await page.goto(`${baseUrl}/observability/overview`);
+  await page.waitForSelector('text=Messages', { timeout: 10000 });
   await page.waitForTimeout(1500);
   check('no console errors on reload', consoleErrors.length === 0);
   if (consoleErrors.length > 0) {

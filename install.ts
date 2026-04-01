@@ -1,20 +1,19 @@
 #!/usr/bin/env bun
 
-import { readdir, mkdir, cp, rm, stat, readFile, writeFile } from "node:fs/promises";
+import { readdir, mkdir, cp, rm, stat, lstat, readFile, writeFile } from "node:fs/promises";
 import { join, dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtemp } from "node:fs/promises";
 import { existsSync } from "node:fs";
 
 // Construct installer — deploys from repo to ~/.claude
-// Source: construct/ (modules), dotclaude/ (CLAUDE.md, settings.json, commands)
+// Source: src/ (everything — modules, commands, CLAUDE.md, hooks config)
 // Preserves: ALL CAPS files in identity/ and memory/
 // Overwrites: hooks, skills, meta, commands, settings, CLAUDE.md
-// Data: ~/.claude/data/ is never touched by sync (DB, sessions, signals live there)
+// User data lives in ~/.construct/ (DB, sessions, signals)
 
 const REPO = dirname(resolve(Bun.argv[1]));
 const CONSTRUCT_SRC = join(REPO, "src");
-const TEMPLATES = join(REPO, "dotclaude");
 const DST = join(Bun.env.HOME!, ".claude");
 
 const INFRA_FILES = new Set(["README.md", "INSTALL.md"]);
@@ -22,7 +21,7 @@ const INFRA_FILES = new Set(["README.md", "INSTALL.md"]);
 // File extensions that should never be overwritten during sync (runtime data)
 const SKIP_EXTENSIONS = [".db", ".db-wal", ".db-shm"];
 
-const DATA_DIR = join(DST, "data");
+const DATA_DIR = join(Bun.env.HOME!, ".construct");
 const BACKUP_DIR = join(DATA_DIR, "backups");
 const MAX_BACKUPS = 5;
 
@@ -57,24 +56,20 @@ async function backupDb(): Promise<void> {
   }
 }
 
-/** Migrate data from old locations under construct/ to ~/.claude/data/ */
+/** Migrate data from old locations to ~/.construct/ */
 async function migrateData(): Promise<void> {
+  const oldDataDir = join(DST, "data");
   const migrations: Array<{ from: string; to: string; type: "file" | "dir" }> = [
-    {
-      from: join(DST, "construct", "data", "construct.db"),
-      to: join(DATA_DIR, "construct.db"),
-      type: "file",
-    },
-    {
-      from: join(DST, "construct", "memory", "sessions"),
-      to: join(DATA_DIR, "sessions"),
-      type: "dir",
-    },
-    {
-      from: join(DST, "construct", "memory", "signals"),
-      to: join(DATA_DIR, "signals"),
-      type: "dir",
-    },
+    // From ~/.claude/data/ (previous layout)
+    { from: join(oldDataDir, "construct.db"), to: join(DATA_DIR, "construct.db"), type: "file" },
+    { from: join(oldDataDir, "sessions"), to: join(DATA_DIR, "sessions"), type: "dir" },
+    { from: join(oldDataDir, "signals"), to: join(DATA_DIR, "signals"), type: "dir" },
+    { from: join(oldDataDir, "backups"), to: join(DATA_DIR, "backups"), type: "dir" },
+    { from: join(oldDataDir, "memory"), to: join(DATA_DIR, "memory"), type: "dir" },
+    // From even older layout under construct/
+    { from: join(DST, "construct", "data", "construct.db"), to: join(DATA_DIR, "construct.db"), type: "file" },
+    { from: join(DST, "construct", "memory", "sessions"), to: join(DATA_DIR, "sessions"), type: "dir" },
+    { from: join(DST, "construct", "memory", "signals"), to: join(DATA_DIR, "signals"), type: "dir" },
   ];
 
   let anyMigrated = false;
@@ -177,28 +172,34 @@ async function syncDir(srcDir: string, dstDir: string): Promise<void> {
   await cleanDst(dstDir, "");
 }
 
+const LINK_ONLY = process.argv.includes("--link-only");
+
 // --- Main ---
 
-console.log("=== Construct Installer ===");
+console.log(LINK_ONLY ? "=== Construct Link Setup ===" : "=== Construct Installer ===");
 console.log(`src: ${REPO}`);
 console.log(`dst: ${DST}`);
 console.log();
 
-// 0. Ensure data directories exist
-await mkdir(join(DATA_DIR), { recursive: true });
+// 0. Ensure data directories exist (~/.construct/)
+await mkdir(DATA_DIR, { recursive: true });
 await mkdir(join(DATA_DIR, "sessions"), { recursive: true });
 await mkdir(join(DATA_DIR, "signals"), { recursive: true });
 await mkdir(join(DATA_DIR, "backups"), { recursive: true });
+await mkdir(join(DATA_DIR, "memory"), { recursive: true });
 
-// 1. Migrate data from old locations (if needed)
-console.log("migrating data...");
-await migrateData();
-
-// 2. Back up preserved files to temp dir
-console.log("backing up preserved files...");
-const backupDir = await mkdtemp(join(tmpdir(), "construct-backup-"));
+const backupDir = LINK_ONLY ? "" : await mkdtemp(join(tmpdir(), "construct-backup-"));
 
 try {
+
+if (!LINK_ONLY) {
+  // 1. Migrate data from old locations (if needed)
+  console.log("migrating data...");
+  await migrateData();
+
+  // 2. Back up preserved files to temp dir
+  console.log("backing up preserved files...");
+
   // Back up ALL CAPS .md files from identity/ and memory/
   await mkdir(join(backupDir, "core/identity"), { recursive: true });
   await mkdir(join(backupDir, "memory"), { recursive: true });
@@ -222,8 +223,18 @@ try {
   // 3a. Stop UI service before overwriting its files
   await Bun.$`systemctl --user stop construct-ui 2>/dev/null`.quiet().nothrow();
 
+  // If construct/ is a symlink (dev/link mode), remove it before copying
+  const constructDst = join(DST, "construct");
+  try {
+    const s = await lstat(constructDst);
+    if (s.isSymbolicLink()) {
+      console.log("  removing symlink (switching from link to install mode)...");
+      await rm(constructDst);
+    }
+  } catch { /* doesn't exist yet */ }
+
   console.log("syncing construct/...");
-  await syncDir(CONSTRUCT_SRC, join(DST, "construct"));
+  await syncDir(CONSTRUCT_SRC, constructDst);
 
   // 3b. Install UI dependencies (file: deps point to sibling dirs that were just overwritten)
   const uiDir = join(DST, "construct", "ui");
@@ -261,12 +272,13 @@ try {
       }
     }
   }
+} // end !LINK_ONLY
 
   // 5. Sync commands — install from repo, remove stale Construct-owned commands
   console.log("syncing commands...");
   await mkdir(join(DST, "commands"), { recursive: true });
 
-  const cmdDir = join(TEMPLATES, "commands");
+  const cmdDir = join(CONSTRUCT_SRC, "commands");
   const repoCommands = new Set<string>();
   if (await exists(cmdDir)) {
     for (const f of await readdir(cmdDir)) {
@@ -315,7 +327,7 @@ try {
   // 6. Merge settings.json — replace hooks + statusLine, preserve everything else
   console.log("merging settings.json...");
 
-  const repoSettings = JSON.parse(await readFile(join(TEMPLATES, "settings.json"), "utf-8"));
+  const repoSettings = JSON.parse(await readFile(join(CONSTRUCT_SRC, "core/hooks/settings-hooks.json"), "utf-8"));
   // Path fixup: rewrite relative paths in hook commands to absolute $HOME-based paths
   const home = Bun.env.HOME!;
   function fixPaths(obj: any): any {
@@ -345,11 +357,9 @@ try {
     await writeFile(dstSettingsPath, JSON.stringify(fixedSettings, null, 2) + "\n");
   }
 
-  // 7. Update CLAUDE.md — replace # Construct section, preserve content before AND after
+  // 7. Update CLAUDE.md — replace # Construct section with @import
   console.log("updating CLAUDE.md...");
-  const rawSection = await readFile(join(TEMPLATES, "CLAUDE.md"), "utf-8");
-  // Strip source-only HTML comments — they're meaningless in the installed copy
-  const constructSection = rawSection.replace(/<!--[\s\S]*?-->\s*/g, "");
+  const constructImport = "# Construct\n\n@construct/core/CLAUDE.md\n";
   const dstClaudeMd = join(DST, "CLAUDE.md");
 
   if (await exists(dstClaudeMd)) {
@@ -369,7 +379,6 @@ try {
         }
       }
 
-      // Clean stale Construct source comments from the user section
       const before = lines.slice(0, startIdx).join("\n")
         .replace(/<!--\s*SOURCE FILE[^>]*?-->\s*/g, "");
       const after = lines.slice(endIdx).join("\n");
@@ -378,22 +387,22 @@ try {
       if (before.trim()) {
         result = before.replace(/\n+$/, "") + "\n\n";
       }
-      result += constructSection.replace(/\n+$/, "");
+      result += constructImport;
       if (after.trim()) {
-        result += "\n\n" + after.replace(/^\n+/, "");
+        result += "\n" + after.replace(/^\n+/, "");
       }
-      result += "\n";
 
       await writeFile(dstClaudeMd, result);
     } else {
       // No existing Construct section — append
-      const result = content.replace(/\n+$/, "") + "\n\n" + constructSection.replace(/\n+$/, "") + "\n";
+      const result = content.replace(/\n+$/, "") + "\n\n" + constructImport;
       await writeFile(dstClaudeMd, result);
     }
   } else {
-    await writeFile(dstClaudeMd, constructSection);
+    await writeFile(dstClaudeMd, constructImport);
   }
 
+if (!LINK_ONLY) {
   // 8. Verify critical files — byte-size check on key infrastructure
   const criticalFiles = [
     "construct/skills/skill-rules.json",
@@ -442,11 +451,10 @@ try {
     }
 
     // Write full manifest
-    const dataDir = join(DST, "data");
-    const dbPath = join(dataDir, "construct.db");
+    const dbPath = join(DATA_DIR, "construct.db");
     const dbSize = (await exists(dbPath)) ? (await stat(dbPath)).size : 0;
-    const sessionCount = (await exists(join(dataDir, "sessions")))
-      ? (await readdir(join(dataDir, "sessions"))).filter((f) => f.endsWith(".md")).length
+    const sessionCount = (await exists(join(DATA_DIR, "sessions")))
+      ? (await readdir(join(DATA_DIR, "sessions"))).filter((f) => f.endsWith(".md")).length
       : 0;
 
     const manifest = [
@@ -466,14 +474,15 @@ try {
       `[paths]`,
       `repo = ${REPO}`,
       `claude_root = ${DST}`,
+      `data_root = ${DATA_DIR}`,
       `construct = ${join(DST, "construct")}`,
       `commands = ${join(DST, "commands")}`,
       `skills = ${join(DST, "construct", "skills")}`,
       `db = ${dbPath}`,
-      `memory_db = ${join(dataDir, "memory", "sqlite_vec.db")}`,
-      `sessions = ${join(dataDir, "sessions")}`,
-      `ratings = ${join(dataDir, "signals", "ratings.jsonl")}`,
-      `backups = ${join(dataDir, "backups")}`,
+      `memory_db = ${join(DATA_DIR, "memory", "sqlite_vec.db")}`,
+      `sessions = ${join(DATA_DIR, "sessions")}`,
+      `ratings = ${join(DATA_DIR, "signals", "ratings.jsonl")}`,
+      `backups = ${join(DATA_DIR, "backups")}`,
       ``,
       `[install]`,
       `timestamp = ${new Date().toISOString()}`,
@@ -521,6 +530,7 @@ try {
   // 11. Verify database health — run DDL and smoke-test each table
   console.log("verifying database...");
   const dbVerifyPath = join(DATA_DIR, "construct.db");
+  await mkdir(join(DATA_DIR, "memory"), { recursive: true });
   if (await exists(dbVerifyPath)) {
     try {
       const { Database } = await import("bun:sqlite");
@@ -555,8 +565,10 @@ try {
     console.log("  ⚠ no database found (will be created on first API start)");
   }
 
+} // end !LINK_ONLY
+
   console.log();
   console.log("done.");
 } finally {
-  await rm(backupDir, { recursive: true, force: true });
+  if (backupDir) await rm(backupDir, { recursive: true, force: true });
 }

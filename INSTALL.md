@@ -20,9 +20,9 @@ bun install.ts
 
 The installer:
 1. Syncs `src/` tree to `~/.claude/construct/`
-2. Copies `dotclaude/commands/` to `~/.claude/commands/`
-3. Merges `dotclaude/settings.json` into `~/.claude/settings.json` (hooks and statusline)
-4. Updates `~/.claude/CLAUDE.md` with the Construct section from `dotclaude/CLAUDE.md`
+2. Copies `src/commands/` + skill SKILL.md files to `~/.claude/commands/`
+3. Merges hooks+statusLine from `src/core/hooks/settings-hooks.json` into `~/.claude/settings.json`
+4. Sets `~/.claude/CLAUDE.md` to `@import` from `construct/core/CLAUDE.md`
 
 After install completes, run `/install` in Claude Code. It runs the installer and then automatically reads each module's `INSTALL.md` and executes the Post-install Verification checks listed there. Every check must pass.
 
@@ -41,7 +41,11 @@ The installer automatically discovers and preserves any ALL CAPS `.md` file (fil
 - `construct/core/identity/` — e.g. `SOUL.md`, `IDENTITY.md`, `STYLE.md`, `USER.md`, plus any custom files you add (e.g. `PROJECTS.md`, `WORKFLOW.md`)
 - `construct/memory/` — any custom ALL CAPS `.md` files you add (e.g. `GOALS.md`, `DECISIONS.md`)
 
-All data under `~/.claude/data/` (databases, sessions, signals, backups) is preserved automatically — the installer never touches this directory. It only syncs `~/.claude/construct/` (code) and `~/.claude/commands/` (commands).
+All user data lives in `~/.construct/` (databases, sessions, signals, backups, memory) — the installer never touches this directory. It only syncs `~/.claude/construct/` (code) and `~/.claude/commands/` (commands).
+
+### Development with /link
+
+Use `/link` to create a single symlink (`~/.claude/construct → src/`). All code changes take effect immediately. A one-time `bun install.ts --link-only` syncs commands, settings, and CLAUDE.md. Run `/install` to go back to a deployed copy.
 
 
 ### What gets overwritten

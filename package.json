@@ -11,7 +11,7 @@
   ],
   "scripts": {
     "test": "bun test.ts",
-    "validate": "jq . dotclaude/settings.json > /dev/null && jq . src/skills/skill-rules.json > /dev/null",
+    "validate": "jq . src/core/hooks/settings-hooks.json > /dev/null && jq . src/skills/skill-rules.json > /dev/null",
     "dev": "cd src/ui && bun run dev",
     "ui:build": "cd src/ui && bun run build",
     "ui:e2e": "bun src/ui/e2e/goal-flow.test.ts",

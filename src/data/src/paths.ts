@@ -1,35 +1,16 @@
 import { resolve } from "path";
 import { homedir } from "os";
-import { mkdirSync, existsSync } from "fs";
+import { mkdirSync } from "fs";
 
-// Auto-detect dev repo: if install.ts + src/data/src/paths.ts exist at or above cwd,
-// we're running from the source tree. Default to .dev/ to prevent accidental production writes.
-function detectClaudeRoot(): string {
-  if (process.env.CLAUDE_ROOT) return process.env.CLAUDE_ROOT;
-  let dir = process.cwd();
-  for (let i = 0; i < 5; i++) {
-    if (existsSync(resolve(dir, "install.ts")) && existsSync(resolve(dir, "src/data/src/paths.ts"))) {
-      return resolve(dir, ".dev");
-    }
-    const parent = resolve(dir, "..");
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return resolve(homedir(), ".claude");
-}
-
-const CLAUDE_ROOT = detectClaudeRoot();
-const DATA_ROOT = process.env.CONSTRUCT_DATA_ROOT || resolve(CLAUDE_ROOT, "data");
+const CLAUDE_ROOT = process.env.CLAUDE_ROOT || resolve(homedir(), ".claude");
+const DATA_ROOT = process.env.CONSTRUCT_DATA_ROOT || resolve(homedir(), ".construct");
 const CONSTRUCT_ROOT = resolve(CLAUDE_ROOT, "construct");
-
-// In dev mode, read transcripts from production (read-only) so the dev UI has real data.
-const PROD_CLAUDE = resolve(homedir(), ".claude");
 
 export const claudePaths = {
   root: CLAUDE_ROOT,
   construct: CONSTRUCT_ROOT,
   commands: resolve(CLAUDE_ROOT, "commands"),
-  projects: resolve(PROD_CLAUDE, "projects"),
+  projects: resolve(CLAUDE_ROOT, "projects"),
   manifest: resolve(CONSTRUCT_ROOT, ".manifest"),
   skills: resolve(CONSTRUCT_ROOT, "skills"),
 };
@@ -60,4 +41,5 @@ export function ensureDataDirs(): void {
   mkdirSync(dataPaths.backups, { recursive: true });
   mkdirSync(dataPaths.sessions, { recursive: true });
   mkdirSync(dataPaths.signals, { recursive: true });
+  mkdirSync(MEMORY_DIR, { recursive: true });
 }

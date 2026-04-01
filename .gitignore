@@ -1,3 +1,5 @@
+.dev/
+src/research/
 .claude/worktrees/
 .claude/commands/
 .claude/MEMORY.md
@@ -6,8 +8,8 @@
 src/memory/sessions/
 src/memory/signals/
 
-# Dev environment
-.dev/
+# Eval scratch data
+.eval-data/
 docs/SCRATCH.md
 
 # Dashboard

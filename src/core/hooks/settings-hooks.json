@@ -1,46 +1,4 @@
 {
-  "permissions": {
-    "allow": [
-      "Bash(git:*)",
-      "Bash(pnpm:*)",
-      "Bash(npm:*)",
-      "Bash(node:*)",
-      "Bash(bun:*)",
-      "Bash(python3:*)",
-      "Bash(uv:*)",
-      "Bash(ruff:*)",
-      "Bash(vitest:*)",
-      "Bash(playwright:*)",
-      "Bash(ls:*)",
-      "Bash(cat:*)",
-      "Bash(grep:*)",
-      "Bash(find:*)",
-      "Bash(mkdir:*)",
-      "Bash(cp:*)",
-      "Bash(mv:*)",
-      "Bash(echo:*)",
-      "Bash(jq:*)",
-      "Bash(curl:*)"
-    ],
-    "deny": [
-      "Bash(rm -rf /*)",
-      "Bash(rm -rf ~*)",
-      "Bash(dd:*)",
-      "Bash(mkfs:*)",
-      "Bash(sudo rm:*)",
-      "Bash(chmod 777:*)"
-    ],
-    "ask": [
-      "Bash(sudo:*)",
-      "Bash(rm -rf:*)",
-      "Bash(kill:*)",
-      "Bash(killall:*)",
-      "Bash(pkill:*)",
-      "Bash(systemctl:*)",
-      "Bash(shutdown:*)",
-      "Bash(reboot:*)"
-    ]
-  },
   "statusLine": {
     "type": "command",
     "command": "ccstatusline",
@@ -92,15 +50,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/skills/hooks/dispatch-stop-remind.ts",
-            "timeout": 2000
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
             "command": "bun src/skills/hooks/context-stop-monitor.ts",
             "timeout": 3000
           }
@@ -133,26 +82,6 @@
             "type": "command",
             "command": "bun src/skills/hooks/isolation-pre-block-destructive-sql.ts",
             "timeout": 3000
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun src/skills/hooks/isolation-pre-block-prod-edit.ts",
-            "timeout": 2000
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun src/skills/hooks/dispatch-pre-require-subagent.ts",
-            "timeout": 2000
           }
         ]
       },

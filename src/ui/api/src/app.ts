@@ -90,7 +90,8 @@ export async function createApp(opts?: { dbUrl?: string }) {
 
   await app.register(cors, {
     origin: (origin, cb) => {
-      if (!origin || origin === 'http://localhost' || origin.startsWith('http://localhost:')) {
+      if (!origin || origin === 'http://localhost' || origin.startsWith('http://localhost:') ||
+          origin === 'http://127.0.0.1' || origin.startsWith('http://127.0.0.1:')) {
         cb(null, true);
       } else {
         cb(new Error('Not allowed'), false);
@@ -137,7 +138,7 @@ export async function createApp(opts?: { dbUrl?: string }) {
 
       const hasManifest = Object.keys(manifest).length > 0;
 
-      // Detect repo dir: in dev, app.ts is at src/ui/api/src/app.ts — repo root is 4 levels up
+      // Detect repo dir for live git info when no manifest
       const repoDir = manifest.paths?.repo ?? (() => {
         const candidate = resolve(import.meta.dirname || '.', '../../../..');
         return existsSync(resolve(candidate, '.git')) ? candidate : undefined;
@@ -150,8 +151,6 @@ export async function createApp(opts?: { dbUrl?: string }) {
       const dbSize = (() => {
         try { return statSync(runtimeDbPath).size; } catch { return 0; }
       })();
-
-      const isDev = !hasManifest;
 
       return {
         git: {
@@ -167,6 +166,7 @@ export async function createApp(opts?: { dbUrl?: string }) {
         paths: {
           repo: repoDir ?? 'unknown',
           claudeRoot: manifest.paths?.claude_root ?? claudePaths.root,
+          dataRoot: manifest.paths?.data_root ?? dataPaths.root,
           construct: manifest.paths?.construct ?? claudePaths.construct,
           commands: manifest.paths?.commands ?? claudePaths.commands,
           skills: manifest.paths?.skills ?? claudePaths.skills,
@@ -179,13 +179,13 @@ export async function createApp(opts?: { dbUrl?: string }) {
           backups: (manifest.paths?.backups) ?? dataPaths.backups,
         },
         install: {
-          timestamp: manifest.install?.timestamp ?? (isDev ? 'dev' : 'unknown'),
-          bunVersion: manifest.install?.bun_version ?? (isDev ? Bun.version : 'unknown'),
+          timestamp: manifest.install?.timestamp ?? 'unknown',
+          bunVersion: manifest.install?.bun_version ?? Bun.version,
           platform: manifest.install?.platform ?? process.platform,
           arch: manifest.install?.arch ?? process.arch,
         },
         runtime: {
-          nodeEnv: process.env.NODE_ENV || (isDev ? 'development' : 'unknown'),
+          nodeEnv: process.env.NODE_ENV || 'development',
           port: config.port,
           dbSizeBytes: dbSize,
         },
@@ -194,7 +194,7 @@ export async function createApp(opts?: { dbUrl?: string }) {
   }, { prefix: '/api' });
 
   const webDist = resolve(import.meta.dirname || '.', '../../web/dist');
-  if (config.nodeEnv === 'production' && existsSync(webDist)) {
+  if (existsSync(webDist)) {
     await app.register(fastifyStatic, { root: webDist, prefix: '/' });
     app.setNotFoundHandler((req, reply) => {
       if (!req.url.startsWith('/api')) {

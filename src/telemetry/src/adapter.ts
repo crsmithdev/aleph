@@ -389,6 +389,8 @@ export interface AdaptOptions {
   baseDir?: string;
 }
 
+const fileCache = new Map<string, { mtimeMs: number; events: TelemetryEvent[] }>();
+
 function readDirectives(since?: Date): TelemetryEvent[] {
   const filePath = dataPaths.directives;
   if (!existsSync(filePath)) return [];

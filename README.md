@@ -32,61 +32,29 @@ See [INSTALL.md](INSTALL.md) for installation, upgrade, and mandatory post-insta
 ## Directory Layout
 
 ```
-src/                                      # source modules (installed to ~/.claude/construct/)
+src/                                      # all Construct code (symlinked or synced to ~/.claude/construct/)
 ├── core/
-│   ├── hooks/                           # (none currently — statusline via ccstatusline)
+│   ├── CLAUDE.md                        # Construct behavioral rules (@imported by ~/.claude/CLAUDE.md)
+│   ├── hooks/
+│   │   └── settings-hooks.json          # hook registrations + statusLine config
 │   └── identity/                        # optional semantic identity layer
-│       ├── SOUL.md                      # purpose, values, mental models
-│       ├── IDENTITY.md                  # name, tone, personality
-│       ├── STYLE.md                     # output formatting, conventions
-│       └── USER.md                      # principal profile, environment
+│       ├── SOUL.md, IDENTITY.md, STYLE.md, USER.md
+├── commands/                            # slash commands (copied to ~/.claude/commands/)
+│   ├── finish.md, gist.md, goal.md, inline.md, todo.md
 ├── memory/
-│   ├── sessions/                        # session summaries
-│   ├── signals/ratings.jsonl            # explicit + implicit ratings
 │   └── hooks/                           # session-start, rating-capture, session-summary, memory-extract
 ├── skills/
 │   ├── skill-rules.json                 # keyword routing config
-│   ├── hooks/routing-submit-classify.ts  # depth classification + skill matching
-│   ├── hooks/quality-post-format.ts      # per-file lint/format on Edit/Write
-│   ├── hooks/quality-post-typecheck.ts   # TypeScript type-check on Edit/Write
-│   ├── hooks/quality-stop-check-e2e.ts   # e2e verification gate
-│   ├── hooks/quality-pre-require-e2e.ts  # deferred hard-block on unverified edits
-│   ├── hooks/context-stop-monitor.ts     # context window usage warning
-│   ├── hooks/context-precompact-backup.ts # transcript backup before compaction
-│   ├── hooks/dispatch-pre-require-subagent.ts # dispatch gate for main session
-│   ├── hooks/dispatch-stop-remind.ts     # dispatch mode reminder on stop
-│   ├── hooks/git-pre-require-commit.ts   # require git commit before more edits
-│   ├── hooks/isolation-pre-block-destructive-sql.ts # block destructive SQL
-│   ├── hooks/isolation-pre-block-prod-edit.ts # block prod edits from dev
-│   ├── hooks/notify-event-toast.ts       # WSL toast / macOS alert / terminal bell
-│   └── */SKILL.md                        # 13 skill playbooks (see Skills section)
-├── eval/
-│   ├── runner.ts                        # Agent SDK eval harness
-│   ├── scenarios/                       # test scenarios (broken-math, todo-app, todo-feature)
-│   └── results/                         # eval run results (JSON)
-├── telemetry/
-│   └── src/                             # JSONL parser, aggregator, pricing, types
-├── data/
-│   └── src/                             # shared SQLite persistence, path resolution
-├── goals/
-│   ├── src/                             # domain logic (services, schema, validators)
-│   └── mcp/                             # MCP server (direct SQLite, no HTTP)
-└── ui/
-    ├── api/                             # Fastify REST API (thin wrappers)
-    └── web/                             # React SPA (Vite + Tailwind)
+│   ├── hooks/                           # 12 hook scripts (quality, dispatch, isolation, context, etc.)
+│   └── */SKILL.md                       # 13 skill playbooks
+├── data/                                # shared SQLite persistence, path resolution
+├── eval/                                # Agent SDK eval harness + scenarios
+├── telemetry/                           # JSONL parser, aggregator, pricing
+├── goals/                               # Goal/TODO domain logic + MCP server
+└── ui/                                  # Fastify API + React SPA
 
-dotclaude/                                # install sources (installed to ~/.claude/)
-├── CLAUDE.md                            # install source for ~/.claude/CLAUDE.md (not loaded directly)
-├── settings.json                        # permissions, statusline, hooks
-└── commands/
-    ├── gist.md                          # /gist slash command
-    ├── goal.md                          # /goal slash command
-    ├── todo.md                          # /todo slash command
-    ├── finish.md                        # /finish slash command
-    └── inline.md                        # /inline dispatch gate override
-
-.claude/                                  # dev-time config only (never installed)
-├── CLAUDE.md                            # dev-only rules, loaded at runtime for this repo
+.claude/                                  # project-local config (never installed)
+├── CLAUDE.md                            # repo-specific dev rules, loaded at runtime
 └── settings.json                        # permissions, statusline, MCP config (no hooks)
 ```
 
@@ -106,7 +74,6 @@ dotclaude/                                # install sources (installed to ~/.cla
 | PreToolUse | git-pre-require-commit.ts | skills | Require commit before more edits |
 | PreToolUse | quality-pre-require-e2e.ts | skills | Deferred hard-block after verification gate |
 | PreToolUse | isolation-pre-block-destructive-sql.ts | skills | Block destructive SQL operations |
-| PreToolUse | isolation-pre-block-prod-edit.ts | skills | Block production edits from dev repo |
 | PostToolUse | quality-post-format.ts | skills | Per-file lint/format on Edit/Write |
 | PostToolUse | quality-post-typecheck.ts | skills | TypeScript type-check on Edit/Write |
 | PreCompact | context-precompact-backup.ts | skills | Transcript backup before compaction |
@@ -116,7 +83,7 @@ The statusline (`ccstatusline`) is configured via the `statusLine` key in settin
 
 ## Slash Commands
 
-### Installed globally (`dotclaude/commands/` -> `~/.claude/commands/`)
+### Installed globally (`src/commands/` -> `~/.claude/commands/`)
 
 | Command | Module | Purpose |
 |---------|------|---------|

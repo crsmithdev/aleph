@@ -9,13 +9,13 @@ Slash commands are the user-facing interface to skills and automation. Unclear o
 
 ## When to Use
 
-- After adding or modifying command files in `dotclaude/commands/`
+- After adding or modifying command files in `src/commands/`
 - When a slash command behaves unexpectedly
 - Periodic audit of command quality
 
 ## Scope
 
-All `.md` files in `dotclaude/commands/` (installed to `~/.claude/commands/`) and `.claude/commands/` (project-local commands loaded at runtime).
+All `.md` files in `src/commands/` (installed to `~/.claude/commands/`) and `.claude/commands/` (project-local commands loaded at runtime).
 
 ## Checks
 
@@ -31,7 +31,7 @@ All `.md` files in `dotclaude/commands/` (installed to `~/.claude/commands/`) an
 
 **References** — Does the command reference tools, files, MCP servers, or APIs that exist? Are referenced skills registered in skill-rules.json? (Nothing fails silently.)
 
-**Source location** — Command source lives in `dotclaude/commands/`, not `.claude/commands/` (unless intentionally project-local). Commands install to `~/.claude/commands/` via merge. (Source in `dotclaude/`, never `.claude/` for shared commands.)
+**Source location** — Command source lives in `src/commands/`, not `.claude/commands/` (unless intentionally project-local). Commands install to `~/.claude/commands/` via install.ts. (Source in `src/`, never `.claude/` for shared commands.)
 
 **Orphans** — No command files that aren't reachable via the slash command interface. No references to commands that don't exist. (Remove completely — no orphaned artifacts.)
 
@@ -45,7 +45,7 @@ Add your own checks below:
 
 ## Process
 
-1. List all command files in `dotclaude/commands/` and `.claude/commands/`
+1. List all command files in `src/commands/` and `.claude/commands/`
 2. Read each fully
 3. Run each check above
 4. Cross-reference with skills — does any command duplicate a skill's trigger?

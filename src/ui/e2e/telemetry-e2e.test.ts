@@ -258,6 +258,7 @@ touchRecursive(fakeProjectsDir);
 
 process.env.CONSTRUCT_DB_PATH = dbPath;
 process.env.CLAUDE_ROOT = fakeClaudeRoot;
+process.env.CONSTRUCT_DATA_ROOT = join(tmpBase, 'data');
 
 const db = new Database(dbPath);
 db.exec('PRAGMA journal_mode = WAL');

@@ -1,0 +1,1 @@
+Kill whatever is running on ports 5174 and 3002, then start the UI dev server with `npm run dev` from `src/ui/`. This uses ports 5174/3002 and reads from `~/.construct/`. Run the server in the background.

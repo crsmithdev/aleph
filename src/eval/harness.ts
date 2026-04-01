@@ -276,7 +276,7 @@ export interface SandboxHook {
  * Write a .claude/settings.json into the sandbox with real hook scripts.
  * Commands use absolute paths to the repo's hook scripts so they resolve
  * from any sandbox cwd. CONSTRUCT_DATA_ROOT must be set in the env so
- * hooks write telemetry to the sandbox's data dir, not production.
+ * hooks write telemetry to the sandbox's data dir, not ~/.construct.
  */
 export function registerSandboxHooks(sandbox: string, hooks: SandboxHook[]) {
   const grouped: Record<string, any[]> = {};
@@ -301,14 +301,6 @@ export function registerSandboxHooks(sandbox: string, hooks: SandboxHook[]) {
 /** Resolve absolute path to a hook script in the construct repo. */
 export function hookCmd(hookPath: string): string {
   return `bun ${resolve(REPO_ROOT, "src", hookPath)}`;
-}
-
-/** Standard dispatch gate hooks pointing to real scripts. */
-export function dispatchHooks(): SandboxHook[] {
-  return [
-    { event: "UserPromptSubmit", command: hookCmd("skills/hooks/routing-submit-classify.ts") },
-    { event: "PreToolUse", matcher: "Edit|Write", command: hookCmd("skills/hooks/dispatch-pre-require-subagent.ts") },
-  ];
 }
 
 /** Standard quality gate hooks pointing to real scripts. */
@@ -362,30 +354,6 @@ export function realStopHookCallback(hookPath: string, dataRoot: string): HookCa
     const { stdout } = execHook(absHook, dataRoot, input);
     if (stdout) return { systemMessage: stdout };
     return {};
-  };
-}
-
-/**
- * Build programmatic SDK hooks that delegate to real hook scripts.
- * The real scripts run as subprocesses and write telemetry to dataRoot.
- */
-export function realDispatchHooks(dataRoot: string): Partial<Record<"PreToolUse" | "PostToolUse" | "Stop" | "UserPromptSubmit", HookCallbackMatcher[]>> {
-  // Capture the SDK session ID on first prompt and write current-session-id
-  const captureSessionId: HookCallback = async (input) => {
-    const sid = (input as any).session_id;
-    if (sid) {
-      mkdirSync(join(dataRoot, "signals"), { recursive: true });
-      writeFileSync(join(dataRoot, "signals", "current-session-id"), sid);
-    }
-    return {};
-  };
-
-  return {
-    UserPromptSubmit: [{ hooks: [captureSessionId] }],
-    PreToolUse: [{
-      matcher: "Edit|Write",
-      hooks: [realHookCallback("skills/hooks/dispatch-pre-require-subagent.ts", dataRoot)],
-    }],
   };
 }
 
@@ -541,7 +509,7 @@ export async function runEval(config: EvalConfig): Promise<{ result: EvalResult;
   const result = config.result ?? emptyResult();
   const start = Date.now();
 
-  // Isolated data dir for this eval — hooks write here, not to production
+  // Isolated data dir for this eval — hooks write here, not to ~/.construct
   const dataRoot = config.dataRoot ?? mkdtempSync(join(tmpdir(), "eval-data-"));
   const signalsDir = join(dataRoot, "signals");
   mkdirSync(signalsDir, { recursive: true });

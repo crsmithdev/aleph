@@ -15,11 +15,9 @@
  *    emit matched skill names for Claude to activate via Skill(). Also check for
  *    project-local skill extensions at .claude/skills/{skill}.md.
  *
- * Writes directive signals (full, dispatch, skill:{name}) to the directives log.
- * Writes current session ID to signals/ for the dispatch gate to read.
- * If depth=FULL and not a question → emit DISPATCH MODE instructions.
+ * Writes directive signals (full, skill:{name}) to the directives log.
  */
-import { existsSync, readFileSync, appendFileSync, mkdirSync, writeFileSync } from "fs";
+import { existsSync, readFileSync, appendFileSync, mkdirSync } from "fs";
 import { resolve, dirname } from "path";
 import { execSync } from "child_process";
 import { trace } from "../../trace.ts";
@@ -90,10 +88,9 @@ const matched = rules
 
 trace(TAG, `skill match: ${matched.length ? matched.join(", ") : "none"}`);
 
-// Write directive signal (before early exit so full/dispatch are captured even with no skill match)
+// Write directive signal (before early exit so full is captured even with no skill match)
 const directives: string[] = [];
 if (isFull) directives.push("full");
-if (isFull && !isQuestion) directives.push("dispatch");
 for (const skill of matched) directives.push(`skill:${skill}`);
 if (directives.length > 0) {
   const sessionId = input.session_id ?? "unknown";
@@ -104,21 +101,6 @@ if (directives.length > 0) {
     trace(TAG, `directive signal written: ${directives.join(", ")}`);
   } catch (e) {
     trace(TAG, `directive signal write failed: ${(e as Error).message}`);
-  }
-
-  // Write session ID to a known path so /inline can create the override signal
-  if (sessionId !== "unknown") {
-    try {
-      writeFileSync(`${dataPaths.signals}/current-session-id`, sessionId);
-    } catch {}
-  }
-
-  if (directives.includes("dispatch") && sessionId !== "unknown") {
-    console.log(`[Construct] DISPATCH MODE — this task must be dispatched to background Agent(s).
-- Create task(s) via TaskCreate for visibility
-- Dispatch each as Agent (run_in_background: true)
-- Respond to the user immediately — don't wait for completion
-- Use /inline to override and work directly`);
   }
 }
 

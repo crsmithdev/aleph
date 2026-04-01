@@ -299,10 +299,6 @@ const HOOK_METADATA: Record<string, HookMeta> = {
     gate: 'dispatch',
     description: 'Reminds to dispatch tasks to background agents',
   },
-  'isolation-pre-block-prod-edit': {
-    blocking: true,
-    description: 'Blocks edits to production ~/.claude paths from dev repo',
-  },
   'isolation-pre-block-destructive-sql': {
     blocking: true,
     description: 'Blocks destructive SQL (DROP, TRUNCATE, DELETE without WHERE)',

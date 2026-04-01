@@ -22,8 +22,7 @@
 | install preservation | Installer sentinel file preservation across upgrades |
 | identity files | Identity files exist, are non-empty, and install correctly |
 | quality-stop-check-e2e | Verification gate (`quality-stop-check-e2e.ts`): blocks edits without e2e evidence, detects playwright/cypress/devserver/chrome-devtools, requires artifacts, deduplicates files, handles malformed JSON, tool-result user messages don't split turns, known gaps (Bash writes, Agent edits) |
-| dispatch-pre-require-subagent | Dispatch gate hook: blocks Edit/Write in main session, allows subagent edits |
-| directive signals | Dispatch directive writing: architectural prompts get `dispatch`+`full`, quick prompts skip, questions get `full` only |
+| directive signals | Directive writing: architectural prompts get `full`, quick prompts skip, questions get `full` only |
 
 ## Telemetry unit tests (`src/telemetry/__tests__/`)
 
@@ -114,75 +113,6 @@ Computes ground-truth metrics independently from raw JSONL, then verifies system
 
 Evals launch Claude via the Agent SDK in a sandboxed scenario. Programmatic hooks delegate to real hook scripts as subprocesses — the scripts write telemetry to `hook-events.jsonl` and marker files, identical to production.
 
-### `dispatch-gate.eval.ts`
-
-Tests that the dispatch gate forces Claude to use the Agent tool instead of editing directly.
-
-**Flow:**
-
-| Step | What happens | Input | Output |
-|---|---|---|---|
-| 1. Setup sandbox | Copies `broken-math` scenario to temp dir, `git init` | Scenario files | Sandbox path |
-| 2. Create data root | Temp dir for hook telemetry + signals | — | `signals/` dir |
-| 3. Capture session ID | `UserPromptSubmit` hook writes SDK session ID to `signals/current-session-id` | SDK input | Marker file |
-| 4. Launch Claude (with gate) | Agent SDK `query()` with `dispatch-pre-require-subagent.ts` as PreToolUse hook (via `realHookCallback`) | Task prompt + gate instructions | Claude session |
-| 5. Gate enforcement | On each Edit/Write, hook subprocess fires: compares `session_id` to marker, blocks main session (exit 2), writes to `hook-events.jsonl` | SDK PreToolUse input | `decision: "block"` or allow |
-| 6. Claude adapts | Claude uses Agent tool to dispatch edit to subagent | Block message | Agent tool call |
-| 7. Check task | `bun test` in sandbox, `git diff --name-only` | Sandbox state | `taskSuccess`, `filesChanged` |
-| 8. Launch Claude (bare) | Same scenario, no hooks | Task prompt | Baseline result |
-| 9. Read telemetry | Parse `signals/hook-events.jsonl` | JSONL file | `HookEvent[]` |
-
-**Verification:**
-
-| Assertion | What it checks | Source |
-|---|---|---|
-| `agentDispatched` | Claude used Agent tool | PostToolUse tracker |
-| `taskSuccess` | `bun test` passes in sandbox | Exit code |
-| `filesChanged.length > 0` | Subagent modified files | `git diff --name-only HEAD` |
-| `hook-events.jsonl exists` | Real hook script wrote telemetry | File existence |
-| `dispatch-pre-require-subagent fired` | Events filtered by hook name | JSONL parse |
-| Events have `PreToolUse` type | Correct event field | JSONL parse |
-| Events have `sessionId` + `ts` | Telemetry format correct | JSONL parse |
-| Bare: no events | No hooks = no telemetry | Empty file |
-| Gate forced dispatch | Agent used only with gate, not bare | A/B comparison |
-
-### `combined-gates.eval.ts`
-
-Combined dispatch + quality gate eval. Tests the full production flow: orchestrator dispatches to subagent, then must verify e2e before stopping.
-
-**Flow:**
-
-| Step | What happens | Input | Output |
-|---|---|---|---|
-| 1. Setup sandbox | Copies `todo-app` scenario (HTTP server with 2 bugs) | Scenario files | Sandbox path |
-| 2. Count events | Reads existing `hook-events.jsonl` line count from `.dev/data` | Dev DB | `eventsBefore` |
-| 3. Merge hooks | Combines dispatch hooks (UserPromptSubmit + PreToolUse) with quality hooks (Stop + PreToolUse) | Hook configs | Combined hook map |
-| 4. Launch Claude (with gates) | Agent SDK `query()` with both gates, `CONSTRUCT_DATA_ROOT=.dev/data` so events land in dev DB | Task prompt + gate rules | Claude session |
-| 5. Dispatch gate | PreToolUse hook blocks Edit/Write, Claude dispatches to subagent | Block message | Agent tool call |
-| 6. Subagent fixes bugs | Subagent edits `server.ts`: fixes toggle (`!todo.done`) and POST response (201 + JSON) | Task context | Fixed code |
-| 7. Quality gate | Stop hook reads transcript, finds edits without e2e, writes `require-e2e` marker, returns `systemMessage` forcing continuation | Transcript path | Marker file + continuation |
-| 8. Orchestrator verifies | Starts `bun server.ts`, curls API endpoints, saves output to file | Server on port 3847 | `verify-output.txt` |
-| 9. Quality gate clears | Stop hook reads transcript again, finds e2e + artifact, clears marker | Transcript path | Marker removed |
-| 10. Check task | `bun test` in sandbox, `git diff --name-only` | Sandbox state | `taskSuccess`, `filesChanged` |
-| 11. Launch Claude (bare) | Same scenario, no hooks | Task prompt | Baseline result |
-| 12. Read telemetry | Count new events in dev DB `hook-events.jsonl`, check marker state | Dev DB | Event count, marker |
-
-**Verification:**
-
-| Assertion | What it checks | Source |
-|---|---|---|
-| `taskSuccess` | Both bugs fixed, `bun test` passes | Exit code |
-| `filesChanged.length > 0` | `server.ts` was modified | `git diff --name-only HEAD` |
-| `agentDispatched` | Dispatch gate forced Agent use | PostToolUse tracker |
-| `e2eEvidence` | Orchestrator ran the server (matched `E2E_CMD` regex) | PostToolUse tracker |
-| `artifactCreated` | Orchestrator saved output (matched `ARTIFACT_CMD` regex) | PostToolUse tracker |
-| New events in dev DB | Real hooks wrote to `.dev/data/signals/hook-events.jsonl` | Line count delta |
-| Dispatch gate fired | `dispatch-pre-require-subagent` events in recent entries | JSONL filter |
-| Quality gate engaged | Marker was written then cleared (or still exists) | `require-e2e` file |
-| Bare: task succeeded | Baseline completes without hooks | Exit code |
-
-**Telemetry in dev UI:** Hook events are written to `.dev/data` so they appear in the Construct observability dashboard at `/observability/hooks`. The `dispatch-pre-require-subagent` and `routing-submit-classify` entries in the hooks table include events from eval runs.
-
 ### `runner.ts`
 
 Multi-trial A/B runner. Runs N trials comparing `with-hook` (quality gate Stop hook + verification prompt) vs `bare` (no hooks). Saves results as JSON to `src/eval/results/`.
@@ -205,6 +135,4 @@ Multi-trial A/B runner. Runs N trials comparing `with-hook` (quality gate Stop h
 ## Coverage gaps
 
 - **Git hooks** (`git-pre-require-commit.ts`) — no tests
-- **Isolation hook** (`isolation-pre-block-prod-edit.ts`) — no tests
-- **Dispatch stop remind** (`dispatch-stop-remind.ts`) — no tests
 - **Quality pre gate** (`quality-pre-require-e2e.ts`) — no tests
