@@ -404,7 +404,16 @@ Return ONLY a JSON array of search query strings. No other text.`,
 
     try {
       const parsed = JSON.parse(result.text.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
-      return Array.isArray(parsed) ? parsed.slice(0, 4) : [thread.query];
+      const candidates: string[] = Array.isArray(parsed) ? parsed.slice(0, 4) : [thread.query];
+      const searchedLower = new Set(searchedQueries.map(q => q.toLowerCase()));
+      const seen = new Set<string>();
+      const deduped = candidates.filter(q => {
+        const lower = q.toLowerCase();
+        if (seen.has(lower) || searchedLower.has(lower)) return false;
+        seen.add(lower);
+        return true;
+      });
+      return deduped.length > 0 ? deduped : [thread.query];
     } catch {
       return [thread.query];
     }
