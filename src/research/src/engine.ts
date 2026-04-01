@@ -238,8 +238,8 @@ export class ResearchEngine {
 
         this.onIteration?.(iterationCount, thread, result.finding);
 
-        // Check thread exhaustion
-        await this.checkThreadExhaustion(thread);
+        // Thread ran once — mark done
+        threads.updateThread(this.sqlite, thread.id, { status: 'exhausted' });
 
         // Perturbation check
         await this.maybePerturbate(sessionId, thread, currentSession.config);
