@@ -342,6 +342,8 @@ export class ResearchEngine {
     // Always create them so the graph is complete, but defer those that exceed
     // max_depth so they don't run until (if ever) the depth limit is raised.
     for (const question of synthesisResult.followUpQuestions) {
+      // Skip malformed or non-question strings
+      if (typeof question !== 'string' || question.trim().length < 10) continue;
       const childDepth = thread.depth + 1;
       threads.createThread(this.sqlite, {
         session_id: sessionId,
