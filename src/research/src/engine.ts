@@ -337,20 +337,22 @@ export class ResearchEngine {
       follow_up_questions: synthesisResult.followUpQuestions,
     });
 
-    // Step 6: Spawn child threads from follow-up questions
-    if (thread.depth < thread.max_depth) {
-      for (const question of synthesisResult.followUpQuestions) {
-        threads.createThread(this.sqlite, {
-          session_id: sessionId,
-          query: question,
-          origin: 'follow_up',
-          parent_thread_id: thread.id,
-          spawned_from_finding_id: finding.id,
-          priority: this.calculateChildPriority(thread, finding),
-          depth: thread.depth + 1,
-          max_depth: thread.max_depth,
-        });
-      }
+    // Step 6: Spawn child threads from follow-up questions.
+    // Always create them so the graph is complete, but defer those that exceed
+    // max_depth so they don't run until (if ever) the depth limit is raised.
+    for (const question of synthesisResult.followUpQuestions) {
+      const childDepth = thread.depth + 1;
+      threads.createThread(this.sqlite, {
+        session_id: sessionId,
+        query: question,
+        origin: 'follow_up',
+        parent_thread_id: thread.id,
+        spawned_from_finding_id: finding.id,
+        priority: this.calculateChildPriority(thread, finding),
+        depth: childDepth,
+        max_depth: thread.max_depth,
+        status: childDepth > thread.max_depth ? 'deferred' : 'queued',
+      });
     }
 
     const totalCost = synthesisResult.totalCost;
@@ -390,7 +392,7 @@ Return ONLY a JSON array of search query strings. No other text.`,
     );
 
     try {
-      const parsed = JSON.parse(result.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+      const parsed = JSON.parse(result.text.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
       return Array.isArray(parsed) ? parsed.slice(0, 4) : [thread.query];
     } catch {
       return [thread.query];
@@ -497,7 +499,7 @@ Return ONLY valid JSON. No markdown fences.`,
     );
 
     try {
-      const text = result.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const text = result.text.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       const parsed = JSON.parse(text);
       return {
         content: parsed.content ?? '',
