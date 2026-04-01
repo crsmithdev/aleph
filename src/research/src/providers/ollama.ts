@@ -1,4 +1,5 @@
 import type { LLMProvider, LLMResult, WebSearchResult } from '../engine.js';
+import { fetchSearchResults } from './websearch.js';
 
 export interface OllamaConfig {
   baseUrl?: string;
