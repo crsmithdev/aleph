@@ -191,96 +191,90 @@ export class ResearchEngine {
     let findingCount = 0;
     let totalCost = 0;
 
-    while (iterationCount < this.maxIterations) {
-      if (this.signal?.aborted) break;
+    const concurrency = session.config.max_concurrent_threads ?? 3;
 
-      const currentSession = sessions.getSession(this.sqlite, sessionId)!;
-      if (currentSession.status !== 'active') break;
+    // Run threads concurrently up to the concurrency limit.
+    // Each slot claims a thread, runs it, then immediately claims the next.
+    const runSlot = async (): Promise<void> => {
+      while (iterationCount < this.maxIterations) {
+        if (this.signal?.aborted) break;
 
-      // Check budget
-      const cost = sessions.getSessionCost(this.sqlite, sessionId);
-      if (currentSession.config.budget_daily_usd && cost.today_cost >= currentSession.config.budget_daily_usd) {
-        sessions.updateSession(this.sqlite, sessionId, { status: 'paused' });
-        break;
-      }
-      if (currentSession.config.budget_total_usd && cost.total_cost >= currentSession.config.budget_total_usd) {
-        sessions.updateSession(this.sqlite, sessionId, { status: 'paused' });
-        break;
-      }
+        const currentSession = sessions.getSession(this.sqlite, sessionId)!;
+        if (currentSession.status !== 'active') break;
 
-      // Apply pending plan modifications
-      await this.applyPlanModifications(sessionId);
-
-      // Select next thread
-      const thread = threads.selectNextThread(this.sqlite, sessionId);
-      if (!thread) {
-        // No threads left — try spawning perturbation threads
-        const allThreads = threads.listThreads(this.sqlite, sessionId);
-        const exhaustedWithFindings = allThreads.filter(t => t.status === 'exhausted');
-        if (exhaustedWithFindings.length > 0) {
-          await this.spawnPerturbationThreads(sessionId, currentSession.config, true);
-          const newThread = threads.selectNextThread(this.sqlite, sessionId);
-          if (!newThread) break;
-        } else {
+        // Check budget
+        const cost = sessions.getSessionCost(this.sqlite, sessionId);
+        if (currentSession.config.budget_daily_usd && cost.today_cost >= currentSession.config.budget_daily_usd) {
+          sessions.updateSession(this.sqlite, sessionId, { status: 'paused' });
           break;
         }
-        continue;
+        if (currentSession.config.budget_total_usd && cost.total_cost >= currentSession.config.budget_total_usd) {
+          sessions.updateSession(this.sqlite, sessionId, { status: 'paused' });
+          break;
+        }
+
+        await this.applyPlanModifications(sessionId);
+
+        // Atomically claim a thread (mark active) so concurrent slots don't double-claim
+        const thread = threads.claimNextThread(this.sqlite, sessionId);
+        if (!thread) break;
+
+        try {
+          const result = await this.runIteration(sessionId, thread, currentSession.config);
+          iterationCount++;
+          if (result.finding) findingCount++;
+          totalCost += result.cost;
+
+          this.onIteration?.(iterationCount, thread, result.finding);
+          threads.updateThread(this.sqlite, thread.id, { status: 'exhausted' });
+
+          await this.maybePerturbate(sessionId, thread, currentSession.config);
+          await this.generatePlan(sessionId, currentSession.config);
+
+          if (iterationCount % 5 === 0) {
+            await this.updateSummary(sessionId);
+          }
+
+          if (currentSession.config.min_delay_between_steps_ms > 0) {
+            await new Promise(resolve => setTimeout(resolve, currentSession.config.min_delay_between_steps_ms));
+          }
+        } catch (error) {
+          const err = error instanceof Error ? error : new Error(String(error));
+          this.onError?.(err, thread);
+
+          steps.createStep(this.sqlite, {
+            thread_id: thread.id,
+            session_id: sessionId,
+            model: currentSession.config.model,
+            prompt_tokens: 0,
+            completion_tokens: 0,
+            cost_usd: 0,
+            duration_ms: 0,
+            error: err.message,
+          });
+
+          const priorErrors = steps.listSteps(this.sqlite, sessionId, { threadId: thread.id })
+            .filter(s => s.error).length;
+          threads.updateThread(this.sqlite, thread.id, {
+            status: priorErrors <= 1 ? 'queued' : 'exhausted',
+          });
+
+          iterationCount++;
+        }
       }
+    };
 
-      // Mark thread active
-      threads.updateThread(this.sqlite, thread.id, { status: 'active' });
+    // Run all slots concurrently; when all slots run dry, try one perturbation pass
+    await Promise.all(Array.from({ length: concurrency }, runSlot));
 
-      try {
-        const result = await this.runIteration(sessionId, thread, currentSession.config);
-        iterationCount++;
-        if (result.finding) findingCount++;
-        totalCost += result.cost;
-
-        this.onIteration?.(iterationCount, thread, result.finding);
-
-        // Thread ran once — mark done
-        threads.updateThread(this.sqlite, thread.id, { status: 'exhausted' });
-
-        // Perturbation check
-        await this.maybePerturbate(sessionId, thread, currentSession.config);
-
-        // Regenerate plan
-        await this.generatePlan(sessionId, currentSession.config);
-
-        // Update session summary periodically
-        if (iterationCount % 5 === 0) {
-          await this.updateSummary(sessionId);
+    if (iterationCount < this.maxIterations && !this.signal?.aborted) {
+      const currentSession = sessions.getSession(this.sqlite, sessionId)!;
+      if (currentSession.status === 'active') {
+        const allThreads = threads.listThreads(this.sqlite, sessionId);
+        if (allThreads.some(t => t.status === 'exhausted')) {
+          await this.spawnPerturbationThreads(sessionId, currentSession.config, true);
+          await Promise.all(Array.from({ length: concurrency }, runSlot));
         }
-
-        // Delay between steps
-        if (currentSession.config.min_delay_between_steps_ms > 0) {
-          await new Promise(resolve => setTimeout(resolve, currentSession.config.min_delay_between_steps_ms));
-        }
-      } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error));
-        this.onError?.(err, thread);
-
-        // Log the error as a step
-        steps.createStep(this.sqlite, {
-          thread_id: thread.id,
-          session_id: sessionId,
-          model: currentSession.config.model,
-          prompt_tokens: 0,
-          completion_tokens: 0,
-          cost_usd: 0,
-          duration_ms: 0,
-          error: err.message,
-        });
-
-        // Re-queue for one retry; if already has a prior error step, give up
-        const priorErrors = steps.listSteps(this.sqlite, sessionId, { threadId: thread.id })
-          .filter(s => s.error).length;
-        threads.updateThread(this.sqlite, thread.id, {
-          status: priorErrors <= 1 ? 'queued' : 'exhausted',
-        });
-
-        iterationCount++;
-        continue;
       }
     }
 
