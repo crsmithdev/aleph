@@ -430,13 +430,10 @@ Return ONLY a JSON array of search query strings. No other text.`,
     threadId: string,
     config: SessionConfig
   ): Promise<Array<{ query: string; results: string }>> {
-    const allResults: Array<{ query: string; results: string }> = [];
-
-    for (const query of queries) {
+    const results = await Promise.all(queries.map(async (query) => {
       const startTime = Date.now();
       try {
         const result = await this.provider.searchWeb(config.model, query);
-
         const cost = calculateCost(result.model, result.promptTokens, result.completionTokens);
 
         steps.createStep(this.sqlite, {
@@ -450,12 +447,11 @@ Return ONLY a JSON array of search query strings. No other text.`,
           duration_ms: Date.now() - startTime,
         });
 
-        if (result.text.trim()) {
-          allResults.push({
-            query,
-            results: result.text + (result.sourceUrls.length > 0 ? `\n\nSources: ${result.sourceUrls.join(', ')}` : ''),
-          });
-        }
+        if (!result.text.trim()) return null;
+        return {
+          query,
+          results: result.text + (result.sourceUrls.length > 0 ? `\n\nSources: ${result.sourceUrls.join(', ')}` : ''),
+        };
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
         steps.createStep(this.sqlite, {
@@ -469,10 +465,11 @@ Return ONLY a JSON array of search query strings. No other text.`,
           duration_ms: Date.now() - startTime,
           error: err.message,
         });
+        return null;
       }
-    }
+    }));
 
-    return allResults;
+    return results.filter((r): r is { query: string; results: string } => r !== null);
   }
 
   private async synthesizeFinding(
