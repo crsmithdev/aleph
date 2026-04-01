@@ -573,30 +573,6 @@ Respond with ONLY "true" if this is a duplicate or near-duplicate, "false" other
     return result.text.trim().toLowerCase() === 'true';
   }
 
-  private async checkThreadExhaustion(thread: ResearchThread): void {
-    const recentFindings = findings.listFindings(this.sqlite, thread.session_id, {
-      threadId: thread.id,
-      limit: 3,
-      sort: 'created_at',
-    });
-
-    if (recentFindings.length >= 3) {
-      const allLowNovelty = recentFindings.every(f => f.novelty < 0.3);
-      if (allLowNovelty) {
-        threads.updateThread(this.sqlite, thread.id, { status: 'exhausted' });
-        return;
-      }
-    }
-
-    if (thread.depth >= thread.max_depth) {
-      threads.updateThread(this.sqlite, thread.id, { status: 'exhausted' });
-      return;
-    }
-
-    // Not exhausted — reset to queued so other threads can compete by priority
-    threads.updateThread(this.sqlite, thread.id, { status: 'queued' });
-  }
-
   private async maybePerturbate(
     sessionId: string,
     thread: ResearchThread,
