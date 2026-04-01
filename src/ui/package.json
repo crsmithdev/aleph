@@ -15,6 +15,7 @@
   "dependencies": {
     "@construct/data": "file:../data",
     "@construct/goals": "file:../goals",
+    "@construct/research": "file:../research",
     "@construct/telemetry": "file:../telemetry"
   },
   "devDependencies": {

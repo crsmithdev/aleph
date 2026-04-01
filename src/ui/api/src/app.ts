@@ -16,6 +16,7 @@ import { backupRoutes } from './routes/backup.js';
 import { summaryRoutes } from './routes/summary.js';
 import { webhookRoutes } from './routes/webhooks.js';
 import { observabilityRoutes } from './routes/observability.js';
+import { researchRoutes } from './routes/research.js';
 import { EventBus, HistoryService, applyDDL } from '@construct/goals';
 import { webhooks } from './db/schema.js';
 import { existsSync, readFileSync, statSync } from 'fs';
@@ -120,6 +121,7 @@ export async function createApp(opts?: { dbUrl?: string }) {
     await api.register(summaryRoutes, { prefix: '/summary' });
     await api.register(webhookRoutes, { prefix: '/webhooks' });
     await api.register(observabilityRoutes, { prefix: '/observability' });
+    await api.register(researchRoutes, { prefix: '/research' });
 
     api.get('/system/info', async function () {
       // Parse manifest: INI-like file with [section] headers and key = value pairs

@@ -53,6 +53,7 @@
       "dependencies": {
         "@construct/data": "file:../data",
         "@construct/goals": "file:../goals",
+        "@construct/research": "file:../research",
         "@construct/telemetry": "file:../telemetry",
       },
       "devDependencies": {
@@ -110,6 +111,8 @@
   },
   "packages": {
     "@anthropic-ai/claude-agent-sdk": ["@anthropic-ai/claude-agent-sdk@0.2.81", "", { "optionalDependencies": { "@img/sharp-darwin-arm64": "^0.34.2", "@img/sharp-darwin-x64": "^0.34.2", "@img/sharp-linux-arm": "^0.34.2", "@img/sharp-linux-arm64": "^0.34.2", "@img/sharp-linux-x64": "^0.34.2", "@img/sharp-linuxmusl-arm64": "^0.34.2", "@img/sharp-linuxmusl-x64": "^0.34.2", "@img/sharp-win32-arm64": "^0.34.2", "@img/sharp-win32-x64": "^0.34.2" }, "peerDependencies": { "zod": "^4.0.0" } }, "sha512-CBeebgibBEN/DWOQGZN67vhuTG55RbI1hlsFSSoZ4uA/Io3lw04eHTE2ISCmdbqyJaefYTt6GKZei1nP0TQMNw=="],
+
+    "@anthropic-ai/sdk": ["@anthropic-ai/sdk@0.52.0", "", { "bin": { "anthropic-ai-sdk": "bin/cli" } }, "sha512-d4c+fg+xy9e46c8+YnrrgIQR45CZlAi7PwdzIfDXDM6ACxEZli1/fxhURsq30ZpMZy6LvSkr41jGq5aF5TD7rQ=="],
 
     "@babel/code-frame": ["@babel/code-frame@7.29.0", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.28.5", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-9NhCeYjq9+3uxgdtp20LSiJXJvN0FeCtNGpJxuMFZ1Kv3cWUNb6DOhJwUvcVCzKGR66cw4njwM6hrJLqgOwbcw=="],
 
@@ -1005,6 +1008,8 @@
 
     "construct-ui/@construct/goals": ["@construct/goals@file:src/goals", { "dependencies": { "@construct/data": "file:../data", "drizzle-orm": "^0.39.3", "nanoid": "^5.1.2", "zod": "^3.24.2" }, "devDependencies": { "typescript": "^5.7.3" } }],
 
+    "construct-ui/@construct/research": ["@construct/research@file:src/research", { "dependencies": { "@anthropic-ai/sdk": "^0.52.0", "@construct/data": "file:../data", "nanoid": "^5.1.2", "zod": "^3.24.2" }, "devDependencies": { "typescript": "^5.7.3" } }],
+
     "construct-ui/@construct/telemetry": ["@construct/telemetry@file:src/telemetry", { "dependencies": { "@construct/data": "file:../data" }, "devDependencies": { "@types/bun": "^1.3.11", "bun-types": "^1.3.11", "typescript": "^5.7.3" } }],
 
     "light-my-request/process-warning": ["process-warning@4.0.1", "", {}, "sha512-3c2LzQ3rY9d0hc1emcsHhfT9Jwz0cChib/QN89oME2R451w5fy3f0afAhERFZAwrbDU43wk12d0ORBpDVME50Q=="],
@@ -1024,6 +1029,8 @@
     "@fastify/swagger-ui/@fastify/static/glob": ["glob@13.0.6", "", { "dependencies": { "minimatch": "^10.2.2", "minipass": "^7.1.3", "path-scurry": "^2.0.2" } }, "sha512-Wjlyrolmm8uDpm/ogGyXZXb1Z+Ca2B8NbJwqBVg0axK9GbBeoS7yGV6vjXnYdGm6X53iehEuxxbyiKp8QmN4Vw=="],
 
     "construct-ui/@construct/goals/@construct/data": ["@construct/data@file:src/data", { "dependencies": { "drizzle-orm": "^0.39.3" }, "devDependencies": { "typescript": "^5.7.3" } }],
+
+    "construct-ui/@construct/research/@construct/data": ["@construct/data@file:src/data", { "dependencies": { "drizzle-orm": "^0.39.3" }, "devDependencies": { "typescript": "^5.7.3" } }],
 
     "construct-ui/@construct/telemetry/@construct/data": ["@construct/data@file:src/data", { "dependencies": { "drizzle-orm": "^0.39.3" }, "devDependencies": { "typescript": "^5.7.3" } }],
   }
