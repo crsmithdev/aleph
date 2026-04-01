@@ -291,6 +291,86 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
+  // === SSE Stream ===
+  app.get<{ Params: { id: string } }>(
+    '/sessions/:id/stream',
+    async (req, reply) => {
+      const sessionId = req.params.id;
+
+      reply.hijack();
+      reply.raw.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      });
+      reply.raw.flushHeaders();
+
+      let closed = false;
+      req.raw.on('close', () => { closed = true; });
+
+      const send = (type: string, payload: unknown) => {
+        if (!closed) reply.raw.write(`data: ${JSON.stringify({ type, payload })}\n\n`);
+      };
+
+      const sentFindings = new Set<string>();
+      const sentThreadState = new Map<string, string>();
+      const sentSteps = new Set<string>();
+      const sentJobs = new Map<string, string>();
+
+      const poll = () => {
+        if (closed) return;
+        try {
+          const findings = listFindings(app.sqlite, sessionId);
+          for (const f of findings) {
+            if (!sentFindings.has(f.id)) {
+              sentFindings.add(f.id);
+              send('finding', f);
+            }
+          }
+
+          const threads = listThreads(app.sqlite, sessionId);
+          for (const t of threads) {
+            const state = `${t.status}:${t.updated_at}`;
+            if (sentThreadState.get(t.id) !== state) {
+              sentThreadState.set(t.id, state);
+              send('thread', t);
+            }
+          }
+
+          const steps = listSteps(app.sqlite, sessionId, { limit: 200 });
+          for (const s of steps) {
+            if (!sentSteps.has(s.id)) {
+              sentSteps.add(s.id);
+              send('step', s);
+            }
+          }
+
+          const jobs = listJobsForSession(app.sqlite, sessionId);
+          for (const j of jobs) {
+            const state = `${j.status}:${j.updated_at}`;
+            if (sentJobs.get(j.id) !== state) {
+              sentJobs.set(j.id, state);
+              send('job', j);
+            }
+          }
+        } catch {
+          // ignore SQLite errors during polling
+        }
+      };
+
+      const pollInterval = setInterval(poll, 500);
+      const heartbeatInterval = setInterval(() => {
+        if (!closed) reply.raw.write(': heartbeat\n\n');
+      }, 15_000);
+
+      await new Promise<void>(resolve => req.raw.on('close', resolve));
+      clearInterval(pollInterval);
+      clearInterval(heartbeatInterval);
+      if (!reply.raw.writableEnded) reply.raw.end();
+    }
+  );
+
   // === Monitors ===
   app.get('/monitors', async (req) => {
     const { status } = req.query as { status?: string };
