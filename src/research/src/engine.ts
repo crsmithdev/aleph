@@ -272,7 +272,13 @@ export class ResearchEngine {
           error: err.message,
         });
 
-        // Continue to next iteration rather than stopping
+        // Re-queue for one retry; if already has a prior error step, give up
+        const priorErrors = steps.listSteps(this.sqlite, sessionId, { threadId: thread.id })
+          .filter(s => s.error).length;
+        threads.updateThread(this.sqlite, thread.id, {
+          status: priorErrors <= 1 ? 'queued' : 'exhausted',
+        });
+
         iterationCount++;
         continue;
       }
