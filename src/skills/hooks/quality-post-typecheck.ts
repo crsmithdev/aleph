@@ -89,7 +89,7 @@ try {
   if (errorCount > 0) {
     const preview = lines.slice(0, 5).join("\n");
     const suffix = errorCount > 5 ? `\n... and ${errorCount - 5} more errors` : "";
-    console.log(`⚠ TypeScript: ${errorCount} error${errorCount === 1 ? "" : "s"} found after editing ${filePath}\n${preview}${suffix}`);
+    console.error(`⚠ TypeScript: ${errorCount} error${errorCount === 1 ? "" : "s"} found after editing ${filePath}\n${preview}${suffix}`);
     trace(TAG, `${errorCount} type errors`);
     process.exit(2);
   }

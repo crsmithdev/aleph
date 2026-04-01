@@ -71,7 +71,7 @@ const markerPath = `${dataPaths.signals}/git-pre-require-commit-${input.session_
 
 if (groupCount >= BLOCK_GROUPS) {
   trace(TAG, `BLOCKED: ${groupCount} groups ≥ ${BLOCK_GROUPS}`);
-  console.log(`[Construct] ${fileCount} uncommitted files across ${groupCount} unrelated areas (${groupList}). Commit your current logical change before continuing.`);
+  console.error(`[Construct] ${fileCount} uncommitted files across ${groupCount} unrelated areas (${groupList}). Commit your current logical change before continuing.`);
   process.exit(2);
 }
 

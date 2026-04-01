@@ -1,0 +1,115 @@
+import type { Sqlite } from '@construct/data';
+import { nanoid } from 'nanoid';
+import type { ResearchFinding } from '../types.js';
+
+function rowToFinding(row: Record<string, unknown>): ResearchFinding {
+  return {
+    ...row,
+    source_urls: JSON.parse(row.source_urls as string),
+    tags: JSON.parse(row.tags as string),
+    follow_up_questions: JSON.parse(row.follow_up_questions as string),
+  } as unknown as ResearchFinding;
+}
+
+export function createFinding(
+  sqlite: Sqlite,
+  params: {
+    thread_id: string;
+    session_id: string;
+    content: string;
+    summary: string;
+    source_urls?: string[];
+    source_quality?: number;
+    tags?: string[];
+    confidence?: number;
+    novelty?: number;
+    actionability?: number;
+    follow_up_questions?: string[];
+  }
+): ResearchFinding {
+  const id = nanoid();
+  const now = new Date().toISOString();
+
+  sqlite.prepare(`
+    INSERT INTO research_findings
+      (id, thread_id, session_id, content, summary, source_urls, source_quality,
+       tags, confidence, novelty, actionability, follow_up_questions, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    params.thread_id,
+    params.session_id,
+    params.content,
+    params.summary,
+    JSON.stringify(params.source_urls ?? []),
+    params.source_quality ?? 0.5,
+    JSON.stringify(params.tags ?? []),
+    params.confidence ?? 0.5,
+    params.novelty ?? 0.5,
+    params.actionability ?? 0.5,
+    JSON.stringify(params.follow_up_questions ?? []),
+    now
+  );
+
+  return getFinding(sqlite, id)!;
+}
+
+export function getFinding(sqlite: Sqlite, id: string): ResearchFinding | null {
+  const row = sqlite.prepare('SELECT * FROM research_findings WHERE id = ?').get(id) as Record<string, unknown> | null;
+  return row ? rowToFinding(row) : null;
+}
+
+export function listFindings(
+  sqlite: Sqlite,
+  sessionId: string,
+  opts?: { threadId?: string; limit?: number; sort?: 'created_at' | 'novelty' | 'confidence' }
+): ResearchFinding[] {
+  let sql = 'SELECT * FROM research_findings WHERE session_id = ?';
+  const params: unknown[] = [sessionId];
+
+  if (opts?.threadId) {
+    sql += ' AND thread_id = ?';
+    params.push(opts.threadId);
+  }
+
+  const sortCol = opts?.sort ?? 'created_at';
+  sql += ` ORDER BY ${sortCol} DESC`;
+
+  if (opts?.limit) {
+    sql += ' LIMIT ?';
+    params.push(opts.limit);
+  }
+
+  return (sqlite.prepare(sql).all(...params) as Record<string, unknown>[]).map(rowToFinding);
+}
+
+export function updateFinding(
+  sqlite: Sqlite,
+  id: string,
+  updates: Partial<Pick<ResearchFinding, 'user_rating' | 'novelty'>>
+): ResearchFinding | null {
+  const fields: string[] = [];
+  const values: unknown[] = [];
+
+  if (updates.user_rating !== undefined) { fields.push('user_rating = ?'); values.push(updates.user_rating); }
+  if (updates.novelty !== undefined) { fields.push('novelty = ?'); values.push(updates.novelty); }
+
+  if (fields.length === 0) return getFinding(sqlite, id);
+  values.push(id);
+
+  sqlite.prepare(`UPDATE research_findings SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+  return getFinding(sqlite, id);
+}
+
+export function getRecentFindings(sqlite: Sqlite, sessionId: string, count: number): ResearchFinding[] {
+  return (sqlite.prepare(
+    'SELECT * FROM research_findings WHERE session_id = ? ORDER BY created_at DESC LIMIT ?'
+  ).all(sessionId, count) as Record<string, unknown>[]).map(rowToFinding);
+}
+
+export function countFindings(sqlite: Sqlite, sessionId: string): number {
+  const row = sqlite.prepare(
+    'SELECT COUNT(*) as count FROM research_findings WHERE session_id = ?'
+  ).get(sessionId) as { count: number };
+  return row.count;
+}

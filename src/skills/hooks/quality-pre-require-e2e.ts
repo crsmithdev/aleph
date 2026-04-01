@@ -35,7 +35,7 @@ catch { /* marker exists but unreadable — still block */ }
 
 trace(TAG, `BLOCKED: require-e2e marker present (files: ${marker.files ?? "unknown"})`);
 
-console.log(`[Construct] BLOCKED: previous edits (${marker.files ?? "unknown files"}) lack e2e verification.
+console.error(`[Construct] BLOCKED: previous edits (${marker.files ?? "unknown files"}) lack e2e verification.
 
 You must verify before making more edits:
 1. Start the dev server or run the real system
