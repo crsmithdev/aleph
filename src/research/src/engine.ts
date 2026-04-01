@@ -46,7 +46,8 @@ const PERTURBATION_STRATEGIES: PerturbationStrategy[] = [
 ];
 
 function calculateCost(model: string, promptTokens: number, completionTokens: number): number {
-  const pricing = MODEL_PRICING[model] ?? MODEL_PRICING['claude-sonnet-4-6'];
+  const pricing = MODEL_PRICING[model];
+  if (!pricing) return 0; // local/unknown models are free
   return (promptTokens * pricing.input + completionTokens * pricing.output) / 1_000_000;
 }
 
