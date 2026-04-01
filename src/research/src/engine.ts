@@ -342,8 +342,10 @@ export class ResearchEngine {
     // Always create them so the graph is complete, but defer those that exceed
     // max_depth so they don't run until (if ever) the depth limit is raised.
     for (const question of synthesisResult.followUpQuestions) {
-      // Skip malformed or non-question strings
+      // Skip malformed or context-dependent questions
       if (typeof question !== 'string' || question.trim().length < 10) continue;
+      // Reject questions with unresolved pronouns — they can't stand alone as search queries
+      if (/\b(they|them|their|it|its|this|these|those|such)\b/i.test(question.trim())) continue;
       const childDepth = thread.depth + 1;
       threads.createThread(this.sqlite, {
         session_id: sessionId,
