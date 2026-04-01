@@ -512,7 +512,7 @@ Produce a JSON object with these fields:
 - confidence: number 0-1 (how confident are you in this finding?)
 - novelty: number 0-1 (how surprising/non-obvious is this? 1 = very novel)
 - actionability: number 0-1 (how directly useful is this for decision-making?)
-- follow_up_questions: string[] (2-4 questions worth investigating next — be specific, not generic)
+- follow_up_questions: string[] (2-4 questions worth investigating next — each must be fully self-contained and searchable on its own, with NO pronouns like "they/it/these/those/this" that refer back to the finding; name the specific topic explicitly)
 
 Return ONLY valid JSON. No markdown fences.`,
       sessionId,
