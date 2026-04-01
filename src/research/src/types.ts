@@ -69,6 +69,7 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
   diminishing_returns_window: 20,
   min_delay_between_steps_ms: 2000,
   max_steps_per_hour: 60,
+  max_concurrent_threads: 3,
   model: 'claude-sonnet-4-6',
   models: {
     cheap: 'claude-haiku-4-5',
