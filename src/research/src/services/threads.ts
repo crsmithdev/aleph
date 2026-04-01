@@ -74,6 +74,29 @@ export function selectNextThread(sqlite: Sqlite, sessionId: string): ResearchThr
   return row ? rowToThread(row) : null;
 }
 
+/** Atomically selects the highest-priority queued thread and marks it active.
+ *  Safe to call from concurrent async slots — only one caller will get each thread. */
+export function claimNextThread(sqlite: Sqlite, sessionId: string): ResearchThread | null {
+  const row = sqlite.prepare(`
+    SELECT * FROM research_threads
+    WHERE session_id = ? AND status = 'queued'
+    ORDER BY priority DESC, created_at ASC
+    LIMIT 1
+  `).get(sessionId) as Record<string, unknown> | null;
+  if (!row) return null;
+
+  const result = sqlite.prepare(`
+    UPDATE research_threads
+    SET status = 'active', updated_at = datetime('now')
+    WHERE id = ? AND status = 'queued'
+  `).run((row as { id: string }).id);
+
+  // Another slot claimed it first — try again
+  if (result.changes === 0) return claimNextThread(sqlite, sessionId);
+
+  return getThread(sqlite, (row as { id: string }).id);
+}
+
 export function updateThread(
   sqlite: Sqlite,
   id: string,
