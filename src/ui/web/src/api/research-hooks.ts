@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 
@@ -26,6 +27,7 @@ export interface ResearchThread {
   depth: number;
   max_depth: number;
   created_at: string;
+  updated_at: string;
 }
 
 export interface ResearchFinding {
@@ -321,4 +323,95 @@ export function useCancelJob() {
       qc.invalidateQueries({ queryKey: ['research-activity'] });
     },
   });
+}
+
+// --- Jobs ---
+export interface ResearchJob {
+  id: string;
+  session_id: string;
+  status: string;
+  mode: string;
+  max_iterations: number | null;
+  iterations_completed: number;
+  claimed_by: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export function useResearchJobs(sessionId: string) {
+  return useQuery({
+    queryKey: ['research-jobs', sessionId],
+    queryFn: () => api.get<ResearchJob[]>(`/research/sessions/${sessionId}/jobs`),
+    enabled: !!sessionId,
+    refetchInterval: 5000,
+  });
+}
+
+// --- SSE Stream ---
+export type StreamEvent =
+  | { type: 'finding'; payload: ResearchFinding }
+  | { type: 'thread'; payload: ResearchThread }
+  | { type: 'step'; payload: ResearchStep }
+  | { type: 'job'; payload: ResearchJob };
+
+export function useResearchStream(sessionId: string) {
+  const qc = useQueryClient();
+  const [events, setEvents] = useState<StreamEvent[]>([]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    const es = new EventSource(`/api/research/sessions/${sessionId}/stream`);
+
+    es.onmessage = (event: MessageEvent) => {
+      try {
+        const parsed: StreamEvent = JSON.parse(event.data);
+
+        if (parsed.type === 'finding') {
+          qc.setQueryData(
+            ['research-findings', sessionId, {}],
+            (old: ResearchFinding[] | undefined) => {
+              if (!old) return [parsed.payload];
+              if (old.find(f => f.id === parsed.payload.id)) return old;
+              return [parsed.payload, ...old];
+            }
+          );
+        } else if (parsed.type === 'thread') {
+          qc.setQueryData(
+            ['research-threads', sessionId],
+            (old: ResearchThread[] | undefined) => {
+              if (!old) return [parsed.payload];
+              const idx = old.findIndex(t => t.id === parsed.payload.id);
+              if (idx >= 0) { const n = [...old]; n[idx] = parsed.payload; return n; }
+              return [...old, parsed.payload];
+            }
+          );
+        } else if (parsed.type === 'job') {
+          qc.setQueryData(
+            ['research-jobs', sessionId],
+            (old: ResearchJob[] | undefined) => {
+              if (!old) return [parsed.payload];
+              const idx = old.findIndex(j => j.id === parsed.payload.id);
+              if (idx >= 0) { const n = [...old]; n[idx] = parsed.payload; return n; }
+              return [...old, parsed.payload];
+            }
+          );
+          qc.invalidateQueries({ queryKey: ['research-running', sessionId] });
+          qc.invalidateQueries({ queryKey: ['research-activity', sessionId] });
+        }
+
+        setEvents(prev => [parsed, ...prev].slice(0, 500));
+      } catch { /* ignore parse errors */ }
+    };
+
+    es.onerror = () => {
+      // EventSource auto-reconnects — no action needed
+    };
+
+    return () => es.close();
+  }, [sessionId, qc]);
+
+  return { events };
 }
