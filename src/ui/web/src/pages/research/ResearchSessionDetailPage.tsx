@@ -1,44 +1,22 @@
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { clsx } from 'clsx';
+// @ts-ignore
+import dagre from 'dagre';
+import { ReactFlow, Background, Controls, Handle, Position, BackgroundVariant } from '@xyflow/react';
+import type { Node, Edge } from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
 import {
   useResearchSession, useResearchFindings, useResearchThreads,
   useResearchCosts, useUpdateResearchSession, useRateFinding,
-  useInjectThread, useRunResearch, useResearchRunning, useUpdateThread,
-  useResearchActivity, useCancelJob,
+  useInjectThread, useRunResearch, useResearchRunning,
+  useResearchActivity, useCancelJob, useResearchJobs, useResearchStream,
   type ResearchFinding, type ResearchThread, type ResearchActivity,
-  useResearchSteps, type ResearchStep,
+  type ResearchJob, type StreamEvent,
 } from '../../api/research-hooks';
 import { Button } from '../../components/ui/Button';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
-import { useState, useMemo } from 'react';
-
-const originColors: Record<string, string> = {
-  seed: 'bg-blue-900/50 text-blue-300',
-  follow_up: 'bg-purple-900/50 text-purple-300',
-  perturbation: 'bg-orange-900/50 text-orange-300',
-  user_injected: 'bg-green-900/50 text-green-300',
-};
-
-const ratingColors: Record<string, string> = {
-  promising: 'text-green-400',
-  not_useful: 'text-red-400',
-  critical: 'text-yellow-400',
-};
-
-function NoveltyBar({ value }: { value: number }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <div className="w-16 h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
-        <div
-          className={clsx('h-full rounded-full', value > 0.7 ? 'bg-green-400' : value > 0.4 ? 'bg-yellow-400' : 'bg-red-400')}
-          style={{ width: `${value * 100}%` }}
-        />
-      </div>
-      <span className="text-xs text-text-muted">{value.toFixed(2)}</span>
-    </div>
-  );
-}
 
 function timeAgo(iso: string): string {
   const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -47,245 +25,66 @@ function timeAgo(iso: string): string {
   return `${Math.floor(seconds / 3600)}h ago`;
 }
 
-function ActivityPanel({ activity, onCancel }: { activity: ResearchActivity; onCancel?: () => void }) {
-  if (activity.running) {
-    const job = activity.job;
-    const progress = job?.max_iterations
-      ? `${job.iterations_completed}/${job.max_iterations}`
-      : job ? `${job.iterations_completed} iterations` : '';
+// --- Document Tab ---
 
-    return (
-      <div className="bg-green-900/20 border border-green-800/50 rounded-lg p-4">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-            <span className="text-sm font-medium text-green-300">
-              {job?.status === 'claimed' ? 'Starting...' : 'Researching'}
-            </span>
-            {progress && <span className="text-xs text-green-400/70">{progress}</span>}
-          </div>
-          {onCancel && (
-            <button onClick={onCancel} className="text-xs text-red-400/70 hover:text-red-400 transition-colors">
-              Cancel
-            </button>
-          )}
-        </div>
-        {activity.active_thread && (
-          <p className="text-sm text-text-secondary truncate">{activity.active_thread.query}</p>
-        )}
-        <div className="flex items-center gap-4 mt-2 text-xs text-text-muted">
-          <span>{activity.queued_threads} queued</span>
-          <span>{activity.exhausted_threads} exhausted</span>
-          {activity.recent_steps[0] && (
-            <span>last step {timeAgo(activity.recent_steps[0].created_at)}</span>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // Job is pending (queued, waiting for worker to pick up)
-  if (activity.job?.status === 'pending') {
-    return (
-      <div className="bg-yellow-900/20 border border-yellow-800/50 rounded-lg p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
-            <span className="text-sm font-medium text-yellow-300">Queued</span>
-            <span className="text-xs text-text-muted">Waiting for worker...</span>
-          </div>
-          {onCancel && (
-            <button onClick={onCancel} className="text-xs text-red-400/70 hover:text-red-400 transition-colors">
-              Cancel
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  const lastStep = activity.recent_steps[0];
-  if (!lastStep) {
-    return (
-      <div className="bg-bg-secondary border border-border-primary rounded-lg p-4">
-        <p className="text-sm text-text-muted">No research activity yet. Hit Run to start.</p>
-      </div>
-    );
-  }
-
+function ConfBar({ label, value }: { label: string; value: number }) {
   return (
-    <div className="bg-bg-secondary border border-border-primary rounded-lg p-4">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="w-2 h-2 rounded-full bg-text-muted" />
-        <span className="text-sm font-medium text-text-secondary">Idle</span>
+    <div className="flex items-center gap-1">
+      <span className="text-xs text-text-muted">{label}</span>
+      <div className="w-12 h-1 bg-bg-tertiary rounded-full overflow-hidden">
+        <div
+          className={clsx('h-full rounded-full', value > 0.7 ? 'bg-green-400' : value > 0.4 ? 'bg-yellow-400' : 'bg-red-400')}
+          style={{ width: `${value * 100}%` }}
+        />
       </div>
-      <div className="flex items-center gap-4 text-xs text-text-muted">
-        <span>{activity.queued_threads} threads queued</span>
-        <span>{activity.exhausted_threads} exhausted</span>
-        <span>last activity {timeAgo(lastStep.created_at)}</span>
-      </div>
-      {activity.recent_steps.length > 0 && (
-        <div className="mt-3 space-y-1">
-          <p className="text-xs text-text-muted font-medium">Recent steps:</p>
-          {activity.recent_steps.slice(0, 3).map((step, i) => (
-            <div key={i} className="flex items-center gap-2 text-xs text-text-muted">
-              <span className="font-mono">{step.model.split('/').pop()?.replace('claude-', '')}</span>
-              <span>${step.cost_usd.toFixed(4)}</span>
-              <span>{(step.duration_ms / 1000).toFixed(1)}s</span>
-              {step.error && <span className="text-red-400">error</span>}
-              <span className="text-text-muted/50">{timeAgo(step.created_at)}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      <span className="text-xs text-text-muted">{(value * 100).toFixed(0)}%</span>
     </div>
   );
 }
 
-function FindingCard({ finding, onRate }: { finding: ResearchFinding; onRate: (id: string, rating: string) => void }) {
+function FindingRow({ finding, index }: { finding: ResearchFinding; index: number }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="bg-bg-secondary border border-border-primary rounded-lg p-4">
-      <div className="flex items-start justify-between gap-3">
+    <div className="px-4 py-3">
+      <div className="flex items-start gap-3">
+        <span className="text-text-muted text-xs font-mono shrink-0 mt-0.5">[{index}]</span>
         <div className="flex-1 min-w-0">
           <p className="text-sm text-text-primary">{finding.summary}</p>
-          <div className="flex items-center gap-3 mt-2">
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-text-muted">Confidence:</span>
-              <NoveltyBar value={finding.confidence} />
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-text-muted">Novelty:</span>
-              <NoveltyBar value={finding.novelty} />
-            </div>
+          <div className="flex items-center gap-4 mt-1.5">
+            <ConfBar label="conf" value={finding.confidence} />
+            <ConfBar label="novel" value={finding.novelty} />
+            {finding.source_urls.length > 0 && (
+              <span className="text-xs text-text-muted">{finding.source_urls.length} source{finding.source_urls.length !== 1 ? 's' : ''}</span>
+            )}
+            {finding.tags.map(tag => (
+              <span key={tag} className="px-1.5 py-0.5 bg-bg-tertiary text-text-muted text-xs rounded">{tag}</span>
+            ))}
           </div>
-        </div>
-        <div className="flex items-center gap-1">
-          {(['promising', 'critical', 'not_useful'] as const).map(rating => (
-            <button
-              key={rating}
-              onClick={() => onRate(finding.id, rating)}
-              className={clsx(
-                'px-1.5 py-0.5 rounded text-xs transition-colors',
-                finding.user_rating === rating
-                  ? ratingColors[rating]
-                  : 'text-text-muted hover:text-text-secondary'
+          {expanded && (
+            <div className="mt-3 space-y-2">
+              <p className="text-xs text-text-secondary whitespace-pre-wrap">{finding.content}</p>
+              {finding.source_urls.length > 0 && (
+                <div className="space-y-0.5">
+                  {finding.source_urls.map((url, i) => (
+                    <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                      className="block text-xs text-accent hover:underline truncate">[{i + 1}] {url}</a>
+                  ))}
+                </div>
               )}
-              title={rating.replace('_', ' ')}
-            >
-              {rating === 'promising' ? '+' : rating === 'critical' ? '!' : '-'}
-            </button>
-          ))}
+            </div>
+          )}
+          <button onClick={() => setExpanded(e => !e)} className="text-xs text-accent mt-1.5 hover:underline">
+            {expanded ? 'collapse' : 'expand'}
+          </button>
         </div>
       </div>
-
-      {finding.tags.length > 0 && (
-        <div className="flex gap-1 mt-2">
-          {finding.tags.map(tag => (
-            <span key={tag} className="px-1.5 py-0.5 bg-bg-tertiary text-text-muted text-xs rounded">{tag}</span>
-          ))}
-        </div>
-      )}
-
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="text-xs text-accent mt-2 hover:underline"
-      >
-        {expanded ? 'Collapse' : 'Expand'}
-      </button>
-
-      {expanded && (
-        <div className="mt-3 space-y-3">
-          <div className="text-sm text-text-secondary whitespace-pre-wrap">{finding.content}</div>
-          {finding.source_urls.length > 0 && (
-            <div>
-              <p className="text-xs text-text-muted font-medium mb-1">Sources:</p>
-              <ul className="space-y-0.5">
-                {finding.source_urls.map((url, i) => (
-                  <li key={i}>
-                    <a href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:underline truncate block">{url}</a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {finding.follow_up_questions.length > 0 && (
-            <div>
-              <p className="text-xs text-text-muted font-medium mb-1">Follow-up questions:</p>
-              <ul className="space-y-0.5">
-                {finding.follow_up_questions.map((q, i) => (
-                  <li key={i} className="text-xs text-text-secondary">- {q}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
 
-function stepLabel(step: ResearchStep): string {
-  if (step.error) return `Error: ${step.error}`;
-  const tools = step.tool_calls;
-  if (tools.length > 0) {
-    const searchTools = tools.filter(t => t.tool === 'web_search');
-    if (searchTools.length > 0) {
-      const query = (searchTools[0].input as Record<string, unknown>)?.query;
-      return `Search: "${query}"`;
-    }
-    return tools.map(t => t.tool).join(', ');
-  }
-  return 'LLM call';
-}
-
-function ThreadSteps({ sessionId, threadId }: { sessionId: string; threadId: string }) {
-  const { data: steps = [] } = useResearchSteps(sessionId, threadId);
-  const sorted = [...steps].reverse(); // chronological order
-
-  if (sorted.length === 0) return <p className="text-xs text-text-muted">No steps recorded.</p>;
-
-  return (
-    <div className="space-y-0">
-      {sorted.map((step, i) => (
-        <div key={step.id} className="flex items-start gap-2 py-1.5">
-          <div className="flex flex-col items-center shrink-0 mt-0.5">
-            <div className={clsx(
-              'w-4 h-4 rounded-full border-2 flex items-center justify-center text-[10px]',
-              step.error ? 'border-red-400 text-red-400' : 'border-green-400 text-green-400'
-            )}>
-              {step.error ? '!' : '✓'}
-            </div>
-            {i < sorted.length - 1 && <div className="w-px h-full min-h-[12px] bg-border-primary" />}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className={clsx('text-xs truncate', step.error ? 'text-red-400' : 'text-text-secondary')}>
-              {stepLabel(step)}
-            </p>
-            <div className="flex items-center gap-2 text-[10px] text-text-muted">
-              <span>{step.model.replace('claude-', '')}</span>
-              <span>${step.cost_usd.toFixed(4)}</span>
-              <span>{(step.duration_ms / 1000).toFixed(1)}s</span>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ThreadList({
-  threads, findings, sessionId, onUpdateThread, onInject, onRateFinding,
-}: {
-  threads: ResearchThread[];
-  findings: ResearchFinding[];
-  sessionId: string;
-  onUpdateThread: (threadId: string, updates: { status?: string; max_depth?: number }) => void;
-  onInject: (query: string) => void;
-  onRateFinding: (id: string, rating: string) => void;
-}) {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+function DocumentView({ findings, threads }: { findings: ResearchFinding[]; threads: ResearchThread[] }) {
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const findingsByThread = useMemo(() => {
     const map = new Map<string, ResearchFinding[]>();
@@ -297,101 +96,58 @@ function ThreadList({
     return map;
   }, [findings]);
 
+  const sectionsThreads = useMemo(() =>
+    threads
+      .filter(t => (findingsByThread.get(t.id) ?? []).length > 0)
+      .sort((a, b) => {
+        if (a.origin === 'seed') return -1;
+        if (b.origin === 'seed') return 1;
+        return a.depth - b.depth || a.created_at.localeCompare(b.created_at);
+      }),
+    [threads, findingsByThread]
+  );
+
+  if (sectionsThreads.length === 0) {
+    return <p className="text-sm text-text-muted text-center py-12">No findings yet. Run the engine to start researching.</p>;
+  }
+
   return (
     <div className="space-y-1">
-      {threads.map(thread => {
-        const threadFindings = findingsByThread.get(thread.id) ?? [];
-        const topFinding = threadFindings[0];
-        const isExpanded = expandedId === thread.id;
+      {sectionsThreads.map((thread, sectionIdx) => {
+        const sectionFindings = (findingsByThread.get(thread.id) ?? [])
+          .slice().sort((a, b) => b.confidence - a.confidence);
+        const isCollapsed = collapsed.has(thread.id);
 
         return (
-          <div key={thread.id} className="bg-bg-secondary border border-border-primary rounded-lg overflow-hidden">
-            <div
-              className="px-4 py-3 cursor-pointer hover:bg-bg-tertiary/30 transition-colors"
-              onClick={() => setExpandedId(isExpanded ? null : thread.id)}
+          <div key={thread.id} className="border border-border-primary rounded-lg overflow-hidden">
+            <button
+              onClick={() => setCollapsed(prev => {
+                const n = new Set(prev);
+                n.has(thread.id) ? n.delete(thread.id) : n.add(thread.id);
+                return n;
+              })}
+              className="w-full px-4 py-3 flex items-center justify-between hover:bg-bg-tertiary/30 transition-colors text-left"
             >
-              <div className="flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-text-primary truncate">{thread.query}</p>
-                  {topFinding && !isExpanded && (
-                    <p className="text-xs text-text-muted mt-1 truncate">{topFinding.summary}</p>
-                  )}
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className={clsx('px-1.5 py-0.5 rounded text-xs font-medium', originColors[thread.origin])}>
-                      {thread.origin.replace('_', ' ')}
-                    </span>
-                    {thread.perturbation_strategy && (
-                      <span className="text-xs text-text-muted">{thread.perturbation_strategy.replace('_', ' ')}</span>
-                    )}
-                    <span className="text-xs text-text-muted flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
-                      depth {thread.depth}/
-                      <input
-                        type="number"
-                        min={thread.depth + 1}
-                        max={20}
-                        value={thread.max_depth}
-                        onChange={e => onUpdateThread(thread.id, { max_depth: Number(e.target.value) })}
-                        className="w-8 bg-transparent border-b border-text-muted/30 text-text-muted text-xs text-center focus:outline-none focus:border-accent hover:border-text-muted/60"
-                      />
-                    </span>
-                    {threadFindings.length > 0 && (
-                      <span className="text-xs text-text-muted">{threadFindings.length} finding{threadFindings.length !== 1 ? 's' : ''}</span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
-                  <span className={clsx(
-                    'px-2 py-0.5 rounded text-xs font-medium',
-                    thread.status === 'active' ? 'bg-green-900/50 text-green-300'
-                      : thread.status === 'exhausted' ? 'bg-bg-tertiary text-text-muted'
-                        : thread.status === 'pruned' ? 'bg-red-900/50 text-red-300'
-                          : thread.status === 'deferred' ? 'bg-blue-900/30 text-blue-400'
-                            : 'bg-yellow-900/50 text-yellow-300'
-                  )}>
-                    {thread.status}
-                  </span>
-                  {(thread.status === 'exhausted' || thread.status === 'pruned' || thread.status === 'deferred') && (
-                    <button
-                      onClick={() => onUpdateThread(thread.id, { status: 'queued' })}
-                      className="text-xs text-text-muted hover:text-accent transition-colors"
-                    >
-                      Re-research
-                    </button>
-                  )}
-                  {!thread.parent_thread_id && (
-                    <button
-                      onClick={() => onInject(thread.query)}
-                      className="text-xs text-text-muted hover:text-purple-400 transition-colors"
-                    >
-                      New topic
-                    </button>
-                  )}
-                  {(thread.status === 'active' || thread.status === 'queued') && (
-                    <button
-                      onClick={() => onUpdateThread(thread.id, { status: 'pruned' })}
-                      className="text-xs text-text-muted hover:text-red-400 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  )}
-                </div>
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="text-text-muted text-xs font-mono shrink-0">{String(sectionIdx + 1).padStart(2, '0')}</span>
+                <span className="text-sm font-medium text-text-primary truncate">{thread.query}</span>
+                <span className={clsx('px-1.5 py-0.5 rounded text-xs shrink-0',
+                  thread.origin === 'seed' ? 'bg-blue-900/50 text-blue-300' : 'bg-purple-900/50 text-purple-300'
+                )}>{thread.origin.replace('_', ' ')}</span>
               </div>
-            </div>
+              <div className="flex items-center gap-3 shrink-0 ml-3">
+                <span className="text-xs text-text-muted">{sectionFindings.length} finding{sectionFindings.length !== 1 ? 's' : ''}</span>
+                <svg className={clsx('w-4 h-4 text-text-muted transition-transform', isCollapsed && 'rotate-180')} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                </svg>
+              </div>
+            </button>
 
-            {isExpanded && (
-              <div className="border-t border-border-primary px-4 py-3 space-y-3">
-                <div>
-                  <p className="text-xs font-medium text-text-muted mb-1">Steps</p>
-                  <ThreadSteps sessionId={sessionId} threadId={thread.id} />
-                </div>
-                {threadFindings.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-text-muted">Findings</p>
-                    {threadFindings.map(f => (
-                      <FindingCard key={f.id} finding={f} onRate={onRateFinding} />
-                    ))}
-                  </div>
-                )}
+            {!isCollapsed && (
+              <div className="border-t border-border-primary divide-y divide-border-primary/50">
+                {sectionFindings.map((finding, idx) => (
+                  <FindingRow key={finding.id} finding={finding} index={idx + 1} />
+                ))}
               </div>
             )}
           </div>
@@ -401,26 +157,319 @@ function ThreadList({
   );
 }
 
+// --- Live Tab ---
+
+function eventLabel(e: StreamEvent): { icon: string; text: string; meta?: string } {
+  if (e.type === 'finding') {
+    return {
+      icon: '✓',
+      text: e.payload.summary.slice(0, 80) + (e.payload.summary.length > 80 ? '…' : ''),
+      meta: `conf ${(e.payload.confidence * 100).toFixed(0)}%`,
+    };
+  }
+  if (e.type === 'thread') {
+    if (e.payload.status === 'queued') return { icon: '+', text: `Thread queued: "${e.payload.query.slice(0, 60)}"` };
+    if (e.payload.status === 'active') return { icon: '▶', text: `Researching: "${e.payload.query.slice(0, 60)}"` };
+    if (e.payload.status === 'exhausted') return { icon: '✓', text: `Thread done: "${e.payload.query.slice(0, 60)}"` };
+    return { icon: '·', text: `Thread ${e.payload.status}: "${e.payload.query.slice(0, 60)}"` };
+  }
+  if (e.type === 'step') {
+    const searches = e.payload.tool_calls.filter(t => t.tool === 'web_search');
+    if (searches.length > 0) {
+      const q = (searches[0].input as Record<string, unknown>)?.query;
+      return { icon: '🔍', text: `Search: "${q}"`, meta: `$${e.payload.cost_usd.toFixed(4)} · ${(e.payload.duration_ms / 1000).toFixed(1)}s` };
+    }
+    if (e.payload.error) return { icon: '⚠', text: `Error: ${e.payload.error.slice(0, 60)}` };
+    return { icon: '·', text: 'LLM call', meta: `$${e.payload.cost_usd.toFixed(4)} · ${(e.payload.duration_ms / 1000).toFixed(1)}s` };
+  }
+  if (e.type === 'job') {
+    if (e.payload.status === 'running') return { icon: '▶', text: 'Job started' };
+    if (e.payload.status === 'completed') return { icon: '✓', text: `Job completed — ${e.payload.iterations_completed} iterations` };
+    if (e.payload.status === 'failed') return { icon: '✗', text: `Job failed: ${e.payload.error ?? 'unknown'}` };
+    return { icon: '·', text: `Job ${e.payload.status}` };
+  }
+  return { icon: '·', text: 'event' };
+}
+
+function LiveView({ events, activity }: { events: StreamEvent[]; activity: ResearchActivity | undefined }) {
+  return (
+    <div className="space-y-0">
+      {activity?.running && (
+        <div className="flex items-center gap-3 py-3 px-4 bg-green-900/10 border border-green-800/30 rounded-lg mb-3">
+          <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse shrink-0" />
+          <span className="text-sm text-green-300 font-medium">
+            {activity.active_thread ? `Researching: "${activity.active_thread.query.slice(0, 60)}"` : 'Running...'}
+          </span>
+        </div>
+      )}
+
+      {events.length === 0 ? (
+        <p className="text-sm text-text-muted text-center py-12">No activity yet. Run the engine to start.</p>
+      ) : (
+        <div className="font-mono text-xs space-y-0">
+          {events.map((e, i) => {
+            const { icon, text, meta } = eventLabel(e);
+            const isError = e.type === 'step' && e.payload.error;
+            const isFinding = e.type === 'finding';
+            const isThreadActive = e.type === 'thread' && e.payload.status === 'active';
+            return (
+              <div key={i} className={clsx(
+                'flex items-start gap-3 py-1.5 px-2 rounded transition-colors',
+                i === 0 && !isError ? 'text-text-primary' : 'text-text-muted',
+                isFinding && 'bg-green-900/10',
+                isError && 'text-red-400',
+                isThreadActive && 'text-blue-400',
+              )}>
+                <span className="shrink-0 w-4 text-center">{icon}</span>
+                <span className="flex-1 break-words">{text}</span>
+                {meta && <span className="shrink-0 text-text-muted/60">{meta}</span>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Graph Tab ---
+
+const NODE_WIDTH = 200;
+const NODE_HEIGHT = 70;
+
+function layoutGraph(threads: ResearchThread[]) {
+  const g = new dagre.graphlib.Graph();
+  g.setDefaultEdgeLabel(() => ({}));
+  g.setGraph({ rankdir: 'TB', nodesep: 20, ranksep: 40 });
+
+  for (const t of threads) {
+    g.setNode(t.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
+  }
+  for (const t of threads) {
+    if (t.parent_thread_id) g.setEdge(t.parent_thread_id, t.id);
+  }
+  dagre.layout(g);
+
+  return threads.map(t => {
+    const pos = g.node(t.id);
+    return { id: t.id, position: { x: pos.x - NODE_WIDTH / 2, y: pos.y - NODE_HEIGHT / 2 }, data: t, type: 'thread' };
+  });
+}
+
+const statusColors: Record<string, string> = {
+  active: 'border-green-500 bg-green-900/20',
+  queued: 'border-yellow-500/50 bg-yellow-900/10',
+  exhausted: 'border-border-primary bg-bg-tertiary/30',
+  deferred: 'border-blue-500/50 bg-blue-900/10',
+  pruned: 'border-red-500/50 bg-red-900/10',
+};
+
+const statusDot: Record<string, string> = {
+  active: 'bg-green-400 animate-pulse',
+  queued: 'bg-yellow-400',
+  exhausted: 'bg-text-muted',
+  deferred: 'bg-blue-400',
+  pruned: 'bg-red-400',
+};
+
+function ThreadNode({ data }: { data: ResearchThread & { findingCount: number } }) {
+  return (
+    <div className={clsx('rounded-lg border px-3 py-2 w-[200px] cursor-pointer', statusColors[data.status] ?? 'border-border-primary bg-bg-secondary')}>
+      <Handle type="target" position={Position.Top} className="!bg-border-primary" />
+      <div className="flex items-center gap-1.5 mb-1">
+        <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', statusDot[data.status] ?? 'bg-text-muted')} />
+        <span className="text-[10px] text-text-muted uppercase tracking-wide">{data.origin.replace('_', ' ')}</span>
+        {data.findingCount > 0 && (
+          <span className="ml-auto text-[10px] bg-bg-tertiary text-text-muted px-1 rounded">{data.findingCount}</span>
+        )}
+      </div>
+      <p className="text-xs text-text-primary leading-tight line-clamp-2">{data.query}</p>
+      <Handle type="source" position={Position.Bottom} className="!bg-border-primary" />
+    </div>
+  );
+}
+
+const nodeTypes = { thread: ThreadNode };
+
+function ThreadGraph({ threads, findings }: { threads: ResearchThread[]; findings: ResearchFinding[] }) {
+  const findingCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const f of findings) map.set(f.thread_id, (map.get(f.thread_id) ?? 0) + 1);
+    return map;
+  }, [findings]);
+
+  const nodes: Node[] = useMemo(() => {
+    if (threads.length === 0) return [];
+    const laid = layoutGraph(threads);
+    return laid.map(n => ({ ...n, data: { ...n.data, findingCount: findingCounts.get(n.id) ?? 0 } }));
+  }, [threads, findingCounts]);
+
+  const edges: Edge[] = useMemo(() =>
+    threads
+      .filter(t => t.parent_thread_id)
+      .map(t => ({
+        id: `${t.parent_thread_id}-${t.id}`,
+        source: t.parent_thread_id!,
+        target: t.id,
+        style: { stroke: '#374151', strokeWidth: 1 },
+      })),
+    [threads]
+  );
+
+  if (threads.length === 0) {
+    return <p className="text-sm text-text-muted text-center py-12">No threads yet.</p>;
+  }
+
+  return (
+    <div style={{ height: '500px' }} className="rounded-lg border border-border-primary overflow-hidden">
+      <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} fitView>
+        <Background variant={BackgroundVariant.Dots} color="#374151" gap={16} />
+        <Controls className="[&>button]:bg-bg-secondary [&>button]:border-border-primary [&>button]:text-text-secondary" />
+      </ReactFlow>
+    </div>
+  );
+}
+
+// --- Workers Tab ---
+
+function WorkersTab({ sessionId }: { sessionId: string }) {
+  const { data: jobs = [] } = useResearchJobs(sessionId);
+  const [selectedJob, setSelectedJob] = useState<ResearchJob | null>(null);
+
+  const counts = useMemo(() => ({
+    running: jobs.filter(j => j.status === 'running' || j.status === 'claimed').length,
+    pending: jobs.filter(j => j.status === 'pending').length,
+    completed: jobs.filter(j => j.status === 'completed').length,
+    failed: jobs.filter(j => j.status === 'failed').length,
+  }), [jobs]);
+
+  function jobDuration(job: ResearchJob): string {
+    if (!job.started_at) return '—';
+    const end = job.completed_at ? new Date(job.completed_at) : new Date();
+    const ms = end.getTime() - new Date(job.started_at).getTime();
+    if (ms < 60000) return `${Math.round(ms / 1000)}s`;
+    return `${Math.round(ms / 60000)}m`;
+  }
+
+  const jobStatusStyle: Record<string, string> = {
+    running: 'bg-green-900/50 text-green-300',
+    claimed: 'bg-green-900/30 text-green-400',
+    pending: 'bg-yellow-900/50 text-yellow-300',
+    completed: 'bg-bg-tertiary text-text-muted',
+    failed: 'bg-red-900/50 text-red-300',
+    cancelled: 'bg-bg-tertiary text-text-muted',
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-4 gap-3">
+        {[
+          { label: 'Running', value: counts.running, accent: counts.running > 0 ? 'text-green-400' : 'text-text-primary' },
+          { label: 'Pending', value: counts.pending, accent: 'text-text-primary' },
+          { label: 'Completed', value: counts.completed, accent: 'text-text-primary' },
+          { label: 'Failed', value: counts.failed, accent: counts.failed > 0 ? 'text-red-400' : 'text-text-primary' },
+        ].map(s => (
+          <div key={s.label} className="bg-bg-secondary border border-border-primary rounded-lg p-3">
+            <p className="text-xs text-text-muted">{s.label}</p>
+            <p className={clsx('text-lg font-semibold', s.accent)}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {jobs.length === 0 ? (
+        <p className="text-sm text-text-muted text-center py-8">No jobs yet. Hit Run to start.</p>
+      ) : (
+        <div className="bg-bg-secondary border border-border-primary rounded-lg overflow-hidden">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-border-primary text-text-muted">
+                <th className="px-3 py-2 text-left font-medium">#</th>
+                <th className="px-3 py-2 text-left font-medium">Status</th>
+                <th className="px-3 py-2 text-left font-medium">Mode</th>
+                <th className="px-3 py-2 text-left font-medium">Iters</th>
+                <th className="px-3 py-2 text-left font-medium">Worker</th>
+                <th className="px-3 py-2 text-left font-medium">Started</th>
+                <th className="px-3 py-2 text-left font-medium">Duration</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border-primary/50">
+              {[...jobs].reverse().map((job, i) => (
+                <tr key={job.id} onClick={() => setSelectedJob(job)}
+                  className="hover:bg-bg-tertiary/30 cursor-pointer transition-colors">
+                  <td className="px-3 py-2 text-text-muted font-mono">{jobs.length - i}</td>
+                  <td className="px-3 py-2">
+                    <span className={clsx('px-1.5 py-0.5 rounded text-[10px] font-medium', jobStatusStyle[job.status] ?? 'bg-bg-tertiary text-text-muted')}>
+                      {job.status}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-text-secondary">{job.mode}</td>
+                  <td className="px-3 py-2 text-text-secondary font-mono">
+                    {job.iterations_completed}{job.max_iterations ? `/${job.max_iterations}` : ''}
+                  </td>
+                  <td className="px-3 py-2 text-text-muted font-mono truncate max-w-[100px]">
+                    {job.claimed_by ? job.claimed_by.replace('worker-', '').slice(0, 12) : '—'}
+                  </td>
+                  <td className="px-3 py-2 text-text-muted">
+                    {job.started_at ? timeAgo(job.started_at) : '—'}
+                  </td>
+                  <td className="px-3 py-2 text-text-muted">{jobDuration(job)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {selectedJob && (
+        <div className="bg-bg-secondary border border-border-primary rounded-lg p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-text-muted">Job detail</p>
+            <button onClick={() => setSelectedJob(null)} className="text-xs text-text-muted hover:text-text-secondary">close</button>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div><span className="text-text-muted">ID: </span><span className="font-mono text-text-secondary">{selectedJob.id.slice(0, 16)}</span></div>
+            <div><span className="text-text-muted">Mode: </span><span className="text-text-secondary">{selectedJob.mode}</span></div>
+            <div><span className="text-text-muted">Created: </span><span className="text-text-secondary">{new Date(selectedJob.created_at).toLocaleString()}</span></div>
+            {selectedJob.started_at && <div><span className="text-text-muted">Started: </span><span className="text-text-secondary">{new Date(selectedJob.started_at).toLocaleString()}</span></div>}
+            {selectedJob.completed_at && <div><span className="text-text-muted">Completed: </span><span className="text-text-secondary">{new Date(selectedJob.completed_at).toLocaleString()}</span></div>}
+            {selectedJob.claimed_by && <div className="col-span-2"><span className="text-text-muted">Worker: </span><span className="font-mono text-text-secondary">{selectedJob.claimed_by}</span></div>}
+          </div>
+          {selectedJob.error && (
+            <div className="bg-red-900/20 border border-red-800/50 rounded p-2">
+              <p className="text-xs text-red-300">{selectedJob.error}</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Main Page ---
+
 export function ResearchSessionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: session, isLoading, isError } = useResearchSession(id!);
   const { data: runningData } = useResearchRunning(id!);
   const isRunning = runningData?.running ?? false;
-  const pollInterval = isRunning ? 5000 : undefined;
-  const { data: findingsData = [] } = useResearchFindings(id!, { refetchInterval: pollInterval });
-  const { data: threadsData = [] } = useResearchThreads(id!, { refetchInterval: pollInterval });
-  const { data: costs } = useResearchCosts(id!, { refetchInterval: pollInterval });
+  const { data: findingsData = [] } = useResearchFindings(id!);
+  const { data: threadsData = [] } = useResearchThreads(id!);
+  const { data: costs } = useResearchCosts(id!);
   const { data: activity } = useResearchActivity(id!, { refetchInterval: isRunning ? 3000 : undefined });
+  const { events } = useResearchStream(id!);
   const updateSession = useUpdateResearchSession();
   const rateFinding = useRateFinding();
   const injectThread = useInjectThread();
   const runResearch = useRunResearch();
   const cancelJobMutation = useCancelJob();
-  const updateThread = useUpdateThread();
   const [newQuestion, setNewQuestion] = useState('');
   const [injectDepth, setInjectDepth] = useState(8);
-  const [tab, setTab] = useState<'findings' | 'threads'>('findings');
+  const [tab, setTab] = useState<'document' | 'live' | 'graph' | 'workers'>('document');
   const [runError, setRunError] = useState<string | null>(null);
+
+  // suppress unused warning — rateFinding is available for future use
+  void rateFinding;
+  void cancelJobMutation;
 
   if (isLoading) return <PageLoading />;
   if (isError || !session) return <ErrorState message="Session not found." />;
@@ -444,45 +493,30 @@ export function ResearchSessionDetailPage() {
           </div>
           <div className="flex items-center gap-2">
             {(session.status === 'active' || session.status === 'paused') && (
-              <Button
-                variant="primary"
-                size="sm"
-                loading={runResearch.isPending}
-                disabled={isRunning}
+              <Button variant="primary" size="sm" loading={runResearch.isPending} disabled={isRunning}
                 onClick={() => {
                   setRunError(null);
                   runResearch.mutate(
                     { sessionId: id!, iterations: 5 },
                     { onError: (err) => setRunError(err instanceof Error ? err.message : String(err)) }
                   );
-                }}
-              >
+                }}>
                 {isRunning ? 'Running...' : 'Run'}
               </Button>
             )}
             {session.status === 'active' && (
-              <Button variant="secondary" size="sm" onClick={() => updateSession.mutate({ id: id!, status: 'paused' })}>
-                Pause
-              </Button>
+              <Button variant="secondary" size="sm" onClick={() => updateSession.mutate({ id: id!, status: 'paused' })}>Pause</Button>
             )}
             {session.status === 'paused' && (
-              <Button variant="secondary" size="sm" onClick={() => updateSession.mutate({ id: id!, status: 'active' })}>
-                Resume
-              </Button>
+              <Button variant="secondary" size="sm" onClick={() => updateSession.mutate({ id: id!, status: 'active' })}>Resume</Button>
             )}
-            <Link to={`/research/${id}/plan`}>
-              <Button variant="secondary" size="sm">Plan</Button>
-            </Link>
             {session.status !== 'archived' && (
-              <Button variant="ghost" size="sm" onClick={() => updateSession.mutate({ id: id!, status: 'archived' })}>
-                Archive
-              </Button>
+              <Button variant="ghost" size="sm" onClick={() => updateSession.mutate({ id: id!, status: 'archived' })}>Archive</Button>
             )}
           </div>
         </div>
       </div>
 
-      {/* Error */}
       {runError && (
         <div className="bg-red-900/20 border border-red-800/50 rounded-lg px-4 py-3 flex items-center justify-between">
           <p className="text-sm text-red-300">{runError}</p>
@@ -505,86 +539,40 @@ export function ResearchSessionDetailPage() {
         ))}
       </div>
 
-      {/* Activity */}
-      {activity && (
-        <ActivityPanel
-          activity={activity}
-          onCancel={activity.job ? () => cancelJobMutation.mutate({ jobId: activity.job!.id }) : undefined}
-        />
-      )}
-
-      {/* Summary */}
-      {session.summary && (
-        <div className="bg-bg-secondary border border-border-primary rounded-lg p-4">
-          <h3 className="text-xs font-medium text-text-muted mb-2">Summary</h3>
-          <p className="text-sm text-text-secondary whitespace-pre-wrap">{session.summary}</p>
-        </div>
-      )}
-
       {/* Inject question */}
       <form onSubmit={handleInject} className="flex gap-2 items-center">
-        <input
-          type="text"
-          value={newQuestion}
-          onChange={e => setNewQuestion(e.target.value)}
+        <input type="text" value={newQuestion} onChange={e => setNewQuestion(e.target.value)}
           placeholder="Inject a research question..."
-          className="flex-1 bg-bg-secondary border border-border-primary rounded-md px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
-        />
+          className="flex-1 bg-bg-secondary border border-border-primary rounded-md px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent" />
         <label className="flex items-center gap-1 text-xs text-text-muted shrink-0">
           Depth
-          <input
-            type="number"
-            min={1}
-            max={20}
-            value={injectDepth}
-            onChange={e => setInjectDepth(Number(e.target.value))}
-            className="w-12 bg-bg-secondary border border-border-primary rounded px-1.5 py-1.5 text-sm text-text-primary text-center focus:outline-none focus:border-accent"
-          />
+          <input type="number" min={1} max={20} value={injectDepth} onChange={e => setInjectDepth(Number(e.target.value))}
+            className="w-12 bg-bg-secondary border border-border-primary rounded px-1.5 py-1.5 text-sm text-text-primary text-center focus:outline-none focus:border-accent" />
         </label>
         <Button type="submit" variant="secondary" size="sm" loading={injectThread.isPending}>Inject</Button>
       </form>
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border-primary">
-        {(['findings', 'threads'] as const).map(t => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={clsx(
-              'px-3 py-2 text-sm font-medium border-b-2 transition-colors capitalize',
-              tab === t ? 'border-accent text-accent' : 'border-transparent text-text-muted hover:text-text-secondary'
-            )}
-          >
-            {t} ({t === 'findings' ? findingsData.length : threadsData.length})
+        {([
+          { key: 'document', label: `Document (${findingsData.length})` },
+          { key: 'live', label: `Live (${events.length})` },
+          { key: 'graph', label: `Graph (${threadsData.length})` },
+          { key: 'workers', label: 'Workers' },
+        ] as const).map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={clsx('px-3 py-2 text-sm font-medium border-b-2 transition-colors',
+              tab === t.key ? 'border-accent text-accent' : 'border-transparent text-text-muted hover:text-text-secondary')}>
+            {t.label}
           </button>
         ))}
       </div>
 
-      {/* Content */}
-      {tab === 'findings' ? (
-        <div className="space-y-2">
-          {findingsData.length === 0 ? (
-            <p className="text-sm text-text-muted text-center py-8">No findings yet. Run the engine to start researching.</p>
-          ) : (
-            findingsData.map(f => (
-              <FindingCard
-                key={f.id}
-                finding={f}
-                onRate={(fid, rating) => rateFinding.mutate({ id: fid, user_rating: rating })}
-              />
-            ))
-          )}
-        </div>
-      ) : (
-        <ThreadList
-          threads={threadsData}
-          findings={findingsData}
-          sessionId={id!}
-          onUpdateThread={(threadId, updates) => updateThread.mutate({ id: threadId, sessionId: id!, ...updates })}
-          onInject={(query) => injectThread.mutate({ sessionId: id!, query })}
-          onRateFinding={(fid, rating) => rateFinding.mutate({ id: fid, user_rating: rating })}
-        />
-      )}
+      {/* Tab content */}
+      {tab === 'document' && <DocumentView findings={findingsData} threads={threadsData} />}
+      {tab === 'live' && <LiveView events={events} activity={activity} />}
+      {tab === 'graph' && <ThreadGraph threads={threadsData} findings={findingsData} />}
+      {tab === 'workers' && <WorkersTab sessionId={id!} />}
     </div>
   );
 }
