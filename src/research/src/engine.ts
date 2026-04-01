@@ -369,22 +369,32 @@ export class ResearchEngine {
       limit: 5,
     });
 
+    // Get already-searched queries for this thread to avoid repeating them
+    const priorSteps = steps.listSteps(this.sqlite, thread.session_id, { threadId: thread.id });
+    const searchedQueries = priorSteps
+      .flatMap(s => s.tool_calls.filter(t => t.tool === 'web_search').map(t => (t.input as Record<string, unknown>)?.query as string))
+      .filter(Boolean);
+
     const context = existingFindings.length > 0
       ? `Previous findings for this thread:\n${existingFindings.map(f => `- ${f.summary}`).join('\n')}`
       : 'This is the first search for this thread.';
+
+    const alreadySearched = searchedQueries.length > 0
+      ? `\nAlready searched (DO NOT repeat these):\n${searchedQueries.map(q => `- ${q}`).join('\n')}`
+      : '';
 
     const result = await this.callLLM(
       config.model,
       `You are a research query formulator. Given a research topic/question, generate 2-3 diverse search queries.
 
 Rules:
-- One query should be a direct search for the topic
-- One should be a reformulated version (different angle, broader or more specific)
-- If previous findings exist, the third should explore gaps in current knowledge
+- Queries must be meaningfully different from each other and from any already-searched queries
+- Explore different angles: specific facts, comparisons, examples, edge cases
+- If previous findings exist, focus on gaps not yet covered
 
 Topic: ${thread.query}
 
-${context}
+${context}${alreadySearched}
 
 Return ONLY a JSON array of search query strings. No other text.`,
       thread.session_id,
