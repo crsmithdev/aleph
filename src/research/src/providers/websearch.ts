@@ -46,25 +46,32 @@ async function braveSearch(query: string, apiKey: string): Promise<SearchResult[
 }
 
 async function duckduckgoSearch(query: string): Promise<SearchResult[]> {
-  // DuckDuckGo instant answers — limited but no key required
-  const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
-  const res = await fetch(url, { headers: { 'User-Agent': 'research-agent/1.0' } });
+  // DuckDuckGo HTML search — no key required
+  const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; research-agent/1.0)' },
+  });
   if (!res.ok) return [];
-  const data = await res.json() as {
-    AbstractText?: string;
-    AbstractURL?: string;
-    AbstractSource?: string;
-    RelatedTopics?: Array<{ Text?: string; FirstURL?: string }>;
-  };
+  const html = await res.text();
 
   const results: SearchResult[] = [];
-  if (data.AbstractText) {
-    results.push({ title: data.AbstractSource ?? query, url: data.AbstractURL ?? '', snippet: data.AbstractText });
-  }
-  for (const t of (data.RelatedTopics ?? []).slice(0, 4)) {
-    if (t.Text && t.FirstURL) {
-      results.push({ title: t.Text.slice(0, 80), url: t.FirstURL, snippet: t.Text });
+
+  // Extract result blocks: title, URL, snippet
+  const blockRe = /<a[^>]+class="result__a"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
+  let match: RegExpExecArray | null;
+  while ((match = blockRe.exec(html)) !== null && results.length < 5) {
+    const ddgUrl = match[1];
+    const title = match[2].replace(/<[^>]+>/g, '').trim();
+    const snippet = match[3].replace(/<[^>]+>/g, '').trim();
+
+    // Decode the DDG redirect URL to get the actual URL
+    const uddgMatch = ddgUrl.match(/uddg=([^&]+)/);
+    const actualUrl = uddgMatch ? decodeURIComponent(uddgMatch[1]) : ddgUrl;
+
+    if (title && snippet) {
+      results.push({ title, url: actualUrl, snippet });
     }
   }
+
   return results;
 }
