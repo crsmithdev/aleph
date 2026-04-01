@@ -45,6 +45,7 @@ export function ResearchSessionsPage() {
       seed_query: 'What are the key differences between bun and deno runtimes?',
       config: {
         max_thread_depth: 1,
+        max_concurrent_threads: 1,
         model: 'qwen2.5:0.5b',
         providers: { primary: 'ollama' },
       },
