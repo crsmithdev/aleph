@@ -413,7 +413,10 @@ Return ONLY a JSON array of search query strings. No other text.`,
         seen.add(lower);
         return true;
       });
-      return deduped.length > 0 ? deduped : [thread.query];
+      if (deduped.length > 0) return deduped;
+      // All LLM suggestions already searched — only fall back to thread.query if not yet searched
+      if (!searchedLower.has(thread.query.toLowerCase())) return [thread.query];
+      return []; // nothing new to search — caller marks thread exhausted
     } catch {
       return [thread.query];
     }
