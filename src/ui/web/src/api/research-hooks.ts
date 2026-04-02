@@ -204,7 +204,7 @@ export function useResearchSteps(sessionId: string, threadId?: string, opts?: { 
   return useQuery({
     queryKey: ['research-steps', sessionId, threadId],
     queryFn: () => api.get<ResearchStep[]>(`/research/sessions/${sessionId}/steps${qs ? `?${qs}` : ''}`),
-    enabled: !!sessionId && !!threadId,
+    enabled: !!sessionId,
     refetchInterval: opts?.refetchInterval,
   });
 }

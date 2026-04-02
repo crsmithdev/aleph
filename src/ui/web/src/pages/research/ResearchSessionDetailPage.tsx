@@ -11,8 +11,9 @@ import {
   useResearchCosts, useUpdateResearchSession, useRateFinding,
   useInjectThread, useRunResearch, useResearchRunning,
   useResearchActivity, useCancelJob, useResearchJobs, useResearchStream,
+  useResearchSteps,
   type ResearchFinding, type ResearchThread, type ResearchActivity,
-  type ResearchJob, type StreamEvent,
+  type ResearchJob, type StreamEvent, type ResearchStep,
 } from '../../api/research-hooks';
 import { Button } from '../../components/ui/Button';
 import { PageLoading } from '../../components/ui/Spinner';
@@ -157,77 +158,240 @@ function DocumentView({ findings, threads }: { findings: ResearchFinding[]; thre
   );
 }
 
-// --- Live Tab ---
+// --- Live Tab (thread-per-row view) ---
 
-function eventLabel(e: StreamEvent): { icon: string; text: string; meta?: string } {
-  if (e.type === 'finding') {
-    return {
-      icon: '✓',
-      text: e.payload.summary.slice(0, 80) + (e.payload.summary.length > 80 ? '…' : ''),
-      meta: `conf ${(e.payload.confidence * 100).toFixed(0)}%`,
-    };
+function orderThreadsDepthFirst(threads: ResearchThread[]): ResearchThread[] {
+  const byParent = new Map<string | null, ResearchThread[]>();
+  for (const t of threads) {
+    const key = t.parent_thread_id ?? null;
+    if (!byParent.has(key)) byParent.set(key, []);
+    byParent.get(key)!.push(t);
   }
-  if (e.type === 'thread') {
-    if (e.payload.status === 'queued') return { icon: '+', text: `Thread queued: "${e.payload.query.slice(0, 60)}"` };
-    if (e.payload.status === 'active') return { icon: '▶', text: `Researching: "${e.payload.query.slice(0, 60)}"` };
-    if (e.payload.status === 'exhausted') return { icon: '✓', text: `Thread done: "${e.payload.query.slice(0, 60)}"` };
-    return { icon: '·', text: `Thread ${e.payload.status}: "${e.payload.query.slice(0, 60)}"` };
+  for (const arr of byParent.values()) arr.sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const result: ResearchThread[] = [];
+  function walk(parentId: string | null) {
+    for (const t of byParent.get(parentId) ?? []) { result.push(t); walk(t.id); }
   }
-  if (e.type === 'step') {
-    const searches = e.payload.tool_calls.filter(t => t.tool === 'web_search');
-    if (searches.length > 0) {
-      const q = (searches[0].input as Record<string, unknown>)?.query;
-      return { icon: '🔍', text: `Search: "${q}"`, meta: `$${e.payload.cost_usd.toFixed(4)} · ${(e.payload.duration_ms / 1000).toFixed(1)}s` };
-    }
-    if (e.payload.error) return { icon: '⚠', text: `Error: ${e.payload.error.slice(0, 60)}` };
-    return { icon: '·', text: 'LLM call', meta: `$${e.payload.cost_usd.toFixed(4)} · ${(e.payload.duration_ms / 1000).toFixed(1)}s` };
-  }
-  if (e.type === 'job') {
-    if (e.payload.status === 'running') return { icon: '▶', text: 'Job started' };
-    if (e.payload.status === 'completed') return { icon: '✓', text: `Job completed — ${e.payload.iterations_completed} iterations` };
-    if (e.payload.status === 'failed') return { icon: '✗', text: `Job failed: ${e.payload.error ?? 'unknown'}` };
-    return { icon: '·', text: `Job ${e.payload.status}` };
-  }
-  return { icon: '·', text: 'event' };
+  walk(null);
+  return result;
 }
 
-function LiveView({ events, activity }: { events: StreamEvent[]; activity: ResearchActivity | undefined }) {
-  return (
-    <div className="space-y-0">
-      {activity?.running && (
-        <div className="flex items-center gap-3 py-3 px-4 bg-green-900/10 border border-green-800/30 rounded-lg mb-3">
-          <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse shrink-0" />
-          <span className="text-sm text-green-300 font-medium">
-            {activity.active_thread ? `Researching: "${activity.active_thread.query.slice(0, 60)}"` : 'Running...'}
-          </span>
-        </div>
-      )}
+const liveStatusDot: Record<string, string> = {
+  active: 'bg-green-400 animate-pulse',
+  queued: 'bg-yellow-400/70',
+  exhausted: 'bg-text-muted/40',
+  deferred: 'bg-blue-400/70',
+  pruned: 'bg-red-400/70',
+  paused: 'bg-orange-400/70',
+};
 
-      {events.length === 0 ? (
-        <p className="text-sm text-text-muted text-center py-12">No activity yet. Run the engine to start.</p>
-      ) : (
-        <div className="font-mono text-xs space-y-0">
-          {events.map((e, i) => {
-            const { icon, text, meta } = eventLabel(e);
-            const isError = e.type === 'step' && e.payload.error;
-            const isFinding = e.type === 'finding';
-            const isThreadActive = e.type === 'thread' && e.payload.status === 'active';
-            return (
-              <div key={i} className={clsx(
-                'flex items-start gap-3 py-1.5 px-2 rounded transition-colors',
-                i === 0 && !isError ? 'text-text-primary' : 'text-text-muted',
-                isFinding && 'bg-green-900/10',
-                isError && 'text-red-400',
-                isThreadActive && 'text-blue-400',
-              )}>
-                <span className="shrink-0 w-4 text-center">{icon}</span>
-                <span className="flex-1 break-words">{text}</span>
-                {meta && <span className="shrink-0 text-text-muted/60">{meta}</span>}
+const liveOriginColor: Record<string, string> = {
+  seed: 'bg-blue-900/50 text-blue-300',
+  follow_up: 'bg-purple-900/50 text-purple-300',
+  perturbation: 'bg-orange-900/50 text-orange-300',
+  verify: 'bg-red-900/50 text-red-300',
+  user_injected: 'bg-green-900/50 text-green-300',
+  monitor_alert: 'bg-yellow-900/50 text-yellow-300',
+};
+
+function ThreadLiveRow({
+  thread, steps, threadFindings, childThreads, depth, expanded, onToggle,
+}: {
+  thread: ResearchThread;
+  steps: ResearchStep[];
+  threadFindings: ResearchFinding[];
+  childThreads: ResearchThread[];
+  depth: number;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const searches = steps.flatMap(s =>
+    s.tool_calls
+      .filter(tc => tc.tool === 'web_search')
+      .map(tc => ({ query: tc.input?.query as string, cost: s.cost_usd, duration: s.duration_ms, error: tc.error }))
+  );
+  const errors = steps.filter(s => s.error);
+  const followUpQuestions = Array.from(new Set(threadFindings.flatMap(f => f.follow_up_questions ?? [])));
+  const childQuerySet = new Set(childThreads.map(t => t.query.toLowerCase().trim()));
+
+  return (
+    <div style={{ marginLeft: depth * 18 }}>
+      <button
+        onClick={onToggle}
+        className="w-full flex items-start gap-2 px-3 py-2 rounded-lg hover:bg-bg-tertiary/30 transition-colors text-left group"
+      >
+        <span className={clsx('mt-1.5 w-1.5 h-1.5 rounded-full shrink-0', liveStatusDot[thread.status] ?? 'bg-text-muted/40')} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm text-text-primary leading-snug">{thread.query}</span>
+            <span className={clsx('px-1 py-0.5 rounded text-[10px] shrink-0', liveOriginColor[thread.origin] ?? 'bg-bg-tertiary text-text-muted')}>
+              {thread.origin.replace(/_/g, ' ')}
+            </span>
+            {thread.status === 'exhausted' && threadFindings.length > 0 && (
+              <span className="text-[10px] text-text-muted shrink-0">{threadFindings.length} finding{threadFindings.length !== 1 ? 's' : ''}</span>
+            )}
+            {thread.status === 'active' && (
+              <span className="text-[10px] text-green-400 shrink-0">running…</span>
+            )}
+          </div>
+        </div>
+        <svg className={clsx('w-3.5 h-3.5 text-text-muted shrink-0 mt-1 transition-transform', expanded && 'rotate-180')} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+        </svg>
+      </button>
+
+      {expanded && (
+        <div className="ml-5 pl-3 border-l border-border-primary/40 pb-1 space-y-0.5">
+          {searches.length === 0 && errors.length === 0 && threadFindings.length === 0 && (
+            <p className="text-xs text-text-muted py-1 italic">waiting to run…</p>
+          )}
+
+          {searches.map((s, i) => (
+            <div key={i} className="flex items-start gap-2 py-0.5">
+              <span className="text-text-muted text-xs shrink-0 mt-0.5">🔍</span>
+              <span className="text-xs text-text-secondary flex-1 break-words">{s.query}</span>
+              <span className="text-[10px] text-text-muted/60 shrink-0">
+                {s.cost > 0 ? `$${s.cost.toFixed(4)}` : ''}{s.duration ? ` · ${(s.duration / 1000).toFixed(1)}s` : ''}
+              </span>
+            </div>
+          ))}
+
+          {errors.map((s, i) => (
+            <div key={i} className="flex items-start gap-2 py-0.5">
+              <span className="text-red-400 text-xs shrink-0">⚠</span>
+              <span className="text-xs text-red-400 break-words">{s.error}</span>
+            </div>
+          ))}
+
+          {threadFindings.map(f => (
+            <div key={f.id} className="flex items-start gap-2 py-1 bg-green-900/10 rounded px-2 mt-1">
+              <span className="text-green-400 text-xs shrink-0 mt-0.5">✓</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-text-primary">{f.summary}</p>
+                <div className="flex items-center gap-3 mt-0.5">
+                  <span className="text-[10px] text-text-muted">conf {(f.confidence * 100).toFixed(0)}%</span>
+                  <span className="text-[10px] text-text-muted">novel {(f.novelty * 100).toFixed(0)}%</span>
+                  {f.source_urls.length > 0 && <span className="text-[10px] text-text-muted">{f.source_urls.length} src</span>}
+                  {f.confidence < 0.4 && <span className="text-[10px] text-red-400">low confidence</span>}
+                </div>
               </div>
-            );
-          })}
+            </div>
+          ))}
+
+          {followUpQuestions.length > 0 && (
+            <div className="mt-1.5 pt-1 border-t border-border-primary/30">
+              <p className="text-[10px] text-text-muted uppercase tracking-wide mb-0.5">Follow-ups</p>
+              {followUpQuestions.map((q, i) => {
+                const spawned = childQuerySet.has(q.toLowerCase().trim());
+                return (
+                  <div key={i} className="flex items-start gap-1.5 py-0.5">
+                    <span className="text-[10px] text-text-muted shrink-0 mt-0.5">{spawned ? '→' : '·'}</span>
+                    <span className={clsx('text-xs break-words', spawned ? 'text-text-secondary' : 'text-text-muted')}>{q}</span>
+                    {spawned && <span className="text-[10px] text-purple-400 shrink-0 mt-0.5">spawned</span>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+function ThreadLiveView({
+  threads, findings, allSteps, events, isRunning,
+}: {
+  threads: ResearchThread[];
+  findings: ResearchFinding[];
+  allSteps: ResearchStep[];
+  events: StreamEvent[];
+  isRunning: boolean;
+}) {
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  // Auto-expand active threads whenever thread list changes
+  useEffect(() => {
+    const activeIds = threads.filter(t => t.status === 'active').map(t => t.id);
+    if (activeIds.length > 0) {
+      setExpandedIds(prev => {
+        const next = new Set(prev);
+        for (const id of activeIds) next.add(id);
+        return next;
+      });
+    }
+  }, [threads]);
+
+  const stepsByThread = useMemo(() => {
+    const map = new Map<string, ResearchStep[]>();
+    const seen = new Set<string>();
+    for (const s of allSteps) {
+      const arr = map.get(s.thread_id) ?? [];
+      arr.push(s);
+      map.set(s.thread_id, arr);
+      seen.add(s.id);
+    }
+    for (const e of events) {
+      if (e.type !== 'step') continue;
+      if (seen.has(e.payload.id)) continue;
+      const arr = map.get(e.payload.thread_id) ?? [];
+      arr.push(e.payload);
+      map.set(e.payload.thread_id, arr);
+    }
+    return map;
+  }, [allSteps, events]);
+
+  const findingsByThread = useMemo(() => {
+    const map = new Map<string, ResearchFinding[]>();
+    for (const f of findings) {
+      const arr = map.get(f.thread_id) ?? [];
+      arr.push(f);
+      map.set(f.thread_id, arr);
+    }
+    return map;
+  }, [findings]);
+
+  const childrenByThread = useMemo(() => {
+    const map = new Map<string, ResearchThread[]>();
+    for (const t of threads) {
+      if (!t.parent_thread_id) continue;
+      const arr = map.get(t.parent_thread_id) ?? [];
+      arr.push(t);
+      map.set(t.parent_thread_id, arr);
+    }
+    return map;
+  }, [threads]);
+
+  const ordered = useMemo(() => orderThreadsDepthFirst(threads), [threads]);
+
+  if (ordered.length === 0) {
+    return <p className="text-sm text-text-muted text-center py-12">No threads yet. Run the engine to start.</p>;
+  }
+
+  return (
+    <div className="space-y-0.5">
+      {isRunning && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-green-900/10 border border-green-800/30 rounded-lg mb-3">
+          <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse shrink-0" />
+          <span className="text-sm text-green-300 font-medium">Running</span>
+        </div>
+      )}
+      {ordered.map(thread => (
+        <ThreadLiveRow
+          key={thread.id}
+          thread={thread}
+          steps={stepsByThread.get(thread.id) ?? []}
+          threadFindings={findingsByThread.get(thread.id) ?? []}
+          childThreads={childrenByThread.get(thread.id) ?? []}
+          depth={thread.depth}
+          expanded={expandedIds.has(thread.id)}
+          onToggle={() => setExpandedIds(prev => {
+            const next = new Set(prev);
+            next.has(thread.id) ? next.delete(thread.id) : next.add(thread.id);
+            return next;
+          })}
+        />
+      ))}
     </div>
   );
 }
@@ -456,6 +620,7 @@ export function ResearchSessionDetailPage() {
   const { data: threadsData = [] } = useResearchThreads(id!);
   const { data: costs } = useResearchCosts(id!);
   const { data: activity } = useResearchActivity(id!, { refetchInterval: isRunning ? 3000 : undefined });
+  const { data: allSteps = [] } = useResearchSteps(id!, undefined, { refetchInterval: isRunning ? 3000 : undefined });
   const { events } = useResearchStream(id!);
   const updateSession = useUpdateResearchSession();
   const rateFinding = useRateFinding();
@@ -467,9 +632,10 @@ export function ResearchSessionDetailPage() {
   const [tab, setTab] = useState<'document' | 'live' | 'graph' | 'workers'>('document');
   const [runError, setRunError] = useState<string | null>(null);
 
-  // suppress unused warning — rateFinding is available for future use
+  // suppress unused warnings — available for future use
   void rateFinding;
   void cancelJobMutation;
+  void activity;
 
   if (isLoading) return <PageLoading />;
   if (isError || !session) return <ErrorState message="Session not found." />;
@@ -556,7 +722,7 @@ export function ResearchSessionDetailPage() {
       <div className="flex gap-1 border-b border-border-primary">
         {([
           { key: 'document', label: `Document (${findingsData.length})` },
-          { key: 'live', label: `Live (${events.length})` },
+          { key: 'live', label: `Live (${threadsData.length})` },
           { key: 'graph', label: `Graph (${threadsData.length})` },
           { key: 'workers', label: 'Workers' },
         ] as const).map(t => (
@@ -570,7 +736,7 @@ export function ResearchSessionDetailPage() {
 
       {/* Tab content */}
       {tab === 'document' && <DocumentView findings={findingsData} threads={threadsData} />}
-      {tab === 'live' && <LiveView events={events} activity={activity} />}
+      {tab === 'live' && <ThreadLiveView threads={threadsData} findings={findingsData} allSteps={allSteps} events={events} isRunning={isRunning} />}
       {tab === 'graph' && <ThreadGraph threads={threadsData} findings={findingsData} />}
       {tab === 'workers' && <WorkersTab sessionId={id!} />}
     </div>
