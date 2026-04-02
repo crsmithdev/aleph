@@ -1,6 +1,7 @@
 ---
 name: code-review
-description: Scans for dead code, unused imports, silent failures, redundant logic, misnamed identifiers, and dead references.
+description: Scans for dead code, unused imports, silent failures, redundant logic, misnamed identifiers, and dead references. Use after completing a feature, during cleanup, or when code quality issues are suspected.
+compatibility: Designed for Claude Code
 ---
 
 # Code Review

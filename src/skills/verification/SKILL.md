@@ -1,6 +1,7 @@
 ---
 name: verification
 description: Use before claiming work is complete, fixed, or passing. Requires e2e verification against the running system plus an artifact. When this skill is active, e2e is mandatory — not optional.
+compatibility: Designed for Claude Code
 ---
 
 # Verification

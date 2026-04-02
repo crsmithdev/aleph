@@ -1,6 +1,7 @@
 ---
 name: debugging
 description: Use when investigating bugs, fixing test failures, or troubleshooting unexpected behavior. Four-phase root cause methodology. No fixes without root cause first.
+compatibility: Designed for Claude Code
 ---
 
 # Systematic Debugging

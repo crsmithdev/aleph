@@ -1,6 +1,7 @@
 ---
 name: research
 description: Use when researching topics, comparing options, or investigating unknowns. Structured research methodology with parallel search and source evaluation.
+compatibility: Designed for Claude Code
 ---
 
 # Research

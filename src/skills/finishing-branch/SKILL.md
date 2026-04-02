@@ -1,6 +1,7 @@
 ---
 name: finishing-branch
 description: Use when development on a feature branch is complete and ready to integrate. Verify, then merge/PR/keep/discard.
+compatibility: Designed for Claude Code
 ---
 
 # Finishing a Branch

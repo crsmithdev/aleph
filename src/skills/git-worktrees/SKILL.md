@@ -1,6 +1,7 @@
 ---
 name: git-worktrees
 description: Use when setting up an isolated git worktree for parallel feature work. Handles directory selection, creation, and baseline verification.
+compatibility: Designed for Claude Code
 ---
 
 # Git Worktrees

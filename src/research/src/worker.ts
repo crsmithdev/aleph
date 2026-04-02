@@ -3,6 +3,7 @@ import { createDb } from '@construct/data';
 import { applyResearchDDL } from './ddl.js';
 import { ResearchEngine, AnthropicProvider, type LLMProvider } from './engine.js';
 import { OllamaProvider } from './providers/ollama.js';
+import { OpenRouterProvider } from './providers/openrouter.js';
 import { Heartbeat, StepRateLimiter, isInActiveWindow, msUntilNextWindow } from './scheduler.js';
 import * as jobs from './services/jobs.js';
 import * as sessions from './services/sessions.js';
@@ -43,14 +44,24 @@ const apiKey = process.env.ANTHROPIC_API_KEY;
 const ollamaModel = process.env.OLLAMA_MODEL;
 const ollamaBaseUrl = process.env.OLLAMA_BASE_URL;
 
-if (!apiKey && !ollamaModel) {
-  console.error('[worker] Set ANTHROPIC_API_KEY or OLLAMA_MODEL');
+if (!apiKey && !ollamaModel && !process.env.OPENROUTER_API_KEY) {
+  console.error('[worker] Set ANTHROPIC_API_KEY, OLLAMA_MODEL, or OPENROUTER_API_KEY');
   process.exit(1);
 }
 
-function buildProvider(session: { config: { model?: string; providers?: { primary?: string } } }): LLMProvider {
+const openrouterApiKey = process.env.OPENROUTER_API_KEY;
+
+function buildProvider(session: { config: { model?: string; models?: Record<string, string>; providers?: { primary?: string; openrouter_api_key?: string } } }): LLMProvider {
   const primary = session.config.providers?.primary;
   const model = session.config.model;
+  if (primary === 'openrouter') {
+    const key = session.config.providers?.openrouter_api_key ?? openrouterApiKey;
+    if (!key) throw new Error('OpenRouter API key not set (pass via session config or OPENROUTER_API_KEY env)');
+    const models = session.config.models
+      ? Object.values(session.config.models).filter(Boolean)
+      : [model ?? 'deepseek/deepseek-chat'];
+    return new OpenRouterProvider({ apiKey: key, models: [...new Set(models)] as string[] });
+  }
   if (primary === 'ollama' || (!apiKey && ollamaModel)) {
     return new OllamaProvider({ model: model || ollamaModel || 'qwen2.5:0.5b', baseUrl: ollamaBaseUrl });
   }

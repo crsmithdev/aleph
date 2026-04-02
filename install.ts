@@ -236,15 +236,24 @@ if (!LINK_ONLY) {
   console.log("syncing construct/...");
   await syncDir(CONSTRUCT_SRC, constructDst);
 
-  // 3b. Install UI dependencies (file: deps point to sibling dirs that were just overwritten)
+  // 3b. Install UI and research dependencies
   const uiDir = join(DST, "construct", "ui");
   const uiWebDir = join(uiDir, "web");
+  const researchDir = join(DST, "construct", "research");
   if (await exists(join(uiDir, "package.json"))) {
     console.log("installing ui dependencies...");
     await Bun.$`cd ${uiDir} && bun install`.quiet();
     if (await exists(join(uiWebDir, "package.json"))) {
       await Bun.$`cd ${uiWebDir} && bun install`.quiet();
     }
+  }
+  if (await exists(join(researchDir, "package.json"))) {
+    console.log("installing research dependencies...");
+    const dataDir = join(DST, "construct", "data");
+    if (await exists(join(dataDir, "package.json"))) {
+      await Bun.$`cd ${dataDir} && bun install`.quiet();
+    }
+    await Bun.$`cd ${researchDir} && bun install`.quiet();
   }
 
   // 4. Restore preserved files from temp dir

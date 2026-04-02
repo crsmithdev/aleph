@@ -1,6 +1,7 @@
 ---
 name: commands-review
-description: Reviews slash command definitions for clarity, completeness, and correct registration.
+description: Reviews slash command definitions for clarity, completeness, and correct registration. Use when auditing commands, after adding or modifying slash commands, or when command behavior is inconsistent.
+compatibility: Designed for Claude Code
 ---
 
 # Slash Commands Review

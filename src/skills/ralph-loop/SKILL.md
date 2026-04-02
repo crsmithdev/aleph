@@ -1,6 +1,7 @@
 ---
 name: ralph-loop
 description: Use when a task needs iterative autonomous work — building features, getting tests to pass, batch processing, or any well-defined goal with clear completion criteria.
+compatibility: Designed for Claude Code
 ---
 
 # Ralph Loop

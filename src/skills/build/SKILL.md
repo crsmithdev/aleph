@@ -1,6 +1,7 @@
 ---
 name: build
 description: Use when implementing features, fixing bugs, or making multi-file changes. Single orchestrator that handles design, planning, TDD execution, and integration.
+compatibility: Designed for Claude Code
 ---
 
 # Build

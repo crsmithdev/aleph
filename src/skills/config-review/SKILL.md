@@ -1,6 +1,7 @@
 ---
 name: config-review
-description: Reviews Claude Code configuration files (settings.json, CLAUDE.md) for consistency, correctness, and completeness.
+description: Reviews Claude Code configuration files (settings.json, CLAUDE.md) for consistency, correctness, and completeness. Use when auditing configuration, after changing settings, or when hooks or permissions behave unexpectedly.
+compatibility: Designed for Claude Code
 ---
 
 # Configuration Review

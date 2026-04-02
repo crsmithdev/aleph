@@ -1,6 +1,7 @@
 ---
 name: skills-review
-description: Reviews skill SKILL.md files for quality, correct registration in skill-rules.json, and alignment with actual behavior.
+description: Reviews skill SKILL.md files for quality, correct registration in skill-rules.json, and alignment with actual behavior. Use when auditing skills, after adding or modifying a skill, or when skill triggering is inconsistent.
+compatibility: Designed for Claude Code
 ---
 
 # Skills Review

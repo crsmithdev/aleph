@@ -1,6 +1,7 @@
 ---
 name: hooks-review
-description: Reviews Claude Code hook scripts for correctness, safety, and alignment with settings.json registration.
+description: Reviews Claude Code hook scripts for correctness, safety, and alignment with settings.json registration. Use when auditing hooks, after adding or modifying hook scripts, or when hook behavior is unexpected.
+compatibility: Designed for Claude Code
 ---
 
 # Hooks Review

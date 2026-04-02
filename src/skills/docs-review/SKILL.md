@@ -1,6 +1,7 @@
 ---
 name: docs-review
-description: Detects drift between documentation and actual code/file state. Checks that every factual claim in docs is true.
+description: Detects drift between documentation and actual code/file state. Checks that every factual claim in docs is true. Use after any change that modifies behavior, or when docs may be stale.
+compatibility: Designed for Claude Code
 ---
 
 # Documentation Sync
