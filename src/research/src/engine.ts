@@ -381,11 +381,16 @@ export class ResearchEngine {
     // max_depth so they don't run until (if ever) the depth limit is raised.
     const updatedFindings = findings.listFindings(this.sqlite, thread.session_id, { threadId: thread.id });
     if (!isCovered(updatedFindings)) {
+      const existingQuerySet = new Set(
+        threads.listThreads(this.sqlite, thread.session_id).map(t => t.query.toLowerCase().trim())
+      );
       for (const question of followUpQuestions) {
         // Skip malformed or context-dependent questions
         if (typeof question !== 'string' || question.trim().length < 10) continue;
         // Reject questions with unresolved pronouns — they can't stand alone as search queries
         if (/\b(they|them|their|it|its|this|these|those|such)\b/i.test(question.trim())) continue;
+        // Skip if a thread with the same query already exists (case-insensitive)
+        if (existingQuerySet.has(question.toLowerCase().trim())) continue;
         const childDepth = thread.depth + 1;
         threads.createThread(this.sqlite, {
           session_id: sessionId,
@@ -414,8 +419,8 @@ export class ResearchEngine {
       limit: 5,
     });
 
-    // Get already-searched queries for this thread to avoid repeating them
-    const priorSteps = steps.listSteps(this.sqlite, thread.session_id, { threadId: thread.id });
+    // Get already-searched queries across the entire session to avoid cross-thread repetition
+    const priorSteps = steps.listSteps(this.sqlite, thread.session_id);
     const searchedQueries = priorSteps
       .flatMap(s => s.tool_calls.filter(t => t.tool === 'web_search').map(t => (t.input as Record<string, unknown>)?.query as string))
       .filter(Boolean);
