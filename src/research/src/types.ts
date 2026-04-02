@@ -121,7 +121,7 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
   },
 };
 
-export type ThreadOrigin = 'seed' | 'follow_up' | 'perturbation' | 'user_injected' | 'monitor_alert';
+export type ThreadOrigin = 'seed' | 'follow_up' | 'perturbation' | 'user_injected' | 'monitor_alert' | 'verify';
 export type ThreadStatus = 'queued' | 'active' | 'paused' | 'exhausted' | 'pruned' | 'deferred';
 
 // All 21 perturbation strategies from spec §3.3
