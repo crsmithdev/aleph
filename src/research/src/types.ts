@@ -46,6 +46,11 @@ export interface SessionConfig {
     timezone: string;
   };
   perturbation: PerturbationConfig;
+  follow_up: {
+    min_count: number;        // default 2
+    max_retries: number;      // default 3
+    similarity_threshold: number; // default 0.75
+  };
 }
 
 export interface PerturbationConfig {
@@ -89,6 +94,11 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
     mode: 'interactive',
     active_windows: [],
     timezone: 'America/Los_Angeles',
+  },
+  follow_up: {
+    min_count: 2,
+    max_retries: 3,
+    similarity_threshold: 0.75,
   },
   perturbation: {
     depth_scaling: true,
@@ -183,6 +193,7 @@ export interface ResearchFinding {
   actionability: number;
   user_rating: 'promising' | 'not_useful' | 'critical' | null;
   follow_up_questions: string[];
+  follow_up_analysis?: FollowUpAnalysis;
   created_at: string;
 }
 
@@ -207,6 +218,26 @@ export interface ToolCallRecord {
   input: Record<string, unknown>;
   output?: string;
   error?: string;
+}
+
+export interface FollowUpCandidate {
+  question: string;
+  quality_score: number;       // 0–1: relevance + specificity + answerability
+  jaccard_similarity: number;  // vs most-similar accepted question
+  embedding_similarity: number | null;
+  llm_similarity: number | null;
+  similarity_method: 'jaccard' | 'embedding' | 'llm';
+  distance_from_parent: number; // 0–1: 1 - jaccardSimilarity(question, parentQuery)
+  rank_score: number;          // composite: 0.40*quality + 0.30*distance + 0.30*(1-max_sim)
+  accepted: boolean;
+  rejection_reason: string | null;
+}
+
+export interface FollowUpAnalysis {
+  candidates: FollowUpCandidate[];
+  similarity_threshold: number;
+  retry_count: number;
+  min_required: number;
 }
 
 export interface ResearchPlan {

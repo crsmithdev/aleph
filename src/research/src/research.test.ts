@@ -1,5 +1,5 @@
 import { Database } from 'bun:sqlite';
-import { describe, test, expect, beforeEach } from 'bun:test';
+import { describe, test, expect, beforeEach, mock } from 'bun:test';
 import { applyResearchDDL } from './ddl';
 import * as sessions from './services/sessions';
 import * as threads from './services/threads';
@@ -10,6 +10,7 @@ import { ResearchEngine, isCovered } from './engine';
 import type { LLMProvider, LLMResult, WebSearchResult } from './engine';
 import { DEFAULT_SESSION_CONFIG } from './types';
 import type { SessionConfig } from './types';
+import { normalizeText, jaccardSimilarity, computeSimilarity } from './similarity';
 
 class SimpleMockProvider implements LLMProvider {
   responses: string[] = [];
@@ -777,5 +778,269 @@ describe('generatePlan with session summary', () => {
     expect(plan!.items.length).toBeGreaterThan(0);
     // Static rationale for follow_up
     expect(plan!.items[0].rationale).toMatch(/Follow-up from|unknown/);
+  });
+});
+
+// ========== Similarity Utilities ==========
+
+describe('normalizeText', () => {
+  test('removes stopwords', () => {
+    const tokens = normalizeText('What is the best way to do it');
+    // stopwords: what, is, the, to, do, it should be removed
+    expect(tokens).not.toContain('what');
+    expect(tokens).not.toContain('the');
+    expect(tokens).not.toContain('is');
+  });
+
+  test('applies suffix stemming', () => {
+    const tokens = normalizeText('running faster connections');
+    // running → runn (ing stripped), faster → fast (er stripped), connections → connection (s stripped)
+    expect(tokens).toContain('runn');
+    expect(tokens).toContain('fast');
+    expect(tokens).toContain('connection');
+  });
+
+  test('lowercases and removes punctuation', () => {
+    const tokens = normalizeText('Hello, World!');
+    expect(tokens).toContain('hello');
+    expect(tokens).toContain('world');
+  });
+
+  test('ies → y stemming', () => {
+    const tokens = normalizeText('policies strategies');
+    expect(tokens).toContain('policy');
+    expect(tokens).toContain('strategy');
+  });
+});
+
+describe('jaccardSimilarity', () => {
+  test('returns 1.0 for identical strings', () => {
+    expect(jaccardSimilarity('machine learning algorithms', 'machine learning algorithms')).toBe(1.0);
+  });
+
+  test('returns 0.0 for completely disjoint strings', () => {
+    // Use uncommon words not in stopwords
+    const sim = jaccardSimilarity('quantum physics experiments', 'culinary baking recipes');
+    expect(sim).toBe(0.0);
+  });
+
+  test('returns partial overlap for related strings', () => {
+    const sim = jaccardSimilarity('machine learning models', 'deep learning models');
+    expect(sim).toBeGreaterThan(0);
+    expect(sim).toBeLessThan(1);
+  });
+});
+
+describe('computeSimilarity', () => {
+  test('uses jaccard when decisive (far below threshold)', async () => {
+    const embedCalled = { value: false };
+    const fakeEmbed = async (_text: string) => { embedCalled.value = true; return [1, 0, 0]; };
+    // Completely disjoint strings → jaccard ~0, threshold 0.75, |0 - 0.75| = 0.75 > 0.15 → decisive
+    const result = await computeSimilarity(
+      'quantum physics experiments',
+      'culinary baking recipes',
+      0.75,
+      fakeEmbed,
+      null
+    );
+    expect(result.method).toBe('jaccard');
+    expect(embedCalled.value).toBe(false);
+  });
+
+  test('uses jaccard when decisive (far above threshold)', async () => {
+    const embedCalled = { value: false };
+    const fakeEmbed = async (_text: string) => { embedCalled.value = true; return [1, 0, 0]; };
+    // Identical strings → jaccard = 1.0, threshold 0.75, |1.0 - 0.75| = 0.25 > 0.15 → decisive
+    const result = await computeSimilarity(
+      'machine learning algorithms',
+      'machine learning algorithms',
+      0.75,
+      fakeEmbed,
+      null
+    );
+    expect(result.method).toBe('jaccard');
+    expect(embedCalled.value).toBe(false);
+    expect(result.score).toBe(1.0);
+  });
+
+  test('calls embed when jaccard is ambiguous', async () => {
+    const embedCalled = { value: false };
+    // Return vectors that are cosine-similar but different
+    const fakeEmbed = async (_text: string) => { embedCalled.value = true; return [1, 0]; };
+    const fakeJudge = async (_a: string, _b: string) => 1.0;
+
+    // We need jaccard to be within 0.15 of threshold (0.75)
+    // Hard to craft exact strings, so we use computeSimilarity with a low threshold
+    // so jaccard of identical strings (1.0) is |1.0 - 0.75| > 0.15 → decisive
+    // Instead test with threshold near jaccard value:
+    // jaccard of "abc def" vs "abc def ghi" ≈ 0.67, threshold 0.70, |0.67-0.70| = 0.03 < 0.15 → ambiguous
+    const result = await computeSimilarity(
+      'neural network training',
+      'neural network training optimization',
+      0.75, // jaccard ≈ 0.75 (3/4 tokens), |0.75 - 0.75| = 0 < 0.15 → ambiguous
+      fakeEmbed,
+      fakeJudge
+    );
+    // embed should be called since jaccard is ambiguous
+    expect(embedCalled.value).toBe(true);
+  });
+
+  test('returns jaccard method and score when no embed or llm provided', async () => {
+    const result = await computeSimilarity(
+      'some question about topic',
+      'another question about subject',
+      0.75,
+      null,
+      null
+    );
+    expect(result.method).toBe('jaccard');
+    expect(result.jaccard).toBeGreaterThanOrEqual(0);
+    expect(result.embedding).toBeNull();
+    expect(result.llm).toBeNull();
+  });
+});
+
+// ========== scoreAndRankFollowUps ==========
+
+describe('scoreAndRankFollowUps', () => {
+  let sqlite: Database;
+  let sessionId: string;
+
+  beforeEach(() => {
+    sqlite = createTestDb();
+    sessionId = sessions.createSession(sqlite, 'Test', 'machine learning algorithms').id;
+  });
+
+  test('rejects near-duplicate questions via jaccard', async () => {
+    const provider = new SimpleMockProvider();
+    provider.responses = ['NO'];
+    const engine = new ResearchEngine({ sqlite, provider }) as any;
+    const thread = threads.createThread(sqlite, { session_id: sessionId, query: 'machine learning algorithms', origin: 'seed' });
+    const config = { ...DEFAULT_SESSION_CONFIG, follow_up: { min_count: 2, max_retries: 3, similarity_threshold: 0.75 } };
+
+    const existingAccepted = ['How do neural networks learn from training data?'];
+    const questions = ['How do neural networks learn from training data?']; // exact duplicate
+
+    const candidates = await engine.scoreAndRankFollowUps(questions, thread, existingAccepted, config, 0);
+    expect(candidates.length).toBe(1);
+    expect(candidates[0].accepted).toBe(false);
+  });
+
+  test('accepts dissimilar questions', async () => {
+    const provider = new SimpleMockProvider();
+    const engine = new ResearchEngine({ sqlite, provider }) as any;
+    const thread = threads.createThread(sqlite, { session_id: sessionId, query: 'machine learning', origin: 'seed' });
+    const config = { ...DEFAULT_SESSION_CONFIG, follow_up: { min_count: 2, max_retries: 3, similarity_threshold: 0.75 } };
+
+    const questions = [
+      'What are the computational requirements for quantum cryptography?',
+      'How does solar panel efficiency compare to wind energy?',
+    ];
+
+    const candidates = await engine.scoreAndRankFollowUps(questions, thread, [], config, 0);
+    const acceptedCount = candidates.filter((c: any) => c.accepted).length;
+    expect(acceptedCount).toBeGreaterThanOrEqual(1);
+  });
+
+  test('FollowUpCandidate fields are present', async () => {
+    const provider = new SimpleMockProvider();
+    const engine = new ResearchEngine({ sqlite, provider }) as any;
+    const thread = threads.createThread(sqlite, { session_id: sessionId, query: 'machine learning', origin: 'seed' });
+    const config = { ...DEFAULT_SESSION_CONFIG, follow_up: { min_count: 2, max_retries: 3, similarity_threshold: 0.75 } };
+
+    const questions = ['What is the impact of gradient descent on model convergence?'];
+    const candidates = await engine.scoreAndRankFollowUps(questions, thread, [], config, 0);
+    expect(candidates.length).toBe(1);
+    const c = candidates[0];
+    expect(typeof c.question).toBe('string');
+    expect(typeof c.quality_score).toBe('number');
+    expect(typeof c.jaccard_similarity).toBe('number');
+    expect(typeof c.distance_from_parent).toBe('number');
+    expect(typeof c.rank_score).toBe('number');
+    expect(typeof c.accepted).toBe('boolean');
+    expect(c.similarity_method).toMatch(/jaccard|embedding|llm/);
+  });
+
+  test('candidates are sorted by rank_score descending', async () => {
+    const provider = new SimpleMockProvider();
+    const engine = new ResearchEngine({ sqlite, provider }) as any;
+    const thread = threads.createThread(sqlite, { session_id: sessionId, query: 'climate change', origin: 'seed' });
+    const config = { ...DEFAULT_SESSION_CONFIG, follow_up: { min_count: 2, max_retries: 3, similarity_threshold: 0.75 } };
+
+    const questions = [
+      'What renewable energy sources reduce carbon emissions most effectively?',
+      'How do rising sea levels affect coastal infrastructure globally?',
+      'What policies have reduced greenhouse gas emissions in Europe?',
+    ];
+    const candidates = await engine.scoreAndRankFollowUps(questions, thread, [], config, 0);
+    for (let i = 1; i < candidates.length; i++) {
+      expect(candidates[i - 1].rank_score).toBeGreaterThanOrEqual(candidates[i].rank_score);
+    }
+  });
+});
+
+// ========== evaluateFollowUps / retry behavior ==========
+
+describe('evaluateFollowUps retry', () => {
+  let sqlite: Database;
+  let sessionId: string;
+
+  beforeEach(() => {
+    sqlite = createTestDb();
+    sessionId = sessions.createSession(sqlite, 'Test', 'quantum computing').id;
+  });
+
+  test('retry count is 0 when enough questions accepted on first pass', async () => {
+    const provider = new SimpleMockProvider();
+    // detectGaps response: 2 distinct questions
+    provider.responses = [
+      '["How do quantum gates work in quantum circuits?", "What are the main applications of quantum entanglement?"]',
+    ];
+    const engine = new ResearchEngine({ sqlite, provider }) as any;
+    const thread = threads.createThread(sqlite, { session_id: sessionId, query: 'quantum computing', origin: 'seed' });
+    const config = { ...DEFAULT_SESSION_CONFIG, follow_up: { min_count: 2, max_retries: 3, similarity_threshold: 0.75 } };
+    const searchResults = [{ query: 'quantum computing', results: 'results here' }];
+    const finding = { content: 'content', summary: 'quantum computing summary' };
+
+    const result = await engine.evaluateFollowUps(thread, searchResults, finding, config);
+    expect(result.analysis.retry_count).toBe(0);
+    expect(result.accepted.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('follow_up_analysis is present in stored finding', async () => {
+    const provider = new SimpleMockProvider();
+    provider.responses = [
+      '["test query"]',
+      'search results here',
+      JSON.stringify({
+        content: 'Content',
+        summary: 'A finding about quantum',
+        source_urls: [],
+        source_quality: 0.7,
+        tags: ['quantum'],
+        confidence: 0.7,
+        novelty: 0.5,
+        actionability: 0.5,
+      }),
+      'false',
+      '["How do quantum gates work?", "What is quantum entanglement used for?"]',
+    ];
+
+    const engine = new ResearchEngine({ sqlite, provider });
+    const session = sessions.getSession(sqlite, sessionId)!;
+    const thread = threads.createThread(sqlite, {
+      session_id: sessionId, query: 'quantum computing', origin: 'seed', depth: 0, max_depth: 8, priority: 0.8,
+    });
+    threads.updateThread(sqlite, thread.id, { status: 'active' });
+
+    await (engine as any).runIteration(sessionId, thread, session.config);
+
+    const allFindings = findings.listFindings(sqlite, sessionId);
+    expect(allFindings.length).toBeGreaterThan(0);
+    const f = allFindings[0];
+    expect(f.follow_up_analysis).toBeDefined();
+    expect(f.follow_up_analysis!.candidates).toBeDefined();
+    expect(Array.isArray(f.follow_up_analysis!.candidates)).toBe(true);
+    expect(typeof f.follow_up_analysis!.similarity_threshold).toBe('number');
   });
 });

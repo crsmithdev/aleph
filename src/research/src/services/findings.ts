@@ -1,6 +1,6 @@
 import type { Sqlite } from '@construct/data';
 import { nanoid } from 'nanoid';
-import type { ResearchFinding } from '../types.js';
+import type { ResearchFinding, FollowUpAnalysis } from '../types.js';
 
 function rowToFinding(row: Record<string, unknown>): ResearchFinding {
   return {
@@ -8,6 +8,7 @@ function rowToFinding(row: Record<string, unknown>): ResearchFinding {
     source_urls: JSON.parse(row.source_urls as string),
     tags: JSON.parse(row.tags as string),
     follow_up_questions: JSON.parse(row.follow_up_questions as string),
+    follow_up_analysis: row.follow_up_analysis ? JSON.parse(row.follow_up_analysis as string) : undefined,
   } as unknown as ResearchFinding;
 }
 
@@ -25,6 +26,7 @@ export function createFinding(
     novelty?: number;
     actionability?: number;
     follow_up_questions?: string[];
+    follow_up_analysis?: FollowUpAnalysis;
   }
 ): ResearchFinding {
   const id = nanoid();
@@ -33,8 +35,8 @@ export function createFinding(
   sqlite.prepare(`
     INSERT INTO research_findings
       (id, thread_id, session_id, content, summary, source_urls, source_quality,
-       tags, confidence, novelty, actionability, follow_up_questions, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       tags, confidence, novelty, actionability, follow_up_questions, follow_up_analysis, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     params.thread_id,
@@ -48,6 +50,7 @@ export function createFinding(
     params.novelty ?? 0.5,
     params.actionability ?? 0.5,
     JSON.stringify(params.follow_up_questions ?? []),
+    params.follow_up_analysis ? JSON.stringify(params.follow_up_analysis) : null,
     now
   );
 
@@ -86,13 +89,17 @@ export function listFindings(
 export function updateFinding(
   sqlite: Sqlite,
   id: string,
-  updates: Partial<Pick<ResearchFinding, 'user_rating' | 'novelty'>>
+  updates: Partial<Pick<ResearchFinding, 'user_rating' | 'novelty' | 'follow_up_analysis'>>
 ): ResearchFinding | null {
   const fields: string[] = [];
   const values: unknown[] = [];
 
   if (updates.user_rating !== undefined) { fields.push('user_rating = ?'); values.push(updates.user_rating); }
   if (updates.novelty !== undefined) { fields.push('novelty = ?'); values.push(updates.novelty); }
+  if (updates.follow_up_analysis !== undefined) {
+    fields.push('follow_up_analysis = ?');
+    values.push(updates.follow_up_analysis ? JSON.stringify(updates.follow_up_analysis) : null);
+  }
 
   if (fields.length === 0) return getFinding(sqlite, id);
   values.push(id);

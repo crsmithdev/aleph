@@ -278,7 +278,47 @@ function ThreadLiveRow({
             </div>
           ))}
 
-          {followUpQuestions.length > 0 && (
+          {/* Follow-up analysis section */}
+          {threadFindings.some(f => f.follow_up_analysis) ? (
+            <div className="mt-1.5 pt-1 border-t border-border-primary/30">
+              <p className="text-[10px] text-text-muted uppercase tracking-wide mb-0.5">
+                Follow-up analysis {(threadFindings[0]?.follow_up_analysis?.retry_count ?? 0) > 0
+                  ? `(${threadFindings[0]?.follow_up_analysis?.retry_count} retries)` : ''}
+              </p>
+              <p className="text-[10px] text-text-muted/60 mb-1">
+                threshold: {((threadFindings[0]?.follow_up_analysis?.similarity_threshold ?? 0.75) * 100).toFixed(0)}%
+              </p>
+              {threadFindings.flatMap(f => f.follow_up_analysis?.candidates ?? []).map((c, i) => {
+                const spawned = childQuerySet.has(c.question.toLowerCase().trim());
+                return (
+                  <div key={i} className={clsx(
+                    'flex items-start gap-1.5 py-0.5 px-1 rounded mb-0.5',
+                    c.accepted ? '' : 'opacity-50'
+                  )}>
+                    <span className={clsx('text-[10px] shrink-0 mt-0.5', c.accepted ? 'text-purple-400' : 'text-text-muted')}>
+                      {c.accepted ? (spawned ? '→' : '·') : '✗'}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <span className={clsx('text-xs break-words', c.accepted ? (spawned ? 'text-text-secondary' : 'text-text-muted') : 'text-text-muted/50 line-through')}>{c.question}</span>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <span className="text-[9px] text-text-muted/70">q:{(c.quality_score*100).toFixed(0)}%</span>
+                        <span className="text-[9px] text-text-muted/70">rank:{(c.rank_score*100).toFixed(0)}%</span>
+                        <span className="text-[9px] text-text-muted/70">dist:{(c.distance_from_parent*100).toFixed(0)}%</span>
+                        <span className={clsx('text-[9px]', c.jaccard_similarity > (threadFindings[0]?.follow_up_analysis?.similarity_threshold ?? 0.75) ? 'text-red-400' : 'text-text-muted/70')}>
+                          sim:{(c.jaccard_similarity*100).toFixed(0)}%{c.similarity_method !== 'jaccard' ? `→${c.similarity_method}` : ''}
+                        </span>
+                        {c.accepted && spawned && <span className="text-[9px] text-purple-400">spawned</span>}
+                        {!c.accepted && c.rejection_reason && (
+                          <span className="text-[9px] text-red-400/70 italic truncate max-w-24" title={c.rejection_reason}>rejected</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : followUpQuestions.length > 0 ? (
+            // Fallback: old display for findings without analysis
             <div className="mt-1.5 pt-1 border-t border-border-primary/30">
               <p className="text-[10px] text-text-muted uppercase tracking-wide mb-0.5">Follow-ups</p>
               {followUpQuestions.map((q, i) => {
@@ -292,7 +332,7 @@ function ThreadLiveRow({
                 );
               })}
             </div>
-          )}
+          ) : null}
         </div>
       )}
     </div>

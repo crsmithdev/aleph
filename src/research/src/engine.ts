@@ -3,8 +3,10 @@ import type { Sqlite } from '@construct/data';
 import type {
   ResearchSession, ResearchThread, ResearchFinding,
   ResearchPlanItem, PerturbationStrategy, SessionConfig, ToolCallRecord,
+  FollowUpCandidate, FollowUpAnalysis,
 } from './types.js';
 import { MODEL_PRICING } from './types.js';
+import { jaccardSimilarity, computeSimilarity } from './similarity.js';
 import * as sessions from './services/sessions.js';
 import * as threads from './services/threads.js';
 import * as findings from './services/findings.js';
@@ -14,6 +16,7 @@ import * as plans from './services/plans.js';
 export interface LLMProvider {
   complete(model: string, prompt: string, maxTokens: number): Promise<LLMResult>;
   searchWeb(model: string, query: string): Promise<WebSearchResult>;
+  embed?(text: string): Promise<number[]>;
 }
 
 export interface LLMResult {
@@ -342,8 +345,10 @@ export class ResearchEngine {
       synthesisResult.novelty = Math.min(synthesisResult.novelty, 0.2);
     }
 
-    // Step 4b: Detect gaps separately
-    const followUpQuestions = await this.detectGaps(thread, searchResults, synthesisResult, config);
+    // Step 4b: Detect gaps and evaluate/score follow-up questions
+    const { accepted: followUpQuestions, analysis: followUpAnalysis } = await this.evaluateFollowUps(
+      thread, searchResults, synthesisResult, config
+    );
 
     // Step 5: Store finding
     const finding = findings.createFinding(this.sqlite, {
@@ -358,6 +363,7 @@ export class ResearchEngine {
       novelty: synthesisResult.novelty,
       actionability: synthesisResult.actionability,
       follow_up_questions: followUpQuestions,
+      follow_up_analysis: followUpAnalysis,
     });
 
     // Step 5b: Spawn verify thread for low-confidence findings (non-recursive)
@@ -376,7 +382,7 @@ export class ResearchEngine {
       });
     }
 
-    // Step 6: Spawn child threads from follow-up questions (skip if covered).
+    // Step 6: Spawn child threads from accepted follow-up questions (skip if covered).
     // Always create them so the graph is complete, but defer those that exceed
     // max_depth so they don't run until (if ever) the depth limit is raised.
     const updatedFindings = findings.listFindings(this.sqlite, thread.session_id, { threadId: thread.id });
@@ -601,11 +607,192 @@ Return ONLY valid JSON. No markdown fences.`,
     }
   }
 
-  private async detectGaps(
+  private async evaluateFollowUps(
     thread: ResearchThread,
     searchResults: Array<{ query: string; results: string }>,
     finding: { content: string; summary: string },
     config: SessionConfig
+  ): Promise<{ accepted: string[]; analysis: FollowUpAnalysis }> {
+    const followUpConfig = config.follow_up ?? { min_count: 2, max_retries: 3, similarity_threshold: 0.75 };
+    const threshold = followUpConfig.similarity_threshold;
+    const minCount = followUpConfig.min_count;
+    const maxRetries = followUpConfig.max_retries;
+
+    let retryCount = 0;
+    let allCandidates: FollowUpCandidate[] = [];
+    const acceptedQuestions: string[] = [];
+
+    // Initial detectGaps call
+    let rawQuestions = await this.detectGaps(thread, searchResults, finding, config);
+
+    while (true) {
+      const newCandidates = await this.scoreAndRankFollowUps(
+        rawQuestions, thread, acceptedQuestions, config, retryCount
+      );
+
+      allCandidates = [...allCandidates, ...newCandidates];
+
+      // Add newly accepted questions
+      for (const c of newCandidates) {
+        if (c.accepted) acceptedQuestions.push(c.question);
+      }
+
+      const acceptedCount = acceptedQuestions.length;
+
+      // Check if we have enough or hit retry limit
+      if (acceptedCount >= minCount || retryCount >= maxRetries) break;
+
+      // Not enough accepted — retry with rejection context
+      const rejected = allCandidates.filter(c => !c.accepted);
+      if (rejected.length === 0) break;
+
+      const rejectionContext = rejected
+        .map(c => `- "${c.question}" (${c.rejection_reason ?? 'rejected'})`)
+        .join('\n');
+
+      rawQuestions = await this.detectGaps(
+        thread,
+        searchResults,
+        finding,
+        config,
+        `\nPreviously rejected questions (DO NOT repeat these or similar ones):\n${rejectionContext}`
+      );
+
+      retryCount++;
+    }
+
+    return {
+      accepted: acceptedQuestions,
+      analysis: {
+        candidates: allCandidates,
+        similarity_threshold: threshold,
+        retry_count: retryCount,
+        min_required: minCount,
+      },
+    };
+  }
+
+  private async scoreAndRankFollowUps(
+    questions: string[],
+    thread: ResearchThread,
+    existingAccepted: string[],
+    config: SessionConfig,
+    retryCount: number
+  ): Promise<FollowUpCandidate[]> {
+    const followUpConfig = config.follow_up ?? { min_count: 2, max_retries: 3, similarity_threshold: 0.75 };
+    const threshold = followUpConfig.similarity_threshold;
+
+    const embedFn = this.provider.embed?.bind(this.provider) ?? null;
+
+    const llmJudge = async (a: string, b: string): Promise<number> => {
+      const result = await this.callLLM(
+        config.models.cheap,
+        `Are these two research questions semantically equivalent or asking about the same thing?\nQ1: ${a}\nQ2: ${b}\nReply with only: YES or NO`,
+        '',
+        '',
+        config
+      );
+      return result.text.trim().toUpperCase().startsWith('YES') ? 1.0 : 0.0;
+    };
+
+    const existingQuerySet = new Set(
+      threads.listThreads(this.sqlite, thread.session_id).map(t => t.query.toLowerCase().trim())
+    );
+
+    const candidates: FollowUpCandidate[] = [];
+    const localAccepted: string[] = [...existingAccepted];
+
+    for (const question of questions) {
+      // Quality score heuristics
+      const words = question.trim().split(/\s+/);
+      const hasCapitalized = /\b[A-Z][a-z]+\b/.test(question);
+      const hasNumbers = /\d/.test(question);
+      const specificityScore = words.length >= 5 && (hasCapitalized || hasNumbers)
+        ? 1.0
+        : words.length >= 3 && words.length <= 4
+          ? 0.6
+          : 0.3;
+
+      const relevanceScore = Math.min(1, jaccardSimilarity(question, thread.query) * 2);
+
+      const questionWords = /\b(what|how|why|when|where|who|which)\b/i.test(question);
+      const answerabilityScore = question.trim().endsWith('?')
+        ? 1.0
+        : questionWords
+          ? 0.7
+          : 0.4;
+
+      const quality_score = 0.4 * specificityScore + 0.3 * relevanceScore + 0.3 * answerabilityScore;
+      const distance_from_parent = 1 - jaccardSimilarity(question, thread.query);
+
+      // Fast exact-match check first
+      const qLower = question.toLowerCase().trim();
+      if (existingQuerySet.has(qLower) || localAccepted.some(a => a.toLowerCase().trim() === qLower)) {
+        candidates.push({
+          question,
+          quality_score,
+          jaccard_similarity: 1.0,
+          embedding_similarity: null,
+          llm_similarity: null,
+          similarity_method: 'jaccard',
+          distance_from_parent,
+          rank_score: 0,
+          accepted: false,
+          rejection_reason: 'exact duplicate',
+        });
+        continue;
+      }
+
+      // Compute similarity against all accepted questions
+      let maxSimilarity = 0;
+      let maxSimilarQuestion = '';
+      let usedMethod: 'jaccard' | 'embedding' | 'llm' = 'jaccard';
+      let embeddingSim: number | null = null;
+      let llmSim: number | null = null;
+
+      for (const accepted of localAccepted) {
+        const result = await computeSimilarity(question, accepted, threshold, embedFn, llmJudge);
+        if (result.score > maxSimilarity) {
+          maxSimilarity = result.score;
+          maxSimilarQuestion = accepted;
+          usedMethod = result.method;
+          embeddingSim = result.embedding;
+          llmSim = result.llm;
+        }
+      }
+
+      const accepted = maxSimilarity < threshold;
+      const rank_score = 0.40 * quality_score + 0.30 * distance_from_parent + 0.30 * (1 - maxSimilarity);
+
+      const candidate: FollowUpCandidate = {
+        question,
+        quality_score,
+        jaccard_similarity: maxSimilarity,
+        embedding_similarity: embeddingSim,
+        llm_similarity: llmSim,
+        similarity_method: usedMethod,
+        distance_from_parent,
+        rank_score,
+        accepted,
+        rejection_reason: accepted ? null : `too similar to: "${maxSimilarQuestion}"`,
+      };
+
+      candidates.push(candidate);
+      if (accepted) localAccepted.push(question);
+    }
+
+    // Sort by rank_score descending
+    candidates.sort((a, b) => b.rank_score - a.rank_score);
+
+    return candidates;
+  }
+
+  private async detectGaps(
+    thread: ResearchThread,
+    searchResults: Array<{ query: string; results: string }>,
+    finding: { content: string; summary: string },
+    config: SessionConfig,
+    rejectionContext?: string
   ): Promise<string[]> {
     const resultsText = searchResults
       .map(r => `### Search: "${r.query}"\n${r.results.slice(0, 500)}`)
@@ -628,7 +815,7 @@ Given the research question and what was found, what specific questions remain u
 Rules:
 - Each question must be fully self-contained and searchable on its own
 - NO pronouns like "they/it/these/those/this" that refer back to the finding
-- Name the specific topic explicitly in each question
+- Name the specific topic explicitly in each question${rejectionContext ?? ''}
 
 Return ONLY a JSON array of question strings. No other text.`,
       thread.session_id,

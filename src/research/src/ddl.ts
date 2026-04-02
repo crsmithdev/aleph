@@ -45,6 +45,7 @@ export function applyResearchDDL(sqlite: Sqlite): void {
       actionability REAL NOT NULL DEFAULT 0.5,
       user_rating TEXT,
       follow_up_questions TEXT NOT NULL DEFAULT '[]',
+      follow_up_analysis TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_rf_session_created ON research_findings(session_id, created_at);
@@ -168,4 +169,9 @@ export function applyResearchDDL(sqlite: Sqlite): void {
     CREATE INDEX IF NOT EXISTS idx_rj_session ON research_jobs(session_id, status);
     CREATE INDEX IF NOT EXISTS idx_rj_heartbeat ON research_jobs(status, heartbeat_at);
   `);
+
+  // Migration: add follow_up_analysis if missing
+  try {
+    sqlite.exec(`ALTER TABLE research_findings ADD COLUMN follow_up_analysis TEXT`);
+  } catch { /* column already exists */ }
 }

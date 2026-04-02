@@ -43,6 +43,23 @@ export interface ResearchFinding {
   actionability: number;
   user_rating: string | null;
   follow_up_questions: string[];
+  follow_up_analysis?: {
+    candidates: Array<{
+      question: string;
+      quality_score: number;
+      jaccard_similarity: number;
+      embedding_similarity: number | null;
+      llm_similarity: number | null;
+      similarity_method: string;
+      distance_from_parent: number;
+      rank_score: number;
+      accepted: boolean;
+      rejection_reason: string | null;
+    }>;
+    similarity_threshold: number;
+    retry_count: number;
+    min_required: number;
+  };
   created_at: string;
 }
 
