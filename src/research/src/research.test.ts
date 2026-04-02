@@ -6,9 +6,23 @@ import * as threads from './services/threads';
 import * as findings from './services/findings';
 import * as steps from './services/steps';
 import * as plans from './services/plans';
-import { ResearchEngine } from './engine';
+import { ResearchEngine, isCovered } from './engine';
+import type { LLMProvider, LLMResult, WebSearchResult } from './engine';
 import { DEFAULT_SESSION_CONFIG } from './types';
 import type { SessionConfig } from './types';
+
+class SimpleMockProvider implements LLMProvider {
+  responses: string[] = [];
+  idx = 0;
+  async complete(model: string, prompt: string): Promise<LLMResult> {
+    const text = this.responses[this.idx++ % (this.responses.length || 1)] ?? '[]';
+    return { text, promptTokens: 100, completionTokens: 50, model };
+  }
+  async searchWeb(model: string, query: string): Promise<WebSearchResult> {
+    const text = this.responses[this.idx++ % (this.responses.length || 1)] ?? 'results';
+    return { text, sourceUrls: ['https://example.com'], promptTokens: 200, completionTokens: 100, model };
+  }
+}
 
 function createTestDb(): Database {
   const sqlite = new Database(':memory:');
@@ -501,5 +515,267 @@ describe('follow-up thread ancestry', () => {
     expect(maxDepthThread.depth).toBe(8);
     expect(maxDepthThread.max_depth).toBe(8);
     expect(maxDepthThread.depth >= maxDepthThread.max_depth).toBe(true);
+  });
+});
+
+// ========== Task Router ==========
+
+describe('task router', () => {
+  let sqlite: Database;
+  let sessionId: string;
+
+  beforeEach(() => {
+    sqlite = createTestDb();
+    sessionId = sessions.createSession(sqlite, 'Test', 'test query').id;
+  });
+
+  test('routeTask returns broad_search for fresh thread', () => {
+    const provider = new SimpleMockProvider();
+    const engine = new ResearchEngine({ sqlite, provider }) as any;
+    const thread = threads.createThread(sqlite, { session_id: sessionId, query: 'q', origin: 'seed' });
+    const action = engine.routeTask(thread, []);
+    expect(action).toBe('broad_search');
+  });
+
+  test('routeTask returns targeted_lookup when findings exist', () => {
+    const provider = new SimpleMockProvider();
+    const engine = new ResearchEngine({ sqlite, provider }) as any;
+    const thread = threads.createThread(sqlite, { session_id: sessionId, query: 'q', origin: 'seed' });
+    const mockFindings = [{ id: '1', confidence: 0.7, novelty: 0.4 }] as any;
+    const action = engine.routeTask(thread, mockFindings);
+    expect(action).toBe('targeted_lookup');
+  });
+
+  test('routeTask returns verification for verify-origin thread', () => {
+    const provider = new SimpleMockProvider();
+    const engine = new ResearchEngine({ sqlite, provider }) as any;
+    const thread = threads.createThread(sqlite, { session_id: sessionId, query: 'Verify: some claim', origin: 'verify' });
+    const action = engine.routeTask(thread, []);
+    expect(action).toBe('verification');
+  });
+});
+
+// ========== Evidence Sufficiency (isCovered) ==========
+
+describe('isCovered', () => {
+  test('returns false with fewer than 3 findings', () => {
+    const twoFindings = [
+      { confidence: 0.9, novelty: 0.1 },
+      { confidence: 0.9, novelty: 0.1 },
+    ] as any;
+    expect(isCovered(twoFindings)).toBe(false);
+  });
+
+  test('returns true when high confidence and low novelty', () => {
+    const covered = [
+      { confidence: 0.8, novelty: 0.2 },
+      { confidence: 0.8, novelty: 0.2 },
+      { confidence: 0.8, novelty: 0.2 },
+    ] as any;
+    expect(isCovered(covered)).toBe(true);
+  });
+
+  test('returns false when novelty is high', () => {
+    const highNovelty = [
+      { confidence: 0.9, novelty: 0.6 },
+      { confidence: 0.9, novelty: 0.6 },
+      { confidence: 0.9, novelty: 0.6 },
+    ] as any;
+    expect(isCovered(highNovelty)).toBe(false);
+  });
+});
+
+// ========== detectGaps ==========
+
+describe('detectGaps', () => {
+  test('detectGaps called with mock provider returns array of questions', async () => {
+    const provider = new SimpleMockProvider();
+    provider.responses = ['["What are the long-term effects?", "How does this compare to alternatives?"]'];
+    const sqlite = createTestDb();
+    const sessionId = sessions.createSession(sqlite, 'Test', 'test query').id;
+    const engine = new ResearchEngine({ sqlite, provider }) as any;
+    const thread = threads.createThread(sqlite, { session_id: sessionId, query: 'test', origin: 'seed' });
+    const config = DEFAULT_SESSION_CONFIG;
+    const searchResults = [{ query: 'test', results: 'some results' }];
+    const finding = { content: 'detailed content', summary: 'short summary' };
+    const questions = await engine.detectGaps(thread, searchResults, finding, config);
+    expect(Array.isArray(questions)).toBe(true);
+    expect(questions.length).toBeGreaterThan(0);
+  });
+});
+
+// ========== Verification Thread Spawning ==========
+
+describe('verification thread spawning', () => {
+  let sqlite: Database;
+  let sessionId: string;
+
+  beforeEach(() => {
+    sqlite = createTestDb();
+    sessionId = sessions.createSession(sqlite, 'Test', 'test query').id;
+  });
+
+  test('low-confidence finding spawns verify thread', async () => {
+    const provider = new SimpleMockProvider();
+    // queries response, search result, synthesis result, duplicate check, detectGaps
+    provider.responses = [
+      '["test query"]',
+      'search results here',
+      JSON.stringify({
+        content: 'Content',
+        summary: 'A low confidence finding',
+        source_urls: [],
+        source_quality: 0.5,
+        tags: ['tag'],
+        confidence: 0.2,
+        novelty: 0.5,
+        actionability: 0.5,
+        follow_up_questions: [],
+      }),
+      'false',
+      '[]',
+    ];
+
+    const engine = new ResearchEngine({ sqlite, provider });
+    const session = sessions.getSession(sqlite, sessionId)!;
+    const thread = threads.createThread(sqlite, {
+      session_id: sessionId, query: 'test', origin: 'seed', depth: 0, max_depth: 8, priority: 0.8,
+    });
+    threads.updateThread(sqlite, thread.id, { status: 'active' });
+
+    await (engine as any).runIteration(sessionId, thread, session.config);
+
+    const allThreads = threads.listThreads(sqlite, sessionId);
+    const verifyThreads = allThreads.filter(t => t.origin === 'verify');
+    expect(verifyThreads.length).toBe(1);
+    expect(verifyThreads[0].query).toContain('Verify:');
+  });
+
+  test('verify-origin thread does not spawn another verify thread', async () => {
+    const provider = new SimpleMockProvider();
+    provider.responses = [
+      '["test query"]',
+      'search results here',
+      JSON.stringify({
+        content: 'Content',
+        summary: 'A low confidence finding',
+        source_urls: [],
+        source_quality: 0.5,
+        tags: ['tag'],
+        confidence: 0.2,
+        novelty: 0.5,
+        actionability: 0.5,
+        follow_up_questions: [],
+      }),
+      'false',
+      '[]',
+    ];
+
+    const engine = new ResearchEngine({ sqlite, provider });
+    const session = sessions.getSession(sqlite, sessionId)!;
+    const thread = threads.createThread(sqlite, {
+      session_id: sessionId, query: 'Verify: some claim', origin: 'verify', depth: 0, max_depth: 8, priority: 0.8,
+    });
+    threads.updateThread(sqlite, thread.id, { status: 'active' });
+
+    await (engine as any).runIteration(sessionId, thread, session.config);
+
+    const allThreads = threads.listThreads(sqlite, sessionId);
+    // Exclude the original verify thread itself; only count newly spawned verify threads
+    const verifyThreads = allThreads.filter(t => t.origin === 'verify' && t.id !== thread.id);
+    expect(verifyThreads.length).toBe(0);
+  });
+
+  test('high-confidence finding does not spawn verify thread', async () => {
+    const provider = new SimpleMockProvider();
+    provider.responses = [
+      '["test query"]',
+      'search results here',
+      JSON.stringify({
+        content: 'Content',
+        summary: 'A high confidence finding',
+        source_urls: [],
+        source_quality: 0.9,
+        tags: ['tag'],
+        confidence: 0.9,
+        novelty: 0.5,
+        actionability: 0.5,
+        follow_up_questions: [],
+      }),
+      'false',
+      '[]',
+    ];
+
+    const engine = new ResearchEngine({ sqlite, provider });
+    const session = sessions.getSession(sqlite, sessionId)!;
+    const thread = threads.createThread(sqlite, {
+      session_id: sessionId, query: 'test', origin: 'seed', depth: 0, max_depth: 8, priority: 0.8,
+    });
+    threads.updateThread(sqlite, thread.id, { status: 'active' });
+
+    await (engine as any).runIteration(sessionId, thread, session.config);
+
+    const allThreads = threads.listThreads(sqlite, sessionId);
+    const verifyThreads = allThreads.filter(t => t.origin === 'verify');
+    expect(verifyThreads.length).toBe(0);
+  });
+});
+
+// ========== generatePlan with session summary ==========
+
+describe('generatePlan with session summary', () => {
+  let sqlite: Database;
+  let sessionId: string;
+
+  beforeEach(() => {
+    sqlite = createTestDb();
+    sessionId = sessions.createSession(sqlite, 'Test', 'test seed query').id;
+  });
+
+  test('generatePlan uses session summary to produce rationale when summary exists', async () => {
+    const provider = new SimpleMockProvider();
+    // LLM response: re-ranked plan with rationale
+    provider.responses = [
+      JSON.stringify([
+        { thread_index: 0, rationale: 'Most relevant because it fills the gap about X' },
+      ]),
+    ];
+    const engine = new ResearchEngine({ sqlite, provider });
+
+    // Update session with a summary
+    sessions.updateSession(sqlite, sessionId, { summary: 'We have learned about X but not Y.' });
+
+    // Create a thread to plan
+    threads.createThread(sqlite, {
+      session_id: sessionId, query: 'investigate Y', origin: 'follow_up', priority: 0.7,
+    });
+
+    const session = sessions.getSession(sqlite, sessionId)!;
+    await engine.generatePlan(sessionId, session.config);
+
+    const plan = plans.getLatestPlan(sqlite, sessionId);
+    expect(plan).not.toBeNull();
+    expect(plan!.items.length).toBeGreaterThan(0);
+    expect(plan!.items[0].rationale).toContain('gap');
+  });
+
+  test('generatePlan falls back to static rationale when summary is empty', async () => {
+    const provider = new SimpleMockProvider();
+    provider.responses = ['[]']; // LLM not expected to be called for empty summary
+    const engine = new ResearchEngine({ sqlite, provider });
+
+    // Session has no summary (empty string by default)
+    threads.createThread(sqlite, {
+      session_id: sessionId, query: 'follow up question', origin: 'follow_up', priority: 0.7,
+    });
+
+    const session = sessions.getSession(sqlite, sessionId)!;
+    await engine.generatePlan(sessionId, session.config);
+
+    const plan = plans.getLatestPlan(sqlite, sessionId);
+    expect(plan).not.toBeNull();
+    expect(plan!.items.length).toBeGreaterThan(0);
+    // Static rationale for follow_up
+    expect(plan!.items[0].rationale).toMatch(/Follow-up from|unknown/);
   });
 });

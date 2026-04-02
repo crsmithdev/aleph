@@ -51,6 +51,15 @@ function calculateCost(model: string, promptTokens: number, completionTokens: nu
   return (promptTokens * pricing.input + completionTokens * pricing.output) / 1_000_000;
 }
 
+export function isCovered(threadFindings: ResearchFinding[]): boolean {
+  if (threadFindings.length < 3) return false;
+  const avgConf = threadFindings.reduce((s, f) => s + f.confidence, 0) / threadFindings.length;
+  const avgNovelty = threadFindings.reduce((s, f) => s + f.novelty, 0) / threadFindings.length;
+  return avgConf > 0.65 && avgNovelty < 0.3;
+}
+
+type TaskAction = 'broad_search' | 'targeted_lookup' | 'verification';
+
 export class AnthropicProvider implements LLMProvider {
   private client: Anthropic;
 
@@ -162,6 +171,12 @@ export class ResearchEngine {
     this.onIteration = opts.onIteration;
     this.onError = opts.onError;
     this.signal = opts.signal;
+  }
+
+  private routeTask(thread: ResearchThread, threadFindings: ResearchFinding[]): TaskAction {
+    if (thread.origin === 'verify') return 'verification';
+    if (threadFindings.length === 0) return 'broad_search';
+    return 'targeted_lookup';
   }
 
   async startSession(title: string, seedQuery: string, config?: Partial<SessionConfig>): Promise<ResearchSession> {
@@ -292,8 +307,12 @@ export class ResearchEngine {
   ): Promise<{ finding: ResearchFinding | null; cost: number }> {
     const startTime = Date.now();
 
-    // Step 1: Formulate search queries
-    const queries = await this.formulateQueries(thread, config);
+    // Get existing findings for this thread early (needed for routing)
+    const threadFindings = findings.listFindings(this.sqlite, thread.session_id, { threadId: thread.id });
+
+    // Step 1: Formulate search queries (task-routed)
+    const action = this.routeTask(thread, threadFindings);
+    const queries = await this.formulateQueries(thread, config, action);
 
     // Step 2: Execute web searches
     const searchResults = await this.executeSearches(queries, sessionId, thread.id, config);
@@ -323,6 +342,9 @@ export class ResearchEngine {
       synthesisResult.novelty = Math.min(synthesisResult.novelty, 0.2);
     }
 
+    // Step 4b: Detect gaps separately
+    const followUpQuestions = await this.detectGaps(thread, searchResults, synthesisResult, config);
+
     // Step 5: Store finding
     const finding = findings.createFinding(this.sqlite, {
       thread_id: thread.id,
@@ -335,36 +357,55 @@ export class ResearchEngine {
       confidence: synthesisResult.confidence,
       novelty: synthesisResult.novelty,
       actionability: synthesisResult.actionability,
-      follow_up_questions: synthesisResult.followUpQuestions,
+      follow_up_questions: followUpQuestions,
     });
 
-    // Step 6: Spawn child threads from follow-up questions.
-    // Always create them so the graph is complete, but defer those that exceed
-    // max_depth so they don't run until (if ever) the depth limit is raised.
-    for (const question of synthesisResult.followUpQuestions) {
-      // Skip malformed or context-dependent questions
-      if (typeof question !== 'string' || question.trim().length < 10) continue;
-      // Reject questions with unresolved pronouns — they can't stand alone as search queries
-      if (/\b(they|them|their|it|its|this|these|those|such)\b/i.test(question.trim())) continue;
+    // Step 5b: Spawn verify thread for low-confidence findings (non-recursive)
+    if (synthesisResult.confidence < 0.4 && thread.origin !== 'verify') {
       const childDepth = thread.depth + 1;
       threads.createThread(this.sqlite, {
         session_id: sessionId,
-        query: question,
-        origin: 'follow_up',
+        query: `Verify: ${finding.summary}`,
+        origin: 'verify',
         parent_thread_id: thread.id,
         spawned_from_finding_id: finding.id,
-        priority: this.calculateChildPriority(thread, finding),
+        priority: 0.8,
         depth: childDepth,
         max_depth: thread.max_depth,
         status: childDepth > thread.max_depth ? 'deferred' : 'queued',
       });
     }
 
+    // Step 6: Spawn child threads from follow-up questions (skip if covered).
+    // Always create them so the graph is complete, but defer those that exceed
+    // max_depth so they don't run until (if ever) the depth limit is raised.
+    const updatedFindings = findings.listFindings(this.sqlite, thread.session_id, { threadId: thread.id });
+    if (!isCovered(updatedFindings)) {
+      for (const question of followUpQuestions) {
+        // Skip malformed or context-dependent questions
+        if (typeof question !== 'string' || question.trim().length < 10) continue;
+        // Reject questions with unresolved pronouns — they can't stand alone as search queries
+        if (/\b(they|them|their|it|its|this|these|those|such)\b/i.test(question.trim())) continue;
+        const childDepth = thread.depth + 1;
+        threads.createThread(this.sqlite, {
+          session_id: sessionId,
+          query: question,
+          origin: 'follow_up',
+          parent_thread_id: thread.id,
+          spawned_from_finding_id: finding.id,
+          priority: this.calculateChildPriority(thread, finding),
+          depth: childDepth,
+          max_depth: thread.max_depth,
+          status: childDepth > thread.max_depth ? 'deferred' : 'queued',
+        });
+      }
+    }
+
     const totalCost = synthesisResult.totalCost;
     return { finding, cost: totalCost };
   }
 
-  private async formulateQueries(thread: ResearchThread, config: SessionConfig): Promise<string[]> {
+  private async formulateQueries(thread: ResearchThread, config: SessionConfig, action: TaskAction = 'broad_search'): Promise<string[]> {
     const startTime = Date.now();
 
     // Get existing findings for context
@@ -387,9 +428,25 @@ export class ResearchEngine {
       ? `\nAlready searched (DO NOT repeat these):\n${searchedQueries.map(q => `- ${q}`).join('\n')}`
       : '';
 
+    let taskInstruction: string;
+    if (action === 'broad_search') {
+      taskInstruction = 'Generate 3 diverse queries exploring different angles of this topic';
+    } else if (action === 'targeted_lookup') {
+      taskInstruction = 'Generate 2 targeted queries to fill gaps not yet covered by existing findings';
+    } else {
+      // verification — look up parent finding claim
+      const parentFinding = thread.spawned_from_finding_id
+        ? findings.getFinding(this.sqlite, thread.spawned_from_finding_id)
+        : null;
+      const claim = parentFinding?.summary ?? thread.query;
+      taskInstruction = `Generate 2 queries to confirm or refute the specific claim being verified: "${claim}"`;
+    }
+
     const result = await this.callLLM(
       config.model,
-      `You are a research query formulator. Given a research topic/question, generate 2-3 diverse search queries.
+      `You are a research query formulator. Given a research topic/question, generate search queries.
+
+Task: ${taskInstruction}
 
 Rules:
 - Queries must be meaningfully different from each other and from any already-searched queries
@@ -488,7 +545,6 @@ Return ONLY a JSON array of search query strings. No other text.`,
     confidence: number;
     novelty: number;
     actionability: number;
-    followUpQuestions: string[];
     totalCost: number;
   } | null> {
     const resultsText = searchResults
@@ -514,7 +570,6 @@ Produce a JSON object with these fields:
 - confidence: number 0-1 (how confident are you in this finding?)
 - novelty: number 0-1 (how surprising/non-obvious is this? 1 = very novel)
 - actionability: number 0-1 (how directly useful is this for decision-making?)
-- follow_up_questions: string[] (2-4 questions worth investigating next — each must be fully self-contained and searchable on its own, with NO pronouns like "they/it/these/those/this" that refer back to the finding; name the specific topic explicitly)
 
 Return ONLY valid JSON. No markdown fences.`,
       sessionId,
@@ -534,11 +589,54 @@ Return ONLY valid JSON. No markdown fences.`,
         confidence: parsed.confidence ?? 0.5,
         novelty: parsed.novelty ?? 0.5,
         actionability: parsed.actionability ?? 0.5,
-        followUpQuestions: parsed.follow_up_questions ?? [],
         totalCost: result.cost,
       };
     } catch {
       return null;
+    }
+  }
+
+  private async detectGaps(
+    thread: ResearchThread,
+    searchResults: Array<{ query: string; results: string }>,
+    finding: { content: string; summary: string },
+    config: SessionConfig
+  ): Promise<string[]> {
+    const resultsText = searchResults
+      .map(r => `### Search: "${r.query}"\n${r.results.slice(0, 500)}`)
+      .join('\n\n---\n\n');
+
+    const result = await this.callLLM(
+      config.models.cheap,
+      `You are a research gap analyst. Given the research question and what was found, identify unanswered questions.
+
+Research question: "${thread.query}"
+
+What was found:
+${finding.summary}
+
+Search results summary:
+${resultsText}
+
+Given the research question and what was found, what specific questions remain unanswered or need verification?
+
+Rules:
+- Each question must be fully self-contained and searchable on its own
+- NO pronouns like "they/it/these/those/this" that refer back to the finding
+- Name the specific topic explicitly in each question
+
+Return ONLY a JSON array of question strings. No other text.`,
+      thread.session_id,
+      thread.id,
+      config
+    );
+
+    try {
+      const text = result.text.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const parsed = JSON.parse(text);
+      return Array.isArray(parsed) ? parsed.filter((q): q is string => typeof q === 'string') : [];
+    } catch {
+      return [];
     }
   }
 
@@ -687,26 +785,92 @@ Return ONLY the search query text, nothing else.`,
 
     if (allThreads.length === 0) return;
 
-    const items: ResearchPlanItem[] = allThreads.map((thread, i) => {
-      const parentThread = thread.parent_thread_id
-        ? threads.getThread(this.sqlite, thread.parent_thread_id)
-        : null;
+    const session = sessions.getSession(this.sqlite, sessionId);
 
+    // Build parent thread map
+    const parentMap = new Map<string, string | null>();
+    for (const thread of allThreads) {
+      if (thread.parent_thread_id) {
+        const parentThread = threads.getThread(this.sqlite, thread.parent_thread_id);
+        parentMap.set(thread.id, parentThread?.query ?? null);
+      } else {
+        parentMap.set(thread.id, null);
+      }
+    }
+
+    const staticRationale = (thread: ResearchThread): string => {
+      const parentQuery = parentMap.get(thread.id) ?? null;
+      return thread.origin === 'perturbation'
+        ? `Tangent via ${thread.perturbation_strategy} strategy`
+        : thread.origin === 'follow_up'
+          ? `Follow-up from: ${parentQuery ?? 'unknown'}`
+          : thread.origin === 'user_injected'
+            ? 'User-injected question'
+            : thread.origin === 'verify'
+              ? `Verification thread`
+              : 'Seed research thread';
+    };
+
+    // If session has a summary, use LLM to re-rank and generate contextual rationale
+    if (session?.summary) {
+      try {
+        const result = await this.callLLM(
+          config.models.cheap,
+          `You are a research planner. Given what has been learned so far, re-rank these pending research threads by importance and explain why each matters.
+
+Research topic: "${session.seed_query}"
+
+What has been learned:
+${session.summary}
+
+Pending threads (current priority order):
+${allThreads.map((t, i) => `${i + 1}. [${t.origin}] ${t.query}`).join('\n')}
+
+Return a JSON array of objects: { thread_index: number (0-based), rationale: string }
+Ordered from most to least important. Each rationale should explain relevance to filling gaps in what's been learned.`,
+          sessionId,
+          '',
+          config
+        );
+
+        const text = result.text.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const parsed: Array<{ thread_index: number; rationale: string }> = JSON.parse(text);
+
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const items: ResearchPlanItem[] = parsed.map((item, rank) => {
+            const thread = allThreads[item.thread_index] ?? allThreads[rank];
+            const parentQuery = thread ? (parentMap.get(thread.id) ?? null) : null;
+            return {
+              rank: rank + 1,
+              thread_id: thread?.id ?? '',
+              thread_query: thread?.query ?? '',
+              parent_thread_title: parentQuery,
+              origin: (thread?.origin ?? 'seed') as ResearchPlanItem['origin'],
+              perturbation_strategy: (thread?.perturbation_strategy ?? null) as PerturbationStrategy | null,
+              estimated_cost: 0.02,
+              rationale: item.rationale,
+            };
+          });
+
+          plans.createPlan(this.sqlite, sessionId, items);
+          return;
+        }
+      } catch {
+        // fall through to static rationale
+      }
+    }
+
+    // Fallback: static rationale, priority-score ordering
+    const items: ResearchPlanItem[] = allThreads.map((thread, i) => {
       return {
         rank: i + 1,
         thread_id: thread.id,
         thread_query: thread.query,
-        parent_thread_title: parentThread?.query ?? null,
+        parent_thread_title: parentMap.get(thread.id) ?? null,
         origin: thread.origin as ResearchPlanItem['origin'],
         perturbation_strategy: thread.perturbation_strategy as PerturbationStrategy | null,
-        estimated_cost: 0.02, // rough estimate per iteration
-        rationale: thread.origin === 'perturbation'
-          ? `Tangent via ${thread.perturbation_strategy} strategy`
-          : thread.origin === 'follow_up'
-            ? `Follow-up from: ${parentThread?.query ?? 'unknown'}`
-            : thread.origin === 'user_injected'
-              ? 'User-injected question'
-              : 'Seed research thread',
+        estimated_cost: 0.02,
+        rationale: staticRationale(thread),
       };
     });
 
