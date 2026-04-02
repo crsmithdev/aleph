@@ -1,5 +1,5 @@
 import type { Sqlite } from '@construct/data';
-import { nanoid } from 'nanoid';
+import { generateId } from './id.js';
 import type { Monitor, MonitorSnapshot, MonitorAlert, MatchCriteria, ProposedMonitor } from '../types.js';
 import { createHash } from 'crypto';
 
@@ -39,7 +39,7 @@ export function createMonitor(
     budget_daily_usd?: number | null;
   }
 ): Monitor {
-  const id = nanoid();
+  const id = generateId();
   const now = new Date().toISOString();
 
   sqlite.prepare(`
@@ -110,7 +110,7 @@ export function createSnapshot(
   itemCount: number,
   costUsd: number
 ): MonitorSnapshot {
-  const id = nanoid();
+  const id = generateId();
   const resultHash = createHash('sha256').update(rawResults).digest('hex');
 
   // Get next cycle number
@@ -155,7 +155,7 @@ export function createAlert(
     severity?: MonitorAlert['severity'];
   }
 ): MonitorAlert {
-  const id = nanoid();
+  const id = generateId();
 
   sqlite.prepare(`
     INSERT INTO research_monitor_alerts
@@ -255,7 +255,7 @@ export function createProposedMonitor(
     rationale: string;
   }
 ): ProposedMonitor {
-  const id = nanoid();
+  const id = generateId();
 
   sqlite.prepare(`
     INSERT INTO research_proposed_monitors

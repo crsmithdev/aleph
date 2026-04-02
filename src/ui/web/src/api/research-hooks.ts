@@ -170,7 +170,7 @@ export function useInjectThread() {
 export function useUpdateThread() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, sessionId, ...data }: { id: string; sessionId: string; status?: string; max_depth?: number }) =>
+    mutationFn: ({ id, sessionId, ...data }: { id: string; sessionId: string; status?: string; max_depth?: number; priority?: number }) =>
       api.patch<ResearchThread>(`/research/threads/${id}`, data),
     onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: ['research-threads', vars.sessionId] }),
   });
@@ -305,6 +305,42 @@ export function useResearchActivity(sessionId: string, opts?: { refetchInterval?
   });
 }
 
+// --- Delete session ---
+export function useDeleteResearchSession() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }: { id: string }) =>
+      api.delete(`/research/sessions/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['research-sessions'] });
+      qc.invalidateQueries({ queryKey: ['research-stats'] });
+    },
+  });
+}
+
+// --- Global run/stop ---
+export function useRunAllResearch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post('/research/run-all', {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['research-running'] });
+      qc.invalidateQueries({ queryKey: ['research-activity'] });
+    },
+  });
+}
+
+export function useStopAllResearch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post('/research/stop-all', {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['research-running'] });
+      qc.invalidateQueries({ queryKey: ['research-activity'] });
+    },
+  });
+}
+
 // --- Reset (dev) ---
 export function useClearResearchDB() {
   const qc = useQueryClient();
@@ -351,8 +387,10 @@ export interface ResearchJob {
   max_iterations: number | null;
   iterations_completed: number;
   claimed_by: string | null;
+  claimed_at: string | null;
   started_at: string | null;
   completed_at: string | null;
+  heartbeat_at: string | null;
   error: string | null;
   created_at: string;
   updated_at: string;

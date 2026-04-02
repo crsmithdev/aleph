@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { BarChart, Bar, AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
-import { useResearchSessions, useCreateResearchSession, useUpdateResearchSession, useResearchStats, useClearResearchDB, useRunResearch } from '../../api/research-hooks';
+import { useResearchSessions, useCreateResearchSession, useUpdateResearchSession, useResearchStats, useClearResearchDB, useRunResearch, useRunAllResearch, useStopAllResearch } from '../../api/research-hooks';
 import { Button } from '../../components/ui/Button';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
@@ -29,6 +29,8 @@ export function ResearchSessionsPage() {
   const updateSession = useUpdateResearchSession();
   const clearDB = useClearResearchDB();
   const runResearch = useRunResearch();
+  const runAll = useRunAllResearch();
+  const stopAll = useStopAllResearch();
   const [newOpen, setNewOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [depth, setDepth] = useState(8);
@@ -74,7 +76,23 @@ export function ResearchSessionsPage() {
                 {visibleSessions.length} session{visibleSessions.length !== 1 ? 's' : ''}
               </p>
             </div>
-            <Button onClick={() => setNewOpen(!newOpen)}>+ New session</Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => stopAll.mutate()}
+                loading={stopAll.isPending}
+                disabled={runAll.isPending}
+              >Stop All</Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => runAll.mutate()}
+                loading={runAll.isPending}
+                disabled={stopAll.isPending}
+              >Run All</Button>
+              <Button onClick={() => setNewOpen(!newOpen)}>+ New session</Button>
+            </div>
           </div>
         }
         range={range}

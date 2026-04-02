@@ -1,5 +1,5 @@
 import type { Sqlite } from '@construct/data';
-import { nanoid } from 'nanoid';
+import { generateId } from './id.js';
 import type { ResearchThread, ThreadOrigin, ThreadStatus, PerturbationStrategy } from '../types.js';
 
 function rowToThread(row: Record<string, unknown>): ResearchThread {
@@ -22,7 +22,7 @@ export function createThread(
     status?: ThreadStatus;
   }
 ): ResearchThread {
-  const id = nanoid();
+  const id = generateId();
   const now = new Date().toISOString();
 
   sqlite.prepare(`

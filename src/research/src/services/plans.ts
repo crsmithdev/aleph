@@ -1,5 +1,5 @@
 import type { Sqlite } from '@construct/data';
-import { nanoid } from 'nanoid';
+import { generateId } from './id.js';
 import type { ResearchPlan, ResearchPlanItem, PlanModification } from '../types.js';
 
 function rowToPlan(row: Record<string, unknown>): ResearchPlan {
@@ -18,7 +18,7 @@ export function createPlan(
   sessionId: string,
   items: ResearchPlanItem[]
 ): ResearchPlan {
-  const id = nanoid();
+  const id = generateId();
   const now = new Date().toISOString();
 
   sqlite.prepare(`
@@ -53,7 +53,7 @@ export function addPlanModification(
     raw_input?: string | null;
   }
 ): PlanModification {
-  const id = nanoid();
+  const id = generateId();
   const now = new Date().toISOString();
 
   sqlite.prepare(`

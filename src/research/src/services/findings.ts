@@ -1,5 +1,5 @@
 import type { Sqlite } from '@construct/data';
-import { nanoid } from 'nanoid';
+import { generateId } from './id.js';
 import type { ResearchFinding, FollowUpAnalysis } from '../types.js';
 
 function rowToFinding(row: Record<string, unknown>): ResearchFinding {
@@ -29,7 +29,7 @@ export function createFinding(
     follow_up_analysis?: FollowUpAnalysis;
   }
 ): ResearchFinding {
-  const id = nanoid();
+  const id = generateId();
   const now = new Date().toISOString();
 
   sqlite.prepare(`

@@ -1,5 +1,5 @@
 import type { Sqlite } from '@construct/data';
-import { nanoid } from 'nanoid';
+import { generateId } from './id.js';
 import type { ResearchJob, JobStatus, JobMode } from '../types.js';
 
 function rowToJob(row: Record<string, unknown>): ResearchJob {
@@ -10,7 +10,7 @@ export function createJob(
   sqlite: Sqlite,
   params: { session_id: string; mode: JobMode; max_iterations?: number }
 ): ResearchJob {
-  const id = nanoid();
+  const id = generateId();
   const now = new Date().toISOString();
 
   sqlite.prepare(`
@@ -107,4 +107,13 @@ export function listJobsForSession(sqlite: Sqlite, sessionId: string): ResearchJ
     'SELECT * FROM research_jobs WHERE session_id = ? ORDER BY created_at DESC'
   ).all(sessionId) as Record<string, unknown>[];
   return rows.map(rowToJob);
+}
+
+export function cancelAllJobs(sqlite: Sqlite): number {
+  const result = sqlite.prepare(`
+    UPDATE research_jobs
+    SET status = 'cancelled', updated_at = datetime('now')
+    WHERE status IN ('pending', 'claimed', 'running')
+  `).run();
+  return result.changes;
 }

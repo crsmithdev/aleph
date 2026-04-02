@@ -1,5 +1,5 @@
 import type { Sqlite } from '@construct/data';
-import { nanoid } from 'nanoid';
+import { generateId } from './id.js';
 import type { ResearchStep, ToolCallRecord } from '../types.js';
 
 function rowToStep(row: Record<string, unknown>): ResearchStep {
@@ -25,7 +25,7 @@ export function createStep(
     error?: string | null;
   }
 ): ResearchStep {
-  const id = nanoid();
+  const id = generateId();
   const now = new Date().toISOString();
 
   sqlite.prepare(`

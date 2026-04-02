@@ -8,7 +8,8 @@ import {
   applyResearchDDL,
   DEFAULT_SESSION_CONFIG,
   // Job imports
-  createJob, getJob, getActiveJobForSession, cancelJob, listJobsForSession,
+  createJob, getJob, getActiveJobForSession, cancelJob, listJobsForSession, cancelAllJobs,
+  deleteSession,
   // Monitor imports
   createMonitor, getMonitor, listMonitors, updateMonitor,
   listSnapshots, listAlerts, updateAlert,
@@ -85,6 +86,15 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       const result = updateSession(app.sqlite, req.params.id, req.body);
       if (!result) return reply.status(404).send({ error: 'Session not found' });
       return result;
+    }
+  );
+
+  app.delete<{ Params: { id: string } }>(
+    '/sessions/:id',
+    async (req, reply) => {
+      const deleted = deleteSession(app.sqlite, req.params.id);
+      if (!deleted) return reply.status(404).send({ error: 'Session not found' });
+      return { status: 'deleted' };
     }
   );
 
@@ -290,6 +300,25 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       };
     }
   );
+
+  // === Global run/stop ===
+  app.post('/run-all', async () => {
+    const allSessions = listSessions(app.sqlite, 'active');
+    const created: string[] = [];
+    for (const session of allSessions) {
+      const existing = getActiveJobForSession(app.sqlite, session.id);
+      if (!existing) {
+        const job = createJob(app.sqlite, { session_id: session.id, mode: 'background' });
+        created.push(job.id);
+      }
+    }
+    return { status: 'started', jobs_created: created.length, job_ids: created };
+  });
+
+  app.post('/stop-all', async () => {
+    const cancelled = cancelAllJobs(app.sqlite);
+    return { status: 'stopped', jobs_cancelled: cancelled };
+  });
 
   // === SSE Stream ===
   app.get<{ Params: { id: string } }>(
