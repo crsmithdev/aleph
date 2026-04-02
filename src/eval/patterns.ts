@@ -7,7 +7,7 @@
  *   - e2e tests (signal assertions)
  */
 
-/** Devserver startup, Playwright/Cypress, browser automation */
+/** CLI execution, Playwright/Cypress, browser automation */
 export const E2E_CMD = /playwright|cypress|puppeteer|(?:bun|npm|npx|yarn|pnpm)\s+(?:run\s+)?(?:e2e|integration|playwright)|(?:bun|npm|npx)\s+(?:run\s+)?dev\b|next\s+dev|vite\s+dev|(?:bun|node)\s+.*server/i;
 
 /** Screenshot or saved output */
@@ -18,3 +18,6 @@ export const UNIT_TEST_CMD = /^(?:bun test|npm test|npx jest|npx vitest|vitest|j
 
 /** Direct hook invocations — testing the hook script is NOT e2e */
 export const HOOK_INVOCATION = /bun\s+src\/skills\/hooks\//;
+
+/** git commit operations */
+export const GIT_COMMIT_CMD = /git\s+commit\b/;

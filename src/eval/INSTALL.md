@@ -6,7 +6,9 @@ All paths relative to `~/.claude/construct/eval/`. Run every check. Do not skip 
 
 - `runner.ts` exists
 - `scenarios/` directory exists with at least one scenario subdirectory
-- Each scenario has `task.md` and at least one `.test.ts` file
+- Each scenario has `task.md`
+- `scenarios/e2e-basic/server.ts` exists
+- `scenarios/commit-sequence/task-1.md` and `task-2.md` exist
 
 ## Data
 

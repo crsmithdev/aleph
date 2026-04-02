@@ -25,7 +25,7 @@ import {
   type PostToolUseHookInput,
   type StopHookInput,
 } from "@anthropic-ai/claude-agent-sdk";
-import { E2E_CMD, ARTIFACT_CMD, UNIT_TEST_CMD } from "./patterns.ts";
+import { E2E_CMD, ARTIFACT_CMD, UNIT_TEST_CMD, GIT_COMMIT_CMD } from "./patterns.ts";
 
 const BUN = process.argv[0];
 const EVAL_ROOT = resolve(import.meta.dir);
@@ -303,12 +303,11 @@ export function hookCmd(hookPath: string): string {
   return `bun ${resolve(REPO_ROOT, "src", hookPath)}`;
 }
 
-/** Standard quality gate hooks pointing to real scripts. */
+/** Standard e2e advisory hooks pointing to real scripts. */
 export function qualityHooks(): SandboxHook[] {
   return [
     { event: "UserPromptSubmit", command: hookCmd("skills/hooks/routing-submit-classify.ts") },
     { event: "Stop", command: hookCmd("skills/hooks/quality-stop-check-e2e.ts") },
-    { event: "PreToolUse", matcher: "Edit|Write", command: hookCmd("skills/hooks/quality-pre-require-e2e.ts") },
   ];
 }
 
@@ -357,14 +356,10 @@ export function realStopHookCallback(hookPath: string, dataRoot: string): HookCa
   };
 }
 
-export function realQualityHooks(dataRoot: string): Partial<Record<"PreToolUse" | "PostToolUse" | "Stop", HookCallbackMatcher[]>> {
+export function realQualityHooks(dataRoot: string): Partial<Record<"PostToolUse" | "Stop", HookCallbackMatcher[]>> {
   return {
     Stop: [{
       hooks: [realStopHookCallback("skills/hooks/quality-stop-check-e2e.ts", dataRoot)],
-    }],
-    PreToolUse: [{
-      matcher: "Edit|Write",
-      hooks: [realHookCallback("skills/hooks/quality-pre-require-e2e.ts", dataRoot)],
     }],
   };
 }
@@ -384,6 +379,7 @@ export interface EvalResult {
   gateBlocks: number;
   e2eSignals: string[];
   artifacts: string[];
+  gitCommits: number;
   durationMs: number;
   error?: string;
 }
@@ -393,7 +389,7 @@ export function emptyResult(): EvalResult {
     taskSuccess: false, toolCalls: [], editsMade: false,
     filesChanged: [], agentDispatched: false, unitTestsRun: false,
     e2eEvidence: false, artifactCreated: false,
-    gateBlocks: 0, e2eSignals: [], artifacts: [], durationMs: 0,
+    gateBlocks: 0, e2eSignals: [], artifacts: [], gitCommits: 0, durationMs: 0,
   };
 }
 
@@ -417,6 +413,9 @@ export function classifyToolCall(result: EvalResult, toolName: string, toolInput
     if (ARTIFACT_CMD.test(cmd)) {
       result.artifactCreated = true;
       result.artifacts.push("bash:" + cmd.slice(0, 60));
+    }
+    if (GIT_COMMIT_CMD.test(cmd)) {
+      result.gitCommits++;
     }
   }
   if (toolName.startsWith("mcp__chrome-devtools__")) {

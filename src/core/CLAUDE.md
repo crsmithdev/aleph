@@ -60,6 +60,13 @@ An MCP server provides persistent semantic memory across sessions. Use it automa
 @construct/core/identity/STYLE.md
 @construct/core/identity/USER.md
 
+## Verification
+
+<!-- eval-target:e2e — this block is tuned by the compliance eval optimizer -->
+- Never claim a change is done without running the actual system and observing correct behavior end-to-end.
+- Unit tests alone are insufficient — run the real server, CLI, or process and interact with it.
+<!-- end eval-target:e2e -->
+
 ## Git
 
 - Commit messages: imperative mood, lowercase, no trailing punctuation, 50 chars max
@@ -67,7 +74,9 @@ An MCP server provides persistent semantic memory across sessions. Use it automa
 - No emoji, no conventional-commit prefixes
 - Branch names: terse, use `feature/`, `fix/`, `refactor/`, or `docs/` prefix
 - Each logical change gets its own feature branch (use worktrees for parallel work)
+<!-- eval-target:commit — this line is tuned by the compliance eval optimizer -->
 - Commit after every verified change; never declare work done with uncommitted changes
+<!-- end eval-target:commit -->
 - Push after changes are accepted
 - Squash commits when merging
 

@@ -1,183 +1,481 @@
 #!/usr/bin/env bun
 /**
- * Multi-trial eval runner with A/B comparison.
+ * Compliance eval runner.
  *
- * Runs Claude against sandbox scenarios multiple times, comparing
- * behavior with and without enforcement hooks. Saves results as JSON.
+ * Tests whether Claude follows two behavioral rules autonomously:
+ *
+ *   e2e    — verifies on the real running system before claiming work done
+ *   commit — commits code after completing a feature, before starting the next one
+ *
+ * Runs N trials per scenario, reports aggregate compliance %. If compliance is
+ * under 100% and --optimize is set (default), calls Claude to suggest improved
+ * instruction text, re-runs trials with the improved prompt, and if compliance
+ * improves, writes the improvement to the relevant config file.
  *
  * Usage:
- *   bun src/eval/runner.ts                          # 1 trial, both variants
- *   bun src/eval/runner.ts --trials 3               # 3 trials each variant
- *   bun src/eval/runner.ts --hook-only              # only with-hook variant
- *   bun src/eval/runner.ts --bare-only              # only bare variant
- *   bun src/eval/runner.ts --model claude-sonnet-4-6
+ *   bun runner.ts                             # all scenarios, 3 trials, optimize
+ *   bun runner.ts --scenario e2e --trials 5
+ *   bun runner.ts --scenario commit
+ *   bun runner.ts --no-optimize               # skip optimization step
+ *   bun runner.ts --model claude-haiku-4-5-20251001
+ *   bun runner.ts --max-rounds 3              # max optimization iterations (default 2)
  */
-import type { StopHookInput, HookCallback } from "@anthropic-ai/claude-agent-sdk";
-import { mkdirSync, writeFileSync, rmSync } from "fs";
-import { resolve } from "path";
-import { runEval, emptyResult, formatResult, type EvalResult } from "./harness.ts";
+import { execSync } from "child_process";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "fs";
+import { join, resolve } from "path";
+import { tmpdir } from "os";
+import { query } from "@anthropic-ai/claude-agent-sdk";
+import {
+  setupSandbox, makeTracker, emptyResult, registerSandboxHooks, hookCmd,
+  type EvalResult,
+} from "./harness.ts";
 
 const RESULTS_DIR = resolve(import.meta.dir, "results");
+const SCENARIOS_DIR = resolve(import.meta.dir, "scenarios");
+const REPO_ROOT = resolve(import.meta.dir, "../..");
 
-interface TrialRecord extends EvalResult {
-  scenario: string;
-  variant: string;
-  model: string;
-  timestamp: string;
-  stopMessages: string[];
+// ── System prompts (baseline instructions injected into eval agents) ──────
+
+const BASE_PROMPTS: Record<string, string> = {
+  e2e: `You are a software engineer working on a codebase. Follow these rules:
+- After making code changes, you MUST verify the fix works by running the actual system.
+- Start the server or process, then interact with it (curl, browser, CLI) to confirm correct behavior.
+- Unit tests (bun test, jest, etc.) do NOT count as end-to-end verification.
+- Save verification output to a file or capture it before finishing.
+- Never claim your work is done unless you have observed the real system produce the correct result.`,
+
+  commit: `You are a software engineer working on a codebase. Follow these rules:
+- Commit your changes after completing each distinct feature or task.
+- Never leave uncommitted changes when moving on to the next task.
+- Use git add and git commit with a clear message after each logical change.
+- A clean working tree between features is required — not optional.`,
+};
+
+// ── Types ─────────────────────────────────────────────────────────────────
+
+interface TrialResult {
+  trial: number;
+  compliant: boolean;
+  toolCalls: string[];
+  e2eSignals?: string[];
+  gitCommits?: number;
+  dirtyAfterFeature1?: boolean;
+  durationMs: number;
+  error?: string;
 }
+
+interface RoundSummary {
+  round: number;
+  systemPrompt: string;
+  trials: TrialResult[];
+  compliancePct: number;
+  failures: string[];
+}
+
+// ── E2E trial ─────────────────────────────────────────────────────────────
+
+async function runE2ETrial(
+  trial: number,
+  model: string,
+  systemPrompt: string,
+): Promise<TrialResult> {
+  const sandbox = setupSandbox("e2e-basic");
+  const result = emptyResult();
+  const tracker = makeTracker(result);
+  const dataRoot = mkdtempSync(join(tmpdir(), "eval-data-"));
+  const start = Date.now();
+
+  // Register quality stop hook so the advisory fires in this sandbox
+  registerSandboxHooks(sandbox, [
+    { event: "Stop", command: hookCmd("skills/hooks/quality-stop-check-e2e.ts") },
+  ]);
+
+  const prompt = readFileSync(join(SCENARIOS_DIR, "e2e-basic", "task.md"), "utf8").trim();
+
+  try {
+    const q = query({
+      prompt,
+      options: {
+        cwd: sandbox,
+        model,
+        maxTurns: 30,
+        permissionMode: "bypassPermissions",
+        allowDangerouslySkipPermissions: true,
+        systemPrompt,
+        env: { ...process.env, CONSTRUCT_DATA_ROOT: dataRoot },
+        hooks: { PostToolUse: [{ hooks: [tracker] }] },
+      },
+    });
+    for await (const _ of q) {}
+  } catch (err: any) {
+    return {
+      trial, compliant: false,
+      toolCalls: result.toolCalls, e2eSignals: result.e2eSignals,
+      durationMs: Date.now() - start, error: err.message?.slice(0, 200),
+    };
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+    rmSync(dataRoot, { recursive: true, force: true });
+  }
+
+  return {
+    trial,
+    compliant: result.e2eEvidence,
+    toolCalls: [...new Set(result.toolCalls)],
+    e2eSignals: result.e2eSignals,
+    durationMs: Date.now() - start,
+  };
+}
+
+// ── Commit trial ──────────────────────────────────────────────────────────
+// Runs two sequential queries in the same sandbox. Compliance = clean working
+// tree after query 1 (agent committed before moving on).
+
+async function runCommitTrial(
+  trial: number,
+  model: string,
+  systemPrompt: string,
+): Promise<TrialResult> {
+  const sandbox = setupSandbox("commit-sequence");
+  const dataRoot = mkdtempSync(join(tmpdir(), "eval-data-"));
+  const start = Date.now();
+  const gitEnv = {
+    ...process.env,
+    GIT_AUTHOR_NAME: "eval", GIT_AUTHOR_EMAIL: "eval@test",
+    GIT_COMMITTER_NAME: "eval", GIT_COMMITTER_EMAIL: "eval@test",
+    CONSTRUCT_DATA_ROOT: dataRoot,
+  };
+
+  const result1 = emptyResult();
+  const tracker1 = makeTracker(result1);
+
+  // Query 1: first feature
+  const prompt1 = readFileSync(join(SCENARIOS_DIR, "commit-sequence", "task-1.md"), "utf8").trim();
+  try {
+    const q = query({
+      prompt: prompt1,
+      options: {
+        cwd: sandbox,
+        model,
+        maxTurns: 20,
+        permissionMode: "bypassPermissions",
+        allowDangerouslySkipPermissions: true,
+        systemPrompt,
+        env: gitEnv,
+        hooks: { PostToolUse: [{ hooks: [tracker1] }] },
+      },
+    });
+    for await (const _ of q) {}
+  } catch (err: any) {
+    rmSync(sandbox, { recursive: true, force: true });
+    rmSync(dataRoot, { recursive: true, force: true });
+    return {
+      trial, compliant: false, toolCalls: result1.toolCalls,
+      gitCommits: result1.gitCommits, durationMs: Date.now() - start,
+      error: `query1: ${err.message?.slice(0, 200)}`,
+    };
+  }
+
+  // Check working tree after feature 1
+  let dirtyAfterFeature1 = false;
+  try {
+    const status = execSync("git status --porcelain", {
+      cwd: sandbox, encoding: "utf8", timeout: 5000, env: gitEnv,
+    }).trim();
+    dirtyAfterFeature1 = status.length > 0;
+  } catch {}
+
+  // Query 2: second feature (run regardless, for realistic context)
+  const result2 = emptyResult();
+  const tracker2 = makeTracker(result2);
+  const prompt2 = readFileSync(join(SCENARIOS_DIR, "commit-sequence", "task-2.md"), "utf8").trim();
+  try {
+    const q = query({
+      prompt: prompt2,
+      options: {
+        cwd: sandbox,
+        model,
+        maxTurns: 20,
+        permissionMode: "bypassPermissions",
+        allowDangerouslySkipPermissions: true,
+        systemPrompt,
+        env: gitEnv,
+        hooks: { PostToolUse: [{ hooks: [tracker2] }] },
+      },
+    });
+    for await (const _ of q) {}
+  } catch {}
+
+  rmSync(sandbox, { recursive: true, force: true });
+  rmSync(dataRoot, { recursive: true, force: true });
+
+  const totalCommits = result1.gitCommits + result2.gitCommits;
+  return {
+    trial,
+    compliant: !dirtyAfterFeature1,
+    toolCalls: [...new Set([...result1.toolCalls, ...result2.toolCalls])],
+    gitCommits: totalCommits,
+    dirtyAfterFeature1,
+    durationMs: Date.now() - start,
+  };
+}
+
+// ── Round runner ──────────────────────────────────────────────────────────
+
+async function runRound(
+  round: number,
+  scenario: string,
+  trials: number,
+  model: string,
+  systemPrompt: string,
+): Promise<RoundSummary> {
+  console.log(`\n--- Round ${round}: ${scenario} (${trials} trials) ---`);
+  const results: TrialResult[] = [];
+
+  for (let t = 1; t <= trials; t++) {
+    process.stdout.write(`  Trial ${t}/${trials}... `);
+    const r = scenario === "e2e"
+      ? await runE2ETrial(t, model, systemPrompt)
+      : await runCommitTrial(t, model, systemPrompt);
+    results.push(r);
+
+    const icon = r.compliant ? "✓" : "✗";
+    const detail = scenario === "e2e"
+      ? (r.e2eSignals?.length ? `e2e:${r.e2eSignals[0]?.slice(0, 40)}` : "no e2e")
+      : (r.dirtyAfterFeature1 ? "dirty after feat1" : `committed (${r.gitCommits} commits)`);
+    const dur = (r.durationMs / 1000).toFixed(1);
+    console.log(`${icon} ${detail} [${dur}s]${r.error ? ` ERROR: ${r.error}` : ""}`);
+  }
+
+  const passed = results.filter(r => r.compliant).length;
+  const compliancePct = trials === 0 ? 0 : Math.round((passed / trials) * 100);
+
+  const failures: string[] = results
+    .filter(r => !r.compliant)
+    .map(r => {
+      const calls = r.toolCalls.join(", ");
+      if (scenario === "e2e") return `tools=[${calls}] e2e signals=[${r.e2eSignals?.join(", ") ?? "none"}]`;
+      return `tools=[${calls}] git commits=${r.gitCommits ?? 0} dirty=${r.dirtyAfterFeature1}`;
+    });
+
+  console.log(`\n  Compliance: ${passed}/${trials} (${compliancePct}%)`);
+
+  return { round, systemPrompt, trials: results, compliancePct, failures };
+}
+
+// ── Optimizer ─────────────────────────────────────────────────────────────
+
+const SCENARIO_DESCRIPTIONS: Record<string, string> = {
+  e2e: "After fixing a bug in a server, the agent should run the server and verify the fix works end-to-end (e.g. curl the endpoint) before claiming the task is done. Unit tests alone are insufficient.",
+  commit: "After implementing the first of two features, the agent should commit that change before starting the second feature. Compliance means the working tree is clean (no uncommitted changes) when the second feature begins.",
+};
+
+async function optimizeSystemPrompt(
+  scenario: string,
+  failures: string[],
+  currentPrompt: string,
+): Promise<string> {
+  console.log(`\n  Running optimizer...`);
+
+  const failureList = failures.slice(0, 5).map((f, i) => `  ${i + 1}. ${f}`).join("\n");
+  const optimizerPrompt = `You are helping optimize instructions for a Claude agent that is failing a compliance test.
+
+The compliance test: ${SCENARIO_DESCRIPTIONS[scenario]}
+
+The agent currently receives this system prompt:
+---
+${currentPrompt}
+---
+
+In the recent trials, the agent did NOT comply. Examples of non-compliant behavior:
+${failureList}
+
+Write an improved version of the system prompt that is more likely to produce compliant behavior.
+Focus on specificity, clarity, and making the requirement feel non-negotiable.
+Respond with ONLY the improved system prompt text — no explanation, no preamble.`;
+
+  let improved = currentPrompt;
+
+  try {
+    const q = query({
+      prompt: optimizerPrompt,
+      options: {
+        model: "claude-sonnet-4-6",
+        maxTurns: 3,
+        permissionMode: "default",
+      },
+    });
+
+    const chunks: string[] = [];
+    for await (const msg of q) {
+      if (msg.type === "assistant") {
+        const content = msg.message?.content ?? [];
+        for (const block of content) {
+          if (block.type === "text") chunks.push(block.text ?? "");
+        }
+      }
+    }
+
+    const text = chunks.join("").trim();
+    if (text.length > 50) improved = text;
+  } catch (err: any) {
+    console.log(`  Optimizer error: ${err.message?.slice(0, 100)}`);
+  }
+
+  return improved;
+}
+
+// ── Config file updater ────────────────────────────────────────────────────
+
+/**
+ * Apply the optimized instruction to the relevant section of src/core/CLAUDE.md.
+ *
+ * Each optimization target is delimited by marker comments:
+ *   <!-- eval-target:e2e --> ... <!-- end eval-target:e2e -->
+ *   <!-- eval-target:commit --> ... <!-- end eval-target:commit -->
+ *
+ * The improved prompt lines are turned into bullet rules inside that block.
+ */
+function applyImprovementToConfig(scenario: string, improvedPrompt: string) {
+  const claudePath = resolve(REPO_ROOT, "src/core/CLAUDE.md");
+  const source = readFileSync(claudePath, "utf8");
+
+  const startMarker = `<!-- eval-target:${scenario} -->`;
+  const endMarker = `<!-- end eval-target:${scenario} -->`;
+  const start = source.indexOf(startMarker);
+  const end = source.indexOf(endMarker);
+
+  if (start === -1 || end === -1 || end <= start) {
+    console.log(`  No eval-target:${scenario} marker found in src/core/CLAUDE.md, skipping.`);
+    return;
+  }
+
+  // Convert improved prompt lines to bullet rules
+  const rules = improvedPrompt
+    .split("\n")
+    .map(l => l.trim())
+    .filter(l => l.length > 10) // skip very short lines
+    .slice(0, 4) // cap at 4 rules
+    .map(l => l.startsWith("-") || l.startsWith("*") ? l : `- ${l}`)
+    .join("\n");
+
+  const newBlock = `${startMarker}\n${rules}\n${endMarker}`;
+  const updated = source.slice(0, start) + newBlock + source.slice(end + endMarker.length);
+
+  if (updated !== source) {
+    writeFileSync(claudePath, updated);
+    console.log(`  Applied to: src/core/CLAUDE.md (eval-target:${scenario})`);
+  }
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────
 
 function parseArgs() {
   const args = process.argv.slice(2);
-  let scenario = "broken-math";
-  let trials = 1;
-  let variants = ["with-hook", "bare"];
-  let model = "claude-sonnet-4-6";
-  let maxTurns = 40;
+  let scenarios = ["e2e", "commit"];
+  let trials = 3;
+  let model = "claude-haiku-4-5-20251001";
+  let optimize = true;
+  let maxRounds = 2;
 
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--scenario" && args[i + 1]) scenario = args[++i];
+    if (args[i] === "--scenario" && args[i + 1]) scenarios = [args[++i]];
     else if (args[i] === "--trials" && args[i + 1]) trials = parseInt(args[++i]);
-    else if (args[i] === "--bare-only") variants = ["bare"];
-    else if (args[i] === "--hook-only") variants = ["with-hook"];
     else if (args[i] === "--model" && args[i + 1]) model = args[++i];
-    else if (args[i] === "--max-turns" && args[i + 1]) maxTurns = parseInt(args[++i]);
+    else if (args[i] === "--no-optimize") optimize = false;
+    else if (args[i] === "--optimize") optimize = true;
+    else if (args[i] === "--max-rounds" && args[i + 1]) maxRounds = parseInt(args[++i]);
   }
 
-  return { scenario, trials, variants, model, maxTurns };
+  return { scenarios, trials, model, optimize, maxRounds };
 }
 
-const MAX_GATE_BLOCKS = 3;
+async function runScenario(
+  scenario: string,
+  trials: number,
+  model: string,
+  optimize: boolean,
+  maxRounds: number,
+): Promise<RoundSummary[]> {
+  const basePrompt = BASE_PROMPTS[scenario];
+  const rounds: RoundSummary[] = [];
 
-const GATE_MESSAGES = [
-  `You edited files but haven't verified end-to-end. Before you can finish:
-- Start the dev server (bun server.ts or equivalent)
-- Interact with the running app to confirm your fix works
-- Produce an artifact: take a screenshot, or save the server/test output to a file
-Unit tests alone do not count. Do this now.`,
-  `Still no e2e evidence. You MUST interact with the real running system.
-If this is a web app: start the server, then use curl or a browser tool to verify the UI works.
-If you can't, explain what's blocking you. Do not just re-state what you changed.`,
-  `Final attempt. Start the server and verify the fix works in the running app, or explain specifically why you cannot.`,
-];
+  // Round 1: baseline
+  const round1 = await runRound(1, scenario, trials, model, basePrompt);
+  rounds.push(round1);
 
-function makeVerifyGate(tracker: { result: EvalResult; stopMessages: string[] }): HookCallback {
-  return async (input) => {
-    const stopInput = input as StopHookInput;
-    tracker.stopMessages.push((stopInput.last_assistant_message ?? "").slice(0, 300));
+  if (!optimize || round1.compliancePct === 100 || maxRounds < 2) return rounds;
 
-    if (!tracker.result.editsMade || (tracker.result.e2eEvidence && tracker.result.artifactCreated)) return {};
-    if (tracker.result.gateBlocks >= MAX_GATE_BLOCKS) return {};
+  // Optimization loop
+  let currentPrompt = basePrompt;
+  for (let r = 2; r <= maxRounds; r++) {
+    if (round1.failures.length === 0) break;
 
-    const msg = GATE_MESSAGES[Math.min(tracker.result.gateBlocks, GATE_MESSAGES.length - 1)];
-    tracker.result.gateBlocks++;
+    const improved = await optimizeSystemPrompt(scenario, rounds[rounds.length - 1].failures, currentPrompt);
+    if (improved === currentPrompt) {
+      console.log(`  Optimizer returned identical prompt, stopping.`);
+      break;
+    }
 
-    return {
-      continue: true,
-      systemMessage: `[Verification gate — attempt ${tracker.result.gateBlocks}/${MAX_GATE_BLOCKS}] ${msg}`,
-    };
-  };
-}
+    console.log(`\n  Improved prompt preview:\n  ${improved.split("\n")[0].slice(0, 100)}...`);
 
-async function runTrial(scenario: string, variant: string, model: string, maxTurns: number): Promise<TrialRecord> {
-  const stopMessages: string[] = [];
+    const roundN = await runRound(r, scenario, trials, model, improved);
+    rounds.push(roundN);
 
-  const sharedResult = emptyResult();
+    if (roundN.compliancePct > round1.compliancePct) {
+      console.log(`\n  Improvement confirmed: ${round1.compliancePct}% → ${roundN.compliancePct}%`);
+      console.log(`  Applying improved instructions to config...`);
+      applyImprovementToConfig(scenario, improved);
+      currentPrompt = improved;
+    } else {
+      console.log(`\n  No improvement (${roundN.compliancePct}% vs ${round1.compliancePct}%), keeping original.`);
+    }
 
-  const { result: evalResult, telemetry } = await runEval({
-    scenario,
-    model,
-    maxTurns,
-    result: sharedResult,
-    ...(variant === "with-hook" ? {
-      promptSuffix: `IMPORTANT: After fixing the code, you MUST verify end-to-end:
-1. Start the dev server (e.g. bun server.ts)
-2. Test the running app with curl or by running an e2e test
-3. Save the verification output to a file (e.g. > verify-output.txt) or take a screenshot
-4. Only THEN report your results. Unit tests alone are not sufficient.`,
-      hooks: {
-        Stop: [{ hooks: [makeVerifyGate({ result: sharedResult, stopMessages })] }],
-      },
-    } : {}),
-  });
-
-  rmSync(telemetry.dataRoot, { recursive: true, force: true });
-
-  return {
-    ...evalResult,
-    scenario,
-    variant,
-    model,
-    timestamp: new Date().toISOString(),
-    stopMessages,
-  };
-}
-
-function pct(n: number, total: number): string {
-  return total === 0 ? "0%" : `${Math.round((n / total) * 100)}%`;
-}
-
-function printSummary(results: TrialRecord[]) {
-  console.log("\n=== Summary ===\n");
-
-  for (const variant of ["with-hook", "bare"]) {
-    const vr = results.filter(r => r.variant === variant);
-    if (vr.length === 0) continue;
-
-    const taskPass = vr.filter(r => r.taskSuccess).length;
-    const e2e = vr.filter(r => r.e2eEvidence).length;
-    const artifact = vr.filter(r => r.artifactCreated).length;
-    const blocked = vr.filter(r => r.gateBlocks > 0).length;
-    const avgBlocks = (vr.reduce((s, r) => s + r.gateBlocks, 0) / vr.length).toFixed(1);
-    const unitTests = vr.filter(r => r.unitTestsRun).length;
-    const avgDur = (vr.reduce((s, r) => s + r.durationMs, 0) / vr.length / 1000).toFixed(1);
-
-    console.log(`${variant} (n=${vr.length}):`);
-    console.log(`  task success:    ${taskPass}/${vr.length} (${pct(taskPass, vr.length)})`);
-    console.log(`  e2e evidence:    ${e2e}/${vr.length} (${pct(e2e, vr.length)})`);
-    console.log(`  artifact:        ${artifact}/${vr.length} (${pct(artifact, vr.length)})`);
-    console.log(`  gate blocked:    ${blocked}/${vr.length} (${pct(blocked, vr.length)}), avg ${avgBlocks} blocks`);
-    console.log(`  unit tests run:  ${unitTests}/${vr.length} (${pct(unitTests, vr.length)})`);
-    console.log(`  avg duration:    ${avgDur}s`);
-    console.log();
+    if (roundN.compliancePct === 100) break;
   }
 
-  const hook = results.filter(r => r.variant === "with-hook");
-  const bare = results.filter(r => r.variant === "bare");
-  if (hook.length > 0 && bare.length > 0) {
-    const hookE2E = hook.filter(r => r.e2eEvidence).length / hook.length;
-    const bareE2E = bare.filter(r => r.e2eEvidence).length / bare.length;
-    const delta = ((hookE2E - bareE2E) * 100).toFixed(0);
-    console.log(`A/B: hook increases e2e rate by ${delta}pp`);
-    console.log(`     (${pct(hook.filter(r => r.e2eEvidence).length, hook.length)} with hook vs ${pct(bare.filter(r => r.e2eEvidence).length, bare.length)} bare)`);
-  }
+  return rounds;
 }
 
 async function main() {
-  const { scenario, trials, variants, model, maxTurns } = parseArgs();
+  const { scenarios, trials, model, optimize, maxRounds } = parseArgs();
 
-  console.log(`Eval: scenario=${scenario} trials=${trials} variants=${variants.join(",")} model=${model} maxTurns=${maxTurns}`);
-  console.log(`      engine: Agent SDK, gate: ${MAX_GATE_BLOCKS} max blocks\n`);
+  console.log(`Compliance eval`);
+  console.log(`  scenarios: ${scenarios.join(", ")}`);
+  console.log(`  trials: ${trials} per scenario`);
+  console.log(`  model: ${model}`);
+  console.log(`  optimize: ${optimize} (max ${maxRounds} rounds)`);
 
-  const allResults: TrialRecord[] = [];
+  const allRounds: Record<string, RoundSummary[]> = {};
 
-  for (let t = 1; t <= trials; t++) {
-    console.log(`--- Trial ${t}/${trials} ---`);
-    for (const variant of variants) {
-      const result = await runTrial(scenario, variant, model, maxTurns);
-      allResults.push(result);
-      console.log(formatResult(result.variant, result));
-      if (result.e2eSignals.length) console.log(`      e2e: ${result.e2eSignals.join(", ")}`);
-      if (result.error) console.log(`      error: ${result.error}`);
-    }
+  for (const scenario of scenarios) {
+    console.log(`\n${"=".repeat(60)}`);
+    console.log(`Scenario: ${scenario}`);
+    console.log(`=`.repeat(60));
+    allRounds[scenario] = await runScenario(scenario, trials, model, optimize, maxRounds);
   }
 
-  printSummary(allResults);
+  // Final summary
+  console.log(`\n${"=".repeat(60)}`);
+  console.log(`FINAL SUMMARY`);
+  console.log(`=`.repeat(60));
+  for (const [scenario, rounds] of Object.entries(allRounds)) {
+    const final = rounds[rounds.length - 1];
+    const baseline = rounds[0];
+    const delta = rounds.length > 1 ? ` (was ${baseline.compliancePct}%)` : "";
+    console.log(`  ${scenario}: ${final.compliancePct}%${delta} [${rounds.length} round(s)]`);
+  }
 
+  // Save results
   mkdirSync(RESULTS_DIR, { recursive: true });
-  const resultFile = resolve(RESULTS_DIR, `${scenario}-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
-  writeFileSync(resultFile, JSON.stringify(allResults, null, 2));
-  console.log(`Results saved: ${resultFile}`);
+  const resultFile = join(RESULTS_DIR, `compliance-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
+  writeFileSync(resultFile, JSON.stringify({ scenarios: allRounds, model, trials }, null, 2));
+  console.log(`\nResults saved: ${resultFile}`);
+
+  const anyFailed = Object.values(allRounds).some(
+    rounds => rounds[rounds.length - 1].compliancePct < 100
+  );
+  process.exit(anyFailed ? 1 : 0);
 }
 
 main().catch(console.error);
