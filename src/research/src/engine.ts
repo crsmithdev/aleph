@@ -48,6 +48,18 @@ const PERTURBATION_STRATEGIES: PerturbationStrategy[] = [
   'analogical', 'contrarian', 'failure_post_mortem', 'temporal_shift',
 ];
 
+function stripLLMFences(text: string): string {
+  // Remove <think> blocks first
+  const noThink = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+  // Try to extract content from a code fence (```json ... ``` or ``` ... ```)
+  const fenceMatch = noThink.match(/`{1,3}(?:json)?\s*\n?([\s\S]*?)`{1,3}/);
+  if (fenceMatch) return fenceMatch[1].trim();
+  // No fence — find the first { or [ and take from there to the end
+  const jsonStart = noThink.search(/[{[]/);
+  if (jsonStart !== -1) return noThink.slice(jsonStart).trim();
+  return noThink;
+}
+
 function calculateCost(model: string, promptTokens: number, completionTokens: number): number {
   const pricing = MODEL_PRICING[model];
   if (!pricing) return 0; // local/unknown models are free
@@ -475,7 +487,7 @@ Return ONLY a JSON array of search query strings. No other text.`,
     );
 
     try {
-      const parsed = JSON.parse(result.text.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+      const parsed = JSON.parse(stripLLMFences(result.text));
       const candidates: string[] = Array.isArray(parsed) ? parsed.slice(0, 4) : [thread.query];
       const searchedLower = new Set(searchedQueries.map(q => q.toLowerCase()));
       const seen = new Set<string>();
@@ -589,7 +601,7 @@ Return ONLY valid JSON. No markdown fences.`,
     );
 
     try {
-      const text = result.text.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const text = stripLLMFences(result.text);
       const parsed = JSON.parse(text);
       return {
         content: parsed.content ?? '',
@@ -686,7 +698,7 @@ Return ONLY valid JSON. No markdown fences.`,
 
     const llmJudge = async (a: string, b: string): Promise<number> => {
       const result = await this.callLLM(
-        config.models.cheap,
+        config.model,
         `Are these two research questions semantically equivalent or asking about the same thing?\nQ1: ${a}\nQ2: ${b}\nReply with only: YES or NO`,
         '',
         '',
@@ -799,7 +811,7 @@ Return ONLY valid JSON. No markdown fences.`,
       .join('\n\n---\n\n');
 
     const result = await this.callLLM(
-      config.models.cheap,
+      config.model,
       `You are a research gap analyst. Given the research question and what was found, identify unanswered questions.
 
 Research question: "${thread.query}"
@@ -824,7 +836,7 @@ Return ONLY a JSON array of question strings. No other text.`,
     );
 
     try {
-      const text = result.text.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const text = stripLLMFences(result.text);
       const parsed = JSON.parse(text);
       return Array.isArray(parsed) ? parsed.filter((q): q is string => typeof q === 'string') : [];
     } catch {
@@ -1025,7 +1037,7 @@ Ordered from most to least important. Each rationale should explain relevance to
           config
         );
 
-        const text = result.text.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const text = stripLLMFences(result.text);
         const parsed: Array<{ thread_index: number; rationale: string }> = JSON.parse(text);
 
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -1151,7 +1163,7 @@ Write a concise, informative summary of what has been discovered so far, key the
     config: SessionConfig
   ): Promise<LLMResult & { cost: number }> {
     const startTime = Date.now();
-    const result = await this.provider.complete(model, prompt, 4096);
+    const result = await this.provider.complete(model, prompt, 8192);
 
     const cost = calculateCost(result.model, result.promptTokens, result.completionTokens);
 

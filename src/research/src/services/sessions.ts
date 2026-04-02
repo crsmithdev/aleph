@@ -4,10 +4,19 @@ import type { ResearchSession, SessionConfig } from '../types.js';
 import { DEFAULT_SESSION_CONFIG } from '../types.js';
 
 function rowToSession(row: Record<string, unknown>): ResearchSession {
-  return {
-    ...row,
-    config: JSON.parse(row.config as string),
-  } as ResearchSession;
+  const stored = JSON.parse(row.config as string) as Partial<SessionConfig>;
+  // Deep-merge with defaults so sessions created before new config fields were added
+  // still get valid defaults (e.g. follow_up added later).
+  const config: SessionConfig = {
+    ...DEFAULT_SESSION_CONFIG,
+    ...stored,
+    models: { ...DEFAULT_SESSION_CONFIG.models, ...(stored.models ?? {}) },
+    providers: { ...DEFAULT_SESSION_CONFIG.providers, ...(stored.providers ?? {}) },
+    schedule: { ...DEFAULT_SESSION_CONFIG.schedule, ...(stored.schedule ?? {}) },
+    perturbation: { ...DEFAULT_SESSION_CONFIG.perturbation, ...(stored.perturbation ?? {}) },
+    follow_up: { ...DEFAULT_SESSION_CONFIG.follow_up, ...(stored.follow_up ?? {}) },
+  };
+  return { ...row, config } as unknown as ResearchSession;
 }
 
 export function createSession(
