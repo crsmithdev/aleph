@@ -19,6 +19,7 @@ export function createThread(
     priority?: number;
     depth?: number;
     max_depth?: number;
+    min_searches?: number | null;
     status?: ThreadStatus;
   }
 ): ResearchThread {
@@ -28,8 +29,8 @@ export function createThread(
   sqlite.prepare(`
     INSERT INTO research_threads
       (id, session_id, parent_thread_id, spawned_from_finding_id, query, node_type, origin,
-       perturbation_strategy, status, priority, depth, max_depth, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       perturbation_strategy, status, priority, depth, max_depth, min_searches, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     params.session_id,
@@ -43,6 +44,7 @@ export function createThread(
     params.priority ?? 0.5,
     params.depth ?? 0,
     params.max_depth ?? 8,
+    params.min_searches ?? null,
     now,
     now
   );
@@ -102,7 +104,7 @@ export function claimNextThread(sqlite: Sqlite, sessionId: string): ResearchThre
 export function updateThread(
   sqlite: Sqlite,
   id: string,
-  updates: Partial<Pick<ResearchThread, 'status' | 'priority' | 'max_depth' | 'query'>>
+  updates: Partial<Pick<ResearchThread, 'status' | 'priority' | 'max_depth' | 'query' | 'min_searches'>>
 ): ResearchThread | null {
   const fields: string[] = [];
   const values: unknown[] = [];
@@ -111,6 +113,7 @@ export function updateThread(
   if (updates.priority !== undefined) { fields.push('priority = ?'); values.push(updates.priority); }
   if (updates.max_depth !== undefined) { fields.push('max_depth = ?'); values.push(updates.max_depth); }
   if (updates.query !== undefined) { fields.push('query = ?'); values.push(updates.query); }
+  if (updates.min_searches !== undefined) { fields.push('min_searches = ?'); values.push(updates.min_searches); }
 
   if (fields.length === 0) return getThread(sqlite, id);
 

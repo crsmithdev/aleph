@@ -28,6 +28,7 @@ export interface LLMResult {
 
 export interface WebSearchResult {
   text: string;
+  sourceTexts: string[];
   sourceUrls: string[];
   promptTokens: number;
   completionTokens: number;
@@ -157,19 +158,24 @@ export class AnthropicProvider implements LLMProvider {
       .join('\n');
 
     const sourceUrls: string[] = [];
+    const sourceTexts: string[] = [];
     for (const block of response!.content) {
       if (block.type === 'web_search_tool_result') {
-        const searchBlock = block as unknown as { content: Array<{ type: string; url?: string }> };
+        const searchBlock = block as unknown as { content: Array<{ type: string; url?: string; text?: string; title?: string }> };
         if (searchBlock.content) {
           for (const item of searchBlock.content) {
             if (item.url) sourceUrls.push(item.url);
+            if (item.text) sourceTexts.push(item.text);
           }
         }
       }
     }
+    // If no per-source texts were extracted, use the model's full synthesis text
+    if (sourceTexts.length === 0 && textContent) sourceTexts.push(textContent);
 
     return {
       text: textContent,
+      sourceTexts,
       sourceUrls,
       promptTokens: response!.usage.input_tokens,
       completionTokens: response!.usage.output_tokens,
@@ -357,8 +363,20 @@ export class ResearchEngine {
     }
 
     // Step 3: Synthesize finding from results
-    const synthesisResult = await this.synthesizeFinding(thread, searchResults, sessionId, config);
+    let synthesisResult = await this.synthesizeFinding(thread, searchResults, sessionId, config);
     if (!synthesisResult) return { finding: null, cost: 0 };
+
+    // Step 3b: Gap analysis — identify missing information and search for it
+    let allSearchResults = searchResults;
+    if (config.gap_analysis?.enabled && synthesisResult) {
+      const gapResults = await this.gapAnalysis(thread, searchResults, synthesisResult, config);
+      if (gapResults.length > 0) {
+        allSearchResults = [...searchResults, ...gapResults];
+        // Re-synthesize with all results combined
+        const augmented = await this.synthesizeFinding(thread, allSearchResults, sessionId, config);
+        if (augmented) Object.assign(synthesisResult, augmented);
+      }
+    }
 
     // Step 4: Check for duplicates
     const isDuplicate = await this.checkDuplicate(sessionId, synthesisResult.summary, config);
@@ -368,7 +386,7 @@ export class ResearchEngine {
 
     // Step 4b: Detect gaps and evaluate/score follow-up questions
     const { accepted: followUpQuestions, analysis: followUpAnalysis } = await this.evaluateFollowUps(
-      thread, searchResults, synthesisResult, config
+      thread, allSearchResults, synthesisResult, config
     );
 
     // Step 5: Store finding
@@ -378,6 +396,7 @@ export class ResearchEngine {
       content: synthesisResult.content,
       summary: synthesisResult.summary,
       source_urls: synthesisResult.sourceUrls,
+      source_texts: synthesisResult.sourceTexts,
       source_quality: synthesisResult.sourceQuality,
       tags: synthesisResult.tags,
       confidence: synthesisResult.confidence,
@@ -462,18 +481,20 @@ export class ResearchEngine {
       ? `\nAlready searched (DO NOT repeat these):\n${searchedQueries.map(q => `- ${q}`).join('\n')}`
       : '';
 
+    const minSearches = thread.min_searches ?? config.min_searches_per_thread ?? 2;
+
     let taskInstruction: string;
     if (action === 'broad_search') {
-      taskInstruction = 'Generate 3 diverse queries exploring different angles of this topic';
+      taskInstruction = `Generate at least ${Math.max(minSearches, 3)} diverse queries exploring different angles of this topic`;
     } else if (action === 'targeted_lookup') {
-      taskInstruction = 'Generate 2 targeted queries to fill gaps not yet covered by existing findings';
+      taskInstruction = `Generate at least ${Math.max(minSearches, 2)} targeted queries to fill gaps not yet covered by existing findings`;
     } else {
       // verification — look up parent finding claim
       const parentFinding = thread.spawned_from_finding_id
         ? findings.getFinding(this.sqlite, thread.spawned_from_finding_id)
         : null;
       const claim = parentFinding?.summary ?? thread.query;
-      taskInstruction = `Generate 2 queries to confirm or refute the specific claim being verified: "${claim}"`;
+      taskInstruction = `Generate ${Math.max(minSearches, 2)} queries to confirm or refute the specific claim being verified: "${claim}"`;
     }
 
     const result = await this.callLLM(
@@ -499,7 +520,8 @@ Return ONLY a JSON array of search query strings. No other text.`,
 
     try {
       const parsed = JSON.parse(stripLLMFences(result.text));
-      const candidates: string[] = Array.isArray(parsed) ? parsed.slice(0, 4) : [thread.query];
+      const minSearches = thread.min_searches ?? config.min_searches_per_thread ?? 2;
+      const candidates: string[] = Array.isArray(parsed) ? parsed.slice(0, Math.max(6, minSearches + 2)) : [thread.query];
       const searchedLower = new Set(searchedQueries.map(q => q.toLowerCase()));
       const seen = new Set<string>();
       const deduped = candidates.filter(q => {
@@ -522,7 +544,7 @@ Return ONLY a JSON array of search query strings. No other text.`,
     sessionId: string,
     threadId: string,
     config: SessionConfig
-  ): Promise<Array<{ query: string; results: string }>> {
+  ): Promise<Array<{ query: string; results: string; sourceTexts: string[] }>> {
     const results = await Promise.all(queries.map(async (query) => {
       const startTime = Date.now();
       try {
@@ -536,7 +558,7 @@ Return ONLY a JSON array of search query strings. No other text.`,
           prompt_tokens: result.promptTokens,
           completion_tokens: result.completionTokens,
           cost_usd: cost,
-          tool_calls: [{ tool: 'web_search', input: { query }, output: result.text.slice(0, 500) }],
+          tool_calls: [{ tool: 'web_search', input: { query }, output: result.text.slice(0, 2000) }],
           duration_ms: Date.now() - startTime,
         });
 
@@ -544,6 +566,7 @@ Return ONLY a JSON array of search query strings. No other text.`,
         return {
           query,
           results: result.text + (result.sourceUrls.length > 0 ? `\n\nSources: ${result.sourceUrls.join(', ')}` : ''),
+          sourceTexts: result.sourceTexts,
         };
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
@@ -562,18 +585,65 @@ Return ONLY a JSON array of search query strings. No other text.`,
       }
     }));
 
-    return results.filter((r): r is { query: string; results: string } => r !== null);
+    return results.filter((r): r is { query: string; results: string; sourceTexts: string[] } => r !== null);
+  }
+
+  private async gapAnalysis(
+    thread: ResearchThread,
+    initialSearchResults: Array<{ query: string; results: string; sourceTexts: string[] }>,
+    draftFinding: { content: string; summary: string },
+    config: SessionConfig
+  ): Promise<Array<{ query: string; results: string; sourceTexts: string[] }>> {
+    if (!config.gap_analysis?.enabled) return [];
+
+    const result = await this.callLLM(
+      config.models?.cheap ?? config.model,
+      `You are evaluating a research finding for completeness.
+
+Research question: "${thread.query}"
+
+Draft finding:
+${draftFinding.content}
+
+Identify specific gaps. What important facts, data points, or aspects are still unclear or missing that would make this finding more complete?
+
+Respond with JSON only:
+{
+  "has_gaps": boolean,
+  "gap_queries": string[]
+}
+
+If has_gaps is false, gap_queries must be [].
+If has_gaps is true, gap_queries must contain ${config.gap_analysis.max_gap_searches ?? 2} targeted search queries addressing specific missing information. Do NOT generate broad or redundant queries.`,
+      thread.session_id,
+      thread.id,
+      config
+    );
+
+    let gapQueries: string[] = [];
+    try {
+      const parsed = JSON.parse(stripLLMFences(result.text));
+      if (parsed.has_gaps && Array.isArray(parsed.gap_queries)) {
+        gapQueries = parsed.gap_queries.slice(0, config.gap_analysis.max_gap_searches ?? 2);
+      }
+    } catch {
+      return [];
+    }
+
+    if (gapQueries.length === 0) return [];
+    return this.executeSearches(gapQueries, thread.session_id, thread.id, config);
   }
 
   private async synthesizeFinding(
     thread: ResearchThread,
-    searchResults: Array<{ query: string; results: string }>,
+    searchResults: Array<{ query: string; results: string; sourceTexts: string[] }>,
     sessionId: string,
     config: SessionConfig
   ): Promise<{
     content: string;
     summary: string;
     sourceUrls: string[];
+    sourceTexts: string[];
     sourceQuality: number;
     tags: string[];
     confidence: number;
@@ -611,6 +681,8 @@ Return ONLY valid JSON. No markdown fences.`,
       config
     );
 
+    const allSourceTexts = searchResults.flatMap(r => r.sourceTexts ?? []);
+
     try {
       const text = stripLLMFences(result.text);
       const parsed = JSON.parse(text);
@@ -618,6 +690,7 @@ Return ONLY valid JSON. No markdown fences.`,
         content: parsed.content ?? '',
         summary: parsed.summary ?? '',
         sourceUrls: parsed.source_urls ?? [],
+        sourceTexts: allSourceTexts,
         sourceQuality: parsed.source_quality ?? 0.5,
         tags: parsed.tags ?? [],
         confidence: parsed.confidence ?? 0.5,
@@ -632,7 +705,7 @@ Return ONLY valid JSON. No markdown fences.`,
 
   private async evaluateFollowUps(
     thread: ResearchThread,
-    searchResults: Array<{ query: string; results: string }>,
+    searchResults: Array<{ query: string; results: string; sourceTexts: string[] }>,
     finding: { content: string; summary: string },
     config: SessionConfig
   ): Promise<{ accepted: string[]; analysis: FollowUpAnalysis }> {
@@ -830,7 +903,7 @@ Return ONLY valid JSON. No markdown fences.`,
 
   private async detectGaps(
     thread: ResearchThread,
-    searchResults: Array<{ query: string; results: string }>,
+    searchResults: Array<{ query: string; results: string; sourceTexts: string[] }>,
     finding: { content: string; summary: string },
     config: SessionConfig,
     rejectionContext?: string

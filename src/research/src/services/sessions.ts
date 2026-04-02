@@ -52,7 +52,7 @@ export function listSessions(sqlite: Sqlite, status?: string): ResearchSession[]
 export function updateSession(
   sqlite: Sqlite,
   id: string,
-  updates: Partial<Pick<ResearchSession, 'status' | 'summary' | 'user_notes' | 'title'>>
+  updates: Partial<Pick<ResearchSession, 'status' | 'summary' | 'user_notes' | 'title'>> & { config?: Partial<SessionConfig> }
 ): ResearchSession | null {
   const fields: string[] = [];
   const values: unknown[] = [];
@@ -61,6 +61,18 @@ export function updateSession(
   if (updates.summary !== undefined) { fields.push('summary = ?'); values.push(updates.summary); }
   if (updates.user_notes !== undefined) { fields.push('user_notes = ?'); values.push(updates.user_notes); }
   if (updates.title !== undefined) { fields.push('title = ?'); values.push(updates.title); }
+  if (updates.config !== undefined) {
+    const existing = getSession(sqlite, id);
+    if (existing) {
+      const merged = { ...existing.config, ...updates.config,
+        providers: { ...existing.config.providers, ...(updates.config.providers ?? {}) },
+        gap_analysis: { ...existing.config.gap_analysis, ...(updates.config.gap_analysis ?? {}) },
+        follow_up: { ...existing.config.follow_up, ...(updates.config.follow_up ?? {}) },
+      };
+      fields.push('config = ?');
+      values.push(JSON.stringify(merged));
+    }
+  }
 
   if (fields.length === 0) return getSession(sqlite, id);
 

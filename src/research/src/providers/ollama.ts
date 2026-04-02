@@ -63,6 +63,7 @@ export class OllamaProvider implements LLMProvider {
 
     return {
       text: result.text,
+      sourceTexts: webResults.length > 0 ? webResults.map(r => r.snippet) : [result.text],
       sourceUrls: webResults.map(r => r.url).filter(Boolean),
       promptTokens: result.promptTokens,
       completionTokens: result.completionTokens,

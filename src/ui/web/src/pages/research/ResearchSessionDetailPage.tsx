@@ -11,7 +11,7 @@ import {
   useResearchCosts, useUpdateResearchSession, useRateFinding,
   useInjectThread, useRunResearch, useResearchRunning,
   useResearchActivity, useCancelJob, useResearchJobs, useResearchStream,
-  useResearchSteps, useUpdateThread, useDeleteResearchSession,
+  useResearchSteps, useUpdateThread, useDeleteResearchSession, useUpdateSessionConfig,
   type ResearchFinding, type ResearchThread, type ResearchActivity,
   type ResearchJob, type StreamEvent, type ResearchStep,
 } from '../../api/research-hooks';
@@ -65,6 +65,14 @@ function FindingRow({ finding, index }: { finding: ResearchFinding; index: numbe
           {expanded && (
             <div className="mt-3 space-y-2">
               <p className="text-xs text-text-secondary whitespace-pre-wrap">{finding.content}</p>
+              {finding.source_texts && finding.source_texts.length > 0 && (
+                <div className="mt-2 space-y-1.5">
+                  <p className="text-[10px] text-text-muted uppercase tracking-wide">Source text</p>
+                  {finding.source_texts.map((text, i) => (
+                    <p key={i} className="text-xs text-text-secondary whitespace-pre-wrap bg-bg-tertiary/30 rounded px-2 py-1.5">{text.slice(0, 1500)}{text.length > 1500 ? '…' : ''}</p>
+                  ))}
+                </div>
+              )}
               {finding.source_urls.length > 0 && (
                 <div className="space-y-0.5">
                   {finding.source_urls.map((url, i) => (
@@ -916,6 +924,160 @@ function WorkersTab({ sessionId }: { sessionId: string }) {
   );
 }
 
+// --- Settings Tab ---
+
+function SessionSettings({ session, sessionId }: { session: { id: string; config: Record<string, unknown> }; sessionId: string }) {
+  const updateConfig = useUpdateSessionConfig();
+  const cfg = session.config as Record<string, unknown>;
+  const providers = (cfg.providers as Record<string, unknown>) ?? {};
+  const gapAnalysis = (cfg.gap_analysis as Record<string, unknown>) ?? {};
+
+  const [provider, setProvider] = useState<string>((providers.primary as string) ?? 'anthropic');
+  const [model, setModel] = useState<string>((cfg.model as string) ?? '');
+  const [maxDepth, setMaxDepth] = useState<number>((cfg.max_thread_depth as number) ?? 8);
+  const [minSearches, setMinSearches] = useState<number>((cfg.min_searches_per_thread as number) ?? 2);
+  const [gapEnabled, setGapEnabled] = useState<boolean>((gapAnalysis.enabled as boolean) ?? true);
+  const [maxGapSearches, setMaxGapSearches] = useState<number>((gapAnalysis.max_gap_searches as number) ?? 2);
+  const [openrouterKey, setOpenrouterKey] = useState<string>((providers.openrouter_api_key as string) ?? '');
+  const [openrouterModels, setOpenrouterModels] = useState<string>(
+    ((providers.openrouter_models as string[]) ?? []).join(', ')
+  );
+  const [localModel, setLocalModel] = useState<string>((providers.local_model as string) ?? '');
+  const [localBaseUrl, setLocalBaseUrl] = useState<string>((providers.local_base_url as string) ?? 'http://localhost:11434');
+  const [budgetDaily, setBudgetDaily] = useState<number>((cfg.budget_daily_usd as number) ?? 5.0);
+  const [saved, setSaved] = useState(false);
+
+  function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    const config: Record<string, unknown> = {
+      model,
+      max_thread_depth: maxDepth,
+      min_searches_per_thread: minSearches,
+      budget_daily_usd: budgetDaily,
+      gap_analysis: { enabled: gapEnabled, max_gap_searches: maxGapSearches },
+      providers: {
+        primary: provider,
+        ...(provider === 'openrouter' ? {
+          openrouter_api_key: openrouterKey || undefined,
+          openrouter_models: openrouterModels.split(',').map(s => s.trim()).filter(Boolean),
+        } : {}),
+        ...(provider === 'ollama' ? {
+          local_model: localModel,
+          local_base_url: localBaseUrl,
+        } : {}),
+      },
+    };
+    updateConfig.mutate({ id: sessionId, config }, {
+      onSuccess: () => { setSaved(true); setTimeout(() => setSaved(false), 2000); },
+    });
+  }
+
+  const inputCls = 'bg-bg-primary border border-border-primary rounded px-2 py-1.5 text-sm text-text-primary focus:outline-none focus:border-accent w-full';
+  const labelCls = 'block text-xs text-text-muted mb-1';
+
+  return (
+    <form onSubmit={handleSave} className="space-y-6 max-w-lg">
+      {/* Provider */}
+      <div>
+        <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Provider</p>
+        <div className="flex gap-2 mb-4">
+          {(['anthropic', 'openrouter', 'ollama'] as const).map(p => (
+            <button key={p} type="button"
+              onClick={() => setProvider(p)}
+              className={clsx('px-3 py-1.5 rounded text-sm font-medium transition-colors',
+                provider === p ? 'bg-accent text-white' : 'bg-bg-secondary border border-border-primary text-text-secondary hover:border-border-secondary')}>
+              {p === 'anthropic' ? 'Anthropic' : p === 'openrouter' ? 'OpenRouter' : 'Local (Ollama)'}
+            </button>
+          ))}
+        </div>
+
+        {provider === 'anthropic' && (
+          <div>
+            <label className={labelCls}>Model</label>
+            <input value={model} onChange={e => setModel(e.target.value)} placeholder="claude-sonnet-4-6" className={inputCls} />
+            <p className="text-[10px] text-text-muted/60 mt-1">Uses ANTHROPIC_API_KEY env var</p>
+          </div>
+        )}
+
+        {provider === 'openrouter' && (
+          <div className="space-y-3">
+            <div>
+              <label className={labelCls}>API Key (optional — uses OPENROUTER_API_KEY env var if blank)</label>
+              <input type="password" value={openrouterKey} onChange={e => setOpenrouterKey(e.target.value)} placeholder="sk-or-…" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Models (comma-separated, rotated)</label>
+              <input value={openrouterModels} onChange={e => setOpenrouterModels(e.target.value)}
+                placeholder="deepseek/deepseek-chat, google/gemini-2.0-flash-001" className={inputCls} />
+            </div>
+          </div>
+        )}
+
+        {provider === 'ollama' && (
+          <div className="space-y-3">
+            <div>
+              <label className={labelCls}>Model</label>
+              <input value={localModel} onChange={e => setLocalModel(e.target.value)} placeholder="qwen2.5:7b" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Base URL</label>
+              <input value={localBaseUrl} onChange={e => setLocalBaseUrl(e.target.value)} className={inputCls} />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Search */}
+      <div>
+        <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Search</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className={labelCls}>Max thread depth</label>
+            <input type="number" min={1} max={20} value={maxDepth} onChange={e => setMaxDepth(Number(e.target.value))} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Min searches per thread</label>
+            <input type="number" min={1} max={10} value={minSearches} onChange={e => setMinSearches(Number(e.target.value))} className={inputCls} />
+          </div>
+        </div>
+      </div>
+
+      {/* Gap analysis */}
+      <div>
+        <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Gap Analysis</p>
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={gapEnabled} onChange={e => setGapEnabled(e.target.checked)}
+              className="w-4 h-4 accent-accent" />
+            <span className="text-sm text-text-primary">Enabled</span>
+            <span className="text-xs text-text-muted">(runs a second LLM pass to find missing information)</span>
+          </label>
+          {gapEnabled && (
+            <div className="max-w-[160px]">
+              <label className={labelCls}>Max gap searches</label>
+              <input type="number" min={1} max={5} value={maxGapSearches} onChange={e => setMaxGapSearches(Number(e.target.value))} className={inputCls} />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Budget */}
+      <div>
+        <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Budget</p>
+        <div className="max-w-[160px]">
+          <label className={labelCls}>Daily limit (USD)</label>
+          <input type="number" min={0} step={0.5} value={budgetDaily} onChange={e => setBudgetDaily(Number(e.target.value))} className={inputCls} />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Button type="submit" loading={updateConfig.isPending}>Save</Button>
+        {saved && <span className="text-xs text-green-400">Saved</span>}
+      </div>
+    </form>
+  );
+}
+
 // --- Main Page ---
 
 export function ResearchSessionDetailPage() {
@@ -932,7 +1094,7 @@ export function ResearchSessionDetailPage() {
   const updateSession = useUpdateResearchSession();
   const injectThread = useInjectThread();
   const [newQuestion, setNewQuestion] = useState('');
-  const [tab, setTab] = useState<'document' | 'live' | 'graph' | 'workers'>('document');
+  const [tab, setTab] = useState<'document' | 'live' | 'graph' | 'workers' | 'settings'>('document');
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const deleteSession = useDeleteResearchSession();
 
@@ -1025,6 +1187,7 @@ export function ResearchSessionDetailPage() {
           { key: 'live', label: `Live (${threadsData.length})` },
           { key: 'graph', label: `Graph (${threadsData.length})` },
           { key: 'workers', label: 'Workers' },
+          { key: 'settings', label: 'Settings' },
         ] as const).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={clsx('px-3 py-2 text-sm font-medium border-b-2 transition-colors',
@@ -1039,6 +1202,7 @@ export function ResearchSessionDetailPage() {
       {tab === 'live' && <ThreadLiveView threads={threadsData} findings={findingsData} allSteps={allSteps} events={events} isRunning={isRunning} sessionId={id!} />}
       {tab === 'graph' && <ThreadGraph threads={threadsData} findings={findingsData} />}
       {tab === 'workers' && <WorkersTab sessionId={id!} />}
+      {tab === 'settings' && <SessionSettings session={session} sessionId={id!} />}
     </div>
   );
 }

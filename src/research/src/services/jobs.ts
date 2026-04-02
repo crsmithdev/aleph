@@ -35,7 +35,15 @@ export function getActiveJobForSession(sqlite: Sqlite, sessionId: string): Resea
 
 export function findPendingJob(sqlite: Sqlite): ResearchJob | null {
   const row = sqlite.prepare(
-    "SELECT * FROM research_jobs WHERE status = 'pending' ORDER BY created_at ASC LIMIT 1"
+    `SELECT j.* FROM research_jobs j
+LEFT JOIN (
+  SELECT session_id, MAX(priority) as max_priority
+  FROM research_threads WHERE status = 'queued'
+  GROUP BY session_id
+) t ON j.session_id = t.session_id
+WHERE j.status = 'pending'
+ORDER BY COALESCE(t.max_priority, 0) DESC, j.created_at ASC
+LIMIT 1`
   ).get() as Record<string, unknown> | null;
   return row ? rowToJob(row) : null;
 }

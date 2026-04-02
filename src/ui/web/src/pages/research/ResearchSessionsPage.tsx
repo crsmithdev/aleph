@@ -34,6 +34,9 @@ export function ResearchSessionsPage() {
   const [newOpen, setNewOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [depth, setDepth] = useState(8);
+  const [provider, setProvider] = useState<string>(() => localStorage.getItem('research_default_provider') ?? 'anthropic');
+  const [model, setModel] = useState<string>(() => localStorage.getItem('research_default_model') ?? '');
+  const [minSearches, setMinSearches] = useState<number>(() => Number(localStorage.getItem('research_default_min_searches') ?? '2'));
   const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
   const [testStatus, setTestStatus] = useState<string | null>(null);
 
@@ -60,7 +63,18 @@ export function ResearchSessionsPage() {
   function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!query.trim()) return;
-    createSession.mutate({ seed_query: query.trim(), config: { max_thread_depth: depth } }, {
+    localStorage.setItem('research_default_provider', provider);
+    if (model) localStorage.setItem('research_default_model', model);
+    localStorage.setItem('research_default_min_searches', String(minSearches));
+    createSession.mutate({
+      seed_query: query.trim(),
+      config: {
+        max_thread_depth: depth,
+        min_searches_per_thread: minSearches,
+        model: model || undefined,
+        providers: { primary: provider as 'anthropic' | 'openrouter' | 'ollama' },
+      },
+    }, {
       onSuccess: () => { setQuery(''); setDepth(8); setNewOpen(false); },
     });
   }
@@ -176,6 +190,39 @@ export function ResearchSessionsPage() {
               max={20}
               value={depth}
               onChange={e => setDepth(Number(e.target.value))}
+              className="w-12 bg-bg-primary border border-border-primary rounded px-1.5 py-1 text-sm text-text-primary text-center focus:outline-none focus:border-accent"
+            />
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0">
+            Provider
+            <select
+              value={provider}
+              onChange={e => setProvider(e.target.value)}
+              className="bg-bg-primary border border-border-primary rounded px-1.5 py-1 text-sm text-text-primary focus:outline-none focus:border-accent"
+            >
+              <option value="anthropic">Anthropic</option>
+              <option value="openrouter">OpenRouter</option>
+              <option value="ollama">Local</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0">
+            Model
+            <input
+              type="text"
+              value={model}
+              onChange={e => setModel(e.target.value)}
+              placeholder="default"
+              className="w-36 bg-bg-primary border border-border-primary rounded px-1.5 py-1 text-sm text-text-primary focus:outline-none focus:border-accent"
+            />
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0">
+            Min searches
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={minSearches}
+              onChange={e => setMinSearches(Number(e.target.value))}
               className="w-12 bg-bg-primary border border-border-primary rounded px-1.5 py-1 text-sm text-text-primary text-center focus:outline-none focus:border-accent"
             />
           </label>

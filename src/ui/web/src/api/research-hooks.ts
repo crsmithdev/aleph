@@ -26,6 +26,7 @@ export interface ResearchThread {
   priority: number;
   depth: number;
   max_depth: number;
+  min_searches: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -37,6 +38,7 @@ export interface ResearchFinding {
   content: string;
   summary: string;
   source_urls: string[];
+  source_texts: string[];
   tags: string[];
   confidence: number;
   novelty: number;
@@ -141,6 +143,18 @@ export function useUpdateResearchSession() {
   return useMutation({
     mutationFn: ({ id, ...data }: { id: string; status?: string; title?: string }) =>
       api.patch<ResearchSession>(`/research/sessions/${id}`, data),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['research-sessions'] });
+      qc.invalidateQueries({ queryKey: ['research-sessions', vars.id] });
+    },
+  });
+}
+
+export function useUpdateSessionConfig() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, config }: { id: string; config: Record<string, unknown> }) =>
+      api.patch<ResearchSession>(`/research/sessions/${id}`, { config }),
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ['research-sessions'] });
       qc.invalidateQueries({ queryKey: ['research-sessions', vars.id] });

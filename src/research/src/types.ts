@@ -32,9 +32,11 @@ export interface SessionConfig {
     tangent: 'rotate' | string;
   };
   providers: {
-    primary: 'anthropic' | 'openrouter';
-    fallback?: 'anthropic' | 'openrouter';
+    primary: 'anthropic' | 'openrouter' | 'ollama';
+    fallback?: 'anthropic' | 'openrouter' | 'ollama';
     openrouter_models: string[];
+    local_model?: string;
+    local_base_url?: string;
   };
   schedule: {
     mode: 'interactive' | 'background' | 'scheduled' | 'burst';
@@ -50,6 +52,11 @@ export interface SessionConfig {
     min_count: number;        // default 2
     max_retries: number;      // default 3
     similarity_threshold: number; // default 0.75
+  };
+  min_searches_per_thread: number;
+  gap_analysis: {
+    enabled: boolean;
+    max_gap_searches: number;
   };
 }
 
@@ -99,6 +106,11 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
     min_count: 2,
     max_retries: 3,
     similarity_threshold: 0.75,
+  },
+  min_searches_per_thread: 2,
+  gap_analysis: {
+    enabled: true,
+    max_gap_searches: 2,
   },
   perturbation: {
     depth_scaling: true,
@@ -176,6 +188,7 @@ export interface ResearchThread {
   priority: number;
   depth: number;
   max_depth: number;
+  min_searches: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -187,6 +200,7 @@ export interface ResearchFinding {
   content: string;
   summary: string;
   source_urls: string[];
+  source_texts: string[];
   source_quality: number;
   tags: string[];
   confidence: number;
