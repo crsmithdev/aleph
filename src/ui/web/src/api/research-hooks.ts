@@ -42,10 +42,10 @@ export interface ResearchFinding {
   novelty: number;
   actionability: number;
   user_rating: string | null;
-  follow_up_questions: string[];
+  follow_ups: string[];
   follow_up_analysis?: {
     candidates: Array<{
-      question: string;
+      text: string;
       quality_score: number;
       jaccard_similarity: number;
       embedding_similarity: number | null;

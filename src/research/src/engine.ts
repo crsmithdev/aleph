@@ -48,6 +48,14 @@ const PERTURBATION_STRATEGIES: PerturbationStrategy[] = [
   'analogical', 'contrarian', 'failure_post_mortem', 'temporal_shift',
 ];
 
+export function classify(s: string): 'question' | 'topic' {
+  const t = s.trim();
+  if (t.endsWith('?')) return 'question';
+  if (/\b(what|how|why|when|where|who|which)\b/i.test(t)) return 'question';
+  if (/^(is|are|does|do|can|should|will|would|has|have|was|were)\b/i.test(t)) return 'question';
+  return 'topic';
+}
+
 function stripLLMFences(text: string): string {
   // Remove <think> blocks first
   const noThink = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
@@ -201,6 +209,7 @@ export class ResearchEngine {
     threads.createThread(this.sqlite, {
       session_id: session.id,
       query: seedQuery,
+      node_type: classify(seedQuery),
       origin: 'seed',
       priority: 1.0,
       depth: 0,
@@ -374,7 +383,7 @@ export class ResearchEngine {
       confidence: synthesisResult.confidence,
       novelty: synthesisResult.novelty,
       actionability: synthesisResult.actionability,
-      follow_up_questions: followUpQuestions,
+      follow_ups: followUpQuestions,
       follow_up_analysis: followUpAnalysis,
     });
 
@@ -384,6 +393,7 @@ export class ResearchEngine {
       threads.createThread(this.sqlite, {
         session_id: sessionId,
         query: `Verify: ${finding.summary}`,
+        node_type: 'question',
         origin: 'verify',
         parent_thread_id: thread.id,
         spawned_from_finding_id: finding.id,
@@ -413,6 +423,7 @@ export class ResearchEngine {
         threads.createThread(this.sqlite, {
           session_id: sessionId,
           query: question,
+          node_type: classify(question),
           origin: 'follow_up',
           parent_thread_id: thread.id,
           spawned_from_finding_id: finding.id,
@@ -646,7 +657,7 @@ Return ONLY valid JSON. No markdown fences.`,
 
       // Add newly accepted questions
       for (const c of newCandidates) {
-        if (c.accepted) acceptedQuestions.push(c.question);
+        if (c.accepted) acceptedQuestions.push(c.text);
       }
 
       const acceptedCount = acceptedQuestions.length;
@@ -659,7 +670,7 @@ Return ONLY valid JSON. No markdown fences.`,
       if (rejected.length === 0) break;
 
       const rejectionContext = rejected
-        .map(c => `- "${c.question}" (${c.rejection_reason ?? 'rejected'})`)
+        .map(c => `- "${c.text}" (${c.rejection_reason ?? 'rejected'})`)
         .join('\n');
 
       rawQuestions = await this.detectGaps(
@@ -713,6 +724,7 @@ Return ONLY valid JSON. No markdown fences.`,
 
     const candidates: FollowUpCandidate[] = [];
     const localAccepted: string[] = [...existingAccepted];
+    const parentWords = thread.query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
 
     for (const question of questions) {
       // Quality score heuristics
@@ -725,23 +737,40 @@ Return ONLY valid JSON. No markdown fences.`,
           ? 0.6
           : 0.3;
 
-      const relevanceScore = Math.min(1, jaccardSimilarity(question, thread.query) * 2);
+      // Relevance to parent: Jaccard for question parents, keyword containment for topic parents
+      let relevanceScore: number;
+      if (thread.node_type === 'topic') {
+        const qLow = question.toLowerCase();
+        const hits = parentWords.filter(w => qLow.includes(w)).length;
+        relevanceScore = parentWords.length > 0 ? Math.min(1, (hits / parentWords.length) * 1.2) : 0.5;
+      } else {
+        relevanceScore = Math.min(1, jaccardSimilarity(question, thread.query) * 2);
+      }
 
-      const questionWords = /\b(what|how|why|when|where|who|which)\b/i.test(question);
-      const answerabilityScore = question.trim().endsWith('?')
-        ? 1.0
-        : questionWords
-          ? 0.7
-          : 0.4;
+      // Focus score: how well-defined/searchable is this item?
+      const childType = classify(question);
+      let focusScore: number;
+      if (childType === 'question') {
+        const hasQuestionWords = /\b(what|how|why|when|where|who|which)\b/i.test(question);
+        focusScore = question.trim().endsWith('?') ? 1.0 : hasQuestionWords ? 0.7 : 0.4;
+      } else {
+        // Topic: score by noun phrase specificity (2-6 words with a meaningful term is ideal)
+        const hasSpecificTerm = /\b[A-Z][a-z]+\b/.test(question) || /\b\w{7,}\b/.test(question);
+        focusScore = words.length >= 3 && words.length <= 6 && hasSpecificTerm
+          ? 1.0
+          : words.length >= 2 && words.length <= 8
+            ? 0.7
+            : 0.4;
+      }
 
-      const quality_score = 0.4 * specificityScore + 0.3 * relevanceScore + 0.3 * answerabilityScore;
+      const quality_score = 0.4 * specificityScore + 0.3 * relevanceScore + 0.3 * focusScore;
       const distance_from_parent = 1 - jaccardSimilarity(question, thread.query);
 
       // Fast exact-match check first
       const qLower = question.toLowerCase().trim();
       if (existingQuerySet.has(qLower) || localAccepted.some(a => a.toLowerCase().trim() === qLower)) {
         candidates.push({
-          question,
+          text: question,
           quality_score,
           jaccard_similarity: 1.0,
           embedding_similarity: null,
@@ -755,7 +784,7 @@ Return ONLY valid JSON. No markdown fences.`,
         continue;
       }
 
-      // Compute similarity against all accepted questions
+      // Compute similarity against all accepted items
       let maxSimilarity = 0;
       let maxSimilarQuestion = '';
       let usedMethod: 'jaccard' | 'embedding' | 'llm' = 'jaccard';
@@ -777,7 +806,7 @@ Return ONLY valid JSON. No markdown fences.`,
       const rank_score = 0.40 * quality_score + 0.30 * distance_from_parent + 0.30 * (1 - maxSimilarity);
 
       const candidate: FollowUpCandidate = {
-        question,
+        text: question,
         quality_score,
         jaccard_similarity: maxSimilarity,
         embedding_similarity: embeddingSim,
@@ -810,9 +839,27 @@ Return ONLY valid JSON. No markdown fences.`,
       .map(r => `### Search: "${r.query}"\n${r.results.slice(0, 500)}`)
       .join('\n\n---\n\n');
 
-    const result = await this.callLLM(
-      config.model,
-      `You are a research gap analyst. Given the research question and what was found, identify unanswered questions.
+    const prompt = thread.node_type === 'topic'
+      ? `You are a research scope analyst. Given a research topic and what was found, identify related subtopics that still need coverage.
+
+Research topic: "${thread.query}"
+
+What was found:
+${finding.summary}
+
+Search results summary:
+${resultsText}
+
+What specific subtopics, aspects, or related concepts of "${thread.query}" still need detailed coverage?
+
+Rules:
+- Return focused noun phrases or named concepts (2-6 words each)
+- Each phrase must be fully self-contained and searchable on its own
+- Do not repeat what was already covered in the finding
+- Name the specific concept explicitly in each phrase${rejectionContext ?? ''}
+
+Return ONLY a JSON array of topic phrase strings. No other text.`
+      : `You are a research gap analyst. Given the research question and what was found, identify unanswered questions.
 
 Research question: "${thread.query}"
 
@@ -829,7 +876,11 @@ Rules:
 - NO pronouns like "they/it/these/those/this" that refer back to the finding
 - Name the specific topic explicitly in each question${rejectionContext ?? ''}
 
-Return ONLY a JSON array of question strings. No other text.`,
+Return ONLY a JSON array of question strings. No other text.`;
+
+    const result = await this.callLLM(
+      config.model,
+      prompt,
       thread.session_id,
       thread.id,
       config
@@ -915,6 +966,7 @@ Respond with ONLY "true" if this is a duplicate or near-duplicate, "false" other
     threads.createThread(this.sqlite, {
       session_id: sessionId,
       query: tangentQuery,
+      node_type: classify(tangentQuery),
       origin: 'perturbation',
       perturbation_strategy: strategy,
       parent_thread_id: parentThread?.id ?? null,

@@ -211,7 +211,7 @@ function ThreadLiveRow({
       .map(tc => ({ query: tc.input?.query as string, cost: s.cost_usd, duration: s.duration_ms, error: tc.error }))
   );
   const errors = steps.filter(s => s.error);
-  const followUpQuestions = Array.from(new Set(threadFindings.flatMap(f => f.follow_up_questions ?? [])));
+  const followUpQuestions = Array.from(new Set(threadFindings.flatMap(f => f.follow_ups ?? [])));
   const childQuerySet = new Set(childThreads.map(t => t.query.toLowerCase().trim()));
 
   return (

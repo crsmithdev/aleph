@@ -7,7 +7,7 @@ function rowToFinding(row: Record<string, unknown>): ResearchFinding {
     ...row,
     source_urls: JSON.parse(row.source_urls as string),
     tags: JSON.parse(row.tags as string),
-    follow_up_questions: JSON.parse(row.follow_up_questions as string),
+    follow_ups: JSON.parse((row.follow_ups ?? row.follow_up_questions ?? '[]') as string),
     follow_up_analysis: row.follow_up_analysis ? JSON.parse(row.follow_up_analysis as string) : undefined,
   } as unknown as ResearchFinding;
 }
@@ -25,7 +25,7 @@ export function createFinding(
     confidence?: number;
     novelty?: number;
     actionability?: number;
-    follow_up_questions?: string[];
+    follow_ups?: string[];
     follow_up_analysis?: FollowUpAnalysis;
   }
 ): ResearchFinding {
@@ -35,7 +35,7 @@ export function createFinding(
   sqlite.prepare(`
     INSERT INTO research_findings
       (id, thread_id, session_id, content, summary, source_urls, source_quality,
-       tags, confidence, novelty, actionability, follow_up_questions, follow_up_analysis, created_at)
+       tags, confidence, novelty, actionability, follow_ups, follow_up_analysis, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
@@ -49,7 +49,7 @@ export function createFinding(
     params.confidence ?? 0.5,
     params.novelty ?? 0.5,
     params.actionability ?? 0.5,
-    JSON.stringify(params.follow_up_questions ?? []),
+    JSON.stringify(params.follow_ups ?? []),
     params.follow_up_analysis ? JSON.stringify(params.follow_up_analysis) : null,
     now
   );

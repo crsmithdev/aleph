@@ -169,6 +169,7 @@ export interface ResearchThread {
   parent_thread_id: string | null;
   spawned_from_finding_id: string | null;
   query: string;
+  node_type: 'question' | 'topic';
   origin: ThreadOrigin;
   perturbation_strategy: PerturbationStrategy | null;
   status: ThreadStatus;
@@ -192,7 +193,7 @@ export interface ResearchFinding {
   novelty: number;
   actionability: number;
   user_rating: 'promising' | 'not_useful' | 'critical' | null;
-  follow_up_questions: string[];
+  follow_ups: string[];
   follow_up_analysis?: FollowUpAnalysis;
   created_at: string;
 }
@@ -221,8 +222,8 @@ export interface ToolCallRecord {
 }
 
 export interface FollowUpCandidate {
-  question: string;
-  quality_score: number;       // 0–1: relevance + specificity + answerability
+  text: string;
+  quality_score: number;       // 0–1: relevance + specificity + focus
   jaccard_similarity: number;  // vs most-similar accepted question
   embedding_similarity: number | null;
   llm_similarity: number | null;

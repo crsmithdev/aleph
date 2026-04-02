@@ -20,6 +20,7 @@ export function applyResearchDDL(sqlite: Sqlite): void {
       parent_thread_id TEXT REFERENCES research_threads(id) ON DELETE SET NULL,
       spawned_from_finding_id TEXT,
       query TEXT NOT NULL,
+      node_type TEXT NOT NULL DEFAULT 'question',
       origin TEXT NOT NULL DEFAULT 'seed',
       perturbation_strategy TEXT,
       status TEXT NOT NULL DEFAULT 'queued',
@@ -44,7 +45,7 @@ export function applyResearchDDL(sqlite: Sqlite): void {
       novelty REAL NOT NULL DEFAULT 0.5,
       actionability REAL NOT NULL DEFAULT 0.5,
       user_rating TEXT,
-      follow_up_questions TEXT NOT NULL DEFAULT '[]',
+      follow_ups TEXT NOT NULL DEFAULT '[]',
       follow_up_analysis TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -170,8 +171,8 @@ export function applyResearchDDL(sqlite: Sqlite): void {
     CREATE INDEX IF NOT EXISTS idx_rj_heartbeat ON research_jobs(status, heartbeat_at);
   `);
 
-  // Migration: add follow_up_analysis if missing
-  try {
-    sqlite.exec(`ALTER TABLE research_findings ADD COLUMN follow_up_analysis TEXT`);
-  } catch { /* column already exists */ }
+  // Migrations
+  try { sqlite.exec(`ALTER TABLE research_findings ADD COLUMN follow_up_analysis TEXT`); } catch { /* exists */ }
+  try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN node_type TEXT NOT NULL DEFAULT 'question'`); } catch { /* exists */ }
+  try { sqlite.exec(`ALTER TABLE research_findings RENAME COLUMN follow_up_questions TO follow_ups`); } catch { /* exists or unsupported */ }
 }

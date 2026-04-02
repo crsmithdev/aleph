@@ -11,6 +11,7 @@ export function createThread(
   params: {
     session_id: string;
     query: string;
+    node_type?: 'question' | 'topic';
     origin: ThreadOrigin;
     parent_thread_id?: string | null;
     spawned_from_finding_id?: string | null;
@@ -26,15 +27,16 @@ export function createThread(
 
   sqlite.prepare(`
     INSERT INTO research_threads
-      (id, session_id, parent_thread_id, spawned_from_finding_id, query, origin,
+      (id, session_id, parent_thread_id, spawned_from_finding_id, query, node_type, origin,
        perturbation_strategy, status, priority, depth, max_depth, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     params.session_id,
     params.parent_thread_id ?? null,
     params.spawned_from_finding_id ?? null,
     params.query,
+    params.node_type ?? 'question',
     params.origin,
     params.perturbation_strategy ?? null,
     params.status ?? 'queued',

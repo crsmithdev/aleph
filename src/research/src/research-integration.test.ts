@@ -95,13 +95,13 @@ function standardFinding(overrides?: Record<string, unknown>) {
     confidence: 0.85,
     novelty: 0.7,
     actionability: 0.6,
-    follow_up_questions: ['What are the implications?', 'How does this compare?', 'What evidence?'],
+    follow_ups: ['What are the implications?', 'How does this compare?', 'What evidence?'],
     ...overrides,
   });
 }
 
 function lowNoveltyFinding() {
-  return standardFinding({ novelty: 0.1, summary: 'Nothing new', follow_up_questions: [] });
+  return standardFinding({ novelty: 0.1, summary: 'Nothing new', follow_ups: [] });
 }
 
 function setupStandardProvider(): MockProvider {
@@ -145,7 +145,7 @@ describe('execution loop resilience', () => {
     const sqlite = createTestDb();
     const provider = new MockProvider();
     for (let i = 0; i < 20; i++) {
-      provider.addIteration({ summary: `Finding ${i}`, follow_up_questions: [] }, i === 0);
+      provider.addIteration({ summary: `Finding ${i}`, follow_ups: [] }, i === 0);
     }
 
     const engine = new ResearchEngine({
@@ -165,8 +165,8 @@ describe('execution loop resilience', () => {
   test('garbage query: handles gracefully, no infinite loop', async () => {
     const sqlite = createTestDb();
     const provider = new MockProvider();
-    provider.addIteration({ novelty: 0.05, summary: 'No results', follow_up_questions: [] }, true);
-    provider.addIteration({ novelty: 0.05, summary: 'No results 2', follow_up_questions: [] });
+    provider.addIteration({ novelty: 0.05, summary: 'No results', follow_ups: [] }, true);
+    provider.addIteration({ novelty: 0.05, summary: 'No results 2', follow_ups: [] });
 
     const engine = new ResearchEngine({ sqlite, provider, maxIterations: 2 });
     const session = await engine.startSession('Garbage', 'qwxzpt blargh', NO_DELAY);
@@ -308,7 +308,7 @@ describe('plan and steering', () => {
     const sqlite = createTestDb();
     const provider = new MockProvider();
     for (let i = 0; i < 4; i++) {
-      provider.addIteration({ follow_up_questions: ['Follow up?'] }, i === 0);
+      provider.addIteration({ follow_ups: ['Follow up?'] }, i === 0);
     }
 
     const engine = new ResearchEngine({ sqlite, provider, maxIterations: 1 });
@@ -345,12 +345,12 @@ describe('thread lifecycle', () => {
     // Iter 1: good finding (first, no dedup)
     provider.addComplete(JSON.stringify(['query']));
     provider.addSearch('results');
-    provider.addComplete(standardFinding({ novelty: 0.9, follow_up_questions: [] }));
+    provider.addComplete(standardFinding({ novelty: 0.9, follow_ups: [] }));
     // Iters 2-4: duds (dedup fires now since findings exist)
     for (let i = 0; i < 3; i++) {
       provider.addComplete(JSON.stringify(['query']));
       provider.addSearch('results');
-      provider.addComplete(standardFinding({ novelty: 0.1, summary: `dud ${i}`, follow_up_questions: [] }));
+      provider.addComplete(standardFinding({ novelty: 0.1, summary: `dud ${i}`, follow_ups: [] }));
       provider.addComplete('false'); // dedup
     }
 
@@ -379,9 +379,9 @@ describe('thread lifecycle', () => {
     const finding = findings.createFinding(sqlite, {
       thread_id: deepThread.id, session_id: sessionId,
       content: 'deep finding', summary: 'deep',
-      follow_up_questions: ['Q1?', 'Q2?'],
+      follow_ups: ['Q1?', 'Q2?'],
     });
-    expect(finding.follow_up_questions.length).toBe(2);
+    expect(finding.follow_ups.length).toBe(2);
   });
 
   test('dedup: similar findings flagged with lower novelty', () => {
@@ -413,7 +413,7 @@ describe('cost tracking accuracy', () => {
     const sqlite = createTestDb();
     const provider = new MockProvider();
     for (let i = 0; i < 3; i++) {
-      provider.addIteration({ follow_up_questions: [], summary: `Finding ${i}` }, i === 0);
+      provider.addIteration({ follow_ups: [], summary: `Finding ${i}` }, i === 0);
     }
 
     const engine = new ResearchEngine({

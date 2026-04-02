@@ -140,11 +140,11 @@ describe('findings CRUD', () => {
       summary: 'test summary',
       source_urls: ['https://example.com'],
       tags: ['bread', 'baking'],
-      follow_up_questions: ['How?', 'Why?'],
+      follow_ups: ['How?', 'Why?'],
     });
     expect(finding.source_urls).toEqual(['https://example.com']);
     expect(finding.tags).toEqual(['bread', 'baking']);
-    expect(finding.follow_up_questions).toEqual(['How?', 'Why?']);
+    expect(finding.follow_ups).toEqual(['How?', 'Why?']);
   });
 
   test('list findings sorted by novelty', () => {
@@ -631,7 +631,7 @@ describe('verification thread spawning', () => {
         confidence: 0.2,
         novelty: 0.5,
         actionability: 0.5,
-        follow_up_questions: [],
+        follow_ups: [],
       }),
       'false',
       '[]',
@@ -666,7 +666,7 @@ describe('verification thread spawning', () => {
         confidence: 0.2,
         novelty: 0.5,
         actionability: 0.5,
-        follow_up_questions: [],
+        follow_ups: [],
       }),
       'false',
       '[]',
@@ -701,7 +701,7 @@ describe('verification thread spawning', () => {
         confidence: 0.9,
         novelty: 0.5,
         actionability: 0.5,
-        follow_up_questions: [],
+        follow_ups: [],
       }),
       'false',
       '[]',
@@ -952,7 +952,7 @@ describe('scoreAndRankFollowUps', () => {
     const candidates = await engine.scoreAndRankFollowUps(questions, thread, [], config, 0);
     expect(candidates.length).toBe(1);
     const c = candidates[0];
-    expect(typeof c.question).toBe('string');
+    expect(typeof c.text).toBe('string');
     expect(typeof c.quality_score).toBe('number');
     expect(typeof c.jaccard_similarity).toBe('number');
     expect(typeof c.distance_from_parent).toBe('number');
