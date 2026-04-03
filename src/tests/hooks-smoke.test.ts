@@ -12,18 +12,18 @@ const r = createResults();
 // ── Quality hook ─────────────────────────────────────────────────────────────
 
 console.log("--- quality ---");
-runAndCheck(te, r, "skills/hooks/quality-post-format.ts", "smoke", "{}");
-runAndCheck(te, r, "skills/hooks/quality-post-format.ts", "missing file", '{"tool_input":{"file_path":"/nonexistent/file.ts"}}');
-runAndCheck(te, r, "skills/hooks/quality-post-format.ts", "malformed", "not json", { expectExit: 1 });
+runAndCheck(te, r, "core/hooks/quality-post-format.ts", "smoke", "{}");
+runAndCheck(te, r, "core/hooks/quality-post-format.ts", "missing file", '{"tool_input":{"file_path":"/nonexistent/file.ts"}}');
+runAndCheck(te, r, "core/hooks/quality-post-format.ts", "malformed", "not json", { expectExit: 1 });
 
 // ── Notify hook ──────────────────────────────────────────────────────────────
 
 console.log("\n--- notify ---");
-runAndCheck(te, r, "skills/hooks/notify-event-toast.ts", "smoke", "{}");
-runAndCheck(te, r, "skills/hooks/notify-event-toast.ts", "complete event", '{"type":"complete"}');
-runAndCheck(te, r, "skills/hooks/notify-event-toast.ts", "permission event", '{"type":"permission"}');
-runAndCheck(te, r, "skills/hooks/notify-event-toast.ts", "idle event", '{"type":"idle"}');
-runAndCheck(te, r, "skills/hooks/notify-event-toast.ts", "malformed", "not json", { expectExit: 1 });
+runAndCheck(te, r, "core/hooks/notify-event-toast.ts", "smoke", "{}");
+runAndCheck(te, r, "core/hooks/notify-event-toast.ts", "complete event", '{"type":"complete"}');
+runAndCheck(te, r, "core/hooks/notify-event-toast.ts", "permission event", '{"type":"permission"}');
+runAndCheck(te, r, "core/hooks/notify-event-toast.ts", "idle event", '{"type":"idle"}');
+runAndCheck(te, r, "core/hooks/notify-event-toast.ts", "malformed", "not json", { expectExit: 1 });
 
 // ── Trace ───────────────────────────────────────────────────────────────────
 
@@ -45,7 +45,7 @@ check(r, "trace: no output when disabled", !noTraceResult.trace.includes("[trace
 
 // Verify multiple hooks produce trace
 writeFileSync(traceFile, "");
-const routingTrace = runHook(te, "skills/hooks/routing-submit-classify.ts", JSON.stringify({ prompt: "debug the crash in auth module" }));
+const routingTrace = runHook(te, "core/hooks/routing-submit-classify.ts", JSON.stringify({ prompt: "debug the crash in auth module" }));
 check(r, "trace: routing-submit-classify traces decisions", routingTrace.trace.includes("[trace:routing-submit-classify]"));
 const ratingTrace = runHook(te, "memory/hooks/rating-capture.ts", JSON.stringify({ prompt: "7" }));
 check(r, "trace: rating-capture traces matches", ratingTrace.trace.includes("[trace:rating-capture]"));

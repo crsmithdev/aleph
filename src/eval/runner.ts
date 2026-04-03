@@ -87,7 +87,7 @@ async function runE2ETrial(
 
   // Register quality stop hook so the advisory fires in this sandbox
   registerSandboxHooks(sandbox, [
-    { event: "Stop", command: hookCmd("skills/hooks/quality-stop-check-e2e.ts") },
+    { event: "Stop", command: hookCmd("core/hooks/quality-stop-check-e2e.ts") },
   ]);
 
   const prompt = readFileSync(join(SCENARIOS_DIR, "e2e-basic", "task.md"), "utf8").trim();

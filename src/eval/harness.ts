@@ -306,8 +306,8 @@ export function hookCmd(hookPath: string): string {
 /** Standard e2e advisory hooks pointing to real scripts. */
 export function qualityHooks(): SandboxHook[] {
   return [
-    { event: "UserPromptSubmit", command: hookCmd("skills/hooks/routing-submit-classify.ts") },
-    { event: "Stop", command: hookCmd("skills/hooks/quality-stop-check-e2e.ts") },
+    { event: "UserPromptSubmit", command: hookCmd("core/hooks/routing-submit-classify.ts") },
+    { event: "Stop", command: hookCmd("core/hooks/quality-stop-check-e2e.ts") },
   ];
 }
 
@@ -359,7 +359,7 @@ export function realStopHookCallback(hookPath: string, dataRoot: string): HookCa
 export function realQualityHooks(dataRoot: string): Partial<Record<"PostToolUse" | "Stop", HookCallbackMatcher[]>> {
   return {
     Stop: [{
-      hooks: [realStopHookCallback("skills/hooks/quality-stop-check-e2e.ts", dataRoot)],
+      hooks: [realStopHookCallback("core/hooks/quality-stop-check-e2e.ts", dataRoot)],
     }],
   };
 }

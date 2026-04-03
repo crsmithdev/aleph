@@ -13,6 +13,10 @@
       "keywords": ["verify", "verify that", "verify it", "confirm passing", "validate that", "prove it works", "verification"]
     },
     {
+      "skill": "verification-before-completion",
+      "keywords": ["complete", "done", "finished", "it works", "all tests pass", "tests pass", "linter clean", "build succeeds", "ready to commit", "ready to merge", "ship it", "looks good"]
+    },
+    {
       "skill": "debugging",
       "keywords": ["debug", "bug", "broken", "failing", "error", "crash", "exception", "traceback", "root cause", "bisect"]
     },
@@ -45,12 +49,44 @@
       "keywords": ["review config", "audit config", "settings review", "config check", "settings audit"]
     },
     {
+      "skill": "finishing-a-development-branch",
+      "keywords": ["finishing a development branch", "implementation complete", "done with feature", "feature complete", "wrapping up", "development complete", "finishing up", "branch ready", "ready to ship", "development done"]
+    },
+    {
       "skill": "finishing-branch",
       "keywords": ["finish branch", "merge branch", "create pr", "ready to merge", "branch done", "pull request", "open pr", "make pr", "submit pr"]
     },
     {
       "skill": "git-worktrees",
       "keywords": ["worktree", "create worktree", "isolated branch", "parallel branch"]
+    },
+    {
+      "skill": "webapp-testing",
+      "keywords": ["test webapp", "test web app", "playwright", "browser test", "frontend test", "ui test", "screenshot", "browser automation", "test local server", "verify ui", "test the ui"]
+    },
+    {
+      "skill": "skill-creator",
+      "keywords": ["create a skill", "make a skill", "new skill", "write a skill", "skill creator", "improve skill", "optimize skill", "skill description", "skill eval", "test a skill"]
+    },
+    {
+      "skill": "systematic-debugging",
+      "keywords": ["systematic debug", "root cause", "trace data flow", "no fixes without", "thrashing", "multiple fixes failed", "3 fixes", "phase 1 investigation"]
+    },
+    {
+      "skill": "frontend-design",
+      "keywords": ["frontend design", "ui design", "landing page", "web component", "react component", "html css", "design system", "web app ui", "visual design", "styled component", "make it look good", "design the ui", "polish the ui"]
+    },
+    {
+      "skill": "using-git-worktrees",
+      "keywords": ["using git worktrees", "isolated workspace", "worktree setup", "before executing plan", "isolation from current"]
+    },
+    {
+      "skill": "code-simplifier",
+      "keywords": ["simplify code", "refine code", "code elegance", "clean up code", "code simplifier", "improve code clarity", "reduce complexity"]
+    },
+    {
+      "skill": "agent-browser",
+      "keywords": ["agent-browser", "browser automation", "open a website", "fill out a form", "click a button", "take a screenshot", "scrape data", "automate browser", "web automation", "navigate page", "browser cli"]
     }
   ]
 }

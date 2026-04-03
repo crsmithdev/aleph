@@ -10,7 +10,7 @@ Hook scripts run automatically on Claude Code events. A broken hook fails silent
 
 ## When to Use
 
-- After adding or modifying hook scripts in `src/skills/hooks/`
+- After adding or modifying hook scripts in `src/core/hooks/`
 - After changing hook registration in settings.json
 - When hooks seem to not fire or produce unexpected output
 
@@ -32,11 +32,11 @@ All `.ts`/`.js`/`.sh` files registered as hooks in settings.json, plus settings.
 
 **Idempotency** — Hook produces the same result if fired twice. No append-only side effects that compound.
 
-**Source location** — Hook source lives in `src/skills/hooks/`, not in `.claude/` or `src/`. Hooks are installed to `~/.claude/` via `bun install.ts`. (Source in `src/`, never `.claude/`.)
+**Source location** — Hook source lives in `src/core/hooks/`, not in `.claude/` or `src/skills/`. Hooks are installed to `~/.claude/` via `bun install.ts`. (Source in `src/`, never `.claude/`.)
 
 **No duplication across layers** — The same hook must not exist in both `.claude/settings.json` and `src/settings.json`. If it does, it fires twice. `.claude/settings.json` may only contain permissions, statusline, and MCP config — never hooks.
 
-**Orphans** — No hook scripts in `src/skills/hooks/` that aren't registered anywhere. No registered paths pointing to missing files. (Remove completely — no orphaned artifacts.)
+**Orphans** — No hook scripts in `src/core/hooks/` that aren't registered anywhere. No registered paths pointing to missing files. (Remove completely — no orphaned artifacts.)
 
 <!-- PROJECT-SPECIFIC CRITERIA
 Add your own checks below:

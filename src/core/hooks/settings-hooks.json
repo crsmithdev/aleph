@@ -10,7 +10,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/memory/hooks/session-start.ts",
+            "command": "bun src/memory/hooks/session-start.ts 2>/dev/null",
             "timeout": 5000
           }
         ]
@@ -21,7 +21,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/memory/hooks/rating-capture.ts",
+            "command": "bun src/memory/hooks/rating-capture.ts 2>/dev/null",
             "timeout": 2000
           }
         ]
@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/skills/hooks/routing-submit-classify.ts",
+            "command": "bun src/core/hooks/routing-submit-classify.ts 2>/dev/null",
             "timeout": 3000
           }
         ]
@@ -41,7 +41,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/skills/hooks/quality-stop-check-e2e.ts",
+            "command": "bun src/core/hooks/quality-stop-check-e2e.ts 2>/dev/null",
             "timeout": 3000
           }
         ]
@@ -50,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/skills/hooks/context-stop-monitor.ts",
+            "command": "bun src/core/hooks/context-stop-monitor.ts 2>/dev/null",
             "timeout": 3000
           }
         ]
@@ -59,7 +59,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/memory/hooks/session-summary.ts",
+            "command": "bun src/memory/hooks/session-summary.ts 2>/dev/null",
             "timeout": 3000
           }
         ]
@@ -68,7 +68,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/memory/hooks/memory-extract.ts",
+            "command": "bun src/memory/hooks/memory-extract.ts 2>/dev/null",
             "timeout": 5000
           }
         ]
@@ -80,7 +80,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/skills/hooks/isolation-pre-block-destructive-sql.ts",
+            "command": "bun src/core/hooks/isolation-pre-block-destructive-sql.ts 2>/dev/null",
             "timeout": 3000
           }
         ]
@@ -90,7 +90,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/skills/hooks/git-pre-require-commit.ts",
+            "command": "bun src/core/hooks/git-pre-require-commit.ts 2>/dev/null",
             "timeout": 5000
           }
         ]
@@ -102,7 +102,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/skills/hooks/quality-post-format.ts",
+            "command": "bun src/core/hooks/quality-post-format.ts 2>/dev/null",
             "timeout": 10000
           }
         ]
@@ -112,7 +112,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/skills/hooks/quality-post-typecheck.ts",
+            "command": "bun src/core/hooks/quality-post-typecheck.ts 2>/dev/null",
             "timeout": 15000
           }
         ]
@@ -123,7 +123,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/skills/hooks/context-precompact-backup.ts",
+            "command": "bun src/core/hooks/context-precompact-backup.ts 2>/dev/null",
             "timeout": 5000
           }
         ]
@@ -134,7 +134,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/skills/hooks/notify-event-toast.ts",
+            "command": "bun src/core/hooks/notify-event-toast.ts 2>/dev/null",
             "timeout": 3000
           }
         ]
