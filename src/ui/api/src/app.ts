@@ -24,12 +24,14 @@ import { resolve } from 'path';
 import { execSync } from 'child_process';
 import { claudePaths, dataPaths, getMemoryDbPath } from '@construct/data';
 import { createLogStream } from './logger.js';
+import { WorkerSupervisor } from './worker-supervisor.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
     db: ReturnType<typeof createDb>['db'];
     sqlite: ReturnType<typeof createDb>['sqlite'];
     eventBus: EventBus;
+    supervisor: WorkerSupervisor;
   }
 }
 
@@ -62,7 +64,7 @@ function liveGitInfo(repoDir: string): Record<string, string> {
   return { revision, short, dirty, branch, commit_count, commits_since_tag, last_commit, last_commit_date };
 }
 
-export async function createApp(opts?: { dbUrl?: string }) {
+export async function createApp(opts?: { dbUrl?: string; workerCount?: number }) {
   const customLogging = opts?.dbUrl !== ':memory:';
   const app = Fastify({
     logger: customLogging ? { stream: createLogStream() } : false,
@@ -85,6 +87,10 @@ export async function createApp(opts?: { dbUrl?: string }) {
 
   const eventBus = new EventBus();
   app.decorate('eventBus', eventBus);
+
+  const workerCount = opts?.workerCount ?? parseInt(process.env.WORKER_COUNT || '3', 10);
+  const supervisor = new WorkerSupervisor(workerCount);
+  app.decorate('supervisor', supervisor);
 
   const historyService = new HistoryService(db, eventBus);
   historyService.start();
@@ -207,6 +213,9 @@ export async function createApp(opts?: { dbUrl?: string }) {
   }
 
   app.addHook('onReady', async () => {
+    // Start research workers (skip in test mode)
+    if (opts?.dbUrl !== ':memory:') supervisor.start();
+
     // Goals domain DDL
     applyDDL(sqlite);
     // Observability DDL
@@ -235,7 +244,8 @@ export async function createApp(opts?: { dbUrl?: string }) {
     `);
   });
 
-  app.addHook('onClose', () => {
+  app.addHook('onClose', async () => {
+    await supervisor.stop();
     sqlite.close();
   });
 

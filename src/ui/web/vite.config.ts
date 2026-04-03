@@ -11,7 +11,7 @@ export default defineConfig({
   server: {
     port: parseInt(process.env.VITE_PORT || '5173', 10),
     proxy: {
-      '/api': { target: `http://localhost:${process.env.API_PORT || '3001'}`, changeOrigin: true },
+      '/api': { target: `http://localhost:${process.env.API_PORT || '3000'}`, changeOrigin: true },
     },
   },
 });

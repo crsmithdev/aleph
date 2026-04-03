@@ -71,10 +71,10 @@ async function setup() {
   );
   db.close();
 
-  // Start API on port 3001 (matching vite proxy config)
+  // Start API on port 3000 (matching vite proxy config)
   server = await createApp({ dbUrl: dbPath });
-  await server.listen({ port: 3001, host: '127.0.0.1' });
-  console.log('[e2e] API server on port 3001');
+  await server.listen({ port: 3000, host: '127.0.0.1' });
+  console.log('[e2e] API server on port 3000');
 
   // Start Vite dev server
   viteProc = spawn('npx', ['vite', '--port', '5199', '--strictPort'], {

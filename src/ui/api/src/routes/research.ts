@@ -301,6 +301,9 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
+  // === Worker supervisor ===
+  app.get('/workers', async () => app.supervisor.status());
+
   // === Global run/stop ===
   app.post('/run-all', async () => {
     const allSessions = listSessions(app.sqlite, 'active');

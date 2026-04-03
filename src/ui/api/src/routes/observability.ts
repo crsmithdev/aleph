@@ -142,11 +142,6 @@ function readSessionGateInfo(): Map<string, SessionGateInfo> {
         const info = map.get(sid)!;
         if (entry.hook === 'inline-override') {
           info.inlineOverride = true;
-        } else if (entry.hook === 'dispatch-pre-require-subagent' && entry.event === 'PreToolUse') {
-          info.dispatchBlocks++;
-        } else if (entry.hook === 'dispatch-pre-require-subagent:inline-override') {
-          info.inlineOverride = true;
-          info.dispatchAllows++;
         }
       } catch {}
     }
@@ -289,31 +284,13 @@ type HookMeta = {
 };
 
 const HOOK_METADATA: Record<string, HookMeta> = {
-  'dispatch-pre-require-subagent': {
-    blocking: true,
-    gate: 'dispatch',
-    description: 'Blocks Edit/Write in main session unless inline override or subagent',
-  },
-  'dispatch-stop-remind': {
-    blocking: false,
-    gate: 'dispatch',
-    description: 'Reminds to dispatch tasks to background agents',
-  },
   'isolation-pre-block-destructive-sql': {
     blocking: true,
     description: 'Blocks destructive SQL (DROP, TRUNCATE, DELETE without WHERE)',
   },
   'quality-stop-check-e2e': {
     blocking: false,
-    gate: 'e2e-verification',
-    markerFile: 'require-e2e',
-    description: 'Checks for e2e verification evidence; writes marker when missing',
-  },
-  'quality-pre-require-e2e': {
-    blocking: true,
-    gate: 'e2e-verification',
-    markerFile: 'require-e2e',
-    description: 'Blocks Edit/Write when e2e verification marker is present',
+    description: 'Advisory check for e2e verification evidence after edits',
   },
   'git-pre-require-commit': {
     blocking: true,

@@ -156,3 +156,28 @@ dialog::backdrop {
   background: rgb(0 0 0 / 0.5);
   backdrop-filter: blur(4px);
 }
+
+/* Markdown content rendering */
+.md-content {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+.md-content p { margin-bottom: 0.5rem; }
+.md-content p:last-child { margin-bottom: 0; }
+.md-content h1 { font-size: 0.875rem; font-weight: 600; margin-bottom: 0.25rem; }
+.md-content h2 { font-size: 0.75rem; font-weight: 600; margin-bottom: 0.25rem; }
+.md-content h3 { font-size: 0.75rem; font-weight: 600; margin-bottom: 0.25rem; }
+.md-content ul { list-style-type: disc; padding-left: 1rem; margin-bottom: 0.5rem; }
+.md-content ol { list-style-type: decimal; padding-left: 1rem; margin-bottom: 0.5rem; }
+.md-content li { margin-bottom: 0.125rem; }
+.md-content code { background: var(--bg-tertiary); padding: 0 0.25rem; border-radius: 0.25rem; font-family: var(--font-mono); }
+.md-content pre { background: var(--bg-tertiary); padding: 0.5rem; border-radius: 0.25rem; overflow-x: auto; margin-bottom: 0.5rem; }
+.md-content pre code { background: none; padding: 0; }
+.md-content blockquote { border-left: 2px solid var(--border-primary); padding-left: 0.5rem; color: var(--text-muted); }
+.md-content a { color: var(--c-accent); text-decoration: underline; }
+.md-content strong { font-weight: 600; }
+.md-content em { font-style: italic; }
+.md-content table { border-collapse: collapse; margin-bottom: 0.5rem; }
+.md-content th, .md-content td { border: 1px solid var(--border-primary); padding: 0.25rem 0.5rem; }
+.md-content hr { border: none; border-top: 1px solid var(--border-primary); margin: 0.5rem 0; }
+.md-content.md-sm h1, .md-content.md-sm h2, .md-content.md-sm h3 { font-size: 0.6875rem; }

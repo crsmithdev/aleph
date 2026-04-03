@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { clsx } from 'clsx';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 // @ts-ignore
 import dagre from 'dagre';
 import { ReactFlow, Background, Controls, MiniMap, Handle, Position, BackgroundVariant } from '@xyflow/react';
@@ -43,6 +45,15 @@ function ConfBar({ label, value }: { label: string; value: number }) {
   );
 }
 
+function Md({ children, className }: { children: string; className?: string }) {
+  if (!children || typeof children !== 'string') return null;
+  return (
+    <div className={['md-content', className].filter(Boolean).join(' ')}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{children}</ReactMarkdown>
+    </div>
+  );
+}
+
 function FindingRow({ finding, index }: { finding: ResearchFinding; index: number }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -63,21 +74,29 @@ function FindingRow({ finding, index }: { finding: ResearchFinding; index: numbe
             ))}
           </div>
           {expanded && (
-            <div className="mt-3 space-y-2">
-              <p className="text-xs text-text-secondary whitespace-pre-wrap">{finding.content}</p>
+            <div className="mt-3 space-y-3">
+              <Md>{finding.content}</Md>
               {finding.source_texts && finding.source_texts.length > 0 && (
-                <div className="mt-2 space-y-1.5">
-                  <p className="text-[10px] text-text-muted uppercase tracking-wide">Source text</p>
+                <div className="space-y-2">
+                  <p className="text-[10px] text-text-muted uppercase tracking-wide">Sources</p>
                   {finding.source_texts.map((text, i) => (
-                    <p key={i} className="text-xs text-text-secondary whitespace-pre-wrap bg-bg-tertiary/30 rounded px-2 py-1.5">{text.slice(0, 1500)}{text.length > 1500 ? '…' : ''}</p>
+                    <div key={i} className="bg-bg-tertiary/30 rounded px-2 py-1.5">
+                      {finding.source_urls[i] && (
+                        <a href={finding.source_urls[i]} target="_blank" rel="noopener noreferrer"
+                          className="block text-[10px] text-accent hover:underline truncate mb-1">
+                          {finding.source_urls[i]}
+                        </a>
+                      )}
+                      <Md className="md-sm">{text.length > 2000 ? text.slice(0, 2000) + '\n\n…' : text}</Md>
+                    </div>
                   ))}
                 </div>
               )}
-              {finding.source_urls.length > 0 && (
+              {finding.source_urls.length > finding.source_texts.length && (
                 <div className="space-y-0.5">
-                  {finding.source_urls.map((url, i) => (
+                  {finding.source_urls.slice(finding.source_texts.length).map((url, i) => (
                     <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                      className="block text-xs text-accent hover:underline truncate">[{i + 1}] {url}</a>
+                      className="block text-xs text-accent hover:underline truncate">[{i + 1 + finding.source_texts.length}] {url}</a>
                   ))}
                 </div>
               )}
@@ -938,6 +957,7 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
   const [minSearches, setMinSearches] = useState<number>((cfg.min_searches_per_thread as number) ?? 2);
   const [gapEnabled, setGapEnabled] = useState<boolean>((gapAnalysis.enabled as boolean) ?? true);
   const [maxGapSearches, setMaxGapSearches] = useState<number>((gapAnalysis.max_gap_searches as number) ?? 2);
+  const [fetchSourceText, setFetchSourceText] = useState<boolean>((cfg.fetch_source_text as boolean) ?? false);
   const [openrouterKey, setOpenrouterKey] = useState<string>((providers.openrouter_api_key as string) ?? '');
   const [openrouterModels, setOpenrouterModels] = useState<string>(
     ((providers.openrouter_models as string[]) ?? []).join(', ')
@@ -953,6 +973,7 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
       model,
       max_thread_depth: maxDepth,
       min_searches_per_thread: minSearches,
+      fetch_source_text: fetchSourceText,
       budget_daily_usd: budgetDaily,
       gap_analysis: { enabled: gapEnabled, max_gap_searches: maxGapSearches },
       providers: {
@@ -1040,6 +1061,17 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
             <input type="number" min={1} max={10} value={minSearches} onChange={e => setMinSearches(Number(e.target.value))} className={inputCls} />
           </div>
         </div>
+      </div>
+
+      {/* Source text */}
+      <div>
+        <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Source Text</p>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={fetchSourceText} onChange={e => setFetchSourceText(e.target.checked)}
+            className="w-4 h-4 accent-accent" />
+          <span className="text-sm text-text-primary">Fetch source page text</span>
+          <span className="text-xs text-text-muted">(slower, higher quality — uses Jina if JINA_API_KEY set, else Readability)</span>
+        </label>
       </div>
 
       {/* Gap analysis */}
