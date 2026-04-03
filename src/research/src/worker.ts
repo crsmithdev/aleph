@@ -1,8 +1,7 @@
 #!/usr/bin/env bun
 import { createDb } from '@construct/data';
 import { applyResearchDDL } from './ddl.js';
-import { ResearchEngine, AnthropicProvider, type LLMProvider } from './engine.js';
-import { OllamaProvider } from './providers/ollama.js';
+import { ResearchEngine, type LLMProvider } from './engine.js';
 import { OpenRouterProvider } from './providers/openrouter.js';
 import { Heartbeat, StepRateLimiter, isInActiveWindow, msUntilNextWindow } from './scheduler.js';
 import * as jobs from './services/jobs.js';
@@ -23,8 +22,8 @@ process.on('SIGINT', () => {
   shutdownRequested = true;
 });
 
-// Load .env from .dev/ if present (dev mode)
-const envPath = new URL('../../../.dev/.env', import.meta.url).pathname;
+// Load .env from project root if present
+const envPath = new URL('../../../.env', import.meta.url).pathname;
 try {
   const envContent = await Bun.file(envPath).text();
   for (const line of envContent.split('\n')) {
@@ -40,39 +39,21 @@ try {
   // No .env file — fine, env vars should be set externally
 }
 
-const apiKey = process.env.ANTHROPIC_API_KEY;
-const ollamaModel = process.env.OLLAMA_MODEL;
-const ollamaBaseUrl = process.env.OLLAMA_BASE_URL;
-
-if (!apiKey && !ollamaModel && !process.env.OPENROUTER_API_KEY) {
-  console.error('[worker] Set ANTHROPIC_API_KEY, OLLAMA_MODEL, or OPENROUTER_API_KEY');
+if (!process.env.OPENROUTER_API_KEY) {
+  console.error('[worker] Set OPENROUTER_API_KEY');
   process.exit(1);
 }
 
 const openrouterApiKey = process.env.OPENROUTER_API_KEY;
 
-function buildProvider(session: { config: { model?: string; providers?: { primary?: string; openrouter_api_key?: string; openrouter_models?: string[] } } }): LLMProvider {
-  const primary = session.config.providers?.primary;
+function buildProvider(session: { config: { model?: string; providers?: { openrouter_api_key?: string; openrouter_models?: string[] } } }): LLMProvider {
   const model = session.config.model ?? 'deepseek/deepseek-chat';
-  if (primary === 'openrouter') {
-    const key = session.config.providers?.openrouter_api_key ?? openrouterApiKey;
-    if (!key) throw new Error('OpenRouter API key not set (pass via session config or OPENROUTER_API_KEY env)');
-    const models = session.config.providers?.openrouter_models?.length
-      ? session.config.providers.openrouter_models
-      : [model];
-    return new OpenRouterProvider({ apiKey: key, models });
-  }
-  if (primary === 'ollama' || (!apiKey && ollamaModel)) {
-    return new OllamaProvider({ model: model || ollamaModel || 'qwen2.5:0.5b', baseUrl: ollamaBaseUrl });
-  }
-  if (!primary && openrouterApiKey) {
-    const models = session.config.providers?.openrouter_models?.length
-      ? session.config.providers.openrouter_models
-      : [model];
-    return new OpenRouterProvider({ apiKey: openrouterApiKey, models });
-  }
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set');
-  return new AnthropicProvider(apiKey);
+  const key = session.config.providers?.openrouter_api_key ?? openrouterApiKey;
+  if (!key) throw new Error('OpenRouter API key not set (pass via session config or OPENROUTER_API_KEY env)');
+  const models = session.config.providers?.openrouter_models?.length
+    ? session.config.providers.openrouter_models
+    : [model];
+  return new OpenRouterProvider({ apiKey: key, models });
 }
 
 const { sqlite } = createDb();
