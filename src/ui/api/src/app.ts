@@ -1,3 +1,19 @@
+// Load .env from ~/construct/.env (project root)
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+try {
+  const envPath = resolve(process.env.HOME ?? '', 'construct', '.env');
+  for (const line of readFileSync(envPath, 'utf-8').split('\n')) {
+    const t = line.trim();
+    if (!t || t.startsWith('#')) continue;
+    const eq = t.indexOf('=');
+    if (eq < 0) continue;
+    const key = t.slice(0, eq).trim();
+    const val = t.slice(eq + 1).trim();
+    if (!process.env[key]) process.env[key] = val;
+  }
+} catch { /* no .env — keys must be set externally */ }
+
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import swagger from '@fastify/swagger';
@@ -65,7 +81,7 @@ function liveGitInfo(repoDir: string): Record<string, string> {
   return { revision, short, dirty, branch, commit_count, commits_since_tag, last_commit, last_commit_date };
 }
 
-export async function createApp(opts?: { dbUrl?: string; workerCount?: number }) {
+export async function createApp(opts?: { dbUrl?: string; workerCount?: number; skipStatic?: boolean }) {
   const customLogging = opts?.dbUrl !== ':memory:';
   const app = Fastify({
     logger: customLogging ? { stream: createLogStream() } : false,
@@ -202,15 +218,17 @@ export async function createApp(opts?: { dbUrl?: string; workerCount?: number })
     });
   }, { prefix: '/api' });
 
-  const webDist = resolve(import.meta.dirname || '.', '../../web/dist');
-  if (existsSync(webDist)) {
-    await app.register(fastifyStatic, { root: webDist, prefix: '/' });
-    app.setNotFoundHandler((req, reply) => {
-      if (!req.url.startsWith('/api')) {
-        return reply.sendFile('index.html');
-      }
-      reply.status(404).send({ error: 'Not found' });
-    });
+  if (!opts?.skipStatic) {
+    const webDist = resolve(import.meta.dirname || '.', '../../web/dist');
+    if (existsSync(webDist)) {
+      await app.register(fastifyStatic, { root: webDist, prefix: '/' });
+      app.setNotFoundHandler((req, reply) => {
+        if (!req.url.startsWith('/api')) {
+          return reply.sendFile('index.html');
+        }
+        reply.status(404).send({ error: 'Not found' });
+      });
+    }
   }
 
   app.addHook('onReady', async () => {
