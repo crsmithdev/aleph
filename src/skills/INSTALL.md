@@ -8,7 +8,7 @@ All paths relative to `~/.claude/`. Run every check. Do not skip or summarize.
 - `construct/core/hooks/routing-submit-classify.ts` exists
 - `construct/core/hooks/quality-post-format.ts` exists
 - `construct/core/hooks/notify-event-toast.ts` exists
-- SKILL.md files exist: `build`, `debugging`, `verification`, `finishing-branch`, `git-worktrees`, `code-review`, `docs-review`, `commands-review`, `config-review`, `hooks-review`, `skills-review`, `research`, `ralph-loop`
+- SKILL.md files exist: `finishing-branch`, `git-worktrees`, `research`, `ralph-loop`, `systematic-debugging`, `webapp-testing`, `skill-creator`, `frontend-design`, `using-git-worktrees`, `verification-before-completion`, `finishing-a-development-branch`, `code-simplifier`, `agent-browser`
 
 ## Registration
 

@@ -18,15 +18,10 @@ function skillTest(prompt: string): { skills: string[]; depth: string } {
   return { skills, depth };
 }
 
-check(r, "skill: 'debug the crash' → debugging", skillTest("debug the crash in auth module").skills.includes("debugging"));
 check(r, "skill: 'investigate redis' → research", skillTest("investigate how redis handles eviction policies").skills.includes("research"));
-check(r, "skill: 'verify the deploy' → verification", skillTest("verify that the deployment succeeded").skills.includes("verification"));
-check(r, "skill: 'doc sync' → docs-review", skillTest("run doc sync on the memory module").skills.includes("docs-review"));
 
 check(r, "skill: 'add dark mode' → no skill", skillTest("add dark mode to the settings page").skills.length === 0);
 check(r, "skill: 'fix the typo' → no skill", skillTest("fix the typo on line 42").skills.length === 0);
-
-check(r, "skill: 'I see an error' → debugging", skillTest("I see an error when running the tests").skills.includes("debugging"));
 
 runAndCheck(te, r, "core/hooks/routing-submit-classify.ts", "smoke", "{}");
 runAndCheck(te, r, "core/hooks/routing-submit-classify.ts", "short skip", '{"prompt":"do it"}');
@@ -57,12 +52,6 @@ check(r, "depth: 'read the file' → QUICK", skillTest("read the API response ha
 // ── Skill extensions ────────────────────────────────────────────────────────
 
 console.log("\n--- skill extensions ---");
-
-const crOut = runHook(te, "core/hooks/routing-submit-classify.ts", JSON.stringify({ prompt: "run a code review on the hooks" })).stdout;
-check(r, "extension: code-review includes base match", crOut.includes("Matched skills: code-review"));
-
-const dbgOut = runHook(te, "core/hooks/routing-submit-classify.ts", JSON.stringify({ prompt: "debug the crash in the auth module" })).stdout;
-check(r, "extension: debugging includes base match", dbgOut.includes("Matched skills: debugging"));
 
 const resOut = runHook(te, "core/hooks/routing-submit-classify.ts", JSON.stringify({ prompt: "investigate how redis handles eviction policies" })).stdout;
 check(r, "extension: research has no project extension", !resOut.includes("Project skill extensions"));

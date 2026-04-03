@@ -1,52 +1,16 @@
 {
   "rules": [
     {
-      "skill": "build",
-      "keywords": ["build", "implement", "add feature", "create feature", "new feature", "refactor", "redesign", "overhaul"]
-    },
-    {
       "skill": "research",
       "keywords": ["research", "investigate", "look into", "find out", "compare", "survey", "analyze"]
-    },
-    {
-      "skill": "verification",
-      "keywords": ["verify", "verify that", "verify it", "confirm passing", "validate that", "prove it works", "verification"]
     },
     {
       "skill": "verification-before-completion",
       "keywords": ["complete", "done", "finished", "it works", "all tests pass", "tests pass", "linter clean", "build succeeds", "ready to commit", "ready to merge", "ship it", "looks good"]
     },
     {
-      "skill": "debugging",
-      "keywords": ["debug", "bug", "broken", "failing", "error", "crash", "exception", "traceback", "root cause", "bisect"]
-    },
-    {
-      "skill": "docs-review",
-      "keywords": ["doc sync", "docs drift", "documentation mismatch", "docs match", "check docs", "review docs", "docs review", "verify docs", "documentation review"]
-    },
-    {
       "skill": "ralph-loop",
       "keywords": ["ralph", "ralph loop", "autonomous loop", "keep iterating", "iterate until"]
-    },
-    {
-      "skill": "code-review",
-      "keywords": ["dead code", "unused", "clean up", "cleanup", "simplify", "code quality", "code review", "lint"]
-    },
-    {
-      "skill": "hooks-review",
-      "keywords": ["review hooks", "audit hooks", "hook check", "hook review"]
-    },
-    {
-      "skill": "commands-review",
-      "keywords": ["review commands", "audit commands", "command check", "slash command review"]
-    },
-    {
-      "skill": "skills-review",
-      "keywords": ["review skills", "audit skills", "skill check", "skill quality"]
-    },
-    {
-      "skill": "config-review",
-      "keywords": ["review config", "audit config", "settings review", "config check", "settings audit"]
     },
     {
       "skill": "finishing-a-development-branch",
