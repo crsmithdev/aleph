@@ -3,6 +3,7 @@
 Behavior-oriented spec for functional testing and drift detection. Every claim here is testable.
 
 For the telemetry system architecture, see [TELEMETRY.md](TELEMETRY.md).
+For the autonomous research system, see [SPEC-RESEARCH.md](SPEC-RESEARCH.md).
 
 ## Session Lifecycle
 
@@ -39,7 +40,7 @@ Last session (<filename>):
 - Output when FULL (architectural keywords): `[Construct] Depth: FULL — architectural keywords. Use design-first pipeline.`
 - Output when FULL (>=40 words): `[Construct] Depth: FULL — complex request. Consider design-first pipeline.`
 
-**Verification gate injection** — same hook injects e2e requirements for non-question prompts >=5 words: `[Construct] Verification gate active — after making changes, you MUST verify end-to-end: 1. Start the dev server or run the actual system 2. Interact with it (Playwright, Chrome DevTools, or run the CLI) 3. Produce an artifact: screenshot or captured output saved to a file`. Unit tests alone are not sufficient. The Stop hook checks for e2e evidence.
+**Verification gate injection** — same hook injects e2e requirements for non-question prompts >=5 words: `[Construct] Verification gate active — after making changes, you MUST verify end-to-end: 1. Run the actual system 2. Interact with it (Playwright, Chrome DevTools, or run the CLI) 3. Produce an artifact: screenshot or captured output saved to a file`. Unit tests alone are not sufficient. The Stop hook checks for e2e evidence.
 
 **Skill matching** — same hook checks prompt against `skill-rules.json` keywords. On match: `[Construct] Matched skills: <names>. Activate via Skill() before proceeding.` No match = silent. Project-local skill extensions (`.claude/skills/<skill>.md`) are appended to the base skill when matched.
 
@@ -66,23 +67,20 @@ Ratings 1-3 trigger a console message: `[Construct] Low rating (N) — store wha
 
 ### Ending a session
 
-On `Stop`, five hooks fire:
+On `Stop`, four hooks fire:
 
-**1. Verification gate** (`quality-stop-check-e2e.ts`) — checks whether the current turn included e2e evidence and an artifact when files were edited:
+**1. E2e advisory** (`quality-stop-check-e2e.ts`) — checks whether the current turn included e2e evidence and an artifact when files were edited:
 - If no edits: skips silently.
-- If edits present: checks for e2e signals (devserver startup, Playwright/Cypress, browser MCP tools) and artifacts (screenshots, saved output).
-- If both e2e evidence and artifact are found: passes silently.
-- Otherwise: writes a `require-e2e` marker file and emits a one-shot reminder listing edited files and what was missing. The next Edit or Write tool call is hard-blocked (exit 2) by `quality-pre-require-e2e.ts` until e2e evidence is provided.
+- If edits present: checks for e2e signals (CLI execution, Playwright/Cypress, browser MCP tools) and artifacts (screenshots, saved output).
+- If missing: emits an advisory reminder listing edited files and what was missing.
 
-**2. Dispatch reminder** (`dispatch-stop-remind.ts`) — if the session ran inline (gate bypassed), emits a reminder to use dispatched mode for future tasks.
+**2. Context monitor** (`context-stop-monitor.ts`) — reads token usage from the last assistant message. Warns at 80% of context limit, critical alert at 90%.
 
-**3. Context monitor** (`context-stop-monitor.ts`) — reads token usage from the last assistant message. Warns at 80% of context limit, critical alert at 90%.
-
-**4. Session summary** (`session-summary.ts`) — writes a summary file if the session had >=4 messages:
+**3. Session summary** (`session-summary.ts`) — writes a summary file if the session had >=4 messages:
 - Output: `data/sessions/YYYY-MM-DD-HHMMSS.md`
 - Contains: intent, outcome, milestones, tools used, files edited, message counts, assistant notes.
 
-**5. Memory extraction** (`memory-extract.ts`) — auto-extracts high-value memories and stores them in semantic memory:
+**4. Memory extraction** (`memory-extract.ts`) — auto-extracts high-value memories and stores them in semantic memory:
 - Skips if session is not substantive (<6 messages or no edits).
 - Skips if Claude already called `memory_store` voluntarily.
 - Extracts: session summary, user corrections, error resolutions.
@@ -144,7 +142,6 @@ Skills are domain-specific playbooks activated by keyword matching. Each lives i
 |---------|----------|
 | `/install` | Runs `bun install.ts`, then auto-runs post-install verification |
 | `/audit` | Full project audit: code, refs, instructions, docs, spec |
-| `/devserver` | Kill dev ports, start UI dev server in background |
 | `/link` | Symlink `~/.claude/construct` to repo `src/` for live development |
 | `/todo` | File items from review output into `docs/TODO.md` |
 
@@ -234,6 +231,27 @@ Stats from latest snapshot: total memories, health score, stale count, store/sea
 
 Per-database: file size, WAL size (warning if >10MB), table count, total rows. Table-level row counts.
 
+## UI — Research Pages
+
+Research pages provide a UI for the autonomous research system. For the full data model, engine behavior, and API, see [SPEC-RESEARCH.md](SPEC-RESEARCH.md).
+
+### Sessions (`/research`)
+
+List of all research sessions. Shows title, seed query, status badge, thread/finding counts, total cost, last updated. Status filter tabs (all, active, paused, completed). "New Session" form: seed query (required), title (optional). Each row links to the detail page.
+
+### Session Detail (`/research/:id`)
+
+Four-tab interface:
+
+- **Document** — ranked findings with source URLs, confidence/novelty/actionability bars, thumbs rating. Sortable by recency or quality score.
+- **Timeline** — live SSE-driven event feed of steps, thread transitions, job events.
+- **Graph** — ReactFlow DAG of thread hierarchy, nodes colour-coded by status (`queued`=grey, `active`=blue, `exhausted`=green). Click a node to see its findings.
+- **Config** — inline-editable session config: model, provider, budget, schedule, perturbation weights. Changes are PATCHed to the session on save.
+
+Controls: Run (5-iteration burst), Run All (start background jobs for all active sessions), Stop All, session status toggle, Inject Thread modal.
+
+Live cost summary pulled from `/api/research/sessions/:id/costs`.
+
 ## UI — Settings (`/settings`)
 
 ### Build
@@ -310,8 +328,8 @@ All hooks in `settings.json`:
 |-------|-----------------|----------|
 | SessionStart | memory/hooks/session-start.ts | 5000ms |
 | UserPromptSubmit | memory/hooks/rating-capture.ts, skills/hooks/routing-submit-classify.ts | 2000ms, 3000ms |
-| Stop | skills/hooks/quality-stop-check-e2e.ts, skills/hooks/dispatch-stop-remind.ts, skills/hooks/context-stop-monitor.ts, memory/hooks/session-summary.ts, memory/hooks/memory-extract.ts | 3000ms, 2000ms, 3000ms, 3000ms, 5000ms |
-| PreToolUse | skills/hooks/dispatch-pre-require-subagent.ts, skills/hooks/git-pre-require-commit.ts, skills/hooks/quality-pre-require-e2e.ts (matcher: `Edit\|Write`), skills/hooks/isolation-pre-block-destructive-sql.ts (matcher: `mcp__.*(?:execute_sql\|apply_migration\|run_query)`) | 3000ms, 3000ms, 3000ms, 3000ms |
+| Stop | skills/hooks/quality-stop-check-e2e.ts, skills/hooks/context-stop-monitor.ts, memory/hooks/session-summary.ts, memory/hooks/memory-extract.ts | 3000ms, 3000ms, 3000ms, 5000ms |
+| PreToolUse | skills/hooks/isolation-pre-block-destructive-sql.ts (matcher: `mcp__.*(?:execute_sql\|apply_migration\|run_query)`), skills/hooks/git-pre-require-commit.ts (matcher: `Edit\|Write`) | 3000ms, 5000ms |
 | PostToolUse | skills/hooks/quality-post-format.ts (matcher: `Edit\|Write`), skills/hooks/quality-post-typecheck.ts (matcher: `Edit\|Write`) | 10000ms, 15000ms |
 | PreCompact | skills/hooks/context-precompact-backup.ts | 5000ms |
 | Notification | skills/hooks/notify-event-toast.ts | 3000ms |

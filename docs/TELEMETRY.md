@@ -3,6 +3,7 @@
 Technical specification for the telemetry and observability system. Covers data ingestion, aggregation, storage, and the API surface.
 
 See [SPEC.md](SPEC.md) for the user-facing observability UI pages.
+See [SPEC-RESEARCH.md](SPEC-RESEARCH.md) for the autonomous research system.
 
 ## Architecture Overview
 

@@ -4,15 +4,15 @@ A minimal, ergonomic Claude Code-native personal AI infrastructure, assistant, a
 
 ## Design Principles
 
-- Claude Code is the runtime. No daemons, no Electron, no external servers.
+- Claude Code is the runtime. No Electron, no external process managers.
 - Favor code over AI instructions wherever behavior can be enforced programmatically.
 - Every component must earn its place. If native Claude Code already does it, don't replicate it.
 - Minimal viable first. Expand when friction is felt, not in anticipation of it.
-- No external API keys required. All hooks use context injection.
+- No external API keys required for core functionality. The research module optionally uses Anthropic, OpenRouter, or Jina keys.
 
 ## Modules
 
-Eight modules, installed in order. Each is independent after its dependencies are met.
+Nine modules, installed in order. Each is independent after its dependencies are met.
 
 | Module | Depends on | What it provides |
 |------|-----------|-----------------|
@@ -23,7 +23,8 @@ Eight modules, installed in order. Each is independent after its dependencies ar
 | `construct-telemetry` | data | JSONL parser, aggregator, pricing, CLI status |
 | `construct-eval` | — | Agent SDK eval harness, test scenarios |
 | `construct-goals` | data | Goal/TODO domain logic, MCP server, /goal and /todo commands |
-| `construct-ui` | data, goals, telemetry | Web UI (Fastify API + React SPA) |
+| `construct-research` | data | Autonomous multi-threaded research engine, worker supervisor, monitors |
+| `construct-ui` | data, goals, telemetry, research | Web UI (Fastify API + React SPA) |
 
 All modules are deployed together. Core is always required; the rest are inert if unused.
 
@@ -40,17 +41,18 @@ src/                                      # all Construct code (symlinked or syn
 │   └── identity/                        # optional semantic identity layer
 │       ├── SOUL.md, IDENTITY.md, STYLE.md, USER.md
 ├── commands/                            # slash commands (copied to ~/.claude/commands/)
-│   ├── finish.md, gist.md, goal.md, inline.md, todo.md
+│   ├── finish.md, gist.md, goal.md, todo.md
 ├── memory/
 │   └── hooks/                           # session-start, rating-capture, session-summary, memory-extract
 ├── skills/
 │   ├── skill-rules.json                 # keyword routing config
-│   ├── hooks/                           # 12 hook scripts (quality, dispatch, isolation, context, etc.)
+│   ├── hooks/                           # 9 hook scripts (quality, git, isolation, context, routing, notify)
 │   └── */SKILL.md                       # 13 skill playbooks
 ├── data/                                # shared SQLite persistence, path resolution
 ├── eval/                                # Agent SDK eval harness + scenarios
 ├── telemetry/                           # JSONL parser, aggregator, pricing
 ├── goals/                               # Goal/TODO domain logic + MCP server
+├── research/                            # autonomous research engine, worker supervisor, monitors
 └── ui/                                  # Fastify API + React SPA
 
 .claude/                                  # project-local config (never installed)
@@ -64,15 +66,12 @@ src/                                      # all Construct code (symlinked or syn
 |-------|------|------|---------|
 | SessionStart | session-start.ts | memory | Surface last session summary, background work briefing |
 | UserPromptSubmit | rating-capture.ts | memory | Capture explicit N/10 ratings |
-| UserPromptSubmit | routing-submit-classify.ts | skills | Depth classification + verification gate + skill matching |
-| Stop | quality-stop-check-e2e.ts | skills | E2e verification gate |
-| Stop | dispatch-stop-remind.ts | skills | Dispatch mode reminder |
+| UserPromptSubmit | routing-submit-classify.ts | skills | Depth classification + skill matching |
+| Stop | quality-stop-check-e2e.ts | skills | E2e advisory check |
 | Stop | context-stop-monitor.ts | skills | Context window usage warning (80%/90%) |
 | Stop | session-summary.ts | memory | Structured session summary |
 | Stop | memory-extract.ts | memory | Auto-extract memories to semantic store |
-| PreToolUse | dispatch-pre-require-subagent.ts | skills | Block Edit/Write in main session (dispatch gate) |
 | PreToolUse | git-pre-require-commit.ts | skills | Require commit before more edits |
-| PreToolUse | quality-pre-require-e2e.ts | skills | Deferred hard-block after verification gate |
 | PreToolUse | isolation-pre-block-destructive-sql.ts | skills | Block destructive SQL operations |
 | PostToolUse | quality-post-format.ts | skills | Per-file lint/format on Edit/Write |
 | PostToolUse | quality-post-typecheck.ts | skills | TypeScript type-check on Edit/Write |
@@ -91,7 +90,6 @@ The statusline (`ccstatusline`) is configured via the `statusLine` key in settin
 | `/goal` | goals | Manage goals: list, create, update, delete, show, archive |
 | `/todo` | goals | Manage todos: list, add, recurring |
 | `/finish` | goals | Mark a todo or goal as done; undo completion; complete recurring todos |
-| `/inline` | skills | Override dispatch gate for the current session |
 
 ### Project-level (`.claude/commands/` — Construct repo only)
 
@@ -99,7 +97,6 @@ The statusline (`ccstatusline`) is configured via the `statusLine` key in settin
 |---------|---------|
 | `/install` | Deploy repo to `~/.claude` with post-install verification |
 | `/audit` | Full project audit: code, docs |
-| `/devserver` | Start UI dev server on ports 5174/3002 |
 
 ## Identity Architecture
 
@@ -130,4 +127,4 @@ Domain-specific playbooks in `src/skills/<name>/SKILL.md`. The `routing-submit-c
 
 ## CLAUDE.md Structure
 
-Core behavioral rules are installed by construct-core; each module appends its own `##` section. See [SPEC.md](SPEC.md) § Modules for the full section-by-section breakdown.
+Core behavioral rules are installed by construct-core; each module appends its own `##` section.

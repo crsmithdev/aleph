@@ -8,8 +8,8 @@ Claude Code itself runs on the host (it's a CLI requiring interactive TTY and ho
 
 | Service | Current | Containerized |
 |---|---|---|
-| API (Fastify/Bun) | host process, port 3002 | `api` container |
-| UI (Vite dev / Nginx prod) | host process, port 5174 | `ui` container |
+| API (Fastify/Bun) | host process, port 3000 | `api` container |
+| UI (Vite dev / Nginx prod) | host process, port 5173 | `ui` container |
 | Ollama | already Docker, port 11435 | `ollama` container (unchanged) |
 | MCP server (`goal-tracker`) | stdio subprocess of Claude Code | host-side, unchanged |
 | SQLite databases | `~/.construct/*.db` | named volume |
@@ -40,14 +40,14 @@ construct/
 ### `api`
 
 - **Base image**: `oven/bun:1-alpine`
-- **Port**: 3002
+- **Port**: 3000
 - **Workdir**: `/app`
 - **Mount**: `construct-data:/data` → maps to `CONSTRUCT_DATA_ROOT=/data`
 - **Source mount** (dev only): `./src:/app/src:ro` for live reload via `bun --watch`
 - **Env**:
   - `DATABASE_URL=/data/construct.db`
   - `CONSTRUCT_DATA_ROOT=/data`
-  - `PORT=3002`
+  - `PORT=3000`
   - `ANTHROPIC_API_KEY` (from host env or `.env`)
   - `OLLAMA_BASE_URL=http://ollama:11435`
   - `OLLAMA_MODEL`
@@ -68,21 +68,21 @@ CMD ["bun", "run", "server.ts"]
 
 **Dev** (`Dockerfile.dev`):
 - **Base image**: `node:22-alpine`
-- **Port**: 5174
+- **Port**: 5173
 - **Source mount**: `./src/ui:/app:delegated`
 - **Command**: `npm run dev -- --host 0.0.0.0`
-- **Env**: `VITE_API_URL=http://api:3002` (or `http://localhost:3002` for browser access)
+- **Env**: `VITE_API_URL=http://api:3000` (or `http://localhost:3000` for browser access)
 
 **Prod** (`Dockerfile.prod`):
 - Multi-stage: `node:22-alpine` build → `nginx:alpine` serve
 - `npm run build` at image build time
-- Nginx serves `/dist` at port 80, proxies `/api` to `api:3002`
+- Nginx serves `/dist` at port 80, proxies `/api` to `api:3000`
 
-**The Vite proxy problem**: In dev, Vite proxies `/api` to `localhost:3002`. In Docker the browser talks to `localhost:5174` but the API is at `api:3002` (Docker internal hostname). Two options:
+**The Vite proxy problem**: In dev, Vite proxies `/api` to `localhost:3000`. In Docker the browser talks to `localhost:5173` but the API is at `api:3000` (Docker internal hostname). Two options:
 1. Use host networking for dev (`network_mode: host`) — simplest, matches current behavior
-2. Expose API on `localhost:3002` via port mapping and keep Vite proxy config unchanged — also simple, preferred
+2. Expose API on `localhost:3000` via port mapping and keep Vite proxy config unchanged — also simple, preferred
 
-Option 2 is cleaner. Map `api` container port 3002 to host port 3002. Vite proxy config (`vite.config.ts`) needs no changes.
+Option 2 is cleaner. Map `api` container port 3000 to host port 3000. Vite proxy config (`vite.config.ts`) needs no changes.
 
 ### `ollama`
 
@@ -136,7 +136,7 @@ docker run --rm \
 services:
   api:
     build: { context: ., dockerfile: docker/api/Dockerfile }
-    ports: ["3002:3002"]
+    ports: ["3000:3000"]
     volumes:
       - construct-data:/data
       - ./src:/app/src:ro        # live reload
@@ -148,7 +148,7 @@ services:
 
   ui:
     build: { context: ./src/ui, dockerfile: ../../docker/ui/Dockerfile.dev }
-    ports: ["5174:5174"]
+    ports: ["5173:5173"]
     volumes:
       - ./src/ui:/app:delegated  # hot module reload
     depends_on: [api]
@@ -174,7 +174,7 @@ volumes:
 services:
   api:
     build: { context: ., dockerfile: docker/api/Dockerfile }
-    ports: ["3002:3002"]
+    ports: ["3000:3000"]
     volumes:
       - construct-data:/data
     env_file: .env
@@ -209,7 +209,7 @@ volumes:
 
 ## Claude Code integration
 
-Claude Code runs on the host and continues to work unchanged. The only adjustment is pointing MCP server config and hook scripts at `localhost:3002` (same as today — the port mapping makes this transparent).
+Claude Code runs on the host and continues to work unchanged. The only adjustment is pointing MCP server config and hook scripts at `localhost:3000` (same as today — the port mapping makes this transparent).
 
 The `goal-tracker` MCP server (`src/goals/mcp/src/index.ts`) runs as a Claude Code subprocess on the host. It reads `DATABASE_URL` from env. Two options:
 

@@ -1,12 +1,12 @@
 # construct-ui
 
-General-purpose Construct web UI. Fastify API + React SPA serving goals, todos, and system settings.
+General-purpose Construct web UI. Fastify API + React SPA serving goals, todos, observability, research, and system settings.
 
-**Depends on:** @construct/data, @construct/goals
+**Depends on:** @construct/data, @construct/goals, @construct/telemetry, @construct/research
 
 ## Contents
 
-- `api/` — Fastify 5 REST API (thin wrappers calling @construct/goals services)
+- `api/` — Fastify 5 REST API (goals, observability, research, backup, settings routes)
 - `web/` — React 19 SPA with Vite, Tailwind CSS v4, TanStack Query
 
 ## Usage
@@ -16,7 +16,7 @@ General-purpose Construct web UI. Fastify API + React SPA serving goals, todos, 
 ```bash
 cd construct/ui
 npm install
-npm run dev    # API on :3001, Vite on :5173
+npm run dev    # API on :3000, Vite on :5173
 ```
 
 ### Building
@@ -37,4 +37,4 @@ npm test       # Vitest API integration tests
 
 ## Data
 
-SQLite at `~/.claude/construct/data/construct.db` (WAL mode, shared with MCP server).
+SQLite at `~/.construct/construct.db` (WAL mode, overridable via `CONSTRUCT_DATA_ROOT`).

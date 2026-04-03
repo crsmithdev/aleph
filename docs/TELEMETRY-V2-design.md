@@ -1,5 +1,7 @@
 # Construct — Telemetry v2 Specification
 
+> **STATUS: NOT IMPLEMENTED.** This is a design document for a future rearchitecture. The current system is described in [TELEMETRY.md](TELEMETRY.md).
+
 Redesign of the telemetry system around a schema-driven event log. Replaces tight coupling to Claude Code's JSONL internals with a two-stream architecture: a Construct-owned event log (structured, stable) and an adapter for Claude Code's JSONL (isolated, replaceable).
 
 ## Design goals

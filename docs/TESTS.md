@@ -21,7 +21,7 @@
 | notify | Notify hook tests |
 | install preservation | Installer sentinel file preservation across upgrades |
 | identity files | Identity files exist, are non-empty, and install correctly |
-| quality-stop-check-e2e | Verification gate (`quality-stop-check-e2e.ts`): blocks edits without e2e evidence, detects playwright/cypress/devserver/chrome-devtools, requires artifacts, deduplicates files, handles malformed JSON, tool-result user messages don't split turns, known gaps (Bash writes, Agent edits) |
+| quality-stop-check-e2e | Verification gate (`quality-stop-check-e2e.ts`): blocks edits without e2e evidence, detects playwright/cypress/cli-execution/chrome-devtools, requires artifacts, deduplicates files, handles malformed JSON, tool-result user messages don't split turns, known gaps (Bash writes, Agent edits) |
 | directive signals | Directive writing: architectural prompts get `full`, quick prompts skip, questions get `full` only |
 
 ## Telemetry unit tests (`src/telemetry/__tests__/`)
@@ -70,8 +70,8 @@ Starts API + Vite + Playwright against real `~/.claude/projects` JSONL data, ver
 | Step | What happens | Input | Output |
 |---|---|---|---|
 | 1. Seed DB | Creates temp DB with `obs_memory_snapshots` table, inserts 2 snapshots | Memory snapshot rows | `test.db` |
-| 2. Start API | Fastify on port 3001 with `CLAUDE_ROOT=~/.claude` | Real JSONL data | HTTP server |
-| 3. Start Vite | Dev server on port 5199 proxying `/api` to port 3001 | Vite config | `http://localhost:5199` |
+| 2. Start API | Fastify on port 3000 with `CLAUDE_ROOT=~/.claude` | Real JSONL data | HTTP server |
+| 3. Start Vite | Dev server on port 5199 proxying `/api` to port 3000 | Vite config | `http://localhost:5199` |
 | 4. Launch browser | Headless Chromium via Playwright | Vite URL | Browser context |
 | 5. Overview tab | Navigates to `/observability`, checks stat cards (Sessions, Messages, Tool Calls, Total Cost) + Daily Activity chart | — | Page DOM |
 | 6. Tools tab | Checks Bash + Read appear in tools table | — | Table rows |
@@ -115,14 +115,14 @@ Evals launch Claude via the Agent SDK in a sandboxed scenario. Programmatic hook
 
 ### `runner.ts`
 
-Multi-trial A/B runner. Runs N trials comparing `with-hook` (quality gate Stop hook + verification prompt) vs `bare` (no hooks). Saves results as JSON to `src/eval/results/`.
+Multi-trial A/B runner. Runs N trials comparing `with-hook` (e2e advisory Stop hook + verification prompt) vs `bare` (no hooks). Saves results as JSON to `src/eval/results/`.
 
 ### Shared infrastructure
 
 | File | Purpose |
 |---|---|
 | `harness.ts` | Sandbox setup (`setupSandbox`), Agent SDK runner (`runEval`), real hook delegation (`realHookCallback`, `realStopHookCallback`), tool classification (`classifyToolCall`), assertions (`check`, `printAndExit`), telemetry I/O (`readHookEvents`, `writeHookEvent`), transcript builders (`userMsg`, `assistantMsg`) |
-| `patterns.ts` | Detection regexes shared by evals and hooks: `E2E_CMD` (playwright, cypress, devserver), `ARTIFACT_CMD` (screenshot, output redirect), `UNIT_TEST_CMD` (bun test, jest — excluded), `HOOK_INVOCATION` (hook scripts — excluded) |
+| `patterns.ts` | Detection regexes shared by evals and hooks: `E2E_CMD` (playwright, cypress, cli execution), `ARTIFACT_CMD` (screenshot, output redirect), `UNIT_TEST_CMD` (bun test, jest — excluded), `HOOK_INVOCATION` (hook scripts — excluded) |
 
 ## Eval scenarios (`src/eval/scenarios/`)
 
@@ -135,4 +135,3 @@ Multi-trial A/B runner. Runs N trials comparing `with-hook` (quality gate Stop h
 ## Coverage gaps
 
 - **Git hooks** (`git-pre-require-commit.ts`) — no tests
-- **Quality pre gate** (`quality-pre-require-e2e.ts`) — no tests
