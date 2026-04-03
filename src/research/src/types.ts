@@ -26,11 +26,8 @@ export interface SessionConfig {
   max_concurrent_threads: number;
   model: string;
   providers: {
-    primary: 'anthropic' | 'openrouter' | 'ollama';
-    fallback?: 'anthropic' | 'openrouter' | 'ollama';
+    primary: 'openrouter';
     openrouter_models: string[];
-    local_model?: string;
-    local_base_url?: string;
   };
   schedule: {
     mode: 'interactive' | 'background' | 'scheduled' | 'burst';
@@ -95,7 +92,7 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
     similarity_threshold: 0.75,
   },
   min_searches_per_thread: 2,
-  fetch_source_text: false,
+  fetch_source_text: true,
   gap_analysis: {
     enabled: true,
     max_gap_searches: 2,
@@ -216,11 +213,18 @@ export interface ResearchStep {
   created_at: string;
 }
 
+export interface JinaFetchRecord {
+  url: string;
+  ok: boolean;
+  content_length: number;
+}
+
 export interface ToolCallRecord {
   tool: string;
   input: Record<string, unknown>;
   output?: string;
   error?: string;
+  jina_fetches?: JinaFetchRecord[];
 }
 
 export interface FollowUpCandidate {
