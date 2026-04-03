@@ -65,6 +65,13 @@ function buildProvider(session: { config: { model?: string; models?: Record<stri
   if (primary === 'ollama' || (!apiKey && ollamaModel)) {
     return new OllamaProvider({ model: model || ollamaModel || 'qwen2.5:0.5b', baseUrl: ollamaBaseUrl });
   }
+  // Default to OpenRouter if key is available and no explicit provider set
+  if (!primary && openrouterApiKey) {
+    const models = session.config.models
+      ? Object.values(session.config.models).filter(Boolean)
+      : [model ?? 'deepseek/deepseek-chat'];
+    return new OpenRouterProvider({ apiKey: openrouterApiKey, models: [...new Set(models)] as string[] });
+  }
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set');
   return new AnthropicProvider(apiKey);
 }
