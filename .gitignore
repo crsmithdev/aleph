@@ -9,6 +9,7 @@ src/memory/signals/
 
 # Eval scratch data
 .eval-data/
+src/eval/results/
 docs/SCRATCH.md
 
 # Dashboard

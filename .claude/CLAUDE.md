@@ -12,7 +12,7 @@ This is the Construct source repo. The installed Construct rules come from `~/.c
 2. Code should be minimal, concise, use modern patterns, libraries where possible, and avoid over-abstraction or unnecessary complexity.  
 3. Rely on code over AI instructions; if it can be done without AI, don't use AI. TypeScript over Bash wherever possible.
 4. Make small, atomic changes that can be tested and reverted independently, frequent commits, feature branches, and worktrees. Push before context switches or session end.  Push code frequently and avoid accumulating un-commited changes.
-5. Never claim something is finished or fixed unless you have tested it on the devserver, and looked at the actual data that the page contains.  Do not assume correctness, skip tests, or finish unless **all** tests are passing.
+5. Never claim something is finished or fixed unless you have tested it on the actual running system and verified the real output.  Do not assume correctness, skip tests, or finish unless **all** tests are passing.
 6. Never summarize, truncate, or paraphrase when copying files; verify copies byte-for-byte.
 7. When removing something, remove it completely: all references, unused files, related artifacts, and every other trace.  Do not let orphaned / 'legacy' features pile up if outdated.
 8. All docs (README.md, INSTALL.md, SPEC.md, etc.) must match actual behavior with zero drift. SPEC.md should be behavior- and feature-oriented, enabling functional testing and diffing.
@@ -30,9 +30,8 @@ This is the Construct source repo. The installed Construct rules come from `~/.c
 
 1. Edit source in `src/`
 2. Run `bun test.ts` to verify
-3. Use `/devserver` for UI work (ports 5174/3002)
-4. Run `/link` once to symlink `~/.claude/construct → src/` (changes flow immediately)
-5. Run `bun install.ts` for copy-based deploy (production)
+3. Run `/link` once to symlink `~/.claude/construct → src/` (changes flow immediately)
+4. Run `bun install.ts` for copy-based deploy (production)
 
 ## Directory map
 
