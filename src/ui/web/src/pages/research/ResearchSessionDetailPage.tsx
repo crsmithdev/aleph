@@ -14,6 +14,7 @@ import {
   useInjectThread, useRunResearch, useResearchRunning,
   useResearchActivity, useCancelJob, useResearchJobs, useResearchStream,
   useResearchSteps, useUpdateThread, useDeleteResearchSession, useUpdateSessionConfig,
+  useResearchEnvCheck,
   type ResearchFinding, type ResearchThread, type ResearchActivity,
   type ResearchJob, type StreamEvent, type ResearchStep,
 } from '../../api/research-hooks';
@@ -358,6 +359,24 @@ function ThreadLiveRow({
                     )}
                     {tc.error && <span className="text-[10px] text-red-400 shrink-0">✗</span>}
                   </div>
+                  {tc.jina_fetches && tc.jina_fetches.length > 0 && (
+                    <div className="pl-4 mt-0.5 flex flex-wrap gap-1">
+                      {tc.jina_fetches.map((jf, ji) => (
+                        <a
+                          key={ji}
+                          href={jf.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={`${jf.url}\n${jf.ok ? `${(jf.content_length / 1000).toFixed(1)}k chars` : 'fetch failed'}`}
+                          className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-mono border transition-opacity hover:opacity-100 ${jf.ok ? 'bg-green-900/20 border-green-700/30 text-green-400/80' : 'bg-red-900/20 border-red-700/30 text-red-400/70'}`}
+                        >
+                          <span>{jf.ok ? '✓' : '✗'}</span>
+                          <span className="max-w-[120px] truncate opacity-70">{new URL(jf.url).hostname}</span>
+                          {jf.ok && <span className="opacity-50">{(jf.content_length / 1000).toFixed(0)}k</span>}
+                        </a>
+                      ))}
+                    </div>
+                  )}
                   {tc.output && (
                     <div className="pl-4 text-[10px] text-text-muted/50 break-words line-clamp-2 mt-0.5">{tc.output.slice(0, 200)}</div>
                   )}
@@ -945,8 +964,15 @@ function WorkersTab({ sessionId }: { sessionId: string }) {
 
 // --- Settings Tab ---
 
+function EnvBadge({ set, label }: { set: boolean; label: string }) {
+  return set
+    ? <span className="inline-flex items-center gap-1 text-[10px] font-medium text-green-400"><span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />{label}</span>
+    : <span className="inline-flex items-center gap-1 text-[10px] font-medium text-red-400"><span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />{label} not set</span>;
+}
+
 function SessionSettings({ session, sessionId }: { session: { id: string; config: Record<string, unknown> }; sessionId: string }) {
   const updateConfig = useUpdateSessionConfig();
+  const { data: envCheck } = useResearchEnvCheck();
   const cfg = session.config as Record<string, unknown>;
   const providers = (cfg.providers as Record<string, unknown>) ?? {};
   const gapAnalysis = (cfg.gap_analysis as Record<string, unknown>) ?? {};
@@ -998,6 +1024,26 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
 
   return (
     <form onSubmit={handleSave} className="space-y-6 max-w-lg">
+      {/* Env errors (hard failures) */}
+      {envCheck && envCheck.errors.length > 0 && (
+        <div className="rounded border border-red-500/50 bg-red-500/10 p-3 space-y-1">
+          {envCheck.errors.map((e, i) => (
+            <p key={i} className="text-xs text-red-400 flex items-start gap-1.5 font-medium">
+              <span className="mt-0.5 shrink-0">✕</span>{e}
+            </p>
+          ))}
+        </div>
+      )}
+      {/* Env warnings (degraded) */}
+      {envCheck && envCheck.warnings.length > 0 && (
+        <div className="rounded border border-yellow-500/30 bg-yellow-500/10 p-3 space-y-1">
+          {envCheck.warnings.map((w, i) => (
+            <p key={i} className="text-xs text-yellow-400 flex items-start gap-1.5">
+              <span className="mt-0.5 shrink-0">⚠</span>{w}
+            </p>
+          ))}
+        </div>
+      )}
       {/* Provider */}
       <div>
         <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Provider</p>
@@ -1016,7 +1062,11 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
           <div>
             <label className={labelCls}>Model</label>
             <input value={model} onChange={e => setModel(e.target.value)} placeholder="claude-sonnet-4-6" className={inputCls} />
-            <p className="text-[10px] text-text-muted/60 mt-1">Uses ANTHROPIC_API_KEY env var</p>
+            <div className="mt-1.5">
+              {envCheck
+                ? <EnvBadge set={envCheck.anthropic} label="ANTHROPIC_API_KEY" />
+                : <span className="text-[10px] text-text-muted/60">Uses ANTHROPIC_API_KEY env var</span>}
+            </div>
           </div>
         )}
 
@@ -1025,6 +1075,11 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
             <div>
               <label className={labelCls}>API Key (optional — uses OPENROUTER_API_KEY env var if blank)</label>
               <input type="password" value={openrouterKey} onChange={e => setOpenrouterKey(e.target.value)} placeholder="sk-or-…" className={inputCls} />
+              {envCheck && !openrouterKey && (
+                <div className="mt-1.5">
+                  <EnvBadge set={envCheck.openrouter} label="OPENROUTER_API_KEY" />
+                </div>
+              )}
             </div>
             <div>
               <label className={labelCls}>Models (comma-separated, rotated)</label>
@@ -1066,11 +1121,31 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
       {/* Source text */}
       <div>
         <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Source Text</p>
-        <label className="flex items-center gap-2 cursor-pointer">
+        <label className="flex items-start gap-2 cursor-pointer">
           <input type="checkbox" checked={fetchSourceText} onChange={e => setFetchSourceText(e.target.checked)}
-            className="w-4 h-4 accent-accent" />
-          <span className="text-sm text-text-primary">Fetch source page text</span>
-          <span className="text-xs text-text-muted">(slower, higher quality — uses Jina if JINA_API_KEY set, else Readability)</span>
+            className="w-4 h-4 accent-accent mt-0.5" />
+          <div>
+            <span className="text-sm text-text-primary">Fetch source page text</span>
+            <div className="mt-1 flex flex-col gap-1">
+              {envCheck ? (
+                <>
+                  <span className="text-[10px] text-text-muted">Page extractor: {' '}
+                    <EnvBadge set={envCheck.jina} label={envCheck.jina ? 'Jina (active)' : 'JINA_API_KEY'} />
+                    {!envCheck.jina && <span className="text-[10px] text-red-400 ml-1 font-medium">— will throw, no fallback</span>}
+                  </span>
+                  <span className="text-[10px] text-text-muted">Search: {' '}
+                    {envCheck.searchProvider === 'tavily' && <EnvBadge set={true} label="Tavily (active)" />}
+                    {envCheck.searchProvider === 'brave' && <EnvBadge set={true} label="Brave (active)" />}
+                    {envCheck.searchProvider === 'duckduckgo' && (
+                      <><EnvBadge set={false} label="TAVILY_API_KEY" /><span className="text-[10px] text-text-muted ml-1">— falling back to DuckDuckGo</span></>
+                    )}
+                  </span>
+                </>
+              ) : (
+                <span className="text-xs text-text-muted">requires JINA_API_KEY — no fallback</span>
+              )}
+            </div>
+          </div>
         </label>
       </div>
 
@@ -1123,6 +1198,7 @@ export function ResearchSessionDetailPage() {
   const { data: activity } = useResearchActivity(id!, { refetchInterval: isRunning ? 3000 : undefined });
   const { data: allSteps = [] } = useResearchSteps(id!, undefined, { refetchInterval: isRunning ? 3000 : undefined });
   const { events } = useResearchStream(id!);
+  const { data: envCheck } = useResearchEnvCheck();
   const updateSession = useUpdateResearchSession();
   const injectThread = useInjectThread();
   const [newQuestion, setNewQuestion] = useState('');
@@ -1188,6 +1264,32 @@ export function ResearchSessionDetailPage() {
         </div>
       </div>
 
+
+      {/* Env warnings/errors banner */}
+      {envCheck && (envCheck.errors.length > 0 || envCheck.warnings.length > 0 || envCheck.jina_balance !== null) && (
+        <div className="flex flex-col gap-1.5">
+          {envCheck.errors.map((e, i) => (
+            <div key={i} className="rounded border border-red-500/50 bg-red-500/10 px-3 py-2 flex items-center gap-2">
+              <span className="text-red-400 text-xs shrink-0">✕</span>
+              <span className="text-xs text-red-400 font-medium">{e}</span>
+            </div>
+          ))}
+          {envCheck.warnings.map((w, i) => (
+            <div key={i} className="rounded border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 flex items-center gap-2">
+              <span className="text-yellow-400 text-xs shrink-0">⚠</span>
+              <span className="text-xs text-yellow-400">{w}</span>
+            </div>
+          ))}
+          {envCheck.jina_balance !== null && (
+            <div className="rounded border border-border-primary bg-bg-secondary px-3 py-2 flex items-center gap-2">
+              <span className="text-xs text-text-muted">Jina balance:</span>
+              <span className={`text-xs font-medium tabular-nums ${envCheck.jina_balance < 100_000 ? 'text-red-400' : envCheck.jina_balance < 1_000_000 ? 'text-yellow-400' : 'text-green-400'}`}>
+                {envCheck.jina_balance.toLocaleString()} tokens
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-3">

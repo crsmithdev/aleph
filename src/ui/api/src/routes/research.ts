@@ -301,6 +301,39 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
+  // === Env check ===
+  app.get('/env-check', async () => {
+    const anthropic = !!process.env.ANTHROPIC_API_KEY;
+    const openrouter = !!process.env.OPENROUTER_API_KEY;
+    const jinaKey = process.env.JINA_API_KEY;
+    const jina = !!jinaKey;
+    const tavily = !!process.env.TAVILY_API_KEY;
+    const brave = !!process.env.BRAVE_SEARCH_API_KEY;
+    const searchProvider = tavily ? 'tavily' : brave ? 'brave' : 'duckduckgo';
+    const warnings: string[] = [];
+    const errors: string[] = [];
+    if (!anthropic && !openrouter && !process.env.OLLAMA_MODEL) {
+      warnings.push('No LLM provider configured — set ANTHROPIC_API_KEY, OPENROUTER_API_KEY, or OLLAMA_MODEL');
+    }
+    if (!jina) errors.push('JINA_API_KEY not set — "Fetch source page text" will throw');
+    if (!tavily && !brave) warnings.push('No search API key set — using DuckDuckGo (rate-limited, lower quality)');
+
+    let jina_balance: number | null = null;
+    if (jinaKey) {
+      try {
+        const res = await fetch('https://r.jina.ai', {
+          headers: { 'Authorization': `Bearer ${jinaKey}` },
+          signal: AbortSignal.timeout(5000),
+        });
+        const text = await res.text();
+        const m = text.match(/\[Balance left\]\s+([\d,]+)/);
+        if (m) jina_balance = parseInt(m[1].replace(/,/g, ''), 10);
+      } catch { /* network error — leave null */ }
+    }
+
+    return { anthropic, openrouter, jina, jina_balance, tavily, brave, searchProvider, warnings, errors };
+  });
+
   // === Worker supervisor ===
   app.get('/workers', async () => app.supervisor.status());
 

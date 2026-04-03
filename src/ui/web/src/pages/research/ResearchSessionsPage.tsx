@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { BarChart, Bar, AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
-import { useResearchSessions, useCreateResearchSession, useUpdateResearchSession, useResearchStats, useClearResearchDB, useRunResearch, useRunAllResearch, useStopAllResearch } from '../../api/research-hooks';
+import { useResearchSessions, useCreateResearchSession, useUpdateResearchSession, useResearchStats, useRunResearch, useRunAllResearch, useStopAllResearch, useResearchEnvCheck } from '../../api/research-hooks';
 import { Button } from '../../components/ui/Button';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
@@ -27,7 +27,6 @@ export function ResearchSessionsPage() {
   const stats = useResearchStats(range, granularity);
   const createSession = useCreateResearchSession();
   const updateSession = useUpdateResearchSession();
-  const clearDB = useClearResearchDB();
   const runResearch = useRunResearch();
   const runAll = useRunAllResearch();
   const stopAll = useStopAllResearch();
@@ -38,27 +37,9 @@ export function ResearchSessionsPage() {
   const [model, setModel] = useState<string>(() => localStorage.getItem('research_default_model') ?? '');
   const [minSearches, setMinSearches] = useState<number>(() => Number(localStorage.getItem('research_default_min_searches') ?? '2'));
   const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
-  const [testStatus, setTestStatus] = useState<string | null>(null);
+  const { data: envCheck } = useResearchEnvCheck();
 
   const visibleSessions = sessions.filter(s => s.status !== 'archived');
-
-  async function handleTestSearch() {
-    setTestStatus('Clearing DB...');
-    await clearDB.mutateAsync();
-    setTestStatus('Creating session...');
-    const session = await createSession.mutateAsync({
-      seed_query: 'What are the key differences between bun and deno runtimes?',
-      config: {
-        max_thread_depth: 1,
-        max_concurrent_threads: 4,
-        model: 'qwen3-4b',
-        providers: { primary: 'ollama' },
-      },
-    });
-    setTestStatus('Starting run...');
-    await runResearch.mutateAsync({ sessionId: session.id, iterations: 3 });
-    setTestStatus(`Started session ${session.id.slice(0, 8)}. Queued for execution.`);
-  }
 
   function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -115,6 +96,32 @@ export function ResearchSessionsPage() {
         onGranularityChange={setGranularity}
       />
 
+      {/* Env warnings/errors banner */}
+      {envCheck && (envCheck.errors.length > 0 || envCheck.warnings.length > 0 || envCheck.jina_balance !== null) && (
+        <div className="flex flex-col gap-1.5">
+          {envCheck.errors.map((e, i) => (
+            <div key={i} className="rounded border border-red-500/50 bg-red-500/10 px-3 py-2 flex items-center gap-2">
+              <span className="text-red-400 text-xs shrink-0">✕</span>
+              <span className="text-xs text-red-400 font-medium">{e}</span>
+            </div>
+          ))}
+          {envCheck.warnings.map((w, i) => (
+            <div key={i} className="rounded border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 flex items-center gap-2">
+              <span className="text-yellow-400 text-xs shrink-0">⚠</span>
+              <span className="text-xs text-yellow-400">{w}</span>
+            </div>
+          ))}
+          {envCheck.jina_balance !== null && (
+            <div className="rounded border border-border-primary bg-bg-secondary px-3 py-2 flex items-center gap-2">
+              <span className="text-xs text-text-muted">Jina balance:</span>
+              <span className={clsx('text-xs font-medium tabular-nums', envCheck.jina_balance < 100_000 ? 'text-red-400' : envCheck.jina_balance < 1_000_000 ? 'text-yellow-400' : 'text-green-400')}>
+                {envCheck.jina_balance.toLocaleString()} tokens
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
       {stats.data && (
         <>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -157,20 +164,6 @@ export function ResearchSessionsPage() {
         </>
       )}
 
-      {/* TEMPORARY: Dev test section */}
-      <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-4 flex items-center gap-4">
-        <div className="flex-1">
-          <p className="text-sm font-medium text-yellow-300">Dev Test</p>
-          <p className="text-xs text-yellow-300/60">Clears all research data and starts a cheap depth-1 test search</p>
-          {testStatus && <p className="text-xs text-yellow-200 mt-1">{testStatus}</p>}
-        </div>
-        <Button
-          onClick={handleTestSearch}
-          loading={clearDB.isPending || createSession.isPending || runResearch.isPending}
-        >
-          Clear &amp; Test
-        </Button>
-      </div>
 
       {newOpen && (
         <form onSubmit={handleCreate} className="bg-bg-secondary border border-border-primary rounded-lg p-4 flex gap-3 items-center">

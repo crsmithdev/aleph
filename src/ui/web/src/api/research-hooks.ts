@@ -112,6 +112,27 @@ export function useResearchStats(range: string, granularity: string) {
   });
 }
 
+// --- Env check ---
+export interface ResearchEnvCheck {
+  anthropic: boolean;
+  openrouter: boolean;
+  jina: boolean;
+  jina_balance: number | null;
+  tavily: boolean;
+  brave: boolean;
+  searchProvider: 'tavily' | 'brave' | 'duckduckgo';
+  warnings: string[];
+  errors: string[];
+}
+
+export function useResearchEnvCheck() {
+  return useQuery({
+    queryKey: ['research-env-check'],
+    queryFn: () => api.get<ResearchEnvCheck>('/research/env-check'),
+    staleTime: 60_000,
+  });
+}
+
 // --- Sessions ---
 export function useResearchSessions(status?: string) {
   const params = status ? `?status=${status}` : '';
@@ -222,7 +243,7 @@ export interface ResearchStep {
   prompt_tokens: number;
   completion_tokens: number;
   cost_usd: number;
-  tool_calls: Array<{ tool: string; input?: Record<string, unknown>; output?: string; error?: string }>;
+  tool_calls: Array<{ tool: string; input?: Record<string, unknown>; output?: string; error?: string; jina_fetches?: Array<{ url: string; ok: boolean; content_length: number }> }>;
   duration_ms: number;
   error: string | null;
   created_at: string;

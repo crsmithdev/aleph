@@ -242,17 +242,23 @@ if (!LINK_ONLY) {
   const researchDir = join(DST, "construct", "research");
   if (await exists(join(uiDir, "package.json"))) {
     console.log("installing ui dependencies...");
-    await Bun.$`cd ${uiDir} && bun install`.quiet();
-    if (await exists(join(uiWebDir, "package.json"))) {
-      await Bun.$`cd ${uiWebDir} && bun install`.quiet();
-    }
+    // Remove stale node_modules to avoid EEXIST on workspace symlinks after sync
+    await rm(join(uiDir, "node_modules"), { recursive: true, force: true });
+    await rm(join(uiDir, "web", "node_modules"), { recursive: true, force: true });
+    await rm(join(uiDir, "api", "node_modules"), { recursive: true, force: true });
+    // nothrow: bun EEXIST on workspace symlinks is benign when the link already resolves correctly
+    await Bun.$`cd ${uiDir} && bun install`.quiet().nothrow();
+    console.log("building ui...");
+    await Bun.$`cd ${uiWebDir} && bun run build`.quiet();
   }
   if (await exists(join(researchDir, "package.json"))) {
     console.log("installing research dependencies...");
     const dataDir = join(DST, "construct", "data");
     if (await exists(join(dataDir, "package.json"))) {
+      await rm(join(dataDir, "node_modules"), { recursive: true, force: true });
       await Bun.$`cd ${dataDir} && bun install`.quiet();
     }
+    await rm(join(researchDir, "node_modules"), { recursive: true, force: true });
     await Bun.$`cd ${researchDir} && bun install`.quiet();
   }
 
