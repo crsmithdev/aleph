@@ -525,6 +525,7 @@ if (!LINK_ONLY) {
     "WorkingDirectory=%h/.claude/construct/ui",
     "Environment=PATH=%h/.bun/bin:/usr/local/bin:/usr/bin:/bin",
     "Environment=NODE_ENV=production",
+    `Environment=ANTHROPIC_API_KEY=${Bun.env.ANTHROPIC_API_KEY || ""}`,
     "ExecStart=%h/.bun/bin/bun run serve",
     "Restart=on-failure",
     "RestartSec=5",
@@ -533,8 +534,29 @@ if (!LINK_ONLY) {
     "WantedBy=default.target",
     "",
   ].join("\n"));
+  await writeFile(join(serviceDir, "construct-research-worker.service"), [
+    "[Unit]",
+    "Description=Construct Research Worker",
+    "After=network.target",
+    "",
+    "[Service]",
+    "Type=simple",
+    "WorkingDirectory=%h/.claude/construct/research",
+    "Environment=PATH=%h/.bun/bin:/usr/local/bin:/usr/bin:/bin",
+    "Environment=NODE_ENV=production",
+    `Environment=ANTHROPIC_API_KEY=${Bun.env.ANTHROPIC_API_KEY || ""}`,
+    "ExecStart=%h/.bun/bin/bun src/worker.ts",
+    "Restart=on-failure",
+    "RestartSec=10",
+    "",
+    "[Install]",
+    "WantedBy=default.target",
+    "",
+  ].join("\n"));
+
   await Bun.$`systemctl --user daemon-reload`.quiet().nothrow();
   await Bun.$`systemctl --user restart construct-ui`.quiet().nothrow();
+  await Bun.$`systemctl --user restart construct-research-worker`.quiet().nothrow();
 
   // 11. Verify database health — run DDL and smoke-test each table
   console.log("verifying database...");

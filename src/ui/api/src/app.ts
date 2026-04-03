@@ -18,6 +18,7 @@ import { webhookRoutes } from './routes/webhooks.js';
 import { observabilityRoutes } from './routes/observability.js';
 import { researchRoutes } from './routes/research.js';
 import { EventBus, HistoryService, applyDDL } from '@construct/goals';
+import { applyResearchDDL } from '@construct/research';
 import { webhooks } from './db/schema.js';
 import { existsSync, readFileSync, statSync } from 'fs';
 import { resolve } from 'path';
@@ -218,6 +219,8 @@ export async function createApp(opts?: { dbUrl?: string; workerCount?: number })
 
     // Goals domain DDL
     applyDDL(sqlite);
+    // Research domain DDL
+    applyResearchDDL(sqlite);
     // Observability DDL
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS obs_memory_snapshots (

@@ -14,6 +14,7 @@ export function createDb(url?: string): { db: BunSQLiteDatabase; sqlite: Databas
   const sqlite = new Database(dbPath);
   sqlite.exec('PRAGMA journal_mode = WAL');
   sqlite.exec('PRAGMA foreign_keys = ON');
+  sqlite.exec('PRAGMA busy_timeout = 5000');
   const db = drizzle(sqlite);
   return { db, sqlite };
 }

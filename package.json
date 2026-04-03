@@ -4,6 +4,7 @@
     "src/data",
     "src/eval",
     "src/goals",
+    "src/research",
     "src/telemetry",
     "src/ui",
     "src/ui/api",

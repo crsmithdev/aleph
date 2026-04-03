@@ -10,6 +10,13 @@ import { TodosPage } from './pages/life/TodosPage';
 import { HabitsPage } from './pages/life/HabitsPage';
 import { SummaryPage } from './pages/life/SummaryPage';
 
+// Research pages
+import { ResearchSessionsPage } from './pages/research/ResearchSessionsPage';
+import { ResearchSessionDetailPage } from './pages/research/ResearchSessionDetailPage';
+import { ResearchPlanPage } from './pages/research/ResearchPlanPage';
+import { MonitorsPage } from './pages/research/MonitorsPage';
+import { MonitorDetailPage } from './pages/research/MonitorDetailPage';
+
 // System pages
 import { OverviewPage } from './pages/system/observability/OverviewPage';
 import { ToolsPage } from './pages/system/observability/ToolsPage';
@@ -64,6 +71,13 @@ export function App() {
               <Route path="/goals/:id" element={<GoalDetailPage />} />
               <Route path="/todos" element={<TodosPage />} />
               <Route path="/habits" element={<HabitsPage />} />
+
+              {/* Research */}
+              <Route path="/research" element={<ResearchSessionsPage />} />
+              <Route path="/research/:id" element={<ResearchSessionDetailPage />} />
+              <Route path="/research/:id/plan" element={<ResearchPlanPage />} />
+              <Route path="/research/monitors" element={<MonitorsPage />} />
+              <Route path="/research/monitors/:id" element={<MonitorDetailPage />} />
 
               {/* Observability */}
               <Route path="/observability" element={<Navigate to="/observability/overview" replace />} />
