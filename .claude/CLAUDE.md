@@ -52,3 +52,54 @@ Claude Code merges `.claude/` (project) with `~/.claude/` (global) at runtime. I
 **CLAUDE.md ownership** — rules must exist in exactly one place:
 - `src/core/CLAUDE.md` → Construct behavioral rules. Referenced via `@construct/core/CLAUDE.md` in `~/.claude/CLAUDE.md`.
 - `.claude/CLAUDE.md` → this file. Repo-specific dev rules. Loaded at runtime, never installed.
+
+## Skill extensions
+
+### /code-review
+
+**Scope:** All `.ts` files under `src/` and the installer (`install.ts`, `test.ts`).
+
+**Additional checks:**
+
+- **Hook integrity:** every hook command in `dotclaude/settings.json` points to a file that exists; every hook handles malformed stdin (JSON parse → exit 1); every hook uses `trace()` from `src/trace.ts`; no hook writes to stdout unless it has a meaningful message
+- **Duplication guard:** nothing in `.claude/` duplicates what's in `dotclaude/` (double-fire risk); CLAUDE.md rules exist in exactly one location per the ownership table
+- **Backwards-compat cruft:** look for shims, wrappers, or fallbacks kept "for backwards compat" that nothing reads anymore; check for old file paths, renamed exports, deprecated aliases, or stale config keys; if the only consumer was removed, the compat layer is dead — remove it
+- **Install roundtrip:** run `bun install.ts` && `bun test.ts` after review; installed copies must match sources byte-for-byte
+
+### /debugging
+
+**Additional checks:**
+
+- **Hook fails silently:** check exit code, pipe `2>&1` to capture stderr, check telemetry for hook events
+
+### /docs-review
+
+**Scope:**
+
+| Document | Truth source |
+|---|---|
+| `README.md` | Actual directory layout, hook registrations, slash commands |
+| `INSTALL.md` | Actual installer behavior, preserved files, prerequisites |
+| Module `README.md` | Actual module contents and hook behavior |
+| Module `INSTALL.md` | Actual verification results (run the checks) |
+| `SPEC.md` | Actual hooks, commands, skills, behavior |
+| `CLAUDE.md` | Actual behavior (are rules followed? do referenced files exist?) |
+| Skill `SKILL.md` | Actual skill-rules.json keywords, skill directory contents |
+
+**Additional checks:**
+
+1. Every hook registered in `settings.json` is documented in the Hook Registration table
+2. Every slash subcommand in `construct.md` is documented
+3. Every skill in `skill-rules.json` is documented
+4. Every module detection file listed matches reality
+5. Flag any behavior described in `SPEC.md` that has no corresponding implementation
+
+### /verification
+
+**Additional checks:**
+
+| Claim | Requires | Not sufficient |
+|---|---|---|
+| Install works | Run `bun install.ts` (verify runs automatically) | "Files copied" |
+| Docs match behavior | Run docs-review skill | "I updated the docs" |
+| Hook works | Pipe test input, check stdout | "Code looks correct" |

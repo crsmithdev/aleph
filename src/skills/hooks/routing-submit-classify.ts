@@ -12,14 +12,12 @@
  *    requirements into the system message so the Stop hook can enforce them.
  *
  * 3. SKILL MATCHING — load skills/skill-rules.json, match prompt keywords against rules,
- *    emit matched skill names for Claude to activate via Skill(). Also check for
- *    project-local skill extensions at .claude/skills/{skill}.md.
+ *    emit matched skill names for Claude to activate via Skill().
  *
  * Writes directive signals (full, skill:{name}) to the directives log.
  */
 import { existsSync, readFileSync, appendFileSync, mkdirSync } from "fs";
 import { resolve, dirname } from "path";
-import { execSync } from "child_process";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 import { dataPaths } from "../../data/src/paths.ts";
@@ -106,39 +104,8 @@ if (directives.length > 0) {
 
 if (!matched.length) { trace(TAG, "no skills matched, exiting"); process.exit(0); }
 
-// Check for project-local skill extensions
-const projectRoot = findProjectRoot();
-trace(TAG, `project root: ${projectRoot ?? "none"}`);
-const extensions: string[] = [];
-if (projectRoot) {
-  for (const skill of matched) {
-    const extPath = resolve(projectRoot, `.claude/skill-extensions/${skill}.md`);
-    if (existsSync(extPath)) {
-      const content = readFileSync(extPath, "utf8").trim();
-      if (content) {
-        extensions.push(`\n## Project-specific: ${skill}\n\n${content}`);
-        trace(TAG, `extension found: ${extPath} (${content.length} chars)`);
-      }
-    } else {
-      trace(TAG, `no extension: ${extPath}`);
-    }
-  }
-}
-
 // Auto-activate: emit skill names for Claude to call Skill() on
-const out = [`[Construct] Matched skills: ${matched.join(", ")}. Activate via Skill() before proceeding.`];
-if (extensions.length) {
-  out.push(`\nProject skill extensions (apply IN ADDITION to the base skill):\n${extensions.join("\n")}`);
-}
-trace(TAG, `output: ${out[0].slice(0, 80)}`);
-console.log(out.join(""));
+const out = `[Construct] Matched skills: ${matched.join(", ")}. Activate via Skill() before proceeding.`;
+trace(TAG, `output: ${out.slice(0, 80)}`);
+console.log(out);
 process.exit(0);
-
-function findProjectRoot(): string | null {
-  try {
-    return execSync("git rev-parse --show-toplevel", { encoding: "utf-8", timeout: 2000 }).trim();
-  } catch (e) {
-    trace(TAG, `git root failed: ${(e as Error).message?.slice(0, 60)}`);
-    return Bun.env.PWD ?? null;
-  }
-}
