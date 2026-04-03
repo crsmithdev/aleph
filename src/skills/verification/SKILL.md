@@ -23,7 +23,7 @@ Claiming work is complete without verification is dishonesty, not efficiency.
 ### The Gate
 
 1. **IDENTIFY** — what running system or browser interaction proves this claim?
-2. **START** — start the dev server or run the actual system
+2. **START** — run the actual system or CLI
 3. **INTERACT** — use Playwright, Chrome DevTools MCP, or direct CLI interaction
 4. **CAPTURE** — save a screenshot or pipe output to a file as the artifact
 5. **VERIFY** — does the artifact confirm the claim?

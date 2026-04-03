@@ -10,7 +10,7 @@
  * 2. Read transcript, find current turn boundary (last real user message with text).
  * 3. Scan assistant messages from turnStart forward:
  *    - Track Edit/Write/NotebookEdit as "edits" (with file paths).
- *    - Track Bash commands matching E2E_CMD (devserver, curl, playwright) as e2e signals.
+ *    - Track Bash commands matching E2E_CMD (cli execution, playwright) as e2e signals.
  *    - Track Bash commands matching ARTIFACT_CMD (output redirect, screenshot) as artifacts.
  *    - Track Chrome DevTools / Playwright MCP calls as e2e signals + artifacts.
  * 4. No edits this turn → exit 0.
@@ -124,7 +124,7 @@ if (hasE2E && hasArtifact) {
 // Advisory reminder only — no marker, no blocking
 const files = [...new Set(editedFiles)].slice(0, 10).join(", ");
 const missing: string[] = [];
-if (!hasE2E) missing.push("e2e verification (start the dev server and interact with the running app)");
+if (!hasE2E) missing.push("e2e verification (run the actual system and interact with it)");
 if (!hasArtifact) missing.push("artifact (screenshot or output saved to a file)");
 
 trace(TAG, `advisory: edits to [${files}] missing [${missing.join(", ")}]`);
@@ -134,7 +134,7 @@ console.log(`[Construct] Advisory: you edited files (${files}) without e2e evide
 Missing: ${missing.join("; ")}
 
 Consider verifying before claiming work is done:
-1. Start the dev server or run the real system
+1. Run the actual system
 2. Interact with it to confirm your changes work
 3. Save a screenshot or capture output to a file as proof
 
