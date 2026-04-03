@@ -1,4 +1,5 @@
 import type { LLMProvider, LLMResult, WebSearchResult } from '../engine.js';
+import { fetchSearchResults, fetchPageContent } from './websearch.js';
 
 export interface OpenRouterConfig {
   apiKey: string;
@@ -36,7 +37,7 @@ export class OpenRouterProvider implements LLMProvider {
 
     const response = await this.fetchWithRetry(actualModel, [
       { role: 'user', content: prompt },
-    ], maxTokens);
+    ], maxTokens, undefined);
 
     return {
       text: response.choices[0]?.message?.content ?? '',
@@ -47,21 +48,39 @@ export class OpenRouterProvider implements LLMProvider {
   }
 
   async searchWeb(model: string, query: string): Promise<WebSearchResult> {
-    // OpenRouter doesn't have native web search — use a model to generate a response
-    // based on its training data (no real-time web access)
     const actualModel = model.includes('/') ? model : this.nextModel();
+
+    // 1. Get URLs from search engine (Tavily → Brave → DuckDuckGo)
+    const searchResults = await fetchSearchResults(query);
+
+    // 2. Fetch structured page content via Jina for each URL
+    const pages = await Promise.all(searchResults.map(r => fetchPageContent(r.url)));
+
+    const sourceUrls = searchResults.map(r => r.url);
+    const sourceTexts = pages.map((page, i) => page?.content ?? searchResults[i].snippet);
+
+    // 3. Synthesize with the LLM — use Jina's title/date/content structure
+    const context = searchResults.map((r, i) => {
+      const page = pages[i];
+      const title = page?.title || r.title;
+      const date = page?.publishedTime ? `\nPublished: ${page.publishedTime}` : '';
+      const body = (page?.content ?? r.snippet).slice(0, 3000);
+      return `### ${title}\nURL: ${r.url}${date}\n\n${body}`;
+    }).join('\n\n---\n\n');
 
     const response = await this.fetchWithRetry(actualModel, [
       {
         role: 'user',
-        content: `Research the following topic and provide detailed, factual information. Include specific data points, names, dates, and any relevant details you know about:\n\n"${query}"`,
+        content: `You are a research assistant. Based on the following web pages, answer this research query:\n\n"${query}"\n\n---\n\n${context}\n\n---\n\nProvide a detailed, factual summary with specific information from the sources above.`,
       },
     ], 4096);
 
+    const text = response.choices[0]?.message?.content ?? '';
+
     return {
-      text: response.choices[0]?.message?.content ?? '',
-      sourceTexts: [response.choices[0]?.message?.content ?? ''],
-      sourceUrls: [],
+      text,
+      sourceTexts,
+      sourceUrls,
       promptTokens: response.usage?.prompt_tokens ?? 0,
       completionTokens: response.usage?.completion_tokens ?? 0,
       model: response.model ?? actualModel,
@@ -72,6 +91,7 @@ export class OpenRouterProvider implements LLMProvider {
     model: string,
     messages: Array<{ role: string; content: string }>,
     maxTokens: number,
+    plugins?: Array<{ id: string; max_results?: number }>,
     attempts = 3
   ): Promise<OpenRouterResponse> {
     let lastError: Error | null = null;
@@ -90,6 +110,7 @@ export class OpenRouterProvider implements LLMProvider {
             model,
             messages,
             max_tokens: maxTokens,
+            ...(plugins ? { plugins } : {}),
           }),
         });
 
@@ -124,7 +145,14 @@ interface OpenRouterResponse {
   id: string;
   model: string;
   choices: Array<{
-    message: { role: string; content: string };
+    message: {
+      role: string;
+      content: string;
+      annotations?: Array<{
+        type: string;
+        url_citation?: { url: string; title?: string; content?: string };
+      }>;
+    };
     finish_reason: string;
   }>;
   usage?: {

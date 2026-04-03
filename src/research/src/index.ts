@@ -14,6 +14,6 @@ export type { MonitorEngineOptions } from './monitor-engine.js';
 export { OpenRouterProvider, getOpenRouterPricing } from './providers/openrouter.js';
 export type { OpenRouterConfig } from './providers/openrouter.js';
 export { ModelRouter } from './providers/router.js';
-export type { TaskType, ModelTier, ModelConfig, ProviderConfig } from './providers/router.js';
+export type { TaskType, ModelConfig, ProviderConfig } from './providers/router.js';
 export * from './perturbation.js';
 export * from './scheduler.js';

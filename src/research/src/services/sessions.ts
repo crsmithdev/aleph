@@ -10,7 +10,6 @@ function rowToSession(row: Record<string, unknown>): ResearchSession {
   const config: SessionConfig = {
     ...DEFAULT_SESSION_CONFIG,
     ...stored,
-    models: { ...DEFAULT_SESSION_CONFIG.models, ...(stored.models ?? {}) },
     providers: { ...DEFAULT_SESSION_CONFIG.providers, ...(stored.providers ?? {}) },
     schedule: { ...DEFAULT_SESSION_CONFIG.schedule, ...(stored.schedule ?? {}) },
     perturbation: { ...DEFAULT_SESSION_CONFIG.perturbation, ...(stored.perturbation ?? {}) },

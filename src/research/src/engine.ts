@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { fetchPageText, JS_RENDERED_FLAG } from './providers/websearch.js';
 import type { Sqlite } from '@construct/data';
 import type {
   ResearchSession, ResearchThread, ResearchFinding,
@@ -56,6 +57,8 @@ export function classify(s: string): 'question' | 'topic' {
   if (/^(is|are|does|do|can|should|will|would|has|have|was|were)\b/i.test(t)) return 'question';
   return 'topic';
 }
+
+const BOT_CHECK_PATTERN = /checking your browser|are you a robot|please confirm you are human|browser before accessing|enable javascript|ddos protection|just a moment|access denied|403 forbidden|cloudflare ray id/i;
 
 function stripLLMFences(text: string): string {
   // Remove <think> blocks first
@@ -544,7 +547,7 @@ Return ONLY a JSON array of search query strings. No other text.`,
     sessionId: string,
     threadId: string,
     config: SessionConfig
-  ): Promise<Array<{ query: string; results: string; sourceTexts: string[] }>> {
+  ): Promise<Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[] }>> {
     const results = await Promise.all(queries.map(async (query) => {
       const startTime = Date.now();
       try {
@@ -563,10 +566,21 @@ Return ONLY a JSON array of search query strings. No other text.`,
         });
 
         if (!result.text.trim()) return null;
+
+        let sourceTexts = result.sourceTexts;
+        if (config.fetch_source_text && result.sourceUrls.length > 0) {
+          const fetched = await Promise.all(result.sourceUrls.map(url => fetchPageText(url)));
+          sourceTexts = fetched.map((full, i) => {
+            if (!full || full === JS_RENDERED_FLAG) return result.sourceTexts[i] ?? '';
+            return full;
+          });
+        }
+
         return {
           query,
           results: result.text + (result.sourceUrls.length > 0 ? `\n\nSources: ${result.sourceUrls.join(', ')}` : ''),
-          sourceTexts: result.sourceTexts,
+          sourceTexts,
+          sourceUrls: result.sourceUrls,
         };
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
@@ -585,19 +599,19 @@ Return ONLY a JSON array of search query strings. No other text.`,
       }
     }));
 
-    return results.filter((r): r is { query: string; results: string; sourceTexts: string[] } => r !== null);
+    return results.filter((r): r is { query: string; results: string; sourceTexts: string[]; sourceUrls: string[] } => r !== null);
   }
 
   private async gapAnalysis(
     thread: ResearchThread,
-    initialSearchResults: Array<{ query: string; results: string; sourceTexts: string[] }>,
+    initialSearchResults: Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[] }>,
     draftFinding: { content: string; summary: string },
     config: SessionConfig
-  ): Promise<Array<{ query: string; results: string; sourceTexts: string[] }>> {
+  ): Promise<Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[] }>> {
     if (!config.gap_analysis?.enabled) return [];
 
     const result = await this.callLLM(
-      config.models?.cheap ?? config.model,
+      config.model,
       `You are evaluating a research finding for completeness.
 
 Research question: "${thread.query}"
@@ -636,7 +650,7 @@ If has_gaps is true, gap_queries must contain ${config.gap_analysis.max_gap_sear
 
   private async synthesizeFinding(
     thread: ResearchThread,
-    searchResults: Array<{ query: string; results: string; sourceTexts: string[] }>,
+    searchResults: Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[] }>,
     sessionId: string,
     config: SessionConfig
   ): Promise<{
@@ -681,7 +695,19 @@ Return ONLY valid JSON. No markdown fences.`,
       config
     );
 
-    const allSourceTexts = searchResults.flatMap(r => r.sourceTexts ?? []);
+    // Collect fetched texts: filter bot-check pages, deduplicate, cap at 8
+    const seen = new Set<string>();
+    const filteredTexts: string[] = [];
+    for (const r of searchResults) {
+      for (const text of r.sourceTexts) {
+        if (text && text.length > 100 && !BOT_CHECK_PATTERN.test(text) && !seen.has(text.slice(0, 80))) {
+          seen.add(text.slice(0, 80));
+          filteredTexts.push(text);
+          if (filteredTexts.length >= 8) break;
+        }
+      }
+      if (filteredTexts.length >= 8) break;
+    }
 
     try {
       const text = stripLLMFences(result.text);
@@ -690,7 +716,7 @@ Return ONLY valid JSON. No markdown fences.`,
         content: parsed.content ?? '',
         summary: parsed.summary ?? '',
         sourceUrls: parsed.source_urls ?? [],
-        sourceTexts: allSourceTexts,
+        sourceTexts: filteredTexts,
         sourceQuality: parsed.source_quality ?? 0.5,
         tags: parsed.tags ?? [],
         confidence: parsed.confidence ?? 0.5,
@@ -705,7 +731,7 @@ Return ONLY valid JSON. No markdown fences.`,
 
   private async evaluateFollowUps(
     thread: ResearchThread,
-    searchResults: Array<{ query: string; results: string; sourceTexts: string[] }>,
+    searchResults: Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[] }>,
     finding: { content: string; summary: string },
     config: SessionConfig
   ): Promise<{ accepted: string[]; analysis: FollowUpAnalysis }> {
@@ -903,7 +929,7 @@ Return ONLY valid JSON. No markdown fences.`,
 
   private async detectGaps(
     thread: ResearchThread,
-    searchResults: Array<{ query: string; results: string; sourceTexts: string[] }>,
+    searchResults: Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[] }>,
     finding: { content: string; summary: string },
     config: SessionConfig,
     rejectionContext?: string
@@ -1144,7 +1170,7 @@ Return ONLY the search query text, nothing else.`,
     if (session?.summary) {
       try {
         const result = await this.callLLM(
-          config.models.cheap,
+          config.model,
           `You are a research planner. Given what has been learned so far, re-rank these pending research threads by importance and explain why each matters.
 
 Research topic: "${session.seed_query}"

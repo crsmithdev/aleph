@@ -12,13 +12,8 @@ export type TaskType =
   | 'summary'
   | 'perturbation';
 
-export type ModelTier = 'cheap' | 'mid' | 'expensive' | 'rotate';
-
 export interface ModelConfig {
-  cheap: string;
-  mid: string;
-  expensive: string;
-  tangent: 'rotate' | string;
+  model: string;
 }
 
 export interface ProviderConfig {
@@ -29,17 +24,6 @@ export interface ProviderConfig {
   openrouterModels?: string[];
 }
 
-// Maps task types to model tiers per spec §4
-const TASK_TIER_MAP: Record<TaskType, ModelTier> = {
-  query_formulation: 'cheap',
-  search: 'mid',        // web search needs comprehension
-  synthesis: 'mid',
-  evaluation: 'mid',
-  tangent_generation: 'rotate',
-  dedup: 'cheap',
-  summary: 'mid',
-  perturbation: 'rotate',
-};
 
 export class ModelRouter implements LLMProvider {
   private anthropic: LLMProvider | null;
@@ -67,34 +51,12 @@ export class ModelRouter implements LLMProvider {
         })
       : null;
 
-    // Build rotation pool: OpenRouter models + Anthropic models for diversity
-    this.rotationModels = [
-      ...(providerConfig.openrouterModels ?? []),
-      modelConfig.mid,
-      modelConfig.cheap,
-    ];
+    this.rotationModels = providerConfig.openrouterModels ?? [modelConfig.model];
   }
 
-  resolveModel(taskType: TaskType): { model: string; provider: 'anthropic' | 'openrouter' } {
-    const tier = TASK_TIER_MAP[taskType];
-
-    if (tier === 'rotate') {
-      const model = this.rotationModels[this.rotationIndex % this.rotationModels.length];
-      this.rotationIndex++;
-      const isOpenRouter = model.includes('/');
-      return {
-        model,
-        provider: isOpenRouter ? 'openrouter' : 'anthropic',
-      };
-    }
-
-    const model = this.modelConfig[tier];
-    // Determine provider: if model contains '/', it's an OpenRouter model
-    const isOpenRouter = model.includes('/');
-    return {
-      model,
-      provider: isOpenRouter ? 'openrouter' : 'anthropic',
-    };
+  resolveModel(_taskType: TaskType): { model: string; provider: 'anthropic' | 'openrouter' } {
+    const model = this.modelConfig.model;
+    return { model, provider: model.includes('/') ? 'openrouter' : 'anthropic' };
   }
 
   private getProvider(providerName: 'anthropic' | 'openrouter'): LLMProvider {

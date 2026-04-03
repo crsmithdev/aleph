@@ -51,26 +51,25 @@ if (!apiKey && !ollamaModel && !process.env.OPENROUTER_API_KEY) {
 
 const openrouterApiKey = process.env.OPENROUTER_API_KEY;
 
-function buildProvider(session: { config: { model?: string; models?: Record<string, string>; providers?: { primary?: string; openrouter_api_key?: string } } }): LLMProvider {
+function buildProvider(session: { config: { model?: string; providers?: { primary?: string; openrouter_api_key?: string; openrouter_models?: string[] } } }): LLMProvider {
   const primary = session.config.providers?.primary;
-  const model = session.config.model;
+  const model = session.config.model ?? 'deepseek/deepseek-chat';
   if (primary === 'openrouter') {
     const key = session.config.providers?.openrouter_api_key ?? openrouterApiKey;
     if (!key) throw new Error('OpenRouter API key not set (pass via session config or OPENROUTER_API_KEY env)');
-    const models = session.config.models
-      ? Object.values(session.config.models).filter(Boolean)
-      : [model ?? 'deepseek/deepseek-chat'];
-    return new OpenRouterProvider({ apiKey: key, models: [...new Set(models)] as string[] });
+    const models = session.config.providers?.openrouter_models?.length
+      ? session.config.providers.openrouter_models
+      : [model];
+    return new OpenRouterProvider({ apiKey: key, models });
   }
   if (primary === 'ollama' || (!apiKey && ollamaModel)) {
     return new OllamaProvider({ model: model || ollamaModel || 'qwen2.5:0.5b', baseUrl: ollamaBaseUrl });
   }
-  // Default to OpenRouter if key is available and no explicit provider set
   if (!primary && openrouterApiKey) {
-    const models = session.config.models
-      ? Object.values(session.config.models).filter(Boolean)
-      : [model ?? 'deepseek/deepseek-chat'];
-    return new OpenRouterProvider({ apiKey: openrouterApiKey, models: [...new Set(models)] as string[] });
+    const models = session.config.providers?.openrouter_models?.length
+      ? session.config.providers.openrouter_models
+      : [model];
+    return new OpenRouterProvider({ apiKey: openrouterApiKey, models });
   }
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set');
   return new AnthropicProvider(apiKey);

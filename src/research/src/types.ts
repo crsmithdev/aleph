@@ -25,12 +25,6 @@ export interface SessionConfig {
   max_steps_per_hour: number;
   max_concurrent_threads: number;
   model: string;
-  models: {
-    cheap: string;
-    mid: string;
-    expensive: string;
-    tangent: 'rotate' | string;
-  };
   providers: {
     primary: 'anthropic' | 'openrouter' | 'ollama';
     fallback?: 'anthropic' | 'openrouter' | 'ollama';
@@ -54,6 +48,7 @@ export interface SessionConfig {
     similarity_threshold: number; // default 0.75
   };
   min_searches_per_thread: number;
+  fetch_source_text: boolean;
   gap_analysis: {
     enabled: boolean;
     max_gap_searches: number;
@@ -82,19 +77,11 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
   min_delay_between_steps_ms: 2000,
   max_steps_per_hour: 60,
   max_concurrent_threads: 3,
-  model: 'claude-sonnet-4-6',
-  models: {
-    cheap: 'claude-haiku-4-5',
-    mid: 'claude-sonnet-4-6',
-    expensive: 'claude-opus-4-6',
-    tangent: 'rotate',
-  },
+  model: 'deepseek/deepseek-chat',
   providers: {
-    primary: 'anthropic',
+    primary: 'openrouter',
     openrouter_models: [
       'deepseek/deepseek-chat',
-      'google/gemini-2.0-flash-001',
-      'meta-llama/llama-3.3-70b-instruct',
     ],
   },
   schedule: {
@@ -108,6 +95,7 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
     similarity_threshold: 0.75,
   },
   min_searches_per_thread: 2,
+  fetch_source_text: false,
   gap_analysis: {
     enabled: true,
     max_gap_searches: 2,
