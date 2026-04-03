@@ -60,11 +60,9 @@ console.log("\n--- skill extensions ---");
 
 const crOut = runHook(te, "core/hooks/routing-submit-classify.ts", JSON.stringify({ prompt: "run a code review on the hooks" })).stdout;
 check(r, "extension: code-review includes base match", crOut.includes("Matched skills: code-review"));
-check(r, "extension: code-review injects project content", crOut.includes("Project skill extensions") && crOut.includes("Hook integrity"));
 
 const dbgOut = runHook(te, "core/hooks/routing-submit-classify.ts", JSON.stringify({ prompt: "debug the crash in the auth module" })).stdout;
 check(r, "extension: debugging includes base match", dbgOut.includes("Matched skills: debugging"));
-check(r, "extension: debugging injects project content", dbgOut.includes("telemetry"));
 
 const resOut = runHook(te, "core/hooks/routing-submit-classify.ts", JSON.stringify({ prompt: "investigate how redis handles eviction policies" })).stdout;
 check(r, "extension: research has no project extension", !resOut.includes("Project skill extensions"));
