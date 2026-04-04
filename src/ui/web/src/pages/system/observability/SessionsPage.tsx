@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
 import { useObsSessions, useObsSubagents } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
@@ -14,8 +14,6 @@ import { useNavigate } from 'react-router-dom';
 import { fmtNumber, fmtMs, fmtCurrency, shortDate, granLabel, relativeTime, fmtProject, fmtDuration } from '../../../utils/format';
 import { clsx } from 'clsx';
 
-type ProjectRow = { project: string; sessions: number };
-type ActivityRow = { date: string; count: number };
 type SessionRow = {
   sessionId: string;
   project: string;
@@ -35,14 +33,14 @@ type SessionRow = {
   gateInfo?: { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; mode: 'dispatched' | 'inline' | 'none' };
   firstUserMessage?: string;
 };
+
 export function SessionsPage() {
   const navigate = useNavigate();
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
   const { data, isLoading, error, refetch } = useObsSessions(range, granularity);
   const subagents = useObsSubagents(range, granularity);
-  const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
-  const [activityChartType, setActivityChartType] = useState<'bar' | 'line'>('bar');
+  const [chartType, setChartType] = useState<'bar' | 'line'>('line');
   const [includeChildSubagents, setIncludeChildSubagents] = useState(false);
   const [onlyWithSubagents, setOnlyWithSubagents] = useState(false);
 
@@ -55,28 +53,14 @@ export function SessionsPage() {
   if (!includeChildSubagents) filteredSessions = filteredSessions.filter(s => !s.parentSessionId);
   if (onlyWithSubagents) filteredSessions = filteredSessions.filter(s => s.hasSubagents);
 
-  const activityData: ActivityRow[] = data.byActivity;
-
-  const projectColumns: Column<ProjectRow>[] = [
-    {
-      key: 'project',
-      label: 'Project',
-      render: (row) => <span className="font-mono text-text-primary">{fmtProject(row.project)}</span>,
-    },
-    {
-      key: 'sessions',
-      label: 'Sessions',
-      align: 'right',
-      sortable: true,
-      render: (row) => fmtNumber(row.sessions),
-    },
-  ];
+  const maxMessages = Math.max(1, ...data.byDay.map(d => (d.userMessages ?? 0) + (d.assistantMessages ?? 0)));
 
   const sessionColumns: Column<SessionRow>[] = [
     {
       key: 'lastTimestamp',
       label: 'Last Active',
       sortable: true,
+      width: '100px',
       render: (row) => <span className="text-text-secondary text-xs whitespace-nowrap">{relativeTime(row.lastTimestamp)}</span>,
     },
     {
@@ -86,7 +70,7 @@ export function SessionsPage() {
       render: (row) => (
         <div className="flex flex-col gap-0.5 min-w-0">
           {row.firstUserMessage && (
-            <span className="text-text-primary text-xs truncate max-w-sm">
+            <span className="text-text-primary text-xs truncate">
               {row.parentSessionId && <span className="text-text-muted mr-1">↳</span>}
               {row.firstUserMessage.slice(0, 120)}{row.firstUserMessage.length > 120 ? '…' : ''}
             </span>
@@ -96,9 +80,10 @@ export function SessionsPage() {
     },
     {
       key: 'gitBranch',
-      label: 'Folder',
+      label: 'Project',
+      width: '140px',
       render: (row) => (
-        <span className="font-mono text-text-secondary text-xs truncate max-w-[12rem] block" title={row.project}>
+        <span className="font-mono text-text-secondary text-xs truncate block" title={row.project}>
           {fmtProject(row.project)}
         </span>
       ),
@@ -108,6 +93,7 @@ export function SessionsPage() {
       label: 'Duration',
       align: 'right',
       sortable: true,
+      width: '80px',
       render: (row) => fmtDuration(row.durationMs),
     },
     {
@@ -115,6 +101,7 @@ export function SessionsPage() {
       label: 'Messages',
       align: 'right',
       sortable: true,
+      width: '90px',
       render: (row) => (
         <span className="text-xs">
           <span className="text-text-secondary">{fmtNumber(row.userMessages + row.assistantMessages)}</span>
@@ -127,6 +114,7 @@ export function SessionsPage() {
       label: 'Cost',
       align: 'right',
       sortable: true,
+      width: '70px',
       render: (row) => fmtCurrency(row.cost),
     },
   ];
@@ -148,56 +136,39 @@ export function SessionsPage() {
         <StatCard label="Avg Dispatch" value={subagents.data ? fmtMs(subagents.data.avgMs) : '—'} />
       </div>
 
-      <ChartContainer title={granLabel(granularity, "Sessions")} chartType={chartType} onChartTypeChange={setChartType}>
-        {chartType === 'bar' ? (
-          <BarChart data={data.byDay}>
-            <CartesianGrid {...gridProps} />
-            <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-            <YAxis {...axisProps} />
-            <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-            <Legend {...legendProps} />
-            <Bar dataKey="sessions" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Sessions" />
-            <Bar dataKey="userMessages" fill={CHART_PALETTE[2]} radius={[2, 2, 0, 0]} name="User Msgs" />
-            <Bar dataKey="assistantMessages" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Assistant Msgs" />
-          </BarChart>
-        ) : (
-          <LineChart data={data.byDay}>
-            <CartesianGrid {...gridProps} />
-            <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-            <YAxis {...axisProps} />
-            <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-            <Legend {...legendProps} />
-            <Line type="monotone" dataKey="sessions" stroke={CHART_PALETTE[0]} strokeWidth={2} dot={false} name="Sessions" />
-            <Line type="monotone" dataKey="userMessages" stroke={CHART_PALETTE[2]} strokeWidth={2} dot={false} name="User Msgs" />
-            <Line type="monotone" dataKey="assistantMessages" stroke={CHART_PALETTE[1]} strokeWidth={2} dot={false} name="Assistant Msgs" />
-          </LineChart>
-        )}
-      </ChartContainer>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <ChartContainer title={granLabel(granularity, "Activity")} chartType={activityChartType} onChartTypeChange={setActivityChartType}>
-            {activityChartType === 'bar' ? (
-              <BarChart data={activityData}>
+      <div className="flex gap-4 items-stretch">
+        <div className="flex-1 min-w-0">
+          <ChartContainer title={granLabel(granularity, "Sessions")} chartType={chartType} onChartTypeChange={setChartType}>
+            {chartType === 'bar' ? (
+              <ComposedChart data={data.byDay}>
                 <CartesianGrid {...gridProps} />
                 <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-                <YAxis {...axisProps} />
+                <YAxis yAxisId="left" {...axisProps} />
+                <YAxis yAxisId="right" orientation="right" {...axisProps} />
                 <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                <Bar dataKey="count" fill={CHART_PALETTE[2]} radius={[2, 2, 0, 0]} name="Events" />
-              </BarChart>
+                <Legend {...legendProps} />
+                <Bar yAxisId="left" dataKey="userMessages" stackId="msgs" fill={CHART_PALETTE[2]} radius={[0, 0, 0, 0]} name="User Msgs" />
+                <Bar yAxisId="left" dataKey="assistantMessages" stackId="msgs" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Assistant Msgs" />
+                <Bar yAxisId="right" dataKey="sessions" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Sessions" />
+              </ComposedChart>
             ) : (
-              <LineChart data={activityData}>
+              <ComposedChart data={data.byDay}>
                 <CartesianGrid {...gridProps} />
                 <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-                <YAxis {...axisProps} />
+                <YAxis yAxisId="left" {...axisProps} domain={[0, maxMessages * 0.7]} />
+                <YAxis yAxisId="right" orientation="right" {...axisProps} />
                 <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                <Line type="monotone" dataKey="count" stroke={CHART_PALETTE[2]} strokeWidth={2} dot={false} name="Events" />
-              </LineChart>
+                <Legend {...legendProps} />
+                <Area yAxisId="left" type="monotone" dataKey="userMessages" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.15} strokeWidth={2} dot={false} name="User Msgs" />
+                <Area yAxisId="left" type="monotone" dataKey="assistantMessages" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Assistant Msgs" />
+                <Area yAxisId="right" type="monotone" dataKey="sessions" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Sessions" />
+              </ComposedChart>
             )}
           </ChartContainer>
         </div>
+
         {subagents.data && subagents.data.byType.length > 0 && (
-          <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
+          <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 w-[280px] shrink-0">
             <h3 className="mb-3 text-sm font-medium text-text-secondary">Subagents by Type</h3>
             <div className="flex flex-col items-center gap-3">
               <PieChart width={140} height={140}>
@@ -256,12 +227,6 @@ export function SessionsPage() {
         columns={sessionColumns}
         keyField="sessionId"
         onRowClick={(row) => navigate(`/observability/sessions/${encodeURIComponent(row.sessionId)}`)}
-      />
-
-      <DataTable<ProjectRow>
-        data={data.byProject}
-        columns={projectColumns}
-        keyField="project"
       />
 
       <QueryTiming ms={data.queryTimeMs} />

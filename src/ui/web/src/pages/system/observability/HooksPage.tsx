@@ -4,6 +4,7 @@ import { PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import { useObsHooks, useObsHookEvents } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
+import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
@@ -59,6 +60,14 @@ function ByHookView({ range, granularity }: {
   }));
   let filtered = hideInactive ? rankedWithRate.filter((r) => r.active) : rankedWithRate;
   if (showUnused) filtered = [...filtered, ...unusedRows];
+
+  const totalExecutions = filtered.filter(r => r.count > 0).reduce((s, r) => s + r.count, 0);
+  const activeScripts = filtered.filter(r => r.active && r.count > 0).length;
+  const totalErrors = filtered.reduce((s, r) => s + r.errors, 0);
+  const activeWithCounts = filtered.filter(r => r.active && r.count > 0);
+  const avgSuccessRate = activeWithCounts.length > 0
+    ? activeWithCounts.reduce((s, r) => s + r.successRate, 0) / activeWithCounts.length
+    : 100;
 
   const columns: Column<HookRow>[] = [
     {
@@ -128,6 +137,77 @@ function ByHookView({ range, granularity }: {
 
   return (
     <>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="Total Executions" value={fmtNumber(totalExecutions)} />
+        <StatCard label="Active Scripts" value={fmtNumber(activeScripts)} />
+        <StatCard label="Total Errors" value={fmtNumber(totalErrors)} accent={totalErrors > 0 ? 'error' : 'default'} />
+        <StatCard
+          label="Avg Success Rate"
+          value={fmtPct(avgSuccessRate)}
+          accent={avgSuccessRate >= 99 ? 'success' : avgSuccessRate >= 95 ? 'warning' : 'error'}
+        />
+      </div>
+
+      {filtered.filter(r => r.count > 0).length > 0 && (
+        <div className="flex gap-4">
+          <div className="flex-1 rounded-lg border border-border-primary bg-bg-secondary p-4">
+            <h3 className="mb-3 text-sm font-medium text-text-secondary">Executions by Script</h3>
+            <div className="flex items-center gap-6">
+              <PieChart width={180} height={180}>
+                <Pie
+                  data={filtered.filter(r => r.count > 0)}
+                  dataKey="count"
+                  nameKey="command"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={80}
+                >
+                  {filtered.filter(r => r.count > 0).map((_, i) => (
+                    <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
+                  ))}
+                </Pie>
+                <RechartsTooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+              </PieChart>
+              <div className="flex flex-col gap-1.5 min-w-0">
+                {filtered.filter(r => r.count > 0).slice(0, 10).map((row, i) => (
+                  <div key={row.command} className="flex items-center gap-2 text-xs">
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                    <span className="font-mono text-text-secondary truncate">{row.command}</span>
+                    <span className="ml-auto text-text-muted font-mono shrink-0">{fmtNumber(row.count)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {data.byEvent && data.byEvent.length > 0 && (
+            <div className="rounded-lg border border-border-primary bg-bg-secondary p-4" style={{ width: 220 }}>
+              <h3 className="mb-3 text-sm font-medium text-text-secondary">By Event</h3>
+              <div className="flex flex-col items-center gap-4">
+                <PieChart width={120} height={120}>
+                  <Pie data={data.byEvent} dataKey="count" nameKey="event" cx="50%" cy="50%" innerRadius={30} outerRadius={50}>
+                    {data.byEvent.map((_, i) => (
+                      <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+                </PieChart>
+                <div className="flex flex-col gap-2 w-full">
+                  {data.byEvent.map((row, i) => (
+                    <div key={row.event} className="flex items-center gap-2 text-xs">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                      <span className="font-mono text-text-secondary">{row.event}</span>
+                      <span className="ml-auto text-text-muted font-mono">{fmtNumber(row.count)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center gap-3">
         <FilterToggle label="Active only" active={hideInactive} onToggle={() => setHideInactive(!hideInactive)} />
         {unusedRows.length > 0 && (
@@ -143,64 +223,6 @@ function ByHookView({ range, granularity }: {
           navigate(`/observability/hooks/${encodeURIComponent(row.command)}`)
         }
       />
-
-      {filtered.filter(r => r.count > 0).length > 0 && (
-        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
-          <h3 className="mb-3 text-sm font-medium text-text-secondary">Executions by Script</h3>
-          <div className="flex items-center gap-6">
-            <PieChart width={180} height={180}>
-              <Pie
-                data={filtered.filter(r => r.count > 0)}
-                dataKey="count"
-                nameKey="command"
-                cx="50%"
-                cy="50%"
-                innerRadius={50}
-                outerRadius={80}
-              >
-                {filtered.filter(r => r.count > 0).map((_, i) => (
-                  <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
-                ))}
-              </Pie>
-              <RechartsTooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
-            </PieChart>
-            <div className="flex flex-col gap-1.5 min-w-0">
-              {filtered.filter(r => r.count > 0).slice(0, 10).map((row, i) => (
-                <div key={row.command} className="flex items-center gap-2 text-xs">
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                  <span className="font-mono text-text-secondary truncate">{row.command}</span>
-                  <span className="ml-auto text-text-muted font-mono shrink-0">{fmtNumber(row.count)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {data.byEvent && data.byEvent.length > 0 && (
-        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
-          <h3 className="mb-3 text-sm font-medium text-text-secondary">By Event</h3>
-          <div className="flex items-center gap-6">
-            <PieChart width={120} height={120}>
-              <Pie data={data.byEvent} dataKey="count" nameKey="event" cx="50%" cy="50%" innerRadius={30} outerRadius={50}>
-                {data.byEvent.map((_, i) => (
-                  <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
-                ))}
-              </Pie>
-              <RechartsTooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
-            </PieChart>
-            <div className="flex flex-col gap-2">
-              {data.byEvent.map((row, i) => (
-                <div key={row.event} className="flex items-center gap-2 text-xs">
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                  <span className="font-mono text-text-secondary">{row.event}</span>
-                  <span className="ml-2 text-text-muted font-mono">{fmtNumber(row.count)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
       <QueryTiming ms={data.queryTimeMs} />
     </>
@@ -345,32 +367,32 @@ export function HooksPage() {
 
   return (
     <div className="space-y-6">
-      <ObsControlBar title={<h1 className="text-2xl font-bold text-text-primary">Scripts</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity}>
-        <div className="flex items-center gap-1 rounded-md border border-border-primary bg-bg-secondary p-0.5">
-          <button
-            onClick={() => setView('by-hook')}
-            className={clsx(
-              'rounded px-2.5 py-1 text-xs transition-colors',
-              view === 'by-hook'
-                ? 'bg-accent text-white'
-                : 'text-text-muted hover:text-text-primary'
-            )}
-          >
-            By Hook
-          </button>
-          <button
-            onClick={() => setView('by-event')}
-            className={clsx(
-              'rounded px-2.5 py-1 text-xs transition-colors',
-              view === 'by-event'
-                ? 'bg-accent text-white'
-                : 'text-text-muted hover:text-text-primary'
-            )}
-          >
-            By Event
-          </button>
-        </div>
-      </ObsControlBar>
+      <ObsControlBar title={<h1 className="text-2xl font-bold text-text-primary">Scripts</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity} />
+
+      <div className="flex items-center gap-1 rounded-md border border-border-primary bg-bg-secondary p-0.5 self-start w-fit">
+        <button
+          onClick={() => setView('by-hook')}
+          className={clsx(
+            'rounded px-2.5 py-1 text-xs transition-colors',
+            view === 'by-hook'
+              ? 'bg-accent text-white'
+              : 'text-text-muted hover:text-text-primary'
+          )}
+        >
+          By Hook
+        </button>
+        <button
+          onClick={() => setView('by-event')}
+          className={clsx(
+            'rounded px-2.5 py-1 text-xs transition-colors',
+            view === 'by-event'
+              ? 'bg-accent text-white'
+              : 'text-text-muted hover:text-text-primary'
+          )}
+        >
+          By Event
+        </button>
+      </div>
 
       {view === 'by-hook' ? (
         <ByHookView range={range} granularity={granularity} />

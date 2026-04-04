@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { useState } from 'react';
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
 import { useObsMemory, useObsMemoryItems, useObsMemoryUsage, useTriggerSnapshot, useDeleteMemory, useUpdateMemory } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
@@ -9,20 +9,12 @@ import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps } from '../../../components/charts/chartTheme';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
-import { fmtNumber, shortDate, relativeTime, granLabel, rangeToDays } from '../../../utils/format';
+import { fmtNumber, shortDate, relativeTime, granLabel } from '../../../utils/format';
 import { clsx } from 'clsx';
 
 type TypeRow = { type: string; count: number };
 type TagRow = { tag: string; count: number };
 type MemoryItem = { id: string; content: string; memory_type: string; tags: string; created_at: string; updated_at: string };
-
-function bucketKey(ts: string, gran: Granularity): string {
-  switch (gran) {
-    case 'minute': return ts.slice(0, 16);
-    case 'hour': return ts.slice(0, 13);
-    case 'day': return ts.slice(0, 10);
-  }
-}
 
 export function MemoryPage() {
   const [range, setRange] = useState<TimeRange>('30d');
@@ -42,7 +34,6 @@ export function MemoryPage() {
   const [activeSearch, setActiveSearch] = useState({ q: '', type: '', tag: '' });
 
   const [usageChartType, setUsageChartType] = useState<'bar' | 'line'>('bar');
-  const [trendChartType, setTrendChartType] = useState<'bar' | 'line'>('line');
 
   const items = useObsMemoryItems({
     q: activeSearch.q || undefined,
@@ -50,21 +41,6 @@ export function MemoryPage() {
     tag: activeSearch.tag || undefined,
     limit: 50,
   });
-
-  // Filter trend data by selected time range (must be before early returns)
-  const trendData = useMemo(() => {
-    if (!data) return [];
-    const allSnapshots = data.snapshots.slice().reverse();
-    const days = rangeToDays(range);
-    const cutoff = new Date(Date.now() - days * 86400000).toISOString();
-    const filtered = allSnapshots.filter((s) => s.takenAt >= cutoff);
-    const buckets = new Map<string, { date: string; total: number }>();
-    for (const s of filtered) {
-      const key = bucketKey(s.takenAt, granularity);
-      buckets.set(key, { date: s.takenAt, total: s.total });
-    }
-    return Array.from(buckets.values());
-  }, [data, range, granularity]);
 
   function handleSearch() {
     setActiveSearch({ q: searchQuery, type: typeFilter, tag: tagFilter });
@@ -134,6 +110,7 @@ export function MemoryPage() {
     {
       key: 'tags',
       label: 'Tags',
+      width: '140px',
       render: (row) => {
         const tags = row.tags ? (row.tags.startsWith('[') ? JSON.parse(row.tags) : row.tags.split(',').map((t: string) => t.trim())) : [];
         return (
@@ -197,35 +174,70 @@ export function MemoryPage() {
         </div>
       )}
 
-      {/* Usage chart */}
+      {/* Usage chart + type donut */}
       {usage.data && usage.data.byDay.length > 0 && (
-        <ChartContainer
-          title={granLabel(granularity, "Memory Operations")}
-          chartType={usageChartType}
-          onChartTypeChange={setUsageChartType}
-        >
-          {usageChartType === 'bar' ? (
-            <BarChart data={usage.data.byDay}>
-              <CartesianGrid {...gridProps} />
-              <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-              <YAxis {...axisProps} />
-              <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-              <Legend {...legendProps} />
-              <Bar dataKey="stores" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Stores" />
-              <Bar dataKey="searches" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Searches" />
-            </BarChart>
-          ) : (
-            <LineChart data={usage.data.byDay}>
-              <CartesianGrid {...gridProps} />
-              <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-              <YAxis {...axisProps} />
-              <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-              <Legend {...legendProps} />
-              <Line type="monotone" dataKey="stores" stroke={CHART_PALETTE[1]} strokeWidth={2} dot={false} name="Stores" />
-              <Line type="monotone" dataKey="searches" stroke={CHART_PALETTE[0]} strokeWidth={2} dot={false} name="Searches" />
-            </LineChart>
+        <div className="flex gap-4 items-start">
+          <div className="flex-1 min-w-0">
+            <ChartContainer
+              title={granLabel(granularity, "Memory Operations")}
+              chartType={usageChartType}
+              onChartTypeChange={setUsageChartType}
+            >
+              {usageChartType === 'bar' ? (
+                <BarChart data={usage.data.byDay}>
+                  <CartesianGrid {...gridProps} />
+                  <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                  <YAxis {...axisProps} />
+                  <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
+                  <Legend {...legendProps} />
+                  <Bar dataKey="stores" stackId="usage" fill={CHART_PALETTE[1]} radius={[0, 0, 0, 0]} name="Stores" />
+                  <Bar dataKey="searches" stackId="usage" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Searches" />
+                </BarChart>
+              ) : (
+                <AreaChart data={usage.data.byDay}>
+                  <CartesianGrid {...gridProps} />
+                  <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                  <YAxis {...axisProps} />
+                  <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
+                  <Legend {...legendProps} />
+                  <Area type="monotone" dataKey="stores" stackId="usage" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} strokeWidth={2} dot={false} name="Stores" />
+                  <Area type="monotone" dataKey="searches" stackId="usage" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} strokeWidth={2} dot={false} name="Searches" />
+                </AreaChart>
+              )}
+            </ChartContainer>
+          </div>
+          {typeRows.length > 0 && (
+            <div className="w-40 shrink-0 bg-bg-secondary border border-border-primary rounded-lg p-3">
+              <p className="text-xs font-medium text-text-secondary mb-2">By Type</p>
+              <PieChart width={128} height={128}>
+                <Pie
+                  data={typeRows}
+                  dataKey="count"
+                  nameKey="type"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={36}
+                  outerRadius={56}
+                  strokeWidth={0}
+                >
+                  {typeRows.map((_, index) => (
+                    <Cell key={index} fill={CHART_PALETTE[index % CHART_PALETTE.length]} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={tooltipStyle} formatter={(value, name) => [fmtNumber(value as number), name]} />
+              </PieChart>
+              <div className="mt-2 space-y-1">
+                {typeRows.map((row, i) => (
+                  <div key={row.type} className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                    <span className="text-[10px] font-mono text-text-muted truncate flex-1">{row.type}</span>
+                    <span className="text-[10px] text-text-secondary">{fmtNumber(row.count)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
-        </ChartContainer>
+        </div>
       )}
 
       {/* Type + Tag breakdown */}
@@ -251,33 +263,6 @@ export function MemoryPage() {
             />
           </div>
         </div>
-      )}
-
-      {/* Memory count trend */}
-      {trendData.length > 1 && (
-        <ChartContainer
-          title="Memory Count Over Time"
-          chartType={trendChartType}
-          onChartTypeChange={setTrendChartType}
-        >
-          {trendChartType === 'line' ? (
-            <LineChart data={trendData}>
-              <CartesianGrid {...gridProps} />
-              <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-              <YAxis {...axisProps} />
-              <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-              <Line type="monotone" dataKey="total" stroke={CHART_PALETTE[0]} strokeWidth={2} dot={false} name="Memories" />
-            </LineChart>
-          ) : (
-            <BarChart data={trendData}>
-              <CartesianGrid {...gridProps} />
-              <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-              <YAxis {...axisProps} />
-              <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-              <Bar dataKey="total" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Memories" />
-            </BarChart>
-          )}
-        </ChartContainer>
       )}
 
       {/* Memory browser */}

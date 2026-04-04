@@ -356,6 +356,7 @@ export function useObsSessionTrace(sessionId: string, range: TimeRange) {
       outputTokens?: number;
       cost?: number;
       model?: string;
+      assistantText?: string;
     }>;
     parentSessionId?: string;
     totalDurationMs: number;

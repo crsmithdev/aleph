@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { useObsHookDetail } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
@@ -23,7 +23,7 @@ export function HookDetailPage() {
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
   const { data, isLoading, error, refetch } = useObsHookDetail(hookName, range);
-  const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
+  const [chartType, setChartType] = useState<'bar' | 'line'>('line');
   const [errorsOnly, setErrorsOnly] = useState(false);
 
   if (isLoading) return <PageLoading />;
@@ -150,13 +150,13 @@ export function HookDetailPage() {
               <Bar dataKey="count" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Executions" />
             </BarChart>
           ) : (
-            <LineChart data={data.byDay}>
+            <AreaChart data={data.byDay}>
               <CartesianGrid {...gridProps} />
               <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
               <YAxis {...axisProps} />
               <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-              <Line type="monotone" dataKey="count" stroke={CHART_PALETTE[0]} strokeWidth={2} dot={false} name="Executions" />
-            </LineChart>
+              <Area type="monotone" dataKey="count" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.15} dot={false} name="Executions" />
+            </AreaChart>
           )}
         </ChartContainer>
       )}

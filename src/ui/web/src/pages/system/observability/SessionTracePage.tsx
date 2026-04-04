@@ -31,6 +31,7 @@ type Turn = {
   outputTokens?: number;
   cost?: number;
   model?: string;
+  assistantText?: string;
 };
 
 // ── Span row inside expanded response ─────────────────────────────────────────
@@ -156,36 +157,34 @@ function ResponseBlock({
   if (toolSpans.length > 0) summaryParts.push(`${toolSpans.length} tool${toolSpans.length !== 1 ? 's' : ''}`);
   if (hookSpans.length > 0) summaryParts.push(`${hookSpans.length} hook${hookSpans.length !== 1 ? 's' : ''}`);
 
+  const hasSpans = turn.spans.length > 0;
+
   return (
-    <div className="rounded-sm border border-border-primary bg-bg-secondary overflow-hidden ml-2">
-      {/* Header */}
+    <div className="ml-2 space-y-1">
+      {/* Meta row — no background */}
       <button
         onClick={onToggle}
-        className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-bg-tertiary/30 transition-colors"
+        className="w-full flex items-center gap-2 px-1 py-0.5 text-left"
       >
-        {/* Model badge */}
         <span className="text-xs text-text-muted font-mono shrink-0">
           {turn.model ? turn.model.replace('claude-', '') : 'Claude'}
         </span>
 
-        {/* Summary: tools + hooks */}
         {summaryParts.length > 0 && (
-          <span className="text-xs text-text-secondary shrink-0">· {summaryParts.join(', ')}</span>
+          <span className="text-xs text-text-disabled shrink-0">· {summaryParts.join(', ')}</span>
         )}
 
         {errorCount > 0 && (
           <span className="text-xs text-error shrink-0">· {errorCount} error{errorCount !== 1 ? 's' : ''}</span>
         )}
 
-        {/* Context delta badge */}
         {ctxDelta !== undefined && ctxDelta > 0 && (
           <span className="shrink-0 text-[10px] rounded px-1.5 py-0.5 bg-bg-tertiary border border-border-primary text-text-muted font-mono">
-            Context +{fmtNumber(ctxDelta)}
+            +{fmtNumber(ctxDelta)}
           </span>
         )}
 
-        {/* Right: tokens / cost / duration / chevron */}
-        <div className="ml-auto flex items-center gap-3 text-xs text-text-muted shrink-0">
+        <div className="ml-auto flex items-center gap-3 text-xs text-text-disabled shrink-0">
           {turn.contextTokens && (
             <span className="font-mono">{fmtNumber(turn.contextTokens)}↑</span>
           )}
@@ -193,22 +192,27 @@ function ResponseBlock({
             <span className="font-mono">{fmtCurrency(turn.cost)}</span>
           ) : null}
           <span className="font-mono">{fmtMs(turn.durationMs)}</span>
-          <span className={clsx('transition-transform', expanded ? 'rotate-180' : '')}>⌄</span>
+          {hasSpans && (
+            <span className={clsx('transition-transform', expanded ? 'rotate-180' : '')}>⌄</span>
+          )}
         </div>
       </button>
 
-      {/* Expanded spans */}
-      {expanded && turn.spans.length > 0 && (
-        <div className="border-t border-border-primary">
-          {turn.spans.map((span, i) => (
-            <SpanRow key={`${span.id}-${i}`} span={span} sessionId={sessionId} />
-          ))}
+      {/* Assistant text */}
+      {turn.assistantText && (
+        <div className="px-1">
+          <p className="text-sm text-text-primary whitespace-pre-wrap break-words leading-relaxed">
+            {turn.assistantText}
+          </p>
         </div>
       )}
 
-      {expanded && turn.spans.length === 0 && (
-        <div className="border-t border-border-primary px-4 py-3 text-xs text-text-muted italic">
-          No tool or hook calls in this turn
+      {/* Collapsible spans panel */}
+      {hasSpans && expanded && (
+        <div className="rounded-sm border border-border-primary bg-bg-secondary overflow-hidden">
+          {turn.spans.map((span, i) => (
+            <SpanRow key={`${span.id}-${i}`} span={span} sessionId={sessionId} />
+          ))}
         </div>
       )}
     </div>
@@ -237,12 +241,14 @@ function UserBlock({ turn }: { turn: Turn }) {
   const time = dateTime(turn.startTime);
 
   return (
-    <div className="flex justify-end">
+    <div className="flex flex-col items-end gap-1">
+      {/* Label row — no background */}
+      <div className="flex items-center gap-2 px-1">
+        <span className="font-mono text-[11px] text-accent tracking-wider uppercase">You</span>
+        <span className="text-[11px] text-text-muted">{time}</span>
+      </div>
+      {/* Message bubble */}
       <div className="max-w-[75%] bg-bg-secondary border-l-4 border-accent rounded-sm px-4 py-3">
-        <div className="flex items-center justify-between gap-4 mb-1">
-          <span className="font-mono text-[11px] text-accent tracking-wider uppercase">You</span>
-          <span className="text-[11px] text-text-muted">{time}</span>
-        </div>
         {msg ? (
           <p className="text-sm text-text-primary whitespace-pre-wrap break-words leading-relaxed">
             <InlineMarkdown text={msg} />

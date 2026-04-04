@@ -106,31 +106,27 @@ function SystemInfoSection() {
   const buildTag = `${info.git.short}${info.git.dirty ? '-dirty' : ''}`;
 
   return (
-    <>
-      <Section title="Build">
-        <InfoGrid rows={[
-          ['Revision', `${buildTag} (${info.git.branch})`],
-          ['Commits', `${info.git.commitCount} total${info.git.commitsSinceTag !== 'n/a' ? `, ${info.git.commitsSinceTag}` : ''}`],
-          ['Last Commit', info.git.lastCommit],
-          ['Commit Date', info.git.lastCommitDate],
-          ['Installed', formatTimestamp(info.install.timestamp)],
-          ['Bun', info.install.bunVersion],
-          ['Platform', `${info.install.platform} / ${info.install.arch}`],
-          ['API Port', String(info.runtime.port)],
-          ['DB Size', fmtBytes(info.runtime.dbSizeBytes)],
-        ]} />
-      </Section>
-
-      <Section title="Paths">
-        <InfoGrid rows={[
-          ['Construct', info.paths.construct],
-          ['Construct DB', info.paths.db],
-          ['Memory DB', info.paths.memoryDb],
-          ['Telemetry', info.paths.telemetry],
-          ['Backups', info.paths.backups],
-        ]} />
-      </Section>
-    </>
+    <Section title="System">
+      <InfoGrid rows={[
+        ['Revision', `${buildTag} (${info.git.branch})`],
+        ['Commits', `${info.git.commitCount} total${info.git.commitsSinceTag !== 'n/a' ? `, ${info.git.commitsSinceTag}` : ''}`],
+        ['Last Commit', info.git.lastCommit],
+        ['Commit Date', info.git.lastCommitDate],
+        ['Installed', formatTimestamp(info.install.timestamp)],
+        ['Bun', info.install.bunVersion],
+        ['Platform', `${info.install.platform} / ${info.install.arch}`],
+        ['API Port', String(info.runtime.port)],
+        ['DB Size', fmtBytes(info.runtime.dbSizeBytes)],
+      ]} />
+      <hr className="border-border-primary" />
+      <InfoGrid rows={[
+        ['Construct', info.paths.construct],
+        ['Construct DB', info.paths.db],
+        ['Memory DB', info.paths.memoryDb],
+        ['Telemetry', info.paths.telemetry],
+        ['Backups', info.paths.backups],
+      ]} />
+    </Section>
   );
 }
 

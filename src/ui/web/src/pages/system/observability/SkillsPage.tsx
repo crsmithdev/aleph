@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import { useObsSkills } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
+import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
@@ -23,17 +24,16 @@ type SkillRow = {
   unused?: boolean;
 };
 
-type TypeFilter = 'all' | 'command' | 'skill';
-
 export function SkillsPage() {
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
   const [showUnused, setShowUnused] = useState(true);
   const [installedOnly, setInstalledOnly] = useState(false);
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  const [showCommands, setShowCommands] = useState(true);
+  const [showSkills, setShowSkills] = useState(true);
   const navigate = useNavigate();
   const { data, isLoading, error, refetch } = useObsSkills(range, granularity);
-  const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
+  const [chartType, setChartType] = useState<'bar' | 'line'>('line');
 
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load skills" retry={refetch} />;
@@ -45,11 +45,28 @@ export function SkillsPage() {
   });
   let ranked = installedOnly ? data.ranked.filter(r => r.registered) : data.ranked;
   let allRows: SkillRow[] = showUnused ? [...ranked, ...unusedRows] : [...ranked];
-  if (typeFilter !== 'all') allRows = allRows.filter(r => r.type === typeFilter);
-  const maxCount = Math.max(...ranked.map((r) => r.count), 1);
+  if (!showCommands && showSkills) allRows = allRows.filter(r => r.type === 'skill');
+  else if (showCommands && !showSkills) allRows = allRows.filter(r => r.type === 'command');
 
   const commandCount = data.ranked.filter(r => r.type === 'command').length;
   const skillCount = data.ranked.filter(r => r.type === 'skill').length;
+  const totalInvocations = data.ranked.reduce((s, r) => s + r.count, 0);
+  const activeSkills = data.ranked.length;
+
+  // Build top 10 skills for stacked chart
+  const top10Skills = data.ranked.slice(0, 10).map(r => r.skill);
+  const stackedByDay = data.byDay.map((d: { date: string; count: number; skills?: Record<string, number> }) => {
+    const row: Record<string, unknown> = { date: d.date };
+    if (d.skills) {
+      for (const skill of top10Skills) {
+        row[skill] = d.skills[skill] ?? 0;
+      }
+    } else {
+      row['count'] = d.count;
+    }
+    return row;
+  });
+  const hasSkillBreakdown = data.byDay.length > 0 && data.byDay[0]?.skills != null;
 
   function displayName(row: SkillRow): string {
     if (row.type === 'command') {
@@ -100,19 +117,6 @@ export function SkillsPage() {
       sortable: true,
       render: (row) => fmtPct(row.pct),
     },
-    {
-      key: 'bar',
-      label: '',
-      width: '20%',
-      render: (row) => (
-        <div className="h-2 w-full rounded-full bg-bg-tertiary">
-          <div
-            className={clsx('h-2 rounded-full', row.type === 'command' ? 'bg-accent' : 'bg-purple-500')}
-            style={{ width: `${(row.count / maxCount) * 100}%` }}
-          />
-        </div>
-      ),
-    },
   ];
 
   return (
@@ -124,24 +128,97 @@ export function SkillsPage() {
         )}
       </ObsControlBar>
 
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="Total Invocations" value={fmtNumber(totalInvocations)} />
+        <StatCard label="Active Skills" value={fmtNumber(activeSkills)} />
+        <StatCard label="Commands" value={fmtNumber(commandCount)} />
+        <StatCard label="Skills" value={fmtNumber(skillCount)} />
+      </div>
+
+      {data.byDay.length > 0 && (
+        <div className="flex gap-4 items-stretch">
+          <div className="flex-1">
+            <ChartContainer title="Skill Invocations Over Time" chartType={chartType} onChartTypeChange={setChartType}>
+              {chartType === 'bar' ? (
+                hasSkillBreakdown ? (
+                  <BarChart data={stackedByDay}>
+                    <CartesianGrid {...gridProps} />
+                    <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                    <YAxis {...axisProps} />
+                    <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
+                    {top10Skills.map((skill, i) => (
+                      <Bar key={skill} dataKey={skill} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === top10Skills.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
+                    ))}
+                  </BarChart>
+                ) : (
+                  <BarChart data={data.byDay}>
+                    <CartesianGrid {...gridProps} />
+                    <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                    <YAxis {...axisProps} />
+                    <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
+                    <Bar dataKey="count" fill={CHART_PALETTE[3]} radius={[2, 2, 0, 0]} name="Invocations" />
+                  </BarChart>
+                )
+              ) : (
+                hasSkillBreakdown ? (
+                  <AreaChart data={stackedByDay}>
+                    <CartesianGrid {...gridProps} />
+                    <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                    <YAxis {...axisProps} />
+                    <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
+                    {top10Skills.map((skill, i) => (
+                      <Area key={skill} type="monotone" dataKey={skill} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.3} dot={false} />
+                    ))}
+                  </AreaChart>
+                ) : (
+                  <AreaChart data={data.byDay}>
+                    <CartesianGrid {...gridProps} />
+                    <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                    <YAxis {...axisProps} />
+                    <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
+                    <Area type="monotone" dataKey="count" stroke={CHART_PALETTE[3]} fill={CHART_PALETTE[3]} fillOpacity={0.15} dot={false} name="Invocations" />
+                  </AreaChart>
+                )
+              )}
+            </ChartContainer>
+          </div>
+
+          {data.byType && data.byType.length > 1 && (
+            <div className="rounded-lg border border-border-primary bg-bg-secondary p-4" style={{ width: 180 }}>
+              <h3 className="mb-3 text-sm font-medium text-text-secondary">By Type</h3>
+              <div className="flex flex-col items-center gap-4">
+                <PieChart width={120} height={120}>
+                  <Pie data={data.byType} dataKey="count" nameKey="type" cx="50%" cy="50%" innerRadius={30} outerRadius={50}>
+                    {data.byType.map((_: unknown, i: number) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                  </Pie>
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v: unknown, n: unknown) => [fmtNumber(Number(v)), String(n)]} />
+                </PieChart>
+                <div className="flex flex-col gap-2 w-full">
+                  {data.byType.map((row: { type: string; count: number }, i: number) => (
+                    <div key={row.type} className="flex items-center gap-2 text-xs">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                      <span className="text-text-secondary capitalize">{row.type}</span>
+                      <span className="ml-auto text-text-muted font-mono">{fmtNumber(row.count)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center gap-2">
-        {(['all', 'command', 'skill'] as const).map(t => (
-          <button
-            key={t}
-            onClick={() => setTypeFilter(t)}
-            className={clsx(
-              'flex items-center gap-1.5 rounded px-2 py-1 text-xs border transition-colors',
-              typeFilter === t
-                ? 'border-accent/40 bg-accent/10 text-accent'
-                : 'border-border-primary bg-bg-secondary text-text-muted',
-            )}
-          >
-            {t === 'all' ? 'All' : t === 'command' ? 'Commands' : 'Skills'}
-            <span className="text-text-disabled">
-              ({t === 'all' ? data.ranked.length : t === 'command' ? commandCount : skillCount})
-            </span>
-          </button>
-        ))}
+        <FilterToggle
+          label={`Commands (${commandCount})`}
+          active={showCommands}
+          onToggle={() => setShowCommands(!showCommands)}
+        />
+        <FilterToggle
+          label={`Skills (${skillCount})`}
+          active={showSkills}
+          onToggle={() => setShowSkills(!showSkills)}
+        />
       </div>
 
       <DataTable<SkillRow>
@@ -151,51 +228,6 @@ export function SkillsPage() {
         onRowClick={(row) => !row.unused && navigate(`/observability/skills/${encodeURIComponent(row.skill)}`)}
         rowClassName={(row) => row.unused ? 'opacity-50' : undefined}
       />
-
-      {data.byType && data.byType.length > 1 && (
-        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
-          <h3 className="mb-3 text-sm font-medium text-text-secondary">By Type</h3>
-          <div className="flex items-center gap-6">
-            <PieChart width={120} height={120}>
-              <Pie data={data.byType} dataKey="count" nameKey="type" cx="50%" cy="50%" innerRadius={30} outerRadius={50}>
-                {data.byType.map((_: unknown, i: number) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
-              </Pie>
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: unknown, n: unknown) => [fmtNumber(Number(v)), String(n)]} />
-            </PieChart>
-            <div className="flex flex-col gap-2">
-              {data.byType.map((row: { type: string; count: number }, i: number) => (
-                <div key={row.type} className="flex items-center gap-2 text-xs">
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                  <span className="text-text-secondary capitalize">{row.type}</span>
-                  <span className="ml-2 text-text-muted font-mono">{fmtNumber(row.count)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {data.byDay.length > 0 && (
-        <ChartContainer title="Skill Invocations Over Time" chartType={chartType} onChartTypeChange={setChartType}>
-          {chartType === 'bar' ? (
-            <BarChart data={data.byDay}>
-              <CartesianGrid {...gridProps} />
-              <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-              <YAxis {...axisProps} />
-              <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-              <Bar dataKey="count" fill={CHART_PALETTE[3]} radius={[2, 2, 0, 0]} name="Invocations" />
-            </BarChart>
-          ) : (
-            <LineChart data={data.byDay}>
-              <CartesianGrid {...gridProps} />
-              <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-              <YAxis {...axisProps} />
-              <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-              <Line type="monotone" dataKey="count" stroke={CHART_PALETTE[3]} strokeWidth={2} dot={false} name="Invocations" />
-            </LineChart>
-          )}
-        </ChartContainer>
-      )}
 
       <QueryTiming ms={data.queryTimeMs} />
     </div>

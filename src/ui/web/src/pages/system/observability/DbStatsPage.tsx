@@ -69,10 +69,32 @@ function ContentsView({ db, table }: { db: string; table: string }) {
               <tr key={i} className="border-b border-border-primary/20 hover:bg-bg-tertiary/30">
                 {columns.map((col) => {
                   const val = row[col];
-                  const str = val === null ? 'NULL' : typeof val === 'string' && val.length > 80 ? val.slice(0, 80) + '…' : String(val ?? '');
+                  let display: React.ReactNode;
+                  let isNull = false;
+                  if (val === null) {
+                    isNull = true;
+                    display = '—';
+                  } else if (typeof val === 'string' && (val.startsWith('{') || val.startsWith('['))) {
+                    try {
+                      const parsed = JSON.parse(val);
+                      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                        const entries = Object.entries(parsed).slice(0, 3);
+                        display = entries.map(([k, v]) => `${k}: ${v}`).join(' · ');
+                      } else if (Array.isArray(parsed)) {
+                        display = parsed.slice(0, 3).join(' · ');
+                      } else {
+                        display = String(val).slice(0, 80) + (String(val).length > 80 ? '…' : '');
+                      }
+                    } catch {
+                      display = val.length > 80 ? val.slice(0, 80) + '…' : val;
+                    }
+                  } else {
+                    const s = String(val);
+                    display = s.length > 80 ? s.slice(0, 80) + '…' : s;
+                  }
                   return (
-                    <td key={col} className={clsx('py-1 pr-4 font-mono max-w-xs truncate', val === null ? 'text-text-disabled italic' : 'text-text-secondary')} title={String(val ?? '')}>
-                      {str}
+                    <td key={col} className={clsx('py-1 pr-4 font-mono max-w-xs truncate', isNull ? 'text-text-muted' : 'text-text-secondary')} title={String(val ?? '')}>
+                      {display}
                     </td>
                   );
                 })}

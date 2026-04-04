@@ -62,6 +62,7 @@ export function App() {
               <Route path="/system/settings" element={<Navigate to="/settings" replace />} />
 
               {/* Life */}
+              <Route path="/life" element={<Navigate to="/summary" replace />} />
               <Route path="/summary" element={<SummaryPage />} />
               <Route path="/goals" element={<GoalsPage />} />
               <Route path="/goals/:id" element={<GoalDetailPage />} />

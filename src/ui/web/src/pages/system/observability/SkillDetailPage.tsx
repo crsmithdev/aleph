@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import { useObsSkillDetail } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
@@ -10,7 +10,7 @@ import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtPct, shortDate, dateTime, granLabel } from '../../../utils/format';
+import { fmtNumber, fmtPct, shortDate, dateTime, granLabel, fmtProject } from '../../../utils/format';
 import { MarkdownBlock } from '../../../components/data/MarkdownBlock';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { clsx } from 'clsx';
@@ -23,6 +23,7 @@ export function SkillDetailPage() {
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  const [chartType, setChartType] = useState<'bar' | 'line'>('line');
   const { data, isLoading, error, refetch } = useObsSkillDetail(skillName, range);
 
   if (isLoading) return <PageLoading />;
@@ -31,9 +32,40 @@ export function SkillDetailPage() {
   const isCommand = data.type === 'command';
   const displayName = isCommand && !skillName.startsWith('/') ? `/${skillName}` : skillName;
 
-  const successRate = data.totalCount > 0
-    ? ((data.totalCount - data.errorCount) / data.totalCount) * 100
-    : 100;
+  const successRate = (data.totalCount ?? 0) === 0
+    ? 100
+    : ((data.totalCount - data.errorCount) / data.totalCount) * 100;
+
+  // Build project breakdown from invocations
+  const allProjects = [...new Set(data.invocations.map((inv: InvocationRow) => inv.project))].slice(0, 8);
+
+  // Group invocations by date+project
+  const invByDateProject: Record<string, Record<string, number>> = {};
+  for (const inv of data.invocations) {
+    const date = inv.timestamp.slice(0, 10);
+    if (!invByDateProject[date]) invByDateProject[date] = {};
+    invByDateProject[date][inv.project] = (invByDateProject[date][inv.project] ?? 0) + 1;
+  }
+
+  // Merge with byDay dates (use byDay as the date axis backbone)
+  const byDayProject = data.byDay.map((d: { date: string; count: number }) => {
+    const row: Record<string, unknown> = { date: d.date };
+    const dateKey = d.date.slice(0, 10);
+    const projectCounts = invByDateProject[dateKey] ?? {};
+    for (const proj of allProjects) {
+      row[proj] = projectCounts[proj] ?? 0;
+    }
+    // If no project breakdown available, fall back to total count
+    if (allProjects.length === 0) row['count'] = d.count;
+    return row;
+  });
+
+  // Project donut data
+  const projectTotals = allProjects.map(proj => ({
+    name: fmtProject(proj),
+    rawName: proj,
+    count: data.invocations.filter((inv: InvocationRow) => inv.project === proj).length,
+  })).sort((a, b) => b.count - a.count);
 
   const invocationColumns: Column<InvocationRow>[] = [
     {
@@ -44,7 +76,7 @@ export function SkillDetailPage() {
     {
       key: 'project',
       label: 'Project',
-      render: (row) => <span className="font-mono text-xs text-text-muted">{row.project}</span>,
+      render: (row) => <span className="font-mono text-xs text-text-muted">{fmtProject(row.project)}</span>,
     },
     {
       key: 'sessionId',
@@ -54,36 +86,12 @@ export function SkillDetailPage() {
     {
       key: 'userRequest',
       label: 'Request',
-      width: '300px',
       render: (row) => {
         if (!row.userRequest) return <span className="text-text-muted">—</span>;
         const text = row.userRequest;
-        const short = text.length > 80 ? text.slice(0, 80) + '...' : text;
+        const short = text.length > 120 ? text.slice(0, 120) + '...' : text;
         return (
           <span className="text-xs text-text-secondary" title={text}>{short}</span>
-        );
-      },
-    },
-    {
-      key: 'params',
-      label: 'Params',
-      width: '200px',
-      render: (row) => {
-        if (!row.params) return <span className="text-text-muted">—</span>;
-        const isExpanded = expandedRow === row.timestamp;
-        const preview = JSON.stringify(row.params);
-        const short = preview.length > 60 ? preview.slice(0, 60) + '...' : preview;
-        return (
-          <button
-            onClick={(e) => { e.stopPropagation(); setExpandedRow(isExpanded ? null : row.timestamp); }}
-            className="w-full text-left font-mono text-xs text-text-muted hover:text-text-primary"
-          >
-            {isExpanded ? (
-              <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all">{JSON.stringify(row.params, null, 2)}</pre>
-            ) : (
-              <span className="block truncate">{short}</span>
-            )}
-          </button>
         );
       },
     },
@@ -118,11 +126,11 @@ export function SkillDetailPage() {
       />
 
       <div className="grid grid-cols-3 gap-4">
-        <StatCard label="Total Invocations" value={fmtNumber(data.totalCount)} />
+        <StatCard label="Total Invocations" value={fmtNumber(data.totalCount ?? 0)} />
         <StatCard
           label="Errors"
-          value={fmtNumber(data.errorCount)}
-          accent={data.errorCount > 0 ? 'error' : 'default'}
+          value={fmtNumber(data.errorCount ?? 0)}
+          accent={(data.errorCount ?? 0) > 0 ? 'error' : 'default'}
         />
         <StatCard
           label="Success Rate"
@@ -132,15 +140,87 @@ export function SkillDetailPage() {
       </div>
 
       {data.byDay.length > 0 && (
-        <ChartContainer title={granLabel(granularity, "Usage")}>
-          <BarChart data={data.byDay}>
-            <CartesianGrid {...gridProps} />
-            <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-            <YAxis {...axisProps} />
-            <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-            <Bar dataKey="count" fill={CHART_PALETTE[3]} radius={[2, 2, 0, 0]} name="Invocations" />
-          </BarChart>
-        </ChartContainer>
+        <div className="flex gap-4 items-stretch">
+          <div className="flex-1">
+            <ChartContainer title={granLabel(granularity, "Usage")} chartType={chartType} onChartTypeChange={setChartType}>
+              {chartType === 'bar' ? (
+                allProjects.length > 0 ? (
+                  <BarChart data={byDayProject}>
+                    <CartesianGrid {...gridProps} />
+                    <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                    <YAxis {...axisProps} />
+                    <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
+                    {allProjects.map((proj, i) => (
+                      <Bar key={proj} dataKey={proj} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]}
+                        name={fmtProject(proj)}
+                        radius={i === allProjects.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]}
+                      />
+                    ))}
+                  </BarChart>
+                ) : (
+                  <BarChart data={data.byDay}>
+                    <CartesianGrid {...gridProps} />
+                    <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                    <YAxis {...axisProps} />
+                    <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
+                    <Bar dataKey="count" fill={CHART_PALETTE[3]} radius={[2, 2, 0, 0]} name="Invocations" />
+                  </BarChart>
+                )
+              ) : (
+                allProjects.length > 0 ? (
+                  <AreaChart data={byDayProject}>
+                    <CartesianGrid {...gridProps} />
+                    <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                    <YAxis {...axisProps} />
+                    <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
+                    {allProjects.map((proj, i) => (
+                      <Area key={proj} type="monotone" dataKey={proj} stackId="a"
+                        stroke={CHART_PALETTE[i % CHART_PALETTE.length]}
+                        fill={CHART_PALETTE[i % CHART_PALETTE.length]}
+                        fillOpacity={0.3}
+                        dot={false}
+                        name={fmtProject(proj)}
+                      />
+                    ))}
+                  </AreaChart>
+                ) : (
+                  <AreaChart data={data.byDay}>
+                    <CartesianGrid {...gridProps} />
+                    <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                    <YAxis {...axisProps} />
+                    <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
+                    <Area type="monotone" dataKey="count" stroke={CHART_PALETTE[3]} fill={CHART_PALETTE[3]} fillOpacity={0.3} dot={false} name="Invocations" />
+                  </AreaChart>
+                )
+              )}
+            </ChartContainer>
+          </div>
+
+          {projectTotals.length > 0 && (
+            <div className="rounded-lg border border-border-primary bg-bg-secondary p-4" style={{ width: 160 }}>
+              <h3 className="mb-3 text-sm font-medium text-text-secondary">By Project</h3>
+              <div className="flex flex-col items-center gap-3">
+                <PieChart width={120} height={120}>
+                  <Pie data={projectTotals} dataKey="count" nameKey="name" cx="50%" cy="50%" innerRadius={30} outerRadius={50}>
+                    {projectTotals.map((_, i) => (
+                      <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+                </PieChart>
+                <div className="flex flex-col gap-1.5 w-full">
+                  {projectTotals.map((row, i) => (
+                    <div key={row.rawName} className="flex items-center gap-1.5 text-xs">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                      <span className="font-mono text-text-secondary truncate">{row.name}</span>
+                      <span className="ml-auto text-text-muted font-mono shrink-0">{fmtNumber(row.count)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {data.invocations.length > 0 && (
@@ -153,6 +233,25 @@ export function SkillDetailPage() {
             columns={invocationColumns}
             keyField="timestamp"
             maxRows={50}
+            expandedKey={expandedRow}
+            onExpandToggle={setExpandedRow}
+            renderExpanded={(row) => {
+              if (!row.params || Object.keys(row.params).length === 0) {
+                return <span className="text-xs text-text-muted">No parameters</span>;
+              }
+              return (
+                <div className="flex flex-col gap-1">
+                  {Object.entries(row.params).map(([k, v]) => (
+                    <div key={k} className="flex gap-3 text-xs">
+                      <span className="font-mono text-text-muted w-32 shrink-0">{k}</span>
+                      <span className="text-text-secondary break-all">
+                        {typeof v === 'string' ? v : JSON.stringify(v)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              );
+            }}
           />
         </div>
       )}

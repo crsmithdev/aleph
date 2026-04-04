@@ -1,12 +1,15 @@
 import { useState, useCallback, useRef } from 'react';
-import { useObsEvents } from '../../../api/observability-hooks';
+import { ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell } from 'recharts';
+import { useObsEvents, useObsSessions } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
-import { type TimeRange } from '../../../components/data/TimeRangeSelector';
+import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
+import { ChartContainer } from '../../../components/charts/ChartContainer';
+import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { dateTime, fmtNumber, fmtMs, fmtToolName } from '../../../utils/format';
+import { dateTime, fmtNumber, fmtMs, fmtToolName, shortDate, granLabel } from '../../../utils/format';
 import { clsx } from 'clsx';
 
 type EntryType =
@@ -126,8 +129,10 @@ function getDetail(row: EventRow): string {
 
 function getInfoPreview(row: EventRow): string {
   if (row.entryType === 'tool_use' && row.toolParams) {
-    const s = JSON.stringify(row.toolParams);
-    return s.length > 60 ? s.slice(0, 60) + '…' : s;
+    return Object.entries(row.toolParams)
+      .map(([k, v]) => `${k}: ${typeof v === 'string' ? v.slice(0, 30) : JSON.stringify(v)}`)
+      .slice(0, 3)
+      .join(' · ');
   }
   if (row.entryType === 'stop_hook_summary' && row.hookOutput) {
     return row.hookOutput.slice(0, 60) + (row.hookOutput.length > 60 ? '…' : '');
@@ -265,6 +270,7 @@ function Pagination({ start, end, total, hasPrev, hasNext, onPrev, onNext }: {
 
 export function EventsPage() {
   const [range, setRange] = useState<TimeRange>('30d');
+  const [granularity, setGranularity] = useState<Granularity>('day');
   const [activeType, setActiveType] = useState<EntryType | undefined>(undefined);
   const [errorsOnly, setErrorsOnly] = useState(false);
   const [search, setSearch] = useState('');
@@ -295,10 +301,21 @@ export function EventsPage() {
     offset,
   );
 
+  const sessions = useObsSessions(range, granularity);
+
   const allEvents = (data?.events ?? []).map((e: EventRow, i: number) => ({ ...e, _idx: i }));
   const events = errorsOnly ? allEvents.filter((e) => e.isError) : allEvents;
   const total = errorsOnly ? events.length : (data?.total ?? 0);
   const errorCount = allEvents.filter((e) => e.isError).length;
+
+  // Build donut data from current page events
+  const typeCounts = allEvents.reduce<Record<string, number>>((acc, e) => {
+    acc[e.entryType] = (acc[e.entryType] ?? 0) + 1;
+    return acc;
+  }, {});
+  const donutData = Object.entries(typeCounts)
+    .map(([type, count]) => ({ type, count, label: TYPE_LABELS[type as EntryType] ?? type }))
+    .sort((a, b) => b.count - a.count);
 
   const columns: Column<EventRow>[] = [
     {
@@ -328,7 +345,7 @@ export function EventsPage() {
     },
     {
       key: 'info',
-      label: 'Info',
+      label: 'Parameters',
       render: (row) => {
         const preview = getInfoPreview(row);
         return preview
@@ -351,19 +368,27 @@ export function EventsPage() {
   const hasPrev = !errorsOnly && offset > 0;
   const hasNext = !errorsOnly && offset + PAGE_SIZE < (data?.total ?? 0);
 
+  const activityData = sessions.data?.byActivity ?? [];
+
   return (
     <div className="space-y-4">
-      <ObsControlBar title={<h1 className="text-2xl font-bold text-text-primary">Events</h1>} range={range} onRangeChange={(r) => { setRange(r); setOffset(0); }}>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {EVENT_TYPES.map((type) => (
-            <FilterToggle
-              key={type}
-              label={TYPE_LABELS[type]}
-              active={activeType === type}
-              onToggle={() => handleTypeToggle(type)}
-            />
-          ))}
-        </div>
+      <ObsControlBar
+        title={<h1 className="text-2xl font-bold text-text-primary">Events</h1>}
+        range={range}
+        onRangeChange={(r) => { setRange(r); setOffset(0); }}
+        granularity={granularity}
+        onGranularityChange={setGranularity}
+      />
+
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {EVENT_TYPES.map((type) => (
+          <FilterToggle
+            key={type}
+            label={TYPE_LABELS[type]}
+            active={activeType === type}
+            onToggle={() => handleTypeToggle(type)}
+          />
+        ))}
         {errorCount > 0 && (
           <FilterToggle
             label={`Errors (${errorCount})`}
@@ -379,7 +404,44 @@ export function EventsPage() {
           placeholder="Search…"
           className="px-2.5 py-1 text-xs rounded-md border border-border-primary bg-bg-secondary text-text-primary placeholder-text-muted focus:outline-none focus:border-accent w-40"
         />
-      </ObsControlBar>
+      </div>
+
+      <div className="flex gap-4 items-stretch">
+        <div className="flex-1 min-w-0">
+          <ChartContainer title={granLabel(granularity, "Activity")}>
+            <ComposedChart data={activityData}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+              <YAxis {...axisProps} />
+              <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
+              <Area type="monotone" dataKey="count" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Events" />
+            </ComposedChart>
+          </ChartContainer>
+        </div>
+
+        {donutData.length > 0 && (
+          <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 w-[200px] shrink-0">
+            <h3 className="mb-3 text-sm font-medium text-text-secondary">By Type</h3>
+            <div className="flex flex-col items-center gap-3">
+              <PieChart width={120} height={120}>
+                <Pie data={donutData} dataKey="count" nameKey="label" cx="50%" cy="50%" innerRadius={28} outerRadius={52}>
+                  {donutData.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                </Pie>
+                <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+              </PieChart>
+              <div className="w-full flex flex-col gap-1">
+                {donutData.slice(0, 6).map((row, i) => (
+                  <div key={row.type} className="flex items-center gap-2 text-xs">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                    <span className="text-text-secondary truncate">{row.label}</span>
+                    <span className="ml-auto text-text-muted font-mono shrink-0">{fmtNumber(row.count)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {isLoading ? (
         <PageLoading />
