@@ -339,6 +339,40 @@ if (!LINK_ONLY) {
   }
   await writeFile(manifestPath, [...repoCommands].sort().join("\n") + "\n");
 
+  // 5b. Sync agents — install from src/agents/ to ~/.claude/agents/
+  // Uses manifest to avoid clobbering user's own agents
+  console.log("syncing agents...");
+  await mkdir(join(DST, "agents"), { recursive: true });
+
+  const agentSrcDir = join(CONSTRUCT_SRC, "agents");
+  const repoAgents = new Set<string>();
+  if (await exists(agentSrcDir)) {
+    for (const f of await readdir(agentSrcDir)) {
+      if (f.endsWith(".md")) {
+        await cp(join(agentSrcDir, f), join(DST, "agents", f));
+        repoAgents.add(f);
+      }
+    }
+  }
+
+  const agentManifestPath = join(DST, "agents", ".construct-managed");
+  const previousAgents = new Set<string>();
+  if (await exists(agentManifestPath)) {
+    const content = await readFile(agentManifestPath, "utf-8");
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed) previousAgents.add(trimmed);
+    }
+  }
+  for (const f of previousAgents) {
+    if (!repoAgents.has(f) && await exists(join(DST, "agents", f))) {
+      await rm(join(DST, "agents", f));
+      console.log(`  removed stale agent: ${f}`);
+    }
+  }
+  await writeFile(agentManifestPath, [...repoAgents].sort().join("\n") + "\n");
+  console.log(`  installed agents: ${repoAgents.size ? [...repoAgents].join(" ") : "none"}`);
+
   // 6. Merge settings.json — replace hooks + statusLine, preserve everything else
   console.log("merging settings.json...");
 

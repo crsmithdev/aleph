@@ -22,7 +22,8 @@
  */
 import { execSync } from "child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "fs";
-import { join, resolve } from "path";
+import { join, resolve, relative } from "path";
+import { globSync } from "fs";
 import { tmpdir } from "os";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import {
@@ -328,27 +329,33 @@ Respond with ONLY the improved system prompt text — no explanation, no preambl
 // ── Config file updater ────────────────────────────────────────────────────
 
 /**
- * Apply the optimized instruction to the relevant section of src/core/CLAUDE.md.
+ * Apply the optimized instruction to whichever src/ file contains the marker.
  *
  * Each optimization target is delimited by marker comments:
  *   <!-- eval-target:e2e --> ... <!-- end eval-target:e2e -->
  *   <!-- eval-target:commit --> ... <!-- end eval-target:commit -->
  *
- * The improved prompt lines are turned into bullet rules inside that block.
+ * Searches all .md files under src/ so markers can live in any config file
+ * (e.g. src/core/CLAUDE.md, src/core/identity/USER.md).
  */
 function applyImprovementToConfig(scenario: string, improvedPrompt: string) {
-  const claudePath = resolve(REPO_ROOT, "src/core/CLAUDE.md");
-  const source = readFileSync(claudePath, "utf8");
-
   const startMarker = `<!-- eval-target:${scenario} -->`;
   const endMarker = `<!-- end eval-target:${scenario} -->`;
-  const start = source.indexOf(startMarker);
-  const end = source.indexOf(endMarker);
 
-  if (start === -1 || end === -1 || end <= start) {
-    console.log(`  No eval-target:${scenario} marker found in src/core/CLAUDE.md, skipping.`);
+  const candidates = globSync("src/**/*.md", { cwd: REPO_ROOT, absolute: true });
+  const targetPath = candidates.find(f => {
+    const content = readFileSync(f, "utf8");
+    return content.includes(startMarker) && content.includes(endMarker);
+  });
+
+  if (!targetPath) {
+    console.log(`  No eval-target:${scenario} marker found in any src/**/*.md, skipping.`);
     return;
   }
+
+  const source = readFileSync(targetPath, "utf8");
+  const start = source.indexOf(startMarker);
+  const end = source.indexOf(endMarker);
 
   // Convert improved prompt lines to bullet rules
   const rules = improvedPrompt
@@ -363,8 +370,9 @@ function applyImprovementToConfig(scenario: string, improvedPrompt: string) {
   const updated = source.slice(0, start) + newBlock + source.slice(end + endMarker.length);
 
   if (updated !== source) {
-    writeFileSync(claudePath, updated);
-    console.log(`  Applied to: src/core/CLAUDE.md (eval-target:${scenario})`);
+    writeFileSync(targetPath, updated);
+    const rel = relative(REPO_ROOT, targetPath);
+    console.log(`  Applied to: ${rel} (eval-target:${scenario})`);
   }
 }
 

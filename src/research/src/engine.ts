@@ -31,6 +31,7 @@ export interface WebSearchResult {
   text: string;
   sourceTexts: string[];
   sourceUrls: string[];
+  jinaFetches?: Array<{ url: string; ok: boolean; content_length: number }>;
   promptTokens: number;
   completionTokens: number;
   model: string;
@@ -561,7 +562,7 @@ Return ONLY a JSON array of search query strings. No other text.`,
           prompt_tokens: result.promptTokens,
           completion_tokens: result.completionTokens,
           cost_usd: cost,
-          tool_calls: [{ tool: 'web_search', input: { query }, output: result.text.slice(0, 2000) }],
+          tool_calls: [{ tool: 'web_search', input: { query }, output: result.text.slice(0, 2000), jina_fetches: result.jinaFetches }],
           duration_ms: Date.now() - startTime,
         });
 

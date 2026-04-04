@@ -54,14 +54,19 @@ export class OpenRouterProvider implements LLMProvider {
     const searchResults = await fetchSearchResults(query);
 
     // 2. Fetch structured page content via Jina for each URL
-    const pages = await Promise.all(searchResults.map(r => fetchPageContent(r.url)));
+    const fetchResults = await Promise.all(searchResults.map(r => fetchPageContent(r.url)));
 
     const sourceUrls = searchResults.map(r => r.url);
-    const sourceTexts = pages.map((page, i) => page?.content ?? searchResults[i].snippet);
+    const sourceTexts = fetchResults.map((fr, i) => fr.page?.content ?? searchResults[i].snippet);
+    const jinaFetches = fetchResults.map((fr, i) => ({
+      url: searchResults[i].url,
+      ok: fr.ok,
+      content_length: fr.content_length,
+    }));
 
     // 3. Synthesize with the LLM — use Jina's title/date/content structure
     const context = searchResults.map((r, i) => {
-      const page = pages[i];
+      const page = fetchResults[i].page;
       const title = page?.title || r.title;
       const date = page?.publishedTime ? `\nPublished: ${page.publishedTime}` : '';
       const body = (page?.content ?? r.snippet).slice(0, 3000);
@@ -81,6 +86,7 @@ export class OpenRouterProvider implements LLMProvider {
       text,
       sourceTexts,
       sourceUrls,
+      jinaFetches,
       promptTokens: response.usage?.prompt_tokens ?? 0,
       completionTokens: response.usage?.completion_tokens ?? 0,
       model: response.model ?? actualModel,

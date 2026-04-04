@@ -3,7 +3,7 @@ description: Deep research — start, manage, and steer autonomous research sess
 ---
 Manage deep research sessions. Parse the user's intent from: $ARGUMENTS
 
-The research API is available at the Construct API server (default http://localhost:3002/api/research).
+The research API is available at the Construct API server (default http://localhost:3000/api/research).
 
 ## Actions
 
@@ -30,3 +30,4 @@ Use web_fetch or curl to call the API endpoints. The API key for running researc
 Keep output concise. Use markdown tables for lists. Show IDs so the user can reference them.
 For findings, show: rank, summary (truncated to ~80 chars), confidence, novelty, tags.
 For plans, show: rank, query (truncated), origin, perturbation strategy if any.
+</id></thread-id></id></thread-id></id></question></id></ranks></id></ranks></id></id></id></id></id></id></topic>

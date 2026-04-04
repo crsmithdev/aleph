@@ -44,54 +44,25 @@ class SimpleMockProvider implements LLMProvider {
 // ========== Model Router ==========
 
 describe('model router', () => {
-  test('resolves model tiers correctly', () => {
+  test('resolves model correctly', () => {
     const router = new ModelRouter(
-      { cheap: 'claude-haiku-4-5', mid: 'claude-sonnet-4-6', expensive: 'claude-opus-4-6', tangent: 'rotate' },
-      { primary: 'anthropic', anthropicApiKey: 'test', openrouterModels: ['deepseek/deepseek-chat'] }
+      { model: 'deepseek/deepseek-chat' },
+      { openrouterApiKey: 'test', openrouterModels: ['deepseek/deepseek-chat'] }
     );
 
-    const query = router.resolveModel('query_formulation');
-    expect(query.model).toBe('claude-haiku-4-5');
-    expect(query.provider).toBe('anthropic');
-
-    const synth = router.resolveModel('synthesis');
-    expect(synth.model).toBe('claude-sonnet-4-6');
-
-    // Tangent rotation
-    const t1 = router.resolveModel('tangent_generation');
-    const t2 = router.resolveModel('tangent_generation');
-    // Should rotate through available models
-    expect(t1.model).toBeTruthy();
-    expect(t2.model).toBeTruthy();
-    // At least one should differ (rotation)
-  });
-
-  test('openrouter models detected by slash', () => {
-    const router = new ModelRouter(
-      { cheap: 'claude-haiku-4-5', mid: 'claude-sonnet-4-6', expensive: 'claude-opus-4-6', tangent: 'rotate' },
-      { primary: 'anthropic', anthropicApiKey: 'test', openrouterModels: ['deepseek/deepseek-chat', 'google/gemini-2.0-flash-001'] }
-    );
-
-    // Rotation should eventually hit an OpenRouter model
-    const models: string[] = [];
-    for (let i = 0; i < 10; i++) {
-      models.push(router.resolveModel('tangent_generation').model);
-    }
-    const hasOpenRouter = models.some(m => m.includes('/'));
-    expect(hasOpenRouter).toBe(true);
-  });
-
-  test('fallback when primary unavailable', () => {
-    const router = new ModelRouter(
-      { cheap: 'claude-haiku-4-5', mid: 'claude-sonnet-4-6', expensive: 'claude-opus-4-6', tangent: 'rotate' },
-      { primary: 'anthropic', openrouterApiKey: 'test', openrouterModels: ['deepseek/deepseek-chat'] }
-      // Note: no anthropicApiKey — anthropic provider is null
-    );
-
-    // Should fallback to openrouter
-    // Router.complete for a non-slash model should still work via fallback
     const resolved = router.resolveModel('query_formulation');
-    expect(resolved.model).toBe('claude-haiku-4-5');
+    expect(resolved.model).toBe('deepseek/deepseek-chat');
+    expect(resolved.provider).toBe('openrouter');
+  });
+
+  test('throws when no openrouter key configured', async () => {
+    const router = new ModelRouter(
+      { model: 'deepseek/deepseek-chat' },
+      {}
+    );
+
+    expect(() => router.resolveModel('synthesis')).not.toThrow();
+    await expect(router.complete('deepseek/deepseek-chat', 'test', 100)).rejects.toThrow('No OpenRouter provider configured');
   });
 });
 

@@ -6,7 +6,7 @@
     },
     {
       "skill": "verification-before-completion",
-      "keywords": ["complete", "done", "finished", "it works", "all tests pass", "tests pass", "linter clean", "build succeeds", "ready to commit", "ready to merge", "ship it", "looks good"]
+      "keywords": ["verify", "check it works", "make sure it works", "confirm it works", "prove it works", "show me it works", "does it work", "validate", "end to end", "e2e"]
     },
     {
       "skill": "ralph-loop",
@@ -14,11 +14,7 @@
     },
     {
       "skill": "finishing-a-development-branch",
-      "keywords": ["finishing a development branch", "implementation complete", "done with feature", "feature complete", "wrapping up", "development complete", "finishing up", "branch ready", "ready to ship", "development done"]
-    },
-    {
-      "skill": "finishing-branch",
-      "keywords": ["finish branch", "merge branch", "create pr", "ready to merge", "branch done", "pull request", "open pr", "make pr", "submit pr"]
+      "keywords": ["wrap up", "wrapping up", "finish the branch", "finish this branch", "merge this", "time to merge", "merge the branch", "ship the feature", "close out the branch", "how do i finish"]
     },
     {
       "skill": "git-worktrees",
@@ -36,21 +32,33 @@
       "skill": "systematic-debugging",
       "keywords": ["systematic debug", "root cause", "trace data flow", "no fixes without", "thrashing", "multiple fixes failed", "3 fixes", "phase 1 investigation"]
     },
-    {
-      "skill": "frontend-design",
-      "keywords": ["frontend design", "ui design", "landing page", "web component", "react component", "html css", "design system", "web app ui", "visual design", "styled component", "make it look good", "design the ui", "polish the ui"]
-    },
-    {
+{
       "skill": "using-git-worktrees",
       "keywords": ["using git worktrees", "isolated workspace", "worktree setup", "before executing plan", "isolation from current"]
     },
     {
-      "skill": "code-simplifier",
-      "keywords": ["simplify code", "refine code", "code elegance", "clean up code", "code simplifier", "improve code clarity", "reduce complexity"]
-    },
-    {
       "skill": "agent-browser",
       "keywords": ["agent-browser", "browser automation", "open a website", "fill out a form", "click a button", "take a screenshot", "scrape data", "automate browser", "web automation", "navigate page", "browser cli"]
+    },
+    {
+      "skill": "llm-docs-optimizer",
+      "keywords": ["optimize docs", "optimize documentation", "c7score", "llms.txt", "llmstxt", "context7", "ai documentation", "llm docs", "docs optimizer", "documentation quality"]
+    },
+    {
+      "skill": "deslop",
+      "keywords": ["deslop", "remove slop", "clean up code", "remove boilerplate", "over-engineered", "unnecessary comments", "simplify before commit", "strip defensive code", "simplify code", "refine code", "code elegance", "code simplifier", "improve code clarity", "reduce complexity"]
+    },
+    {
+      "skill": "code-architecture-reviewer",
+      "keywords": ["code review", "review this code", "architecture review", "review my implementation", "check my code", "review the changes", "architectural consistency", "code quality review"]
+    },
+    {
+      "skill": "code-refactor-master",
+      "keywords": ["refactor", "reorganize files", "restructure code", "extract component", "move files", "update imports", "file organization", "break down this file", "split this module"]
+    },
+    {
+      "skill": "documentation-architect",
+      "keywords": ["document this", "write documentation", "create docs", "update the docs", "write a readme", "api documentation", "document the architecture", "data flow diagram", "architectural overview"]
     }
   ]
 }

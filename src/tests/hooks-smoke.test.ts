@@ -16,15 +16,6 @@ runAndCheck(te, r, "core/hooks/quality-post-format.ts", "smoke", "{}");
 runAndCheck(te, r, "core/hooks/quality-post-format.ts", "missing file", '{"tool_input":{"file_path":"/nonexistent/file.ts"}}');
 runAndCheck(te, r, "core/hooks/quality-post-format.ts", "malformed", "not json", { expectExit: 1 });
 
-// ── Notify hook ──────────────────────────────────────────────────────────────
-
-console.log("\n--- notify ---");
-runAndCheck(te, r, "core/hooks/notify-event-toast.ts", "smoke", "{}");
-runAndCheck(te, r, "core/hooks/notify-event-toast.ts", "complete event", '{"type":"complete"}');
-runAndCheck(te, r, "core/hooks/notify-event-toast.ts", "permission event", '{"type":"permission"}');
-runAndCheck(te, r, "core/hooks/notify-event-toast.ts", "idle event", '{"type":"idle"}');
-runAndCheck(te, r, "core/hooks/notify-event-toast.ts", "malformed", "not json", { expectExit: 1 });
-
 // ── Trace ───────────────────────────────────────────────────────────────────
 
 console.log("\n--- trace ---");

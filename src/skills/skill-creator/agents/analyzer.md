@@ -1,3 +1,8 @@
+---
+name: analyzer
+description: Analyze blind comparison results to understand why the winner won and generate improvement suggestions.
+---
+
 # Post-hoc Analyzer Agent
 
 Analyze blind comparison results to understand WHY the winner won and generate improvement suggestions.

@@ -22,7 +22,7 @@ All paths relative to `~/.claude/`. Run every check. Do not skip or summarize.
 - `memory/hooks/rating-capture.ts` registered under `UserPromptSubmit` in `settings.json`
 - `memory/hooks/session-summary.ts` registered under `Stop` in `settings.json`
 - `memory/hooks/memory-extract.ts` registered under `Stop` in `settings.json`
-- `CLAUDE.md` contains `## Memory` section with `memory_store` and `memory_search` references
+- `construct/core/CLAUDE.md` contains `## Memory` section with `memory_store` and `memory_search` references
 
 ## Semantic memory (⚠ optional)
 

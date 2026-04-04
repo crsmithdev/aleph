@@ -45,6 +45,26 @@ Who the principal is. Preferences, environment, constraints.
 - Flag blockers and ambiguity immediately, don't guess
 - If something breaks, show the error, not your interpretation of it
 
+## Verification
+
+<!-- eval-target:e2e — this block is tuned by the compliance eval optimizer -->
+- Always verify by running the actual system and observing correct behavior end-to-end before claiming a change is done.
+- Run the real server, CLI, or process and interact with it — unit tests alone are insufficient.
+<!-- end eval-target:e2e -->
+
+## Git
+
+- Commit messages: imperative mood, lowercase, no trailing punctuation, 50 chars max
+- Body only when the "why" isn't obvious from the diff
+- No emoji, no conventional-commit prefixes
+- Branch names: terse, use `feature/`, `fix/`, `refactor/`, or `docs/` prefix
+- Each logical change gets its own feature branch (use worktrees for parallel work)
+<!-- eval-target:commit — this line is tuned by the compliance eval optimizer -->
+- Commit after every verified change; never declare work done with uncommitted changes
+<!-- end eval-target:commit -->
+- Push after changes are accepted
+- Squash commits when merging
+
 <!--
 INSTRUCTIONS: Copy this file and fill in your details.
 Delete any sections that don't apply. Add sections for

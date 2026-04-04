@@ -87,20 +87,22 @@ export interface PageContent {
   content: string;
 }
 
-export async function fetchPageContent(url: string): Promise<PageContent | null> {
+export interface FetchResult {
+  page: PageContent | null;
+  ok: boolean;
+  content_length: number;
+}
+
+export async function fetchPageContent(url: string): Promise<FetchResult> {
   const jinaKey = process.env.JINA_API_KEY;
-  if (jinaKey) {
-    const page = await fetchViaJina(url, jinaKey);
-    if (page) return page;
-  }
-  const text = await fetchViaReadability(url);
-  if (!text || text === JS_RENDERED_FLAG) return null;
-  return { title: '', url, content: text };
+  if (!jinaKey) throw new Error('JINA_API_KEY is not set — page content fetch requires Jina');
+  const page = await fetchViaJina(url, jinaKey);
+  return { page, ok: page !== null, content_length: page?.content.length ?? 0 };
 }
 
 /** @deprecated Use fetchPageContent */
 export async function fetchPageText(url: string): Promise<string> {
-  const page = await fetchPageContent(url);
+  const { page } = await fetchPageContent(url);
   return page?.content ?? '';
 }
 

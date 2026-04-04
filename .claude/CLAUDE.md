@@ -1,6 +1,6 @@
 <!-- DEV-ONLY — loaded at runtime for this repo, never installed anywhere.
-     Construct behavioral rules live in dotclaude/CLAUDE.md (installed to ~/.claude/CLAUDE.md).
-     Do not duplicate rules between this file and dotclaude/CLAUDE.md. -->
+     Construct behavioral rules live in src/core/CLAUDE.md (installed to ~/.claude/CLAUDE.md).
+     Keep behavioral rules in src/core/CLAUDE.md; put dev-only rules here. -->
 
 # Construct Development
 
@@ -11,13 +11,24 @@ This is the Construct source repo. The installed Construct rules come from `~/.c
 1. Architecture should favor simplicity, testability, fast iteration; it should be easy to test and debug code.  Nothing may fail silently.
 2. Code should be minimal, concise, use modern patterns, libraries where possible, and avoid over-abstraction or unnecessary complexity.  
 3. Rely on code over AI instructions; if it can be done without AI, don't use AI. TypeScript over Bash wherever possible.
-4. Make small, atomic changes that can be tested and reverted independently, frequent commits, feature branches, and worktrees. Push before context switches or session end.  Push code frequently and avoid accumulating un-commited changes.
+4. Make small, atomic changes that can be tested and reverted independently, frequent commits, feature branches, and worktrees. Push before context switches or session end. Push after every verified change; never accumulate uncommitted work.
 5. Never claim something is finished or fixed unless you have tested it on the actual running system and verified the real output.  Do not assume correctness, skip tests, or finish unless **all** tests are passing.
 6. Never summarize, truncate, or paraphrase when copying files; verify copies byte-for-byte.
 7. When removing something, remove it completely: all references, unused files, related artifacts, and every other trace.  Do not let orphaned / 'legacy' features pile up if outdated.
 8. All docs (README.md, INSTALL.md, SPEC.md, etc.) must match actual behavior with zero drift. SPEC.md should be behavior- and feature-oriented, enabling functional testing and diffing.
 9. Use memory (MCP), CLAUDE.md, and docs appropriately without duplicating information between layers. Clearing context and continuing in a new session should be instant — never re-learn the codebase.
 10. Never write to `~/.claude/` directly — use `bun install.ts` to deploy, or `/link` to symlink for development.
+
+## Avoiding duplication
+
+Claude Code merges `.claude/` (project) with `~/.claude/` (global) at runtime. If the same hook, command, or setting exists in both, it fires/loads twice. To prevent this:
+
+- Put hooks, commands, and CLAUDE.md rules in `src/` (installed to `~/.claude/construct/`), not `.claude/`.
+- `.claude/settings.json` may only contain permissions, statusline, and MCP server config — hooks go in `src/`.
+
+**CLAUDE.md ownership** — rules must exist in exactly one place (this file supplements but does not override global rules):
+- `src/core/CLAUDE.md` → Construct behavioral rules. Referenced via `@construct/core/CLAUDE.md` in `~/.claude/CLAUDE.md`. Takes precedence as the authoritative behavioral source.
+- `.claude/CLAUDE.md` → this file. Repo-specific dev rules. Loaded at runtime, never installed.
 
 ## Testing Philosophy
 
@@ -26,12 +37,23 @@ This is the Construct source repo. The installed Construct rules come from `~/.c
 - **Mock boundaries, not logic.** Only mock things that are slow, non-deterministic, or external. Hook tests pipe real JSON and check real output.
 - **CI is the source of truth.** `bun test.ts` runs in GitHub Actions on every push. If CI passes, the code works.
 
+## Server
+
+The UI runs on **one port: 3000** in all modes.
+
+- Production: `construct-ui.service` (systemd) — `bun api/src/server.ts`
+- Dev: `npm start` from `src/ui/`
+
+Both use port 3000. Stop the systemd service before running dev. There is no separate Vite port.
+
 ## Dev workflow
 
 1. Edit source in `src/`
 2. Run `bun test.ts` to verify
 3. Run `/link` once to symlink `~/.claude/construct → src/` (changes flow immediately)
 4. Run `bun install.ts` for copy-based deploy (production)
+
+After any install, run all checks in the relevant `INSTALL.md`. Resolve failures before moving on. When copying files, always do so verbatim — no truncation or paraphrasing.
 
 ## Directory map
 
@@ -41,17 +63,6 @@ This is the Construct source repo. The installed Construct rules come from `~/.c
 | `.claude/` | Project-local dev config (this file, permissions, statusline) | nowhere — used at runtime | — |
 | `~/.claude/construct/` | Installed code (or symlink to `src/`) | — | Only written by `install.ts` or `/link` |
 | `~/.construct/` | User data (DB, sessions, signals, memory) | — | Never touched by install |
-
-## Avoiding duplication
-
-Claude Code merges `.claude/` (project) with `~/.claude/` (global) at runtime. If the same hook, command, or setting exists in both, it fires/loads twice. To prevent this:
-
-- **Never** put hooks, commands, or CLAUDE.md rules in `.claude/`. Those belong in `src/` (installed to `~/.claude/construct/`).
-- `.claude/settings.json` may only contain permissions, statusline, and MCP server config — never hooks.
-
-**CLAUDE.md ownership** — rules must exist in exactly one place:
-- `src/core/CLAUDE.md` → Construct behavioral rules. Referenced via `@construct/core/CLAUDE.md` in `~/.claude/CLAUDE.md`.
-- `.claude/CLAUDE.md` → this file. Repo-specific dev rules. Loaded at runtime, never installed.
 
 ## Skill extensions
 

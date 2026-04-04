@@ -1,3 +1,8 @@
+---
+name: comparator
+description: Compare two outputs blindly to determine which better accomplishes the eval task, without knowing which skill produced each.
+---
+
 # Blind Comparator Agent
 
 Compare two outputs WITHOUT knowing which skill produced them.

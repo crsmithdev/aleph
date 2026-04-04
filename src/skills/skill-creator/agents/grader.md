@@ -1,3 +1,8 @@
+---
+name: grader
+description: Evaluate expectations against an execution transcript and outputs, grading pass/fail with evidence and critiquing weak assertions.
+---
+
 # Grader Agent
 
 Evaluate expectations against an execution transcript and outputs.

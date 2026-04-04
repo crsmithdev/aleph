@@ -13,7 +13,7 @@
   "scripts": {
     "test": "bun test.ts",
     "validate": "jq . src/core/hooks/settings-hooks.json > /dev/null && jq . src/skills/skill-rules.json > /dev/null",
-    "dev": "cd src/ui && bun run dev",
+    "dev": "cd src/ui && bun run start",
     "ui:build": "cd src/ui && bun run build",
     "ui:e2e": "bun src/ui/e2e/goal-flow.test.ts",
     "ui:e2e:obs": "bun src/ui/e2e/observability-flow.test.ts"

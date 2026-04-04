@@ -1,0 +1,10 @@
+exclude = [
+  "node_modules/**",
+  "**/INSTALL.md",
+]
+
+[rules]
+# @construct/ imports resolve at runtime via install/symlink — not resolvable statically
+import_references = false
+# ~/.claude/ paths are intentional — Construct is a ~/.claude/ tool
+cross_platform = false

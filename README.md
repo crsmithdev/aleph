@@ -125,6 +125,81 @@ Domain-specific playbooks in `src/skills/<name>/SKILL.md`. The `routing-submit-c
 | `finishing-branch` | Verify then integrate: merge, PR, keep, or discard a feature branch |
 | `git-worktrees` | Set up isolated worktrees for parallel feature work |
 
+## Operations
+
+### Running the UI
+
+**Dev (hot-reload):**
+```bash
+npm run dev          # from repo root — starts dev server at http://localhost:3000
+```
+Single server: Fastify API + Vite middleware in one process. React components hot-reload on save. No separate Vite port. Port is `$PORT` or `$API_PORT`, default 3000. Sources `.env` from repo root if present.
+
+**Production (systemd):**
+```bash
+systemctl --user start   construct-ui       # start
+systemctl --user stop    construct-ui       # stop
+systemctl --user restart construct-ui       # restart
+systemctl --user status  construct-ui       # status + recent logs
+```
+Serves pre-built SPA from `web/dist/` on port 3000. Installed/updated via `bun install.ts`.
+
+### Running Tests
+
+```bash
+npm test             # unit + integration suite (src/tests/*.test.ts), fails if <90% pass
+npm run ui:e2e       # Playwright e2e: starts real server, verifies goals UI
+npm run ui:e2e:obs   # Playwright e2e: observability flow
+npm run validate     # JSON lint on settings-hooks.json and skill-rules.json
+```
+
+`npm test` runs `bun test.ts` which scans `src/tests/`, aggregates pass/fail, and exits non-zero if score < 90%.
+
+### Research Workers
+
+Workers are managed two ways simultaneously:
+
+**Auto (WorkerSupervisor):** The UI app spawns 3 workers on startup (`$WORKER_COUNT` to override). They restart automatically on crash with exponential backoff. No manual action needed when using the production systemd service or dev server.
+
+**Systemd (standalone):**
+```bash
+systemctl --user start   construct-research-worker
+systemctl --user stop    construct-research-worker
+systemctl --user restart construct-research-worker
+journalctl --user -u construct-research-worker -f   # tail logs
+```
+
+Workers require `$OPENROUTER_API_KEY`. They poll the SQLite DB for pending research jobs, execute them, and heartbeat every 60s. Graceful shutdown on SIGTERM (finishes current iteration).
+
+**Via slash command:**
+```
+/research start <topic>    # create + start session
+/research status           # list all sessions
+/research findings <id>    # show findings with confidence/novelty
+/research pause <id>       # pause
+/research resume <id>      # resume
+```
+
+### Install / Deploy
+
+```bash
+bun install.ts       # full deploy: src/ → ~/.claude/construct/, deps, services, DB verify
+```
+
+What it does: backs up DB → stops UI service → syncs files → installs deps → merges settings.json + CLAUDE.md → recreates systemd services → verifies DB health. Safe to re-run; all user data is preserved.
+
+### Environment Variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PORT` / `API_PORT` | 3000 | UI server port |
+| `OPENROUTER_API_KEY` | — | Required for research workers |
+| `ANTHROPIC_API_KEY` | — | Optional, passed to systemd services |
+| `WORKER_COUNT` | 3 | Research workers to spawn |
+| `DATABASE_URL` | `~/.construct/construct.db` | Override DB path |
+
+Place in `.env` at repo root; automatically sourced by `npm run dev` and worker startup.
+
 ## CLAUDE.md Structure
 
 Core behavioral rules are installed by construct-core; each module appends its own `##` section.
