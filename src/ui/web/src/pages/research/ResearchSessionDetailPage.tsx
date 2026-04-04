@@ -1282,10 +1282,17 @@ export function ResearchSessionDetailPage() {
           ))}
           {envCheck.jina_balance !== null && (
             <div className="rounded border border-border-primary bg-bg-secondary px-3 py-2 flex items-center gap-2">
-              <span className="text-xs text-text-muted">Jina balance:</span>
-              <span className={`text-xs font-medium tabular-nums ${envCheck.jina_balance < 100_000 ? 'text-red-400' : envCheck.jina_balance < 1_000_000 ? 'text-yellow-400' : 'text-green-400'}`}>
-                {envCheck.jina_balance.toLocaleString()} tokens
-              </span>
+              <span className="text-xs text-text-muted">Jina:</span>
+              {(envCheck.jina_paid_balance ?? 0) > 0 ? (
+                <>
+                  <span className={`text-xs font-medium tabular-nums ${envCheck.jina_paid_balance! < 100_000 ? 'text-red-400' : envCheck.jina_paid_balance! < 1_000_000 ? 'text-yellow-400' : 'text-green-400'}`}>
+                    {envCheck.jina_paid_balance!.toLocaleString()} paid tokens
+                  </span>
+                  <span className="text-xs text-text-muted">+ {(envCheck.jina_trial_balance ?? 0).toLocaleString()} free</span>
+                </>
+              ) : (
+                <span className="text-xs text-text-muted">{(envCheck.jina_trial_balance ?? 0).toLocaleString()} free tokens (rate-limited)</span>
+              )}
             </div>
           )}
         </div>
