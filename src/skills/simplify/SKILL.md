@@ -1,5 +1,5 @@
 ---
-name: deslop
+name: simplify
 description: Remove AI-generated code slop, unnecessary comments, and over-engineering from the current branch diff, then refine remaining code for clarity, consistency, and maintainability while preserving all functionality. Cleans up boilerplate, simplifies abstractions, and strips defensive code. Use when cleaning up code, simplifying, removing boilerplate, or before committing.
 model: opus
 ---

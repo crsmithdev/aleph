@@ -16,7 +16,7 @@ General-purpose Construct web UI. Fastify API + React SPA serving goals, todos, 
 ```bash
 cd construct/ui
 npm install
-npm run dev    # API on :3000, Vite on :5173
+npm run dev    # single server on :3000 (Fastify + Vite HMR)
 ```
 
 ### Building

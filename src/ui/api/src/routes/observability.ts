@@ -319,10 +319,6 @@ const HOOK_METADATA: Record<string, HookMeta> = {
     blocking: false,
     description: 'Backs up transcript before context compaction',
   },
-  'notify-event-toast': {
-    blocking: false,
-    description: 'Sends desktop toast notifications for events',
-  },
 };
 
 function readMarkerFileStats(): Record<string, { writes: number; clears: number; activeNow: boolean }> {

@@ -107,6 +107,12 @@ Instructions say WHAT, not HOW. "Add X" or "Fix Y" doesn't mean skip workflows.
 
 Store a session summary at end.
 
+## Git Discipline
+
+- Every task runs on a feature branch or worktree — never work directly on `main`.
+- Commit after every verified change. Never declare a task done with uncommitted work.
+- Never leave a dirty working tree at end of task. All changes committed or explicitly deferred by the user.
+
 ## Error Handling
 
 Never claim done without running the actual system and observing correct behavior end-to-end. Unit tests alone are not sufficient — run the real server, CLI, or process and interact with it.
