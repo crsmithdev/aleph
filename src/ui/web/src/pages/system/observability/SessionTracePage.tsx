@@ -157,7 +157,7 @@ function ResponseBlock({
   if (hookSpans.length > 0) summaryParts.push(`${hookSpans.length} hook${hookSpans.length !== 1 ? 's' : ''}`);
 
   return (
-    <div className="rounded-xl border border-border-primary bg-bg-secondary overflow-hidden ml-2">
+    <div className="rounded-sm border border-border-primary bg-bg-secondary overflow-hidden ml-2">
       {/* Header */}
       <button
         onClick={onToggle}
@@ -223,9 +223,9 @@ function UserBlock({ turn }: { turn: Turn }) {
 
   return (
     <div className="flex justify-end">
-      <div className="max-w-[75%] rounded-2xl bg-accent/10 border border-accent/20 px-4 py-3">
+      <div className="max-w-[75%] bg-bg-secondary border-l-4 border-accent rounded-sm px-4 py-3">
         <div className="flex items-center justify-between gap-4 mb-1">
-          <span className="text-[11px] text-accent font-semibold uppercase tracking-wide">You</span>
+          <span className="font-mono text-[11px] text-accent tracking-wider uppercase">You</span>
           <span className="text-[11px] text-text-muted">{time}</span>
         </div>
         {msg ? (
@@ -304,7 +304,7 @@ function ContextPanel({ turns }: { turns: Turn[] }) {
   const showFlat = grouping === 'flat' || view === 'category';
 
   return (
-    <div className="rounded-xl border border-border-primary bg-bg-secondary overflow-hidden">
+    <div className="rounded-sm border border-border-primary bg-bg-secondary overflow-hidden">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-border-primary">
         <h2 className="text-sm font-medium text-text-secondary">Visible Context</h2>

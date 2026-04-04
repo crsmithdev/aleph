@@ -11,7 +11,7 @@ export const CHART_PALETTE = [
 export const tooltipStyle = {
   background: 'var(--chart-tooltip-bg)',
   border: '1px solid var(--chart-tooltip-border)',
-  borderRadius: 8,
+  borderRadius: 2,
   fontSize: 12,
   color: 'var(--text-primary)',
 };

@@ -33,9 +33,9 @@ export function StatCard({
 }) {
 
   return (
-    <div className={clsx('rounded-lg border border-border-primary bg-bg-secondary p-4', className)}>
-      <div className="text-[11px] uppercase tracking-wider font-medium text-text-muted mb-1">{label}</div>
-      <div className={clsx('text-3xl font-semibold tracking-tight', accentColors[accent ?? 'default'])}>
+    <div className={clsx('border-t-2 border-border-primary pt-4', className)}>
+      <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted mb-1">{label}</div>
+      <div className={clsx('font-mono text-3xl font-medium tracking-tight', accentColors[accent ?? 'default'])}>
         {value}
       </div>
       {detailContent && <div className="mt-1 text-xs text-text-muted">{detailContent}</div>}

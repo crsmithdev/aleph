@@ -67,7 +67,7 @@ export function DataTable<T>({
   }
 
   return (
-    <div className={clsx('overflow-hidden rounded-lg border border-border-primary', className)}>
+    <div className={clsx('overflow-hidden border-t border-border-primary', className)}>
       <table className="w-full table-fixed text-sm">
         <thead>
           <tr className="border-b border-border-primary bg-bg-secondary">
@@ -75,7 +75,7 @@ export function DataTable<T>({
               <th
                 key={col.key}
                 className={clsx(
-                  'px-4 py-2.5 text-xs font-medium text-text-muted',
+                  'px-4 py-2.5 font-mono text-[10px] uppercase tracking-widest text-text-muted',
                   col.align === 'right' ? 'text-right' : 'text-left',
                   col.sortable && 'cursor-pointer select-none hover:text-text-secondary'
                 )}
