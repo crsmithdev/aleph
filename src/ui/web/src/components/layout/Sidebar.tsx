@@ -66,7 +66,7 @@ const navGroups: NavItem[][] = [
   ],
   [
     {
-      to: '/observability',
+      to: '/observability/overview',
       label: 'Observability',
       icon: (
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
@@ -75,13 +75,11 @@ const navGroups: NavItem[][] = [
         </svg>
       ),
       children: [
-        { to: '/observability/overview', label: 'Overview' },
         { to: '/observability/tools', label: 'Tools' },
-        { to: '/observability/hooks', label: 'Hooks' },
+        { to: '/observability/hooks', label: 'Scripts' },
         { to: '/observability/skills', label: 'Skills' },
         { to: '/observability/tokens', label: 'Tokens' },
         { to: '/observability/sessions', label: 'Sessions' },
-        { to: '/observability/subagents', label: 'Subagents' },
         { to: '/observability/events', label: 'Events' },
         { to: '/observability/memory', label: 'Memory' },
         { to: '/observability/db', label: 'Database' },
@@ -166,7 +164,7 @@ export function Sidebar() {
               const isParentActive = location.pathname === item.to || location.pathname.startsWith(item.to + '/');
               return (
                 <div key={item.to}>
-                  <SidebarLink to={item.children ? item.children[0].to : item.to} label={item.label} icon={item.icon} />
+                  <SidebarLink to={item.to} label={item.label} icon={item.icon} />
                   {item.children && isParentActive && (
                     <div className="mt-0.5 space-y-0.5">
                       {item.children.map((child) => (
@@ -183,7 +181,7 @@ export function Sidebar() {
         {collapsed && allItems.map((item) => (
           <NavLink
             key={item.to}
-            to={item.children ? item.children[0].to : item.to}
+            to={item.to}
             className={({ isActive }) =>
               clsx(
                 'flex items-center justify-center p-2 transition-colors',

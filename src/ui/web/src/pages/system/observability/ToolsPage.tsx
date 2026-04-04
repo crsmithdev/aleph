@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import { useObsTools } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
@@ -29,7 +29,6 @@ export function ToolsPage() {
 
   const enriched: ToolRow[] = data.ranked.map((r) => ({ ...r, ...parseToolSource(r.name) }));
   const filtered = hideInactive ? enriched.filter((r) => r.active) : enriched;
-  const maxCount = Math.max(...filtered.map((r) => r.count), 1);
 
   const columns: Column<ToolRow>[] = [
     {
@@ -87,26 +86,39 @@ export function ToolsPage() {
       sortable: true,
       render: (row) => row.p95Ms !== undefined ? <span className={clsx(row.p95Ms > 5000 && 'text-warning')}>{fmtMs(row.p95Ms)}</span> : <span className="text-text-tertiary">—</span>,
     },
-    {
-      key: 'bar',
-      label: '',
-      width: '20%',
-      render: (row) => (
-        <div className="h-2 w-full rounded-full bg-bg-tertiary">
-          <div
-            className="h-2 rounded-full bg-accent"
-            style={{ width: `${(row.count / maxCount) * 100}%` }}
-          />
-        </div>
-      ),
-    },
   ];
+
+  const top10 = filtered.slice(0, 10);
 
   return (
     <div className="space-y-6">
       <ObsControlBar title={<h1 className="text-2xl font-bold text-text-primary">Tools</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity}>
         <FilterToggle label="Active only" active={hideInactive} onToggle={() => setHideInactive(!hideInactive)} />
       </ObsControlBar>
+
+      {top10.length > 0 && (
+        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
+          <h3 className="mb-3 text-sm font-medium text-text-secondary">Tool Call Distribution</h3>
+          <div className="flex items-center gap-6">
+            <PieChart width={160} height={160}>
+              <Pie data={top10} dataKey="count" nameKey="tool" cx="50%" cy="50%" innerRadius={45} outerRadius={70}>
+                {top10.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+              </Pie>
+              <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+            </PieChart>
+            <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+              {top10.map((row, i) => (
+                <div key={row.name} className="flex items-center gap-2 text-xs">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                  <span className="font-mono text-text-secondary truncate">{row.tool}</span>
+                  <span className="ml-auto text-text-muted font-mono shrink-0">{fmtNumber(row.count)}</span>
+                  <span className="text-text-disabled font-mono shrink-0 w-10 text-right">{fmtPct(row.pct)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <DataTable<ToolRow>
         data={filtered}

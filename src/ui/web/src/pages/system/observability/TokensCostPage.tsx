@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
 import { useObsTokens, useObsCost } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
-import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
@@ -13,28 +12,6 @@ import { QueryTiming } from '../../../components/data/QueryTiming';
 import { fmtCurrency, fmtNumber, fmtPct, shortDate, granLabel, rangeToDays } from '../../../utils/format';
 
 type ModelRow = { model: string; usd: number; pct: number };
-
-const modelColumns: Column<ModelRow>[] = [
-  {
-    key: 'model',
-    label: 'Model',
-    render: (row) => <span className="font-mono text-text-primary">{row.model}</span>,
-  },
-  {
-    key: 'usd',
-    label: 'Cost',
-    align: 'right',
-    sortable: true,
-    render: (row) => fmtCurrency(row.usd),
-  },
-  {
-    key: 'pct',
-    label: '%',
-    align: 'right',
-    sortable: true,
-    render: (row) => fmtPct(row.pct),
-  },
-];
 
 export function TokensCostPage() {
   const [range, setRange] = useState<TimeRange>('30d');
@@ -117,11 +94,29 @@ export function TokensCostPage() {
         )}
       </ChartContainer>
 
-      <DataTable<ModelRow>
-        data={cost.data.byModel}
-        columns={modelColumns}
-        keyField="model"
-      />
+      {cost.data.byModel.length > 0 && (
+        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
+          <h3 className="mb-3 text-sm font-medium text-text-secondary">Cost by Model</h3>
+          <div className="flex items-center gap-6">
+            <PieChart width={160} height={160}>
+              <Pie data={cost.data.byModel} dataKey="usd" nameKey="model" cx="50%" cy="50%" innerRadius={45} outerRadius={70}>
+                {cost.data.byModel.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+              </Pie>
+              <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtCurrency(Number(v)), String(n)]} />
+            </PieChart>
+            <div className="flex flex-col gap-2 min-w-0">
+              {cost.data.byModel.map((row, i) => (
+                <div key={row.model} className="flex items-center gap-2 text-xs">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                  <span className="font-mono text-text-secondary truncate">{row.model.replace('claude-', '')}</span>
+                  <span className="ml-auto text-text-muted font-mono shrink-0">{fmtCurrency(row.usd)}</span>
+                  <span className="text-text-disabled font-mono shrink-0 w-10 text-right">{fmtPct(row.pct)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <QueryTiming ms={(tokens.data.queryTimeMs || 0) + (cost.data.queryTimeMs || 0)} />
     </div>

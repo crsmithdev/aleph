@@ -116,31 +116,17 @@ function SystemInfoSection() {
           ['Installed', formatTimestamp(info.install.timestamp)],
           ['Bun', info.install.bunVersion],
           ['Platform', `${info.install.platform} / ${info.install.arch}`],
+          ['API Port', String(info.runtime.port)],
+          ['DB Size', fmtBytes(info.runtime.dbSizeBytes)],
         ]} />
       </Section>
 
       <Section title="Paths">
         <InfoGrid rows={[
-          ['CLAUDE_ROOT', info.paths.claudeRoot],
-          ['Source Repo', info.paths.repo],
-          ['Construct', info.paths.construct],
-          ['Commands', info.paths.commands],
-          ['Skills', info.paths.skills],
           ['Construct DB', info.paths.db],
           ['Memory DB', info.paths.memoryDb],
-          ['Sessions', info.paths.sessions],
           ['Telemetry', info.paths.telemetry],
-          ['Signals', info.paths.signals],
-          ['Ratings', info.paths.ratings],
           ['Backups', info.paths.backups],
-        ]} dimAfter={1} />
-      </Section>
-
-      <Section title="Runtime">
-        <InfoGrid rows={[
-          ['Environment', info.runtime.nodeEnv],
-          ['API Port', String(info.runtime.port)],
-          ['DB Size', fmtBytes(info.runtime.dbSizeBytes)],
         ]} />
       </Section>
     </>

@@ -20,10 +20,10 @@ export function ObsControlBar({
   children,
 }: ObsControlBarProps) {
   return (
-    <div className="space-y-2">
-      <div>{title}</div>
-      <div className="sticky top-0 z-10 -mx-1 px-1 py-2 bg-bg-primary flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 flex-wrap">{children}</div>
+    <div className="sticky top-0 z-10 -mx-1 px-1 py-2 bg-bg-primary flex items-center gap-3">
+      <div className="flex-1 min-w-0">{title}</div>
+      {children && <div className="flex items-center gap-2 flex-wrap shrink-0">{children}</div>}
+      <div className="shrink-0">
         <TimeRangeSelector
           value={range}
           onChange={onRangeChange}

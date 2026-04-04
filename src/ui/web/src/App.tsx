@@ -76,7 +76,7 @@ export function App() {
               <Route path="/research/monitors/:id" element={<MonitorDetailPage />} />
 
               {/* Observability */}
-              <Route path="/observability" element={<Navigate to="/observability/overview" replace />} />
+              <Route path="/observability" element={<OverviewPage />} />
               <Route path="/observability/overview" element={<OverviewPage />} />
               <Route path="/observability/tools" element={<ToolsPage />} />
               <Route path="/observability/tools/:name" element={<ToolDetailPage />} />

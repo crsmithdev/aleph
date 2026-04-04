@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
-import { useObsSessions } from '../../../api/observability-hooks';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
+import { useObsSessions, useObsSubagents } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
@@ -40,7 +40,9 @@ export function SessionsPage() {
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
   const { data, isLoading, error, refetch } = useObsSessions(range, granularity);
+  const subagents = useObsSubagents(range, granularity);
   const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
+  const [activityChartType, setActivityChartType] = useState<'bar' | 'line'>('bar');
   const [includeChildSubagents, setIncludeChildSubagents] = useState(false);
   const [onlyWithSubagents, setOnlyWithSubagents] = useState(false);
 
@@ -75,24 +77,30 @@ export function SessionsPage() {
       key: 'lastTimestamp',
       label: 'Last Active',
       sortable: true,
-      render: (row) => <span className="text-text-secondary text-xs">{relativeTime(row.lastTimestamp)}</span>,
+      render: (row) => <span className="text-text-secondary text-xs whitespace-nowrap">{relativeTime(row.lastTimestamp)}</span>,
     },
     {
       key: 'project',
-      label: 'Project',
+      label: 'Conversation',
       sortable: true,
       render: (row) => (
         <div className="flex flex-col gap-0.5 min-w-0">
-          <span className="font-mono text-text-primary text-xs">
-            {row.parentSessionId && <span className="text-text-muted mr-1">↳</span>}
-            {fmtProject(row.project)}
-          </span>
           {row.firstUserMessage && (
-            <span className="text-text-muted text-xs truncate max-w-xs italic">
-              {row.firstUserMessage.slice(0, 80)}{row.firstUserMessage.length > 80 ? '…' : ''}
+            <span className="text-text-primary text-xs truncate max-w-sm">
+              {row.parentSessionId && <span className="text-text-muted mr-1">↳</span>}
+              {row.firstUserMessage.slice(0, 120)}{row.firstUserMessage.length > 120 ? '…' : ''}
             </span>
           )}
         </div>
+      ),
+    },
+    {
+      key: 'gitBranch',
+      label: 'Folder',
+      render: (row) => (
+        <span className="font-mono text-text-secondary text-xs truncate max-w-[12rem] block" title={row.project}>
+          {fmtProject(row.project)}
+        </span>
       ),
     },
     {
@@ -104,45 +112,15 @@ export function SessionsPage() {
     },
     {
       key: 'userMessages',
-      label: 'User',
-      align: 'right',
-      sortable: true,
-      render: (row) => fmtNumber(row.userMessages),
-    },
-    {
-      key: 'assistantMessages',
-      label: 'Assistant',
-      align: 'right',
-      sortable: true,
-      render: (row) => fmtNumber(row.assistantMessages),
-    },
-    {
-      key: 'toolCalls',
-      label: 'Tools',
-      align: 'right',
-      sortable: true,
-      render: (row) => fmtNumber(row.toolCalls),
-    },
-    {
-      key: 'linesAdded',
-      label: 'Lines',
+      label: 'Messages',
       align: 'right',
       sortable: true,
       render: (row) => (
-        <span>
-          {row.linesAdded > 0 && <span className="text-green-400">+{fmtNumber(row.linesAdded)}</span>}
-          {row.linesAdded > 0 && row.linesRemoved > 0 && ' '}
-          {row.linesRemoved > 0 && <span className="text-red-400">-{fmtNumber(row.linesRemoved)}</span>}
-          {!row.linesAdded && !row.linesRemoved && <span className="text-text-tertiary">—</span>}
+        <span className="text-xs">
+          <span className="text-text-secondary">{fmtNumber(row.userMessages + row.assistantMessages)}</span>
+          <span className="text-text-disabled ml-1">({fmtNumber(row.userMessages)}u)</span>
         </span>
       ),
-    },
-    {
-      key: 'commits',
-      label: 'Commits',
-      align: 'right',
-      sortable: true,
-      render: (row) => row.commits > 0 ? fmtNumber(row.commits) : <span className="text-text-tertiary">—</span>,
     },
     {
       key: 'cost',
@@ -150,22 +128,6 @@ export function SessionsPage() {
       align: 'right',
       sortable: true,
       render: (row) => fmtCurrency(row.cost),
-    },
-    {
-      key: 'gitBranch',
-      label: 'Branch',
-      render: (row) => row.gitBranch ? <span className="font-mono text-text-secondary text-xs">{row.gitBranch}</span> : <span className="text-text-tertiary">—</span>,
-    },
-    {
-      key: 'gateInfo',
-      label: 'Mode',
-      width: '5rem',
-      render: (row) => {
-        if (!row.gateInfo) return <span className="text-text-tertiary">—</span>;
-        if (row.gateInfo.mode === 'inline') return <span className="rounded bg-yellow-500/15 px-1.5 py-0.5 text-xs text-yellow-400">inline</span>;
-        if (row.gateInfo.mode === 'dispatched') return <span className="rounded bg-purple-500/15 px-1.5 py-0.5 text-xs text-purple-400">dispatched</span>;
-        return <span className="text-text-tertiary">—</span>;
-      },
     },
   ];
 
@@ -176,10 +138,14 @@ export function SessionsPage() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
         <StatCard label="Sessions" value={fmtNumber(data.sessions.length)} />
         <StatCard label="Avg Duration" value={fmtDuration(data.avgDurationMs)} />
-        <StatCard label="User Messages" value={fmtNumber(data.totalUserMessages)} />
-        <StatCard label="Assistant Messages" value={fmtNumber(data.totalAssistantMessages)} />
-        <StatCard label="Lines Changed" value={<><span className="text-green-400">+{fmtNumber(data.totalLinesAdded)}</span><span className="text-text-muted"> / </span><span className="text-red-400">-{fmtNumber(data.totalLinesRemoved)}</span></>} />
-        <StatCard label="Commits" value={fmtNumber(data.totalCommits)} />
+        <StatCard label="Messages" value={fmtNumber(data.totalUserMessages + data.totalAssistantMessages)} />
+        {subagents.data && (
+          <>
+            <StatCard label="Dispatches" value={fmtNumber(subagents.data.totalDispatches)} />
+            <StatCard label="Spawner Sessions" value={fmtNumber(subagents.data.parentSessionCount)} />
+          </>
+        )}
+        <StatCard label="Avg Dispatch" value={subagents.data ? fmtMs(subagents.data.avgMs) : '—'} />
       </div>
 
       <ChartContainer title={granLabel(granularity, "Sessions")} chartType={chartType} onChartTypeChange={setChartType}>
@@ -208,15 +174,51 @@ export function SessionsPage() {
         )}
       </ChartContainer>
 
-      <ChartContainer title={granLabel(granularity, "Activity")}>
-        <BarChart data={activityData}>
-          <CartesianGrid {...gridProps} />
-          <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-          <YAxis {...axisProps} />
-          <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-          <Bar dataKey="count" fill={CHART_PALETTE[2]} radius={[2, 2, 0, 0]} name="Events" />
-        </BarChart>
-      </ChartContainer>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <ChartContainer title={granLabel(granularity, "Activity")} chartType={activityChartType} onChartTypeChange={setActivityChartType}>
+            {activityChartType === 'bar' ? (
+              <BarChart data={activityData}>
+                <CartesianGrid {...gridProps} />
+                <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                <YAxis {...axisProps} />
+                <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
+                <Bar dataKey="count" fill={CHART_PALETTE[2]} radius={[2, 2, 0, 0]} name="Events" />
+              </BarChart>
+            ) : (
+              <LineChart data={activityData}>
+                <CartesianGrid {...gridProps} />
+                <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                <YAxis {...axisProps} />
+                <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
+                <Line type="monotone" dataKey="count" stroke={CHART_PALETTE[2]} strokeWidth={2} dot={false} name="Events" />
+              </LineChart>
+            )}
+          </ChartContainer>
+        </div>
+        {subagents.data && subagents.data.byType.length > 0 && (
+          <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
+            <h3 className="mb-3 text-sm font-medium text-text-secondary">Subagents by Type</h3>
+            <div className="flex flex-col items-center gap-3">
+              <PieChart width={140} height={140}>
+                <Pie data={subagents.data.byType} dataKey="count" nameKey="subagentType" cx="50%" cy="50%" innerRadius={35} outerRadius={60}>
+                  {subagents.data.byType.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                </Pie>
+                <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+              </PieChart>
+              <div className="w-full flex flex-col gap-1">
+                {subagents.data.byType.slice(0, 6).map((row, i) => (
+                  <div key={row.subagentType} className="flex items-center gap-2 text-xs">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                    <span className="text-text-secondary truncate">{row.subagentType}</span>
+                    <span className="ml-auto text-text-muted font-mono shrink-0">{fmtNumber(row.count)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="flex items-center gap-2">
         {childCount > 0 && (

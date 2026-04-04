@@ -95,7 +95,7 @@ export function HookDetailPage() {
               to="/observability/hooks"
               className="text-sm text-text-muted hover:text-text-primary transition-colors"
             >
-              &larr; Hooks
+              &larr; Scripts
             </Link>
             <h1 className="text-2xl font-bold font-mono text-text-primary">{hookName}</h1>
             {data.event && (

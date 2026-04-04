@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import { useObsHooks, useObsHookEvents } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
@@ -8,9 +8,8 @@ import { DataTable, type Column } from '../../../components/data/DataTable';
 import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { ChartContainer } from '../../../components/charts/ChartContainer';
-import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtMs, fmtPct, shortDate, dateTime } from '../../../utils/format';
+import { tooltipStyle, CHART_PALETTE } from '../../../components/charts/chartTheme';
+import { fmtNumber, fmtMs, fmtPct, dateTime } from '../../../utils/format';
 import { clsx } from 'clsx';
 
 type HookRow = {
@@ -29,8 +28,6 @@ type HookRow = {
   description?: string;
 };
 
-type MarkerStats = Record<string, { writes: number; clears: number; activeNow: boolean }>;
-
 type InvocationRow = {
   timestamp: string;
   sessionId: string;
@@ -46,14 +43,12 @@ function ByHookView({ range, granularity }: {
 }) {
   const navigate = useNavigate();
   const { data, isLoading, error, refetch } = useObsHooks(range, granularity);
-  const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
   const [hideInactive, setHideInactive] = useState(true);
   const [showUnused, setShowUnused] = useState(true);
 
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load hooks" retry={refetch} />;
 
-  const markerStats: MarkerStats = data.markerStats || {};
   const rankedWithRate: HookRow[] = data.ranked.map(r => ({
     ...r,
     successRate: r.count > 0 ? ((r.count - r.errors) / r.count) * 100 : 100,
@@ -81,35 +76,6 @@ function ByHookView({ range, granularity }: {
       key: 'event',
       label: 'Event',
       render: (row) => <span className="text-text-secondary">{row.event}</span>,
-    },
-    {
-      key: 'blocking',
-      label: 'Mode',
-      width: '7rem',
-      render: (row) => (
-        <div className="flex items-center gap-1.5">
-          {row.blocking ? (
-            <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-error/10 text-error border border-error/20">
-              blocking
-            </span>
-          ) : (
-            <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-bg-tertiary text-text-muted border border-border-primary">
-              passive
-            </span>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: 'gate',
-      label: 'Gate',
-      width: '8rem',
-      render: (row) => row.gate ? (
-        <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-mono bg-purple-500/10 text-purple-400 border border-purple-500/20">
-          {row.gate}
-          {row.markerFile && <span title={`Marker: ${row.markerFile}`}>&#x2691;</span>}
-        </span>
-      ) : <span className="text-text-muted">—</span>,
     },
     {
       key: 'count',
@@ -178,68 +144,37 @@ function ByHookView({ range, granularity }: {
         }
       />
 
-      {Object.keys(markerStats).length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-sm font-medium text-text-secondary">Gate Markers</h3>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {Object.entries(markerStats).map(([name, stats]) => {
-              const catchRate = stats.writes > 0 ? ((stats.writes - stats.clears) / stats.writes * 100) : 0;
-              return (
-                <div key={name} className="rounded-lg border border-border-primary bg-bg-secondary p-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs text-text-primary">{name}</span>
-                    <span className={clsx(
-                      'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium',
-                      stats.activeNow
-                        ? 'bg-warning/10 text-warning border border-warning/20'
-                        : 'bg-success/10 text-success border border-success/20',
-                    )}>
-                      {stats.activeNow ? 'active' : 'clear'}
-                    </span>
-                  </div>
-                  <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
-                    <div>
-                      <span className="text-text-muted">Writes</span>
-                      <div className="font-medium text-text-primary">{fmtNumber(stats.writes)}</div>
-                    </div>
-                    <div>
-                      <span className="text-text-muted">Clears</span>
-                      <div className="font-medium text-text-primary">{fmtNumber(stats.clears)}</div>
-                    </div>
-                    <div>
-                      <span className="text-text-muted">Catch %</span>
-                      <div className={clsx('font-medium', catchRate > 50 ? 'text-warning' : 'text-text-primary')}>
-                        {stats.writes > 0 ? fmtPct(catchRate) : '—'}
-                      </div>
-                    </div>
-                  </div>
+      {filtered.filter(r => r.count > 0).length > 0 && (
+        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
+          <h3 className="mb-3 text-sm font-medium text-text-secondary">Executions by Script</h3>
+          <div className="flex items-center gap-6">
+            <PieChart width={180} height={180}>
+              <Pie
+                data={filtered.filter(r => r.count > 0)}
+                dataKey="count"
+                nameKey="command"
+                cx="50%"
+                cy="50%"
+                innerRadius={50}
+                outerRadius={80}
+              >
+                {filtered.filter(r => r.count > 0).map((_, i) => (
+                  <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
+                ))}
+              </Pie>
+              <RechartsTooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+            </PieChart>
+            <div className="flex flex-col gap-1.5 min-w-0">
+              {filtered.filter(r => r.count > 0).slice(0, 10).map((row, i) => (
+                <div key={row.command} className="flex items-center gap-2 text-xs">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                  <span className="font-mono text-text-secondary truncate">{row.command}</span>
+                  <span className="ml-auto text-text-muted font-mono shrink-0">{fmtNumber(row.count)}</span>
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </div>
         </div>
-      )}
-
-      {data.byDay.length > 0 && (
-        <ChartContainer title="Hook Executions Over Time" chartType={chartType} onChartTypeChange={setChartType}>
-          {chartType === 'bar' ? (
-            <BarChart data={data.byDay}>
-              <CartesianGrid {...gridProps} />
-              <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-              <YAxis {...axisProps} />
-              <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-              <Bar dataKey="count" fill={CHART_PALETTE[2]} radius={[2, 2, 0, 0]} name="Executions" />
-            </BarChart>
-          ) : (
-            <LineChart data={data.byDay}>
-              <CartesianGrid {...gridProps} />
-              <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-              <YAxis {...axisProps} />
-              <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-              <Line type="monotone" dataKey="count" stroke={CHART_PALETTE[2]} strokeWidth={2} dot={false} name="Executions" />
-            </LineChart>
-          )}
-        </ChartContainer>
       )}
 
       <QueryTiming ms={data.queryTimeMs} />
@@ -385,7 +320,7 @@ export function HooksPage() {
 
   return (
     <div className="space-y-6">
-      <ObsControlBar title={<h1 className="text-2xl font-bold text-text-primary">Hooks</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity}>
+      <ObsControlBar title={<h1 className="text-2xl font-bold text-text-primary">Scripts</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity}>
         <div className="flex items-center gap-1 rounded-md border border-border-primary bg-bg-secondary p-0.5">
           <button
             onClick={() => setView('by-hook')}

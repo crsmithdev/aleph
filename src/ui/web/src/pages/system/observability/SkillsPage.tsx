@@ -29,6 +29,7 @@ export function SkillsPage() {
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
   const [showUnused, setShowUnused] = useState(true);
+  const [installedOnly, setInstalledOnly] = useState(false);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const navigate = useNavigate();
   const { data, isLoading, error, refetch } = useObsSkills(range, granularity);
@@ -42,9 +43,10 @@ export function SkillsPage() {
     const type = typeof s === 'string' ? 'skill' as const : s.type;
     return { skill: name, count: 0, pct: 0, errors: 0, type, unused: true };
   });
-  let allRows: SkillRow[] = showUnused ? [...data.ranked, ...unusedRows] : [...data.ranked];
+  let ranked = installedOnly ? data.ranked.filter(r => r.registered) : data.ranked;
+  let allRows: SkillRow[] = showUnused ? [...ranked, ...unusedRows] : [...ranked];
   if (typeFilter !== 'all') allRows = allRows.filter(r => r.type === typeFilter);
-  const maxCount = Math.max(...data.ranked.map((r) => r.count), 1);
+  const maxCount = Math.max(...ranked.map((r) => r.count), 1);
 
   const commandCount = data.ranked.filter(r => r.type === 'command').length;
   const skillCount = data.ranked.filter(r => r.type === 'skill').length;
@@ -116,6 +118,7 @@ export function SkillsPage() {
   return (
     <div className="space-y-6">
       <ObsControlBar title={<h1 className="text-2xl font-bold text-text-primary">Skills</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity}>
+        <FilterToggle label="Installed only" active={installedOnly} onToggle={() => setInstalledOnly(!installedOnly)} />
         {unusedRows.length > 0 && (
           <FilterToggle label={`Unused (${unusedRows.length})`} active={showUnused} onToggle={() => setShowUnused(!showUnused)} />
         )}

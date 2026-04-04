@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import { useObsSessionTrace } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
@@ -215,6 +215,21 @@ function ResponseBlock({
   );
 }
 
+// ── Inline markdown: bold only ─────────────────────────────────────────────────
+
+function InlineMarkdown({ text }: { text: string }) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.startsWith('**') && part.endsWith('**')
+          ? <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>
+          : <span key={i}>{part}</span>
+      )}
+    </>
+  );
+}
+
 // ── User message block ─────────────────────────────────────────────────────────
 
 function UserBlock({ turn }: { turn: Turn }) {
@@ -229,9 +244,9 @@ function UserBlock({ turn }: { turn: Turn }) {
           <span className="text-[11px] text-text-muted">{time}</span>
         </div>
         {msg ? (
-          <pre className="text-sm text-text-primary whitespace-pre-wrap break-words font-sans leading-relaxed">
-            {msg}
-          </pre>
+          <p className="text-sm text-text-primary whitespace-pre-wrap break-words leading-relaxed">
+            <InlineMarkdown text={msg} />
+          </p>
         ) : (
           <span className="text-sm text-text-muted italic">no message</span>
         )}
@@ -471,6 +486,23 @@ export function SessionTracePage() {
   const { data, isLoading, error, refetch } = useObsSessionTrace(sessionId, range);
   const [expandedTurns, setExpandedTurns] = useState<Set<number>>(new Set());
   const [showContext, setShowContext] = useState(false);
+  const topRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const [atTop, setAtTop] = useState(true);
+  const [atBottom, setAtBottom] = useState(false);
+
+  const handleScroll = useCallback(() => {
+    const scrollY = window.scrollY;
+    const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+    setAtTop(scrollY < 100);
+    setAtBottom(maxScroll - scrollY < 100);
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [handleScroll]);
 
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load session trace" retry={refetch} />;
@@ -478,6 +510,7 @@ export function SessionTracePage() {
   const totalTools = data.turns.reduce((s, t) => s + t.spans.filter((sp) => sp.kind === 'tool').length, 0);
   const totalHooks = data.turns.reduce((s, t) => s + t.spans.filter((sp) => sp.kind === 'hook').length, 0);
   const errorSpans = data.turns.reduce((s, t) => s + t.spans.filter((sp) => sp.isError).length, 0);
+  const isSubagent = !!data.parentSessionId;
 
   const toggleTurn = (idx: number) => {
     setExpandedTurns((prev) => {
@@ -496,6 +529,8 @@ export function SessionTracePage() {
 
   return (
     <div className="space-y-4">
+      <div ref={topRef} />
+
       {/* Page header */}
       <div className="flex flex-wrap items-center gap-2">
         <Link
@@ -510,6 +545,16 @@ export function SessionTracePage() {
         {data.project && (
           <span className="rounded-md bg-bg-tertiary px-2 py-0.5 text-xs text-text-muted">
             {data.project}
+          </span>
+        )}
+        {/* Root / subagent indicator */}
+        {isSubagent ? (
+          <span className="rounded-md bg-purple-500/15 px-2 py-0.5 text-xs font-medium text-purple-400 border border-purple-500/30">
+            subagent
+          </span>
+        ) : (
+          <span className="rounded-md bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent border border-accent/20">
+            root
           </span>
         )}
         {data.parentSessionId && (
@@ -530,8 +575,26 @@ export function SessionTracePage() {
             dispatched
           </span>
         )}
-        {/* Expand all / Collapse all */}
+        {/* Controls */}
         <div className="ml-auto flex items-center gap-2">
+          {!atTop && (
+            <button
+              onClick={() => topRef.current?.scrollIntoView({ behavior: 'smooth' })}
+              className="text-xs text-text-muted hover:text-text-primary border border-border-primary bg-bg-secondary rounded px-2 py-1 transition-colors"
+              title="Scroll to top"
+            >
+              ↑ Top
+            </button>
+          )}
+          {!atBottom && (
+            <button
+              onClick={() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' })}
+              className="text-xs text-text-muted hover:text-text-primary border border-border-primary bg-bg-secondary rounded px-2 py-1 transition-colors"
+              title="Scroll to bottom"
+            >
+              ↓ Bottom
+            </button>
+          )}
           <button
             onClick={toggleAll}
             className="text-xs text-text-muted hover:text-text-primary border border-border-primary bg-bg-secondary rounded px-2 py-1 transition-colors"
@@ -547,7 +610,7 @@ export function SessionTracePage() {
                 : 'border-border-primary bg-bg-secondary text-text-muted hover:text-text-primary',
             )}
           >
-            Context window
+            Context
           </button>
         </div>
       </div>
@@ -568,34 +631,41 @@ export function SessionTracePage() {
         />
       </div>
 
-      {/* Turn feed */}
-      {data.turns.length === 0 ? (
-        <p className="py-12 text-center text-sm text-text-muted">No turns found for this session</p>
-      ) : (
-        <div className="space-y-3">
-          {data.turns.map((turn, i) => {
-            const prevTurn = i > 0 ? data.turns[i - 1] : undefined;
-            return (
-              <div key={turn.index} className="space-y-1.5">
-                <UserBlock turn={turn} />
-                <ResponseBlock
-                  turn={turn}
-                  expanded={expandedTurns.has(turn.index)}
-                  onToggle={() => toggleTurn(turn.index)}
-                  sessionId={sessionId}
-                  prevContextTokens={prevTurn?.contextTokens}
-                />
-              </div>
-            );
-          })}
+      {/* Turn feed + optional context sidebar */}
+      <div className={clsx('flex gap-4 items-start', showContext && 'lg:gap-6')}>
+        <div className="flex-1 min-w-0">
+          {data.turns.length === 0 ? (
+            <p className="py-12 text-center text-sm text-text-muted">No turns found for this session</p>
+          ) : (
+            <div className="space-y-3">
+              {data.turns.map((turn, i) => {
+                const prevTurn = i > 0 ? data.turns[i - 1] : undefined;
+                return (
+                  <div key={turn.index} className="space-y-1.5">
+                    <UserBlock turn={turn} />
+                    <ResponseBlock
+                      turn={turn}
+                      expanded={expandedTurns.has(turn.index)}
+                      onToggle={() => toggleTurn(turn.index)}
+                      sessionId={sessionId}
+                      prevContextTokens={prevTurn?.contextTokens}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
-      )}
 
-      {/* Context window panel */}
-      {showContext && data.turns.length > 0 && (
-        <ContextPanel turns={data.turns as Turn[]} />
-      )}
+        {/* Context sidebar */}
+        {showContext && data.turns.length > 0 && (
+          <div className="w-80 shrink-0 sticky top-16">
+            <ContextPanel turns={data.turns as Turn[]} />
+          </div>
+        )}
+      </div>
 
+      <div ref={bottomRef} />
       <QueryTiming ms={data.queryTimeMs} />
     </div>
   );
