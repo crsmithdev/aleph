@@ -113,10 +113,10 @@ function SidebarLink({ to, label, icon, depth = 0 }: { to: string; label: string
           isActive
             ? depth > 0
               ? 'text-accent font-medium'
-              : 'border-l-2 border-accent pl-[8px] text-accent font-medium'
+              : 'rounded-lg bg-accent text-white font-medium pl-2.5'
             : depth > 0
               ? 'text-text-muted hover:text-text-primary hover:bg-bg-tertiary pl-9'
-              : 'pl-2.5 text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
+              : 'pl-2.5 text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded-lg'
         )
       }
     >
@@ -188,8 +188,8 @@ export function Sidebar() {
               clsx(
                 'flex items-center justify-center p-2 transition-colors',
                 isActive
-                  ? 'border-l-2 border-accent text-accent'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
+                  ? 'rounded-lg bg-accent text-white'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded-lg'
               )
             }
             title={item.label}
