@@ -74,41 +74,42 @@
 }
 
 [data-theme="dark"] {
-  --bg-primary:   #0B1437;
-  --bg-secondary: #111C44;
-  --bg-tertiary:  #1B2559;
-  --bg-hover:     #1B2559;
-  --bg-contrast:  #060D24;
-  --bg-buttons:   #111C44;
-  --text-primary:    #FFFFFF;
-  --text-secondary:  #A3AED0;
-  --text-muted:      #707EAE;
-  --text-disabled:   #3D4E8A;
-  --border-primary:  #1B2559;
-  --border-secondary: #2D3A6E;
-  --c-accent:        #7551FF;
-  --c-accent-hover:  #8D6FFF;
-  --c-accent-muted:  #3D2B7A;
-  --c-accent-subtle: #1A1047;
-  --c-success:       #01B574;
-  --c-success-muted: rgb(1 181 116 / 0.15);
-  --c-warning:       #FFB547;
-  --c-warning-muted: rgb(255 181 71 / 0.15);
-  --c-error:         #EE5D50;
-  --c-error-muted:   rgb(238 93 80 / 0.15);
-  --c-links:         #7551FF;
-  --c-agent:         #1B2559;
-  --c-agent-border:  #2D3A6E;
+  /* Palenight */
+  --bg-primary:   #292D3E;
+  --bg-secondary: #2f3347;
+  --bg-tertiary:  #34394f;
+  --bg-hover:     #34394f;
+  --bg-contrast:  #232637;
+  --bg-buttons:   #2f3347;
+  --text-primary:    #babed8;
+  --text-secondary:  #8796b0;
+  --text-muted:      #676E95;
+  --text-disabled:   #4b5168;
+  --border-primary:  #383c50;
+  --border-secondary: #4b5168;
+  --c-accent:        #c792ea;
+  --c-accent-hover:  #d4a9f0;
+  --c-accent-muted:  #5a3d6b;
+  --c-accent-subtle: #352840;
+  --c-success:       #c3e88d;
+  --c-success-muted: rgb(195 232 141 / 0.15);
+  --c-warning:       #ffcb6b;
+  --c-warning-muted: rgb(255 203 107 / 0.15);
+  --c-error:         #f07178;
+  --c-error-muted:   rgb(240 113 120 / 0.15);
+  --c-links:         #82aaff;
+  --c-agent:         #2f3347;
+  --c-agent-border:  #4b5168;
 
-  --chart-1: #7551FF;
-  --chart-2: #39B3D7;
-  --chart-3: #6AD2FF;
-  --chart-4: #FFB547;
-  --chart-5: #EE5D50;
-  --chart-grid: #1B2559;
-  --chart-text: #707EAE;
-  --chart-tooltip-bg: #111C44;
-  --chart-tooltip-border: #1B2559;
+  --chart-1: #c792ea;
+  --chart-2: #82aaff;
+  --chart-3: #89ddff;
+  --chart-4: #ffcb6b;
+  --chart-5: #f07178;
+  --chart-grid: #383c50;
+  --chart-text: #676E95;
+  --chart-tooltip-bg: #2f3347;
+  --chart-tooltip-border: #383c50;
 
   --shadow-sm: none;
   --shadow-md: none;
