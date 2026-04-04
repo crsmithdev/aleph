@@ -486,6 +486,7 @@ export function SessionTracePage() {
   const { data, isLoading, error, refetch } = useObsSessionTrace(sessionId, range);
   const [expandedTurns, setExpandedTurns] = useState<Set<number>>(new Set());
   const [showContext, setShowContext] = useState(false);
+  const [selectedTurnIndex, setSelectedTurnIndex] = useState<number | null>(null);
   const topRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [atTop, setAtTop] = useState(true);
@@ -602,7 +603,7 @@ export function SessionTracePage() {
             {allExpanded ? 'Collapse all' : 'Expand all'}
           </button>
           <button
-            onClick={() => setShowContext(!showContext)}
+            onClick={() => { setShowContext(s => { if (s) setSelectedTurnIndex(null); return !s; }); }}
             className={clsx(
               'text-xs border rounded px-2 py-1 transition-colors',
               showContext
@@ -641,8 +642,26 @@ export function SessionTracePage() {
               {data.turns.map((turn, i) => {
                 const prevTurn = i > 0 ? data.turns[i - 1] : undefined;
                 return (
-                  <div key={turn.index} className="space-y-1.5">
-                    <UserBlock turn={turn} />
+                  <div key={turn.index} className={clsx('space-y-1.5', selectedTurnIndex === turn.index && 'ring-1 ring-accent/30 rounded-sm')}>
+                    <div className="flex items-start gap-2">
+                      <div className="flex-1 min-w-0">
+                        <UserBlock turn={turn} />
+                      </div>
+                      {showContext && (
+                        <button
+                          onClick={() => setSelectedTurnIndex(selectedTurnIndex === turn.index ? null : turn.index)}
+                          className={clsx(
+                            'shrink-0 mt-1 text-[10px] px-1.5 py-0.5 rounded border transition-colors',
+                            selectedTurnIndex === turn.index
+                              ? 'border-accent/40 bg-accent/10 text-accent'
+                              : 'border-border-primary bg-bg-secondary text-text-disabled hover:text-text-muted'
+                          )}
+                          title="Pin context to this turn"
+                        >
+                          ctx
+                        </button>
+                      )}
+                    </div>
                     <ResponseBlock
                       turn={turn}
                       expanded={expandedTurns.has(turn.index)}
@@ -660,7 +679,7 @@ export function SessionTracePage() {
         {/* Context sidebar */}
         {showContext && data.turns.length > 0 && (
           <div className="w-80 shrink-0 sticky top-16">
-            <ContextPanel turns={data.turns as Turn[]} />
+            <ContextPanel turns={selectedTurnIndex !== null ? data.turns.slice(0, selectedTurnIndex + 1) as Turn[] : data.turns as Turn[]} />
           </div>
         )}
       </div>

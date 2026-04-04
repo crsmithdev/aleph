@@ -123,6 +123,7 @@ function SystemInfoSection() {
 
       <Section title="Paths">
         <InfoGrid rows={[
+          ['Construct', info.paths.construct],
           ['Construct DB', info.paths.db],
           ['Memory DB', info.paths.memoryDb],
           ['Telemetry', info.paths.telemetry],

@@ -74,6 +74,7 @@ export function useObsHooks(range: TimeRange, granularity?: Granularity, session
       description?: string;
     }>;
     byDay: Array<{ date: string; count: number; hooks: Record<string, number> }>;
+    byEvent?: Array<{ event: string; count: number }>;
     unused: Array<{ command: string; event: string; blocking?: boolean; gate?: string; markerFile?: string; description?: string }>;
     markerStats?: Record<string, { writes: number; clears: number; activeNow: boolean }>;
     queryTimeMs: number;
@@ -84,6 +85,7 @@ export function useObsSkills(range: TimeRange, granularity?: Granularity, sessio
   return obsQuery<{
     ranked: Array<{ skill: string; count: number; pct: number; errors: number; lastUsed?: string; type: 'command' | 'skill'; registered: boolean }>;
     byDay: Array<{ date: string; count: number; skills: Record<string, number> }>;
+    byType?: Array<{ type: string; count: number }>;
     unused: string[];
     queryTimeMs: number;
   }>('skills', { range, granularity, session });
@@ -444,5 +446,30 @@ export function useTriggerSnapshot() {
   return useMutation({
     mutationFn: () => api.post('/observability/memory/snapshot', {}),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['observability', 'memory'] }),
+  });
+}
+
+export function useObsDbContents(db: string, table: string, limit = 50, offset = 0) {
+  return useQuery<{ rows: Record<string, unknown>[]; total: number; error?: string }>({
+    queryKey: ['observability', 'db-contents', db, table, limit, offset],
+    queryFn: () => api.get(`/observability/db-contents/${encodeURIComponent(db)}/${encodeURIComponent(table)}?limit=${limit}&offset=${offset}`),
+    enabled: !!db && !!table,
+  });
+}
+
+export function useDeleteMemory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/observability/memory/${encodeURIComponent(id)}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['observability', 'memory-items'] }),
+  });
+}
+
+export function useUpdateMemory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, content }: { id: string; content: string }) =>
+      api.put(`/observability/memory/${encodeURIComponent(id)}`, { content }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['observability', 'memory-items'] }),
   });
 }

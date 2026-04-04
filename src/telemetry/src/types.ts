@@ -303,6 +303,7 @@ export interface TraceTurn {
   outputTokens?: number;
   cost?: number;
   model?: string;
+  assistantText?: string;
 }
 
 export interface TraceData {

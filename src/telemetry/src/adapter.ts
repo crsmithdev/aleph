@@ -19,8 +19,9 @@ const PROJECTS_DIRNAME = basename(claudePaths.projects);
 // ---------------------------------------------------------------------------
 
 const { sqlite: cacheDb } = createDb(dataPaths.db);
+cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache`);
 cacheDb.exec(`
-  CREATE TABLE IF NOT EXISTS telemetry_cache (
+  CREATE TABLE IF NOT EXISTS telemetry_cache_v2 (
     file_path TEXT PRIMARY KEY,
     mtime_ms INTEGER NOT NULL,
     size INTEGER NOT NULL,
@@ -29,14 +30,14 @@ cacheDb.exec(`
 `);
 
 const insertCache = cacheDb.prepare(
-  `INSERT OR REPLACE INTO telemetry_cache (file_path, mtime_ms, size, events) VALUES (?, ?, ?, ?)`
+  `INSERT OR REPLACE INTO telemetry_cache_v2 (file_path, mtime_ms, size, events) VALUES (?, ?, ?, ?)`
 );
 const selectCache = cacheDb.prepare(
-  `SELECT mtime_ms, size, events FROM telemetry_cache WHERE file_path = ?`
+  `SELECT mtime_ms, size, events FROM telemetry_cache_v2 WHERE file_path = ?`
 );
 
 export function clearCache(): void {
-  cacheDb.exec("DELETE FROM telemetry_cache");
+  cacheDb.exec("DELETE FROM telemetry_cache_v2");
 }
 
 function discoverJsonlFiles(baseDir: string, since?: Date): string[] {
@@ -196,6 +197,20 @@ function adaptLine(
             data: toolData,
           });
         }
+      }
+
+      // Capture assistant text
+      const textParts: string[] = [];
+      for (const block of content) {
+        if (block.type === "text" && typeof block.text === "string") {
+          textParts.push(block.text as string);
+        }
+      }
+      if (textParts.length > 0) {
+        events.push({
+          ts, sid, kind: "message", name: "assistant",
+          data: { ...meta, text: textParts.join("\n").slice(0, 2000), role: "assistant" },
+        });
       }
     }
   }

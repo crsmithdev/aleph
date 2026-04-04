@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
-import { useObsMemory, useObsMemoryItems, useObsMemoryUsage, useTriggerSnapshot } from '../../../api/observability-hooks';
+import { useObsMemory, useObsMemoryItems, useObsMemoryUsage, useTriggerSnapshot, useDeleteMemory, useUpdateMemory } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
@@ -29,6 +29,11 @@ export function MemoryPage() {
   const [granularity, setGranularity] = useState<Granularity>('day');
   const { data, isLoading, error, refetch } = useObsMemory();
   const snapshot = useTriggerSnapshot();
+  const deleteMemory = useDeleteMemory();
+  const updateMemory = useUpdateMemory();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState('');
   const usage = useObsMemoryUsage(range, granularity);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -332,6 +337,63 @@ export function MemoryPage() {
             data={items.data.items}
             columns={memoryColumns}
             keyField="id"
+            expandedKey={expandedId}
+            onExpandToggle={(key) => setExpandedId(key === expandedId ? null : key)}
+            renderExpanded={(row) => (
+              <div className="space-y-3">
+                {editingId === row.id ? (
+                  <div className="space-y-2">
+                    <textarea
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      className="w-full rounded border border-border-primary bg-bg-primary px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:ring-1 focus:ring-accent resize-y min-h-[100px]"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => updateMemory.mutate({ id: row.id, content: editContent }, { onSuccess: () => setEditingId(null) })}
+                        disabled={updateMemory.isPending}
+                        className="px-3 py-1 text-xs bg-accent text-white rounded hover:bg-accent-hover disabled:opacity-50 transition-colors"
+                      >
+                        {updateMemory.isPending ? 'Saving...' : 'Save'}
+                      </button>
+                      <button
+                        onClick={() => setEditingId(null)}
+                        className="px-3 py-1 text-xs border border-border-primary text-text-muted rounded hover:text-text-primary transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <pre className="text-sm text-text-primary whitespace-pre-wrap break-words font-sans leading-relaxed">{row.content}</pre>
+                    <div className="flex items-center gap-3 text-xs text-text-muted">
+                      <span>Created {relativeTime(row.created_at)}</span>
+                      {row.updated_at !== row.created_at && <span>Updated {relativeTime(row.updated_at)}</span>}
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        onClick={() => { setEditingId(row.id); setEditContent(row.content); }}
+                        className="px-3 py-1 text-xs border border-border-primary text-text-muted rounded hover:text-text-primary transition-colors"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm('Delete this memory?')) {
+                            deleteMemory.mutate(row.id, { onSuccess: () => setExpandedId(null) });
+                          }
+                        }}
+                        disabled={deleteMemory.isPending}
+                        className="px-3 py-1 text-xs border border-error/30 text-error rounded hover:bg-error/10 disabled:opacity-50 transition-colors"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           />
         )}
         {items.data && items.data.items.length === 0 && (activeSearch.q || activeSearch.type || activeSearch.tag) && (

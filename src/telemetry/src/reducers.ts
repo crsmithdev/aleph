@@ -866,6 +866,7 @@ export function reduceSessionTrace(events: TelemetryEvent[], sessionId: string):
     const spans: TraceSpan[] = [];
     let turnTokens = 0, turnCost = 0, turnModel: string | undefined, turnDurationMs = 0, spanCounter = 0;
     let turnContextTokens = 0, turnOutputTokens = 0;
+    let assistantText: string | undefined;
 
     for (const e of turnEntries) {
       const offsetMs = new Date(e.ts).getTime() - turnStart;
@@ -965,6 +966,10 @@ export function reduceSessionTrace(events: TelemetryEvent[], sessionId: string):
       }
 
       if (e.kind === "turn" && e.ms) turnDurationMs = e.ms;
+
+      if (e.kind === "message" && e.data?.role === "assistant" && e.data?.text) {
+        assistantText = e.data.text as string;
+      }
     }
 
     if (turnDurationMs === 0 && spans.length > 0) {
@@ -979,6 +984,7 @@ export function reduceSessionTrace(events: TelemetryEvent[], sessionId: string):
       spans: spans.sort((a, b) => a.startMs - b.startMs),
       tokenCount: turnTokens || undefined, cost: turnCost || undefined, model: turnModel,
       contextTokens: turnContextTokens || undefined, outputTokens: turnOutputTokens || undefined,
+      assistantText: assistantText || undefined,
     });
   }
 

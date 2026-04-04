@@ -36,7 +36,7 @@ import { researchRoutes } from './routes/research.js';
 import { EventBus, HistoryService, applyDDL } from '@construct/goals';
 import { applyResearchDDL } from '@construct/research';
 import { webhooks } from './db/schema.js';
-import { existsSync, readFileSync, statSync } from 'fs';
+import { existsSync, readFileSync, statSync, lstatSync, readlinkSync } from 'fs';
 import { resolve } from 'path';
 import { execSync } from 'child_process';
 import { claudePaths, dataPaths, getMemoryDbPath } from '@construct/data';
@@ -146,6 +146,11 @@ export async function createApp(opts?: { dbUrl?: string; workerCount?: number; s
     await api.register(observabilityRoutes, { prefix: '/observability' });
     await api.register(researchRoutes, { prefix: '/research' });
 
+    function pathWithSymlink(p: string): string {
+      try { const s = lstatSync(p); if (s.isSymbolicLink()) return `${p} → ${readlinkSync(p)}`; } catch { /* ignore */ }
+      return p;
+    }
+
     api.get('/system/info', async function () {
       // Parse manifest: INI-like file with [section] headers and key = value pairs
       let manifest: Record<string, Record<string, string>> = {};
@@ -192,9 +197,9 @@ export async function createApp(opts?: { dbUrl?: string; workerCount?: number; s
           repo: repoDir ?? 'unknown',
           claudeRoot: manifest.paths?.claude_root ?? claudePaths.root,
           dataRoot: manifest.paths?.data_root ?? dataPaths.root,
-          construct: manifest.paths?.construct ?? claudePaths.construct,
-          commands: manifest.paths?.commands ?? claudePaths.commands,
-          skills: manifest.paths?.skills ?? claudePaths.skills,
+          construct: pathWithSymlink(manifest.paths?.construct ?? claudePaths.construct),
+          commands: pathWithSymlink(manifest.paths?.commands ?? claudePaths.commands),
+          skills: pathWithSymlink(manifest.paths?.skills ?? claudePaths.skills),
           db: runtimeDbPath,
           memoryDb: (manifest.paths?.memory_db) ?? getMemoryDbPath(),
           sessions: (manifest.paths?.sessions) ?? dataPaths.sessions,

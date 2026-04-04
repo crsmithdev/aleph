@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import { useObsSkills } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
@@ -151,6 +151,29 @@ export function SkillsPage() {
         onRowClick={(row) => !row.unused && navigate(`/observability/skills/${encodeURIComponent(row.skill)}`)}
         rowClassName={(row) => row.unused ? 'opacity-50' : undefined}
       />
+
+      {data.byType && data.byType.length > 1 && (
+        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
+          <h3 className="mb-3 text-sm font-medium text-text-secondary">By Type</h3>
+          <div className="flex items-center gap-6">
+            <PieChart width={120} height={120}>
+              <Pie data={data.byType} dataKey="count" nameKey="type" cx="50%" cy="50%" innerRadius={30} outerRadius={50}>
+                {data.byType.map((_: unknown, i: number) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+              </Pie>
+              <Tooltip contentStyle={tooltipStyle} formatter={(v: unknown, n: unknown) => [fmtNumber(Number(v)), String(n)]} />
+            </PieChart>
+            <div className="flex flex-col gap-2">
+              {data.byType.map((row: { type: string; count: number }, i: number) => (
+                <div key={row.type} className="flex items-center gap-2 text-xs">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                  <span className="text-text-secondary capitalize">{row.type}</span>
+                  <span className="ml-2 text-text-muted font-mono">{fmtNumber(row.count)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {data.byDay.length > 0 && (
         <ChartContainer title="Skill Invocations Over Time" chartType={chartType} onChartTypeChange={setChartType}>

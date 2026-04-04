@@ -177,6 +177,31 @@ function ByHookView({ range, granularity }: {
         </div>
       )}
 
+      {data.byEvent && data.byEvent.length > 0 && (
+        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
+          <h3 className="mb-3 text-sm font-medium text-text-secondary">By Event</h3>
+          <div className="flex items-center gap-6">
+            <PieChart width={120} height={120}>
+              <Pie data={data.byEvent} dataKey="count" nameKey="event" cx="50%" cy="50%" innerRadius={30} outerRadius={50}>
+                {data.byEvent.map((_, i) => (
+                  <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
+                ))}
+              </Pie>
+              <RechartsTooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+            </PieChart>
+            <div className="flex flex-col gap-2">
+              {data.byEvent.map((row, i) => (
+                <div key={row.event} className="flex items-center gap-2 text-xs">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                  <span className="font-mono text-text-secondary">{row.event}</span>
+                  <span className="ml-2 text-text-muted font-mono">{fmtNumber(row.count)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <QueryTiming ms={data.queryTimeMs} />
     </>
   );

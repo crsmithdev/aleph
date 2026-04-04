@@ -419,7 +419,12 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
         description: meta?.description,
       };
     });
-    return { ...result, ranked, unused, markerStats, queryTimeMs };
+    const byEventMap = new Map<string, number>();
+    for (const h of merged) {
+      if (h.event) byEventMap.set(h.event, (byEventMap.get(h.event) || 0) + h.count);
+    }
+    const byEvent = [...byEventMap.entries()].map(([event, count]) => ({ event, count })).sort((a, b) => b.count - a.count);
+    return { ...result, ranked, unused, markerStats, byEvent, queryTimeMs };
   });
 
   app.get<{ Querystring: QueryParams }>('/skills', { preHandler: parseDaysPreHandler }, async (req) => {
@@ -441,7 +446,12 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
         registered: isCommand || isSkill,
       };
     });
-    return { ...result, ranked, unused, queryTimeMs };
+    const typeMap = new Map<string, number>();
+    for (const s of ranked) {
+      typeMap.set(s.type, (typeMap.get(s.type) || 0) + s.count);
+    }
+    const byType = [...typeMap.entries()].map(([type, count]) => ({ type, count }));
+    return { ...result, ranked, unused, byType, queryTimeMs };
   });
 
   app.get<{ Querystring: QueryParams }>('/tokens', { preHandler: parseDaysPreHandler }, async (req) => {
@@ -593,6 +603,46 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
+  app.put<{ Params: { id: string }; Body: { content: string } }>(
+    '/memory/:id',
+    async (req) => {
+      const dbPath = getMemoryDbPath();
+      if (!existsSync(dbPath)) return { error: 'memory db not found' };
+      const { id } = req.params;
+      const { content } = req.body as { content: string };
+      if (!content || typeof content !== 'string') return { error: 'content required' };
+      let db: Database | null = null;
+      try {
+        db = new Database(dbPath);
+        db.run(`UPDATE memories SET content = ?, updated_at = unixepoch() WHERE id = ?`, [content, id]);
+        return { ok: true };
+      } catch (err) {
+        return { error: (err as Error).message };
+      } finally {
+        db?.close();
+      }
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>(
+    '/memory/:id',
+    async (req) => {
+      const dbPath = getMemoryDbPath();
+      if (!existsSync(dbPath)) return { error: 'memory db not found' };
+      const { id } = req.params;
+      let db: Database | null = null;
+      try {
+        db = new Database(dbPath);
+        db.run(`DELETE FROM memories WHERE id = ?`, [id]);
+        return { ok: true };
+      } catch (err) {
+        return { error: (err as Error).message };
+      } finally {
+        db?.close();
+      }
+    },
+  );
+
   app.get<{ Querystring: QueryParams }>('/compaction', { preHandler: parseDaysPreHandler }, async (req) => {
     const obsReq = req as ObsRequest;
     const { result, queryTimeMs } = timed(() => aggregateCompaction(obsReq.telemetryEntries, obsReq.granularity));
@@ -696,6 +746,29 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       db?.close();
     }
   });
+
+  app.get<{ Params: { db: string; table: string }; Querystring: { limit?: string; offset?: string } }>(
+    '/db-contents/:db/:table',
+    async (request) => {
+      const { db: dbName, table } = request.params;
+      const limit = Math.min(Math.max(parseInt(request.query.limit || '50', 10) || 50, 1), 200);
+      const offset = Math.max(parseInt(request.query.offset || '0', 10) || 0, 0);
+      const dbPath = dbName === 'construct' ? dataPaths.db : dbName === 'memory' ? getMemoryDbPath() : null;
+      if (!dbPath || !existsSync(dbPath)) return { rows: [], total: 0 };
+      const safeTable = table.replace(/[^a-zA-Z0-9_]/g, '');
+      let db: Database | null = null;
+      try {
+        db = new Database(dbPath, { readonly: true });
+        const totalRow = db.query(`SELECT count(*) as c FROM "${safeTable}"`).get() as { c: number };
+        const rows = db.query(`SELECT * FROM "${safeTable}" LIMIT ? OFFSET ?`).all(limit, offset);
+        return { rows, total: totalRow.c };
+      } catch (err) {
+        return { rows: [], total: 0, error: (err as Error).message };
+      } finally {
+        db?.close();
+      }
+    },
+  );
 
   app.get<{ Querystring: QueryParams }>('/subagents', { preHandler: parseDaysPreHandler }, async (req) => {
     const obsReq = req as ObsRequest;
