@@ -118,8 +118,6 @@ export interface ResearchEnvCheck {
   openrouter: boolean;
   jina: boolean;
   jina_balance: number | null;
-  jina_trial_balance: number | null;
-  jina_paid_balance: number | null;
   tavily: boolean;
   brave: boolean;
   searchProvider: 'tavily' | 'brave' | 'duckduckgo';

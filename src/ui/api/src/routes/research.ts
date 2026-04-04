@@ -319,25 +319,19 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     if (!tavily && !brave) warnings.push('No search API key set — using DuckDuckGo (rate-limited, lower quality)');
 
     let jina_balance: number | null = null;
-    let jina_trial_balance: number | null = null;
-    let jina_paid_balance: number | null = null;
     if (jinaKey) {
       try {
-        const res = await fetch(`https://embeddings-dashboard-api.jina.ai/api/v1/api_key/user?api_key=${jinaKey}`, {
+        const res = await fetch('https://r.jina.ai', {
+          headers: { 'Authorization': `Bearer ${jinaKey}` },
           signal: AbortSignal.timeout(5000),
         });
-        if (res.ok) {
-          const data = await res.json() as { wallet?: { trial_balance: number; regular_balance: number; total_balance: number } };
-          if (data.wallet) {
-            jina_trial_balance = data.wallet.trial_balance;
-            jina_paid_balance = data.wallet.regular_balance;
-            jina_balance = data.wallet.total_balance;
-          }
-        }
+        const text = await res.text();
+        const m = text.match(/\[Balance left\]\s+([\d,]+)/);
+        if (m) jina_balance = parseInt(m[1].replace(/,/g, ''), 10);
       } catch { /* network error — leave null */ }
     }
 
-    return { anthropic, openrouter, jina, jina_balance, jina_trial_balance, jina_paid_balance, tavily, brave, searchProvider, warnings, errors };
+    return { anthropic, openrouter, jina, jina_balance, tavily, brave, searchProvider, warnings, errors };
   });
 
   // === Worker supervisor ===
