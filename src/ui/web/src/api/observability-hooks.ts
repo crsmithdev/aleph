@@ -139,6 +139,7 @@ export function useObsSessions(range: TimeRange, granularity?: Granularity, sess
       parentSessionId?: string;
       hasSubagents?: boolean;
       gateInfo?: { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; mode: 'dispatched' | 'inline' | 'none' };
+      firstUserMessage?: string;
     }>;
     avgDurationMs: number;
     totalUserMessages: number;
@@ -349,6 +350,8 @@ export function useObsSessionTrace(sessionId: string, range: TimeRange) {
         subagentSessionId?: string;
       }>;
       tokenCount?: number;
+      contextTokens?: number;
+      outputTokens?: number;
       cost?: number;
       model?: string;
     }>;

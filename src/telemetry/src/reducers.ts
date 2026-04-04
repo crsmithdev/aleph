@@ -364,6 +364,7 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
     linesAdded: number; linesRemoved: number;
     commits: number; compactions: number;
     hasSubagents: boolean; gitBranch?: string;
+    firstUserMessage?: string;
   }>();
 
   function getSession(sid: string, project: string, ts: string, parentSessionId?: string) {
@@ -400,6 +401,9 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
     if (e.kind === "message" && e.data?.role === "user") {
       bucket.messages++; bucket.userMessages++;
       sess.userMessages++;
+      if (!sess.firstUserMessage && e.data?.text) {
+        sess.firstUserMessage = (e.data.text as string).replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim().slice(0, 200);
+      }
     }
 
     if (e.kind === "tool") {
@@ -449,6 +453,7 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
       commits: s.commits, compactions: s.compactions,
       firstTimestamp: s.firstTs, lastTimestamp: s.lastTs,
       gitBranch: s.gitBranch, hasSubagents: s.hasSubagents,
+      firstUserMessage: s.firstUserMessage,
     }))
     .sort((a, b) => b.lastTimestamp.localeCompare(a.lastTimestamp));
 
@@ -860,6 +865,7 @@ export function reduceSessionTrace(events: TelemetryEvent[], sessionId: string):
 
     const spans: TraceSpan[] = [];
     let turnTokens = 0, turnCost = 0, turnModel: string | undefined, turnDurationMs = 0, spanCounter = 0;
+    let turnContextTokens = 0, turnOutputTokens = 0;
 
     for (const e of turnEntries) {
       const offsetMs = new Date(e.ts).getTime() - turnStart;
@@ -944,11 +950,18 @@ export function reduceSessionTrace(events: TelemetryEvent[], sessionId: string):
 
       if (e.kind === "tokens") {
         const d = e.data || {};
-        const tokens = ((d.input as number) || 0) + ((d.output as number) || 0);
+        const inp = (d.input as number) || 0;
+        const out = (d.output as number) || 0;
+        const cacheRead = (d.cacheRead as number) || 0;
+        const cacheCreation = (d.cacheCreation as number) || 0;
+        const tokens = inp + out;
         const cost = costFromTokenEvent(e);
         turnTokens += tokens; turnCost += cost;
         totalTokens += tokens; totalCost += cost;
         if (d.model) turnModel = d.model as string;
+        // Total context window = fresh input + cached reads + newly cached
+        turnContextTokens = inp + cacheRead + cacheCreation;
+        turnOutputTokens = out;
       }
 
       if (e.kind === "turn" && e.ms) turnDurationMs = e.ms;
@@ -965,6 +978,7 @@ export function reduceSessionTrace(events: TelemetryEvent[], sessionId: string):
       index: t, userMessage, startTime: turnEntries[0].ts, durationMs: turnDurationMs,
       spans: spans.sort((a, b) => a.startMs - b.startMs),
       tokenCount: turnTokens || undefined, cost: turnCost || undefined, model: turnModel,
+      contextTokens: turnContextTokens || undefined, outputTokens: turnOutputTokens || undefined,
     });
   }
 

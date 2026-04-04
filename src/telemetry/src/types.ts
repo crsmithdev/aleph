@@ -201,6 +201,7 @@ export interface SessionMetric {
   gitBranch?: string;
   hasSubagents?: boolean;
   gateInfo?: GateInfo;
+  firstUserMessage?: string;
 }
 
 export interface SessionsData {
@@ -298,6 +299,8 @@ export interface TraceTurn {
   durationMs: number;
   spans: TraceSpan[];
   tokenCount?: number;
+  contextTokens?: number;
+  outputTokens?: number;
   cost?: number;
   model?: string;
 }

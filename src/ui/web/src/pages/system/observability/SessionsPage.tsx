@@ -33,6 +33,7 @@ type SessionRow = {
   gitBranch?: string;
   parentSessionId?: string;
   gateInfo?: { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; mode: 'dispatched' | 'inline' | 'none' };
+  firstUserMessage?: string;
 };
 export function SessionsPage() {
   const navigate = useNavigate();
@@ -81,10 +82,17 @@ export function SessionsPage() {
       label: 'Project',
       sortable: true,
       render: (row) => (
-        <span className="font-mono text-text-primary text-xs">
-          {row.parentSessionId && <span className="text-text-muted mr-1">↳</span>}
-          {fmtProject(row.project)}
-        </span>
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <span className="font-mono text-text-primary text-xs">
+            {row.parentSessionId && <span className="text-text-muted mr-1">↳</span>}
+            {fmtProject(row.project)}
+          </span>
+          {row.firstUserMessage && (
+            <span className="text-text-muted text-xs truncate max-w-xs italic">
+              {row.firstUserMessage.slice(0, 80)}{row.firstUserMessage.length > 80 ? '…' : ''}
+            </span>
+          )}
+        </div>
       ),
     },
     {
