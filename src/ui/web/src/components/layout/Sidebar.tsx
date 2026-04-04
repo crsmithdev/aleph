@@ -161,7 +161,9 @@ export function Sidebar() {
           <div key={gi}>
             {gi > 0 && <hr className="my-2 border-border-primary" />}
             {group.map((item) => {
-              const isParentActive = location.pathname === item.to || location.pathname.startsWith(item.to + '/');
+              const isParentActive = location.pathname === item.to ||
+                location.pathname.startsWith(item.to + '/') ||
+                item.children?.some((c) => location.pathname === c.to || location.pathname.startsWith(c.to + '/'));
               return (
                 <div key={item.to}>
                   <SidebarLink to={item.to} label={item.label} icon={item.icon} />
