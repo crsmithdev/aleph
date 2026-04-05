@@ -15,10 +15,10 @@ try {
 } catch { /* no .env — keys must be set externally */ }
 
 import Fastify from 'fastify';
+import fastifyStatic from '@fastify/static';
 import cors from '@fastify/cors';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
-import fastifyStatic from '@fastify/static';
 import { createDb } from '@construct/data';
 import { config } from './config.js';
 import { errorHandler } from './plugins/error-handler.js';
@@ -224,6 +224,8 @@ export async function createApp(opts?: { dbUrl?: string; workerCount?: number; s
   }, { prefix: '/api' });
 
   if (!opts?.skipStatic) {
+    const { resolve } = await import('path');
+    const { existsSync } = await import('fs');
     const webDist = resolve(import.meta.dirname || '.', '../../web/dist');
     if (existsSync(webDist)) {
       await app.register(fastifyStatic, { root: webDist, prefix: '/' });

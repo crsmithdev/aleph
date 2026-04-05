@@ -273,10 +273,12 @@ function ResponseBlock({
         )}
 
         {/* Assistant text */}
-        {turn.assistantText && (
+        {turn.assistantText ? (
           <div className="whitespace-pre-wrap break-words">
             <MarkdownText text={turn.assistantText} />
           </div>
+        ) : !hasSpans && (
+          <span className="text-sm text-text-disabled italic">—</span>
         )}
 
         {/* Toggle button — at bottom */}
@@ -301,23 +303,37 @@ function UserBlock({ turn, runningCost, prevContextTokens }: {
   runningCost: number;
   prevContextTokens?: number;
 }) {
-  const msg = cleanMessage(turn.userMessage);
   const time = dateTime(turn.startTime);
   const isCaveat = turn.userMessage.includes('local-command-caveat');
+  const isStdout = turn.userMessage.includes('local-command-stdout');
 
   // Context delta
   const ctxDelta =
     turn.contextTokens && prevContextTokens ? turn.contextTokens - prevContextTokens : undefined;
 
   if (isCaveat) {
+    // Just a system marker — no useful content to show
+    return null;
+  }
+
+  if (isStdout) {
+    const stdoutContent = turn.userMessage.match(/<local-command-stdout>([\s\S]*?)<\/local-command-stdout>/)?.[1]?.trim()
+      || cleanMessage(turn.userMessage);
     return (
       <div className="flex flex-col items-end gap-1">
-        <div className="max-w-[85%] px-3 py-1.5 rounded-sm border border-border-primary/30 bg-bg-tertiary/30">
-          <span className="text-xs text-text-disabled font-mono">[system] {msg || 'local-command-caveat'}</span>
+        <div className="max-w-[85%] rounded-sm border border-border-primary/40 bg-bg-primary overflow-hidden">
+          <div className="px-2 py-1 border-b border-border-primary/30 bg-bg-tertiary/40">
+            <span className="text-[10px] text-text-disabled font-mono tracking-wider uppercase">shell output</span>
+          </div>
+          <pre className="px-3 py-2 text-xs font-mono text-text-secondary whitespace-pre-wrap break-words leading-relaxed max-h-48 overflow-y-auto">
+            {stdoutContent || '(no output)'}
+          </pre>
         </div>
       </div>
     );
   }
+
+  const msg = cleanMessage(turn.userMessage);
 
   return (
     <div className="flex flex-col items-end gap-1">

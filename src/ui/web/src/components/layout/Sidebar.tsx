@@ -76,7 +76,7 @@ const settingsItem = {
   ),
 };
 
-function SidebarLink({ to, label, icon, depth = 0 }: { to: string; label: string; icon?: React.ReactNode; depth?: number }) {
+function SidebarLink({ to, label, icon, depth = 0, collapsed = false }: { to: string; label: string; icon?: React.ReactNode; depth?: number; collapsed?: boolean }) {
   return (
     <NavLink
       to={to}
@@ -93,9 +93,10 @@ function SidebarLink({ to, label, icon, depth = 0 }: { to: string; label: string
               : 'pl-2.5 text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded-lg'
         )
       }
+      title={collapsed ? label : undefined}
     >
       {icon}
-      <span className="truncate">{label}</span>
+      {!collapsed && <span className="truncate">{label}</span>}
     </NavLink>
   );
 }
@@ -176,7 +177,7 @@ export function Sidebar() {
 
       {/* Footer */}
       <div className="border-t border-border-primary px-2 py-2 space-y-0.5">
-        <SidebarLink to={settingsItem.to} label={settingsItem.label} icon={settingsItem.icon} />
+        <SidebarLink to={settingsItem.to} label={settingsItem.label} icon={settingsItem.icon} collapsed={collapsed} />
         <ThemeToggle collapsed={collapsed} />
       </div>
     </aside>
