@@ -172,6 +172,12 @@ async function syncDir(srcDir: string, dstDir: string): Promise<void> {
   await cleanDst(dstDir, "");
 }
 
+async function printSymlinks(): Promise<void> {
+  console.log("\n=== Symlinks ===");
+  const result = await Bun.$`find ${DST}/construct ${DST}/commands -maxdepth 1 -type l -printf "%p -> %l\n" 2>/dev/null`.text();
+  console.log(result.trim() || "(none)");
+}
+
 // --- Main ---
 
 console.log("=== Construct Installer ===");
@@ -188,22 +194,22 @@ await mkdir(join(DATA_DIR, "memory"), { recursive: true });
 
 /** Sync commands, agents, settings.json, and CLAUDE.md from CONSTRUCT_SRC to DST. */
 async function syncConfig() {
-  // 5. Sync commands — install from repo, remove stale Construct-owned commands
+  // Commands — per-file copy; stale = symlink into our src/ that no longer exists in src/commands/
   console.log("syncing commands...");
   await mkdir(join(DST, "commands"), { recursive: true });
+  const installed = new Set<string>();
 
   const cmdDir = join(CONSTRUCT_SRC, "commands");
-  const repoCommands = new Set<string>();
   if (await exists(cmdDir)) {
     for (const f of await readdir(cmdDir)) {
       if (f.endsWith(".md")) {
-        await cp(join(cmdDir, f), join(DST, "commands", f));
-        repoCommands.add(f);
+        const dst = join(DST, "commands", f);
+        await rm(dst, { force: true });
+        await cp(join(cmdDir, f), dst);
+        installed.add(f);
       }
     }
   }
-
-  // Register skills from src/skills/*/SKILL.md as commands
   const skillsDir = join(CONSTRUCT_SRC, "skills");
   if (await exists(skillsDir)) {
     for (const d of await readdir(skillsDir, { withFileTypes: true })) {
@@ -211,65 +217,56 @@ async function syncConfig() {
       const skillFile = join(skillsDir, d.name, "SKILL.md");
       if (await exists(skillFile)) {
         const cmdName = `${d.name}.md`;
-        if (!repoCommands.has(cmdName)) {
-          await cp(skillFile, join(DST, "commands", cmdName));
-          repoCommands.add(cmdName);
+        if (!installed.has(cmdName)) {
+          const dst = join(DST, "commands", cmdName);
+          await rm(dst, { force: true });
+          await cp(skillFile, dst);
+          installed.add(cmdName);
         }
       }
     }
   }
-  console.log(`  installed: ${repoCommands.size ? [...repoCommands].join(" ") : "none"}`);
-
-  // Remove stale Construct-owned commands using manifest
-  const manifestPath = join(DST, "commands", ".construct-managed");
-  const previouslyManaged = new Set<string>();
-  if (await exists(manifestPath)) {
-    const content = await readFile(manifestPath, "utf-8");
-    for (const line of content.split("\n")) {
-      const trimmed = line.trim();
-      if (trimmed) previouslyManaged.add(trimmed);
-    }
+  // Remove stale: symlinks pointing into CONSTRUCT_SRC that are no longer present
+  for (const f of await readdir(join(DST, "commands"))) {
+    if (installed.has(f)) continue;
+    const p = join(DST, "commands", f);
+    try {
+      const s = await lstat(p);
+      if (s.isSymbolicLink()) {
+        const target = await import("fs/promises").then(m => m.readlink(p));
+        if (target.startsWith(CONSTRUCT_SRC)) { await rm(p); console.log(`  removed stale: ${f}`); }
+      }
+    } catch { /* ignore */ }
   }
-  for (const f of previouslyManaged) {
-    if (!repoCommands.has(f) && await exists(join(DST, "commands", f))) {
-      await rm(join(DST, "commands", f));
-      console.log(`  removed stale: ${f}`);
-    }
-  }
-  await writeFile(manifestPath, [...repoCommands].sort().join("\n") + "\n");
+  console.log(`  installed: ${installed.size ? [...installed].join(" ") : "none"}`);
 
-  // 5b. Sync agents — install from src/agents/ to ~/.claude/agents/
+  // Agents — same approach
   console.log("syncing agents...");
   await mkdir(join(DST, "agents"), { recursive: true });
-
+  const installedAgents = new Set<string>();
   const agentSrcDir = join(CONSTRUCT_SRC, "agents");
-  const repoAgents = new Set<string>();
   if (await exists(agentSrcDir)) {
     for (const f of await readdir(agentSrcDir)) {
       if (f.endsWith(".md")) {
-        await cp(join(agentSrcDir, f), join(DST, "agents", f));
-        repoAgents.add(f);
+        const dst = join(DST, "agents", f);
+        await rm(dst, { force: true });
+        await cp(join(agentSrcDir, f), dst);
+        installedAgents.add(f);
       }
     }
   }
-
-  const agentManifestPath = join(DST, "agents", ".construct-managed");
-  const previousAgents = new Set<string>();
-  if (await exists(agentManifestPath)) {
-    const content = await readFile(agentManifestPath, "utf-8");
-    for (const line of content.split("\n")) {
-      const trimmed = line.trim();
-      if (trimmed) previousAgents.add(trimmed);
-    }
+  for (const f of await readdir(join(DST, "agents"))) {
+    if (installedAgents.has(f)) continue;
+    const p = join(DST, "agents", f);
+    try {
+      const s = await lstat(p);
+      if (s.isSymbolicLink()) {
+        const target = await import("fs/promises").then(m => m.readlink(p));
+        if (target.startsWith(CONSTRUCT_SRC)) { await rm(p); }
+      }
+    } catch { /* ignore */ }
   }
-  for (const f of previousAgents) {
-    if (!repoAgents.has(f) && await exists(join(DST, "agents", f))) {
-      await rm(join(DST, "agents", f));
-      console.log(`  removed stale agent: ${f}`);
-    }
-  }
-  await writeFile(agentManifestPath, [...repoAgents].sort().join("\n") + "\n");
-  console.log(`  installed agents: ${repoAgents.size ? [...repoAgents].join(" ") : "none"}`);
+  console.log(`  installed agents: ${installedAgents.size ? [...installedAgents].join(" ") : "none"}`);
 
   // 6. Merge settings.json — replace hooks + statusLine, preserve everything else
   console.log("merging settings.json...");
@@ -611,6 +608,9 @@ try {
 
   console.log();
   console.log("done.");
+
+  await printSymlinks();
+
 } finally {
   await rm(backupDir, { recursive: true, force: true });
 }

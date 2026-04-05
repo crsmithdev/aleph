@@ -13,10 +13,10 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
-    "@construct/data": "file:../data",
-    "@construct/goals": "file:../goals",
-    "@construct/research": "file:../research",
-    "@construct/telemetry": "file:../telemetry"
+    "@construct/data": "workspace:*",
+    "@construct/goals": "workspace:*",
+    "@construct/research": "workspace:*",
+    "@construct/telemetry": "workspace:*"
   },
   "devDependencies": {
     "playwright": "^1.58.2",

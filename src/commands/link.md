@@ -10,14 +10,14 @@ ls -la ~/.claude/ | grep construct
 ```
 
 - `lrwxrwxrwx ... construct -> ~/construct/src/` → **linked-on** (serving live from repo)
-- `lrwxrwxrwx ... construct -> ~/.claude/construct-<id>` → **linked-off** (symlink to backup)
+- `lrwxrwxrwx ... construct -> ~/.claude/construct-installed` → **linked-off** (symlink to backup)
 - `drwxr-xr-x ... construct` → **installed** (real directory copy)
 
 ## Transitions
 
 | From | Command | Result |
 |------|---------|--------|
-| installed | `bun link.ts` | backs up real dir as `construct-<word1-word2-noun>`, creates symlink → repo `src/` |
+| installed | `bun link.ts` | backs up real dir as `construct-installed`, creates symlink → repo `src/` |
 | linked-on | `bun link.ts` | retargets symlink to backup dir (linked-off) |
 | linked-off | `bun link.ts` | retargets symlink back to repo `src/` (linked-on) |
 
@@ -41,3 +41,7 @@ The server runs on **port 3000** in both modes.
 ```bash
 cd ~/construct && bun install.ts
 ```
+
+## After link
+
+The script prints a `=== Symlinks ===` summary at the end — display that output here.

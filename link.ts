@@ -13,18 +13,13 @@
  *   linked-on   → linked-off  (retarget symlink to backup, restart)
  *   linked-off  → linked-on   (retarget symlink to repo src, restart)
  *
- * Systemd notes:
- *   - bun --watch (the serve script) picks up file changes within the linked directory
- *     automatically with no service action needed.
- *   - Switching the symlink target requires a service restart so the server re-evaluates
- *     isLinked() and loads the correct mode (Vite middleware vs static assets).
- *   - `systemctl reload` sends SIGHUP; bun exits on SIGHUP and systemd auto-restarts it
- *     (Restart=on-failure), so `reload` effectively equals `restart` here. We use restart
- *     directly for clarity.
+ * Commands/agents use per-file symlinks so user's own commands coexist.
+ * File edits in src/ are picked up automatically by bun --watch (no restart needed).
+ * Switching the symlink target requires a service restart to reload the new code.
  */
 
 import { lstatSync, readlinkSync } from "fs";
-import { rename, symlink, unlink, readdir, mkdir, cp, rm, readFile, writeFile } from "fs/promises";
+import { rename, symlink, unlink, readdir, mkdir, readlink, rm, readFile, writeFile } from "fs/promises";
 import { resolve, join, dirname } from "path";
 import { homedir } from "os";
 
@@ -35,37 +30,6 @@ const REPO_SRC = resolve(dirname(Bun.argv[1] || "."), "src");
 const STATE_FILE = resolve(HOME, ".construct", "link-state.json");
 const DST = CLAUDE_DIR;
 const CONSTRUCT_SRC = REPO_SRC;
-
-// ── 3-word ID ─────────────────────────────────────────────────────────────────
-
-const ADJECTIVES = [
-  "amber", "azure", "bold", "bright", "calm", "cedar", "clear", "cool", "crisp",
-  "dawn", "deep", "dense", "distant", "drifting", "dusky", "early", "ember", "faint",
-  "firm", "fleet", "flowing", "foggy", "forest", "frozen", "gentle", "golden", "grand",
-  "green", "grey", "hollow", "humid", "hushed", "idle", "indigo", "jade", "keen",
-  "lofty", "lunar", "marble", "mellow", "misty", "modular", "mossy", "muted", "narrow",
-  "night", "noble", "quiet", "rapid", "rocky", "rolling", "rustic", "sandy", "sharp",
-  "silent", "silver", "sleek", "slow", "smooth", "solar", "sparse", "steady", "steep",
-  "still", "stone", "stormy", "swift", "tidal", "timber", "tranquil", "vast", "velvet",
-  "vivid", "wandering", "warm", "wild", "winding", "winter", "wooden",
-];
-
-const NOUNS = [
-  "anchor", "arch", "basin", "beacon", "birch", "brook", "canyon", "cedar", "cliff",
-  "cloud", "cove", "creek", "crest", "dawn", "delta", "dune", "elm", "fern", "field",
-  "fjord", "flame", "flint", "fog", "forest", "frost", "garden", "glade", "gorge",
-  "grove", "harbor", "heath", "hill", "horizon", "island", "lake", "lantern", "laurel",
-  "leaf", "ledge", "marsh", "meadow", "mesa", "mist", "moon", "moss", "mountain",
-  "oak", "ocean", "peak", "pine", "plain", "pond", "reef", "ridge", "river", "rock",
-  "root", "sand", "shore", "slope", "snow", "spring", "stone", "stream", "summit",
-  "tide", "timber", "trail", "tree", "turtle", "valley", "vine", "wave", "willow",
-  "wind", "wood",
-];
-
-function threeWordId(): string {
-  const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
-  return `${pick(ADJECTIVES)}-${pick(ADJECTIVES)}-${pick(NOUNS)}`;
-}
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
@@ -96,22 +60,26 @@ function currentMode(): Mode {
   } catch { return "unknown"; }
 }
 
-// ── Config sync (commands, agents, settings.json, CLAUDE.md) ─────────────────
+// ── Config sync ───────────────────────────────────────────────────────────────
 
 async function exists(p: string): Promise<boolean> {
   try { await import("fs/promises").then(m => m.access(p)); return true; } catch { return false; }
 }
 
 async function syncConfig(): Promise<void> {
+  // Commands — per-file symlinks; user's own commands (real files) coexist safely
   console.log("syncing commands...");
   await mkdir(join(DST, "commands"), { recursive: true });
+  const linked = new Set<string>();
+
   const cmdDir = join(CONSTRUCT_SRC, "commands");
-  const repoCommands = new Set<string>();
   if (await exists(cmdDir)) {
     for (const f of await readdir(cmdDir)) {
       if (f.endsWith(".md")) {
-        await cp(join(cmdDir, f), join(DST, "commands", f));
-        repoCommands.add(f);
+        const dst = join(DST, "commands", f);
+        if (await exists(dst)) await rm(dst);
+        await symlink(join(cmdDir, f), dst);
+        linked.add(f);
       }
     }
   }
@@ -122,55 +90,60 @@ async function syncConfig(): Promise<void> {
       const skillFile = join(skillsDir, d.name, "SKILL.md");
       if (await exists(skillFile)) {
         const cmdName = `${d.name}.md`;
-        if (!repoCommands.has(cmdName)) {
-          await cp(skillFile, join(DST, "commands", cmdName));
-          repoCommands.add(cmdName);
+        if (!linked.has(cmdName)) {
+          const dst = join(DST, "commands", cmdName);
+          if (await exists(dst)) await rm(dst);
+          await symlink(skillFile, dst);
+          linked.add(cmdName);
         }
       }
     }
   }
-  console.log(`  installed: ${repoCommands.size ? [...repoCommands].join(" ") : "none"}`);
-  const manifestPath = join(DST, "commands", ".construct-managed");
-  const previouslyManaged = new Set<string>();
-  if (await exists(manifestPath)) {
-    for (const line of (await readFile(manifestPath, "utf-8")).split("\n")) {
-      const t = line.trim(); if (t) previouslyManaged.add(t);
-    }
+  // Remove stale: symlinks pointing into CONSTRUCT_SRC that are no longer present
+  for (const f of await readdir(join(DST, "commands"))) {
+    if (linked.has(f)) continue;
+    const p = join(DST, "commands", f);
+    try {
+      const { lstat } = await import("fs/promises");
+      const s = await lstat(p);
+      if (s.isSymbolicLink()) {
+        const target = await readlink(p);
+        if (target.startsWith(CONSTRUCT_SRC)) { await rm(p); console.log(`  removed stale: ${f}`); }
+      }
+    } catch { /* ignore */ }
   }
-  for (const f of previouslyManaged) {
-    if (!repoCommands.has(f) && await exists(join(DST, "commands", f))) {
-      await rm(join(DST, "commands", f));
-      console.log(`  removed stale: ${f}`);
-    }
-  }
-  await writeFile(manifestPath, [...repoCommands].sort().join("\n") + "\n");
+  console.log(`  linked: ${linked.size ? [...linked].join(" ") : "none"}`);
 
+  // Agents — same approach
   console.log("syncing agents...");
   await mkdir(join(DST, "agents"), { recursive: true });
+  const linkedAgents = new Set<string>();
   const agentSrcDir = join(CONSTRUCT_SRC, "agents");
-  const repoAgents = new Set<string>();
   if (await exists(agentSrcDir)) {
     for (const f of await readdir(agentSrcDir)) {
       if (f.endsWith(".md")) {
-        await cp(join(agentSrcDir, f), join(DST, "agents", f)); repoAgents.add(f);
+        const dst = join(DST, "agents", f);
+        if (await exists(dst)) await rm(dst);
+        await symlink(join(agentSrcDir, f), dst);
+        linkedAgents.add(f);
       }
     }
   }
-  const agentManifest = join(DST, "agents", ".construct-managed");
-  const prevAgents = new Set<string>();
-  if (await exists(agentManifest)) {
-    for (const line of (await readFile(agentManifest, "utf-8")).split("\n")) {
-      const t = line.trim(); if (t) prevAgents.add(t);
-    }
+  for (const f of await readdir(join(DST, "agents"))) {
+    if (linkedAgents.has(f)) continue;
+    const p = join(DST, "agents", f);
+    try {
+      const { lstat } = await import("fs/promises");
+      const s = await lstat(p);
+      if (s.isSymbolicLink()) {
+        const target = await readlink(p);
+        if (target.startsWith(CONSTRUCT_SRC)) { await rm(p); }
+      }
+    } catch { /* ignore */ }
   }
-  for (const f of prevAgents) {
-    if (!repoAgents.has(f) && await exists(join(DST, "agents", f))) {
-      await rm(join(DST, "agents", f));
-    }
-  }
-  await writeFile(agentManifest, [...repoAgents].sort().join("\n") + "\n");
-  console.log(`  installed agents: ${repoAgents.size ? [...repoAgents].join(" ") : "none"}`);
+  console.log(`  linked agents: ${linkedAgents.size ? [...linkedAgents].join(" ") : "none"}`);
 
+  // settings.json — replace hooks + statusLine, preserve everything else
   console.log("merging settings.json...");
   const repoSettings = JSON.parse(await readFile(join(CONSTRUCT_SRC, "core/hooks/settings-hooks.json"), "utf-8"));
   function fixPaths(obj: any): any {
@@ -188,6 +161,7 @@ async function syncConfig(): Promise<void> {
     await writeFile(dstSettings, JSON.stringify(fixed, null, 2) + "\n");
   }
 
+  // CLAUDE.md — upsert # Construct section
   console.log("updating CLAUDE.md...");
   const constructImport = "# Construct\n\n@construct/core/CLAUDE.md\n";
   const dstMd = join(DST, "CLAUDE.md");
@@ -252,11 +226,11 @@ if (mode === "linked-on") {
 
 } else {
   // Installed (real dir) or unknown: backup and create symlink
-  const id = threeWordId();
-  const backupPath = `${CONSTRUCT_LINK}-${id}`;
+  const backupPath = `${CONSTRUCT_LINK}-installed`;
 
   if (mode === "installed") {
     console.log(`moving current install → ${backupPath}`);
+    await rm(backupPath, { recursive: true, force: true });
     await rename(CONSTRUCT_LINK, backupPath);
   } else {
     // Unknown: dangling or missing — just remove whatever is there
@@ -278,3 +252,11 @@ console.log();
 console.log("done.");
 console.log("  file changes in src/ are picked up automatically by bun --watch (no restart needed).");
 console.log("  run 'bun link.ts' again to toggle off, or 'bun install.ts' to restore copy mode.");
+
+await printSymlinks();
+
+async function printSymlinks(): Promise<void> {
+  console.log("\n=== Symlinks ===");
+  const result = await Bun.$`find ${CLAUDE_DIR}/construct ${CLAUDE_DIR}/commands -maxdepth 1 -type l -printf "%p -> %l\n" 2>/dev/null`.text();
+  console.log(result.trim() || "(none)");
+}

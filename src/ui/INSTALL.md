@@ -16,3 +16,4 @@ All paths relative to `~/.claude/construct/ui/`. Run every check. Do not skip or
 
 - `web/dist/index.html` exists (built automatically by `bun install.ts`)
 - `web/dist/assets/` contains at least one `.js` file
+
