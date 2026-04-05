@@ -17,4 +17,4 @@ const vite = await createViteServer({
 await app.use(vite.middlewares);
 
 await app.listen({ port: config.port, host: config.host });
-console.log(`dev server running at http://localhost:${config.port}`);
+console.log(`linked mode: serving with vite middleware at http://localhost:${config.port}`);

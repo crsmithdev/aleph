@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { readdir, mkdir, cp, rm, stat, lstat, readFile, writeFile } from "node:fs/promises";
+import { readdir, mkdir, cp, rm, stat, lstat, readFile, writeFile, symlink } from "node:fs/promises";
 import { join, dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtemp } from "node:fs/promises";
@@ -172,11 +172,11 @@ async function syncDir(srcDir: string, dstDir: string): Promise<void> {
   await cleanDst(dstDir, "");
 }
 
-const LINK_ONLY = process.argv.includes("--link-only");
+const LINK_MODE = process.argv.includes("--link");
 
 // --- Main ---
 
-console.log(LINK_ONLY ? "=== Construct Link Setup ===" : "=== Construct Installer ===");
+console.log(LINK_MODE ? "=== Construct Link ===" : "=== Construct Installer ===");
 console.log(`src: ${REPO}`);
 console.log(`dst: ${DST}`);
 console.log();
@@ -188,11 +188,174 @@ await mkdir(join(DATA_DIR, "signals"), { recursive: true });
 await mkdir(join(DATA_DIR, "backups"), { recursive: true });
 await mkdir(join(DATA_DIR, "memory"), { recursive: true });
 
-const backupDir = LINK_ONLY ? "" : await mkdtemp(join(tmpdir(), "construct-backup-"));
+/** Sync commands, agents, settings.json, and CLAUDE.md from CONSTRUCT_SRC to DST. */
+async function syncConfig() {
+  // 5. Sync commands — install from repo, remove stale Construct-owned commands
+  console.log("syncing commands...");
+  await mkdir(join(DST, "commands"), { recursive: true });
+
+  const cmdDir = join(CONSTRUCT_SRC, "commands");
+  const repoCommands = new Set<string>();
+  if (await exists(cmdDir)) {
+    for (const f of await readdir(cmdDir)) {
+      if (f.endsWith(".md")) {
+        await cp(join(cmdDir, f), join(DST, "commands", f));
+        repoCommands.add(f);
+      }
+    }
+  }
+
+  // Register skills from src/skills/*/SKILL.md as commands
+  const skillsDir = join(CONSTRUCT_SRC, "skills");
+  if (await exists(skillsDir)) {
+    for (const d of await readdir(skillsDir, { withFileTypes: true })) {
+      if (!d.isDirectory()) continue;
+      const skillFile = join(skillsDir, d.name, "SKILL.md");
+      if (await exists(skillFile)) {
+        const cmdName = `${d.name}.md`;
+        if (!repoCommands.has(cmdName)) {
+          await cp(skillFile, join(DST, "commands", cmdName));
+          repoCommands.add(cmdName);
+        }
+      }
+    }
+  }
+  console.log(`  installed: ${repoCommands.size ? [...repoCommands].join(" ") : "none"}`);
+
+  // Remove stale Construct-owned commands using manifest
+  const manifestPath = join(DST, "commands", ".construct-managed");
+  const previouslyManaged = new Set<string>();
+  if (await exists(manifestPath)) {
+    const content = await readFile(manifestPath, "utf-8");
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed) previouslyManaged.add(trimmed);
+    }
+  }
+  for (const f of previouslyManaged) {
+    if (!repoCommands.has(f) && await exists(join(DST, "commands", f))) {
+      await rm(join(DST, "commands", f));
+      console.log(`  removed stale: ${f}`);
+    }
+  }
+  await writeFile(manifestPath, [...repoCommands].sort().join("\n") + "\n");
+
+  // 5b. Sync agents — install from src/agents/ to ~/.claude/agents/
+  console.log("syncing agents...");
+  await mkdir(join(DST, "agents"), { recursive: true });
+
+  const agentSrcDir = join(CONSTRUCT_SRC, "agents");
+  const repoAgents = new Set<string>();
+  if (await exists(agentSrcDir)) {
+    for (const f of await readdir(agentSrcDir)) {
+      if (f.endsWith(".md")) {
+        await cp(join(agentSrcDir, f), join(DST, "agents", f));
+        repoAgents.add(f);
+      }
+    }
+  }
+
+  const agentManifestPath = join(DST, "agents", ".construct-managed");
+  const previousAgents = new Set<string>();
+  if (await exists(agentManifestPath)) {
+    const content = await readFile(agentManifestPath, "utf-8");
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed) previousAgents.add(trimmed);
+    }
+  }
+  for (const f of previousAgents) {
+    if (!repoAgents.has(f) && await exists(join(DST, "agents", f))) {
+      await rm(join(DST, "agents", f));
+      console.log(`  removed stale agent: ${f}`);
+    }
+  }
+  await writeFile(agentManifestPath, [...repoAgents].sort().join("\n") + "\n");
+  console.log(`  installed agents: ${repoAgents.size ? [...repoAgents].join(" ") : "none"}`);
+
+  // 6. Merge settings.json — replace hooks + statusLine, preserve everything else
+  console.log("merging settings.json...");
+  const repoSettings = JSON.parse(await readFile(join(CONSTRUCT_SRC, "core/hooks/settings-hooks.json"), "utf-8"));
+  const home = Bun.env.HOME!;
+  function fixPaths(obj: any): any {
+    if (typeof obj === "string") {
+      return obj.replace(/^(bun|bash) src\//, `$1 ${home}/.claude/construct/`);
+    }
+    if (Array.isArray(obj)) return obj.map(fixPaths);
+    if (obj && typeof obj === "object") {
+      const out: any = {};
+      for (const [k, v] of Object.entries(obj)) out[k] = fixPaths(v);
+      return out;
+    }
+    return obj;
+  }
+  const fixedSettings = fixPaths(repoSettings);
+  const dstSettingsPath = join(DST, "settings.json");
+  if (await exists(dstSettingsPath)) {
+    const existingSettings = JSON.parse(await readFile(dstSettingsPath, "utf-8"));
+    const merged = { ...existingSettings, hooks: fixedSettings.hooks, statusLine: fixedSettings.statusLine };
+    await writeFile(dstSettingsPath, JSON.stringify(merged, null, 2) + "\n");
+  } else {
+    await writeFile(dstSettingsPath, JSON.stringify(fixedSettings, null, 2) + "\n");
+  }
+
+  // 7. Update CLAUDE.md — replace # Construct section with @import
+  console.log("updating CLAUDE.md...");
+  const constructImport = "# Construct\n\n@construct/core/CLAUDE.md\n";
+  const dstClaudeMd = join(DST, "CLAUDE.md");
+  if (await exists(dstClaudeMd)) {
+    const content = await readFile(dstClaudeMd, "utf-8");
+    const lines = content.split("\n");
+    const startIdx = lines.findIndex((l) => /^# Construct\s*$/.test(l));
+    if (startIdx !== -1) {
+      let endIdx = lines.length;
+      for (let i = startIdx + 1; i < lines.length; i++) {
+        if (/^# [^\s#]/.test(lines[i]) || /^# $/.test(lines[i])) { endIdx = i; break; }
+      }
+      const before = lines.slice(0, startIdx).join("\n").replace(/<!--\s*SOURCE FILE[^>]*?-->\s*/g, "");
+      const after = lines.slice(endIdx).join("\n");
+      let result = before.trim() ? before.replace(/\n+$/, "") + "\n\n" : "";
+      result += constructImport;
+      if (after.trim()) result += "\n" + after.replace(/^\n+/, "");
+      await writeFile(dstClaudeMd, result);
+    } else {
+      await writeFile(dstClaudeMd, content.replace(/\n+$/, "") + "\n\n" + constructImport);
+    }
+  } else {
+    await writeFile(dstClaudeMd, constructImport);
+  }
+}
+
+if (LINK_MODE) {
+  // Link mode: replace ~/.claude/construct with a symlink to repo src/.
+  // server.ts detects the symlink and switches to Vite middleware mode,
+  // serving code and frontend assets directly from the repo with no stale copies.
+
+  console.log("stopping service...");
+  await Bun.$`systemctl --user stop construct-ui 2>/dev/null`.quiet().nothrow();
+
+  console.log("creating symlink...");
+  const constructDst = join(DST, "construct");
+  await rm(constructDst, { recursive: true, force: true });
+  await symlink(CONSTRUCT_SRC, constructDst);
+  console.log(`  ~/.claude/construct → ${CONSTRUCT_SRC}`);
+
+  await syncConfig();
+
+  console.log("restarting service...");
+  await Bun.$`systemctl --user daemon-reload`.quiet().nothrow();
+  await Bun.$`systemctl --user restart construct-ui`.quiet().nothrow();
+
+  console.log();
+  console.log("done. server is in linked mode — code and assets served live from the repo.");
+  console.log("run 'bun install.ts' to switch back to copy mode.");
+
+} else {
+
+const backupDir = await mkdtemp(join(tmpdir(), "construct-backup-"));
 
 try {
 
-if (!LINK_ONLY) {
   // 1. Migrate data from old locations (if needed)
   console.log("migrating data...");
   await migrateData();
@@ -287,171 +450,9 @@ if (!LINK_ONLY) {
       }
     }
   }
-} // end !LINK_ONLY
 
-  // 5. Sync commands — install from repo, remove stale Construct-owned commands
-  console.log("syncing commands...");
-  await mkdir(join(DST, "commands"), { recursive: true });
+  await syncConfig();
 
-  const cmdDir = join(CONSTRUCT_SRC, "commands");
-  const repoCommands = new Set<string>();
-  if (await exists(cmdDir)) {
-    for (const f of await readdir(cmdDir)) {
-      if (f.endsWith(".md")) {
-        await cp(join(cmdDir, f), join(DST, "commands", f));
-        repoCommands.add(f);
-      }
-    }
-  }
-
-  // Register skills from src/skills/*/SKILL.md as commands
-  const skillsDir = join(CONSTRUCT_SRC, "skills");
-  if (await exists(skillsDir)) {
-    for (const d of await readdir(skillsDir, { withFileTypes: true })) {
-      if (!d.isDirectory()) continue;
-      const skillFile = join(skillsDir, d.name, "SKILL.md");
-      if (await exists(skillFile)) {
-        const cmdName = `${d.name}.md`;
-        if (!repoCommands.has(cmdName)) {
-          await cp(skillFile, join(DST, "commands", cmdName));
-          repoCommands.add(cmdName);
-        }
-      }
-    }
-  }
-  console.log(`  installed: ${repoCommands.size ? [...repoCommands].join(" ") : "none"}`);
-
-  // Remove stale Construct-owned commands using manifest
-  const manifestPath = join(DST, "commands", ".construct-managed");
-  const previouslyManaged = new Set<string>();
-  if (await exists(manifestPath)) {
-    const content = await readFile(manifestPath, "utf-8");
-    for (const line of content.split("\n")) {
-      const trimmed = line.trim();
-      if (trimmed) previouslyManaged.add(trimmed);
-    }
-  }
-  for (const f of previouslyManaged) {
-    if (!repoCommands.has(f) && await exists(join(DST, "commands", f))) {
-      await rm(join(DST, "commands", f));
-      console.log(`  removed stale: ${f}`);
-    }
-  }
-  await writeFile(manifestPath, [...repoCommands].sort().join("\n") + "\n");
-
-  // 5b. Sync agents — install from src/agents/ to ~/.claude/agents/
-  // Uses manifest to avoid clobbering user's own agents
-  console.log("syncing agents...");
-  await mkdir(join(DST, "agents"), { recursive: true });
-
-  const agentSrcDir = join(CONSTRUCT_SRC, "agents");
-  const repoAgents = new Set<string>();
-  if (await exists(agentSrcDir)) {
-    for (const f of await readdir(agentSrcDir)) {
-      if (f.endsWith(".md")) {
-        await cp(join(agentSrcDir, f), join(DST, "agents", f));
-        repoAgents.add(f);
-      }
-    }
-  }
-
-  const agentManifestPath = join(DST, "agents", ".construct-managed");
-  const previousAgents = new Set<string>();
-  if (await exists(agentManifestPath)) {
-    const content = await readFile(agentManifestPath, "utf-8");
-    for (const line of content.split("\n")) {
-      const trimmed = line.trim();
-      if (trimmed) previousAgents.add(trimmed);
-    }
-  }
-  for (const f of previousAgents) {
-    if (!repoAgents.has(f) && await exists(join(DST, "agents", f))) {
-      await rm(join(DST, "agents", f));
-      console.log(`  removed stale agent: ${f}`);
-    }
-  }
-  await writeFile(agentManifestPath, [...repoAgents].sort().join("\n") + "\n");
-  console.log(`  installed agents: ${repoAgents.size ? [...repoAgents].join(" ") : "none"}`);
-
-  // 6. Merge settings.json — replace hooks + statusLine, preserve everything else
-  console.log("merging settings.json...");
-
-  const repoSettings = JSON.parse(await readFile(join(CONSTRUCT_SRC, "core/hooks/settings-hooks.json"), "utf-8"));
-  // Path fixup: rewrite relative paths in hook commands to absolute $HOME-based paths
-  const home = Bun.env.HOME!;
-  function fixPaths(obj: any): any {
-    if (typeof obj === "string") {
-      return obj.replace(/^(bun|bash) src\//, `$1 ${home}/.claude/construct/`);
-    }
-    if (Array.isArray(obj)) return obj.map(fixPaths);
-    if (obj && typeof obj === "object") {
-      const out: any = {};
-      for (const [k, v] of Object.entries(obj)) out[k] = fixPaths(v);
-      return out;
-    }
-    return obj;
-  }
-  const fixedSettings = fixPaths(repoSettings);
-
-  const dstSettingsPath = join(DST, "settings.json");
-  if (await exists(dstSettingsPath)) {
-    const existingSettings = JSON.parse(await readFile(dstSettingsPath, "utf-8"));
-    const merged = {
-      ...existingSettings,
-      hooks: fixedSettings.hooks,
-      statusLine: fixedSettings.statusLine,
-    };
-    await writeFile(dstSettingsPath, JSON.stringify(merged, null, 2) + "\n");
-  } else {
-    await writeFile(dstSettingsPath, JSON.stringify(fixedSettings, null, 2) + "\n");
-  }
-
-  // 7. Update CLAUDE.md — replace # Construct section with @import
-  console.log("updating CLAUDE.md...");
-  const constructImport = "# Construct\n\n@construct/core/CLAUDE.md\n";
-  const dstClaudeMd = join(DST, "CLAUDE.md");
-
-  if (await exists(dstClaudeMd)) {
-    const content = await readFile(dstClaudeMd, "utf-8");
-    const lines = content.split("\n");
-
-    // Find the start of "# Construct"
-    const startIdx = lines.findIndex((l) => /^# Construct\s*$/.test(l));
-
-    if (startIdx !== -1) {
-      // Find the end: next ^# heading at same level (single #), or EOF
-      let endIdx = lines.length;
-      for (let i = startIdx + 1; i < lines.length; i++) {
-        if (/^# [^\s#]/.test(lines[i]) || /^# $/.test(lines[i])) {
-          endIdx = i;
-          break;
-        }
-      }
-
-      const before = lines.slice(0, startIdx).join("\n")
-        .replace(/<!--\s*SOURCE FILE[^>]*?-->\s*/g, "");
-      const after = lines.slice(endIdx).join("\n");
-
-      let result = "";
-      if (before.trim()) {
-        result = before.replace(/\n+$/, "") + "\n\n";
-      }
-      result += constructImport;
-      if (after.trim()) {
-        result += "\n" + after.replace(/^\n+/, "");
-      }
-
-      await writeFile(dstClaudeMd, result);
-    } else {
-      // No existing Construct section — append
-      const result = content.replace(/\n+$/, "") + "\n\n" + constructImport;
-      await writeFile(dstClaudeMd, result);
-    }
-  } else {
-    await writeFile(dstClaudeMd, constructImport);
-  }
-
-if (!LINK_ONLY) {
   // 8. Verify critical files — byte-size check on key infrastructure
   const criticalFiles = [
     "construct/skills/skill-rules.json",
@@ -636,10 +637,10 @@ if (!LINK_ONLY) {
     console.log("  ⚠ no database found (will be created on first API start)");
   }
 
-} // end !LINK_ONLY
-
   console.log();
   console.log("done.");
 } finally {
-  if (backupDir) await rm(backupDir, { recursive: true, force: true });
+  await rm(backupDir, { recursive: true, force: true });
 }
+
+} // end else (full install)

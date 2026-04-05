@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 
 // Example: Capturing console logs during browser automation
 
-const url = 'http://localhost:5173'; // Replace with your URL
+const url = 'http://localhost:3000'; // Replace with your URL
 
 const consoleLogs: string[] = [];
 

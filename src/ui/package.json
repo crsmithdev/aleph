@@ -6,7 +6,7 @@
     "web"
   ],
   "scripts": {
-    "start": "set -a && [ -f ../../.env ] && . ../../.env; set +a && PORT=${API_PORT:-3000} bun api/src/dev-server.ts",
+    "start": "set -a && [ -f ../../.env ] && . ../../.env; set +a && bun api/src/server.ts",
     "serve": "bun --watch api/src/server.ts",
     "build": "cd web && bun run build",
     "test:e2e": "bun e2e/goal-flow.test.ts",
@@ -19,7 +19,6 @@
     "@construct/telemetry": "file:../telemetry"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2",
     "playwright": "^1.58.2",
     "typescript": "^5.7.3"
   }

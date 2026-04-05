@@ -7,7 +7,7 @@ const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage();
 
 // Navigate to page and wait for it to fully load
-await page.goto('http://localhost:5173');
+await page.goto('http://localhost:3000');
 await page.waitForLoadState('networkidle');
 
 // Discover all buttons on the page

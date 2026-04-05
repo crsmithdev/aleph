@@ -38,14 +38,14 @@ To start a server, run `--help` first, then use the helper:
 
 **Single server:**
 ```bash
-bun scripts/with-server.ts --server "npm run dev" --port 5173 -- bun your_automation.ts
+bun scripts/with-server.ts --server "npm run dev" --port 3000 -- bun your_automation.ts
 ```
 
 **Multiple servers (e.g., backend + frontend):**
 ```bash
 bun scripts/with-server.ts \
   --server "cd backend && bun server.ts" --port 3000 \
-  --server "cd frontend && npm run dev" --port 5173 \
+  --server "cd frontend && npm run dev" --port 3000 \
   -- bun your_automation.ts
 ```
 
@@ -55,7 +55,7 @@ import { chromium } from 'playwright';
 
 const browser = await chromium.launch({ headless: true }); // Always launch chromium in headless mode
 const page = await browser.newPage();
-await page.goto('http://localhost:5173'); // Server already running and ready
+await page.goto('http://localhost:3000'); // Server already running and ready
 await page.waitForLoadState('networkidle'); // CRITICAL: Wait for JS to execute
 // ... your automation logic
 await browser.close();

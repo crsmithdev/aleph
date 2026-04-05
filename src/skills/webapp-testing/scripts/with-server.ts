@@ -4,13 +4,13 @@
  *
  * Usage:
  *     # Single server
- *     bun scripts/with-server.ts --server "npm run dev" --port 5173 -- bun automation.ts
+ *     bun scripts/with-server.ts --server "npm run dev" --port 3000 -- bun automation.ts
  *     bun scripts/with-server.ts --server "npm start" --port 3000 -- bun test.ts
  *
  *     # Multiple servers
  *     bun scripts/with-server.ts \
  *       --server "cd backend && bun server.ts" --port 3000 \
- *       --server "cd frontend && npm run dev" --port 5173 \
+ *       --server "cd frontend && npm run dev" --port 3000 \
  *       -- bun test.ts
  */
 
@@ -101,10 +101,10 @@ Options:
   --              Separator before the command to run
 
 Examples:
-  bun scripts/with-server.ts --server "npm run dev" --port 5173 -- bun automation.ts
+  bun scripts/with-server.ts --server "npm run dev" --port 3000 -- bun automation.ts
   bun scripts/with-server.ts \\
     --server "cd backend && bun server.ts" --port 3000 \\
-    --server "cd frontend && npm run dev" --port 5173 \\
+    --server "cd frontend && npm run dev" --port 3000 \\
     -- bun test.ts`);
       process.exit(0);
     } else {
