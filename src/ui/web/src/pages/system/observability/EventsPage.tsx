@@ -414,7 +414,7 @@ export function EventsPage() {
               <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
               <YAxis {...axisProps} />
               <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-              <Area type="linear" dataKey="count" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Events" />
+              <Area type="natural" dataKey="count" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Events" />
             </ComposedChart>
           </ChartContainer>
         </div>

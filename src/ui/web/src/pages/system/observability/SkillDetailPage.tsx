@@ -174,7 +174,7 @@ export function SkillDetailPage() {
                     <YAxis {...axisProps} />
                     <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                     {allProjects.map((proj, i) => (
-                      <Area key={proj} type="linear" dataKey={proj} stackId="a"
+                      <Area key={proj} type="natural" dataKey={proj} stackId="a"
                         stroke={CHART_PALETTE[i % CHART_PALETTE.length]}
                         fill={CHART_PALETTE[i % CHART_PALETTE.length]}
                         fillOpacity={0.3}
@@ -189,7 +189,7 @@ export function SkillDetailPage() {
                     <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
                     <YAxis {...axisProps} />
                     <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                    <Area type="linear" dataKey="count" stroke={CHART_PALETTE[3]} fill={CHART_PALETTE[3]} fillOpacity={0.3} dot={false} name="Invocations" />
+                    <Area type="natural" dataKey="count" stroke={CHART_PALETTE[3]} fill={CHART_PALETTE[3]} fillOpacity={0.3} dot={false} name="Invocations" />
                   </AreaChart>
                 )
               )}

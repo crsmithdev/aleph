@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { readdir, mkdir, cp, rm, stat, lstat, readFile, writeFile, symlink } from "node:fs/promises";
+import { readdir, mkdir, cp, rm, stat, lstat, readFile, writeFile } from "node:fs/promises";
 import { join, dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtemp } from "node:fs/promises";
@@ -172,11 +172,9 @@ async function syncDir(srcDir: string, dstDir: string): Promise<void> {
   await cleanDst(dstDir, "");
 }
 
-const LINK_MODE = process.argv.includes("--link");
-
 // --- Main ---
 
-console.log(LINK_MODE ? "=== Construct Link ===" : "=== Construct Installer ===");
+console.log("=== Construct Installer ===");
 console.log(`src: ${REPO}`);
 console.log(`dst: ${DST}`);
 console.log();
@@ -325,32 +323,6 @@ async function syncConfig() {
     await writeFile(dstClaudeMd, constructImport);
   }
 }
-
-if (LINK_MODE) {
-  // Link mode: replace ~/.claude/construct with a symlink to repo src/.
-  // server.ts detects the symlink and switches to Vite middleware mode,
-  // serving code and frontend assets directly from the repo with no stale copies.
-
-  console.log("stopping service...");
-  await Bun.$`systemctl --user stop construct-ui 2>/dev/null`.quiet().nothrow();
-
-  console.log("creating symlink...");
-  const constructDst = join(DST, "construct");
-  await rm(constructDst, { recursive: true, force: true });
-  await symlink(CONSTRUCT_SRC, constructDst);
-  console.log(`  ~/.claude/construct → ${CONSTRUCT_SRC}`);
-
-  await syncConfig();
-
-  console.log("restarting service...");
-  await Bun.$`systemctl --user daemon-reload`.quiet().nothrow();
-  await Bun.$`systemctl --user restart construct-ui`.quiet().nothrow();
-
-  console.log();
-  console.log("done. server is in linked mode — code and assets served live from the repo.");
-  console.log("run 'bun install.ts' to switch back to copy mode.");
-
-} else {
 
 const backupDir = await mkdtemp(join(tmpdir(), "construct-backup-"));
 
@@ -642,5 +614,3 @@ try {
 } finally {
   await rm(backupDir, { recursive: true, force: true });
 }
-
-} // end else (full install)

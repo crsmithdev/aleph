@@ -200,8 +200,8 @@ export function MemoryPage() {
                   <YAxis {...axisProps} />
                   <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                   <Legend {...legendProps} />
-                  <Area type="linear" dataKey="stores" stackId="usage" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} strokeWidth={2} dot={false} name="Stores" />
-                  <Area type="linear" dataKey="searches" stackId="usage" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} strokeWidth={2} dot={false} name="Searches" />
+                  <Area type="natural" dataKey="stores" stackId="usage" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} strokeWidth={2} dot={false} name="Stores" />
+                  <Area type="natural" dataKey="searches" stackId="usage" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} strokeWidth={2} dot={false} name="Searches" />
                 </AreaChart>
               )}
             </ChartContainer>

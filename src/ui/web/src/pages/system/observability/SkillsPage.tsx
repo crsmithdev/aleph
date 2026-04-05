@@ -167,7 +167,7 @@ export function SkillsPage() {
                     <YAxis {...axisProps} />
                     <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                     {top10Skills.map((skill, i) => (
-                      <Area key={skill} type="linear" dataKey={skill} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.3} dot={false} />
+                      <Area key={skill} type="natural" dataKey={skill} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.3} dot={false} />
                     ))}
                   </AreaChart>
                 ) : (
@@ -176,7 +176,7 @@ export function SkillsPage() {
                     <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
                     <YAxis {...axisProps} />
                     <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                    <Area type="linear" dataKey="count" stroke={CHART_PALETTE[3]} fill={CHART_PALETTE[3]} fillOpacity={0.15} dot={false} name="Invocations" />
+                    <Area type="natural" dataKey="count" stroke={CHART_PALETTE[3]} fill={CHART_PALETTE[3]} fillOpacity={0.15} dot={false} name="Invocations" />
                   </AreaChart>
                 )
               )}

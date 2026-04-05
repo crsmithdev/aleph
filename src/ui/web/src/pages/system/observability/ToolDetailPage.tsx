@@ -178,9 +178,9 @@ export function ToolDetailPage() {
                   <YAxis {...axisProps} />
                   <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                   {projectNames.length > 0 ? projectNames.map((name, i) => (
-                    <Area key={name} type="linear" dataKey={name} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
+                    <Area key={name} type="natural" dataKey={name} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
                   )) : (
-                    <Area type="linear" dataKey="count" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.4} strokeWidth={2} dot={false} name="Calls" />
+                    <Area type="natural" dataKey="count" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.4} strokeWidth={2} dot={false} name="Calls" />
                   )}
                 </AreaChart>
               )}

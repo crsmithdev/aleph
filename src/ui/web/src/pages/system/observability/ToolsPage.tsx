@@ -199,7 +199,7 @@ export function ToolsPage() {
                     <YAxis {...axisProps} />
                     <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                     {topToolNames.map((name, i) => (
-                      <Area key={name} type="linear" dataKey={name} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
+                      <Area key={name} type="natural" dataKey={name} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
                     ))}
                   </AreaChart>
                 )}

@@ -18,8 +18,3 @@ After the script completes, verify:
 systemctl --user status construct-ui   # should be active (running)
 curl -s http://localhost:3000/api/system/info | head -5
 ```
-
-## Flags
-
-- `--link` — link mode instead: creates symlink, serves code and assets live from the repo.
-  See `/link` for details.

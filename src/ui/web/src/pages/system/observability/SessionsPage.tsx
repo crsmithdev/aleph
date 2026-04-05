@@ -159,9 +159,9 @@ export function SessionsPage() {
                 <YAxis yAxisId="right" orientation="right" {...axisProps} />
                 <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                 <Legend {...legendProps} />
-                <Area yAxisId="left" type="linear" dataKey="userMessages" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.15} strokeWidth={2} dot={false} name="User Msgs" />
-                <Area yAxisId="left" type="linear" dataKey="assistantMessages" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Assistant Msgs" />
-                <Area yAxisId="right" type="linear" dataKey="sessions" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Sessions" />
+                <Area yAxisId="left" type="natural" dataKey="userMessages" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.15} strokeWidth={2} dot={false} name="User Msgs" />
+                <Area yAxisId="left" type="natural" dataKey="assistantMessages" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Assistant Msgs" />
+                <Area yAxisId="right" type="natural" dataKey="sessions" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Sessions" />
               </ComposedChart>
             )}
           </ChartContainer>

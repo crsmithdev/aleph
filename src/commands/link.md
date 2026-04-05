@@ -1,32 +1,28 @@
 # /link — Toggle linked mode
 
 Switches the Construct install between **linked** (live from repo) and **copy** mode.
+Run `bun link.ts` from the repo root.
 
-## Detect current state
+## States
 
 ```bash
 ls -la ~/.claude/ | grep construct
 ```
 
-- `lrwxrwxrwx ... construct -> ...` → currently **linked**
-- `drwxr-xr-x ... construct` → currently **installed (copy)**
+- `lrwxrwxrwx ... construct -> ~/construct/src/` → **linked-on** (serving live from repo)
+- `lrwxrwxrwx ... construct -> ~/.claude/construct-<id>` → **linked-off** (symlink to backup)
+- `drwxr-xr-x ... construct` → **installed** (real directory copy)
 
-## Link (copy → linked)
+## Transitions
 
-Creates a symlink so `~/.claude/construct` points directly to `~/construct/src/`.
-The running server detects the symlink and switches to Vite middleware mode,
-serving API code and frontend assets live from the repo with no stale copies.
-
-```bash
-cd ~/construct && bun install.ts --link
-```
-
-## Unlink (linked → copy)
-
-Removes the symlink and runs a full install: copies files, builds the UI, restarts the service in production mode.
+| From | Command | Result |
+|------|---------|--------|
+| installed | `bun link.ts` | backs up real dir as `construct-<word1-word2-noun>`, creates symlink → repo `src/` |
+| linked-on | `bun link.ts` | retargets symlink to backup dir (linked-off) |
+| linked-off | `bun link.ts` | retargets symlink back to repo `src/` (linked-on) |
 
 ```bash
-cd ~/construct && bun install.ts
+cd ~/construct && bun link.ts
 ```
 
 ## What changes in linked mode
@@ -36,6 +32,12 @@ cd ~/construct && bun install.ts
 | `~/.claude/construct` | symlink → `~/construct/src/` | file copy |
 | API code | live from repo (restart to pick up changes) | static copy |
 | Frontend assets | Vite middleware — HMR, no build needed | served from `web/dist/` |
-| Commands / hooks | copied once on link; re-link to pick up new files | copied on install |
+| Commands / hooks | copied on initial link; re-link to pick up new files | copied on install |
 
 The server runs on **port 3000** in both modes.
+
+## Unlink (restore copy mode)
+
+```bash
+cd ~/construct && bun install.ts
+```

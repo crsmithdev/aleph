@@ -67,9 +67,9 @@ export function TokensCostPage() {
             <YAxis {...axisProps} tickFormatter={fmtNumber} />
             <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
             <Legend {...legendProps} />
-            <Area type="linear" dataKey="input" stackId="tokens" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} name="Input" />
-            <Area type="linear" dataKey="output" stackId="tokens" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} name="Output" />
-            <Area type="linear" dataKey="cacheRead" stackId="tokens" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.3} name="Cache Read" />
+            <Area type="natural" dataKey="input" stackId="tokens" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} name="Input" />
+            <Area type="natural" dataKey="output" stackId="tokens" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} name="Output" />
+            <Area type="natural" dataKey="cacheRead" stackId="tokens" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.3} name="Cache Read" />
           </AreaChart>
         )}
       </ChartContainer>
