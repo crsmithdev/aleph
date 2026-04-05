@@ -9,7 +9,7 @@ import { type TimeRange, type Granularity } from '../../../components/data/TimeR
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { fmtCurrency, fmtNumber, fmtPct, shortDate, granLabel, rangeToDays } from '../../../utils/format';
+import { fmtCurrency, fmtNumber, fmtPct, shortDate, granLabel, rangeToDays, fmtSeriesName } from '../../../utils/format';
 
 type ModelRow = { model: string; usd: number; pct: number };
 
@@ -67,9 +67,9 @@ export function TokensCostPage() {
             <YAxis {...axisProps} tickFormatter={fmtNumber} />
             <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
             <Legend {...legendProps} />
-            <Area type="monotone" dataKey="input" stackId="tokens" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} name="Input" />
-            <Area type="monotone" dataKey="output" stackId="tokens" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} name="Output" />
-            <Area type="monotone" dataKey="cacheRead" stackId="tokens" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.3} name="Cache Read" />
+            <Area type="linear" dataKey="input" stackId="tokens" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} name="Input" />
+            <Area type="linear" dataKey="output" stackId="tokens" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} name="Output" />
+            <Area type="linear" dataKey="cacheRead" stackId="tokens" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.3} name="Cache Read" />
           </AreaChart>
         )}
       </ChartContainer>
@@ -102,7 +102,7 @@ export function TokensCostPage() {
               <Pie data={cost.data.byModel} dataKey="usd" nameKey="model" cx="50%" cy="50%" innerRadius={45} outerRadius={70}>
                 {cost.data.byModel.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
               </Pie>
-              <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtCurrency(Number(v)), String(n)]} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtCurrency(Number(v)), fmtSeriesName(String(n))]} />
             </PieChart>
             <div className="flex flex-col gap-2 min-w-0">
               {cost.data.byModel.map((row, i) => (

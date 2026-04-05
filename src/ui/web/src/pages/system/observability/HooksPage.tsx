@@ -10,7 +10,7 @@ import { type Granularity, type TimeRange } from '../../../components/data/TimeR
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { tooltipStyle, CHART_PALETTE } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtMs, fmtPct, dateTime } from '../../../utils/format';
+import { fmtNumber, fmtMs, fmtPct, dateTime, fmtSeriesName } from '../../../utils/format';
 import { clsx } from 'clsx';
 
 type HookRow = {
@@ -167,7 +167,7 @@ function ByHookView({ range, granularity }: {
                     <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
                   ))}
                 </Pie>
-                <RechartsTooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+                <RechartsTooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
               </PieChart>
               <div className="flex flex-col gap-1.5 min-w-0">
                 {filtered.filter(r => r.count > 0).slice(0, 10).map((row, i) => (
@@ -191,13 +191,13 @@ function ByHookView({ range, granularity }: {
                       <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
                     ))}
                   </Pie>
-                  <RechartsTooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+                  <RechartsTooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
                 </PieChart>
                 <div className="flex flex-col gap-2 w-full">
                   {data.byEvent.map((row, i) => (
                     <div key={row.event} className="flex items-center gap-2 text-xs">
                       <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                      <span className="font-mono text-text-secondary">{row.event}</span>
+                      <span className="font-mono text-text-secondary">{fmtSeriesName(row.event)}</span>
                       <span className="ml-auto text-text-muted font-mono">{fmtNumber(row.count)}</span>
                     </div>
                   ))}

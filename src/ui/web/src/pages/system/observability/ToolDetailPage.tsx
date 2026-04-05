@@ -9,7 +9,7 @@ import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtPct, shortDate, dateTime, granLabel, fmtToolName, fmtProject } from '../../../utils/format';
+import { fmtNumber, fmtPct, shortDate, dateTime, granLabel, fmtToolName, fmtProject, fmtSeriesName } from '../../../utils/format';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { clsx } from 'clsx';
 
@@ -178,9 +178,9 @@ export function ToolDetailPage() {
                   <YAxis {...axisProps} />
                   <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                   {projectNames.length > 0 ? projectNames.map((name, i) => (
-                    <Area key={name} type="monotone" dataKey={name} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
+                    <Area key={name} type="linear" dataKey={name} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
                   )) : (
-                    <Area type="monotone" dataKey="count" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.4} strokeWidth={2} dot={false} name="Calls" />
+                    <Area type="linear" dataKey="count" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.4} strokeWidth={2} dot={false} name="Calls" />
                   )}
                 </AreaChart>
               )}
@@ -192,7 +192,7 @@ export function ToolDetailPage() {
                   <Pie data={donutData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={38} outerRadius={60}>
                     {donutData.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
                   </Pie>
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
                 </PieChart>
                 <div className="flex flex-col gap-1 mt-2 w-full">
                   {donutData.slice(0, 6).map((d, i) => (

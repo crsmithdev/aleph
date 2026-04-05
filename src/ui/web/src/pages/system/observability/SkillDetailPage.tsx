@@ -10,7 +10,7 @@ import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtPct, shortDate, dateTime, granLabel, fmtProject } from '../../../utils/format';
+import { fmtNumber, fmtPct, shortDate, dateTime, granLabel, fmtProject, fmtSeriesName } from '../../../utils/format';
 import { MarkdownBlock } from '../../../components/data/MarkdownBlock';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { clsx } from 'clsx';
@@ -174,7 +174,7 @@ export function SkillDetailPage() {
                     <YAxis {...axisProps} />
                     <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                     {allProjects.map((proj, i) => (
-                      <Area key={proj} type="monotone" dataKey={proj} stackId="a"
+                      <Area key={proj} type="linear" dataKey={proj} stackId="a"
                         stroke={CHART_PALETTE[i % CHART_PALETTE.length]}
                         fill={CHART_PALETTE[i % CHART_PALETTE.length]}
                         fillOpacity={0.3}
@@ -189,7 +189,7 @@ export function SkillDetailPage() {
                     <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
                     <YAxis {...axisProps} />
                     <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                    <Area type="monotone" dataKey="count" stroke={CHART_PALETTE[3]} fill={CHART_PALETTE[3]} fillOpacity={0.3} dot={false} name="Invocations" />
+                    <Area type="linear" dataKey="count" stroke={CHART_PALETTE[3]} fill={CHART_PALETTE[3]} fillOpacity={0.3} dot={false} name="Invocations" />
                   </AreaChart>
                 )
               )}
@@ -206,7 +206,7 @@ export function SkillDetailPage() {
                       <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
                 </PieChart>
                 <div className="flex flex-col gap-1.5 w-full">
                   {projectTotals.map((row, i) => (

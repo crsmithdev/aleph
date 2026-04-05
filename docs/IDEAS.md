@@ -1,4 +1,4 @@
-# Planned / Possible Features
+# Ideas 
 
 Feature superset drawn from note-taking (Obsidian, Logseq, SiYuan, AFFiNE, Joplin, Notion), Zettelkasten methodology, personal assistants (OpenClaw, Leon, PyGPT), and personal CRMs (Monica, Clay, Dex, Folk). Not all will be implemented — this is the ceiling, not the plan.
 

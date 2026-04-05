@@ -9,7 +9,7 @@ import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps } from '../../../components/charts/chartTheme';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
-import { fmtNumber, shortDate, relativeTime, granLabel } from '../../../utils/format';
+import { fmtNumber, shortDate, relativeTime, granLabel, fmtSeriesName } from '../../../utils/format';
 import { clsx } from 'clsx';
 
 type TypeRow = { type: string; count: number };
@@ -200,8 +200,8 @@ export function MemoryPage() {
                   <YAxis {...axisProps} />
                   <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                   <Legend {...legendProps} />
-                  <Area type="monotone" dataKey="stores" stackId="usage" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} strokeWidth={2} dot={false} name="Stores" />
-                  <Area type="monotone" dataKey="searches" stackId="usage" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} strokeWidth={2} dot={false} name="Searches" />
+                  <Area type="linear" dataKey="stores" stackId="usage" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} strokeWidth={2} dot={false} name="Stores" />
+                  <Area type="linear" dataKey="searches" stackId="usage" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} strokeWidth={2} dot={false} name="Searches" />
                 </AreaChart>
               )}
             </ChartContainer>
@@ -224,13 +224,13 @@ export function MemoryPage() {
                     <Cell key={index} fill={CHART_PALETTE[index % CHART_PALETTE.length]} />
                   ))}
                 </Pie>
-                <Tooltip contentStyle={tooltipStyle} formatter={(value, name) => [fmtNumber(value as number), name]} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(value, name) => [fmtNumber(value as number), fmtSeriesName(String(name))]} />
               </PieChart>
               <div className="mt-2 space-y-1">
                 {typeRows.map((row, i) => (
                   <div key={row.type} className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                    <span className="text-[10px] font-mono text-text-muted truncate flex-1">{row.type}</span>
+                    <span className="text-[10px] font-mono text-text-muted truncate flex-1">{fmtSeriesName(row.type)}</span>
                     <span className="text-[10px] text-text-secondary">{fmtNumber(row.count)}</span>
                   </div>
                 ))}

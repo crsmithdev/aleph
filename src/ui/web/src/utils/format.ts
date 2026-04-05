@@ -137,3 +137,7 @@ export function cleanMessage(msg: string): string {
     .replace(/\s+/g, ' ')
     .trim();
 }
+
+export function fmtSeriesName(name: string): string {
+  return name.replace(/[_-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}

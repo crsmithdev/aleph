@@ -10,7 +10,7 @@ import { type Granularity, type TimeRange } from '../../../components/data/TimeR
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtPct, fmtMs, shortDate, parseToolSource, relativeTime } from '../../../utils/format';
+import { fmtNumber, fmtPct, fmtMs, shortDate, parseToolSource, relativeTime, fmtSeriesName } from '../../../utils/format';
 import { clsx } from 'clsx';
 
 type RawToolRow = { name: string; count: number; errorCount: number; pct: number; active: boolean; lastUsed?: string; avgMs?: number; p50Ms?: number; p95Ms?: number };
@@ -167,7 +167,7 @@ export function ToolsPage() {
                 <Pie data={top10} dataKey="count" nameKey="tool" cx="50%" cy="50%" innerRadius={45} outerRadius={70}>
                   {top10.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
                 </Pie>
-                <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
               </PieChart>
               <div className="flex flex-col gap-1 mt-2">
                 {top10.map((row, i) => (
@@ -199,7 +199,7 @@ export function ToolsPage() {
                     <YAxis {...axisProps} />
                     <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                     {topToolNames.map((name, i) => (
-                      <Area key={name} type="monotone" dataKey={name} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
+                      <Area key={name} type="linear" dataKey={name} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
                     ))}
                   </AreaChart>
                 )}

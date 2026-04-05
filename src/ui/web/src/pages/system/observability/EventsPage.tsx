@@ -9,7 +9,7 @@ import { type TimeRange, type Granularity } from '../../../components/data/TimeR
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { dateTime, fmtNumber, fmtMs, fmtToolName, shortDate, granLabel } from '../../../utils/format';
+import { dateTime, fmtNumber, fmtMs, fmtToolName, shortDate, granLabel, fmtSeriesName } from '../../../utils/format';
 import { clsx } from 'clsx';
 
 type EntryType =
@@ -414,7 +414,7 @@ export function EventsPage() {
               <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
               <YAxis {...axisProps} />
               <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-              <Area type="monotone" dataKey="count" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Events" />
+              <Area type="linear" dataKey="count" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Events" />
             </ComposedChart>
           </ChartContainer>
         </div>
@@ -427,13 +427,13 @@ export function EventsPage() {
                 <Pie data={donutData} dataKey="count" nameKey="label" cx="50%" cy="50%" innerRadius={28} outerRadius={52}>
                   {donutData.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
                 </Pie>
-                <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
               </PieChart>
               <div className="w-full flex flex-col gap-1">
                 {donutData.slice(0, 6).map((row, i) => (
                   <div key={row.type} className="flex items-center gap-2 text-xs">
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                    <span className="text-text-secondary truncate">{row.label}</span>
+                    <span className="text-text-secondary truncate">{fmtSeriesName(row.label)}</span>
                     <span className="ml-auto text-text-muted font-mono shrink-0">{fmtNumber(row.count)}</span>
                   </div>
                 ))}

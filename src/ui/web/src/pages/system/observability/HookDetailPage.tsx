@@ -155,7 +155,7 @@ export function HookDetailPage() {
               <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
               <YAxis {...axisProps} />
               <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-              <Area type="monotone" dataKey="count" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.15} dot={false} name="Executions" />
+              <Area type="linear" dataKey="count" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.15} dot={false} name="Executions" />
             </AreaChart>
           )}
         </ChartContainer>

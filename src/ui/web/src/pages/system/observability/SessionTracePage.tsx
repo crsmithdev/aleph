@@ -34,6 +34,99 @@ type Turn = {
   assistantText?: string;
 };
 
+// ── Markdown renderer ──────────────────────────────────────────────────────────
+
+function renderInline(text: string): React.ReactNode[] {
+  // Split on **bold** and `code` patterns
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return (
+        <code key={i} className="font-mono bg-bg-tertiary px-1 rounded text-sm">
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    // Strip single asterisk italics — render as plain text
+    return <span key={i}>{part.replace(/\*([^*]+)\*/g, '$1')}</span>;
+  });
+}
+
+function MarkdownText({ text }: { text: string }) {
+  const lines = text.split('\n');
+
+  type Block =
+    | { kind: 'line'; text: string }
+    | { kind: 'ul'; items: string[] }
+    | { kind: 'ol'; items: string[] };
+
+  const blocks: Block[] = [];
+  let currentList: { kind: 'ul' | 'ol'; items: string[] } | null = null;
+
+  for (const line of lines) {
+    const ulMatch = /^[-*] (.*)$/.exec(line);
+    const olMatch = /^\d+\. (.*)$/.exec(line);
+
+    if (ulMatch) {
+      if (currentList?.kind !== 'ul') {
+        currentList = { kind: 'ul', items: [] };
+        blocks.push(currentList);
+      }
+      currentList.items.push(ulMatch[1]);
+    } else if (olMatch) {
+      if (currentList?.kind !== 'ol') {
+        currentList = { kind: 'ol', items: [] };
+        blocks.push(currentList);
+      }
+      currentList.items.push(olMatch[1]);
+    } else {
+      currentList = null;
+      blocks.push({ kind: 'line', text: line });
+    }
+  }
+
+  return (
+    <>
+      {blocks.map((block, i) => {
+        if (block.kind === 'ul') {
+          return (
+            <ul key={i} className="list-disc list-inside my-1 space-y-0.5">
+              {block.items.map((item, j) => (
+                <li key={j} className="text-sm text-text-primary leading-relaxed">
+                  {renderInline(item)}
+                </li>
+              ))}
+            </ul>
+          );
+        }
+        if (block.kind === 'ol') {
+          return (
+            <ol key={i} className="list-decimal list-inside my-1 space-y-0.5">
+              {block.items.map((item, j) => (
+                <li key={j} className="text-sm text-text-primary leading-relaxed">
+                  {renderInline(item)}
+                </li>
+              ))}
+            </ol>
+          );
+        }
+        // Plain line — preserve blank lines as breaks
+        if (block.text === '') {
+          return <br key={i} />;
+        }
+        return (
+          <p key={i} className="text-sm text-text-primary leading-relaxed">
+            {renderInline(block.text)}
+          </p>
+        );
+      })}
+    </>
+  );
+}
+
 // ── Span row inside expanded response ─────────────────────────────────────────
 
 function SpanRow({ span, sessionId }: { span: Span; sessionId: string }) {
@@ -137,112 +230,113 @@ function ResponseBlock({
   expanded,
   onToggle,
   sessionId,
-  prevContextTokens,
 }: {
   turn: Turn;
   expanded: boolean;
   onToggle: () => void;
   sessionId: string;
-  prevContextTokens?: number;
 }) {
   const toolSpans = turn.spans.filter((s) => s.kind === 'tool');
   const hookSpans = turn.spans.filter((s) => s.kind === 'hook');
-  const errorCount = turn.spans.filter((s) => s.isError).length;
-
-  // Context delta: how many tokens were added to input context since last turn
-  const ctxDelta =
-    turn.contextTokens && prevContextTokens ? turn.contextTokens - prevContextTokens : undefined;
 
   const summaryParts: string[] = [];
   if (toolSpans.length > 0) summaryParts.push(`${toolSpans.length} tool${toolSpans.length !== 1 ? 's' : ''}`);
   if (hookSpans.length > 0) summaryParts.push(`${hookSpans.length} hook${hookSpans.length !== 1 ? 's' : ''}`);
 
+  const errorCount = turn.spans.filter((s) => s.isError).length;
   const hasSpans = turn.spans.length > 0;
+
+  const modelLabel = turn.model ? turn.model.replace('claude-', '') : 'Claude';
 
   return (
     <div className="ml-2 space-y-1">
-      {/* Meta row — no background */}
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center gap-2 px-1 py-0.5 text-left"
-      >
-        <span className="text-xs text-text-muted font-mono shrink-0">
-          {turn.model ? turn.model.replace('claude-', '') : 'Claude'}
-        </span>
-
+      {/* Label row — model name left, stats right */}
+      <div className="flex items-center gap-2 px-1">
+        <span className="text-xs text-text-muted font-mono shrink-0">{modelLabel}</span>
         {summaryParts.length > 0 && (
           <span className="text-xs text-text-disabled shrink-0">· {summaryParts.join(', ')}</span>
         )}
-
         {errorCount > 0 && (
           <span className="text-xs text-error shrink-0">· {errorCount} error{errorCount !== 1 ? 's' : ''}</span>
         )}
+      </div>
 
-        {ctxDelta !== undefined && ctxDelta > 0 && (
-          <span className="shrink-0 text-[10px] rounded px-1.5 py-0.5 bg-bg-tertiary border border-border-primary text-text-muted font-mono">
-            +{fmtNumber(ctxDelta)}
-          </span>
+      {/* Bubble */}
+      <div className="max-w-[85%] bg-bg-secondary border-l-4 border-border-primary rounded-sm px-4 py-3 space-y-2">
+        {/* Expanded spans panel — above the text */}
+        {hasSpans && expanded && (
+          <div className="rounded-sm border border-border-primary bg-bg-primary overflow-hidden">
+            {turn.spans.map((span, i) => (
+              <SpanRow key={`${span.id}-${i}`} span={span} sessionId={sessionId} />
+            ))}
+          </div>
         )}
 
-        <div className="ml-auto flex items-center gap-3 text-xs text-text-disabled shrink-0">
-          {turn.contextTokens && (
-            <span className="font-mono">{fmtNumber(turn.contextTokens)}↑</span>
-          )}
-          {turn.cost && turn.cost > 0 ? (
-            <span className="font-mono">{fmtCurrency(turn.cost)}</span>
-          ) : null}
-          <span className="font-mono">{fmtMs(turn.durationMs)}</span>
-          {hasSpans && (
+        {/* Assistant text */}
+        {turn.assistantText && (
+          <div className="whitespace-pre-wrap break-words">
+            <MarkdownText text={turn.assistantText} />
+          </div>
+        )}
+
+        {/* Toggle button — at bottom */}
+        {hasSpans && (
+          <button
+            onClick={onToggle}
+            className="flex items-center gap-1 text-xs text-text-disabled hover:text-text-muted transition-colors"
+          >
             <span className={clsx('transition-transform', expanded ? 'rotate-180' : '')}>⌄</span>
-          )}
-        </div>
-      </button>
-
-      {/* Assistant text */}
-      {turn.assistantText && (
-        <div className="px-1">
-          <p className="text-sm text-text-primary whitespace-pre-wrap break-words leading-relaxed">
-            {turn.assistantText}
-          </p>
-        </div>
-      )}
-
-      {/* Collapsible spans panel */}
-      {hasSpans && expanded && (
-        <div className="rounded-sm border border-border-primary bg-bg-secondary overflow-hidden">
-          {turn.spans.map((span, i) => (
-            <SpanRow key={`${span.id}-${i}`} span={span} sessionId={sessionId} />
-          ))}
-        </div>
-      )}
+            <span>{expanded ? 'hide' : 'show'} spans</span>
+          </button>
+        )}
+      </div>
     </div>
-  );
-}
-
-// ── Inline markdown: bold only ─────────────────────────────────────────────────
-
-function InlineMarkdown({ text }: { text: string }) {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
-  return (
-    <>
-      {parts.map((part, i) =>
-        part.startsWith('**') && part.endsWith('**')
-          ? <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>
-          : <span key={i}>{part}</span>
-      )}
-    </>
   );
 }
 
 // ── User message block ─────────────────────────────────────────────────────────
 
-function UserBlock({ turn }: { turn: Turn }) {
+function UserBlock({ turn, runningCost, prevContextTokens }: {
+  turn: Turn;
+  runningCost: number;
+  prevContextTokens?: number;
+}) {
   const msg = cleanMessage(turn.userMessage);
   const time = dateTime(turn.startTime);
+  const isCaveat = turn.userMessage.includes('local-command-caveat');
+
+  // Context delta
+  const ctxDelta =
+    turn.contextTokens && prevContextTokens ? turn.contextTokens - prevContextTokens : undefined;
+
+  if (isCaveat) {
+    return (
+      <div className="flex flex-col items-end gap-1">
+        <div className="max-w-[85%] px-3 py-1.5 rounded-sm border border-border-primary/30 bg-bg-tertiary/30">
+          <span className="text-xs text-text-disabled font-mono">[system] {msg || 'local-command-caveat'}</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col items-end gap-1">
-      {/* Label row — no background */}
+      {/* Stats row above the bubble */}
+      <div className="flex items-center gap-2 px-1 text-[11px] text-text-disabled font-mono">
+        {runningCost > 0 && (
+          <span>{fmtCurrency(runningCost)} total</span>
+        )}
+        {turn.cost && turn.cost > 0 ? (
+          <span>· {fmtCurrency(turn.cost)} this turn</span>
+        ) : null}
+        {turn.contextTokens ? (
+          <span>· {fmtNumber(turn.contextTokens)} tokens{ctxDelta !== undefined && ctxDelta > 0 ? ` (+${fmtNumber(ctxDelta)})` : ''}</span>
+        ) : null}
+        {turn.durationMs > 0 && (
+          <span>· {fmtMs(turn.durationMs)}</span>
+        )}
+      </div>
+      {/* Label row */}
       <div className="flex items-center gap-2 px-1">
         <span className="font-mono text-[11px] text-accent tracking-wider uppercase">You</span>
         <span className="text-[11px] text-text-muted">{time}</span>
@@ -251,10 +345,10 @@ function UserBlock({ turn }: { turn: Turn }) {
       <div className="max-w-[75%] bg-bg-secondary border-l-4 border-accent rounded-sm px-4 py-3">
         {msg ? (
           <p className="text-sm text-text-primary whitespace-pre-wrap break-words leading-relaxed">
-            <InlineMarkdown text={msg} />
+            <MarkdownText text={msg} />
           </p>
         ) : (
-          <span className="text-sm text-text-muted italic">no message</span>
+          <span className="text-sm text-text-disabled">—</span>
         )}
       </div>
     </div>
@@ -322,16 +416,14 @@ function ContextPanel({ turns }: { turns: Turn[] }) {
   const sortedToolItems =
     view === 'size' ? [...toolItems].sort((a, b) => b.estTokens - a.estTokens) : toolItems;
 
-  const showFlat = grouping === 'flat' || view === 'category';
-
   return (
     <div className="rounded-sm border border-border-primary bg-bg-secondary overflow-hidden">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-border-primary">
-        <h2 className="text-sm font-medium text-text-secondary">Visible Context</h2>
+        <h2 className="text-sm font-medium text-text-secondary">Context</h2>
         {totalContextTokens ? (
           <span className="text-xs text-text-muted">
-            ~{fmtNumber(totalContextTokens)} total tokens
+            ~{fmtNumber(totalContextTokens)} tokens
           </span>
         ) : (
           <span className="text-xs text-text-disabled">token data unavailable</span>
@@ -383,6 +475,7 @@ function ContextPanel({ turns }: { turns: Turn[] }) {
               label="User Messages"
               count={userItems.length}
               totalEst={totalUserEst}
+              totalContextTokens={totalContextTokens}
               items={sortedUserItems}
               view={view}
             />
@@ -392,6 +485,7 @@ function ContextPanel({ turns }: { turns: Turn[] }) {
               label="Tool Calls"
               count={toolItems.length}
               totalEst={totalToolEst}
+              totalContextTokens={totalContextTokens}
               items={sortedToolItems}
               view={view}
               note="estimated from param text"
@@ -418,6 +512,7 @@ function ContextGroup({
   label,
   count,
   totalEst,
+  totalContextTokens,
   items,
   view,
   note,
@@ -425,12 +520,15 @@ function ContextGroup({
   label: string;
   count: number;
   totalEst: number;
+  totalContextTokens?: number;
   items: ContextItem[];
   view: 'category' | 'size';
   note?: string;
 }) {
   const [open, setOpen] = useState(true);
   if (count === 0) return null;
+
+  const pct = totalContextTokens ? Math.round(totalEst / totalContextTokens * 100) : 0;
 
   return (
     <div>
@@ -442,7 +540,9 @@ function ContextGroup({
         <span className="text-sm font-medium text-text-primary">{label}</span>
         <span className="text-xs text-text-muted">{count}</span>
         {note && <span className="text-[11px] text-text-disabled">({note})</span>}
-        <span className="ml-auto text-xs text-text-muted font-mono">~{fmtNumber(totalEst)} tokens</span>
+        <span className="ml-auto text-xs text-text-muted font-mono">
+          ~{fmtNumber(totalEst)} tokens{totalContextTokens ? ` (${pct}%)` : ''}
+        </span>
       </button>
 
       {open && (
@@ -450,7 +550,7 @@ function ContextGroup({
           {items.map((item, i) => (
             <div key={i} className="flex items-start gap-3 px-8 py-1.5">
               <span className="text-xs text-accent font-mono shrink-0">{item.label}</span>
-              <span className="text-xs text-text-muted truncate flex-1 italic">{item.preview}</span>
+              <span className="text-xs text-text-muted truncate flex-1">{item.preview}</span>
               <span className="text-xs text-text-muted font-mono shrink-0">~{fmtNumber(item.estTokens)}</span>
             </div>
           ))}
@@ -477,7 +577,7 @@ function FlatContextItem({ item }: { item: ContextItem }) {
         {item.type === 'user' ? 'User' : 'Tool'}
       </span>
       <span className="text-xs text-text-muted font-mono shrink-0">{item.label}</span>
-      <span className="text-xs text-text-muted truncate flex-1 italic">{item.preview}</span>
+      <span className="text-xs text-text-muted truncate flex-1">{item.preview}</span>
       <span className="text-xs text-text-muted font-mono shrink-0">{fmtNumber(item.estTokens)}</span>
     </div>
   );
@@ -491,7 +591,7 @@ export function SessionTracePage() {
   const range: TimeRange = '30d';
   const { data, isLoading, error, refetch } = useObsSessionTrace(sessionId, range);
   const [expandedTurns, setExpandedTurns] = useState<Set<number>>(new Set());
-  const [showContext, setShowContext] = useState(false);
+  const [showContext, setShowContext] = useState(true);
   const [selectedTurnIndex, setSelectedTurnIndex] = useState<number | null>(null);
   const topRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -516,7 +616,8 @@ export function SessionTracePage() {
 
   const totalTools = data.turns.reduce((s, t) => s + t.spans.filter((sp) => sp.kind === 'tool').length, 0);
   const totalHooks = data.turns.reduce((s, t) => s + t.spans.filter((sp) => sp.kind === 'hook').length, 0);
-  const errorSpans = data.turns.reduce((s, t) => s + t.spans.filter((sp) => sp.isError).length, 0);
+  const toolErrors = data.turns.reduce((s, t) => s + t.spans.filter((sp) => sp.kind === 'tool' && sp.isError).length, 0);
+  const hookErrors = data.turns.reduce((s, t) => s + t.spans.filter((sp) => sp.kind === 'hook' && sp.isError).length, 0);
   const isSubagent = !!data.parentSessionId;
 
   const toggleTurn = (idx: number) => {
@@ -533,6 +634,14 @@ export function SessionTracePage() {
     if (allExpanded) setExpandedTurns(new Set());
     else setExpandedTurns(new Set(data.turns.map((t) => t.index)));
   };
+
+  // Compute cumulative cost per turn
+  const cumulativeCosts: number[] = [];
+  let runningSum = 0;
+  for (const turn of data.turns) {
+    runningSum += turn.cost ?? 0;
+    cumulativeCosts.push(runningSum);
+  }
 
   return (
     <div className="space-y-4">
@@ -625,17 +734,23 @@ export function SessionTracePage() {
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
         <StatCard label="Duration" value={fmtDuration(data.totalDurationMs)} />
-        <StatCard label="Turns" value={fmtNumber(data.turns.length)} />
-        <StatCard label="Tool Calls" value={fmtNumber(totalTools)} />
-        <StatCard label="Hook Runs" value={fmtNumber(totalHooks)} />
-        <StatCard label="Tokens" value={fmtNumber(data.totalTokens)} />
         <StatCard
-          label="Cost"
-          value={fmtCurrency(data.totalCost)}
-          {...(errorSpans > 0
-            ? { detail: `${errorSpans} error${errorSpans !== 1 ? 's' : ''}`, accent: 'error' as const }
+          label="Tool Calls"
+          value={fmtNumber(totalTools)}
+          {...(toolErrors > 0
+            ? { detail: `${toolErrors} err`, accent: 'error' as const }
             : {})}
         />
+        <StatCard
+          label="Hook Runs"
+          value={fmtNumber(totalHooks)}
+          {...(hookErrors > 0
+            ? { detail: `${hookErrors} err`, accent: 'error' as const }
+            : {})}
+        />
+        <StatCard label="Tokens" value={fmtNumber(data.totalTokens)} />
+        <StatCard label="Messages" value={fmtNumber(data.turns.length)} />
+        <StatCard label="Cost" value={fmtCurrency(data.totalCost)} />
       </div>
 
       {/* Turn feed + optional context sidebar */}
@@ -647,11 +762,17 @@ export function SessionTracePage() {
             <div className="space-y-3">
               {data.turns.map((turn, i) => {
                 const prevTurn = i > 0 ? data.turns[i - 1] : undefined;
+                const runningCost = cumulativeCosts[i] ?? 0;
+                const hasContent = turn.spans.length > 0 || !!turn.assistantText;
                 return (
                   <div key={turn.index} className={clsx('space-y-1.5', selectedTurnIndex === turn.index && 'ring-1 ring-accent/30 rounded-sm')}>
                     <div className="flex items-start gap-2">
                       <div className="flex-1 min-w-0">
-                        <UserBlock turn={turn} />
+                        <UserBlock
+                          turn={turn}
+                          runningCost={runningCost}
+                          prevContextTokens={prevTurn?.contextTokens}
+                        />
                       </div>
                       {showContext && (
                         <button
@@ -668,13 +789,14 @@ export function SessionTracePage() {
                         </button>
                       )}
                     </div>
-                    <ResponseBlock
-                      turn={turn}
-                      expanded={expandedTurns.has(turn.index)}
-                      onToggle={() => toggleTurn(turn.index)}
-                      sessionId={sessionId}
-                      prevContextTokens={prevTurn?.contextTokens}
-                    />
+                    {hasContent && (
+                      <ResponseBlock
+                        turn={turn}
+                        expanded={expandedTurns.has(turn.index)}
+                        onToggle={() => toggleTurn(turn.index)}
+                        sessionId={sessionId}
+                      />
+                    )}
                   </div>
                 );
               })}

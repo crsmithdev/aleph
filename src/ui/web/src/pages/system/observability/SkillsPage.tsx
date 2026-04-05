@@ -11,7 +11,7 @@ import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControl
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtPct, shortDate } from '../../../utils/format';
+import { fmtNumber, fmtPct, shortDate, fmtSeriesName } from '../../../utils/format';
 import { clsx } from 'clsx';
 
 type SkillRow = {
@@ -167,7 +167,7 @@ export function SkillsPage() {
                     <YAxis {...axisProps} />
                     <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                     {top10Skills.map((skill, i) => (
-                      <Area key={skill} type="monotone" dataKey={skill} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.3} dot={false} />
+                      <Area key={skill} type="linear" dataKey={skill} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.3} dot={false} />
                     ))}
                   </AreaChart>
                 ) : (
@@ -176,7 +176,7 @@ export function SkillsPage() {
                     <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
                     <YAxis {...axisProps} />
                     <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                    <Area type="monotone" dataKey="count" stroke={CHART_PALETTE[3]} fill={CHART_PALETTE[3]} fillOpacity={0.15} dot={false} name="Invocations" />
+                    <Area type="linear" dataKey="count" stroke={CHART_PALETTE[3]} fill={CHART_PALETTE[3]} fillOpacity={0.15} dot={false} name="Invocations" />
                   </AreaChart>
                 )
               )}
@@ -191,7 +191,7 @@ export function SkillsPage() {
                   <Pie data={data.byType} dataKey="count" nameKey="type" cx="50%" cy="50%" innerRadius={30} outerRadius={50}>
                     {data.byType.map((_: unknown, i: number) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
                   </Pie>
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v: unknown, n: unknown) => [fmtNumber(Number(v)), String(n)]} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v: unknown, n: unknown) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
                 </PieChart>
                 <div className="flex flex-col gap-2 w-full">
                   {data.byType.map((row: { type: string; count: number }, i: number) => (
