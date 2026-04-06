@@ -58,6 +58,7 @@ const navGroups: NavItem[][] = [
         { to: '/observability/skills', label: 'Skills' },
         { to: '/observability/sessions', label: 'Sessions' },
         { to: '/observability/evals', label: 'Evals' },
+        { to: '/observability/compaction', label: 'Compaction' },
         { to: '/observability/events', label: 'Events' },
         { to: '/observability/memory', label: 'Memory' },
         { to: '/observability/db', label: 'Database' },

@@ -11,7 +11,7 @@ import { clsx } from 'clsx';
 
 type Span = {
   id: string;
-  kind: 'tool' | 'hook' | 'token';
+  kind: 'tool' | 'hook' | 'token' | 'verify';
   label: string;
   startMs: number;
   durationMs: number;
@@ -22,7 +22,7 @@ type Span = {
 
 type Segment = {
   id: string;
-  kind: 'tool' | 'hook' | 'token' | 'agent';
+  kind: 'tool' | 'hook' | 'token' | 'agent' | 'verify';
   label: string;
   durationMs: number;
   widthPct: number;
@@ -36,7 +36,8 @@ const SEGMENT_STYLES: Record<string, { bg: string; border: string; text: string 
   tool:  { bg: 'bg-accent/40',       border: 'border-accent/60',       text: 'text-text-secondary' },
   hook:  { bg: 'bg-purple-500/40',   border: 'border-purple-500/60',   text: 'text-purple-500' },
   token: { bg: 'bg-blue-500/40',     border: 'border-blue-500/60',     text: 'text-blue-500' },
-  agent: { bg: 'bg-agent',              border: 'border-agent-border',      text: 'text-white' },
+  agent:  { bg: 'bg-agent',              border: 'border-agent-border',      text: 'text-white' },
+  verify: { bg: 'bg-green-500/40',     border: 'border-green-500/60',    text: 'text-green-400' },
   error: { bg: 'bg-error/30',        border: 'border-error/60',        text: 'text-error' },
 };
 

@@ -461,6 +461,21 @@ function adaptFile(filePath: string, project: string, since?: Date): TelemetryEv
     }
   }
 
+  // Enrich compact events with tool call count and context% up to that point
+  const toolCountBySid = new Map<string, number>();
+  for (const e of rawEvents) {
+    if (e.kind === "tool") {
+      toolCountBySid.set(e.sid, (toolCountBySid.get(e.sid) || 0) + 1);
+    }
+    if (e.kind === "compact" && e.data) {
+      e.data.toolCallCount = toolCountBySid.get(e.sid) || 0;
+      const preTokens = e.data.preTokens as number | undefined;
+      if (preTokens) {
+        e.data.contextPct = Math.round(preTokens / 200_000 * 100);
+      }
+    }
+  }
+
   insertCache.run(filePath, stat.mtimeMs, stat.size, JSON.stringify(rawEvents));
 
   if (since) {

@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 
-type TimeRange = 'session' | '1h' | '1d' | '7d' | '30d';
+export type TimeRange = 'session' | '1h' | '1d' | '7d' | '30d';
 type Granularity = 'minute' | 'hour' | 'day';
 
 interface ObsQueryOpts {
@@ -316,7 +316,7 @@ export function useObsCompaction(range: TimeRange, granularity?: Granularity, se
     totalTokensAtCompaction: number;
     avgPreTokens: number;
     byDay: Array<{ date: string; count: number }>;
-    events: Array<{ timestamp: string; sessionId: string; trigger: string; preTokens: number }>;
+    events: Array<{ timestamp: string; sessionId: string; trigger: string; preTokens: number; toolCallCount?: number; contextPct?: number }>;
     queryTimeMs: number;
   }>('compaction', { range, granularity, session });
 }
@@ -342,7 +342,7 @@ export function useObsSessionTrace(sessionId: string, range: TimeRange) {
       durationMs: number;
       spans: Array<{
         id: string;
-        kind: 'tool' | 'hook' | 'token';
+        kind: 'tool' | 'hook' | 'token' | 'verify';
         label: string;
         startMs: number;
         durationMs: number;

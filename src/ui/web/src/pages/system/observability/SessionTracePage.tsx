@@ -19,7 +19,7 @@ type TraceCompaction = {
 
 type Span = {
   id: string;
-  kind: 'tool' | 'hook' | 'token';
+  kind: 'tool' | 'hook' | 'token' | 'verify';
   label: string;
   startMs: number;
   durationMs: number;
@@ -206,6 +206,8 @@ function SpanRow({ span, sessionId }: { span: Span; sessionId: string }) {
       ? 'bg-error/10 border-error/30 text-error'
       : span.kind === 'hook'
       ? 'bg-purple-500/10 border-purple-500/30 text-purple-400'
+      : span.kind === 'verify'
+      ? (span.label.includes('FAIL') ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-green-500/10 border-green-500/30 text-green-400')
       : isSubagent
       ? 'bg-agent/20 border-agent-border text-white'
       : 'bg-accent/10 border-accent/30 text-accent';
@@ -228,11 +230,11 @@ function SpanRow({ span, sessionId }: { span: Span; sessionId: string }) {
             kindStyle,
           )}
         >
-          {isSubagent ? 'agent' : span.kind}
+          {isSubagent ? 'agent' : span.kind === 'verify' ? (span.label.includes('FAIL') ? 'fail' : 'pass') : span.kind}
         </span>
 
         {/* Name — fixed width column, mono, truncated */}
-        <span className={clsx('font-mono truncate font-medium', span.isError ? 'text-error' : span.kind === 'hook' ? 'text-purple-300' : isSubagent ? 'text-white' : 'text-sky-300')}>
+        <span className={clsx('font-mono truncate font-medium', span.isError ? 'text-error' : span.kind === 'hook' ? 'text-purple-300' : span.kind === 'verify' ? (span.label.includes('FAIL') ? 'text-red-400' : 'text-green-400') : isSubagent ? 'text-white' : 'text-sky-300')}>
           {span.subagentSessionId ? (
             <Link
               to={`/observability/sessions/${encodeURIComponent(span.subagentSessionId)}`}

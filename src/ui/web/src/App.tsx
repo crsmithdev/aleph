@@ -32,6 +32,7 @@ import { EventsPage } from './pages/system/observability/EventsPage';
 import { DbStatsPage } from './pages/system/observability/DbStatsPage';
 import { SubagentsPage } from './pages/system/observability/SubagentsPage';
 import { EvalsPage } from './pages/system/observability/EvalsPage';
+import { CompactionPage } from './pages/system/observability/CompactionPage';
 import { SessionTracePage } from './pages/system/observability/SessionTracePage';
 import { TurnTracePage } from './pages/system/observability/TurnTracePage';
 import { SettingsPage } from './pages/system/SettingsPage';
@@ -92,6 +93,7 @@ export function App() {
               <Route path="/observability/sessions/:id" element={<SessionTracePage />} />
               <Route path="/observability/sessions/:id/turns/:turnIndex" element={<TurnTracePage />} />
               <Route path="/observability/evals" element={<EvalsPage />} />
+              <Route path="/observability/compaction" element={<CompactionPage />} />
               <Route path="/observability/events" element={<EventsPage />} />
               <Route path="/observability/memory" element={<MemoryPage />} />
               <Route path="/observability/db" element={<DbStatsPage />} />
