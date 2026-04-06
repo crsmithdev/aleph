@@ -8,7 +8,7 @@
  */
 
 /** CLI execution, Playwright/Cypress, browser automation */
-export const E2E_CMD = /playwright|cypress|puppeteer|(?:bun|npm|npx|yarn|pnpm)\s+(?:run\s+)?(?:e2e|integration|playwright)|(?:bun|npm|npx)\s+(?:run\s+)?dev\b|next\s+dev|vite\s+dev|(?:bun|node)\s+.*server/i;
+export const E2E_CMD = /playwright|cypress|puppeteer|agent-browser|(?:bun|npm|npx|yarn|pnpm)\s+(?:run\s+)?(?:e2e|integration|playwright)|(?:bun|npm|npx)\s+(?:run\s+)?dev\b|next\s+dev|vite\s+dev|(?:bun|node)\s+.*server/i;
 
 /** Screenshot or saved output */
 export const ARTIFACT_CMD = /--screenshot|screenshot|\.png|\.jpg|\.jpeg|> .*\.(txt|log|html|json)|tee\s/i;

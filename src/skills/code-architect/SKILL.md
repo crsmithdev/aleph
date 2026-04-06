@@ -1,5 +1,5 @@
 ---
-name: code-architecture-reviewer
+name: code-architect
 description: Use when user wants to Review recently written code for architectural consistency, best practices, and system integration. Use after implementing features, components, or refactors to validate quality before merging.
 ---
 

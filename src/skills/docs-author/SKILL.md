@@ -1,5 +1,5 @@
 ---
-name: documentation-architect
+name: docs-author
 description: Create, update, or enhance documentation for any part of the codebase. Use when you need developer guides, README files, API documentation, data flow diagrams, or architectural overviews. Gathers comprehensive context before writing.
 ---
 

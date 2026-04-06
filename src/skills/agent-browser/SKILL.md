@@ -739,3 +739,91 @@ agent-browser dashboard stop
 ```
 
 The dashboard runs independently of browser sessions on port 4848 (configurable with `--port`). All sessions automatically stream to the dashboard. Sessions can also be created from the dashboard UI with local engines or cloud providers.
+
+## agent-browser vs chrome-devtools MCP
+
+Both tools expose the Chrome accessibility tree. Choose based on task:
+
+| Scenario | Use |
+|---|---|
+| Multi-step automation (forms, flows) | agent-browser |
+| Verify an action worked (diff) | agent-browser |
+| Extract page content / read text | chrome-devtools MCP |
+| Need link URLs without eval | chrome-devtools MCP |
+| Prompt injection risk (untrusted pages) | agent-browser + `--content-boundaries` |
+| Network monitoring / HAR capture | agent-browser |
+| Quick one-off inspection / debugging | chrome-devtools MCP |
+| Parallel isolated sessions | agent-browser |
+| CI/CD headless automation | agent-browser |
+| ARIA attribute inspection | chrome-devtools MCP |
+
+**Key differences observed on real pages:**
+
+- `snapshot -i` (agent-browser) returns ~140 interactive nodes on github.com; chrome-devtools returns 270+ nodes including all static text, images, and alt text. agent-browser is more token-efficient for action tasks.
+- chrome-devtools includes full URLs on every link node — no `eval` needed to get href. agent-browser omits URLs from snapshot output.
+- `diff snapshot` uses the full a11y tree (not `-i`), so it catches content changes too, not just interactive element changes.
+- `--annotate` caches refs from the screenshot, letting you skip a separate `snapshot -i` step when you need visual context anyway.
+- Batch mode `--json` output embeds both a `refs` map and the full `snapshot` string in the same response — useful when you need structured parsing.
+
+## Optimization Cheatsheet
+
+**Avoid session collision with chrome-devtools MCP:**
+
+agent-browser and the chrome-devtools MCP share the same Chrome instance. Navigating with MCP will move the default agent-browser session to a different page (and vice versa). Always use a named session when both tools are active in the same conversation:
+
+```bash
+agent-browser --session my-task open https://example.com
+agent-browser --session my-task snapshot -i
+```
+
+**Reduce token usage on large pages:**
+
+```bash
+# Scope snapshot to a specific region instead of full page
+# This can reduce output by 70-80% on pages with rich nav/footer
+agent-browser snapshot -i -s "nav"        # navigation only (~7 lines vs 26 full)
+agent-browser snapshot -i -s "form"       # just the form
+agent-browser snapshot -i -s "#content"   # main content region
+
+# Set output limit to prevent context flooding
+export AGENT_BROWSER_MAX_OUTPUT=30000
+```
+
+**Speed up read-only scraping (10x faster, 10x less memory):**
+
+```bash
+agent-browser --engine lightpanda open https://example.com
+# Note: lightpanda doesn't support --profile, --state, --extension
+```
+
+**Skip the snapshot step when you need visual context anyway:**
+
+```bash
+# --annotate caches refs; you can interact immediately without a separate snapshot
+agent-browser screenshot --annotate
+agent-browser click @e5  # ref is already cached
+```
+
+**Verify an action worked without re-reading the full page:**
+
+```bash
+agent-browser snapshot -i       # sets baseline
+agent-browser click @e3         # perform action
+agent-browser diff snapshot     # see only what changed
+```
+
+**Prevent prompt injection from untrusted pages:**
+
+```bash
+export AGENT_BROWSER_CONTENT_BOUNDARIES=1
+# All snapshot/get output is now wrapped in nonce-verified markers
+```
+
+**Complex JS extraction — avoid shell quoting bugs:**
+
+```bash
+# Always use --stdin for anything with nested quotes or multiline
+agent-browser eval --stdin <<'EOF'
+JSON.stringify(Array.from(document.querySelectorAll("table tr")).map(r => r.innerText))
+EOF
+```

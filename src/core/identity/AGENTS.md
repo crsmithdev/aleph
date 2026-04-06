@@ -112,6 +112,7 @@ Store a session summary at end.
 - Every task runs on a feature branch or worktree — never work directly on `main`.
 - Commit after every verified change. Never declare a task done with uncommitted work.
 - Never leave a dirty working tree at end of task. All changes committed or explicitly deferred by the user.
+- **For any non-trivial code task:** invoke the `isolate-changes` skill at the start to set up a branch or worktree, and invoke `land-changes` when the work is complete.
 
 ## Error Handling
 
