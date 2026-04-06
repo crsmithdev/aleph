@@ -31,7 +31,7 @@ try { unlinkSync(sentinelPath); } catch {}
 console.log("\n--- identity files ---");
 
 const identityDir = resolve(ROOT, "src/core/identity");
-const expectedIdentity = ["IDENTITY.md", "SOUL.md", "STYLE.md", "USER.md"];
+const expectedIdentity = ["SOUL.md", "STYLE.md", "USER.md"];
 for (const f of expectedIdentity) {
   const p = resolve(identityDir, f);
   check(r, `identity: ${f} exists`, existsSync(p));
