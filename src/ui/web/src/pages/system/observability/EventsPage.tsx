@@ -10,18 +10,23 @@ import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { dateTime, fmtNumber, fmtMs, fmtToolName, shortDate, granLabel, fmtSeriesName } from '../../../utils/format';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { clsx } from 'clsx';
 
-type EntryType =
-  | 'tool_use'
-  | 'tool_result'
-  | 'hook_progress'
-  | 'stop_hook_summary'
-  | 'tokens'
-  | 'turn_duration'
-  | 'directive'
-  | 'user_message'
-  | 'compact_boundary';
+const EVENT_TYPES = [
+  'tool_use',
+  'tool_result',
+  'hook_progress',
+  'stop_hook_summary',
+  'tokens',
+  'turn_duration',
+  'directive',
+  'user_message',
+  'compact_boundary',
+] as const;
+
+type EntryType = typeof EVENT_TYPES[number];
 
 type EventRow = {
   sessionId: string;
@@ -52,18 +57,6 @@ type EventRow = {
   compactTrigger?: string;
   compactPreTokens?: number;
 };
-
-const EVENT_TYPES: EntryType[] = [
-  'tool_use',
-  'tool_result',
-  'hook_progress',
-  'stop_hook_summary',
-  'tokens',
-  'turn_duration',
-  'directive',
-  'user_message',
-  'compact_boundary',
-];
 
 const TYPE_LABELS: Record<EntryType, string> = {
   tool_use: 'tool_use',
@@ -164,7 +157,7 @@ function rowKey(row: EventRow & { _idx?: number }): string {
 }
 
 function ExpandedRow({ row }: { row: EventRow }) {
-  const sections: Array<{ label: string; content: string; isError?: boolean }> = [];
+  const sections: Array<{ label: string; content: string; isError?: boolean; isMarkdown?: boolean }> = [];
 
   if (row.entryType === 'tool_use') {
     if (row.toolName) sections.push({ label: 'Tool', content: fmtToolName(row.toolName) });
@@ -196,7 +189,7 @@ function ExpandedRow({ row }: { row: EventRow }) {
     if (row.directives?.length) sections.push({ label: 'Directives', content: row.directives.join(', ') });
     if (row.promptWords != null) sections.push({ label: 'Prompt Words', content: String(row.promptWords) });
   } else if (row.entryType === 'user_message') {
-    if (row.userRequest) sections.push({ label: 'Message', content: row.userRequest });
+    if (row.userRequest) sections.push({ label: 'Message', content: row.userRequest, isMarkdown: true });
   } else if (row.entryType === 'compact_boundary') {
     if (row.compactTrigger) sections.push({ label: 'Trigger', content: row.compactTrigger });
     if (row.compactPreTokens != null) sections.push({ label: 'Pre-Compact Tokens', content: fmtNumber(row.compactPreTokens) });
@@ -214,7 +207,16 @@ function ExpandedRow({ row }: { row: EventRow }) {
       {sections.map((s) => (
         <div key={s.label} className="contents">
           <span className="text-text-muted font-medium whitespace-nowrap">{s.label}</span>
-          {s.content.includes('\n') || s.content.length > 80 ? (
+          {s.isMarkdown ? (
+            <div className="text-text-secondary
+              [&_p]:text-sm [&_p]:leading-relaxed [&_p]:mb-1
+              [&_code]:font-mono [&_code]:bg-bg-tertiary [&_code]:px-1 [&_code]:rounded [&_code]:text-accent [&_code]:text-xs
+              [&_pre]:bg-bg-tertiary [&_pre]:rounded [&_pre]:p-2 [&_pre]:text-xs [&_pre]:overflow-x-auto [&_pre_code]:bg-transparent [&_pre_code]:p-0
+              [&_ul]:list-disc [&_ul]:ml-4 [&_ul]:mb-1 [&_ol]:list-decimal [&_ol]:ml-4 [&_ol]:mb-1
+              [&_strong]:font-semibold [&_strong]:text-text-primary">
+              <Markdown remarkPlugins={[remarkGfm]}>{s.content}</Markdown>
+            </div>
+          ) : s.content.includes('\n') || s.content.length > 80 ? (
             <pre className={clsx(
               'font-mono whitespace-pre-wrap break-all max-h-48 overflow-auto rounded bg-bg-tertiary px-2 py-1',
               s.isError && 'text-error'
@@ -323,7 +325,7 @@ export function EventsPage() {
       label: 'Time',
       width: '160px',
       render: (row) => (
-        <span className="text-text-secondary text-xs whitespace-nowrap">{dateTime(row.timestamp)}</span>
+        <span className="text-text-secondary text-sm whitespace-nowrap">{dateTime(row.timestamp)}</span>
       ),
     },
     {
@@ -339,7 +341,7 @@ export function EventsPage() {
       render: (row) => {
         const detail = getDetail(row);
         return detail
-          ? <span className="font-mono text-xs text-text-primary truncate block">{detail}</span>
+          ? <span className="font-mono text-sm text-text-primary truncate block">{detail}</span>
           : <span className="text-text-muted">—</span>;
       },
     },
@@ -349,7 +351,7 @@ export function EventsPage() {
       render: (row) => {
         const preview = getInfoPreview(row);
         return preview
-          ? <span className="font-mono text-xs text-text-muted block truncate">{preview}</span>
+          ? <span className="font-mono text-sm text-text-muted block truncate">{preview}</span>
           : <span className="text-text-muted">—</span>;
       },
     },
@@ -358,7 +360,7 @@ export function EventsPage() {
       label: 'Session',
       width: '90px',
       render: (row) => (
-        <span className="font-mono text-xs text-text-muted">{row.sessionId.slice(0, 8)}</span>
+        <span className="font-mono text-sm text-text-muted">{row.sessionId.slice(0, 8)}</span>
       ),
     },
   ];
@@ -414,13 +416,13 @@ export function EventsPage() {
               <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
               <YAxis {...axisProps} />
               <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-              <Area type="natural" dataKey="count" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Events" />
+              <Area type="monotone" dataKey="count" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Events" />
             </ComposedChart>
           </ChartContainer>
         </div>
 
         {donutData.length > 0 && (
-          <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 w-[200px] shrink-0">
+          <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 w-1/4 min-w-[180px] shrink-0">
             <h3 className="mb-3 text-sm font-medium text-text-secondary">By Type</h3>
             <div className="flex flex-col items-center gap-3">
               <PieChart width={120} height={120}>

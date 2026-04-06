@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import { useObsSkillDetail } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
@@ -12,6 +12,8 @@ import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtPct, shortDate, dateTime, granLabel, fmtProject, fmtSeriesName } from '../../../utils/format';
 import { MarkdownBlock } from '../../../components/data/MarkdownBlock';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { clsx } from 'clsx';
 
@@ -19,12 +21,28 @@ type InvocationRow = { timestamp: string; sessionId: string; project: string; pa
 
 export function SkillDetailPage() {
   const { name: rawName } = useParams<{ name: string }>();
+  const [searchParams] = useSearchParams();
+  const targetSession = searchParams.get('session');
   const skillName = decodeURIComponent(rawName ?? '');
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [chartType, setChartType] = useState<'bar' | 'line'>('line');
+  const invTableRef = useRef<HTMLDivElement>(null);
   const { data, isLoading, error, refetch } = useObsSkillDetail(skillName, range);
+
+  // Auto-expand and scroll to the invocation matching the session query param
+  useEffect(() => {
+    if (!data || !targetSession) return;
+    const match = data.invocations.find((inv: InvocationRow) => inv.sessionId === targetSession);
+    if (match) {
+      setExpandedRow(match.timestamp);
+      setTimeout(() => {
+        const row = invTableRef.current?.querySelector(`tr[data-row-key="${match.timestamp}"]`);
+        (row ?? invTableRef.current)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 150);
+    }
+  }, [data, targetSession]);
 
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load skill details" retry={refetch} />;
@@ -32,9 +50,9 @@ export function SkillDetailPage() {
   const isCommand = data.type === 'command';
   const displayName = isCommand && !skillName.startsWith('/') ? `/${skillName}` : skillName;
 
-  const successRate = (data.totalCount ?? 0) === 0
-    ? 100
-    : ((data.totalCount - data.errorCount) / data.totalCount) * 100;
+  const total = Number(data.totalCount) || 0;
+  const errors = Number(data.errorCount) || 0;
+  const successRate = total === 0 ? 100 : ((total - errors) / total) * 100;
 
   // Build project breakdown from invocations
   const allProjects = [...new Set(data.invocations.map((inv: InvocationRow) => inv.project))].slice(0, 8);
@@ -71,17 +89,28 @@ export function SkillDetailPage() {
     {
       key: 'timestamp',
       label: 'Time',
+      width: '8rem',
       render: (row) => <span className="text-text-secondary">{dateTime(row.timestamp)}</span>,
     },
     {
       key: 'project',
       label: 'Project',
-      render: (row) => <span className="font-mono text-xs text-text-muted">{fmtProject(row.project)}</span>,
+      width: '7rem',
+      render: (row) => <span className="font-mono text-xs text-text-muted truncate block">{fmtProject(row.project)}</span>,
     },
     {
       key: 'sessionId',
       label: 'Session',
-      render: (row) => <span className="font-mono text-xs text-text-muted">{row.sessionId.slice(0, 8)}</span>,
+      width: '5rem',
+      render: (row) => (
+        <Link
+          to={`/observability/sessions/${encodeURIComponent(row.sessionId)}?t=${encodeURIComponent(row.timestamp)}`}
+          className="font-mono text-xs text-accent hover:underline"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {row.sessionId.slice(0, 8)}
+        </Link>
+      ),
     },
     {
       key: 'userRequest',
@@ -134,7 +163,7 @@ export function SkillDetailPage() {
         />
         <StatCard
           label="Success Rate"
-          value={fmtPct(successRate)}
+          value={isNaN(successRate) ? '—' : fmtPct(successRate)}
           accent={successRate >= 99 ? 'success' : successRate >= 95 ? 'warning' : 'error'}
         />
       </div>
@@ -174,7 +203,7 @@ export function SkillDetailPage() {
                     <YAxis {...axisProps} />
                     <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                     {allProjects.map((proj, i) => (
-                      <Area key={proj} type="natural" dataKey={proj} stackId="a"
+                      <Area key={proj} type="monotone" dataKey={proj} stackId="a"
                         stroke={CHART_PALETTE[i % CHART_PALETTE.length]}
                         fill={CHART_PALETTE[i % CHART_PALETTE.length]}
                         fillOpacity={0.3}
@@ -189,7 +218,7 @@ export function SkillDetailPage() {
                     <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
                     <YAxis {...axisProps} />
                     <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                    <Area type="natural" dataKey="count" stroke={CHART_PALETTE[3]} fill={CHART_PALETTE[3]} fillOpacity={0.3} dot={false} name="Invocations" />
+                    <Area type="monotone" dataKey="count" stroke={CHART_PALETTE[3]} fill={CHART_PALETTE[3]} fillOpacity={0.3} dot={false} name="Invocations" />
                   </AreaChart>
                 )
               )}
@@ -224,7 +253,7 @@ export function SkillDetailPage() {
       )}
 
       {data.invocations.length > 0 && (
-        <div>
+        <div ref={invTableRef}>
           <h2 className="mb-3 text-sm font-medium text-text-secondary">
             Recent Invocations ({data.invocations.length})
           </h2>
@@ -236,12 +265,23 @@ export function SkillDetailPage() {
             expandedKey={expandedRow}
             onExpandToggle={setExpandedRow}
             renderExpanded={(row) => {
-              if (!row.params || Object.keys(row.params).length === 0) {
-                return <span className="text-xs text-text-muted">No parameters</span>;
-              }
+              const hasParams = row.params && Object.keys(row.params).length > 0;
               return (
-                <div className="flex flex-col gap-1">
-                  {Object.entries(row.params).map(([k, v]) => (
+                <div className="flex flex-col gap-2">
+                  {row.userRequest && (
+                    <div className="text-xs">
+                      <span className="font-mono text-text-muted block mb-0.5">request</span>
+                      <div className="text-text-secondary
+                        [&_p]:text-sm [&_p]:leading-relaxed [&_p]:mb-1
+                        [&_code]:font-mono [&_code]:bg-bg-tertiary [&_code]:px-1 [&_code]:rounded [&_code]:text-accent [&_code]:text-xs
+                        [&_pre]:bg-bg-tertiary [&_pre]:rounded [&_pre]:p-2 [&_pre]:text-xs [&_pre]:overflow-x-auto [&_pre_code]:bg-transparent [&_pre_code]:p-0
+                        [&_ul]:list-disc [&_ul]:ml-4 [&_ul]:mb-1 [&_ol]:list-decimal [&_ol]:ml-4 [&_ol]:mb-1
+                        [&_strong]:font-semibold [&_strong]:text-text-primary">
+                        <Markdown remarkPlugins={[remarkGfm]}>{row.userRequest}</Markdown>
+                      </div>
+                    </div>
+                  )}
+                  {hasParams && Object.entries(row.params!).filter(([k]) => k !== 'skill').map(([k, v]) => (
                     <div key={k} className="flex gap-3 text-xs">
                       <span className="font-mono text-text-muted w-32 shrink-0">{k}</span>
                       <span className="text-text-secondary break-all">

@@ -26,6 +26,7 @@ export const axisProps = {
   fontSize: 12,
   tickLine: false as const,
   axisLine: false as const,
+  domain: [0, 'auto'] as [number, string],
 };
 
 export const legendProps = {

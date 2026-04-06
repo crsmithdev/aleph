@@ -31,17 +31,18 @@ export function SubagentsPage() {
     {
       key: 'subagentType',
       label: 'Type',
-      render: (row) => <span className="font-mono text-text-primary text-xs">{row.subagentType}</span>,
+      render: (row) => <span className="font-mono text-text-primary text-sm">{row.subagentType}</span>,
     },
-    { key: 'count', label: 'Count', align: 'right', sortable: true, render: (row) => fmtNumber(row.count) },
-    { key: 'pct', label: '% Total', align: 'right', render: (row) => `${row.pct}%` },
-    { key: 'avgMs', label: 'Avg', align: 'right', sortable: true, render: (row) => fmtMs(row.avgMs) },
-    { key: 'p95Ms', label: 'p95', align: 'right', sortable: true, render: (row) => fmtMs(row.p95Ms) },
+    { key: 'count', label: 'Count', align: 'right', sortable: true, width: '80px', render: (row) => fmtNumber(row.count) },
+    { key: 'pct', label: '% Total', align: 'right', width: '90px', render: (row) => `${row.pct}%` },
+    { key: 'avgMs', label: 'Avg', align: 'right', sortable: true, width: '80px', render: (row) => fmtMs(row.avgMs) },
+    { key: 'p95Ms', label: 'p95', align: 'right', sortable: true, width: '80px', render: (row) => fmtMs(row.p95Ms) },
     {
       key: 'errors',
       label: 'Errors',
       align: 'right',
       sortable: true,
+      width: '80px',
       render: (row) => <span className={row.errors > 0 ? 'text-error' : ''}>{fmtNumber(row.errors)}</span>,
     },
   ];
@@ -51,7 +52,7 @@ export function SubagentsPage() {
       key: 'description',
       label: 'Description',
       render: (row) => (
-        <span className="text-text-primary text-xs max-w-xs truncate block" title={row.description}>
+        <span className="text-text-primary text-sm truncate block" title={row.description}>
           {row.description || '—'}
         </span>
       ),
@@ -60,15 +61,17 @@ export function SubagentsPage() {
       key: 'timestamp',
       label: 'Time',
       sortable: true,
-      render: (row) => <span className="text-text-secondary text-xs whitespace-nowrap">{relativeTime(row.timestamp)}</span>,
+      width: '160px',
+      render: (row) => <span className="text-text-secondary text-sm whitespace-nowrap">{relativeTime(row.timestamp)}</span>,
     },
     {
       key: 'sessionId',
       label: 'Session',
+      width: '90px',
       render: (row) => (
         <Link
           to={`/observability/sessions/${encodeURIComponent(row.sessionId)}`}
-          className="font-mono text-xs text-accent hover:underline"
+          className="font-mono text-sm text-accent hover:underline"
           onClick={(e) => e.stopPropagation()}
         >
           {row.sessionId.slice(0, 8)}
@@ -78,24 +81,28 @@ export function SubagentsPage() {
     {
       key: 'subagentType',
       label: 'Type',
-      render: (row) => <span className="font-mono text-text-secondary text-xs">{row.subagentType || '—'}</span>,
+      width: '140px',
+      render: (row) => <span className="font-mono text-text-secondary text-sm">{row.subagentType || '—'}</span>,
     },
     {
       key: 'model',
       label: 'Model',
-      render: (row) => <span className="text-text-secondary text-xs">{row.model || '—'}</span>,
+      width: '160px',
+      render: (row) => <span className="text-text-secondary text-sm">{row.model || '—'}</span>,
     },
     {
       key: 'durationMs',
       label: 'Duration',
       align: 'right',
       sortable: true,
-      render: (row) => <span className="text-xs">{row.durationMs ? fmtMs(row.durationMs) : '—'}</span>,
+      width: '90px',
+      render: (row) => <span className="text-sm">{row.durationMs ? fmtMs(row.durationMs) : '—'}</span>,
     },
     {
       key: 'runInBackground',
       label: 'BG',
       align: 'right',
+      width: '60px',
       render: (row) => row.runInBackground
         ? <span className="text-xs px-1.5 py-0.5 rounded bg-accent/20 text-accent">bg</span>
         : <span className="text-xs text-text-tertiary">fg</span>,
@@ -104,6 +111,7 @@ export function SubagentsPage() {
       key: 'isError',
       label: 'Status',
       align: 'right',
+      width: '80px',
       render: (row) => row.isError
         ? <span className="text-xs px-1.5 py-0.5 rounded bg-error/20 text-error">error</span>
         : <span className="text-xs px-1.5 py-0.5 rounded bg-success/20 text-success">ok</span>,
@@ -111,15 +119,16 @@ export function SubagentsPage() {
     {
       key: 'subagentSessionId',
       label: 'Child',
+      width: '90px',
       render: (row) => row.subagentSessionId ? (
         <Link
           to={`/observability/sessions/${encodeURIComponent(row.subagentSessionId)}`}
-          className="font-mono text-xs text-accent hover:underline"
+          className="font-mono text-sm text-accent hover:underline"
           onClick={(e) => e.stopPropagation()}
         >
           {row.subagentSessionId.slice(0, 8)}
         </Link>
-      ) : <span className="text-text-tertiary text-xs">—</span>,
+      ) : <span className="text-text-tertiary text-sm">—</span>,
     },
   ];
 

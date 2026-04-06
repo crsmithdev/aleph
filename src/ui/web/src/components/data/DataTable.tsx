@@ -105,6 +105,7 @@ export function DataTable<T>({
             return (
               <React.Fragment key={rowKey}>
                 <tr
+                  data-row-key={rowKey}
                   onClick={handleClick}
                   className={clsx(
                     'border-b border-border-primary/50 transition-colors',

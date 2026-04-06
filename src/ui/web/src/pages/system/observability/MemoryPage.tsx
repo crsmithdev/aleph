@@ -9,8 +9,10 @@ import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps } from '../../../components/charts/chartTheme';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
-import { fmtNumber, shortDate, relativeTime, granLabel, fmtSeriesName } from '../../../utils/format';
+import { fmtNumber, shortDate, shortRelativeTime, granLabel, fmtSeriesName } from '../../../utils/format';
 import { clsx } from 'clsx';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 type TypeRow = { type: string; count: number };
 type TagRow = { tag: string; count: number };
@@ -102,7 +104,7 @@ export function MemoryPage() {
           <p className="text-sm text-text-primary line-clamp-2">{row.content}</p>
           <div className="mt-1 flex items-center gap-2 text-xs text-text-muted">
             <span className="font-mono">{row.memory_type}</span>
-            <span>{relativeTime(row.created_at)}</span>
+            <span>{shortRelativeTime(row.created_at)}</span>
           </div>
         </div>
       ),
@@ -200,14 +202,14 @@ export function MemoryPage() {
                   <YAxis {...axisProps} />
                   <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                   <Legend {...legendProps} />
-                  <Area type="natural" dataKey="stores" stackId="usage" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} strokeWidth={2} dot={false} name="Stores" />
-                  <Area type="natural" dataKey="searches" stackId="usage" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} strokeWidth={2} dot={false} name="Searches" />
+                  <Area type="monotone" dataKey="stores" stackId="usage" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} strokeWidth={2} dot={false} name="Stores" />
+                  <Area type="monotone" dataKey="searches" stackId="usage" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} strokeWidth={2} dot={false} name="Searches" />
                 </AreaChart>
               )}
             </ChartContainer>
           </div>
           {typeRows.length > 0 && (
-            <div className="w-40 shrink-0 bg-bg-secondary border border-border-primary rounded-lg p-3">
+            <div className="w-1/4 min-w-[170px] shrink-0 bg-bg-secondary border border-border-primary rounded-lg p-3">
               <p className="text-xs font-medium text-text-secondary mb-2">By Type</p>
               <PieChart width={128} height={128}>
                 <Pie
@@ -351,10 +353,17 @@ export function MemoryPage() {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <pre className="text-sm text-text-primary whitespace-pre-wrap break-words font-sans leading-relaxed">{row.content}</pre>
+                    <div className="text-text-primary
+                      [&_p]:text-sm [&_p]:leading-relaxed [&_p]:mb-1
+                      [&_code]:font-mono [&_code]:bg-bg-tertiary [&_code]:px-1 [&_code]:rounded [&_code]:text-accent [&_code]:text-xs
+                      [&_pre]:bg-bg-tertiary [&_pre]:rounded [&_pre]:p-2 [&_pre]:text-xs [&_pre]:overflow-x-auto [&_pre_code]:bg-transparent [&_pre_code]:p-0
+                      [&_ul]:list-disc [&_ul]:ml-4 [&_ul]:mb-1 [&_ol]:list-decimal [&_ol]:ml-4 [&_ol]:mb-1
+                      [&_strong]:font-semibold [&_h1]:text-base [&_h1]:font-bold [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold">
+                      <Markdown remarkPlugins={[remarkGfm]}>{row.content}</Markdown>
+                    </div>
                     <div className="flex items-center gap-3 text-xs text-text-muted">
-                      <span>Created {relativeTime(row.created_at)}</span>
-                      {row.updated_at !== row.created_at && <span>Updated {relativeTime(row.updated_at)}</span>}
+                      <span>Created {shortRelativeTime(row.created_at)}</span>
+                      {row.updated_at !== row.created_at && <span>Updated {shortRelativeTime(row.updated_at)}</span>}
                     </div>
                     <div className="flex gap-2 pt-1">
                       <button

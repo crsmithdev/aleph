@@ -15,7 +15,7 @@ function SchemaView({ db, table }: { db: string; table: string }) {
   if (error || !data || data.columns.length === 0) return <span className="text-xs text-text-muted">No schema available</span>;
 
   return (
-    <table className="w-full text-xs">
+    <table className="w-full text-sm">
       <thead>
         <tr className="text-text-muted">
           <th className="text-left py-1 pr-4 font-medium">Column</th>
@@ -56,7 +56,7 @@ function ContentsView({ db, table }: { db: string; table: string }) {
   return (
     <div className="space-y-2">
       <div className="overflow-x-auto">
-        <table className="w-full text-xs">
+        <table className="w-full text-sm">
           <thead>
             <tr className="text-text-muted border-b border-border-primary/30">
               {columns.map((col) => (

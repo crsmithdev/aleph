@@ -36,6 +36,48 @@ export function relativeTime(iso: string): string {
   return formatDistanceToNow(new Date(iso), { addSuffix: true });
 }
 
+export function shortRelativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 60) return 'now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 7) return `${diffDay}d`;
+  const diffWeek = Math.floor(diffDay / 7);
+  if (diffWeek < 5) return `${diffWeek}w`;
+  const diffMo = Math.floor(diffDay / 30);
+  return `${diffMo}mo`;
+}
+
+export function stripMarkdown(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/__(.+?)__/g, '$1')
+    .replace(/_(.+?)_/g, '$1')
+    .replace(/~~(.+?)~~/g, '$1')
+    .replace(/`(.+?)`/g, '$1')
+    .replace(/^\s*[-*+]\s+/gm, '')
+    .replace(/^\s*>\s*/gm, '')
+    .replace(/\[(.+?)\]\(.+?\)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function formatModelName(model: string): string {
+  const bare = model.replace(/^claude-/, '');
+  const m = /^(\w+)-(\d+)-(\d+)/.exec(bare);
+  if (m) {
+    const name = m[1].charAt(0).toUpperCase() + m[1].slice(1);
+    return `${name} ${m[2]}.${m[3]}`;
+  }
+  return bare.charAt(0).toUpperCase() + bare.slice(1);
+}
+
 export function toDateStr(d: Date): string {
   return format(d, 'yyyy-MM-dd');
 }
@@ -119,7 +161,8 @@ export function rangeToDays(range: string): number {
 export function fmtDuration(ms: number): string {
   if (ms < 60000) return fmtMs(ms);
   const mins = Math.floor(ms / 60000);
-  if (mins < 60) return `${mins}m`;
+  const secs = Math.floor((ms % 60000) / 1000);
+  if (mins < 60) return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
   const hours = Math.floor(mins / 60);
   const remMins = mins % 60;
   return remMins > 0 ? `${hours}h ${remMins}m` : `${hours}h`;

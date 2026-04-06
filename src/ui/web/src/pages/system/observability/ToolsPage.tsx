@@ -10,7 +10,7 @@ import { type Granularity, type TimeRange } from '../../../components/data/TimeR
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtPct, fmtMs, shortDate, parseToolSource, relativeTime, fmtSeriesName } from '../../../utils/format';
+import { fmtNumber, fmtPct, fmtMs, shortDate, parseToolSource, shortRelativeTime, fmtSeriesName } from '../../../utils/format';
 import { clsx } from 'clsx';
 
 type RawToolRow = { name: string; count: number; errorCount: number; pct: number; active: boolean; lastUsed?: string; avgMs?: number; p50Ms?: number; p95Ms?: number };
@@ -46,6 +46,7 @@ export function ToolsPage() {
       key: 'server',
       label: 'Server',
       sortable: true,
+      width: '120px',
       render: (row) => {
         return row.server === 'builtin'
           ? <span className="font-mono text-text-tertiary">{row.server}</span>
@@ -57,6 +58,7 @@ export function ToolsPage() {
       label: 'Count',
       align: 'right',
       sortable: true,
+      width: '80px',
       render: (row) => fmtNumber(row.count),
     },
     {
@@ -64,6 +66,7 @@ export function ToolsPage() {
       label: 'Errors',
       align: 'right',
       sortable: true,
+      width: '80px',
       render: (row) => (
         <span className={clsx(row.errorCount > 0 && 'text-error font-medium')}>
           {row.errorCount > 0 ? fmtNumber(row.errorCount) : '-'}
@@ -75,6 +78,7 @@ export function ToolsPage() {
       label: 'Avg',
       align: 'right',
       sortable: true,
+      width: '80px',
       render: (row) => row.avgMs !== undefined ? fmtMs(row.avgMs) : <span className="text-text-tertiary">—</span>,
     },
     {
@@ -82,16 +86,17 @@ export function ToolsPage() {
       label: 'P95',
       align: 'right',
       sortable: true,
+      width: '80px',
       render: (row) => row.p95Ms !== undefined ? <span className={clsx(row.p95Ms > 5000 && 'text-warning')}>{fmtMs(row.p95Ms)}</span> : <span className="text-text-tertiary">—</span>,
     },
     {
       key: 'lastUsed',
-      label: 'Last Used',
-      align: 'right',
+      label: 'Last Use',
       sortable: true,
+      width: '120px',
       render: (row) => row.lastUsed
-        ? <span className="text-text-muted">{relativeTime(row.lastUsed)}</span>
-        : <span className="text-text-tertiary">—</span>,
+        ? <span className="text-text-secondary text-sm whitespace-nowrap">{shortRelativeTime(row.lastUsed)}</span>
+        : <span className="text-text-disabled text-sm">—</span>,
     },
   ];
 
@@ -162,7 +167,7 @@ export function ToolsPage() {
             </div>
           </div>
           <div className="flex items-stretch gap-4">
-            <div className="shrink-0" style={{ width: 200 }}>
+            <div className="w-1/4 min-w-[170px] shrink-0">
               <PieChart width={160} height={160}>
                 <Pie data={top10} dataKey="count" nameKey="tool" cx="50%" cy="50%" innerRadius={45} outerRadius={70}>
                   {top10.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
@@ -199,7 +204,7 @@ export function ToolsPage() {
                     <YAxis {...axisProps} />
                     <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                     {topToolNames.map((name, i) => (
-                      <Area key={name} type="natural" dataKey={name} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
+                      <Area key={name} type="monotone" dataKey={name} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
                     ))}
                   </AreaChart>
                 )}

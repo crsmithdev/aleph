@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
+import { curveCardinal } from 'd3-shape';
 import { useObsSessions, useObsSubagents } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
@@ -11,7 +12,7 @@ import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { useNavigate } from 'react-router-dom';
-import { fmtNumber, fmtMs, fmtCurrency, shortDate, granLabel, relativeTime, fmtProject, fmtDuration, fmtSeriesName } from '../../../utils/format';
+import { fmtNumber, fmtMs, fmtCurrency, shortDate, granLabel, shortRelativeTime, fmtProject, fmtDuration, fmtSeriesName, stripMarkdown } from '../../../utils/format';
 import { clsx } from 'clsx';
 
 type SessionRow = {
@@ -54,25 +55,19 @@ export function SessionsPage() {
   if (onlyWithSubagents) filteredSessions = filteredSessions.filter(s => s.hasSubagents);
 
   const maxMessages = Math.max(1, ...data.byDay.map(d => (d.userMessages ?? 0) + (d.assistantMessages ?? 0)));
+  const maxSessions = Math.max(1, ...data.byDay.map(d => d.sessions ?? 0));
 
   const sessionColumns: Column<SessionRow>[] = [
-    {
-      key: 'lastTimestamp',
-      label: 'Last Active',
-      sortable: true,
-      width: '100px',
-      render: (row) => <span className="text-text-secondary text-xs whitespace-nowrap">{relativeTime(row.lastTimestamp)}</span>,
-    },
     {
       key: 'project',
       label: 'Conversation',
       sortable: true,
       render: (row) => (
         <div className="flex flex-col gap-0.5 min-w-0">
-          {row.firstUserMessage && (
-            <span className="text-text-primary text-xs truncate">
+          {row.firstUserMessage && !row.firstUserMessage.startsWith('Caveat:') && (
+            <span className="text-text-primary text-sm truncate">
               {row.parentSessionId && <span className="text-text-muted mr-1">↳</span>}
-              {row.firstUserMessage.slice(0, 120)}{row.firstUserMessage.length > 120 ? '…' : ''}
+              {(() => { const t = stripMarkdown(row.firstUserMessage!); return t.length > 120 ? t.slice(0, 120) + '…' : t; })()}
             </span>
           )}
         </div>
@@ -83,7 +78,7 @@ export function SessionsPage() {
       label: 'Project',
       width: '140px',
       render: (row) => (
-        <span className="font-mono text-text-secondary text-xs truncate block" title={row.project}>
+        <span className="font-mono text-text-secondary text-sm truncate block" title={row.project}>
           {fmtProject(row.project)}
         </span>
       ),
@@ -93,17 +88,17 @@ export function SessionsPage() {
       label: 'Duration',
       align: 'right',
       sortable: true,
-      width: '80px',
-      render: (row) => fmtDuration(row.durationMs),
+      width: '90px',
+      render: (row) => <span className="whitespace-nowrap">{fmtDuration(row.durationMs)}</span>,
     },
     {
       key: 'userMessages',
       label: 'Messages',
       align: 'right',
       sortable: true,
-      width: '90px',
+      width: '150px',
       render: (row) => (
-        <span className="text-xs">
+        <span className="text-sm whitespace-nowrap">
           <span className="text-text-secondary">{fmtNumber(row.userMessages + row.assistantMessages)}</span>
           <span className="text-text-disabled ml-1">({fmtNumber(row.assistantMessages)} / {fmtNumber(row.userMessages)})</span>
         </span>
@@ -116,6 +111,13 @@ export function SessionsPage() {
       sortable: true,
       width: '70px',
       render: (row) => fmtCurrency(row.cost),
+    },
+    {
+      key: 'lastTimestamp',
+      label: 'Last',
+      sortable: true,
+      width: '100px',
+      render: (row) => <span className="text-text-secondary text-sm whitespace-nowrap">{shortRelativeTime(row.lastTimestamp)}</span>,
     },
   ];
 
@@ -143,32 +145,32 @@ export function SessionsPage() {
               <ComposedChart data={data.byDay}>
                 <CartesianGrid {...gridProps} />
                 <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-                <YAxis yAxisId="left" {...axisProps} />
-                <YAxis yAxisId="right" orientation="right" {...axisProps} />
+                <YAxis yAxisId="left" {...axisProps} domain={[0, maxMessages]} />
+                <YAxis yAxisId="right" orientation="right" {...axisProps} domain={[0, maxSessions]} />
                 <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                 <Legend {...legendProps} />
-                <Bar yAxisId="right" dataKey="userMessages" stackId="msgs" fill={CHART_PALETTE[2]} radius={[0, 0, 0, 0]} name="User Msgs" />
-                <Bar yAxisId="right" dataKey="assistantMessages" stackId="msgs" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Assistant Msgs" />
-                <Bar yAxisId="left" dataKey="sessions" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Sessions" />
+                <Bar yAxisId="left" dataKey="userMessages" stackId="msgs" fill={CHART_PALETTE[2]} radius={[0, 0, 0, 0]} name="User Msgs" />
+                <Bar yAxisId="left" dataKey="assistantMessages" stackId="msgs" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Assistant Msgs" />
+                <Bar yAxisId="right" dataKey="sessions" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Sessions" />
               </ComposedChart>
             ) : (
               <ComposedChart data={data.byDay}>
                 <CartesianGrid {...gridProps} />
                 <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-                <YAxis yAxisId="left" {...axisProps} domain={[0, maxMessages * 0.7]} />
-                <YAxis yAxisId="right" orientation="right" {...axisProps} />
+                <YAxis yAxisId="left" {...axisProps} domain={[0, maxMessages]} />
+                <YAxis yAxisId="right" orientation="right" {...axisProps} domain={[0, maxSessions]} />
                 <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                 <Legend {...legendProps} />
-                <Area yAxisId="left" type="natural" dataKey="userMessages" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.15} strokeWidth={2} dot={false} name="User Msgs" />
-                <Area yAxisId="left" type="natural" dataKey="assistantMessages" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Assistant Msgs" />
-                <Area yAxisId="right" type="natural" dataKey="sessions" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Sessions" />
+                <Area yAxisId="left" type={curveCardinal.tension(0.5) as any} dataKey="userMessages" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.15} strokeWidth={2} dot={false} name="User Msgs" />
+                <Area yAxisId="left" type={curveCardinal.tension(0.5) as any} dataKey="assistantMessages" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Assistant Msgs" />
+                <Area yAxisId="right" type={curveCardinal.tension(0.5) as any} dataKey="sessions" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Sessions" />
               </ComposedChart>
             )}
           </ChartContainer>
         </div>
 
         {subagents.data && subagents.data.byType.length > 0 && (
-          <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 w-[280px] shrink-0">
+          <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 w-1/4 min-w-[180px] shrink-0">
             <h3 className="mb-3 text-sm font-medium text-text-secondary">Subagents by Type</h3>
             <div className="flex flex-col items-center gap-3">
               <PieChart width={140} height={140}>

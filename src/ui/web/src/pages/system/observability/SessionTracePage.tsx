@@ -1,13 +1,21 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { useObsSessionTrace } from '../../../api/observability-hooks';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
+import { useObsSessionTrace, useObsSessionContextFiles } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { type TimeRange } from '../../../components/data/TimeRangeSelector';
-import { fmtNumber, fmtMs, fmtCurrency, dateTime, fmtDuration, fmtToolName, cleanMessage } from '../../../utils/format';
+import { fmtNumber, fmtMs, fmtCurrency, dateTime, fmtDuration, fmtToolName, cleanMessage, formatModelName, fmtProject } from '../../../utils/format';
 import { clsx } from 'clsx';
+
+type TraceCompaction = {
+  timestamp: string;
+  trigger: string;
+  preTokens?: number;
+  postTokens?: number;
+  summary?: string;
+};
 
 type Span = {
   id: string;
@@ -18,6 +26,7 @@ type Span = {
   isError?: boolean;
   detail?: string;
   subagentSessionId?: string;
+  resultTokens?: number;
 };
 
 type Turn = {
@@ -29,6 +38,9 @@ type Turn = {
   tokenCount?: number;
   contextTokens?: number;
   outputTokens?: number;
+  inputTokens?: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
   cost?: number;
   model?: string;
   assistantText?: string;
@@ -37,11 +49,10 @@ type Turn = {
 // ── Markdown renderer ──────────────────────────────────────────────────────────
 
 function renderInline(text: string): React.ReactNode[] {
-  // Split on **bold** and `code` patterns
-  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`|https?:\/\/[^\s<>"{}\\^`[\]|]+)/g);
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>;
+      return <strong key={i} className="font-semibold">{renderInline(part.slice(2, -2))}</strong>;
     }
     if (part.startsWith('`') && part.endsWith('`')) {
       return (
@@ -50,27 +61,67 @@ function renderInline(text: string): React.ReactNode[] {
         </code>
       );
     }
-    // Strip single asterisk italics — render as plain text
+    if (/^https?:\/\//.test(part)) {
+      return (
+        <a key={i} href={part} target="_blank" rel="noopener noreferrer"
+          className="text-accent underline underline-offset-2 decoration-accent/40 hover:decoration-accent break-all transition-colors">
+          {part}
+        </a>
+      );
+    }
     return <span key={i}>{part.replace(/\*([^*]+)\*/g, '$1')}</span>;
   });
 }
 
 function MarkdownText({ text }: { text: string }) {
-  const lines = text.split('\n');
-
   type Block =
     | { kind: 'line'; text: string }
+    | { kind: 'h1'; text: string }
+    | { kind: 'h2'; text: string }
+    | { kind: 'h3'; text: string }
     | { kind: 'ul'; items: string[] }
-    | { kind: 'ol'; items: string[] };
+    | { kind: 'ol'; items: string[] }
+    | { kind: 'code'; lang: string; content: string };
 
   const blocks: Block[] = [];
   let currentList: { kind: 'ul' | 'ol'; items: string[] } | null = null;
 
-  for (const line of lines) {
+  // Pre-process: extract triple-backtick code blocks
+  const lines = text.split('\n');
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const fenceMatch = /^```(\w*)/.exec(line);
+    if (fenceMatch) {
+      currentList = null;
+      const lang = fenceMatch[1] || '';
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith('```')) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      blocks.push({ kind: 'code', lang, content: codeLines.join('\n') });
+      i++; // skip closing ```
+      continue;
+    }
+
+    const h3Match = /^### (.+)$/.exec(line);
+    const h2Match = /^## (.+)$/.exec(line);
+    const h1Match = /^# (.+)$/.exec(line);
     const ulMatch = /^[-*] (.*)$/.exec(line);
     const olMatch = /^\d+\. (.*)$/.exec(line);
 
-    if (ulMatch) {
+    if (h1Match) {
+      currentList = null;
+      blocks.push({ kind: 'h1', text: h1Match[1] });
+    } else if (h2Match) {
+      currentList = null;
+      blocks.push({ kind: 'h2', text: h2Match[1] });
+    } else if (h3Match) {
+      currentList = null;
+      blocks.push({ kind: 'h3', text: h3Match[1] });
+    } else if (ulMatch) {
       if (currentList?.kind !== 'ul') {
         currentList = { kind: 'ul', items: [] };
         blocks.push(currentList);
@@ -86,14 +137,31 @@ function MarkdownText({ text }: { text: string }) {
       currentList = null;
       blocks.push({ kind: 'line', text: line });
     }
+    i++;
   }
 
   return (
     <>
-      {blocks.map((block, i) => {
+      {blocks.map((block, idx) => {
+        if (block.kind === 'h1') {
+          return <h2 key={idx} className="text-base font-bold text-text-primary mt-3 mb-1">{renderInline(block.text)}</h2>;
+        }
+        if (block.kind === 'h2') {
+          return <h3 key={idx} className="text-sm font-bold text-text-primary mt-2.5 mb-0.5">{renderInline(block.text)}</h3>;
+        }
+        if (block.kind === 'h3') {
+          return <h4 key={idx} className="text-sm font-semibold text-text-secondary mt-2 mb-0.5">{renderInline(block.text)}</h4>;
+        }
+        if (block.kind === 'code') {
+          return (
+            <pre key={idx} className="font-mono bg-bg-tertiary px-3 py-2 rounded text-xs overflow-x-auto my-1 whitespace-pre-wrap break-all">
+              {block.content}
+            </pre>
+          );
+        }
         if (block.kind === 'ul') {
           return (
-            <ul key={i} className="list-disc list-inside my-1 space-y-0.5">
+            <ul key={idx} className="list-disc list-inside my-1 space-y-0.5">
               {block.items.map((item, j) => (
                 <li key={j} className="text-sm text-text-primary leading-relaxed">
                   {renderInline(item)}
@@ -104,7 +172,7 @@ function MarkdownText({ text }: { text: string }) {
         }
         if (block.kind === 'ol') {
           return (
-            <ol key={i} className="list-decimal list-inside my-1 space-y-0.5">
+            <ol key={idx} className="list-decimal list-inside my-1 space-y-0.5">
               {block.items.map((item, j) => (
                 <li key={j} className="text-sm text-text-primary leading-relaxed">
                   {renderInline(item)}
@@ -113,12 +181,11 @@ function MarkdownText({ text }: { text: string }) {
             </ol>
           );
         }
-        // Plain line — preserve blank lines as breaks
         if (block.text === '') {
-          return <br key={i} />;
+          return <br key={idx} />;
         }
         return (
-          <p key={i} className="text-sm text-text-primary leading-relaxed">
+          <p key={idx} className="text-sm text-text-primary leading-relaxed">
             {renderInline(block.text)}
           </p>
         );
@@ -147,23 +214,25 @@ function SpanRow({ span, sessionId }: { span: Span; sessionId: string }) {
     <>
       <div
         className={clsx(
-          'flex items-center gap-2 px-4 py-2 border-b border-border-primary/20 last:border-b-0 text-xs',
+          'grid items-center gap-x-3 px-3 py-1.5 border-b border-border-primary/20 last:border-b-0 text-xs',
+          'grid-cols-[4rem_9rem_1fr_auto]',
           hasDetail && 'cursor-pointer hover:bg-bg-tertiary/30',
         )}
+        style={{ gridTemplateColumns: '4.5rem 9rem 1fr auto' }}
         onClick={() => hasDetail && setOpen(!open)}
       >
-        {/* Kind badge */}
+        {/* Kind badge — fixed width column */}
         <span
           className={clsx(
-            'shrink-0 inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-semibold uppercase tracking-wide',
+            'inline-flex items-center justify-center px-1.5 py-0.5 rounded border text-[10px] font-semibold uppercase tracking-wide w-fit',
             kindStyle,
           )}
         >
           {isSubagent ? 'agent' : span.kind}
         </span>
 
-        {/* Name */}
-        <span className={clsx('font-mono shrink-0', span.isError ? 'text-error' : 'text-text-primary')}>
+        {/* Name — fixed width column, mono, truncated */}
+        <span className={clsx('font-mono truncate font-medium', span.isError ? 'text-error' : span.kind === 'hook' ? 'text-purple-300' : isSubagent ? 'text-white' : 'text-sky-300')}>
           {span.subagentSessionId ? (
             <Link
               to={`/observability/sessions/${encodeURIComponent(span.subagentSessionId)}`}
@@ -177,18 +246,18 @@ function SpanRow({ span, sessionId }: { span: Span; sessionId: string }) {
           )}
         </span>
 
-        {/* Inline detail preview */}
-        {span.detail && !open && (
-          <span className="text-text-muted truncate flex-1 min-w-0">
-            {span.detail.replace(/^(command|description|file_path|content|pattern|query|url|path|prompt|message):\s*/gmi, '').slice(0, 80)}
-          </span>
-        )}
+        {/* Inline detail preview — flex-1 */}
+        <span className="text-text-muted truncate min-w-0">
+          {span.detail && !open
+            ? span.detail.replace(/^(command|description|file_path|content|pattern|query|url|path|prompt|message):\s*/gmi, '').slice(0, 80)
+            : ''}
+        </span>
 
         {/* Right side: status dot + duration + expand caret */}
-        <div className="ml-auto flex items-center gap-2 shrink-0">
-          <span className={clsx('w-1.5 h-1.5 rounded-full', span.isError ? 'bg-error' : 'bg-green-500')} />
+        <div className="flex items-center gap-2 justify-end">
+          <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', span.isError ? 'bg-error' : 'bg-green-500')} />
           {span.durationMs > 0 && (
-            <span className="text-text-disabled font-mono">{fmtMs(span.durationMs)}</span>
+            <span className="text-emerald-400/70 font-mono">{fmtMs(span.durationMs)}</span>
           )}
           {hasDetail && (
             <span className={clsx('text-text-disabled transition-transform', open && 'rotate-90')}>›</span>
@@ -223,6 +292,101 @@ function SpanRow({ span, sessionId }: { span: Span; sessionId: string }) {
   );
 }
 
+// ── Token delta hover breakdown ────────────────────────────────────────────────
+
+function TokenDeltaHover({
+  delta, inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens,
+}: {
+  delta: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
+}) {
+  const [show, setShow] = useState(false);
+  const hasBreakdown = !!(inputTokens || outputTokens || cacheReadTokens || cacheCreationTokens);
+
+  return (
+    <span className="relative inline-flex items-center">
+      <span
+        className="text-text-secondary cursor-default"
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+      >
+        {' '}(+{fmtNumber(delta)})
+      </span>
+      {show && hasBreakdown && (
+        <span className="absolute bottom-full left-0 mb-1.5 z-50 min-w-[170px] rounded border border-border-primary bg-bg-primary shadow-lg px-3 py-2 text-[11px] space-y-1 pointer-events-none">
+          {cacheReadTokens !== undefined && cacheReadTokens > 0 && (
+            <span className="flex justify-between gap-4">
+              <span className="text-text-muted">Cache read</span>
+              <span className="text-text-secondary font-mono">{fmtNumber(cacheReadTokens)}</span>
+            </span>
+          )}
+          {cacheCreationTokens !== undefined && cacheCreationTokens > 0 && (
+            <span className="flex justify-between gap-4">
+              <span className="text-text-muted">Cache write</span>
+              <span className="text-text-secondary font-mono">{fmtNumber(cacheCreationTokens)}</span>
+            </span>
+          )}
+          {inputTokens !== undefined && inputTokens > 0 && (
+            <span className="flex justify-between gap-4">
+              <span className="text-text-muted">Fresh input</span>
+              <span className="text-text-secondary font-mono">{fmtNumber(inputTokens)}</span>
+            </span>
+          )}
+          {outputTokens !== undefined && outputTokens > 0 && (
+            <span className="flex justify-between gap-4">
+              <span className="text-text-muted">Output</span>
+              <span className="text-text-secondary font-mono">{fmtNumber(outputTokens)}</span>
+            </span>
+          )}
+        </span>
+      )}
+    </span>
+  );
+}
+
+// ── Compaction divider ─────────────────────────────────────────────────────────
+
+function CompactionDivider({ compaction }: { compaction: TraceCompaction }) {
+  const [open, setOpen] = useState(false);
+  const freed = compaction.preTokens && compaction.postTokens
+    ? compaction.preTokens - compaction.postTokens
+    : undefined;
+  const pct = freed && compaction.preTokens ? Math.round(freed / compaction.preTokens * 100) : undefined;
+
+  return (
+    <div className="flex flex-col items-center my-2 gap-0">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 px-3 py-1.5 rounded border border-purple-500/30 bg-purple-500/5 text-xs text-purple-400 hover:bg-purple-500/10 transition-colors"
+      >
+        <span className={clsx('transition-transform text-[10px]', open ? 'rotate-90' : '')}>›</span>
+        <span>⟳ Context compacted</span>
+        {compaction.preTokens && (
+          <span className="text-purple-400/60">
+            {fmtNumber(compaction.preTokens)} tokens
+            {freed !== undefined && pct !== undefined && (
+              <> → {fmtNumber(compaction.preTokens - freed)} ({pct}% freed)</>
+            )}
+          </span>
+        )}
+        <span className="text-purple-400/40 text-[10px]">{compaction.trigger}</span>
+      </button>
+      {open && (
+        <div className="w-full max-w-2xl mt-1 rounded border border-purple-500/20 bg-purple-500/5 px-4 py-3 text-xs text-text-muted">
+          {compaction.summary ? (
+            <pre className="whitespace-pre-wrap break-words font-mono">{compaction.summary}</pre>
+          ) : (
+            <span className="text-text-disabled italic">Compaction document not available</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Response block (collapsed/expanded) ───────────────────────────────────────
 
 function ResponseBlock({
@@ -230,67 +394,136 @@ function ResponseBlock({
   expanded,
   onToggle,
   sessionId,
+  runningCost,
+  prevContextTokens,
+  onContextClick,
 }: {
   turn: Turn;
   expanded: boolean;
   onToggle: () => void;
   sessionId: string;
+  runningCost?: number;
+  prevContextTokens?: number;
+  onContextClick?: () => void;
 }) {
-  const toolSpans = turn.spans.filter((s) => s.kind === 'tool');
+  const subagentSpans = turn.spans.filter((s) => s.kind === 'tool' && s.label === 'Agent');
+  const skillSpans = turn.spans.filter((s) => s.kind === 'tool' && s.label.startsWith('Skill('));
+  const toolSpans = turn.spans.filter((s) => s.kind === 'tool' && s.label !== 'Agent' && !s.label.startsWith('Skill('));
   const hookSpans = turn.spans.filter((s) => s.kind === 'hook');
 
   const summaryParts: string[] = [];
   if (toolSpans.length > 0) summaryParts.push(`${toolSpans.length} tool${toolSpans.length !== 1 ? 's' : ''}`);
   if (hookSpans.length > 0) summaryParts.push(`${hookSpans.length} hook${hookSpans.length !== 1 ? 's' : ''}`);
+  if (skillSpans.length > 0) summaryParts.push(`${skillSpans.length} skill${skillSpans.length !== 1 ? 's' : ''}`);
+  if (subagentSpans.length > 0) summaryParts.push(`${subagentSpans.length} subagent${subagentSpans.length !== 1 ? 's' : ''}`);
 
   const errorCount = turn.spans.filter((s) => s.isError).length;
   const hasSpans = turn.spans.length > 0;
 
-  const modelLabel = turn.model ? turn.model.replace('claude-', '') : 'Claude';
+  const modelLabel = turn.model ? formatModelName(turn.model) : 'Claude';
+
+  // Context delta (tokens added since previous turn)
+  const ctxDelta = turn.contextTokens && prevContextTokens ? turn.contextTokens - prevContextTokens : undefined;
 
   return (
     <div className="ml-2 space-y-1">
-      {/* Label row — model name left, stats right */}
-      <div className="flex items-center gap-2 px-1">
-        <span className="text-xs text-text-muted font-mono shrink-0">{modelLabel}</span>
-        {summaryParts.length > 0 && (
-          <span className="text-xs text-text-disabled shrink-0">· {summaryParts.join(', ')}</span>
-        )}
-        {errorCount > 0 && (
-          <span className="text-xs text-error shrink-0">· {errorCount} error{errorCount !== 1 ? 's' : ''}</span>
-        )}
-      </div>
-
-      {/* Bubble */}
-      <div className="max-w-[85%] bg-bg-secondary border-l-4 border-border-primary rounded-sm px-4 py-3 space-y-2">
-        {/* Expanded spans panel — above the text */}
-        {hasSpans && expanded && (
-          <div className="rounded-sm border border-border-primary bg-bg-primary overflow-hidden">
-            {turn.spans.map((span, i) => (
-              <SpanRow key={`${span.id}-${i}`} span={span} sessionId={sessionId} />
-            ))}
+      {/* Constrain label + bubble to same max-width so stats align to bubble edge */}
+      <div className="max-w-[85%]">
+        {/* Label row — model name + summary + caret left, stats right */}
+        <div className="flex items-baseline gap-1.5 px-1 flex-wrap">
+          <span className="font-mono text-xs text-accent tracking-wider uppercase shrink-0 leading-none">Claude</span>
+          {turn.model && <span className="text-xs text-sky-400 font-mono shrink-0 leading-none">{modelLabel}</span>}
+          <span className="font-mono text-xs font-bold text-violet-400 shrink-0 leading-none">#{turn.index + 1}</span>
+          {summaryParts.length > 0 && (
+            <>
+              <span className="text-text-muted/60 text-xs leading-none shrink-0">•</span>
+              <span className="text-xs text-text-secondary shrink-0 leading-none">{summaryParts.join(', ')}</span>
+            </>
+          )}
+          {errorCount > 0 && (
+            <>
+              <span className="text-text-muted/60 text-xs leading-none shrink-0">•</span>
+              <span className="text-xs text-error shrink-0 leading-none">{errorCount} error{errorCount !== 1 ? 's' : ''}</span>
+            </>
+          )}
+          {hasSpans && (
+            <button
+              onClick={onToggle}
+              className="self-center shrink-0 flex items-center justify-center w-5 h-5 rounded text-text-muted hover:text-text-secondary hover:bg-bg-tertiary transition-colors"
+              title={expanded ? 'Collapse' : 'Expand'}
+            >
+              <svg
+                width="10" height="10" viewBox="0 0 10 10" fill="none"
+                className={clsx('transition-transform duration-150', expanded ? 'rotate-180' : '')}
+              >
+                <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          )}
+          {/* Stats on the right */}
+          <div className="ml-auto self-center flex items-center gap-1 shrink-0 flex-wrap justify-end">
+            <div className="flex items-center gap-1 text-xs font-mono">
+              {(runningCost !== undefined && runningCost > 0) || turn.cost ? (
+                <span className="text-text-secondary">
+                  {runningCost !== undefined && runningCost > 0 ? fmtCurrency(runningCost) : ''}
+                  {turn.cost && turn.cost > 0 ? ` (+${fmtCurrency(turn.cost)})` : ''}
+                </span>
+              ) : null}
+              {turn.contextTokens ? (
+                <>
+                  <span className="text-text-muted/60 text-xs leading-none">•</span>
+                  {onContextClick ? (
+                    <button
+                      onClick={onContextClick}
+                      className="text-sky-400/80 hover:text-sky-400 underline underline-offset-2 decoration-sky-400/40 hover:decoration-sky-400 transition-colors"
+                      title="Show context at this turn"
+                    >
+                      {fmtNumber(turn.contextTokens)}
+                    </button>
+                  ) : (
+                    <span className="text-sky-400/80">{fmtNumber(turn.contextTokens)}</span>
+                  )}
+                  {ctxDelta !== undefined && ctxDelta > 0 && (
+                    <TokenDeltaHover
+                      delta={ctxDelta}
+                      inputTokens={turn.inputTokens}
+                      outputTokens={turn.outputTokens}
+                      cacheReadTokens={turn.cacheReadTokens}
+                      cacheCreationTokens={turn.cacheCreationTokens}
+                    />
+                  )}
+                </>
+              ) : null}
+              {turn.durationMs > 0 && (
+                <>
+                  <span className="text-text-muted/60 text-xs leading-none">•</span>
+                  <span className="text-text-secondary">{fmtDuration(turn.durationMs)}</span>
+                </>
+              )}
+            </div>
           </div>
-        )}
+        </div>
 
-        {/* Assistant text */}
-        {turn.assistantText ? (
-          <div className="whitespace-pre-wrap break-words">
-            <MarkdownText text={turn.assistantText} />
-          </div>
-        ) : !hasSpans && (
-          <span className="text-sm text-text-disabled italic">—</span>
-        )}
+        {/* Bubble */}
+        <div className="bg-bg-secondary border-l-4 border-border-primary rounded-sm px-4 py-3 space-y-2">
+          {/* Expanded spans panel — above the text */}
+          {hasSpans && expanded && (
+            <div className="rounded-sm border border-border-primary bg-bg-primary overflow-hidden">
+              {turn.spans.map((span, i) => (
+                <SpanRow key={`${span.id}-${i}`} span={span} sessionId={sessionId} />
+              ))}
+            </div>
+          )}
 
-        {/* Toggle button — at bottom */}
-        {hasSpans && (
-          <button
-            onClick={onToggle}
-            className="flex items-center gap-1 text-xs text-text-disabled hover:text-text-muted transition-colors"
-          >
-            <span className={clsx('transition-transform', expanded ? 'rotate-180' : '')}>⌄</span>
-            <span>{expanded ? 'hide' : 'show'} spans</span>
-          </button>
-        )}
+          {/* Assistant text */}
+          {turn.assistantText ? (
+            <div className="break-words">
+              <MarkdownText text={turn.assistantText} />
+            </div>
+          ) : !hasSpans && (
+            <span className="text-sm text-text-disabled italic">—</span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -298,22 +531,134 @@ function ResponseBlock({
 
 // ── User message block ─────────────────────────────────────────────────────────
 
-function UserBlock({ turn, runningCost, prevContextTokens }: {
+// Claude Code built-in slash commands — never link these to skill detail pages
+const CLAUDE_BUILTIN_COMMANDS = new Set([
+  'add-dir', 'allowed-tools', 'bug', 'clear', 'compact', 'config', 'cost',
+  'doctor', 'help', 'history', 'init', 'login', 'logout', 'mcp', 'memory',
+  'model', 'permissions', 'pr_comments', 'release-notes', 'review', 'status',
+  'terminal-setup', 'vim',
+]);
+
+const INTERRUPT_PATTERNS = [
+  '[Request interrupted by user]',
+  '[Request interrupted by user for tool use]',
+];
+
+function isInterrupt(msg: string): boolean {
+  return INTERRUPT_PATTERNS.some((p) => msg.includes(p));
+}
+
+function parseCommandInvocation(raw: string): { name: string; args: string } | null {
+  const nameMatch = raw.match(/<command-name>([^<]+)<\/command-name>/);
+  if (!nameMatch) return null;
+  const argsMatch = raw.match(/<command-args>([^<]*)<\/command-args>/);
+  const name = nameMatch[1].trim();
+  const rawArgs = (argsMatch?.[1] ?? '').trim();
+  // Deduplicate: skip args if they're just the command name with/without leading slash
+  const bare = name.replace(/^\//, '');
+  const isDuplicate = rawArgs === name || rawArgs === `/${bare}` || rawArgs === bare;
+  return { name, args: isDuplicate ? '' : rawArgs };
+}
+
+function stripMarkdownForPreview(text: string): string {
+  // Must operate on multiline text (before whitespace collapsing) for ^ anchors to work
+  return text
+    .replace(/```[\s\S]*?```/gm, '')   // ``` code blocks ```
+    .replace(/^#{1,6}\s+/gm, '')       // ## headings
+    .replace(/\*\*([^*]+)\*\*/g, '$1') // **bold**
+    .replace(/\*([^*]+)\*/g, '$1')     // *italic*
+    .replace(/`([^`]+)`/g, '$1')       // `inline code`
+    .replace(/^>\s+/gm, '')            // > blockquote
+    .replace(/^[-*]\s+/gm, '')         // - list items
+    .replace(/^\|.*$/gm, '')           // | table rows |
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function commandPreview(raw: string): string {
+  const cmd = parseCommandInvocation(raw);
+  if (!cmd) return '';
+  return cmd.args ? `${cmd.name} ${cmd.args}` : cmd.name;
+}
+
+function decodeHtmlEntities(s: string): string {
+  return s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+}
+
+function parseTaskNotification(raw: string): { taskId: string; status: string; summary: string } | null {
+  if (!raw.includes('<task-notification>')) return null;
+  const taskId = raw.match(/<task-id>([^<]+)<\/task-id>/)?.[1] ?? '';
+  const status = raw.match(/<status>([^<]+)<\/status>/)?.[1] ?? '';
+  const summary = decodeHtmlEntities(raw.match(/<summary>([^<]*)<\/summary>/)?.[1] ?? '');
+  return { taskId, status, summary };
+}
+
+function UserBlock({ turn, sessionId, prevTurn }: {
   turn: Turn;
-  runningCost: number;
-  prevContextTokens?: number;
+  sessionId: string;
+  prevTurn?: Turn;
 }) {
   const time = dateTime(turn.startTime);
   const isCaveat = turn.userMessage.includes('local-command-caveat');
   const isStdout = turn.userMessage.includes('local-command-stdout');
-
-  // Context delta
-  const ctxDelta =
-    turn.contextTokens && prevContextTokens ? turn.contextTokens - prevContextTokens : undefined;
+  const interrupt = isInterrupt(turn.userMessage);
 
   if (isCaveat) {
-    // Just a system marker — no useful content to show
     return null;
+  }
+
+  // Skip session-lifecycle commands that appear as the first message due to /clear starting a new session
+  const SESSION_LIFECYCLE = new Set(['clear', 'reset']);
+  const cmdName = turn.userMessage.match(/<command-name>\/?([^<]+)<\/command-name>/)?.[1]?.trim().toLowerCase();
+  if (cmdName && SESSION_LIFECYCLE.has(cmdName) && turn.index === 0) {
+    return null;
+  }
+
+  // Task notification (background task result)
+  const taskNotif = parseTaskNotification(turn.userMessage);
+  if (taskNotif) {
+    const isFailure = taskNotif.status === 'failed' || taskNotif.status === 'error';
+    return (
+      <div className="flex justify-center my-1">
+        <div className={clsx(
+          'flex items-center gap-2 px-3 py-1.5 rounded border text-xs',
+          isFailure
+            ? 'border-error/30 bg-error/5 text-error'
+            : 'border-border-primary/40 bg-bg-tertiary/40 text-text-muted'
+        )}>
+          <span>{isFailure ? '✗' : '✓'}</span>
+          <span className="font-mono text-[10px] text-text-disabled">{taskNotif.taskId.slice(0, 8)}</span>
+          <span>{taskNotif.summary || `Task ${taskNotif.status}`}</span>
+          <span className="text-text-disabled text-[10px]">{time}</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Skill body: the turn immediately after a command invocation contains the skill's text.
+  // Hide it — the skill link from the previous turn provides navigation.
+  const looksLikeSkillBody = (msg: string) => {
+    const s = msg.trimStart();
+    return s.startsWith('#') || /^\d+\.\s/.test(s) || /^[-*]\s/.test(s);
+  };
+  const isSkillBody = !turn.userMessage.includes('<command-name>') &&
+    !turn.userMessage.includes('<local-command-') &&
+    !!prevTurn && parseCommandInvocation(prevTurn.userMessage) !== null &&
+    looksLikeSkillBody(turn.userMessage);
+  if (isSkillBody) {
+    return null;
+  }
+
+  if (interrupt) {
+    return (
+      <div className="flex justify-center my-1">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded border border-warning/30 bg-warning/5 text-xs text-warning">
+          <span>⚠</span>
+          <span>Request interrupted by user</span>
+          <span className="text-text-disabled text-[10px]">{time}</span>
+        </div>
+      </div>
+    );
   }
 
   if (isStdout) {
@@ -333,36 +678,49 @@ function UserBlock({ turn, runningCost, prevContextTokens }: {
     );
   }
 
+  // Skill/command invocation — render as a compact pill (linked if user-defined, plain if built-in)
+  const cmd = parseCommandInvocation(turn.userMessage);
+  if (cmd) {
+    const skillName = cmd.name.startsWith('/') ? cmd.name.slice(1) : cmd.name;
+    const isBuiltin = CLAUDE_BUILTIN_COMMANDS.has(skillName.toLowerCase());
+    return (
+      <div className="flex justify-end my-0.5">
+        {isBuiltin ? (
+          <span className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-border-primary bg-bg-secondary text-xs font-mono">
+            <span className="text-text-muted">{cmd.name}</span>
+            {cmd.args && <span className="text-text-disabled">{cmd.args}</span>}
+          </span>
+        ) : (
+          <Link
+            to={`/observability/skills/${encodeURIComponent(skillName)}?session=${encodeURIComponent(sessionId)}`}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-accent/30 bg-accent/5 text-xs hover:bg-accent/10 transition-colors font-mono"
+          >
+            <span className="text-accent">{cmd.name}</span>
+            {cmd.args && <span className="text-text-muted">{cmd.args}</span>}
+            <span className="text-text-disabled">↗</span>
+          </Link>
+        )}
+      </div>
+    );
+  }
+
   const msg = cleanMessage(turn.userMessage);
 
   return (
     <div className="flex flex-col items-end gap-1">
-      {/* Stats row above the bubble */}
-      <div className="flex items-center gap-2 px-1 text-[11px] text-text-disabled font-mono">
-        {runningCost > 0 && (
-          <span>{fmtCurrency(runningCost)} total</span>
-        )}
-        {turn.cost && turn.cost > 0 ? (
-          <span>· {fmtCurrency(turn.cost)} this turn</span>
-        ) : null}
-        {turn.contextTokens ? (
-          <span>· {fmtNumber(turn.contextTokens)} tokens{ctxDelta !== undefined && ctxDelta > 0 ? ` (+${fmtNumber(ctxDelta)})` : ''}</span>
-        ) : null}
-        {turn.durationMs > 0 && (
-          <span>· {fmtMs(turn.durationMs)}</span>
-        )}
-      </div>
       {/* Label row */}
-      <div className="flex items-center gap-2 px-1">
-        <span className="font-mono text-[11px] text-accent tracking-wider uppercase">You</span>
-        <span className="text-[11px] text-text-muted">{time}</span>
+      <div className="flex items-center gap-1.5 px-1">
+        <span className="font-mono text-xs font-bold text-violet-400 leading-none shrink-0">#{turn.index + 1}</span>
+        <span className="text-xs text-text-secondary font-mono leading-none">{time}</span>
+        <span className="text-text-muted/60 text-xs leading-none">•</span>
+        <span className="font-mono text-xs text-accent tracking-wider uppercase leading-none">You</span>
       </div>
       {/* Message bubble */}
       <div className="max-w-[75%] bg-bg-secondary border-l-4 border-accent rounded-sm px-4 py-3">
         {msg ? (
-          <p className="text-sm text-text-primary whitespace-pre-wrap break-words leading-relaxed">
+          <div className="text-sm text-text-primary leading-relaxed">
             <MarkdownText text={msg} />
-          </p>
+          </div>
         ) : (
           <span className="text-sm text-text-disabled">—</span>
         )}
@@ -371,19 +729,85 @@ function UserBlock({ turn, runningCost, prevContextTokens }: {
   );
 }
 
+// ── System context breakdown ───────────────────────────────────────────────────
+
+function SystemContextBreakdown({
+  systemEst,
+  totalContextTokens,
+  contextFiles,
+}: {
+  systemEst: number;
+  totalContextTokens: number;
+  contextFiles?: ContextFile[];
+}) {
+  const [open, setOpen] = useState(false);
+  const knownFileTokens = contextFiles?.reduce((s, f) => s + f.estTokens, 0) ?? 0;
+  const unknownEst = Math.max(0, systemEst - knownFileTokens);
+  const pct = Math.round(systemEst / totalContextTokens * 100);
+
+  return (
+    <div className="border-t border-border-primary/40">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-bg-tertiary/30 transition-colors"
+      >
+        <span className="text-xs text-text-muted flex items-center gap-1.5">
+          <svg width="9" height="9" viewBox="0 0 10 10" fill="none"
+            className={clsx('shrink-0 transition-transform duration-150', open ? 'rotate-180' : '')}
+          >
+            <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          System / CLAUDE.md / settings
+        </span>
+        <span className="text-xs text-text-muted font-mono">{fmtNumber(systemEst)} ({pct}%)</span>
+      </button>
+      {open && (
+        <div className="px-4 pb-2.5 space-y-1">
+          {contextFiles && contextFiles.length > 0 ? (
+            <>
+              {contextFiles.map((f, i) => (
+                <div key={i} className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-text-muted truncate flex-1" title={f.path}>{f.label}</span>
+                  <span className="text-[11px] text-text-disabled font-mono shrink-0">{fmtNumber(f.estTokens)}</span>
+                </div>
+              ))}
+              {unknownEst > 100 && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-text-disabled truncate flex-1">System prompt / hooks / settings</span>
+                  <span className="text-[11px] text-text-disabled font-mono shrink-0">~{fmtNumber(unknownEst)}</span>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] text-text-disabled">System prompt / CLAUDE.md / settings</span>
+              <span className="text-[11px] text-text-disabled font-mono">~{fmtNumber(systemEst)}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Context panel ──────────────────────────────────────────────────────────────
 
 type ContextItem = {
-  type: 'user' | 'tool';
+  type: 'user' | 'tool' | 'assistant';
   turnIndex: number;
   label: string;
   preview?: string;
   estTokens: number;
 };
 
-function ContextPanel({ turns }: { turns: Turn[] }) {
+type ContextFile = { label: string; path: string; chars: number; estTokens: number };
+
+function ContextPanel({ turns, contextFiles, onTurnClick }: {
+  turns: Turn[];
+  contextFiles?: ContextFile[];
+  onTurnClick?: (index: number) => void;
+}) {
   const [view, setView] = useState<'category' | 'size'>('category');
-  const [grouping, setGrouping] = useState<'grouped' | 'flat'>('grouped');
 
   const lastTurn = turns[turns.length - 1];
   const totalContextTokens = lastTurn?.contextTokens;
@@ -392,12 +816,18 @@ function ContextPanel({ turns }: { turns: Turn[] }) {
   const userItems: ContextItem[] = turns
     .filter((t) => cleanMessage(t.userMessage).length > 0)
     .map((t) => {
-      const text = cleanMessage(t.userMessage);
+      const raw = t.userMessage;
+      // For command invocations use the clean name; for regular messages strip markdown.
+      // Strip XML tags while preserving newlines so multiline regex anchors work in stripMarkdownForPreview.
+      const preview = raw.includes('<command-name>')
+        ? commandPreview(raw)
+        : stripMarkdownForPreview(raw.replace(/<[^>]+>/g, '')).slice(0, 70);
+      const text = cleanMessage(raw);
       return {
         type: 'user',
         turnIndex: t.index,
-        label: `@Turn ${t.index + 1}`,
-        preview: text.slice(0, 70),
+        label: `@${t.index + 1}`,
+        preview,
         estTokens: Math.ceil(text.length / 4),
       };
     });
@@ -406,24 +836,42 @@ function ContextPanel({ turns }: { turns: Turn[] }) {
     .filter((t) => t.spans.some((s) => s.kind === 'tool'))
     .map((t) => {
       const toolSpans = t.spans.filter((s) => s.kind === 'tool');
-      const estTokens = toolSpans.reduce(
-        (sum, s) => sum + Math.ceil((s.detail || '').length / 4),
-        0,
-      );
+      const estTokens = toolSpans.reduce((sum, s) => {
+        // Use actual result token count if available, otherwise estimate from param detail
+        return sum + (s.resultTokens ?? Math.ceil((s.detail || '').length / 4));
+      }, 0);
       return {
         type: 'tool',
         turnIndex: t.index,
-        label: `@Turn ${t.index + 1}`,
+        label: `@${t.index + 1}`,
         preview: `${toolSpans.length} tool${toolSpans.length !== 1 ? 's' : ''}`,
         estTokens,
       };
     });
 
+  // Assistant responses — each turn's outputTokens sits in context for all subsequent turns
+  // We include turns that have output (skip the last turn; its response isn't yet in context)
+  const assistantItems: ContextItem[] = turns
+    .filter((t) => (t.outputTokens ?? 0) > 0)
+    .map((t) => ({
+      type: 'assistant' as const,
+      turnIndex: t.index,
+      label: `@${t.index + 1}`,
+      preview: t.assistantText ? t.assistantText.slice(0, 70) : `${t.outputTokens} tokens`,
+      estTokens: t.outputTokens!,
+    }));
+
   const totalUserEst = userItems.reduce((s, i) => s + i.estTokens, 0);
   const totalToolEst = toolItems.reduce((s, i) => s + i.estTokens, 0);
+  const totalAssistantEst = assistantItems.reduce((s, i) => s + i.estTokens, 0);
+
+  // System / CLAUDE.md / settings = remainder after accounting for messages, tools, and assistant
+  const systemEst = totalContextTokens
+    ? Math.max(0, totalContextTokens - totalUserEst - totalToolEst - totalAssistantEst)
+    : 0;
 
   // Flat sorted view
-  const flatItems = [...userItems, ...toolItems].sort((a, b) =>
+  const flatItems = [...userItems, ...toolItems, ...assistantItems].sort((a, b) =>
     view === 'size' ? b.estTokens - a.estTokens : a.turnIndex - b.turnIndex,
   );
 
@@ -431,18 +879,20 @@ function ContextPanel({ turns }: { turns: Turn[] }) {
     view === 'size' ? [...userItems].sort((a, b) => b.estTokens - a.estTokens) : userItems;
   const sortedToolItems =
     view === 'size' ? [...toolItems].sort((a, b) => b.estTokens - a.estTokens) : toolItems;
+  const sortedAssistantItems =
+    view === 'size' ? [...assistantItems].sort((a, b) => b.estTokens - a.estTokens) : assistantItems;
 
   return (
     <div className="rounded-sm border border-border-primary bg-bg-secondary overflow-hidden">
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-border-primary">
-        <h2 className="text-sm font-medium text-text-secondary">Context</h2>
+      <div className="flex flex-wrap items-baseline gap-2 px-4 py-3 border-b border-border-primary">
+        <span className="text-sm font-medium text-text-secondary leading-none">Context</span>
         {totalContextTokens ? (
-          <span className="text-xs text-text-muted">
-            ~{fmtNumber(totalContextTokens)} tokens
+          <span className="text-xs text-text-muted leading-none">
+            {fmtNumber(totalContextTokens)} tokens
           </span>
         ) : (
-          <span className="text-xs text-text-disabled">token data unavailable</span>
+          <span className="text-xs text-text-disabled leading-none">token data unavailable</span>
         )}
 
         <div className="ml-auto flex items-center gap-1">
@@ -462,29 +912,11 @@ function ContextPanel({ turns }: { turns: Turn[] }) {
           ))}
         </div>
 
-        {view === 'size' && (
-          <div className="flex items-center gap-1">
-            {(['grouped', 'flat'] as const).map((g) => (
-              <button
-                key={g}
-                onClick={() => setGrouping(g)}
-                className={clsx(
-                  'px-2 py-0.5 rounded text-xs border transition-colors',
-                  grouping === g
-                    ? 'border-accent/40 bg-accent/10 text-accent'
-                    : 'border-border-primary bg-bg-tertiary text-text-muted',
-                )}
-              >
-                {g === 'grouped' ? 'Grouped' : 'Flat'}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* Body */}
       <div className="divide-y divide-border-primary/20">
-        {view === 'category' || grouping === 'grouped' ? (
+        {view === 'category' ? (
           <>
             {/* User Messages group */}
             <ContextGroup
@@ -494,6 +926,7 @@ function ContextPanel({ turns }: { turns: Turn[] }) {
               totalContextTokens={totalContextTokens}
               items={sortedUserItems}
               view={view}
+              onTurnClick={onTurnClick}
             />
 
             {/* Tool Outputs group */}
@@ -504,21 +937,41 @@ function ContextPanel({ turns }: { turns: Turn[] }) {
               totalContextTokens={totalContextTokens}
               items={sortedToolItems}
               view={view}
-              note="estimated from param text"
+              onTurnClick={onTurnClick}
+            />
+
+            {/* Assistant responses */}
+            <ContextGroup
+              label="Assistant Responses"
+              count={assistantItems.length}
+              totalEst={totalAssistantEst}
+              totalContextTokens={totalContextTokens}
+              items={sortedAssistantItems}
+              view={view}
+              onTurnClick={onTurnClick}
             />
           </>
         ) : (
-          /* Flat view */
+          /* Flat view — single list sorted by size */
           <div className="px-4 py-2 space-y-0">
             {flatItems.map((item, i) => (
-              <FlatContextItem key={i} item={item} />
+              <FlatContextItem key={i} item={item} onTurnClick={onTurnClick} />
             ))}
           </div>
         )}
       </div>
 
-      <div className="px-4 py-2 border-t border-border-primary text-[11px] text-text-disabled">
-        Token counts estimated from user message text; tool output size not tracked in telemetry
+      {/* System / CLAUDE.md / settings breakdown */}
+      {systemEst > 0 && totalContextTokens && (
+        <SystemContextBreakdown
+          systemEst={systemEst}
+          totalContextTokens={totalContextTokens}
+          contextFiles={contextFiles}
+        />
+      )}
+
+      <div className="px-4 py-1.5 border-t border-border-primary text-[11px] text-text-disabled">
+        Sizes estimated from result tokens and message length.
       </div>
     </div>
   );
@@ -531,7 +984,7 @@ function ContextGroup({
   totalContextTokens,
   items,
   view,
-  note,
+  onTurnClick,
 }: {
   label: string;
   count: number;
@@ -539,7 +992,7 @@ function ContextGroup({
   totalContextTokens?: number;
   items: ContextItem[];
   view: 'category' | 'size';
-  note?: string;
+  onTurnClick?: (index: number) => void;
 }) {
   const [open, setOpen] = useState(true);
   if (count === 0) return null;
@@ -550,14 +1003,18 @@ function ContextGroup({
     <div>
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-bg-tertiary/30 transition-colors"
+        className="w-full flex items-baseline gap-2 px-4 py-2.5 hover:bg-bg-tertiary/30 transition-colors"
       >
-        <span className={clsx('text-[10px] transition-transform', open ? 'rotate-90' : '')}>›</span>
-        <span className="text-sm font-medium text-text-primary">{label}</span>
-        <span className="text-xs text-text-muted">{count}</span>
-        {note && <span className="text-[11px] text-text-disabled">({note})</span>}
-        <span className="ml-auto text-xs text-text-muted font-mono">
-          ~{fmtNumber(totalEst)} tokens{totalContextTokens ? ` (${pct}%)` : ''}
+        <svg
+          width="10" height="10" viewBox="0 0 10 10" fill="none"
+          className={clsx('shrink-0 self-center transition-transform duration-150', open ? 'rotate-180' : '')}
+        >
+          <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+        <span className="text-sm font-medium text-text-primary shrink-0 whitespace-nowrap leading-none">{label}</span>
+        <span className="text-xs text-text-muted shrink-0 leading-none">{count}</span>
+        <span className="ml-auto text-xs text-text-muted font-mono shrink-0 whitespace-nowrap leading-none">
+          {fmtNumber(totalEst)}{totalContextTokens ? ` (${pct}%)` : ''}
         </span>
       </button>
 
@@ -565,9 +1022,18 @@ function ContextGroup({
         <div className="pb-1">
           {items.map((item, i) => (
             <div key={i} className="flex items-start gap-3 px-8 py-1.5">
-              <span className="text-xs text-accent font-mono shrink-0">{item.label}</span>
+              {onTurnClick ? (
+                <button
+                  className="text-xs text-accent font-mono shrink-0 hover:underline"
+                  onClick={() => onTurnClick(item.turnIndex)}
+                >
+                  {item.label}
+                </button>
+              ) : (
+                <span className="text-xs text-accent font-mono shrink-0">{item.label}</span>
+              )}
               <span className="text-xs text-text-muted truncate flex-1">{item.preview}</span>
-              <span className="text-xs text-text-muted font-mono shrink-0">~{fmtNumber(item.estTokens)}</span>
+              <span className="text-xs text-text-muted font-mono shrink-0">{fmtNumber(item.estTokens)}</span>
             </div>
           ))}
         </div>
@@ -576,11 +1042,15 @@ function ContextGroup({
   );
 }
 
-function FlatContextItem({ item }: { item: ContextItem }) {
+function FlatContextItem({ item, onTurnClick }: { item: ContextItem; onTurnClick?: (index: number) => void }) {
   const typeStyle =
     item.type === 'user'
       ? 'bg-accent/10 border-accent/30 text-accent'
+      : item.type === 'assistant'
+      ? 'bg-green-500/10 border-green-500/30 text-green-400'
       : 'bg-amber-500/10 border-amber-500/30 text-amber-400';
+
+  const typeLabel = item.type === 'user' ? 'User' : item.type === 'assistant' ? 'Asst' : 'Tool';
 
   return (
     <div className="flex items-center gap-2 py-1.5">
@@ -590,9 +1060,18 @@ function FlatContextItem({ item }: { item: ContextItem }) {
           typeStyle,
         )}
       >
-        {item.type === 'user' ? 'User' : 'Tool'}
+        {typeLabel}
       </span>
-      <span className="text-xs text-text-muted font-mono shrink-0">{item.label}</span>
+      {onTurnClick ? (
+        <button
+          className="text-xs text-accent font-mono shrink-0 hover:underline"
+          onClick={() => onTurnClick(item.turnIndex)}
+        >
+          {item.label}
+        </button>
+      ) : (
+        <span className="text-xs text-text-muted font-mono shrink-0">{item.label}</span>
+      )}
       <span className="text-xs text-text-muted truncate flex-1">{item.preview}</span>
       <span className="text-xs text-text-muted font-mono shrink-0">{fmtNumber(item.estTokens)}</span>
     </div>
@@ -603,9 +1082,12 @@ function FlatContextItem({ item }: { item: ContextItem }) {
 
 export function SessionTracePage() {
   const { id: rawId } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const targetTimestamp = searchParams.get('t');
   const sessionId = decodeURIComponent(rawId ?? '');
   const range: TimeRange = '30d';
   const { data, isLoading, error, refetch } = useObsSessionTrace(sessionId, range);
+  const { data: contextFilesData } = useObsSessionContextFiles(sessionId);
   const [expandedTurns, setExpandedTurns] = useState<Set<number>>(new Set());
   const [showContext, setShowContext] = useState(true);
   const [selectedTurnIndex, setSelectedTurnIndex] = useState<number | null>(null);
@@ -626,6 +1108,26 @@ export function SessionTracePage() {
     handleScroll();
     return () => window.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);
+
+  // Scroll to and highlight the turn closest to the target timestamp (from skill detail link)
+  useEffect(() => {
+    if (!data || !targetTimestamp) return;
+    const target = new Date(targetTimestamp).getTime();
+    let bestIdx = -1;
+    let bestDelta = Infinity;
+    for (const turn of data.turns) {
+      const delta = Math.abs(new Date(turn.startTime).getTime() - target);
+      if (delta < bestDelta) { bestDelta = delta; bestIdx = turn.index; }
+    }
+    if (bestIdx >= 0) {
+      setSelectedTurnIndex(bestIdx);
+      setExpandedTurns(prev => new Set([...prev, bestIdx]));
+      setTimeout(() => {
+        const el = document.getElementById(`turn-${bestIdx}`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
+    }
+  }, [data, targetTimestamp]);
 
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load session trace" retry={refetch} />;
@@ -659,6 +1161,14 @@ export function SessionTracePage() {
     cumulativeCosts.push(runningSum);
   }
 
+  const compactions: TraceCompaction[] = data.compactions ?? [];
+
+  const handleTurnClick = (turnIndex: number) => {
+    setSelectedTurnIndex(turnIndex);
+    const el = document.getElementById(`turn-${turnIndex}`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
   return (
     <div className="space-y-4">
       <div ref={topRef} />
@@ -675,8 +1185,8 @@ export function SessionTracePage() {
           Session <span className="font-mono text-accent">{sessionId.slice(0, 8)}</span>
         </h1>
         {data.project && (
-          <span className="rounded-md bg-bg-tertiary px-2 py-0.5 text-xs text-text-muted">
-            {data.project}
+          <span className="rounded-md bg-bg-tertiary px-2 py-0.5 text-xs text-text-muted font-mono">
+            {fmtProject(data.project)}
           </span>
         )}
         {/* Root / subagent indicator */}
@@ -780,39 +1290,39 @@ export function SessionTracePage() {
                 const prevTurn = i > 0 ? data.turns[i - 1] : undefined;
                 const runningCost = cumulativeCosts[i] ?? 0;
                 const hasContent = turn.spans.length > 0 || !!turn.assistantText;
+
+                // Compactions that occurred before this turn (after previous turn)
+                const prevTs = prevTurn ? prevTurn.startTime : '';
+                const compactionsBefore = compactions.filter((c) =>
+                  c.timestamp > prevTs && c.timestamp <= turn.startTime
+                );
+
                 return (
-                  <div key={turn.index} className={clsx('space-y-1.5', selectedTurnIndex === turn.index && 'ring-1 ring-accent/30 rounded-sm')}>
-                    <div className="flex items-start gap-2">
-                      <div className="flex-1 min-w-0">
-                        <UserBlock
+                  <div key={turn.index}>
+                    {/* Compaction dividers */}
+                    {compactionsBefore.map((c, ci) => (
+                      <CompactionDivider key={`compact-${i}-${ci}`} compaction={c} />
+                    ))}
+                    <div
+                      id={`turn-${turn.index}`}
+                      className={clsx('space-y-1.5', selectedTurnIndex === turn.index && 'ring-1 ring-accent/30 rounded-sm')}
+                    >
+                      <UserBlock turn={turn} sessionId={sessionId} prevTurn={prevTurn} />
+                      {hasContent && (
+                        <ResponseBlock
                           turn={turn}
+                          expanded={expandedTurns.has(turn.index)}
+                          onToggle={() => toggleTurn(turn.index)}
+                          sessionId={sessionId}
                           runningCost={runningCost}
                           prevContextTokens={prevTurn?.contextTokens}
+                          onContextClick={showContext ? () => {
+                            setShowContext(true);
+                            setSelectedTurnIndex(turn.index);
+                          } : undefined}
                         />
-                      </div>
-                      {showContext && (
-                        <button
-                          onClick={() => setSelectedTurnIndex(selectedTurnIndex === turn.index ? null : turn.index)}
-                          className={clsx(
-                            'shrink-0 mt-1 text-[10px] px-1.5 py-0.5 rounded border transition-colors',
-                            selectedTurnIndex === turn.index
-                              ? 'border-accent/40 bg-accent/10 text-accent'
-                              : 'border-border-primary bg-bg-secondary text-text-disabled hover:text-text-muted'
-                          )}
-                          title="Pin context to this turn"
-                        >
-                          ctx
-                        </button>
                       )}
                     </div>
-                    {hasContent && (
-                      <ResponseBlock
-                        turn={turn}
-                        expanded={expandedTurns.has(turn.index)}
-                        onToggle={() => toggleTurn(turn.index)}
-                        sessionId={sessionId}
-                      />
-                    )}
                   </div>
                 );
               })}
@@ -823,7 +1333,11 @@ export function SessionTracePage() {
         {/* Context sidebar */}
         {showContext && data.turns.length > 0 && (
           <div className="w-80 shrink-0 sticky top-16">
-            <ContextPanel turns={selectedTurnIndex !== null ? data.turns.slice(0, selectedTurnIndex + 1) as Turn[] : data.turns as Turn[]} />
+            <ContextPanel
+              turns={selectedTurnIndex !== null ? data.turns.slice(0, selectedTurnIndex + 1) as Turn[] : data.turns as Turn[]}
+              contextFiles={contextFilesData?.files}
+              onTurnClick={handleTurnClick}
+            />
           </div>
         )}
       </div>

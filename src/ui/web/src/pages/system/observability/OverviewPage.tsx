@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
-import { useObsOverview, useObsCompaction, useObsApiDuration, useObsSessions, useObsTokens, useObsCost } from '../../../api/observability-hooks';
+import { useObsOverview, useObsSessions, useObsTokens, useObsCost } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
@@ -9,14 +9,12 @@ import { type TimeRange, type Granularity } from '../../../components/data/TimeR
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtCurrency, fmtPct, fmtMs, shortDate, granLabel, rangeToDays, fmtSeriesName } from '../../../utils/format';
+import { fmtNumber, fmtCurrency, fmtPct, shortDate, granLabel, fmtSeriesName } from '../../../utils/format';
 
 export function OverviewPage() {
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
   const { data, isLoading, error, refetch } = useObsOverview(range, granularity);
-  const compaction = useObsCompaction(range, granularity);
-  const apiDuration = useObsApiDuration(range, granularity);
   const sessions = useObsSessions(range, granularity);
   const tokens = useObsTokens(range, granularity);
   const cost = useObsCost(range, granularity);
@@ -30,9 +28,6 @@ export function OverviewPage() {
   const toolSuccessPct = data.toolCalls > 0
     ? ((data.toolCalls - data.toolErrors) / data.toolCalls) * 100
     : 100;
-
-  const days = rangeToDays(range);
-  const avgDaily = cost.data && days > 0 ? cost.data.totalUsd / days : 0;
 
   return (
     <div className="space-y-6">
@@ -51,56 +46,24 @@ export function OverviewPage() {
         <StatCard label="Total Cost" value={fmtCurrency(data.totalCost)} accent="success" />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        {apiDuration.data && (
-          <>
-            <StatCard label="API Latency (avg)" value={fmtMs(apiDuration.data.avgMs)} />
-            <StatCard label="API Latency (p95)" value={fmtMs(apiDuration.data.p95Ms)} accent={apiDuration.data.p95Ms > 30000 ? 'warning' : undefined} />
-          </>
-        )}
-        {compaction.data && (
-          <StatCard
-            label="Compactions"
-            value={fmtNumber(compaction.data.totalCompactions)}
-            detail={compaction.data.avgPreTokens > 0 ? `avg ${fmtNumber(compaction.data.avgPreTokens)} tokens` : undefined}
-          />
-        )}
-        {sessions.data && (
-          <>
-            <StatCard label="Lines Changed" value={<><span className="text-green-400">+{fmtNumber(sessions.data.totalLinesAdded)}</span><span className="text-text-muted"> / </span><span className="text-red-400">-{fmtNumber(sessions.data.totalLinesRemoved)}</span></>} />
-            <StatCard label="Commits" value={fmtNumber(sessions.data.totalCommits)} />
-          </>
-        )}
-      </div>
-
-      {(tokens.data || cost.data) && (
+      {sessions.data && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatCard label="Lines Changed" value={<><span className="text-green-400">+{fmtNumber(sessions.data.totalLinesAdded)}</span><span className="text-text-muted"> / </span><span className="text-red-400">-{fmtNumber(sessions.data.totalLinesRemoved)}</span></>} />
+          <StatCard label="Commits" value={fmtNumber(sessions.data.totalCommits)} />
           {tokens.data && (
-            <>
-              <StatCard
-                label="Cache Efficiency"
-                value={fmtPct(tokens.data.cacheEfficiency)}
-                accent={tokens.data.cacheEfficiency >= 80 ? 'success' : tokens.data.cacheEfficiency >= 50 ? 'warning' : 'error'}
-                detailContent={<><span className="text-success font-medium">{fmtNumber(tokens.data.totalCacheRead)}</span><span className="text-text-muted"> read / </span><span className="text-warning font-medium">{fmtNumber(tokens.data.totalCacheCreation)}</span><span className="text-text-muted"> created</span></>}
-              />
-              <StatCard
-                label="Total Tokens"
-                value={fmtNumber(tokens.data.totalInput + tokens.data.totalOutput)}
-                detailContent={<><span className="text-text-secondary font-medium">{fmtNumber(tokens.data.totalInput)}</span><span className="text-text-muted"> in / </span><span className="text-text-secondary font-medium">{fmtNumber(tokens.data.totalOutput)}</span><span className="text-text-muted"> out</span></>}
-              />
-            </>
+            <StatCard
+              label="Cache Efficiency"
+              value={fmtPct(tokens.data.cacheEfficiency)}
+              accent={tokens.data.cacheEfficiency >= 80 ? 'success' : tokens.data.cacheEfficiency >= 50 ? 'warning' : 'error'}
+              detailContent={<><span className="text-success font-medium">{fmtNumber(tokens.data.totalCacheRead)}</span><span className="text-text-muted"> read / </span><span className="text-warning font-medium">{fmtNumber(tokens.data.totalCacheCreation)}</span><span className="text-text-muted"> created</span></>}
+            />
           )}
-          {cost.data && (
-            <>
-              <StatCard label="Avg / Day" value={fmtCurrency(avgDaily)} />
-              {cost.data.byModel.length > 0 && (
-                <StatCard
-                  label="Top Model"
-                  value={cost.data.byModel[0].model.replace('claude-', '')}
-                  detail={fmtCurrency(cost.data.byModel[0].usd)}
-                />
-              )}
-            </>
+          {tokens.data && (
+            <StatCard
+              label="Total Tokens"
+              value={fmtNumber(tokens.data.totalInput + tokens.data.totalOutput)}
+              detailContent={<><span className="text-text-secondary font-medium">{fmtNumber(tokens.data.totalInput)}</span><span className="text-text-muted"> in / </span><span className="text-text-secondary font-medium">{fmtNumber(tokens.data.totalOutput)}</span><span className="text-text-muted"> out</span></>}
+            />
           )}
         </div>
       )}
@@ -121,8 +84,8 @@ export function OverviewPage() {
             <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
             <YAxis {...axisProps} />
             <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-            <Area type="natural" dataKey="messages" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.15} name="Messages" />
-            <Area type="natural" dataKey="sessions" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.15} name="Sessions" />
+            <Area type="monotone" dataKey="messages" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.15} name="Messages" />
+            <Area type="monotone" dataKey="sessions" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.15} name="Sessions" />
           </AreaChart>
         )}
       </ChartContainer>
@@ -147,9 +110,9 @@ export function OverviewPage() {
               <YAxis {...axisProps} tickFormatter={fmtNumber} />
               <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
               <Legend {...legendProps} />
-              <Area type="natural" dataKey="input" stackId="tokens" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} name="Input" />
-              <Area type="natural" dataKey="output" stackId="tokens" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} name="Output" />
-              <Area type="natural" dataKey="cacheRead" stackId="tokens" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.3} name="Cache Read" />
+              <Area type="monotone" dataKey="input" stackId="tokens" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} name="Input" />
+              <Area type="monotone" dataKey="output" stackId="tokens" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} name="Output" />
+              <Area type="monotone" dataKey="cacheRead" stackId="tokens" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.3} name="Cache Read" />
             </AreaChart>
           )}
         </ChartContainer>
@@ -171,7 +134,7 @@ export function OverviewPage() {
               <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
               <YAxis {...axisProps} tickFormatter={(v: number) => `$${v.toFixed(2)}`} />
               <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(value) => [fmtCurrency(Number(value ?? 0)), 'Cost']} />
-              <Area type="natural" dataKey="usd" stroke={CHART_PALETTE[3]} fill={CHART_PALETTE[3]} fillOpacity={0.3} name="Cost" />
+              <Area type="monotone" dataKey="usd" stroke={CHART_PALETTE[3]} fill={CHART_PALETTE[3]} fillOpacity={0.3} name="Cost" />
             </AreaChart>
           )}
         </ChartContainer>

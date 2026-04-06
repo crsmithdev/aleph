@@ -84,13 +84,15 @@ function ByHookView({ range, granularity }: {
     {
       key: 'event',
       label: 'Event',
-      render: (row) => <span className="text-text-secondary">{row.event}</span>,
+      width: '160px',
+      render: (row) => <span className="text-text-secondary whitespace-nowrap">{row.event}</span>,
     },
     {
       key: 'count',
       label: 'Count',
       align: 'right',
       sortable: true,
+      width: '80px',
       render: (row) => fmtNumber(row.count),
     },
     {
@@ -98,6 +100,7 @@ function ByHookView({ range, granularity }: {
       label: 'Errors',
       align: 'right',
       sortable: true,
+      width: '80px',
       render: (row) => (
         <span className={clsx(row.errors > 0 && 'text-error font-medium')}>
           {row.errors > 0 ? fmtNumber(row.errors) : '—'}
@@ -109,6 +112,7 @@ function ByHookView({ range, granularity }: {
       label: 'Success',
       align: 'right',
       sortable: true,
+      width: '90px',
       render: (row) => (
         <span className={clsx(row.successRate < 95 && 'text-warning', row.successRate < 80 && 'text-error')}>
           {fmtPct(row.successRate)}
@@ -120,6 +124,7 @@ function ByHookView({ range, granularity }: {
       label: 'Avg',
       align: 'right',
       sortable: true,
+      width: '80px',
       render: (row) => fmtMs(row.avgMs),
     },
     {
@@ -127,6 +132,7 @@ function ByHookView({ range, granularity }: {
       label: 'P95',
       align: 'right',
       sortable: true,
+      width: '80px',
       render: (row) => (
         <span className={clsx(row.p95Ms > 500 && 'text-warning')}>
           {fmtMs(row.p95Ms)}
@@ -245,13 +251,15 @@ function ByEventView({ range }: { range: TimeRange }) {
     {
       key: 'timestamp',
       label: 'Time',
-      render: (row) => <span className="text-text-secondary">{dateTime(row.timestamp)}</span>,
+      width: '160px',
+      render: (row) => <span className="text-text-secondary whitespace-nowrap">{dateTime(row.timestamp)}</span>,
     },
     {
       key: 'event',
       label: 'Event',
+      width: '160px',
       render: (row) => (
-        <span className="rounded bg-bg-tertiary px-1.5 py-0.5 text-xs text-text-secondary font-mono">
+        <span className="rounded bg-bg-tertiary px-1.5 py-0.5 text-sm text-text-secondary font-mono whitespace-nowrap">
           {row.event}
         </span>
       ),
@@ -273,7 +281,7 @@ function ByEventView({ range }: { range: TimeRange }) {
             {isExpanded ? (
               <div className="space-y-1">
                 {row.hooks.map((h, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs">
+                  <div key={i} className="flex items-center gap-2 text-sm">
                     <span className="font-mono text-text-primary">{h.command}</span>
                     {h.durationMs !== undefined && (
                       <span className={clsx('text-text-muted', h.durationMs > 500 && 'text-warning')}>
@@ -284,7 +292,7 @@ function ByEventView({ range }: { range: TimeRange }) {
                 ))}
               </div>
             ) : (
-              <span className="text-xs text-text-secondary">
+              <span className="text-sm text-text-secondary">
                 {row.hooks.map((h) => h.command).join(', ')}
               </span>
             )}
@@ -295,7 +303,8 @@ function ByEventView({ range }: { range: TimeRange }) {
     {
       key: 'sessionId',
       label: 'Session',
-      render: (row) => <span className="font-mono text-xs text-text-muted">{row.sessionId.slice(0, 8)}</span>,
+      width: '90px',
+      render: (row) => <span className="font-mono text-sm text-text-muted">{row.sessionId.slice(0, 8)}</span>,
     },
   ];
 

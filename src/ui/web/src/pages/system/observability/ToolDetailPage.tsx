@@ -65,24 +65,26 @@ export function ToolDetailPage() {
     {
       key: 'timestamp',
       label: 'Time',
-      render: (row) => <span className="text-text-secondary">{dateTime(row.timestamp)}</span>,
+      width: '160px',
+      render: (row) => <span className="text-text-secondary whitespace-nowrap">{dateTime(row.timestamp)}</span>,
     },
     {
       key: 'project',
       label: 'Project',
-      render: (row) => <span className="font-mono text-xs text-text-muted">{fmtProject(row.project)}</span>,
+      width: '120px',
+      render: (row) => <span className="font-mono text-sm text-text-muted truncate block">{fmtProject(row.project)}</span>,
     },
     {
       key: 'sessionId',
       label: 'Session',
       width: '90px',
-      render: (row) => <span className="font-mono text-xs text-text-muted">{row.sessionId.slice(0, 8)}</span>,
+      render: (row) => <span className="font-mono text-sm text-text-muted">{row.sessionId.slice(0, 8)}</span>,
     },
     ...(data.errorCount > 0 ? [{
       key: 'errorMessage',
       label: 'Error',
       render: (row: InvocationRow) => row.errorMessage
-        ? <span className="text-xs text-error truncate block max-w-xs" title={row.errorMessage}>{row.errorMessage.slice(0, 80)}{row.errorMessage.length > 80 ? '...' : ''}</span>
+        ? <span className="text-sm text-error truncate block max-w-xs" title={row.errorMessage}>{row.errorMessage.slice(0, 80)}{row.errorMessage.length > 80 ? '...' : ''}</span>
         : <span className="text-text-muted">—</span>,
     }] : []) as Column<InvocationRow>[],
     {
@@ -178,16 +180,16 @@ export function ToolDetailPage() {
                   <YAxis {...axisProps} />
                   <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                   {projectNames.length > 0 ? projectNames.map((name, i) => (
-                    <Area key={name} type="natural" dataKey={name} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
+                    <Area key={name} type="monotone" dataKey={name} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
                   )) : (
-                    <Area type="natural" dataKey="count" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.4} strokeWidth={2} dot={false} name="Calls" />
+                    <Area type="monotone" dataKey="count" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.4} strokeWidth={2} dot={false} name="Calls" />
                   )}
                 </AreaChart>
               )}
             </div>
 
             {donutData.length > 0 && (
-              <div className="shrink-0 flex flex-col items-center" style={{ width: 160 }}>
+              <div className="w-1/4 min-w-[150px] shrink-0 flex flex-col items-center">
                 <PieChart width={140} height={140}>
                   <Pie data={donutData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={38} outerRadius={60}>
                     {donutData.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
