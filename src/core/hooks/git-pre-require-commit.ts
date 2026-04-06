@@ -12,7 +12,7 @@
  * 4. ≥ WARN_GROUPS → write marker, emit advisory, exit 0.
  */
 import { execSync } from "child_process";
-import { existsSync, writeFileSync, unlinkSync, mkdirSync } from "fs";
+import { writeFileSync, unlinkSync, mkdirSync } from "fs";
 import { dirname } from "path";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
@@ -68,15 +68,15 @@ if (groupCount < WARN_GROUPS) {
 const markerPath = `${dataPaths.signals}/git-pre-require-commit-${input.session_id}`;
 
 // Advisory only — never block
-if (!existsSync(markerPath)) {
+try {
   mkdirSync(dirname(markerPath), { recursive: true });
   writeFileSync(markerPath, JSON.stringify({ ts: new Date().toISOString(), groups: groupCount, files: fileCount, areas: groupList }));
-}
+} catch {}
 trace(TAG, `advisory: ${groupCount} groups`);
 console.log(`[Construct] ${fileCount} uncommitted files across ${groupCount} areas (${groupList}). Consider committing before starting a new logical change.`);
 process.exit(0);
 
 function cleanupMarker(sessionId: string) {
   const path = `${dataPaths.signals}/git-pre-require-commit-${sessionId}`;
-  try { if (existsSync(path)) unlinkSync(path); } catch {}
+  try { unlinkSync(path); } catch {}
 }

@@ -20,8 +20,10 @@ const PROJECTS_DIRNAME = basename(claudePaths.projects);
 
 const { sqlite: cacheDb } = createDb(dataPaths.db);
 cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache`);
+cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v4`);
+cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v4`);
 cacheDb.exec(`
-  CREATE TABLE IF NOT EXISTS telemetry_cache_v2 (
+  CREATE TABLE IF NOT EXISTS telemetry_cache_v4 (
     file_path TEXT PRIMARY KEY,
     mtime_ms INTEGER NOT NULL,
     size INTEGER NOT NULL,
@@ -30,14 +32,39 @@ cacheDb.exec(`
 `);
 
 const insertCache = cacheDb.prepare(
-  `INSERT OR REPLACE INTO telemetry_cache_v2 (file_path, mtime_ms, size, events) VALUES (?, ?, ?, ?)`
+  `INSERT OR REPLACE INTO telemetry_cache_v4 (file_path, mtime_ms, size, events) VALUES (?, ?, ?, ?)`
 );
 const selectCache = cacheDb.prepare(
-  `SELECT mtime_ms, size, events FROM telemetry_cache_v2 WHERE file_path = ?`
+  `SELECT mtime_ms, size, events FROM telemetry_cache_v4 WHERE file_path = ?`
 );
 
-export function clearCache(): void {
-  cacheDb.exec("DELETE FROM telemetry_cache_v2");
+// ---------------------------------------------------------------------------
+// Filesystem discovery cache (30s TTL)
+// ---------------------------------------------------------------------------
+
+interface DiscoveryCache {
+  files: string[];
+  expiresAt: number;
+  baseDir: string;
+  sinceMs: number | undefined;
+}
+
+let discoveryCache: DiscoveryCache | undefined;
+
+function discoverJsonlFilesCached(baseDir: string, since?: Date): string[] {
+  const sinceMs = since?.getTime();
+  const now = Date.now();
+  if (
+    discoveryCache &&
+    discoveryCache.baseDir === baseDir &&
+    discoveryCache.sinceMs === sinceMs &&
+    now < discoveryCache.expiresAt
+  ) {
+    return discoveryCache.files;
+  }
+  const files = discoverJsonlFiles(baseDir, since);
+  discoveryCache = { files, expiresAt: now + 30_000, baseDir, sinceMs };
+  return files;
 }
 
 function discoverJsonlFiles(baseDir: string, since?: Date): string[] {
@@ -112,6 +139,24 @@ function parentSessionIdFromPath(filePath: string): string | undefined {
 // ---------------------------------------------------------------------------
 // Line-level adaptation: Claude Code JSONL → TelemetryEvent[]
 // ---------------------------------------------------------------------------
+
+/**
+ * Extract a clean hook name from a shell command string.
+ * Command format: "bun /path/to/hook.ts 2>/dev/null" or similar.
+ * Naive split("/").pop() fails when the command ends with "2>/dev/null",
+ * yielding the literal string "null".
+ */
+function hookBasename(command: string | null | undefined): string {
+  if (!command) return "unknown";
+  // Find the first token that looks like a script file path (.ts / .js / .sh)
+  const tokens = command.split(/\s+/);
+  const script = tokens.find((t) => /\.(ts|js|sh|py)$/.test(t) && t.includes("/"));
+  if (script) return script.split("/").pop()!.replace(/\.(ts|js|sh|py)$/, "");
+  // Fallback: first path-like token that isn't a redirect
+  const path = tokens.find((t) => t.startsWith("/") && !t.startsWith("/dev/"));
+  if (path) return path.split("/").pop() || "unknown";
+  return "unknown";
+}
 
 function adaptLine(
   line: string,
@@ -234,8 +279,18 @@ function adaptLine(
             const toolUseResult = (raw as Record<string, unknown>).toolUseResult as Record<string, unknown> | undefined;
             const toolDurationMs = toolUseResult?.totalDurationMs as number | undefined;
 
+            // Count result content size for token estimation
+            const rawContent = block.content;
+            let resultChars = 0;
+            if (typeof rawContent === "string") {
+              resultChars = rawContent.length;
+            } else if (Array.isArray(rawContent)) {
+              for (const b of rawContent as Array<Record<string, unknown>>) {
+                if (b.type === "text" && typeof b.text === "string") resultChars += (b.text as string).length;
+              }
+            }
+
             if (block.is_error) {
-              const rawContent = block.content;
               const errorMessage = typeof rawContent === "string"
                 ? rawContent.slice(0, 200)
                 : Array.isArray(rawContent)
@@ -245,13 +300,13 @@ function adaptLine(
                 ts, sid, kind: "tool_result", name: "error",
                 err: errorMessage || undefined,
                 ms: toolDurationMs,
-                data: { ...meta, useId: toolUseId, isError: true, errorMessage: errorMessage || undefined },
+                data: { ...meta, useId: toolUseId, isError: true, errorMessage: errorMessage || undefined, resultChars },
               });
             } else if (toolUseId) {
               events.push({
                 ts, sid, kind: "tool_result", name: "ok",
                 ms: toolDurationMs,
-                data: { ...meta, useId: toolUseId },
+                data: { ...meta, useId: toolUseId, resultChars },
               });
             }
           }
@@ -272,7 +327,7 @@ function adaptLine(
     const data = raw.data as Record<string, unknown> | undefined;
     if (data?.type === "hook_progress") {
       events.push({
-        ts, sid, kind: "hook", name: (data.command as string)?.split("/").pop() || "unknown",
+        ts, sid, kind: "hook", name: hookBasename(data.command as string),
         data: {
           ...meta,
           event: (data.hookEvent as string) || undefined,
@@ -295,7 +350,7 @@ function adaptLine(
           const isError = (exitCode !== undefined && exitCode !== 0) || hasHookErrors;
           events.push({
             ts, sid, kind: "hook_summary",
-            name: (info.command as string)?.split("/").pop() || "unknown",
+            name: hookBasename(info.command as string),
             ms: (info.durationMs as number) || undefined,
             err: isError ? (hasHookErrors ? hookErrors!.join("\n").slice(0, 200) : `exit ${exitCode}`) : undefined,
             data: {
@@ -374,7 +429,15 @@ function adaptFile(filePath: string, project: string, since?: Date): TelemetryEv
     rawEvents.push(...adaptLine(line, project, fallbackSessionId, parentId));
   }
 
-  // Attach last user message text to skill invocations
+  // Build useId → tool_result map for joining duration/error onto tool events
+  const toolResults = new Map<string, { ms?: number; err?: string; ts: string }>();
+  for (const e of rawEvents) {
+    if (e.kind === "tool_result" && e.data?.useId) {
+      toolResults.set(e.data.useId as string, { ms: e.ms, err: e.err, ts: e.ts });
+    }
+  }
+
+  // Attach last user message text and tool_result data to skill invocations
   const lastUserMsg = new Map<string, string>();
   for (const e of rawEvents) {
     if (e.kind === "message" && e.data?.role === "user" && e.data?.text) {
@@ -382,6 +445,19 @@ function adaptFile(filePath: string, project: string, since?: Date): TelemetryEv
     }
     if (e.kind === "tool" && e.data?.skill) {
       e.data.userRequest = lastUserMsg.get(e.sid);
+      if (e.data.useId) {
+        const result = toolResults.get(e.data.useId as string);
+        if (result) {
+          if (result.ms != null) {
+            e.ms = result.ms;
+          } else {
+            // Estimate duration from timestamp delta (tool_use → tool_result)
+            const delta = new Date(result.ts).getTime() - new Date(e.ts).getTime();
+            if (delta > 0) e.ms = delta;
+          }
+          if (result.err) e.err = result.err;
+        }
+      }
     }
   }
 
@@ -437,9 +513,37 @@ function readDirectives(since?: Date): TelemetryEvent[] {
   return events;
 }
 
+// ---------------------------------------------------------------------------
+// Event corpus cache (5s TTL — deduplicates concurrent dashboard requests)
+// ---------------------------------------------------------------------------
+
+interface CorpusCache {
+  events: TelemetryEvent[];
+  expiresAt: number;
+  key: string;
+}
+
+let corpusCache: CorpusCache | undefined;
+
+function corpusCacheKey(opts?: AdaptOptions): string {
+  return `${opts?.baseDir ?? ""}|${opts?.since?.getTime() ?? ""}|${(opts?.projects ?? []).join(",")}`;
+}
+
+export function clearCache(): void {
+  cacheDb.exec("DELETE FROM telemetry_cache_v4");
+  discoveryCache = undefined;
+  corpusCache = undefined;
+}
+
 export function adaptAllSessions(opts?: AdaptOptions): TelemetryEvent[] {
+  const key = corpusCacheKey(opts);
+  const now = Date.now();
+  if (corpusCache && corpusCache.key === key && now < corpusCache.expiresAt) {
+    return corpusCache.events;
+  }
+
   const baseDir = opts?.baseDir || DEFAULT_BASE;
-  const files = discoverJsonlFiles(baseDir, opts?.since);
+  const files = discoverJsonlFilesCached(baseDir, opts?.since);
 
   const allEvents: TelemetryEvent[] = [];
   for (const file of files) {
@@ -449,6 +553,7 @@ export function adaptAllSessions(opts?: AdaptOptions): TelemetryEvent[] {
   }
 
   allEvents.push(...readDirectives(opts?.since));
+  corpusCache = { events: allEvents, expiresAt: Date.now() + 5_000, key };
   return allEvents;
 }
 

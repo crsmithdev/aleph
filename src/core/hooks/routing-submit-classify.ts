@@ -16,7 +16,7 @@
  *
  * Writes directive signals (full, skill:{name}) to the directives log.
  */
-import { existsSync, readFileSync, appendFileSync, mkdirSync } from "fs";
+import { readFileSync, appendFileSync, mkdirSync } from "fs";
 import { resolve, dirname } from "path";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
@@ -61,28 +61,30 @@ const isQuestion = /^\s*(what|how|why|when|where|who|is |are |can |does |do |sho
 if (!isQuestion && words.length >= 5) {
   console.log(`[Construct] Tip: after making changes, consider verifying end-to-end:
 1. Run the actual system
-2. Interact with it (Playwright, Chrome DevTools, or run the CLI)
+2. Interact with it (Playwright, agent-browser, or run the CLI)
 3. Produce an artifact: screenshot or captured output saved to a file
 Unit tests alone are not e2e verification. Use /verification to make e2e a requirement.`);
 }
 
 // Skill matching
-if (!existsSync(rulesFile)) {
-  trace(TAG, "no skill-rules.json, skip skill matching");
-  process.exit(0);
-}
 let rules: any[] = [];
 try {
   rules = JSON.parse(readFileSync(rulesFile, "utf8")).rules ?? [];
-} catch (e) {
-  trace(TAG, `failed to parse skill-rules.json: ${(e as Error).message}`);
-  console.error(`[Construct] Failed to parse skill-rules.json: ${e}`);
+} catch {
+  trace(TAG, "skill-rules.json missing or invalid, skip skill matching");
   process.exit(0);
 }
 const lp = prompt.toLowerCase();
 const matched = rules
   .filter((r: any) => r.keywords?.some((kw: string) => lp.includes(kw.toLowerCase())))
   .map((r: any) => r.skill);
+
+// Always inject worktree lifecycle skills for non-question code requests
+if (!isQuestion && words.length >= 5) {
+  for (const skill of ["isolate-changes", "land-changes"]) {
+    if (!matched.includes(skill)) matched.push(skill);
+  }
+}
 
 trace(TAG, `skill match: ${matched.length ? matched.join(", ") : "none"}`);
 

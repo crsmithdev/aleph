@@ -17,7 +17,7 @@ This is the Construct source repo. The installed Construct rules come from `~/.c
 7. When removing something, remove it completely: all references, unused files, related artifacts, and every other trace.  Do not let orphaned / 'legacy' features pile up if outdated.
 8. All docs (README.md, INSTALL.md, SPEC.md, etc.) must match actual behavior with zero drift. SPEC.md should be behavior- and feature-oriented, enabling functional testing and diffing.
 9. Use memory (MCP), CLAUDE.md, and docs appropriately without duplicating information between layers. Clearing context and continuing in a new session should be instant — never re-learn the codebase.
-10. Never write to `~/.claude/` directly — use `bun install.ts` to deploy, or `/link` to symlink for development.
+10. Never write to `~/.claude/` directly — use `bun install.ts` to deploy. Dev changes are served live from `src/` via `bun dev-server.ts`.
 
 ## Avoiding duplication
 
@@ -39,29 +39,27 @@ Claude Code merges `.claude/` (project) with `~/.claude/` (global) at runtime. I
 
 ## Server
 
-The UI runs on **one port: 3000** in all modes.
+- **Dev:** port 3001 — `bun dev-server.ts` from repo root, Vite HMR, live from `src/`
+- **Prod:** port 3000 — systemd `construct-ui.service`, deployed via `/install`
 
-- Production: `construct-ui.service` (systemd) — `bun api/src/server.ts`
-- Dev: `npm start` from `src/ui/`
-
-Both use port 3000. Stop the systemd service before running dev. There is no separate Vite port.
+Always develop against **port 3001**. Both share data at `~/.construct/`.
 
 ## Dev workflow
 
 1. Edit source in `src/`
-2. Run `bun test.ts` to verify
-3. Run `/link` once to symlink `~/.claude/construct → src/` (changes flow immediately)
-4. Run `bun install.ts` for copy-based deploy (production)
+2. Run `bun dev-server.ts` to see changes live at http://localhost:3001
+3. Run `bun test.ts` to verify
+4. Run `bun install.ts` to deploy to production (port 3000)
 
-After any install, run all checks in the relevant `INSTALL.md`. Resolve failures before moving on. When copying files, always do so verbatim — no truncation or paraphrasing.
+After any install, verify with `systemctl --user status construct-ui` and `curl http://localhost:3000/api/system/info`.
 
 ## Directory map
 
 | Path | Purpose | Installs to | Method |
 |---|---|---|---|
-| `src/` | All Construct code: hooks, skills, commands, CLAUDE.md, settings | `~/.claude/construct/` | Symlink (`/link`) or sync (`install.ts`) |
+| `src/` | All Construct code: hooks, skills, commands, CLAUDE.md, settings | `~/.claude/construct/` | `bun install.ts` |
 | `.claude/` | Project-local dev config (this file, permissions, statusline) | nowhere — used at runtime | — |
-| `~/.claude/construct/` | Installed code (or symlink to `src/`) | — | Only written by `install.ts` or `/link` |
+| `~/.claude/construct/` | Installed code | — | Only written by `install.ts` |
 | `~/.construct/` | User data (DB, sessions, signals, memory) | — | Never touched by install |
 
 ## Skill extensions

@@ -1,31 +1,8 @@
 # Ideas 
 
-Feature superset drawn from note-taking (Obsidian, Logseq, SiYuan, AFFiNE, Joplin, Notion), Zettelkasten methodology, personal assistants (OpenClaw, Leon, PyGPT), and personal CRMs (Monica, Clay, Dex, Folk). Not all will be implemented — this is the ceiling, not the plan.
-
-## Solo Adaptive System
-- **Single-user, zero-overhead** — no multi-tenancy, no auth layers, no team abstractions; the entire system is shaped for one person
-- **AI-native architecture** — AI is not a bolt-on; it is the primary interaction layer, builder, and maintainer of the system itself
-- **Self-modifying structure** — the system can rewrite its own rules, skills, schemas, and components; no part is sacred except the principles
-- **Convention-driven, fully overridable** — sensible defaults everywhere, but every behavior can be changed by editing a file
-- **Schema-free evolution** — data structures grow organically with usage; no migrations, no breaking changes, no versioned APIs
-- **Modular hot-swap** — any component (hook, skill, view, integration) can be added, removed, or replaced without affecting others
-- **Principles over process** — a small set of immutable commandments governs everything; all other rules are negotiable and AI-modifiable
-- **Rapid prototyping loop** — new features go from idea → working code → tested → deployed in a single session; no bureaucracy
-- **Observable by default** — every action, decision, and change is logged and queryable; the system explains itself
-- **Persistent memory** — user preferences, past decisions, and context survive across sessions; the system never forgets unless told to
-
 ## Background Autonomy
-- **Autonomous development loops** — dispatch a prompt; AI iterates (build → test → refine) unattended across multiple cycles until done or blocked
-- **Overnight feature delivery** — queue features before sleep; wake up to tested, working, commit-ready code on feature branches with summaries of what was built and decisions made
-- **Deep research agents** — drop a topic ("I'm interested in X"); come back hours later to synthesized resources, summaries, comparisons, recommendations, and suggested next steps
-- **Parallel agent swarms** — multiple independent agents work simultaneously on different features, research topics, or refactoring tasks
-- **Quality gates** — autonomous work must pass real tests, linting, and verification before presenting results; no "it should work" — only evidence
-- **Progress journals** — each autonomous session produces a structured log: what was attempted, what succeeded, what failed, decisions made, and open questions for the human
-- **Completion contracts** — define a verifiable promise ("all tests pass", "API matches spec"); the loop runs until the contract is met or it escalates
-- **Escalation protocol** — if an agent is stuck after N attempts, it stops, documents the problem clearly, and waits rather than thrashing
+- **Autonomous development** — dispatch a prompt; AI iterates (build → test → refine) unattended across multiple cycles, configurable variation, completion contacts, quality gates, summaries
 - **Morning briefing** — on session start, surface a digest of all overnight autonomous work: features ready for review, research completed, issues encountered
-- **Topic watchlists** — maintain a list of interests; background agents periodically scan for new developments, papers, tools, repos, and surface relevant findings
-- **Idea incubation** — seed half-formed ideas; background agents explore feasibility, find prior art, sketch implementations, and return with a "here's what this could look like" package
 
 ## Writing & Editing
 - **Rich text / WYSIWYG** — formatted editing without seeing markup
@@ -36,9 +13,7 @@ Feature superset drawn from note-taking (Obsidian, Logseq, SiYuan, AFFiNE, Jopli
 - **Diagrams** — Mermaid, PlantUML, flowcharts, sequence diagrams rendered inline
 - **Embedded media** — images, video, audio, PDFs, web pages inline
 - **Audio recording** — record voice notes directly into a note, with speech-to-text
-- **Tables** — markdown tables and database-style structured tables
 - **Callouts / admonitions** — colored info/warning/tip blocks
-- **Horizontal rules, headings (6 levels), checklists**
 
 ## Note Types (Zettelkasten)
 - **Fleeting notes** — quick captures, disposable, inbox items
@@ -51,24 +26,14 @@ Feature superset drawn from note-taking (Obsidian, Logseq, SiYuan, AFFiNE, Jopli
 
 ## Contact & Relationship Management
 - **Contact profiles** — name, photo, employer, job title, social links, addresses, phone, email, automatically from data
-- **Relationship mapping** — define relationship types (family, friend, colleague, mentor), link contacts to each other, automatically
 - **Contact groups / tags / labels** — arbitrary categorization, smart groups by filter, automatically
-- **Contact enrichment** — auto-pull data from LinkedIn, social media, public web (job changes, company info)
+- **Contact enrichment** — auto-pull data from LinkedIn, social media, public web (job changes, company info)Z
 - **Interaction timeline** — chronological log of every touchpoint per contact (calls, emails, meetings, texts)
 - **Multi-source import** — Gmail, LinkedIn, CSV, vCard, social platforms, phone contacts
-- **Contact deduplication** — merge duplicates across sources
 - **Per-contact tracking** — notes, debts, gifts given/received/wishlisted, expenses, activity log
 - **Relationship intelligence** — health scores based on interaction frequency/recency/sentiment, neglected contact alerts, "Y just changed jobs" insights
 
-## Linking & Knowledge Graph
-- **Bi-directional links** — `[[wikilinks]]` that auto-create backlinks on the target note
-- **Backlinks panel** — see all notes that reference the current note
-- **Outgoing links panel** — see all notes the current note links to
-- **Unlinked mentions** — detect text that matches a note title but isn't linked yet
-- **Block references** — link to a specific block/paragraph within a note, not just the whole note
-- **Block embeds / transclusion** — render another note's content inline
-- **Graph visualization** — interactive node-and-edge map of all notes, contacts, and their connections; local graph scoped to neighbors
-- **Link aliases** — display different text for a link than the target note's title
+- **Link aliases** — display different text for a link than the target note's titleA
 - **Atomic note principle** — one idea per note, enforced by convention
 - **Mind maps** — visual branching thought maps derived from the knowledge graph
 
@@ -104,7 +69,6 @@ Feature superset drawn from note-taking (Obsidian, Logseq, SiYuan, AFFiNE, Jopli
 
 ## Sync & Cross-Platform
 - **Local-first storage** — all data on device, works offline
-- **End-to-end encrypted sync** — sync across devices with client-side encryption
 - **Cloud sync options** — Dropbox, OneDrive, iCloud, Google Drive, S3, self-hosted
 - **Git-based sync** — version control via Git repositories
 - **Cross-platform** — Windows, macOS, Linux, iOS, Android, web browser

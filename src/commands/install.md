@@ -1,10 +1,7 @@
 # /install — Deploy Construct to ~/.claude
 
-Runs the full installer: copies `src/` to `~/.claude/construct/`, installs dependencies,
-builds the frontend, updates commands/settings/CLAUDE.md, and restarts the service.
-
-If currently in linked mode (`~/.claude/construct` is a symlink), the symlink is replaced
-with a fresh copy.
+Copies `src/` to `~/.claude/construct/`, builds the frontend, installs dependencies,
+updates commands/settings/CLAUDE.md, and restarts the production service on port 3000.
 
 ```bash
 cd ~/construct && bun install.ts
@@ -12,13 +9,14 @@ cd ~/construct && bun install.ts
 
 ## Post-install checks
 
-After the script completes, verify:
-
 ```bash
-systemctl --user status construct-ui   # should be active (running)
+systemctl --user status construct-ui        # active (running)
 curl -s http://localhost:3000/api/system/info | head -5
 ```
 
-## After install
+The installer prints a compact summary. Show that output to the user.
 
-Run the post-install checks above. The installer prints a `=== Symlinks ===` summary at the end — display that output here.
+## Dev vs Prod
+
+- **Dev** (port 3001): `bun dev-server.ts` — Vite HMR, live from `src/`, no install needed
+- **Prod** (port 3000): this command — built static files, deployed copy

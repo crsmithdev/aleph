@@ -12,7 +12,7 @@
  *    - Track Edit/Write/NotebookEdit as "edits" (with file paths).
  *    - Track Bash commands matching E2E_CMD (cli execution, playwright) as e2e signals.
  *    - Track Bash commands matching ARTIFACT_CMD (output redirect, screenshot) as artifacts.
- *    - Track Chrome DevTools / Playwright MCP calls as e2e signals + artifacts.
+ *    - Track Playwright MCP calls as e2e signals + artifacts.
  * 4. No edits this turn → exit 0.
  * 5. Edits + e2e + artifact → exit 0 (verification passed).
  * 6. Edits but missing e2e or artifact → emit advisory reminder, exit 0.
@@ -90,14 +90,6 @@ for (let i = turnStart; i < lines.length; i++) {
       }
       if (ARTIFACT_CMD.test(cmd) && !HOOK_INVOCATION.test(cmd)) {
         artifacts.push("bash:" + cmd.slice(0, 60));
-      }
-    }
-
-    // Chrome DevTools MCP = real browser interaction
-    if (name.startsWith("mcp__chrome-devtools__")) {
-      e2eSignals.push(name);
-      if (name === "mcp__chrome-devtools__take_screenshot") {
-        artifacts.push("screenshot:chrome-devtools");
       }
     }
 
