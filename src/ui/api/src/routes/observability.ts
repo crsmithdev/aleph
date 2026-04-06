@@ -22,8 +22,48 @@ import {
   aggregateSessionTrace,
   getRecentEvents,
   aggregateSubagents,
+  aggregateVerifications,
 } from '@construct/telemetry';
 import type { Granularity, TelemetryEvent } from '@construct/telemetry';
+
+const MAX_MEMORY_ITEMS = 500;
+
+// ---------------------------------------------------------------------------
+// Reducer result cache (60s TTL)
+// Keyed by route URL (includes path + query string) — safe for read-only
+// aggregate endpoints. Session traces are excluded (per-session, keyed by id).
+// ---------------------------------------------------------------------------
+
+interface ResultCacheEntry {
+  value: unknown;
+  expiresAt: number;
+}
+
+const resultCache = new Map<string, ResultCacheEntry>();
+
+function cachedResult<T>(key: string, ttlMs: number, fn: () => T): T {
+  const now = Date.now();
+  const cached = resultCache.get(key);
+  if (cached && now < cached.expiresAt) return cached.value as T;
+  const value = fn();
+  resultCache.set(key, { value, expiresAt: now + ttlMs });
+  return value;
+}
+
+// Pre-handler that short-circuits before parseDaysPreHandler when the result
+// is already cached. Registered as the first preHandler in the array.
+function resultCachePreHandler(
+  req: FastifyRequest,
+  reply: { send: (body: unknown) => void },
+  done: () => void,
+) {
+  const cached = resultCache.get(req.url);
+  if (cached && Date.now() < cached.expiresAt) {
+    reply.send(cached.value);
+    return;
+  }
+  done();
+}
 
 type QueryParams = { days?: string; range?: string; granularity?: string; session?: string };
 type ObsRequest = FastifyRequest<{ Querystring: QueryParams }> & {
@@ -113,6 +153,91 @@ function checkHookActive(fullCommand: string): boolean {
 function tryRead(path: string): string | undefined {
   if (!existsSync(path)) return undefined;
   try { return readFileSync(path, 'utf-8'); } catch { return undefined; }
+}
+
+// Decode Claude's project encoding ("-home-user-project" → "/home/user/project")
+// by finding which prefix of the encoded segments matches a real path.
+function decodeProjectPath(encoded: string): string | undefined {
+  // Encoded path has '/' replaced by '-', with a leading '-' for root '/'.
+  // Walk the encoded string finding candidate split points.
+  const stripped = encoded.startsWith('-') ? encoded.slice(1) : encoded;
+  const candidates: string[] = [];
+  // Try all partitions of the stripped string using '-' as separator
+  // by building paths left-to-right and checking existence.
+  function tryBuild(remaining: string, current: string): void {
+    const full = '/' + current;
+    if (existsSync(full) && statSync(full).isDirectory()) {
+      candidates.push(full);
+    }
+    if (!remaining) return;
+    for (let i = 1; i <= remaining.length; i++) {
+      if (remaining[i - 1] === '-' || i === remaining.length) {
+        const seg = remaining.slice(0, i === remaining.length ? i : i - 1);
+        if (seg) tryBuild(remaining.slice(i), current ? current + '/' + seg : seg);
+        if (i < remaining.length) {
+          const segWithHyphen = remaining.slice(0, i);
+          tryBuild(remaining.slice(i), current ? current + '/' + segWithHyphen : segWithHyphen);
+        }
+      }
+    }
+  }
+  // Simpler: just replace all '-' with '/' and try that path first
+  const simple = '/' + stripped.replace(/-/g, '/');
+  if (existsSync(simple)) return simple;
+  return undefined;
+}
+
+type ContextFile = { label: string; path: string; chars: number; estTokens: number };
+
+function readContextFiles(sessionId: string): { files: ContextFile[] } {
+  // Find the project for this session by scanning telemetry dirs
+  let projectEncoded: string | undefined;
+  for (const dir of readdirSync(claudePaths.projects)) {
+    const sessionFile = resolve(claudePaths.projects, dir, `${sessionId}.jsonl`);
+    if (existsSync(sessionFile)) { projectEncoded = dir; break; }
+  }
+
+  const files: ContextFile[] = [];
+
+  function addFile(label: string, path: string): string | undefined {
+    const content = tryRead(path);
+    if (content === undefined) return undefined;
+    files.push({ label, path, chars: content.length, estTokens: Math.ceil(content.length / 3.5) });
+    return content;
+  }
+
+  // 1. Global CLAUDE.md
+  const globalContent = addFile('Global CLAUDE.md', resolve(claudePaths.root, 'CLAUDE.md'));
+
+  // 2. Resolve @-references in global CLAUDE.md (e.g. @construct/core/CLAUDE.md)
+  if (globalContent) {
+    for (const ref of globalContent.matchAll(/^@([^\s]+)/gm)) {
+      const refPath = ref[1];
+      // Map known construct/ prefix to actual construct path
+      const resolved = refPath.startsWith('construct/')
+        ? resolve(claudePaths.construct, refPath.slice('construct/'.length))
+        : resolve(claudePaths.root, refPath);
+      addFile(refPath, resolved);
+    }
+  }
+
+  // 3. Project-local CLAUDE.md
+  if (projectEncoded) {
+    const projectPath = decodeProjectPath(projectEncoded);
+    if (projectPath) {
+      const projectContent = addFile('Project CLAUDE.md', resolve(projectPath, '.claude', 'CLAUDE.md'));
+      // Resolve @-refs in project CLAUDE.md too
+      if (projectContent) {
+        for (const ref of projectContent.matchAll(/^@([^\s]+)/gm)) {
+          const refPath = ref[1];
+          const resolved = resolve(projectPath, '.claude', refPath);
+          if (!files.some(f => f.path === resolved)) addFile(refPath, resolved);
+        }
+      }
+    }
+  }
+
+  return { files };
 }
 
 function readHookSource(fullCommand: string): string | undefined {
@@ -319,6 +444,14 @@ const HOOK_METADATA: Record<string, HookMeta> = {
     blocking: false,
     description: 'Backs up transcript before context compaction',
   },
+  'context-compact-suggest': {
+    blocking: false,
+    description: 'Suggests /compact at 50 tool calls with phase-boundary decision guide',
+  },
+  'security-scan-pre-commit': {
+    blocking: false,
+    description: 'Scans staged diff for secrets and console.log before git commit',
+  },
 };
 
 function readMarkerFileStats(): Record<string, { writes: number; clears: number; activeNow: boolean }> {
@@ -356,190 +489,224 @@ function readMarkerFileStats(): Record<string, { writes: number; clears: number;
 }
 
 export const observabilityRoutes: FastifyPluginAsync = async (app) => {
-  app.get<{ Querystring: QueryParams }>('/overview', { preHandler: parseDaysPreHandler }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/overview', { preHandler: [resultCachePreHandler, parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    const { result, queryTimeMs } = timed(() => aggregateOverview(obsReq.telemetryEntries, obsReq.granularity));
-    return { ...result, queryTimeMs };
+    return cachedResult(req.url, 60_000, () => {
+      const { result, queryTimeMs } = timed(() => aggregateOverview(obsReq.telemetryEntries, obsReq.granularity));
+      return { ...result, queryTimeMs };
+    });
   });
 
-  app.get<{ Querystring: QueryParams }>('/tools', { preHandler: parseDaysPreHandler }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/tools', { preHandler: [resultCachePreHandler, parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    const { result, queryTimeMs } = timed(() => aggregateTools(obsReq.telemetryEntries, obsReq.granularity));
-    // Add active status
-    const ranked = result.ranked.map((t) => ({
-      ...t,
-      active: checkToolActive(t.name, t.lastUsed),
-    }));
-    return { ...result, ranked, queryTimeMs };
+    return cachedResult(req.url, 60_000, () => {
+      const { result, queryTimeMs } = timed(() => aggregateTools(obsReq.telemetryEntries, obsReq.granularity));
+      const ranked = result.ranked.map((t) => ({
+        ...t,
+        active: checkToolActive(t.name, t.lastUsed),
+      }));
+      return { ...result, ranked, queryTimeMs };
+    });
   });
 
-  app.get<{ Querystring: QueryParams }>('/hooks', { preHandler: parseDaysPreHandler }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/hooks', { preHandler: [resultCachePreHandler, parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    const { result, queryTimeMs } = timed(() => aggregateHooks(obsReq.telemetryEntries, obsReq.granularity));
+    return cachedResult(req.url, 60_000, () => {
+      const { result, queryTimeMs } = timed(() => aggregateHooks(obsReq.telemetryEntries, obsReq.granularity));
 
-    // Merge self-reported hook events (for hooks on events Claude Code doesn't log)
-    const days = rangeToDays(req.query.range) || rangeToDays(req.query.days ? `${req.query.days}d` : undefined) || 30;
-    const startDate = new Date(Date.now() - days * 86400000).toISOString();
-    const selfReported = readSelfReportedHookCounts(startDate);
-    const rankedMap = new Map(result.ranked.map((h) => [h.command, h]));
-    for (const [hook, { count, event }] of selfReported) {
-      const existing = rankedMap.get(hook);
-      if (existing) {
-        existing.count = Math.max(existing.count, count);
-        if (!existing.event) existing.event = event;
-      } else {
-        rankedMap.set(hook, { command: hook, event, count, avgMs: 0, p50Ms: 0, p95Ms: 0, errors: 0, fullCommand: hook });
+      // Merge self-reported hook events (for hooks on events Claude Code doesn't log)
+      const days = rangeToDays(req.query.range) || rangeToDays(req.query.days ? `${req.query.days}d` : undefined) || 30;
+      const startDate = new Date(Date.now() - days * 86400000).toISOString();
+      const selfReported = readSelfReportedHookCounts(startDate);
+      const rankedMap = new Map(result.ranked.map((h) => [h.command, h]));
+      for (const [hook, { count, event }] of selfReported) {
+        const existing = rankedMap.get(hook);
+        if (existing) {
+          existing.count = Math.max(existing.count, count);
+          if (!existing.event) existing.event = event;
+        } else {
+          rankedMap.set(hook, { command: hook, event, count, avgMs: 0, p50Ms: 0, p95Ms: 0, errors: 0, fullCommand: hook });
+        }
       }
-    }
-    const merged = [...rankedMap.values()].sort((a, b) => b.count - a.count);
+      const merged = [...rankedMap.values()].sort((a, b) => b.count - a.count);
 
-    const markerStats = readMarkerFileStats();
-    const ranked = merged.map((h) => {
-      const name = h.command.replace(/\.ts$/, '');
-      const meta = HOOK_METADATA[name];
-      return {
-        ...h,
-        active: h.fullCommand ? checkHookActive(h.fullCommand) : false,
-        blocking: meta?.blocking ?? false,
-        gate: meta?.gate,
-        markerFile: meta?.markerFile,
-        description: meta?.description,
-      };
+      const markerStats = readMarkerFileStats();
+      const ranked = merged.map((h) => {
+        const name = h.command.replace(/\.ts$/, '');
+        const meta = HOOK_METADATA[name];
+        return {
+          ...h,
+          active: h.fullCommand ? checkHookActive(h.fullCommand) : false,
+          blocking: meta?.blocking ?? false,
+          gate: meta?.gate,
+          markerFile: meta?.markerFile,
+          description: meta?.description,
+        };
+      });
+      const registered = getRegisteredHooks();
+      const normalize = (cmd: string) => cmd.replace(/\.(ts|sh)$/, '');
+      const usedCommands = new Set(ranked.map(h => normalize(h.command)));
+      const unused = registered.filter(h => !usedCommands.has(normalize(h.command))).map(h => {
+        const meta = HOOK_METADATA[normalize(h.command)];
+        return {
+          ...h,
+          blocking: meta?.blocking ?? false,
+          gate: meta?.gate,
+          markerFile: meta?.markerFile,
+          description: meta?.description,
+        };
+      });
+      const byEventMap = new Map<string, number>();
+      for (const h of merged) {
+        if (h.event) byEventMap.set(h.event, (byEventMap.get(h.event) || 0) + h.count);
+      }
+      const byEvent = [...byEventMap.entries()].map(([event, count]) => ({ event, count })).sort((a, b) => b.count - a.count);
+      return { ...result, ranked, unused, markerStats, byEvent, queryTimeMs };
     });
-    const registered = getRegisteredHooks();
-    const normalize = (cmd: string) => cmd.replace(/\.(ts|sh)$/, '');
-    const usedCommands = new Set(ranked.map(h => normalize(h.command)));
-    const unused = registered.filter(h => !usedCommands.has(normalize(h.command))).map(h => {
-      const meta = HOOK_METADATA[normalize(h.command)];
-      return {
-        ...h,
-        blocking: meta?.blocking ?? false,
-        gate: meta?.gate,
-        markerFile: meta?.markerFile,
-        description: meta?.description,
-      };
+  });
+
+  app.get<{ Querystring: QueryParams }>('/skills', { preHandler: [resultCachePreHandler, parseDaysPreHandler] }, async (req) => {
+    const obsReq = req as ObsRequest;
+    return cachedResult(req.url, 60_000, () => {
+      const { result, queryTimeMs } = timed(() => aggregateSkills(obsReq.telemetryEntries, obsReq.granularity));
+      const registeredSkills = new Set(getRegisteredSkills());
+      const commandNames = getCommandNames();
+      const usedNames = new Set(result.ranked.map(s => s.skill.replace(/^\//, '')));
+      const unusedSkills = [...registeredSkills].filter(s => !usedNames.has(s)).map(s => ({ name: s, type: 'skill' as const }));
+      const unusedCommands = [...commandNames].filter(s => !usedNames.has(s) && !registeredSkills.has(s)).map(s => ({ name: s, type: 'command' as const }));
+      const unused = [...unusedSkills, ...unusedCommands];
+      const ranked = result.ranked.map(s => {
+        const bare = s.skill.replace(/^\//, '');
+        const isSkill = registeredSkills.has(bare);
+        const isCommand = commandNames.has(bare) && !isSkill;
+        return {
+          ...s,
+          type: isCommand ? 'command' as const : 'skill' as const,
+          registered: isCommand || isSkill,
+        };
+      });
+      const typeMap = new Map<string, number>();
+      for (const s of ranked) {
+        typeMap.set(s.type, (typeMap.get(s.type) || 0) + s.count);
+      }
+      const byType = [...typeMap.entries()].map(([type, count]) => ({ type, count }));
+      return { ...result, ranked, unused, byType, queryTimeMs };
     });
-    const byEventMap = new Map<string, number>();
-    for (const h of merged) {
-      if (h.event) byEventMap.set(h.event, (byEventMap.get(h.event) || 0) + h.count);
-    }
-    const byEvent = [...byEventMap.entries()].map(([event, count]) => ({ event, count })).sort((a, b) => b.count - a.count);
-    return { ...result, ranked, unused, markerStats, byEvent, queryTimeMs };
   });
 
-  app.get<{ Querystring: QueryParams }>('/skills', { preHandler: parseDaysPreHandler }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/tokens', { preHandler: [resultCachePreHandler, parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    const { result, queryTimeMs } = timed(() => aggregateSkills(obsReq.telemetryEntries, obsReq.granularity));
-    const registeredSkills = new Set(getRegisteredSkills());
-    const commandNames = getCommandNames();
-    const usedNames = new Set(result.ranked.map(s => s.skill.replace(/^\//, '')));
-    const unusedSkills = [...registeredSkills].filter(s => !usedNames.has(s)).map(s => ({ name: s, type: 'skill' as const }));
-    const unusedCommands = [...commandNames].filter(s => !usedNames.has(s) && !registeredSkills.has(s)).map(s => ({ name: s, type: 'command' as const }));
-    const unused = [...unusedSkills, ...unusedCommands];
-    const ranked = result.ranked.map(s => {
-      const bare = s.skill.replace(/^\//, '');
-      const isSkill = registeredSkills.has(bare);
-      const isCommand = commandNames.has(bare) && !isSkill;
-      return {
-        ...s,
-        type: isCommand ? 'command' as const : 'skill' as const,
-        registered: isCommand || isSkill,
-      };
+    return cachedResult(req.url, 60_000, () => {
+      const { result, queryTimeMs } = timed(() => aggregateTokens(obsReq.telemetryEntries, obsReq.granularity));
+      return { ...result, queryTimeMs };
     });
-    const typeMap = new Map<string, number>();
-    for (const s of ranked) {
-      typeMap.set(s.type, (typeMap.get(s.type) || 0) + s.count);
-    }
-    const byType = [...typeMap.entries()].map(([type, count]) => ({ type, count }));
-    return { ...result, ranked, unused, byType, queryTimeMs };
   });
 
-  app.get<{ Querystring: QueryParams }>('/tokens', { preHandler: parseDaysPreHandler }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/cost', { preHandler: [resultCachePreHandler, parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    const { result, queryTimeMs } = timed(() => aggregateTokens(obsReq.telemetryEntries, obsReq.granularity));
-    return { ...result, queryTimeMs };
+    return cachedResult(req.url, 60_000, () => {
+      const { result, queryTimeMs } = timed(() => aggregateCost(obsReq.telemetryEntries, obsReq.granularity));
+      return { ...result, queryTimeMs };
+    });
   });
 
-  app.get<{ Querystring: QueryParams }>('/cost', { preHandler: parseDaysPreHandler }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/sessions', { preHandler: [resultCachePreHandler, parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    const { result, queryTimeMs } = timed(() => aggregateCost(obsReq.telemetryEntries, obsReq.granularity));
-    return { ...result, queryTimeMs };
-  });
-
-  app.get<{ Querystring: QueryParams }>('/sessions', { preHandler: parseDaysPreHandler }, async (req) => {
-    const obsReq = req as ObsRequest;
-    const { result, queryTimeMs } = timed(() => aggregateSessions(obsReq.telemetryEntries, obsReq.granularity));
-    const gateMap = readSessionGateInfo();
-    for (const session of result.sessions) {
-      session.gateInfo = toGateInfo(gateMap.get(session.sessionId));
-    }
-    return { ...result, queryTimeMs };
+    return cachedResult(req.url, 60_000, () => {
+      const { result, queryTimeMs } = timed(() => aggregateSessions(obsReq.telemetryEntries, obsReq.granularity));
+      const gateMap = readSessionGateInfo();
+      for (const session of result.sessions) {
+        session.gateInfo = toGateInfo(gateMap.get(session.sessionId));
+      }
+      return { ...result, queryTimeMs };
+    });
   });
 
   app.get<{ Params: { id: string }; Querystring: QueryParams }>(
     '/sessions/:id/trace',
-    { preHandler: parseDaysPreHandler },
+    { preHandler: [resultCachePreHandler, parseDaysPreHandler] },
     async (req) => {
       const sessionId = decodeURIComponent(req.params.id);
-      const { result, queryTimeMs } = timed(() => aggregateSessionTrace((req as ObsRequest).telemetryEntries, sessionId));
-      const gateMap = readSessionGateInfo();
-      result.gateInfo = toGateInfo(gateMap.get(sessionId));
-      return { ...result, queryTimeMs };
+      return cachedResult(req.url, 30_000, () => {
+        const { result, queryTimeMs } = timed(() => aggregateSessionTrace((req as ObsRequest).telemetryEntries, sessionId));
+        const gateMap = readSessionGateInfo();
+        result.gateInfo = toGateInfo(gateMap.get(sessionId));
+        return { ...result, queryTimeMs };
+      });
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    '/sessions/:id/context-files',
+    async (req) => {
+      const sessionId = decodeURIComponent(req.params.id);
+      return cachedResult(req.url, 300_000, () => readContextFiles(sessionId));
     },
   );
 
   app.get<{ Params: { name: string }; Querystring: QueryParams }>(
     '/tools/:name',
-    { preHandler: parseDaysPreHandler },
+    { preHandler: [resultCachePreHandler, parseDaysPreHandler] },
     async (req) => {
-      const toolName = decodeURIComponent(req.params.name);
-      const { result, queryTimeMs } = timed(() => aggregateToolDetail((req as ObsRequest).telemetryEntries, toolName));
-      return { ...result, queryTimeMs };
+      const obsReq = req as ObsRequest;
+      return cachedResult(req.url, 60_000, () => {
+        const toolName = decodeURIComponent(req.params.name);
+        const { result, queryTimeMs } = timed(() => aggregateToolDetail(obsReq.telemetryEntries, toolName));
+        return { ...result, queryTimeMs };
+      });
     },
   );
 
-  app.get<{ Querystring: QueryParams }>('/hooks/events', { preHandler: parseDaysPreHandler }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/hooks/events', { preHandler: [resultCachePreHandler, parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    const { result, queryTimeMs } = timed(() => aggregateHookEvents(obsReq.telemetryEntries));
-    return { ...result, queryTimeMs };
+    return cachedResult(req.url, 60_000, () => {
+      const { result, queryTimeMs } = timed(() => aggregateHookEvents(obsReq.telemetryEntries));
+      return { ...result, queryTimeMs };
+    });
   });
 
   app.get<{ Params: { name: string }; Querystring: QueryParams }>(
     '/hooks/:name',
-    { preHandler: parseDaysPreHandler },
+    { preHandler: [resultCachePreHandler, parseDaysPreHandler] },
     async (req) => {
-      const hookName = decodeURIComponent(req.params.name);
       const obsReq = req as ObsRequest;
-      const { result, queryTimeMs } = timed(() => aggregateHookDetail(obsReq.telemetryEntries, hookName));
-      const active = result.fullCommand ? checkHookActive(result.fullCommand) : false;
-      const sourceCode = result.fullCommand ? readHookSource(result.fullCommand) : undefined;
-      return { ...result, active, sourceCode, queryTimeMs };
+      return cachedResult(req.url, 60_000, () => {
+        const hookName = decodeURIComponent(req.params.name);
+        const { result, queryTimeMs } = timed(() => aggregateHookDetail(obsReq.telemetryEntries, hookName));
+        const active = result.fullCommand ? checkHookActive(result.fullCommand) : false;
+        const sourceCode = result.fullCommand ? readHookSource(result.fullCommand) : undefined;
+        return { ...result, active, sourceCode, queryTimeMs };
+      });
     },
   );
 
   app.get<{ Params: { name: string }; Querystring: QueryParams }>(
     '/skills/:name',
-    { preHandler: parseDaysPreHandler },
+    { preHandler: [resultCachePreHandler, parseDaysPreHandler] },
     async (req) => {
-      const skillName = decodeURIComponent(req.params.name);
       const obsReq = req as ObsRequest;
-      const { result, queryTimeMs } = timed(() => aggregateSkillDetail(obsReq.telemetryEntries, skillName));
-      const projects = [...new Set(result.invocations?.map((i: { project: string }) => i.project) ?? [])];
-      const sourceContent = findSkillSource(skillName, projects);
-      const commandNames = getCommandNames();
-      const bare = skillName.startsWith('/') ? skillName.slice(1) : skillName;
-      const type = commandNames.has(bare) ? 'command' as const : 'skill' as const;
-      return { ...result, sourceContent, type, queryTimeMs };
+      return cachedResult(req.url, 60_000, () => {
+        const skillName = decodeURIComponent(req.params.name);
+        const { result, queryTimeMs } = timed(() => aggregateSkillDetail(obsReq.telemetryEntries, skillName));
+        const projects = [...new Set(result.invocations?.map((i: { project: string }) => i.project) ?? [])];
+        const sourceContent = findSkillSource(skillName, projects);
+        const commandNames = getCommandNames();
+        const bare = skillName.startsWith('/') ? skillName.slice(1) : skillName;
+        const type = commandNames.has(bare) ? 'command' as const : 'skill' as const;
+        return { ...result, sourceContent, type, queryTimeMs };
+      });
     },
   );
 
   app.get<{ Querystring: QueryParams }>(
     '/memory/usage',
-    { preHandler: parseDaysPreHandler },
+    { preHandler: [resultCachePreHandler, parseDaysPreHandler] },
     async (req) => {
       const obsReq = req as ObsRequest;
-      const { result, queryTimeMs } = timed(() => aggregateMemoryUsage(obsReq.telemetryEntries, obsReq.granularity));
-      return { ...result, queryTimeMs };
+      return cachedResult(req.url, 60_000, () => {
+        const { result, queryTimeMs } = timed(() => aggregateMemoryUsage(obsReq.telemetryEntries, obsReq.granularity));
+        return { ...result, queryTimeMs };
+      });
     },
   );
 
@@ -551,7 +718,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
         return { items: [] };
       }
 
-      const limit = Math.min(Math.max(parseInt(req.query.limit || '50', 10) || 50, 1), 500);
+      const limit = Math.min(Math.max(parseInt(req.query.limit || '50', 10) || 50, 1), MAX_MEMORY_ITEMS);
       const conditions: string[] = [];
       const params: (string | number)[] = [];
       const useFts = !!req.query.q;
@@ -643,31 +810,39 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  app.get<{ Querystring: QueryParams }>('/compaction', { preHandler: parseDaysPreHandler }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/compaction', { preHandler: [resultCachePreHandler, parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    const { result, queryTimeMs } = timed(() => aggregateCompaction(obsReq.telemetryEntries, obsReq.granularity));
-    return { ...result, queryTimeMs };
+    return cachedResult(req.url, 60_000, () => {
+      const { result, queryTimeMs } = timed(() => aggregateCompaction(obsReq.telemetryEntries, obsReq.granularity));
+      return { ...result, queryTimeMs };
+    });
   });
 
-  app.get<{ Querystring: QueryParams }>('/api-duration', { preHandler: parseDaysPreHandler }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/api-duration', { preHandler: [resultCachePreHandler, parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    const { result, queryTimeMs } = timed(() => aggregateApiDuration(obsReq.telemetryEntries, obsReq.granularity));
-    return { ...result, queryTimeMs };
+    return cachedResult(req.url, 60_000, () => {
+      const { result, queryTimeMs } = timed(() => aggregateApiDuration(obsReq.telemetryEntries, obsReq.granularity));
+      return { ...result, queryTimeMs };
+    });
   });
 
   app.get<{ Querystring: QueryParams & { type?: string; search?: string; limit?: string; offset?: string } }>(
     '/events',
-    { preHandler: parseDaysPreHandler },
+    { preHandler: [resultCachePreHandler, parseDaysPreHandler] },
     async (req) => {
-      const limit = Math.min(Math.max(parseInt(req.query.limit || '100', 10) || 100, 1), 500);
-      const offset = Math.max(parseInt(req.query.offset || '0', 10) || 0, 0);
-      const filters: { entryType?: string; search?: string } = {};
-      if (req.query.type) filters.entryType = req.query.type;
-      if (req.query.search) filters.search = req.query.search;
-      const { result, queryTimeMs } = timed(() =>
-        getRecentEvents((req as ObsRequest).telemetryEntries, limit, offset, filters),
-      );
-      return { ...result, queryTimeMs };
+      // Events are not cached — they're paginated and search-filtered, so the URL
+      // key already differentiates pages/queries, but staleness of 5s is fine.
+      return cachedResult(req.url, 5_000, () => {
+        const limit = Math.min(Math.max(parseInt(req.query.limit || '100', 10) || 100, 1), 500);
+        const offset = Math.max(parseInt(req.query.offset || '0', 10) || 0, 0);
+        const filters: { entryType?: string; search?: string } = {};
+        if (req.query.type) filters.entryType = req.query.type;
+        if (req.query.search) filters.search = req.query.search;
+        const { result, queryTimeMs } = timed(() =>
+          getRecentEvents((req as ObsRequest).telemetryEntries, limit, offset, filters),
+        );
+        return { ...result, queryTimeMs };
+      });
     },
   );
 
@@ -770,10 +945,12 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  app.get<{ Querystring: QueryParams }>('/subagents', { preHandler: parseDaysPreHandler }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/subagents', { preHandler: [resultCachePreHandler, parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    const { result, queryTimeMs } = timed(() => aggregateSubagents(obsReq.telemetryEntries, obsReq.granularity));
-    return { ...result, queryTimeMs };
+    return cachedResult(req.url, 60_000, () => {
+      const { result, queryTimeMs } = timed(() => aggregateSubagents(obsReq.telemetryEntries, obsReq.granularity));
+      return { ...result, queryTimeMs };
+    });
   });
 
   app.post('/memory/snapshot', async () => {
@@ -788,5 +965,98 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     } catch (err) {
       return { status: 'error', message: String(err) };
     }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Evals
+  // ---------------------------------------------------------------------------
+
+  app.get('/evals', async () => {
+    const evalsFile = resolve(dataPaths.root, 'evals', 'results.jsonl');
+    if (!existsSync(evalsFile)) {
+      return { evals: [], byDay: [], totalRuns: 0, overallPassAt3Rate: 0 };
+    }
+
+    let lines: string[];
+    try {
+      lines = readFileSync(evalsFile, 'utf-8').split('\n').filter(Boolean);
+    } catch {
+      return { evals: [], byDay: [], totalRuns: 0, overallPassAt3Rate: 0 };
+    }
+
+    // Parse all eval results
+    type EvalEntry = { ts: string; evalName: string; attempt: number; passed: number; failed: number; passAt1: boolean };
+    const entries: EvalEntry[] = [];
+    for (const line of lines) {
+      try { entries.push(JSON.parse(line)); } catch {}
+    }
+
+    // Group by eval name
+    const byName = new Map<string, EvalEntry[]>();
+    for (const e of entries) {
+      if (!byName.has(e.evalName)) byName.set(e.evalName, []);
+      byName.get(e.evalName)!.push(e);
+    }
+
+    // Calculate pass@k per eval
+    const evals = [...byName.entries()].map(([name, runs]) => {
+      const sorted = runs.sort((a, b) => a.ts.localeCompare(b.ts));
+      const passAt1Runs = sorted.filter(r => r.passAt1).length;
+      const passAt1Rate = Math.round((passAt1Runs / sorted.length) * 100);
+
+      // pass@3: group consecutive runs of ≤3 and check if any succeed
+      let pass3 = 0; let total3 = 0;
+      for (let i = 0; i < sorted.length; i += 3) {
+        const window = sorted.slice(i, i + 3);
+        total3++;
+        if (window.some(r => r.passed > 0 && r.failed === 0)) pass3++;
+      }
+      const passAt3Rate = total3 > 0 ? Math.round((pass3 / total3) * 100) : 0;
+
+      // Trend: compare last 3 runs vs previous 3
+      const recent3 = sorted.slice(-3);
+      const prev3 = sorted.slice(-6, -3);
+      const recentPassRate = recent3.filter(r => r.passAt1).length / Math.max(recent3.length, 1);
+      const prevPassRate = prev3.length > 0 ? prev3.filter(r => r.passAt1).length / prev3.length : recentPassRate;
+      const trend = prev3.length === 0 ? 'stable'
+        : recentPassRate > prevPassRate + 0.1 ? 'improving'
+        : recentPassRate < prevPassRate - 0.1 ? 'regressing'
+        : 'stable';
+
+      return { name, totalRuns: sorted.length, passAt1Rate, passAt3Rate, lastRun: sorted[sorted.length - 1].ts, trend };
+    });
+
+    // By day
+    const dayMap = new Map<string, { runs: number; passes: number }>();
+    for (const e of entries) {
+      const day = e.ts.slice(0, 10);
+      const cur = dayMap.get(day) ?? { runs: 0, passes: 0 };
+      cur.runs++;
+      if (e.passAt1) cur.passes++;
+      dayMap.set(day, cur);
+    }
+    const byDay = [...dayMap.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, { runs, passes }]) => ({ date, runs, passRate: runs > 0 ? Math.round((passes / runs) * 100) : 0 }));
+
+    const totalRuns = entries.length;
+    const passAt3Rates = evals.map(e => e.passAt3Rate);
+    const overallPassAt3Rate = passAt3Rates.length > 0
+      ? Math.round(passAt3Rates.reduce((s, r) => s + r, 0) / passAt3Rates.length)
+      : 0;
+
+    return { evals, byDay, totalRuns, overallPassAt3Rate };
+  });
+
+  // ---------------------------------------------------------------------------
+  // Verifications
+  // ---------------------------------------------------------------------------
+
+  app.get<{ Querystring: QueryParams }>('/verifications', { preHandler: [resultCachePreHandler, parseDaysPreHandler] }, async (req) => {
+    const obsReq = req as ObsRequest;
+    return cachedResult(req.url, 60_000, () => {
+      const { result, queryTimeMs } = timed(() => aggregateVerifications(obsReq.telemetryEntries, obsReq.granularity));
+      return { ...result, queryTimeMs };
+    });
   });
 };

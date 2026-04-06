@@ -20,8 +20,12 @@ function skillTest(prompt: string): { skills: string[]; depth: string } {
 
 check(r, "skill: 'investigate redis' → research", skillTest("investigate how redis handles eviction policies").skills.includes("research"));
 
-check(r, "skill: 'add dark mode' → no skill", skillTest("add dark mode to the settings page").skills.length === 0);
-check(r, "skill: 'fix the typo' → no skill", skillTest("fix the typo on line 42").skills.length === 0);
+// isolate-changes and land-changes are always injected for non-question code requests
+const CODE_DEFAULTS = ["isolate-changes", "land-changes"];
+const addDarkSkills = skillTest("add dark mode to the settings page").skills;
+check(r, "skill: 'add dark mode' → only lifecycle skills", addDarkSkills.every(s => CODE_DEFAULTS.includes(s)));
+const fixTypoSkills = skillTest("fix the typo on line 42").skills;
+check(r, "skill: 'fix the typo' → only lifecycle skills", fixTypoSkills.every(s => CODE_DEFAULTS.includes(s)));
 
 runAndCheck(te, r, "core/hooks/routing-submit-classify.ts", "smoke", "{}");
 runAndCheck(te, r, "core/hooks/routing-submit-classify.ts", "short skip", '{"prompt":"do it"}');

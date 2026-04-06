@@ -44,6 +44,9 @@ export type {
   SubagentInvocation,
   SubagentTypeBucket,
   GateInfo,
+  VerificationData,
+  EvalData,
+  EvalResult,
 } from "./types.js";
 
 // Re-export new types
@@ -76,6 +79,7 @@ export {
   reduceSessionTrace as aggregateSessionTrace,
   reduceRecentEvents as getRecentEvents,
   reduceSubagents as aggregateSubagents,
+  reduceVerifications as aggregateVerifications,
 } from "./reducers.js";
 
 // -- getStatus convenience function --

@@ -94,6 +94,26 @@
             "timeout": 5000
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun src/core/hooks/context-compact-suggest.ts 2>/dev/null",
+            "timeout": 3000
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun src/core/hooks/security-scan-pre-commit.ts 2>/dev/null",
+            "timeout": 5000
+          }
+        ]
       }
     ],
     "PostToolUse": [

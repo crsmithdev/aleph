@@ -359,6 +359,7 @@ export function useObsSessionTrace(sessionId: string, range: TimeRange) {
       assistantText?: string;
     }>;
     parentSessionId?: string;
+    compactions: Array<{ timestamp: string; trigger: string; preTokens?: number }>;
     totalDurationMs: number;
     totalTokens: number;
     totalCost: number;
@@ -433,6 +434,16 @@ export interface SubagentsData {
   queryTimeMs?: number;
 }
 
+export function useObsSessionContextFiles(sessionId: string) {
+  return useQuery<{
+    files: Array<{ label: string; path: string; chars: number; estTokens: number }>;
+  }>({
+    queryKey: ['observability', 'session-context-files', sessionId],
+    queryFn: () => api.get(`/observability/sessions/${encodeURIComponent(sessionId)}/context-files`),
+    staleTime: Infinity,
+  });
+}
+
 export function useObsSubagents(range: TimeRange, granularity?: Granularity) {
   const shouldPoll = range === '1h' || range === '1d';
   return useQuery<SubagentsData>({
@@ -472,5 +483,27 @@ export function useUpdateMemory() {
     mutationFn: ({ id, content }: { id: string; content: string }) =>
       api.put(`/observability/memory/${encodeURIComponent(id)}`, { content }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['observability', 'memory-items'] }),
+  });
+}
+
+export type EvalResult = {
+  name: string;
+  totalRuns: number;
+  passAt1Rate: number;
+  passAt3Rate: number;
+  lastRun: string;
+  trend: 'improving' | 'stable' | 'regressing';
+};
+
+export function useObsEvals() {
+  return useQuery<{
+    evals: EvalResult[];
+    byDay: Array<{ date: string; runs: number; passRate: number }>;
+    totalRuns: number;
+    overallPassAt3Rate: number;
+  }>({
+    queryKey: ['observability', 'evals'],
+    queryFn: () => api.get('/observability/evals'),
+    staleTime: 30_000,
   });
 }

@@ -57,6 +57,7 @@ const navGroups: NavItem[][] = [
         { to: '/observability/hooks', label: 'Scripts' },
         { to: '/observability/skills', label: 'Skills' },
         { to: '/observability/sessions', label: 'Sessions' },
+        { to: '/observability/evals', label: 'Evals' },
         { to: '/observability/events', label: 'Events' },
         { to: '/observability/memory', label: 'Memory' },
         { to: '/observability/db', label: 'Database' },
@@ -117,7 +118,7 @@ export function Sidebar() {
       {/* Header */}
       <div className="flex h-14 items-center justify-between border-b border-border-primary px-3">
         {!collapsed && (
-          <NavLink to="/" className="font-heading text-xl text-text-primary">
+          <NavLink to="/" className="font-heading text-2xl font-bold text-text-primary">
             Construct
           </NavLink>
         )}

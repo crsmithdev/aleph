@@ -69,7 +69,36 @@ export interface CompactionData {
   totalTokensAtCompaction: number;
   avgPreTokens: number;
   byDay: TimeBucket[];
-  events: Array<{ timestamp: string; sessionId: string; trigger: string; preTokens: number }>;
+  events: Array<{ timestamp: string; sessionId: string; trigger: string; preTokens: number; toolCallCount?: number; contextPct?: number }>;
+}
+
+export interface VerificationPhaseResult {
+  result: "pass" | "fail" | "skip";
+  count?: number;
+  coverage?: number;
+}
+
+export interface VerificationData {
+  totalRuns: number;
+  byPhase: Record<string, { pass: number; fail: number; skip: number }>;
+  byDay: Array<{ date: string; pass: number; fail: number }>;
+  recentRuns: Array<{ timestamp: string; sessionId: string; phases: Record<string, VerificationPhaseResult> }>;
+}
+
+export interface EvalResult {
+  name: string;
+  totalRuns: number;
+  passAt1Rate: number;
+  passAt3Rate: number;
+  lastRun: string;
+  trend: "improving" | "stable" | "regressing";
+}
+
+export interface EvalData {
+  evals: EvalResult[];
+  byDay: Array<{ date: string; runs: number; passRate: number }>;
+  totalRuns: number;
+  overallPassAt3Rate: number;
 }
 
 export interface ApiDurationData {
@@ -96,6 +125,9 @@ export interface SkillMetric {
   count: number;
   pct: number;
   errors: number;
+  sessions: number;
+  avgMs?: number;
+  p95Ms?: number;
   lastUsed?: string;
 }
 
@@ -290,6 +322,7 @@ export interface TraceSpan {
   detail?: string;
   toolUseId?: string;
   subagentSessionId?: string;
+  resultTokens?: number;
 }
 
 export interface TraceTurn {
@@ -301,9 +334,19 @@ export interface TraceTurn {
   tokenCount?: number;
   contextTokens?: number;
   outputTokens?: number;
+  inputTokens?: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
   cost?: number;
   model?: string;
   assistantText?: string;
+}
+
+export interface TraceCompaction {
+  timestamp: string;
+  trigger: string;
+  preTokens?: number;
+  summary?: string;
 }
 
 export interface TraceData {
@@ -311,6 +354,7 @@ export interface TraceData {
   parentSessionId?: string;
   project: string;
   turns: TraceTurn[];
+  compactions: TraceCompaction[];
   totalDurationMs: number;
   totalTokens: number;
   totalCost: number;

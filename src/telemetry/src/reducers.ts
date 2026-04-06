@@ -24,12 +24,24 @@ import type {
   ApiDurationData,
   TraceData, TraceSpan, TraceTurn,
   SubagentsData, SubagentInvocation, SubagentTypeBucket,
+  VerificationData,
 } from "./types.js";
 import { calculateCost } from "./pricing.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/** Extract a readable hook name from a shell command string (e.g. "bun /path/hook.ts 2>/dev/null"). */
+function hookBasename(command: string | null | undefined): string {
+  if (!command) return "unknown";
+  const tokens = command.split(/\s+/);
+  const script = tokens.find((t) => /\.(ts|js|sh|py)$/.test(t) && t.includes("/"));
+  if (script) return script.split("/").pop()!.replace(/\.(ts|js|sh|py)$/, "");
+  const path = tokens.find((t) => t.startsWith("/") && !t.startsWith("/dev/"));
+  if (path) return path.split("/").pop() || "unknown";
+  return "unknown";
+}
 
 function bucketKey(ts: string, g: Granularity): string {
   switch (g) {
@@ -249,15 +261,18 @@ export function reduceHooks(events: TelemetryEvent[], granularity: Granularity =
 // ---------------------------------------------------------------------------
 
 export function reduceSkills(events: TelemetryEvent[], granularity: Granularity = "day", validSkills?: Set<string>): SkillsData {
-  const skillCounts = new Map<string, { count: number; errors: number; lastUsed: string }>();
+  const skillCounts = new Map<string, { count: number; errors: number; sessions: Set<string>; durations: number[]; lastUsed: string }>();
   const daySkillMap = new Map<string, Map<string, number>>();
 
   for (const e of events) {
     if (e.kind === "tool" && e.data?.skill) {
       const skillName = e.data.skill as string;
       if (validSkills && !validSkills.has(skillName)) continue;
-      const cur = skillCounts.get(skillName) || { count: 0, errors: 0, lastUsed: "" };
+      const cur = skillCounts.get(skillName) || { count: 0, errors: 0, sessions: new Set<string>(), durations: [], lastUsed: "" };
       cur.count++;
+      if (e.err) cur.errors++;
+      cur.sessions.add(e.sid);
+      if (e.ms != null) cur.durations.push(e.ms);
       if (!cur.lastUsed || e.ts > cur.lastUsed) cur.lastUsed = e.ts;
       skillCounts.set(skillName, cur);
 
@@ -270,11 +285,17 @@ export function reduceSkills(events: TelemetryEvent[], granularity: Granularity 
 
   const total = [...skillCounts.values()].reduce((s, v) => s + v.count, 0);
   const ranked: SkillMetric[] = [...skillCounts.entries()]
-    .map(([skill, v]) => ({
-      skill, count: v.count,
-      pct: total > 0 ? (v.count / total) * 100 : 0,
-      errors: v.errors, lastUsed: v.lastUsed,
-    }))
+    .map(([skill, v]) => {
+      const sorted = [...v.durations].sort((a, b) => a - b);
+      const avgMs = sorted.length > 0 ? sorted.reduce((s, x) => s + x, 0) / sorted.length : undefined;
+      const p95Ms = sorted.length > 0 ? sorted[Math.floor(sorted.length * 0.95)] : undefined;
+      return {
+        skill, count: v.count,
+        pct: total > 0 ? (v.count / total) * 100 : 0,
+        errors: v.errors, sessions: v.sessions.size,
+        avgMs, p95Ms, lastUsed: v.lastUsed,
+      };
+    })
     .sort((a, b) => b.count - a.count);
 
   const byDay = [...daySkillMap.entries()]
@@ -402,7 +423,25 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
       bucket.messages++; bucket.userMessages++;
       sess.userMessages++;
       if (!sess.firstUserMessage && e.data?.text) {
-        sess.firstUserMessage = (e.data.text as string).replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim().slice(0, 200);
+        const raw = e.data.text as string;
+        const SKIP_COMMANDS = new Set(["clear", "reset"]);
+        if (raw.includes("local-command-caveat")) { /* skip */ }
+        else if (raw.includes("<command-name>")) {
+          const nameMatch = raw.match(/<command-name>([^<]+)<\/command-name>/);
+          const argsMatch = raw.match(/<command-args>([^<]*)<\/command-args>/);
+          if (nameMatch) {
+            const name = nameMatch[1].trim();
+            const bare = name.replace(/^\//, "");
+            if (!SKIP_COMMANDS.has(bare)) {
+              const args = (argsMatch?.[1] ?? "").trim();
+              const isDup = args === name || args === `/${bare}` || args === bare;
+              sess.firstUserMessage = isDup || !args ? name : `${name} ${args}`;
+            }
+          }
+        } else {
+          const cleaned = raw.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim().slice(0, 200);
+          if (cleaned) sess.firstUserMessage = cleaned;
+        }
       }
     }
 
@@ -760,7 +799,10 @@ export function reduceCompaction(events: TelemetryEvent[], granularity: Granular
     totalTokensAtCompaction += preTokens;
     compEvents.push({
       timestamp: e.ts, sessionId: e.sid,
-      trigger: (e.data?.trigger as string) || "unknown", preTokens,
+      trigger: (e.data?.trigger as string) || "unknown",
+      preTokens,
+      toolCallCount: (e.data?.toolCallCount as number) | 0 || undefined,
+      contextPct: (e.data?.contextPct as number) || undefined,
     });
     const day = bucketKey(e.ts, granularity);
     dayMap.set(day, (dayMap.get(day) || 0) + 1);
@@ -816,7 +858,7 @@ export function reduceSessionTrace(events: TelemetryEvent[], sessionId: string):
     .sort((a, b) => a.ts.localeCompare(b.ts));
 
   if (sessionEvents.length === 0) {
-    return { sessionId, project: "", turns: [], totalDurationMs: 0, totalTokens: 0, totalCost: 0 };
+    return { sessionId, project: "", turns: [], compactions: [], totalDurationMs: 0, totalTokens: 0, totalCost: 0 };
   }
 
   const project = (sessionEvents[0].data?.project as string) || "";
@@ -838,19 +880,37 @@ export function reduceSessionTrace(events: TelemetryEvent[], sessionId: string):
   const resultTimestamps = new Map<string, string>();
   const resultDurations = new Map<string, number>();
   const resultErrors = new Map<string, { isError: boolean; errorMessage?: string }>();
+  const resultCharsMap = new Map<string, number>();
   for (const e of sessionEvents) {
     if (e.kind === "tool_result" && e.data?.useId) {
       const useId = e.data.useId as string;
       resultTimestamps.set(useId, e.ts);
       if (e.ms) resultDurations.set(useId, e.ms);
       if (e.data.isError) resultErrors.set(useId, { isError: true, errorMessage: e.err });
+      if (e.data.resultChars) resultCharsMap.set(useId, e.data.resultChars as number);
     }
   }
 
-  // Split at message events
+  // Identify skill injection user messages: the Skill tool injects its content
+  // back as a user message. We detect injections by scanning once and tracking
+  // whether the next user message should be marked as an injection.
+  const skillInjectionIndices = new Set<number>();
+  let pendingSkillInjection = false;
+  for (let i = 0; i < sessionEvents.length; i++) {
+    const e = sessionEvents[i];
+    if (e.kind === "tool" && (e.data?.tool as string) === "Skill") {
+      pendingSkillInjection = true;
+    } else if (pendingSkillInjection && e.kind === "message" && e.data?.role === "user") {
+      skillInjectionIndices.add(i);
+      pendingSkillInjection = false;
+    }
+  }
+
+  // Split at user message events, but skip skill injections
   const turnBoundaries: number[] = [];
   for (let i = 0; i < sessionEvents.length; i++) {
-    if (sessionEvents[i].kind === "message" && sessionEvents[i].data?.role === "user") turnBoundaries.push(i);
+    if (sessionEvents[i].kind === "message" && sessionEvents[i].data?.role === "user"
+        && !skillInjectionIndices.has(i)) turnBoundaries.push(i);
   }
 
   const turns: TraceTurn[] = [];
@@ -865,7 +925,7 @@ export function reduceSessionTrace(events: TelemetryEvent[], sessionId: string):
 
     const spans: TraceSpan[] = [];
     let turnTokens = 0, turnCost = 0, turnModel: string | undefined, turnDurationMs = 0, spanCounter = 0;
-    let turnContextTokens = 0, turnOutputTokens = 0;
+    let turnContextTokens = 0, turnOutputTokens = 0, turnInputTokens = 0, turnCacheReadTokens = 0, turnCacheCreationTokens = 0;
     let assistantText: string | undefined;
 
     for (const e of turnEntries) {
@@ -921,19 +981,26 @@ export function reduceSessionTrace(events: TelemetryEvent[], sessionId: string):
         }
 
         const skillName = e.data.skill as string | undefined;
+        const resultChars = useId ? resultCharsMap.get(useId) : undefined;
+        const resultTokens = resultChars !== undefined ? Math.ceil(resultChars / 4) : undefined;
         spans.push({
           id: `span-${t}-${spanCounter++}`, kind: "tool",
           label: skillName ? `Skill(${skillName})` : (e.data.tool as string),
           startMs: offsetMs, durationMs,
           isError: isError || undefined, detail,
-          toolUseId: useId, subagentSessionId,
+          toolUseId: useId, subagentSessionId, resultTokens,
         });
       }
 
       if (e.kind === "hook_summary" && e.data?.command) {
+        // e.name may be the string "null" if the command ends with "2>/dev/null"
+        // (split("/").pop() bug in adapter). Re-derive from the command if needed.
+        const rawLabel = (e.name === "null" || !e.name)
+          ? hookBasename(e.data.command as string)
+          : e.name;
         spans.push({
           id: `span-${t}-${spanCounter++}`, kind: "hook",
-          label: e.name, startMs: offsetMs,
+          label: rawLabel, startMs: offsetMs,
           durationMs: e.ms || 0,
           isError: (e.data.isError as boolean) || undefined,
           detail: (e.data.output as string) || e.err,
@@ -963,6 +1030,9 @@ export function reduceSessionTrace(events: TelemetryEvent[], sessionId: string):
         // Total context window = fresh input + cached reads + newly cached
         turnContextTokens = inp + cacheRead + cacheCreation;
         turnOutputTokens = out;
+        turnInputTokens = inp;
+        turnCacheReadTokens = cacheRead;
+        turnCacheCreationTokens = cacheCreation;
       }
 
       if (e.kind === "turn" && e.ms) turnDurationMs = e.ms;
@@ -984,6 +1054,8 @@ export function reduceSessionTrace(events: TelemetryEvent[], sessionId: string):
       spans: spans.sort((a, b) => a.startMs - b.startMs),
       tokenCount: turnTokens || undefined, cost: turnCost || undefined, model: turnModel,
       contextTokens: turnContextTokens || undefined, outputTokens: turnOutputTokens || undefined,
+      inputTokens: turnInputTokens || undefined, cacheReadTokens: turnCacheReadTokens || undefined,
+      cacheCreationTokens: turnCacheCreationTokens || undefined,
       assistantText: assistantText || undefined,
     });
   }
@@ -992,7 +1064,15 @@ export function reduceSessionTrace(events: TelemetryEvent[], sessionId: string):
     ? new Date(sessionEvents[sessionEvents.length - 1].ts).getTime() - new Date(sessionEvents[0].ts).getTime()
     : 0;
 
-  return { sessionId, parentSessionId, project, turns, totalDurationMs, totalTokens, totalCost };
+  const compactions = sessionEvents
+    .filter((e) => e.kind === "compact")
+    .map((e) => ({
+      timestamp: e.ts,
+      trigger: (e.name as string) || "unknown",
+      preTokens: (e.data?.preTokens as number) || undefined,
+    }));
+
+  return { sessionId, parentSessionId, project, turns, compactions, totalDurationMs, totalTokens, totalCost };
 }
 
 // ---------------------------------------------------------------------------
@@ -1188,4 +1268,48 @@ export function reduceSubagents(events: TelemetryEvent[], granularity: Granulari
     p50Ms: percentile(durations, 50), p95Ms: percentile(durations, 95),
     byDay, byType, recent: recent.slice(0, 100),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Verification
+// ---------------------------------------------------------------------------
+
+export function reduceVerifications(events: TelemetryEvent[], granularity: Granularity = "day"): VerificationData {
+  type PhaseMap = Record<string, { pass: number; fail: number; skip: number }>;
+  const phases: PhaseMap = {};
+  const dayPass = new Map<string, number>();
+  const dayFail = new Map<string, number>();
+  const runMap = new Map<string, { timestamp: string; sessionId: string; phases: Record<string, { result: string; count?: number; coverage?: number }> }>();
+
+  for (const e of events) {
+    if (e.kind !== "verify") continue;
+    const phase = (e.data?.phase as string) || "unknown";
+    const result = (e.data?.result as string) || "skip";
+    if (!phases[phase]) phases[phase] = { pass: 0, fail: 0, skip: 0 };
+    if (result === "pass") phases[phase].pass++;
+    else if (result === "fail") phases[phase].fail++;
+    else phases[phase].skip++;
+
+    const day = bucketKey(e.ts, granularity);
+    if (result === "pass") dayPass.set(day, (dayPass.get(day) || 0) + 1);
+    else if (result === "fail") dayFail.set(day, (dayFail.get(day) || 0) + 1);
+
+    // Group by session+day for recent runs
+    const runKey = `${e.sid}:${day}`;
+    if (!runMap.has(runKey)) runMap.set(runKey, { timestamp: e.ts, sessionId: e.sid, phases: {} });
+    runMap.get(runKey)!.phases[phase] = { result, count: e.data?.count as number | undefined, coverage: e.data?.coverage as number | undefined };
+  }
+
+  const allDays = new Set([...dayPass.keys(), ...dayFail.keys()]);
+  const byDay = [...allDays]
+    .sort()
+    .map((date) => ({ date, pass: dayPass.get(date) || 0, fail: dayFail.get(date) || 0 }));
+
+  const recentRuns = [...runMap.values()]
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+    .slice(0, 50)
+    .map((r) => ({ ...r, phases: r.phases as Record<string, { result: "pass" | "fail" | "skip"; count?: number; coverage?: number }> }));
+
+  const totalRuns = runMap.size;
+  return { totalRuns, byPhase: phases, byDay, recentRuns };
 }
