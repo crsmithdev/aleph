@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { useObsOverview, useObsSessions, useObsTokens, useObsCost } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
@@ -140,29 +140,35 @@ export function OverviewPage() {
         </ChartContainer>
       )}
 
-      {cost.data && cost.data.byModel.length > 0 && (
-        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
-          <h3 className="mb-3 text-sm font-medium text-text-secondary">Cost by Model</h3>
-          <div className="flex items-center gap-6">
-            <PieChart width={160} height={160}>
-              <Pie data={cost.data.byModel} dataKey="usd" nameKey="model" cx="50%" cy="50%" innerRadius={45} outerRadius={70}>
-                {cost.data.byModel.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
-              </Pie>
-              <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtCurrency(Number(v)), fmtSeriesName(String(n))]} />
-            </PieChart>
-            <div className="flex flex-col gap-2 min-w-0">
-              {cost.data.byModel.map((row, i) => (
-                <div key={row.model} className="flex items-center gap-2 text-xs">
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+      {cost.data && cost.data.byModel.length > 0 && (() => {
+        const top5 = cost.data.byModel.slice(0, 5);
+        const otherUsd = cost.data.byModel.slice(5).reduce((s, r) => s + r.usd, 0);
+        const donut = otherUsd > 0 ? [...top5, { model: 'Other', usd: otherUsd, pct: 0 }] : top5;
+        return (
+          <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
+            <h3 className="mb-3 text-sm font-medium text-text-secondary">Cost by Model</h3>
+            <div className="h-[180px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={donut} dataKey="usd" nameKey="model" cx="50%" cy="50%" innerRadius={50} outerRadius={78}>
+                    {donut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                  </Pie>
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtCurrency(Number(v)), fmtSeriesName(String(n))]} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 mt-3">
+              {donut.map((row, i) => (
+                <div key={row.model} className="flex items-center gap-1.5 text-xs min-w-0">
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
                   <span className="font-mono text-text-secondary truncate">{row.model.replace('claude-', '')}</span>
                   <span className="ml-auto text-text-muted font-mono shrink-0">{fmtCurrency(row.usd)}</span>
-                  <span className="text-text-disabled font-mono shrink-0 w-10 text-right">{fmtPct(row.pct)}</span>
                 </div>
               ))}
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <QueryTiming ms={data.queryTimeMs} />
     </div>

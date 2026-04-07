@@ -138,9 +138,9 @@ export function SessionsPage() {
         <StatCard label="Avg Dispatch" value={subagents.data ? fmtMs(subagents.data.avgMs) : '—'} />
       </div>
 
-      <div className="flex gap-4 items-stretch">
-        <div className="flex-1 min-w-0">
-          <ChartContainer title={granLabel(granularity, "Sessions")} chartType={chartType} onChartTypeChange={setChartType}>
+      <div className="flex gap-4 items-stretch h-[320px]">
+        <div className="flex-1 min-w-0 h-full">
+          <ChartContainer title={granLabel(granularity, "Sessions")} chartType={chartType} onChartTypeChange={setChartType} fill className="h-full">
             {chartType === 'bar' ? (
               <ComposedChart data={data.byDay}>
                 <CartesianGrid {...gridProps} />
@@ -169,21 +169,26 @@ export function SessionsPage() {
           </ChartContainer>
         </div>
 
-        {subagents.data && subagents.data.byType.length > 0 && (
-          <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 w-1/4 min-w-[220px] shrink-0">
-            <h3 className="mb-3 text-sm font-medium text-text-secondary">Subagents by Type</h3>
-            <div className="flex flex-col gap-3">
-              <ResponsiveContainer width="100%" height={180}>
-                <PieChart>
-                  <Pie data={subagents.data.byType} dataKey="count" nameKey="subagentType" cx="50%" cy="50%" innerRadius={50} outerRadius={78}>
-                    {subagents.data.byType.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
-                  </Pie>
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="w-full flex flex-col gap-1">
-                {subagents.data.byType.slice(0, 6).map((row, i) => (
-                  <div key={row.subagentType} className="flex items-center gap-2 text-xs">
+        {subagents.data && subagents.data.byType.length > 0 && (() => {
+          const top5 = subagents.data.byType.slice(0, 5);
+          const other = subagents.data.byType.slice(5).reduce((s: number, r: { count: number }) => s + r.count, 0);
+          const donut = other > 0 ? [...top5, { subagentType: 'Other', count: other }] : top5;
+          return (
+            <div className="flex flex-col rounded-lg border border-border-primary bg-bg-secondary p-4 w-1/4 min-w-[220px] shrink-0 h-full">
+              <h3 className="mb-3 text-sm font-medium text-text-secondary shrink-0">Subagents by Type</h3>
+              <div className="flex-1 min-h-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={donut} dataKey="count" nameKey="subagentType" cx="50%" cy="50%" innerRadius={50} outerRadius={78}>
+                      {donut.map((_: unknown, i: number) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                    </Pie>
+                    <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 mt-3 shrink-0">
+                {donut.map((row: { subagentType: string; count: number }, i: number) => (
+                  <div key={row.subagentType} className="flex items-center gap-1.5 text-xs min-w-0">
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
                     <span className="text-text-secondary truncate">{fmtSeriesName(row.subagentType)}</span>
                     <span className="ml-auto text-text-muted font-mono shrink-0">{fmtNumber(row.count)}</span>
@@ -191,8 +196,8 @@ export function SessionsPage() {
                 ))}
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       <div className="flex items-center gap-2">

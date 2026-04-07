@@ -318,8 +318,8 @@ export function EventsPage() {
   const allDonutData = Object.entries(typeCounts)
     .map(([type, count]) => ({ type, count, label: TYPE_LABELS[type as EntryType] ?? type }))
     .sort((a, b) => b.count - a.count);
-  const topDonut = allDonutData.slice(0, 4);
-  const otherCount = allDonutData.slice(4).reduce((s, r) => s + r.count, 0);
+  const topDonut = allDonutData.slice(0, 5);
+  const otherCount = allDonutData.slice(5).reduce((s, r) => s + r.count, 0);
   const donutData = otherCount > 0
     ? [...topDonut, { type: 'other', count: otherCount, label: 'Other' }]
     : topDonut;

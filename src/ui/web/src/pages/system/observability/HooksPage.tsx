@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useObsHooks, useObsHookEvents } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
@@ -8,9 +8,10 @@ import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
+import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { tooltipStyle, CHART_PALETTE } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtMs, fmtPct, dateTime, shortRelativeTime, fmtSeriesName } from '../../../utils/format';
+import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
+import { fmtNumber, fmtMs, fmtPct, dateTime, shortDate, shortRelativeTime, fmtSeriesName, granLabel } from '../../../utils/format';
 import { clsx } from 'clsx';
 
 type HookRow = {
@@ -50,6 +51,7 @@ function ByHookView({ range, granularity }: { range: TimeRange; granularity: Gra
   const { data, isLoading, error, refetch } = useObsHooks(range, granularity);
   const [showMissing, setShowMissing] = useState(false);
   const [showUnused, setShowUnused] = useState(false);
+  const [chartType, setChartType] = useState<'bar' | 'line'>('line');
 
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load hooks" retry={refetch} />;
@@ -186,69 +188,79 @@ function ByHookView({ range, granularity }: { range: TimeRange; granularity: Gra
         />
       </div>
 
-      {filtered.filter(r => r.count > 0).length > 0 && (
-        <div className="flex gap-4">
-          <div className="flex-1 rounded-lg border border-border-primary bg-bg-secondary p-4">
-            <h3 className="mb-3 text-sm font-medium text-text-secondary">Executions by Hook</h3>
-            <div className="flex items-start gap-4">
-              <div className="w-44 shrink-0">
-                <ResponsiveContainer width="100%" height={180}>
-                  <PieChart>
-                    <Pie
-                      data={filtered.filter(r => r.count > 0)}
-                      dataKey="count"
-                      nameKey="command"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={45}
-                      outerRadius={72}
-                    >
-                      {filtered.filter(r => r.count > 0).map((_, i) => (
-                        <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="flex flex-col gap-1.5 min-w-0 pt-2">
-                {filtered.filter(r => r.count > 0).slice(0, 10).map((row, i) => (
-                  <div key={row.command} className="flex items-center gap-2 text-xs">
-                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                    <span className="font-mono text-text-secondary truncate">{row.command}</span>
-                    <span className="ml-auto text-text-muted font-mono shrink-0">{fmtNumber(row.count)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {data.byEvent && data.byEvent.length > 0 && (
-            <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 w-1/4 min-w-[220px] shrink-0">
-              <h3 className="mb-3 text-sm font-medium text-text-secondary">By Event</h3>
-              <ResponsiveContainer width="100%" height={180}>
-                <PieChart>
-                  <Pie data={data.byEvent} dataKey="count" nameKey="event" cx="50%" cy="50%" innerRadius={50} outerRadius={78}>
-                    {data.byEvent.map((_, i) => (
-                      <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
+      {data.byDay.length > 0 && (() => {
+        const topHookNames: string[] = (() => {
+          const totals: Record<string, number> = {};
+          for (const day of data.byDay) {
+            for (const [hook, count] of Object.entries(day.hooks ?? {})) {
+              totals[hook] = (totals[hook] ?? 0) + count;
+            }
+          }
+          return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([n]) => n);
+        })();
+        const stackedByDay = data.byDay.map(day => {
+          const entry: Record<string, unknown> = { date: day.date };
+          for (const name of topHookNames) entry[name] = (day.hooks ?? {})[name] ?? 0;
+          return entry;
+        });
+        const byEventAll = data.byEvent ?? [];
+        const top5Events = byEventAll.slice(0, 5);
+        const eventsOther = byEventAll.slice(5).reduce((s, r) => s + r.count, 0);
+        const eventDonut = eventsOther > 0 ? [...top5Events, { event: 'Other', count: eventsOther }] : top5Events;
+        return (
+          <div className="flex gap-4 items-stretch h-[320px]">
+            <div className="flex-1 min-w-0 h-full">
+              <ChartContainer title={granLabel(granularity, 'Executions')} chartType={chartType} onChartTypeChange={setChartType} fill className="h-full">
+                {chartType === 'bar' ? (
+                  <BarChart data={stackedByDay}>
+                    <CartesianGrid {...gridProps} />
+                    <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                    <YAxis {...axisProps} />
+                    <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
+                    {topHookNames.map((name, i) => (
+                      <Bar key={name} dataKey={name} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === topHookNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
                     ))}
-                  </Pie>
-                  <RechartsTooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="flex flex-col gap-2 mt-2">
-                {data.byEvent.map((row, i) => (
-                  <div key={row.event} className="flex items-center gap-2 text-xs">
-                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                    <span className="font-mono text-text-secondary">{fmtSeriesName(row.event)}</span>
-                    <span className="ml-auto text-text-muted font-mono">{fmtNumber(row.count)}</span>
-                  </div>
-                ))}
-              </div>
+                  </BarChart>
+                ) : (
+                  <AreaChart data={stackedByDay}>
+                    <CartesianGrid {...gridProps} />
+                    <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                    <YAxis {...axisProps} />
+                    <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
+                    {topHookNames.map((name, i) => (
+                      <Area key={name} type="monotone" dataKey={name} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
+                    ))}
+                  </AreaChart>
+                )}
+              </ChartContainer>
             </div>
-          )}
-        </div>
-      )}
+            {eventDonut.length > 0 && (
+              <div className="flex flex-col rounded-lg border border-border-primary bg-bg-secondary p-4 w-1/4 min-w-[220px] shrink-0 h-full">
+                <h3 className="mb-3 text-sm font-medium text-text-secondary shrink-0">By Event</h3>
+                <div className="flex-1 min-h-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={eventDonut} dataKey="count" nameKey="event" cx="50%" cy="50%" innerRadius={50} outerRadius={78}>
+                        {eventDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                      </Pie>
+                      <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 mt-3 shrink-0">
+                  {eventDonut.map((row, i) => (
+                    <div key={row.event} className="flex items-center gap-1.5 text-xs min-w-0">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                      <span className="font-mono text-text-secondary truncate">{fmtSeriesName(row.event)}</span>
+                      <span className="ml-auto text-text-muted font-mono shrink-0">{fmtNumber(row.count)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <div className="flex items-center gap-3">
         {missingCount > 0 && (

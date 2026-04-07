@@ -211,9 +211,9 @@ export function SkillsPage() {
       </div>
 
       {data.byDay.length > 0 && (
-        <div className="flex gap-4 items-stretch">
-          <div className="flex-1 min-w-0">
-            <ChartContainer title="Invocations by Name" chartType={chartType} onChartTypeChange={setChartType}>
+        <div className="flex gap-4 items-stretch h-[320px]">
+          <div className="flex-1 min-w-0 h-full">
+            <ChartContainer title="Invocations by Name" chartType={chartType} onChartTypeChange={setChartType} fill className="h-full">
               {chartType === 'bar' ? (
                 hasSkillBreakdown ? (
                   <BarChart data={stackedByDay}>
@@ -260,30 +260,35 @@ export function SkillsPage() {
             </ChartContainer>
           </div>
 
-          {data.byType && data.byType.length > 1 && (
-            <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 w-1/4 min-w-[220px] shrink-0">
-              <h3 className="mb-3 text-sm font-medium text-text-secondary">Invocations by Type</h3>
-              <div className="flex flex-col gap-4">
-                <ResponsiveContainer width="100%" height={180}>
-                  <PieChart>
-                    <Pie data={data.byType} dataKey="count" nameKey="type" cx="50%" cy="50%" innerRadius={50} outerRadius={78}>
-                      {data.byType.map((_: unknown, i: number) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
-                    </Pie>
-                    <Tooltip contentStyle={tooltipStyle} formatter={(v: unknown, n: unknown) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="flex flex-col gap-2 w-full">
-                  {data.byType.map((row: { type: string; count: number }, i: number) => (
-                    <div key={row.type} className="flex items-center gap-2 text-xs">
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                      <span className="text-text-secondary capitalize">{row.type}</span>
-                      <span className="ml-auto text-text-muted font-mono">{fmtNumber(row.count)}</span>
+          {data.byType && data.byType.length > 1 && (() => {
+            const top5 = data.byType.slice(0, 5);
+            const other = data.byType.slice(5).reduce((s: number, r: { count: number }) => s + r.count, 0);
+            const donut = other > 0 ? [...top5, { type: 'other', count: other }] : top5;
+            return (
+              <div className="flex flex-col rounded-lg border border-border-primary bg-bg-secondary p-4 w-1/4 min-w-[220px] shrink-0 h-full">
+                <h3 className="mb-3 text-sm font-medium text-text-secondary shrink-0">Invocations by Type</h3>
+                <div className="flex-1 min-h-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={donut} dataKey="count" nameKey="type" cx="50%" cy="50%" innerRadius={50} outerRadius={78}>
+                        {donut.map((_: unknown, i: number) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                      </Pie>
+                      <Tooltip contentStyle={tooltipStyle} formatter={(v: unknown, n: unknown) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 mt-3 shrink-0">
+                  {donut.map((row: { type: string; count: number }, i: number) => (
+                    <div key={row.type} className="flex items-center gap-1.5 text-xs min-w-0">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                      <span className="text-text-secondary capitalize truncate">{row.type}</span>
+                      <span className="ml-auto text-text-muted font-mono shrink-0">{fmtNumber(row.count)}</span>
                     </div>
                   ))}
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       )}
 

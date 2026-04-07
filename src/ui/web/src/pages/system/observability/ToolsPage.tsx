@@ -114,8 +114,13 @@ export function ToolsPage() {
     .sort((a, b) => (b.velocity || 0) - (a.velocity || 0))
     .slice(0, 10);
 
-  const top10 = filtered.slice(0, 10);
-  const projectTop8 = data.projectRanked.slice(0, 8);
+  const top5Tools = filtered.slice(0, 5);
+  const toolsOther = filtered.slice(5).reduce((s, r) => s + r.count, 0);
+  const callsDonut = toolsOther > 0 ? [...top5Tools, { name: 'other', tool: 'Other', count: toolsOther } as ToolRow] : top5Tools;
+
+  const top5Projects = data.projectRanked.slice(0, 5);
+  const projectsOther = data.projectRanked.slice(5).reduce((s, r) => s + r.count, 0);
+  const projectsDonut = projectsOther > 0 ? [...top5Projects, { project: 'Other', count: projectsOther, pct: 0 }] : top5Projects;
 
   const hasTimeSeries = dataset === 'velocity' ? data.byDayVelocity.length > 0 : activeStackedData.length > 0;
 
@@ -237,7 +242,7 @@ export function ToolsPage() {
         />
       </div>
 
-      {top10.length > 0 && (
+      {filtered.length > 0 && (
         <>
           {/* Dataset selector */}
           <div className="flex items-center gap-3">
@@ -260,11 +265,11 @@ export function ToolsPage() {
             </div>
           </div>
 
-          <div className="flex gap-4 items-start">
+          <div className="flex gap-4 items-stretch h-[320px]">
             {/* Time series chart */}
             {hasTimeSeries && (
-              <div className="flex-1 min-w-0 rounded-lg border border-border-primary bg-bg-secondary p-4">
-                <div className="flex items-center justify-between mb-3">
+              <div className="flex-1 min-w-0 rounded-lg border border-border-primary bg-bg-secondary p-4 h-full flex flex-col">
+                <div className="flex items-center justify-between mb-3 shrink-0">
                   <h3 className="text-sm font-medium text-text-secondary">{timeSeriesTitle}</h3>
                   {dataset !== 'velocity' && (
                     <div className="flex gap-1">
@@ -283,56 +288,61 @@ export function ToolsPage() {
                     </div>
                   )}
                 </div>
-
-                {dataset === 'velocity' ? (
-                  <AreaChart width={undefined as unknown as number} height={240} data={data.byDayVelocity} style={{ width: '100%' }}>
-                    <CartesianGrid {...gridProps} />
-                    <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-                    <YAxis {...axisProps} />
-                    <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v) => [v, 'Calls/Session']} />
-                    <Area type="monotone" dataKey="velocity" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Velocity" />
-                  </AreaChart>
-                ) : chartType === 'bar' ? (
-                  <BarChart width={undefined as unknown as number} height={240} data={activeStackedData} style={{ width: '100%' }}>
-                    <CartesianGrid {...gridProps} />
-                    <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-                    <YAxis {...axisProps} />
-                    <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
-                    {activeKeys.map((name, i) => (
-                      <Bar key={name} dataKey={name} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === activeKeys.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
-                    ))}
-                  </BarChart>
-                ) : (
-                  <AreaChart width={undefined as unknown as number} height={240} data={activeStackedData} style={{ width: '100%' }}>
-                    <CartesianGrid {...gridProps} />
-                    <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-                    <YAxis {...axisProps} />
-                    <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
-                    {activeKeys.map((name, i) => (
-                      <Area key={name} type="monotone" dataKey={name} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
-                    ))}
-                  </AreaChart>
-                )}
+                <div className="flex-1 min-h-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    {dataset === 'velocity' ? (
+                      <AreaChart data={data.byDayVelocity}>
+                        <CartesianGrid {...gridProps} />
+                        <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                        <YAxis {...axisProps} />
+                        <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v) => [v, 'Calls/Session']} />
+                        <Area type="monotone" dataKey="velocity" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Velocity" />
+                      </AreaChart>
+                    ) : chartType === 'bar' ? (
+                      <BarChart data={activeStackedData}>
+                        <CartesianGrid {...gridProps} />
+                        <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                        <YAxis {...axisProps} />
+                        <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
+                        {activeKeys.map((name, i) => (
+                          <Bar key={name} dataKey={name} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === activeKeys.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
+                        ))}
+                      </BarChart>
+                    ) : (
+                      <AreaChart data={activeStackedData}>
+                        <CartesianGrid {...gridProps} />
+                        <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                        <YAxis {...axisProps} />
+                        <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
+                        {activeKeys.map((name, i) => (
+                          <Area key={name} type="monotone" dataKey={name} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
+                        ))}
+                      </AreaChart>
+                    )}
+                  </ResponsiveContainer>
+                </div>
               </div>
             )}
 
             {/* Distribution chart */}
-            <div className="w-1/4 min-w-[220px] shrink-0 rounded-lg border border-border-primary bg-bg-secondary p-4">
-              <h3 className="text-sm font-medium text-text-secondary mb-3">{distTitle}</h3>
+            <div className="w-1/4 min-w-[220px] shrink-0 rounded-lg border border-border-primary bg-bg-secondary p-4 h-full flex flex-col">
+              <h3 className="text-sm font-medium text-text-secondary mb-3 shrink-0">{distTitle}</h3>
 
               {dataset === 'calls' && (
                 <>
-                  <ResponsiveContainer width="100%" height={180}>
-                    <PieChart>
-                      <Pie data={top10} dataKey="count" nameKey="tool" cx="50%" cy="50%" innerRadius={50} outerRadius={78}>
-                        {top10.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
-                      </Pie>
-                      <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="flex flex-col gap-1 mt-3">
-                    {top10.map((row, i) => (
-                      <div key={row.name} className="flex items-center gap-2 text-xs">
+                  <div className="flex-1 min-h-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={callsDonut} dataKey="count" nameKey="tool" cx="50%" cy="50%" innerRadius={50} outerRadius={78}>
+                          {callsDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                        </Pie>
+                        <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 mt-3 shrink-0">
+                    {callsDonut.map((row, i) => (
+                      <div key={row.name} className="flex items-center gap-1.5 text-xs min-w-0">
                         <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
                         <span className="font-mono text-text-secondary truncate">{row.tool}</span>
                         <span className="ml-auto text-text-muted font-mono shrink-0">{fmtNumber(row.count)}</span>
@@ -344,21 +354,23 @@ export function ToolsPage() {
 
               {dataset === 'churn' && (
                 <>
-                  {topChurnTools.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={240}>
-                      <BarChart layout="vertical" data={topChurnTools}>
-                        <CartesianGrid {...gridProps} horizontal={false} />
-                        <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
-                        <YAxis type="category" dataKey="tool" {...axisProps} width={72} tick={{ fontSize: 10 }} />
-                        <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
-                        <Bar dataKey="linesAdded" stackId="a" fill={CHART_PALETTE[2]} name="Added" radius={[0, 0, 0, 0]} />
-                        <Bar dataKey="linesRemoved" stackId="a" fill={CHART_PALETTE[4]} name="Removed" radius={[0, 2, 2, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="flex items-center justify-center h-40 text-xs text-text-muted">No churn data</div>
-                  )}
-                  <div className="flex items-center gap-3 mt-2 text-xs">
+                  <div className="flex-1 min-h-0">
+                    {topChurnTools.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart layout="vertical" data={topChurnTools}>
+                          <CartesianGrid {...gridProps} horizontal={false} />
+                          <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
+                          <YAxis type="category" dataKey="tool" {...axisProps} width={72} tick={{ fontSize: 10 }} />
+                          <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+                          <Bar dataKey="linesAdded" stackId="a" fill={CHART_PALETTE[2]} name="Added" radius={[0, 0, 0, 0]} />
+                          <Bar dataKey="linesRemoved" stackId="a" fill={CHART_PALETTE[4]} name="Removed" radius={[0, 2, 2, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-xs text-text-muted">No churn data</div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mt-2 text-xs shrink-0">
                     <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: CHART_PALETTE[2] }} />Added</span>
                     <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: CHART_PALETTE[4] }} />Removed</span>
                   </div>
@@ -367,21 +379,23 @@ export function ToolsPage() {
 
               {dataset === 'projects' && (
                 <>
-                  {projectTop8.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={180}>
-                      <PieChart>
-                        <Pie data={projectTop8} dataKey="count" nameKey="project" cx="50%" cy="50%" innerRadius={50} outerRadius={78}>
-                          {projectTop8.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
-                        </Pie>
-                        <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="flex items-center justify-center h-40 text-xs text-text-muted">No project data</div>
-                  )}
-                  <div className="flex flex-col gap-1 mt-3">
-                    {projectTop8.map((row, i) => (
-                      <div key={row.project} className="flex items-center gap-2 text-xs">
+                  <div className="flex-1 min-h-0">
+                    {projectsDonut.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={projectsDonut} dataKey="count" nameKey="project" cx="50%" cy="50%" innerRadius={50} outerRadius={78}>
+                            {projectsDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                          </Pie>
+                          <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-xs text-text-muted">No project data</div>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 mt-3 shrink-0">
+                    {projectsDonut.map((row, i) => (
+                      <div key={row.project} className="flex items-center gap-1.5 text-xs min-w-0">
                         <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
                         <span className="font-mono text-text-secondary truncate">{row.project}</span>
                         <span className="ml-auto text-text-muted font-mono shrink-0">{fmtNumber(row.count)}</span>
@@ -393,20 +407,22 @@ export function ToolsPage() {
 
               {dataset === 'velocity' && (
                 <>
-                  {topVelocityTools.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={240}>
-                      <BarChart layout="vertical" data={topVelocityTools}>
-                        <CartesianGrid {...gridProps} horizontal={false} />
-                        <XAxis type="number" {...axisProps} />
-                        <YAxis type="category" dataKey="tool" {...axisProps} width={72} tick={{ fontSize: 10 }} />
-                        <Tooltip contentStyle={tooltipStyle} formatter={(v) => [v, 'Calls/Session']} />
-                        <Bar dataKey="velocity" fill={CHART_PALETTE[0]} name="Velocity" radius={[0, 2, 2, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="flex items-center justify-center h-40 text-xs text-text-muted">No velocity data</div>
-                  )}
-                  <p className="mt-2 text-xs text-text-muted">avg calls per session</p>
+                  <div className="flex-1 min-h-0">
+                    {topVelocityTools.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart layout="vertical" data={topVelocityTools}>
+                          <CartesianGrid {...gridProps} horizontal={false} />
+                          <XAxis type="number" {...axisProps} />
+                          <YAxis type="category" dataKey="tool" {...axisProps} width={72} tick={{ fontSize: 10 }} />
+                          <Tooltip contentStyle={tooltipStyle} formatter={(v) => [v, 'Calls/Session']} />
+                          <Bar dataKey="velocity" fill={CHART_PALETTE[0]} name="Velocity" radius={[0, 2, 2, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-xs text-text-muted">No velocity data</div>
+                    )}
+                  </div>
+                  <p className="mt-2 text-xs text-text-muted shrink-0">avg calls per session</p>
                 </>
               )}
             </div>
