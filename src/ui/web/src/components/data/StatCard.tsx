@@ -9,8 +9,9 @@ function highlightNumbers(text: string): ReactNode[] {
   );
 }
 
-const accentColors: Record<'default' | 'success' | 'warning' | 'error', string> = {
+const accentColors: Record<'default' | 'neutral' | 'success' | 'warning' | 'error', string> = {
   default: 'text-accent',
+  neutral: 'text-text-primary',
   success: 'text-success',
   warning: 'text-warning',
   error: 'text-error',
@@ -28,14 +29,14 @@ export function StatCard({
   value: string | number | ReactNode;
   detail?: string;
   detailContent?: ReactNode;
-  accent?: 'default' | 'success' | 'warning' | 'error';
+  accent?: 'default' | 'neutral' | 'success' | 'warning' | 'error';
   className?: string;
 }) {
 
   return (
     <div className={clsx('border-t-2 border-border-primary pt-4', className)}>
-      <div className="font-mono text-[10px] uppercase tracking-widest text-text-muted mb-1">{label}</div>
-      <div className={clsx('font-mono text-3xl font-medium tracking-tight', accentColors[accent ?? 'default'])}>
+      <div className="font-sans text-xs uppercase tracking-wide text-text-muted mb-1">{label}</div>
+      <div className={clsx('font-mono text-5xl font-medium tracking-tight whitespace-nowrap', accentColors[accent ?? 'default'])}>
         {value}
       </div>
       {detailContent && <div className="mt-1 text-xs text-text-muted">{detailContent}</div>}

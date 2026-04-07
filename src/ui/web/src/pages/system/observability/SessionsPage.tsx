@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { curveCardinal } from 'd3-shape';
 import { useObsSessions, useObsSubagents } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
@@ -65,7 +65,7 @@ export function SessionsPage() {
       render: (row) => (
         <div className="flex flex-col gap-0.5 min-w-0">
           {row.firstUserMessage && !row.firstUserMessage.startsWith('Caveat:') && (
-            <span className="text-text-primary text-sm truncate">
+            <span className="text-text-primary text-base truncate">
               {row.parentSessionId && <span className="text-text-muted mr-1">↳</span>}
               {(() => { const t = stripMarkdown(row.firstUserMessage!); return t.length > 120 ? t.slice(0, 120) + '…' : t; })()}
             </span>
@@ -76,9 +76,9 @@ export function SessionsPage() {
     {
       key: 'gitBranch',
       label: 'Project',
-      width: '140px',
+      shrink: true,
       render: (row) => (
-        <span className="font-mono text-text-secondary text-sm truncate block" title={row.project}>
+        <span className="text-text-secondary text-base truncate block" title={row.project}>
           {fmtProject(row.project)}
         </span>
       ),
@@ -88,17 +88,17 @@ export function SessionsPage() {
       label: 'Duration',
       align: 'right',
       sortable: true,
-      width: '90px',
-      render: (row) => <span className="whitespace-nowrap">{fmtDuration(row.durationMs)}</span>,
+      shrink: true,
+      render: (row) => <span className="font-mono text-base text-text-secondary whitespace-nowrap">{fmtDuration(row.durationMs)}</span>,
     },
     {
       key: 'userMessages',
       label: 'Messages',
       align: 'right',
       sortable: true,
-      width: '150px',
+      shrink: true,
       render: (row) => (
-        <span className="text-sm whitespace-nowrap">
+        <span className="font-mono text-base whitespace-nowrap">
           <span className="text-text-secondary">{fmtNumber(row.userMessages + row.assistantMessages)}</span>
           <span className="text-text-disabled ml-1">({fmtNumber(row.assistantMessages)} / {fmtNumber(row.userMessages)})</span>
         </span>
@@ -109,21 +109,21 @@ export function SessionsPage() {
       label: 'Cost',
       align: 'right',
       sortable: true,
-      width: '70px',
-      render: (row) => fmtCurrency(row.cost),
+      shrink: true,
+      render: (row) => <span className="font-mono text-base text-text-secondary">{fmtCurrency(row.cost)}</span>,
     },
     {
       key: 'lastTimestamp',
       label: 'Last',
       sortable: true,
-      width: '100px',
-      render: (row) => <span className="text-text-secondary text-sm whitespace-nowrap">{shortRelativeTime(row.lastTimestamp)}</span>,
+      shrink: true,
+      render: (row) => <span className="text-text-secondary text-base whitespace-nowrap">{shortRelativeTime(row.lastTimestamp)}</span>,
     },
   ];
 
   return (
     <div className="space-y-6">
-      <ObsControlBar title={<h1 className="text-2xl font-bold text-text-primary">Sessions</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity} />
+      <ObsControlBar title={<h1 className="font-heading text-2xl font-bold text-text-primary">Sessions</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity} />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
         <StatCard label="Sessions" value={fmtNumber(data.sessions.length)} />
@@ -170,15 +170,17 @@ export function SessionsPage() {
         </div>
 
         {subagents.data && subagents.data.byType.length > 0 && (
-          <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 w-1/4 min-w-[180px] shrink-0">
+          <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 w-1/4 min-w-[220px] shrink-0">
             <h3 className="mb-3 text-sm font-medium text-text-secondary">Subagents by Type</h3>
-            <div className="flex flex-col items-center gap-3">
-              <PieChart width={140} height={140}>
-                <Pie data={subagents.data.byType} dataKey="count" nameKey="subagentType" cx="50%" cy="50%" innerRadius={35} outerRadius={60}>
-                  {subagents.data.byType.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
-                </Pie>
-                <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
-              </PieChart>
+            <div className="flex flex-col gap-3">
+              <ResponsiveContainer width="100%" height={180}>
+                <PieChart>
+                  <Pie data={subagents.data.byType} dataKey="count" nameKey="subagentType" cx="50%" cy="50%" innerRadius={50} outerRadius={78}>
+                    {subagents.data.byType.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                  </Pie>
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
+                </PieChart>
+              </ResponsiveContainer>
               <div className="w-full flex flex-col gap-1">
                 {subagents.data.byType.slice(0, 6).map((row, i) => (
                   <div key={row.subagentType} className="flex items-center gap-2 text-xs">

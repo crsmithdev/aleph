@@ -116,6 +116,7 @@ export interface HookMetric {
   p50Ms: number;
   p95Ms: number;
   errors: number;
+  lastUsed?: string;
   active?: boolean;
   fullCommand?: string;
 }
@@ -127,6 +128,7 @@ export interface SkillMetric {
   errors: number;
   sessions: number;
   avgMs?: number;
+  p50Ms?: number;
   p95Ms?: number;
   lastUsed?: string;
 }

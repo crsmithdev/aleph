@@ -79,7 +79,7 @@ export function MonitorDetailPage() {
         <Link to="/research/monitors" className="text-xs text-accent hover:underline">&larr; All monitors</Link>
         <div className="flex items-center justify-between mt-2">
           <div>
-            <h1 className="text-2xl font-bold text-text-primary">{monitor.title}</h1>
+            <h1 className="font-heading text-2xl font-bold text-text-primary">{monitor.title}</h1>
             <p className="text-sm text-text-muted mt-0.5">{monitor.queries.join(', ')}</p>
           </div>
           <div className="flex items-center gap-2">

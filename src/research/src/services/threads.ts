@@ -3,7 +3,12 @@ import { generateId } from './id.js';
 import type { ResearchThread, ThreadOrigin, ThreadStatus, PerturbationStrategy } from '../types.js';
 
 function rowToThread(row: Record<string, unknown>): ResearchThread {
-  return row as unknown as ResearchThread;
+  return {
+    ...row,
+    fetch_source_text: row.fetch_source_text === null || row.fetch_source_text === undefined
+      ? null
+      : row.fetch_source_text === 1 || row.fetch_source_text === true,
+  } as unknown as ResearchThread;
 }
 
 export function createThread(
@@ -20,6 +25,7 @@ export function createThread(
     depth?: number;
     max_depth?: number;
     min_searches?: number | null;
+    fetch_source_text?: boolean | null;
     status?: ThreadStatus;
   }
 ): ResearchThread {
@@ -29,8 +35,8 @@ export function createThread(
   sqlite.prepare(`
     INSERT INTO research_threads
       (id, session_id, parent_thread_id, spawned_from_finding_id, query, node_type, origin,
-       perturbation_strategy, status, priority, depth, max_depth, min_searches, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       perturbation_strategy, status, priority, depth, max_depth, min_searches, fetch_source_text, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     params.session_id,
@@ -45,6 +51,7 @@ export function createThread(
     params.depth ?? 0,
     params.max_depth ?? 8,
     params.min_searches ?? null,
+    params.fetch_source_text === undefined ? null : (params.fetch_source_text ? 1 : 0),
     now,
     now
   );
@@ -104,7 +111,7 @@ export function claimNextThread(sqlite: Sqlite, sessionId: string): ResearchThre
 export function updateThread(
   sqlite: Sqlite,
   id: string,
-  updates: Partial<Pick<ResearchThread, 'status' | 'priority' | 'max_depth' | 'query' | 'min_searches'>>
+  updates: Partial<Pick<ResearchThread, 'status' | 'priority' | 'max_depth' | 'query' | 'min_searches' | 'fetch_source_text'>>
 ): ResearchThread | null {
   const fields: string[] = [];
   const values: unknown[] = [];
@@ -114,6 +121,10 @@ export function updateThread(
   if (updates.max_depth !== undefined) { fields.push('max_depth = ?'); values.push(updates.max_depth); }
   if (updates.query !== undefined) { fields.push('query = ?'); values.push(updates.query); }
   if (updates.min_searches !== undefined) { fields.push('min_searches = ?'); values.push(updates.min_searches); }
+  if (updates.fetch_source_text !== undefined) {
+    fields.push('fetch_source_text = ?');
+    values.push(updates.fetch_source_text === null ? null : (updates.fetch_source_text ? 1 : 0));
+  }
 
   if (fields.length === 0) return getThread(sqlite, id);
 

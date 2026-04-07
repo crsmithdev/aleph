@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { useObsHooks, useObsHookEvents } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
@@ -10,7 +10,7 @@ import { type Granularity, type TimeRange } from '../../../components/data/TimeR
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { tooltipStyle, CHART_PALETTE } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtMs, fmtPct, dateTime, fmtSeriesName } from '../../../utils/format';
+import { fmtNumber, fmtMs, fmtPct, dateTime, shortRelativeTime, fmtSeriesName } from '../../../utils/format';
 import { clsx } from 'clsx';
 
 type HookRow = {
@@ -21,6 +21,7 @@ type HookRow = {
   p50Ms: number;
   p95Ms: number;
   errors: number;
+  lastUsed?: string;
   active: boolean;
   successRate: number;
   blocking?: boolean;
@@ -38,14 +39,17 @@ type InvocationRow = {
 
 type ViewMode = 'by-hook' | 'by-event';
 
-function ByHookView({ range, granularity }: {
-  range: TimeRange;
-  granularity: Granularity;
-}) {
+function fmtCalls(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+  return String(n);
+}
+
+function ByHookView({ range, granularity }: { range: TimeRange; granularity: Granularity }) {
   const navigate = useNavigate();
   const { data, isLoading, error, refetch } = useObsHooks(range, granularity);
-  const [hideInactive, setHideInactive] = useState(true);
-  const [showUnused, setShowUnused] = useState(true);
+  const [showMissing, setShowMissing] = useState(false);
+  const [showUnused, setShowUnused] = useState(false);
 
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load hooks" retry={refetch} />;
@@ -58,16 +62,28 @@ function ByHookView({ range, granularity }: {
     command: h.command, event: h.event, count: 0, avgMs: 0, p50Ms: 0, p95Ms: 0, errors: 0, active: true, successRate: 100,
     blocking: h.blocking, gate: h.gate, markerFile: h.markerFile, description: h.description,
   }));
-  let filtered = hideInactive ? rankedWithRate.filter((r) => r.active) : rankedWithRate;
+
+  const missingCount = rankedWithRate.filter(r => !r.active).length;
+
+  let filtered = rankedWithRate.filter(r => r.active);
+  if (showMissing) filtered = [...filtered, ...rankedWithRate.filter(r => !r.active)];
   if (showUnused) filtered = [...filtered, ...unusedRows];
 
   const totalExecutions = filtered.filter(r => r.count > 0).reduce((s, r) => s + r.count, 0);
-  const activeScripts = filtered.filter(r => r.active && r.count > 0).length;
   const totalErrors = filtered.reduce((s, r) => s + r.errors, 0);
   const activeWithCounts = filtered.filter(r => r.active && r.count > 0);
   const avgSuccessRate = activeWithCounts.length > 0
     ? activeWithCounts.reduce((s, r) => s + r.successRate, 0) / activeWithCounts.length
     : 100;
+
+  const toolsWithLatency = filtered.filter(r => r.count > 0);
+  const totalCount = toolsWithLatency.reduce((s, r) => s + r.count, 0);
+  const weightedP50 = totalCount > 0
+    ? toolsWithLatency.reduce((s, r) => s + r.p50Ms * r.count, 0) / totalCount
+    : 0;
+  const weightedP95 = totalCount > 0
+    ? toolsWithLatency.reduce((s, r) => s + r.p95Ms * r.count, 0) / totalCount
+    : 0;
 
   const columns: Column<HookRow>[] = [
     {
@@ -77,7 +93,8 @@ function ByHookView({ range, granularity }: {
       render: (row) => (
         <span className={clsx('font-mono', row.count === 0 ? 'text-text-muted' : 'text-text-primary')}>
           {row.command}
-          {row.count === 0 && <span className="ml-2 text-[10px] text-text-disabled uppercase">unused</span>}
+          {row.count === 0 && <span className="ml-2 text-xs text-text-disabled uppercase">unused</span>}
+          {!row.active && row.count > 0 && <span className="ml-2 text-xs text-warning uppercase">missing</span>}
         </span>
       ),
     },
@@ -93,62 +110,77 @@ function ByHookView({ range, granularity }: {
       align: 'right',
       sortable: true,
       width: '80px',
-      render: (row) => fmtNumber(row.count),
+      render: (row) => <span className="font-mono">{fmtNumber(row.count)}</span>,
     },
     {
       key: 'errors',
       label: 'Errors',
       align: 'right',
       sortable: true,
-      width: '80px',
+      width: '70px',
       render: (row) => (
-        <span className={clsx(row.errors > 0 && 'text-error font-medium')}>
+        <span className={clsx('font-mono', row.errors > 0 && 'text-error font-medium')}>
           {row.errors > 0 ? fmtNumber(row.errors) : '—'}
         </span>
       ),
     },
     {
-      key: 'successRate',
-      label: 'Success',
+      key: 'p50Ms',
+      label: 'P50',
       align: 'right',
       sortable: true,
-      width: '90px',
-      render: (row) => (
-        <span className={clsx(row.successRate < 95 && 'text-warning', row.successRate < 80 && 'text-error')}>
-          {fmtPct(row.successRate)}
-        </span>
-      ),
-    },
-    {
-      key: 'avgMs',
-      label: 'Avg',
-      align: 'right',
-      sortable: true,
-      width: '80px',
-      render: (row) => fmtMs(row.avgMs),
+      width: '70px',
+      render: (row) => row.count > 0
+        ? <span className="font-mono">{fmtMs(row.p50Ms)}</span>
+        : <span className="text-text-disabled">—</span>,
     },
     {
       key: 'p95Ms',
       label: 'P95',
       align: 'right',
       sortable: true,
+      width: '70px',
+      render: (row) => row.count > 0
+        ? <span className={clsx('font-mono', row.p95Ms > 500 && 'text-warning')}>{fmtMs(row.p95Ms)}</span>
+        : <span className="text-text-disabled">—</span>,
+    },
+    {
+      key: 'successRate',
+      label: 'Success',
+      align: 'right',
+      sortable: true,
       width: '80px',
-      render: (row) => (
-        <span className={clsx(row.p95Ms > 500 && 'text-warning')}>
-          {fmtMs(row.p95Ms)}
-        </span>
-      ),
+      render: (row) => row.count > 0
+        ? <span className={clsx('font-mono', row.successRate < 95 && 'text-warning', row.successRate < 80 && 'text-error')}>{fmtPct(row.successRate)}</span>
+        : <span className="text-text-disabled">—</span>,
+    },
+    {
+      key: 'lastUsed',
+      label: 'Last Used',
+      sortable: true,
+      width: '100px',
+      render: (row) => row.lastUsed
+        ? <span className="font-mono text-text-secondary whitespace-nowrap">{shortRelativeTime(row.lastUsed)}</span>
+        : <span className="text-text-disabled">—</span>,
     },
   ];
 
   return (
     <>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total Executions" value={fmtNumber(totalExecutions)} />
-        <StatCard label="Active Scripts" value={fmtNumber(activeScripts)} />
-        <StatCard label="Total Errors" value={fmtNumber(totalErrors)} accent={totalErrors > 0 ? 'error' : 'default'} />
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard
-          label="Avg Success Rate"
+          label="Hook Executions"
+          value={fmtCalls(totalExecutions)}
+          detail={totalErrors > 0 ? `${fmtNumber(totalErrors)} errors` : 'No errors'}
+          accent={totalErrors > 0 ? 'error' : 'default'}
+        />
+        <StatCard
+          label="P50 / P95"
+          value={weightedP50 > 0 ? fmtMs(weightedP50) : '—'}
+          detail={weightedP95 > 0 ? `p95 ${fmtMs(weightedP95)}` : undefined}
+        />
+        <StatCard
+          label="Success Rate"
           value={fmtPct(avgSuccessRate)}
           accent={avgSuccessRate >= 99 ? 'success' : avgSuccessRate >= 95 ? 'warning' : 'error'}
         />
@@ -157,25 +189,29 @@ function ByHookView({ range, granularity }: {
       {filtered.filter(r => r.count > 0).length > 0 && (
         <div className="flex gap-4">
           <div className="flex-1 rounded-lg border border-border-primary bg-bg-secondary p-4">
-            <h3 className="mb-3 text-sm font-medium text-text-secondary">Executions by Script</h3>
-            <div className="flex items-center gap-6">
-              <PieChart width={180} height={180}>
-                <Pie
-                  data={filtered.filter(r => r.count > 0)}
-                  dataKey="count"
-                  nameKey="command"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={80}
-                >
-                  {filtered.filter(r => r.count > 0).map((_, i) => (
-                    <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
-                  ))}
-                </Pie>
-                <RechartsTooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
-              </PieChart>
-              <div className="flex flex-col gap-1.5 min-w-0">
+            <h3 className="mb-3 text-sm font-medium text-text-secondary">Executions by Hook</h3>
+            <div className="flex items-start gap-4">
+              <div className="w-44 shrink-0">
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie
+                      data={filtered.filter(r => r.count > 0)}
+                      dataKey="count"
+                      nameKey="command"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={45}
+                      outerRadius={72}
+                    >
+                      {filtered.filter(r => r.count > 0).map((_, i) => (
+                        <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex flex-col gap-1.5 min-w-0 pt-2">
                 {filtered.filter(r => r.count > 0).slice(0, 10).map((row, i) => (
                   <div key={row.command} className="flex items-center gap-2 text-xs">
                     <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
@@ -188,26 +224,26 @@ function ByHookView({ range, granularity }: {
           </div>
 
           {data.byEvent && data.byEvent.length > 0 && (
-            <div className="rounded-lg border border-border-primary bg-bg-secondary p-4" style={{ width: 220 }}>
+            <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 w-1/4 min-w-[220px] shrink-0">
               <h3 className="mb-3 text-sm font-medium text-text-secondary">By Event</h3>
-              <div className="flex flex-col items-center gap-4">
-                <PieChart width={120} height={120}>
-                  <Pie data={data.byEvent} dataKey="count" nameKey="event" cx="50%" cy="50%" innerRadius={30} outerRadius={50}>
+              <ResponsiveContainer width="100%" height={180}>
+                <PieChart>
+                  <Pie data={data.byEvent} dataKey="count" nameKey="event" cx="50%" cy="50%" innerRadius={50} outerRadius={78}>
                     {data.byEvent.map((_, i) => (
                       <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
                     ))}
                   </Pie>
                   <RechartsTooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
                 </PieChart>
-                <div className="flex flex-col gap-2 w-full">
-                  {data.byEvent.map((row, i) => (
-                    <div key={row.event} className="flex items-center gap-2 text-xs">
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                      <span className="font-mono text-text-secondary">{fmtSeriesName(row.event)}</span>
-                      <span className="ml-auto text-text-muted font-mono">{fmtNumber(row.count)}</span>
-                    </div>
-                  ))}
-                </div>
+              </ResponsiveContainer>
+              <div className="flex flex-col gap-2 mt-2">
+                {data.byEvent.map((row, i) => (
+                  <div key={row.event} className="flex items-center gap-2 text-xs">
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                    <span className="font-mono text-text-secondary">{fmtSeriesName(row.event)}</span>
+                    <span className="ml-auto text-text-muted font-mono">{fmtNumber(row.count)}</span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -215,7 +251,9 @@ function ByHookView({ range, granularity }: {
       )}
 
       <div className="flex items-center gap-3">
-        <FilterToggle label="Active only" active={hideInactive} onToggle={() => setHideInactive(!hideInactive)} />
+        {missingCount > 0 && (
+          <FilterToggle label={`Missing (${missingCount})`} active={showMissing} onToggle={() => setShowMissing(!showMissing)} activeColor="error" />
+        )}
         {unusedRows.length > 0 && (
           <FilterToggle label={`Unused (${unusedRows.length})`} active={showUnused} onToggle={() => setShowUnused(!showUnused)} />
         )}
@@ -225,9 +263,7 @@ function ByHookView({ range, granularity }: {
         data={filtered}
         columns={columns}
         keyField="command"
-        onRowClick={(row) =>
-          navigate(`/observability/hooks/${encodeURIComponent(row.command)}`)
-        }
+        onRowClick={(row) => navigate(`/observability/hooks/${encodeURIComponent(row.command)}`)}
       />
 
       <QueryTiming ms={data.queryTimeMs} />
@@ -252,14 +288,14 @@ function ByEventView({ range }: { range: TimeRange }) {
       key: 'timestamp',
       label: 'Time',
       width: '160px',
-      render: (row) => <span className="text-text-secondary whitespace-nowrap">{dateTime(row.timestamp)}</span>,
+      render: (row) => <span className="font-mono text-text-secondary whitespace-nowrap">{dateTime(row.timestamp)}</span>,
     },
     {
       key: 'event',
       label: 'Event',
       width: '160px',
       render: (row) => (
-        <span className="rounded bg-bg-tertiary px-1.5 py-0.5 text-sm text-text-secondary font-mono whitespace-nowrap">
+        <span className="rounded bg-bg-tertiary px-1.5 py-0.5 text-text-secondary font-mono whitespace-nowrap">
           {row.event}
         </span>
       ),
@@ -304,7 +340,7 @@ function ByEventView({ range }: { range: TimeRange }) {
       key: 'sessionId',
       label: 'Session',
       width: '90px',
-      render: (row) => <span className="font-mono text-sm text-text-muted">{row.sessionId.slice(0, 8)}</span>,
+      render: (row) => <span className="font-mono text-text-muted">{row.sessionId.slice(0, 8)}</span>,
     },
   ];
 
@@ -338,15 +374,10 @@ function ByEventView({ range }: { range: TimeRange }) {
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-medium text-text-secondary">
               Recent Invocations ({filtered.length})
-              {eventFilter && (
-                <span className="ml-2 text-text-muted">— {eventFilter}</span>
-              )}
+              {eventFilter && <span className="ml-2 text-text-muted">— {eventFilter}</span>}
             </h2>
             {eventFilter && (
-              <button
-                onClick={() => setEventFilter(null)}
-                className="text-xs text-text-muted hover:text-text-primary transition-colors"
-              >
+              <button onClick={() => setEventFilter(null)} className="text-xs text-text-muted hover:text-text-primary transition-colors">
                 clear filter
               </button>
             )}
@@ -374,34 +405,40 @@ export function HooksPage() {
   const [granularity, setGranularity] = useState<Granularity>('day');
   const [view, setView] = useState<ViewMode>('by-hook');
 
+  const viewToggle = (
+    <div className="flex items-center gap-0.5 rounded-md border border-border-primary bg-bg-secondary p-0.5">
+      <button
+        onClick={() => setView('by-hook')}
+        className={clsx(
+          'rounded px-2.5 py-1 text-xs transition-colors',
+          view === 'by-hook' ? 'bg-accent text-white' : 'text-text-muted hover:text-text-primary'
+        )}
+      >
+        By Hook
+      </button>
+      <button
+        onClick={() => setView('by-event')}
+        className={clsx(
+          'rounded px-2.5 py-1 text-xs transition-colors',
+          view === 'by-event' ? 'bg-accent text-white' : 'text-text-muted hover:text-text-primary'
+        )}
+      >
+        By Event
+      </button>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
-      <ObsControlBar title={<h1 className="text-2xl font-bold text-text-primary">Scripts</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity} />
-
-      <div className="flex items-center gap-1 rounded-md border border-border-primary bg-bg-secondary p-0.5 self-start w-fit">
-        <button
-          onClick={() => setView('by-hook')}
-          className={clsx(
-            'rounded px-2.5 py-1 text-xs transition-colors',
-            view === 'by-hook'
-              ? 'bg-accent text-white'
-              : 'text-text-muted hover:text-text-primary'
-          )}
-        >
-          By Hook
-        </button>
-        <button
-          onClick={() => setView('by-event')}
-          className={clsx(
-            'rounded px-2.5 py-1 text-xs transition-colors',
-            view === 'by-event'
-              ? 'bg-accent text-white'
-              : 'text-text-muted hover:text-text-primary'
-          )}
-        >
-          By Event
-        </button>
-      </div>
+      <ObsControlBar
+        title={<h1 className="font-heading text-2xl font-bold text-text-primary">Hooks</h1>}
+        range={range}
+        onRangeChange={setRange}
+        granularity={granularity}
+        onGranularityChange={setGranularity}
+      >
+        {viewToggle}
+      </ObsControlBar>
 
       {view === 'by-hook' ? (
         <ByHookView range={range} granularity={granularity} />

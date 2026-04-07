@@ -61,7 +61,7 @@ function InlineEdit({
   if (!editing) {
     return (
       <h1
-        className="text-2xl font-bold text-text-primary cursor-pointer hover:text-accent group flex items-center gap-2 min-w-0"
+        className="font-heading text-2xl font-bold text-text-primary cursor-pointer hover:text-accent group flex items-center gap-2 min-w-0"
         onClick={() => { setDraft(value); setEditing(true); }}
         title="Click to edit"
       >
@@ -81,7 +81,7 @@ function InlineEdit({
         if (e.key === 'Enter') commit();
         if (e.key === 'Escape') { setDraft(value); setEditing(false); }
       }}
-      className="text-2xl font-bold bg-transparent border-b border-accent text-text-primary focus:outline-none w-full min-w-0"
+      className="font-heading text-2xl font-bold bg-transparent border-b border-accent text-text-primary focus:outline-none w-full min-w-0"
     />
   );
 }
@@ -455,7 +455,7 @@ export function GoalDetailPage() {
             <LinkSearch
               items={unlinkedHabits}
               onLink={(habit) => updateHabit.mutate({ id: habit.id, goalId: id })}
-              renderExtra={(habit) => <span className="text-text-disabled text-[10px]">{habit.frequency}</span>}
+              renderExtra={(habit) => <span className="text-text-disabled text-xs">{habit.frequency}</span>}
             />
           ) : undefined}
         />

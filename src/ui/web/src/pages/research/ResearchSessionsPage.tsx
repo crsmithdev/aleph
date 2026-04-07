@@ -11,7 +11,7 @@ import { ObsControlBar } from '../../components/data/ObsControlBar';
 import { type TimeRange, type Granularity } from '../../components/data/TimeRangeSelector';
 import { ChartContainer } from '../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps } from '../../components/charts/chartTheme';
-import { fmtCurrency, fmtPct, shortDate, granLabel } from '../../utils/format';
+import { fmtCurrency, fmtNumber, fmtPct, shortDate, granLabel } from '../../utils/format';
 
 const statusColors: Record<string, string> = {
   active: 'bg-green-900/50 text-green-300',
@@ -66,7 +66,7 @@ export function ResearchSessionsPage() {
         title={
           <div className="flex items-center justify-between w-full">
             <div>
-              <h1 className="text-2xl font-bold text-text-primary">Deep Research</h1>
+              <h1 className="font-heading text-2xl font-bold text-text-primary">Deep Research</h1>
               <p className="text-sm text-text-muted mt-0.5">
                 {visibleSessions.length} session{visibleSessions.length !== 1 ? 's' : ''}
               </p>
@@ -125,8 +125,8 @@ export function ResearchSessionsPage() {
       {stats.data && (
         <>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <StatCard label="Sessions" value={stats.data.totalSessions} accent="default" detailContent={<><span className="text-success font-medium">{stats.data.activeSessions}</span><span className="text-text-muted"> active</span></>} />
-            <StatCard label="Findings" value={stats.data.totalFindings} accent="success" />
+            <StatCard label="Sessions" value={fmtNumber(stats.data.totalSessions)} accent="default" detailContent={<><span className="text-success font-medium">{stats.data.activeSessions}</span><span className="text-text-muted"> active</span></>} />
+            <StatCard label="Findings" value={fmtNumber(stats.data.totalFindings)} accent="success" />
             <StatCard label="Total Cost" value={fmtCurrency(stats.data.totalCost)} />
             <StatCard
               label="Avg Confidence"

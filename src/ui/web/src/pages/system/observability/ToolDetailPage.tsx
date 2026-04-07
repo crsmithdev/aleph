@@ -106,7 +106,7 @@ export function ToolDetailPage() {
             >
               &larr; Tools
             </Link>
-            <h1 className="text-2xl font-bold font-mono text-text-primary">{fmtToolName(toolName!)}</h1>
+            <h1 className="text-2xl font-bold font-heading text-text-primary">{fmtToolName(toolName!)}</h1>
           </div>
         }
         range={range}

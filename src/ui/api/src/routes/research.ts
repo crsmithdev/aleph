@@ -2,11 +2,12 @@ import type { FastifyPluginAsync } from 'fastify';
 import {
   listSessions, getSession, createSession, updateSession, getSessionCost, getResearchStats,
   listThreads, getThread, updateThread, createThread,
-  listFindings, getFinding, updateFinding,
+  listFindings, getFinding, updateFinding, updateFindingSourceTexts, clearThreadFindings,
   getLatestPlan, addPlanModification,
   getStepCosts, listSteps,
   applyResearchDDL,
   DEFAULT_SESSION_CONFIG,
+  fetchPageText, JS_RENDERED_FLAG,
   // Job imports
   createJob, getJob, getActiveJobForSession, cancelJob, listJobsForSession, cancelAllJobs,
   deleteSession,
@@ -15,6 +16,25 @@ import {
   listSnapshots, listAlerts, updateAlert,
   MonitorEngine,
 } from '@construct/research';
+
+function sanitizeQuery(q: string): string {
+  const trimmed = q.trim().replace(/\s+/g, ' ');
+  if (!trimmed) return trimmed;
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+}
+
+function summarizeQuery(query: string): string {
+  const t = query.trim();
+  // Take text before a colon if it's a reasonable length (e.g. "Topic: details...")
+  const colon = t.indexOf(':');
+  if (colon > 10 && colon < 80) return t.slice(0, colon).trim();
+  // Take first sentence/clause
+  const sentEnd = t.search(/[?!.]\s/);
+  if (sentEnd > 10 && sentEnd < 80) return t.slice(0, sentEnd).trim();
+  // Fall back to first 8 words
+  const words = t.split(/\s+/);
+  return words.length > 8 ? words.slice(0, 8).join(' ') : t;
+}
 
 export const researchRoutes: FastifyPluginAsync = async (app) => {
   // Ensure research tables exist
@@ -58,11 +78,12 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
   app.post<{ Body: { title?: string; seed_query: string; config?: Record<string, unknown> } }>(
     '/sessions',
     async (req, reply) => {
-      const { seed_query, title, config } = req.body;
+      const { seed_query: rawQuery, title, config } = req.body;
+      const seed_query = sanitizeQuery(rawQuery ?? '');
       if (!seed_query) return reply.status(400).send({ error: 'seed_query is required' });
       const session = createSession(
         app.sqlite,
-        title ?? seed_query,
+        title ?? summarizeQuery(seed_query),
         seed_query,
         config as Partial<typeof DEFAULT_SESSION_CONFIG>
       );
@@ -116,7 +137,8 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
   app.post<{ Params: { id: string }; Body: { query: string; priority?: number; max_depth?: number } }>(
     '/sessions/:id/threads',
     async (req, reply) => {
-      const { query, priority, max_depth } = req.body;
+      const { query: rawQuery, priority, max_depth } = req.body;
+      const query = sanitizeQuery(rawQuery ?? '');
       if (!query) return reply.status(400).send({ error: 'query is required' });
       const thread = createThread(app.sqlite, {
         session_id: req.params.id,
@@ -126,6 +148,62 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
         max_depth,
       });
       return reply.status(201).send(thread);
+    }
+  );
+
+  app.post<{ Params: { id: string; threadId: string } }>(
+    '/sessions/:id/threads/:threadId/fetch-text',
+    async (req, reply) => {
+      const { id: sessionId, threadId } = req.params;
+      const thread = getThread(app.sqlite, threadId);
+      if (!thread) return reply.status(404).send({ error: 'Thread not found' });
+
+      const threadFindings = listFindings(app.sqlite, sessionId, { threadId });
+      if (threadFindings.length === 0) return reply.send({ updated: 0 });
+
+      let updated = 0;
+      for (const finding of threadFindings) {
+        if (finding.source_urls.length === 0) continue;
+        const fetched = await Promise.all(finding.source_urls.map(url => fetchPageText(url)));
+        const sourceTexts = fetched.map((full, i) => {
+          if (!full || full === JS_RENDERED_FLAG) return finding.source_texts[i] ?? '';
+          return full;
+        });
+        updateFindingSourceTexts(app.sqlite, finding.id, sourceTexts);
+        updated++;
+      }
+
+      return reply.send({ updated });
+    }
+  );
+
+  app.post<{ Params: { id: string; threadId: string }; Body: { fetch_source_text?: boolean } }>(
+    '/sessions/:id/threads/:threadId/redo',
+    async (req, reply) => {
+      const { threadId } = req.params;
+      const thread = getThread(app.sqlite, threadId);
+      if (!thread) return reply.status(404).send({ error: 'Thread not found' });
+      clearThreadFindings(app.sqlite, threadId);
+      const patch: Record<string, unknown> = { status: 'queued' };
+      if (req.body?.fetch_source_text !== undefined) patch.fetch_source_text = req.body.fetch_source_text;
+      const updated = updateThread(app.sqlite, threadId, patch);
+      return reply.send(updated);
+    }
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/findings/:id/fetch-text',
+    async (req, reply) => {
+      const finding = getFinding(app.sqlite, req.params.id);
+      if (!finding) return reply.status(404).send({ error: 'Finding not found' });
+      if (finding.source_urls.length === 0) return reply.send({ updated: false });
+      const fetched = await Promise.all(finding.source_urls.map(url => fetchPageText(url)));
+      const sourceTexts = fetched.map((full, i) => {
+        if (!full || full === JS_RENDERED_FLAG) return finding.source_texts[i] ?? '';
+        return full;
+      });
+      updateFindingSourceTexts(app.sqlite, finding.id, sourceTexts);
+      return reply.send({ updated: true });
     }
   );
 
@@ -336,6 +414,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
 
   // === Worker supervisor ===
   app.get('/workers', async () => app.supervisor.status());
+  app.post('/workers/start', async () => { app.supervisor.start(); return app.supervisor.status(); });
 
   // === Global run/stop ===
   app.post('/run-all', async () => {

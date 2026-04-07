@@ -91,13 +91,19 @@ export interface FetchResult {
   page: PageContent | null;
   ok: boolean;
   content_length: number;
+  error?: string;
 }
+
+// Circuit breaker: disabled after first 402 (balance exhausted)
+let jinaDisabledReason: string | null = null;
 
 export async function fetchPageContent(url: string): Promise<FetchResult> {
   const jinaKey = process.env.JINA_API_KEY;
   if (!jinaKey) throw new Error('JINA_API_KEY is not set — page content fetch requires Jina');
-  const page = await fetchViaJina(url, jinaKey);
-  return { page, ok: page !== null, content_length: page?.content.length ?? 0 };
+  if (jinaDisabledReason) return { page: null, ok: false, content_length: 0, error: jinaDisabledReason };
+  const result = await fetchViaJina(url, jinaKey);
+  if (result.error?.includes('402')) jinaDisabledReason = result.error;
+  return { page: result.page, ok: result.page !== null, content_length: result.page?.content.length ?? 0, error: result.error };
 }
 
 /** @deprecated Use fetchPageContent */
@@ -147,7 +153,7 @@ function parseJinaResponse(raw: string, url: string): PageContent | null {
   };
 }
 
-async function fetchViaJina(url: string, apiKey: string): Promise<PageContent | null> {
+async function fetchViaJina(url: string, apiKey: string): Promise<{ page: PageContent | null; error?: string }> {
   try {
     const res = await fetch(`https://r.jina.ai/${url}`, {
       signal: AbortSignal.timeout(15_000),
@@ -159,13 +165,15 @@ async function fetchViaJina(url: string, apiKey: string): Promise<PageContent | 
         'X-With-Links-Summary': 'false',
       },
     });
-    if (!res.ok) return null;
+    if (!res.ok) return { page: null, error: `HTTP ${res.status} ${res.statusText}` };
     const text = (await res.text()).trim();
-    if (!text) return null;
+    if (!text) return { page: null, error: 'empty response' };
     const page = parseJinaResponse(text, url);
-    return page;
-  } catch {
-    return null;
+    if (!page) return { page: null, error: 'content filtered (too short, garbage, or paywall)' };
+    return { page };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { page: null, error: msg.includes('timed out') || msg.includes('TimeoutError') ? 'timeout' : msg };
   }
 }
 

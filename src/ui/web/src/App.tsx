@@ -72,7 +72,8 @@ export function App() {
               <Route path="/habits" element={<HabitsPage />} />
 
               {/* Research */}
-              <Route path="/research" element={<ResearchSessionsPage />} />
+              <Route path="/research" element={<Navigate to="/research/sessions" replace />} />
+              <Route path="/research/sessions" element={<ResearchSessionsPage />} />
               <Route path="/research/:id" element={<ResearchSessionDetailPage />} />
               <Route path="/research/:id/plan" element={<ResearchPlanPage />} />
               <Route path="/research/monitors" element={<MonitorsPage />} />

@@ -27,6 +27,7 @@ export interface ResearchThread {
   depth: number;
   max_depth: number;
   min_searches: number | null;
+  fetch_source_text: boolean | null;
   created_at: string;
   updated_at: string;
 }
@@ -205,9 +206,40 @@ export function useInjectThread() {
 export function useUpdateThread() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, sessionId, ...data }: { id: string; sessionId: string; status?: string; max_depth?: number; priority?: number }) =>
+    mutationFn: ({ id, sessionId, ...data }: { id: string; sessionId: string; status?: string; max_depth?: number; priority?: number; fetch_source_text?: boolean | null }) =>
       api.patch<ResearchThread>(`/research/threads/${id}`, data),
     onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: ['research-threads', vars.sessionId] }),
+  });
+}
+
+export function useFetchThreadText() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sessionId, threadId }: { sessionId: string; threadId: string }) =>
+      api.post<{ updated: number }>(`/research/sessions/${sessionId}/threads/${threadId}/fetch-text`, {}),
+    onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: ['research-findings', vars.sessionId] }),
+  });
+}
+
+export function useRedoThread() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sessionId, threadId, fetch_source_text }: { sessionId: string; threadId: string; fetch_source_text?: boolean }) =>
+      api.post<ResearchThread>(`/research/sessions/${sessionId}/threads/${threadId}/redo`, fetch_source_text !== undefined ? { fetch_source_text } : {}),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['research-threads', vars.sessionId] });
+      qc.invalidateQueries({ queryKey: ['research-findings', vars.sessionId] });
+      qc.invalidateQueries({ queryKey: ['research-steps', vars.sessionId] });
+    },
+  });
+}
+
+export function useFetchFindingText() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sessionId, findingId }: { sessionId: string; findingId: string }) =>
+      api.post<{ updated: boolean }>(`/research/findings/${findingId}/fetch-text`, {}),
+    onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: ['research-findings', vars.sessionId] }),
   });
 }
 
@@ -243,7 +275,7 @@ export interface ResearchStep {
   prompt_tokens: number;
   completion_tokens: number;
   cost_usd: number;
-  tool_calls: Array<{ tool: string; input?: Record<string, unknown>; output?: string; error?: string; jina_fetches?: Array<{ url: string; ok: boolean; content_length: number }> }>;
+  tool_calls: Array<{ tool: string; input?: Record<string, unknown>; output?: string; error?: string; jina_fetches?: Array<{ url: string; ok: boolean; content_length: number; error?: string }> }>;
   duration_ms: number;
   error: string | null;
   created_at: string;

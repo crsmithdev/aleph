@@ -29,7 +29,7 @@ const navGroups: NavItem[][] = [
   ],
   [
     {
-      to: '/research',
+      to: '/research/sessions',
       label: 'Research',
       icon: (
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
@@ -37,7 +37,7 @@ const navGroups: NavItem[][] = [
         </svg>
       ),
       children: [
-        { to: '/research', label: 'Sessions' },
+        { to: '/research/sessions', label: 'Sessions' },
         { to: '/research/monitors', label: 'Monitors' },
       ],
     },
@@ -54,7 +54,7 @@ const navGroups: NavItem[][] = [
       ),
       children: [
         { to: '/observability/tools', label: 'Tools' },
-        { to: '/observability/hooks', label: 'Scripts' },
+        { to: '/observability/hooks', label: 'Hooks' },
         { to: '/observability/skills', label: 'Skills' },
         { to: '/observability/sessions', label: 'Sessions' },
         { to: '/observability/evals', label: 'Evals' },
@@ -84,7 +84,7 @@ function SidebarLink({ to, label, icon, depth = 0, collapsed = false }: { to: st
       to={to}
       className={({ isActive }) =>
         clsx(
-          'flex items-center gap-2.5 py-1.5 text-sm font-mono transition-colors',
+          'flex items-center gap-2.5 py-1.5 text-base font-sans transition-colors',
           depth > 0 ? 'pl-9 pr-2.5' : 'pr-2.5',
           isActive
             ? depth > 0

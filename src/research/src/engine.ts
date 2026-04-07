@@ -31,7 +31,7 @@ export interface WebSearchResult {
   text: string;
   sourceTexts: string[];
   sourceUrls: string[];
-  jinaFetches?: Array<{ url: string; ok: boolean; content_length: number }>;
+  jinaFetches?: Array<{ url: string; ok: boolean; content_length: number; error?: string }>;
   promptTokens: number;
   completionTokens: number;
   model: string;
@@ -58,8 +58,6 @@ export function classify(s: string): 'question' | 'topic' {
   if (/^(is|are|does|do|can|should|will|would|has|have|was|were)\b/i.test(t)) return 'question';
   return 'topic';
 }
-
-const BOT_CHECK_PATTERN = /checking your browser|are you a robot|please confirm you are human|browser before accessing|enable javascript|ddos protection|just a moment|access denied|403 forbidden|cloudflare ray id/i;
 
 function stripLLMFences(text: string): string {
   // Remove <think> blocks first
@@ -349,7 +347,7 @@ export class ResearchEngine {
     const queries = await this.formulateQueries(thread, config, action);
 
     // Step 2: Execute web searches
-    const searchResults = await this.executeSearches(queries, sessionId, thread.id, config);
+    const searchResults = await this.executeSearches(queries, sessionId, thread.id, config, thread.fetch_source_text ?? null);
 
     if (searchResults.length === 0) {
       // No results — mark as potential exhaustion signal
@@ -547,7 +545,8 @@ Return ONLY a JSON array of search query strings. No other text.`,
     queries: string[],
     sessionId: string,
     threadId: string,
-    config: SessionConfig
+    config: SessionConfig,
+    fetchSourceTextOverride?: boolean | null
   ): Promise<Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[] }>> {
     const results = await Promise.all(queries.map(async (query) => {
       const startTime = Date.now();
@@ -569,7 +568,10 @@ Return ONLY a JSON array of search query strings. No other text.`,
         if (!result.text.trim()) return null;
 
         let sourceTexts = result.sourceTexts;
-        if (config.fetch_source_text && result.sourceUrls.length > 0) {
+        const shouldFetchText = fetchSourceTextOverride !== undefined && fetchSourceTextOverride !== null
+          ? fetchSourceTextOverride
+          : config.fetch_source_text;
+        if (shouldFetchText && result.sourceUrls.length > 0) {
           const fetched = await Promise.all(result.sourceUrls.map(url => fetchPageText(url)));
           sourceTexts = fetched.map((full, i) => {
             if (!full || full === JS_RENDERED_FLAG) return result.sourceTexts[i] ?? '';
@@ -646,7 +648,7 @@ If has_gaps is true, gap_queries must contain ${config.gap_analysis.max_gap_sear
     }
 
     if (gapQueries.length === 0) return [];
-    return this.executeSearches(gapQueries, thread.session_id, thread.id, config);
+    return this.executeSearches(gapQueries, thread.session_id, thread.id, config, thread.fetch_source_text ?? null);
   }
 
   private async synthesizeFinding(
@@ -696,20 +698,6 @@ Return ONLY valid JSON. No markdown fences.`,
       config
     );
 
-    // Collect fetched texts: filter bot-check pages, deduplicate, cap at 8
-    const seen = new Set<string>();
-    const filteredTexts: string[] = [];
-    for (const r of searchResults) {
-      for (const text of r.sourceTexts) {
-        if (text && text.length > 100 && !BOT_CHECK_PATTERN.test(text) && !seen.has(text.slice(0, 80))) {
-          seen.add(text.slice(0, 80));
-          filteredTexts.push(text);
-          if (filteredTexts.length >= 8) break;
-        }
-      }
-      if (filteredTexts.length >= 8) break;
-    }
-
     try {
       const text = stripLLMFences(result.text);
       const parsed = JSON.parse(text);
@@ -717,7 +705,7 @@ Return ONLY valid JSON. No markdown fences.`,
         content: parsed.content ?? '',
         summary: parsed.summary ?? '',
         sourceUrls: parsed.source_urls ?? [],
-        sourceTexts: filteredTexts,
+        sourceTexts: [],
         sourceQuality: parsed.source_quality ?? 0.5,
         tags: parsed.tags ?? [],
         confidence: parsed.confidence ?? 0.5,

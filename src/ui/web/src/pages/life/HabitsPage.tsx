@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useHabits, useCreateHabit, useCompleteHabit, useUncompleteHabit, useUpdateHabit, useDeleteHabit } from '../../api/hooks';
 import { PageLoading } from '../../components/ui/Spinner';
+import { PageHeader } from '../../components/layout/PageHeader';
 import { clsx } from 'clsx';
 import type { Habit } from '../../types';
 
@@ -162,7 +163,7 @@ export function HabitsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-text-primary">Habits</h1>
+      <PageHeader title="Habits" />
 
       <HabitCreateForm />
 

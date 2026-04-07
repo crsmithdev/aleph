@@ -226,7 +226,7 @@ function SpanRow({ span, sessionId }: { span: Span; sessionId: string }) {
         {/* Kind badge — fixed width column */}
         <span
           className={clsx(
-            'inline-flex items-center justify-center px-1.5 py-0.5 rounded border text-[10px] font-semibold uppercase tracking-wide w-fit',
+            'inline-flex items-center justify-center px-1.5 py-0.5 rounded border text-xs font-semibold uppercase tracking-wide w-fit',
             kindStyle,
           )}
         >
@@ -321,25 +321,25 @@ function TokenDeltaHover({
         <span className="absolute bottom-full left-0 mb-1.5 z-50 min-w-[170px] rounded border border-border-primary bg-bg-primary shadow-lg px-3 py-2 text-[11px] space-y-1 pointer-events-none">
           {cacheReadTokens !== undefined && cacheReadTokens > 0 && (
             <span className="flex justify-between gap-4">
-              <span className="text-text-muted">Cache read</span>
+              <span className="text-text-secondary">Cache read</span>
               <span className="text-text-secondary font-mono">{fmtNumber(cacheReadTokens)}</span>
             </span>
           )}
           {cacheCreationTokens !== undefined && cacheCreationTokens > 0 && (
             <span className="flex justify-between gap-4">
-              <span className="text-text-muted">Cache write</span>
+              <span className="text-text-secondary">Cache write</span>
               <span className="text-text-secondary font-mono">{fmtNumber(cacheCreationTokens)}</span>
             </span>
           )}
           {inputTokens !== undefined && inputTokens > 0 && (
             <span className="flex justify-between gap-4">
-              <span className="text-text-muted">Fresh input</span>
+              <span className="text-text-secondary">Fresh input</span>
               <span className="text-text-secondary font-mono">{fmtNumber(inputTokens)}</span>
             </span>
           )}
           {outputTokens !== undefined && outputTokens > 0 && (
             <span className="flex justify-between gap-4">
-              <span className="text-text-muted">Output</span>
+              <span className="text-text-secondary">Output</span>
               <span className="text-text-secondary font-mono">{fmtNumber(outputTokens)}</span>
             </span>
           )}
@@ -364,7 +364,7 @@ function CompactionDivider({ compaction }: { compaction: TraceCompaction }) {
         onClick={() => setOpen(o => !o)}
         className="flex items-center gap-2 px-3 py-1.5 rounded border border-purple-500/30 bg-purple-500/5 text-xs text-purple-400 hover:bg-purple-500/10 transition-colors"
       >
-        <span className={clsx('transition-transform text-[10px]', open ? 'rotate-90' : '')}>›</span>
+        <span className={clsx('transition-transform text-xs', open ? 'rotate-90' : '')}>›</span>
         <span>⟳ Context compacted</span>
         {compaction.preTokens && (
           <span className="text-purple-400/60">
@@ -374,7 +374,7 @@ function CompactionDivider({ compaction }: { compaction: TraceCompaction }) {
             )}
           </span>
         )}
-        <span className="text-purple-400/40 text-[10px]">{compaction.trigger}</span>
+        <span className="text-purple-400/40 text-xs">{compaction.trigger}</span>
       </button>
       {open && (
         <div className="w-full max-w-2xl mt-1 rounded border border-purple-500/20 bg-purple-500/5 px-4 py-3 text-xs text-text-muted">
@@ -432,14 +432,14 @@ function ResponseBlock({
       {/* Constrain label + bubble to same max-width so stats align to bubble edge */}
       <div className="max-w-[85%]">
         {/* Label row — model name + summary + caret left, stats right */}
-        <div className="flex items-baseline gap-1.5 px-1 flex-wrap">
+        <div className="flex items-center gap-1.5 px-1 flex-wrap">
           <span className="font-mono text-xs text-accent tracking-wider uppercase shrink-0 leading-none">Claude</span>
           {turn.model && <span className="text-xs text-sky-400 font-mono shrink-0 leading-none">{modelLabel}</span>}
           <span className="font-mono text-xs font-bold text-violet-400 shrink-0 leading-none">#{turn.index + 1}</span>
           {summaryParts.length > 0 && (
             <>
               <span className="text-text-muted/60 text-xs leading-none shrink-0">•</span>
-              <span className="text-xs text-text-secondary shrink-0 leading-none">{summaryParts.join(', ')}</span>
+              <span className="text-sm text-text-secondary shrink-0 leading-none">{summaryParts.join(', ')}</span>
             </>
           )}
           {errorCount > 0 && (
@@ -451,7 +451,7 @@ function ResponseBlock({
           {hasSpans && (
             <button
               onClick={onToggle}
-              className="self-center shrink-0 flex items-center justify-center w-5 h-5 rounded text-text-muted hover:text-text-secondary hover:bg-bg-tertiary transition-colors"
+              className="shrink-0 flex items-center justify-center w-5 h-5 rounded text-text-muted hover:text-text-secondary hover:bg-bg-tertiary transition-colors"
               title={expanded ? 'Collapse' : 'Expand'}
             >
               <svg
@@ -463,7 +463,7 @@ function ResponseBlock({
             </button>
           )}
           {/* Stats on the right */}
-          <div className="ml-auto self-center flex items-center gap-1 shrink-0 flex-wrap justify-end">
+          <div className="ml-auto flex items-center gap-1 shrink-0 flex-wrap justify-end">
             <div className="flex items-center gap-1 text-xs font-mono">
               {(runningCost !== undefined && runningCost > 0) || turn.cost ? (
                 <span className="text-text-secondary">
@@ -629,9 +629,9 @@ function UserBlock({ turn, sessionId, prevTurn }: {
             : 'border-border-primary/40 bg-bg-tertiary/40 text-text-muted'
         )}>
           <span>{isFailure ? '✗' : '✓'}</span>
-          <span className="font-mono text-[10px] text-text-disabled">{taskNotif.taskId.slice(0, 8)}</span>
+          <span className="font-mono text-xs text-text-disabled">{taskNotif.taskId.slice(0, 8)}</span>
           <span>{taskNotif.summary || `Task ${taskNotif.status}`}</span>
-          <span className="text-text-disabled text-[10px]">{time}</span>
+          <span className="text-text-disabled text-xs">{time}</span>
         </div>
       </div>
     );
@@ -657,7 +657,7 @@ function UserBlock({ turn, sessionId, prevTurn }: {
         <div className="flex items-center gap-2 px-3 py-1.5 rounded border border-warning/30 bg-warning/5 text-xs text-warning">
           <span>⚠</span>
           <span>Request interrupted by user</span>
-          <span className="text-text-disabled text-[10px]">{time}</span>
+          <span className="text-text-disabled text-xs">{time}</span>
         </div>
       </div>
     );
@@ -670,7 +670,7 @@ function UserBlock({ turn, sessionId, prevTurn }: {
       <div className="flex flex-col items-end gap-1">
         <div className="max-w-[85%] rounded-sm border border-border-primary/40 bg-bg-primary overflow-hidden">
           <div className="px-2 py-1 border-b border-border-primary/30 bg-bg-tertiary/40">
-            <span className="text-[10px] text-text-disabled font-mono tracking-wider uppercase">shell output</span>
+            <span className="text-xs text-text-disabled font-mono tracking-wider uppercase">shell output</span>
           </div>
           <pre className="px-3 py-2 text-xs font-mono text-text-secondary whitespace-pre-wrap break-words leading-relaxed max-h-48 overflow-y-auto">
             {stdoutContent || '(no output)'}
@@ -1058,7 +1058,7 @@ function FlatContextItem({ item, onTurnClick }: { item: ContextItem; onTurnClick
     <div className="flex items-center gap-2 py-1.5">
       <span
         className={clsx(
-          'shrink-0 text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded border',
+          'shrink-0 text-xs uppercase font-semibold px-1.5 py-0.5 rounded border',
           typeStyle,
         )}
       >
@@ -1183,7 +1183,7 @@ export function SessionTracePage() {
         >
           «
         </Link>
-        <h1 className="text-xl font-semibold text-text-primary">
+        <h1 className="font-heading text-xl font-semibold text-text-primary">
           Session <span className="font-mono text-accent">{sessionId.slice(0, 8)}</span>
         </h1>
         {data.project && (

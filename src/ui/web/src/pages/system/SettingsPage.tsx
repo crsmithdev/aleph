@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../api/client';
 import { fmtBytes } from '../../utils/format';
+import { PageHeader } from '../../components/layout/PageHeader';
 import { clsx } from 'clsx';
 
 // --- Types ---
@@ -55,7 +56,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <div className="bg-bg-secondary border border-border-primary rounded-lg overflow-hidden">
       <div className="px-4 py-3 border-b border-border-primary">
-        <h2 className="text-base font-semibold text-text-primary">{title}</h2>
+        <h2 className="text-lg font-semibold text-text-primary">{title}</h2>
       </div>
       <div className="p-4 space-y-3">{children}</div>
     </div>
@@ -240,7 +241,7 @@ function BackupSection() {
 export function SettingsPage() {
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-text-primary">Settings</h1>
+      <PageHeader title="Settings" />
       <SystemInfoSection />
       <BackupSection />
     </div>

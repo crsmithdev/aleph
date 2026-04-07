@@ -137,12 +137,12 @@ export function SkillDetailPage() {
             >
               &larr; Skills
             </Link>
-            <h1 className="text-2xl font-bold font-mono text-text-primary">{displayName}</h1>
+            <h1 className="text-2xl font-bold font-heading text-text-primary">{displayName}</h1>
             <span className={clsx(
-              'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+              'inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium uppercase tracking-wide',
               isCommand
                 ? 'bg-accent/10 text-accent border border-accent/20'
-                : 'bg-purple-500/10 text-purple-400 border border-purple-500/20',
+                : 'bg-accent/5 text-accent/70 border border-accent/10',
             )}>
               {isCommand ? 'command' : 'skill'}
             </span>

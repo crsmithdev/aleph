@@ -6,7 +6,7 @@ export function Layout() {
     <div className="flex h-screen overflow-hidden">
       <Sidebar />
       <main className="flex-1 overflow-y-auto">
-        <div className="px-6 py-6">
+        <div className="px-6 pb-6">
           <Outlet />
         </div>
       </main>

@@ -1,5 +1,5 @@
 import type { LLMProvider, LLMResult, WebSearchResult } from '../engine.js';
-import { fetchSearchResults, fetchPageContent } from './websearch.js';
+import { fetchSearchResults } from './websearch.js';
 
 export interface OpenRouterConfig {
   apiKey: string;
@@ -53,24 +53,11 @@ export class OpenRouterProvider implements LLMProvider {
     // 1. Get URLs from search engine (Tavily → Brave → DuckDuckGo)
     const searchResults = await fetchSearchResults(query);
 
-    // 2. Fetch structured page content via Jina for each URL
-    const fetchResults = await Promise.all(searchResults.map(r => fetchPageContent(r.url)));
-
     const sourceUrls = searchResults.map(r => r.url);
-    const sourceTexts = fetchResults.map((fr, i) => fr.page?.content ?? searchResults[i].snippet);
-    const jinaFetches = fetchResults.map((fr, i) => ({
-      url: searchResults[i].url,
-      ok: fr.ok,
-      content_length: fr.content_length,
-    }));
 
-    // 3. Synthesize with the LLM — use Jina's title/date/content structure
-    const context = searchResults.map((r, i) => {
-      const page = fetchResults[i].page;
-      const title = page?.title || r.title;
-      const date = page?.publishedTime ? `\nPublished: ${page.publishedTime}` : '';
-      const body = (page?.content ?? r.snippet).slice(0, 3000);
-      return `### ${title}\nURL: ${r.url}${date}\n\n${body}`;
+    // 2. Synthesize with the LLM using search snippets
+    const context = searchResults.map(r => {
+      return `### ${r.title}\nURL: ${r.url}\n\n${r.snippet.slice(0, 3000)}`;
     }).join('\n\n---\n\n');
 
     const response = await this.fetchWithRetry(actualModel, [
@@ -84,9 +71,8 @@ export class OpenRouterProvider implements LLMProvider {
 
     return {
       text,
-      sourceTexts,
+      sourceTexts: [],
       sourceUrls,
-      jinaFetches,
       promptTokens: response.usage?.prompt_tokens ?? 0,
       completionTokens: response.usage?.completion_tokens ?? 0,
       model: response.model ?? actualModel,

@@ -195,16 +195,17 @@ export function reduceTools(events: TelemetryEvent[], granularity: Granularity =
 // ---------------------------------------------------------------------------
 
 export function reduceHooks(events: TelemetryEvent[], granularity: Granularity = "day"): HooksData {
-  const hookMap = new Map<string, { event: string; durations: number[]; errors: number; fullCommand: string; progressCount: number }>();
+  const hookMap = new Map<string, { event: string; durations: number[]; errors: number; fullCommand: string; progressCount: number; lastUsed: string }>();
   const dayHookMap = new Map<string, Map<string, number>>();
 
   for (const e of events) {
     if (e.kind === "hook_summary" && e.data?.command) {
       const shortCmd = e.name;
-      const cur = hookMap.get(shortCmd) || { event: "", durations: [], errors: 0, fullCommand: (e.data.command as string), progressCount: 0 };
+      const cur = hookMap.get(shortCmd) || { event: "", durations: [], errors: 0, fullCommand: (e.data.command as string), progressCount: 0, lastUsed: "" };
       if (e.ms !== undefined) cur.durations.push(e.ms);
       if (e.data.isError) cur.errors++;
       cur.fullCommand = e.data.command as string;
+      if (!cur.lastUsed || e.ts > cur.lastUsed) cur.lastUsed = e.ts;
       hookMap.set(shortCmd, cur);
 
       const bk = bucketKey(e.ts, granularity);
@@ -215,9 +216,10 @@ export function reduceHooks(events: TelemetryEvent[], granularity: Granularity =
 
     if (e.kind === "hook" && e.data?.command) {
       const shortCmd = e.name;
-      const cur = hookMap.get(shortCmd) || { event: "", durations: [], errors: 0, fullCommand: (e.data.command as string), progressCount: 0 };
+      const cur = hookMap.get(shortCmd) || { event: "", durations: [], errors: 0, fullCommand: (e.data.command as string), progressCount: 0, lastUsed: "" };
       cur.event = (e.data.event as string) || cur.event;
       cur.fullCommand = e.data.command as string;
+      if (!cur.lastUsed || e.ts > cur.lastUsed) cur.lastUsed = e.ts;
       hookMap.set(shortCmd, cur);
 
       if ((e.data.event as string) !== "Stop") {
@@ -242,6 +244,7 @@ export function reduceHooks(events: TelemetryEvent[], granularity: Granularity =
         p50Ms: Math.round(percentile(sorted, 50)),
         p95Ms: Math.round(percentile(sorted, 95)),
         errors: v.errors, fullCommand: v.fullCommand,
+        lastUsed: v.lastUsed || undefined,
       };
     })
     .sort((a, b) => b.count - a.count);
@@ -288,12 +291,13 @@ export function reduceSkills(events: TelemetryEvent[], granularity: Granularity 
     .map(([skill, v]) => {
       const sorted = [...v.durations].sort((a, b) => a - b);
       const avgMs = sorted.length > 0 ? sorted.reduce((s, x) => s + x, 0) / sorted.length : undefined;
+      const p50Ms = sorted.length > 0 ? sorted[Math.floor(sorted.length * 0.5)] : undefined;
       const p95Ms = sorted.length > 0 ? sorted[Math.floor(sorted.length * 0.95)] : undefined;
       return {
         skill, count: v.count,
         pct: total > 0 ? (v.count / total) * 100 : 0,
         errors: v.errors, sessions: v.sessions.size,
-        avgMs, p95Ms, lastUsed: v.lastUsed,
+        avgMs, p50Ms, p95Ms, lastUsed: v.lastUsed,
       };
     })
     .sort((a, b) => b.count - a.count);

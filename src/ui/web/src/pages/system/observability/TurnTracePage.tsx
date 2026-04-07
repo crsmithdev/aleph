@@ -176,7 +176,7 @@ export function TurnTracePage() {
         >
           &lsaquo;
         </Link>
-        <h1 className="text-xl font-semibold text-text-primary">Turn #{turnIndex + 1}</h1>
+        <h1 className="font-heading text-xl font-semibold text-text-primary">Turn #{turnIndex + 1}</h1>
         <div className="flex items-center gap-1 ml-auto">
           {prevTurn !== null && (
             <Link
@@ -273,7 +273,7 @@ export function TurnTracePage() {
                   title={`${seg.label}: ${fmtMs(seg.durationMs)}`}
                 >
                   {showLabel && (
-                    <span className={clsx('text-[10px] font-mono truncate px-0.5 leading-tight', styles.text)}>
+                    <span className={clsx('text-xs font-mono truncate px-0.5 leading-tight', styles.text)}>
                       {seg.label}
                     </span>
                   )}
@@ -324,7 +324,7 @@ export function TurnTracePage() {
                       </td>
                       <td className="px-4 py-2.5 align-top">
                         <span className={clsx(
-                          'inline-flex items-center px-1.5 py-px rounded text-[10px] font-semibold uppercase tracking-wide leading-tight',
+                          'inline-flex items-center px-1.5 py-px rounded text-xs font-semibold uppercase tracking-wide leading-tight',
                           styles.bg, 'border', styles.border, styles.text,
                         )}>
                           {seg.kind}
@@ -362,7 +362,7 @@ export function TurnTracePage() {
                       <td className="px-4 py-2.5 pr-4 text-right align-top">
                         {(seg.detail || seg.subagentSessionId) && (
                           <span className={clsx(
-                            'inline-block text-[10px] text-text-disabled transition-transform',
+                            'inline-block text-xs text-text-disabled transition-transform',
                             isSelected && 'rotate-90',
                           )}>
                             ▸
@@ -403,7 +403,7 @@ export function TurnTracePage() {
                 className="relative flex items-center justify-center w-full bg-text-muted/8"
                 title={`LLM: ${fmtMs(turn.durationMs)}`}
               >
-                <span className="text-[10px] font-mono text-text-muted">
+                <span className="text-xs font-mono text-text-muted">
                   LLM — {fmtMs(turn.durationMs)}
                 </span>
               </div>

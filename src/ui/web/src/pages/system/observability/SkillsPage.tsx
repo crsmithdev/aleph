@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { useObsSkills } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
@@ -21,6 +21,7 @@ type SkillRow = {
   errors: number;
   sessions?: number;
   avgMs?: number;
+  p50Ms?: number;
   p95Ms?: number;
   lastUsed?: string;
   type?: 'command' | 'skill';
@@ -31,8 +32,8 @@ type SkillRow = {
 export function SkillsPage() {
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
-  const [showUnused, setShowUnused] = useState(true);
-  const [installedOnly, setInstalledOnly] = useState(true);
+  const [showUnused, setShowUnused] = useState(false);
+  const [showMissing, setShowMissing] = useState(false);
   const [showCommands, setShowCommands] = useState(true);
   const [showSkills, setShowSkills] = useState(true);
   const navigate = useNavigate();
@@ -47,18 +48,19 @@ export function SkillsPage() {
     const type = typeof s === 'string' ? 'skill' as const : s.type;
     return { skill: name, count: 0, pct: 0, errors: 0, type, unused: true };
   });
-  let ranked = installedOnly ? data.ranked.filter(r => r.registered) : data.ranked;
+
+  const missingCount = data.ranked.filter(r => !r.registered).length;
+
+  let ranked = !showMissing ? data.ranked.filter(r => r.registered) : data.ranked;
   let allRows: SkillRow[] = showUnused ? [...ranked, ...unusedRows] : [...ranked];
   if (!showCommands && showSkills) allRows = allRows.filter(r => r.type === 'skill');
   else if (showCommands && !showSkills) allRows = allRows.filter(r => r.type === 'command');
 
   const commandCount = data.ranked.filter(r => r.type === 'command').length;
   const skillCount = data.ranked.filter(r => r.type === 'skill').length;
-  const installedCount = data.ranked.filter(r => r.registered).length;
   const totalInvocations = data.ranked.reduce((s, r) => s + r.count, 0);
   const activeSkills = data.ranked.length;
 
-  // Build top 10 skills for stacked chart
   const top10Skills = data.ranked.slice(0, 10).map(r => r.skill);
   const stackedByDay = data.byDay.map((d: { date: string; count: number; skills?: Record<string, number> }) => {
     const row: Record<string, unknown> = { date: d.date };
@@ -88,7 +90,8 @@ export function SkillsPage() {
       render: (row) => (
         <span className={clsx('font-mono', row.unused ? 'text-text-muted' : 'text-text-primary')}>
           {displayName(row)}
-          {row.unused && <span className="ml-2 text-[10px] text-text-disabled uppercase">unused</span>}
+          {row.unused && <span className="ml-2 text-xs text-text-disabled uppercase">unused</span>}
+          {!row.registered && !row.unused && <span className="ml-2 text-xs text-warning uppercase">missing</span>}
         </span>
       ),
     },
@@ -99,10 +102,10 @@ export function SkillsPage() {
       width: '5rem',
       render: (row) => (
         <span className={clsx(
-          'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+          'inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium uppercase tracking-wide',
           row.type === 'command'
             ? 'bg-accent/10 text-accent border border-accent/20'
-            : 'bg-purple-500/10 text-purple-400 border border-purple-500/20',
+            : 'bg-accent/5 text-accent/70 border border-accent/10',
         )}>
           {row.type === 'command' ? 'cmd' : 'skill'}
         </span>
@@ -114,7 +117,7 @@ export function SkillsPage() {
       align: 'right',
       sortable: true,
       width: '4.5rem',
-      render: (row) => fmtNumber(row.count),
+      render: (row) => <span className="font-mono">{fmtNumber(row.count)}</span>,
     },
     {
       key: 'pct',
@@ -122,7 +125,7 @@ export function SkillsPage() {
       align: 'right',
       sortable: true,
       width: '3.5rem',
-      render: (row) => fmtPct(row.pct),
+      render: (row) => <span className="font-mono">{fmtPct(row.pct)}</span>,
     },
     {
       key: 'errors',
@@ -131,8 +134,8 @@ export function SkillsPage() {
       sortable: true,
       width: '5rem',
       render: (row) => row.errors > 0
-        ? <span className="text-error font-mono text-xs">{fmtNumber(row.errors)}</span>
-        : <span className="text-text-disabled text-xs">—</span>,
+        ? <span className="text-error font-mono">{fmtNumber(row.errors)}</span>
+        : <span className="text-text-disabled">—</span>,
     },
     {
       key: 'sessions',
@@ -141,18 +144,18 @@ export function SkillsPage() {
       sortable: true,
       width: '5.5rem',
       render: (row) => (row.sessions ?? 0) > 0
-        ? <span className="text-xs">{fmtNumber(row.sessions!)}</span>
-        : <span className="text-text-disabled text-xs">—</span>,
+        ? <span className="font-mono">{fmtNumber(row.sessions!)}</span>
+        : <span className="text-text-disabled">—</span>,
     },
     {
-      key: 'avgMs',
-      label: 'Avg',
+      key: 'p50Ms',
+      label: 'P50',
       align: 'right',
       sortable: true,
       width: '4.5rem',
-      render: (row) => row.avgMs != null
-        ? <span className="text-text-secondary text-xs font-mono">{fmtMs(row.avgMs)}</span>
-        : <span className="text-text-disabled text-xs">—</span>,
+      render: (row) => row.p50Ms != null
+        ? <span className="text-text-secondary font-mono">{fmtMs(row.p50Ms)}</span>
+        : <span className="text-text-disabled">—</span>,
     },
     {
       key: 'p95Ms',
@@ -161,23 +164,44 @@ export function SkillsPage() {
       sortable: true,
       width: '4.5rem',
       render: (row) => row.p95Ms != null
-        ? <span className="text-text-secondary text-xs font-mono">{fmtMs(row.p95Ms)}</span>
-        : <span className="text-text-disabled text-xs">—</span>,
+        ? <span className="text-text-secondary font-mono">{fmtMs(row.p95Ms)}</span>
+        : <span className="text-text-disabled">—</span>,
     },
     {
       key: 'lastUsed',
-      label: 'Last',
+      label: 'Last Use',
       sortable: true,
       width: '60px',
       render: (row) => row.lastUsed
-        ? <span className="text-text-secondary text-sm whitespace-nowrap">{shortRelativeTime(row.lastUsed)}</span>
-        : <span className="text-text-disabled text-sm">—</span>,
+        ? <span className="font-mono text-text-secondary whitespace-nowrap">{shortRelativeTime(row.lastUsed)}</span>
+        : <span className="text-text-disabled">—</span>,
     },
   ];
 
+  const filters = (
+    <>
+      <FilterToggle label={`Commands (${commandCount})`} active={showCommands} onToggle={() => setShowCommands(!showCommands)} />
+      <FilterToggle label={`Skills (${skillCount})`} active={showSkills} onToggle={() => setShowSkills(!showSkills)} />
+      {missingCount > 0 && (
+        <FilterToggle label={`Missing (${missingCount})`} active={showMissing} onToggle={() => setShowMissing(!showMissing)} activeColor="error" />
+      )}
+      {unusedRows.length > 0 && (
+        <FilterToggle label={`Unused (${unusedRows.length})`} active={showUnused} onToggle={() => setShowUnused(!showUnused)} />
+      )}
+    </>
+  );
+
   return (
     <div className="space-y-6">
-      <ObsControlBar title={<h1 className="text-2xl font-bold text-text-primary">Skills</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity} />
+      <ObsControlBar
+        title={<h1 className="font-heading text-2xl font-bold text-text-primary">Skills</h1>}
+        range={range}
+        onRangeChange={setRange}
+        granularity={granularity}
+        onGranularityChange={setGranularity}
+      >
+        {filters}
+      </ObsControlBar>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Total Invocations" value={fmtNumber(totalInvocations)} />
@@ -237,15 +261,17 @@ export function SkillsPage() {
           </div>
 
           {data.byType && data.byType.length > 1 && (
-            <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 w-1/4 min-w-[170px] shrink-0">
+            <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 w-1/4 min-w-[220px] shrink-0">
               <h3 className="mb-3 text-sm font-medium text-text-secondary">Invocations by Type</h3>
-              <div className="flex flex-col items-center gap-4">
-                <PieChart width={120} height={120}>
-                  <Pie data={data.byType} dataKey="count" nameKey="type" cx="50%" cy="50%" innerRadius={30} outerRadius={50}>
-                    {data.byType.map((_: unknown, i: number) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
-                  </Pie>
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v: unknown, n: unknown) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
-                </PieChart>
+              <div className="flex flex-col gap-4">
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie data={data.byType} dataKey="count" nameKey="type" cx="50%" cy="50%" innerRadius={50} outerRadius={78}>
+                      {data.byType.map((_: unknown, i: number) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                    </Pie>
+                    <Tooltip contentStyle={tooltipStyle} formatter={(v: unknown, n: unknown) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
+                  </PieChart>
+                </ResponsiveContainer>
                 <div className="flex flex-col gap-2 w-full">
                   {data.byType.map((row: { type: string; count: number }, i: number) => (
                     <div key={row.type} className="flex items-center gap-2 text-xs">
@@ -260,23 +286,6 @@ export function SkillsPage() {
           )}
         </div>
       )}
-
-      <div className="flex items-center gap-2">
-        <FilterToggle
-          label={`Commands (${commandCount})`}
-          active={showCommands}
-          onToggle={() => setShowCommands(!showCommands)}
-        />
-        <FilterToggle
-          label={`Skills (${skillCount})`}
-          active={showSkills}
-          onToggle={() => setShowSkills(!showSkills)}
-        />
-        <FilterToggle label={`Installed (${installedCount})`} active={installedOnly} onToggle={() => setInstalledOnly(!installedOnly)} />
-        {unusedRows.length > 0 && (
-          <FilterToggle label={`Unused (${unusedRows.length})`} active={showUnused} onToggle={() => setShowUnused(!showUnused)} />
-        )}
-      </div>
 
       <DataTable<SkillRow>
         data={allRows}

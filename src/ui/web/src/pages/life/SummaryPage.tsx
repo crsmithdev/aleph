@@ -3,6 +3,7 @@ import { useSummary } from '../../api/hooks';
 import { StatCard } from '../../components/data/StatCard';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
+import { PageHeader } from '../../components/layout/PageHeader';
 import { clsx } from 'clsx';
 import { toDateStr, longDate } from '../../utils/format';
 
@@ -164,10 +165,10 @@ export function SummaryPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-baseline gap-4">
-        <h1 className="text-2xl font-bold text-text-primary">Summary</h1>
-        <span className="text-sm text-text-muted">{dateDisplay}</span>
-      </div>
+      <PageHeader
+        title="Summary"
+        actions={<span className="text-sm text-text-muted">{dateDisplay}</span>}
+      />
 
       {/* Preset selector */}
       <div className="space-y-3">

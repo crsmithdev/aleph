@@ -6,6 +6,7 @@ export interface Column<T> {
   label: string;
   align?: 'left' | 'right';
   width?: string;
+  shrink?: boolean;  // collapse column to minimum content width (no wrapping)
   render?: (row: T) => ReactNode;
   sortable?: boolean;
 }
@@ -68,24 +69,25 @@ export function DataTable<T>({
 
   return (
     <div className={clsx('overflow-hidden border-t border-border-primary', className)}>
-      <table className="w-full table-fixed text-sm">
+      <table className="w-full text-base">
         <thead>
           <tr className="border-b border-border-primary bg-bg-secondary">
             {columns.map((col) => (
               <th
                 key={col.key}
                 className={clsx(
-                  'px-4 py-2.5 font-mono text-[10px] uppercase tracking-widest text-text-muted',
+                  'px-4 py-2.5 font-sans text-xs uppercase tracking-widest text-text-muted',
                   col.align === 'right' ? 'text-right' : 'text-left',
-                  col.sortable && 'cursor-pointer select-none hover:text-text-secondary'
+                  col.sortable && 'cursor-pointer select-none hover:text-text-secondary',
+                  col.shrink && 'whitespace-nowrap'
                 )}
-                style={col.width ? { width: col.width } : undefined}
+                style={col.shrink ? { width: '1px' } : col.width ? { width: col.width } : undefined}
                 onClick={col.sortable ? () => handleSort(col.key) : undefined}
               >
                 <span className="inline-flex items-center gap-1">
                   {col.label}
                   {col.sortable && sortKey === col.key && (
-                    <span className="text-[10px]">{sortDir === 'asc' ? '\u25b2' : '\u25bc'}</span>
+                    <span className="text-xs">{sortDir === 'asc' ? '\u25b2' : '\u25bc'}</span>
                   )}
                 </span>
               </th>
@@ -120,9 +122,10 @@ export function DataTable<T>({
                       key={col.key}
                       className={clsx(
                         'px-4 py-2.5 align-middle',
-                        col.align === 'right' ? 'text-right' : 'text-left'
+                        col.align === 'right' ? 'text-right' : 'text-left',
+                        col.shrink && 'whitespace-nowrap'
                       )}
-                      style={col.width ? { width: col.width, maxWidth: col.width } : undefined}
+                      style={col.shrink ? { width: '1px' } : col.width ? { width: col.width, maxWidth: col.width } : undefined}
                     >
                       {col.render
                         ? col.render(row)

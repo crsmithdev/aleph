@@ -31,19 +31,19 @@ export function SubagentsPage() {
     {
       key: 'subagentType',
       label: 'Type',
-      render: (row) => <span className="font-mono text-text-primary text-sm">{row.subagentType}</span>,
+      render: (row) => <span className="text-text-primary text-sm">{row.subagentType}</span>,
     },
-    { key: 'count', label: 'Count', align: 'right', sortable: true, width: '80px', render: (row) => fmtNumber(row.count) },
-    { key: 'pct', label: '% Total', align: 'right', width: '90px', render: (row) => `${row.pct}%` },
-    { key: 'avgMs', label: 'Avg', align: 'right', sortable: true, width: '80px', render: (row) => fmtMs(row.avgMs) },
-    { key: 'p95Ms', label: 'p95', align: 'right', sortable: true, width: '80px', render: (row) => fmtMs(row.p95Ms) },
+    { key: 'count', label: 'Count', align: 'right', sortable: true, width: '80px', render: (row) => <span className="font-mono">{fmtNumber(row.count)}</span> },
+    { key: 'pct', label: '% Total', align: 'right', width: '90px', render: (row) => <span className="font-mono">{row.pct}%</span> },
+    { key: 'avgMs', label: 'Avg', align: 'right', sortable: true, width: '80px', render: (row) => <span className="font-mono">{fmtMs(row.avgMs)}</span> },
+    { key: 'p95Ms', label: 'p95', align: 'right', sortable: true, width: '80px', render: (row) => <span className="font-mono">{fmtMs(row.p95Ms)}</span> },
     {
       key: 'errors',
       label: 'Errors',
       align: 'right',
       sortable: true,
       width: '80px',
-      render: (row) => <span className={row.errors > 0 ? 'text-error' : ''}>{fmtNumber(row.errors)}</span>,
+      render: (row) => <span className={clsx('font-mono', row.errors > 0 && 'text-error')}>{fmtNumber(row.errors)}</span>,
     },
   ];
 
@@ -62,7 +62,7 @@ export function SubagentsPage() {
       label: 'Time',
       sortable: true,
       width: '160px',
-      render: (row) => <span className="text-text-secondary text-sm whitespace-nowrap">{relativeTime(row.timestamp)}</span>,
+      render: (row) => <span className="font-mono text-text-secondary text-sm whitespace-nowrap">{relativeTime(row.timestamp)}</span>,
     },
     {
       key: 'sessionId',
@@ -82,13 +82,13 @@ export function SubagentsPage() {
       key: 'subagentType',
       label: 'Type',
       width: '140px',
-      render: (row) => <span className="font-mono text-text-secondary text-sm">{row.subagentType || '—'}</span>,
+      render: (row) => <span className="text-text-secondary text-sm">{row.subagentType || '—'}</span>,
     },
     {
       key: 'model',
       label: 'Model',
       width: '160px',
-      render: (row) => <span className="text-text-secondary text-sm">{row.model || '—'}</span>,
+      render: (row) => <span className="font-mono text-text-secondary text-sm">{row.model || '—'}</span>,
     },
     {
       key: 'durationMs',
@@ -96,7 +96,7 @@ export function SubagentsPage() {
       align: 'right',
       sortable: true,
       width: '90px',
-      render: (row) => <span className="text-sm">{row.durationMs ? fmtMs(row.durationMs) : '—'}</span>,
+      render: (row) => <span className="font-mono text-sm">{row.durationMs ? fmtMs(row.durationMs) : '—'}</span>,
     },
     {
       key: 'runInBackground',
@@ -136,7 +136,7 @@ export function SubagentsPage() {
   return (
     <div className="space-y-6">
       <ObsControlBar
-        title={<h1 className="text-2xl font-bold text-text-primary">Subagents</h1>}
+        title={<h1 className="font-heading text-2xl font-bold text-text-primary">Subagents</h1>}
         range={range}
         onRangeChange={setRange}
         granularity={granularity}

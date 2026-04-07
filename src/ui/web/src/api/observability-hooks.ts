@@ -66,6 +66,7 @@ export function useObsHooks(range: TimeRange, granularity?: Granularity, session
       p50Ms: number;
       p95Ms: number;
       errors: number;
+      lastUsed?: string;
       active: boolean;
       fullCommand?: string;
       blocking?: boolean;
@@ -83,7 +84,7 @@ export function useObsHooks(range: TimeRange, granularity?: Granularity, session
 
 export function useObsSkills(range: TimeRange, granularity?: Granularity, session?: string) {
   return obsQuery<{
-    ranked: Array<{ skill: string; count: number; pct: number; errors: number; lastUsed?: string; type: 'command' | 'skill'; registered: boolean }>;
+    ranked: Array<{ skill: string; count: number; pct: number; errors: number; avgMs?: number; p50Ms?: number; p95Ms?: number; sessions?: number; lastUsed?: string; type: 'command' | 'skill'; registered: boolean }>;
     byDay: Array<{ date: string; count: number; skills: Record<string, number> }>;
     byType?: Array<{ type: string; count: number }>;
     unused: string[];

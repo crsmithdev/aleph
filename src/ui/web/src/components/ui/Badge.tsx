@@ -2,17 +2,17 @@ import { clsx } from 'clsx';
 
 export const priorityColors: Record<string, string> = {
   low: 'bg-bg-tertiary text-text-muted',
-  medium: 'bg-blue-900/50 text-blue-300',
-  high: 'bg-orange-900/50 text-orange-300',
-  critical: 'bg-red-900/50 text-red-300',
+  medium: 'bg-accent/10 text-accent',
+  high: 'bg-warning/15 text-warning',
+  critical: 'bg-error/15 text-error',
 };
 
 export const stateColors: Record<string, string> = {
   not_started: 'bg-bg-tertiary text-text-muted',
-  actionable: 'bg-green-900/50 text-green-300',
-  scheduled: 'bg-purple-900/50 text-purple-300',
-  waiting: 'bg-yellow-900/50 text-yellow-300',
-  done: 'bg-emerald-900/50 text-emerald-300',
+  actionable: 'bg-success/15 text-success',
+  scheduled: 'bg-accent/10 text-accent',
+  waiting: 'bg-warning/15 text-warning',
+  done: 'bg-success/15 text-success',
   canceled: 'bg-bg-tertiary text-text-muted line-through',
 };
 

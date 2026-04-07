@@ -92,7 +92,7 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
     similarity_threshold: 0.75,
   },
   min_searches_per_thread: 2,
-  fetch_source_text: true,
+  fetch_source_text: false,
   gap_analysis: {
     enabled: true,
     max_gap_searches: 2,
@@ -174,6 +174,7 @@ export interface ResearchThread {
   depth: number;
   max_depth: number;
   min_searches: number | null;
+  fetch_source_text?: boolean | null;
   created_at: string;
   updated_at: string;
 }
@@ -217,6 +218,7 @@ export interface JinaFetchRecord {
   url: string;
   ok: boolean;
   content_length: number;
+  error?: string;
 }
 
 export interface ToolCallRecord {

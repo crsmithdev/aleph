@@ -6,7 +6,7 @@ import { join } from 'path';
 const isDev = config.nodeEnv === 'development';
 const port = isDev ? parseInt(process.env.PORT || '3001', 10) : config.port;
 
-const app = await createApp({ skipStatic: isDev, workerCount: isDev ? 0 : undefined });
+const app = await createApp({ skipStatic: isDev });
 
 if (isDev) {
   const webDir = resolve(import.meta.dirname, '../../web');
@@ -18,7 +18,7 @@ if (isDev) {
   await app.register(middie.default);
   const vite = await createViteServer({
     root: webDir,
-    server: { middlewareMode: true },
+    server: { middlewareMode: true, hmr: { server: app.server } },
     appType: 'spa',
   });
   await app.use((req: any, res: any, next: any) => {

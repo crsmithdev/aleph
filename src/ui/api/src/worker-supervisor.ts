@@ -55,7 +55,9 @@ export class WorkerSupervisor {
     w.status = 'starting';
     w.startedAt = Date.now();
 
-    const proc = spawn(process.execPath, ['run', WORKER_SCRIPT], {
+    const isDev = process.env.NODE_ENV === 'development';
+    const args = isDev ? ['--watch', 'run', WORKER_SCRIPT] : ['run', WORKER_SCRIPT];
+    const proc = spawn(process.execPath, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: process.env,
     });

@@ -117,6 +117,21 @@ export function getRecentFindings(sqlite: Sqlite, sessionId: string, count: numb
   ).all(sessionId, count) as Record<string, unknown>[]).map(rowToFinding);
 }
 
+export function updateFindingSourceTexts(
+  sqlite: Sqlite,
+  findingId: string,
+  sourceTexts: string[]
+): ResearchFinding | null {
+  sqlite.prepare('UPDATE research_findings SET source_texts = ? WHERE id = ?')
+    .run(JSON.stringify(sourceTexts), findingId);
+  return getFinding(sqlite, findingId);
+}
+
+export function clearThreadFindings(sqlite: Sqlite, threadId: string): void {
+  sqlite.prepare('DELETE FROM research_steps WHERE thread_id = ?').run(threadId);
+  sqlite.prepare('DELETE FROM research_findings WHERE thread_id = ?').run(threadId);
+}
+
 export function countFindings(sqlite: Sqlite, sessionId: string): number {
   const row = sqlite.prepare(
     'SELECT COUNT(*) as count FROM research_findings WHERE session_id = ?'

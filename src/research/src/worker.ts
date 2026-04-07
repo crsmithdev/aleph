@@ -22,11 +22,9 @@ process.on('SIGINT', () => {
   shutdownRequested = true;
 });
 
-// Load .env from project root if present
-const envPath = new URL('../../../.env', import.meta.url).pathname;
-try {
-  const envContent = await Bun.file(envPath).text();
-  for (const line of envContent.split('\n')) {
+// Load .env — search: relative to worker, then HOME
+function loadEnv(content: string) {
+  for (const line of content.split('\n')) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
     const eqIndex = trimmed.indexOf('=');
@@ -35,8 +33,17 @@ try {
     const value = trimmed.slice(eqIndex + 1);
     if (!process.env[key]) process.env[key] = value;
   }
-} catch {
-  // No .env file — fine, env vars should be set externally
+}
+const envCandidates = [
+  new URL('../../../.env', import.meta.url).pathname,
+  `${process.env.HOME}/.construct/.env`,
+  `${process.env.HOME}/.env`,
+];
+for (const envPath of envCandidates) {
+  try {
+    loadEnv(await Bun.file(envPath).text());
+    break;
+  } catch { /* try next */ }
 }
 
 if (!process.env.OPENROUTER_API_KEY) {

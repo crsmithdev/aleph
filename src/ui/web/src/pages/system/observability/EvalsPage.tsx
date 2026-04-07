@@ -7,6 +7,7 @@ import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { relativeTime, shortDate } from '../../../utils/format';
+import { PageHeader } from '../../../components/layout/PageHeader';
 import { clsx } from 'clsx';
 
 function TrendBadge({ trend }: { trend: EvalResult['trend'] }) {
@@ -46,7 +47,7 @@ export function EvalsPage() {
     {
       key: 'name',
       label: 'Eval',
-      render: (row) => <span className="font-mono text-text-primary text-sm">{row.name}</span>,
+      render: (row) => <span className="text-text-primary">{row.name}</span>,
     },
     {
       key: 'totalRuns',
@@ -54,7 +55,7 @@ export function EvalsPage() {
       align: 'right',
       sortable: true,
       width: '70px',
-      render: (row) => <span className="text-text-secondary text-sm">{row.totalRuns}</span>,
+      render: (row) => <span className="font-mono text-text-secondary">{row.totalRuns}</span>,
     },
     {
       key: 'passAt1Rate',
@@ -83,20 +84,15 @@ export function EvalsPage() {
       label: 'Last Run',
       sortable: true,
       width: '130px',
-      render: (row) => <span className="text-text-muted text-sm">{relativeTime(row.lastRun)}</span>,
+      render: (row) => <span className="font-mono text-text-muted">{relativeTime(row.lastRun)}</span>,
     },
   ];
 
   const hasData = data.evals.length > 0;
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div>
-        <h1 className="font-heading text-2xl font-semibold text-text-primary">Evals</h1>
-        <p className="text-text-secondary text-sm mt-1">
-          Eval-driven reliability — pass@k metrics over time
-        </p>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader title="Evals" subtitle="Eval-driven reliability — pass@k metrics over time" />
 
       <div className="grid grid-cols-3 gap-4">
         <StatCard label="Total Runs" value={String(data.totalRuns)} />

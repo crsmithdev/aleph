@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell } from 'recharts';
+import { ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { useObsEvents, useObsSessions } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
@@ -89,7 +89,7 @@ function TypeBadge({ type, isError }: { type: string; isError?: boolean }) {
   const cls = classes[type] ?? 'bg-bg-tertiary text-text-muted border-border-primary';
 
   return (
-    <span className={clsx('inline-block px-1.5 py-0.5 text-[10px] font-mono rounded border whitespace-nowrap', cls)}>
+    <span className={clsx('inline-block px-1.5 py-0.5 text-xs font-mono rounded border whitespace-nowrap', cls)}>
       {label}
     </span>
   );
@@ -315,9 +315,14 @@ export function EventsPage() {
     acc[e.entryType] = (acc[e.entryType] ?? 0) + 1;
     return acc;
   }, {});
-  const donutData = Object.entries(typeCounts)
+  const allDonutData = Object.entries(typeCounts)
     .map(([type, count]) => ({ type, count, label: TYPE_LABELS[type as EntryType] ?? type }))
     .sort((a, b) => b.count - a.count);
+  const topDonut = allDonutData.slice(0, 4);
+  const otherCount = allDonutData.slice(4).reduce((s, r) => s + r.count, 0);
+  const donutData = otherCount > 0
+    ? [...topDonut, { type: 'other', count: otherCount, label: 'Other' }]
+    : topDonut;
 
   const columns: Column<EventRow>[] = [
     {
@@ -325,7 +330,7 @@ export function EventsPage() {
       label: 'Time',
       width: '160px',
       render: (row) => (
-        <span className="text-text-secondary text-sm whitespace-nowrap">{dateTime(row.timestamp)}</span>
+        <span className="text-text-secondary whitespace-nowrap">{dateTime(row.timestamp)}</span>
       ),
     },
     {
@@ -341,7 +346,7 @@ export function EventsPage() {
       render: (row) => {
         const detail = getDetail(row);
         return detail
-          ? <span className="font-mono text-sm text-text-primary truncate block">{detail}</span>
+          ? <span className="font-mono text-text-primary truncate block">{detail}</span>
           : <span className="text-text-muted">—</span>;
       },
     },
@@ -351,7 +356,7 @@ export function EventsPage() {
       render: (row) => {
         const preview = getInfoPreview(row);
         return preview
-          ? <span className="font-mono text-sm text-text-muted block truncate">{preview}</span>
+          ? <span className="font-mono text-text-muted block truncate">{preview}</span>
           : <span className="text-text-muted">—</span>;
       },
     },
@@ -360,7 +365,7 @@ export function EventsPage() {
       label: 'Session',
       width: '90px',
       render: (row) => (
-        <span className="font-mono text-sm text-text-muted">{row.sessionId.slice(0, 8)}</span>
+        <span className="font-mono text-text-muted">{row.sessionId.slice(0, 8)}</span>
       ),
     },
   ];
@@ -375,7 +380,7 @@ export function EventsPage() {
   return (
     <div className="space-y-4">
       <ObsControlBar
-        title={<h1 className="text-2xl font-bold text-text-primary">Events</h1>}
+        title={<h1 className="font-heading text-2xl font-bold text-text-primary">Events</h1>}
         range={range}
         onRangeChange={(r) => { setRange(r); setOffset(0); }}
         granularity={granularity}
@@ -408,9 +413,9 @@ export function EventsPage() {
         />
       </div>
 
-      <div className="flex gap-4 items-stretch">
-        <div className="flex-1 min-w-0">
-          <ChartContainer title={granLabel(granularity, "Activity")}>
+      <div className="flex gap-4 items-stretch h-[320px]">
+        <div className="flex-1 min-w-0 h-full">
+          <ChartContainer title={granLabel(granularity, "Activity")} fill className="h-full">
             <ComposedChart data={activityData}>
               <CartesianGrid {...gridProps} />
               <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
@@ -422,24 +427,26 @@ export function EventsPage() {
         </div>
 
         {donutData.length > 0 && (
-          <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 w-1/4 min-w-[180px] shrink-0">
-            <h3 className="mb-3 text-sm font-medium text-text-secondary">By Type</h3>
-            <div className="flex flex-col items-center gap-3">
-              <PieChart width={120} height={120}>
-                <Pie data={donutData} dataKey="count" nameKey="label" cx="50%" cy="50%" innerRadius={28} outerRadius={52}>
-                  {donutData.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
-                </Pie>
-                <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
-              </PieChart>
-              <div className="w-full flex flex-col gap-1">
-                {donutData.slice(0, 6).map((row, i) => (
-                  <div key={row.type} className="flex items-center gap-2 text-xs">
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                    <span className="text-text-secondary truncate">{fmtSeriesName(row.label)}</span>
-                    <span className="ml-auto text-text-muted font-mono shrink-0">{fmtNumber(row.count)}</span>
-                  </div>
-                ))}
-              </div>
+          <div className="flex flex-col rounded-lg border border-border-primary bg-bg-secondary p-4 w-1/4 min-w-[240px] shrink-0 h-full">
+            <h3 className="mb-3 text-sm font-medium text-text-secondary shrink-0">By Type</h3>
+            <div className="flex-1 min-h-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={donutData} dataKey="count" nameKey="label" cx="50%" cy="50%" innerRadius={58} outerRadius={90}>
+                    {donutData.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                  </Pie>
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 mt-3 shrink-0">
+              {donutData.map((row, i) => (
+                <div key={row.type} className="flex items-center gap-1.5 text-xs min-w-0">
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                  <span className="text-text-secondary truncate">{row.label}</span>
+                  <span className="ml-auto text-text-muted font-mono shrink-0">{fmtNumber(row.count)}</span>
+                </div>
+              ))}
             </div>
           </div>
         )}

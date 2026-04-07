@@ -17,3 +17,4 @@ export { ModelRouter } from './providers/router.js';
 export type { TaskType, ModelConfig, ProviderConfig } from './providers/router.js';
 export * from './perturbation.js';
 export * from './scheduler.js';
+export { fetchPageText, JS_RENDERED_FLAG } from './providers/websearch.js';

@@ -5,9 +5,10 @@ import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
-import { ObsControlBar } from '../../../components/data/ObsControlBar';
+import { TimeRangeSelector } from '../../../components/data/TimeRangeSelector';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { relativeTime, shortDate, fmtNumber } from '../../../utils/format';
+import { PageHeader } from '../../../components/layout/PageHeader';
 import { useState } from 'react';
 import type { TimeRange } from '../../../api/observability-hooks';
 
@@ -67,14 +68,14 @@ export function CompactionPage() {
       key: 'timestamp',
       label: 'When',
       width: '110px',
-      render: (row) => <span className="text-text-muted text-sm">{relativeTime(row.timestamp)}</span>,
+      render: (row) => <span className="font-mono text-text-muted">{relativeTime(row.timestamp)}</span>,
     },
     {
       key: 'sessionId',
       label: 'Session',
       width: '160px',
       render: (row) => (
-        <span className="font-mono text-xs text-text-secondary truncate block max-w-[140px]" title={row.sessionId}>
+        <span className="font-mono text-text-secondary truncate block max-w-[140px]" title={row.sessionId}>
           {row.sessionId.slice(0, 8)}…
         </span>
       ),
@@ -83,7 +84,7 @@ export function CompactionPage() {
       key: 'trigger',
       label: 'Trigger',
       width: '120px',
-      render: (row) => <span className="font-mono text-xs text-text-secondary">{row.trigger}</span>,
+      render: (row) => <span className="font-mono text-text-secondary">{row.trigger}</span>,
     },
     {
       key: 'preTokens',
@@ -91,7 +92,7 @@ export function CompactionPage() {
       align: 'right',
       sortable: true,
       width: '110px',
-      render: (row) => <span className="text-text-secondary text-sm">{fmtNumber(row.preTokens)}</span>,
+      render: (row) => <span className="font-mono text-text-secondary">{fmtNumber(row.preTokens)}</span>,
     },
     {
       key: 'toolCallCount',
@@ -100,7 +101,7 @@ export function CompactionPage() {
       sortable: true,
       width: '90px',
       render: (row) => (
-        <span className="text-text-secondary text-sm">
+        <span className="font-mono text-text-secondary">
           {row.toolCallCount !== undefined ? (
             <span className={
               phaseBucket(row.toolCallCount) === 'early' ? 'text-green-500' :
@@ -119,7 +120,7 @@ export function CompactionPage() {
       sortable: true,
       width: '90px',
       render: (row) => (
-        <span className="text-text-secondary text-sm">
+        <span className="font-mono text-text-secondary">
           {row.contextPct !== undefined ? (
             <span className={
               row.contextPct >= 80 ? 'text-red-500' :
@@ -134,14 +135,12 @@ export function CompactionPage() {
   ];
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="font-heading text-2xl font-semibold text-text-primary">Compaction</h1>
-          <p className="text-text-secondary text-sm mt-1">Context compaction events — when and how deep</p>
-        </div>
-        <ObsControlBar title="" range={range} onRangeChange={setRange} />
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Compaction"
+        subtitle="Context compaction events — when and how deep"
+        actions={<TimeRangeSelector value={range} onChange={setRange} />}
+      />
 
       <div className="grid grid-cols-4 gap-4">
         <StatCard label="Total Compactions" value={String(data.totalCompactions)} />

@@ -3,6 +3,7 @@ import { useObsDbStats, useObsDbSchema, useObsDbContents } from '../../../api/ob
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
+import { PageHeader } from '../../../components/layout/PageHeader';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { fmtNumber, fmtBytes } from '../../../utils/format';
 import { clsx } from 'clsx';
@@ -15,7 +16,7 @@ function SchemaView({ db, table }: { db: string; table: string }) {
   if (error || !data || data.columns.length === 0) return <span className="text-xs text-text-muted">No schema available</span>;
 
   return (
-    <table className="w-full text-sm">
+    <table className="w-full text-base">
       <thead>
         <tr className="text-text-muted">
           <th className="text-left py-1 pr-4 font-medium">Column</th>
@@ -56,7 +57,7 @@ function ContentsView({ db, table }: { db: string; table: string }) {
   return (
     <div className="space-y-2">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-base">
           <thead>
             <tr className="text-text-muted border-b border-border-primary/30">
               {columns.map((col) => (
@@ -142,7 +143,7 @@ function DbTableList({ dbName, tables }: { dbName: string; tables: TableRow[] })
       label: 'Rows',
       align: 'right',
       sortable: true,
-      render: (row) => fmtNumber(row.rows),
+      render: (row) => <span className="font-mono">{fmtNumber(row.rows)}</span>,
     },
   ];
 
@@ -190,7 +191,7 @@ export function DbStatsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-text-primary">Database</h1>
+      <PageHeader title="Database" />
 
       {data.databases.map((db) => {
         const totalRows = db.tables.reduce((sum, t) => sum + t.rows, 0);

@@ -47,7 +47,7 @@ export function HookDetailPage() {
       key: 'trigger',
       label: 'Trigger',
       render: (row: InvocationRow) => row.trigger
-        ? <span className="font-mono text-xs text-accent">{row.trigger}</span>
+        ? <span className="font-mono text-accent">{row.trigger}</span>
         : <span className="text-text-muted">—</span>,
     }] : []) as Column<InvocationRow>[],
     {
@@ -56,7 +56,7 @@ export function HookDetailPage() {
       width: '3rem',
       align: 'right',
       render: (row) => row.exitCode != null
-        ? <span className={clsx('font-mono text-xs', row.exitCode !== 0 ? 'text-error font-medium' : 'text-text-muted')}>{row.exitCode}</span>
+        ? <span className={clsx('font-mono', row.exitCode !== 0 ? 'text-error font-medium' : 'text-text-muted')}>{row.exitCode}</span>
         : <span className="text-text-muted">—</span>,
     },
     {
@@ -65,7 +65,7 @@ export function HookDetailPage() {
       align: 'right',
       sortable: true,
       render: (row) => row.durationMs > 0 ? (
-        <span className={clsx('font-mono text-xs', row.durationMs > 500 ? 'text-warning' : 'text-text-muted')}>
+        <span className={clsx('font-mono', row.durationMs > 500 ? 'text-warning' : 'text-text-muted')}>
           {fmtMs(row.durationMs)}
         </span>
       ) : <span className="text-text-muted">—</span>,
@@ -76,13 +76,13 @@ export function HookDetailPage() {
       render: (row: InvocationRow) => {
         const msg = row.errorMessage || row.output;
         if (!msg) return <span className="text-text-muted">—</span>;
-        return <span className={clsx('font-mono text-xs truncate block max-w-xs', row.isError ? 'text-error' : 'text-text-muted')} title={msg}>{msg.slice(0, 80)}{msg.length > 80 ? '...' : ''}</span>;
+        return <span className={clsx('font-mono truncate block max-w-xs', row.isError ? 'text-error' : 'text-text-muted')} title={msg}>{msg.slice(0, 80)}{msg.length > 80 ? '...' : ''}</span>;
       },
     }] : []) as Column<InvocationRow>[],
     {
       key: 'sessionId',
       label: 'Session',
-      render: (row) => <span className="font-mono text-xs text-text-muted">{row.sessionId.slice(0, 8)}</span>,
+      render: (row) => <span className="font-mono text-text-muted">{row.sessionId.slice(0, 8)}</span>,
     },
   ];
 
@@ -97,7 +97,7 @@ export function HookDetailPage() {
             >
               &larr; Scripts
             </Link>
-            <h1 className="text-2xl font-bold font-mono text-text-primary">{hookName}</h1>
+            <h1 className="text-2xl font-bold font-heading text-text-primary">{hookName}</h1>
             {data.event && (
               <span className="rounded-md bg-bg-tertiary px-2 py-0.5 text-xs text-text-muted">{data.event}</span>
             )}

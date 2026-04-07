@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { useObsMemory, useObsMemoryItems, useObsMemoryUsage, useTriggerSnapshot, useDeleteMemory, useUpdateMemory } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
@@ -69,14 +69,14 @@ export function MemoryPage() {
     {
       key: 'type',
       label: 'Type',
-      render: (row) => <span className="font-mono text-text-primary">{row.type}</span>,
+      render: (row) => <span className="text-text-primary">{row.type}</span>,
     },
     {
       key: 'count',
       label: 'Count',
       align: 'right',
       sortable: true,
-      render: (row) => fmtNumber(row.count),
+      render: (row) => <span className="font-mono">{fmtNumber(row.count)}</span>,
     },
   ];
 
@@ -84,14 +84,14 @@ export function MemoryPage() {
     {
       key: 'tag',
       label: 'Tag',
-      render: (row) => <span className="font-mono text-text-primary">{row.tag}</span>,
+      render: (row) => <span className="text-text-primary">{row.tag}</span>,
     },
     {
       key: 'count',
       label: 'Count',
       align: 'right',
       sortable: true,
-      render: (row) => fmtNumber(row.count),
+      render: (row) => <span className="font-mono">{fmtNumber(row.count)}</span>,
     },
   ];
 
@@ -118,7 +118,7 @@ export function MemoryPage() {
         return (
           <div className="flex flex-wrap gap-1">
             {(tags as string[]).slice(0, 5).map((tag: string) => (
-              <span key={tag} className="rounded bg-bg-tertiary px-1.5 py-0.5 text-[10px] font-mono text-text-muted">
+              <span key={tag} className="rounded bg-bg-tertiary px-1.5 py-0.5 text-xs font-mono text-text-muted">
                 {tag}
               </span>
             ))}
@@ -133,7 +133,7 @@ export function MemoryPage() {
       <ObsControlBar
         title={
           <div className="flex items-center justify-between w-full">
-            <h1 className="text-2xl font-bold text-text-primary">Memory</h1>
+            <h1 className="font-heading text-2xl font-bold text-text-primary">Memory</h1>
             <button
               onClick={() => snapshot.mutate()}
               disabled={snapshot.isPending}
@@ -209,31 +209,33 @@ export function MemoryPage() {
             </ChartContainer>
           </div>
           {typeRows.length > 0 && (
-            <div className="w-1/4 min-w-[170px] shrink-0 bg-bg-secondary border border-border-primary rounded-lg p-3">
+            <div className="w-1/4 min-w-[220px] shrink-0 bg-bg-secondary border border-border-primary rounded-lg p-3">
               <p className="text-xs font-medium text-text-secondary mb-2">By Type</p>
-              <PieChart width={128} height={128}>
-                <Pie
-                  data={typeRows}
-                  dataKey="count"
-                  nameKey="type"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={36}
-                  outerRadius={56}
-                  strokeWidth={0}
-                >
-                  {typeRows.map((_, index) => (
-                    <Cell key={index} fill={CHART_PALETTE[index % CHART_PALETTE.length]} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={tooltipStyle} formatter={(value, name) => [fmtNumber(value as number), fmtSeriesName(String(name))]} />
-              </PieChart>
+              <ResponsiveContainer width="100%" height={180}>
+                <PieChart>
+                  <Pie
+                    data={typeRows}
+                    dataKey="count"
+                    nameKey="type"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={78}
+                    strokeWidth={0}
+                  >
+                    {typeRows.map((_, index) => (
+                      <Cell key={index} fill={CHART_PALETTE[index % CHART_PALETTE.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={tooltipStyle} formatter={(value, name) => [fmtNumber(value as number), fmtSeriesName(String(name))]} />
+                </PieChart>
+              </ResponsiveContainer>
               <div className="mt-2 space-y-1">
                 {typeRows.map((row, i) => (
                   <div key={row.type} className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                    <span className="text-[10px] font-mono text-text-muted truncate flex-1">{fmtSeriesName(row.type)}</span>
-                    <span className="text-[10px] text-text-secondary">{fmtNumber(row.count)}</span>
+                    <span className="text-xs font-mono text-text-muted truncate flex-1">{fmtSeriesName(row.type)}</span>
+                    <span className="text-xs text-text-secondary">{fmtNumber(row.count)}</span>
                   </div>
                 ))}
               </div>

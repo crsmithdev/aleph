@@ -177,4 +177,5 @@ export function applyResearchDDL(sqlite: Sqlite): void {
   try { sqlite.exec(`ALTER TABLE research_findings RENAME COLUMN follow_up_questions TO follow_ups`); } catch { /* exists or unsupported */ }
   try { sqlite.exec(`ALTER TABLE research_findings ADD COLUMN source_texts TEXT NOT NULL DEFAULT '[]'`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN min_searches INTEGER`); } catch { /* exists */ }
+  try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN fetch_source_text INTEGER`); } catch { /* exists */ }
 }
