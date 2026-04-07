@@ -5,7 +5,7 @@ import { ResearchEngine, type LLMProvider } from './engine.js';
 import { OpenRouterProvider } from './providers/openrouter.js';
 import { Heartbeat, StepRateLimiter, isInActiveWindow, msUntilNextWindow } from './scheduler.js';
 import * as jobs from './services/jobs.js';
-import * as sessions from './services/sessions.js';
+import * as sessions from './services/queries.js';
 
 const POLL_INTERVAL_MS = 5_000;
 const HEARTBEAT_INTERVAL_MS = 60_000;
