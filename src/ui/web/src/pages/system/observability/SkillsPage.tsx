@@ -281,8 +281,8 @@ export function SkillsPage() {
                   {donut.map((row: { type: string; count: number }, i: number) => (
                     <div key={row.type} className="flex items-center gap-1.5 text-xs min-w-0">
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                      <span className="text-text-secondary capitalize truncate">{row.type}</span>
-                      <span className="ml-auto text-text-muted font-mono shrink-0">{fmtNumber(row.count)}</span>
+                      <span className="text-text-secondary capitalize truncate flex-1">{row.type}</span>
+                      <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtNumber(row.count)}</span>
                     </div>
                   ))}
                 </div>

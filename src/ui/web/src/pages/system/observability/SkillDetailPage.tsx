@@ -242,7 +242,7 @@ export function SkillDetailPage() {
                     <div key={row.rawName} className="flex items-center gap-1.5 text-xs">
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
                       <span className="font-mono text-text-secondary truncate">{row.name}</span>
-                      <span className="ml-auto text-text-muted font-mono shrink-0">{fmtNumber(row.count)}</span>
+                      <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtNumber(row.count)}</span>
                     </div>
                   ))}
                 </div>

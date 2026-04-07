@@ -190,8 +190,8 @@ export function SessionsPage() {
                 {donut.map((row: { subagentType: string; count: number }, i: number) => (
                   <div key={row.subagentType} className="flex items-center gap-1.5 text-xs min-w-0">
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                    <span className="text-text-secondary truncate">{fmtSeriesName(row.subagentType)}</span>
-                    <span className="ml-auto text-text-muted font-mono shrink-0">{fmtNumber(row.count)}</span>
+                    <span className="text-text-secondary truncate flex-1">{fmtSeriesName(row.subagentType)}</span>
+                    <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtNumber(row.count)}</span>
                   </div>
                 ))}
               </div>

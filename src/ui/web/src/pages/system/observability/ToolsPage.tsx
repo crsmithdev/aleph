@@ -344,8 +344,8 @@ export function ToolsPage() {
                     {callsDonut.map((row, i) => (
                       <div key={row.name} className="flex items-center gap-1.5 text-xs min-w-0">
                         <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                        <span className="font-mono text-text-secondary truncate">{row.tool}</span>
-                        <span className="ml-auto text-text-muted font-mono shrink-0">{fmtNumber(row.count)}</span>
+                        <span className="font-mono text-text-secondary truncate flex-1">{row.tool}</span>
+                        <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtNumber(row.count)}</span>
                       </div>
                     ))}
                   </div>
@@ -397,8 +397,8 @@ export function ToolsPage() {
                     {projectsDonut.map((row, i) => (
                       <div key={row.project} className="flex items-center gap-1.5 text-xs min-w-0">
                         <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                        <span className="font-mono text-text-secondary truncate">{row.project}</span>
-                        <span className="ml-auto text-text-muted font-mono shrink-0">{fmtNumber(row.count)}</span>
+                        <span className="font-mono text-text-secondary truncate flex-1">{row.project}</span>
+                        <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtNumber(row.count)}</span>
                       </div>
                     ))}
                   </div>

@@ -109,7 +109,7 @@ export function TokensCostPage() {
                 <div key={row.model} className="flex items-center gap-2 text-xs">
                   <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
                   <span className="font-mono text-text-secondary truncate">{row.model.replace('claude-', '')}</span>
-                  <span className="ml-auto text-text-muted font-mono shrink-0">{fmtCurrency(row.usd)}</span>
+                  <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtCurrency(row.usd)}</span>
                   <span className="text-text-disabled font-mono shrink-0 w-10 text-right">{fmtPct(row.pct)}</span>
                 </div>
               ))}
