@@ -2,7 +2,7 @@ import type { Sqlite } from '@construct/data';
 
 export function applyResearchDDL(sqlite: Sqlite): void {
   sqlite.exec(`
-    CREATE TABLE IF NOT EXISTS research_sessions (
+    CREATE TABLE IF NOT EXISTS research_queries (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
       seed_query TEXT NOT NULL,
@@ -16,7 +16,7 @@ export function applyResearchDDL(sqlite: Sqlite): void {
 
     CREATE TABLE IF NOT EXISTS research_threads (
       id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL REFERENCES research_sessions(id) ON DELETE CASCADE,
+      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
       parent_thread_id TEXT REFERENCES research_threads(id) ON DELETE SET NULL,
       spawned_from_finding_id TEXT,
       query TEXT NOT NULL,
@@ -35,7 +35,7 @@ export function applyResearchDDL(sqlite: Sqlite): void {
     CREATE TABLE IF NOT EXISTS research_findings (
       id TEXT PRIMARY KEY,
       thread_id TEXT NOT NULL REFERENCES research_threads(id) ON DELETE CASCADE,
-      session_id TEXT NOT NULL REFERENCES research_sessions(id) ON DELETE CASCADE,
+      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
       content TEXT NOT NULL,
       summary TEXT NOT NULL,
       source_urls TEXT NOT NULL DEFAULT '[]',
@@ -55,7 +55,7 @@ export function applyResearchDDL(sqlite: Sqlite): void {
     CREATE TABLE IF NOT EXISTS research_steps (
       id TEXT PRIMARY KEY,
       thread_id TEXT NOT NULL REFERENCES research_threads(id) ON DELETE CASCADE,
-      session_id TEXT NOT NULL REFERENCES research_sessions(id) ON DELETE CASCADE,
+      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
       finding_id TEXT REFERENCES research_findings(id) ON DELETE SET NULL,
       model TEXT NOT NULL,
       provider TEXT NOT NULL DEFAULT 'anthropic',
@@ -71,7 +71,7 @@ export function applyResearchDDL(sqlite: Sqlite): void {
 
     CREATE TABLE IF NOT EXISTS research_plans (
       id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL REFERENCES research_sessions(id) ON DELETE CASCADE,
+      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
       items TEXT NOT NULL DEFAULT '[]',
       generated_at TEXT NOT NULL DEFAULT (datetime('now')),
       status TEXT NOT NULL DEFAULT 'proposed'
@@ -93,7 +93,7 @@ export function applyResearchDDL(sqlite: Sqlite): void {
 
     CREATE TABLE IF NOT EXISTS research_monitors (
       id TEXT PRIMARY KEY,
-      session_id TEXT REFERENCES research_sessions(id) ON DELETE SET NULL,
+      session_id TEXT REFERENCES research_queries(id) ON DELETE SET NULL,
       title TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'active',
       queries TEXT NOT NULL DEFAULT '[]',
@@ -138,7 +138,7 @@ export function applyResearchDDL(sqlite: Sqlite): void {
 
     CREATE TABLE IF NOT EXISTS research_proposed_monitors (
       id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL REFERENCES research_sessions(id) ON DELETE CASCADE,
+      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
       thread_id TEXT NOT NULL REFERENCES research_threads(id) ON DELETE CASCADE,
       proposed_queries TEXT NOT NULL DEFAULT '[]',
       proposed_fetch_urls TEXT NOT NULL DEFAULT '[]',
@@ -152,7 +152,7 @@ export function applyResearchDDL(sqlite: Sqlite): void {
 
     CREATE TABLE IF NOT EXISTS research_jobs (
       id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL REFERENCES research_sessions(id) ON DELETE CASCADE,
+      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
       status TEXT NOT NULL DEFAULT 'pending',
       mode TEXT NOT NULL DEFAULT 'burst',
       max_iterations INTEGER,
@@ -172,6 +172,10 @@ export function applyResearchDDL(sqlite: Sqlite): void {
   `);
 
   // Migrations
+  try { sqlite.exec('ALTER TABLE research_sessions RENAME TO research_queries'); } catch { /* already renamed */ }
+  try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN short_query TEXT`); } catch { /* exists */ }
+  try { sqlite.exec(`ALTER TABLE research_steps ADD COLUMN label TEXT`); } catch { /* exists */ }
+  try { sqlite.exec("ALTER TABLE research_findings ADD COLUMN source_url_meta TEXT NOT NULL DEFAULT '[]'"); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_findings ADD COLUMN follow_up_analysis TEXT`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN node_type TEXT NOT NULL DEFAULT 'question'`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_findings RENAME COLUMN follow_up_questions TO follow_ups`); } catch { /* exists or unsupported */ }

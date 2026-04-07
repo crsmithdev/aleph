@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import {
-  listSessions, getSession, createSession, updateSession, getSessionCost, getResearchStats,
+  listQueries, getQuery, createQuery, updateQuery, getQueryCost, getResearchStats,
   listThreads, getThread, updateThread, createThread,
   listFindings, getFinding, updateFinding, updateFindingSourceTexts, clearThreadFindings,
   getLatestPlan, addPlanModification,
@@ -10,7 +10,7 @@ import {
   fetchPageText, JS_RENDERED_FLAG,
   // Job imports
   createJob, getJob, getActiveJobForSession, cancelJob, listJobsForSession, cancelAllJobs,
-  deleteSession,
+  deleteQuery,
   // Monitor imports
   createMonitor, getMonitor, listMonitors, updateMonitor,
   listSnapshots, listAlerts, updateAlert,
@@ -36,6 +36,32 @@ function summarizeQuery(query: string): string {
   return words.length > 8 ? words.slice(0, 8).join(' ') : t;
 }
 
+async function generateQueryTitle(seedQuery: string): Promise<string> {
+  const openrouterKey = process.env.OPENROUTER_API_KEY;
+  const heuristic = summarizeQuery(seedQuery);
+
+  if (!openrouterKey) return heuristic;
+
+  try {
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${openrouterKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'deepseek/deepseek-chat',
+        messages: [{ role: 'user', content: `Give a short title (5-8 words) for this research query. Return ONLY the title, no quotes, no punctuation at end:\n\n${seedQuery}` }],
+        max_tokens: 30,
+      }),
+    });
+    if (resp.ok) {
+      const data = await resp.json() as { choices: Array<{ message: { content: string } }> };
+      const title = data.choices[0]?.message?.content?.trim();
+      if (title) return title;
+    }
+  } catch { /* fall through to heuristic */ }
+
+  return heuristic;
+}
+
 export const researchRoutes: FastifyPluginAsync = async (app) => {
   // Ensure research tables exist
   applyResearchDDL(app.sqlite);
@@ -45,7 +71,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     const tables = [
       'research_monitor_alerts', 'research_monitor_snapshots', 'research_proposed_monitors',
       'research_monitors', 'research_plan_modifications', 'research_plans',
-      'research_steps', 'research_findings', 'research_threads', 'research_jobs', 'research_sessions',
+      'research_steps', 'research_findings', 'research_threads', 'research_jobs', 'research_queries',
     ];
     for (const table of tables) {
       app.sqlite.exec(`DELETE FROM ${table}`);
@@ -53,7 +79,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     return { status: 'cleared' };
   });
 
-  // === Stats (aggregate across all sessions) ===
+  // === Stats (aggregate across all queries) ===
   app.get<{ Querystring: { range?: string; granularity?: string } }>(
     '/stats',
     async (req) => {
@@ -63,25 +89,25 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
-  // === Sessions ===
-  app.get('/sessions', async (req) => {
+  // === Queries ===
+  app.get('/queries', async (req) => {
     const { status } = req.query as { status?: string };
-    return listSessions(app.sqlite, status);
+    return listQueries(app.sqlite, status);
   });
 
-  app.get<{ Params: { id: string } }>('/sessions/:id', async (req, reply) => {
-    const session = getSession(app.sqlite, req.params.id);
-    if (!session) return reply.status(404).send({ error: 'Session not found' });
-    return session;
+  app.get<{ Params: { id: string } }>('/queries/:id', async (req, reply) => {
+    const query = getQuery(app.sqlite, req.params.id);
+    if (!query) return reply.status(404).send({ error: 'Query not found' });
+    return query;
   });
 
   app.post<{ Body: { title?: string; seed_query: string; config?: Record<string, unknown> } }>(
-    '/sessions',
+    '/queries',
     async (req, reply) => {
       const { seed_query: rawQuery, title, config } = req.body;
       const seed_query = sanitizeQuery(rawQuery ?? '');
       if (!seed_query) return reply.status(400).send({ error: 'seed_query is required' });
-      const session = createSession(
+      const query = createQuery(
         app.sqlite,
         title ?? summarizeQuery(seed_query),
         seed_query,
@@ -89,39 +115,45 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       );
       // Create seed thread
       createThread(app.sqlite, {
-        session_id: session.id,
+        session_id: query.id,
         query: seed_query,
         origin: 'seed',
         priority: 1.0,
         depth: 0,
-        max_depth: session.config.max_thread_depth,
+        max_depth: query.config.max_thread_depth,
         status: 'queued',
       });
-      return reply.status(201).send(session);
+      // Fire async LLM title generation (don't await — return immediately)
+      generateQueryTitle(seed_query).then(llmTitle => {
+        if (llmTitle !== query.title) {
+          updateQuery(app.sqlite, query.id, { title: llmTitle });
+        }
+      }).catch(() => { /* ignore */ });
+      return reply.status(201).send(query);
     }
   );
 
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>(
-    '/sessions/:id',
+    '/queries/:id',
     async (req, reply) => {
-      const result = updateSession(app.sqlite, req.params.id, req.body);
-      if (!result) return reply.status(404).send({ error: 'Session not found' });
+      const result = updateQuery(app.sqlite, req.params.id, req.body);
+      if (!result) return reply.status(404).send({ error: 'Query not found' });
       return result;
     }
   );
 
   app.delete<{ Params: { id: string } }>(
-    '/sessions/:id',
+    '/queries/:id',
     async (req, reply) => {
-      const deleted = deleteSession(app.sqlite, req.params.id);
-      if (!deleted) return reply.status(404).send({ error: 'Session not found' });
+      const deleted = deleteQuery(app.sqlite, req.params.id);
+      if (!deleted) return reply.status(404).send({ error: 'Query not found' });
       return { status: 'deleted' };
     }
   );
 
   // === Threads ===
   app.get<{ Params: { id: string }; Querystring: { status?: string } }>(
-    '/sessions/:id/threads',
+    '/queries/:id/threads',
     async (req) => listThreads(app.sqlite, req.params.id, req.query.status as any)
   );
 
@@ -135,7 +167,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.post<{ Params: { id: string }; Body: { query: string; priority?: number; max_depth?: number } }>(
-    '/sessions/:id/threads',
+    '/queries/:id/threads',
     async (req, reply) => {
       const { query: rawQuery, priority, max_depth } = req.body;
       const query = sanitizeQuery(rawQuery ?? '');
@@ -152,7 +184,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.post<{ Params: { id: string; threadId: string } }>(
-    '/sessions/:id/threads/:threadId/fetch-text',
+    '/queries/:id/threads/:threadId/fetch-text',
     async (req, reply) => {
       const { id: sessionId, threadId } = req.params;
       const thread = getThread(app.sqlite, threadId);
@@ -178,7 +210,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.post<{ Params: { id: string; threadId: string }; Body: { fetch_source_text?: boolean } }>(
-    '/sessions/:id/threads/:threadId/redo',
+    '/queries/:id/threads/:threadId/redo',
     async (req, reply) => {
       const { threadId } = req.params;
       const thread = getThread(app.sqlite, threadId);
@@ -209,7 +241,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
 
   // === Findings ===
   app.get<{ Params: { id: string }; Querystring: { thread_id?: string; limit?: string; sort?: string } }>(
-    '/sessions/:id/findings',
+    '/queries/:id/findings',
     async (req) => {
       const { thread_id, limit, sort } = req.query;
       return listFindings(app.sqlite, req.params.id, {
@@ -237,7 +269,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
 
   // === Steps ===
   app.get<{ Params: { id: string }; Querystring: { thread_id?: string; limit?: string } }>(
-    '/sessions/:id/steps',
+    '/queries/:id/steps',
     async (req) => {
       const { thread_id, limit } = req.query;
       return listSteps(app.sqlite, req.params.id, {
@@ -249,7 +281,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
 
   // === Plan ===
   app.get<{ Params: { id: string } }>(
-    '/sessions/:id/plan',
+    '/queries/:id/plan',
     async (req, reply) => {
       const plan = getLatestPlan(app.sqlite, req.params.id);
       if (!plan) return reply.status(404).send({ error: 'No plan found' });
@@ -258,7 +290,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.post<{ Params: { id: string }; Body: { action: string; target_item_rank?: number; target_thread_id?: string; payload?: string } }>(
-    '/sessions/:id/plan/modify',
+    '/queries/:id/plan/modify',
     async (req, reply) => {
       const plan = getLatestPlan(app.sqlite, req.params.id);
       if (!plan) return reply.status(404).send({ error: 'No plan found' });
@@ -276,40 +308,40 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
 
   // === Costs ===
   app.get<{ Params: { id: string } }>(
-    '/sessions/:id/costs',
+    '/queries/:id/costs',
     async (req) => {
-      const sessionCost = getSessionCost(app.sqlite, req.params.id);
+      const queryCost = getQueryCost(app.sqlite, req.params.id);
       const stepCosts = getStepCosts(app.sqlite, req.params.id);
-      return { ...sessionCost, ...stepCosts };
+      return { ...queryCost, ...stepCosts };
     }
   );
 
   // === Jobs & Run ===
   app.post<{ Params: { id: string }; Body: { iterations?: number; mode?: string } }>(
-    '/sessions/:id/run',
+    '/queries/:id/run',
     async (req, reply) => {
-      const sessionId = req.params.id;
-      const session = getSession(app.sqlite, sessionId);
-      if (!session) return reply.status(404).send({ error: 'Session not found' });
+      const queryId = req.params.id;
+      const query = getQuery(app.sqlite, queryId);
+      if (!query) return reply.status(404).send({ error: 'Query not found' });
 
-      const existing = getActiveJobForSession(app.sqlite, sessionId);
+      const existing = getActiveJobForSession(app.sqlite, queryId);
       if (existing) {
-        return reply.status(409).send({ error: 'Session already has an active job', job_id: existing.id });
+        return reply.status(409).send({ error: 'Query already has an active job', job_id: existing.id });
       }
 
       const mode = (req.body.mode ?? 'burst') as 'burst' | 'background' | 'scheduled';
       const job = createJob(app.sqlite, {
-        session_id: sessionId,
+        session_id: queryId,
         mode,
         max_iterations: mode === 'burst' ? (req.body.iterations ?? 5) : undefined,
       });
 
-      return reply.status(201).send({ status: 'queued', job_id: job.id, session_id: sessionId });
+      return reply.status(201).send({ status: 'queued', job_id: job.id, session_id: queryId });
     }
   );
 
   app.get<{ Params: { id: string } }>(
-    '/sessions/:id/running',
+    '/queries/:id/running',
     async (req) => {
       const job = getActiveJobForSession(app.sqlite, req.params.id);
       return {
@@ -327,7 +359,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.get<{ Params: { id: string } }>(
-    '/sessions/:id/jobs',
+    '/queries/:id/jobs',
     async (req) => listJobsForSession(app.sqlite, req.params.id)
   );
 
@@ -350,13 +382,13 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.get<{ Params: { id: string } }>(
-    '/sessions/:id/activity',
+    '/queries/:id/activity',
     async (req) => {
-      const sessionId = req.params.id;
-      const job = getActiveJobForSession(app.sqlite, sessionId);
+      const queryId = req.params.id;
+      const job = getActiveJobForSession(app.sqlite, queryId);
       const running = !!job && (job.status === 'running' || job.status === 'claimed');
-      const recentSteps = listSteps(app.sqlite, sessionId, { limit: 5 });
-      const allThreads = listThreads(app.sqlite, sessionId);
+      const recentSteps = listSteps(app.sqlite, queryId, { limit: 5 });
+      const allThreads = listThreads(app.sqlite, queryId);
       const activeThread = allThreads.find(t => t.status === 'active');
       const queuedCount = allThreads.filter(t => t.status === 'queued').length;
       const exhaustedCount = allThreads.filter(t => t.status === 'exhausted').length;
@@ -418,12 +450,12 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
 
   // === Global run/stop ===
   app.post('/run-all', async () => {
-    const allSessions = listSessions(app.sqlite, 'active');
+    const allQueries = listQueries(app.sqlite, 'active');
     const created: string[] = [];
-    for (const session of allSessions) {
-      const existing = getActiveJobForSession(app.sqlite, session.id);
+    for (const query of allQueries) {
+      const existing = getActiveJobForSession(app.sqlite, query.id);
       if (!existing) {
-        const job = createJob(app.sqlite, { session_id: session.id, mode: 'background' });
+        const job = createJob(app.sqlite, { session_id: query.id, mode: 'background' });
         created.push(job.id);
       }
     }
@@ -437,9 +469,9 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
 
   // === SSE Stream ===
   app.get<{ Params: { id: string } }>(
-    '/sessions/:id/stream',
+    '/queries/:id/stream',
     async (req, reply) => {
-      const sessionId = req.params.id;
+      const queryId = req.params.id;
 
       reply.hijack();
       reply.raw.writeHead(200, {
@@ -465,7 +497,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       const poll = () => {
         if (closed) return;
         try {
-          const findings = listFindings(app.sqlite, sessionId);
+          const findings = listFindings(app.sqlite, queryId);
           for (const f of findings) {
             if (!sentFindings.has(f.id)) {
               sentFindings.add(f.id);
@@ -473,7 +505,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
             }
           }
 
-          const threads = listThreads(app.sqlite, sessionId);
+          const threads = listThreads(app.sqlite, queryId);
           for (const t of threads) {
             const state = `${t.status}:${t.updated_at}`;
             if (sentThreadState.get(t.id) !== state) {
@@ -482,7 +514,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
             }
           }
 
-          const steps = listSteps(app.sqlite, sessionId, { limit: 200 });
+          const steps = listSteps(app.sqlite, queryId, { limit: 200 });
           for (const s of steps) {
             if (!sentSteps.has(s.id)) {
               sentSteps.add(s.id);
@@ -490,7 +522,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
             }
           }
 
-          const jobs = listJobsForSession(app.sqlite, sessionId);
+          const jobs = listJobsForSession(app.sqlite, queryId);
           for (const j of jobs) {
             const state = `${j.status}:${j.updated_at}`;
             if (sentJobs.get(j.id) !== state) {

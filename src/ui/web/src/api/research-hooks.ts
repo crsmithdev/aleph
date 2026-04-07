@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 
 // Types matching the API response shapes
-export interface ResearchSession {
+export interface ResearchQuery {
   id: string;
   title: string;
   seed_query: string;
@@ -15,11 +15,15 @@ export interface ResearchSession {
   updated_at: string;
 }
 
+/** @deprecated Use ResearchQuery */
+export type ResearchSession = ResearchQuery;
+
 export interface ResearchThread {
   id: string;
   session_id: string;
   parent_thread_id: string | null;
   query: string;
+  short_query: string | null;
   origin: string;
   perturbation_strategy: string | null;
   status: string;
@@ -40,6 +44,7 @@ export interface ResearchFinding {
   summary: string;
   source_urls: string[];
   source_texts: string[];
+  source_url_meta: Array<{ url: string; title: string; snippet: string }>;
   tags: string[];
   confidence: number;
   novelty: number;
@@ -134,61 +139,76 @@ export function useResearchEnvCheck() {
   });
 }
 
-// --- Sessions ---
-export function useResearchSessions(status?: string) {
+// --- Queries ---
+export function useResearchQueries(status?: string) {
   const params = status ? `?status=${status}` : '';
   return useQuery({
-    queryKey: ['research-sessions', status],
-    queryFn: () => api.get<ResearchSession[]>(`/research/sessions${params}`),
+    queryKey: ['research-queries', status],
+    queryFn: () => api.get<ResearchQuery[]>(`/research/queries${params}`),
   });
 }
 
-export function useResearchSession(id: string) {
+/** @deprecated Use useResearchQueries */
+export const useResearchSessions = useResearchQueries;
+
+export function useResearchQuery(id: string) {
   return useQuery({
-    queryKey: ['research-sessions', id],
-    queryFn: () => api.get<ResearchSession>(`/research/sessions/${id}`),
+    queryKey: ['research-queries', id],
+    queryFn: () => api.get<ResearchQuery>(`/research/queries/${id}`),
     enabled: !!id,
   });
 }
 
-export function useCreateResearchSession() {
+/** @deprecated Use useResearchQuery */
+export const useResearchSession = useResearchQuery;
+
+export function useCreateResearchQuery() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: { seed_query: string; title?: string; config?: Record<string, unknown> }) =>
-      api.post<ResearchSession>('/research/sessions', data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['research-sessions'] }),
+      api.post<ResearchQuery>('/research/queries', data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['research-queries'] }),
   });
 }
 
-export function useUpdateResearchSession() {
+/** @deprecated Use useCreateResearchQuery */
+export const useCreateResearchSession = useCreateResearchQuery;
+
+export function useUpdateResearchQuery() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...data }: { id: string; status?: string; title?: string }) =>
-      api.patch<ResearchSession>(`/research/sessions/${id}`, data),
+      api.patch<ResearchQuery>(`/research/queries/${id}`, data),
     onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: ['research-sessions'] });
-      qc.invalidateQueries({ queryKey: ['research-sessions', vars.id] });
+      qc.invalidateQueries({ queryKey: ['research-queries'] });
+      qc.invalidateQueries({ queryKey: ['research-queries', vars.id] });
     },
   });
 }
 
-export function useUpdateSessionConfig() {
+/** @deprecated Use useUpdateResearchQuery */
+export const useUpdateResearchSession = useUpdateResearchQuery;
+
+export function useUpdateQueryConfig() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, config }: { id: string; config: Record<string, unknown> }) =>
-      api.patch<ResearchSession>(`/research/sessions/${id}`, { config }),
+      api.patch<ResearchQuery>(`/research/queries/${id}`, { config }),
     onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: ['research-sessions'] });
-      qc.invalidateQueries({ queryKey: ['research-sessions', vars.id] });
+      qc.invalidateQueries({ queryKey: ['research-queries'] });
+      qc.invalidateQueries({ queryKey: ['research-queries', vars.id] });
     },
   });
 }
+
+/** @deprecated Use useUpdateQueryConfig */
+export const useUpdateSessionConfig = useUpdateQueryConfig;
 
 // --- Threads ---
 export function useResearchThreads(sessionId: string, opts?: { refetchInterval?: number }) {
   return useQuery({
     queryKey: ['research-threads', sessionId],
-    queryFn: () => api.get<ResearchThread[]>(`/research/sessions/${sessionId}/threads`),
+    queryFn: () => api.get<ResearchThread[]>(`/research/queries/${sessionId}/threads`),
     enabled: !!sessionId,
     refetchInterval: opts?.refetchInterval,
   });
@@ -198,7 +218,7 @@ export function useInjectThread() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ sessionId, query, max_depth }: { sessionId: string; query: string; max_depth?: number }) =>
-      api.post<ResearchThread>(`/research/sessions/${sessionId}/threads`, { query, max_depth }),
+      api.post<ResearchThread>(`/research/queries/${sessionId}/threads`, { query, max_depth }),
     onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: ['research-threads', vars.sessionId] }),
   });
 }
@@ -216,7 +236,7 @@ export function useFetchThreadText() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ sessionId, threadId }: { sessionId: string; threadId: string }) =>
-      api.post<{ updated: number }>(`/research/sessions/${sessionId}/threads/${threadId}/fetch-text`, {}),
+      api.post<{ updated: number }>(`/research/queries/${sessionId}/threads/${threadId}/fetch-text`, {}),
     onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: ['research-findings', vars.sessionId] }),
   });
 }
@@ -225,7 +245,7 @@ export function useRedoThread() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ sessionId, threadId, fetch_source_text }: { sessionId: string; threadId: string; fetch_source_text?: boolean }) =>
-      api.post<ResearchThread>(`/research/sessions/${sessionId}/threads/${threadId}/redo`, fetch_source_text !== undefined ? { fetch_source_text } : {}),
+      api.post<ResearchThread>(`/research/queries/${sessionId}/threads/${threadId}/redo`, fetch_source_text !== undefined ? { fetch_source_text } : {}),
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ['research-threads', vars.sessionId] });
       qc.invalidateQueries({ queryKey: ['research-findings', vars.sessionId] });
@@ -251,7 +271,7 @@ export function useResearchFindings(sessionId: string, opts?: { sort?: string; l
   const qs = params.toString();
   return useQuery({
     queryKey: ['research-findings', sessionId, opts],
-    queryFn: () => api.get<ResearchFinding[]>(`/research/sessions/${sessionId}/findings${qs ? `?${qs}` : ''}`),
+    queryFn: () => api.get<ResearchFinding[]>(`/research/queries/${sessionId}/findings${qs ? `?${qs}` : ''}`),
     enabled: !!sessionId,
     refetchInterval: opts?.refetchInterval,
   });
@@ -278,6 +298,7 @@ export interface ResearchStep {
   tool_calls: Array<{ tool: string; input?: Record<string, unknown>; output?: string; error?: string; jina_fetches?: Array<{ url: string; ok: boolean; content_length: number; error?: string }> }>;
   duration_ms: number;
   error: string | null;
+  label: string | null;
   created_at: string;
 }
 
@@ -287,7 +308,7 @@ export function useResearchSteps(sessionId: string, threadId?: string, opts?: { 
   const qs = params.toString();
   return useQuery({
     queryKey: ['research-steps', sessionId, threadId],
-    queryFn: () => api.get<ResearchStep[]>(`/research/sessions/${sessionId}/steps${qs ? `?${qs}` : ''}`),
+    queryFn: () => api.get<ResearchStep[]>(`/research/queries/${sessionId}/steps${qs ? `?${qs}` : ''}`),
     enabled: !!sessionId,
     refetchInterval: opts?.refetchInterval,
   });
@@ -297,7 +318,7 @@ export function useResearchSteps(sessionId: string, threadId?: string, opts?: { 
 export function useResearchPlan(sessionId: string) {
   return useQuery({
     queryKey: ['research-plan', sessionId],
-    queryFn: () => api.get<ResearchPlan>(`/research/sessions/${sessionId}/plan`),
+    queryFn: () => api.get<ResearchPlan>(`/research/queries/${sessionId}/plan`),
     enabled: !!sessionId,
     retry: false,
   });
@@ -307,7 +328,7 @@ export function useModifyPlan() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ sessionId, ...data }: { sessionId: string; action: string; target_item_rank?: number; target_thread_id?: string }) =>
-      api.post(`/research/sessions/${sessionId}/plan/modify`, data),
+      api.post(`/research/queries/${sessionId}/plan/modify`, data),
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ['research-plan', vars.sessionId] });
       qc.invalidateQueries({ queryKey: ['research-threads', vars.sessionId] });
@@ -319,7 +340,7 @@ export function useModifyPlan() {
 export function useResearchCosts(sessionId: string, opts?: { refetchInterval?: number }) {
   return useQuery({
     queryKey: ['research-costs', sessionId],
-    queryFn: () => api.get<SessionCosts>(`/research/sessions/${sessionId}/costs`),
+    queryFn: () => api.get<SessionCosts>(`/research/queries/${sessionId}/costs`),
     enabled: !!sessionId,
     refetchInterval: opts?.refetchInterval,
   });
@@ -341,7 +362,7 @@ export interface RunningStatus {
 export function useResearchRunning(sessionId: string) {
   return useQuery({
     queryKey: ['research-running', sessionId],
-    queryFn: () => api.get<RunningStatus>(`/research/sessions/${sessionId}/running`),
+    queryFn: () => api.get<RunningStatus>(`/research/queries/${sessionId}/running`),
     enabled: !!sessionId,
     refetchInterval: 3000,
   });
@@ -366,24 +387,27 @@ export interface ResearchActivity {
 export function useResearchActivity(sessionId: string, opts?: { refetchInterval?: number }) {
   return useQuery({
     queryKey: ['research-activity', sessionId],
-    queryFn: () => api.get<ResearchActivity>(`/research/sessions/${sessionId}/activity`),
+    queryFn: () => api.get<ResearchActivity>(`/research/queries/${sessionId}/activity`),
     enabled: !!sessionId,
     refetchInterval: opts?.refetchInterval,
   });
 }
 
-// --- Delete session ---
-export function useDeleteResearchSession() {
+// --- Delete query ---
+export function useDeleteResearchQuery() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id }: { id: string }) =>
-      api.delete(`/research/sessions/${id}`),
+      api.delete(`/research/queries/${id}`),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['research-sessions'] });
+      qc.invalidateQueries({ queryKey: ['research-queries'] });
       qc.invalidateQueries({ queryKey: ['research-stats'] });
     },
   });
 }
+
+/** @deprecated Use useDeleteResearchQuery */
+export const useDeleteResearchSession = useDeleteResearchQuery;
 
 // --- Global run/stop ---
 export function useRunAllResearch() {
@@ -414,7 +438,7 @@ export function useClearResearchDB() {
   return useMutation({
     mutationFn: () => api.delete('/research/reset'),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['research-sessions'] });
+      qc.invalidateQueries({ queryKey: ['research-queries'] });
       qc.invalidateQueries({ queryKey: ['research-stats'] });
     },
   });
@@ -425,7 +449,7 @@ export function useRunResearch() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ sessionId, iterations, mode }: { sessionId: string; iterations?: number; mode?: string }) =>
-      api.post(`/research/sessions/${sessionId}/run`, { iterations, mode }),
+      api.post(`/research/queries/${sessionId}/run`, { iterations, mode }),
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ['research-running', vars.sessionId] });
       qc.invalidateQueries({ queryKey: ['research-activity', vars.sessionId] });
@@ -466,7 +490,7 @@ export interface ResearchJob {
 export function useResearchJobs(sessionId: string) {
   return useQuery({
     queryKey: ['research-jobs', sessionId],
-    queryFn: () => api.get<ResearchJob[]>(`/research/sessions/${sessionId}/jobs`),
+    queryFn: () => api.get<ResearchJob[]>(`/research/queries/${sessionId}/jobs`),
     enabled: !!sessionId,
     refetchInterval: 5000,
   });
@@ -485,7 +509,7 @@ export function useResearchStream(sessionId: string) {
 
   useEffect(() => {
     if (!sessionId) return;
-    const es = new EventSource(`/api/research/sessions/${sessionId}/stream`);
+    const es = new EventSource(`/api/research/queries/${sessionId}/stream`);
 
     es.onmessage = (event: MessageEvent) => {
       try {

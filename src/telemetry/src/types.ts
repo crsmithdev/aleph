@@ -167,6 +167,10 @@ export interface SessionBucket {
   messages: number;
   userMessages?: number;
   assistantMessages?: number;
+  cost?: number;
+  linesAdded?: number;
+  linesRemoved?: number;
+  commits?: number;
 }
 
 export interface ProjectBucket {
@@ -190,17 +194,27 @@ export interface ToolsData {
   byDayChurn: (TimeBucket & { tools: Record<string, number> })[];
   byDayProject: (TimeBucket & { projects: Record<string, number> })[];
   byDayVelocity: (TimeBucket & { velocity: number })[];
+  byDayErrors: (TimeBucket & { tools: Record<string, number> })[];
+  byDayLatency: (TimeBucket & { tools: Record<string, number> })[];
+  byDaySessionCount: (TimeBucket & { tools: Record<string, number> })[];
+  skillToolMatrix: Array<{ skill: string; tools: Array<{ tool: string; count: number }> }>;
   projectRanked: Array<{ project: string; count: number; pct: number }>;
 }
 
 export interface HooksData {
   ranked: HookMetric[];
   byDay: (TimeBucket & { hooks: Record<string, number> })[];
+  byDayLatency: (TimeBucket & { hooks: Record<string, number> })[];
+  byDayErrors: (TimeBucket & { hooks: Record<string, number> })[];
+  byDayEvent: (TimeBucket & { events: Record<string, number> })[];
 }
 
 export interface SkillsData {
   ranked: SkillMetric[];
   byDay: (TimeBucket & { skills: Record<string, number> })[];
+  byDaySessions: (TimeBucket & { skills: Record<string, number> })[];
+  byDayErrors: (TimeBucket & { skills: Record<string, number> })[];
+  byDayLatency: (TimeBucket & { skills: Record<string, number> })[];
 }
 
 export interface TokensData {
@@ -250,6 +264,7 @@ export interface SessionsData {
   byDay: SessionBucket[];
   byProject: ProjectBucket[];
   byActivity: TimeBucket[];
+  byDayProject: (TimeBucket & { projects: Record<string, number> })[];
   sessions: SessionMetric[];
   avgDurationMs: number;
   totalUserMessages: number;

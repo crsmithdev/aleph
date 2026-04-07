@@ -54,7 +54,7 @@ const navGroups: NavItem[][] = [
   ],
   [
     {
-      to: '/research/sessions',
+      to: '/research',
       label: 'Research',
       icon: (
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
@@ -62,7 +62,7 @@ const navGroups: NavItem[][] = [
         </svg>
       ),
       children: [
-        { to: '/research/sessions', label: 'Sessions', icon: icons.sessions },
+        { to: '/research/queries', label: 'Queries', icon: icons.sessions },
         { to: '/research/monitors', label: 'Monitors', icon: icons.monitors },
       ],
     },
@@ -114,13 +114,14 @@ const settingsItem = {
   ),
 };
 
-function SidebarLink({ to, label, icon, depth = 0, collapsed = false, disabled = false }: {
+function SidebarLink({ to, label, icon, depth = 0, collapsed = false, disabled = false, isGroupHeader = false }: {
   to: string;
   label: string;
   icon?: React.ReactNode;
   depth?: number;
   collapsed?: boolean;
   disabled?: boolean;
+  isGroupHeader?: boolean;
 }) {
   if (disabled) {
     return (
@@ -147,9 +148,11 @@ function SidebarLink({ to, label, icon, depth = 0, collapsed = false, disabled =
           'flex items-center gap-2.5 py-1.5 text-base font-sans transition-colors',
           depth > 0 ? 'pl-5 pr-2.5' : 'pr-2.5',
           isActive
-            ? depth > 0
-              ? 'text-accent font-medium'
-              : 'rounded-lg bg-accent text-white font-medium pl-2.5'
+            ? isGroupHeader
+              ? 'pl-2.5 text-accent font-medium'
+              : depth > 0
+                ? 'text-accent font-medium'
+                : 'rounded-lg bg-accent text-white font-medium pl-2.5'
             : depth > 0
               ? 'text-text-muted hover:text-text-primary hover:bg-bg-tertiary pl-5'
               : 'pl-2.5 text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded-lg'
@@ -204,7 +207,7 @@ export function Sidebar() {
                 item.children?.some((c) => location.pathname === c.to || location.pathname.startsWith(c.to + '/'));
               return (
                 <div key={item.to}>
-                  <SidebarLink to={item.to} label={item.label} icon={item.icon} disabled={item.disabled} />
+                  <SidebarLink to={item.to} label={item.label} icon={item.icon} disabled={item.disabled} isGroupHeader={!!item.children?.length} />
                   {item.children && isParentActive && (
                     <div className="mt-0.5 space-y-0.5">
                       {item.children.map((child) => (

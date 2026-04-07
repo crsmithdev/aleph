@@ -11,7 +11,7 @@ import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControl
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtMs, fmtPct, dateTime, shortDate, shortRelativeTime, fmtSeriesName, granLabel } from '../../../utils/format';
+import { fmtNumber, fmtMs, fmtPct, dateTime, shortDate, shortRelativeTime, fmtSeriesName } from '../../../utils/format';
 import { clsx } from 'clsx';
 
 type HookRow = {
@@ -39,6 +39,14 @@ type InvocationRow = {
 };
 
 type ViewMode = 'by-hook' | 'by-event';
+type HookDataset = 'by-hook' | 'by-event';
+
+const HOOK_DATASETS: { key: HookDataset; label: string }[] = [
+  { key: 'by-hook', label: 'By Hook' },
+  { key: 'by-event', label: 'By Event' },
+];
+
+const GRAN_LABEL: Record<Granularity, string> = { minute: 'Per-Minute', hour: 'Hourly', day: 'Daily' };
 
 function fmtCalls(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
@@ -52,6 +60,7 @@ function ByHookView({ range, granularity }: { range: TimeRange; granularity: Gra
   const [showMissing, setShowMissing] = useState(false);
   const [showUnused, setShowUnused] = useState(false);
   const [chartType, setChartType] = useState<'bar' | 'line'>('line');
+  const [dataset, setDataset] = useState<HookDataset>('by-hook');
 
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load hooks" retry={refetch} />;
@@ -86,6 +95,56 @@ function ByHookView({ range, granularity }: { range: TimeRange; granularity: Gra
   const weightedP95 = totalCount > 0
     ? toolsWithLatency.reduce((s, r) => s + r.p95Ms * r.count, 0) / totalCount
     : 0;
+
+  // By-hook time series
+  const topHookNames: string[] = (() => {
+    const totals: Record<string, number> = {};
+    for (const day of data.byDay) {
+      for (const [hook, count] of Object.entries(day.hooks ?? {})) {
+        totals[hook] = (totals[hook] ?? 0) + count;
+      }
+    }
+    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([n]) => n);
+  })();
+  const stackedByHook = data.byDay.map(day => {
+    const entry: Record<string, unknown> = { date: day.date };
+    for (const name of topHookNames) entry[name] = (day.hooks ?? {})[name] ?? 0;
+    return entry;
+  });
+
+  // By-event time series (derived from byDay.hooks + ranked event map)
+  const hookEventMap = Object.fromEntries(rankedWithRate.map(r => [r.command, r.event]));
+  const topEventNames: string[] = (() => {
+    const totals: Record<string, number> = {};
+    for (const day of data.byDay) {
+      for (const [hook, count] of Object.entries(day.hooks ?? {})) {
+        const ev = hookEventMap[hook] ?? 'unknown';
+        totals[ev] = (totals[ev] ?? 0) + count;
+      }
+    }
+    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([e]) => e);
+  })();
+  const stackedByEvent = data.byDay.map(day => {
+    const entry: Record<string, unknown> = { date: day.date };
+    const evCounts: Record<string, number> = {};
+    for (const [hook, count] of Object.entries(day.hooks ?? {})) {
+      const ev = hookEventMap[hook] ?? 'unknown';
+      evCounts[ev] = (evCounts[ev] ?? 0) + count;
+    }
+    for (const e of topEventNames) entry[e] = evCounts[e] ?? 0;
+    return entry;
+  });
+
+  // Event donut (aggregate)
+  const byEventAll = data.byEvent ?? [];
+  const top5Events = byEventAll.slice(0, 5);
+  const eventsOther = byEventAll.slice(5).reduce((s, r) => s + r.count, 0);
+  const eventDonut = eventsOther > 0 ? [...top5Events, { event: 'Other', count: eventsOther }] : top5Events;
+
+  const activeKeys = dataset === 'by-hook' ? topHookNames : topEventNames;
+  const activeData = dataset === 'by-hook' ? stackedByHook : stackedByEvent;
+  const segLabel = dataset === 'by-hook' ? 'Hook' : 'Event';
+  const timeSeriesTitle = `${GRAN_LABEL[granularity]} Executions by ${segLabel}`;
 
   const columns: Column<HookRow>[] = [
     {
@@ -188,46 +247,48 @@ function ByHookView({ range, granularity }: { range: TimeRange; granularity: Gra
         />
       </div>
 
-      {data.byDay.length > 0 && (() => {
-        const topHookNames: string[] = (() => {
-          const totals: Record<string, number> = {};
-          for (const day of data.byDay) {
-            for (const [hook, count] of Object.entries(day.hooks ?? {})) {
-              totals[hook] = (totals[hook] ?? 0) + count;
-            }
-          }
-          return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([n]) => n);
-        })();
-        const stackedByDay = data.byDay.map(day => {
-          const entry: Record<string, unknown> = { date: day.date };
-          for (const name of topHookNames) entry[name] = (day.hooks ?? {})[name] ?? 0;
-          return entry;
-        });
-        const byEventAll = data.byEvent ?? [];
-        const top5Events = byEventAll.slice(0, 5);
-        const eventsOther = byEventAll.slice(5).reduce((s, r) => s + r.count, 0);
-        const eventDonut = eventsOther > 0 ? [...top5Events, { event: 'Other', count: eventsOther }] : top5Events;
-        return (
+      {data.byDay.length > 0 && (
+        <>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-text-muted">Dataset</span>
+            <div className="flex items-center gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
+              {HOOK_DATASETS.map(d => (
+                <button
+                  key={d.key}
+                  onClick={() => setDataset(d.key)}
+                  className={clsx(
+                    'px-3 py-1 text-xs rounded transition-colors whitespace-nowrap',
+                    dataset === d.key
+                      ? 'bg-bg-secondary text-text-primary shadow-sm'
+                      : 'text-text-muted hover:text-text-primary'
+                  )}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="flex gap-4 items-stretch h-[320px]">
             <div className="flex-1 min-w-0 h-full">
-              <ChartContainer title={granLabel(granularity, 'Executions')} chartType={chartType} onChartTypeChange={setChartType} fill className="h-full">
+              <ChartContainer title={timeSeriesTitle} chartType={chartType} onChartTypeChange={setChartType} fill className="h-full">
                 {chartType === 'bar' ? (
-                  <BarChart data={stackedByDay}>
+                  <BarChart data={activeData}>
                     <CartesianGrid {...gridProps} />
                     <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
                     <YAxis {...axisProps} />
                     <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
-                    {topHookNames.map((name, i) => (
-                      <Bar key={name} dataKey={name} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === topHookNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
+                    {activeKeys.map((name, i) => (
+                      <Bar key={name} dataKey={name} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === activeKeys.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
                     ))}
                   </BarChart>
                 ) : (
-                  <AreaChart data={stackedByDay}>
+                  <AreaChart data={activeData}>
                     <CartesianGrid {...gridProps} />
                     <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
                     <YAxis {...axisProps} />
                     <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
-                    {topHookNames.map((name, i) => (
+                    {activeKeys.map((name, i) => (
                       <Area key={name} type="monotone" dataKey={name} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
                     ))}
                   </AreaChart>
@@ -235,32 +296,34 @@ function ByHookView({ range, granularity }: { range: TimeRange; granularity: Gra
               </ChartContainer>
             </div>
             {eventDonut.length > 0 && (
-              <div className="flex flex-col rounded-lg border border-border-primary bg-bg-secondary p-4 w-1/4 min-w-[220px] shrink-0 h-full">
-                <h3 className="mb-3 text-sm font-medium text-text-secondary shrink-0">By Event</h3>
-                <div className="flex-1 min-h-0">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={eventDonut} dataKey="count" nameKey="event" cx="50%" cy="50%" innerRadius={50} outerRadius={78}>
-                        {eventDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
-                      </Pie>
-                      <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 mt-3 shrink-0">
-                  {eventDonut.map((row, i) => (
-                    <div key={row.event} className="flex items-center gap-1.5 text-xs min-w-0">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                      <span className="font-mono text-text-secondary truncate flex-1">{fmtSeriesName(row.event)}</span>
-                      <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtNumber(row.count)}</span>
-                    </div>
-                  ))}
+              <div className="flex flex-col rounded-lg border border-border-primary bg-bg-secondary p-4 w-[400px] shrink-0 h-full">
+                <h3 className="mb-3 text-sm font-medium text-text-secondary shrink-0">Top Events</h3>
+                <div className="flex-1 min-h-0 flex gap-3">
+                  <div className="flex-1 min-w-0 min-h-0 flex items-center">
+                    <ResponsiveContainer width="100%" height={212}>
+                      <PieChart>
+                        <Pie data={eventDonut} dataKey="count" nameKey="event" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                          {eventDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                        </Pie>
+                        <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="flex flex-col gap-1.5 justify-center shrink-0 w-36">
+                    {eventDonut.map((row, i) => (
+                      <div key={row.event} className="flex items-center gap-1.5 text-xs min-w-0">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                        <span className="font-mono text-text-secondary truncate flex-1">{fmtSeriesName(row.event)}</span>
+                        <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtNumber(row.count)}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
           </div>
-        );
-      })()}
+        </>
+      )}
 
       <div className="flex items-center gap-3">
         {missingCount > 0 && (

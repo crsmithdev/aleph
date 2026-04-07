@@ -59,6 +59,10 @@ export function useObsTools(range: TimeRange, granularity?: Granularity, session
     byDayChurn: Array<{ date: string; count: number; tools: Record<string, number> }>;
     byDayProject: Array<{ date: string; count: number; projects: Record<string, number> }>;
     byDayVelocity: Array<{ date: string; count: number; velocity: number }>;
+    byDayErrors: Array<{ date: string; count: number; tools: Record<string, number> }>;
+    byDayLatency: Array<{ date: string; count: number; tools: Record<string, number> }>;
+    byDaySessionCount: Array<{ date: string; count: number; tools: Record<string, number> }>;
+    skillToolMatrix: Array<{ skill: string; tools: Array<{ tool: string; count: number }> }>;
     projectRanked: Array<{ project: string; count: number; pct: number }>;
     queryTimeMs: number;
   }>('tools', { range, granularity, session });
@@ -84,6 +88,9 @@ export function useObsHooks(range: TimeRange, granularity?: Granularity, session
     }>;
     byDay: Array<{ date: string; count: number; hooks: Record<string, number> }>;
     byEvent?: Array<{ event: string; count: number }>;
+    byDayLatency: Array<{ date: string; count: number; hooks: Record<string, number> }>;
+    byDayErrors: Array<{ date: string; count: number; hooks: Record<string, number> }>;
+    byDayEvent: Array<{ date: string; count: number; events: Record<string, number> }>;
     unused: Array<{ command: string; event: string; blocking?: boolean; gate?: string; markerFile?: string; description?: string }>;
     markerStats?: Record<string, { writes: number; clears: number; activeNow: boolean }>;
     queryTimeMs: number;
@@ -95,6 +102,9 @@ export function useObsSkills(range: TimeRange, granularity?: Granularity, sessio
     ranked: Array<{ skill: string; count: number; pct: number; errors: number; avgMs?: number; p50Ms?: number; p95Ms?: number; sessions?: number; lastUsed?: string; type: 'command' | 'skill'; registered: boolean }>;
     byDay: Array<{ date: string; count: number; skills: Record<string, number> }>;
     byType?: Array<{ type: string; count: number }>;
+    byDaySessions: Array<{ date: string; count: number; skills: Record<string, number> }>;
+    byDayErrors: Array<{ date: string; count: number; skills: Record<string, number> }>;
+    byDayLatency: Array<{ date: string; count: number; skills: Record<string, number> }>;
     unused: string[];
     queryTimeMs: number;
   }>('skills', { range, granularity, session });
@@ -129,7 +139,8 @@ export function useObsCost(range: TimeRange, granularity?: Granularity, session?
 
 export function useObsSessions(range: TimeRange, granularity?: Granularity, session?: string) {
   return obsQuery<{
-    byDay: Array<{ date: string; sessions: number; messages: number; userMessages?: number; assistantMessages?: number }>;
+    byDay: Array<{ date: string; sessions: number; messages: number; userMessages?: number; assistantMessages?: number; cost?: number; linesAdded?: number; linesRemoved?: number; commits?: number }>;
+    byDayProject: Array<{ date: string; count: number; projects: Record<string, number> }>;
     byProject: Array<{ project: string; sessions: number }>;
     byActivity: Array<{ date: string; count: number }>;
     sessions: Array<{

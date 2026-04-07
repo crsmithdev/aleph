@@ -147,24 +147,26 @@ export function OverviewPage() {
         return (
           <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
             <h3 className="mb-3 text-sm font-medium text-text-secondary">Cost by Model</h3>
-            <div className="h-[180px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={donut} dataKey="usd" nameKey="model" cx="50%" cy="50%" innerRadius={50} outerRadius={78}>
-                    {donut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
-                  </Pie>
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtCurrency(Number(v)), fmtSeriesName(String(n))]} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 mt-3">
-              {donut.map((row, i) => (
-                <div key={row.model} className="flex items-center gap-1.5 text-xs min-w-0">
-                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                  <span className="font-mono text-text-secondary truncate flex-1">{row.model.replace('claude-', '')}</span>
-                  <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtCurrency(row.usd)}</span>
-                </div>
-              ))}
+            <div className="flex gap-3 h-[180px]">
+              <div className="flex-1 min-w-0 flex items-center">
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie data={donut} dataKey="usd" nameKey="model" cx="50%" cy="50%" innerRadius="38%" outerRadius="90%">
+                      {donut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                    </Pie>
+                    <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtCurrency(Number(v)), fmtSeriesName(String(n))]} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex flex-col gap-1.5 justify-center shrink-0 w-36">
+                {donut.map((row, i) => (
+                  <div key={row.model} className="flex items-center gap-1.5 text-xs min-w-0">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                    <span className="font-mono text-text-secondary truncate flex-1">{row.model.replace('claude-', '')}</span>
+                    <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtCurrency(row.usd)}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         );

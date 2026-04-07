@@ -2,7 +2,7 @@ export { applyResearchDDL } from './ddl.js';
 export * from './types.js';
 export { ResearchEngine, AnthropicProvider } from './engine.js';
 export type { EngineOptions, LLMProvider, LLMResult, WebSearchResult } from './engine.js';
-export * from './services/sessions.js';
+export * from './services/queries.js';
 export * from './services/threads.js';
 export * from './services/findings.js';
 export * from './services/steps.js';

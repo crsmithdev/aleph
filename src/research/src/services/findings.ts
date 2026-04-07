@@ -7,6 +7,7 @@ function rowToFinding(row: Record<string, unknown>): ResearchFinding {
     ...row,
     source_urls: JSON.parse(row.source_urls as string),
     source_texts: JSON.parse((row.source_texts as string) ?? '[]'),
+    source_url_meta: JSON.parse((row.source_url_meta as string) ?? '[]'),
     tags: JSON.parse(row.tags as string),
     follow_ups: JSON.parse((row.follow_ups ?? row.follow_up_questions ?? '[]') as string),
     follow_up_analysis: row.follow_up_analysis ? JSON.parse(row.follow_up_analysis as string) : undefined,
@@ -22,6 +23,7 @@ export function createFinding(
     summary: string;
     source_urls?: string[];
     source_texts?: string[];
+    source_url_meta?: Array<{ url: string; title: string; snippet: string }>;
     source_quality?: number;
     tags?: string[];
     confidence?: number;
@@ -36,9 +38,9 @@ export function createFinding(
 
   sqlite.prepare(`
     INSERT INTO research_findings
-      (id, thread_id, session_id, content, summary, source_urls, source_texts, source_quality,
-       tags, confidence, novelty, actionability, follow_ups, follow_up_analysis, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, thread_id, session_id, content, summary, source_urls, source_texts, source_url_meta,
+       source_quality, tags, confidence, novelty, actionability, follow_ups, follow_up_analysis, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     params.thread_id,
@@ -47,6 +49,7 @@ export function createFinding(
     params.summary,
     JSON.stringify(params.source_urls ?? []),
     JSON.stringify(params.source_texts ?? []),
+    JSON.stringify(params.source_url_meta ?? []),
     params.source_quality ?? 0.5,
     JSON.stringify(params.tags ?? []),
     params.confidence ?? 0.5,

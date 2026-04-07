@@ -120,6 +120,10 @@ export function reduceTools(events: TelemetryEvent[], granularity: Granularity =
   const dayChurnMap = new Map<string, Map<string, number>>();
   const dayProjectMap = new Map<string, Map<string, number>>();
   const daySessionMap = new Map<string, Set<string>>();
+  const dayErrorMap = new Map<string, Map<string, number>>();
+  const dayLatencyMap = new Map<string, Map<string, number[]>>();
+  const dayToolSessionMap = new Map<string, Map<string, Set<string>>>();
+  const skillToolMap = new Map<string, Map<string, number>>();
   const projectCounts = new Map<string, number>();
   const sidToProject = new Map<string, string>();
 
@@ -160,7 +164,14 @@ export function reduceTools(events: TelemetryEvent[], granularity: Granularity =
         const result = resultInfo.get(useId);
         if (result) {
           const ms = result.durationMs ?? (new Date(result.timestamp).getTime() - new Date(e.ts).getTime());
-          if (ms >= 0 && ms < 3600000) cur.durations.push(ms);
+          if (ms >= 0 && ms < 3600000) {
+            cur.durations.push(ms);
+            const bkLat = bucketKey(e.ts, granularity);
+            if (!dayLatencyMap.has(bkLat)) dayLatencyMap.set(bkLat, new Map());
+            const dlm = dayLatencyMap.get(bkLat)!;
+            if (!dlm.has(toolName)) dlm.set(toolName, []);
+            dlm.get(toolName)!.push(ms);
+          }
         }
       }
 
@@ -170,6 +181,20 @@ export function reduceTools(events: TelemetryEvent[], granularity: Granularity =
 
       if (!dayToolMap.has(bk)) dayToolMap.set(bk, new Map());
       dayToolMap.get(bk)!.set(toolName, (dayToolMap.get(bk)!.get(toolName) || 0) + 1);
+
+      // Track per-day sessions per tool
+      if (!dayToolSessionMap.has(bk)) dayToolSessionMap.set(bk, new Map());
+      const dtss = dayToolSessionMap.get(bk)!;
+      if (!dtss.has(toolName)) dtss.set(toolName, new Set());
+      dtss.get(toolName)!.add(e.sid);
+
+      // Track skill→tool correlation
+      if (e.data?.skill) {
+        const skillName = e.data.skill as string;
+        if (!skillToolMap.has(skillName)) skillToolMap.set(skillName, new Map());
+        const stm = skillToolMap.get(skillName)!;
+        stm.set(toolName, (stm.get(toolName) || 0) + 1);
+      }
 
       const churnTotal = added + removed;
       if (churnTotal > 0) {
@@ -192,6 +217,10 @@ export function reduceTools(events: TelemetryEvent[], granularity: Granularity =
       if (info) {
         const cur = toolCounts.get(info.toolName);
         if (cur) cur.errors++;
+        const errBk = bucketKey(info.timestamp, granularity);
+        if (!dayErrorMap.has(errBk)) dayErrorMap.set(errBk, new Map());
+        const dem = dayErrorMap.get(errBk)!;
+        dem.set(info.toolName, (dem.get(info.toolName) || 0) + 1);
       }
     }
   }
@@ -244,7 +273,34 @@ export function reduceTools(events: TelemetryEvent[], granularity: Granularity =
     .map(([project, count]) => ({ project, count, pct: projectTotal > 0 ? (count / projectTotal) * 100 : 0 }))
     .sort((a, b) => b.count - a.count);
 
-  return { ranked, byDay, byDayChurn, byDayProject, byDayVelocity, projectRanked };
+  const sortBuckets2 = <T extends { date: string }>(map: Map<string, T>): T[] =>
+    [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
+
+  const byDayErrors = sortBuckets2(new Map([...dayErrorMap.entries()].map(([date, tools]) => [date, {
+    date, count: [...tools.values()].reduce((s, v) => s + v, 0), tools: Object.fromEntries(tools),
+  }])));
+
+  const byDayLatency = sortBuckets2(new Map([...dayLatencyMap.entries()].map(([date, toolDurations]) => [date, {
+    date, count: [...toolDurations.values()].reduce((s, v) => s + v.length, 0),
+    tools: Object.fromEntries([...toolDurations.entries()].map(([tool, durations]) => [
+      tool, durations.length > 0 ? Math.round(durations.reduce((s, d) => s + d, 0) / durations.length) : 0,
+    ])),
+  }])));
+
+  const byDaySessionCount = sortBuckets2(new Map([...dayToolSessionMap.entries()].map(([date, toolSessions]) => [date, {
+    date, count: [...toolSessions.values()].reduce((s, v) => s + v.size, 0),
+    tools: Object.fromEntries([...toolSessions.entries()].map(([tool, sids]) => [tool, sids.size])),
+  }])));
+
+  const skillToolMatrix = [...skillToolMap.entries()].map(([skill, toolCounts]) => ({
+    skill,
+    tools: [...toolCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([tool, count]) => ({ tool, count })),
+  })).sort((a, b) => b.tools.reduce((s, t) => s + t.count, 0) - a.tools.reduce((s, t) => s + t.count, 0));
+
+  return { ranked, byDay, byDayChurn, byDayProject, byDayVelocity, byDayErrors, byDayLatency, byDaySessionCount, skillToolMatrix, projectRanked };
 }
 
 // ---------------------------------------------------------------------------
@@ -254,6 +310,9 @@ export function reduceTools(events: TelemetryEvent[], granularity: Granularity =
 export function reduceHooks(events: TelemetryEvent[], granularity: Granularity = "day"): HooksData {
   const hookMap = new Map<string, { event: string; durations: number[]; errors: number; fullCommand: string; progressCount: number; lastUsed: string }>();
   const dayHookMap = new Map<string, Map<string, number>>();
+  const dayHookLatencyMap = new Map<string, Map<string, number[]>>();
+  const dayHookErrorMap = new Map<string, Map<string, number>>();
+  const dayHookEventMap = new Map<string, Map<string, number>>();
 
   for (const e of events) {
     if (e.kind === "hook_summary" && e.data?.command) {
@@ -269,6 +328,22 @@ export function reduceHooks(events: TelemetryEvent[], granularity: Granularity =
       if (!dayHookMap.has(bk)) dayHookMap.set(bk, new Map());
       const dm = dayHookMap.get(bk)!;
       dm.set(shortCmd, (dm.get(shortCmd) || 0) + 1);
+
+      if (e.ms !== undefined) {
+        if (!dayHookLatencyMap.has(bk)) dayHookLatencyMap.set(bk, new Map());
+        const dlm = dayHookLatencyMap.get(bk)!;
+        if (!dlm.has(shortCmd)) dlm.set(shortCmd, []);
+        dlm.get(shortCmd)!.push(e.ms);
+      }
+      if (e.data.isError) {
+        if (!dayHookErrorMap.has(bk)) dayHookErrorMap.set(bk, new Map());
+        const dem = dayHookErrorMap.get(bk)!;
+        dem.set(shortCmd, (dem.get(shortCmd) || 0) + 1);
+      }
+      const eventType = (e.data.event as string) || "unknown";
+      if (!dayHookEventMap.has(bk)) dayHookEventMap.set(bk, new Map());
+      const devM = dayHookEventMap.get(bk)!;
+      devM.set(eventType, (devM.get(eventType) || 0) + 1);
     }
 
     if (e.kind === "hook" && e.data?.command) {
@@ -285,6 +360,10 @@ export function reduceHooks(events: TelemetryEvent[], granularity: Granularity =
         if (!dayHookMap.has(bk)) dayHookMap.set(bk, new Map());
         const dm = dayHookMap.get(bk)!;
         dm.set(shortCmd, (dm.get(shortCmd) || 0) + 1);
+        const evType = (e.data.event as string) || "unknown";
+        if (!dayHookEventMap.has(bk)) dayHookEventMap.set(bk, new Map());
+        const devM = dayHookEventMap.get(bk)!;
+        devM.set(evType, (devM.get(evType) || 0) + 1);
       }
     }
   }
@@ -313,7 +392,28 @@ export function reduceHooks(events: TelemetryEvent[], granularity: Granularity =
       hooks: Object.fromEntries(hooks),
     }));
 
-  return { ranked, byDay };
+  const byDayLatency = [...dayHookLatencyMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, hookDurations]) => ({
+      date, count: [...hookDurations.values()].reduce((s, v) => s + v.length, 0),
+      hooks: Object.fromEntries([...hookDurations.entries()].map(([hook, durations]) => [
+        hook, durations.length > 0 ? Math.round(durations.reduce((s, d) => s + d, 0) / durations.length) : 0,
+      ])),
+    }));
+
+  const byDayErrors = [...dayHookErrorMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, hooks]) => ({
+      date, count: [...hooks.values()].reduce((s, v) => s + v, 0), hooks: Object.fromEntries(hooks),
+    }));
+
+  const byDayEvent = [...dayHookEventMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, events]) => ({
+      date, count: [...events.values()].reduce((s, v) => s + v, 0), events: Object.fromEntries(events),
+    }));
+
+  return { ranked, byDay, byDayLatency, byDayErrors, byDayEvent };
 }
 
 // ---------------------------------------------------------------------------
@@ -323,6 +423,9 @@ export function reduceHooks(events: TelemetryEvent[], granularity: Granularity =
 export function reduceSkills(events: TelemetryEvent[], granularity: Granularity = "day", validSkills?: Set<string>): SkillsData {
   const skillCounts = new Map<string, { count: number; errors: number; sessions: Set<string>; durations: number[]; lastUsed: string }>();
   const daySkillMap = new Map<string, Map<string, number>>();
+  const daySkillSessionMap = new Map<string, Map<string, Set<string>>>();
+  const daySkillErrorMap = new Map<string, Map<string, number>>();
+  const daySkillLatencyMap = new Map<string, Map<string, number[]>>();
 
   for (const e of events) {
     if (e.kind === "tool" && e.data?.skill) {
@@ -340,6 +443,24 @@ export function reduceSkills(events: TelemetryEvent[], granularity: Granularity 
       if (!daySkillMap.has(bk)) daySkillMap.set(bk, new Map());
       const dm = daySkillMap.get(bk)!;
       dm.set(skillName, (dm.get(skillName) || 0) + 1);
+
+      if (!daySkillSessionMap.has(bk)) daySkillSessionMap.set(bk, new Map());
+      const dsm = daySkillSessionMap.get(bk)!;
+      if (!dsm.has(skillName)) dsm.set(skillName, new Set());
+      dsm.get(skillName)!.add(e.sid);
+
+      if (e.err) {
+        if (!daySkillErrorMap.has(bk)) daySkillErrorMap.set(bk, new Map());
+        const dem = daySkillErrorMap.get(bk)!;
+        dem.set(skillName, (dem.get(skillName) || 0) + 1);
+      }
+
+      if (e.ms != null) {
+        if (!daySkillLatencyMap.has(bk)) daySkillLatencyMap.set(bk, new Map());
+        const dlm = daySkillLatencyMap.get(bk)!;
+        if (!dlm.has(skillName)) dlm.set(skillName, []);
+        dlm.get(skillName)!.push(e.ms);
+      }
     }
   }
 
@@ -366,7 +487,29 @@ export function reduceSkills(events: TelemetryEvent[], granularity: Granularity 
       skills: Object.fromEntries(skills),
     }));
 
-  return { ranked, byDay };
+  const byDaySessions = [...daySkillSessionMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, skillSessions]) => ({
+      date, count: [...skillSessions.values()].reduce((s, v) => s + v.size, 0),
+      skills: Object.fromEntries([...skillSessions.entries()].map(([skill, sids]) => [skill, sids.size])),
+    }));
+
+  const byDayErrors = [...daySkillErrorMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, skills]) => ({
+      date, count: [...skills.values()].reduce((s, v) => s + v, 0), skills: Object.fromEntries(skills),
+    }));
+
+  const byDayLatency = [...daySkillLatencyMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, skillDurations]) => ({
+      date, count: [...skillDurations.values()].reduce((s, v) => s + v.length, 0),
+      skills: Object.fromEntries([...skillDurations.entries()].map(([skill, durations]) => [
+        skill, durations.length > 0 ? Math.round(durations.reduce((s, d) => s + d, 0) / durations.length) : 0,
+      ])),
+    }));
+
+  return { ranked, byDay, byDaySessions, byDayErrors, byDayLatency };
 }
 
 // ---------------------------------------------------------------------------
@@ -434,9 +577,10 @@ export function reduceCost(events: TelemetryEvent[], granularity: Granularity = 
 // ---------------------------------------------------------------------------
 
 export function reduceSessions(events: TelemetryEvent[], granularity: Granularity = "day"): SessionsData {
-  const dayMap = new Map<string, { sessions: Set<string>; messages: number; userMessages: number; assistantMessages: number }>();
+  const dayMap = new Map<string, { sessions: Set<string>; messages: number; userMessages: number; assistantMessages: number; cost: number; linesAdded: number; linesRemoved: number; commits: number }>();
   const projectMap = new Map<string, Set<string>>();
   const activityMap = new Map<string, number>();
+  const dayProjectMap = new Map<string, Map<string, number>>();
 
   const sessionMap = new Map<string, {
     project: string; parentSessionId?: string;
@@ -466,7 +610,7 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
   for (const e of events) {
     const project = (e.data?.project as string) || "unknown";
     const day = bucketKey(e.ts, granularity);
-    if (!dayMap.has(day)) dayMap.set(day, { sessions: new Set(), messages: 0, userMessages: 0, assistantMessages: 0 });
+    if (!dayMap.has(day)) dayMap.set(day, { sessions: new Set(), messages: 0, userMessages: 0, assistantMessages: 0, cost: 0, linesAdded: 0, linesRemoved: 0, commits: 0 });
     const bucket = dayMap.get(day)!;
     bucket.sessions.add(e.sid);
 
@@ -477,7 +621,9 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
     if (e.kind === "tokens") {
       bucket.messages++; bucket.assistantMessages++;
       sess.assistantMessages++;
-      sess.cost += costFromTokenEvent(e);
+      const tokenCost = costFromTokenEvent(e);
+      sess.cost += tokenCost;
+      bucket.cost += tokenCost;
     }
 
     if (e.kind === "message" && e.data?.role === "user") {
@@ -510,12 +656,14 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
       sess.toolCalls++;
       const tool = e.data?.tool as string;
       if (tool === "Agent") sess.hasSubagents = true;
-      if (e.data?.linesAdded) sess.linesAdded += e.data.linesAdded as number;
-      if (e.data?.linesRemoved) sess.linesRemoved += e.data.linesRemoved as number;
+      const linesAdded = (e.data?.linesAdded as number) || 0;
+      const linesRemoved = (e.data?.linesRemoved as number) || 0;
+      if (linesAdded) { sess.linesAdded += linesAdded; bucket.linesAdded += linesAdded; }
+      if (linesRemoved) { sess.linesRemoved += linesRemoved; bucket.linesRemoved += linesRemoved; }
 
       if (tool === "Bash" && e.data?.params) {
         const cmd = (e.data.params as Record<string, unknown>)?.command;
-        if (typeof cmd === "string" && /\bgit\s+commit\b/.test(cmd)) sess.commits++;
+        if (typeof cmd === "string" && /\bgit\s+commit\b/.test(cmd)) { sess.commits++; bucket.commits++; }
       }
     }
 
@@ -523,6 +671,10 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
 
     if (!projectMap.has(project)) projectMap.set(project, new Set());
     projectMap.get(project)!.add(e.sid);
+
+    if (!dayProjectMap.has(day)) dayProjectMap.set(day, new Map());
+    const dpBucket = dayProjectMap.get(day)!;
+    dpBucket.set(project, (dpBucket.get(project) || 0) + 1);
 
     const actKey = bucketKey(e.ts, granularity);
     activityMap.set(actKey, (activityMap.get(actKey) || 0) + 1);
@@ -533,6 +685,7 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
     .map(([date, v]) => ({
       date, sessions: v.sessions.size, messages: v.messages,
       userMessages: v.userMessages, assistantMessages: v.assistantMessages,
+      cost: v.cost, linesAdded: v.linesAdded, linesRemoved: v.linesRemoved, commits: v.commits,
     }));
 
   const byProject: ProjectBucket[] = [...projectMap.entries()]
@@ -542,6 +695,12 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
   const byActivity: TimeBucket[] = [...activityMap.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, count]) => ({ date, count }));
+
+  const byDayProject = [...dayProjectMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, projects]) => ({
+      date, count: [...projects.values()].reduce((s, v) => s + v, 0), projects: Object.fromEntries(projects),
+    }));
 
   const sessions: SessionMetric[] = [...sessionMap.entries()]
     .map(([sessionId, s]) => ({
@@ -561,7 +720,7 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
   const avgDurationMs = durations.length > 0 ? Math.round(durations.reduce((s, d) => s + d, 0) / durations.length) : 0;
 
   return {
-    byDay, byProject, byActivity, sessions, avgDurationMs,
+    byDay, byProject, byActivity, byDayProject, sessions, avgDurationMs,
     totalUserMessages: sessions.reduce((s, v) => s + v.userMessages, 0),
     totalAssistantMessages: sessions.reduce((s, v) => s + v.assistantMessages, 0),
     totalLinesAdded: sessions.reduce((s, v) => s + v.linesAdded, 0),

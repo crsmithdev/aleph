@@ -2,13 +2,13 @@ import Anthropic from '@anthropic-ai/sdk';
 import { fetchPageText, JS_RENDERED_FLAG } from './providers/websearch.js';
 import type { Sqlite } from '@construct/data';
 import type {
-  ResearchSession, ResearchThread, ResearchFinding,
+  ResearchQuery, ResearchThread, ResearchFinding,
   ResearchPlanItem, PerturbationStrategy, SessionConfig, ToolCallRecord,
   FollowUpCandidate, FollowUpAnalysis,
 } from './types.js';
 import { MODEL_PRICING } from './types.js';
 import { jaccardSimilarity, computeSimilarity } from './similarity.js';
-import * as sessions from './services/sessions.js';
+import * as sessions from './services/queries.js';
 import * as threads from './services/threads.js';
 import * as findings from './services/findings.js';
 import * as steps from './services/steps.js';
@@ -31,6 +31,7 @@ export interface WebSearchResult {
   text: string;
   sourceTexts: string[];
   sourceUrls: string[];
+  sourceUrlMeta?: Array<{ url: string; title: string; snippet: string }>;
   jinaFetches?: Array<{ url: string; ok: boolean; content_length: number; error?: string }>;
   promptTokens: number;
   completionTokens: number;
@@ -69,6 +70,16 @@ function stripLLMFences(text: string): string {
   const jsonStart = noThink.search(/[{[]/);
   if (jsonStart !== -1) return noThink.slice(jsonStart).trim();
   return noThink;
+}
+
+function shortenQuery(query: string): string {
+  const t = query.trim();
+  const colon = t.indexOf(':');
+  if (colon > 10 && colon < 60) return t.slice(0, colon).trim();
+  const sentEnd = t.search(/[?!.]\s/);
+  if (sentEnd > 10 && sentEnd < 60) return t.slice(0, sentEnd).trim();
+  const words = t.split(/\s+/);
+  return words.length > 8 ? words.slice(0, 8).join(' ') + '…' : t;
 }
 
 function calculateCost(model: string, promptTokens: number, completionTokens: number): number {
@@ -210,8 +221,8 @@ export class ResearchEngine {
     return 'targeted_lookup';
   }
 
-  async startSession(title: string, seedQuery: string, config?: Partial<SessionConfig>): Promise<ResearchSession> {
-    const session = sessions.createSession(this.sqlite, title, seedQuery, config);
+  async startSession(title: string, seedQuery: string, config?: Partial<SessionConfig>): Promise<ResearchQuery> {
+    const session = sessions.createQuery(this.sqlite, title, seedQuery, config);
 
     // Create seed thread
     threads.createThread(this.sqlite, {
@@ -229,7 +240,7 @@ export class ResearchEngine {
   }
 
   async runIterations(sessionId: string): Promise<{ iterations: number; findings: number; cost: number }> {
-    const session = sessions.getSession(this.sqlite, sessionId);
+    const session = sessions.getQuery(this.sqlite, sessionId);
     if (!session || session.status !== 'active') {
       throw new Error(`Session ${sessionId} not found or not active`);
     }
@@ -246,17 +257,17 @@ export class ResearchEngine {
       while (iterationCount < this.maxIterations) {
         if (this.signal?.aborted) break;
 
-        const currentSession = sessions.getSession(this.sqlite, sessionId)!;
+        const currentSession = sessions.getQuery(this.sqlite, sessionId)!;
         if (currentSession.status !== 'active') break;
 
         // Check budget
-        const cost = sessions.getSessionCost(this.sqlite, sessionId);
+        const cost = sessions.getQueryCost(this.sqlite, sessionId);
         if (currentSession.config.budget_daily_usd && cost.today_cost >= currentSession.config.budget_daily_usd) {
-          sessions.updateSession(this.sqlite, sessionId, { status: 'paused' });
+          sessions.updateQuery(this.sqlite, sessionId, { status: 'paused' });
           break;
         }
         if (currentSession.config.budget_total_usd && cost.total_cost >= currentSession.config.budget_total_usd) {
-          sessions.updateSession(this.sqlite, sessionId, { status: 'paused' });
+          sessions.updateQuery(this.sqlite, sessionId, { status: 'paused' });
           break;
         }
 
@@ -315,7 +326,7 @@ export class ResearchEngine {
     await Promise.all(Array.from({ length: concurrency }, runSlot));
 
     if (iterationCount < this.maxIterations && !this.signal?.aborted) {
-      const currentSession = sessions.getSession(this.sqlite, sessionId)!;
+      const currentSession = sessions.getQuery(this.sqlite, sessionId)!;
       if (currentSession.status === 'active') {
         const allThreads = threads.listThreads(this.sqlite, sessionId);
         if (allThreads.some(t => t.status === 'exhausted')) {
@@ -326,7 +337,7 @@ export class ResearchEngine {
     }
 
     // Final plan generation
-    const finalSession = sessions.getSession(this.sqlite, sessionId)!;
+    const finalSession = sessions.getQuery(this.sqlite, sessionId)!;
     await this.generatePlan(sessionId, finalSession.config);
 
     return { iterations: iterationCount, findings: findingCount, cost: totalCost };
@@ -399,6 +410,7 @@ export class ResearchEngine {
       summary: synthesisResult.summary,
       source_urls: synthesisResult.sourceUrls,
       source_texts: synthesisResult.sourceTexts,
+      source_url_meta: synthesisResult.sourceUrlMeta,
       source_quality: synthesisResult.sourceQuality,
       tags: synthesisResult.tags,
       confidence: synthesisResult.confidence,
@@ -411,9 +423,11 @@ export class ResearchEngine {
     // Step 5b: Spawn verify thread for low-confidence findings (non-recursive)
     if (synthesisResult.confidence < 0.4 && thread.origin !== 'verify') {
       const childDepth = thread.depth + 1;
+      const verifyQuery = `Verify: ${finding.summary}`;
       threads.createThread(this.sqlite, {
         session_id: sessionId,
-        query: `Verify: ${finding.summary}`,
+        query: verifyQuery,
+        short_query: shortenQuery(verifyQuery),
         node_type: 'question',
         origin: 'verify',
         parent_thread_id: thread.id,
@@ -444,6 +458,7 @@ export class ResearchEngine {
         threads.createThread(this.sqlite, {
           session_id: sessionId,
           query: question,
+          short_query: shortenQuery(question),
           node_type: classify(question),
           origin: 'follow_up',
           parent_thread_id: thread.id,
@@ -517,7 +532,8 @@ ${context}${alreadySearched}
 Return ONLY a JSON array of search query strings. No other text.`,
       thread.session_id,
       thread.id,
-      config
+      config,
+      'formulate queries'
     );
 
     try {
@@ -547,7 +563,7 @@ Return ONLY a JSON array of search query strings. No other text.`,
     threadId: string,
     config: SessionConfig,
     fetchSourceTextOverride?: boolean | null
-  ): Promise<Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[] }>> {
+  ): Promise<Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[]; sourceUrlMeta: Array<{ url: string; title: string; snippet: string }> }>> {
     const results = await Promise.all(queries.map(async (query) => {
       const startTime = Date.now();
       try {
@@ -584,6 +600,7 @@ Return ONLY a JSON array of search query strings. No other text.`,
           results: result.text + (result.sourceUrls.length > 0 ? `\n\nSources: ${result.sourceUrls.join(', ')}` : ''),
           sourceTexts,
           sourceUrls: result.sourceUrls,
+          sourceUrlMeta: result.sourceUrlMeta ?? [],
         };
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
@@ -602,15 +619,15 @@ Return ONLY a JSON array of search query strings. No other text.`,
       }
     }));
 
-    return results.filter((r): r is { query: string; results: string; sourceTexts: string[]; sourceUrls: string[] } => r !== null);
+    return results.filter((r): r is { query: string; results: string; sourceTexts: string[]; sourceUrls: string[]; sourceUrlMeta: Array<{ url: string; title: string; snippet: string }> } => r !== null);
   }
 
   private async gapAnalysis(
     thread: ResearchThread,
-    initialSearchResults: Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[] }>,
+    initialSearchResults: Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[]; sourceUrlMeta: Array<{ url: string; title: string; snippet: string }> }>,
     draftFinding: { content: string; summary: string },
     config: SessionConfig
-  ): Promise<Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[] }>> {
+  ): Promise<Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[]; sourceUrlMeta: Array<{ url: string; title: string; snippet: string }> }>> {
     if (!config.gap_analysis?.enabled) return [];
 
     const result = await this.callLLM(
@@ -634,7 +651,8 @@ If has_gaps is false, gap_queries must be [].
 If has_gaps is true, gap_queries must contain ${config.gap_analysis.max_gap_searches ?? 2} targeted search queries addressing specific missing information. Do NOT generate broad or redundant queries.`,
       thread.session_id,
       thread.id,
-      config
+      config,
+      'gap analysis'
     );
 
     let gapQueries: string[] = [];
@@ -653,7 +671,7 @@ If has_gaps is true, gap_queries must contain ${config.gap_analysis.max_gap_sear
 
   private async synthesizeFinding(
     thread: ResearchThread,
-    searchResults: Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[] }>,
+    searchResults: Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[]; sourceUrlMeta: Array<{ url: string; title: string; snippet: string }> }>,
     sessionId: string,
     config: SessionConfig
   ): Promise<{
@@ -661,6 +679,7 @@ If has_gaps is true, gap_queries must contain ${config.gap_analysis.max_gap_sear
     summary: string;
     sourceUrls: string[];
     sourceTexts: string[];
+    sourceUrlMeta: Array<{ url: string; title: string; snippet: string }>;
     sourceQuality: number;
     tags: string[];
     confidence: number;
@@ -695,17 +714,21 @@ Produce a JSON object with these fields:
 Return ONLY valid JSON. No markdown fences.`,
       sessionId,
       thread.id,
-      config
+      config,
+      'synthesize finding'
     );
 
     try {
       const text = stripLLMFences(result.text);
       const parsed = JSON.parse(text);
+      // Collect all sourceUrlMeta from search results
+      const allMeta = searchResults.flatMap(r => r.sourceUrlMeta ?? []);
       return {
         content: parsed.content ?? '',
         summary: parsed.summary ?? '',
         sourceUrls: parsed.source_urls ?? [],
         sourceTexts: [],
+        sourceUrlMeta: allMeta,
         sourceQuality: parsed.source_quality ?? 0.5,
         tags: parsed.tags ?? [],
         confidence: parsed.confidence ?? 0.5,
@@ -720,7 +743,7 @@ Return ONLY valid JSON. No markdown fences.`,
 
   private async evaluateFollowUps(
     thread: ResearchThread,
-    searchResults: Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[] }>,
+    searchResults: Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[]; sourceUrlMeta: Array<{ url: string; title: string; snippet: string }> }>,
     finding: { content: string; summary: string },
     config: SessionConfig
   ): Promise<{ accepted: string[]; analysis: FollowUpAnalysis }> {
@@ -971,7 +994,8 @@ Return ONLY a JSON array of question strings. No other text.`;
       prompt,
       thread.session_id,
       thread.id,
-      config
+      config,
+      'evaluate follow-ups'
     );
 
     try {
@@ -1038,7 +1062,7 @@ Respond with ONLY "true" if this is a duplicate or near-duplicate, "false" other
     }
 
     // Get context for perturbation
-    const session = sessions.getSession(this.sqlite, sessionId)!;
+    const session = sessions.getQuery(this.sqlite, sessionId)!;
     const recentFindings = findings.getRecentFindings(this.sqlite, sessionId, 10);
     const context = recentFindings.length > 0
       ? recentFindings.map(f => f.summary).join('\n')
@@ -1129,7 +1153,7 @@ Return ONLY the search query text, nothing else.`,
 
     if (allThreads.length === 0) return;
 
-    const session = sessions.getSession(this.sqlite, sessionId);
+    const session = sessions.getQuery(this.sqlite, sessionId);
 
     // Build parent thread map
     const parentMap = new Map<string, string | null>();
@@ -1174,7 +1198,8 @@ Return a JSON array of objects: { thread_index: number (0-based), rationale: str
 Ordered from most to least important. Each rationale should explain relevance to filling gaps in what's been learned.`,
           sessionId,
           '',
-          config
+          config,
+          'generate plan'
         );
 
         const text = stripLLMFences(result.text);
@@ -1266,7 +1291,7 @@ Ordered from most to least important. Each rationale should explain relevance to
   }
 
   private async updateSummary(sessionId: string): Promise<void> {
-    const session = sessions.getSession(this.sqlite, sessionId)!;
+    const session = sessions.getQuery(this.sqlite, sessionId)!;
     const recentFindings = findings.getRecentFindings(this.sqlite, sessionId, 20);
     const findingCount = findings.countFindings(this.sqlite, sessionId);
     const threadCounts = threads.countThreadsByOrigin(this.sqlite, sessionId);
@@ -1289,10 +1314,11 @@ ${session.summary ? `Previous summary:\n${session.summary}` : ''}
 Write a concise, informative summary of what has been discovered so far, key themes, and interesting tangents.`,
       sessionId,
       '',
-      session.config
+      session.config,
+      'update summary'
     );
 
-    sessions.updateSession(this.sqlite, sessionId, { summary: result.text });
+    sessions.updateQuery(this.sqlite, sessionId, { summary: result.text });
   }
 
   protected async callLLM(
@@ -1300,7 +1326,8 @@ Write a concise, informative summary of what has been discovered so far, key the
     prompt: string,
     sessionId: string,
     threadId: string,
-    config: SessionConfig
+    config: SessionConfig,
+    label?: string
   ): Promise<LLMResult & { cost: number }> {
     const startTime = Date.now();
     const result = await this.provider.complete(model, prompt, 8192);
@@ -1315,6 +1342,7 @@ Write a concise, informative summary of what has been discovered so far, key the
         prompt_tokens: result.promptTokens,
         completion_tokens: result.completionTokens,
         cost_usd: cost,
+        label: label ?? null,
         duration_ms: Date.now() - startTime,
       });
     }

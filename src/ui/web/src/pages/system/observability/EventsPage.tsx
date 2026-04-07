@@ -9,7 +9,9 @@ import { type TimeRange, type Granularity } from '../../../components/data/TimeR
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { dateTime, fmtNumber, fmtMs, fmtToolName, shortDate, granLabel, fmtSeriesName } from '../../../utils/format';
+import { dateTime, fmtNumber, fmtMs, fmtToolName, shortDate, fmtSeriesName } from '../../../utils/format';
+
+const GRAN_LABEL: Record<string, string> = { minute: 'Per-Minute', hour: 'Hourly', day: 'Daily' };
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { clsx } from 'clsx';
@@ -415,7 +417,7 @@ export function EventsPage() {
 
       <div className="flex gap-4 items-stretch h-[320px]">
         <div className="flex-1 min-w-0 h-full">
-          <ChartContainer title={granLabel(granularity, "Activity")} fill className="h-full">
+          <ChartContainer title={`${GRAN_LABEL[granularity] ?? 'Daily'} Activity by Day`} fill className="h-full">
             <ComposedChart data={activityData}>
               <CartesianGrid {...gridProps} />
               <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
@@ -427,26 +429,28 @@ export function EventsPage() {
         </div>
 
         {donutData.length > 0 && (
-          <div className="flex flex-col rounded-lg border border-border-primary bg-bg-secondary p-4 w-1/4 min-w-[240px] shrink-0 h-full">
-            <h3 className="mb-3 text-sm font-medium text-text-secondary shrink-0">By Type</h3>
-            <div className="flex-1 min-h-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={donutData} dataKey="count" nameKey="label" cx="50%" cy="50%" innerRadius={58} outerRadius={90}>
-                    {donutData.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
-                  </Pie>
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 mt-3 shrink-0">
-              {donutData.map((row, i) => (
-                <div key={row.type} className="flex items-center gap-1.5 text-xs min-w-0">
-                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                  <span className="text-text-secondary truncate flex-1">{row.label}</span>
-                  <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtNumber(row.count)}</span>
-                </div>
-              ))}
+          <div className="flex flex-col rounded-lg border border-border-primary bg-bg-secondary p-4 w-[400px] shrink-0 h-full">
+            <h3 className="mb-3 text-sm font-medium text-text-secondary shrink-0">Events by Type</h3>
+            <div className="flex-1 min-h-0 flex gap-3">
+              <div className="flex-1 min-w-0 min-h-0 flex items-center">
+                <ResponsiveContainer width="100%" height={212}>
+                  <PieChart>
+                    <Pie data={donutData} dataKey="count" nameKey="label" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                      {donutData.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                    </Pie>
+                    <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex flex-col gap-1.5 justify-center shrink-0 w-36">
+                {donutData.map((row, i) => (
+                  <div key={row.type} className="flex items-center gap-1.5 text-xs min-w-0">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                    <span className="text-text-secondary truncate flex-1">{row.label}</span>
+                    <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtNumber(row.count)}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}

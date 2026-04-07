@@ -1,4 +1,4 @@
-export interface ResearchSession {
+export interface ResearchQuery {
   id: string;
   title: string;
   seed_query: string;
@@ -9,6 +9,9 @@ export interface ResearchSession {
   created_at: string;
   updated_at: string;
 }
+
+/** @deprecated Use ResearchQuery */
+export type ResearchSession = ResearchQuery;
 
 export interface SessionConfig {
   budget_daily_usd: number;
@@ -166,6 +169,7 @@ export interface ResearchThread {
   parent_thread_id: string | null;
   spawned_from_finding_id: string | null;
   query: string;
+  short_query: string | null;
   node_type: 'question' | 'topic';
   origin: ThreadOrigin;
   perturbation_strategy: PerturbationStrategy | null;
@@ -187,6 +191,7 @@ export interface ResearchFinding {
   summary: string;
   source_urls: string[];
   source_texts: string[];
+  source_url_meta: Array<{ url: string; title: string; snippet: string }>;
   source_quality: number;
   tags: string[];
   confidence: number;
@@ -211,6 +216,7 @@ export interface ResearchStep {
   tool_calls: ToolCallRecord[];
   duration_ms: number;
   error: string | null;
+  label: string | null;
   created_at: string;
 }
 
@@ -251,7 +257,7 @@ export interface FollowUpAnalysis {
 
 export interface ResearchPlan {
   id: string;
-  session_id: string;
+  session_id: string; // FK to research_queries
   items: ResearchPlanItem[];
   generated_at: string;
   status: 'proposed' | 'acknowledged' | 'modified';

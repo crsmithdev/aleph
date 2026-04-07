@@ -6,6 +6,7 @@ function rowToStep(row: Record<string, unknown>): ResearchStep {
   return {
     ...row,
     tool_calls: JSON.parse(row.tool_calls as string),
+    label: row.label ?? null,
   } as unknown as ResearchStep;
 }
 
@@ -23,6 +24,7 @@ export function createStep(
     tool_calls?: ToolCallRecord[];
     duration_ms: number;
     error?: string | null;
+    label?: string | null;
   }
 ): ResearchStep {
   const id = generateId();
@@ -31,8 +33,8 @@ export function createStep(
   sqlite.prepare(`
     INSERT INTO research_steps
       (id, thread_id, session_id, finding_id, model, provider,
-       prompt_tokens, completion_tokens, cost_usd, tool_calls, duration_ms, error, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       prompt_tokens, completion_tokens, cost_usd, tool_calls, duration_ms, error, label, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     params.thread_id,
@@ -46,6 +48,7 @@ export function createStep(
     JSON.stringify(params.tool_calls ?? []),
     params.duration_ms,
     params.error ?? null,
+    params.label ?? null,
     now
   );
 

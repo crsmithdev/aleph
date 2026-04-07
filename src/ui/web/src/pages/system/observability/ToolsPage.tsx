@@ -100,8 +100,11 @@ export function ToolsPage() {
   const activeKeys = dataset === 'calls' ? topCallNames : dataset === 'churn' ? topChurnNames : dataset === 'projects' ? topProjectNames : [];
   const activeStackedData = dataset === 'calls' ? stackedCalls : dataset === 'churn' ? stackedChurn : dataset === 'projects' ? stackedProjects : [];
 
-  const timeSeriesTitle = dataset === 'calls' ? 'Calls Over Time' : dataset === 'churn' ? 'Code Churn Over Time' : dataset === 'projects' ? 'Usage by Project' : 'Velocity Over Time';
-  const distTitle = dataset === 'calls' ? 'Top Tools' : dataset === 'churn' ? 'Top by Churn' : dataset === 'projects' ? 'By Project' : 'Top by Velocity';
+  const granularityLabel: Record<Granularity, string> = { minute: 'Per-Minute', hour: 'Hourly', day: 'Daily' };
+  const datasetLabel: Record<Dataset, string> = { calls: 'Calls', churn: 'Code Churn', projects: 'Usage', velocity: 'Velocity' };
+  const segmentLabel = dataset === 'projects' ? 'Project' : 'Tool';
+  const timeSeriesTitle = `${granularityLabel[granularity]} ${datasetLabel[dataset]} by ${segmentLabel}`;
+  const distTitle = dataset === 'projects' ? 'Top Projects' : `Top Tools by ${datasetLabel[dataset]}`;
 
   const topChurnTools = [...enriched]
     .map(r => ({ ...r, totalChurn: (r.linesAdded || 0) + (r.linesRemoved || 0) }))
@@ -289,7 +292,7 @@ export function ToolsPage() {
                   )}
                 </div>
                 <div className="flex-1 min-h-0">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height={212}>
                     {dataset === 'velocity' ? (
                       <AreaChart data={data.byDayVelocity}>
                         <CartesianGrid {...gridProps} />
@@ -325,22 +328,22 @@ export function ToolsPage() {
             )}
 
             {/* Distribution chart */}
-            <div className="w-1/4 min-w-[220px] shrink-0 rounded-lg border border-border-primary bg-bg-secondary p-4 h-full flex flex-col">
+            <div className="w-[400px] shrink-0 rounded-lg border border-border-primary bg-bg-secondary p-4 h-full flex flex-col">
               <h3 className="text-sm font-medium text-text-secondary mb-3 shrink-0">{distTitle}</h3>
 
               {dataset === 'calls' && (
-                <>
-                  <div className="flex-1 min-h-0">
-                    <ResponsiveContainer width="100%" height="100%">
+                <div className="flex-1 min-h-0 flex gap-3">
+                  <div className="flex-1 min-w-0 min-h-0 flex items-center">
+                    <ResponsiveContainer width="100%" height={212}>
                       <PieChart>
-                        <Pie data={callsDonut} dataKey="count" nameKey="tool" cx="50%" cy="50%" innerRadius={50} outerRadius={78}>
+                        <Pie data={callsDonut} dataKey="count" nameKey="tool" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
                           {callsDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
                         </Pie>
                         <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 mt-3 shrink-0">
+                  <div className="flex flex-col gap-1.5 justify-center shrink-0 w-36">
                     {callsDonut.map((row, i) => (
                       <div key={row.name} className="flex items-center gap-1.5 text-xs min-w-0">
                         <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
@@ -349,14 +352,14 @@ export function ToolsPage() {
                       </div>
                     ))}
                   </div>
-                </>
+                </div>
               )}
 
               {dataset === 'churn' && (
                 <>
                   <div className="flex-1 min-h-0">
                     {topChurnTools.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ResponsiveContainer width="100%" height={212}>
                         <BarChart layout="vertical" data={topChurnTools}>
                           <CartesianGrid {...gridProps} horizontal={false} />
                           <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
@@ -378,38 +381,40 @@ export function ToolsPage() {
               )}
 
               {dataset === 'projects' && (
-                <>
-                  <div className="flex-1 min-h-0">
-                    {projectsDonut.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie data={projectsDonut} dataKey="count" nameKey="project" cx="50%" cy="50%" innerRadius={50} outerRadius={78}>
-                            {projectsDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
-                          </Pie>
-                          <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="flex items-center justify-center h-full text-xs text-text-muted">No project data</div>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 mt-3 shrink-0">
-                    {projectsDonut.map((row, i) => (
-                      <div key={row.project} className="flex items-center gap-1.5 text-xs min-w-0">
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                        <span className="font-mono text-text-secondary truncate flex-1">{row.project}</span>
-                        <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtNumber(row.count)}</span>
+                <div className="flex-1 min-h-0 flex gap-3">
+                  {projectsDonut.length > 0 ? (
+                    <>
+                      <div className="flex-1 min-w-0 min-h-0 flex items-center">
+                        <ResponsiveContainer width="100%" height={212}>
+                          <PieChart>
+                            <Pie data={projectsDonut} dataKey="count" nameKey="project" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                              {projectsDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                            </Pie>
+                            <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
+                          </PieChart>
+                        </ResponsiveContainer>
                       </div>
-                    ))}
-                  </div>
-                </>
+                      <div className="flex flex-col gap-1.5 justify-center shrink-0 w-36">
+                        {projectsDonut.map((row, i) => (
+                          <div key={row.project} className="flex items-center gap-1.5 text-xs min-w-0">
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                            <span className="font-mono text-text-secondary truncate flex-1">{row.project}</span>
+                            <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtNumber(row.count)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex items-center justify-center flex-1 text-xs text-text-muted">No project data</div>
+                  )}
+                </div>
               )}
 
               {dataset === 'velocity' && (
                 <>
                   <div className="flex-1 min-h-0">
                     {topVelocityTools.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ResponsiveContainer width="100%" height={212}>
                         <BarChart layout="vertical" data={topVelocityTools}>
                           <CartesianGrid {...gridProps} horizontal={false} />
                           <XAxis type="number" {...axisProps} />

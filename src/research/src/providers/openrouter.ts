@@ -73,6 +73,7 @@ export class OpenRouterProvider implements LLMProvider {
       text,
       sourceTexts: [],
       sourceUrls,
+      sourceUrlMeta: searchResults.map(r => ({ url: r.url, title: r.title, snippet: r.snippet.slice(0, 200) })),
       promptTokens: response.usage?.prompt_tokens ?? 0,
       completionTokens: response.usage?.completion_tokens ?? 0,
       model: response.model ?? actualModel,
