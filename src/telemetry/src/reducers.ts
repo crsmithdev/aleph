@@ -112,14 +112,25 @@ export function reduceOverview(events: TelemetryEvent[], granularity: Granularit
 // ---------------------------------------------------------------------------
 
 export function reduceTools(events: TelemetryEvent[], granularity: Granularity = "day"): ToolsData {
-  const toolCounts = new Map<string, { count: number; errors: number; lastUsed: string; durations: number[] }>();
+  const toolCounts = new Map<string, {
+    count: number; errors: number; lastUsed: string; durations: number[];
+    linesAdded: number; linesRemoved: number; sessions: Set<string>;
+  }>();
   const dayToolMap = new Map<string, Map<string, number>>();
+  const dayChurnMap = new Map<string, Map<string, number>>();
+  const dayProjectMap = new Map<string, Map<string, number>>();
+  const daySessionMap = new Map<string, Set<string>>();
+  const projectCounts = new Map<string, number>();
+  const sidToProject = new Map<string, string>();
 
-  // Build useId → toolName + timestamp maps
+  // Build useId → toolName map and sid → project map
   const useIdToTool = new Map<string, { toolName: string; timestamp: string }>();
   for (const e of events) {
     if (e.kind === "tool" && e.data?.tool && e.data?.useId) {
       useIdToTool.set(e.data.useId as string, { toolName: e.data.tool as string, timestamp: e.ts });
+    }
+    if (e.data?.project && !sidToProject.has(e.sid)) {
+      sidToProject.set(e.sid, e.data.project as string);
     }
   }
 
@@ -134,9 +145,15 @@ export function reduceTools(events: TelemetryEvent[], granularity: Granularity =
   for (const e of events) {
     if (e.kind === "tool" && e.data?.tool) {
       const toolName = e.data.tool as string;
-      const cur = toolCounts.get(toolName) || { count: 0, errors: 0, lastUsed: "", durations: [] };
+      const cur = toolCounts.get(toolName) || { count: 0, errors: 0, lastUsed: "", durations: [], linesAdded: 0, linesRemoved: 0, sessions: new Set<string>() };
       cur.count++;
+      cur.sessions.add(e.sid);
       if (!cur.lastUsed || e.ts > cur.lastUsed) cur.lastUsed = e.ts;
+
+      const added = (e.data?.linesAdded as number) || 0;
+      const removed = (e.data?.linesRemoved as number) || 0;
+      cur.linesAdded += added;
+      cur.linesRemoved += removed;
 
       const useId = e.data.useId as string | undefined;
       if (useId) {
@@ -150,9 +167,23 @@ export function reduceTools(events: TelemetryEvent[], granularity: Granularity =
       toolCounts.set(toolName, cur);
 
       const bk = bucketKey(e.ts, granularity);
+
       if (!dayToolMap.has(bk)) dayToolMap.set(bk, new Map());
-      const dm = dayToolMap.get(bk)!;
-      dm.set(toolName, (dm.get(toolName) || 0) + 1);
+      dayToolMap.get(bk)!.set(toolName, (dayToolMap.get(bk)!.get(toolName) || 0) + 1);
+
+      const churnTotal = added + removed;
+      if (churnTotal > 0) {
+        if (!dayChurnMap.has(bk)) dayChurnMap.set(bk, new Map());
+        dayChurnMap.get(bk)!.set(toolName, (dayChurnMap.get(bk)!.get(toolName) || 0) + churnTotal);
+      }
+
+      const project = sidToProject.get(e.sid) || "unknown";
+      projectCounts.set(project, (projectCounts.get(project) || 0) + 1);
+      if (!dayProjectMap.has(bk)) dayProjectMap.set(bk, new Map());
+      dayProjectMap.get(bk)!.set(project, (dayProjectMap.get(bk)!.get(project) || 0) + 1);
+
+      if (!daySessionMap.has(bk)) daySessionMap.set(bk, new Set());
+      daySessionMap.get(bk)!.add(e.sid);
     }
 
     if (e.kind === "tool_result" && e.data?.isError) {
@@ -170,24 +201,50 @@ export function reduceTools(events: TelemetryEvent[], granularity: Granularity =
     .map(([name, v]) => {
       const sorted = v.durations.slice().sort((a, b) => a - b);
       const avgMs = sorted.length > 0 ? Math.round(sorted.reduce((s, d) => s + d, 0) / sorted.length) : undefined;
+      const sessionCount = v.sessions.size;
       return {
         name, count: v.count, errorCount: v.errors,
         pct: total > 0 ? (v.count / total) * 100 : 0,
         lastUsed: v.lastUsed, avgMs,
         p50Ms: sorted.length > 0 ? Math.round(percentile(sorted, 50)) : undefined,
         p95Ms: sorted.length > 0 ? Math.round(percentile(sorted, 95)) : undefined,
+        linesAdded: v.linesAdded || undefined,
+        linesRemoved: v.linesRemoved || undefined,
+        sessionCount: sessionCount || undefined,
+        velocity: sessionCount > 0 ? Math.round((v.count / sessionCount) * 10) / 10 : undefined,
       };
     })
     .sort((a, b) => b.count - a.count);
 
-  const byDay = [...dayToolMap.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, tools]) => ({
-      date, count: [...tools.values()].reduce((s, v) => s + v, 0),
-      tools: Object.fromEntries(tools),
-    }));
+  const sortBuckets = <T extends { date: string }>(map: Map<string, T>): T[] =>
+    [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
 
-  return { ranked, byDay };
+  const byDay = sortBuckets(new Map([...dayToolMap.entries()].map(([date, tools]) => [date, {
+    date, count: [...tools.values()].reduce((s, v) => s + v, 0), tools: Object.fromEntries(tools),
+  }])));
+
+  const byDayChurn = sortBuckets(new Map([...dayChurnMap.entries()].map(([date, tools]) => [date, {
+    date, count: [...tools.values()].reduce((s, v) => s + v, 0), tools: Object.fromEntries(tools),
+  }])));
+
+  const byDayProject = sortBuckets(new Map([...dayProjectMap.entries()].map(([date, projects]) => [date, {
+    date, count: [...projects.values()].reduce((s, v) => s + v, 0), projects: Object.fromEntries(projects),
+  }])));
+
+  const byDayVelocity = [...dayToolMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, tools]) => {
+      const calls = [...tools.values()].reduce((s, v) => s + v, 0);
+      const sessions = daySessionMap.get(date)?.size || 1;
+      return { date, count: calls, velocity: Math.round((calls / sessions) * 10) / 10 };
+    });
+
+  const projectTotal = [...projectCounts.values()].reduce((s, v) => s + v, 0);
+  const projectRanked = [...projectCounts.entries()]
+    .map(([project, count]) => ({ project, count, pct: projectTotal > 0 ? (count / projectTotal) * 100 : 0 }))
+    .sort((a, b) => b.count - a.count);
+
+  return { ranked, byDay, byDayChurn, byDayProject, byDayVelocity, projectRanked };
 }
 
 // ---------------------------------------------------------------------------

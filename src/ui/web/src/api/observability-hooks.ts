@@ -50,8 +50,16 @@ export function useObsTools(range: TimeRange, granularity?: Granularity, session
       avgMs?: number;
       p50Ms?: number;
       p95Ms?: number;
+      linesAdded?: number;
+      linesRemoved?: number;
+      sessionCount?: number;
+      velocity?: number;
     }>;
     byDay: Array<{ date: string; count: number; tools: Record<string, number> }>;
+    byDayChurn: Array<{ date: string; count: number; tools: Record<string, number> }>;
+    byDayProject: Array<{ date: string; count: number; projects: Record<string, number> }>;
+    byDayVelocity: Array<{ date: string; count: number; velocity: number }>;
+    projectRanked: Array<{ project: string; count: number; pct: number }>;
     queryTimeMs: number;
   }>('tools', { range, granularity, session });
 }

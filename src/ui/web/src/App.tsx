@@ -53,16 +53,6 @@ export function App() {
               {/* Root redirect */}
               <Route path="/" element={<Navigate to="/summary" replace />} />
 
-              {/* Backward compat redirects */}
-              <Route path="/life/summary" element={<Navigate to="/summary" replace />} />
-              <Route path="/life/goals" element={<Navigate to="/goals" replace />} />
-              <Route path="/life/goals/:id" element={<Navigate to="/goals/:id" replace />} />
-              <Route path="/life/todos" element={<Navigate to="/todos" replace />} />
-              <Route path="/life/habits" element={<Navigate to="/habits" replace />} />
-              <Route path="/system/observability" element={<Navigate to="/observability" replace />} />
-              <Route path="/system/observability/*" element={<Navigate to="/observability/*" replace />} />
-              <Route path="/system/settings" element={<Navigate to="/settings" replace />} />
-
               {/* Life */}
               <Route path="/life" element={<Navigate to="/summary" replace />} />
               <Route path="/summary" element={<SummaryPage />} />
@@ -81,7 +71,6 @@ export function App() {
 
               {/* Observability */}
               <Route path="/observability" element={<OverviewPage />} />
-              <Route path="/observability/overview" element={<OverviewPage />} />
               <Route path="/observability/tools" element={<ToolsPage />} />
               <Route path="/observability/tools/:name" element={<ToolDetailPage />} />
               <Route path="/observability/hooks" element={<HooksPage />} />

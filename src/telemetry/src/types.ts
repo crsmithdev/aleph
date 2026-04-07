@@ -62,6 +62,10 @@ export interface ToolMetric {
   avgMs?: number;
   p50Ms?: number;
   p95Ms?: number;
+  linesAdded?: number;
+  linesRemoved?: number;
+  sessionCount?: number;
+  velocity?: number;
 }
 
 export interface CompactionData {
@@ -183,6 +187,10 @@ export interface OverviewData {
 export interface ToolsData {
   ranked: ToolMetric[];
   byDay: (TimeBucket & { tools: Record<string, number> })[];
+  byDayChurn: (TimeBucket & { tools: Record<string, number> })[];
+  byDayProject: (TimeBucket & { projects: Record<string, number> })[];
+  byDayVelocity: (TimeBucket & { velocity: number })[];
+  projectRanked: Array<{ project: string; count: number; pct: number }>;
 }
 
 export interface HooksData {

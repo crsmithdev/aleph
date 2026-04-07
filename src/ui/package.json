@@ -7,6 +7,7 @@
   ],
   "scripts": {
     "start": "set -a && [ -f ../../.env ] && . ../../.env; set +a && bun --watch api/src/server.ts",
+    "serve": "set -a && [ -f ../../.env ] && . ../../.env; set +a && bun api/src/server.ts",
     "build": "cd web && bun run build",
     "test:e2e": "bun e2e/goal-flow.test.ts",
     "typecheck": "tsc -b"

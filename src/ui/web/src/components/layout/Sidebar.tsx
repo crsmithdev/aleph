@@ -44,7 +44,7 @@ const navGroups: NavItem[][] = [
   ],
   [
     {
-      to: '/observability/overview',
+      to: '/observability',
       label: 'Observability',
       icon: (
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">

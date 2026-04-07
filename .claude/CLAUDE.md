@@ -17,7 +17,7 @@ This is the Construct source repo. The installed Construct rules come from `~/.c
 7. When removing something, remove it completely: all references, unused files, related artifacts, and every other trace.  Do not let orphaned / 'legacy' features pile up if outdated.
 8. All docs (README.md, INSTALL.md, SPEC.md, etc.) must match actual behavior with zero drift. SPEC.md should be behavior- and feature-oriented, enabling functional testing and diffing.
 9. Use memory (MCP), CLAUDE.md, and docs appropriately without duplicating information between layers. Clearing context and continuing in a new session should be instant — never re-learn the codebase.
-10. Never write to `~/.claude/` directly — use `bun install.ts` to deploy. Dev changes are served live from `src/` via `bun dev-server.ts`.
+10. Never write to `~/.claude/` directly — use `bun install.ts` to deploy. Dev changes are served live from `src/` via `bun run start` in `src/ui/`.
 
 ## Avoiding duplication
 
