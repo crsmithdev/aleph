@@ -1,6 +1,16 @@
 import type { Sqlite } from '@construct/data';
 
 export function applyResearchDDL(sqlite: Sqlite): void {
+  // Run rename migration BEFORE CREATE TABLE so it doesn't create an empty research_queries first
+  try {
+    // Only rename if research_queries doesn't already exist
+    const hasQueries = sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='research_queries'").get();
+    const hasSessions = sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='research_sessions'").get();
+    if (!hasQueries && hasSessions) {
+      sqlite.exec('ALTER TABLE research_sessions RENAME TO research_queries');
+    }
+  } catch { /* already renamed or not applicable */ }
+
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS research_queries (
       id TEXT PRIMARY KEY,
@@ -172,7 +182,6 @@ export function applyResearchDDL(sqlite: Sqlite): void {
   `);
 
   // Migrations
-  try { sqlite.exec('ALTER TABLE research_sessions RENAME TO research_queries'); } catch { /* already renamed */ }
   try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN short_query TEXT`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_steps ADD COLUMN label TEXT`); } catch { /* exists */ }
   try { sqlite.exec("ALTER TABLE research_findings ADD COLUMN source_url_meta TEXT NOT NULL DEFAULT '[]'"); } catch { /* exists */ }
