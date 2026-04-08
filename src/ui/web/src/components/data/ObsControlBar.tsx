@@ -44,10 +44,10 @@ export interface ObsControlBarProps {
   onGranularityChange?: (g: Granularity) => void;
 }
 
-const SEG_BTN = 'px-2 py-0.5 text-xs rounded transition-colors whitespace-nowrap';
+const SEG_BTN = 'px-2 py-0.5 text-sm rounded transition-colors whitespace-nowrap';
 const SEG_ACTIVE = 'bg-bg-secondary text-text-primary shadow-sm';
 const SEG_INACTIVE = 'text-text-muted hover:text-text-primary';
-const RANGE_ACTIVE = 'bg-accent text-white';
+const ACCENT_ACTIVE = 'bg-accent text-white';
 const PIPE = <span className="mx-2 text-border-secondary/80 select-none text-sm font-light" aria-hidden>|</span>;
 
 export function ObsControlBar({
@@ -94,13 +94,13 @@ export function ObsControlBar({
           onClick={() => setExpandAll(v => !v)}
           title={expandAll ? 'Collapse all' : 'Expand all'}
           className={clsx(
-            'mr-2 px-1.5 py-0.5 text-xs rounded border transition-colors',
+            'mr-2 px-1.5 py-0.5 text-sm rounded border transition-colors',
             expandAll
               ? 'border-accent/40 text-accent bg-accent/5 hover:bg-accent/10'
               : 'border-transparent text-text-muted hover:text-text-secondary hover:border-border-primary'
           )}
         >
-          {expandAll ? '−' : '⋯'}
+          {expandAll ? '−' : '+'}
         </button>
 
         {/* Dataset segment */}
@@ -124,7 +124,7 @@ export function ObsControlBar({
                   ))}
                 </div>
               ) : (
-                <span className="text-xs text-text-secondary px-1 cursor-default select-none">
+                <span className="text-sm text-text-secondary px-1 cursor-default select-none">
                   {datasets!.find(d => d.key === dataset)?.label ?? dataset}
                 </span>
               )}
@@ -142,14 +142,14 @@ export function ObsControlBar({
               onMouseLeave={closeSeg}
             >
               {isOpen('filters') ? (
-                <div className="flex items-center gap-1 flex-wrap">
+                <div className="flex items-center gap-0.5 rounded border border-border-primary bg-bg-tertiary p-0.5">
                   {filters}
                   {activeFilterCount > 0 && (
-                    <span className="text-xs text-text-muted">({activeFilterCount})</span>
+                    <span className="text-sm text-text-muted px-1">({activeFilterCount})</span>
                   )}
                 </div>
               ) : (
-                <span className="flex items-center gap-1 text-xs text-text-secondary cursor-default select-none px-1">
+                <span className="flex items-center gap-1 text-sm text-text-secondary cursor-default select-none px-1">
                   <FilterIcon className="text-text-muted" />
                   <span className="text-text-muted">({activeFilterCount})</span>
                 </span>
@@ -172,7 +172,7 @@ export function ObsControlBar({
                   <button
                     key={p.value}
                     onClick={() => onRangeChange(p.value)}
-                    className={clsx(SEG_BTN, range === p.value ? RANGE_ACTIVE : SEG_INACTIVE)}
+                    className={clsx(SEG_BTN, range === p.value ? ACCENT_ACTIVE : SEG_INACTIVE)}
                   >
                     {p.label}
                   </button>
@@ -186,7 +186,7 @@ export function ObsControlBar({
                       <button
                         key={g.value}
                         onClick={() => onGranularityChange!(g.value)}
-                        className={clsx(SEG_BTN, granularity === g.value ? SEG_ACTIVE : SEG_INACTIVE)}
+                        className={clsx(SEG_BTN, granularity === g.value ? ACCENT_ACTIVE : SEG_INACTIVE)}
                       >
                         {g.label}
                       </button>
@@ -196,7 +196,7 @@ export function ObsControlBar({
               )}
             </div>
           ) : (
-            <span className="flex items-center gap-1 text-xs text-text-secondary cursor-default select-none px-1">
+            <span className="flex items-center gap-1 text-sm text-text-secondary cursor-default select-none px-1">
               <CalendarIcon className="text-text-muted" />
               <span>{rangeLabel}</span>
               {granShort && <span className="text-text-muted">({granShort})</span>}
@@ -208,7 +208,7 @@ export function ObsControlBar({
   );
 }
 
-export type FilterToggleColor = 'default' | 'error' | 'success';
+export type FilterToggleColor = 'default' | 'accent' | 'error' | 'success';
 
 export interface FilterToggleProps {
   label: string;
@@ -218,9 +218,10 @@ export interface FilterToggleProps {
 }
 
 const activeColorClasses: Record<FilterToggleColor, string> = {
-  default: 'bg-bg-tertiary border-border-primary text-text-primary',
-  error: 'bg-error/10 border-error text-error',
-  success: 'bg-success/10 border-success text-success',
+  default: 'bg-bg-secondary text-text-primary shadow-sm',
+  accent: 'bg-accent text-white',
+  error: 'bg-error/10 text-error',
+  success: 'bg-success/10 text-success',
 };
 
 export function FilterToggle({
@@ -233,10 +234,10 @@ export function FilterToggle({
     <button
       onClick={onToggle}
       className={clsx(
-        'px-2.5 py-0.5 text-xs rounded border transition-colors',
+        'px-2 py-0.5 text-sm rounded transition-colors whitespace-nowrap',
         active
           ? activeColorClasses[activeColor]
-          : 'bg-bg-secondary border-border-primary text-text-muted hover:text-text-secondary hover:bg-bg-tertiary'
+          : 'text-text-muted hover:text-text-primary'
       )}
     >
       {label}

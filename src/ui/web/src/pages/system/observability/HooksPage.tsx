@@ -278,13 +278,21 @@ function ByHookView({ range, granularity }: { range: TimeRange; granularity: Gra
         <StatCard
           label="Hook Executions"
           value={fmtCalls(totalExecutions)}
-          detail={totalErrors > 0 ? `${fmtNumber(totalErrors)} errors` : 'No errors'}
-          accent={totalErrors > 0 ? 'error' : 'default'}
+          accent="neutral"
+          secondary={{
+            value: totalErrors === 0 ? 'No errors' : `${fmtNumber(totalErrors)} errors`,
+            accent: totalErrors === 0 ? 'success' : totalErrors / Math.max(totalExecutions, 1) < 0.05 ? 'warning' : 'error',
+          }}
         />
         <StatCard
-          label="P50 / P95"
+          label="Latency"
           value={weightedP50 > 0 ? fmtMs(weightedP50) : '—'}
-          detail={weightedP95 > 0 ? `p95 ${fmtMs(weightedP95)}` : undefined}
+          valueLabel={weightedP50 > 0 ? 'p50' : undefined}
+          secondary={weightedP95 > 0 ? {
+            value: fmtMs(weightedP95),
+            label: 'p95',
+            accent: weightedP95 < 500 ? 'success' : weightedP95 < 2000 ? 'warning' : 'error',
+          } : undefined}
         />
         <StatCard
           label="Success Rate"
@@ -417,7 +425,7 @@ function ByHookView({ range, granularity }: { range: TimeRange; granularity: Gra
 
       <div className="flex items-center gap-3">
         {missingCount > 0 && (
-          <FilterToggle label={`Missing (${missingCount})`} active={showMissing} onToggle={() => setShowMissing(!showMissing)} activeColor="error" />
+          <FilterToggle label={`Missing (${missingCount})`} active={showMissing} onToggle={() => setShowMissing(!showMissing)} activeColor="accent" />
         )}
         {unusedRows.length > 0 && (
           <FilterToggle label={`Unused (${unusedRows.length})`} active={showUnused} onToggle={() => setShowUnused(!showUnused)} />

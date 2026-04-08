@@ -265,7 +265,7 @@ export function ToolsPage() {
         granularity={granularity}
         onGranularityChange={setGranularity}
         filters={inactiveCount > 0 ? (
-          <FilterToggle label={`Missing (${inactiveCount})`} active={showMissing} onToggle={() => setShowMissing(!showMissing)} activeColor="error" />
+          <FilterToggle label={`Missing (${inactiveCount})`} active={showMissing} onToggle={() => setShowMissing(!showMissing)} activeColor="accent" />
         ) : undefined}
         activeFilterCount={showMissing ? 1 : 0}
       />
@@ -275,24 +275,21 @@ export function ToolsPage() {
           label="Tool Calls"
           value={fmtCalls(totalCalls)}
           accent="neutral"
-          detailContent={
-            totalErrors === 0
-              ? <span className="text-sm text-success font-semibold">No errors</span>
-              : totalErrors / Math.max(totalCalls, 1) < 0.05
-              ? <span className="text-sm text-warning font-semibold">{fmtNumber(totalErrors)} errors</span>
-              : <span className="text-sm text-error font-semibold">{fmtNumber(totalErrors)} errors</span>
-          }
+          secondary={{
+            value: totalErrors === 0 ? 'No errors' : `${fmtNumber(totalErrors)} errors`,
+            accent: totalErrors === 0 ? 'success' : totalErrors / Math.max(totalCalls, 1) < 0.05 ? 'warning' : 'error',
+          }}
         />
         <StatCard label="Active Tools" value={fmtNumber(activeTools)} />
         <StatCard
           label="Latency"
           value={weightedP50 > 0 ? fmtMs(weightedP50) : '—'}
-          detailContent={weightedP95 > 0 ? (
-            <span className="text-sm">
-              <span className="text-text-muted">p95 </span>
-              <span className="font-mono font-semibold text-text-primary">{fmtMs(weightedP95)}</span>
-            </span>
-          ) : undefined}
+          valueLabel={weightedP50 > 0 ? 'p50' : undefined}
+          secondary={weightedP95 > 0 ? {
+            value: fmtMs(weightedP95),
+            label: 'p95',
+            accent: weightedP95 < 1000 ? 'success' : weightedP95 < 5000 ? 'warning' : 'error',
+          } : undefined}
         />
         <StatCard
           label="Success Rate"
