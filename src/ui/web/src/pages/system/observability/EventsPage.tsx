@@ -388,6 +388,34 @@ export function EventsPage() {
 
   const activityData = sessions.data?.byActivity ?? [];
 
+  const eventFilters = (
+    <>
+      {EVENT_TYPES.map((type) => (
+        <FilterToggle
+          key={type}
+          label={TYPE_LABELS[type]}
+          active={activeType === type}
+          onToggle={() => handleTypeToggle(type)}
+        />
+      ))}
+      {errorCount > 0 && (
+        <FilterToggle
+          label={`Errors (${errorCount})`}
+          active={errorsOnly}
+          onToggle={() => { setErrorsOnly(!errorsOnly); setOffset(0); }}
+          activeColor="error"
+        />
+      )}
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => handleSearch(e.target.value)}
+        placeholder="Search…"
+        className="px-2.5 py-0.5 text-xs rounded border border-border-primary bg-bg-secondary text-text-primary placeholder-text-muted focus:outline-none focus:border-accent w-32"
+      />
+    </>
+  );
+
   return (
     <div className="space-y-4">
       <ObsControlBar
@@ -396,53 +424,12 @@ export function EventsPage() {
         onRangeChange={(r) => { setRange(r); setOffset(0); }}
         granularity={granularity}
         onGranularityChange={setGranularity}
+        datasets={EVENTS_DATASETS}
+        dataset={chartDataset}
+        onDatasetChange={(d) => setChartDataset(d as EventsDataset)}
+        filters={eventFilters}
+        activeFilterCount={(activeType ? 1 : 0) + (errorsOnly ? 1 : 0) + (search ? 1 : 0)}
       />
-
-      <div className="flex items-center gap-1.5 flex-wrap">
-        {EVENT_TYPES.map((type) => (
-          <FilterToggle
-            key={type}
-            label={TYPE_LABELS[type]}
-            active={activeType === type}
-            onToggle={() => handleTypeToggle(type)}
-          />
-        ))}
-        {errorCount > 0 && (
-          <FilterToggle
-            label={`Errors (${errorCount})`}
-            active={errorsOnly}
-            onToggle={() => { setErrorsOnly(!errorsOnly); setOffset(0); }}
-            activeColor="error"
-          />
-        )}
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => handleSearch(e.target.value)}
-          placeholder="Search…"
-          className="px-2.5 py-1 text-xs rounded-md border border-border-primary bg-bg-secondary text-text-primary placeholder-text-muted focus:outline-none focus:border-accent w-40"
-        />
-      </div>
-
-      <div className="flex items-center gap-3">
-        <span className="text-xs text-text-muted">Dataset</span>
-        <div className="flex items-center gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
-          {EVENTS_DATASETS.map(d => (
-            <button
-              key={d.key}
-              onClick={() => setChartDataset(d.key)}
-              className={clsx(
-                'px-3 py-1 text-xs rounded transition-colors whitespace-nowrap',
-                chartDataset === d.key
-                  ? 'bg-bg-secondary text-text-primary shadow-sm'
-                  : 'text-text-muted hover:text-text-primary'
-              )}
-            >
-              {d.label}
-            </button>
-          ))}
-        </div>
-      </div>
 
       <div className="flex gap-4 items-stretch h-[320px]">
         <div className="flex-1 min-w-0 h-full">

@@ -313,9 +313,12 @@ export function SkillsPage() {
         onRangeChange={setRange}
         granularity={granularity}
         onGranularityChange={setGranularity}
-      >
-        {filters}
-      </ObsControlBar>
+        datasets={SKILL_DATASETS}
+        dataset={dataset}
+        onDatasetChange={(d) => setDataset(d as SkillDataset)}
+        filters={filters}
+        activeFilterCount={(showCommands ? 1 : 0) + (showSkills ? 1 : 0) + (showMissing ? 1 : 0) + (showUnused ? 1 : 0)}
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Total Invocations" value={fmtNumber(totalInvocations)} />
@@ -326,26 +329,6 @@ export function SkillsPage() {
 
       {data.byDay.length > 0 && (
         <>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-text-muted">Dataset</span>
-            <div className="flex items-center gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
-              {SKILL_DATASETS.map(d => (
-                <button
-                  key={d.key}
-                  onClick={() => setDataset(d.key)}
-                  className={clsx(
-                    'px-3 py-1 text-xs rounded transition-colors whitespace-nowrap',
-                    dataset === d.key
-                      ? 'bg-bg-secondary text-text-primary shadow-sm'
-                      : 'text-text-muted hover:text-text-primary'
-                  )}
-                >
-                  {d.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
           <div className="flex gap-4 items-stretch h-[320px]">
             <div className="flex-1 min-w-0 h-full">
               <ChartContainer title={timeSeriesTitle} chartType={chartType} onChartTypeChange={setChartType} fill className="h-full">

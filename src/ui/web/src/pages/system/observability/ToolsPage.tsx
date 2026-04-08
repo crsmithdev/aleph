@@ -258,11 +258,17 @@ export function ToolsPage() {
 
   return (
     <div className="space-y-6">
-      <ObsControlBar title={<h1 className="font-heading text-2xl font-bold text-text-primary">Tools</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity}>
-        {inactiveCount > 0 && (
+      <ObsControlBar
+        title={<h1 className="font-heading text-2xl font-bold text-text-primary">Tools</h1>}
+        range={range}
+        onRangeChange={setRange}
+        granularity={granularity}
+        onGranularityChange={setGranularity}
+        filters={inactiveCount > 0 ? (
           <FilterToggle label={`Missing (${inactiveCount})`} active={showMissing} onToggle={() => setShowMissing(!showMissing)} activeColor="error" />
-        )}
-      </ObsControlBar>
+        ) : undefined}
+        activeFilterCount={showMissing ? 1 : 0}
+      />
 
       <div className="grid grid-cols-4 gap-4">
         <StatCard

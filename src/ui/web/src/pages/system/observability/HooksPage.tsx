@@ -565,33 +565,15 @@ function ByEventView({ range }: { range: TimeRange }) {
   );
 }
 
+const VIEW_DATASETS: { key: ViewMode; label: string }[] = [
+  { key: 'by-hook', label: 'By Hook' },
+  { key: 'by-event', label: 'By Event' },
+];
+
 export function HooksPage() {
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
   const [view, setView] = useState<ViewMode>('by-hook');
-
-  const viewToggle = (
-    <div className="flex items-center gap-0.5 rounded-md border border-border-primary bg-bg-secondary p-0.5">
-      <button
-        onClick={() => setView('by-hook')}
-        className={clsx(
-          'rounded px-2.5 py-1 text-xs transition-colors',
-          view === 'by-hook' ? 'bg-accent text-white' : 'text-text-muted hover:text-text-primary'
-        )}
-      >
-        By Hook
-      </button>
-      <button
-        onClick={() => setView('by-event')}
-        className={clsx(
-          'rounded px-2.5 py-1 text-xs transition-colors',
-          view === 'by-event' ? 'bg-accent text-white' : 'text-text-muted hover:text-text-primary'
-        )}
-      >
-        By Event
-      </button>
-    </div>
-  );
 
   return (
     <div className="space-y-6">
@@ -601,9 +583,10 @@ export function HooksPage() {
         onRangeChange={setRange}
         granularity={granularity}
         onGranularityChange={setGranularity}
-      >
-        {viewToggle}
-      </ObsControlBar>
+        datasets={VIEW_DATASETS}
+        dataset={view}
+        onDatasetChange={(d) => setView(d as ViewMode)}
+      />
 
       {view === 'by-hook' ? (
         <ByHookView range={range} granularity={granularity} />

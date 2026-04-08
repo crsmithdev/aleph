@@ -141,19 +141,21 @@ export function SubagentsPage() {
         onRangeChange={setRange}
         granularity={granularity}
         onGranularityChange={setGranularity}
-      >
-        <button
-          className={clsx(
-            'px-3 py-1 text-xs rounded-md border transition-colors',
-            bgOnly
-              ? 'bg-accent/20 border-accent text-accent'
-              : 'border-border text-text-secondary hover:text-text-primary',
-          )}
-          onClick={() => setBgOnly(!bgOnly)}
-        >
-          Background only
-        </button>
-      </ObsControlBar>
+        filters={
+          <button
+            className={clsx(
+              'px-2.5 py-0.5 text-xs rounded border transition-colors',
+              bgOnly
+                ? 'bg-accent/20 border-accent text-accent'
+                : 'bg-bg-secondary border-border-primary text-text-muted hover:text-text-secondary hover:bg-bg-tertiary',
+            )}
+            onClick={() => setBgOnly(!bgOnly)}
+          >
+            Background only
+          </button>
+        }
+        activeFilterCount={bgOnly ? 1 : 0}
+      />
 
       <div className="grid grid-cols-4 gap-4">
         <StatCard
