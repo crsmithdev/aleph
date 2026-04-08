@@ -3,6 +3,7 @@ import type { Goal, Category } from '../../types';
 import { PriorityBadge, StateBadge } from '../ui/Badge';
 import { CategoryChip } from '../categories/CategoryChip';
 import { useUpdateGoal } from '../../api/hooks';
+import { Icon } from '../ui/Icon';
 
 interface GoalCardProps {
   goal: Goal & { categories?: Category[]; latestNote?: { content: string } | null; todoCount?: number; noteCount?: number; habitCount?: number };
@@ -38,18 +39,14 @@ export function GoalCard({ goal }: GoalCardProps) {
       <button
         onClick={handleToggleDone}
         title={isDone ? 'Mark not done' : 'Mark done'}
-        className={`mt-0.5 flex-shrink-0 w-4.5 h-4.5 rounded-full border-2 flex items-center justify-center transition-colors ${
+        className={`mt-0.5 flex-shrink-0 rounded-full border-2 flex items-center justify-center transition-colors ${
           isDone
             ? 'border-emerald-500 bg-emerald-500'
             : 'border-border-primary hover:border-emerald-500'
         }`}
         style={{ width: '1.125rem', height: '1.125rem' }}
       >
-        {isDone && (
-          <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 10 10">
-            <path d="M1.5 5l2.5 2.5 4.5-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        )}
+        {isDone && <Icon name="check" size="xs" className="text-white" />}
       </button>
 
       <div className="flex-1 min-w-0">

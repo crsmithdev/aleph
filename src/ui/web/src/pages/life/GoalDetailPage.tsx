@@ -1,3 +1,4 @@
+import { Icon } from '../../components/ui/Icon';
 import { useState, useRef, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { PRIORITY, GOAL_STATE } from '../../types';
@@ -144,7 +145,7 @@ function InlineAddRow({ placeholder, onSubmit, loading, linkSearch }: { placehol
             onClick={() => setLinkOpen(true)}
             className="flex items-center gap-1 text-xs text-text-disabled hover:text-text-muted transition-colors"
           >
-            <span className="text-sm leading-none">↗</span>
+            <Icon name="open_in_new" size="xs" />
             Link existing
           </button>
         </>
@@ -268,9 +269,7 @@ export function GoalDetailPage() {
         to="/goals"
         className="inline-flex items-center gap-1.5 text-sm text-text-muted hover:text-text-secondary transition-colors w-fit"
       >
-        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-        </svg>
+        <Icon name="arrow_back" size="xs" />
         All goals
       </Link>
 

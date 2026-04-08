@@ -1,22 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { clsx } from 'clsx';
+import { Icon } from '../ui/Icon';
 import { type Granularity, type TimeRange } from './TimeRangeSelector';
-
-function FilterIcon({ className }: { className?: string }) {
-  return (
-    <svg className={clsx('w-3 h-3 shrink-0', className)} viewBox="0 0 16 16" fill="currentColor">
-      <path d="M1.5 3.25a.75.75 0 0 1 .75-.75h11.5a.75.75 0 0 1 .53 1.28L9.5 9.06V13a.75.75 0 0 1-1.28.53l-2-2A.75.75 0 0 1 6 11V9.06L1.97 4.53a.75.75 0 0 1-.47-.97V3.25z" />
-    </svg>
-  );
-}
-
-function CalendarIcon({ className }: { className?: string }) {
-  return (
-    <svg className={clsx('w-3 h-3 shrink-0', className)} viewBox="0 0 16 16" fill="currentColor">
-      <path fillRule="evenodd" d="M4.5 1.75a.75.75 0 0 0-1.5 0V3H2a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1h-1V1.75a.75.75 0 0 0-1.5 0V3h-7V1.75zM2.5 7h11V13h-11V7z" />
-    </svg>
-  );
-}
 
 const TIME_RANGE_PRESETS: { label: string; value: TimeRange }[] = [
   { label: 'Session', value: 'session' },
@@ -100,7 +85,7 @@ export function ObsControlBar({
               : 'border-transparent text-text-muted hover:text-text-secondary hover:border-border-primary'
           )}
         >
-          {expandAll ? '−' : '+'}
+          <Icon name={expandAll ? 'remove' : 'add'} size="xs" />
         </button>
 
         {/* Dataset segment */}
@@ -150,7 +135,7 @@ export function ObsControlBar({
                 </div>
               ) : (
                 <span className="flex items-center gap-1 text-sm text-text-secondary cursor-default select-none px-1">
-                  <FilterIcon className="text-text-muted" />
+                  <Icon name="filter_list" size="xs" className="text-text-muted" />
                   <span className="text-text-muted">({activeFilterCount})</span>
                 </span>
               )}
@@ -197,7 +182,7 @@ export function ObsControlBar({
             </div>
           ) : (
             <span className="flex items-center gap-1 text-sm text-text-secondary cursor-default select-none px-1">
-              <CalendarIcon className="text-text-muted" />
+              <Icon name="calendar_today" size="xs" className="text-text-muted" />
               <span>{rangeLabel}</span>
               {granShort && <span className="text-text-muted">({granShort})</span>}
             </span>

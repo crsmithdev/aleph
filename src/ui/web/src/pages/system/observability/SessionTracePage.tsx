@@ -1,3 +1,4 @@
+import { Icon } from '../../../../components/ui/Icon';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useObsSessionTrace, useObsSessionContextFiles } from '../../../api/observability-hooks';
@@ -454,12 +455,7 @@ function ResponseBlock({
               className="shrink-0 flex items-center justify-center w-5 h-5 rounded text-text-muted hover:text-text-secondary hover:bg-bg-tertiary transition-colors"
               title={expanded ? 'Collapse' : 'Expand'}
             >
-              <svg
-                width="10" height="10" viewBox="0 0 10 10" fill="none"
-                className={clsx('transition-transform duration-150', expanded ? 'rotate-180' : '')}
-              >
-                <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+              <Icon name="expand_more" size="xs" className={clsx('transition-transform duration-150', expanded ? 'rotate-180' : '')} />
             </button>
           )}
           {/* Stats on the right */}
@@ -628,7 +624,7 @@ function UserBlock({ turn, sessionId, prevTurn }: {
             ? 'border-error/30 bg-error/5 text-error'
             : 'border-border-primary/40 bg-bg-tertiary/40 text-text-muted'
         )}>
-          <span>{isFailure ? '✗' : '✓'}</span>
+          <Icon name={isFailure ? 'close' : 'check'} size="xs" />
           <span className="font-mono text-xs text-text-disabled">{taskNotif.taskId.slice(0, 8)}</span>
           <span>{taskNotif.summary || `Task ${taskNotif.status}`}</span>
           <span className="text-text-disabled text-xs">{time}</span>
@@ -699,7 +695,7 @@ function UserBlock({ turn, sessionId, prevTurn }: {
           >
             <span className="text-accent">{cmd.name}</span>
             {cmd.args && <span className="text-text-muted">{cmd.args}</span>}
-            <span className="text-text-disabled">↗</span>
+            <Icon name="open_in_new" size="xs" className="text-text-disabled" />
           </Link>
         )}
       </div>
@@ -754,11 +750,7 @@ function SystemContextBreakdown({
         className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-bg-tertiary/30 transition-colors"
       >
         <span className="text-xs text-text-muted flex items-center gap-1.5">
-          <svg width="9" height="9" viewBox="0 0 10 10" fill="none"
-            className={clsx('shrink-0 transition-transform duration-150', open ? 'rotate-180' : '')}
-          >
-            <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
+          <Icon name="expand_more" size="xs" className={clsx('shrink-0 transition-transform duration-150', open ? 'rotate-180' : '')} />
           System / CLAUDE.md / settings
         </span>
         <span className="text-xs text-text-muted font-mono">{fmtNumber(systemEst)} ({pct}%)</span>
@@ -1007,12 +999,7 @@ function ContextGroup({
         onClick={() => setOpen(!open)}
         className="w-full flex items-baseline gap-2 px-4 py-2.5 hover:bg-bg-tertiary/30 transition-colors"
       >
-        <svg
-          width="10" height="10" viewBox="0 0 10 10" fill="none"
-          className={clsx('shrink-0 self-center transition-transform duration-150', open ? 'rotate-180' : '')}
-        >
-          <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
+        <Icon name="expand_more" size="xs" className={clsx('shrink-0 self-center transition-transform duration-150', open ? 'rotate-180' : '')} />
         <span className="text-sm font-medium text-text-primary shrink-0 whitespace-nowrap leading-none">{label}</span>
         <span className="text-xs text-text-muted shrink-0 leading-none">{count}</span>
         <span className="ml-auto text-xs text-text-muted font-mono shrink-0 whitespace-nowrap leading-none">

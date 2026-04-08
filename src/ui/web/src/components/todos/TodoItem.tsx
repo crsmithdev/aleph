@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useUpdateTodo, useDeleteTodo, usePromoteTodo } from '../../api/hooks';
 import type { Todo } from '../../types';
+import { Icon } from '../ui/Icon';
 
 interface TodoItemProps {
   todo: Todo & { goalTitle?: string };
@@ -115,27 +116,21 @@ export function TodoItem({ todo }: TodoItemProps) {
             className="p-1 rounded text-text-muted hover:text-accent hover:bg-accent/10 transition-colors"
             title="Promote to goal"
           >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
-            </svg>
+            <Icon name="arrow_upward" size="sm" />
           </button>
           <button
             onClick={() => updateTodo.mutate({ id: todo.id, done: true })}
             className="p-1 rounded text-text-muted hover:text-success hover:bg-success/10 transition-colors"
             title="Complete"
           >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-            </svg>
+            <Icon name="check" size="sm" />
           </button>
           <button
             onClick={() => deleteTodo.mutate(todo.id)}
             className="p-1 rounded text-text-muted hover:text-error hover:bg-error/10 transition-colors"
             title="Delete"
           >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <Icon name="close" size="sm" />
           </button>
         </div>
       )}

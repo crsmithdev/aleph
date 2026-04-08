@@ -1,3 +1,4 @@
+import { Icon } from '../../components/ui/Icon';
 import { useState } from 'react';
 import { useHabits, useCreateHabit, useCompleteHabit, useUncompleteHabit, useUpdateHabit, useDeleteHabit } from '../../api/hooks';
 import { PageLoading } from '../../components/ui/Spinner';
@@ -107,9 +108,7 @@ function HabitRow({ habit }: { habit: Habit }) {
         )}
       >
         {checked && (
-          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-          </svg>
+          <Icon name="check" size="xs" />
         )}
       </button>
 

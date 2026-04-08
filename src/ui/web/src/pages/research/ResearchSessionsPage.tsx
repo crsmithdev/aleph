@@ -1,3 +1,4 @@
+import { Icon } from '../../components/ui/Icon';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
@@ -101,7 +102,7 @@ export function ResearchSessionsPage() {
         <div className="flex flex-col gap-1.5">
           {envCheck.errors.map((e, i) => (
             <div key={i} className="rounded border border-red-500/50 bg-red-500/10 px-3 py-2 flex items-center gap-2">
-              <span className="text-red-400 text-xs shrink-0">✕</span>
+              <Icon name="close" size="xs" className="text-red-400 shrink-0" />
               <span className="text-xs text-red-400 font-medium">{e}</span>
             </div>
           ))}

@@ -1,3 +1,4 @@
+import { Icon } from '../../components/ui/Icon';
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { clsx } from 'clsx';
@@ -174,9 +175,7 @@ function DocumentView({ findings, threads }: { findings: ResearchFinding[]; thre
               </div>
               <div className="flex items-center gap-3 shrink-0 ml-3">
                 <span className="text-xs text-text-muted">{sectionFindings.length} finding{sectionFindings.length !== 1 ? 's' : ''}</span>
-                <svg className={clsx('w-4 h-4 text-text-muted transition-transform', isCollapsed && 'rotate-180')} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-                </svg>
+                <Icon name="expand_more" size="xs" className={clsx('w-4 h-4 text-text-muted transition-transform', isCollapsed && 'rotate-180')} />
               </div>
             </button>
 
@@ -312,14 +311,12 @@ function ThreadLiveRow({
                 <span className={clsx('px-1 py-0.5 rounded text-xs shrink-0 font-mono',
                   threadFetch ? 'bg-success/10 text-success' : 'bg-error/10 text-error/70'
                 )}>
-                  {threadFetch ? 'full-text ✓' : 'full-text ✗'}
+                  {threadFetch ? <><Icon name="check" size="xs" className="text-green-400" /> full-text</> : <><Icon name="close" size="xs" className="text-red-400" /> full-text</>}
                 </span>
               )}
             </div>
           </div>
-          <svg className={clsx('w-3.5 h-3.5 text-text-muted shrink-0 mt-1 transition-transform', expanded && 'rotate-180')} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-          </svg>
+          <Icon name="expand_more" size="xs" className={clsx('w-3.5 h-3.5 text-text-muted shrink-0 mt-1 transition-transform', expanded && 'rotate-180')} />
         </button>
         {/* Per-row controls — priority + prune only */}
         <div className="flex items-center gap-0.5 pr-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
@@ -327,18 +324,18 @@ function ThreadLiveRow({
             title="Increase priority"
             onClick={() => updateThread.mutate({ id: thread.id, sessionId, priority: Math.min(1.0, thread.priority + 0.1) })}
             className="p-1 text-text-muted hover:text-text-primary rounded"
-          >▲</button>
+          ><Icon name="keyboard_arrow_up" size="xs" /></button>
           <button
             title="Decrease priority"
             onClick={() => updateThread.mutate({ id: thread.id, sessionId, priority: Math.max(0.0, thread.priority - 0.1) })}
             className="p-1 text-text-muted hover:text-text-primary rounded"
-          >▼</button>
+          ><Icon name="keyboard_arrow_down" size="xs" /></button>
           {!isTerminal && (
             <button
               title="Reject thread"
               onClick={() => updateThread.mutate({ id: thread.id, sessionId, status: 'pruned' })}
               className="p-1 text-text-muted hover:text-red-400 rounded text-xs"
-            >✕</button>
+            ><Icon name="close" size="xs" /></button>
           )}
         </div>
       </div>
@@ -449,7 +446,7 @@ function ThreadLiveRow({
                       </span>
                     )}
                     {tc.error && (
-                      <span className="text-xs text-red-400 shrink-0" title={tc.error}>✗ error</span>
+                      <span className="flex items-center gap-0.5 text-xs text-red-400 shrink-0" title={tc.error}><Icon name="close" size="xs" /> error</span>
                     )}
                   </div>
                   {/* Fetched pages as event rows (replacing badges) */}
@@ -461,7 +458,7 @@ function ThreadLiveRow({
                         return (
                           <div key={ji} className="flex items-center gap-2">
                             <span className={clsx('text-xs shrink-0', jf.ok ? 'text-green-400' : 'text-red-400')}>
-                              {jf.ok ? '✓' : '✗'}
+                              <Icon name={jf.ok ? 'check' : 'close'} size="xs" />
                             </span>
                             <a
                               href={jf.url}
@@ -489,7 +486,7 @@ function ThreadLiveRow({
           {/* Findings */}
           {threadFindings.map(f => (
             <div key={f.id} className="flex items-start gap-2 py-1 bg-green-900/10 rounded px-2 mt-1 group/finding">
-              <span className="text-green-400 text-sm shrink-0 mt-0.5">✓</span>
+              <Icon name="check" size="sm" className="text-green-400 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
                 <p className="text-base text-text-primary">{f.summary}</p>
                 <div className="flex items-center gap-3 mt-0.5 flex-wrap">
@@ -530,7 +527,7 @@ function ThreadLiveRow({
                   <div key={i} className={clsx('py-0.5 px-1 rounded mb-0.5', c.accepted ? '' : 'opacity-50')}>
                     <div className="flex items-start gap-1.5">
                       <span className={clsx('text-xs shrink-0 mt-0.5', c.accepted ? 'text-purple-400' : 'text-text-muted')}>
-                        {c.accepted ? (spawned ? '→' : '·') : '✗'}
+                        {c.accepted ? (spawned ? <Icon name="arrow_forward" size="xs" /> : <span>·</span>) : <Icon name="close" size="xs" />}
                       </span>
                       <div className="flex-1 min-w-0">
                         <span className={clsx('text-sm break-words', c.accepted ? (spawned ? 'text-text-secondary' : 'text-text-muted') : 'text-text-muted/50 line-through')}>{c.text}</span>
@@ -959,9 +956,7 @@ function WorkersTab({ sessionId }: { sessionId: string }) {
                         title="Kill worker (cancel current job)"
                       >kill</button>
                     )}
-                    <svg className={clsx('w-3 h-3 text-text-muted shrink-0 transition-transform', isExpanded && 'rotate-180')} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-                    </svg>
+                    <Icon name="expand_more" size="xs" className={clsx('w-3 h-3 text-text-muted shrink-0 transition-transform', isExpanded && 'rotate-180')} />
                   </button>
                   {isExpanded && (
                     <div className="px-3 pb-2 pl-8 space-y-1">
@@ -1010,9 +1005,7 @@ function WorkersTab({ sessionId }: { sessionId: string }) {
                   <span className="text-xs text-text-muted font-mono">{job.iterations_completed}{job.max_iterations ? `/${job.max_iterations}` : ''}</span>
                   <span className="text-xs text-text-muted">{jobDuration(job)}</span>
                   <button onClick={e => { e.stopPropagation(); cancelJob.mutate({ jobId: job.id }); }} className="text-xs text-red-400 hover:text-red-300 shrink-0">cancel</button>
-                  <svg className={clsx('w-3 h-3 text-text-muted shrink-0 transition-transform', expandedJobs.has(job.id) && 'rotate-180')} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-                  </svg>
+                  <Icon name="expand_more" size="xs" className={clsx('w-3 h-3 text-text-muted shrink-0 transition-transform', expandedJobs.has(job.id) && 'rotate-180')} />
                 </button>
                 {expandedJobs.has(job.id) && (
                   <div className="px-3 pb-2 pl-6 text-xs space-y-0.5 text-text-muted border-t border-success/20">
@@ -1045,9 +1038,7 @@ function WorkersTab({ sessionId }: { sessionId: string }) {
                   <span className="text-xs text-text-muted">{job.mode}</span>
                   <span className="text-xs text-text-muted">{timeAgo(job.created_at)}</span>
                   <button onClick={e => { e.stopPropagation(); cancelJob.mutate({ jobId: job.id }); }} className="text-xs text-red-400 hover:text-red-300 shrink-0">cancel</button>
-                  <svg className={clsx('w-3 h-3 text-text-muted shrink-0 transition-transform', expandedJobs.has(job.id) && 'rotate-180')} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-                  </svg>
+                  <Icon name="expand_more" size="xs" className={clsx('w-3 h-3 text-text-muted shrink-0 transition-transform', expandedJobs.has(job.id) && 'rotate-180')} />
                 </button>
                 {expandedJobs.has(job.id) && (
                   <div className="px-3 pb-2 pl-6 text-xs text-text-muted border-t border-warning/20 pt-1.5">
@@ -1076,9 +1067,7 @@ function WorkersTab({ sessionId }: { sessionId: string }) {
                       <span className="text-xs text-text-muted">{job.mode}</span>
                       <span className="text-xs text-text-muted font-mono">{job.iterations_completed}{job.max_iterations ? `/${job.max_iterations}` : ''}</span>
                       <span className="text-xs text-text-muted">{jobDuration(job)}</span>
-                      <svg className={clsx('w-3 h-3 text-text-muted shrink-0 transition-transform', expandedJobs.has(job.id) && 'rotate-180')} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-                      </svg>
+                      <Icon name="expand_more" size="xs" className={clsx('w-3 h-3 text-text-muted shrink-0 transition-transform', expandedJobs.has(job.id) && 'rotate-180')} />
                     </button>
                     {expandedJobs.has(job.id) && (
                       <div className="px-3 pb-2 pl-6 text-xs text-text-muted border-t border-border-primary/40 pt-1.5 space-y-0.5">
@@ -1169,7 +1158,7 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
         <div className="rounded border border-red-500/50 bg-red-500/10 p-3 space-y-1">
           {envCheck.errors.map((e, i) => (
             <p key={i} className="text-xs text-red-400 flex items-start gap-1.5 font-medium">
-              <span className="mt-0.5 shrink-0">✕</span>{e}
+              <Icon name="close" size="xs" className="mt-0.5 shrink-0" />{e}
             </p>
           ))}
         </div>
@@ -1417,7 +1406,7 @@ export function ResearchQueryDetailPage() {
         <div className="flex flex-col gap-1.5">
           {envCheck.errors.map((e, i) => (
             <div key={i} className="rounded border border-red-500/50 bg-red-500/10 px-3 py-2 flex items-center gap-2">
-              <span className="text-red-400 text-xs shrink-0">✕</span>
+              <Icon name="close" size="xs" className="text-red-400 shrink-0" />
               <span className="text-xs text-red-400 font-medium">{e}</span>
             </div>
           ))}

@@ -1,3 +1,4 @@
+import { Icon } from '../../../../components/ui/Icon';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
@@ -181,7 +182,7 @@ export function ToolsPage() {
       sortable: true,
       width: '64px',
       render: (row) => row.active
-        ? <span className="text-success text-sm">✓</span>
+        ? <Icon name="check" size="sm" className="text-success" />
         : <span className="text-text-disabled text-xs">—</span>,
     },
     {

@@ -1,36 +1,7 @@
 import { ResponsiveContainer } from 'recharts';
 import { clsx } from 'clsx';
 import type { ReactNode } from 'react';
-
-function BarChartIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect x="1" y="7" width="3" height="8" rx="0.5" fill="currentColor" fillOpacity={active ? 1 : 0.4} />
-      <rect x="6" y="4" width="3" height="11" rx="0.5" fill="currentColor" fillOpacity={active ? 1 : 0.4} />
-      <rect x="11" y="1" width="3" height="14" rx="0.5" fill="currentColor" fillOpacity={active ? 1 : 0.4} />
-    </svg>
-  );
-}
-
-function LineChartIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <polyline
-        points="1,13 5,7 9,10 13,3"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeOpacity={active ? 1 : 0.4}
-        fill="none"
-      />
-      <circle cx="1" cy="13" r="1.5" fill="currentColor" fillOpacity={active ? 1 : 0.4} />
-      <circle cx="5" cy="7" r="1.5" fill="currentColor" fillOpacity={active ? 1 : 0.4} />
-      <circle cx="9" cy="10" r="1.5" fill="currentColor" fillOpacity={active ? 1 : 0.4} />
-      <circle cx="13" cy="3" r="1.5" fill="currentColor" fillOpacity={active ? 1 : 0.4} />
-    </svg>
-  );
-}
+import { Icon } from '../ui/Icon';
 
 export function ChartContainer({
   title,
@@ -61,22 +32,26 @@ export function ChartContainer({
               <button
                 onClick={() => onChartTypeChange('line')}
                 className={clsx(
-                  'flex items-center rounded px-1.5 py-1 text-text-muted transition-colors hover:text-text-primary',
-                  chartType === 'line' && 'bg-bg-secondary text-text-primary shadow-sm'
+                  'flex items-center rounded px-1.5 py-1 transition-colors',
+                  chartType === 'line'
+                    ? 'bg-bg-secondary text-text-primary shadow-sm'
+                    : 'text-text-muted hover:text-text-primary'
                 )}
                 title="Line chart"
               >
-                <LineChartIcon active={chartType === 'line'} />
+                <Icon name="show_chart" size="sm" />
               </button>
               <button
                 onClick={() => onChartTypeChange('bar')}
                 className={clsx(
-                  'flex items-center rounded px-1.5 py-1 text-text-muted transition-colors hover:text-text-primary',
-                  chartType === 'bar' && 'bg-bg-secondary text-text-primary shadow-sm'
+                  'flex items-center rounded px-1.5 py-1 transition-colors',
+                  chartType === 'bar'
+                    ? 'bg-bg-secondary text-text-primary shadow-sm'
+                    : 'text-text-muted hover:text-text-primary'
                 )}
                 title="Bar chart"
               >
-                <BarChartIcon active={chartType === 'bar'} />
+                <Icon name="bar_chart" size="sm" />
               </button>
             </div>
           )}
