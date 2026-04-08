@@ -1,4 +1,4 @@
-import { Icon } from '../../../../components/ui/Icon';
+import { Icon } from '../../../components/ui/Icon';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useObsSessionTrace, useObsSessionContextFiles } from '../../../api/observability-hooks';

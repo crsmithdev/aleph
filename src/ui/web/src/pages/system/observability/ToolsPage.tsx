@@ -1,4 +1,4 @@
-import { Icon } from '../../../../components/ui/Icon';
+import { Icon } from '../../../components/ui/Icon';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
@@ -276,10 +276,10 @@ export function ToolsPage() {
           label="Tool Calls"
           value={fmtCalls(totalCalls)}
           accent="neutral"
-          secondary={{
-            value: totalErrors === 0 ? 'No errors' : `${fmtNumber(totalErrors)} errors`,
-            accent: totalErrors === 0 ? 'success' : totalErrors / Math.max(totalCalls, 1) < 0.05 ? 'warning' : 'error',
-          }}
+          secondary={totalErrors === 0
+            ? { value: 'No errors', accent: 'success' }
+            : { value: fmtNumber(totalErrors), label: 'errors', accent: totalErrors / Math.max(totalCalls, 1) < 0.05 ? 'warning' : 'error' }
+          }
         />
         <StatCard label="Active Tools" value={fmtNumber(activeTools)} />
         <StatCard
