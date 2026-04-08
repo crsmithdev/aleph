@@ -9,7 +9,7 @@ import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
-import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
+import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtMs, fmtPct, shortDate, dateTime, granLabel } from '../../../utils/format';
 import { clsx } from 'clsx';
 import { CodeBlock } from '../../../components/data/CodeBlock';
@@ -41,7 +41,7 @@ export function HookDetailPage() {
     {
       key: 'timestamp',
       label: 'Time',
-      render: (row) => <span className="text-text-secondary">{dateTime(row.timestamp)}</span>,
+      render: (row) => <span className="font-mono text-text-secondary">{dateTime(row.timestamp)}</span>,
     },
     ...(data.invocations.some((inv: InvocationRow) => inv.trigger) ? [{
       key: 'trigger',
@@ -144,7 +144,7 @@ export function HookDetailPage() {
           {chartType === 'bar' ? (
             <BarChart data={data.byDay}>
               <CartesianGrid {...gridProps} />
-              <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+              <XAxis dataKey="date" {...xAxisDateProps} />
               <YAxis {...axisProps} />
               <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
               <Bar dataKey="count" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Executions" />
@@ -152,7 +152,7 @@ export function HookDetailPage() {
           ) : (
             <AreaChart data={data.byDay}>
               <CartesianGrid {...gridProps} />
-              <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+              <XAxis dataKey="date" {...xAxisDateProps} />
               <YAxis {...axisProps} />
               <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
               <Area type="monotone" dataKey="count" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.15} dot={false} name="Executions" />

@@ -1,17 +1,24 @@
 import { useState, useCallback, useRef } from 'react';
-import { ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { useObsEvents, useObsSessions } from '../../../api/observability-hooks';
+import { ComposedChart, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { useObsEvents, useObsSessions, useObsTokens } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
-import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
+import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { dateTime, fmtNumber, fmtMs, fmtToolName, shortDate, fmtSeriesName } from '../../../utils/format';
+import { dateTime, fmtNumber, fmtMs, fmtToolName, shortDate } from '../../../utils/format';
 
 const GRAN_LABEL: Record<string, string> = { minute: 'Per-Minute', hour: 'Hourly', day: 'Daily' };
+
+type EventsDataset = 'activity' | 'tokens';
+const EVENTS_DATASETS: { key: EventsDataset; label: string }[] = [
+  { key: 'activity', label: 'Activity' },
+  { key: 'tokens', label: 'Tokens' },
+];
+
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { clsx } from 'clsx';
@@ -305,7 +312,9 @@ export function EventsPage() {
     offset,
   );
 
+  const [chartDataset, setChartDataset] = useState<EventsDataset>('activity');
   const sessions = useObsSessions(range, granularity);
+  const tokens = useObsTokens(range, granularity);
 
   const allEvents = (data?.events ?? []).map((e: EventRow, i: number) => ({ ...e, _idx: i }));
   const events = errorsOnly ? allEvents.filter((e) => e.isError) : allEvents;
@@ -332,7 +341,7 @@ export function EventsPage() {
       label: 'Time',
       width: '160px',
       render: (row) => (
-        <span className="text-text-secondary whitespace-nowrap">{dateTime(row.timestamp)}</span>
+        <span className="font-mono text-text-secondary whitespace-nowrap">{dateTime(row.timestamp)}</span>
       ),
     },
     {
@@ -415,45 +424,117 @@ export function EventsPage() {
         />
       </div>
 
+      <div className="flex items-center gap-3">
+        <span className="text-xs text-text-muted">Dataset</span>
+        <div className="flex items-center gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
+          {EVENTS_DATASETS.map(d => (
+            <button
+              key={d.key}
+              onClick={() => setChartDataset(d.key)}
+              className={clsx(
+                'px-3 py-1 text-xs rounded transition-colors whitespace-nowrap',
+                chartDataset === d.key
+                  ? 'bg-bg-secondary text-text-primary shadow-sm'
+                  : 'text-text-muted hover:text-text-primary'
+              )}
+            >
+              {d.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="flex gap-4 items-stretch h-[320px]">
         <div className="flex-1 min-w-0 h-full">
-          <ChartContainer title={`${GRAN_LABEL[granularity] ?? 'Daily'} Activity by Day`} fill className="h-full">
-            <ComposedChart data={activityData}>
-              <CartesianGrid {...gridProps} />
-              <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
-              <YAxis {...axisProps} />
-              <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-              <Area type="monotone" dataKey="count" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Events" />
-            </ComposedChart>
-          </ChartContainer>
+          {chartDataset === 'tokens' && tokens.data ? (
+            <ChartContainer title={`${GRAN_LABEL[granularity] ?? 'Daily'} Token Usage`} fill className="h-full">
+              <AreaChart data={tokens.data.byDay}>
+                <CartesianGrid {...gridProps} />
+                <XAxis dataKey="date" {...xAxisDateProps} />
+                <YAxis {...axisProps} tickFormatter={fmtNumber} />
+                <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+                <Area type="monotone" dataKey="input" stackId="t" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.4} strokeWidth={1.5} dot={false} name="Input" />
+                <Area type="monotone" dataKey="output" stackId="t" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.4} strokeWidth={1.5} dot={false} name="Output" />
+                <Area type="monotone" dataKey="cacheRead" stackId="t" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.4} strokeWidth={1.5} dot={false} name="Cache Read" />
+              </AreaChart>
+            </ChartContainer>
+          ) : (
+            <ChartContainer title={`${GRAN_LABEL[granularity] ?? 'Daily'} Activity by Day`} fill className="h-full">
+              <ComposedChart data={activityData}>
+                <CartesianGrid {...gridProps} />
+                <XAxis dataKey="date" {...xAxisDateProps} />
+                <YAxis {...axisProps} />
+                <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
+                <Area type="monotone" dataKey="count" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Events" />
+              </ComposedChart>
+            </ChartContainer>
+          )}
         </div>
 
-        {donutData.length > 0 && (
-          <div className="flex flex-col rounded-lg border border-border-primary bg-bg-secondary p-4 w-[400px] shrink-0 h-full">
-            <h3 className="mb-3 text-sm font-medium text-text-secondary shrink-0">Events by Type</h3>
-            <div className="flex-1 min-h-0 flex gap-3">
-              <div className="flex-1 min-w-0 min-h-0 flex items-center">
-                <ResponsiveContainer width="100%" height={212}>
-                  <PieChart>
-                    <Pie data={donutData} dataKey="count" nameKey="label" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
-                      {donutData.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
-                    </Pie>
-                    <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="flex flex-col gap-1.5 justify-center shrink-0 w-36">
-                {donutData.map((row, i) => (
-                  <div key={row.type} className="flex items-center gap-1.5 text-xs min-w-0">
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                    <span className="text-text-secondary truncate flex-1">{row.label}</span>
-                    <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtNumber(row.count)}</span>
+        <div className="flex flex-col rounded-lg border border-border-primary bg-bg-secondary p-4 w-[400px] shrink-0 h-full">
+          {chartDataset === 'tokens' && tokens.data ? (() => {
+            const tokenBreakdown = [
+              { label: 'Input', count: tokens.data.totalInput, color: CHART_PALETTE[0] },
+              { label: 'Output', count: tokens.data.totalOutput, color: CHART_PALETTE[1] },
+              { label: 'Cache Read', count: tokens.data.totalCacheRead, color: CHART_PALETTE[2] },
+              { label: 'Cache Creation', count: tokens.data.totalCacheCreation, color: CHART_PALETTE[3] },
+            ].filter(r => r.count > 0);
+            return (
+              <>
+                <h3 className="mb-3 text-sm font-medium text-text-secondary shrink-0">Token Breakdown</h3>
+                <div className="flex-1 min-h-0 flex gap-3">
+                  <div className="flex-1 min-w-0 min-h-0 flex items-center">
+                    <ResponsiveContainer width="100%" height={212}>
+                      <PieChart>
+                        <Pie data={tokenBreakdown} dataKey="count" nameKey="label" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                          {tokenBreakdown.map((r, i) => <Cell key={i} fill={r.color} />)}
+                        </Pie>
+                        <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+                      </PieChart>
+                    </ResponsiveContainer>
                   </div>
-                ))}
+                  <div className="flex flex-col gap-1.5 justify-center shrink-0 w-36">
+                    {tokenBreakdown.map((row, i) => (
+                      <div key={row.label} className="flex items-center gap-1.5 text-xs min-w-0">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: row.color }} />
+                        <span className="text-text-secondary truncate flex-1">{row.label}</span>
+                        <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtNumber(row.count)}</span>
+                      </div>
+                    ))}
+                    <div className="mt-2 pt-2 border-t border-border-primary text-xs text-text-muted">
+                      Cache efficiency: <span className="font-mono text-text-primary">{fmtNumber(tokens.data.cacheEfficiency)}%</span>
+                    </div>
+                  </div>
+                </div>
+              </>
+            );
+          })() : donutData.length > 0 ? (
+            <>
+              <h3 className="mb-3 text-sm font-medium text-text-secondary shrink-0">Events by Type</h3>
+              <div className="flex-1 min-h-0 flex gap-3">
+                <div className="flex-1 min-w-0 min-h-0 flex items-center">
+                  <ResponsiveContainer width="100%" height={212}>
+                    <PieChart>
+                      <Pie data={donutData} dataKey="count" nameKey="label" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                        {donutData.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                      </Pie>
+                      <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="flex flex-col gap-1.5 justify-center shrink-0 w-36">
+                  {donutData.map((row, i) => (
+                    <div key={row.type} className="flex items-center gap-1.5 text-xs min-w-0">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                      <span className="text-text-secondary truncate flex-1">{row.label}</span>
+                      <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtNumber(row.count)}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          </div>
-        )}
+            </>
+          ) : null}
+        </div>
       </div>
 
       {isLoading ? (

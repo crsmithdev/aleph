@@ -8,8 +8,8 @@ import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtPct, shortDate, dateTime, granLabel, fmtToolName, fmtProject, fmtSeriesName } from '../../../utils/format';
+import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
+import { fmtNumber, fmtPct, shortDate, dateTime, granLabel, fmtToolName, fmtProject } from '../../../utils/format';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { clsx } from 'clsx';
 
@@ -66,7 +66,7 @@ export function ToolDetailPage() {
       key: 'timestamp',
       label: 'Time',
       width: '160px',
-      render: (row) => <span className="text-text-secondary whitespace-nowrap">{dateTime(row.timestamp)}</span>,
+      render: (row) => <span className="font-mono text-text-secondary whitespace-nowrap">{dateTime(row.timestamp)}</span>,
     },
     {
       key: 'project',
@@ -148,7 +148,7 @@ export function ToolDetailPage() {
                   key={t}
                   onClick={() => setChartType(t)}
                   className={clsx(
-                    'px-2 py-0.5 text-xs rounded font-mono transition-colors',
+                    'px-2 py-0.5 text-xs rounded transition-colors',
                     chartType === t
                       ? 'bg-accent/20 text-accent'
                       : 'text-text-muted hover:text-text-secondary'
@@ -164,11 +164,11 @@ export function ToolDetailPage() {
               {chartType === 'bar' ? (
                 <BarChart width={undefined as unknown as number} height={220} data={stackedByDay} style={{ width: '100%' }}>
                   <CartesianGrid {...gridProps} />
-                  <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                  <XAxis dataKey="date" {...xAxisDateProps} />
                   <YAxis {...axisProps} />
                   <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                   {projectNames.length > 0 ? projectNames.map((name, i) => (
-                    <Bar key={name} dataKey={name} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === projectNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
+                    <Bar key={name} dataKey={name} name={name} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === projectNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
                   )) : (
                     <Bar dataKey="count" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Calls" />
                   )}
@@ -176,11 +176,11 @@ export function ToolDetailPage() {
               ) : (
                 <AreaChart width={undefined as unknown as number} height={220} data={stackedByDay} style={{ width: '100%' }}>
                   <CartesianGrid {...gridProps} />
-                  <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                  <XAxis dataKey="date" {...xAxisDateProps} />
                   <YAxis {...axisProps} />
                   <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                   {projectNames.length > 0 ? projectNames.map((name, i) => (
-                    <Area key={name} type="monotone" dataKey={name} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
+                    <Area key={name} type="monotone" dataKey={name} name={name} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
                   )) : (
                     <Area type="monotone" dataKey="count" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.4} strokeWidth={2} dot={false} name="Calls" />
                   )}
@@ -194,7 +194,7 @@ export function ToolDetailPage() {
                   <Pie data={donutData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={38} outerRadius={60}>
                     {donutData.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
                   </Pie>
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
                 </PieChart>
                 <div className="flex flex-col gap-1 mt-2 w-full">
                   {donutData.slice(0, 6).map((d, i) => (

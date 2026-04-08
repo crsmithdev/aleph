@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { useObsMemory, useObsMemoryItems, useObsMemoryUsage, useTriggerSnapshot, useDeleteMemory, useUpdateMemory } from '../../../api/observability-hooks';
+import { useObsMemory, useObsMemoryItems, useObsMemoryUsage, useObsMemorySearches, useTriggerSnapshot, useDeleteMemory, useUpdateMemory } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
-import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps } from '../../../components/charts/chartTheme';
+import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
-import { fmtNumber, shortDate, shortRelativeTime, granLabel, fmtSeriesName } from '../../../utils/format';
+import { fmtNumber, shortDate, shortRelativeTime, granLabel, fmtLegendLabel, fmtMs, dateTime } from '../../../utils/format';
 import { clsx } from 'clsx';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -36,6 +36,8 @@ export function MemoryPage() {
   const [activeSearch, setActiveSearch] = useState({ q: '', type: '', tag: '' });
 
   const [usageChartType, setUsageChartType] = useState<'bar' | 'line'>('bar');
+  const [expandedSearch, setExpandedSearch] = useState<string | null>(null);
+  const searches = useObsMemorySearches(range);
 
   const items = useObsMemoryItems({
     q: activeSearch.q || undefined,
@@ -188,7 +190,7 @@ export function MemoryPage() {
               {usageChartType === 'bar' ? (
                 <BarChart data={usage.data.byDay}>
                   <CartesianGrid {...gridProps} />
-                  <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                  <XAxis dataKey="date" {...xAxisDateProps} />
                   <YAxis {...axisProps} />
                   <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                   <Legend {...legendProps} />
@@ -198,7 +200,7 @@ export function MemoryPage() {
               ) : (
                 <AreaChart data={usage.data.byDay}>
                   <CartesianGrid {...gridProps} />
-                  <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                  <XAxis dataKey="date" {...xAxisDateProps} />
                   <YAxis {...axisProps} />
                   <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                   <Legend {...legendProps} />
@@ -227,14 +229,14 @@ export function MemoryPage() {
                       <Cell key={index} fill={CHART_PALETTE[index % CHART_PALETTE.length]} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={tooltipStyle} formatter={(value, name) => [fmtNumber(value as number), fmtSeriesName(String(name))]} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(value, name) => [fmtNumber(value as number), fmtLegendLabel(String(name))]} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="mt-2 space-y-1">
                 {typeRows.map((row, i) => (
                   <div key={row.type} className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                    <span className="text-xs font-mono text-text-muted truncate flex-1">{fmtSeriesName(row.type)}</span>
+                    <span className="text-xs text-text-muted truncate flex-1">{fmtLegendLabel(row.type)}</span>
                     <span className="text-xs text-text-secondary">{fmtNumber(row.count)}</span>
                   </div>
                 ))}
@@ -394,6 +396,106 @@ export function MemoryPage() {
         )}
         {items.data && items.data.items.length === 0 && (activeSearch.q || activeSearch.type || activeSearch.tag) && (
           <p className="py-4 text-center text-sm text-text-muted">No memories matching filters.</p>
+        )}
+      </div>
+
+      {/* Search History */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-medium text-text-secondary">Search History</h2>
+          {searches.data && (
+            <span className="text-xs text-text-muted">{fmtNumber(searches.data.totalSearches)} searches</span>
+          )}
+        </div>
+
+        {searches.isLoading && <p className="text-sm text-text-muted">Loading search history...</p>}
+        {searches.data && searches.data.invocations.length === 0 && (
+          <p className="py-4 text-center text-sm text-text-muted">No memory searches recorded in this period.</p>
+        )}
+        {searches.data && searches.data.invocations.length > 0 && (
+          <div className="rounded-lg border border-border-primary overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border-primary bg-bg-tertiary">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-text-muted w-36">Time</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-text-muted">Query</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-text-muted w-20">Mode</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-text-muted w-16">Results</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-text-muted w-16">Duration</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-text-muted w-20">Session</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-primary">
+                {searches.data.invocations.map((inv, idx) => {
+                  const key = `${inv.timestamp}-${idx}`;
+                  const isExpanded = expandedSearch === key;
+                  return (
+                    <>
+                      <tr
+                        key={key}
+                        onClick={() => setExpandedSearch(isExpanded ? null : key)}
+                        className={clsx(
+                          'cursor-pointer transition-colors',
+                          isExpanded ? 'bg-bg-tertiary' : 'hover:bg-bg-tertiary/50',
+                          inv.isError && 'bg-error/5'
+                        )}
+                      >
+                        <td className="px-3 py-2 font-mono text-xs text-text-muted whitespace-nowrap">{dateTime(inv.timestamp)}</td>
+                        <td className="px-3 py-2 max-w-0">
+                          <span className={clsx('block truncate text-xs', inv.isError ? 'text-error' : 'text-text-primary')}>
+                            {inv.query || <span className="text-text-disabled italic">no query</span>}
+                          </span>
+                          {inv.tags && inv.tags.length > 0 && (
+                            <span className="text-xs text-text-muted font-mono">tags: {inv.tags.join(', ')}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          {inv.mode && (
+                            <span className="text-xs font-mono rounded bg-bg-tertiary px-1.5 py-0.5 text-text-muted">{inv.mode}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono text-xs text-text-secondary">{inv.resultCount}</td>
+                        <td className="px-3 py-2 text-right font-mono text-xs text-text-muted">
+                          {inv.durationMs != null ? fmtMs(inv.durationMs) : '—'}
+                        </td>
+                        <td className="px-3 py-2 font-mono text-xs text-text-muted">{inv.sessionId.slice(0, 8)}</td>
+                      </tr>
+                      {isExpanded && (
+                        <tr key={`${key}-expanded`} className="bg-bg-tertiary">
+                          <td colSpan={6} className="px-4 py-3">
+                            {inv.isError ? (
+                              <p className="text-xs text-error font-mono">{inv.errorMessage || 'Error'}</p>
+                            ) : inv.results.length === 0 ? (
+                              <p className="text-xs text-text-muted italic">No memories returned.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {inv.results.map((result, i) => (
+                                  <div key={i} className="rounded border border-border-primary bg-bg-secondary p-3 space-y-1">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      {result.memory_type && (
+                                        <span className="text-xs font-mono rounded bg-bg-tertiary px-1.5 py-0.5 text-text-muted">{result.memory_type}</span>
+                                      )}
+                                      {result.score != null && (
+                                        <span className="text-xs text-text-muted font-mono">score: {result.score.toFixed(3)}</span>
+                                      )}
+                                      {result.tags && result.tags.length > 0 && (
+                                        <span className="text-xs text-text-muted font-mono">{result.tags.join(', ')}</span>
+                                      )}
+                                    </div>
+                                    <p className="text-xs text-text-primary leading-relaxed whitespace-pre-wrap">{result.content}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

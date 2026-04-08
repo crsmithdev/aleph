@@ -9,8 +9,8 @@ import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
-import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtPct, shortDate, dateTime, granLabel, fmtProject, fmtSeriesName } from '../../../utils/format';
+import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
+import { fmtNumber, fmtPct, shortDate, dateTime, granLabel, fmtProject } from '../../../utils/format';
 import { MarkdownBlock } from '../../../components/data/MarkdownBlock';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -90,7 +90,7 @@ export function SkillDetailPage() {
       key: 'timestamp',
       label: 'Time',
       width: '8rem',
-      render: (row) => <span className="text-text-secondary">{dateTime(row.timestamp)}</span>,
+      render: (row) => <span className="font-mono text-text-secondary">{dateTime(row.timestamp)}</span>,
     },
     {
       key: 'project',
@@ -176,7 +176,7 @@ export function SkillDetailPage() {
                 allProjects.length > 0 ? (
                   <BarChart data={byDayProject}>
                     <CartesianGrid {...gridProps} />
-                    <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                    <XAxis dataKey="date" {...xAxisDateProps} />
                     <YAxis {...axisProps} />
                     <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                     {allProjects.map((proj, i) => (
@@ -189,7 +189,7 @@ export function SkillDetailPage() {
                 ) : (
                   <BarChart data={data.byDay}>
                     <CartesianGrid {...gridProps} />
-                    <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                    <XAxis dataKey="date" {...xAxisDateProps} />
                     <YAxis {...axisProps} />
                     <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                     <Bar dataKey="count" fill={CHART_PALETTE[3]} radius={[2, 2, 0, 0]} name="Invocations" />
@@ -199,7 +199,7 @@ export function SkillDetailPage() {
                 allProjects.length > 0 ? (
                   <AreaChart data={byDayProject}>
                     <CartesianGrid {...gridProps} />
-                    <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                    <XAxis dataKey="date" {...xAxisDateProps} />
                     <YAxis {...axisProps} />
                     <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                     {allProjects.map((proj, i) => (
@@ -215,7 +215,7 @@ export function SkillDetailPage() {
                 ) : (
                   <AreaChart data={data.byDay}>
                     <CartesianGrid {...gridProps} />
-                    <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                    <XAxis dataKey="date" {...xAxisDateProps} />
                     <YAxis {...axisProps} />
                     <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                     <Area type="monotone" dataKey="count" stroke={CHART_PALETTE[3]} fill={CHART_PALETTE[3]} fillOpacity={0.3} dot={false} name="Invocations" />
@@ -235,7 +235,7 @@ export function SkillDetailPage() {
                       <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
                 </PieChart>
                 <div className="flex flex-col gap-1.5 w-full">
                   {projectTotals.map((row, i) => (

@@ -6,7 +6,7 @@ import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { TimeRangeSelector } from '../../../components/data/TimeRangeSelector';
-import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
+import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { relativeTime, shortDate, fmtNumber } from '../../../utils/format';
 import { PageHeader } from '../../../components/layout/PageHeader';
 import { useState } from 'react';
@@ -155,7 +155,7 @@ export function CompactionPage() {
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={data.byDay} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
                 <CartesianGrid {...gridProps} />
-                <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                <XAxis dataKey="date" {...xAxisDateProps} />
                 <YAxis {...axisProps} allowDecimals={false} />
                 <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                 <Bar dataKey="count" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Compactions" />

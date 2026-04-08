@@ -7,9 +7,9 @@ import { StatCard } from '../../../components/data/StatCard';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
-import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps } from '../../../components/charts/chartTheme';
+import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { fmtCurrency, fmtNumber, fmtPct, shortDate, granLabel, rangeToDays, fmtSeriesName } from '../../../utils/format';
+import { fmtCurrency, fmtNumber, fmtPct, shortDate, granLabel, rangeToDays, formatModelName } from '../../../utils/format';
 
 type ModelRow = { model: string; usd: number; pct: number };
 
@@ -52,7 +52,7 @@ export function TokensCostPage() {
         {tokensChartType === 'bar' ? (
           <BarChart data={tokens.data.byDay}>
             <CartesianGrid {...gridProps} />
-            <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+            <XAxis dataKey="date" {...xAxisDateProps} />
             <YAxis {...axisProps} tickFormatter={fmtNumber} />
             <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
             <Legend {...legendProps} />
@@ -63,7 +63,7 @@ export function TokensCostPage() {
         ) : (
           <AreaChart data={tokens.data.byDay}>
             <CartesianGrid {...gridProps} />
-            <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+            <XAxis dataKey="date" {...xAxisDateProps} />
             <YAxis {...axisProps} tickFormatter={fmtNumber} />
             <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
             <Legend {...legendProps} />
@@ -78,7 +78,7 @@ export function TokensCostPage() {
         {costChartType === 'bar' ? (
           <BarChart data={cost.data.byDay}>
             <CartesianGrid {...gridProps} />
-            <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+            <XAxis dataKey="date" {...xAxisDateProps} />
             <YAxis {...axisProps} tickFormatter={(v: number) => `$${v.toFixed(2)}`} />
             <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(value) => [fmtCurrency(Number(value ?? 0)), 'Cost']} />
             <Bar dataKey="usd" fill={CHART_PALETTE[3]} radius={[2, 2, 0, 0]} name="Cost" />
@@ -86,7 +86,7 @@ export function TokensCostPage() {
         ) : (
           <LineChart data={cost.data.byDay}>
             <CartesianGrid {...gridProps} />
-            <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+            <XAxis dataKey="date" {...xAxisDateProps} />
             <YAxis {...axisProps} tickFormatter={(v: number) => `$${v.toFixed(2)}`} />
             <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(value) => [fmtCurrency(Number(value ?? 0)), 'Cost']} />
             <Line type="monotone" dataKey="usd" stroke={CHART_PALETTE[3]} strokeWidth={2} dot={false} name="Cost" />
@@ -102,13 +102,13 @@ export function TokensCostPage() {
               <Pie data={cost.data.byModel} dataKey="usd" nameKey="model" cx="50%" cy="50%" innerRadius={45} outerRadius={70}>
                 {cost.data.byModel.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
               </Pie>
-              <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtCurrency(Number(v)), fmtSeriesName(String(n))]} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtCurrency(Number(v)), formatModelName(String(n))]} />
             </PieChart>
             <div className="flex flex-col gap-2 min-w-0">
               {cost.data.byModel.map((row, i) => (
                 <div key={row.model} className="flex items-center gap-2 text-xs">
                   <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                  <span className="font-mono text-text-secondary truncate">{row.model.replace('claude-', '')}</span>
+                  <span className="font-mono text-text-secondary truncate">{formatModelName(row.model)}</span>
                   <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtCurrency(row.usd)}</span>
                   <span className="text-text-disabled font-mono shrink-0 w-10 text-right">{fmtPct(row.pct)}</span>
                 </div>

@@ -10,8 +10,8 @@ import { type Granularity, type TimeRange } from '../../../components/data/TimeR
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtMs, fmtPct, dateTime, shortDate, shortRelativeTime, fmtSeriesName } from '../../../utils/format';
+import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
+import { fmtNumber, fmtMs, fmtPct, dateTime, shortDate, shortRelativeTime, fmtLegendLabel } from '../../../utils/format';
 import { clsx } from 'clsx';
 
 type HookRow = {
@@ -39,11 +39,13 @@ type InvocationRow = {
 };
 
 type ViewMode = 'by-hook' | 'by-event';
-type HookDataset = 'by-hook' | 'by-event';
+type HookDataset = 'by-hook' | 'by-event' | 'latency' | 'errors';
 
 const HOOK_DATASETS: { key: HookDataset; label: string }[] = [
   { key: 'by-hook', label: 'By Hook' },
   { key: 'by-event', label: 'By Event' },
+  { key: 'latency', label: 'Latency' },
+  { key: 'errors', label: 'Errors' },
 ];
 
 const GRAN_LABEL: Record<Granularity, string> = { minute: 'Per-Minute', hour: 'Hourly', day: 'Daily' };
@@ -141,10 +143,54 @@ function ByHookView({ range, granularity }: { range: TimeRange; granularity: Gra
   const eventsOther = byEventAll.slice(5).reduce((s, r) => s + r.count, 0);
   const eventDonut = eventsOther > 0 ? [...top5Events, { event: 'Other', count: eventsOther }] : top5Events;
 
-  const activeKeys = dataset === 'by-hook' ? topHookNames : topEventNames;
-  const activeData = dataset === 'by-hook' ? stackedByHook : stackedByEvent;
-  const segLabel = dataset === 'by-hook' ? 'Hook' : 'Event';
-  const timeSeriesTitle = `${GRAN_LABEL[granularity]} Executions by ${segLabel}`;
+  // By-latency time series (top hooks by latency)
+  const topLatencyHookNames: string[] = (() => {
+    const totals: Record<string, number> = {};
+    for (const day of (data.byDayLatency ?? [])) {
+      for (const [hook, val] of Object.entries(day.hooks ?? {})) {
+        totals[hook] = (totals[hook] ?? 0) + val;
+      }
+    }
+    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([n]) => n);
+  })();
+  const stackedByLatency = (data.byDayLatency ?? []).map(day => {
+    const entry: Record<string, unknown> = { date: day.date };
+    for (const name of topLatencyHookNames) entry[name] = (day.hooks ?? {})[name] ?? 0;
+    return entry;
+  });
+
+  // By-errors time series (top hooks by errors)
+  const topErrorHookNames: string[] = (() => {
+    const totals: Record<string, number> = {};
+    for (const day of (data.byDayErrors ?? [])) {
+      for (const [hook, val] of Object.entries(day.hooks ?? {})) {
+        totals[hook] = (totals[hook] ?? 0) + val;
+      }
+    }
+    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([n]) => n);
+  })();
+  const stackedByErrors = (data.byDayErrors ?? []).map(day => {
+    const entry: Record<string, unknown> = { date: day.date };
+    for (const name of topErrorHookNames) entry[name] = (day.hooks ?? {})[name] ?? 0;
+    return entry;
+  });
+
+  const topErrorHooksForDist = [...rankedWithRate].filter(r => r.errors > 0).sort((a, b) => b.errors - a.errors).slice(0, 10);
+  const topLatencyHooksForDist = [...rankedWithRate].filter(r => r.count > 0).sort((a, b) => b.p50Ms - a.p50Ms).slice(0, 10);
+
+  const activeKeys = dataset === 'by-hook' ? topHookNames
+    : dataset === 'by-event' ? topEventNames
+    : dataset === 'latency' ? topLatencyHookNames
+    : topErrorHookNames;
+  const activeData = dataset === 'by-hook' ? stackedByHook
+    : dataset === 'by-event' ? stackedByEvent
+    : dataset === 'latency' ? stackedByLatency
+    : stackedByErrors;
+  const segLabel = dataset === 'by-hook' ? 'Hook'
+    : dataset === 'by-event' ? 'Event'
+    : dataset === 'latency' ? 'Hook (Latency)'
+    : 'Hook (Errors)';
+  const timeSeriesTitle = `${GRAN_LABEL[granularity]} ${dataset === 'latency' ? 'Latency' : dataset === 'errors' ? 'Errors' : 'Executions'} by ${dataset === 'by-event' ? 'Event' : 'Hook'}`;
 
   const columns: Column<HookRow>[] = [
     {
@@ -221,7 +267,7 @@ function ByHookView({ range, granularity }: { range: TimeRange; granularity: Gra
       sortable: true,
       width: '100px',
       render: (row) => row.lastUsed
-        ? <span className="font-mono text-text-secondary whitespace-nowrap">{shortRelativeTime(row.lastUsed)}</span>
+        ? <span className="text-text-secondary whitespace-nowrap">{shortRelativeTime(row.lastUsed)}</span>
         : <span className="text-text-disabled">—</span>,
     },
   ];
@@ -275,52 +321,96 @@ function ByHookView({ range, granularity }: { range: TimeRange; granularity: Gra
                 {chartType === 'bar' ? (
                   <BarChart data={activeData}>
                     <CartesianGrid {...gridProps} />
-                    <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                    <XAxis dataKey="date" {...xAxisDateProps} />
                     <YAxis {...axisProps} />
-                    <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
+                    <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                     {activeKeys.map((name, i) => (
-                      <Bar key={name} dataKey={name} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === activeKeys.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
+                      <Bar key={name} dataKey={name} name={fmtLegendLabel(name)} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === activeKeys.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
                     ))}
                   </BarChart>
                 ) : (
                   <AreaChart data={activeData}>
                     <CartesianGrid {...gridProps} />
-                    <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+                    <XAxis dataKey="date" {...xAxisDateProps} />
                     <YAxis {...axisProps} />
-                    <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
+                    <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                     {activeKeys.map((name, i) => (
-                      <Area key={name} type="monotone" dataKey={name} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
+                      <Area key={name} type="monotone" dataKey={name} name={fmtLegendLabel(name)} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
                     ))}
                   </AreaChart>
                 )}
               </ChartContainer>
             </div>
-            {eventDonut.length > 0 && (
-              <div className="flex flex-col rounded-lg border border-border-primary bg-bg-secondary p-4 w-[400px] shrink-0 h-full">
-                <h3 className="mb-3 text-sm font-medium text-text-secondary shrink-0">Top Events</h3>
-                <div className="flex-1 min-h-0 flex gap-3">
-                  <div className="flex-1 min-w-0 min-h-0 flex items-center">
-                    <ResponsiveContainer width="100%" height={212}>
-                      <PieChart>
-                        <Pie data={eventDonut} dataKey="count" nameKey="event" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
-                          {eventDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
-                        </Pie>
-                        <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtSeriesName(String(n))]} />
-                      </PieChart>
-                    </ResponsiveContainer>
+            <div className="flex flex-col rounded-lg border border-border-primary bg-bg-secondary p-4 w-[400px] shrink-0 h-full">
+              {(dataset === 'by-hook' || dataset === 'by-event') && eventDonut.length > 0 && (
+                <>
+                  <h3 className="mb-3 text-sm font-medium text-text-secondary shrink-0">Top Events</h3>
+                  <div className="flex-1 min-h-0 flex gap-3">
+                    <div className="flex-1 min-w-0 min-h-0 flex items-center">
+                      <ResponsiveContainer width="100%" height={212}>
+                        <PieChart>
+                          <Pie data={eventDonut} dataKey="count" nameKey="event" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                            {eventDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                          </Pie>
+                          <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="flex flex-col gap-1.5 justify-center shrink-0 w-36">
+                      {eventDonut.map((row, i) => (
+                        <div key={row.event} className="flex items-center gap-1.5 text-xs min-w-0">
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                          <span className="font-mono text-text-secondary truncate flex-1">{fmtLegendLabel(row.event)}</span>
+                          <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtNumber(row.count)}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex flex-col gap-1.5 justify-center shrink-0 w-36">
-                    {eventDonut.map((row, i) => (
-                      <div key={row.event} className="flex items-center gap-1.5 text-xs min-w-0">
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                        <span className="font-mono text-text-secondary truncate flex-1">{fmtSeriesName(row.event)}</span>
-                        <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtNumber(row.count)}</span>
-                      </div>
-                    ))}
+                </>
+              )}
+
+              {dataset === 'latency' && (
+                <>
+                  <h3 className="mb-3 text-sm font-medium text-text-secondary shrink-0">Top Hooks by Latency</h3>
+                  <div className="flex-1 min-h-0">
+                    {topLatencyHooksForDist.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={212}>
+                        <BarChart layout="vertical" data={topLatencyHooksForDist}>
+                          <CartesianGrid {...gridProps} horizontal={false} />
+                          <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtMs(Number(v))} />
+                          <YAxis type="category" dataKey="command" {...axisProps} width={90} tick={{ fontSize: 10 }} />
+                          <Tooltip contentStyle={tooltipStyle} formatter={(v) => [fmtMs(Number(v)), 'p50 Latency']} />
+                          <Bar dataKey="p50Ms" fill={CHART_PALETTE[1]} name="p50 Latency" radius={[0, 2, 2, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-xs text-text-muted">No latency data</div>
+                    )}
                   </div>
-                </div>
-              </div>
-            )}
+                </>
+              )}
+
+              {dataset === 'errors' && (
+                <>
+                  <h3 className="mb-3 text-sm font-medium text-text-secondary shrink-0">Top Hooks by Errors</h3>
+                  <div className="flex-1 min-h-0">
+                    {topErrorHooksForDist.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={212}>
+                        <BarChart layout="vertical" data={topErrorHooksForDist}>
+                          <CartesianGrid {...gridProps} horizontal={false} />
+                          <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
+                          <YAxis type="category" dataKey="command" {...axisProps} width={90} tick={{ fontSize: 10 }} />
+                          <Tooltip contentStyle={tooltipStyle} formatter={(v) => [fmtNumber(Number(v)), 'Errors']} />
+                          <Bar dataKey="errors" fill={CHART_PALETTE[4]} name="Errors" radius={[0, 2, 2, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-xs text-text-muted">No errors</div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </>
       )}

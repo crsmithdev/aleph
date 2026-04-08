@@ -5,7 +5,7 @@ import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
-import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter } from '../../../components/charts/chartTheme';
+import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { relativeTime, shortDate } from '../../../utils/format';
 import { PageHeader } from '../../../components/layout/PageHeader';
 import { clsx } from 'clsx';
@@ -13,7 +13,7 @@ import { clsx } from 'clsx';
 function TrendBadge({ trend }: { trend: EvalResult['trend'] }) {
   return (
     <span className={clsx(
-      'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-mono',
+      'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs',
       trend === 'improving' && 'bg-green-500/10 text-green-500',
       trend === 'regressing' && 'bg-red-500/10 text-red-500',
       trend === 'stable' && 'bg-bg-tertiary text-text-muted',
@@ -109,7 +109,7 @@ export function EvalsPage() {
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={data.byDay} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
               <CartesianGrid {...gridProps} />
-              <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+              <XAxis dataKey="date" {...xAxisDateProps} />
               <YAxis {...axisProps} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
               <Tooltip
                 contentStyle={tooltipStyle}

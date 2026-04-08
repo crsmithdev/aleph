@@ -308,6 +308,33 @@ export interface MemoryUsageData {
   byDay: { date: string; stores: number; searches: number }[];
 }
 
+export interface MemorySearchResult {
+  id?: string;
+  content: string;
+  memory_type?: string;
+  tags?: string[];
+  score?: number;
+  name?: string;
+}
+
+export interface MemorySearchInvocation {
+  timestamp: string;
+  sessionId: string;
+  query: string;
+  mode?: string;
+  tags?: string[];
+  durationMs?: number;
+  isError?: boolean;
+  errorMessage?: string;
+  results: MemorySearchResult[];
+  resultCount: number;
+}
+
+export interface MemorySearchData {
+  totalSearches: number;
+  invocations: MemorySearchInvocation[];
+}
+
 export interface HookInvocation {
   timestamp: string;
   sessionId: string;

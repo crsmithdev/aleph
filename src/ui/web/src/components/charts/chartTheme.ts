@@ -6,6 +6,7 @@ export const CHART_PALETTE = [
   'var(--chart-3)',
   'var(--chart-4)',
   'var(--chart-5)',
+  'var(--chart-6)',
 ];
 
 export const tooltipStyle = {
@@ -29,8 +30,19 @@ export const axisProps = {
   domain: [0, 'auto'] as [number, string],
 };
 
+// Use this instead of {...axisProps} tickFormatter={shortDate} on all date XAxes.
+// interval="equidistantPreserveStart" evenly distributes ticks and avoids crowding.
+export const xAxisDateProps = {
+  stroke: 'var(--chart-text)',
+  fontSize: 12,
+  tickLine: false as const,
+  axisLine: false as const,
+  tickFormatter: shortDate,
+  interval: 'equidistantPreserveStart' as const,
+};
+
 export const legendProps = {
-  wrapperStyle: { fontSize: 11 },
+  wrapperStyle: { fontSize: 12 },
 };
 
 export function labelFormatter(label: unknown): string {

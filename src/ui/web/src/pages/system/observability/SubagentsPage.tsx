@@ -9,7 +9,7 @@ import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
-import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps } from '../../../components/charts/chartTheme';
+import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { fmtNumber, fmtMs, relativeTime, shortDate, granLabel } from '../../../utils/format';
 import { clsx } from 'clsx';
@@ -173,7 +173,7 @@ export function SubagentsPage() {
         <ChartContainer title={granLabel(granularity, 'Dispatches')}>
           <BarChart data={data.byDay}>
             <CartesianGrid {...gridProps} />
-            <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+            <XAxis dataKey="date" {...xAxisDateProps} />
             <YAxis {...axisProps} />
             <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
             <Legend {...legendProps} />

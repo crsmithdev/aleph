@@ -2,10 +2,8 @@
 
 ## Background Autonomy
 - **Autonomous development** — dispatch a prompt; AI iterates (build → test → refine) unattended across multiple cycles, configurable variation, completion contacts, quality gates, summaries
-- **Morning briefing** — on session start, surface a digest of all overnight autonomous work: features ready for review, research completed, issues encountered
 
 ## Writing & Editing
-- **Rich text / WYSIWYG** — formatted editing without seeing markup
 - **Block-based editing** — each paragraph/image/embed is a movable block
 - **Outliner mode** — bullet-based hierarchical note structure (indent/outdent)
 - **Slash commands** — type `/` to insert blocks, formatting, embeds

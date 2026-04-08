@@ -21,9 +21,9 @@ const PROJECTS_DIRNAME = basename(claudePaths.projects);
 const { sqlite: cacheDb } = createDb(dataPaths.db);
 cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache`);
 cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v4`);
-cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v4`);
+cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v5`);
 cacheDb.exec(`
-  CREATE TABLE IF NOT EXISTS telemetry_cache_v4 (
+  CREATE TABLE IF NOT EXISTS telemetry_cache_v5 (
     file_path TEXT PRIMARY KEY,
     mtime_ms INTEGER NOT NULL,
     size INTEGER NOT NULL,
@@ -32,10 +32,10 @@ cacheDb.exec(`
 `);
 
 const insertCache = cacheDb.prepare(
-  `INSERT OR REPLACE INTO telemetry_cache_v4 (file_path, mtime_ms, size, events) VALUES (?, ?, ?, ?)`
+  `INSERT OR REPLACE INTO telemetry_cache_v5 (file_path, mtime_ms, size, events) VALUES (?, ?, ?, ?)`
 );
 const selectCache = cacheDb.prepare(
-  `SELECT mtime_ms, size, events FROM telemetry_cache_v4 WHERE file_path = ?`
+  `SELECT mtime_ms, size, events FROM telemetry_cache_v5 WHERE file_path = ?`
 );
 
 // ---------------------------------------------------------------------------
@@ -290,6 +290,21 @@ function adaptLine(
               }
             }
 
+            // Capture result content text (capped at 8KB) for memory tool observability
+            const RESULT_CONTENT_CAP = 8192;
+            let resultContent: string | undefined;
+            if (resultChars <= RESULT_CONTENT_CAP) {
+              if (typeof rawContent === "string") {
+                resultContent = rawContent;
+              } else if (Array.isArray(rawContent)) {
+                const parts: string[] = [];
+                for (const b of rawContent as Array<Record<string, unknown>>) {
+                  if (b.type === "text" && typeof b.text === "string") parts.push(b.text as string);
+                }
+                if (parts.length > 0) resultContent = parts.join("");
+              }
+            }
+
             if (block.is_error) {
               const errorMessage = typeof rawContent === "string"
                 ? rawContent.slice(0, 200)
@@ -300,13 +315,13 @@ function adaptLine(
                 ts, sid, kind: "tool_result", name: "error",
                 err: errorMessage || undefined,
                 ms: toolDurationMs,
-                data: { ...meta, useId: toolUseId, isError: true, errorMessage: errorMessage || undefined, resultChars },
+                data: { ...meta, useId: toolUseId, isError: true, errorMessage: errorMessage || undefined, resultChars, resultContent },
               });
             } else if (toolUseId) {
               events.push({
                 ts, sid, kind: "tool_result", name: "ok",
                 ms: toolDurationMs,
-                data: { ...meta, useId: toolUseId, resultChars },
+                data: { ...meta, useId: toolUseId, resultChars, resultContent },
               });
             }
           }

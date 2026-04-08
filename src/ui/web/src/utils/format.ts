@@ -128,7 +128,7 @@ export function fmtToolName(name: string): string {
       return `${server} / ${action}`;
     }
   }
-  return name;
+  return name.replace(/_/g, ' ');
 }
 
 export function parseToolSource(name: string): { server: string; tool: string } {
@@ -184,5 +184,13 @@ export function cleanMessage(msg: string): string {
 }
 
 export function fmtSeriesName(name: string): string {
-  return name.replace(/[_-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  return name.replace(/[_.\-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+/** Smart legend/tooltip label formatter — detects project paths and MCP tool names automatically. */
+export function fmtLegendLabel(name: string): string {
+  if (!name || name === 'Other') return name;
+  if (name.startsWith('mcp__')) return fmtToolName(name);
+  if (name.startsWith('-home-')) return fmtProject(name);
+  return fmtSeriesName(name);
 }

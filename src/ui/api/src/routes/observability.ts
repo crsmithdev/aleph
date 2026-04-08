@@ -16,6 +16,7 @@ import {
   aggregateHookDetail,
   aggregateSkillDetail,
   aggregateMemoryUsage,
+  aggregateMemorySearches,
   aggregateHookEvents,
   aggregateCompaction,
   aggregateApiDuration,
@@ -705,6 +706,18 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       const obsReq = req as ObsRequest;
       return cachedResult(req.url, 60_000, () => {
         const { result, queryTimeMs } = timed(() => aggregateMemoryUsage(obsReq.telemetryEntries, obsReq.granularity));
+        return { ...result, queryTimeMs };
+      });
+    },
+  );
+
+  app.get<{ Querystring: QueryParams }>(
+    '/memory/searches',
+    { preHandler: [resultCachePreHandler, parseDaysPreHandler] },
+    async (req) => {
+      const obsReq = req as ObsRequest;
+      return cachedResult(req.url, 60_000, () => {
+        const { result, queryTimeMs } = timed(() => aggregateMemorySearches(obsReq.telemetryEntries));
         return { ...result, queryTimeMs };
       });
     },

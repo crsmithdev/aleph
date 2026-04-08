@@ -330,6 +330,32 @@ export function useObsMemoryUsage(range: TimeRange, granularity?: Granularity) {
   }>('memory/usage', { range, granularity });
 }
 
+export function useObsMemorySearches(range: TimeRange) {
+  return obsQuery<{
+    totalSearches: number;
+    invocations: Array<{
+      timestamp: string;
+      sessionId: string;
+      query: string;
+      mode?: string;
+      tags?: string[];
+      durationMs?: number;
+      isError?: boolean;
+      errorMessage?: string;
+      results: Array<{
+        id?: string;
+        content: string;
+        memory_type?: string;
+        tags?: string[];
+        score?: number;
+        name?: string;
+      }>;
+      resultCount: number;
+    }>;
+    queryTimeMs: number;
+  }>('memory/searches', { range });
+}
+
 export function useObsCompaction(range: TimeRange, granularity?: Granularity, session?: string) {
   return obsQuery<{
     totalCompactions: number;

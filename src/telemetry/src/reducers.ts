@@ -19,6 +19,7 @@ import type {
   HookDetailData,
   SkillDetailData,
   MemoryUsageData,
+  MemorySearchData, MemorySearchInvocation, MemorySearchResult,
   HookEventData, HookInvocation,
   CompactionData,
   ApiDurationData,
@@ -1002,6 +1003,80 @@ export function reduceMemoryUsage(events: TelemetryEvent[], granularity: Granula
     .map(([date, v]) => ({ date, stores: v.stores, searches: v.searches }));
 
   return { stores, searches, byDay };
+}
+
+// ---------------------------------------------------------------------------
+// Memory Searches
+// ---------------------------------------------------------------------------
+
+const MEMORY_SEARCH_TOOLS = new Set(["memory_search", "mcp__memory__memory_search"]);
+
+export function reduceMemorySearches(events: TelemetryEvent[]): MemorySearchData {
+  // Build useId → resultContent map from tool_result events
+  const resultByUseId = new Map<string, { content?: string; durationMs?: number; isError?: boolean; errorMessage?: string }>();
+  for (const e of events) {
+    if (e.kind === "tool_result" && e.data?.useId) {
+      resultByUseId.set(e.data.useId as string, {
+        content: e.data.resultContent as string | undefined,
+        durationMs: e.ms,
+        isError: e.data.isError as boolean | undefined,
+        errorMessage: e.data.errorMessage as string | undefined,
+      });
+    }
+  }
+
+  const invocations: MemorySearchInvocation[] = [];
+
+  for (const e of events) {
+    if (e.kind !== "tool" || !e.data?.tool) continue;
+    if (!MEMORY_SEARCH_TOOLS.has(e.data.tool as string)) continue;
+
+    const params = e.data.params as Record<string, unknown> | undefined;
+    const query = (params?.query ?? params?.content ?? "") as string;
+    const mode = params?.mode as string | undefined;
+    const tags = Array.isArray(params?.tags) ? (params!.tags as unknown[]).map(String) : undefined;
+
+    const resultData = e.data.useId ? resultByUseId.get(e.data.useId as string) : undefined;
+
+    // Parse text-format result from memory MCP server
+    // Format: "Found N memories (mode: X) for query: '...'\n\n1. content...\n\n2. content..."
+    let results: MemorySearchResult[] = [];
+    if (resultData?.content) {
+      const text = resultData.content;
+      // Extract each numbered entry
+      const entryRegex = /(?:^|\n)(\d+)\.\s+([\s\S]*?)(?=\n\d+\.\s+|$)/g;
+      let m: RegExpExecArray | null;
+      while ((m = entryRegex.exec(text)) !== null) {
+        const raw = m[2].trim();
+        if (raw) {
+          // Strip trailing metadata lines (Hash:, Created:, Tags:)
+          const contentLines = raw.split("\n").filter(l => !/^\s*(Hash:|Created:|Tags:|Updated:)/.test(l));
+          const content = contentLines.join("\n").trim();
+          if (content) results.push({ content });
+        }
+      }
+    }
+
+    invocations.push({
+      timestamp: e.ts,
+      sessionId: e.sid,
+      query,
+      mode,
+      tags,
+      durationMs: resultData?.durationMs ?? e.ms,
+      isError: resultData?.isError,
+      errorMessage: resultData?.errorMessage,
+      results,
+      resultCount: results.length,
+    });
+  }
+
+  invocations.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+  return {
+    totalSearches: invocations.length,
+    invocations: invocations.slice(0, 500),
+  };
 }
 
 // ---------------------------------------------------------------------------
