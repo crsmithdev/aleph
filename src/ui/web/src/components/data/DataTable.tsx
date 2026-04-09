@@ -4,7 +4,7 @@ import { clsx } from 'clsx';
 export interface Column<T> {
   key: string;
   label: string;
-  align?: 'left' | 'right';
+  align?: 'left' | 'center' | 'right';
   width?: string;
   shrink?: boolean;  // collapse column to minimum content width (no wrapping)
   render?: (row: T) => ReactNode;
