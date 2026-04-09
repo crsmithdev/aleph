@@ -65,6 +65,7 @@ export function useObsTools(range: TimeRange, granularity?: Granularity, session
     skillToolMatrix: Array<{ skill: string; tools: Array<{ tool: string; count: number }> }>;
     projectRanked: Array<{ project: string; count: number; pct: number }>;
     queryTimeMs: number;
+    totalRows: number;
   }>('tools', { range, granularity, session });
 }
 
@@ -193,8 +194,12 @@ export function useObsToolDetail(name: string, range: TimeRange) {
     name: string;
     totalCount: number;
     errorCount: number;
-    byDay: Array<{ date: string; count: number; byHour: Record<number, number> }>;
-    invocations: Array<{ timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; isError?: boolean; errorMessage?: string }>;
+    totalLinesAdded: number;
+    totalLinesRemoved: number;
+    sessionCount: number;
+    byDay: Array<{ date: string; count: number; byHour: Record<number, number>; errors: number; errorRate: number; sessions: number; linesAdded: number; linesRemoved: number; p50Ms?: number; p95Ms?: number; avgMs?: number }>;
+    skills: Array<{ name: string; count: number }>;
+    invocations: Array<{ timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; durationMs?: number; isError?: boolean; errorMessage?: string; errorFull?: string; skill?: string; linesAdded?: number; linesRemoved?: number }>;
     queryTimeMs: number;
   }>({
     queryKey: ['observability', 'tool-detail', name, range],

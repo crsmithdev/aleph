@@ -59,6 +59,10 @@
     {
       "skill": "eval-harness",
       "keywords": ["eval", "pass@", "pass@1", "pass@3", "reliability", "regression eval", "capability eval", "eval-driven", "define eval", "run eval", "eval report"]
+    },
+    {
+      "skill": "design-engineer",
+      "keywords": ["design engineer", "ui polish", "animation", "easing", "transition", "css animation", "spring animation", "gesture", "drag interaction", "component design", "review ui", "ui review", "design review", "motion design", "micro-interaction"]
     }
   ]
 }

@@ -5,7 +5,7 @@ export function QueryTiming({ ms, rows }: { ms?: number; rows?: number }) {
     <span className="text-xs text-text-muted">
       {rows !== undefined
         ? `${rows.toLocaleString()} rows in ${timing}ms`
-        : `Loaded in ${timing}ms`}
+        : `Query: ${timing}ms`}
     </span>
   );
 }

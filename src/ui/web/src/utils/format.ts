@@ -119,23 +119,27 @@ export function granLabel(granularity: string, noun: string): string {
   }
 }
 
+function titleCase(s: string): string {
+  return s.replace(/[_.\-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 export function fmtToolName(name: string): string {
   if (name.startsWith('mcp__')) {
     const parts = name.slice(5).split('__');
     if (parts.length >= 2) {
-      const server = parts[0];
-      const action = parts.slice(1).join(' ').replace(/_/g, ' ');
+      const server = titleCase(parts[0]);
+      const action = titleCase(parts.slice(1).join('_'));
       return `${server} / ${action}`;
     }
   }
-  return name.replace(/_/g, ' ');
+  return titleCase(name);
 }
 
 export function parseToolSource(name: string): { server: string; tool: string } {
   if (name.startsWith('mcp__')) {
     const parts = name.slice(5).split('__');
     if (parts.length >= 2) {
-      return { server: parts[0], tool: parts.slice(1).join('_') };
+      return { server: titleCase(parts[0]), tool: titleCase(parts.slice(1).join('_')) };
     }
   }
   return { server: 'builtin', tool: name };
@@ -143,11 +147,12 @@ export function parseToolSource(name: string): { server: string; tool: string } 
 
 export function fmtProject(raw: string): string {
   // "-home-crsmi-construct" → "crsmi/construct"
-  // Strip leading /home/<user>/ or -home-<user>- prefix, then join with /
+  // "-home-crsmi" → "crsmi/~"
   const cleaned = raw.replace(/^-/, '').replace(/^home-/, '');
   const parts = cleaned.split('-').filter(Boolean);
-  if (parts.length >= 2) return parts.join('/');
-  return raw;
+  if (parts.length >= 2) return parts.join('/').toLowerCase();
+  if (parts.length === 1) return `${parts[0].toLowerCase()}/~`;
+  return raw.toLowerCase();
 }
 
 export function rangeToDays(range: string): number {
@@ -184,13 +189,15 @@ export function cleanMessage(msg: string): string {
 }
 
 export function fmtSeriesName(name: string): string {
-  return name.replace(/[_.\-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  return titleCase(name);
 }
 
 /** Smart legend/tooltip label formatter — detects project paths and MCP tool names automatically. */
 export function fmtLegendLabel(name: string): string {
   if (!name || name === 'Other') return name;
   if (name.startsWith('mcp__')) return fmtToolName(name);
-  if (name.startsWith('-home-')) return fmtProject(name);
+  // Project paths: -home-user-project or user/project
+  if (name.startsWith('-home-') || name.startsWith('-')) return fmtProject(name);
+  if (name.includes('/')) return name.toLowerCase();
   return fmtSeriesName(name);
 }

@@ -24,6 +24,7 @@ interface DataTableProps<T> {
   emptyMessage?: string;
   className?: string;
   maxRows?: number;
+  defaultSort?: { key: string; dir: 'asc' | 'desc' };
 }
 
 export function DataTable<T>({
@@ -39,9 +40,10 @@ export function DataTable<T>({
   emptyMessage = 'No data',
   className,
   maxRows,
+  defaultSort,
 }: DataTableProps<T>) {
-  const [sortKey, setSortKey] = useState<string | null>(null);
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [sortKey, setSortKey] = useState<string | null>(defaultSort?.key ?? null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>(defaultSort?.dir ?? 'desc');
 
   const handleSort = (key: string) => {
     if (sortKey === key) {
@@ -76,10 +78,9 @@ export function DataTable<T>({
               <th
                 key={col.key}
                 className={clsx(
-                  'px-4 py-2.5 font-sans text-xs uppercase tracking-widest text-text-muted',
-                  col.align === 'right' ? 'text-right' : 'text-left',
-                  col.sortable && 'cursor-pointer select-none hover:text-text-secondary',
-                  col.shrink && 'whitespace-nowrap'
+                  'px-4 py-2.5 font-sans text-xs uppercase tracking-widest text-text-muted whitespace-nowrap',
+                  col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left',
+                  col.sortable && 'cursor-pointer select-none hover:text-text-secondary'
                 )}
                 style={col.shrink ? { width: '1px' } : col.width ? { width: col.width } : undefined}
                 onClick={col.sortable ? () => handleSort(col.key) : undefined}

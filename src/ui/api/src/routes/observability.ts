@@ -381,7 +381,10 @@ function getRegisteredHooks(): Array<{ command: string; event: string }> {
       for (const entry of entries as Array<{ hooks?: Array<{ command: string }>; command?: string }>) {
         const cmds = entry.hooks?.map(h => h.command) ?? (entry.command ? [entry.command] : []);
         for (const raw of cmds) {
-          const cmd = raw.split('/').pop()?.replace(/\.ts$/, '') || raw;
+          // Strip shell redirections (e.g. "2>/dev/null") before extracting filename
+          const clean = raw.replace(/\s+\d*>\s*\/dev\/null/g, '').trim();
+          const cmd = clean.split('/').pop()?.replace(/\.ts$/, '') || clean;
+          if (!cmd || cmd === 'null') continue;
           hooks.push({ command: cmd, event });
         }
       }
@@ -506,7 +509,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
         ...t,
         active: checkToolActive(t.name, t.lastUsed),
       }));
-      return { ...result, ranked, queryTimeMs };
+      return { ...result, ranked, queryTimeMs, totalRows: obsReq.telemetryEntries.length };
     });
   });
 
@@ -896,9 +899,11 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       try {
         db = new Database(dbPath, { readonly: true });
         const tableNames = db.query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all() as Array<{ name: string }>;
-        const tables = tableNames.map((t) => {
-          const countRow = db!.query(`SELECT count(*) as c FROM "${t.name}"`).get() as { c: number };
-          return { name: t.name, rows: countRow.c };
+        const tables = tableNames.flatMap((t) => {
+          try {
+            const countRow = db!.query(`SELECT count(*) as c FROM "${t.name}"`).get() as { c: number };
+            return [{ name: t.name, rows: countRow.c }];
+          } catch { return []; }
         });
         return { name, path: dbPath, sizeBytes: stat.size, walSizeBytes: walSize, tables };
       } catch {

@@ -11,7 +11,7 @@ import { type Granularity, type TimeRange } from '../../../components/data/TimeR
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtPct, fmtMs, shortDate, parseToolSource, shortRelativeTime, fmtLegendLabel, fmtProject } from '../../../utils/format';
+import { fmtNumber, fmtPct, fmtMs, shortDate, parseToolSource, shortRelativeTime, fmtLegendLabel, fmtProject, fmtToolName } from '../../../utils/format';
 import { clsx } from 'clsx';
 
 type RawToolRow = {
@@ -62,8 +62,8 @@ export function ToolsPage() {
   const [granularity, setGranularity] = useState<Granularity>('day');
   const [showMissing, setShowMissing] = useState(false);
   const [chartType, setChartType] = useState<'bar' | 'line'>('line');
+  const [distChartType, setDistChartType] = useState<'donut' | 'bar'>('donut');
   const [tsDataset, setTsDataset] = useState<Dataset>('calls');
-  const [distDataset, setDistDataset] = useState<Dataset>('calls');
   const navigate = useNavigate();
   const { data, isLoading, error, refetch } = useObsTools(range, granularity);
 
@@ -124,9 +124,9 @@ export function ToolsPage() {
   const datasetLabel: Record<Dataset, string> = { calls: 'Calls', churn: 'Code Churn', projects: 'Usage', velocity: 'Velocity', errors: 'Errors', latency: 'Latency', sessions: 'Sessions' };
   const tsSegmentLabel = tsDataset === 'projects' ? 'Project' : 'Tool';
   const timeSeriesTitle = `${granularityLabel[granularity]} ${datasetLabel[tsDataset]} by ${tsSegmentLabel}`;
-  const distTitle = distDataset === 'projects' ? 'Top Projects'
-    : distDataset === 'sessions' ? 'Top Tools by Sessions'
-    : `Top Tools by ${datasetLabel[distDataset]}`;
+  const distTitle = tsDataset === 'projects' ? 'Top Projects'
+    : tsDataset === 'sessions' ? 'Top Tools by Sessions'
+    : `Top Tools by ${datasetLabel[tsDataset]}`;
 
   const topChurnTools = [...enriched]
     .map(r => ({ ...r, totalChurn: (r.linesAdded || 0) + (r.linesRemoved || 0) }))
@@ -139,67 +139,55 @@ export function ToolsPage() {
     .sort((a, b) => (b.velocity || 0) - (a.velocity || 0))
     .slice(0, 10);
 
-  const top5Tools = filtered.slice(0, 5);
-  const toolsOther = filtered.slice(5).reduce((s, r) => s + r.count, 0);
-  const callsDonut = toolsOther > 0 ? [...top5Tools, { name: 'other', tool: 'Other', count: toolsOther } as ToolRow] : top5Tools;
-
-  const top5Projects = data.projectRanked.slice(0, 5);
-  const projectsOther = data.projectRanked.slice(5).reduce((s, r) => s + r.count, 0);
-  const projectsDonut = projectsOther > 0 ? [...top5Projects, { project: 'Other', count: projectsOther, pct: 0 }] : top5Projects;
+  const callsDonut = filtered.slice(0, 10);
+  const projectsDonut = data.projectRanked.slice(0, 10);
 
   const topErrorTools = [...enriched].filter(r => r.errorCount > 0).sort((a, b) => b.errorCount - a.errorCount).slice(0, 10);
   const topLatencyTools = [...enriched].filter(r => r.p50Ms !== undefined && r.count > 0).sort((a, b) => (b.p50Ms ?? 0) - (a.p50Ms ?? 0)).slice(0, 10);
 
-  const top5SessionTools = (() => {
+  const sessionsDonut = (() => {
     const totals: Record<string, number> = {};
     for (const day of (data.byDaySessionCount ?? [])) {
       for (const [k, v] of Object.entries(day.tools ?? {})) totals[k] = (totals[k] ?? 0) + v;
     }
-    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => ({ name, tool: parseToolSource(name).tool, count }));
+    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, count]) => ({ name, tool: parseToolSource(name).tool, count }));
   })();
-  const sessionsOther = (() => {
-    const totals: Record<string, number> = {};
-    for (const day of (data.byDaySessionCount ?? [])) {
-      for (const [k, v] of Object.entries(day.tools ?? {})) totals[k] = (totals[k] ?? 0) + v;
-    }
-    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(5).reduce((s, [, v]) => s + v, 0);
-  })();
-  const sessionsDonut = sessionsOther > 0 ? [...top5SessionTools, { name: 'other', tool: 'Other', count: sessionsOther }] : top5SessionTools;
 
   const hasTimeSeries = tsDataset === 'velocity' ? data.byDayVelocity.length > 0 : tsData.length > 0;
 
   const columns: Column<ToolRow>[] = [
     {
+      key: 'server',
+      label: 'Server',
+      sortable: true,
+      shrink: true,
+      render: (row) => row.server === 'builtin'
+        ? <span className="font-mono text-text-muted">{row.server}</span>
+        : <span className="font-mono text-text-primary">{row.server}</span>,
+    },
+    {
       key: 'tool',
       label: 'Tool',
       sortable: true,
+      shrink: true,
       render: (row) => <span className="font-mono text-text-primary">{row.tool}</span>,
     },
     {
       key: 'active',
       label: 'Installed',
-      align: 'right',
+      align: 'center',
       sortable: true,
-      width: '64px',
+      width: '80px',
       render: (row) => row.active
         ? <Icon name="check" size="sm" className="text-success" />
         : <span className="text-text-disabled text-xs">—</span>,
-    },
-    {
-      key: 'server',
-      label: 'Server',
-      sortable: true,
-      width: '120px',
-      render: (row) => row.server === 'builtin'
-        ? <span className="font-mono text-text-muted">{row.server}</span>
-        : <span className="font-mono text-text-primary">{row.server}</span>,
     },
     {
       key: 'count',
       label: 'Count',
       align: 'right',
       sortable: true,
-      width: '80px',
+      shrink: true,
       render: (row) => <span className="font-mono">{fmtNumber(row.count)}</span>,
     },
     {
@@ -211,6 +199,18 @@ export function ToolsPage() {
       render: (row) => (
         <span className={clsx('font-mono', row.errorCount > 0 && 'text-error font-medium')}>
           {row.errorCount > 0 ? fmtNumber(row.errorCount) : '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'successRate',
+      label: 'Success',
+      align: 'right',
+      sortable: true,
+      width: '78px',
+      render: (row) => (
+        <span className={clsx('font-mono', row.successRate < 95 && 'text-warning', row.successRate < 80 && 'text-error')}>
+          {row.count > 0 ? fmtPct(row.successRate) : '—'}
         </span>
       ),
     },
@@ -235,18 +235,6 @@ export function ToolsPage() {
         : <span className="text-text-disabled">—</span>,
     },
     {
-      key: 'successRate',
-      label: 'Success',
-      align: 'right',
-      sortable: true,
-      width: '80px',
-      render: (row) => (
-        <span className={clsx('font-mono', row.successRate < 95 && 'text-warning', row.successRate < 80 && 'text-error')}>
-          {row.count > 0 ? fmtPct(row.successRate) : '—'}
-        </span>
-      ),
-    },
-    {
       key: 'lastUsed',
       label: 'Last Used',
       sortable: true,
@@ -261,71 +249,62 @@ export function ToolsPage() {
     <div className="space-y-6">
       <ObsControlBar
         title={<h1 className="font-heading text-2xl font-bold text-text-primary">Tools</h1>}
+        datasets={DATASETS}
+        dataset={tsDataset}
+        onDatasetChange={(d) => setTsDataset(d as Dataset)}
         range={range}
         onRangeChange={setRange}
         granularity={granularity}
         onGranularityChange={setGranularity}
         filters={inactiveCount > 0 ? (
-          <FilterToggle label={`Missing (${inactiveCount})`} active={showMissing} onToggle={() => setShowMissing(!showMissing)} activeColor="accent" />
+          <FilterToggle label={`Missing (${inactiveCount})`} active={showMissing} onToggle={() => setShowMissing(!showMissing)} />
         ) : undefined}
         activeFilterCount={showMissing ? 1 : 0}
       />
 
-      <div className="grid grid-cols-4 gap-4">
-        <StatCard
-          label="Tool Calls"
-          value={fmtCalls(totalCalls)}
-          accent="neutral"
-          secondary={totalErrors === 0
-            ? { value: 'No errors', accent: 'success' }
-            : { value: fmtNumber(totalErrors), label: 'errors', accent: totalErrors / Math.max(totalCalls, 1) < 0.05 ? 'warning' : 'error' }
-          }
-        />
+      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4">
         <StatCard label="Active Tools" value={fmtNumber(activeTools)} />
+        <StatCard label="Tool Calls" value={fmtCalls(totalCalls)} accent="neutral" />
         <StatCard
-          label="Latency"
-          value={weightedP50 > 0 ? fmtMs(weightedP50) : '—'}
-          valueLabel={weightedP50 > 0 ? 'p50' : undefined}
-          secondary={weightedP95 > 0 ? {
-            value: fmtMs(weightedP95),
-            label: 'p95',
-            accent: weightedP95 < 1000 ? 'success' : weightedP95 < 5000 ? 'warning' : 'error',
-          } : undefined}
+          label="Errors"
+          value={totalErrors === 0 ? '0' : fmtNumber(totalErrors)}
+          accent={totalErrors === 0 ? 'success' : totalErrors / Math.max(totalCalls, 1) < 0.05 ? 'warning' : 'error'}
         />
         <StatCard
           label="Success Rate"
           value={fmtPct(avgSuccessRate)}
           accent={avgSuccessRate >= 99 ? 'success' : avgSuccessRate >= 95 ? 'warning' : 'error'}
         />
+        <StatCard
+          label="P50 Latency"
+          value={weightedP50 > 0 ? fmtMs(weightedP50) : '—'}
+          accent={weightedP50 > 0 ? (weightedP50 < 1000 ? 'success' : weightedP50 < 5000 ? 'warning' : 'error') : undefined}
+        />
+        <StatCard
+          label="P95 Latency"
+          value={weightedP95 > 0 ? fmtMs(weightedP95) : '—'}
+          accent={weightedP95 > 0 ? (weightedP95 < 1000 ? 'success' : weightedP95 < 5000 ? 'warning' : 'error') : undefined}
+        />
       </div>
 
       {filtered.length > 0 && (
         <>
-          <div className="flex gap-4 items-stretch h-[320px]">
-            {/* Time series chart */}
-            {hasTimeSeries && (
-              <div className="flex-1 min-w-0 rounded-lg border border-border-primary bg-bg-secondary p-4 h-full flex flex-col">
-                <div className="flex items-center justify-between mb-3 shrink-0">
-                  <div className="flex items-center gap-2">
+          <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 h-[350px] flex flex-col">
+            <div className="flex-1 min-h-0 flex">
+              {/* Time series */}
+              {hasTimeSeries && (
+                <div className="flex-1 min-w-0 flex flex-col">
+                  <div className="flex items-center justify-between mb-2 shrink-0">
                     <h3 className="text-sm font-medium text-text-secondary">{timeSeriesTitle}</h3>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={tsDataset}
-                      onChange={(e) => setTsDataset(e.target.value as Dataset)}
-                      className="text-xs bg-bg-tertiary border border-border-primary rounded px-1.5 py-0.5 text-text-secondary focus:outline-none focus:border-accent cursor-pointer"
-                    >
-                      {DATASETS.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
-                    </select>
                     {tsDataset !== 'velocity' && (
                       <div className="flex gap-1">
-                        {(['bar', 'line'] as const).map((t) => (
+                        {(['line', 'bar'] as const).map((t) => (
                           <button
                             key={t}
                             onClick={() => setChartType(t)}
                             className={clsx(
                               'px-2 py-0.5 text-xs rounded transition-colors',
-                              chartType === t ? 'bg-accent/20 text-accent' : 'text-text-muted hover:text-text-secondary'
+                              chartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'
                             )}
                           >
                             {t}
@@ -334,8 +313,8 @@ export function ToolsPage() {
                       </div>
                     )}
                   </div>
-                </div>
-                <div className="flex-1 min-h-0">
+                  <div className="h-1" />
+                  <div className="flex-1 min-h-0">
                   <ResponsiveContainer width="100%" height="100%">
                     {tsDataset === 'velocity' ? (
                       <AreaChart data={data.byDayVelocity}>
@@ -367,124 +346,127 @@ export function ToolsPage() {
                       </AreaChart>
                     )}
                   </ResponsiveContainer>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Distribution chart */}
-            <div className="w-[400px] shrink-0 rounded-lg border border-border-primary bg-bg-secondary p-4 h-full flex flex-col">
-              <div className="flex items-center justify-between mb-3 shrink-0">
-                <h3 className="text-sm font-medium text-text-secondary">{distTitle}</h3>
-                <select
-                  value={distDataset}
-                  onChange={(e) => setDistDataset(e.target.value as Dataset)}
-                  className="text-xs bg-bg-tertiary border border-border-primary rounded px-1.5 py-0.5 text-text-secondary focus:outline-none focus:border-accent cursor-pointer"
-                >
-                  {DATASETS.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
-                </select>
-              </div>
+              {/* Vertical divider */}
+              <div className="w-px bg-border-primary shrink-0 mx-5" />
 
-              {distDataset === 'calls' && (
-                <div className="flex-1 min-h-0 flex gap-3">
-                  <div className="flex-1 min-w-0 min-h-0 flex items-center">
-                    <ResponsiveContainer width="100%" height="100%">
+              {/* Distribution */}
+              <div className="w-[360px] shrink-0 flex flex-col">
+                <div className="flex items-center justify-between mb-3 shrink-0">
+                  <h3 className="text-sm font-medium text-text-secondary">{distTitle}</h3>
+                  <div className="flex gap-1">
+                    {(['donut', 'bar'] as const).map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => setDistChartType(t)}
+                        className={clsx(
+                          'px-2 py-0.5 text-xs rounded transition-colors',
+                          distChartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'
+                        )}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+              {tsDataset === 'calls' && (
+                <div className="flex-1 min-h-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    {distChartType === 'donut' ? (
                       <PieChart>
                         <Pie data={callsDonut} dataKey="count" nameKey="tool" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
                           {callsDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
                         </Pie>
                         <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                       </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="flex flex-col gap-1.5 justify-center shrink-0 w-36">
-                    {callsDonut.map((row, i) => (
-                      <div key={row.name} className="flex items-center gap-1.5 text-xs min-w-0">
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                        <span className="font-mono text-text-secondary truncate flex-1">{row.tool}</span>
-                        <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtNumber(row.count)}</span>
-                      </div>
-                    ))}
-                  </div>
+                    ) : (
+                      <BarChart layout="vertical" data={callsDonut}>
+                        <CartesianGrid {...gridProps} horizontal={false} />
+                        <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
+                        <YAxis type="category" dataKey="tool" {...axisProps} width={72} tick={{ fontSize: 10 }} />
+                        <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
+                        <Bar dataKey="count" name="Calls" radius={[0, 2, 2, 0]}>
+                          {callsDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                        </Bar>
+                      </BarChart>
+                    )}
+                  </ResponsiveContainer>
                 </div>
               )}
 
-              {distDataset === 'churn' && (
-                <>
-                  <div className="flex-1 min-h-0">
-                    {topChurnTools.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart layout="vertical" data={topChurnTools}>
-                          <CartesianGrid {...gridProps} horizontal={false} />
-                          <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
-                          <YAxis type="category" dataKey="tool" {...axisProps} width={72} tick={{ fontSize: 10 }} />
-                          <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
-                          <Bar dataKey="linesAdded" stackId="a" fill={CHART_PALETTE[2]} name="Added" radius={[0, 0, 0, 0]} />
-                          <Bar dataKey="linesRemoved" stackId="a" fill={CHART_PALETTE[4]} name="Removed" radius={[0, 2, 2, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="flex items-center justify-center h-full text-xs text-text-muted">No churn data</div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 mt-2 text-xs shrink-0">
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: CHART_PALETTE[2] }} />Added</span>
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: CHART_PALETTE[4] }} />Removed</span>
-                  </div>
-                </>
-              )}
-
-              {distDataset === 'projects' && (
-                <div className="flex-1 min-h-0 flex gap-3">
-                  {projectsDonut.length > 0 ? (
-                    <>
-                      <div className="flex-1 min-w-0 min-h-0 flex items-center">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie data={projectsDonut} dataKey="count" nameKey="project" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
-                              {projectsDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
-                            </Pie>
-                            <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      </div>
-                      <div className="flex flex-col gap-1.5 justify-center shrink-0 w-44">
-                        {projectsDonut.map((row, i) => (
-                          <div key={row.project} className="flex items-center gap-1.5 text-xs min-w-0">
-                            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                            <span className="font-mono text-text-secondary truncate flex-1">{fmtProject(row.project)}</span>
-                            <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtNumber(row.count)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </>
+              {tsDataset === 'churn' && (
+                <div className="flex-1 min-h-0">
+                  {topChurnTools.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart layout="vertical" data={topChurnTools}>
+                        <CartesianGrid {...gridProps} horizontal={false} />
+                        <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
+                        <YAxis type="category" dataKey="tool" {...axisProps} width={72} tick={{ fontSize: 10 }} />
+                        <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+                        <Bar dataKey="linesAdded" stackId="a" fill={CHART_PALETTE[2]} name="Added" radius={[0, 0, 0, 0]} />
+                        <Bar dataKey="linesRemoved" stackId="a" fill={CHART_PALETTE[4]} name="Removed" radius={[0, 2, 2, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
                   ) : (
-                    <div className="flex items-center justify-center flex-1 text-xs text-text-muted">No project data</div>
+                    <div className="flex items-center justify-center h-full text-xs text-text-muted">No churn data</div>
                   )}
                 </div>
               )}
 
-              {distDataset === 'velocity' && (
-                <>
-                  <div className="flex-1 min-h-0">
-                    {topVelocityTools.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart layout="vertical" data={topVelocityTools}>
+              {tsDataset === 'projects' && (
+                <div className="flex-1 min-h-0">
+                  {projectsDonut.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      {distChartType === 'donut' ? (
+                        <PieChart>
+                          <Pie data={projectsDonut} dataKey="count" nameKey="project" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                            {projectsDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                          </Pie>
+                          <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
+                        </PieChart>
+                      ) : (
+                        <BarChart layout="vertical" data={projectsDonut}>
                           <CartesianGrid {...gridProps} horizontal={false} />
-                          <XAxis type="number" {...axisProps} />
-                          <YAxis type="category" dataKey="tool" {...axisProps} width={72} tick={{ fontSize: 10 }} />
-                          <Tooltip contentStyle={tooltipStyle} formatter={(v) => [v, 'Calls/Session']} />
-                          <Bar dataKey="velocity" fill={CHART_PALETTE[0]} name="Velocity" radius={[0, 2, 2, 0]} />
+                          <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
+                          <YAxis type="category" dataKey="project" {...axisProps} width={72} tick={{ fontSize: 10 }} />
+                          <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
+                          <Bar dataKey="count" name="Usage" radius={[0, 2, 2, 0]}>
+                            {projectsDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                          </Bar>
                         </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="flex items-center justify-center h-full text-xs text-text-muted">No velocity data</div>
-                    )}
-                  </div>
-                  <p className="mt-2 text-xs text-text-muted shrink-0">avg calls per session</p>
-                </>
+                      )}
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-xs text-text-muted">No project data</div>
+                  )}
+                </div>
               )}
 
-              {distDataset === 'errors' && (
+              {tsDataset === 'velocity' && (
+                <div className="flex-1 min-h-0">
+                  {topVelocityTools.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart layout="vertical" data={topVelocityTools}>
+                        <CartesianGrid {...gridProps} horizontal={false} />
+                        <XAxis type="number" {...axisProps} />
+                        <YAxis type="category" dataKey="tool" {...axisProps} width={72} tick={{ fontSize: 10 }} />
+                        <Tooltip contentStyle={tooltipStyle} formatter={(v) => [v, 'Calls/Session']} />
+                        <Bar dataKey="velocity" name="Velocity" radius={[0, 2, 2, 0]}>
+                          {topVelocityTools.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-xs text-text-muted">No velocity data</div>
+                  )}
+                </div>
+              )}
+
+              {tsDataset === 'errors' && (
                 <div className="flex-1 min-h-0">
                   {topErrorTools.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
@@ -493,7 +475,9 @@ export function ToolsPage() {
                         <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
                         <YAxis type="category" dataKey="tool" {...axisProps} width={72} tick={{ fontSize: 10 }} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(v) => [fmtNumber(Number(v)), 'Errors']} />
-                        <Bar dataKey="errorCount" fill={CHART_PALETTE[4]} name="Errors" radius={[0, 2, 2, 0]} />
+                        <Bar dataKey="errorCount" name="Errors" radius={[0, 2, 2, 0]}>
+                          {topErrorTools.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                        </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (
@@ -502,7 +486,7 @@ export function ToolsPage() {
                 </div>
               )}
 
-              {distDataset === 'latency' && (
+              {tsDataset === 'latency' && (
                 <div className="flex-1 min-h-0">
                   {topLatencyTools.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
@@ -511,7 +495,9 @@ export function ToolsPage() {
                         <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtMs(Number(v))} />
                         <YAxis type="category" dataKey="tool" {...axisProps} width={72} tick={{ fontSize: 10 }} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(v) => [fmtMs(Number(v)), 'p50 Latency']} />
-                        <Bar dataKey="p50Ms" fill={CHART_PALETTE[1]} name="p50 Latency" radius={[0, 2, 2, 0]} />
+                        <Bar dataKey="p50Ms" name="p50 Latency" radius={[0, 2, 2, 0]}>
+                          {topLatencyTools.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                        </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (
@@ -520,36 +506,52 @@ export function ToolsPage() {
                 </div>
               )}
 
-              {distDataset === 'sessions' && (
-                <div className="flex-1 min-h-0 flex gap-3">
+              {tsDataset === 'sessions' && (
+                <div className="flex-1 min-h-0">
                   {sessionsDonut.length > 0 ? (
-                    <>
-                      <div className="flex-1 min-w-0 min-h-0 flex items-center">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie data={sessionsDonut} dataKey="count" nameKey="tool" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
-                              {sessionsDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
-                            </Pie>
-                            <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      </div>
-                      <div className="flex flex-col gap-1.5 justify-center shrink-0 w-36">
-                        {sessionsDonut.map((row, i) => (
-                          <div key={row.name} className="flex items-center gap-1.5 text-xs min-w-0">
-                            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                            <span className="font-mono text-text-secondary truncate flex-1">{row.tool}</span>
-                            <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtNumber(row.count)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </>
+                    <ResponsiveContainer width="100%" height="100%">
+                      {distChartType === 'donut' ? (
+                        <PieChart>
+                          <Pie data={sessionsDonut} dataKey="count" nameKey="tool" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                            {sessionsDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                          </Pie>
+                          <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
+                        </PieChart>
+                      ) : (
+                        <BarChart layout="vertical" data={sessionsDonut}>
+                          <CartesianGrid {...gridProps} horizontal={false} />
+                          <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
+                          <YAxis type="category" dataKey="tool" {...axisProps} width={72} tick={{ fontSize: 10 }} />
+                          <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
+                          <Bar dataKey="count" name="Sessions" radius={[0, 2, 2, 0]}>
+                            {sessionsDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                          </Bar>
+                        </BarChart>
+                      )}
+                    </ResponsiveContainer>
                   ) : (
-                    <div className="flex items-center justify-center flex-1 text-xs text-text-muted">No session data</div>
+                    <div className="flex items-center justify-center h-full text-xs text-text-muted">No session data</div>
                   )}
                 </div>
               )}
+              </div>
             </div>
+            {/* Shared legend */}
+            {tsDataset === 'churn' ? (
+              <div className="flex items-center justify-center gap-4 mt-4 mb-1 text-xs shrink-0">
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: CHART_PALETTE[2] }} />Added</span>
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: CHART_PALETTE[4] }} />Removed</span>
+              </div>
+            ) : tsKeys.length > 0 && (
+              <div className="flex items-center justify-center gap-4 mt-4 mb-1 text-xs shrink-0 flex-wrap">
+                {tsKeys.map((name, i) => (
+                  <span key={name} className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                    <span className="font-mono text-text-secondary">{fmtLegendLabel(name)}</span>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </>
       )}
@@ -561,7 +563,7 @@ export function ToolsPage() {
         onRowClick={(row) => navigate(`/observability/tools/${encodeURIComponent(row.name)}`)}
       />
 
-      <QueryTiming ms={data.queryTimeMs} />
+      <QueryTiming ms={data.queryTimeMs} rows={data.totalRows} />
     </div>
   );
 }

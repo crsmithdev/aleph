@@ -1,4 +1,4 @@
-import { shortDate } from '../../utils/format';
+import { shortDate, fmtNumber } from '../../utils/format';
 
 export const CHART_PALETTE = [
   'var(--chart-1)',
@@ -28,6 +28,7 @@ export const axisProps = {
   tickLine: false as const,
   axisLine: false as const,
   domain: [0, 'auto'] as [number, string],
+  tickFormatter: (v: number) => fmtNumber(v),
 };
 
 // Use this instead of {...axisProps} tickFormatter={shortDate} on all date XAxes.

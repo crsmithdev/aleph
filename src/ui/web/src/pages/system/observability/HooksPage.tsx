@@ -8,10 +8,9 @@ import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
-import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtMs, fmtPct, dateTime, shortDate, shortRelativeTime, fmtLegendLabel } from '../../../utils/format';
+import { fmtNumber, fmtMs, fmtPct, dateTime, shortRelativeTime, fmtLegendLabel } from '../../../utils/format';
 import { clsx } from 'clsx';
 
 type HookRow = {
@@ -38,7 +37,6 @@ type InvocationRow = {
   hooks: Array<{ command: string; durationMs?: number; exitCode?: number; output?: string }>;
 };
 
-type ViewMode = 'by-hook' | 'by-event';
 type HookDataset = 'by-hook' | 'by-event' | 'latency' | 'errors';
 
 const HOOK_DATASETS: { key: HookDataset; label: string }[] = [
@@ -54,394 +52,6 @@ function fmtCalls(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
   if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
   return String(n);
-}
-
-function ByHookView({ range, granularity }: { range: TimeRange; granularity: Granularity }) {
-  const navigate = useNavigate();
-  const { data, isLoading, error, refetch } = useObsHooks(range, granularity);
-  const [showMissing, setShowMissing] = useState(false);
-  const [showUnused, setShowUnused] = useState(false);
-  const [chartType, setChartType] = useState<'bar' | 'line'>('line');
-  const [dataset, setDataset] = useState<HookDataset>('by-hook');
-
-  if (isLoading) return <PageLoading />;
-  if (error || !data) return <ErrorState message="Failed to load hooks" retry={refetch} />;
-
-  const rankedWithRate: HookRow[] = data.ranked.map(r => ({
-    ...r,
-    successRate: r.count > 0 ? ((r.count - r.errors) / r.count) * 100 : 100,
-  }));
-  const unusedRows: HookRow[] = (data.unused || []).map(h => ({
-    command: h.command, event: h.event, count: 0, avgMs: 0, p50Ms: 0, p95Ms: 0, errors: 0, active: true, successRate: 100,
-    blocking: h.blocking, gate: h.gate, markerFile: h.markerFile, description: h.description,
-  }));
-
-  const missingCount = rankedWithRate.filter(r => !r.active).length;
-
-  let filtered = rankedWithRate.filter(r => r.active);
-  if (showMissing) filtered = [...filtered, ...rankedWithRate.filter(r => !r.active)];
-  if (showUnused) filtered = [...filtered, ...unusedRows];
-
-  const totalExecutions = filtered.filter(r => r.count > 0).reduce((s, r) => s + r.count, 0);
-  const totalErrors = filtered.reduce((s, r) => s + r.errors, 0);
-  const activeWithCounts = filtered.filter(r => r.active && r.count > 0);
-  const avgSuccessRate = activeWithCounts.length > 0
-    ? activeWithCounts.reduce((s, r) => s + r.successRate, 0) / activeWithCounts.length
-    : 100;
-
-  const toolsWithLatency = filtered.filter(r => r.count > 0);
-  const totalCount = toolsWithLatency.reduce((s, r) => s + r.count, 0);
-  const weightedP50 = totalCount > 0
-    ? toolsWithLatency.reduce((s, r) => s + r.p50Ms * r.count, 0) / totalCount
-    : 0;
-  const weightedP95 = totalCount > 0
-    ? toolsWithLatency.reduce((s, r) => s + r.p95Ms * r.count, 0) / totalCount
-    : 0;
-
-  // By-hook time series
-  const topHookNames: string[] = (() => {
-    const totals: Record<string, number> = {};
-    for (const day of data.byDay) {
-      for (const [hook, count] of Object.entries(day.hooks ?? {})) {
-        totals[hook] = (totals[hook] ?? 0) + count;
-      }
-    }
-    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([n]) => n);
-  })();
-  const stackedByHook = data.byDay.map(day => {
-    const entry: Record<string, unknown> = { date: day.date };
-    for (const name of topHookNames) entry[name] = (day.hooks ?? {})[name] ?? 0;
-    return entry;
-  });
-
-  // By-event time series (derived from byDay.hooks + ranked event map)
-  const hookEventMap = Object.fromEntries(rankedWithRate.map(r => [r.command, r.event]));
-  const topEventNames: string[] = (() => {
-    const totals: Record<string, number> = {};
-    for (const day of data.byDay) {
-      for (const [hook, count] of Object.entries(day.hooks ?? {})) {
-        const ev = hookEventMap[hook] ?? 'unknown';
-        totals[ev] = (totals[ev] ?? 0) + count;
-      }
-    }
-    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([e]) => e);
-  })();
-  const stackedByEvent = data.byDay.map(day => {
-    const entry: Record<string, unknown> = { date: day.date };
-    const evCounts: Record<string, number> = {};
-    for (const [hook, count] of Object.entries(day.hooks ?? {})) {
-      const ev = hookEventMap[hook] ?? 'unknown';
-      evCounts[ev] = (evCounts[ev] ?? 0) + count;
-    }
-    for (const e of topEventNames) entry[e] = evCounts[e] ?? 0;
-    return entry;
-  });
-
-  // Event donut (aggregate)
-  const byEventAll = data.byEvent ?? [];
-  const top5Events = byEventAll.slice(0, 5);
-  const eventsOther = byEventAll.slice(5).reduce((s, r) => s + r.count, 0);
-  const eventDonut = eventsOther > 0 ? [...top5Events, { event: 'Other', count: eventsOther }] : top5Events;
-
-  // By-latency time series (top hooks by latency)
-  const topLatencyHookNames: string[] = (() => {
-    const totals: Record<string, number> = {};
-    for (const day of (data.byDayLatency ?? [])) {
-      for (const [hook, val] of Object.entries(day.hooks ?? {})) {
-        totals[hook] = (totals[hook] ?? 0) + val;
-      }
-    }
-    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([n]) => n);
-  })();
-  const stackedByLatency = (data.byDayLatency ?? []).map(day => {
-    const entry: Record<string, unknown> = { date: day.date };
-    for (const name of topLatencyHookNames) entry[name] = (day.hooks ?? {})[name] ?? 0;
-    return entry;
-  });
-
-  // By-errors time series (top hooks by errors)
-  const topErrorHookNames: string[] = (() => {
-    const totals: Record<string, number> = {};
-    for (const day of (data.byDayErrors ?? [])) {
-      for (const [hook, val] of Object.entries(day.hooks ?? {})) {
-        totals[hook] = (totals[hook] ?? 0) + val;
-      }
-    }
-    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([n]) => n);
-  })();
-  const stackedByErrors = (data.byDayErrors ?? []).map(day => {
-    const entry: Record<string, unknown> = { date: day.date };
-    for (const name of topErrorHookNames) entry[name] = (day.hooks ?? {})[name] ?? 0;
-    return entry;
-  });
-
-  const topErrorHooksForDist = [...rankedWithRate].filter(r => r.errors > 0).sort((a, b) => b.errors - a.errors).slice(0, 10);
-  const topLatencyHooksForDist = [...rankedWithRate].filter(r => r.count > 0).sort((a, b) => b.p50Ms - a.p50Ms).slice(0, 10);
-
-  const activeKeys = dataset === 'by-hook' ? topHookNames
-    : dataset === 'by-event' ? topEventNames
-    : dataset === 'latency' ? topLatencyHookNames
-    : topErrorHookNames;
-  const activeData = dataset === 'by-hook' ? stackedByHook
-    : dataset === 'by-event' ? stackedByEvent
-    : dataset === 'latency' ? stackedByLatency
-    : stackedByErrors;
-  const segLabel = dataset === 'by-hook' ? 'Hook'
-    : dataset === 'by-event' ? 'Event'
-    : dataset === 'latency' ? 'Hook (Latency)'
-    : 'Hook (Errors)';
-  const timeSeriesTitle = `${GRAN_LABEL[granularity]} ${dataset === 'latency' ? 'Latency' : dataset === 'errors' ? 'Errors' : 'Executions'} by ${dataset === 'by-event' ? 'Event' : 'Hook'}`;
-
-  const columns: Column<HookRow>[] = [
-    {
-      key: 'command',
-      label: 'Hook',
-      sortable: true,
-      render: (row) => (
-        <span className={clsx('font-mono', row.count === 0 ? 'text-text-muted' : 'text-text-primary')}>
-          {row.command}
-          {row.count === 0 && <span className="ml-2 text-xs text-text-disabled uppercase">unused</span>}
-          {!row.active && row.count > 0 && <span className="ml-2 text-xs text-warning uppercase">missing</span>}
-        </span>
-      ),
-    },
-    {
-      key: 'event',
-      label: 'Event',
-      width: '160px',
-      render: (row) => <span className="text-text-secondary whitespace-nowrap">{row.event}</span>,
-    },
-    {
-      key: 'count',
-      label: 'Count',
-      align: 'right',
-      sortable: true,
-      width: '80px',
-      render: (row) => <span className="font-mono">{fmtNumber(row.count)}</span>,
-    },
-    {
-      key: 'errors',
-      label: 'Errors',
-      align: 'right',
-      sortable: true,
-      width: '70px',
-      render: (row) => (
-        <span className={clsx('font-mono', row.errors > 0 && 'text-error font-medium')}>
-          {row.errors > 0 ? fmtNumber(row.errors) : '—'}
-        </span>
-      ),
-    },
-    {
-      key: 'p50Ms',
-      label: 'P50',
-      align: 'right',
-      sortable: true,
-      width: '70px',
-      render: (row) => row.count > 0
-        ? <span className="font-mono">{fmtMs(row.p50Ms)}</span>
-        : <span className="text-text-disabled">—</span>,
-    },
-    {
-      key: 'p95Ms',
-      label: 'P95',
-      align: 'right',
-      sortable: true,
-      width: '70px',
-      render: (row) => row.count > 0
-        ? <span className={clsx('font-mono', row.p95Ms > 500 && 'text-warning')}>{fmtMs(row.p95Ms)}</span>
-        : <span className="text-text-disabled">—</span>,
-    },
-    {
-      key: 'successRate',
-      label: 'Success',
-      align: 'right',
-      sortable: true,
-      width: '80px',
-      render: (row) => row.count > 0
-        ? <span className={clsx('font-mono', row.successRate < 95 && 'text-warning', row.successRate < 80 && 'text-error')}>{fmtPct(row.successRate)}</span>
-        : <span className="text-text-disabled">—</span>,
-    },
-    {
-      key: 'lastUsed',
-      label: 'Last Used',
-      sortable: true,
-      width: '100px',
-      render: (row) => row.lastUsed
-        ? <span className="text-text-secondary whitespace-nowrap">{shortRelativeTime(row.lastUsed)}</span>
-        : <span className="text-text-disabled">—</span>,
-    },
-  ];
-
-  return (
-    <>
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        <StatCard
-          label="Hook Executions"
-          value={fmtCalls(totalExecutions)}
-          accent="neutral"
-          secondary={{
-            value: totalErrors === 0 ? 'No errors' : `${fmtNumber(totalErrors)} errors`,
-            accent: totalErrors === 0 ? 'success' : totalErrors / Math.max(totalExecutions, 1) < 0.05 ? 'warning' : 'error',
-          }}
-        />
-        <StatCard
-          label="Latency"
-          value={weightedP50 > 0 ? fmtMs(weightedP50) : '—'}
-          valueLabel={weightedP50 > 0 ? 'p50' : undefined}
-          secondary={weightedP95 > 0 ? {
-            value: fmtMs(weightedP95),
-            label: 'p95',
-            accent: weightedP95 < 500 ? 'success' : weightedP95 < 2000 ? 'warning' : 'error',
-          } : undefined}
-        />
-        <StatCard
-          label="Success Rate"
-          value={fmtPct(avgSuccessRate)}
-          accent={avgSuccessRate >= 99 ? 'success' : avgSuccessRate >= 95 ? 'warning' : 'error'}
-        />
-      </div>
-
-      {data.byDay.length > 0 && (
-        <>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-text-muted">Dataset</span>
-            <div className="flex items-center gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
-              {HOOK_DATASETS.map(d => (
-                <button
-                  key={d.key}
-                  onClick={() => setDataset(d.key)}
-                  className={clsx(
-                    'px-3 py-1 text-xs rounded transition-colors whitespace-nowrap',
-                    dataset === d.key
-                      ? 'bg-bg-secondary text-text-primary shadow-sm'
-                      : 'text-text-muted hover:text-text-primary'
-                  )}
-                >
-                  {d.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex gap-4 items-stretch h-[320px]">
-            <div className="flex-1 min-w-0 h-full">
-              <ChartContainer title={timeSeriesTitle} chartType={chartType} onChartTypeChange={setChartType} fill className="h-full">
-                {chartType === 'bar' ? (
-                  <BarChart data={activeData}>
-                    <CartesianGrid {...gridProps} />
-                    <XAxis dataKey="date" {...xAxisDateProps} />
-                    <YAxis {...axisProps} />
-                    <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
-                    {activeKeys.map((name, i) => (
-                      <Bar key={name} dataKey={name} name={fmtLegendLabel(name)} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === activeKeys.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
-                    ))}
-                  </BarChart>
-                ) : (
-                  <AreaChart data={activeData}>
-                    <CartesianGrid {...gridProps} />
-                    <XAxis dataKey="date" {...xAxisDateProps} />
-                    <YAxis {...axisProps} />
-                    <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
-                    {activeKeys.map((name, i) => (
-                      <Area key={name} type="monotone" dataKey={name} name={fmtLegendLabel(name)} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
-                    ))}
-                  </AreaChart>
-                )}
-              </ChartContainer>
-            </div>
-            <div className="flex flex-col rounded-lg border border-border-primary bg-bg-secondary p-4 w-[400px] shrink-0 h-full">
-              {(dataset === 'by-hook' || dataset === 'by-event') && eventDonut.length > 0 && (
-                <>
-                  <h3 className="mb-3 text-sm font-medium text-text-secondary shrink-0">Top Events</h3>
-                  <div className="flex-1 min-h-0 flex gap-3">
-                    <div className="flex-1 min-w-0 min-h-0 flex items-center">
-                      <ResponsiveContainer width="100%" height={212}>
-                        <PieChart>
-                          <Pie data={eventDonut} dataKey="count" nameKey="event" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
-                            {eventDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
-                          </Pie>
-                          <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <div className="flex flex-col gap-1.5 justify-center shrink-0 w-36">
-                      {eventDonut.map((row, i) => (
-                        <div key={row.event} className="flex items-center gap-1.5 text-xs min-w-0">
-                          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                          <span className="font-mono text-text-secondary truncate flex-1">{fmtLegendLabel(row.event)}</span>
-                          <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtNumber(row.count)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {dataset === 'latency' && (
-                <>
-                  <h3 className="mb-3 text-sm font-medium text-text-secondary shrink-0">Top Hooks by Latency</h3>
-                  <div className="flex-1 min-h-0">
-                    {topLatencyHooksForDist.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={212}>
-                        <BarChart layout="vertical" data={topLatencyHooksForDist}>
-                          <CartesianGrid {...gridProps} horizontal={false} />
-                          <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtMs(Number(v))} />
-                          <YAxis type="category" dataKey="command" {...axisProps} width={90} tick={{ fontSize: 10 }} />
-                          <Tooltip contentStyle={tooltipStyle} formatter={(v) => [fmtMs(Number(v)), 'p50 Latency']} />
-                          <Bar dataKey="p50Ms" fill={CHART_PALETTE[1]} name="p50 Latency" radius={[0, 2, 2, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="flex items-center justify-center h-full text-xs text-text-muted">No latency data</div>
-                    )}
-                  </div>
-                </>
-              )}
-
-              {dataset === 'errors' && (
-                <>
-                  <h3 className="mb-3 text-sm font-medium text-text-secondary shrink-0">Top Hooks by Errors</h3>
-                  <div className="flex-1 min-h-0">
-                    {topErrorHooksForDist.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={212}>
-                        <BarChart layout="vertical" data={topErrorHooksForDist}>
-                          <CartesianGrid {...gridProps} horizontal={false} />
-                          <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
-                          <YAxis type="category" dataKey="command" {...axisProps} width={90} tick={{ fontSize: 10 }} />
-                          <Tooltip contentStyle={tooltipStyle} formatter={(v) => [fmtNumber(Number(v)), 'Errors']} />
-                          <Bar dataKey="errors" fill={CHART_PALETTE[4]} name="Errors" radius={[0, 2, 2, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="flex items-center justify-center h-full text-xs text-text-muted">No errors</div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-
-      <div className="flex items-center gap-3">
-        {missingCount > 0 && (
-          <FilterToggle label={`Missing (${missingCount})`} active={showMissing} onToggle={() => setShowMissing(!showMissing)} activeColor="accent" />
-        )}
-        {unusedRows.length > 0 && (
-          <FilterToggle label={`Unused (${unusedRows.length})`} active={showUnused} onToggle={() => setShowUnused(!showUnused)} />
-        )}
-      </div>
-
-      <DataTable<HookRow>
-        data={filtered}
-        columns={columns}
-        keyField="command"
-        onRowClick={(row) => navigate(`/observability/hooks/${encodeURIComponent(row.command)}`)}
-      />
-
-      <QueryTiming ms={data.queryTimeMs} />
-    </>
-  );
 }
 
 function ByEventView({ range }: { range: TimeRange }) {
@@ -573,33 +183,416 @@ function ByEventView({ range }: { range: TimeRange }) {
   );
 }
 
-const VIEW_DATASETS: { key: ViewMode; label: string }[] = [
-  { key: 'by-hook', label: 'By Hook' },
-  { key: 'by-event', label: 'By Event' },
-];
-
 export function HooksPage() {
+  const navigate = useNavigate();
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<Granularity>('day');
-  const [view, setView] = useState<ViewMode>('by-hook');
+  const [showMissing, setShowMissing] = useState(false);
+  const [showUnused, setShowUnused] = useState(false);
+  const [chartType, setChartType] = useState<'bar' | 'line'>('line');
+  const [dataset, setDataset] = useState<HookDataset>('by-hook');
+  const { data, isLoading, error, refetch } = useObsHooks(range, granularity);
+
+  if (isLoading) return <PageLoading />;
+  if (error || !data) return <ErrorState message="Failed to load hooks" retry={refetch} />;
+
+  const rankedWithRate: HookRow[] = data.ranked.map(r => ({
+    ...r,
+    successRate: r.count > 0 ? ((r.count - r.errors) / r.count) * 100 : 100,
+  }));
+  const unusedRows: HookRow[] = (data.unused || []).map(h => ({
+    command: h.command, event: h.event, count: 0, avgMs: 0, p50Ms: 0, p95Ms: 0, errors: 0, active: true, successRate: 100,
+    blocking: h.blocking, gate: h.gate, markerFile: h.markerFile, description: h.description,
+  }));
+
+  const missingCount = rankedWithRate.filter(r => !r.active).length;
+
+  let filtered = rankedWithRate.filter(r => r.active);
+  if (showMissing) filtered = [...filtered, ...rankedWithRate.filter(r => !r.active)];
+  if (showUnused) filtered = [...filtered, ...unusedRows];
+
+  const activeHooks = filtered.filter(r => r.count > 0).length;
+  const totalExecutions = filtered.filter(r => r.count > 0).reduce((s, r) => s + r.count, 0);
+  const totalErrors = filtered.reduce((s, r) => s + r.errors, 0);
+  const activeWithCounts = filtered.filter(r => r.active && r.count > 0);
+  const avgSuccessRate = activeWithCounts.length > 0
+    ? activeWithCounts.reduce((s, r) => s + r.successRate, 0) / activeWithCounts.length
+    : 100;
+
+  const toolsWithLatency = filtered.filter(r => r.count > 0);
+  const totalCount = toolsWithLatency.reduce((s, r) => s + r.count, 0);
+  const weightedP50 = totalCount > 0
+    ? toolsWithLatency.reduce((s, r) => s + r.p50Ms * r.count, 0) / totalCount
+    : 0;
+  const weightedP95 = totalCount > 0
+    ? toolsWithLatency.reduce((s, r) => s + r.p95Ms * r.count, 0) / totalCount
+    : 0;
+
+  // By-hook time series
+  const topHookNames: string[] = (() => {
+    const totals: Record<string, number> = {};
+    for (const day of data.byDay) {
+      for (const [hook, count] of Object.entries(day.hooks ?? {})) {
+        totals[hook] = (totals[hook] ?? 0) + count;
+      }
+    }
+    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([n]) => n);
+  })();
+  const stackedByHook = data.byDay.map(day => {
+    const entry: Record<string, unknown> = { date: day.date };
+    for (const name of topHookNames) entry[name] = (day.hooks ?? {})[name] ?? 0;
+    return entry;
+  });
+
+  // By-event time series (derived from byDay.hooks + ranked event map)
+  const hookEventMap = Object.fromEntries(rankedWithRate.map(r => [r.command, r.event]));
+  const topEventNames: string[] = (() => {
+    const totals: Record<string, number> = {};
+    for (const day of data.byDay) {
+      for (const [hook, count] of Object.entries(day.hooks ?? {})) {
+        const ev = hookEventMap[hook] ?? 'unknown';
+        totals[ev] = (totals[ev] ?? 0) + count;
+      }
+    }
+    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([e]) => e);
+  })();
+  const stackedByEvent = data.byDay.map(day => {
+    const entry: Record<string, unknown> = { date: day.date };
+    const evCounts: Record<string, number> = {};
+    for (const [hook, count] of Object.entries(day.hooks ?? {})) {
+      const ev = hookEventMap[hook] ?? 'unknown';
+      evCounts[ev] = (evCounts[ev] ?? 0) + count;
+    }
+    for (const e of topEventNames) entry[e] = evCounts[e] ?? 0;
+    return entry;
+  });
+
+  // Event donut (aggregate)
+  const byEventAll = data.byEvent ?? [];
+  const top5Events = byEventAll.slice(0, 5);
+  const eventsOther = byEventAll.slice(5).reduce((s, r) => s + r.count, 0);
+  const eventDonut = eventsOther > 0 ? [...top5Events, { event: 'Other', count: eventsOther }] : top5Events;
+
+  // By-latency time series (top hooks by latency)
+  const topLatencyHookNames: string[] = (() => {
+    const totals: Record<string, number> = {};
+    for (const day of (data.byDayLatency ?? [])) {
+      for (const [hook, val] of Object.entries(day.hooks ?? {})) {
+        totals[hook] = (totals[hook] ?? 0) + val;
+      }
+    }
+    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([n]) => n);
+  })();
+  const stackedByLatency = (data.byDayLatency ?? []).map(day => {
+    const entry: Record<string, unknown> = { date: day.date };
+    for (const name of topLatencyHookNames) entry[name] = (day.hooks ?? {})[name] ?? 0;
+    return entry;
+  });
+
+  // By-errors time series (top hooks by errors)
+  const topErrorHookNames: string[] = (() => {
+    const totals: Record<string, number> = {};
+    for (const day of (data.byDayErrors ?? [])) {
+      for (const [hook, val] of Object.entries(day.hooks ?? {})) {
+        totals[hook] = (totals[hook] ?? 0) + val;
+      }
+    }
+    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([n]) => n);
+  })();
+  const stackedByErrors = (data.byDayErrors ?? []).map(day => {
+    const entry: Record<string, unknown> = { date: day.date };
+    for (const name of topErrorHookNames) entry[name] = (day.hooks ?? {})[name] ?? 0;
+    return entry;
+  });
+
+  const topErrorHooksForDist = [...rankedWithRate].filter(r => r.errors > 0).sort((a, b) => b.errors - a.errors).slice(0, 10);
+  const topLatencyHooksForDist = [...rankedWithRate].filter(r => r.count > 0).sort((a, b) => b.p50Ms - a.p50Ms).slice(0, 10);
+
+  const activeKeys = dataset === 'by-hook' ? topHookNames
+    : dataset === 'latency' ? topLatencyHookNames
+    : topErrorHookNames;
+  const activeData = dataset === 'by-hook' ? stackedByHook
+    : dataset === 'latency' ? stackedByLatency
+    : stackedByErrors;
+  const timeSeriesTitle = `${GRAN_LABEL[granularity]} ${dataset === 'latency' ? 'Latency' : dataset === 'errors' ? 'Errors' : 'Executions'} by Hook`;
+
+  const distTitle = dataset === 'latency' ? 'Top Hooks by Latency'
+    : dataset === 'errors' ? 'Top Hooks by Errors'
+    : 'Top Events';
+
+  const filterControls = (
+    <>
+      {missingCount > 0 && (
+        <FilterToggle label={`Missing (${missingCount})`} active={showMissing} onToggle={() => setShowMissing(!showMissing)} />
+      )}
+      {unusedRows.length > 0 && (
+        <FilterToggle label={`Unused (${unusedRows.length})`} active={showUnused} onToggle={() => setShowUnused(!showUnused)} />
+      )}
+    </>
+  );
+
+  const activeFilterCount = (showMissing ? 1 : 0) + (showUnused ? 1 : 0);
+
+  const columns: Column<HookRow>[] = [
+    {
+      key: 'command',
+      label: 'Hook',
+      sortable: true,
+      shrink: true,
+      render: (row) => (
+        <span className={clsx('font-mono', row.count === 0 ? 'text-text-muted' : 'text-text-primary')}>
+          {row.command}
+          {row.count === 0 && <span className="ml-2 text-xs text-text-disabled uppercase">unused</span>}
+          {!row.active && row.count > 0 && <span className="ml-2 text-xs text-warning uppercase">missing</span>}
+        </span>
+      ),
+    },
+    {
+      key: 'event',
+      label: 'Event',
+      sortable: true,
+      shrink: true,
+      render: (row) => <span className="text-text-secondary whitespace-nowrap">{row.event}</span>,
+    },
+    {
+      key: 'count',
+      label: 'Count',
+      align: 'right',
+      sortable: true,
+      shrink: true,
+      render: (row) => <span className="font-mono">{fmtNumber(row.count)}</span>,
+    },
+    {
+      key: 'errors',
+      label: 'Errors',
+      align: 'right',
+      sortable: true,
+      width: '70px',
+      render: (row) => (
+        <span className={clsx('font-mono', row.errors > 0 && 'text-error font-medium')}>
+          {row.errors > 0 ? fmtNumber(row.errors) : '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'successRate',
+      label: 'Success',
+      align: 'right',
+      sortable: true,
+      width: '78px',
+      render: (row) => row.count > 0
+        ? <span className={clsx('font-mono', row.successRate < 95 && 'text-warning', row.successRate < 80 && 'text-error')}>{fmtPct(row.successRate)}</span>
+        : <span className="text-text-disabled">—</span>,
+    },
+    {
+      key: 'p50Ms',
+      label: 'P50',
+      align: 'right',
+      sortable: true,
+      width: '70px',
+      render: (row) => row.count > 0
+        ? <span className="font-mono">{fmtMs(row.p50Ms)}</span>
+        : <span className="text-text-disabled">—</span>,
+    },
+    {
+      key: 'p95Ms',
+      label: 'P95',
+      align: 'right',
+      sortable: true,
+      width: '70px',
+      render: (row) => row.count > 0
+        ? <span className={clsx('font-mono', row.p95Ms > 500 && 'text-warning')}>{fmtMs(row.p95Ms)}</span>
+        : <span className="text-text-disabled">—</span>,
+    },
+    {
+      key: 'lastUsed',
+      label: 'Last Used',
+      sortable: true,
+      width: '100px',
+      render: (row) => row.lastUsed
+        ? <span className="text-text-secondary whitespace-nowrap">{shortRelativeTime(row.lastUsed)}</span>
+        : <span className="text-text-disabled">—</span>,
+    },
+  ];
 
   return (
     <div className="space-y-6">
       <ObsControlBar
         title={<h1 className="font-heading text-2xl font-bold text-text-primary">Hooks</h1>}
+        datasets={HOOK_DATASETS}
+        dataset={dataset}
+        onDatasetChange={(d) => setDataset(d as HookDataset)}
         range={range}
         onRangeChange={setRange}
         granularity={granularity}
         onGranularityChange={setGranularity}
-        datasets={VIEW_DATASETS}
-        dataset={view}
-        onDatasetChange={(d) => setView(d as ViewMode)}
+        filters={filterControls}
+        activeFilterCount={activeFilterCount}
       />
 
-      {view === 'by-hook' ? (
-        <ByHookView range={range} granularity={granularity} />
-      ) : (
+      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4">
+        <StatCard label="Active Hooks" value={fmtNumber(activeHooks)} />
+        <StatCard label="Executions" value={fmtCalls(totalExecutions)} accent="neutral" />
+        <StatCard
+          label="Errors"
+          value={totalErrors === 0 ? '0' : fmtNumber(totalErrors)}
+          accent={totalErrors === 0 ? 'success' : totalErrors / Math.max(totalExecutions, 1) < 0.05 ? 'warning' : 'error'}
+        />
+        <StatCard
+          label="Success Rate"
+          value={fmtPct(avgSuccessRate)}
+          accent={avgSuccessRate >= 99 ? 'success' : avgSuccessRate >= 95 ? 'warning' : 'error'}
+        />
+        <StatCard
+          label="P50 Latency"
+          value={weightedP50 > 0 ? fmtMs(weightedP50) : '—'}
+          accent={weightedP50 > 0 ? (weightedP50 < 500 ? 'success' : weightedP50 < 2000 ? 'warning' : 'error') : undefined}
+        />
+        <StatCard
+          label="P95 Latency"
+          value={weightedP95 > 0 ? fmtMs(weightedP95) : '—'}
+          accent={weightedP95 > 0 ? (weightedP95 < 500 ? 'success' : weightedP95 < 2000 ? 'warning' : 'error') : undefined}
+        />
+      </div>
+
+      {dataset === 'by-event' ? (
         <ByEventView range={range} />
+      ) : (
+        <>
+          {data.byDay.length > 0 && (
+            <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 h-[350px] flex flex-col">
+              <div className="flex-1 min-h-0 flex">
+                <div className="flex-1 min-w-0 flex flex-col">
+                  <div className="flex items-center justify-between mb-2 shrink-0">
+                    <h3 className="text-sm font-medium text-text-secondary">{timeSeriesTitle}</h3>
+                    <div className="flex gap-1">
+                      {(['line', 'bar'] as const).map((t) => (
+                        <button
+                          key={t}
+                          onClick={() => setChartType(t)}
+                          className={clsx(
+                            'px-2 py-0.5 text-xs rounded transition-colors',
+                            chartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'
+                          )}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="h-1" />
+                  <div className="flex-1 min-h-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      {chartType === 'bar' ? (
+                        <BarChart data={activeData}>
+                          <CartesianGrid {...gridProps} />
+                          <XAxis dataKey="date" {...xAxisDateProps} />
+                          <YAxis {...axisProps} />
+                          <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
+                          {activeKeys.map((name, i) => (
+                            <Bar key={name} dataKey={name} name={fmtLegendLabel(name)} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === activeKeys.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
+                          ))}
+                        </BarChart>
+                      ) : (
+                        <AreaChart data={activeData}>
+                          <CartesianGrid {...gridProps} />
+                          <XAxis dataKey="date" {...xAxisDateProps} />
+                          <YAxis {...axisProps} />
+                          <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
+                          {activeKeys.map((name, i) => (
+                            <Area key={name} type="monotone" dataKey={name} name={fmtLegendLabel(name)} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
+                          ))}
+                        </AreaChart>
+                      )}
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="w-px bg-border-primary shrink-0 mx-5" />
+
+                <div className="w-[360px] shrink-0 flex flex-col">
+                  <div className="flex items-center justify-between mb-3 shrink-0">
+                    <h3 className="text-sm font-medium text-text-secondary">{distTitle}</h3>
+                  </div>
+
+                  {(dataset === 'by-hook') && (
+                    <div className="flex-1 min-h-0">
+                      {eventDonut.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie data={eventDonut} dataKey="count" nameKey="event" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                              {eventDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                            </Pie>
+                            <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="flex items-center justify-center h-full text-xs text-text-muted">No event data</div>
+                      )}
+                    </div>
+                  )}
+
+                  {dataset === 'latency' && (
+                    <div className="flex-1 min-h-0">
+                      {topLatencyHooksForDist.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart layout="vertical" data={topLatencyHooksForDist}>
+                            <CartesianGrid {...gridProps} horizontal={false} />
+                            <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtMs(Number(v))} />
+                            <YAxis type="category" dataKey="command" {...axisProps} width={90} tick={{ fontSize: 10 }} />
+                            <Tooltip contentStyle={tooltipStyle} formatter={(v) => [fmtMs(Number(v)), 'p50 Latency']} />
+                            <Bar dataKey="p50Ms" fill={CHART_PALETTE[1]} name="p50 Latency" radius={[0, 2, 2, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="flex items-center justify-center h-full text-xs text-text-muted">No latency data</div>
+                      )}
+                    </div>
+                  )}
+
+                  {dataset === 'errors' && (
+                    <div className="flex-1 min-h-0">
+                      {topErrorHooksForDist.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart layout="vertical" data={topErrorHooksForDist}>
+                            <CartesianGrid {...gridProps} horizontal={false} />
+                            <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
+                            <YAxis type="category" dataKey="command" {...axisProps} width={90} tick={{ fontSize: 10 }} />
+                            <Tooltip contentStyle={tooltipStyle} formatter={(v) => [fmtNumber(Number(v)), 'Errors']} />
+                            <Bar dataKey="errors" fill={CHART_PALETTE[4]} name="Errors" radius={[0, 2, 2, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="flex items-center justify-center h-full text-xs text-text-muted">No errors</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {activeKeys.length > 0 && (
+                <div className="flex items-center justify-center gap-4 mt-4 mb-1 text-xs shrink-0 flex-wrap">
+                  {activeKeys.map((name, i) => (
+                    <span key={name} className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                      <span className="font-mono text-text-secondary">{fmtLegendLabel(name)}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <DataTable<HookRow>
+            data={filtered}
+            columns={columns}
+            keyField="command"
+            defaultSort={{ key: 'event', dir: 'asc' }}
+            onRowClick={(row) => navigate(`/observability/hooks/${encodeURIComponent(row.command)}`)}
+          />
+
+          <QueryTiming ms={data.queryTimeMs} />
+        </>
       )}
     </div>
   );

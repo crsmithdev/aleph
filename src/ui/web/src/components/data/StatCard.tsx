@@ -9,7 +9,9 @@ function highlightNumbers(text: string): ReactNode[] {
   );
 }
 
-const accentColors: Record<'default' | 'neutral' | 'success' | 'warning' | 'error', string> = {
+type Accent = 'default' | 'neutral' | 'success' | 'warning' | 'error';
+
+const accentColors: Record<Accent, string> = {
   default: 'text-accent',
   neutral: 'text-text-primary',
   success: 'text-success',
@@ -20,25 +22,38 @@ const accentColors: Record<'default' | 'neutral' | 'success' | 'warning' | 'erro
 export function StatCard({
   label,
   value,
+  valueLabel,
+  secondary,
   detail,
   detailContent,
   accent,
+  compact,
   className,
 }: {
   label: string;
   value: string | number | ReactNode;
+  valueLabel?: string;
+  secondary?: { value: ReactNode; label?: string; accent?: Accent };
   detail?: string;
   detailContent?: ReactNode;
-  accent?: 'default' | 'neutral' | 'success' | 'warning' | 'error';
+  accent?: Accent;
+  compact?: boolean;
   className?: string;
 }) {
 
   return (
-    <div className={clsx('border-t-2 border-border-primary pt-4', className)}>
-      <div className="font-sans text-xs uppercase tracking-wide text-text-muted mb-1">{label}</div>
-      <div className={clsx('font-mono text-5xl font-medium tracking-tight whitespace-nowrap', accentColors[accent ?? 'default'])}>
-        {value}
+    <div className={clsx('border-t-2 border-border-primary', compact ? 'pt-3' : 'pt-4', className)}>
+      <div className="font-sans text-xs uppercase tracking-wide text-text-secondary mb-1">{label}</div>
+      <div className={clsx('font-mono font-medium tracking-tight whitespace-nowrap flex items-baseline gap-2', compact ? 'text-3xl' : 'text-5xl', accentColors[accent ?? 'default'])}>
+        <span>{value}</span>
+        {valueLabel && <span className="font-sans text-sm font-normal text-text-muted">{valueLabel}</span>}
       </div>
+      {secondary && (
+        <div className={clsx('font-mono font-medium tracking-tight whitespace-nowrap flex items-baseline gap-2 mt-0.5 leading-tight', accentColors[secondary.accent ?? 'neutral'])} style={{ fontSize: 18 }}>
+          <span>{secondary.value}</span>
+          {secondary.label && <span className="font-sans text-sm font-normal text-text-muted">{secondary.label}</span>}
+        </div>
+      )}
       {detailContent && <div className="mt-1 text-xs text-text-muted">{detailContent}</div>}
       {!detailContent && detail && <div className="mt-1 text-xs text-text-muted">{highlightNumbers(detail)}</div>}
     </div>

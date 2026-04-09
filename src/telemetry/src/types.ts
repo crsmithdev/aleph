@@ -278,8 +278,22 @@ export interface ToolDetailData {
   name: string;
   totalCount: number;
   errorCount: number;
-  byDay: (TimeBucket & { byHour: Record<number, number> })[];
-  invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; isError?: boolean; errorMessage?: string }[];
+  totalLinesAdded: number;
+  totalLinesRemoved: number;
+  sessionCount: number;
+  byDay: (TimeBucket & {
+    byHour: Record<number, number>;
+    errors: number;
+    errorRate: number;
+    sessions: number;
+    linesAdded: number;
+    linesRemoved: number;
+    p50Ms?: number;
+    p95Ms?: number;
+    avgMs?: number;
+  })[];
+  skills: { name: string; count: number }[];
+  invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; durationMs?: number; isError?: boolean; errorMessage?: string; errorFull?: string; skill?: string; linesAdded?: number; linesRemoved?: number }[];
 }
 
 export interface HookDetailData {

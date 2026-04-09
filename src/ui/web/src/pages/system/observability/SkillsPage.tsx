@@ -9,9 +9,8 @@ import { DataTable, type Column } from '../../../components/data/DataTable';
 import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
-import { fmtNumber, fmtPct, shortDate, fmtLegendLabel, shortRelativeTime, fmtMs } from '../../../utils/format';
+import { fmtNumber, fmtPct, fmtLegendLabel, shortRelativeTime, fmtMs } from '../../../utils/format';
 import { clsx } from 'clsx';
 
 type SkillRow = {
@@ -19,6 +18,7 @@ type SkillRow = {
   count: number;
   pct: number;
   errors: number;
+  successRate: number;
   sessions?: number;
   avgMs?: number;
   p50Ms?: number;
@@ -52,6 +52,7 @@ export function SkillsPage() {
   const navigate = useNavigate();
   const { data, isLoading, error, refetch } = useObsSkills(range, granularity);
   const [chartType, setChartType] = useState<'bar' | 'line'>('line');
+  const [distChartType, setDistChartType] = useState<'donut' | 'bar'>('donut');
 
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load skills" retry={refetch} />;
@@ -59,20 +60,27 @@ export function SkillsPage() {
   const unusedRows: SkillRow[] = (data.unused || []).map((s: string | { name: string; type: 'command' | 'skill' }) => {
     const name = typeof s === 'string' ? s : s.name;
     const type = typeof s === 'string' ? 'skill' as const : s.type;
-    return { skill: name, count: 0, pct: 0, errors: 0, type, unused: true };
+    return { skill: name, count: 0, pct: 0, errors: 0, successRate: 100, type, unused: true };
   });
 
   const missingCount = data.ranked.filter(r => !r.registered).length;
 
   let ranked = !showMissing ? data.ranked.filter(r => r.registered) : data.ranked;
-  let allRows: SkillRow[] = showUnused ? [...ranked, ...unusedRows] : [...ranked];
+  let allRows: SkillRow[] = (showUnused ? [...ranked, ...unusedRows] : [...ranked]) as SkillRow[];
   if (!showCommands && showSkills) allRows = allRows.filter(r => r.type === 'skill');
   else if (showCommands && !showSkills) allRows = allRows.filter(r => r.type === 'command');
+
+  allRows = allRows.map(r => ({
+    ...r,
+    successRate: r.count > 0 ? ((r.count - r.errors) / r.count) * 100 : 100,
+  }));
 
   const commandCount = data.ranked.filter(r => r.type === 'command').length;
   const skillCount = data.ranked.filter(r => r.type === 'skill').length;
   const totalInvocations = data.ranked.reduce((s, r) => s + r.count, 0);
   const activeSkills = data.ranked.length;
+  const totalErrors = data.ranked.reduce((s, r) => s + r.errors, 0);
+  const avgSuccessRate = totalInvocations > 0 ? ((totalInvocations - totalErrors) / totalInvocations) * 100 : 100;
 
   // By-skill time series (top 10 skills stacked)
   const top10Skills = data.ranked.slice(0, 10).map(r => r.skill);
@@ -189,6 +197,10 @@ export function SkillsPage() {
     ? `${GRAN_LABEL[granularity]} Latency by Skill`
     : `${GRAN_LABEL[granularity]} Invocations by Skill`;
 
+  const distTitle = dataset === 'errors' ? 'Top Skills by Errors'
+    : dataset === 'latency' ? 'Top Skills by Latency'
+    : donutTitle ?? 'Distribution';
+
   function displayName(row: SkillRow): string {
     if (row.type === 'command') {
       return row.skill.startsWith('/') ? row.skill : `/${row.skill}`;
@@ -196,11 +208,20 @@ export function SkillsPage() {
     return row.skill;
   }
 
+  const tsKeys = dataset === 'by-type' ? ['command', 'skill']
+    : dataset === 'sessions' ? topSessionSkillNames
+    : dataset === 'errors' ? topErrorSkillNames
+    : dataset === 'latency' ? topLatencySkillNames
+    : top10Skills;
+
+  const showDonutBarToggle = dataset === 'by-skill' || dataset === 'by-type' || dataset === 'sessions';
+
   const columns: Column<SkillRow>[] = [
     {
       key: 'skill',
       label: 'Name',
       sortable: true,
+      shrink: true,
       render: (row) => (
         <span className={clsx('font-mono', row.unused ? 'text-text-muted' : 'text-text-primary')}>
           {displayName(row)}
@@ -213,7 +234,7 @@ export function SkillsPage() {
       key: 'type',
       label: 'Type',
       sortable: true,
-      width: '5rem',
+      shrink: true,
       render: (row) => (
         <span className={clsx(
           'inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium uppercase tracking-wide',
@@ -230,43 +251,37 @@ export function SkillsPage() {
       label: 'Count',
       align: 'right',
       sortable: true,
-      width: '4.5rem',
+      shrink: true,
       render: (row) => <span className="font-mono">{fmtNumber(row.count)}</span>,
-    },
-    {
-      key: 'pct',
-      label: '%',
-      align: 'right',
-      sortable: true,
-      width: '3.5rem',
-      render: (row) => <span className="font-mono">{fmtPct(row.pct)}</span>,
     },
     {
       key: 'errors',
       label: 'Errors',
       align: 'right',
       sortable: true,
-      width: '5rem',
+      width: '70px',
       render: (row) => row.errors > 0
-        ? <span className="text-error font-mono">{fmtNumber(row.errors)}</span>
+        ? <span className="text-error font-medium font-mono">{fmtNumber(row.errors)}</span>
         : <span className="text-text-disabled">—</span>,
     },
     {
-      key: 'sessions',
-      label: 'Sessions',
+      key: 'successRate',
+      label: 'Success',
       align: 'right',
       sortable: true,
-      width: '5.5rem',
-      render: (row) => (row.sessions ?? 0) > 0
-        ? <span className="font-mono">{fmtNumber(row.sessions!)}</span>
-        : <span className="text-text-disabled">—</span>,
+      width: '78px',
+      render: (row) => (
+        <span className={clsx('font-mono', row.successRate < 95 && 'text-warning', row.successRate < 80 && 'text-error')}>
+          {row.count > 0 ? fmtPct(row.successRate) : '—'}
+        </span>
+      ),
     },
     {
       key: 'p50Ms',
       label: 'P50',
       align: 'right',
       sortable: true,
-      width: '4.5rem',
+      width: '70px',
       render: (row) => row.p50Ms != null
         ? <span className="text-text-secondary font-mono">{fmtMs(row.p50Ms)}</span>
         : <span className="text-text-disabled">—</span>,
@@ -276,16 +291,16 @@ export function SkillsPage() {
       label: 'P95',
       align: 'right',
       sortable: true,
-      width: '4.5rem',
+      width: '70px',
       render: (row) => row.p95Ms != null
         ? <span className="text-text-secondary font-mono">{fmtMs(row.p95Ms)}</span>
         : <span className="text-text-disabled">—</span>,
     },
     {
       key: 'lastUsed',
-      label: 'Last Use',
+      label: 'Last Used',
       sortable: true,
-      width: '60px',
+      width: '100px',
       render: (row) => row.lastUsed
         ? <span className="text-text-secondary whitespace-nowrap">{shortRelativeTime(row.lastUsed)}</span>
         : <span className="text-text-disabled">—</span>,
@@ -297,7 +312,7 @@ export function SkillsPage() {
       <FilterToggle label={`Commands (${commandCount})`} active={showCommands} onToggle={() => setShowCommands(!showCommands)} />
       <FilterToggle label={`Skills (${skillCount})`} active={showSkills} onToggle={() => setShowSkills(!showSkills)} />
       {missingCount > 0 && (
-        <FilterToggle label={`Missing (${missingCount})`} active={showMissing} onToggle={() => setShowMissing(!showMissing)} activeColor="accent" />
+        <FilterToggle label={`Missing (${missingCount})`} active={showMissing} onToggle={() => setShowMissing(!showMissing)} />
       )}
       {unusedRows.length > 0 && (
         <FilterToggle label={`Unused (${unusedRows.length})`} active={showUnused} onToggle={() => setShowUnused(!showUnused)} />
@@ -320,223 +335,273 @@ export function SkillsPage() {
         activeFilterCount={(showCommands ? 1 : 0) + (showSkills ? 1 : 0) + (showMissing ? 1 : 0) + (showUnused ? 1 : 0)}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4">
         <StatCard label="Total Invocations" value={fmtNumber(totalInvocations)} />
         <StatCard label="Active Skills" value={fmtNumber(activeSkills)} />
         <StatCard label="Commands" value={fmtNumber(commandCount)} />
         <StatCard label="Skills" value={fmtNumber(skillCount)} />
+        <StatCard
+          label="Errors"
+          value={totalErrors === 0 ? '0' : fmtNumber(totalErrors)}
+          accent={totalErrors === 0 ? 'success' : totalErrors / Math.max(totalInvocations, 1) < 0.05 ? 'warning' : 'error'}
+        />
+        <StatCard
+          label="Success Rate"
+          value={fmtPct(avgSuccessRate)}
+          accent={avgSuccessRate >= 99 ? 'success' : avgSuccessRate >= 95 ? 'warning' : 'error'}
+        />
       </div>
 
       {data.byDay.length > 0 && (
-        <>
-          <div className="flex gap-4 items-stretch h-[320px]">
-            <div className="flex-1 min-w-0 h-full">
-              <ChartContainer title={timeSeriesTitle} chartType={chartType} onChartTypeChange={setChartType} fill className="h-full">
-                {dataset === 'by-type' ? (
-                  chartType === 'bar' ? (
-                    <BarChart data={stackedByType}>
-                      <CartesianGrid {...gridProps} />
-                      <XAxis dataKey="date" {...xAxisDateProps} />
-                      <YAxis {...axisProps} />
-                      <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
-                      <Bar dataKey="command" stackId="a" fill={CHART_PALETTE[0]} radius={[0, 0, 0, 0]} name="Command" />
-                      <Bar dataKey="skill" stackId="a" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Skill" />
-                    </BarChart>
+        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 h-[350px] flex flex-col">
+          <div className="flex-1 min-h-0 flex">
+            <div className="flex-1 min-w-0 flex flex-col">
+              <div className="flex items-center justify-between mb-2 shrink-0">
+                <h3 className="text-sm font-medium text-text-secondary">{timeSeriesTitle}</h3>
+                <div className="flex gap-1">
+                  {(['line', 'bar'] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setChartType(t)}
+                      className={clsx(
+                        'px-2 py-0.5 text-xs rounded transition-colors',
+                        chartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'
+                      )}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="h-1" />
+              <div className="flex-1 min-h-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  {dataset === 'by-type' ? (
+                    chartType === 'bar' ? (
+                      <BarChart data={stackedByType}>
+                        <CartesianGrid {...gridProps} />
+                        <XAxis dataKey="date" {...xAxisDateProps} />
+                        <YAxis {...axisProps} />
+                        <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+                        <Bar dataKey="command" stackId="a" fill={CHART_PALETTE[0]} radius={[0, 0, 0, 0]} name="Command" />
+                        <Bar dataKey="skill" stackId="a" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Skill" />
+                      </BarChart>
+                    ) : (
+                      <AreaChart data={stackedByType}>
+                        <CartesianGrid {...gridProps} />
+                        <XAxis dataKey="date" {...xAxisDateProps} />
+                        <YAxis {...axisProps} />
+                        <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+                        <Area type="monotone" dataKey="command" stackId="a" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.4} strokeWidth={1.5} dot={false} name="Command" />
+                        <Area type="monotone" dataKey="skill" stackId="a" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.4} strokeWidth={1.5} dot={false} name="Skill" />
+                      </AreaChart>
+                    )
+                  ) : dataset === 'sessions' ? (
+                    chartType === 'bar' ? (
+                      <BarChart data={stackedBySessions}>
+                        <CartesianGrid {...gridProps} />
+                        <XAxis dataKey="date" {...xAxisDateProps} />
+                        <YAxis {...axisProps} />
+                        <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
+                        {topSessionSkillNames.map((skill, i) => (
+                          <Bar key={skill} dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === topSessionSkillNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
+                        ))}
+                      </BarChart>
+                    ) : (
+                      <AreaChart data={stackedBySessions}>
+                        <CartesianGrid {...gridProps} />
+                        <XAxis dataKey="date" {...xAxisDateProps} />
+                        <YAxis {...axisProps} />
+                        <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
+                        {topSessionSkillNames.map((skill, i) => (
+                          <Area key={skill} type="monotone" dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.3} dot={false} />
+                        ))}
+                      </AreaChart>
+                    )
+                  ) : dataset === 'errors' ? (
+                    chartType === 'bar' ? (
+                      <BarChart data={stackedBySkillErrors}>
+                        <CartesianGrid {...gridProps} />
+                        <XAxis dataKey="date" {...xAxisDateProps} />
+                        <YAxis {...axisProps} />
+                        <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
+                        {topErrorSkillNames.map((skill, i) => (
+                          <Bar key={skill} dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === topErrorSkillNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
+                        ))}
+                      </BarChart>
+                    ) : (
+                      <AreaChart data={stackedBySkillErrors}>
+                        <CartesianGrid {...gridProps} />
+                        <XAxis dataKey="date" {...xAxisDateProps} />
+                        <YAxis {...axisProps} />
+                        <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
+                        {topErrorSkillNames.map((skill, i) => (
+                          <Area key={skill} type="monotone" dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.3} dot={false} />
+                        ))}
+                      </AreaChart>
+                    )
+                  ) : dataset === 'latency' ? (
+                    chartType === 'bar' ? (
+                      <BarChart data={stackedBySkillLatency}>
+                        <CartesianGrid {...gridProps} />
+                        <XAxis dataKey="date" {...xAxisDateProps} />
+                        <YAxis {...axisProps} />
+                        <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtMs(Number(v)), fmtLegendLabel(String(n))]} />
+                        {topLatencySkillNames.map((skill, i) => (
+                          <Bar key={skill} dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === topLatencySkillNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
+                        ))}
+                      </BarChart>
+                    ) : (
+                      <AreaChart data={stackedBySkillLatency}>
+                        <CartesianGrid {...gridProps} />
+                        <XAxis dataKey="date" {...xAxisDateProps} />
+                        <YAxis {...axisProps} />
+                        <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtMs(Number(v)), fmtLegendLabel(String(n))]} />
+                        {topLatencySkillNames.map((skill, i) => (
+                          <Area key={skill} type="monotone" dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.3} dot={false} />
+                        ))}
+                      </AreaChart>
+                    )
+                  ) : chartType === 'bar' ? (
+                    hasSkillBreakdown ? (
+                      <BarChart data={stackedBySkill}>
+                        <CartesianGrid {...gridProps} />
+                        <XAxis dataKey="date" {...xAxisDateProps} />
+                        <YAxis {...axisProps} />
+                        <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
+                        {top10Skills.map((skill, i) => (
+                          <Bar key={skill} dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === top10Skills.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
+                        ))}
+                      </BarChart>
+                    ) : (
+                      <BarChart data={data.byDay}>
+                        <CartesianGrid {...gridProps} />
+                        <XAxis dataKey="date" {...xAxisDateProps} />
+                        <YAxis {...axisProps} />
+                        <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
+                        <Bar dataKey="count" fill={CHART_PALETTE[3]} radius={[2, 2, 0, 0]} name="Invocations" />
+                      </BarChart>
+                    )
                   ) : (
-                    <AreaChart data={stackedByType}>
-                      <CartesianGrid {...gridProps} />
-                      <XAxis dataKey="date" {...xAxisDateProps} />
-                      <YAxis {...axisProps} />
-                      <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
-                      <Area type="monotone" dataKey="command" stackId="a" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.4} strokeWidth={1.5} dot={false} name="Command" />
-                      <Area type="monotone" dataKey="skill" stackId="a" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.4} strokeWidth={1.5} dot={false} name="Skill" />
-                    </AreaChart>
-                  )
-                ) : dataset === 'sessions' ? (
-                  chartType === 'bar' ? (
-                    <BarChart data={stackedBySessions}>
-                      <CartesianGrid {...gridProps} />
-                      <XAxis dataKey="date" {...xAxisDateProps} />
-                      <YAxis {...axisProps} />
-                      <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
-                      {topSessionSkillNames.map((skill, i) => (
-                        <Bar key={skill} dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === topSessionSkillNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
-                      ))}
-                    </BarChart>
-                  ) : (
-                    <AreaChart data={stackedBySessions}>
-                      <CartesianGrid {...gridProps} />
-                      <XAxis dataKey="date" {...xAxisDateProps} />
-                      <YAxis {...axisProps} />
-                      <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
-                      {topSessionSkillNames.map((skill, i) => (
-                        <Area key={skill} type="monotone" dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.3} dot={false} />
-                      ))}
-                    </AreaChart>
-                  )
-                ) : dataset === 'errors' ? (
-                  chartType === 'bar' ? (
-                    <BarChart data={stackedBySkillErrors}>
-                      <CartesianGrid {...gridProps} />
-                      <XAxis dataKey="date" {...xAxisDateProps} />
-                      <YAxis {...axisProps} />
-                      <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
-                      {topErrorSkillNames.map((skill, i) => (
-                        <Bar key={skill} dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === topErrorSkillNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
-                      ))}
-                    </BarChart>
-                  ) : (
-                    <AreaChart data={stackedBySkillErrors}>
-                      <CartesianGrid {...gridProps} />
-                      <XAxis dataKey="date" {...xAxisDateProps} />
-                      <YAxis {...axisProps} />
-                      <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
-                      {topErrorSkillNames.map((skill, i) => (
-                        <Area key={skill} type="monotone" dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.3} dot={false} />
-                      ))}
-                    </AreaChart>
-                  )
-                ) : dataset === 'latency' ? (
-                  chartType === 'bar' ? (
-                    <BarChart data={stackedBySkillLatency}>
-                      <CartesianGrid {...gridProps} />
-                      <XAxis dataKey="date" {...xAxisDateProps} />
-                      <YAxis {...axisProps} />
-                      <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtMs(Number(v)), fmtLegendLabel(String(n))]} />
-                      {topLatencySkillNames.map((skill, i) => (
-                        <Bar key={skill} dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === topLatencySkillNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
-                      ))}
-                    </BarChart>
-                  ) : (
-                    <AreaChart data={stackedBySkillLatency}>
-                      <CartesianGrid {...gridProps} />
-                      <XAxis dataKey="date" {...xAxisDateProps} />
-                      <YAxis {...axisProps} />
-                      <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtMs(Number(v)), fmtLegendLabel(String(n))]} />
-                      {topLatencySkillNames.map((skill, i) => (
-                        <Area key={skill} type="monotone" dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.3} dot={false} />
-                      ))}
-                    </AreaChart>
-                  )
-                ) : chartType === 'bar' ? (
-                  hasSkillBreakdown ? (
-                    <BarChart data={stackedBySkill}>
-                      <CartesianGrid {...gridProps} />
-                      <XAxis dataKey="date" {...xAxisDateProps} />
-                      <YAxis {...axisProps} />
-                      <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
-                      {top10Skills.map((skill, i) => (
-                        <Bar key={skill} dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === top10Skills.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
-                      ))}
-                    </BarChart>
-                  ) : (
-                    <BarChart data={data.byDay}>
-                      <CartesianGrid {...gridProps} />
-                      <XAxis dataKey="date" {...xAxisDateProps} />
-                      <YAxis {...axisProps} />
-                      <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                      <Bar dataKey="count" fill={CHART_PALETTE[3]} radius={[2, 2, 0, 0]} name="Invocations" />
-                    </BarChart>
-                  )
-                ) : (
-                  hasSkillBreakdown ? (
-                    <AreaChart data={stackedBySkill}>
-                      <CartesianGrid {...gridProps} />
-                      <XAxis dataKey="date" {...xAxisDateProps} />
-                      <YAxis {...axisProps} />
-                      <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
-                      {top10Skills.map((skill, i) => (
-                        <Area key={skill} type="monotone" dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.3} dot={false} />
-                      ))}
-                    </AreaChart>
-                  ) : (
-                    <AreaChart data={data.byDay}>
-                      <CartesianGrid {...gridProps} />
-                      <XAxis dataKey="date" {...xAxisDateProps} />
-                      <YAxis {...axisProps} />
-                      <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                      <Area type="monotone" dataKey="count" stroke={CHART_PALETTE[3]} fill={CHART_PALETTE[3]} fillOpacity={0.15} dot={false} name="Invocations" />
-                    </AreaChart>
-                  )
-                )}
-              </ChartContainer>
+                    hasSkillBreakdown ? (
+                      <AreaChart data={stackedBySkill}>
+                        <CartesianGrid {...gridProps} />
+                        <XAxis dataKey="date" {...xAxisDateProps} />
+                        <YAxis {...axisProps} />
+                        <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
+                        {top10Skills.map((skill, i) => (
+                          <Area key={skill} type="monotone" dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.3} dot={false} />
+                        ))}
+                      </AreaChart>
+                    ) : (
+                      <AreaChart data={data.byDay}>
+                        <CartesianGrid {...gridProps} />
+                        <XAxis dataKey="date" {...xAxisDateProps} />
+                        <YAxis {...axisProps} />
+                        <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
+                        <Area type="monotone" dataKey="count" stroke={CHART_PALETTE[3]} fill={CHART_PALETTE[3]} fillOpacity={0.15} dot={false} name="Invocations" />
+                      </AreaChart>
+                    )
+                  )}
+                </ResponsiveContainer>
+              </div>
             </div>
 
-            <div className="flex flex-col rounded-lg border border-border-primary bg-bg-secondary p-4 w-[400px] shrink-0 h-full">
-              {activeDonut && donutTitle && (
-                <>
-                  <h3 className="mb-3 text-sm font-medium text-text-secondary shrink-0">{donutTitle}</h3>
-                  <div className="flex-1 min-h-0 flex gap-3">
-                    <div className="flex-1 min-w-0 min-h-0 flex items-center">
-                      <ResponsiveContainer width="100%" height={212}>
-                        <PieChart>
-                          <Pie data={activeDonut} dataKey="count" nameKey={dataset === 'by-type' ? 'type' : 'skill'} cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
-                            {activeDonut.map((_: unknown, i: number) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
-                          </Pie>
-                          <Tooltip contentStyle={tooltipStyle} formatter={(v: unknown, n: unknown) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <div className="flex flex-col gap-1.5 justify-center shrink-0 w-36">
-                      {activeDonut.map((row: { skill?: string; type?: string; count: number }, i: number) => {
-                        const label = row.type ?? row.skill ?? '';
-                        return (
-                          <div key={label} className="flex items-center gap-1.5 text-xs min-w-0">
-                            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                            <span className="font-mono text-text-secondary truncate flex-1">{fmtLegendLabel(label)}</span>
-                            <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtNumber(row.count)}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
+            <div className="w-px bg-border-primary shrink-0 mx-5" />
+
+            <div className="w-[360px] shrink-0 flex flex-col">
+              <div className="flex items-center justify-between mb-3 shrink-0">
+                <h3 className="text-sm font-medium text-text-secondary">{distTitle}</h3>
+                {showDonutBarToggle && (
+                  <div className="flex gap-1">
+                    {(['donut', 'bar'] as const).map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => setDistChartType(t)}
+                        className={clsx(
+                          'px-2 py-0.5 text-xs rounded transition-colors',
+                          distChartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'
+                        )}
+                      >
+                        {t}
+                      </button>
+                    ))}
                   </div>
-                </>
+                )}
+              </div>
+
+              {activeDonut && (
+                <div className="flex-1 min-h-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    {distChartType === 'donut' ? (
+                      <PieChart>
+                        <Pie data={activeDonut as any[]} dataKey="count" nameKey={dataset === 'by-type' ? 'type' : 'skill'} cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                          {activeDonut.map((_: unknown, i: number) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                        </Pie>
+                        <Tooltip contentStyle={tooltipStyle} formatter={(v: unknown, n: unknown) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
+                      </PieChart>
+                    ) : (
+                      <BarChart layout="vertical" data={activeDonut as any[]}>
+                        <CartesianGrid {...gridProps} horizontal={false} />
+                        <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
+                        <YAxis type="category" dataKey={dataset === 'by-type' ? 'type' : 'skill'} {...axisProps} width={80} tick={{ fontSize: 10 }} />
+                        <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
+                        <Bar dataKey="count" name="Count" radius={[0, 2, 2, 0]}>
+                          {activeDonut.map((_: unknown, i: number) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                        </Bar>
+                      </BarChart>
+                    )}
+                  </ResponsiveContainer>
+                </div>
               )}
 
               {dataset === 'errors' && (
-                <>
-                  <h3 className="mb-3 text-sm font-medium text-text-secondary shrink-0">Top Skills by Errors</h3>
-                  <div className="flex-1 min-h-0">
-                    {topErrorSkillsForDist.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={212}>
-                        <BarChart layout="vertical" data={topErrorSkillsForDist}>
-                          <CartesianGrid {...gridProps} horizontal={false} />
-                          <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
-                          <YAxis type="category" dataKey="skill" {...axisProps} width={80} tick={{ fontSize: 10 }} />
-                          <Tooltip contentStyle={tooltipStyle} formatter={(v) => [fmtNumber(Number(v)), 'Errors']} />
-                          <Bar dataKey="errors" fill={CHART_PALETTE[4]} name="Errors" radius={[0, 2, 2, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="flex items-center justify-center h-full text-xs text-text-muted">No errors</div>
-                    )}
-                  </div>
-                </>
+                <div className="flex-1 min-h-0">
+                  {topErrorSkillsForDist.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart layout="vertical" data={topErrorSkillsForDist}>
+                        <CartesianGrid {...gridProps} horizontal={false} />
+                        <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
+                        <YAxis type="category" dataKey="skill" {...axisProps} width={80} tick={{ fontSize: 10 }} />
+                        <Tooltip contentStyle={tooltipStyle} formatter={(v) => [fmtNumber(Number(v)), 'Errors']} />
+                        <Bar dataKey="errors" fill={CHART_PALETTE[4]} name="Errors" radius={[0, 2, 2, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-xs text-text-muted">No errors</div>
+                  )}
+                </div>
               )}
 
               {dataset === 'latency' && (
-                <>
-                  <h3 className="mb-3 text-sm font-medium text-text-secondary shrink-0">Top Skills by Latency</h3>
-                  <div className="flex-1 min-h-0">
-                    {topLatencySkillsForDist.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={212}>
-                        <BarChart layout="vertical" data={topLatencySkillsForDist}>
-                          <CartesianGrid {...gridProps} horizontal={false} />
-                          <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtMs(Number(v))} />
-                          <YAxis type="category" dataKey="skill" {...axisProps} width={80} tick={{ fontSize: 10 }} />
-                          <Tooltip contentStyle={tooltipStyle} formatter={(v) => [fmtMs(Number(v)), 'p50 Latency']} />
-                          <Bar dataKey="p50Ms" fill={CHART_PALETTE[1]} name="p50 Latency" radius={[0, 2, 2, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="flex items-center justify-center h-full text-xs text-text-muted">No latency data</div>
-                    )}
-                  </div>
-                </>
+                <div className="flex-1 min-h-0">
+                  {topLatencySkillsForDist.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart layout="vertical" data={topLatencySkillsForDist}>
+                        <CartesianGrid {...gridProps} horizontal={false} />
+                        <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtMs(Number(v))} />
+                        <YAxis type="category" dataKey="skill" {...axisProps} width={80} tick={{ fontSize: 10 }} />
+                        <Tooltip contentStyle={tooltipStyle} formatter={(v) => [fmtMs(Number(v)), 'p50 Latency']} />
+                        <Bar dataKey="p50Ms" fill={CHART_PALETTE[1]} name="p50 Latency" radius={[0, 2, 2, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-xs text-text-muted">No latency data</div>
+                  )}
+                </div>
               )}
             </div>
           </div>
-        </>
+
+          <div className="flex items-center justify-center gap-4 mt-4 mb-1 text-xs shrink-0 flex-wrap">
+            {tsKeys.map((name, i) => (
+              <span key={name} className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                <span className="font-mono text-text-secondary">{fmtLegendLabel(name)}</span>
+              </span>
+            ))}
+          </div>
+        </div>
       )}
 
       <DataTable<SkillRow>

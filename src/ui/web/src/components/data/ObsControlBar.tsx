@@ -16,6 +16,14 @@ const GRANULARITIES: { label: string; value: Granularity; short: string }[] = [
   { label: 'Day', value: 'day', short: 'd' },
 ];
 
+export type DatasetDisplayMode = 'top-n-other' | 'top-n' | 'all';
+
+const DISPLAY_MODES: { label: string; value: DatasetDisplayMode; short: string }[] = [
+  { label: 'Top N + Other', value: 'top-n-other', short: `10+` },
+  { label: 'Top N', value: 'top-n', short: '10' },
+  { label: 'All', value: 'all', short: '∞' },
+];
+
 export interface ObsControlBarProps {
   title: React.ReactNode;
   datasets?: { key: string; label: string }[];
@@ -27,13 +35,16 @@ export interface ObsControlBarProps {
   onRangeChange: (range: TimeRange) => void;
   granularity?: Granularity;
   onGranularityChange?: (g: Granularity) => void;
+  displayMode?: DatasetDisplayMode;
+  onDisplayModeChange?: (m: DatasetDisplayMode) => void;
+  displayN?: number;
+  onDisplayNChange?: (n: number) => void;
 }
 
 const SEG_BTN = 'px-2 py-0.5 text-sm rounded transition-colors whitespace-nowrap';
 const SEG_ACTIVE = 'bg-bg-secondary text-text-primary shadow-sm';
 const SEG_INACTIVE = 'text-text-muted hover:text-text-primary';
-const ACCENT_ACTIVE = 'bg-accent text-white';
-const PIPE = <span className="mx-2 text-border-secondary/80 select-none text-sm font-light" aria-hidden>|</span>;
+const PIPE = <span className="mx-1 text-border-secondary/80 select-none text-sm font-light" aria-hidden>|</span>;
 
 export function ObsControlBar({
   title,
@@ -46,74 +57,64 @@ export function ObsControlBar({
   onRangeChange,
   granularity,
   onGranularityChange,
+  displayMode,
+  onDisplayModeChange,
+  displayN = 10,
+  onDisplayNChange,
 }: ObsControlBarProps) {
-  const [expandAll, setExpandAll] = useState(false);
-  const [openSegment, setOpenSegment] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const openSeg = useCallback((seg: string) => {
+  const expand = useCallback(() => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-    setOpenSegment(seg);
+    setExpanded(true);
   }, []);
 
-  const closeSeg = useCallback(() => {
-    closeTimerRef.current = setTimeout(() => setOpenSegment(null), 120);
+  const collapse = useCallback(() => {
+    closeTimerRef.current = setTimeout(() => setExpanded(false), 180);
   }, []);
-
-  const isOpen = (seg: string) => expandAll || openSegment === seg;
 
   const hasDataset = !!(datasets?.length && onDatasetChange);
   const hasGranularity = !!(granularity && onGranularityChange);
   const hasFilters = !!filters;
+  const hasOptions = !!(displayMode && onDisplayModeChange);
 
   const granShort = GRANULARITIES.find(g => g.value === granularity)?.short ?? '';
   const rangeLabel = range === 'session' ? 'Sess' : range;
+  const modeShort = DISPLAY_MODES.find(m => m.value === displayMode)?.short ?? '';
 
   return (
-    <div className="sticky top-0 z-10 h-11 bg-bg-primary flex items-center gap-2 mb-4">
+    <div className="sticky top-0 z-10 h-14 bg-bg-primary flex items-center gap-2 mb-4">
       <div className="flex-1 min-w-0">{title}</div>
 
-      <div className="flex items-center shrink-0">
-        {/* Expand / Collapse all toggle */}
-        <button
-          onClick={() => setExpandAll(v => !v)}
-          title={expandAll ? 'Collapse all' : 'Expand all'}
-          className={clsx(
-            'mr-2 px-1.5 py-0.5 text-sm rounded border transition-colors',
-            expandAll
-              ? 'border-accent/40 text-accent bg-accent/5 hover:bg-accent/10'
-              : 'border-transparent text-text-muted hover:text-text-secondary hover:border-border-primary'
-          )}
-        >
-          <Icon name={expandAll ? 'remove' : 'add'} size="xs" />
-        </button>
+      <div
+        className="flex items-center shrink-0"
+        onMouseEnter={expand}
+        onMouseLeave={collapse}
+      >
 
         {/* Dataset segment */}
         {hasDataset && (
           <>
-            <div
-              className="flex items-center"
-              onMouseEnter={() => openSeg('dataset')}
-              onMouseLeave={closeSeg}
-            >
-              {isOpen('dataset') ? (
-                <div className="flex items-center gap-0.5 rounded border border-border-primary bg-bg-tertiary p-0.5">
-                  {datasets!.map(d => (
-                    <button
-                      key={d.key}
-                      onClick={() => onDatasetChange!(d.key)}
-                      className={clsx(SEG_BTN, dataset === d.key ? SEG_ACTIVE : SEG_INACTIVE)}
-                    >
-                      {d.label}
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <span className="text-sm text-text-secondary px-1 cursor-default select-none">
-                  {datasets!.find(d => d.key === dataset)?.label ?? dataset}
-                </span>
-              )}
-            </div>
+            {expanded ? (
+              <div className="flex items-center gap-0.5 rounded border border-border-primary bg-bg-tertiary p-0.5">
+                <Icon name="bar_chart" size="xs" className="text-text-muted mx-1" />
+                {datasets!.map(d => (
+                  <button
+                    key={d.key}
+                    onClick={() => onDatasetChange!(d.key)}
+                    className={clsx(SEG_BTN, dataset === d.key ? SEG_ACTIVE : SEG_INACTIVE)}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <span className="flex items-center gap-1 text-sm text-text-secondary cursor-default select-none px-1">
+                <Icon name="bar_chart" size="xs" className="text-text-muted" />
+                <span>{datasets!.find(d => d.key === dataset)?.label ?? dataset}</span>
+              </span>
+            )}
             {PIPE}
           </>
         )}
@@ -121,73 +122,112 @@ export function ObsControlBar({
         {/* Filter segment */}
         {hasFilters && (
           <>
-            <div
-              className="flex items-center"
-              onMouseEnter={() => openSeg('filters')}
-              onMouseLeave={closeSeg}
-            >
-              {isOpen('filters') ? (
-                <div className="flex items-center gap-0.5 rounded border border-border-primary bg-bg-tertiary p-0.5">
-                  {filters}
-                  {activeFilterCount > 0 && (
-                    <span className="text-sm text-text-muted px-1">({activeFilterCount})</span>
-                  )}
-                </div>
-              ) : (
-                <span className="flex items-center gap-1 text-sm text-text-secondary cursor-default select-none px-1">
-                  <Icon name="filter_list" size="xs" className="text-text-muted" />
-                  <span className="text-text-muted">({activeFilterCount})</span>
-                </span>
-              )}
-            </div>
+            {expanded ? (
+              <div className="flex items-center gap-0.5 rounded border border-border-primary bg-bg-tertiary p-0.5">
+                <Icon name="filter_list" size="xs" className="text-text-muted mx-1" />
+                {filters}
+                {activeFilterCount > 0 && (
+                  <span className="text-sm text-text-muted px-1">({activeFilterCount})</span>
+                )}
+              </div>
+            ) : (
+              <span className="flex items-center gap-1 text-sm text-text-secondary cursor-default select-none px-1">
+                <Icon name="filter_list" size="xs" className="text-text-muted" />
+                <span>({activeFilterCount})</span>
+              </span>
+            )}
             {PIPE}
           </>
         )}
 
-        {/* Range + Interval segment */}
-        <div
-          className="flex items-center"
-          onMouseEnter={() => openSeg('range')}
-          onMouseLeave={closeSeg}
-        >
-          {isOpen('range') ? (
-            <div className="flex items-center gap-1">
+        {/* Range segment */}
+        {expanded ? (
+          <div className="flex items-center gap-0.5 rounded border border-border-primary bg-bg-tertiary p-0.5">
+            <Icon name="calendar_today" size="xs" className="text-text-muted mx-1" />
+            {TIME_RANGE_PRESETS.map(p => (
+              <button
+                key={p.value}
+                onClick={() => onRangeChange(p.value)}
+                className={clsx(SEG_BTN, range === p.value ? SEG_ACTIVE : SEG_INACTIVE)}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <span className="flex items-center gap-1 text-sm text-text-secondary cursor-default select-none px-1">
+            <Icon name="calendar_today" size="xs" className="text-text-muted" />
+            <span>{rangeLabel}</span>
+          </span>
+        )}
+
+        {/* Granularity segment */}
+        {hasGranularity && (
+          <>
+            {PIPE}
+            {expanded ? (
               <div className="flex items-center gap-0.5 rounded border border-border-primary bg-bg-tertiary p-0.5">
-                {TIME_RANGE_PRESETS.map(p => (
+                <Icon name="schedule" size="xs" className="text-text-muted mx-1" />
+                {GRANULARITIES.map(g => (
                   <button
-                    key={p.value}
-                    onClick={() => onRangeChange(p.value)}
-                    className={clsx(SEG_BTN, range === p.value ? ACCENT_ACTIVE : SEG_INACTIVE)}
+                    key={g.value}
+                    onClick={() => onGranularityChange!(g.value)}
+                    className={clsx(SEG_BTN, granularity === g.value ? SEG_ACTIVE : SEG_INACTIVE)}
                   >
-                    {p.label}
+                    {g.label}
                   </button>
                 ))}
               </div>
-              {hasGranularity && (
-                <>
-                  {PIPE}
-                  <div className="flex items-center gap-0.5 rounded border border-border-primary bg-bg-tertiary p-0.5">
-                    {GRANULARITIES.map(g => (
+            ) : (
+              <span className="flex items-center gap-1 text-sm text-text-secondary cursor-default select-none px-1">
+                <Icon name="schedule" size="xs" className="text-text-muted" />
+                <span>{granShort === 'h' ? '1h' : '1d'}</span>
+              </span>
+            )}
+          </>
+        )}
+
+        {/* Options segment */}
+        {hasOptions && (
+          <>
+            {PIPE}
+            {expanded ? (
+              <div className="flex items-center gap-0.5 rounded border border-border-primary bg-bg-tertiary p-0.5">
+                <Icon name="tune" size="xs" className="text-text-muted mx-1" />
+                {DISPLAY_MODES.map(m => (
+                  <button
+                    key={m.value}
+                    onClick={() => onDisplayModeChange!(m.value)}
+                    className={clsx(SEG_BTN, displayMode === m.value ? SEG_ACTIVE : SEG_INACTIVE)}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+                {displayMode !== 'all' && onDisplayNChange && (
+                  <>
+                    <span className="text-border-secondary/80 mx-0.5 text-sm font-light select-none" aria-hidden>·</span>
+                    <span className="text-sm text-text-muted mx-0.5">N=</span>
+                    {[5, 10, 20, 50].map(n => (
                       <button
-                        key={g.value}
-                        onClick={() => onGranularityChange!(g.value)}
-                        className={clsx(SEG_BTN, granularity === g.value ? ACCENT_ACTIVE : SEG_INACTIVE)}
+                        key={n}
+                        onClick={() => onDisplayNChange(n)}
+                        className={clsx(SEG_BTN, displayN === n ? SEG_ACTIVE : SEG_INACTIVE)}
                       >
-                        {g.label}
+                        {n}
                       </button>
                     ))}
-                  </div>
-                </>
-              )}
-            </div>
-          ) : (
-            <span className="flex items-center gap-1 text-sm text-text-secondary cursor-default select-none px-1">
-              <Icon name="calendar_today" size="xs" className="text-text-muted" />
-              <span>{rangeLabel}</span>
-              {granShort && <span className="text-text-muted">({granShort})</span>}
-            </span>
-          )}
-        </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <span className="flex items-center gap-1 text-sm text-text-secondary cursor-default select-none px-1">
+                <Icon name="tune" size="xs" className="text-text-muted" />
+                <span>{displayMode === 'all' ? '∞' : `${displayN}${displayMode === 'top-n-other' ? '+' : ''}`}</span>
+              </span>
+            )}
+          </>
+        )}
+
       </div>
     </div>
   );

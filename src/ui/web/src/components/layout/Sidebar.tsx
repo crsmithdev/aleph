@@ -9,6 +9,7 @@ interface NavChild {
   label: string;
   icon?: string;
   disabled?: boolean;
+  separator?: 'before';
 }
 
 interface NavItem {
@@ -49,13 +50,13 @@ const navGroups: NavItem[][] = [
       label: 'Observability',
       icon: 'visibility',
       children: [
+        { to: '/observability/sessions', label: 'Sessions', icon: 'schedule' },
+        { to: '/observability/skills', label: 'Skills', icon: 'auto_awesome' },
         { to: '/observability/tools', label: 'Tools', icon: 'build' },
         { to: '/observability/hooks', label: 'Hooks', icon: 'webhook' },
-        { to: '/observability/skills', label: 'Skills', icon: 'auto_awesome' },
-        { to: '/observability/sessions', label: 'Sessions', icon: 'schedule' },
-        { to: '/observability/compaction', label: 'Compaction', icon: 'compress' },
         { to: '/observability/events', label: 'Events', icon: 'event_note' },
-        { to: '/observability/memory', label: 'Memory', icon: 'memory' },
+        { to: '/observability/compaction', label: 'Compaction', icon: 'compress', disabled: true },
+        { to: '/observability/memory', label: 'Memory', icon: 'memory', separator: 'before' },
         { to: '/observability/db', label: 'Database', icon: 'storage' },
       ],
     },
@@ -171,7 +172,10 @@ export function Sidebar() {
                   {item.children && isParentActive && (
                     <div className="mt-0.5 space-y-0.5">
                       {item.children.map((child) => (
-                        <SidebarLink key={child.to} to={child.to} label={child.label} icon={child.icon} depth={1} disabled={child.disabled} />
+                        <div key={child.to}>
+                          {child.separator === 'before' && <hr className="my-1.5 border-border-primary mx-5" />}
+                          <SidebarLink to={child.to} label={child.label} icon={child.icon} depth={1} disabled={child.disabled} />
+                        </div>
                       ))}
                     </div>
                   )}
