@@ -7,7 +7,7 @@ All paths relative to `~/.claude/`. Run every check. Do not skip or summarize.
 - `construct/skills/skill-rules.json` exists and is valid JSON with a `rules` array
 - `construct/core/hooks/routing-submit-classify.ts` exists
 - `construct/core/hooks/quality-post-format.ts` exists
-- SKILL.md files exist: `agent-browser`, `code-architect`, `code-refactor`, `docs-author`, `docs-optimizer`, `isolate-changes`, `land-changes`, `ralph-loop`, `research`, `simplify`, `skill-creator`, `systematic-debugging`, `using-git-worktrees`, `verify-completion`, `webapp-testing`
+- SKILL.md files exist: `agent-browser`, `code-debug`, `code-refactor`, `code-review`, `code-simplify`, `context-compact`, `design-audit`, `design-standards`, `design-type`, `docs-author`, `docs-optimize`, `eval-harness`, `git-workflow`, `ralph-loop`, `search`, `skill-creator`, `test-webapp`, `verify-completion`
 
 ## Registration
 

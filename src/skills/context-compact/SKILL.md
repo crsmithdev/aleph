@@ -1,5 +1,5 @@
 ---
-name: strategic-compact
+name: context-compact
 description: Guide context compaction at logical task phase boundaries rather than letting auto-compaction hit mid-task. Use when approaching context limits, switching between phases, or after completing a major milestone.
 ---
 

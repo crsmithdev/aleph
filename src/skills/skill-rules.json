@@ -1,8 +1,8 @@
 {
   "rules": [
     {
-      "skill": "research",
-      "keywords": ["research", "investigate", "look into", "find out", "compare", "survey", "analyze"]
+      "skill": "search",
+      "keywords": ["search for", "look up", "find out", "what is", "how does", "compare", "search online", "web search", "find examples", "evaluate options", "search-first"]
     },
     {
       "skill": "verify-completion",
@@ -17,7 +17,7 @@
       "keywords": ["worktree", "create worktree", "isolated branch", "parallel branch", "wrap up", "wrapping up", "finish the branch", "finish this branch", "merge this", "time to merge", "merge the branch", "ship the feature", "close out the branch", "how do i finish", "feature branch", "start a branch", "new branch"]
     },
     {
-      "skill": "webapp-testing",
+      "skill": "test-webapp",
       "keywords": ["test webapp", "test web app", "playwright", "browser test", "frontend test", "ui test", "screenshot", "browser automation", "test local server", "verify ui", "test the ui"]
     },
     {
@@ -25,7 +25,7 @@
       "keywords": ["create a skill", "make a skill", "new skill", "write a skill", "skill creator", "improve skill", "optimize skill", "skill description", "skill eval", "test a skill"]
     },
     {
-      "skill": "systematic-debugging",
+      "skill": "code-debug",
       "keywords": ["systematic debug", "root cause", "trace data flow", "no fixes without", "thrashing", "multiple fixes failed", "3 fixes", "phase 1 investigation"]
     },
     {
@@ -33,11 +33,11 @@
       "keywords": ["agent-browser", "browser automation", "open a website", "fill out a form", "click a button", "take a screenshot", "scrape data", "automate browser", "web automation", "navigate page", "browser cli"]
     },
     {
-      "skill": "simplify",
+      "skill": "code-simplify",
       "keywords": ["deslop", "remove slop", "clean up code", "remove boilerplate", "over-engineered", "unnecessary comments", "simplify before commit", "strip defensive code", "simplify code", "refine code", "code elegance", "code simplifier", "improve code clarity", "reduce complexity"]
     },
     {
-      "skill": "code-architect",
+      "skill": "code-review",
       "keywords": ["code review", "review this code", "architecture review", "review my implementation", "check my code", "review the changes", "architectural consistency", "code quality review"]
     },
     {
@@ -49,11 +49,11 @@
       "keywords": ["document this", "write documentation", "create docs", "update the docs", "write a readme", "api documentation", "document the architecture", "data flow diagram", "architectural overview"]
     },
     {
-      "skill": "docs-optimizer",
+      "skill": "docs-optimize",
       "keywords": ["optimize docs", "optimize documentation", "c7score", "llms.txt", "llmstxt", "context7", "ai documentation", "llm docs", "docs optimizer", "documentation quality"]
     },
     {
-      "skill": "strategic-compact",
+      "skill": "context-compact",
       "keywords": ["compact", "context window", "token budget", "context limit", "when to compact", "compaction", "context pressure", "compress context"]
     },
     {
@@ -61,8 +61,16 @@
       "keywords": ["eval", "pass@", "pass@1", "pass@3", "reliability", "regression eval", "capability eval", "eval-driven", "define eval", "run eval", "eval report"]
     },
     {
-      "skill": "design-engineer",
-      "keywords": ["design engineer", "ui polish", "animation", "easing", "transition", "css animation", "spring animation", "gesture", "drag interaction", "component design", "review ui", "ui review", "design review", "motion design", "micro-interaction"]
+      "skill": "design-audit",
+      "keywords": ["design audit", "audit the design", "audit the ui", "audit ui", "design review", "make this feel professional", "make this look professional", "polish the interface", "ux audit", "visual hierarchy", "spacing audit", "design consistency", "ui architecture", "reduce clutter"]
+    },
+    {
+      "skill": "design-type",
+      "keywords": ["typography", "fix typography", "typographic", "curly quotes", "em dash", "en dash", "letterspacing", "line length", "font pairing", "text hierarchy", "review layout", "html entities", "opentype features", "tabular nums"]
+    },
+    {
+      "skill": "design-standards",
+      "keywords": ["web standards", "check accessibility", "accessibility audit", "a11y", "semantic html", "web guidelines", "best practices", "review ux", "audit for a11y", "check web standards", "form validation", "performance audit"]
     }
   ]
 }
