@@ -8,7 +8,7 @@ import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
-import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps, xAxisDateProps } from '../../../components/charts/chartTheme';
+import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, CHART_OTHER, chartColor, labelFormatter, legendProps, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtCurrency, fmtPct, shortDate, granLabel, fmtLegendLabel, formatModelName } from '../../../utils/format';
 
 export function OverviewPage() {
@@ -148,13 +148,13 @@ export function OverviewPage() {
         const donut = otherUsd > 0 ? [...top5, { model: 'Other', usd: otherUsd, pct: 0 }] : top5;
         return (
           <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
-            <h3 className="mb-3 text-sm font-medium text-text-secondary">Cost by Model</h3>
+            <h3 className="font-heading mb-3 text-sm font-medium text-text-secondary">Cost by Model</h3>
             <div className="flex gap-3 h-[180px]">
               <div className="flex-1 min-w-0 flex items-center">
                 <ResponsiveContainer width="100%" height={180}>
                   <PieChart>
                     <Pie data={donut} dataKey="usd" nameKey="model" cx="50%" cy="50%" innerRadius="38%" outerRadius="90%">
-                      {donut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                      {donut.map((entry, i) => <Cell key={i} fill={entry.model === 'Other' ? CHART_OTHER : CHART_PALETTE[i % CHART_PALETTE.length]} />)}
                     </Pie>
                     <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtCurrency(Number(v)), formatModelName(String(n))]} />
                   </PieChart>
@@ -163,7 +163,7 @@ export function OverviewPage() {
               <div className="flex flex-col gap-1.5 justify-center shrink-0 w-36">
                 {donut.map((row, i) => (
                   <div key={row.model} className="flex items-center gap-1.5 text-xs min-w-0">
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: row.model === 'Other' ? CHART_OTHER : CHART_PALETTE[i % CHART_PALETTE.length] }} />
                     <span className="font-mono text-text-secondary truncate flex-1">{formatModelName(row.model)}</span>
                     <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtCurrency(row.usd)}</span>
                   </div>
@@ -181,7 +181,7 @@ export function OverviewPage() {
           .map(s => ({ churn: s.linesAdded + s.linesRemoved, cost: s.cost, name: s.sessionId.slice(0, 8) }));
         return (
           <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
-            <h3 className="mb-3 text-sm font-medium text-text-secondary">Cost vs Code Output</h3>
+            <h3 className="font-heading mb-3 text-sm font-medium text-text-secondary">Cost vs Code Output</h3>
             <ResponsiveContainer width="100%" height={200}>
               <ScatterChart>
                 <CartesianGrid {...gridProps} />
@@ -200,7 +200,7 @@ export function OverviewPage() {
         const topHooks = [...hooks.data!.ranked].filter(r => r.count > 0).sort((a, b) => b.p50Ms - a.p50Ms).slice(0, 10);
         return (
           <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
-            <h3 className="mb-3 text-sm font-medium text-text-secondary">Hook Latency (p50)</h3>
+            <h3 className="font-heading mb-3 text-sm font-medium text-text-secondary">Hook Latency (p50)</h3>
             <ResponsiveContainer width="100%" height={Math.max(160, topHooks.length * 24)}>
               <BarChart layout="vertical" data={topHooks}>
                 <CartesianGrid {...gridProps} horizontal={false} />
@@ -225,7 +225,7 @@ export function OverviewPage() {
         });
         return (
           <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
-            <h3 className="mb-3 text-sm font-medium text-text-secondary">Skill → Tool Usage</h3>
+            <h3 className="font-heading mb-3 text-sm font-medium text-text-secondary">Skill → Tool Usage</h3>
             <ResponsiveContainer width="100%" height={Math.max(160, topSkills.length * 28)}>
               <BarChart layout="vertical" data={barData}>
                 <CartesianGrid {...gridProps} horizontal={false} />
@@ -233,7 +233,7 @@ export function OverviewPage() {
                 <YAxis type="category" dataKey="skill" {...axisProps} width={120} tick={{ fontSize: 10 }} />
                 <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                 {allTools.map((tool, i) => (
-                  <Bar key={tool} dataKey={tool} name={fmtLegendLabel(tool)} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === allTools.length - 1 ? [0, 2, 2, 0] : [0, 0, 0, 0]} />
+                  <Bar key={tool} dataKey={tool} name={fmtLegendLabel(tool)} stackId="a" fill={chartColor(tool, i)} radius={i === allTools.length - 1 ? [0, 2, 2, 0] : [0, 0, 0, 0]} />
                 ))}
               </BarChart>
             </ResponsiveContainer>

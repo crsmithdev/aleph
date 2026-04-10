@@ -7,9 +7,9 @@ import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
-import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
+import { ObsControlBar, FilterToggle, type DatasetDisplayMode } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
+import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, CHART_OTHER, chartColor, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtMs, fmtPct, dateTime, shortRelativeTime, fmtLegendLabel } from '../../../utils/format';
 import { clsx } from 'clsx';
 
@@ -191,6 +191,8 @@ export function HooksPage() {
   const [showUnused, setShowUnused] = useState(false);
   const [chartType, setChartType] = useState<'bar' | 'line'>('line');
   const [dataset, setDataset] = useState<HookDataset>('by-hook');
+  const [displayMode, setDisplayMode] = useState<DatasetDisplayMode>('top-n-other');
+  const [displayN, setDisplayN] = useState(10);
   const { data, isLoading, error, refetch } = useObsHooks(range, granularity);
 
   if (isLoading) return <PageLoading />;
@@ -228,23 +230,49 @@ export function HooksPage() {
     ? toolsWithLatency.reduce((s, r) => s + r.p95Ms * r.count, 0) / totalCount
     : 0;
 
-  // By-hook time series
-  const topHookNames: string[] = (() => {
+  // Helpers for display mode
+  const dn = displayN;
+  const dm = displayMode;
+  function topNHookKeys(days: Array<{ hooks?: Record<string, number> }>): string[] {
     const totals: Record<string, number> = {};
-    for (const day of data.byDay) {
-      for (const [hook, count] of Object.entries(day.hooks ?? {})) {
-        totals[hook] = (totals[hook] ?? 0) + count;
+    for (const day of days) for (const [k, v] of Object.entries(day.hooks ?? {})) totals[k] = (totals[k] ?? 0) + v;
+    const ranked = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+    if (dm === 'all') return ranked.map(([k]) => k);
+    const top = ranked.slice(0, dn).map(([k]) => k);
+    if (dm === 'top-n-other' && ranked.length > dn) top.push('Other');
+    return top;
+  }
+  function stackHookDays(days: Array<{ date: string; hooks?: Record<string, number> }>, keys: string[]): Record<string, unknown>[] {
+    const hasOther = dm === 'top-n-other' && keys.includes('Other');
+    const realKeys = keys.filter(k => k !== 'Other');
+    return days.map(day => {
+      const entry: Record<string, unknown> = { date: day.date };
+      const source = day.hooks ?? {};
+      for (const k of realKeys) entry[k] = source[k] ?? 0;
+      if (hasOther) {
+        let other = 0;
+        for (const [k, v] of Object.entries(source)) if (!realKeys.includes(k)) other += v;
+        entry['Other'] = other;
       }
-    }
-    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([n]) => n);
-  })();
-  const stackedByHook = data.byDay.map(day => {
-    const entry: Record<string, unknown> = { date: day.date };
-    for (const name of topHookNames) entry[name] = (day.hooks ?? {})[name] ?? 0;
-    return entry;
-  });
+      return entry;
+    });
+  }
+  function sliceRanked<T extends Record<string, unknown>>(items: T[], valueKey: string): T[] {
+    if (dm === 'all') return items;
+    const top = items.slice(0, dn);
+    if (dm === 'top-n' || items.length <= dn) return top;
+    const rest = items.slice(dn);
+    const otherValue = rest.reduce((s, r) => s + (Number(r[valueKey]) || 0), 0);
+    if (otherValue === 0) return top;
+    const other = { command: 'Other', event: 'Other', name: 'Other', [valueKey]: otherValue } as unknown as T;
+    return [...top, other];
+  }
 
-  // By-event time series (derived from byDay.hooks + ranked event map)
+  // By-hook time series
+  const topHookNames = topNHookKeys(data.byDay);
+  const stackedByHook = stackHookDays(data.byDay, topHookNames);
+
+  // By-event time series
   const hookEventMap = Object.fromEntries(rankedWithRate.map(r => [r.command, r.event]));
   const topEventNames: string[] = (() => {
     const totals: Record<string, number> = {};
@@ -254,7 +282,11 @@ export function HooksPage() {
         totals[ev] = (totals[ev] ?? 0) + count;
       }
     }
-    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([e]) => e);
+    const ranked = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+    if (dm === 'all') return ranked.map(([k]) => k);
+    const top = ranked.slice(0, dn).map(([k]) => k);
+    if (dm === 'top-n-other' && ranked.length > dn) top.push('Other');
+    return top;
   })();
   const stackedByEvent = data.byDay.map(day => {
     const entry: Record<string, unknown> = { date: day.date };
@@ -263,50 +295,35 @@ export function HooksPage() {
       const ev = hookEventMap[hook] ?? 'unknown';
       evCounts[ev] = (evCounts[ev] ?? 0) + count;
     }
-    for (const e of topEventNames) entry[e] = evCounts[e] ?? 0;
-    return entry;
-  });
-
-  // Event donut (aggregate)
-  const byEventAll = data.byEvent ?? [];
-  const top5Events = byEventAll.slice(0, 5);
-  const eventsOther = byEventAll.slice(5).reduce((s, r) => s + r.count, 0);
-  const eventDonut = eventsOther > 0 ? [...top5Events, { event: 'Other', count: eventsOther }] : top5Events;
-
-  // By-latency time series (top hooks by latency)
-  const topLatencyHookNames: string[] = (() => {
-    const totals: Record<string, number> = {};
-    for (const day of (data.byDayLatency ?? [])) {
-      for (const [hook, val] of Object.entries(day.hooks ?? {})) {
-        totals[hook] = (totals[hook] ?? 0) + val;
-      }
+    const realKeys = topEventNames.filter(k => k !== 'Other');
+    for (const e of realKeys) entry[e] = evCounts[e] ?? 0;
+    if (dm === 'top-n-other' && topEventNames.includes('Other')) {
+      let other = 0;
+      for (const [e, v] of Object.entries(evCounts)) if (!realKeys.includes(e)) other += v;
+      entry['Other'] = other;
     }
-    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([n]) => n);
-  })();
-  const stackedByLatency = (data.byDayLatency ?? []).map(day => {
-    const entry: Record<string, unknown> = { date: day.date };
-    for (const name of topLatencyHookNames) entry[name] = (day.hooks ?? {})[name] ?? 0;
     return entry;
   });
 
-  // By-errors time series (top hooks by errors)
-  const topErrorHookNames: string[] = (() => {
-    const totals: Record<string, number> = {};
-    for (const day of (data.byDayErrors ?? [])) {
-      for (const [hook, val] of Object.entries(day.hooks ?? {})) {
-        totals[hook] = (totals[hook] ?? 0) + val;
-      }
-    }
-    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([n]) => n);
-  })();
-  const stackedByErrors = (data.byDayErrors ?? []).map(day => {
-    const entry: Record<string, unknown> = { date: day.date };
-    for (const name of topErrorHookNames) entry[name] = (day.hooks ?? {})[name] ?? 0;
-    return entry;
-  });
+  // Event donut
+  const eventDonut = sliceRanked(data.byEvent ?? [], 'count');
 
-  const topErrorHooksForDist = [...rankedWithRate].filter(r => r.errors > 0).sort((a, b) => b.errors - a.errors).slice(0, 10);
-  const topLatencyHooksForDist = [...rankedWithRate].filter(r => r.count > 0).sort((a, b) => b.p50Ms - a.p50Ms).slice(0, 10);
+  // By-latency time series
+  const topLatencyHookNames = topNHookKeys(data.byDayLatency ?? []);
+  const stackedByLatency = stackHookDays(data.byDayLatency ?? [], topLatencyHookNames);
+
+  // By-errors time series
+  const topErrorHookNames = topNHookKeys(data.byDayErrors ?? []);
+  const stackedByErrors = stackHookDays(data.byDayErrors ?? [], topErrorHookNames);
+
+  const topErrorHooksForDist = sliceRanked(
+    [...rankedWithRate].filter(r => r.errors > 0).sort((a, b) => b.errors - a.errors) as Record<string, unknown>[],
+    'errors'
+  );
+  const topLatencyHooksForDist = sliceRanked(
+    [...rankedWithRate].filter(r => r.count > 0).sort((a, b) => b.p50Ms - a.p50Ms) as Record<string, unknown>[],
+    'p50Ms'
+  );
 
   const activeKeys = dataset === 'by-hook' ? topHookNames
     : dataset === 'latency' ? topLatencyHookNames
@@ -381,7 +398,7 @@ export function HooksPage() {
       sortable: true,
       width: '78px',
       render: (row) => row.count > 0
-        ? <span className={clsx('font-mono', row.successRate < 95 && 'text-warning', row.successRate < 80 && 'text-error')}>{fmtPct(row.successRate)}</span>
+        ? <span className={clsx('font-mono', row.successRate >= 95 ? 'text-success' : row.successRate >= 80 ? 'text-warning' : 'text-error')}>{fmtPct(row.successRate)}</span>
         : <span className="text-text-disabled">—</span>,
     },
     {
@@ -428,6 +445,10 @@ export function HooksPage() {
         onGranularityChange={setGranularity}
         filters={filterControls}
         activeFilterCount={activeFilterCount}
+        displayMode={displayMode}
+        onDisplayModeChange={setDisplayMode}
+        displayN={displayN}
+        onDisplayNChange={setDisplayN}
       />
 
       <div className="grid grid-cols-3 lg:grid-cols-6 gap-4">
@@ -464,7 +485,7 @@ export function HooksPage() {
               <div className="flex-1 min-h-0 flex">
                 <div className="flex-1 min-w-0 flex flex-col">
                   <div className="flex items-center justify-between mb-2 shrink-0">
-                    <h3 className="text-sm font-medium text-text-secondary">{timeSeriesTitle}</h3>
+                    <h3 className="font-heading text-lg font-medium text-text-secondary">{timeSeriesTitle}</h3>
                     <div className="flex gap-1">
                       {(['line', 'bar'] as const).map((t) => (
                         <button
@@ -490,7 +511,7 @@ export function HooksPage() {
                           <YAxis {...axisProps} />
                           <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                           {activeKeys.map((name, i) => (
-                            <Bar key={name} dataKey={name} name={fmtLegendLabel(name)} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === activeKeys.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
+                            <Bar key={name} dataKey={name} name={fmtLegendLabel(name)} stackId="a" fill={chartColor(name, i)} radius={i === activeKeys.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
                           ))}
                         </BarChart>
                       ) : (
@@ -500,7 +521,7 @@ export function HooksPage() {
                           <YAxis {...axisProps} />
                           <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                           {activeKeys.map((name, i) => (
-                            <Area key={name} type="monotone" dataKey={name} name={fmtLegendLabel(name)} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
+                            <Area key={name} type="monotone" dataKey={name} name={fmtLegendLabel(name)} stackId="a" stroke={chartColor(name, i)} fill={chartColor(name, i)} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
                           ))}
                         </AreaChart>
                       )}
@@ -512,7 +533,7 @@ export function HooksPage() {
 
                 <div className="w-[360px] shrink-0 flex flex-col">
                   <div className="flex items-center justify-between mb-3 shrink-0">
-                    <h3 className="text-sm font-medium text-text-secondary">{distTitle}</h3>
+                    <h3 className="font-heading text-lg font-medium text-text-secondary">{distTitle}</h3>
                   </div>
 
                   {(dataset === 'by-hook') && (
@@ -521,7 +542,7 @@ export function HooksPage() {
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
                             <Pie data={eventDonut} dataKey="count" nameKey="event" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
-                              {eventDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                              {eventDonut.map((entry, i) => <Cell key={i} fill={(entry as any).event === 'Other' ? CHART_OTHER : CHART_PALETTE[i % CHART_PALETTE.length]} />)}
                             </Pie>
                             <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                           </PieChart>
@@ -571,10 +592,10 @@ export function HooksPage() {
               </div>
 
               {activeKeys.length > 0 && (
-                <div className="flex items-center justify-center gap-4 mt-4 mb-1 text-xs shrink-0 flex-wrap">
+                <div className="flex items-center justify-center gap-x-2 gap-y-[5px] mt-1 mb-1 text-xs shrink-0 flex-wrap">
                   {activeKeys.map((name, i) => (
                     <span key={name} className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: chartColor(name, i) }} />
                       <span className="font-mono text-text-secondary">{fmtLegendLabel(name)}</span>
                     </span>
                   ))}

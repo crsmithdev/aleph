@@ -44,12 +44,12 @@ export function StatCard({
   return (
     <div className={clsx('border-t-2 border-border-primary', compact ? 'pt-3' : 'pt-4', className)}>
       <div className="font-sans text-xs uppercase tracking-wide text-text-secondary mb-1">{label}</div>
-      <div className={clsx('font-mono font-medium tracking-tight whitespace-nowrap flex items-baseline gap-2', compact ? 'text-3xl' : 'text-5xl', accentColors[accent ?? 'default'])}>
+      <div className={clsx('font-heading font-semibold tracking-tight whitespace-nowrap flex items-baseline gap-2', compact ? 'text-3xl' : 'text-5xl', accentColors[accent ?? 'default'])}>
         <span>{value}</span>
         {valueLabel && <span className="font-sans text-sm font-normal text-text-muted">{valueLabel}</span>}
       </div>
       {secondary && (
-        <div className={clsx('font-mono font-medium tracking-tight whitespace-nowrap flex items-baseline gap-2 mt-0.5 leading-tight', accentColors[secondary.accent ?? 'neutral'])} style={{ fontSize: 18 }}>
+        <div className={clsx('font-heading font-semibold tracking-tight whitespace-nowrap flex items-baseline gap-2 mt-0.5 leading-tight', accentColors[secondary.accent ?? 'neutral'])} style={{ fontSize: 18 }}>
           <span>{secondary.value}</span>
           {secondary.label && <span className="font-sans text-sm font-normal text-text-muted">{secondary.label}</span>}
         </div>

@@ -9,7 +9,7 @@ import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
+import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, chartColor, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtPct, fmtProject, fmtLegendLabel } from '../../../utils/format';
 import { MarkdownBlock } from '../../../components/data/MarkdownBlock';
 import Markdown from 'react-markdown';
@@ -119,7 +119,7 @@ export function SkillDetailPage() {
       distData: projectDonut.length > 1 ? projectDonut : undefined,
     },
     projects: {
-      data: projectStackedByDay, keys: projectNames, colors: projectNames.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]), stacked: true,
+      data: projectStackedByDay, keys: projectNames, colors: projectNames.map((name, i) => chartColor(name, i)), stacked: true,
       title: `${granularityLabel[granularity]} Usage by Project`, distTitle: 'Top Projects', distData: projectDonut,
     },
   };
@@ -227,7 +227,7 @@ export function SkillDetailPage() {
             {/* Time series */}
             <div className="flex-1 min-w-0 flex flex-col">
               <div className="flex items-center justify-between mb-2 shrink-0">
-                <h3 className="text-sm font-medium text-text-secondary">{cfg.title}</h3>
+                <h3 className="font-heading text-lg font-medium text-text-secondary">{cfg.title}</h3>
                 <div className="flex gap-1">
                   {(['line', 'bar'] as const).map((t) => (
                     <button
@@ -295,7 +295,7 @@ export function SkillDetailPage() {
                 <div className="w-px bg-border-primary shrink-0 mx-5" />
                 <div className="w-[360px] shrink-0 flex flex-col">
                   <div className="flex items-center justify-between mb-3 shrink-0">
-                    <h3 className="text-sm font-medium text-text-secondary">{cfg.distTitle}</h3>
+                    <h3 className="font-heading text-lg font-medium text-text-secondary">{cfg.distTitle}</h3>
                     <div className="flex gap-1">
                       {(['donut', 'bar'] as const).map((t) => (
                         <button
@@ -338,7 +338,7 @@ export function SkillDetailPage() {
             )}
           </div>
           {/* Legend */}
-          <div className="flex items-center justify-center gap-4 mt-4 mb-1 text-xs shrink-0 flex-wrap">
+          <div className="flex items-center justify-center gap-x-2 gap-y-[5px] mt-1 mb-1 text-xs shrink-0 flex-wrap">
             {cfg.keys.map((name, i) => (
               <span key={name} className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ background: cfg.colors[i] || CHART_PALETTE[i % CHART_PALETTE.length] }} />

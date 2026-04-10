@@ -8,9 +8,9 @@ import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
-import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
+import { ObsControlBar, FilterToggle, type DatasetDisplayMode } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
+import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, chartColor, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtPct, fmtMs, shortDate, parseToolSource, shortRelativeTime, fmtLegendLabel, fmtProject, fmtToolName } from '../../../utils/format';
 import { clsx } from 'clsx';
 
@@ -38,21 +38,38 @@ function fmtCalls(n: number): string {
   return String(n);
 }
 
-function topKeysFromRecord(days: { tools?: Record<string, number>; projects?: Record<string, number> }[], field: 'tools' | 'projects', n = 10): string[] {
+function rankedKeysFromRecord(days: { tools?: Record<string, number>; projects?: Record<string, number> }[], field: 'tools' | 'projects'): [string, number][] {
   const totals: Record<string, number> = {};
   for (const day of days) {
     for (const [k, v] of Object.entries((day as Record<string, unknown>)[field] as Record<string, number> ?? {})) {
       totals[k] = (totals[k] ?? 0) + v;
     }
   }
-  return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, n).map(([k]) => k);
+  return Object.entries(totals).sort((a, b) => b[1] - a[1]);
 }
 
-function stackByDay<T extends { date: string }>(days: T[], keys: string[], field: 'tools' | 'projects'): Record<string, unknown>[] {
+function topKeysFromRecord(days: { tools?: Record<string, number>; projects?: Record<string, number> }[], field: 'tools' | 'projects', n: number, mode: DatasetDisplayMode): string[] {
+  const ranked = rankedKeysFromRecord(days, field);
+  if (mode === 'all') return ranked.map(([k]) => k);
+  const top = ranked.slice(0, n).map(([k]) => k);
+  if (mode === 'top-n-other' && ranked.length > n) top.push('Other');
+  return top;
+}
+
+function stackByDay<T extends { date: string }>(days: T[], keys: string[], field: 'tools' | 'projects', mode: DatasetDisplayMode): Record<string, unknown>[] {
+  const hasOther = mode === 'top-n-other' && keys.includes('Other');
+  const realKeys = keys.filter(k => k !== 'Other');
   return days.map(day => {
     const entry: Record<string, unknown> = { date: day.date };
     const source = (day as Record<string, unknown>)[field] as Record<string, number> ?? {};
-    for (const k of keys) entry[k] = source[k] ?? 0;
+    for (const k of realKeys) entry[k] = source[k] ?? 0;
+    if (hasOther) {
+      let other = 0;
+      for (const [k, v] of Object.entries(source)) {
+        if (!realKeys.includes(k)) other += v;
+      }
+      entry['Other'] = other;
+    }
     return entry;
   });
 }
@@ -64,6 +81,8 @@ export function ToolsPage() {
   const [chartType, setChartType] = useState<'bar' | 'line'>('line');
   const [distChartType, setDistChartType] = useState<'donut' | 'bar'>('donut');
   const [tsDataset, setTsDataset] = useState<Dataset>('calls');
+  const [displayMode, setDisplayMode] = useState<DatasetDisplayMode>('top-n-other');
+  const [displayN, setDisplayN] = useState(10);
   const navigate = useNavigate();
   const { data, isLoading, error, refetch } = useObsTools(range, granularity);
 
@@ -94,19 +113,19 @@ export function ToolsPage() {
 
   // --- Dataset-specific chart data ---
 
-  const topCallNames = topKeysFromRecord(data.byDay, 'tools');
-  const topChurnNames = topKeysFromRecord(data.byDayChurn, 'tools');
-  const topProjectNames = topKeysFromRecord(data.byDayProject, 'projects');
-  const topErrorNames = topKeysFromRecord(data.byDayErrors ?? [], 'tools');
-  const topLatencyNames = topKeysFromRecord(data.byDayLatency ?? [], 'tools');
-  const topSessionNames = topKeysFromRecord(data.byDaySessionCount ?? [], 'tools');
+  const topCallNames = topKeysFromRecord(data.byDay, 'tools', displayN, displayMode);
+  const topChurnNames = topKeysFromRecord(data.byDayChurn, 'tools', displayN, displayMode);
+  const topProjectNames = topKeysFromRecord(data.byDayProject, 'projects', displayN, displayMode);
+  const topErrorNames = topKeysFromRecord(data.byDayErrors ?? [], 'tools', displayN, displayMode);
+  const topLatencyNames = topKeysFromRecord(data.byDayLatency ?? [], 'tools', displayN, displayMode);
+  const topSessionNames = topKeysFromRecord(data.byDaySessionCount ?? [], 'tools', displayN, displayMode);
 
-  const stackedCalls = stackByDay(data.byDay, topCallNames, 'tools');
-  const stackedChurn = stackByDay(data.byDayChurn, topChurnNames, 'tools');
-  const stackedProjects = stackByDay(data.byDayProject, topProjectNames, 'projects');
-  const stackedErrors = stackByDay(data.byDayErrors ?? [], topErrorNames, 'tools');
-  const stackedLatency = stackByDay(data.byDayLatency ?? [], topLatencyNames, 'tools');
-  const stackedSessions = stackByDay(data.byDaySessionCount ?? [], topSessionNames, 'tools');
+  const stackedCalls = stackByDay(data.byDay, topCallNames, 'tools', displayMode);
+  const stackedChurn = stackByDay(data.byDayChurn, topChurnNames, 'tools', displayMode);
+  const stackedProjects = stackByDay(data.byDayProject, topProjectNames, 'projects', displayMode);
+  const stackedErrors = stackByDay(data.byDayErrors ?? [], topErrorNames, 'tools', displayMode);
+  const stackedLatency = stackByDay(data.byDayLatency ?? [], topLatencyNames, 'tools', displayMode);
+  const stackedSessions = stackByDay(data.byDaySessionCount ?? [], topSessionNames, 'tools', displayMode);
 
   function getKeys(d: Dataset): string[] {
     return d === 'calls' ? topCallNames : d === 'churn' ? topChurnNames : d === 'projects' ? topProjectNames
@@ -128,29 +147,53 @@ export function ToolsPage() {
     : tsDataset === 'sessions' ? 'Top Tools by Sessions'
     : `Top Tools by ${datasetLabel[tsDataset]}`;
 
-  const topChurnTools = [...enriched]
-    .map(r => ({ ...r, totalChurn: (r.linesAdded || 0) + (r.linesRemoved || 0) }))
-    .filter(r => r.totalChurn > 0)
-    .sort((a, b) => b.totalChurn - a.totalChurn)
-    .slice(0, 10);
+  // Helper: slice ranked data respecting displayMode, aggregating "Other" for donuts/bar distributions
+  function sliceRanked<T extends Record<string, unknown>>(items: T[], valueKey: string): T[] {
+    if (displayMode === 'all') return items;
+    const top = items.slice(0, displayN);
+    if (displayMode === 'top-n' || items.length <= displayN) return top;
+    // top-n-other: aggregate the rest
+    const rest = items.slice(displayN);
+    const otherValue = rest.reduce((s, r) => s + (Number(r[valueKey]) || 0), 0);
+    if (otherValue === 0) return top;
+    const other = { name: 'Other', tool: 'Other', [valueKey]: otherValue } as unknown as T;
+    return [...top, other];
+  }
 
-  const topVelocityTools = [...enriched]
-    .filter(r => r.velocity !== undefined)
-    .sort((a, b) => (b.velocity || 0) - (a.velocity || 0))
-    .slice(0, 10);
+  const topChurnTools = sliceRanked(
+    [...enriched]
+      .map(r => ({ ...r, totalChurn: (r.linesAdded || 0) + (r.linesRemoved || 0) }))
+      .filter(r => r.totalChurn > 0)
+      .sort((a, b) => b.totalChurn - a.totalChurn),
+    'totalChurn'
+  );
 
-  const callsDonut = filtered.slice(0, 10);
-  const projectsDonut = data.projectRanked.slice(0, 10);
+  const topVelocityTools = sliceRanked(
+    [...enriched]
+      .filter(r => r.velocity !== undefined)
+      .sort((a, b) => (b.velocity || 0) - (a.velocity || 0)),
+    'velocity'
+  );
 
-  const topErrorTools = [...enriched].filter(r => r.errorCount > 0).sort((a, b) => b.errorCount - a.errorCount).slice(0, 10);
-  const topLatencyTools = [...enriched].filter(r => r.p50Ms !== undefined && r.count > 0).sort((a, b) => (b.p50Ms ?? 0) - (a.p50Ms ?? 0)).slice(0, 10);
+  const callsDonut = sliceRanked(filtered, 'count');
+  const projectsDonut = sliceRanked(data.projectRanked, 'count');
+
+  const topErrorTools = sliceRanked(
+    [...enriched].filter(r => r.errorCount > 0).sort((a, b) => b.errorCount - a.errorCount),
+    'errorCount'
+  );
+  const topLatencyTools = sliceRanked(
+    [...enriched].filter(r => r.p50Ms !== undefined && r.count > 0).sort((a, b) => (b.p50Ms ?? 0) - (a.p50Ms ?? 0)),
+    'p50Ms'
+  );
 
   const sessionsDonut = (() => {
     const totals: Record<string, number> = {};
     for (const day of (data.byDaySessionCount ?? [])) {
       for (const [k, v] of Object.entries(day.tools ?? {})) totals[k] = (totals[k] ?? 0) + v;
     }
-    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, count]) => ({ name, tool: parseToolSource(name).tool, count }));
+    const ranked = Object.entries(totals).sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, tool: parseToolSource(name).tool, count }));
+    return sliceRanked(ranked, 'count');
   })();
 
   const hasTimeSeries = tsDataset === 'velocity' ? data.byDayVelocity.length > 0 : tsData.length > 0;
@@ -209,7 +252,7 @@ export function ToolsPage() {
       sortable: true,
       width: '78px',
       render: (row) => (
-        <span className={clsx('font-mono', row.successRate < 95 && 'text-warning', row.successRate < 80 && 'text-error')}>
+        <span className={clsx('font-mono', row.successRate >= 95 ? 'text-success' : row.successRate >= 80 ? 'text-warning' : 'text-error')}>
           {row.count > 0 ? fmtPct(row.successRate) : '—'}
         </span>
       ),
@@ -260,6 +303,10 @@ export function ToolsPage() {
           <FilterToggle label={`Missing (${inactiveCount})`} active={showMissing} onToggle={() => setShowMissing(!showMissing)} />
         ) : undefined}
         activeFilterCount={showMissing ? 1 : 0}
+        displayMode={displayMode}
+        onDisplayModeChange={setDisplayMode}
+        displayN={displayN}
+        onDisplayNChange={setDisplayN}
       />
 
       <div className="grid grid-cols-3 lg:grid-cols-6 gap-4">
@@ -295,7 +342,7 @@ export function ToolsPage() {
               {hasTimeSeries && (
                 <div className="flex-1 min-w-0 flex flex-col">
                   <div className="flex items-center justify-between mb-2 shrink-0">
-                    <h3 className="text-sm font-medium text-text-secondary">{timeSeriesTitle}</h3>
+                    <h3 className="font-heading text-lg font-medium text-text-secondary">{timeSeriesTitle}</h3>
                     {tsDataset !== 'velocity' && (
                       <div className="flex gap-1">
                         {(['line', 'bar'] as const).map((t) => (
@@ -331,7 +378,7 @@ export function ToolsPage() {
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
                         {tsKeys.map((name, i) => (
-                          <Bar key={name} dataKey={name} name={fmtLegendLabel(name)} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === tsKeys.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
+                          <Bar key={name} dataKey={name} name={fmtLegendLabel(name)} stackId="a" fill={chartColor(name, i)} radius={i === tsKeys.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
                         ))}
                       </BarChart>
                     ) : (
@@ -341,7 +388,7 @@ export function ToolsPage() {
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
                         {tsKeys.map((name, i) => (
-                          <Area key={name} type="monotone" dataKey={name} name={fmtLegendLabel(name)} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
+                          <Area key={name} type="monotone" dataKey={name} name={fmtLegendLabel(name)} stackId="a" stroke={chartColor(name, i)} fill={chartColor(name, i)} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
                         ))}
                       </AreaChart>
                     )}
@@ -356,7 +403,7 @@ export function ToolsPage() {
               {/* Distribution */}
               <div className="w-[360px] shrink-0 flex flex-col">
                 <div className="flex items-center justify-between mb-3 shrink-0">
-                  <h3 className="text-sm font-medium text-text-secondary">{distTitle}</h3>
+                  <h3 className="font-heading text-lg font-medium text-text-secondary">{distTitle}</h3>
                   <div className="flex gap-1">
                     {(['donut', 'bar'] as const).map((t) => (
                       <button
@@ -379,7 +426,7 @@ export function ToolsPage() {
                     {distChartType === 'donut' ? (
                       <PieChart>
                         <Pie data={callsDonut} dataKey="count" nameKey="tool" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
-                          {callsDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                          {callsDonut.map((entry: any, i) => <Cell key={i} fill={chartColor(String(entry.tool ?? ''), i)} />)}
                         </Pie>
                         <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                       </PieChart>
@@ -390,7 +437,7 @@ export function ToolsPage() {
                         <YAxis type="category" dataKey="tool" {...axisProps} width={72} tick={{ fontSize: 10 }} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                         <Bar dataKey="count" name="Calls" radius={[0, 2, 2, 0]}>
-                          {callsDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                          {callsDonut.map((entry: any, i) => <Cell key={i} fill={chartColor(String(entry.tool ?? ''), i)} />)}
                         </Bar>
                       </BarChart>
                     )}
@@ -424,7 +471,7 @@ export function ToolsPage() {
                       {distChartType === 'donut' ? (
                         <PieChart>
                           <Pie data={projectsDonut} dataKey="count" nameKey="project" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
-                            {projectsDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                            {projectsDonut.map((entry: any, i) => <Cell key={i} fill={chartColor(String(entry.project ?? ''), i)} />)}
                           </Pie>
                           <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                         </PieChart>
@@ -435,7 +482,7 @@ export function ToolsPage() {
                           <YAxis type="category" dataKey="project" {...axisProps} width={72} tick={{ fontSize: 10 }} />
                           <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                           <Bar dataKey="count" name="Usage" radius={[0, 2, 2, 0]}>
-                            {projectsDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                            {projectsDonut.map((entry: any, i) => <Cell key={i} fill={chartColor(String(entry.project ?? ''), i)} />)}
                           </Bar>
                         </BarChart>
                       )}
@@ -456,7 +503,7 @@ export function ToolsPage() {
                         <YAxis type="category" dataKey="tool" {...axisProps} width={72} tick={{ fontSize: 10 }} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(v) => [v, 'Calls/Session']} />
                         <Bar dataKey="velocity" name="Velocity" radius={[0, 2, 2, 0]}>
-                          {topVelocityTools.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                          {topVelocityTools.map((entry: any, i) => <Cell key={i} fill={chartColor(String(entry.tool ?? ''), i)} />)}
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
@@ -476,7 +523,7 @@ export function ToolsPage() {
                         <YAxis type="category" dataKey="tool" {...axisProps} width={72} tick={{ fontSize: 10 }} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(v) => [fmtNumber(Number(v)), 'Errors']} />
                         <Bar dataKey="errorCount" name="Errors" radius={[0, 2, 2, 0]}>
-                          {topErrorTools.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                          {topErrorTools.map((entry: any, i) => <Cell key={i} fill={chartColor(String(entry.tool ?? ''), i)} />)}
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
@@ -496,7 +543,7 @@ export function ToolsPage() {
                         <YAxis type="category" dataKey="tool" {...axisProps} width={72} tick={{ fontSize: 10 }} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(v) => [fmtMs(Number(v)), 'p50 Latency']} />
                         <Bar dataKey="p50Ms" name="p50 Latency" radius={[0, 2, 2, 0]}>
-                          {topLatencyTools.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                          {topLatencyTools.map((entry: any, i) => <Cell key={i} fill={chartColor(String(entry.tool ?? ''), i)} />)}
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
@@ -513,7 +560,7 @@ export function ToolsPage() {
                       {distChartType === 'donut' ? (
                         <PieChart>
                           <Pie data={sessionsDonut} dataKey="count" nameKey="tool" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
-                            {sessionsDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                            {sessionsDonut.map((entry: any, i) => <Cell key={i} fill={chartColor(String(entry.tool ?? ''), i)} />)}
                           </Pie>
                           <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                         </PieChart>
@@ -524,7 +571,7 @@ export function ToolsPage() {
                           <YAxis type="category" dataKey="tool" {...axisProps} width={72} tick={{ fontSize: 10 }} />
                           <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                           <Bar dataKey="count" name="Sessions" radius={[0, 2, 2, 0]}>
-                            {sessionsDonut.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                            {sessionsDonut.map((entry: any, i) => <Cell key={i} fill={chartColor(String(entry.tool ?? ''), i)} />)}
                           </Bar>
                         </BarChart>
                       )}
@@ -538,15 +585,15 @@ export function ToolsPage() {
             </div>
             {/* Shared legend */}
             {tsDataset === 'churn' ? (
-              <div className="flex items-center justify-center gap-4 mt-4 mb-1 text-xs shrink-0">
+              <div className="flex items-center justify-center gap-x-2 gap-y-[5px] mt-1 mb-1 text-xs shrink-0">
                 <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: CHART_PALETTE[2] }} />Added</span>
                 <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: CHART_PALETTE[4] }} />Removed</span>
               </div>
             ) : tsKeys.length > 0 && (
-              <div className="flex items-center justify-center gap-4 mt-4 mb-1 text-xs shrink-0 flex-wrap">
+              <div className="flex items-center justify-center gap-x-2 gap-y-[5px] mt-1 mb-1 text-xs shrink-0 flex-wrap">
                 {tsKeys.map((name, i) => (
                   <span key={name} className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: chartColor(name, i) }} />
                     <span className="font-mono text-text-secondary">{fmtLegendLabel(name)}</span>
                   </span>
                 ))}

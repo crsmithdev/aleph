@@ -9,6 +9,13 @@ export const CHART_PALETTE = [
   'var(--chart-6)',
 ];
 
+export const CHART_OTHER = 'var(--chart-other)';
+
+/** Return CHART_OTHER for 'Other'/'other' keys, otherwise the normal palette color. */
+export function chartColor(key: string, i: number): string {
+  return key === 'Other' || key === 'other' ? CHART_OTHER : CHART_PALETTE[i % CHART_PALETTE.length];
+}
+
 export const tooltipStyle = {
   background: 'var(--chart-tooltip-bg)',
   border: '1px solid var(--chart-tooltip-border)',
@@ -43,7 +50,7 @@ export const xAxisDateProps = {
 };
 
 export const legendProps = {
-  wrapperStyle: { fontSize: 12 },
+  wrapperStyle: { fontSize: 12, display: 'flex', flexWrap: 'wrap' as const, justifyContent: 'center', columnGap: 8, rowGap: 2, paddingLeft: 0 },
 };
 
 export function labelFormatter(label: unknown): string {

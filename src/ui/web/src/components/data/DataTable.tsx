@@ -70,7 +70,7 @@ export function DataTable<T>({
   }
 
   return (
-    <div className={clsx('overflow-hidden border-t border-border-primary', className)}>
+    <div className={clsx('overflow-x-auto border-t border-border-primary', className)}>
       <table className="w-full text-base">
         <thead>
           <tr className="border-b border-border-primary bg-bg-secondary">
@@ -124,9 +124,9 @@ export function DataTable<T>({
                       className={clsx(
                         'px-4 py-2.5 align-middle',
                         col.align === 'right' ? 'text-right' : 'text-left',
-                        col.shrink && 'whitespace-nowrap'
+                        col.shrink ? 'whitespace-nowrap' : !col.width && 'overflow-hidden text-ellipsis whitespace-nowrap'
                       )}
-                      style={col.shrink ? { width: '1px' } : col.width ? { width: col.width, maxWidth: col.width } : undefined}
+                      style={col.shrink ? { width: '1px' } : col.width ? { width: col.width, maxWidth: col.width } : { maxWidth: 0 }}
                     >
                       {col.render
                         ? col.render(row)

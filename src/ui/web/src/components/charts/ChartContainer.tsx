@@ -26,7 +26,7 @@ export function ChartContainer({
     <div className={clsx('rounded-lg border border-border-primary bg-bg-secondary p-4', fill && 'flex flex-col', className)}>
       {(title || showToggle) && (
         <div className={clsx('flex items-center justify-between', fill ? 'mb-3 shrink-0' : 'mb-3')}>
-          {title && <h3 className="text-sm font-medium text-text-secondary">{title}</h3>}
+          {title && <h3 className="font-heading text-lg font-medium text-text-secondary">{title}</h3>}
           {showToggle && (
             <div className="flex items-center gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
               <button

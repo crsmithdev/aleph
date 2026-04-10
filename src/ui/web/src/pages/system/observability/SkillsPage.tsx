@@ -7,9 +7,9 @@ import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { type Granularity, type TimeRange } from '../../../components/data/TimeRangeSelector';
-import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
+import { ObsControlBar, FilterToggle, type DatasetDisplayMode } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
-import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
+import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, chartColor, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtPct, fmtLegendLabel, shortRelativeTime, fmtMs } from '../../../utils/format';
 import { clsx } from 'clsx';
 
@@ -53,6 +53,8 @@ export function SkillsPage() {
   const { data, isLoading, error, refetch } = useObsSkills(range, granularity);
   const [chartType, setChartType] = useState<'bar' | 'line'>('line');
   const [distChartType, setDistChartType] = useState<'donut' | 'bar'>('donut');
+  const [displayMode, setDisplayMode] = useState<DatasetDisplayMode>('top-n-other');
+  const [displayN, setDisplayN] = useState(10);
 
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load skills" retry={refetch} />;
@@ -82,19 +84,47 @@ export function SkillsPage() {
   const totalErrors = data.ranked.reduce((s, r) => s + r.errors, 0);
   const avgSuccessRate = totalInvocations > 0 ? ((totalInvocations - totalErrors) / totalInvocations) * 100 : 100;
 
-  // By-skill time series (top 10 skills stacked)
-  const top10Skills = data.ranked.slice(0, 10).map(r => r.skill);
-  const stackedBySkill = data.byDay.map((d: { date: string; count: number; skills?: Record<string, number> }) => {
-    const row: Record<string, unknown> = { date: d.date };
-    if (d.skills) {
-      for (const skill of top10Skills) {
-        row[skill] = d.skills[skill] ?? 0;
+  // Helpers for display mode
+  const dn = displayN;
+  const dm = displayMode;
+  function topNKeys(days: Array<{ skills?: Record<string, number> }>): string[] {
+    const totals: Record<string, number> = {};
+    for (const day of days) for (const [k, v] of Object.entries(day.skills ?? {})) totals[k] = (totals[k] ?? 0) + v;
+    const ranked = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+    if (dm === 'all') return ranked.map(([k]) => k);
+    const top = ranked.slice(0, dn).map(([k]) => k);
+    if (dm === 'top-n-other' && ranked.length > dn) top.push('Other');
+    return top;
+  }
+  function stackDays(days: Array<{ date: string; skills?: Record<string, number> }>, keys: string[]): Record<string, unknown>[] {
+    const hasOther = dm === 'top-n-other' && keys.includes('Other');
+    const realKeys = keys.filter(k => k !== 'Other');
+    return days.map(day => {
+      const entry: Record<string, unknown> = { date: day.date };
+      const source = day.skills ?? {};
+      for (const k of realKeys) entry[k] = source[k] ?? 0;
+      if (hasOther) {
+        let other = 0;
+        for (const [k, v] of Object.entries(source)) if (!realKeys.includes(k)) other += v;
+        entry['Other'] = other;
       }
-    } else {
-      row['count'] = d.count;
-    }
-    return row;
-  });
+      return entry;
+    });
+  }
+  function sliceRanked<T extends Record<string, unknown>>(items: T[], valueKey: string): T[] {
+    if (dm === 'all') return items;
+    const top = items.slice(0, dn);
+    if (dm === 'top-n' || items.length <= dn) return top;
+    const rest = items.slice(dn);
+    const otherValue = rest.reduce((s, r) => s + (Number(r[valueKey]) || 0), 0);
+    if (otherValue === 0) return top;
+    const other = { skill: 'Other', name: 'Other', type: undefined, [valueKey]: otherValue } as unknown as T;
+    return [...top, other];
+  }
+
+  // By-skill time series
+  const topSkillNames = topNKeys(data.byDay);
+  const stackedBySkill = stackDays(data.byDay, topSkillNames);
   const hasSkillBreakdown = data.byDay.length > 0 && data.byDay[0]?.skills != null;
 
   // By-type time series (command vs skill stacked)
@@ -109,77 +139,44 @@ export function SkillsPage() {
   });
 
   // Type donut (for "By Type" dataset)
-  const donutSource = data.byType ?? [];
-  const top5Type = donutSource.slice(0, 5);
-  const typeOther = donutSource.slice(5).reduce((s: number, r: { count: number }) => s + r.count, 0);
-  const typeDonut = typeOther > 0 ? [...top5Type, { type: 'other', count: typeOther }] : top5Type;
+  const typeDonut = sliceRanked(data.byType ?? [], 'count');
 
   // Skill donut (for "By Skill" dataset)
-  const top5Skills = data.ranked.filter(r => r.count > 0).slice(0, 5);
-  const skillsOther = data.ranked.slice(5).reduce((s, r) => s + r.count, 0);
-  const skillDonut = skillsOther > 0 ? [...top5Skills, { skill: 'other', count: skillsOther, type: undefined as any }] : top5Skills;
+  const skillDonut = sliceRanked(
+    data.ranked.filter(r => r.count > 0) as Record<string, unknown>[],
+    'count'
+  );
 
-  // Sessions time series (top skills by session count)
-  const topSessionSkillNames: string[] = (() => {
-    const totals: Record<string, number> = {};
-    for (const day of (data.byDaySessions ?? [])) {
-      for (const [sk, v] of Object.entries(day.skills ?? {})) totals[sk] = (totals[sk] ?? 0) + v;
-    }
-    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([n]) => n);
-  })();
-  const stackedBySessions = (data.byDaySessions ?? []).map(day => {
-    const entry: Record<string, unknown> = { date: day.date };
-    for (const name of topSessionSkillNames) entry[name] = (day.skills ?? {})[name] ?? 0;
-    return entry;
-  });
+  // Sessions time series
+  const topSessionSkillNames = topNKeys(data.byDaySessions ?? []);
+  const stackedBySessions = stackDays(data.byDaySessions ?? [], topSessionSkillNames);
 
   // Errors time series
-  const topErrorSkillNames: string[] = (() => {
-    const totals: Record<string, number> = {};
-    for (const day of (data.byDayErrors ?? [])) {
-      for (const [sk, v] of Object.entries(day.skills ?? {})) totals[sk] = (totals[sk] ?? 0) + v;
-    }
-    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([n]) => n);
-  })();
-  const stackedBySkillErrors = (data.byDayErrors ?? []).map(day => {
-    const entry: Record<string, unknown> = { date: day.date };
-    for (const name of topErrorSkillNames) entry[name] = (day.skills ?? {})[name] ?? 0;
-    return entry;
-  });
+  const topErrorSkillNames = topNKeys(data.byDayErrors ?? []);
+  const stackedBySkillErrors = stackDays(data.byDayErrors ?? [], topErrorSkillNames);
 
   // Latency time series
-  const topLatencySkillNames: string[] = (() => {
-    const totals: Record<string, number> = {};
-    for (const day of (data.byDayLatency ?? [])) {
-      for (const [sk, v] of Object.entries(day.skills ?? {})) totals[sk] = (totals[sk] ?? 0) + v;
-    }
-    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([n]) => n);
-  })();
-  const stackedBySkillLatency = (data.byDayLatency ?? []).map(day => {
-    const entry: Record<string, unknown> = { date: day.date };
-    for (const name of topLatencySkillNames) entry[name] = (day.skills ?? {})[name] ?? 0;
-    return entry;
-  });
+  const topLatencySkillNames = topNKeys(data.byDayLatency ?? []);
+  const stackedBySkillLatency = stackDays(data.byDayLatency ?? [], topLatencySkillNames);
 
-  const topErrorSkillsForDist = [...data.ranked].filter(r => r.errors > 0).sort((a, b) => b.errors - a.errors).slice(0, 10);
-  const topLatencySkillsForDist = [...data.ranked].filter(r => r.p50Ms != null && r.count > 0).sort((a, b) => (b.p50Ms ?? 0) - (a.p50Ms ?? 0)).slice(0, 10);
+  const topErrorSkillsForDist = sliceRanked(
+    [...data.ranked].filter(r => r.errors > 0).sort((a, b) => b.errors - a.errors) as Record<string, unknown>[],
+    'errors'
+  );
+  const topLatencySkillsForDist = sliceRanked(
+    [...data.ranked].filter(r => r.p50Ms != null && r.count > 0).sort((a, b) => (b.p50Ms ?? 0) - (a.p50Ms ?? 0)) as Record<string, unknown>[],
+    'p50Ms'
+  );
 
   // Sessions donut
-  const top5SessionSkills = topSessionSkillNames.slice(0, 5).map(name => {
+  const sessionsSkillDonut = (() => {
     const totals: Record<string, number> = {};
     for (const day of (data.byDaySessions ?? [])) {
       for (const [sk, v] of Object.entries(day.skills ?? {})) totals[sk] = (totals[sk] ?? 0) + v;
     }
-    return { skill: name, count: totals[name] ?? 0 };
-  });
-  const sessionsSkillOther = (() => {
-    const totals: Record<string, number> = {};
-    for (const day of (data.byDaySessions ?? [])) {
-      for (const [sk, v] of Object.entries(day.skills ?? {})) totals[sk] = (totals[sk] ?? 0) + v;
-    }
-    return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(5).reduce((s, [, v]) => s + v, 0);
+    const ranked = Object.entries(totals).sort((a, b) => b[1] - a[1]).map(([skill, count]) => ({ skill, count }));
+    return sliceRanked(ranked as Record<string, unknown>[], 'count');
   })();
-  const sessionsSkillDonut = sessionsSkillOther > 0 ? [...top5SessionSkills, { skill: 'other', count: sessionsSkillOther }] : top5SessionSkills;
 
   const activeDonut = dataset === 'by-skill' ? skillDonut : dataset === 'by-type' ? typeDonut : dataset === 'sessions' ? sessionsSkillDonut : null;
   const donutTitle = dataset === 'by-skill' ? 'Top Skills'
@@ -212,7 +209,7 @@ export function SkillsPage() {
     : dataset === 'sessions' ? topSessionSkillNames
     : dataset === 'errors' ? topErrorSkillNames
     : dataset === 'latency' ? topLatencySkillNames
-    : top10Skills;
+    : topSkillNames;
 
   const showDonutBarToggle = dataset === 'by-skill' || dataset === 'by-type' || dataset === 'sessions';
 
@@ -224,25 +221,11 @@ export function SkillsPage() {
       shrink: true,
       render: (row) => (
         <span className={clsx('font-mono', row.unused ? 'text-text-muted' : 'text-text-primary')}>
-          {displayName(row)}
+          {row.type === 'command'
+            ? <><span className="text-accent">/</span>{row.skill.replace(/^\//, '')}</>
+            : row.skill}
           {row.unused && <span className="ml-2 text-xs text-text-disabled uppercase">unused</span>}
           {!row.registered && !row.unused && <span className="ml-2 text-xs text-warning uppercase">missing</span>}
-        </span>
-      ),
-    },
-    {
-      key: 'type',
-      label: 'Type',
-      sortable: true,
-      shrink: true,
-      render: (row) => (
-        <span className={clsx(
-          'inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium uppercase tracking-wide',
-          row.type === 'command'
-            ? 'bg-accent/10 text-accent border border-accent/20'
-            : 'bg-accent/5 text-accent/70 border border-accent/10',
-        )}>
-          {row.type === 'command' ? 'cmd' : 'skill'}
         </span>
       ),
     },
@@ -271,7 +254,7 @@ export function SkillsPage() {
       sortable: true,
       width: '78px',
       render: (row) => (
-        <span className={clsx('font-mono', row.successRate < 95 && 'text-warning', row.successRate < 80 && 'text-error')}>
+        <span className={clsx('font-mono', row.successRate >= 95 ? 'text-success' : row.successRate >= 80 ? 'text-warning' : 'text-error')}>
           {row.count > 0 ? fmtPct(row.successRate) : '—'}
         </span>
       ),
@@ -333,6 +316,10 @@ export function SkillsPage() {
         onDatasetChange={(d) => setDataset(d as SkillDataset)}
         filters={filters}
         activeFilterCount={(showCommands ? 1 : 0) + (showSkills ? 1 : 0) + (showMissing ? 1 : 0) + (showUnused ? 1 : 0)}
+        displayMode={displayMode}
+        onDisplayModeChange={setDisplayMode}
+        displayN={displayN}
+        onDisplayNChange={setDisplayN}
       />
 
       <div className="grid grid-cols-3 lg:grid-cols-6 gap-4">
@@ -357,7 +344,7 @@ export function SkillsPage() {
           <div className="flex-1 min-h-0 flex">
             <div className="flex-1 min-w-0 flex flex-col">
               <div className="flex items-center justify-between mb-2 shrink-0">
-                <h3 className="text-sm font-medium text-text-secondary">{timeSeriesTitle}</h3>
+                <h3 className="font-heading text-lg font-medium text-text-secondary">{timeSeriesTitle}</h3>
                 <div className="flex gap-1">
                   {(['line', 'bar'] as const).map((t) => (
                     <button
@@ -404,7 +391,7 @@ export function SkillsPage() {
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                         {topSessionSkillNames.map((skill, i) => (
-                          <Bar key={skill} dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === topSessionSkillNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
+                          <Bar key={skill} dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" fill={chartColor(skill, i)} radius={i === topSessionSkillNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
                         ))}
                       </BarChart>
                     ) : (
@@ -414,7 +401,7 @@ export function SkillsPage() {
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                         {topSessionSkillNames.map((skill, i) => (
-                          <Area key={skill} type="monotone" dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.3} dot={false} />
+                          <Area key={skill} type="monotone" dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" stroke={chartColor(skill, i)} fill={chartColor(skill, i)} fillOpacity={0.3} dot={false} />
                         ))}
                       </AreaChart>
                     )
@@ -426,7 +413,7 @@ export function SkillsPage() {
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                         {topErrorSkillNames.map((skill, i) => (
-                          <Bar key={skill} dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === topErrorSkillNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
+                          <Bar key={skill} dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" fill={chartColor(skill, i)} radius={i === topErrorSkillNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
                         ))}
                       </BarChart>
                     ) : (
@@ -436,7 +423,7 @@ export function SkillsPage() {
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                         {topErrorSkillNames.map((skill, i) => (
-                          <Area key={skill} type="monotone" dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.3} dot={false} />
+                          <Area key={skill} type="monotone" dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" stroke={chartColor(skill, i)} fill={chartColor(skill, i)} fillOpacity={0.3} dot={false} />
                         ))}
                       </AreaChart>
                     )
@@ -448,7 +435,7 @@ export function SkillsPage() {
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtMs(Number(v)), fmtLegendLabel(String(n))]} />
                         {topLatencySkillNames.map((skill, i) => (
-                          <Bar key={skill} dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === topLatencySkillNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
+                          <Bar key={skill} dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" fill={chartColor(skill, i)} radius={i === topLatencySkillNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
                         ))}
                       </BarChart>
                     ) : (
@@ -458,7 +445,7 @@ export function SkillsPage() {
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtMs(Number(v)), fmtLegendLabel(String(n))]} />
                         {topLatencySkillNames.map((skill, i) => (
-                          <Area key={skill} type="monotone" dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.3} dot={false} />
+                          <Area key={skill} type="monotone" dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" stroke={chartColor(skill, i)} fill={chartColor(skill, i)} fillOpacity={0.3} dot={false} />
                         ))}
                       </AreaChart>
                     )
@@ -469,8 +456,8 @@ export function SkillsPage() {
                         <XAxis dataKey="date" {...xAxisDateProps} />
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
-                        {top10Skills.map((skill, i) => (
-                          <Bar key={skill} dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === top10Skills.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
+                        {topSkillNames.map((skill, i) => (
+                          <Bar key={skill} dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" fill={chartColor(skill, i)} radius={i === topSkillNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
                         ))}
                       </BarChart>
                     ) : (
@@ -489,8 +476,8 @@ export function SkillsPage() {
                         <XAxis dataKey="date" {...xAxisDateProps} />
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
-                        {top10Skills.map((skill, i) => (
-                          <Area key={skill} type="monotone" dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.3} dot={false} />
+                        {topSkillNames.map((skill, i) => (
+                          <Area key={skill} type="monotone" dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" stroke={chartColor(skill, i)} fill={chartColor(skill, i)} fillOpacity={0.3} dot={false} />
                         ))}
                       </AreaChart>
                     ) : (
@@ -511,7 +498,7 @@ export function SkillsPage() {
 
             <div className="w-[360px] shrink-0 flex flex-col">
               <div className="flex items-center justify-between mb-3 shrink-0">
-                <h3 className="text-sm font-medium text-text-secondary">{distTitle}</h3>
+                <h3 className="font-heading text-lg font-medium text-text-secondary">{distTitle}</h3>
                 {showDonutBarToggle && (
                   <div className="flex gap-1">
                     {(['donut', 'bar'] as const).map((t) => (
@@ -536,7 +523,7 @@ export function SkillsPage() {
                     {distChartType === 'donut' ? (
                       <PieChart>
                         <Pie data={activeDonut as any[]} dataKey="count" nameKey={dataset === 'by-type' ? 'type' : 'skill'} cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
-                          {activeDonut.map((_: unknown, i: number) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                          {activeDonut.map((entry: any, i: number) => <Cell key={i} fill={chartColor(String(entry[dataset === 'by-type' ? 'type' : 'skill']), i)} />)}
                         </Pie>
                         <Tooltip contentStyle={tooltipStyle} formatter={(v: unknown, n: unknown) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                       </PieChart>
@@ -547,7 +534,7 @@ export function SkillsPage() {
                         <YAxis type="category" dataKey={dataset === 'by-type' ? 'type' : 'skill'} {...axisProps} width={80} tick={{ fontSize: 10 }} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                         <Bar dataKey="count" name="Count" radius={[0, 2, 2, 0]}>
-                          {activeDonut.map((_: unknown, i: number) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                          {activeDonut.map((entry: any, i: number) => <Cell key={i} fill={chartColor(String(entry[dataset === 'by-type' ? 'type' : 'skill']), i)} />)}
                         </Bar>
                       </BarChart>
                     )}
@@ -593,10 +580,10 @@ export function SkillsPage() {
             </div>
           </div>
 
-          <div className="flex items-center justify-center gap-4 mt-4 mb-1 text-xs shrink-0 flex-wrap">
+          <div className="flex items-center justify-center gap-x-2 gap-y-[5px] mt-1 mb-1 text-xs shrink-0 flex-wrap">
             {tsKeys.map((name, i) => (
               <span key={name} className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: chartColor(name, i) }} />
                 <span className="font-mono text-text-secondary">{fmtLegendLabel(name)}</span>
               </span>
             ))}

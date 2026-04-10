@@ -218,7 +218,7 @@ export function TurnTracePage() {
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-5 text-xs text-text-muted">
+      <div className="flex items-center gap-2.5 text-xs text-text-muted">
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-3 h-2.5 rounded-sm bg-accent/40 border border-accent/60" /> Tool
         </span>

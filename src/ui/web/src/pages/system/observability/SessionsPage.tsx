@@ -6,9 +6,9 @@ import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
-import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
+import { ObsControlBar, FilterToggle, type DatasetDisplayMode } from '../../../components/data/ObsControlBar';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
-import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
+import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, CHART_OTHER, chartColor, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { useNavigate } from 'react-router-dom';
 import { fmtNumber, fmtMs, fmtCurrency, fmtDuration, fmtLegendLabel, formatModelName, stripMarkdown, fmtProject, shortRelativeTime } from '../../../utils/format';
@@ -24,19 +24,43 @@ const SESSION_DATASETS: { key: SessionDataset; label: string }[] = [
   { key: 'commits', label: 'Commits' },
 ];
 
-function topProjectKeys(days: Array<{ projects?: Record<string, number> }>, n = 10): string[] {
+function topProjectKeys(days: Array<{ projects?: Record<string, number> }>, n: number, mode: DatasetDisplayMode): string[] {
   const totals: Record<string, number> = {};
   for (const day of days) for (const [k, v] of Object.entries(day.projects ?? {})) {
     totals[k] = (totals[k] ?? 0) + v;
   }
-  return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, n).map(([k]) => k);
+  const ranked = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+  if (mode === 'all') return ranked.map(([k]) => k);
+  const top = ranked.slice(0, n).map(([k]) => k);
+  if (mode === 'top-n-other' && ranked.length > n) top.push('Other');
+  return top;
 }
-function stackProjectsByDay(days: Array<{ date: string; projects?: Record<string, number> }>, keys: string[]): Record<string, unknown>[] {
+function stackProjectsByDay(days: Array<{ date: string; projects?: Record<string, number> }>, keys: string[], mode: DatasetDisplayMode): Record<string, unknown>[] {
+  const hasOther = mode === 'top-n-other' && keys.includes('Other');
+  const realKeys = keys.filter(k => k !== 'Other');
   return days.map(day => {
     const entry: Record<string, unknown> = { date: day.date };
-    for (const k of keys) entry[k] = (day.projects ?? {})[k] ?? 0;
+    const source = day.projects ?? {};
+    for (const k of realKeys) entry[k] = source[k] ?? 0;
+    if (hasOther) {
+      let other = 0;
+      for (const [k, v] of Object.entries(source)) {
+        if (!realKeys.includes(k)) other += v;
+      }
+      entry['Other'] = other;
+    }
     return entry;
   });
+}
+function sliceRanked<T extends Record<string, unknown>>(items: T[], valueKey: string, n: number, mode: DatasetDisplayMode): T[] {
+  if (mode === 'all') return items;
+  const top = items.slice(0, n);
+  if (mode === 'top-n' || items.length <= n) return top;
+  const rest = items.slice(n);
+  const otherValue = rest.reduce((s, r) => s + (Number(r[valueKey]) || 0), 0);
+  if (otherValue === 0) return top;
+  const other = { ...Object.fromEntries(Object.keys(items[0] ?? {}).map(k => [k, k === valueKey ? otherValue : 'Other'])) } as unknown as T;
+  return [...top, other];
 }
 const GRAN_LABEL: Record<string, string> = { minute: 'Per-Minute', hour: 'Hourly', day: 'Daily' };
 
@@ -68,9 +92,12 @@ export function SessionsPage() {
   const subagents = useObsSubagents(range, granularity);
   const cost = useObsCost(range, granularity);
   const [chartType, setChartType] = useState<'bar' | 'line'>('line');
+  const [distChartType, setDistChartType] = useState<'donut' | 'bar'>('donut');
   const [dataset, setDataset] = useState<SessionDataset>('sessions');
   const [includeChildSubagents, setIncludeChildSubagents] = useState(false);
   const [onlyWithSubagents, setOnlyWithSubagents] = useState(false);
+  const [displayMode, setDisplayMode] = useState<DatasetDisplayMode>('top-n-other');
+  const [displayN, setDisplayN] = useState(10);
 
   if (isLoading) return <PageLoading />;
   if (error || !data) return <ErrorState message="Failed to load sessions" retry={refetch} />;
@@ -85,8 +112,8 @@ export function SessionsPage() {
   const maxSessions = Math.max(1, ...data.byDay.map(d => d.sessions ?? 0));
 
   const byDayProject = data.byDayProject ?? [];
-  const topProjectNames = topProjectKeys(byDayProject);
-  const stackedByProject = stackProjectsByDay(byDayProject, topProjectNames);
+  const topProjectNames = topProjectKeys(byDayProject, displayN, displayMode);
+  const stackedByProject = stackProjectsByDay(byDayProject, topProjectNames, displayMode);
 
   const chartTitles: Record<SessionDataset, string> = {
     sessions: `${GRAN_LABEL[granularity]} Sessions by Day`,
@@ -130,7 +157,7 @@ export function SessionsPage() {
       ];
     }
     if (dataset === 'by-project') {
-      return topProjectNames.map((name, i) => ({ name: fmtLegendLabel(name), color: CHART_PALETTE[i % CHART_PALETTE.length] }));
+      return topProjectNames.map((name, i) => ({ name: fmtLegendLabel(name), color: chartColor(name, i) }));
     }
     if (dataset === 'commits') {
       return [{ name: 'Commits', color: CHART_PALETTE[1] }];
@@ -236,6 +263,10 @@ export function SessionsPage() {
           </>
         ) : undefined}
         activeFilterCount={activeFilterCount}
+        displayMode={displayMode}
+        onDisplayModeChange={setDisplayMode}
+        displayN={displayN}
+        onDisplayNChange={setDisplayN}
       />
 
       <div className="grid grid-cols-3 lg:grid-cols-6 gap-4">
@@ -256,7 +287,7 @@ export function SessionsPage() {
           {/* Left: Time series */}
           <div className="flex-1 min-w-0 flex flex-col">
             <div className="flex items-center justify-between mb-2 shrink-0">
-              <h3 className="text-sm font-medium text-text-secondary">{chartTitles[dataset]}</h3>
+              <h3 className="font-heading text-lg font-medium text-text-secondary">{chartTitles[dataset]}</h3>
               <div className="flex gap-1">
                 {(['line', 'bar'] as const).map((t) => (
                   <button
@@ -341,7 +372,7 @@ export function SessionsPage() {
                       <YAxis {...axisProps} />
                       <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
                       {topProjectNames.map((name, i) => (
-                        <Bar key={name} dataKey={name} name={fmtLegendLabel(name)} stackId="a" fill={CHART_PALETTE[i % CHART_PALETTE.length]} radius={i === topProjectNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
+                        <Bar key={name} dataKey={name} name={fmtLegendLabel(name)} stackId="a" fill={chartColor(name, i)} radius={i === topProjectNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
                       ))}
                     </BarChart>
                   ) : (
@@ -351,7 +382,7 @@ export function SessionsPage() {
                       <YAxis {...axisProps} />
                       <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
                       {topProjectNames.map((name, i) => (
-                        <Area key={name} type={curveCardinal.tension(0.5) as any} dataKey={name} name={fmtLegendLabel(name)} stackId="a" stroke={CHART_PALETTE[i % CHART_PALETTE.length]} fill={CHART_PALETTE[i % CHART_PALETTE.length]} fillOpacity={0.15} strokeWidth={2} dot={false} />
+                        <Area key={name} type={curveCardinal.tension(0.5) as any} dataKey={name} name={fmtLegendLabel(name)} stackId="a" stroke={chartColor(name, i)} fill={chartColor(name, i)} fillOpacity={0.15} strokeWidth={2} dot={false} />
                       ))}
                     </ComposedChart>
                   )
@@ -405,23 +436,49 @@ export function SessionsPage() {
           {/* Right: Distribution */}
           <div className="w-[360px] shrink-0 flex flex-col">
             <div className="flex items-center justify-between mb-3 shrink-0">
-              <h3 className="text-sm font-medium text-text-secondary">{distTitles[dataset]}</h3>
+              <h3 className="font-heading text-lg font-medium text-text-secondary">{distTitles[dataset]}</h3>
+              {(dataset === 'sessions' || dataset === 'by-project' || dataset === 'dispatches' || dataset === 'cost') && (
+                <div className="flex gap-1">
+                  {(['donut', 'bar'] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setDistChartType(t)}
+                      className={clsx(
+                        'px-2 py-0.5 text-xs rounded transition-colors',
+                        distChartType === t ? 'bg-bg-secondary text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'
+                      )}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {(dataset === 'sessions' || dataset === 'by-project') && (() => {
-              const top5 = data.byProject.slice(0, 5);
-              const other = data.byProject.slice(5).reduce((s, r) => s + r.sessions, 0);
-              const donut = other > 0 ? [...top5, { project: 'Other', sessions: other }] : top5;
-              if (donut.length === 0) return <div className="flex items-center justify-center flex-1 text-xs text-text-muted">No data</div>;
+              const items = sliceRanked(data.byProject as Record<string, unknown>[], 'sessions', displayN, displayMode) as Array<{ project: string; sessions: number }>;
+              if (items.length === 0) return <div className="flex items-center justify-center flex-1 text-xs text-text-muted">No data</div>;
               return (
                 <div className="flex-1 min-h-0">
                   <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={donut} dataKey="sessions" nameKey="project" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
-                        {donut.map((_: unknown, i: number) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
-                      </Pie>
-                      <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
-                    </PieChart>
+                    {distChartType === 'donut' ? (
+                      <PieChart>
+                        <Pie data={items} dataKey="sessions" nameKey="project" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                          {items.map((entry: any, i: number) => <Cell key={i} fill={entry.project === 'Other' ? CHART_OTHER : CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                        </Pie>
+                        <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
+                      </PieChart>
+                    ) : (
+                      <BarChart layout="vertical" data={items}>
+                        <CartesianGrid {...gridProps} horizontal={false} />
+                        <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
+                        <YAxis type="category" dataKey="project" {...axisProps} width={80} tick={{ fontSize: 10 }} tickFormatter={(v: string) => fmtLegendLabel(v)} />
+                        <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
+                        <Bar dataKey="sessions" name="Sessions" radius={[0, 2, 2, 0]}>
+                          {items.map((entry: any, i: number) => <Cell key={i} fill={entry.project === 'Other' ? CHART_OTHER : CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                        </Bar>
+                      </BarChart>
+                    )}
                   </ResponsiveContainer>
                 </div>
               );
@@ -429,18 +486,28 @@ export function SessionsPage() {
 
             {dataset === 'dispatches' && (() => {
               if (!subagents.data || subagents.data.byType.length === 0) return <div className="flex items-center justify-center flex-1 text-xs text-text-muted">No data</div>;
-              const top5 = subagents.data.byType.slice(0, 5);
-              const other = subagents.data.byType.slice(5).reduce((s: number, r: { count: number }) => s + r.count, 0);
-              const donut = other > 0 ? [...top5, { subagentType: 'Other', count: other }] : top5;
+              const items = sliceRanked(subagents.data.byType as unknown as Record<string, unknown>[], 'count', displayN, displayMode) as Array<{ subagentType: string; count: number }>;
               return (
                 <div className="flex-1 min-h-0">
                   <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={donut} dataKey="count" nameKey="subagentType" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
-                        {donut.map((_: unknown, i: number) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
-                      </Pie>
-                      <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
-                    </PieChart>
+                    {distChartType === 'donut' ? (
+                      <PieChart>
+                        <Pie data={items} dataKey="count" nameKey="subagentType" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                          {items.map((entry: any, i: number) => <Cell key={i} fill={entry.subagentType === 'Other' ? CHART_OTHER : CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                        </Pie>
+                        <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
+                      </PieChart>
+                    ) : (
+                      <BarChart layout="vertical" data={items}>
+                        <CartesianGrid {...gridProps} horizontal={false} />
+                        <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
+                        <YAxis type="category" dataKey="subagentType" {...axisProps} width={80} tick={{ fontSize: 10 }} tickFormatter={(v: string) => fmtLegendLabel(v)} />
+                        <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
+                        <Bar dataKey="count" name="Count" radius={[0, 2, 2, 0]}>
+                          {items.map((entry: any, i: number) => <Cell key={i} fill={entry.subagentType === 'Other' ? CHART_OTHER : CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                        </Bar>
+                      </BarChart>
+                    )}
                   </ResponsiveContainer>
                 </div>
               );
@@ -448,29 +515,41 @@ export function SessionsPage() {
 
             {dataset === 'cost' && (() => {
               if (!cost.data || cost.data.byModel.length === 0) return <div className="flex items-center justify-center flex-1 text-xs text-text-muted">No data</div>;
-              const top5 = cost.data.byModel.slice(0, 5);
-              const otherUsd = cost.data.byModel.slice(5).reduce((s, r) => s + r.usd, 0);
-              const donut = otherUsd > 0 ? [...top5, { model: 'Other', usd: otherUsd, pct: 0 }] : top5;
+              const items = sliceRanked(cost.data.byModel as Record<string, unknown>[], 'usd', displayN, displayMode) as Array<{ model: string; usd: number; pct: number }>;
               return (
                 <div className="flex-1 min-h-0">
                   <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={donut} dataKey="usd" nameKey="model" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
-                        {donut.map((_: unknown, i: number) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
-                      </Pie>
-                      <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtCurrency(Number(v)), formatModelName(String(n))]} />
-                    </PieChart>
+                    {distChartType === 'donut' ? (
+                      <PieChart>
+                        <Pie data={items} dataKey="usd" nameKey="model" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                          {items.map((entry: any, i: number) => <Cell key={i} fill={entry.model === 'Other' ? CHART_OTHER : CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                        </Pie>
+                        <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtCurrency(Number(v)), formatModelName(String(n))]} />
+                      </PieChart>
+                    ) : (
+                      <BarChart layout="vertical" data={items}>
+                        <CartesianGrid {...gridProps} horizontal={false} />
+                        <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtCurrency(Number(v))} />
+                        <YAxis type="category" dataKey="model" {...axisProps} width={80} tick={{ fontSize: 10 }} tickFormatter={(v: string) => formatModelName(v)} />
+                        <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtCurrency(Number(v)), formatModelName(String(n))]} />
+                        <Bar dataKey="usd" name="Cost" radius={[0, 2, 2, 0]}>
+                          {items.map((entry: any, i: number) => <Cell key={i} fill={entry.model === 'Other' ? CHART_OTHER : CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                        </Bar>
+                      </BarChart>
+                    )}
                   </ResponsiveContainer>
                 </div>
               );
             })()}
 
             {dataset === 'churn' && (() => {
-              const topChurn = [...filteredSessions]
-                .map(s => ({ ...s, totalChurn: s.linesAdded + s.linesRemoved }))
-                .filter(s => s.totalChurn > 0)
-                .sort((a, b) => b.totalChurn - a.totalChurn)
-                .slice(0, 10);
+              const topChurn = sliceRanked(
+                [...filteredSessions]
+                  .map(s => ({ ...s, totalChurn: s.linesAdded + s.linesRemoved }))
+                  .filter(s => s.totalChurn > 0)
+                  .sort((a, b) => b.totalChurn - a.totalChurn) as Record<string, unknown>[],
+                'totalChurn', displayN, displayMode
+              ) as Array<SessionRow & { totalChurn: number }>;
               if (topChurn.length === 0) return <div className="flex items-center justify-center flex-1 text-xs text-text-muted">No churn data</div>;
               return (
                 <div className="flex-1 min-h-0">
@@ -489,10 +568,12 @@ export function SessionsPage() {
             })()}
 
             {dataset === 'commits' && (() => {
-              const topCommits = [...filteredSessions]
-                .filter(s => s.commits > 0)
-                .sort((a, b) => b.commits - a.commits)
-                .slice(0, 10);
+              const topCommits = sliceRanked(
+                [...filteredSessions]
+                  .filter(s => s.commits > 0)
+                  .sort((a, b) => b.commits - a.commits) as Record<string, unknown>[],
+                'commits', displayN, displayMode
+              ) as SessionRow[];
               if (topCommits.length === 0) return <div className="flex items-center justify-center flex-1 text-xs text-text-muted">No commits data</div>;
               return (
                 <div className="flex-1 min-h-0">
@@ -512,7 +593,7 @@ export function SessionsPage() {
         </div>
 
         {/* Shared legend */}
-        <div className="flex items-center justify-center gap-4 mt-4 mb-1 text-xs shrink-0 flex-wrap">
+        <div className="flex items-center justify-center gap-x-2 gap-y-[5px] mt-1 mb-1 text-xs shrink-0 flex-wrap">
           {getLegendKeys().map(({ name, color }) => (
             <span key={name} className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />

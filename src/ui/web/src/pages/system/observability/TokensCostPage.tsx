@@ -7,7 +7,7 @@ import { StatCard } from '../../../components/data/StatCard';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
-import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps, xAxisDateProps } from '../../../components/charts/chartTheme';
+import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, chartColor, labelFormatter, legendProps, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { fmtCurrency, fmtNumber, fmtPct, shortDate, granLabel, rangeToDays, formatModelName } from '../../../utils/format';
 
@@ -96,18 +96,18 @@ export function TokensCostPage() {
 
       {cost.data.byModel.length > 0 && (
         <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
-          <h3 className="mb-3 text-sm font-medium text-text-secondary">Cost by Model</h3>
+          <h3 className="font-heading mb-3 text-sm font-medium text-text-secondary">Cost by Model</h3>
           <div className="flex items-center gap-6">
             <PieChart width={160} height={160}>
               <Pie data={cost.data.byModel} dataKey="usd" nameKey="model" cx="50%" cy="50%" innerRadius={45} outerRadius={70}>
-                {cost.data.byModel.map((_, i) => <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                {cost.data.byModel.map((entry, i) => <Cell key={i} fill={chartColor(entry.model, i)} />)}
               </Pie>
               <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtCurrency(Number(v)), formatModelName(String(n))]} />
             </PieChart>
             <div className="flex flex-col gap-2 min-w-0">
               {cost.data.byModel.map((row, i) => (
                 <div key={row.model} className="flex items-center gap-2 text-xs">
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: chartColor(row.model, i) }} />
                   <span className="font-mono text-text-secondary truncate">{formatModelName(row.model)}</span>
                   <span className="text-text-muted font-mono shrink-0 w-10 text-right">{fmtCurrency(row.usd)}</span>
                   <span className="text-text-disabled font-mono shrink-0 w-10 text-right">{fmtPct(row.pct)}</span>

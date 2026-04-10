@@ -160,7 +160,7 @@ export function CompactionPage() {
         <div className="flex-1 min-h-0 flex">
           <div className="flex-1 min-w-0 flex flex-col">
             <div className="flex items-center justify-between mb-2 shrink-0">
-              <h3 className="text-sm font-medium text-text-secondary">Compactions by Day</h3>
+              <h3 className="font-heading text-lg font-medium text-text-secondary">Compactions by Day</h3>
               <div className="flex gap-1">
                 {(['line', 'bar'] as const).map((t) => (
                   <button
@@ -202,7 +202,7 @@ export function CompactionPage() {
           <div className="w-px bg-border-primary shrink-0 mx-5" />
           <div className="w-[360px] shrink-0 flex flex-col">
             <div className="flex items-center justify-between mb-3 shrink-0">
-              <h3 className="text-sm font-medium text-text-secondary">Phase Distribution</h3>
+              <h3 className="font-heading text-lg font-medium text-text-secondary">Phase Distribution</h3>
             </div>
             <div className="flex-1 min-h-0">
               <ResponsiveContainer width="100%" height="100%">
@@ -221,7 +221,7 @@ export function CompactionPage() {
             </div>
           </div>
         </div>
-        <div className="flex items-center justify-center gap-4 mt-4 mb-1 text-xs shrink-0">
+        <div className="flex items-center justify-center gap-x-2 gap-y-[5px] mt-1 mb-1 text-xs shrink-0">
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: PHASE_COLOR.early }} />Early (&lt;30)</span>
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: PHASE_COLOR.mid }} />Mid (30-70)</span>
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: PHASE_COLOR.late }} />Late (&gt;70)</span>
