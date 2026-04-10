@@ -113,7 +113,7 @@ export function claimNextThread(sqlite: Sqlite, sessionId: string): ResearchThre
 export function updateThread(
   sqlite: Sqlite,
   id: string,
-  updates: Partial<Pick<ResearchThread, 'status' | 'priority' | 'max_depth' | 'query' | 'min_searches' | 'fetch_source_text'>>
+  updates: Partial<Pick<ResearchThread, 'status' | 'priority' | 'max_depth' | 'query' | 'short_query' | 'min_searches' | 'fetch_source_text'>>
 ): ResearchThread | null {
   const fields: string[] = [];
   const values: unknown[] = [];
@@ -122,6 +122,7 @@ export function updateThread(
   if (updates.priority !== undefined) { fields.push('priority = ?'); values.push(updates.priority); }
   if (updates.max_depth !== undefined) { fields.push('max_depth = ?'); values.push(updates.max_depth); }
   if (updates.query !== undefined) { fields.push('query = ?'); values.push(updates.query); }
+  if (updates.short_query !== undefined) { fields.push('short_query = ?'); values.push(updates.short_query); }
   if (updates.min_searches !== undefined) { fields.push('min_searches = ?'); values.push(updates.min_searches); }
   if (updates.fetch_source_text !== undefined) {
     fields.push('fetch_source_text = ?');

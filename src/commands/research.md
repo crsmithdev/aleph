@@ -1,5 +1,5 @@
 ---
-description: Deep research — start, manage, and steer autonomous research queries
+description: Deep autonomous research — long-running investigations with budgets and persistence. For quick lookups use /search.
 ---
 Manage deep research queries. Parse the user's intent from: $ARGUMENTS
 

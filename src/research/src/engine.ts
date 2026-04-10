@@ -72,14 +72,13 @@ function stripLLMFences(text: string): string {
   return noThink;
 }
 
-function shortenQuery(query: string): string {
+/** Placeholder short_query: first 80 chars of first sentence, elided if truncated.
+ *  Replaced by LLM-generated summary once the summarize worker processes it. */
+function placeholderShortQuery(query: string): string {
   const t = query.trim();
-  const colon = t.indexOf(':');
-  if (colon > 10 && colon < 60) return t.slice(0, colon).trim();
-  const sentEnd = t.search(/[?!.]\s/);
-  if (sentEnd > 10 && sentEnd < 60) return t.slice(0, sentEnd).trim();
-  const words = t.split(/\s+/);
-  return words.length > 8 ? words.slice(0, 8).join(' ') + '…' : t;
+  const MAX = 80;
+  if (t.length <= MAX) return t;
+  return t.slice(0, MAX) + '…';
 }
 
 function calculateCost(model: string, promptTokens: number, completionTokens: number): number {
@@ -225,9 +224,10 @@ export class ResearchEngine {
     const session = sessions.createQuery(this.sqlite, title, seedQuery, config);
 
     // Create seed thread
-    threads.createThread(this.sqlite, {
+    const seedThread = threads.createThread(this.sqlite, {
       session_id: session.id,
       query: seedQuery,
+      short_query: placeholderShortQuery(seedQuery),
       node_type: classify(seedQuery),
       origin: 'seed',
       priority: 1.0,
@@ -235,6 +235,7 @@ export class ResearchEngine {
       max_depth: session.config.max_thread_depth,
       status: 'queued',
     });
+    this.summarizeThreadAsync(seedThread.id, seedQuery, session.id, session.config);
 
     return session;
   }
@@ -424,10 +425,10 @@ export class ResearchEngine {
     if (synthesisResult.confidence < 0.4 && thread.origin !== 'verify') {
       const childDepth = thread.depth + 1;
       const verifyQuery = `Verify: ${finding.summary}`;
-      threads.createThread(this.sqlite, {
+      const vThread = threads.createThread(this.sqlite, {
         session_id: sessionId,
         query: verifyQuery,
-        short_query: shortenQuery(verifyQuery),
+        short_query: placeholderShortQuery(verifyQuery),
         node_type: 'question',
         origin: 'verify',
         parent_thread_id: thread.id,
@@ -437,6 +438,7 @@ export class ResearchEngine {
         max_depth: thread.max_depth,
         status: childDepth > thread.max_depth ? 'deferred' : 'queued',
       });
+      this.summarizeThreadAsync(vThread.id, verifyQuery, sessionId, config);
     }
 
     // Step 6: Spawn child threads from accepted follow-up questions (skip if covered).
@@ -455,10 +457,10 @@ export class ResearchEngine {
         // Skip if a thread with the same query already exists (case-insensitive)
         if (existingQuerySet.has(question.toLowerCase().trim())) continue;
         const childDepth = thread.depth + 1;
-        threads.createThread(this.sqlite, {
+        const fuThread = threads.createThread(this.sqlite, {
           session_id: sessionId,
           query: question,
-          short_query: shortenQuery(question),
+          short_query: placeholderShortQuery(question),
           node_type: classify(question),
           origin: 'follow_up',
           parent_thread_id: thread.id,
@@ -468,6 +470,7 @@ export class ResearchEngine {
           max_depth: thread.max_depth,
           status: childDepth > thread.max_depth ? 'deferred' : 'queued',
         });
+        this.summarizeThreadAsync(fuThread.id, question, sessionId, config);
       }
     }
 
@@ -1075,9 +1078,10 @@ Respond with ONLY "true" if this is a duplicate or near-duplicate, "false" other
     const allThreads = threads.listThreads(this.sqlite, sessionId);
     const parentThread = allThreads.find(t => t.status !== 'pruned') ?? allThreads[0];
 
-    threads.createThread(this.sqlite, {
+    const pertThread = threads.createThread(this.sqlite, {
       session_id: sessionId,
       query: tangentQuery,
+      short_query: placeholderShortQuery(tangentQuery),
       node_type: classify(tangentQuery),
       origin: 'perturbation',
       perturbation_strategy: strategy,
@@ -1086,6 +1090,7 @@ Respond with ONLY "true" if this is a duplicate or near-duplicate, "false" other
       depth: (parentThread?.depth ?? 0) + 1,
       max_depth: config.max_thread_depth,
     });
+    this.summarizeThreadAsync(pertThread.id, tangentQuery, sessionId, config);
   }
 
   private async generatePerturbation(
@@ -1319,6 +1324,27 @@ Write a concise, informative summary of what has been discovered so far, key the
     );
 
     sessions.updateQuery(this.sqlite, sessionId, { summary: result.text });
+  }
+
+  /** Fire-and-forget LLM summarization for a thread's query.
+   *  Updates short_query in DB once the LLM responds. */
+  private summarizeThreadAsync(threadId: string, query: string, sessionId: string, config: SessionConfig): void {
+    // Short queries don't need summarization — placeholder is fine
+    if (query.length <= 80) return;
+
+    this.callLLM(
+      config.model,
+      `Summarize this research question in one short sentence (under 80 characters). Return ONLY the summary, nothing else:\n\n${query}`,
+      sessionId,
+      threadId,
+      config,
+      'summarize thread'
+    ).then(result => {
+      const summary = result.text.trim();
+      if (summary && summary.length <= 100) {
+        threads.updateThread(this.sqlite, threadId, { short_query: summary });
+      }
+    }).catch(() => { /* non-critical — placeholder remains */ });
   }
 
   protected async callLLM(

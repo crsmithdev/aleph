@@ -36,6 +36,36 @@ function summarizeQuery(query: string): string {
   return words.length > 8 ? words.slice(0, 8).join(' ') : t;
 }
 
+function placeholderShortQuery(query: string): string {
+  const t = query.trim();
+  const MAX = 80;
+  if (t.length <= MAX) return t;
+  return t.slice(0, MAX) + '…';
+}
+
+async function generateShortQuery(query: string): Promise<string | null> {
+  if (query.trim().length <= 80) return null; // placeholder is fine
+  const openrouterKey = process.env.OPENROUTER_API_KEY;
+  if (!openrouterKey) return null;
+  try {
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${openrouterKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'deepseek/deepseek-chat',
+        messages: [{ role: 'user', content: `Summarize this research question in one short sentence (under 80 characters). Return ONLY the summary, nothing else:\n\n${query}` }],
+        max_tokens: 60,
+      }),
+    });
+    if (resp.ok) {
+      const data = await resp.json() as { choices: Array<{ message: { content: string } }> };
+      const summary = data.choices[0]?.message?.content?.trim();
+      if (summary && summary.length <= 100) return summary;
+    }
+  } catch { /* fall through */ }
+  return null;
+}
+
 async function generateQueryTitle(seedQuery: string): Promise<string> {
   const openrouterKey = process.env.OPENROUTER_API_KEY;
   const heuristic = summarizeQuery(seedQuery);
@@ -114,15 +144,20 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
         config as Partial<typeof DEFAULT_SESSION_CONFIG>
       );
       // Create seed thread
-      createThread(app.sqlite, {
+      const seedThread = createThread(app.sqlite, {
         session_id: query.id,
         query: seed_query,
+        short_query: placeholderShortQuery(seed_query),
         origin: 'seed',
         priority: 1.0,
         depth: 0,
         max_depth: query.config.max_thread_depth,
         status: 'queued',
       });
+      // Fire async LLM summarization for the seed thread
+      generateShortQuery(seed_query).then(summary => {
+        if (summary) updateThread(app.sqlite, seedThread.id, { short_query: summary });
+      }).catch(() => { /* ignore */ });
       // Fire async LLM title generation (don't await — return immediately)
       generateQueryTitle(seed_query).then(llmTitle => {
         if (llmTitle !== query.title) {
@@ -175,10 +210,15 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       const thread = createThread(app.sqlite, {
         session_id: req.params.id,
         query,
+        short_query: placeholderShortQuery(query),
         origin: 'user_injected',
         priority: priority ?? 0.8,
         max_depth,
       });
+      // Fire async LLM summarization
+      generateShortQuery(query).then(summary => {
+        if (summary) updateThread(app.sqlite, thread.id, { short_query: summary });
+      }).catch(() => { /* ignore */ });
       return reply.status(201).send(thread);
     }
   );
