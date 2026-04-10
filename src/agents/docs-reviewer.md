@@ -12,7 +12,7 @@ Read and follow the skill at ~/.claude/construct/skills/docs-author/SKILL.md, th
 
 ## Phase 2: Review & Optimize
 
-If the user requested optimization, accuracy review, c7score improvements, or llms.txt generation — or if Phase 1 produced new or significantly changed content — read and follow the skill at ~/.claude/construct/skills/docs-optimizer/SKILL.md and apply it to the output from Phase 1.
+If the user requested optimization, accuracy review, c7score improvements, or llms.txt generation — or if Phase 1 produced new or significantly changed content — read and follow the skill at ~/.claude/construct/skills/docs-optimize/SKILL.md and apply it to the output from Phase 1.
 
 Otherwise, stop after Phase 1.
 

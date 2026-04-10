@@ -8,7 +8,7 @@ Two-phase workflow: review first, fix after approval.
 
 ## Phase 1: Review
 
-Read and follow the skill at ~/.claude/construct/skills/code-architect/SKILL.md, then apply it to the code the user has asked you to review.
+Read and follow the skill at ~/.claude/construct/skills/code-review/SKILL.md, then apply it to the code the user has asked you to review.
 
 Do NOT proceed to Phase 2 until the user specifies which findings to fix.
 
