@@ -4,6 +4,8 @@ import { api } from '../../api/client';
 import { fmtBytes } from '../../utils/format';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { clsx } from 'clsx';
+import { useTheme } from '../../theme';
+import { darkThemes, lightThemes } from '../../themes';
 
 // --- Types ---
 
@@ -235,12 +237,83 @@ function BackupSection() {
   );
 }
 
+// --- Theme Section ---
+
+function ThemeSection() {
+  const { themeId, theme, setThemeId } = useTheme();
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Section title="Theme">
+      <div className="relative w-full max-w-xs">
+        <button
+          onClick={() => setOpen(!open)}
+          className={clsx(
+            'flex items-center justify-between w-full rounded-lg border border-border-primary',
+            'bg-bg-tertiary px-3 py-1.5 text-sm text-text-primary'
+          )}
+        >
+          <span className="flex items-center gap-2">
+            <Icon name={theme.mode === 'dark' ? 'dark_mode' : 'light_mode'} size="sm" />
+            {theme.name}
+          </span>
+          <Icon name="expand_more" size="sm" className="text-text-muted" />
+        </button>
+        {open && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+            <div className="absolute top-full left-0 mt-1 w-full max-h-80 overflow-y-auto z-50 rounded-lg border border-border-primary bg-bg-secondary shadow-lg">
+              <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted">Dark</div>
+              {darkThemes.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => { setThemeId(t.id); setOpen(false); }}
+                  className={clsx(
+                    'flex items-center w-full px-3 py-1.5 text-sm transition-colors',
+                    t.id === themeId ? 'text-accent bg-bg-tertiary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'
+                  )}
+                >
+                  <span className="flex shrink-0 mr-2 rounded-sm overflow-hidden h-2.5" style={{ width: 20 }}>
+                    {[t.vars['--accent'], t.vars['--chart-2'], t.vars['--chart-3'], t.vars['--chart-5']].map((c, i) => (
+                      <span key={i} className="h-full" style={{ flex: 1, background: c }} />
+                    ))}
+                  </span>
+                  {t.name}
+                </button>
+              ))}
+              <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted border-t border-border-primary mt-1 pt-1.5">Light</div>
+              {lightThemes.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => { setThemeId(t.id); setOpen(false); }}
+                  className={clsx(
+                    'flex items-center w-full px-3 py-1.5 text-sm transition-colors',
+                    t.id === themeId ? 'text-accent bg-bg-tertiary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'
+                  )}
+                >
+                  <span className="flex shrink-0 mr-2 rounded-sm overflow-hidden h-2.5" style={{ width: 20 }}>
+                    {[t.vars['--accent'], t.vars['--chart-2'], t.vars['--chart-3'], t.vars['--chart-5']].map((c, i) => (
+                      <span key={i} className="h-full" style={{ flex: 1, background: c }} />
+                    ))}
+                  </span>
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </Section>
+  );
+}
+
 // --- Main Settings Page ---
 
 export function SettingsPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Settings" />
+      <ThemeSection />
       <SystemInfoSection />
       <BackupSection />
     </div>

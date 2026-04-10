@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: 'Source Sans 3', system-ui, sans-serif;
-  --font-heading: 'Outfit', system-ui, sans-serif;
+  --font-sans: 'Figtree', system-ui, sans-serif;
+  --font-heading: 'Space Grotesk', system-ui, sans-serif;
   --font-mono: 'Noto Sans Mono', ui-monospace, monospace;
 
   /* Standard type scale at 16px base */
@@ -43,87 +43,32 @@
   --color-agent-border: var(--c-agent-border);
 }
 
+/* Base theme vars (--bg-primary, --accent, --border, etc.) are set by JS in theme.tsx.
+   Derived vars below are computed from those base vars using color-mix(). */
 :root {
-  --bg-primary:   #F4F7FE;
-  --bg-secondary: #FFFFFF;
-  --bg-tertiary:  #E9EEF7;
-  --bg-hover:     #EDF2FA;
-  --bg-contrast:  #E0E7F5;
-  --bg-buttons:   #F4F7FE;
-  --text-primary:    #1B2559;
-  --text-secondary:  #68769F;
-  --text-muted:      #A3AED0;
-  --text-disabled:   #D0D5EE;
-  --border-primary:  #E0E5F2;
-  --border-secondary: #C7D0EA;
-  --c-accent:        #422AFB;
-  --c-accent-hover:  #3317E0;
-  --c-accent-muted:  #B9B0FD;
-  --c-accent-subtle: #EAE7FF;
-  --c-success:       #01B574;
-  --c-success-muted: rgb(1 181 116 / 0.15);
-  --c-warning:       #FFB547;
-  --c-warning-muted: rgb(255 181 71 / 0.15);
-  --c-error:         #EE5D50;
-  --c-error-muted:   rgb(238 93 80 / 0.15);
-  --c-links:         #422AFB;
-  --c-agent:         #E0E5F2;
-  --c-agent-border:  #C7D0EA;
+  --bg-buttons:      var(--bg-secondary);
+  --border-primary:  var(--border);
+  --border-secondary: var(--text-disabled);
+  --c-accent:        var(--accent);
+  --c-accent-hover:  color-mix(in srgb, var(--accent), var(--text-primary) 20%);
+  --c-accent-muted:  color-mix(in srgb, var(--accent), var(--bg-primary) 50%);
+  --c-accent-subtle: color-mix(in srgb, var(--accent) 12%, var(--bg-primary));
+  --c-success:       var(--success);
+  --c-success-muted: color-mix(in srgb, var(--success) 15%, transparent);
+  --c-warning:       var(--warning);
+  --c-warning-muted: color-mix(in srgb, var(--warning) 15%, transparent);
+  --c-error:         var(--error);
+  --c-error-muted:   color-mix(in srgb, var(--error) 15%, transparent);
+  --c-links:         var(--accent);
+  --c-agent:         var(--bg-tertiary);
+  --c-agent-border:  var(--border);
+  --chart-other:     var(--text-muted);
 
-  --chart-1: #422AFB;
-  --chart-2: #39B3D7;
-  --chart-3: #6AD2FF;
-  --chart-4: #FFB547;
-  --chart-5: #EE5D50;
-  --chart-6: #27AE80;
-  --chart-grid: #E0E5F2;
-  --chart-text: #A3AED0;
-  --chart-tooltip-bg: #FFFFFF;
-  --chart-tooltip-border: #E0E5F2;
-
-  --shadow-sm: 0 1px 3px 0 rgb(27 37 89 / 0.08), 0 1px 2px -1px rgb(27 37 89 / 0.04);
-  --shadow-md: 0 4px 12px -2px rgb(27 37 89 / 0.10), 0 2px 6px -2px rgb(27 37 89 / 0.06);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.10), 0 2px 6px -2px rgb(0 0 0 / 0.06);
 }
 
 [data-theme="dark"] {
-  /* Palenight */
-  --bg-primary:   #292D3E;
-  --bg-secondary: #2f3347;
-  --bg-tertiary:  #34394f;
-  --bg-hover:     #34394f;
-  --bg-contrast:  #232637;
-  --bg-buttons:   #2f3347;
-  --text-primary:    #babed8;
-  --text-secondary:  #8796b0;
-  --text-muted:      #676E95;
-  --text-disabled:   #4b5168;
-  --border-primary:  #383c50;
-  --border-secondary: #4b5168;
-  --c-accent:        #c792ea;
-  --c-accent-hover:  #d4a9f0;
-  --c-accent-muted:  #5a3d6b;
-  --c-accent-subtle: #352840;
-  --c-success:       #c3e88d;
-  --c-success-muted: rgb(195 232 141 / 0.15);
-  --c-warning:       #ffcb6b;
-  --c-warning-muted: rgb(255 203 107 / 0.15);
-  --c-error:         #f07178;
-  --c-error-muted:   rgb(240 113 120 / 0.15);
-  --c-links:         #82aaff;
-  --c-agent:         #2f3347;
-  --c-agent-border:  #4b5168;
-
-  --chart-1: #c792ea;
-  --chart-2: #82aaff;
-  --chart-3: #89ddff;
-  --chart-4: #ffcb6b;
-  --chart-5: #f07178;
-  --chart-6: #c3e88d;
-  --chart-grid: #383c50;
-  --chart-text: #676E95;
-  --chart-tooltip-bg: #2f3347;
-  --chart-tooltip-border: #383c50;
-
   --shadow-sm: none;
   --shadow-md: none;
 }
@@ -201,3 +146,6 @@ dialog::backdrop {
 .md-content th, .md-content td { border: 1px solid var(--border-primary); padding: 0.25rem 0.5rem; }
 .md-content hr { border: none; border-top: 1px solid var(--border-primary); margin: 0.5rem 0; }
 .md-content.md-sm h1, .md-content.md-sm h2, .md-content.md-sm h3 { font-size: 0.6875rem; }
+
+/* Recharts legend — override default li margin so legendProps gap controls spacing */
+.recharts-legend-item { margin-right: 0 !important; }
