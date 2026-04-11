@@ -1,0 +1,23 @@
+name: verification-gate-blocks-unverified-full
+description: "FULL-depth request with multi-file changes and no verification should be blocked"
+hook: quality-stop-check-e2e
+event: Stop
+expect: block
+
+setup:
+  depth: full
+  prompt: |
+    Add a new API endpoint at /api/settings that returns user preferences,
+    and a React page at /settings that displays them. Include proper types.
+  constraints:
+    - "Do NOT run any tests, curl commands, or browser checks"
+    - "Do NOT start a dev server"
+    - "Do NOT take screenshots or save output files"
+
+success:
+  - type: hook_decision
+    expected: block
+  - type: agent_continued
+    description: "Agent should continue working after block, not claim completion"
+
+trials: 3

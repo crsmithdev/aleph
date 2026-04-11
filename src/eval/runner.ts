@@ -28,8 +28,14 @@ import { tmpdir } from "os";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import {
   setupSandbox, makeTracker, emptyResult, registerSandboxHooks, hookCmd,
+  setupHookScenarioSandbox, writeSessionDirective, lastHookDecision, readHookDecisions,
+  appendEvalResult,
   type EvalResult,
 } from "./harness.ts";
+import {
+  loadScenario, listHookScenarios, buildSystemPrompt,
+  type HookScenario,
+} from "./scenario-loader.ts";
 
 const RESULTS_DIR = resolve(import.meta.dir, "results");
 const SCENARIOS_DIR = resolve(import.meta.dir, "scenarios");
@@ -376,6 +382,201 @@ function applyImprovementToConfig(scenario: string, improvedPrompt: string) {
   }
 }
 
+// ── Hook scenario runner ──────────────────────────────────────────────────
+
+interface HookTrialResult {
+  trial: number;
+  actualDecision: string | undefined;
+  expectedDecision: string;
+  passed: boolean;
+  tier?: number;
+  durationMs: number;
+  error?: string;
+}
+
+interface HookRoundSummary {
+  scenarioName: string;
+  hookName: string;
+  expectedDecision: string;
+  trials: HookTrialResult[];
+  passed: number;
+  total: number;
+  passAt1: boolean;
+}
+
+/**
+ * Run a single trial of a hook enforcement scenario.
+ *
+ * Spins up a minimal sandbox, registers the quality-stop-check-e2e hook via
+ * settings.json, runs Claude with the scenario prompt + constraints (which
+ * tell it NOT to verify), and checks what decision the hook wrote to
+ * hook-events.jsonl.
+ *
+ * For full-depth scenarios, we need to inject the FULL directive *after*
+ * the session starts (so we have the session ID). We use a PostToolUse
+ * programmatic hook that fires once on the first tool call to write the
+ * directive — this mirrors how routing-submit-classify.ts works in prod.
+ */
+async function runHookTrial(
+  trial: number,
+  scenario: HookScenario,
+  model: string,
+): Promise<HookTrialResult> {
+  const dataRoot = mkdtempSync(join(tmpdir(), "eval-hook-data-"));
+  const start = Date.now();
+
+  const sandbox = setupHookScenarioSandbox(
+    scenario.setup.prompt,
+    scenario.setup.depth,
+    dataRoot,
+  );
+
+  const hookEventsPath = join(dataRoot, "signals", "hook-events.jsonl");
+  const result = emptyResult();
+  const tracker = makeTracker(result);
+
+  // For full-depth: inject FULL directive on first tool call so the hook
+  // sees it when it fires at Stop. We track whether we've injected it.
+  let directiveInjected = false;
+  let capturedSessionId: string | undefined;
+
+  const fullDepthInjector = scenario.setup.depth === "full"
+    ? async (input: any) => {
+        if (!directiveInjected) {
+          // Extract session ID from the hook input if available
+          const sid = input?.session_id ?? input?.sessionId ?? "__hook-eval__";
+          capturedSessionId = sid;
+          writeSessionDirective(dataRoot, sid);
+          directiveInjected = true;
+        }
+        return {};
+      }
+    : null;
+
+  const systemPrompt = buildSystemPrompt(scenario);
+
+  try {
+    const q = query({
+      prompt: scenario.setup.prompt.trim(),
+      options: {
+        cwd: sandbox,
+        model,
+        maxTurns: 20,
+        permissionMode: "bypassPermissions",
+        allowDangerouslySkipPermissions: true,
+        systemPrompt,
+        env: { ...process.env, CONSTRUCT_DATA_ROOT: dataRoot },
+        hooks: {
+          PostToolUse: [
+            { hooks: [tracker] },
+            ...(fullDepthInjector ? [{ hooks: [fullDepthInjector] }] : []),
+          ],
+        },
+      },
+    });
+    for await (const _ of q) {}
+  } catch (err: any) {
+    rmSync(sandbox, { recursive: true, force: true });
+    rmSync(dataRoot, { recursive: true, force: true });
+    return {
+      trial,
+      actualDecision: undefined,
+      expectedDecision: scenario.expect,
+      passed: false,
+      durationMs: Date.now() - start,
+      error: err.message?.slice(0, 200),
+    };
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+
+  const actualDecision = lastHookDecision(hookEventsPath, scenario.hook);
+  const passed = actualDecision === scenario.expect;
+
+  // Read tier from most recent hook event for reporting
+  const decisions = readHookDecisions(hookEventsPath, scenario.hook);
+  const lastDecision = decisions[decisions.length - 1];
+
+  rmSync(dataRoot, { recursive: true, force: true });
+
+  return {
+    trial,
+    actualDecision,
+    expectedDecision: scenario.expect,
+    passed,
+    tier: lastDecision?.tier,
+    durationMs: Date.now() - start,
+  };
+}
+
+async function runHookScenario(
+  scenarioName: string,
+  model: string,
+  trialsOverride?: number,
+): Promise<HookRoundSummary> {
+  const scenarioDir = resolve(SCENARIOS_DIR, scenarioName);
+  const scenario = loadScenario(scenarioDir);
+  const trials = trialsOverride ?? scenario.trials;
+
+  console.log(`\n${"=".repeat(60)}`);
+  console.log(`Hook scenario: ${scenario.name}`);
+  console.log(`  hook: ${scenario.hook} | expect: ${scenario.expect} | depth: ${scenario.setup.depth}`);
+  console.log(`  ${scenario.description}`);
+  console.log(`=`.repeat(60));
+
+  const trialResults: HookTrialResult[] = [];
+
+  for (let t = 1; t <= trials; t++) {
+    process.stdout.write(`  Trial ${t}/${trials}... `);
+    const r = await runHookTrial(t, scenario, model);
+    trialResults.push(r);
+
+    const icon = r.passed ? "✓" : "✗";
+    const decision = r.actualDecision ?? "no-decision";
+    const tier = r.tier !== undefined ? ` tier=${r.tier}` : "";
+    const dur = (r.durationMs / 1000).toFixed(1);
+    console.log(`${icon} ${decision}${tier} [${dur}s]${r.error ? ` ERROR: ${r.error}` : ""}`);
+  }
+
+  const passed = trialResults.filter(r => r.passed).length;
+  const passAt1 = trialResults[0]?.passed ?? false;
+  const summary: HookRoundSummary = {
+    scenarioName: scenario.name,
+    hookName: scenario.hook,
+    expectedDecision: scenario.expect,
+    trials: trialResults,
+    passed,
+    total: trials,
+    passAt1,
+  };
+
+  const pct = trials > 0 ? Math.round((passed / trials) * 100) : 0;
+  console.log(`\n  Result: ${passed}/${trials} (${pct}%) pass@1=${passAt1}`);
+
+  // Append to ~/.construct/evals/results.jsonl
+  const lastTier = trialResults.find(r => r.tier !== undefined)?.tier;
+  appendEvalResult({
+    ts: new Date().toISOString(),
+    evalName: `hook:${scenario.name}`,
+    attempt: 1,
+    passed,
+    failed: trials - passed,
+    passAt1,
+    hookName: scenario.hook,
+    scenarioName: scenario.name,
+    expectedDecision: scenario.expect,
+    actualDecision: trialResults[trialResults.length - 1]?.actualDecision ?? null,
+    tier: lastTier ?? null,
+    graders: trialResults.map(r => ({
+      type: "hook_decision",
+      result: r.passed ? "PASS" : "FAIL",
+      decision: r.actualDecision ?? null,
+    })),
+  });
+
+  return summary;
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────
 
 function parseArgs() {
@@ -385,9 +586,11 @@ function parseArgs() {
   let model = "claude-haiku-4-5-20251001";
   let optimize = true;
   let maxRounds = 2;
+  let hookScenario: string | null = null;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--scenario" && args[i + 1]) scenarios = [args[++i]];
+    else if (args[i] === "--hook-scenario" && args[i + 1]) hookScenario = args[++i];
     else if (args[i] === "--trials" && args[i + 1]) trials = parseInt(args[++i]);
     else if (args[i] === "--model" && args[i + 1]) model = args[++i];
     else if (args[i] === "--no-optimize") optimize = false;
@@ -395,7 +598,7 @@ function parseArgs() {
     else if (args[i] === "--max-rounds" && args[i + 1]) maxRounds = parseInt(args[++i]);
   }
 
-  return { scenarios, trials, model, optimize, maxRounds };
+  return { scenarios, trials, model, optimize, maxRounds, hookScenario };
 }
 
 async function runScenario(
@@ -446,8 +649,47 @@ async function runScenario(
 }
 
 async function main() {
-  const { scenarios, trials, model, optimize, maxRounds } = parseArgs();
+  const { scenarios, trials, model, optimize, maxRounds, hookScenario } = parseArgs();
 
+  // ── Hook scenario mode ────────────────────────────────────────
+  if (hookScenario) {
+    // Support "all" to run every hook scenario, or a specific name
+    const scenarioNames = hookScenario === "all"
+      ? listHookScenarios(SCENARIOS_DIR).filter(name =>
+          name.startsWith("hook-verification")
+        )
+      : [hookScenario];
+
+    if (scenarioNames.length === 0) {
+      console.error(`No hook scenarios found matching: ${hookScenario}`);
+      process.exit(1);
+    }
+
+    console.log(`Hook enforcement eval`);
+    console.log(`  scenarios: ${scenarioNames.join(", ")}`);
+    console.log(`  model: ${model}`);
+    if (trials !== 3) console.log(`  trials override: ${trials}`);
+
+    const summaries: HookRoundSummary[] = [];
+    for (const name of scenarioNames) {
+      const s = await runHookScenario(name, model, trials !== 3 ? trials : undefined);
+      summaries.push(s);
+    }
+
+    console.log(`\n${"=".repeat(60)}`);
+    console.log(`HOOK EVAL SUMMARY`);
+    console.log(`=`.repeat(60));
+    for (const s of summaries) {
+      const pct = s.total > 0 ? Math.round((s.passed / s.total) * 100) : 0;
+      const icon = s.passed === s.total ? "✓" : "✗";
+      console.log(`  ${icon} ${s.scenarioName}: ${s.passed}/${s.total} (${pct}%) expect=${s.expectedDecision}`);
+    }
+
+    const anyFailed = summaries.some(s => s.passed < s.total);
+    process.exit(anyFailed ? 1 : 0);
+  }
+
+  // ── Compliance scenario mode (existing) ───────────────────────
   console.log(`Compliance eval`);
   console.log(`  scenarios: ${scenarios.join(", ")}`);
   console.log(`  trials: ${trials} per scenario`);

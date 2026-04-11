@@ -16,6 +16,9 @@ export const ARTIFACT_CMD = /--screenshot|screenshot|\.png|\.jpg|\.jpeg|> .*\.(t
 /** Unit test runners — do NOT count as e2e */
 export const UNIT_TEST_CMD = /^(?:bun test|npm test|npx jest|npx vitest|vitest|jest|pytest|cargo test|go test|dotnet test)(?:\s|$)/;
 
+/** Direct functional verification — curl, wget, localhost hits */
+export const FUNCTIONAL_CMD = /\bcurl\b|\bwget\b|\bhttpie\b|http:\/\/localhost|http:\/\/127\.\d/i;
+
 /** Direct hook invocations — testing the hook script is NOT e2e */
 export const HOOK_INVOCATION = /bun\s+src\/skills\/hooks\//;
 

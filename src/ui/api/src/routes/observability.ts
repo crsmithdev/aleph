@@ -1,6 +1,9 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { resolve } from 'path';
-import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
+import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, writeFileSync } from 'fs';
+import { stringify as yamlStringify } from 'yaml';
+import { loadScenario, listHookScenarios } from '@construct/eval/scenario-loader.ts';
+import { spawn } from 'child_process';
 import { claudePaths, dataPaths, getMemoryDbPath } from '@construct/data';
 import { Database } from 'bun:sqlite';
 import {
@@ -1065,6 +1068,232 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
 
     return { evals, byDay, totalRuns, overallPassAt3Rate };
   });
+
+  // ---------------------------------------------------------------------------
+  // Eval scenario management
+  // ---------------------------------------------------------------------------
+
+  const SCENARIOS_DIR = resolve(import.meta.dirname, '../../../../eval/scenarios');
+  const EVALS_RESULTS_FILE = resolve(dataPaths.root, 'evals', 'results.jsonl');
+
+  app.get('/evals/scenarios', async () => {
+    if (!existsSync(SCENARIOS_DIR)) return { scenarios: [] };
+    const dirNames = listHookScenarios(SCENARIOS_DIR);
+    const scenarios = [];
+    for (const dirName of dirNames) {
+      try {
+        const s = loadScenario(resolve(SCENARIOS_DIR, dirName));
+        scenarios.push({
+          name: s.name,
+          dirName,
+          description: s.description,
+          hook: s.hook,
+          event: s.event,
+          expect: s.expect,
+          depth: s.setup.depth,
+          trials: s.trials,
+          prompt: s.setup.prompt.slice(0, 200),
+          constraints: s.setup.constraints ?? [],
+        });
+      } catch (err) {
+        // Skip malformed scenarios but log
+        app.log.warn(`Failed to load scenario ${dirName}: ${(err as Error).message}`);
+      }
+    }
+    return { scenarios };
+  });
+
+  app.get<{ Params: { name: string } }>('/evals/scenarios/:name', async (req, reply) => {
+    const { name } = req.params;
+    const scenarioDir = resolve(SCENARIOS_DIR, name);
+    if (!existsSync(scenarioDir) || !existsSync(resolve(scenarioDir, 'scenario.yaml'))) {
+      reply.code(404);
+      return { error: `Scenario '${name}' not found` };
+    }
+
+    let scenario;
+    try {
+      scenario = loadScenario(scenarioDir);
+    } catch (err) {
+      reply.code(400);
+      return { error: `Failed to load scenario: ${(err as Error).message}` };
+    }
+
+    const evalName = `hook:${scenario.name}`;
+    const runs: Array<{
+      ts: string;
+      passed: number;
+      failed: number;
+      passAt1: boolean;
+      hookName: string;
+      expectedDecision: string;
+      actualDecision: string | null;
+      tier: number | null;
+      graders: Array<{ type: string; result: string; decision?: string }>;
+    }> = [];
+
+    if (existsSync(EVALS_RESULTS_FILE)) {
+      try {
+        const lines = readFileSync(EVALS_RESULTS_FILE, 'utf-8').split('\n').filter(Boolean);
+        for (const line of lines) {
+          try {
+            const entry = JSON.parse(line) as Record<string, unknown>;
+            if (entry.evalName !== evalName) continue;
+            runs.push({
+              ts: entry.ts as string,
+              passed: (entry.passed as number) ?? 0,
+              failed: (entry.failed as number) ?? 0,
+              passAt1: (entry.passAt1 as boolean) ?? false,
+              hookName: (entry.hookName as string) ?? scenario.hook,
+              expectedDecision: (entry.expectedDecision as string) ?? scenario.expect,
+              actualDecision: (entry.actualDecision as string | null) ?? null,
+              tier: (entry.tier as number | null) ?? null,
+              graders: (entry.graders as Array<{ type: string; result: string; decision?: string }>) ?? [],
+            });
+          } catch {}
+        }
+      } catch {}
+    }
+
+    runs.sort((a, b) => b.ts.localeCompare(a.ts));
+    return { scenario, runs };
+  });
+
+  app.post<{
+    Body: {
+      name: string;
+      description: string;
+      hook: string;
+      event: string;
+      expect: 'block' | 'advisory' | 'pass';
+      setup: { depth: 'full' | 'quick'; prompt: string; constraints?: string[] };
+      success: Array<{ type: string; expected?: string; description?: string }>;
+      trials: number;
+    };
+  }>('/evals/scenarios', async (req, reply) => {
+    const body = req.body;
+    if (!body.name || typeof body.name !== 'string') {
+      reply.code(400); return { error: 'name is required' };
+    }
+    if (!['block', 'advisory', 'pass'].includes(body.expect)) {
+      reply.code(400); return { error: 'expect must be block|advisory|pass' };
+    }
+    if (!body.setup?.prompt) {
+      reply.code(400); return { error: 'setup.prompt is required' };
+    }
+    if (!['full', 'quick'].includes(body.setup?.depth)) {
+      reply.code(400); return { error: 'setup.depth must be full|quick' };
+    }
+    if (!Array.isArray(body.success) || body.success.length === 0) {
+      reply.code(400); return { error: 'success must be a non-empty array' };
+    }
+    if (typeof body.trials !== 'number' || body.trials < 1) {
+      reply.code(400); return { error: 'trials must be a positive number' };
+    }
+
+    const dirName = body.name.toLowerCase().replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const scenarioDir = resolve(SCENARIOS_DIR, dirName);
+
+    if (existsSync(scenarioDir)) {
+      reply.code(409); return { error: `Scenario directory '${dirName}' already exists` };
+    }
+
+    const yamlContent = yamlStringify({
+      name: body.name,
+      description: body.description,
+      hook: body.hook,
+      event: body.event,
+      expect: body.expect,
+      setup: body.setup,
+      success: body.success,
+      trials: body.trials,
+    });
+
+    try {
+      mkdirSync(scenarioDir, { recursive: true });
+      writeFileSync(resolve(scenarioDir, 'scenario.yaml'), yamlContent, 'utf-8');
+    } catch (err) {
+      reply.code(500); return { error: `Failed to write scenario: ${(err as Error).message}` };
+    }
+
+    reply.code(201);
+    return { created: true, dirName };
+  });
+
+  app.post<{ Params: { name: string } }>('/evals/run/:name', async (req, reply) => {
+    const { name } = req.params;
+    const scenarioDir = resolve(SCENARIOS_DIR, name);
+    if (!existsSync(scenarioDir) || !existsSync(resolve(scenarioDir, 'scenario.yaml'))) {
+      reply.code(404); return { error: `Scenario '${name}' not found` };
+    }
+
+    const runnerPath = resolve(import.meta.dirname, '../../../../eval/runner.ts');
+    const projectRoot = resolve(import.meta.dirname, '../../../..');
+
+    const child = spawn('bun', [runnerPath, '--hook-scenario', name], {
+      detached: true,
+      stdio: 'ignore',
+      cwd: projectRoot,
+    });
+    child.unref();
+
+    return { started: true, scenarioName: name, pid: child.pid };
+  });
+
+  app.get<{ Querystring: { scenario?: string; limit?: string; offset?: string } }>(
+    '/evals/runs',
+    async (req) => {
+      if (!existsSync(EVALS_RESULTS_FILE)) {
+        return { runs: [], total: 0 };
+      }
+
+      const limit = Math.min(Math.max(parseInt(req.query.limit || '50', 10) || 50, 1), 500);
+      const offset = Math.max(parseInt(req.query.offset || '0', 10) || 0, 0);
+      const scenarioFilter = req.query.scenario;
+
+      let lines: string[];
+      try {
+        lines = readFileSync(EVALS_RESULTS_FILE, 'utf-8').split('\n').filter(Boolean);
+      } catch {
+        return { runs: [], total: 0 };
+      }
+
+      type RunEntry = {
+        ts: string;
+        evalName: string;
+        attempt: number;
+        passed: number;
+        failed: number;
+        passAt1: boolean;
+        hookName?: string;
+        scenarioName?: string;
+        expectedDecision?: string;
+        actualDecision?: string;
+        tier?: number;
+        graders?: Array<{ type: string; result: string }>;
+      };
+
+      const all: RunEntry[] = [];
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line) as RunEntry;
+          if (scenarioFilter) {
+            // Match by evalName "hook:<scenarioName>" or explicit scenarioName field
+            const matchesName = entry.evalName === `hook:${scenarioFilter}` || entry.scenarioName === scenarioFilter;
+            if (!matchesName) continue;
+          }
+          all.push(entry);
+        } catch {}
+      }
+
+      // Sort newest first
+      all.sort((a, b) => b.ts.localeCompare(a.ts));
+      const total = all.length;
+      const runs = all.slice(offset, offset + limit);
+
+      return { runs, total };
+    },
+  );
 
   // ---------------------------------------------------------------------------
   // Verifications

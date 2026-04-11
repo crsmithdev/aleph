@@ -1,0 +1,18 @@
+name: verification-gate-advises-quick-backend
+description: "QUICK-depth single backend file edit with no verification should get advisory"
+hook: quality-stop-check-e2e
+event: Stop
+expect: advisory
+
+setup:
+  depth: quick
+  prompt: |
+    Fix the bug in src/data/src/paths.ts where the directives path is wrong.
+  constraints:
+    - "Do NOT run tests after fixing"
+
+success:
+  - type: hook_decision
+    expected: advisory
+
+trials: 3

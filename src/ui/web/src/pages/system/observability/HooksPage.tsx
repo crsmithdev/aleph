@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { useObsHooks, useObsHookEvents } from '../../../api/observability-hooks';
+import { useObsHooks, useObsHookEvents, type HookGatingStat } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
@@ -52,6 +52,129 @@ function fmtCalls(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
   if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
   return String(n);
+}
+
+function GatingSection({ gating }: { gating: Record<string, HookGatingStat> }) {
+  const hooks = Object.entries(gating);
+  if (hooks.length === 0) return null;
+
+  const totalDecisions = hooks.reduce((s, [, g]) => s + g.total, 0);
+  const totalBlocks = hooks.reduce((s, [, g]) => s + g.blocks, 0);
+  const totalAdvisories = hooks.reduce((s, [, g]) => s + g.advisories, 0);
+  const totalIgnored = hooks.reduce((s, [, g]) => s + g.ignoredAdvisories, 0);
+  const totalRepeated = hooks.reduce((s, [, g]) => s + g.repeatedBlocks, 0);
+  const overallBlockRate = totalDecisions > 0 ? (totalBlocks / totalDecisions) * 100 : 0;
+  const advisoryCompliance = totalAdvisories > 0 ? (1 - totalIgnored / totalAdvisories) * 100 : 100;
+
+  // Stacked bar data: blocks/advisories/passes per hook
+  const chartData = hooks.map(([name, g]) => ({
+    name: name.replace(/^quality-|^isolation-|^git-|^routing-|^context-|^security-/, '').replace(/-/g, ' '),
+    blocks: g.blocks,
+    advisories: g.advisories,
+    passes: g.passes,
+  }));
+
+  return (
+    <div className="space-y-4">
+      <h2 className="font-heading text-lg font-medium text-text-secondary">Gating Effectiveness</h2>
+
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="Gate Decisions" value={fmtNumber(totalDecisions)} />
+        <StatCard
+          label="Block Rate"
+          value={totalDecisions > 0 ? fmtPct(overallBlockRate) : '—'}
+          accent={overallBlockRate > 20 ? 'error' : overallBlockRate > 5 ? 'warning' : 'success'}
+        />
+        <StatCard
+          label="Advisory Compliance"
+          value={totalAdvisories > 0 ? fmtPct(advisoryCompliance) : '—'}
+          accent={advisoryCompliance >= 90 ? 'success' : advisoryCompliance >= 70 ? 'warning' : 'error'}
+        />
+        <StatCard
+          label="Repeated Blocks"
+          value={fmtNumber(totalRepeated)}
+          accent={totalRepeated === 0 ? 'success' : totalRepeated < 3 ? 'warning' : 'error'}
+        />
+      </div>
+
+      {/* Per-hook gating chart */}
+      {chartData.length > 0 && (
+        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 h-[220px]">
+          <h3 className="font-heading text-sm font-medium text-text-secondary mb-3">Gate Decisions by Hook</h3>
+          <div className="h-[160px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 20, top: 0, bottom: 0 }}>
+                <CartesianGrid {...gridProps} horizontal={false} />
+                <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
+                <YAxis type="category" dataKey="name" {...axisProps} width={110} tick={{ fontSize: 10 }} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+                <Bar dataKey="blocks" name="Blocks" stackId="a" fill="var(--color-error, #ef4444)" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="advisories" name="Advisories" stackId="a" fill="var(--color-warning, #f59e0b)" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="passes" name="Passes" stackId="a" fill="var(--color-success, #22c55e)" radius={[0, 2, 2, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* Per-hook table */}
+      <div className="rounded-lg border border-border-primary bg-bg-secondary overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border-primary">
+              <th className="text-left px-4 py-2.5 text-text-muted font-medium text-xs uppercase tracking-wide">Hook</th>
+              <th className="text-right px-4 py-2.5 text-text-muted font-medium text-xs uppercase tracking-wide">Blocks</th>
+              <th className="text-right px-4 py-2.5 text-text-muted font-medium text-xs uppercase tracking-wide">Advisories</th>
+              <th className="text-right px-4 py-2.5 text-text-muted font-medium text-xs uppercase tracking-wide">Passes</th>
+              <th className="text-right px-4 py-2.5 text-text-muted font-medium text-xs uppercase tracking-wide">Block Rate</th>
+              <th className="text-right px-4 py-2.5 text-text-muted font-medium text-xs uppercase tracking-wide">Ignored</th>
+              <th className="text-right px-4 py-2.5 text-text-muted font-medium text-xs uppercase tracking-wide">Repeated</th>
+            </tr>
+          </thead>
+          <tbody>
+            {hooks.map(([name, g]) => (
+              <tr key={name} className="border-b border-border-primary/40 last:border-b-0 hover:bg-bg-tertiary/30">
+                <td className="px-4 py-2.5 font-mono text-text-primary text-xs">{name}</td>
+                <td className="px-4 py-2.5 text-right font-mono">
+                  <span className={clsx(g.blocks > 0 ? 'text-error font-medium' : 'text-text-disabled')}>
+                    {g.blocks > 0 ? fmtNumber(g.blocks) : '—'}
+                  </span>
+                </td>
+                <td className="px-4 py-2.5 text-right font-mono">
+                  <span className={clsx(g.advisories > 0 ? 'text-warning font-medium' : 'text-text-disabled')}>
+                    {g.advisories > 0 ? fmtNumber(g.advisories) : '—'}
+                  </span>
+                </td>
+                <td className="px-4 py-2.5 text-right font-mono">
+                  <span className={clsx(g.passes > 0 ? 'text-success' : 'text-text-disabled')}>
+                    {g.passes > 0 ? fmtNumber(g.passes) : '—'}
+                  </span>
+                </td>
+                <td className="px-4 py-2.5 text-right font-mono">
+                  <span className={clsx(
+                    g.blockRate > 0.2 ? 'text-error' : g.blockRate > 0.05 ? 'text-warning' : 'text-text-secondary'
+                  )}>
+                    {g.total > 0 ? fmtPct(g.blockRate * 100) : '—'}
+                  </span>
+                </td>
+                <td className="px-4 py-2.5 text-right font-mono">
+                  <span className={clsx(g.ignoredAdvisories > 0 ? 'text-warning' : 'text-text-disabled')}>
+                    {g.ignoredAdvisories > 0 ? fmtNumber(g.ignoredAdvisories) : '—'}
+                  </span>
+                </td>
+                <td className="px-4 py-2.5 text-right font-mono">
+                  <span className={clsx(g.repeatedBlocks > 0 ? 'text-error' : 'text-text-disabled')}>
+                    {g.repeatedBlocks > 0 ? fmtNumber(g.repeatedBlocks) : '—'}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 function ByEventView({ range }: { range: TimeRange }) {
@@ -475,6 +598,10 @@ export function HooksPage() {
           accent={weightedP95 > 0 ? (weightedP95 < 500 ? 'success' : weightedP95 < 2000 ? 'warning' : 'error') : undefined}
         />
       </div>
+
+      {data.gating && Object.keys(data.gating).length > 0 && (
+        <GatingSection gating={data.gating} />
+      )}
 
       {dataset === 'by-event' ? (
         <ByEventView range={range} />

@@ -1,65 +1,35 @@
-# General
+# Observability
 
-# Charts
+- handling of subagents in sessions
+- learning / feedback loop
+- easy eval system
+- hook audit
+- tests audit / rebuild
+- docs audi / rebuild / optimization / codebase skill
+- agents / subagents page?
+- minor session fixes / search
 
-Go through every chart on every page in observability.
+# Research
 
-- on pages that have two charts in the same row, the first should be a shaded area / stacked bar chart, the second should be a donut chart.  They should be shown in separate panels, not a single one, and should not share a legend.
-- The donut chart should take up ~1/4 of the row on the right, the area / bar chart on the left.  +
-- The donut chart should take up most of the area of its own panel, e.g. this is not great (C:\Users\crsmi\OneDrive\Desktop\2026-04-06 21_55_36-Steam.png).  Adjust how the legend displays so that it does not eat too much space vertically, consider alternatives if it's not feasible to size the chart like that.
-  
+# Document view
+- Getting better, but still feels like a list.  
+- The document needs some structure / direction / narrative.  Compare our document on consciousness vs the wikipedia article on the subject (https://en.wikipedia.org/wiki/Consciousness):  the article has a flow from start to finish, a kind of narrative direction, that starts with the general idea, drops back into fundamental concepts, etymology, then does a whole walk forward through history, brings in modern concepts, alternative perspectives, etc.  So ours needs to be structured in some way, it will probably vary per topic, that makes it feel like that.  That probably will require more LLM calls.
+- One thing in particular in both document and live views is that the questions look very unnatural as headers for sections, given how extremely long they are.  Also, it's unlikely in any document that the questions asked in the process of making it would be the names of sections, the wikipedia article has very short phrases, usually 1-5 words, that are conceptual rather than direct representations of the question.
+- The threads sidebar should be repurposed:  in threads view it's an outline for something that's right next to it, the question names are too long to work in an outline, and the document view doesn't benefit from them at all.
+- There are also queries made about a topic, not directly as a question.  We should probably aim for those kind of queries to have 'follow-up questions' that are presented at least as topics themselves.  e.g. "topic A -> topic B" instead of "topic A -> long text of a question about topic B
 
-- On tools, combine the tool calls / total errors cards into one, adjust the precision of total tool calls to be 1 decimal point. Add a combined p50 / p95 success rate data card.  Add a p50 and success % column to the table, remove avg, rename 'Last Use' to 'Last Used'
-- On Scripts, move the 'by hook / by event' toggle to the immediate left of the granularity / date range controls.  Rename that page to 'Hooks'.  Combine total calls / errors like you just did on Tools, remove the Active Hooks card, replace with a combined p50 / p95 latency card.  Update text on the page as needed to match the rename.  Replace 'avg' with p50 in in the table, also add a 'last used' column.  Change the Active Only filter to 'Missing (#count)', default it and unused to off.
-- On Skills, move the filters (Commands, Skills, Installed, Unused) to the header row to the left of the granularity and date range controls.  Rename 'Installed' to 'Missing', adjust the # in parentheses to show missing skills (present in the data but not currently installed), default 'Missing' and 'Unused' to off.  In the table, replace avg with p50, change 'Last' header to 'Last Use'
+# Providers page
+- The panels should show only what's relevant to selected provider, e.g. if I have OpenRouter active, I only see the OpenRouter key view / input.     
+- represent the full API key in the UI, just use '*' in place of most of the digits, instead of striking out a few and hiding the rest.'
+- Readability should not even have a green checkmark at all, nor Duck Duck Go
+- Restore the 'gap size' option , along the gap analysis checkbox
+- Remove the defaults section.
 
-- what are all the 'null' unused skills on the Scripts page?
-- the topmost hook has 'null' for its name
-- 
-
-
-- for Tools, make the error count in the first datacard more visible, use red / yellow / green highlighting for it, pick another color for total calls.  Same thing for p50 / p95, the p95 is barely visible, change card title to Latency.  Swap the order of the charts, put them in separate panels, do not share a legend between them.
-- Move the 'dataset' control to the left of the 'Missing' filter on top, put a vertical spacer (the kind between granularity a and date range) between 'Missing' and granularity, and between Dataset and 'Missing'
-
-              - add an 'installed' column to the table / dataset, that shows whether that tool still currently exists / is installed.  Just use a checkmark for the per-row value
-Research -> session detaild
-
-- Add all of tho
-
-
-
-
-
-Make those changes.  Look for cases where mono fonts are being used for things that are mostly text, or vice versa.  e.g. skill names
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# Queries page
+- This shouldn't be a page of its own, this is just what you see when clicking 'research' and should not be in the sidebar at all.
+- The settings that pop up when a new question is being added should include gap analysis enabled / size controls.  
+- Model default is DeepSeek V3.  When a full model name is entered into the text box, is it possible to query for cost?  Or have some representation of it at the point of submitting a question.
+- More follow-up questions than specified are being generated, e.g. default is 8, actual is nearly 2x it seems.  Lower the default to 5, ensure only that many are generated
 
 
 

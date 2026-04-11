@@ -2,8 +2,8 @@ import { Icon } from '../../components/ui/Icon';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { BarChart, Bar, AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
-import { useResearchQueries, useCreateResearchQuery, useUpdateResearchQuery, useResearchStats, useRunResearch, useRunAllResearch, useStopAllResearch, useResearchEnvCheck } from '../../api/research-hooks';
+import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { useResearchQueries, useCreateResearchQuery, useUpdateResearchQuery, useResearchStats, useRunAllResearch, useStopAllResearch, useClearResearchDB } from '../../api/research-hooks';
 import { Button } from '../../components/ui/Button';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
@@ -12,9 +12,25 @@ import { ObsControlBar } from '../../components/data/ObsControlBar';
 import { type TimeRange, type Granularity } from '../../components/data/TimeRangeSelector';
 import { ChartContainer } from '../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps, xAxisDateProps } from '../../components/charts/chartTheme';
-import { fmtCurrency, fmtNumber, fmtPct, shortDate, granLabel } from '../../utils/format';
+import { fmtCurrency, fmtNumber, fmtPct, granLabel } from '../../utils/format';
 
-const statusColors: Record<string, string> = {
+type StatusFilter = 'all' | 'active' | 'paused' | 'completed';
+
+const STATUS_FILTERS: { label: string; value: StatusFilter }[] = [
+  { label: 'All', value: 'all' },
+  { label: 'Active', value: 'active' },
+  { label: 'Paused', value: 'paused' },
+  { label: 'Completed', value: 'completed' },
+];
+
+const statusDotColors: Record<string, string> = {
+  active: 'bg-green-400',
+  paused: 'bg-yellow-400',
+  completed: 'bg-blue-400',
+  archived: 'bg-text-muted',
+};
+
+const statusBadgeColors: Record<string, string> = {
   active: 'bg-green-900/50 text-green-300',
   paused: 'bg-yellow-900/50 text-yellow-300',
   completed: 'bg-blue-900/50 text-blue-300',
@@ -28,7 +44,6 @@ export function ResearchQueriesPage() {
   const stats = useResearchStats(range, granularity);
   const createSession = useCreateResearchQuery();
   const updateSession = useUpdateResearchQuery();
-  const runResearch = useRunResearch();
   const runAll = useRunAllResearch();
   const stopAll = useStopAllResearch();
   const [newOpen, setNewOpen] = useState(false);
@@ -37,10 +52,14 @@ export function ResearchQueriesPage() {
   const [provider, setProvider] = useState<string>(() => localStorage.getItem('research_default_provider') ?? 'openrouter');
   const [model, setModel] = useState<string>(() => localStorage.getItem('research_default_model') ?? '');
   const [minSearches, setMinSearches] = useState<number>(() => Number(localStorage.getItem('research_default_min_searches') ?? '2'));
+  const clearDb = useClearResearchDB();
   const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
-  const { data: envCheck } = useResearchEnvCheck();
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   const visibleSessions = sessions.filter(s => s.status !== 'archived');
+  const filteredSessions = statusFilter === 'all'
+    ? visibleSessions
+    : visibleSessions.filter(s => s.status === statusFilter);
 
   function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -97,31 +116,24 @@ export function ResearchQueriesPage() {
         onGranularityChange={setGranularity}
       />
 
-      {/* Env warnings/errors banner */}
-      {envCheck && (envCheck.errors.length > 0 || envCheck.warnings.length > 0 || envCheck.jina_balance !== null) && (
-        <div className="flex flex-col gap-1.5">
-          {envCheck.errors.map((e, i) => (
-            <div key={i} className="rounded border border-red-500/50 bg-red-500/10 px-3 py-2 flex items-center gap-2">
-              <Icon name="close" size="xs" className="text-red-400 shrink-0" />
-              <span className="text-xs text-red-400 font-medium">{e}</span>
-            </div>
-          ))}
-          {envCheck.warnings.map((w, i) => (
-            <div key={i} className="rounded border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 flex items-center gap-2">
-              <span className="text-yellow-400 text-xs shrink-0">⚠</span>
-              <span className="text-xs text-yellow-400">{w}</span>
-            </div>
-          ))}
-          {envCheck.jina_balance !== null && (
-            <div className="rounded border border-border-primary bg-bg-secondary px-3 py-2 flex items-center gap-2">
-              <span className="text-xs text-text-muted">Jina balance:</span>
-              <span className={clsx('text-xs font-medium tabular-nums', envCheck.jina_balance < 100_000 ? 'text-red-400' : envCheck.jina_balance < 1_000_000 ? 'text-yellow-400' : 'text-green-400')}>
-                {envCheck.jina_balance.toLocaleString()} tokens
-              </span>
-            </div>
-          )}
-        </div>
-      )}
+      {/* Dev: wipe & start */}
+      <button
+        onClick={() => {
+          if (visibleSessions.length > 0 && !confirm('This will delete ALL research data. Continue?')) return;
+          clearDb.mutate(undefined, {
+            onSuccess: () => {
+              createSession.mutate({
+                seed_query: 'How are personal AI assistants evolving to become persistent, context-aware companions that learn from user interactions over time? What architectures, memory systems, and interaction patterns are emerging in tools like Claude Code, Cursor, and open-source alternatives?',
+                config: { max_thread_depth: 6, min_searches_per_thread: 2, providers: { primary: 'openrouter' } },
+              });
+            },
+          });
+        }}
+        disabled={clearDb.isPending || createSession.isPending}
+        className="self-start px-3 py-1.5 text-xs rounded border border-dashed border-border-secondary text-text-muted hover:text-red-400 hover:border-red-400/50 hover:bg-red-500/5 transition-colors"
+      >
+        {clearDb.isPending || createSession.isPending ? 'Starting...' : 'Wipe & start test query'}
+      </button>
 
       {stats.data && (
         <>
@@ -164,7 +176,6 @@ export function ResearchQueriesPage() {
           )}
         </>
       )}
-
 
       {newOpen && (
         <form onSubmit={handleCreate} className="bg-bg-secondary border border-border-primary rounded-lg p-4 flex gap-3 items-center">
@@ -225,45 +236,84 @@ export function ResearchQueriesPage() {
         </form>
       )}
 
+      {/* Status filter bar */}
+      {!isLoading && !isError && visibleSessions.length > 0 && (
+        <div className="flex items-center gap-1">
+          {STATUS_FILTERS.map(f => (
+            <button
+              key={f.value}
+              onClick={() => setStatusFilter(f.value)}
+              className={clsx(
+                'px-3 py-1.5 rounded text-xs font-medium transition-colors',
+                statusFilter === f.value
+                  ? 'bg-bg-tertiary text-text-primary'
+                  : 'text-text-muted hover:text-text-secondary hover:bg-bg-secondary'
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {isLoading ? (
         <PageLoading />
       ) : isError ? (
         <ErrorState message="Failed to load research sessions." />
-      ) : visibleSessions.length === 0 ? (
+      ) : filteredSessions.length === 0 ? (
         <div className="text-center py-12 text-text-muted">
-          No research queries yet. Start one to begin exploring.
+          {visibleSessions.length === 0
+            ? 'No research queries yet. Start one to begin exploring.'
+            : 'No queries match the selected filter.'}
         </div>
       ) : (
-        <div className="space-y-2">
-          {visibleSessions.map(session => (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {filteredSessions.map(session => (
             <div
               key={session.id}
-              className="bg-bg-secondary border border-border-primary rounded-lg p-4 hover:border-border-secondary transition-colors flex items-start gap-3"
+              className="group bg-bg-secondary border border-border-primary rounded-lg hover:border-border-secondary transition-colors flex flex-col"
             >
-              <Link to={`/research/${session.id}`} className="flex-1 min-w-0">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-medium text-text-primary truncate">{session.title}</h3>
-                    <p className="text-xs text-text-muted mt-1 truncate">{session.seed_query}</p>
-                  </div>
-                  <span className={clsx('px-2 py-0.5 rounded text-xs font-medium ml-3', statusColors[session.status])}>
+              <Link to={`/research/${session.id}`} className="flex flex-col flex-1 p-4 min-w-0">
+                {/* Header: status badge + title */}
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <h3 className="font-heading text-sm font-semibold text-text-primary leading-snug line-clamp-2 flex-1 min-w-0">
+                    {session.title || session.seed_query}
+                  </h3>
+                  <span className={clsx(
+                    'flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium shrink-0',
+                    statusBadgeColors[session.status]
+                  )}>
+                    <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', statusDotColors[session.status])} />
                     {session.status}
                   </span>
                 </div>
-                {session.summary && (
-                  <p className="text-xs text-text-secondary mt-2 line-clamp-2">{session.summary}</p>
+
+                {/* Seed query */}
+                <p className="text-xs text-text-muted mb-3 truncate">{session.seed_query}</p>
+
+                {/* Summary preview */}
+                {session.summary ? (
+                  <p className="text-xs text-text-secondary leading-relaxed line-clamp-3 flex-1">
+                    {session.summary}
+                  </p>
+                ) : (
+                  <p className="text-xs text-text-muted italic flex-1">No summary yet.</p>
                 )}
-                <p className="text-xs text-text-muted mt-2">
-                  Created {new Date(session.created_at).toLocaleDateString()}
-                </p>
               </Link>
-              <button
-                onClick={() => updateSession.mutate({ id: session.id, status: 'archived' })}
-                className="text-xs text-text-muted hover:text-red-400 transition-colors shrink-0 mt-1"
-                title="Archive"
-              >
-                Archive
-              </button>
+
+              {/* Footer */}
+              <div className="px-4 pb-3 pt-2 border-t border-border-primary flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 text-xs text-text-muted">
+                  <span>{new Date(session.created_at).toLocaleDateString()}</span>
+                </div>
+                <button
+                  onClick={() => updateSession.mutate({ id: session.id, status: 'archived' })}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-text-muted hover:text-red-400 p-1 rounded"
+                  title="Archive"
+                >
+                  <Icon name="close" size="xs" />
+                </button>
+              </div>
             </div>
           ))}
         </div>

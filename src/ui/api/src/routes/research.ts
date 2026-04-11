@@ -1,4 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { resolve, dirname } from 'path';
 import {
   listQueries, getQuery, createQuery, updateQuery, getQueryCost, getResearchStats,
   listThreads, getThread, updateThread, createThread,
@@ -451,7 +453,89 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
-  // === Env check ===
+  // === Provider config (persisted to ~/.construct/research-config.json) ===
+  const configPath = resolve(process.env.HOME ?? '', '.construct', 'research-config.json');
+
+  function loadProviderConfig(): Record<string, unknown> {
+    try { return JSON.parse(readFileSync(configPath, 'utf-8')); } catch { return {}; }
+  }
+
+  function saveProviderConfig(patch: Record<string, unknown>) {
+    const existing = loadProviderConfig();
+    const merged = { ...existing, ...patch };
+    mkdirSync(dirname(configPath), { recursive: true });
+    writeFileSync(configPath, JSON.stringify(merged, null, 2));
+    // Apply API keys to process.env so research module picks them up
+    const keyMap: Record<string, string> = {
+      anthropic_api_key: 'ANTHROPIC_API_KEY',
+      openrouter_api_key: 'OPENROUTER_API_KEY',
+      tavily_api_key: 'TAVILY_API_KEY',
+      brave_api_key: 'BRAVE_SEARCH_API_KEY',
+      jina_api_key: 'JINA_API_KEY',
+    };
+    for (const [configKey, envKey] of Object.entries(keyMap)) {
+      if (typeof merged[configKey] === 'string' && merged[configKey]) {
+        process.env[envKey] = merged[configKey] as string;
+      }
+    }
+    return merged;
+  }
+
+  // Apply stored keys on startup
+  (() => {
+    const cfg = loadProviderConfig();
+    const keyMap: Record<string, string> = {
+      anthropic_api_key: 'ANTHROPIC_API_KEY',
+      openrouter_api_key: 'OPENROUTER_API_KEY',
+      tavily_api_key: 'TAVILY_API_KEY',
+      brave_api_key: 'BRAVE_SEARCH_API_KEY',
+      jina_api_key: 'JINA_API_KEY',
+    };
+    for (const [configKey, envKey] of Object.entries(keyMap)) {
+      if (typeof cfg[configKey] === 'string' && cfg[configKey] && !process.env[envKey]) {
+        process.env[envKey] = cfg[configKey] as string;
+      }
+    }
+  })();
+
+  function maskKey(key: string | undefined): string {
+    if (!key) return '';
+    if (key.length <= 8) return '••••';
+    return '••••' + key.slice(-4);
+  }
+
+  app.get('/config', async () => {
+    const cfg = loadProviderConfig();
+    return {
+      llm_provider: cfg.llm_provider ?? (process.env.ANTHROPIC_API_KEY ? 'anthropic' : 'openrouter'),
+      model: cfg.model ?? '',
+      search_provider: cfg.search_provider ?? (process.env.TAVILY_API_KEY ? 'tavily' : process.env.BRAVE_SEARCH_API_KEY ? 'brave' : 'duckduckgo'),
+      fulltext_provider: cfg.fulltext_provider ?? (process.env.JINA_API_KEY ? 'jina' : 'local'),
+      // Masked keys — indicate whether set
+      keys: {
+        anthropic: { set: !!process.env.ANTHROPIC_API_KEY, masked: maskKey(process.env.ANTHROPIC_API_KEY) },
+        openrouter: { set: !!process.env.OPENROUTER_API_KEY, masked: maskKey(process.env.OPENROUTER_API_KEY) },
+        tavily: { set: !!process.env.TAVILY_API_KEY, masked: maskKey(process.env.TAVILY_API_KEY) },
+        brave: { set: !!process.env.BRAVE_SEARCH_API_KEY, masked: maskKey(process.env.BRAVE_SEARCH_API_KEY) },
+        jina: { set: !!process.env.JINA_API_KEY, masked: maskKey(process.env.JINA_API_KEY) },
+      },
+      // Research defaults
+      max_thread_depth: cfg.max_thread_depth ?? 8,
+      min_searches: cfg.min_searches ?? 2,
+      fetch_source_text: cfg.fetch_source_text ?? false,
+      gap_analysis: cfg.gap_analysis ?? true,
+      max_gap_searches: cfg.max_gap_searches ?? 3,
+      daily_limit: cfg.daily_limit ?? '',
+    };
+  });
+
+  app.patch<{ Body: Record<string, unknown> }>('/config', async (req) => {
+    const patch = req.body;
+    saveProviderConfig(patch);
+    return { status: 'saved' };
+  });
+
+  // === Env check (kept for backward compat + consumer-page warnings) ===
   app.get('/env-check', async () => {
     const anthropic = !!process.env.ANTHROPIC_API_KEY;
     const openrouter = !!process.env.OPENROUTER_API_KEY;
@@ -462,11 +546,10 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     const searchProvider = tavily ? 'tavily' : brave ? 'brave' : 'duckduckgo';
     const warnings: string[] = [];
     const errors: string[] = [];
-    if (!anthropic && !openrouter && !process.env.OLLAMA_MODEL) {
-      warnings.push('No LLM provider configured — set ANTHROPIC_API_KEY, OPENROUTER_API_KEY, or OLLAMA_MODEL');
+    if (!anthropic && !openrouter) {
+      warnings.push('No LLM provider configured — set an API key in Providers');
     }
-    if (!jina) errors.push('JINA_API_KEY not set — "Fetch source page text" will throw');
-    if (!tavily && !brave) warnings.push('No search API key set — using DuckDuckGo (rate-limited, lower quality)');
+    if (!tavily && !brave) warnings.push('Using DuckDuckGo for search (rate-limited) — configure a search provider in Providers');
 
     let jina_balance: number | null = null;
     if (jinaKey) {

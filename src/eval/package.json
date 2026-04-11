@@ -7,7 +7,8 @@
     "eval": "bun runner.ts"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.81"
+    "@anthropic-ai/claude-agent-sdk": "^0.2.81",
+    "yaml": "^2.8.3"
   },
   "devDependencies": {
     "typescript": "^5.7.3"

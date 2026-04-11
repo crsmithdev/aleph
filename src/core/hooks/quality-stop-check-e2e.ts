@@ -1,50 +1,63 @@
 #!/usr/bin/env bun
 /**
- * Stop hook: e2e verification advisory.
+ * Stop hook: tiered verification enforcement.
  *
- * Checks whether the current turn included e2e verification evidence
- * AND an artifact (screenshot or captured output). Advisory only —
- * emits a reminder but does not block future edits.
+ * Classifies edits by scope (docs → unit → functional → e2e-light → e2e-full),
+ * checks for proportional verification evidence, and either passes silently,
+ * advises, or blocks (JSON decision) based on tier and session depth.
  *
- * 1. Skip if stop_hook_active (already reminded once this turn).
- * 2. Read transcript, find current turn boundary (last real user message with text).
- * 3. Scan assistant messages from turnStart forward:
- *    - Track Edit/Write/NotebookEdit as "edits" (with file paths).
- *    - Track Bash commands matching E2E_CMD (cli execution, playwright) as e2e signals.
- *    - Track Bash commands matching ARTIFACT_CMD (output redirect, screenshot) as artifacts.
- *    - Track Playwright MCP calls as e2e signals + artifacts.
- * 4. No edits this turn → exit 0.
- * 5. Edits + e2e + artifact → exit 0 (verification passed).
- * 6. Edits but missing e2e or artifact → emit advisory reminder, exit 0.
+ * Hard blocks only fire when: isFULL session + tier ≥ 2 + zero verification.
  */
 import { readFileSync, existsSync } from "fs";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
-import { E2E_CMD, ARTIFACT_CMD, UNIT_TEST_CMD, HOOK_INVOCATION } from "../../eval/patterns.ts";
+import { E2E_CMD, ARTIFACT_CMD, UNIT_TEST_CMD, HOOK_INVOCATION, FUNCTIONAL_CMD } from "../../eval/patterns.ts";
+import { dataPaths } from "../../data/src/paths.ts";
 
 const TAG = "quality-stop-check-e2e";
 
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
-catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(0); }
-reportHook(TAG, "Stop", input.session_id);
+catch { process.exit(0); }
 
-if (input.stop_hook_active) {
-  trace(TAG, "skip: stop_hook_active (already reminded once)");
+// Guards: never block re-fires or non-natural stops
+if (input.stop_hook_active) { trace(TAG, "skip: stop_hook_active"); process.exit(0); }
+if (input.stop_reason && input.stop_reason !== "end_of_turn") {
+  trace(TAG, `skip: stop_reason=${input.stop_reason}`);
   process.exit(0);
 }
 
 const transcriptPath = input.transcript_path;
-if (!transcriptPath || !existsSync(transcriptPath)) {
-  trace(TAG, "skip: no transcript");
-  process.exit(0);
+if (!transcriptPath || !existsSync(transcriptPath)) { process.exit(0); }
+
+// --- File classifiers ---
+const isUIFile = (p: string) => /\.(tsx|jsx|css|scss)$/.test(p) || /\/(components|pages|app|web)\//.test(p);
+const isDocFile = (p: string) => /\.(md|txt)$/i.test(p) || /\b(CLAUDE|README|INSTALL)\b/i.test(p.split("/").pop() ?? "");
+const isConfigFile = (p: string) => {
+  const name = p.split("/").pop() ?? "";
+  if (/^tsconfig.*\.json$/.test(name) || /^package.*\.json$/.test(name)) return false;
+  return /\.(json|ya?ml|toml|env)$/i.test(name);
+};
+const isHookFile = (p: string) => /\/hooks\//.test(p);
+const isTestFile = (p: string) => /\.(test|spec)\.(ts|tsx|js|jsx)$/.test(p) || /__tests__\//.test(p);
+
+// --- Read isFULL from directives ---
+function sessionIsFull(sessionId: string): boolean {
+  try {
+    const lines = readFileSync(dataPaths.directives, "utf8").trim().split("\n");
+    for (const line of lines) {
+      try {
+        const entry = JSON.parse(line);
+        if (entry.sessionId === sessionId && entry.directives?.includes("full")) return true;
+      } catch { continue; }
+    }
+  } catch { /* file missing */ }
+  return false;
 }
 
+// --- Scan transcript for current turn ---
 const lines = readFileSync(transcriptPath, "utf8").trim().split("\n");
 
-// Find current turn (from last real user message onward).
-// Tool-result messages also have type "user" but with empty or missing text content —
-// skip those so the turn boundary is the actual user prompt.
 let turnStart = 0;
 for (let i = lines.length - 1; i >= 0; i--) {
   try {
@@ -52,84 +65,142 @@ for (let i = lines.length - 1; i >= 0; i--) {
     if (parsed.type !== "user") continue;
     const content = parsed.message?.content;
     if (!Array.isArray(content) || content.length === 0) continue;
-    const hasText = content.some((b: any) => b.type === "text" && b.text?.trim());
-    if (hasText) { turnStart = i; break; }
+    if (content.some((b: any) => b.type === "text" && b.text?.trim())) { turnStart = i; break; }
   } catch { continue; }
 }
 
-// --- Scan current turn ---
-
-let hasEdits = false;
 const editedFiles: string[] = [];
-const e2eSignals: string[] = [];
-const artifacts: string[] = [];
+let hasUnitTest = false, hasFunctionalCheck = false, hasE2E = false, hasArtifact = false;
 
 for (let i = turnStart; i < lines.length; i++) {
   let parsed: any;
   try { parsed = JSON.parse(lines[i]); } catch { continue; }
   if (parsed.type !== "assistant") continue;
 
-  const content: any[] = parsed.message?.content ?? [];
-  for (const block of content) {
+  for (const block of (parsed.message?.content ?? [])) {
     if (block.type !== "tool_use") continue;
     const name = block.name as string;
     const blockInput = block.input as Record<string, unknown> | undefined;
 
-    // Track edits
     if (name === "Edit" || name === "Write" || name === "NotebookEdit") {
-      hasEdits = true;
       const fp = blockInput?.file_path as string | undefined;
-      if (fp) editedFiles.push(fp.split("/").slice(-2).join("/"));
+      if (fp) editedFiles.push(fp);
     }
 
-    // E2E signals from Bash commands
     if (name === "Bash") {
       const cmd = (blockInput?.command as string) ?? "";
-      if (E2E_CMD.test(cmd) && !UNIT_TEST_CMD.test(cmd.trim()) && !HOOK_INVOCATION.test(cmd)) {
-        e2eSignals.push(cmd.slice(0, 80));
-      }
-      if (ARTIFACT_CMD.test(cmd) && !HOOK_INVOCATION.test(cmd)) {
-        artifacts.push("bash:" + cmd.slice(0, 60));
-      }
+      if (UNIT_TEST_CMD.test(cmd.trim())) hasUnitTest = true;
+      if (FUNCTIONAL_CMD.test(cmd)) hasFunctionalCheck = true;
+      if (E2E_CMD.test(cmd) && !UNIT_TEST_CMD.test(cmd.trim()) && !HOOK_INVOCATION.test(cmd)) hasE2E = true;
+      if (ARTIFACT_CMD.test(cmd) && !HOOK_INVOCATION.test(cmd)) hasArtifact = true;
     }
 
-    // Playwright/browser MCP
     if (name.startsWith("mcp__playwright") || name.startsWith("mcp__browser")) {
-      e2eSignals.push(name);
+      hasE2E = true;
+      if (name.includes("screenshot")) hasArtifact = true;
     }
   }
 }
 
-if (!hasEdits) {
-  trace(TAG, "skip: no edits in current turn");
+if (editedFiles.length === 0) {
+  reportHook(TAG, "Stop", input.session_id, { decision: "pass", tier: 0, detail: "no edits" });
   process.exit(0);
 }
 
-const hasE2E = e2eSignals.length > 0;
-const hasArtifact = artifacts.length > 0;
+// --- Classify tier ---
+const unique = [...new Set(editedFiles)];
+const fileCount = unique.length;
+const dirs = new Set(unique.map(f => f.split("/").slice(0, -1).join("/").split("/").slice(-2).join("/")));
+const dirCount = dirs.size;
 
-if (hasE2E && hasArtifact) {
-  trace(TAG, `pass: e2e=[${e2eSignals[0]}] artifact=[${artifacts[0]}]`);
+const allDocs = unique.every(f => isDocFile(f));
+const allConfig = unique.every(f => isConfigFile(f) || isDocFile(f));
+const allHooks = unique.every(f => isHookFile(f));
+const allTests = unique.every(f => isTestFile(f));
+const hasUI = unique.some(f => isUIFile(f));
+const hasServer = unique.some(f => !isUIFile(f) && !isDocFile(f) && !isConfigFile(f) && !isTestFile(f) && /\.(ts|js|tsx|jsx)$/.test(f));
+
+const isFull = sessionIsFull(input.session_id ?? "");
+
+let tier: number;
+if (allDocs || allConfig || allHooks) {
+  tier = 0;
+} else if (allTests || (fileCount === 1 && !hasUI && !isFull)) {
+  tier = 1;
+} else if (hasServer && !hasUI) {
+  tier = 2;
+} else if (hasUI && !hasServer) {
+  tier = 3;
+} else if ((hasUI && hasServer) || (isFull && fileCount >= 5) || dirCount >= 3) {
+  tier = 4;
+} else {
+  tier = 2; // default: treat as functional
+}
+
+const TIER_NAMES = ["SKIP", "UNIT", "FUNCTIONAL", "E2E_LIGHT", "E2E_FULL"];
+const anyVerification = hasUnitTest || hasFunctionalCheck || hasE2E || hasArtifact;
+
+trace(TAG, `tier=${TIER_NAMES[tier]} isFull=${isFull} files=${fileCount} dirs=${dirCount} unit=${hasUnitTest} func=${hasFunctionalCheck} e2e=${hasE2E} artifact=${hasArtifact}`);
+
+const display = unique.map(f => f.split("/").slice(-2).join("/")).slice(0, 8);
+const fileList = display.join(", ");
+
+function exitWith(decision: "block" | "advisory" | "pass", message?: string) {
+  reportHook(TAG, "Stop", input.session_id, {
+    decision,
+    tier,
+    detail: `tier=${TIER_NAMES[tier]} isFull=${isFull} unit=${hasUnitTest} func=${hasFunctionalCheck} e2e=${hasE2E} artifact=${hasArtifact}`,
+  });
+  if (message) console.log(message);
   process.exit(0);
 }
 
-// Advisory reminder only — no marker, no blocking
-const files = [...new Set(editedFiles)].slice(0, 10).join(", ");
-const missing: string[] = [];
-if (!hasE2E) missing.push("e2e verification (run the actual system and interact with it)");
-if (!hasArtifact) missing.push("artifact (screenshot or output saved to a file)");
+// --- Enforcement ---
 
-trace(TAG, `advisory: edits to [${files}] missing [${missing.join(", ")}]`);
+// Tier 0: always pass
+if (tier === 0) exitWith("pass");
 
-console.log(`[Construct] Advisory: you edited files (${files}) without e2e evidence.
+// Tier 1: advisory only
+if (tier === 1) {
+  if (anyVerification) exitWith("pass");
+  exitWith("advisory", `[Construct] You edited ${fileList} without running tests. Quick check: bun test`);
+}
 
-Missing: ${missing.join("; ")}
+// Tier 2: block if isFULL + zero verification
+if (tier === 2) {
+  if (anyVerification) exitWith("pass");
+  if (isFull) {
+    exitWith("block", JSON.stringify({
+      decision: "block",
+      reason: `Full-scope backend change (${fileCount} files: ${fileList}) with no verification. Run tests (bun test) or curl the affected endpoint before finishing.`,
+    }));
+  }
+  exitWith("advisory", `[Construct] Backend change (${fileList}) — no verification done. Consider: bun test, or curl the endpoint.`);
+}
 
-Consider verifying before claiming work is done:
-1. Run the actual system
-2. Interact with it to confirm your changes work
-3. Save a screenshot or capture output to a file as proof
+// Tier 3: advisory only
+if (tier === 3) {
+  if (hasE2E || hasFunctionalCheck || hasArtifact) exitWith("pass");
+  if (hasUnitTest) {
+    exitWith("advisory", `[Construct] UI change (${fileList}) — tests ran but no browser check. If the dev server can't be started, this is fine to skip.`);
+  }
+  exitWith("advisory", `[Construct] UI change (${fileList}) — no verification done. Check in browser if possible, or run bun test. Fine to skip if dev server unavailable.`);
+}
 
-Unit tests (bun test, jest, pytest) are not e2e verification.`);
+// Tier 4: block if isFULL + zero verification
+if (hasE2E && hasArtifact) exitWith("pass");
 
-process.exit(0);
+if (isFull && !anyVerification) {
+  exitWith("block", JSON.stringify({
+    decision: "block",
+    reason: `Full-scope change (${fileCount} files across ${dirCount} dirs: ${fileList}) with no verification. Start the system, exercise the changed behavior, and capture output before finishing.`,
+  }));
+}
+
+if (hasE2E && !hasArtifact) {
+  exitWith("advisory", `[Construct] Full-scope change verified but no artifact captured. Save evidence: screenshot or tee output to a file.`);
+} else if (anyVerification) {
+  exitWith("advisory", `[Construct] Cross-cutting change (${fileList}) — partial verification done. Consider a browser check for the UI changes.`);
+} else {
+  exitWith("advisory", `[Construct] Cross-cutting change (${fileList}) — no verification done. Run the system and check both backend and frontend if possible.`);
+}

@@ -1,14 +1,9 @@
 import { Icon } from '../../components/ui/Icon';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { clsx } from 'clsx';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-// @ts-ignore
-import dagre from 'dagre';
-import { ReactFlow, Background, Controls, MiniMap, Handle, Position, BackgroundVariant } from '@xyflow/react';
-import type { Node, Edge } from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
 import {
   useResearchQuery, useResearchFindings, useResearchThreads,
   useResearchCosts, useUpdateResearchQuery, useRateFinding,
@@ -22,6 +17,18 @@ import {
 import { Button } from '../../components/ui/Button';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
+import cytoscape from 'cytoscape';
+// @ts-expect-error cytoscape-fcose has no bundled types
+import fcose from 'cytoscape-fcose';
+
+cytoscape.use(fcose);
+
+// suppress unused import warnings — available for future use
+void (useRateFinding as unknown);
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function timeAgo(iso: string): string {
   const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -30,7 +37,39 @@ function timeAgo(iso: string): string {
   return `${Math.floor(seconds / 3600)}h ago`;
 }
 
-// --- Document Tab ---
+function orderThreadsDepthFirst(threads: ResearchThread[]): ResearchThread[] {
+  const byParent = new Map<string | null, ResearchThread[]>();
+  for (const t of threads) {
+    const key = t.parent_thread_id ?? null;
+    if (!byParent.has(key)) byParent.set(key, []);
+    byParent.get(key)!.push(t);
+  }
+  for (const arr of byParent.values()) arr.sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const result: ResearchThread[] = [];
+  function walk(parentId: string | null) {
+    for (const t of byParent.get(parentId) ?? []) { result.push(t); walk(t.id); }
+  }
+  walk(null);
+  return result;
+}
+
+/** Returns the seed (depth=0) ancestor id for a thread, or null if it is one. */
+function findSeedAncestor(thread: ResearchThread, all: ResearchThread[]): string | null {
+  if (thread.depth === 0) return thread.id;
+  const byId = new Map(all.map(t => [t.id, t]));
+  let cur: ResearchThread = thread;
+  while (cur.parent_thread_id) {
+    const parent = byId.get(cur.parent_thread_id);
+    if (!parent) break;
+    if (parent.depth === 0) return parent.id;
+    cur = parent;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Shared sub-components
+// ---------------------------------------------------------------------------
 
 function ConfBar({ label, value }: { label: string; value: number }) {
   return (
@@ -56,16 +95,227 @@ function Md({ children, className }: { children: string; className?: string }) {
   );
 }
 
-function FindingRow({ finding, index }: { finding: ResearchFinding; index: number }) {
+const statusDotCls: Record<string, string> = {
+  active: 'bg-success animate-pulse',
+  queued: 'bg-warning/70',
+  exhausted: 'bg-text-muted/40',
+  deferred: 'bg-accent/50',
+  pruned: 'bg-error/70',
+  paused: 'bg-warning/50',
+};
+
+const originBadgeCls: Record<string, string> = {
+  seed: 'bg-accent/10 text-accent',
+  follow_up: 'bg-accent/5 text-accent/70',
+  perturbation: 'bg-warning/10 text-warning',
+  verify: 'bg-error/10 text-error',
+  user_injected: 'bg-success/10 text-success',
+  monitor_alert: 'bg-warning/15 text-warning',
+};
+
+function StatusDot({ status, className }: { status: string; className?: string }) {
+  return <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', statusDotCls[status] ?? 'bg-text-muted/40', className)} />;
+}
+
+function OriginBadge({ origin }: { origin: string }) {
+  if (origin === 'follow_up') return null;
+  return (
+    <span className={clsx('px-1.5 py-0.5 rounded text-xs font-medium shrink-0', originBadgeCls[origin] ?? 'bg-bg-tertiary text-text-muted')}>
+      {origin.replace(/_/g, ' ')}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Left Sidebar — Thread Navigator
+// ---------------------------------------------------------------------------
+
+function ThreadNavigator({
+  threads,
+  findingCounts,
+  selectedThreadId,
+  onSelectThread,
+  sessionId,
+}: {
+  threads: ResearchThread[];
+  findingCounts: Map<string, number>;
+  selectedThreadId: string | null;
+  onSelectThread: (id: string) => void;
+  sessionId: string;
+}) {
+  const [filter, setFilter] = useState('');
+  const [viewMode, setViewMode] = useState<'hierarchical' | 'flat'>('hierarchical');
+  const [newQuestion, setNewQuestion] = useState('');
+  const injectThread = useInjectThread();
+
+  const hierarchical = useMemo(() => orderThreadsDepthFirst(threads), [threads]);
+  const flat = useMemo(() => [...threads].sort((a, b) => b.priority - a.priority), [threads]);
+  const ordered = viewMode === 'hierarchical' ? hierarchical : flat;
+
+  const filtered = useMemo(() => {
+    if (!filter.trim()) return ordered;
+    const lc = filter.toLowerCase();
+    return ordered.filter(t =>
+      t.query.toLowerCase().includes(lc) ||
+      (t.short_query?.toLowerCase().includes(lc))
+    );
+  }, [ordered, filter]);
+
+  // Expand/collapse state for hierarchical mode
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const childrenOf = useMemo(() => {
+    const m = new Map<string | null, string[]>();
+    for (const t of threads) {
+      const key = t.parent_thread_id ?? null;
+      if (!m.has(key)) m.set(key, []);
+      m.get(key)!.push(t.id);
+    }
+    return m;
+  }, [threads]);
+
+  function hasChildren(id: string) {
+    return (childrenOf.get(id) ?? []).length > 0;
+  }
+
+  function isHidden(t: ResearchThread): boolean {
+    if (viewMode === 'flat') return false;
+    let pid = t.parent_thread_id;
+    while (pid) {
+      if (collapsed.has(pid)) return true;
+      const parent = threads.find(x => x.id === pid);
+      pid = parent?.parent_thread_id ?? null;
+    }
+    return false;
+  }
+
+  const visibleFiltered = useMemo(() => filtered.filter(t => !isHidden(t)), [filtered, collapsed, viewMode]);
+
+  function handleInject(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newQuestion.trim()) return;
+    injectThread.mutate({ sessionId, query: newQuestion.trim() });
+    setNewQuestion('');
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="px-3 py-3 border-b border-border-primary space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-text-muted uppercase tracking-wide font-medium">Threads</span>
+          <span className="text-xs text-text-muted tabular-nums">{threads.length}</span>
+        </div>
+        <input
+          type="text"
+          value={filter}
+          onChange={e => setFilter(e.target.value)}
+          placeholder="Filter threads..."
+          className="w-full bg-bg-primary border border-border-primary rounded px-2 py-1 text-xs text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent"
+        />
+        <div className="flex gap-1">
+          {(['hierarchical', 'flat'] as const).map(mode => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={clsx('flex-1 px-2 py-1 rounded text-xs transition-colors',
+                viewMode === mode
+                  ? 'bg-accent/10 text-accent'
+                  : 'text-text-muted hover:text-text-secondary'
+              )}
+            >{mode === 'hierarchical' ? 'Tree' : 'Flat'}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Thread list */}
+      <div className="flex-1 overflow-y-auto">
+        {visibleFiltered.map(thread => {
+          const fc = findingCounts.get(thread.id) ?? 0;
+          const display = thread.short_query ?? (thread.query.length > 60 ? thread.query.slice(0, 60) + '...' : thread.query);
+          const isSelected = selectedThreadId === thread.id;
+          const depth = viewMode === 'hierarchical' ? thread.depth : 0;
+          const canExpand = viewMode === 'hierarchical' && hasChildren(thread.id);
+          const isCollapsed = collapsed.has(thread.id);
+
+          return (
+            <div
+              key={thread.id}
+              className={clsx(
+                'flex items-center gap-1.5 px-2 py-1.5 cursor-pointer transition-colors border-l-2',
+                isSelected ? 'bg-accent/10 border-accent' : 'border-transparent hover:bg-bg-tertiary/30'
+              )}
+              style={{ paddingLeft: `${8 + depth * 14}px` }}
+              onClick={() => onSelectThread(thread.id)}
+            >
+              {canExpand ? (
+                <button
+                  onClick={e => {
+                    e.stopPropagation();
+                    setCollapsed(prev => {
+                      const n = new Set(prev);
+                      n.has(thread.id) ? n.delete(thread.id) : n.add(thread.id);
+                      return n;
+                    });
+                  }}
+                  className="p-0.5 shrink-0"
+                >
+                  <Icon name="expand_more" size="xs" className={clsx('w-3 h-3 text-text-muted transition-transform', isCollapsed && '-rotate-90')} />
+                </button>
+              ) : (
+                <span className="w-4 shrink-0" />
+              )}
+              <StatusDot status={thread.status} />
+              <span className="text-xs text-text-primary truncate flex-1">{display}</span>
+              {fc > 0 && (
+                <span className="px-1 py-0.5 bg-bg-tertiary text-text-muted text-xs rounded shrink-0">{fc}</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Inject question */}
+      <form onSubmit={handleInject} className="p-3 border-t border-border-primary">
+        <div className="flex gap-1.5">
+          <input
+            type="text"
+            value={newQuestion}
+            onChange={e => setNewQuestion(e.target.value)}
+            placeholder="Inject question..."
+            className="flex-1 bg-bg-primary border border-border-primary rounded px-2 py-1 text-xs text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent"
+          />
+          <Button type="submit" variant="secondary" size="sm" loading={injectThread.isPending}>
+            <Icon name="add" size="xs" />
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Document Tab
+// ---------------------------------------------------------------------------
+
+function FindingCard({ finding, index, isHighlighted, onViewThread, onShowOnMap }: {
+  finding: ResearchFinding;
+  index: number;
+  isHighlighted: boolean;
+  onViewThread: () => void;
+  onShowOnMap: () => void;
+}) {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="px-4 py-3">
+    <div className={clsx(
+      'py-3',
+      isHighlighted && 'bg-accent/5 border-l-2 border-accent pl-3 -ml-3'
+    )}>
       <div className="flex items-start gap-3">
         <span className="text-text-muted text-xs font-mono shrink-0 mt-0.5">[{index}]</span>
         <div className="flex-1 min-w-0">
           <p className="text-base text-text-primary">{finding.summary}</p>
-          <div className="flex items-center gap-4 mt-1.5">
+          <div className="flex items-center gap-4 mt-1.5 flex-wrap">
             <ConfBar label="conf" value={finding.confidence} />
             <ConfBar label="novel" value={finding.novelty} />
             {finding.source_urls.length > 0 && (
@@ -89,19 +339,19 @@ function FindingRow({ finding, index }: { finding: ResearchFinding; index: numbe
                           {finding.source_urls[i]}
                         </a>
                       )}
-                      <Md className="md-sm">{text.length > 2000 ? text.slice(0, 2000) + '\n\n…' : text}</Md>
+                      <Md className="md-sm">{text.length > 2000 ? text.slice(0, 2000) + '\n\n...' : text}</Md>
                     </div>
                   ))}
                 </div>
               )}
-              {finding.source_urls.length > finding.source_texts.length && (
+              {finding.source_urls.length > (finding.source_texts?.length ?? 0) && (
                 <div className="space-y-1.5">
-                  {finding.source_urls.slice(finding.source_texts.length).map((url, i) => {
+                  {finding.source_urls.slice(finding.source_texts?.length ?? 0).map((url, i) => {
                     const meta = finding.source_url_meta?.find(m => m.url === url);
                     return (
                       <div key={i} className="space-y-0.5">
                         <a href={url} target="_blank" rel="noopener noreferrer"
-                          className="block text-xs text-accent hover:underline truncate">[{i + 1 + finding.source_texts.length}] {url}</a>
+                          className="block text-xs text-accent hover:underline truncate">[{i + 1 + (finding.source_texts?.length ?? 0)}] {url}</a>
                         {meta && <p className="text-xs text-text-muted/70">{meta.title} — {meta.snippet}</p>}
                       </div>
                     );
@@ -110,17 +360,27 @@ function FindingRow({ finding, index }: { finding: ResearchFinding; index: numbe
               )}
             </div>
           )}
-          <button onClick={() => setExpanded(e => !e)} className="text-xs text-accent mt-1.5 hover:underline">
-            {expanded ? 'collapse' : 'expand'}
-          </button>
+          <div className="flex items-center gap-3 mt-1.5">
+            <button onClick={() => setExpanded(e => !e)} className="text-xs text-accent hover:underline">
+              {expanded ? 'collapse' : 'expand'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function DocumentView({ findings, threads }: { findings: ResearchFinding[]; threads: ResearchThread[] }) {
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+function DocumentView({
+  findings, threads, onNavigateToThread, onNavigateToMap, summary,
+}: {
+  findings: ResearchFinding[];
+  threads: ResearchThread[];
+  onNavigateToThread: (threadId: string) => void;
+  onNavigateToMap: (threadId: string) => void;
+  summary?: string;
+}) {
+  const sectionRefs = useRef<Map<string, HTMLElement>>(new Map());
 
   const findingsByThread = useMemo(() => {
     const map = new Map<string, ResearchFinding[]>();
@@ -143,94 +403,178 @@ function DocumentView({ findings, threads }: { findings: ResearchFinding[]; thre
     [threads, findingsByThread]
   );
 
+  function scrollToSection(threadId: string) {
+    sectionRefs.current.get(threadId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   if (sectionsThreads.length === 0) {
     return <p className="text-sm text-text-muted text-center py-12">No findings yet. Run the engine to start researching.</p>;
   }
 
   return (
-    <div className="space-y-1">
-      {sectionsThreads.map((thread, sectionIdx) => {
-        const sectionFindings = (findingsByThread.get(thread.id) ?? [])
-          .slice().sort((a, b) => b.confidence - a.confidence);
-        const isCollapsed = collapsed.has(thread.id);
+    <div className="flex gap-8">
+      {/* Main document */}
+      <div className="flex-1 min-w-0">
+        <div className="max-w-3xl mx-auto">
 
-        return (
-          <div key={thread.id} className="border border-border-primary rounded-lg overflow-hidden">
-            <button
-              onClick={() => setCollapsed(prev => {
-                const n = new Set(prev);
-                n.has(thread.id) ? n.delete(thread.id) : n.add(thread.id);
-                return n;
-              })}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-bg-tertiary/30 transition-colors text-left"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="text-text-muted text-xs font-mono shrink-0">{String(sectionIdx + 1).padStart(2, '0')}</span>
-                <span className="text-base font-medium text-text-primary truncate">{thread.query}</span>
-                {thread.origin !== 'follow_up' && (
-                  <span className={clsx('px-1.5 py-0.5 rounded text-xs shrink-0',
-                    thread.origin === 'seed' ? 'bg-accent/10 text-accent' : 'bg-accent/5 text-accent/70'
-                  )}>{thread.origin.replace('_', ' ')}</span>
-                )}
+          {/* Summary card */}
+          {summary && (
+            <div className="bg-accent/5 border border-accent/20 rounded-lg p-5 mb-10">
+              <p className="text-xs text-accent uppercase tracking-widest font-semibold mb-3">Summary</p>
+              <div className="text-base text-text-primary leading-relaxed">
+                <Md>{summary}</Md>
               </div>
-              <div className="flex items-center gap-3 shrink-0 ml-3">
-                <span className="text-xs text-text-muted">{sectionFindings.length} finding{sectionFindings.length !== 1 ? 's' : ''}</span>
-                <Icon name="expand_more" size="xs" className={clsx('w-4 h-4 text-text-muted transition-transform', isCollapsed && 'rotate-180')} />
-              </div>
-            </button>
+            </div>
+          )}
 
-            {!isCollapsed && (
-              <div className="border-t border-border-primary divide-y divide-border-primary/50">
-                {sectionFindings.map((finding, idx) => (
-                  <FindingRow key={finding.id} finding={finding} index={idx + 1} />
-                ))}
-              </div>
-            )}
+          {/* Sections */}
+          <div className="space-y-12">
+            {sectionsThreads.map((thread) => {
+              const sectionFindings = (findingsByThread.get(thread.id) ?? [])
+                .slice().sort((a, b) => b.confidence - a.confidence);
+              const sectionUrls = Array.from(new Set(sectionFindings.flatMap(f => f.source_urls)));
+
+              return (
+                <section
+                  key={thread.id}
+                  ref={el => { if (el) sectionRefs.current.set(thread.id, el); }}
+                >
+                  {/* Section heading */}
+                  <div className="flex items-center gap-3 mb-5">
+                    <h2 className="text-[1.375rem] font-semibold text-text-primary leading-snug flex-1">
+                      {thread.query}
+                    </h2>
+                    <OriginBadge origin={thread.origin} />
+                  </div>
+
+                  {/* Findings as prose */}
+                  <div className="space-y-5">
+                    {sectionFindings.map((finding) => {
+                      const isKey = finding.confidence > 0.8;
+
+                      if (isKey) {
+                        return (
+                          <div
+                            key={finding.id}
+                            className="pl-4 border-l-[3px] border-success bg-success/5 rounded-r py-3 pr-3"
+                          >
+                            <div className="flex items-center gap-2 mb-2">
+                              <Icon name="lightbulb" size="xs" className="text-success shrink-0" />
+                              <span className="text-xs text-success uppercase tracking-widest font-semibold">Key Finding</span>
+                              <div className="ml-auto flex items-center gap-3">
+                                <ConfBar label="conf" value={finding.confidence} />
+                                <ConfBar label="novel" value={finding.novelty} />
+                              </div>
+                            </div>
+                            <div className="text-base text-text-primary leading-[1.85]">
+                              <Md>{finding.content}</Md>
+                            </div>
+                            {finding.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 mt-2">
+                                {finding.tags.map(tag => (
+                                  <span key={tag} className="px-1.5 py-0.5 bg-bg-tertiary text-text-muted text-xs rounded">{tag}</span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div key={finding.id} className="text-base text-text-secondary leading-[1.85]">
+                          <Md>{finding.content}</Md>
+                          {finding.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              {finding.tags.map(tag => (
+                                <span key={tag} className="px-1.5 py-0.5 bg-bg-tertiary text-text-muted text-xs rounded">{tag}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Section sources */}
+                  {sectionUrls.length > 0 && (
+                    <div className="mt-5 pt-4 border-t border-border-primary/30">
+                      <p className="text-xs text-text-muted uppercase tracking-wide mb-2">
+                        Sources ({sectionUrls.length})
+                      </p>
+                      <div className="space-y-1">
+                        {sectionUrls.map((url, i) => {
+                          let host = url;
+                          try { host = new URL(url).hostname; } catch { /* keep url */ }
+                          const meta = sectionFindings.flatMap(f => f.source_url_meta ?? []).find(m => m.url === url);
+                          return (
+                            <a
+                              key={i}
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-baseline gap-1.5 text-xs text-accent hover:underline"
+                              title={url}
+                            >
+                              <span className="text-text-muted font-mono shrink-0">[{i + 1}]</span>
+                              <span className="truncate">{meta?.title ?? host}</span>
+                            </a>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Cross-nav */}
+                  <div className="mt-3 flex items-center gap-4">
+                    <button
+                      onClick={() => onNavigateToThread(thread.id)}
+                      className="text-xs text-text-muted hover:text-accent transition-colors"
+                    >
+                      View thread &rarr;
+                    </button>
+                    <button
+                      onClick={() => onNavigateToMap(thread.id)}
+                      className="text-xs text-text-muted hover:text-accent transition-colors"
+                    >
+                      Show on map &rarr;
+                    </button>
+                  </div>
+                </section>
+              );
+            })}
           </div>
-        );
-      })}
+        </div>
+      </div>
+
+      {/* Sidebar TOC */}
+      {sectionsThreads.length > 2 && (
+        <div className="w-48 shrink-0 hidden xl:block">
+          <div className="sticky top-4 space-y-1">
+            <p className="text-xs text-text-muted uppercase tracking-wide mb-2">Sections</p>
+            {sectionsThreads.map((thread, idx) => (
+              <button
+                key={thread.id}
+                onClick={() => scrollToSection(thread.id)}
+                className="block w-full text-left px-2 py-1 text-xs text-text-secondary hover:text-text-primary hover:bg-bg-tertiary/30 rounded truncate"
+              >
+                <span className="text-text-muted font-mono mr-1">{String(idx + 1).padStart(2, '0')}</span>
+                {thread.short_query ?? thread.query.slice(0, 40)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// --- Live Tab (thread-per-row view) ---
-
-function orderThreadsDepthFirst(threads: ResearchThread[]): ResearchThread[] {
-  const byParent = new Map<string | null, ResearchThread[]>();
-  for (const t of threads) {
-    const key = t.parent_thread_id ?? null;
-    if (!byParent.has(key)) byParent.set(key, []);
-    byParent.get(key)!.push(t);
-  }
-  for (const arr of byParent.values()) arr.sort((a, b) => a.created_at.localeCompare(b.created_at));
-  const result: ResearchThread[] = [];
-  function walk(parentId: string | null) {
-    for (const t of byParent.get(parentId) ?? []) { result.push(t); walk(t.id); }
-  }
-  walk(null);
-  return result;
-}
-
-const liveStatusDot: Record<string, string> = {
-  active: 'bg-success animate-pulse',
-  queued: 'bg-warning/70',
-  exhausted: 'bg-text-muted/40',
-  deferred: 'bg-accent/50',
-  pruned: 'bg-error/70',
-  paused: 'bg-warning/50',
-};
-
-const liveOriginColor: Record<string, string> = {
-  seed: 'bg-accent/10 text-accent',
-  follow_up: 'bg-accent/5 text-accent/70',
-  perturbation: 'bg-warning/10 text-warning',
-  verify: 'bg-error/10 text-error',
-  user_injected: 'bg-success/10 text-success',
-  monitor_alert: 'bg-warning/15 text-warning',
-};
+// ---------------------------------------------------------------------------
+// Live Tab
+// ---------------------------------------------------------------------------
 
 function ThreadLiveRow({
   thread, steps, threadFindings, childThreads, parentThread, depth, expanded, onToggle, sessionId,
+  workerLabel, onViewInDocument, onShowOnMap, showInlineConfig, onToggleConfig,
 }: {
   thread: ResearchThread;
   steps: ResearchStep[];
@@ -241,6 +585,11 @@ function ThreadLiveRow({
   expanded: boolean;
   onToggle: () => void;
   sessionId: string;
+  workerLabel: string | null;
+  onViewInDocument: () => void;
+  onShowOnMap: () => void;
+  showInlineConfig: boolean;
+  onToggleConfig: () => void;
 }) {
   const updateThread = useUpdateThread();
   const fetchThreadText = useFetchThreadText();
@@ -248,35 +597,21 @@ function ThreadLiveRow({
   const fetchFindingText = useFetchFindingText();
   const isTerminal = thread.status === 'exhausted' || thread.status === 'pruned';
 
-  // Build timeline events sorted by time
   const timelineSteps = [...steps].sort((a, b) => a.created_at.localeCompare(b.created_at));
-  const errors = steps.filter(s => s.error);
   const followUpCandidates = threadFindings.flatMap(f => f.follow_up_analysis?.candidates ?? []);
   const hasAnalysis = threadFindings.some(f => f.follow_up_analysis);
   const childQuerySet = new Set(childThreads.map(t => t.query.toLowerCase().trim()));
 
-  // Thread query display: first line as header, rest expandable
-  const queryLines = thread.query.split('\n');
-  const queryFirstLine = queryLines[0].length > 100
-    ? queryLines[0].slice(0, 100) + '…'
-    : queryLines[0];
-  const queryHasMore = queryLines.length > 1 || queryLines[0].length > 100;
-
-  // Per-thread fetch_source_text: null means use session default
+  const displayText = thread.short_query ?? (thread.query.length > 100 ? thread.query.slice(0, 100) + '...' : thread.query);
   const threadFetch = thread.fetch_source_text;
 
   function handleFetchToggle() {
     const newVal = threadFetch === true ? false : threadFetch === false ? null : true;
     updateThread.mutate({ id: thread.id, sessionId, fetch_source_text: newVal });
-    // If completed thread toggled ON, trigger fetch
     if (newVal === true && isTerminal) {
       fetchThreadText.mutate({ sessionId, threadId: thread.id });
     }
   }
-
-  // Display short_query as main text if available
-  const displayText = thread.short_query ?? queryFirstLine;
-  const displayHasMore = !thread.short_query && queryHasMore;
 
   return (
     <div style={{ marginLeft: depth * 18 }}>
@@ -285,18 +620,18 @@ function ThreadLiveRow({
           onClick={onToggle}
           className="flex-1 flex items-start gap-2 px-3 py-2 rounded-lg hover:bg-bg-tertiary/30 transition-colors text-left"
         >
-          <span className={clsx('mt-1.5 w-1.5 h-1.5 rounded-full shrink-0', liveStatusDot[thread.status] ?? 'bg-text-muted/40')} />
+          <div className="flex items-center gap-1.5 mt-1 shrink-0">
+            <StatusDot status={thread.status} />
+            {workerLabel && (
+              <span className="text-xs font-mono text-accent/70">{workerLabel}</span>
+            )}
+          </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-base text-text-primary leading-snug">
                 {displayText}
-                {displayHasMore && !expanded && <span className="text-text-muted/50">…</span>}
               </span>
-              {thread.origin !== 'follow_up' && (
-                <span className={clsx('px-1 py-0.5 rounded text-xs shrink-0', liveOriginColor[thread.origin] ?? 'bg-bg-tertiary text-text-muted')}>
-                  {thread.origin.replace(/_/g, ' ')}
-                </span>
-              )}
+              <OriginBadge origin={thread.origin} />
               {thread.priority !== undefined && (
                 <span className="text-xs text-text-muted font-mono shrink-0">p:{thread.priority.toFixed(2)}</span>
               )}
@@ -304,9 +639,8 @@ function ThreadLiveRow({
                 <span className="text-xs text-text-muted shrink-0">{threadFindings.length} finding{threadFindings.length !== 1 ? 's' : ''}</span>
               )}
               {thread.status === 'active' && (
-                <span className="text-xs text-success shrink-0">running…</span>
+                <span className="text-xs text-success shrink-0">running...</span>
               )}
-              {/* Fetch-text indicator — always visible, shows per-thread override */}
               {threadFetch !== null && (
                 <span className={clsx('px-1 py-0.5 rounded text-xs shrink-0 font-mono',
                   threadFetch ? 'bg-success/10 text-success' : 'bg-error/10 text-error/70'
@@ -318,8 +652,13 @@ function ThreadLiveRow({
           </div>
           <Icon name="expand_more" size="xs" className={clsx('w-3.5 h-3.5 text-text-muted shrink-0 mt-1 transition-transform', expanded && 'rotate-180')} />
         </button>
-        {/* Per-row controls — priority + prune only */}
+        {/* Hover controls */}
         <div className="flex items-center gap-0.5 pr-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+          <button
+            title="Thread config"
+            onClick={onToggleConfig}
+            className={clsx('p-1 rounded text-xs', showInlineConfig ? 'text-accent' : 'text-text-muted hover:text-text-primary')}
+          ><Icon name="tune" size="xs" /></button>
           <button
             title="Increase priority"
             onClick={() => updateThread.mutate({ id: thread.id, sessionId, priority: Math.min(1.0, thread.priority + 0.1) })}
@@ -340,41 +679,92 @@ function ThreadLiveRow({
         </div>
       </div>
 
+      {/* Inline config panel */}
+      {showInlineConfig && (
+        <div className="ml-5 pl-3 border-l border-accent/30 py-2 mb-1 bg-bg-secondary/50 rounded-r-lg space-y-2">
+          <div className="flex items-center gap-4 text-xs text-text-muted">
+            <span>Priority: <span className="text-text-primary font-mono">{thread.priority.toFixed(2)}</span></span>
+            <span>Max depth: <span className="text-text-primary font-mono">{thread.max_depth}</span></span>
+            <span>Depth: <span className="text-text-primary font-mono">{thread.depth}</span></span>
+          </div>
+          <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={thread.priority}
+              onChange={e => updateThread.mutate({ id: thread.id, sessionId, priority: Number(e.target.value) })}
+              className="w-32 accent-accent"
+            />
+            <span className="text-xs text-text-muted font-mono w-8">{thread.priority.toFixed(2)}</span>
+          </div>
+          <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+            <span className="text-xs text-text-muted">Fetch source text:</span>
+            <button
+              onClick={handleFetchToggle}
+              className={clsx('px-2 py-0.5 rounded text-xs border transition-colors',
+                threadFetch === true ? 'bg-green-900/40 border-green-700/40 text-green-400'
+                  : threadFetch === false ? 'bg-red-900/30 border-red-700/30 text-red-400/70'
+                    : 'bg-bg-secondary border-border-primary text-text-muted/50'
+              )}
+            >{threadFetch === true ? 'ON' : threadFetch === false ? 'OFF' : 'Default'}</button>
+          </div>
+          <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+            {isTerminal && (
+              <button
+                onClick={() => redoThread.mutate({ sessionId, threadId: thread.id })}
+                disabled={redoThread.isPending}
+                className="px-1.5 py-0.5 text-text-muted hover:text-blue-400 rounded text-xs border border-border-primary hover:border-blue-700/40"
+              >redo</button>
+            )}
+            {isTerminal && (
+              <button
+                onClick={() => redoThread.mutate({ sessionId, threadId: thread.id, fetch_source_text: true })}
+                disabled={redoThread.isPending}
+                className="px-1.5 py-0.5 text-text-muted hover:text-green-400 rounded text-xs border border-border-primary hover:border-green-700/40 font-mono"
+              >redo+txt</button>
+            )}
+          </div>
+          <div className="text-xs text-text-muted/60 space-y-0.5">
+            <p>ID: <span className="font-mono">{thread.id}</span></p>
+            <p>Origin: {thread.origin} | Depth: {thread.depth} | Created: {new Date(thread.created_at).toLocaleTimeString()}</p>
+            <p>Findings: {threadFindings.length} | Children: {childThreads.length}</p>
+          </div>
+        </div>
+      )}
+
       {expanded && (
         <div className="ml-5 pl-3 border-l border-border-primary/40 pb-1 space-y-1">
-          {/* Full query (always show if short_query was used as summary, or if truncated) */}
-          {(thread.short_query || queryHasMore) && (
+          {/* Full query */}
+          {(thread.short_query || thread.query.length > 100) && (
             <p className="text-base text-text-secondary py-1 leading-relaxed">{thread.query}</p>
           )}
 
-          {/* Fetch/redo controls in expanded section */}
+          {/* Fetch/redo controls */}
           <div className="flex items-center gap-2 py-0.5" onClick={e => e.stopPropagation()}>
             <button
-              title={threadFetch === true ? 'Full-text ON — click to turn OFF' : threadFetch === false ? 'Full-text OFF — click to use session default' : 'Full-text: using session default — click to force ON'}
+              title={threadFetch === true ? 'Full-text ON' : threadFetch === false ? 'Full-text OFF' : 'Full-text: session default'}
               onClick={handleFetchToggle}
               className={clsx('px-1.5 py-0.5 rounded text-xs border transition-colors',
-                threadFetch === true
-                  ? 'bg-green-900/40 border-green-700/40 text-green-400 hover:bg-green-900/60'
-                  : threadFetch === false
-                    ? 'bg-red-900/30 border-red-700/30 text-red-400/70 hover:bg-red-900/50'
+                threadFetch === true ? 'bg-green-900/40 border-green-700/40 text-green-400 hover:bg-green-900/60'
+                  : threadFetch === false ? 'bg-red-900/30 border-red-700/30 text-red-400/70 hover:bg-red-900/50'
                     : 'bg-bg-secondary border-border-primary text-text-muted/50 hover:text-text-muted'
               )}
             >txt</button>
             {isTerminal && (
               <button
-                title="Redo thread (re-run all searches and generate new findings)"
                 onClick={() => redoThread.mutate({ sessionId, threadId: thread.id })}
                 disabled={redoThread.isPending}
                 className="px-1.5 py-0.5 text-text-muted hover:text-blue-400 rounded text-xs border border-border-primary hover:border-blue-700/40"
-              >↺ redo</button>
+              >&#x21ba; redo</button>
             )}
             {isTerminal && (
               <button
-                title="Redo thread with full-text fetching"
                 onClick={() => redoThread.mutate({ sessionId, threadId: thread.id, fetch_source_text: true })}
                 disabled={redoThread.isPending}
                 className="px-1.5 py-0.5 text-text-muted hover:text-green-400 rounded text-xs border border-border-primary hover:border-green-700/40 font-mono"
-              >↺ redo+txt</button>
+              >&#x21ba; redo+txt</button>
             )}
           </div>
 
@@ -401,20 +791,17 @@ function ThreadLiveRow({
             </div>
           )}
 
-          {steps.length === 0 && errors.length === 0 && threadFindings.length === 0 && (
-            <p className="text-sm text-text-muted py-1 italic">waiting to run…</p>
+          {steps.length === 0 && threadFindings.length === 0 && (
+            <p className="text-sm text-text-muted py-1 italic">waiting to run...</p>
           )}
 
-          {/* Timeline: steps with tool calls as events */}
+          {/* Timeline: steps */}
           {timelineSteps.map((step, si) => (
             <div key={step.id} className="py-0.5 space-y-1">
-              {/* LLM invocation header */}
               <div className="flex items-center gap-2 text-xs text-text-muted">
                 <span className="text-blue-400/80 font-mono shrink-0">llm</span>
                 <span className="font-mono">{step.model}</span>
-                <span className="text-text-muted/70">
-                  {step.prompt_tokens + step.completion_tokens} tok
-                </span>
+                <span className="text-text-muted/70">{step.prompt_tokens + step.completion_tokens} tok</span>
                 {step.cost_usd > 0 && <span className="text-text-muted/70">${step.cost_usd.toFixed(4)}</span>}
                 {step.duration_ms && <span className="text-text-muted/70">{(step.duration_ms / 1000).toFixed(1)}s</span>}
                 <span className="text-text-muted/40 ml-auto">{new Date(step.created_at).toLocaleTimeString()}</span>
@@ -425,17 +812,14 @@ function ThreadLiveRow({
                   <span className="text-xs text-red-300 break-words">{step.error}</span>
                 </div>
               )}
-              {/* Empty tool calls: show label or fallback */}
               {step.tool_calls.length === 0 && step.label && (
                 <span className="pl-4 text-xs text-text-muted/70 italic">{step.label}</span>
               )}
               {step.tool_calls.length === 0 && !step.label && !step.error && (
                 <span className="pl-4 text-xs text-text-muted/40 italic">no tool calls</span>
               )}
-              {/* Tool calls as event rows */}
               {step.tool_calls.map((tc, ti) => (
                 <div key={`${si}-${ti}`} className="pl-4 space-y-0.5">
-                  {/* Tool call header */}
                   <div className="flex items-start gap-2">
                     <span className="text-text-secondary/80 text-xs font-mono shrink-0">{tc.tool}</span>
                     {tc.input && (
@@ -449,7 +833,6 @@ function ThreadLiveRow({
                       <span className="flex items-center gap-0.5 text-xs text-red-400 shrink-0" title={tc.error}><Icon name="close" size="xs" /> error</span>
                     )}
                   </div>
-                  {/* Fetched pages as event rows (replacing badges) */}
                   {tc.jina_fetches && tc.jina_fetches.length > 0 && (
                     <div className="pl-4 space-y-0.5">
                       {tc.jina_fetches.map((jf, ji) => {
@@ -460,12 +843,8 @@ function ThreadLiveRow({
                             <span className={clsx('text-xs shrink-0', jf.ok ? 'text-green-400' : 'text-red-400')}>
                               <Icon name={jf.ok ? 'check' : 'close'} size="xs" />
                             </span>
-                            <a
-                              href={jf.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-xs text-accent hover:underline truncate max-w-[300px]"
-                            >{hostname}</a>
+                            <a href={jf.url} target="_blank" rel="noreferrer"
+                              className="text-xs text-accent hover:underline truncate max-w-[300px]">{hostname}</a>
                             {jf.ok
                               ? <span className="text-xs text-text-muted/60 shrink-0">{(jf.content_length / 1000).toFixed(1)}k</span>
                               : <span className="text-xs text-red-400/70 shrink-0" title={jf.error ?? 'fetch failed'}>{jf.error ?? 'failed'}</span>
@@ -502,7 +881,7 @@ function ThreadLiveRow({
                         onClick={() => fetchFindingText.mutate({ sessionId, findingId: f.id })}
                         disabled={fetchFindingText.isPending}
                         className="text-xs text-text-muted/50 hover:text-green-400 font-mono opacity-0 group-hover/finding:opacity-100 transition-opacity"
-                      >↓txt</button>
+                      >&#x2193;txt</button>
                     )
                   }
                   {f.confidence < 0.4 && <span className="text-xs text-red-400">low confidence</span>}
@@ -527,23 +906,23 @@ function ThreadLiveRow({
                   <div key={i} className={clsx('py-0.5 px-1 rounded mb-0.5', c.accepted ? '' : 'opacity-50')}>
                     <div className="flex items-start gap-1.5">
                       <span className={clsx('text-xs shrink-0 mt-0.5', c.accepted ? 'text-purple-400' : 'text-text-muted')}>
-                        {c.accepted ? (spawned ? <Icon name="arrow_forward" size="xs" /> : <span>·</span>) : <Icon name="close" size="xs" />}
+                        {c.accepted ? (spawned ? <Icon name="arrow_forward" size="xs" /> : <span>&#xb7;</span>) : <Icon name="close" size="xs" />}
                       </span>
                       <div className="flex-1 min-w-0">
                         <span className={clsx('text-sm break-words', c.accepted ? (spawned ? 'text-text-secondary' : 'text-text-muted') : 'text-text-muted/50 line-through')}>{c.text}</span>
                         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                           <span className="text-xs text-text-muted/70" title="Quality score">quality:{(c.quality_score*100).toFixed(0)}%</span>
-                          <span className="text-xs text-text-muted/70" title="Rank score (aggregate)">rank:{(c.rank_score*100).toFixed(0)}%</span>
+                          <span className="text-xs text-text-muted/70" title="Rank score">rank:{(c.rank_score*100).toFixed(0)}%</span>
                           <span className="text-xs text-text-muted/70" title="Distance from parent">dist:{(c.distance_from_parent*100).toFixed(0)}%</span>
                           <span className={clsx('text-xs', c.jaccard_similarity > (threadFindings[0]?.follow_up_analysis?.similarity_threshold ?? 0.75) ? 'text-red-400' : 'text-text-muted/70')}
-                            title="Jaccard similarity (too-similar = rejected)">
+                            title="Jaccard similarity">
                             Jaccard:{(c.jaccard_similarity*100).toFixed(0)}%
                           </span>
                           {c.embedding_similarity !== null && c.embedding_similarity !== undefined && (
-                            <span className="text-xs text-text-muted/70" title="Embedding (cosine) similarity">emb:{(c.embedding_similarity*100).toFixed(0)}%</span>
+                            <span className="text-xs text-text-muted/70" title="Embedding similarity">emb:{(c.embedding_similarity*100).toFixed(0)}%</span>
                           )}
                           {c.llm_similarity !== null && c.llm_similarity !== undefined && (
-                            <span className="text-xs text-text-muted/70" title="LLM similarity score">llm:{(c.llm_similarity*100).toFixed(0)}%</span>
+                            <span className="text-xs text-text-muted/70" title="LLM similarity">llm:{(c.llm_similarity*100).toFixed(0)}%</span>
                           )}
                           {c.similarity_method !== 'jaccard' && (
                             <span className="text-xs text-accent/70 font-mono">[{c.similarity_method}]</span>
@@ -561,7 +940,7 @@ function ThreadLiveRow({
             </div>
           )}
 
-          {/* Fallback: old follow_ups display when no analysis data */}
+          {/* Fallback: old follow_ups */}
           {!hasAnalysis && threadFindings.some(f => (f.follow_ups ?? []).length > 0) && (
             <div className="mt-1.5 pt-1 border-t border-border-primary/30">
               <p className="text-xs text-text-muted uppercase tracking-wide mb-0.5">Follow-ups</p>
@@ -569,7 +948,7 @@ function ThreadLiveRow({
                 const spawned = childQuerySet.has(q.toLowerCase().trim());
                 return (
                   <div key={i} className="flex items-start gap-1.5 py-0.5">
-                    <span className="text-xs text-text-muted shrink-0 mt-0.5">{spawned ? '→' : '·'}</span>
+                    <span className="text-xs text-text-muted shrink-0 mt-0.5">{spawned ? '\u2192' : '\u00b7'}</span>
                     <span className={clsx('text-sm break-words', spawned ? 'text-text-secondary' : 'text-text-muted')}>{q}</span>
                     {spawned && <span className="text-xs text-purple-400 shrink-0 mt-0.5">spawned</span>}
                   </div>
@@ -577,14 +956,26 @@ function ThreadLiveRow({
               })}
             </div>
           )}
+
+          {/* Cross-nav links */}
+          <div className="flex items-center gap-4 pt-1 border-t border-border-primary/20">
+            <button onClick={onViewInDocument} className="text-xs text-accent hover:underline">
+              View in document &rarr;
+            </button>
+            <button onClick={onShowOnMap} className="text-xs text-accent hover:underline">
+              Show on map &rarr;
+            </button>
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-function ThreadLiveView({
-  threads, findings, allSteps, events, isRunning, sessionId, sessionFetchText, onToggleSessionFetch,
+function LiveView({
+  threads, findings, allSteps, events, isRunning, sessionId, sessionFetchText,
+  onToggleSessionFetch, activity, jobs, selectedThreadId, onSelectThread,
+  onNavigateToDocument, onNavigateToMap,
 }: {
   threads: ResearchThread[];
   findings: ResearchFinding[];
@@ -594,11 +985,18 @@ function ThreadLiveView({
   sessionId: string;
   sessionFetchText: boolean;
   onToggleSessionFetch: () => void;
+  activity: ResearchActivity | undefined;
+  jobs: ResearchJob[];
+  selectedThreadId: string | null;
+  onSelectThread: (id: string) => void;
+  onNavigateToDocument: (threadId: string) => void;
+  onNavigateToMap: (threadId: string) => void;
 }) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'hierarchical' | 'flat'>('hierarchical');
+  const [configThreadId, setConfigThreadId] = useState<string | null>(null);
 
-  // Auto-expand active threads whenever thread list changes
+  // Auto-expand active threads
   useEffect(() => {
     const activeIds = threads.filter(t => t.status === 'active').map(t => t.id);
     if (activeIds.length > 0) {
@@ -609,6 +1007,17 @@ function ThreadLiveView({
       });
     }
   }, [threads]);
+
+  // Auto-expand selected thread
+  useEffect(() => {
+    if (selectedThreadId) {
+      setExpandedIds(prev => {
+        const next = new Set(prev);
+        next.add(selectedThreadId);
+        return next;
+      });
+    }
+  }, [selectedThreadId]);
 
   const stepsByThread = useMemo(() => {
     const map = new Map<string, ResearchStep[]>();
@@ -656,6 +1065,19 @@ function ThreadLiveView({
     return map;
   }, [threads]);
 
+  // Worker label per thread: match running jobs to active threads
+  const workerByThread = useMemo(() => {
+    const map = new Map<string, string>();
+    const activeThread = activity?.active_thread;
+    if (activeThread) {
+      const runningJob = jobs.find(j => (j.status === 'running' || j.status === 'claimed') && j.claimed_by);
+      if (runningJob?.claimed_by) {
+        map.set(activeThread.id, runningJob.claimed_by.slice(0, 12));
+      }
+    }
+    return map;
+  }, [activity, jobs]);
+
   const orderedHierarchical = useMemo(() => orderThreadsDepthFirst(threads), [threads]);
   const orderedFlat = useMemo(() => [...threads].sort((a, b) => b.priority - a.priority), [threads]);
   const ordered = viewMode === 'flat' ? orderedFlat : orderedHierarchical;
@@ -666,7 +1088,7 @@ function ThreadLiveView({
 
   return (
     <div className="space-y-0.5">
-      {/* Session-wide controls bar */}
+      {/* Controls bar */}
       <div className="flex items-center gap-3 px-1 pb-2 mb-1 border-b border-border-primary/30">
         <span className="text-xs text-text-muted">Full-text fetch:</span>
         <button
@@ -676,8 +1098,7 @@ function ThreadLiveView({
               ? 'bg-green-900/40 border-green-700/40 text-green-300 hover:bg-green-900/60'
               : 'bg-bg-secondary border-border-primary text-text-muted hover:border-border-secondary hover:text-text-secondary'
           )}
-        >{sessionFetchText ? 'ON — fetch full page text' : 'OFF — summaries only'}</button>
-        <span className="text-xs text-text-muted/40">per-thread override: expand a row</span>
+        >{sessionFetchText ? 'ON' : 'OFF'}</button>
         <div className="ml-auto flex items-center gap-1">
           {(['hierarchical', 'flat'] as const).map(mode => (
             <button
@@ -692,12 +1113,14 @@ function ThreadLiveView({
           ))}
         </div>
       </div>
+
       {isRunning && (
         <div className="flex items-center gap-2 px-3 py-2 bg-success/5 border border-success/20 rounded-lg mb-3">
           <span className="w-2 h-2 rounded-full bg-success animate-pulse shrink-0" />
           <span className="text-sm text-success font-medium">Running</span>
         </div>
       )}
+
       {ordered.map(thread => (
         <ThreadLiveRow
           key={thread.id}
@@ -708,390 +1131,286 @@ function ThreadLiveView({
           parentThread={thread.parent_thread_id ? (threadById.get(thread.parent_thread_id) ?? null) : null}
           depth={viewMode === 'flat' ? 0 : thread.depth}
           expanded={expandedIds.has(thread.id)}
-          onToggle={() => setExpandedIds(prev => {
-            const next = new Set(prev);
-            next.has(thread.id) ? next.delete(thread.id) : next.add(thread.id);
-            return next;
-          })}
+          onToggle={() => {
+            onSelectThread(thread.id);
+            setExpandedIds(prev => {
+              const next = new Set(prev);
+              next.has(thread.id) ? next.delete(thread.id) : next.add(thread.id);
+              return next;
+            });
+          }}
           sessionId={sessionId}
+          workerLabel={workerByThread.get(thread.id) ?? null}
+          onViewInDocument={() => onNavigateToDocument(thread.id)}
+          onShowOnMap={() => onNavigateToMap(thread.id)}
+          showInlineConfig={configThreadId === thread.id}
+          onToggleConfig={() => setConfigThreadId(prev => prev === thread.id ? null : thread.id)}
         />
       ))}
     </div>
   );
 }
 
-// --- Graph Tab ---
+// ---------------------------------------------------------------------------
+// Map Tab — Force-directed graph (Cytoscape.js + fcose)
+// ---------------------------------------------------------------------------
 
-const NODE_WIDTH = 150;
-const NODE_HEIGHT = 48;
-
-function layoutGraph(threads: ResearchThread[]) {
-  const g = new dagre.graphlib.Graph();
-  g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: 'TB', nodesep: 12, ranksep: 28 });
-
-  for (const t of threads) {
-    g.setNode(t.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
-  }
-  for (const t of threads) {
-    if (t.parent_thread_id) g.setEdge(t.parent_thread_id, t.id);
-  }
-  dagre.layout(g);
-
-  return threads.map(t => {
-    const pos = g.node(t.id);
-    return { id: t.id, position: { x: pos.x - NODE_WIDTH / 2, y: pos.y - NODE_HEIGHT / 2 }, data: t, type: 'thread' };
-  });
-}
-
-const statusColors: Record<string, string> = {
-  active: 'border-green-500 bg-green-900/20',
-  queued: 'border-yellow-500/50 bg-yellow-900/10',
-  exhausted: 'border-border-primary bg-bg-tertiary/30',
-  deferred: 'border-blue-500/50 bg-blue-900/10',
-  pruned: 'border-red-500/50 bg-red-900/10',
+const STATUS_COLORS: Record<string, string> = {
+  active:    '#a6e3a1',
+  running:   '#a6e3a1',
+  exhausted: '#6c7086',
+  pruned:    '#f38ba8',
+  pending:   '#f9e2af',
 };
+const DEFAULT_NODE_COLOR = '#89b4fa';
 
-const statusDot: Record<string, string> = {
-  active: 'bg-green-400 animate-pulse',
-  queued: 'bg-yellow-400',
-  exhausted: 'bg-text-muted',
-  deferred: 'bg-blue-400',
-  pruned: 'bg-red-400',
-};
+function MapView({
+  threads, findingCounts, onNavigateToLive,
+}: {
+  threads: ResearchThread[];
+  findingCounts: Map<string, number>;
+  onNavigateToLive: (threadId: string) => void;
+}) {
+  const [depthFilter, setDepthFilter] = useState<'all' | '0-2' | '3-5' | '6+'>('all');
+  const [hideExhausted, setHideExhausted] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const cyRef = useRef<cytoscape.Core | null>(null);
 
-function ThreadNode({ data }: { data: ResearchThread & { findingCount: number } }) {
-  return (
-    <div className={clsx('rounded border px-2 py-1.5 w-[150px] cursor-pointer', statusColors[data.status] ?? 'border-border-primary bg-bg-secondary')}>
-      <Handle type="target" position={Position.Top} className="!bg-border-primary" />
-      <div className="flex items-center gap-1.5">
-        <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', statusDot[data.status] ?? 'bg-text-muted')} />
-        <span className="text-xs text-text-muted uppercase tracking-wide">{data.origin.replace('_', ' ')}</span>
-        {data.findingCount > 0 && (
-          <span className="ml-auto text-xs bg-bg-tertiary text-text-muted px-1 rounded">{data.findingCount}</span>
-        )}
-      </div>
-      <p className="text-xs leading-tight line-clamp-2 text-text-primary">{data.query}</p>
-      <Handle type="source" position={Position.Bottom} className="!bg-border-primary" />
-    </div>
-  );
-}
+  const filtered = useMemo(() => {
+    let list = threads;
+    if (depthFilter !== 'all') {
+      const [min, max] = depthFilter === '0-2' ? [0, 2] : depthFilter === '3-5' ? [3, 5] : [6, 999];
+      list = list.filter(t => t.depth >= min && t.depth <= max);
+    }
+    if (hideExhausted) list = list.filter(t => t.status !== 'exhausted');
+    return list;
+  }, [threads, depthFilter, hideExhausted]);
 
-const nodeTypes = { thread: ThreadNode };
+  const handleNodeTap = useCallback((threadId: string) => {
+    onNavigateToLive(threadId);
+  }, [onNavigateToLive]);
 
-function ThreadGraph({ threads, findings }: { threads: ResearchThread[]; findings: ResearchFinding[] }) {
-  const findingCounts = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const f of findings) map.set(f.thread_id, (map.get(f.thread_id) ?? 0) + 1);
-    return map;
-  }, [findings]);
+  // Build elements from filtered threads
+  const elements = useMemo(() => {
+    const filteredIds = new Set(filtered.map(t => t.id));
+    const seedIds = new Set(filtered.filter(t => t.depth === 0).map(t => t.id));
 
-  const nodes: Node[] = useMemo(() => {
-    if (threads.length === 0) return [];
-    const laid = layoutGraph(threads);
-    return laid.map(n => ({ ...n, data: { ...n.data, findingCount: findingCounts.get(n.id) ?? 0 } }));
-  }, [threads, findingCounts]);
+    // Compound parent nodes for seed threads
+    const compoundNodes: cytoscape.ElementDefinition[] = [...seedIds].map(id => ({
+      data: { id: `compound-${id}` },
+    }));
 
-  const edges: Edge[] = useMemo(() =>
-    threads
-      .filter(t => t.parent_thread_id)
+    const nodes: cytoscape.ElementDefinition[] = filtered.map(t => {
+      const raw = t.short_query ?? t.query;
+      const label = (raw.length > 30 ? raw.slice(0, 30) + '…' : raw);
+      const fc = findingCounts.get(t.id) ?? 0;
+      const displayLabel = fc > 0 ? `${label} [${fc}]` : label;
+      const seedAncestor = findSeedAncestor(t, threads);
+      const parent = seedAncestor ? `compound-${seedAncestor}` : undefined;
+      return {
+        data: {
+          id: t.id,
+          label: displayLabel,
+          status: t.status,
+          depth: t.depth,
+          origin: t.origin,
+          findingCount: fc,
+          parent,
+        },
+      };
+    });
+
+    const edges: cytoscape.ElementDefinition[] = filtered
+      .filter(t => t.parent_thread_id && filteredIds.has(t.parent_thread_id))
       .map(t => ({
-        id: `${t.parent_thread_id}-${t.id}`,
-        source: t.parent_thread_id!,
-        target: t.id,
-        style: { stroke: '#374151', strokeWidth: 1 },
-      })),
-    [threads]
-  );
+        data: {
+          id: `edge-${t.parent_thread_id}-${t.id}`,
+          source: t.parent_thread_id!,
+          target: t.id,
+        },
+      }));
+
+    return [...compoundNodes, ...nodes, ...edges];
+  }, [filtered, findingCounts, threads]);
+
+  // Initialize cytoscape once
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const cy = cytoscape({
+      container: containerRef.current,
+      elements,
+      style: [
+        {
+          selector: 'node[label]',
+          style: {
+            'background-color': (ele: cytoscape.NodeSingular) =>
+              STATUS_COLORS[ele.data('status') as string] ?? DEFAULT_NODE_COLOR,
+            'label': 'data(label)',
+            'color': '#1e1e2e',
+            'font-size': '10px',
+            'font-weight': 'bold',
+            'text-valign': 'center',
+            'text-halign': 'center',
+            'text-wrap': 'wrap',
+            'text-max-width': '120px',
+            'shape': 'round-rectangle',
+            'width': (ele: cytoscape.NodeSingular) => {
+              const lbl = ele.data('label') as string | undefined;
+              return Math.max(80, Math.min(140, (lbl?.length ?? 10) * 6));
+            },
+            'height': 32,
+            'padding': '6px',
+            'border-width': 1,
+            'border-color': '#313147',
+          } as cytoscape.Css.Node,
+        },
+        {
+          selector: '$node > node',
+          style: {
+            'background-color': '#1e1e2e',
+            'background-opacity': 0.5,
+            'border-color': '#89b4fa',
+            'border-width': 1.5,
+            'padding': '20px',
+          } as cytoscape.Css.Node,
+        },
+        {
+          selector: 'node[origin = "seed"]',
+          style: {
+            'border-color': '#89b4fa',
+            'border-width': 2,
+          } as cytoscape.Css.Node,
+        },
+        {
+          selector: 'edge',
+          style: {
+            'line-color': '#313147',
+            'curve-style': 'bezier',
+            'target-arrow-shape': 'triangle',
+            'target-arrow-color': '#313147',
+            'arrow-scale': 0.8,
+            'width': 1.5,
+          } as cytoscape.Css.Edge,
+        },
+        {
+          selector: 'edge.highlighted',
+          style: {
+            'line-color': '#89b4fa',
+            'target-arrow-color': '#89b4fa',
+            'width': 2.5,
+          } as cytoscape.Css.Edge,
+        },
+        {
+          selector: 'node.dimmed',
+          style: { 'opacity': 0.3 } as cytoscape.Css.Node,
+        },
+      ],
+      layout: {
+        name: 'fcose',
+        animate: true,
+        animationDuration: 500,
+        nodeRepulsion: 8000,
+        idealEdgeLength: 80,
+        gravity: 0.25,
+        gravityRange: 3.8,
+        nodeSeparation: 75,
+      } as cytoscape.LayoutOptions,
+    });
+
+    cy.on('tap', 'node[status]', (evt) => {
+      const id = evt.target.data('id') as string;
+      handleNodeTap(id);
+    });
+
+    cy.on('mouseover', 'node[status]', (evt) => {
+      const node = evt.target as cytoscape.NodeSingular;
+      cy.elements().not(node.connectedEdges()).not(node).addClass('dimmed');
+      node.connectedEdges().addClass('highlighted');
+    });
+
+    cy.on('mouseout', 'node[status]', () => {
+      cy.elements().removeClass('dimmed highlighted');
+    });
+
+    cyRef.current = cy;
+    return () => {
+      cy.destroy();
+      cyRef.current = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Update elements and re-run layout when data/filters change
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    cy.elements().remove();
+    cy.add(elements);
+    cy.layout({
+      name: 'fcose',
+      animate: true,
+      animationDuration: 500,
+      nodeRepulsion: 8000,
+      idealEdgeLength: 80,
+      gravity: 0.25,
+      gravityRange: 3.8,
+      nodeSeparation: 75,
+    } as cytoscape.LayoutOptions).run();
+  }, [elements]);
+
+  const resetLayout = useCallback(() => {
+    cyRef.current?.layout({
+      name: 'fcose',
+      animate: true,
+      animationDuration: 500,
+      nodeRepulsion: 8000,
+      idealEdgeLength: 80,
+      gravity: 0.25,
+      gravityRange: 3.8,
+      nodeSeparation: 75,
+    } as cytoscape.LayoutOptions).run();
+  }, []);
 
   if (threads.length === 0) {
     return <p className="text-sm text-text-muted text-center py-12">No threads yet.</p>;
   }
 
   return (
-    <div style={{ height: '650px' }} className="rounded-lg border border-border-primary overflow-hidden">
-      <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} fitView>
-        <Background variant={BackgroundVariant.Dots} color="#374151" gap={16} />
-        <Controls className="[&>button]:bg-bg-secondary [&>button]:border-border-primary [&>button]:text-text-secondary" />
-        <MiniMap nodeColor={(n) => {
-          const s = (n.data as unknown as ResearchThread).status;
-          if (s === 'active') return '#22c55e';
-          if (s === 'queued') return '#eab308';
-          if (s === 'exhausted') return '#6b7280';
-          if (s === 'pruned') return '#ef4444';
-          return '#374151';
-        }} className="!bg-bg-secondary !border-border-primary" />
-      </ReactFlow>
-    </div>
-  );
-}
-
-// --- Workers Tab ---
-
-function WorkersTab({ sessionId }: { sessionId: string }) {
-  const { data: jobs = [] } = useResearchJobs(sessionId);
-  const cancelJob = useCancelJob();
-  const runResearch = useRunResearch();
-  const [expandedWorkers, setExpandedWorkers] = useState<Set<string>>(new Set());
-  const [expandedJobs, setExpandedJobs] = useState<Set<string>>(new Set());
-
-  // Derive workers from jobs
-  const workers = useMemo(() => {
-    const map = new Map<string, { id: string; jobs: ResearchJob[] }>();
-    for (const job of jobs) {
-      if (!job.claimed_by) continue;
-      const entry = map.get(job.claimed_by) ?? { id: job.claimed_by, jobs: [] };
-      entry.jobs.push(job);
-      map.set(job.claimed_by, entry);
-    }
-    return Array.from(map.values());
-  }, [jobs]);
-
-  const counts = useMemo(() => ({
-    running: jobs.filter(j => j.status === 'running' || j.status === 'claimed').length,
-    pending: jobs.filter(j => j.status === 'pending').length,
-    completed: jobs.filter(j => j.status === 'completed').length,
-    failed: jobs.filter(j => j.status === 'failed').length,
-    total_cost: 0, // computed from steps, not available here
-  }), [jobs]);
-
-  function jobDuration(job: ResearchJob): string {
-    if (!job.started_at || !job.completed_at) {
-      if (!job.started_at) return '—';
-      const ms = Date.now() - new Date(job.started_at).getTime();
-      if (ms < 0) return '—';
-      if (ms < 60000) return `${Math.round(ms / 1000)}s`;
-      return `${Math.round(ms / 60000)}m`;
-    }
-    const ms = new Date(job.completed_at).getTime() - new Date(job.started_at).getTime();
-    if (ms < 0) return '—';
-    if (ms < 60000) return `${Math.round(ms / 1000)}s`;
-    return `${Math.round(ms / 60000)}m`;
-  }
-
-  function workerLifetime(worker: { jobs: ResearchJob[] }): string {
-    const claimedTimes = worker.jobs
-      .filter(j => j.claimed_at)
-      .map(j => new Date(j.claimed_at!).getTime());
-    if (claimedTimes.length === 0) return '—';
-    const firstSeen = Math.min(...claimedTimes);
-    const lastJob = worker.jobs.find(j => j.status === 'running' || j.status === 'claimed');
-    const end = lastJob ? Date.now() : Math.max(...worker.jobs
-      .filter(j => j.completed_at)
-      .map(j => new Date(j.completed_at!).getTime()));
-    if (!end || end < firstSeen) return '—';
-    const ms = end - firstSeen;
-    if (ms < 60000) return `${Math.round(ms / 1000)}s`;
-    return `${Math.round(ms / 60000)}m`;
-  }
-
-  const jobStatusStyle: Record<string, string> = {
-    running: 'bg-success/15 text-success',
-    claimed: 'bg-success/10 text-success',
-    pending: 'bg-warning/15 text-warning',
-    completed: 'bg-bg-tertiary text-text-muted',
-    failed: 'bg-error/15 text-error',
-    cancelled: 'bg-bg-tertiary text-text-muted',
-  };
-
-  const activeJobs = jobs.filter(j => j.status === 'running' || j.status === 'claimed');
-  const pendingJobs = jobs.filter(j => j.status === 'pending');
-  const pastJobs = jobs.filter(j => j.status === 'completed' || j.status === 'failed' || j.status === 'cancelled');
-
-  return (
-    <div className="space-y-6">
-      {/* Section 1: Overall stats */}
-      <div>
-        <p className="text-xs text-text-muted uppercase tracking-wide mb-2">Overall</p>
-        <div className="grid grid-cols-4 gap-3">
-          {[
-            { label: 'Running', value: counts.running, accent: counts.running > 0 ? 'text-green-400' : 'text-text-primary' },
-            { label: 'Pending', value: counts.pending, accent: 'text-text-primary' },
-            { label: 'Completed', value: counts.completed, accent: 'text-text-primary' },
-            { label: 'Failed', value: counts.failed, accent: counts.failed > 0 ? 'text-red-400' : 'text-text-primary' },
-          ].map(s => (
-            <div key={s.label} className="bg-bg-secondary border border-border-primary rounded-lg p-3">
-              <p className="text-xs text-text-muted">{s.label}</p>
-              <p className={clsx('text-lg font-semibold', s.accent)}>{s.value}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Section 2: Workers */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-xs text-text-muted uppercase tracking-wide">Workers ({workers.length})</p>
+    <div className="space-y-4">
+      {/* Controls */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className="text-xs text-text-muted">Depth:</span>
+        {(['all', '0-2', '3-5', '6+'] as const).map(d => (
           <button
-            onClick={() => runResearch.mutate({ sessionId, mode: 'background' })}
-            className="text-xs text-accent hover:underline"
-            disabled={runResearch.isPending}
-          >+ Spawn worker</button>
-        </div>
-        {workers.length === 0 ? (
-          <p className="text-xs text-text-muted py-4 text-center">No workers active. Start a job to spawn one.</p>
-        ) : (
-          <div className="bg-bg-secondary border border-border-primary rounded-lg overflow-hidden">
-            {workers.map(worker => {
-              const isExpanded = expandedWorkers.has(worker.id);
-              const activeWorkerJob = worker.jobs.find(j => j.status === 'running' || j.status === 'claimed');
-              return (
-                <div key={worker.id} className="border-b border-border-primary/50 last:border-0">
-                  <button
-                    onClick={() => setExpandedWorkers(prev => {
-                      const next = new Set(prev);
-                      next.has(worker.id) ? next.delete(worker.id) : next.add(worker.id);
-                      return next;
-                    })}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-bg-tertiary/30 transition-colors text-left"
-                  >
-                    <span className={clsx('w-2 h-2 rounded-full shrink-0', activeWorkerJob ? 'bg-success animate-pulse' : 'bg-text-muted/40')} />
-                    <span className="text-xs font-mono text-text-secondary flex-1 truncate">{worker.id}</span>
-                    <span className="text-xs text-text-muted shrink-0">{worker.jobs.length} job{worker.jobs.length !== 1 ? 's' : ''}</span>
-                    <span className="text-xs text-text-muted shrink-0">{workerLifetime(worker)}</span>
-                    {activeWorkerJob && (
-                      <button
-                        onClick={e => { e.stopPropagation(); cancelJob.mutate({ jobId: activeWorkerJob.id }); }}
-                        className="text-xs text-red-400 hover:text-red-300 shrink-0 px-1"
-                        title="Kill worker (cancel current job)"
-                      >kill</button>
-                    )}
-                    <Icon name="expand_more" size="xs" className={clsx('w-3 h-3 text-text-muted shrink-0 transition-transform', isExpanded && 'rotate-180')} />
-                  </button>
-                  {isExpanded && (
-                    <div className="px-3 pb-2 pl-8 space-y-1">
-                      {worker.jobs.map(job => (
-                        <div key={job.id} className="text-xs flex items-center gap-2">
-                          <span className={clsx('px-1.5 py-0.5 rounded font-medium', jobStatusStyle[job.status] ?? 'bg-bg-tertiary text-text-muted')}>
-                            {job.status}
-                          </span>
-                          <span className="font-mono text-text-muted">{job.id}</span>
-                          <span className="text-text-muted/60">{job.mode}</span>
-                          <span className="text-text-muted/60">{job.iterations_completed}{job.max_iterations ? `/${job.max_iterations}` : ''} iter</span>
-                          <span className="text-text-muted/60 ml-auto">{jobDuration(job)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Section 3: Jobs */}
-      <div>
-        <p className="text-xs text-text-muted uppercase tracking-wide mb-2">Jobs ({jobs.length})</p>
-        {jobs.length === 0 ? (
-          <p className="text-xs text-text-muted py-4 text-center">No jobs yet. Hit Run to start.</p>
-        ) : (
-          <div className="space-y-1">
-            {/* Active jobs */}
-            {activeJobs.length > 0 && activeJobs.map(job => (
-              <div key={job.id} className="bg-success/5 border border-success/20 rounded-lg overflow-hidden">
-                <button
-                  onClick={() => setExpandedJobs(prev => {
-                    const next = new Set(prev);
-                    next.has(job.id) ? next.delete(job.id) : next.add(job.id);
-                    return next;
-                  })}
-                  className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-success/10 transition-colors"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shrink-0" />
-                  <span className="font-mono text-xs text-text-secondary flex-1 truncate">{job.id}</span>
-                  <span className={clsx('px-1.5 py-0.5 rounded text-xs font-medium', jobStatusStyle[job.status] ?? '')}>{job.status}</span>
-                  <span className="text-xs text-text-muted">{job.mode}</span>
-                  <span className="text-xs text-text-muted font-mono">{job.iterations_completed}{job.max_iterations ? `/${job.max_iterations}` : ''}</span>
-                  <span className="text-xs text-text-muted">{jobDuration(job)}</span>
-                  <button onClick={e => { e.stopPropagation(); cancelJob.mutate({ jobId: job.id }); }} className="text-xs text-red-400 hover:text-red-300 shrink-0">cancel</button>
-                  <Icon name="expand_more" size="xs" className={clsx('w-3 h-3 text-text-muted shrink-0 transition-transform', expandedJobs.has(job.id) && 'rotate-180')} />
-                </button>
-                {expandedJobs.has(job.id) && (
-                  <div className="px-3 pb-2 pl-6 text-xs space-y-0.5 text-text-muted border-t border-success/20">
-                    <div className="pt-1.5 grid grid-cols-2 gap-x-4">
-                      <span>id: <span className="font-mono text-text-secondary">{job.id}</span></span>
-                      <span>worker: <span className="font-mono text-text-secondary">{job.claimed_by ?? '—'}</span></span>
-                      {job.started_at && <span>started: {new Date(job.started_at).toLocaleTimeString()}</span>}
-                      {job.heartbeat_at && <span>heartbeat: {timeAgo(job.heartbeat_at)}</span>}
-                    </div>
-                    {job.error && <p className="text-red-400 mt-1">{job.error}</p>}
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {/* Pending/queued jobs */}
-            {pendingJobs.length > 0 && pendingJobs.map(job => (
-              <div key={job.id} className="bg-warning/5 border border-warning/20 rounded-lg overflow-hidden">
-                <button
-                  onClick={() => setExpandedJobs(prev => {
-                    const next = new Set(prev);
-                    next.has(job.id) ? next.delete(job.id) : next.add(job.id);
-                    return next;
-                  })}
-                  className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-warning/10 transition-colors"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-400/70 shrink-0" />
-                  <span className="font-mono text-xs text-text-secondary flex-1 truncate">{job.id}</span>
-                  <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-warning/15 text-warning">queued</span>
-                  <span className="text-xs text-text-muted">{job.mode}</span>
-                  <span className="text-xs text-text-muted">{timeAgo(job.created_at)}</span>
-                  <button onClick={e => { e.stopPropagation(); cancelJob.mutate({ jobId: job.id }); }} className="text-xs text-red-400 hover:text-red-300 shrink-0">cancel</button>
-                  <Icon name="expand_more" size="xs" className={clsx('w-3 h-3 text-text-muted shrink-0 transition-transform', expandedJobs.has(job.id) && 'rotate-180')} />
-                </button>
-                {expandedJobs.has(job.id) && (
-                  <div className="px-3 pb-2 pl-6 text-xs text-text-muted border-t border-warning/20 pt-1.5">
-                    <span>id: <span className="font-mono text-text-secondary">{job.id}</span></span>
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {/* Past jobs */}
-            {pastJobs.length > 0 && (
-              <div className="bg-bg-secondary border border-border-primary rounded-lg overflow-hidden">
-                {[...pastJobs].reverse().map((job, i) => (
-                  <div key={job.id} className="border-b border-border-primary/40 last:border-0">
-                    <button
-                      onClick={() => setExpandedJobs(prev => {
-                        const next = new Set(prev);
-                        next.has(job.id) ? next.delete(job.id) : next.add(job.id);
-                        return next;
-                      })}
-                      className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-bg-tertiary/30 transition-colors"
-                    >
-                      <span className="text-text-muted text-xs font-mono shrink-0">{pastJobs.length - i}</span>
-                      <span className="font-mono text-xs text-text-muted flex-1 truncate">{job.id}</span>
-                      <span className={clsx('px-1.5 py-0.5 rounded text-xs font-medium', jobStatusStyle[job.status] ?? 'bg-bg-tertiary text-text-muted')}>{job.status}</span>
-                      <span className="text-xs text-text-muted">{job.mode}</span>
-                      <span className="text-xs text-text-muted font-mono">{job.iterations_completed}{job.max_iterations ? `/${job.max_iterations}` : ''}</span>
-                      <span className="text-xs text-text-muted">{jobDuration(job)}</span>
-                      <Icon name="expand_more" size="xs" className={clsx('w-3 h-3 text-text-muted shrink-0 transition-transform', expandedJobs.has(job.id) && 'rotate-180')} />
-                    </button>
-                    {expandedJobs.has(job.id) && (
-                      <div className="px-3 pb-2 pl-6 text-xs text-text-muted border-t border-border-primary/40 pt-1.5 space-y-0.5">
-                        <div className="grid grid-cols-2 gap-x-4">
-                          <span>id: <span className="font-mono text-text-secondary">{job.id}</span></span>
-                          {job.claimed_by && <span>worker: <span className="font-mono text-text-secondary">{job.claimed_by}</span></span>}
-                          {job.started_at && <span>started: {new Date(job.started_at).toLocaleString()}</span>}
-                          {job.completed_at && <span>ended: {new Date(job.completed_at).toLocaleString()}</span>}
-                        </div>
-                        {job.error && <p className="text-red-400">{job.error}</p>}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+            key={d}
+            onClick={() => setDepthFilter(d)}
+            className={clsx('px-2 py-1 rounded text-xs border transition-colors',
+              depthFilter === d
+                ? 'bg-accent/10 border-accent/30 text-accent'
+                : 'bg-bg-secondary border-border-primary text-text-muted hover:text-text-secondary'
             )}
-          </div>
-        )}
+          >{d === 'all' ? 'All' : d}</button>
+        ))}
+        <label className="ml-4 flex items-center gap-1.5 cursor-pointer">
+          <input type="checkbox" checked={hideExhausted} onChange={e => setHideExhausted(e.target.checked)} className="accent-accent" />
+          <span className="text-xs text-text-muted">Hide exhausted</span>
+        </label>
+        <button
+          onClick={resetLayout}
+          className="ml-auto px-2 py-1 rounded text-xs border bg-bg-secondary border-border-primary text-text-muted hover:text-text-secondary transition-colors"
+        >Reset layout</button>
       </div>
+
+      {/* Graph */}
+      <div ref={containerRef} className="w-full h-[500px] bg-bg-primary border border-border-primary rounded-lg" />
     </div>
   );
 }
 
-// --- Settings Tab ---
+// ---------------------------------------------------------------------------
+// Settings Tab
+// ---------------------------------------------------------------------------
 
 function EnvBadge({ set, label }: { set: boolean; label: string }) {
   return set
@@ -1099,13 +1418,21 @@ function EnvBadge({ set, label }: { set: boolean; label: string }) {
     : <span className="inline-flex items-center gap-1 text-xs font-medium text-error"><span className="w-1.5 h-1.5 rounded-full bg-error inline-block" />{label} not set</span>;
 }
 
-function SessionSettings({ session, sessionId }: { session: { id: string; config: Record<string, unknown> }; sessionId: string }) {
+function SettingsView({
+  session, sessionId, onDelete,
+}: {
+  session: { id: string; title: string; config: Record<string, unknown> };
+  sessionId: string;
+  onDelete: () => void;
+}) {
   const updateConfig = useUpdateQueryConfig();
+  const updateQuery = useUpdateResearchQuery();
   const { data: envCheck } = useResearchEnvCheck();
   const cfg = session.config as Record<string, unknown>;
   const providers = (cfg.providers as Record<string, unknown>) ?? {};
   const gapAnalysis = (cfg.gap_analysis as Record<string, unknown>) ?? {};
 
+  const [title, setTitle] = useState(session.title);
   const [provider, setProvider] = useState<string>((providers.primary as string) ?? 'anthropic');
   const [model, setModel] = useState<string>((cfg.model as string) ?? '');
   const [maxDepth, setMaxDepth] = useState<number>((cfg.max_thread_depth as number) ?? 8);
@@ -1121,9 +1448,14 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
   const [localBaseUrl, setLocalBaseUrl] = useState<string>((providers.local_base_url as string) ?? 'http://localhost:11434');
   const [budgetDaily, setBudgetDaily] = useState<number>((cfg.budget_daily_usd as number) ?? 5.0);
   const [saved, setSaved] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    // Save title if changed
+    if (title !== session.title) {
+      updateQuery.mutate({ id: sessionId, title });
+    }
     const config: Record<string, unknown> = {
       model,
       max_thread_depth: maxDepth,
@@ -1153,7 +1485,7 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
 
   return (
     <form onSubmit={handleSave} className="space-y-6 max-w-lg">
-      {/* Env errors (hard failures) */}
+      {/* Env errors */}
       {envCheck && envCheck.errors.length > 0 && (
         <div className="rounded border border-red-500/50 bg-red-500/10 p-3 space-y-1">
           {envCheck.errors.map((e, i) => (
@@ -1163,16 +1495,22 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
           ))}
         </div>
       )}
-      {/* Env warnings (degraded) */}
       {envCheck && envCheck.warnings.length > 0 && (
         <div className="rounded border border-yellow-500/30 bg-yellow-500/10 p-3 space-y-1">
           {envCheck.warnings.map((w, i) => (
             <p key={i} className="text-xs text-yellow-400 flex items-start gap-1.5">
-              <span className="mt-0.5 shrink-0">⚠</span>{w}
+              <span className="mt-0.5 shrink-0">&#x26a0;</span>{w}
             </p>
           ))}
         </div>
       )}
+
+      {/* Title */}
+      <div>
+        <label className={labelCls}>Query title</label>
+        <input value={title} onChange={e => setTitle(e.target.value)} className={inputCls} />
+      </div>
+
       {/* Provider */}
       <div>
         <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Provider</p>
@@ -1202,8 +1540,8 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
         {provider === 'openrouter' && (
           <div className="space-y-3">
             <div>
-              <label className={labelCls}>API Key (optional — uses OPENROUTER_API_KEY env var if blank)</label>
-              <input type="password" value={openrouterKey} onChange={e => setOpenrouterKey(e.target.value)} placeholder="sk-or-…" className={inputCls} />
+              <label className={labelCls}>API Key (optional)</label>
+              <input type="password" value={openrouterKey} onChange={e => setOpenrouterKey(e.target.value)} placeholder="sk-or-..." className={inputCls} />
               {envCheck && !openrouterKey && (
                 <div className="mt-1.5">
                   <EnvBadge set={envCheck.openrouter} label="OPENROUTER_API_KEY" />
@@ -1260,18 +1598,18 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
                 <>
                   <span className="text-xs text-text-muted">Page extractor: {' '}
                     <EnvBadge set={envCheck.jina} label={envCheck.jina ? 'Jina (active)' : 'JINA_API_KEY'} />
-                    {!envCheck.jina && <span className="text-xs text-red-400 ml-1 font-medium">— will throw, no fallback</span>}
+                    {!envCheck.jina && <span className="text-xs text-red-400 ml-1 font-medium">-- will throw, no fallback</span>}
                   </span>
                   <span className="text-xs text-text-muted">Search: {' '}
                     {envCheck.searchProvider === 'tavily' && <EnvBadge set={true} label="Tavily (active)" />}
                     {envCheck.searchProvider === 'brave' && <EnvBadge set={true} label="Brave (active)" />}
                     {envCheck.searchProvider === 'duckduckgo' && (
-                      <><EnvBadge set={false} label="TAVILY_API_KEY" /><span className="text-xs text-text-muted ml-1">— falling back to DuckDuckGo</span></>
+                      <><EnvBadge set={false} label="TAVILY_API_KEY" /><span className="text-xs text-text-muted ml-1">-- falling back to DuckDuckGo</span></>
                     )}
                   </span>
                 </>
               ) : (
-                <span className="text-xs text-text-muted">requires JINA_API_KEY — no fallback</span>
+                <span className="text-xs text-text-muted">requires JINA_API_KEY -- no fallback</span>
               )}
             </div>
           </div>
@@ -1310,11 +1648,28 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
         <Button type="submit" loading={updateConfig.isPending}>Save</Button>
         {saved && <span className="text-xs text-green-400">Saved</span>}
       </div>
+
+      {/* Delete */}
+      <div className="pt-4 border-t border-border-primary">
+        {deleteConfirm ? (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-text-muted">Delete this query permanently?</span>
+            <Button variant="ghost" size="sm" className="!bg-red-900/50 !text-red-300 hover:!bg-red-900/80"
+              onClick={onDelete}>Confirm delete</Button>
+            <Button variant="ghost" size="sm" onClick={() => setDeleteConfirm(false)}>Cancel</Button>
+          </div>
+        ) : (
+          <Button variant="ghost" size="sm" className="!text-red-400 hover:!text-red-300"
+            onClick={() => setDeleteConfirm(true)}>Delete query</Button>
+        )}
+      </div>
     </form>
   );
 }
 
-// --- Main Page ---
+// ---------------------------------------------------------------------------
+// Main Page
+// ---------------------------------------------------------------------------
 
 export function ResearchQueryDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -1328,16 +1683,39 @@ export function ResearchQueryDetailPage() {
   const { data: allSteps = [] } = useResearchSteps(id!, undefined, { refetchInterval: isRunning ? 3000 : undefined });
   const { events } = useResearchStream(id!);
   const { data: envCheck } = useResearchEnvCheck();
+  const { data: jobs = [] } = useResearchJobs(id!);
   const updateQuery = useUpdateResearchQuery();
   const updateConfig = useUpdateQueryConfig();
-  const injectThread = useInjectThread();
-  const [newQuestion, setNewQuestion] = useState('');
-  const [tab, setTab] = useState<'document' | 'live' | 'graph' | 'workers' | 'settings'>('document');
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const runResearch = useRunResearch();
+  const cancelJob = useCancelJob();
   const deleteQuery = useDeleteResearchQuery();
 
-  // suppress unused warnings — available for future use
-  void activity;
+  const [tab, setTab] = useState<'document' | 'live' | 'map' | 'settings'>('document');
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [runIterations, setRunIterations] = useState<string>('');
+
+  const findingCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const f of findingsData) map.set(f.thread_id, (map.get(f.thread_id) ?? 0) + 1);
+    return map;
+  }, [findingsData]);
+
+  // Cross-navigation helpers
+  const navigateToThread = useCallback((threadId: string) => {
+    setSelectedThreadId(threadId);
+    setTab('live');
+  }, []);
+
+  const navigateToMap = useCallback((threadId: string) => {
+    setSelectedThreadId(threadId);
+    setTab('map');
+  }, []);
+
+  const navigateToDocument = useCallback((threadId: string) => {
+    setSelectedThreadId(threadId);
+    setTab('document');
+  }, []);
 
   if (isLoading) return <PageLoading />;
   if (isError || !session) return <ErrorState message="Query not found." />;
@@ -1347,132 +1725,201 @@ export function ResearchQueryDetailPage() {
     updateConfig.mutate({ id: id!, config: { fetch_source_text: !sessionFetchText } });
   }
 
-
-  function handleInject(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newQuestion.trim()) return;
-    injectThread.mutate({ sessionId: id!, query: newQuestion.trim() });
-    setNewQuestion('');
-  }
+  const activeJobs = jobs.filter(j => j.status === 'running' || j.status === 'claimed');
 
   return (
-    <div className="flex flex-col gap-5">
-      {/* Header */}
-      <div>
-        <Link to="/research/queries" className="text-xs text-accent hover:underline">&larr; All queries</Link>
-        <div className="flex items-center justify-between mt-2">
-          <div>
-            <h1 className="font-heading text-2xl font-bold text-text-primary">{session.title}</h1>
-            <p className="text-sm text-text-muted mt-0.5">{session.seed_query}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {(session.status === 'active' || session.status === 'paused') && (
-              <Button
-                variant={session.status === 'active' ? 'secondary' : 'primary'}
-                size="sm"
-                loading={updateQuery.isPending}
-                onClick={() => updateQuery.mutate({ id: id!, status: session.status === 'active' ? 'paused' : 'active' })}
-              >
-                {session.status === 'active' ? 'Disable' : 'Enable'}
-              </Button>
-            )}
-            {deleteConfirm ? (
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-text-muted">Delete query?</span>
+    <div className="flex h-[calc(100vh-64px)]">
+      {/* Left Sidebar — Thread Navigator */}
+      <div className="w-[280px] shrink-0 border-r border-border-primary bg-bg-secondary/50 overflow-hidden flex flex-col">
+        <ThreadNavigator
+          threads={threadsData}
+          findingCounts={findingCounts}
+          selectedThreadId={selectedThreadId}
+          onSelectThread={(id) => {
+            setSelectedThreadId(id);
+            // In live view, selecting a thread auto-expands it (handled in LiveView)
+          }}
+          sessionId={id!}
+        />
+      </div>
+
+      {/* Main Content Area */}
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        {/* Header bar */}
+        <div className="px-6 py-4 border-b border-border-primary bg-bg-primary shrink-0">
+          {/* Breadcrumb */}
+          <Link to="/research/queries" className="text-xs text-accent hover:underline">&larr; All queries</Link>
+
+          {/* Title + controls */}
+          <div className="flex items-center justify-between mt-2">
+            <div className="min-w-0">
+              <h1 className="font-heading text-2xl font-bold text-text-primary truncate">{session.title}</h1>
+              <p className="text-sm text-text-muted mt-0.5 truncate">{session.seed_query}</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 ml-4">
+              {(session.status === 'active' || session.status === 'paused') && (
                 <Button
-                  variant="ghost"
+                  variant={session.status === 'active' ? 'secondary' : 'primary'}
                   size="sm"
-                  className="!bg-red-900/50 !text-red-300 hover:!bg-red-900/80"
-                  loading={deleteQuery.isPending}
-                  onClick={() => deleteQuery.mutate({ id: id! }, { onSuccess: () => { window.location.href = '/research/queries'; } })}
-                >Confirm</Button>
-                <Button variant="ghost" size="sm" onClick={() => setDeleteConfirm(false)}>Cancel</Button>
+                  loading={updateQuery.isPending}
+                  onClick={() => updateQuery.mutate({ id: id!, status: session.status === 'active' ? 'paused' : 'active' })}
+                >
+                  {session.status === 'active' ? 'Disable' : 'Enable'}
+                </Button>
+              )}
+              {deleteConfirm ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-text-muted">Delete?</span>
+                  <Button variant="ghost" size="sm" className="!bg-red-900/50 !text-red-300 hover:!bg-red-900/80"
+                    loading={deleteQuery.isPending}
+                    onClick={() => deleteQuery.mutate({ id: id! }, { onSuccess: () => { window.location.href = '/research/queries'; } })}
+                  >Confirm</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setDeleteConfirm(false)}>Cancel</Button>
+                </div>
+              ) : (
+                <Button variant="ghost" size="sm" className="!text-red-400 hover:!text-red-300"
+                  onClick={() => setDeleteConfirm(true)}>Delete</Button>
+              )}
+            </div>
+          </div>
+
+          {/* Env warnings */}
+          {envCheck && (envCheck.errors.length > 0 || envCheck.warnings.length > 0 || envCheck.jina_balance !== null) && (
+            <div className="flex flex-col gap-1.5 mt-3">
+              {envCheck.errors.map((e, i) => (
+                <div key={i} className="rounded border border-red-500/50 bg-red-500/10 px-3 py-1.5 flex items-center gap-2">
+                  <Icon name="close" size="xs" className="text-red-400 shrink-0" />
+                  <span className="text-xs text-red-400 font-medium">{e}</span>
+                </div>
+              ))}
+              {envCheck.warnings.map((w, i) => (
+                <div key={i} className="rounded border border-yellow-500/30 bg-yellow-500/10 px-3 py-1.5 flex items-center gap-2">
+                  <span className="text-yellow-400 text-xs shrink-0">&#x26a0;</span>
+                  <span className="text-xs text-yellow-400">{w}</span>
+                </div>
+              ))}
+              {envCheck.jina_balance !== null && (
+                <div className="rounded border border-border-primary bg-bg-secondary px-3 py-1.5 flex items-center gap-2">
+                  <span className="text-xs text-text-muted">Jina balance:</span>
+                  <span className={`text-xs font-medium tabular-nums ${envCheck.jina_balance < 100_000 ? 'text-red-400' : envCheck.jina_balance < 1_000_000 ? 'text-yellow-400' : 'text-green-400'}`}>
+                    {envCheck.jina_balance.toLocaleString()} tokens
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Stats row */}
+          <div className="flex items-center gap-6 mt-3">
+            {[
+              { label: 'Findings', value: findingsData.length },
+              { label: 'Threads', value: threadsData.length },
+              { label: 'Cost', value: costs ? `$${costs.total_cost.toFixed(3)}` : '...' },
+              { label: 'Today', value: costs ? `$${costs.today_cost.toFixed(3)}` : '...' },
+            ].map(stat => (
+              <div key={stat.label} className="flex items-center gap-1.5">
+                <span className="text-xs text-text-muted">{stat.label}:</span>
+                <span className="text-sm font-semibold text-text-primary tabular-nums">{stat.value}</span>
               </div>
-            ) : (
+            ))}
+          </div>
+
+          {/* Run controls */}
+          <div className="flex items-center gap-2 mt-3">
+            <Button
+              size="sm"
+              loading={runResearch.isPending}
+              onClick={() => {
+                const iters = runIterations.trim() ? parseInt(runIterations, 10) : undefined;
+                runResearch.mutate({ sessionId: id!, iterations: iters });
+              }}
+            >Run</Button>
+            <input
+              type="number"
+              min={1}
+              value={runIterations}
+              onChange={e => setRunIterations(e.target.value)}
+              placeholder="N"
+              className="w-16 bg-bg-secondary border border-border-primary rounded px-2 py-1 text-xs text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent"
+              title="Number of iterations (blank = default)"
+            />
+            {activeJobs.length > 0 && (
               <Button
                 variant="ghost"
                 size="sm"
                 className="!text-red-400 hover:!text-red-300"
-                onClick={() => setDeleteConfirm(true)}
-              >Delete</Button>
+                onClick={() => { for (const j of activeJobs) cancelJob.mutate({ jobId: j.id }); }}
+              >Cancel</Button>
+            )}
+            {isRunning && (
+              <span className="flex items-center gap-1.5 ml-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                <span className="text-xs text-success">Running</span>
+              </span>
             )}
           </div>
+
+          {/* Tab bar */}
+          <div className="flex gap-1 mt-3 -mb-[17px]">
+            {([
+              { key: 'document' as const, label: `Document (${findingsData.length})` },
+              { key: 'live' as const, label: `Live (${threadsData.length})` },
+              { key: 'map' as const, label: `Map` },
+              { key: 'settings' as const, label: 'Settings' },
+            ]).map(t => (
+              <button key={t.key} onClick={() => setTab(t.key)}
+                className={clsx('px-3 py-2 text-sm font-medium border-b-2 transition-colors',
+                  tab === t.key ? 'border-accent text-accent' : 'border-transparent text-text-muted hover:text-text-secondary')}>
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
 
-
-      {/* Env warnings/errors banner */}
-      {envCheck && (envCheck.errors.length > 0 || envCheck.warnings.length > 0 || envCheck.jina_balance !== null) && (
-        <div className="flex flex-col gap-1.5">
-          {envCheck.errors.map((e, i) => (
-            <div key={i} className="rounded border border-red-500/50 bg-red-500/10 px-3 py-2 flex items-center gap-2">
-              <Icon name="close" size="xs" className="text-red-400 shrink-0" />
-              <span className="text-xs text-red-400 font-medium">{e}</span>
-            </div>
-          ))}
-          {envCheck.warnings.map((w, i) => (
-            <div key={i} className="rounded border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 flex items-center gap-2">
-              <span className="text-yellow-400 text-xs shrink-0">⚠</span>
-              <span className="text-xs text-yellow-400">{w}</span>
-            </div>
-          ))}
-          {envCheck.jina_balance !== null && (
-            <div className="rounded border border-border-primary bg-bg-secondary px-3 py-2 flex items-center gap-2">
-              <span className="text-xs text-text-muted">Jina balance:</span>
-              <span className={`text-xs font-medium tabular-nums ${envCheck.jina_balance < 100_000 ? 'text-red-400' : envCheck.jina_balance < 1_000_000 ? 'text-yellow-400' : 'text-green-400'}`}>
-                {envCheck.jina_balance.toLocaleString()} tokens
-              </span>
-            </div>
+        {/* Tab content */}
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          {tab === 'document' && (
+            <DocumentView
+              findings={findingsData}
+              threads={threadsData}
+              onNavigateToThread={navigateToThread}
+              onNavigateToMap={navigateToMap}
+            />
+          )}
+          {tab === 'live' && (
+            <LiveView
+              threads={threadsData}
+              findings={findingsData}
+              allSteps={allSteps}
+              events={events}
+              isRunning={isRunning}
+              sessionId={id!}
+              sessionFetchText={sessionFetchText}
+              onToggleSessionFetch={handleToggleSessionFetch}
+              activity={activity}
+              jobs={jobs}
+              selectedThreadId={selectedThreadId}
+              onSelectThread={setSelectedThreadId}
+              onNavigateToDocument={navigateToDocument}
+              onNavigateToMap={navigateToMap}
+            />
+          )}
+          {tab === 'map' && (
+            <MapView
+              threads={threadsData}
+              findingCounts={findingCounts}
+              onNavigateToLive={navigateToThread}
+            />
+          )}
+          {tab === 'settings' && (
+            <SettingsView
+              session={session}
+              sessionId={id!}
+              onDelete={() => deleteQuery.mutate({ id: id! }, { onSuccess: () => { window.location.href = '/research/queries'; } })}
+            />
           )}
         </div>
-      )}
-
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-3">
-        {[
-          { label: 'Findings', value: findingsData.length },
-          { label: 'Threads', value: threadsData.length },
-          { label: 'Cost', value: costs ? `$${costs.total_cost.toFixed(3)}` : '...' },
-          { label: 'Today', value: costs ? `$${costs.today_cost.toFixed(3)}` : '...' },
-        ].map(stat => (
-          <div key={stat.label} className="bg-bg-secondary border border-border-primary rounded-lg p-3">
-            <p className="text-xs text-text-muted">{stat.label}</p>
-            <p className="text-lg font-semibold text-text-primary">{stat.value}</p>
-          </div>
-        ))}
       </div>
-
-      {/* Inject question */}
-      <form onSubmit={handleInject} className="flex gap-2 items-center">
-        <input type="text" value={newQuestion} onChange={e => setNewQuestion(e.target.value)}
-          placeholder="Inject a research question..."
-          className="flex-1 bg-bg-secondary border border-border-primary rounded-md px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent" />
-<Button type="submit" variant="secondary" size="sm" loading={injectThread.isPending}>Inject</Button>
-      </form>
-
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-border-primary">
-        {([
-          { key: 'document', label: `Document (${findingsData.length})` },
-          { key: 'live', label: `Live (${threadsData.length})` },
-          { key: 'graph', label: `Graph (${threadsData.length})` },
-          { key: 'workers', label: 'Workers' },
-          { key: 'settings', label: 'Settings' },
-        ] as const).map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className={clsx('px-3 py-2 text-sm font-medium border-b-2 transition-colors',
-              tab === t.key ? 'border-accent text-accent' : 'border-transparent text-text-muted hover:text-text-secondary')}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Tab content */}
-      {tab === 'document' && <DocumentView findings={findingsData} threads={threadsData} />}
-      {tab === 'live' && <ThreadLiveView threads={threadsData} findings={findingsData} allSteps={allSteps} events={events} isRunning={isRunning} sessionId={id!} sessionFetchText={sessionFetchText} onToggleSessionFetch={handleToggleSessionFetch} />}
-      {tab === 'graph' && <ThreadGraph threads={threadsData} findings={findingsData} />}
-      {tab === 'workers' && <WorkersTab sessionId={id!} />}
-      {tab === 'settings' && <SessionSettings session={session} sessionId={id!} />}
     </div>
   );
 }

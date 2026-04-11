@@ -118,6 +118,15 @@ export function useResearchStats(range: string, granularity: string) {
   });
 }
 
+// --- Workers (global) ---
+export function useResearchWorkers() {
+  return useQuery({
+    queryKey: ['research-workers'],
+    queryFn: () => api.get<{ running: boolean; workers: number; queued: number }>('/research/workers'),
+    refetchInterval: 5000,
+  });
+}
+
 // --- Env check ---
 export interface ResearchEnvCheck {
   anthropic: boolean;
@@ -136,6 +145,52 @@ export function useResearchEnvCheck() {
     queryKey: ['research-env-check'],
     queryFn: () => api.get<ResearchEnvCheck>('/research/env-check'),
     staleTime: 60_000,
+  });
+}
+
+// --- Provider config ---
+export interface ProviderKeyInfo {
+  set: boolean;
+  masked: string;
+}
+
+export interface ProviderConfig {
+  llm_provider: string;
+  model: string;
+  search_provider: string;
+  fulltext_provider: string;
+  keys: {
+    anthropic: ProviderKeyInfo;
+    openrouter: ProviderKeyInfo;
+    tavily: ProviderKeyInfo;
+    brave: ProviderKeyInfo;
+    jina: ProviderKeyInfo;
+  };
+  max_thread_depth: number;
+  min_searches: number;
+  fetch_source_text: boolean;
+  gap_analysis: boolean;
+  max_gap_searches: number;
+  daily_limit: string;
+}
+
+export function useProviderConfig() {
+  return useQuery({
+    queryKey: ['research-config'],
+    queryFn: () => api.get<ProviderConfig>('/research/config'),
+    staleTime: 30_000,
+  });
+}
+
+export function useUpdateProviderConfig() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Record<string, unknown>) =>
+      api.patch('/research/config', data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['research-config'] });
+      qc.invalidateQueries({ queryKey: ['research-env-check'] });
+    },
   });
 }
 

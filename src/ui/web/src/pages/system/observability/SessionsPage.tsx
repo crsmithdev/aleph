@@ -80,7 +80,7 @@ type SessionRow = {
   lastTimestamp: string;
   gitBranch?: string;
   parentSessionId?: string;
-  gateInfo?: { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; mode: 'dispatched' | 'inline' | 'none' };
+  gateInfo?: { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; hookBlocks: number; hookAdvisories: number; mode: 'dispatched' | 'inline' | 'none' };
   firstUserMessage?: string;
 };
 
@@ -221,6 +221,31 @@ export function SessionsPage() {
       sortable: true,
       shrink: true,
       render: (row) => <span className="font-mono text-base text-text-secondary">{fmtCurrency(row.cost)}</span>,
+    },
+    {
+      key: 'gateInfo',
+      label: 'Gates',
+      shrink: true,
+      render: (row) => {
+        const gi = row.gateInfo;
+        if (!gi || (gi.hookBlocks === 0 && gi.hookAdvisories === 0)) {
+          return <span className="text-text-disabled">—</span>;
+        }
+        return (
+          <div className="flex items-center gap-1">
+            {gi.hookBlocks > 0 && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-error/15 text-error border border-error/30" title="Hook blocks">
+                {gi.hookBlocks}B
+              </span>
+            )}
+            {gi.hookAdvisories > 0 && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-warning/15 text-warning border border-warning/30" title="Hook advisories">
+                {gi.hookAdvisories}A
+              </span>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: 'lastTimestamp',

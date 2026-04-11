@@ -197,14 +197,28 @@ function MarkdownText({ text }: { text: string }) {
 
 // ── Span row inside expanded response ─────────────────────────────────────────
 
+function parseHookDecision(detail?: string): 'block' | 'advisory' | 'pass' | null {
+  if (!detail) return null;
+  const m = detail.match(/decision[=:]\s*(block|advisory|pass)/i);
+  return m ? (m[1].toLowerCase() as 'block' | 'advisory' | 'pass') : null;
+}
+
 function SpanRow({ span, sessionId }: { span: Span; sessionId: string }) {
   const [open, setOpen] = useState(false);
   const hasDetail = !!span.detail || !!span.subagentSessionId;
   const isSubagent = span.kind === 'tool' && span.label === 'Agent';
 
+  const hookDecision = span.kind === 'hook' ? parseHookDecision(span.detail) : null;
+
   const kindStyle =
     span.isError
       ? 'bg-error/10 border-error/30 text-error'
+      : span.kind === 'hook' && hookDecision === 'block'
+      ? 'bg-error/10 border-error/30 text-error'
+      : span.kind === 'hook' && hookDecision === 'advisory'
+      ? 'bg-warning/10 border-warning/30 text-warning'
+      : span.kind === 'hook' && hookDecision === 'pass'
+      ? 'bg-success/10 border-success/30 text-success'
       : span.kind === 'hook'
       ? 'bg-purple-500/10 border-purple-500/30 text-purple-400'
       : span.kind === 'verify'
@@ -231,11 +245,18 @@ function SpanRow({ span, sessionId }: { span: Span; sessionId: string }) {
             kindStyle,
           )}
         >
-          {isSubagent ? 'agent' : span.kind === 'verify' ? (span.label.includes('FAIL') ? 'fail' : 'pass') : span.kind}
+          {isSubagent ? 'agent' : span.kind === 'verify' ? (span.label.includes('FAIL') ? 'fail' : 'pass') : hookDecision ?? span.kind}
         </span>
 
         {/* Name — fixed width column, mono, truncated */}
-        <span className={clsx('font-mono truncate font-medium', span.isError ? 'text-error' : span.kind === 'hook' ? 'text-purple-300' : span.kind === 'verify' ? (span.label.includes('FAIL') ? 'text-red-400' : 'text-green-400') : isSubagent ? 'text-white' : 'text-sky-300')}>
+        <span className={clsx('font-mono truncate font-medium',
+          span.isError ? 'text-error'
+          : span.kind === 'hook' && hookDecision === 'block' ? 'text-error'
+          : span.kind === 'hook' && hookDecision === 'advisory' ? 'text-warning'
+          : span.kind === 'hook' && hookDecision === 'pass' ? 'text-success'
+          : span.kind === 'hook' ? 'text-purple-300'
+          : span.kind === 'verify' ? (span.label.includes('FAIL') ? 'text-red-400' : 'text-green-400')
+          : isSubagent ? 'text-white' : 'text-sky-300')}>
           {span.subagentSessionId ? (
             <Link
               to={`/observability/sessions/${encodeURIComponent(span.subagentSessionId)}`}

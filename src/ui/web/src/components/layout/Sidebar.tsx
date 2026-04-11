@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { Icon } from '../ui/Icon';
-import { useTheme, fonts } from '../../theme';
+import { useTheme, fonts, headingFonts, monoFonts, type FontDef } from '../../theme';
 import { darkThemes, lightThemes, allThemes } from '../../themes';
 
 interface NavChild {
@@ -41,7 +41,9 @@ const navGroups: NavItem[][] = [
       icon: 'search',
       children: [
         { to: '/research/queries', label: 'Queries', icon: 'format_list_bulleted' },
+        { to: '/research/workers', label: 'Workers', icon: 'engineering' },
         { to: '/research/monitors', label: 'Monitors', icon: 'notifications' },
+        { to: '/research/config', label: 'Providers', icon: 'tune' },
       ],
     },
   ],
@@ -66,7 +68,7 @@ const navGroups: NavItem[][] = [
     {
       to: '/observability/evals',
       label: 'Evals',
-      disabled: true,
+      disabled: false,
       icon: 'science',
     },
   ],
@@ -130,32 +132,39 @@ function SidebarLink({ to, label, icon, depth = 0, collapsed = false, disabled =
   );
 }
 
-function FontSelect({ collapsed }: { collapsed?: boolean }) {
-  const { fontId, font, setFontId } = useTheme();
+function FontPicker({ items, activeId, onSelect, icon, fallbackStack, collapsed }: {
+  items: FontDef[];
+  activeId: string;
+  onSelect: (id: string) => void;
+  icon: string;
+  fallbackStack: string;
+  collapsed?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const active = items.find((f) => f.id === activeId) ?? items[0];
 
-  const cycleFont = (direction: 1 | -1) => {
-    const idx = fonts.findIndex((f) => f.id === fontId);
-    const next = (idx + direction + fonts.length) % fonts.length;
-    setFontId(fonts[next].id);
+  const cycle = (direction: 1 | -1) => {
+    const idx = items.findIndex((f) => f.id === activeId);
+    const next = (idx + direction + items.length) % items.length;
+    onSelect(items[next].id);
   };
 
   useEffect(() => {
     if (open && listRef.current) {
-      const active = listRef.current.querySelector(`[data-font-id="${fontId}"]`) as HTMLElement | null;
-      if (active) active.scrollIntoView({ block: 'center' });
+      const el = listRef.current.querySelector(`[data-font-id="${activeId}"]`) as HTMLElement | null;
+      if (el) el.scrollIntoView({ block: 'center' });
     }
-  }, [open, fontId]);
+  }, [open, activeId]);
 
   if (collapsed) {
     return (
       <button
         className="flex items-center justify-center w-full rounded-md px-2 py-1.5 text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors"
-        title={font.name}
-        onClick={() => cycleFont(1)}
+        title={active.name}
+        onClick={() => cycle(1)}
       >
-        <Icon name="text_fields" size="sm" />
+        <Icon name={icon} size="sm" />
       </button>
     );
   }
@@ -170,20 +179,20 @@ function FontSelect({ collapsed }: { collapsed?: boolean }) {
             'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
           )}
         >
-          <Icon name="text_fields" size="sm" />
-          <span className="truncate">{font.name}</span>
+          <Icon name={icon} size="sm" />
+          <span className="truncate">{active.name}</span>
         </button>
         <button
-          onClick={() => cycleFont(-1)}
+          onClick={() => cycle(-1)}
           className="shrink-0 p-1 rounded text-text-muted hover:text-text-primary hover:bg-bg-tertiary transition-colors"
-          title="Previous font"
+          title="Previous"
         >
           <Icon name="chevron_left" size="xs" />
         </button>
         <button
-          onClick={() => cycleFont(1)}
+          onClick={() => cycle(1)}
           className="shrink-0 p-1 rounded text-text-muted hover:text-text-primary hover:bg-bg-tertiary transition-colors"
-          title="Next font"
+          title="Next"
         >
           <Icon name="chevron_right" size="xs" />
         </button>
@@ -192,16 +201,16 @@ function FontSelect({ collapsed }: { collapsed?: boolean }) {
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div ref={listRef} className="absolute bottom-full left-0 mb-1 w-56 max-h-80 overflow-y-auto z-50 rounded-lg border border-border-primary bg-bg-secondary shadow-lg">
-            {fonts.map((f) => (
+            {items.map((f) => (
               <button
                 key={f.id}
                 data-font-id={f.id}
-                onClick={() => { setFontId(f.id); setOpen(false); }}
+                onClick={() => { onSelect(f.id); setOpen(false); }}
                 className={clsx(
                   'flex items-center w-full px-2 py-1.5 text-sm transition-colors',
-                  f.id === fontId ? 'text-accent bg-bg-tertiary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'
+                  f.id === activeId ? 'text-accent bg-bg-tertiary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'
                 )}
-                style={{ fontFamily: `${f.family}, system-ui, sans-serif` }}
+                style={{ fontFamily: `${f.family}, ${fallbackStack}` }}
               >
                 {f.name}
               </button>
@@ -211,6 +220,21 @@ function FontSelect({ collapsed }: { collapsed?: boolean }) {
       )}
     </div>
   );
+}
+
+function FontSelect({ collapsed }: { collapsed?: boolean }) {
+  const { fontId, setFontId } = useTheme();
+  return <FontPicker items={fonts} activeId={fontId} onSelect={setFontId} icon="text_fields" fallbackStack="system-ui, sans-serif" collapsed={collapsed} />;
+}
+
+function HeadingFontSelect({ collapsed }: { collapsed?: boolean }) {
+  const { headingFontId, setHeadingFontId } = useTheme();
+  return <FontPicker items={headingFonts} activeId={headingFontId} onSelect={setHeadingFontId} icon="title" fallbackStack="system-ui, sans-serif" collapsed={collapsed} />;
+}
+
+function MonoFontSelect({ collapsed }: { collapsed?: boolean }) {
+  const { monoFontId, setMonoFontId } = useTheme();
+  return <FontPicker items={monoFonts} activeId={monoFontId} onSelect={setMonoFontId} icon="code" fallbackStack="ui-monospace, monospace" collapsed={collapsed} />;
 }
 
 function ThemeSelect({ collapsed }: { collapsed?: boolean }) {
@@ -401,6 +425,8 @@ export function Sidebar() {
       <div className="border-t border-border-primary px-2 py-2 space-y-0.5">
         <SidebarLink to={settingsItem.to} label={settingsItem.label} icon={settingsItem.icon} collapsed={collapsed} />
         <FontSelect collapsed={collapsed} />
+        <HeadingFontSelect collapsed={collapsed} />
+        <MonoFontSelect collapsed={collapsed} />
         <ThemeSelect collapsed={collapsed} />
       </div>
     </aside>

@@ -1,0 +1,1423 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Research UI Redesign — Design Options</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Figtree:wght@300;400;500;600;700&family=Noto+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+<style>
+  :root {
+    --bg-primary: #1e1e2e;
+    --bg-secondary: #262637;
+    --bg-tertiary: #313147;
+    --bg-hover: #3a3a52;
+    --bg-contrast: #f5f5f5;
+    --text-primary: #cdd6f4;
+    --text-secondary: #a6adc8;
+    --text-muted: #6c7086;
+    --text-disabled: #45475a;
+    --accent: #89b4fa;
+    --accent-hover: #a6c8ff;
+    --accent-muted: #89b4fa50;
+    --accent-subtle: #89b4fa1f;
+    --success: #a6e3a1;
+    --success-muted: #a6e3a126;
+    --warning: #f9e2af;
+    --warning-muted: #f9e2af26;
+    --error: #f38ba8;
+    --error-muted: #f38ba826;
+    --border-primary: #313147;
+    --border-secondary: #45475a;
+    --chart-1: #89b4fa;
+    --chart-2: #a6e3a1;
+    --chart-3: #f9e2af;
+    --chart-4: #cba6f7;
+    --chart-5: #f38ba8;
+    --chart-6: #94e2d5;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Figtree', sans-serif;
+    background: #11111b;
+    color: var(--text-primary);
+    line-height: 1.5;
+    padding: 2rem;
+  }
+
+  h1, h2, h3, h4 { font-family: 'Space Grotesk', sans-serif; }
+
+  .mockup-header {
+    text-align: center;
+    padding: 3rem 0 2rem;
+    border-bottom: 1px solid var(--border-primary);
+    margin-bottom: 3rem;
+  }
+  .mockup-header h1 { font-size: 2.5rem; font-weight: 700; }
+  .mockup-header p { color: var(--text-muted); margin-top: 0.5rem; font-size: 0.875rem; }
+
+  .option-section {
+    margin-bottom: 4rem;
+    border: 1px solid var(--border-primary);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .option-label {
+    background: var(--bg-secondary);
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid var(--border-primary);
+  }
+  .option-label h2 { font-size: 1.5rem; font-weight: 700; }
+  .option-label .subtitle { color: var(--text-muted); font-size: 0.875rem; margin-top: 0.25rem; }
+  .option-label .philosophy { color: var(--text-secondary); font-size: 0.8125rem; margin-top: 0.75rem; line-height: 1.6; max-width: 80ch; }
+
+  .mockup-frame {
+    background: var(--bg-primary);
+    padding: 1.5rem;
+    position: relative;
+  }
+  .mockup-frame + .mockup-frame { border-top: 1px solid var(--border-primary); }
+
+  .frame-label {
+    font-size: 0.6875rem;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    font-family: 'Noto Sans Mono', monospace;
+  }
+
+  /* Shared component styles */
+  .card { background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 0.5rem; }
+  .card:hover { border-color: var(--border-secondary); }
+  .badge { display: inline-flex; align-items: center; padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; font-weight: 500; }
+  .badge-active { background: #a6e3a130; color: var(--success); }
+  .badge-paused { background: #f9e2af30; color: var(--warning); }
+  .badge-completed { background: #89b4fa30; color: var(--accent); }
+  .badge-seed { background: #89b4fa15; color: var(--accent); }
+  .badge-followup { background: #cba6f715; color: #cba6f7; }
+  .badge-perturbation { background: #f9e2af15; color: var(--warning); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; padding: 0.375rem 0.75rem; border-radius: 0.125rem; font-size: 0.75rem; font-weight: 500; border: none; cursor: pointer; transition: all 0.15s; }
+  .btn-primary { background: var(--accent); color: #1e1e2e; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-secondary { background: var(--bg-tertiary); color: var(--text-secondary); }
+  .btn-ghost { background: none; color: var(--text-muted); }
+  .btn-ghost:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+  .stat-card { padding: 1rem; }
+  .stat-card .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-family: 'Figtree', sans-serif; }
+  .stat-card .value { font-family: 'Space Grotesk', sans-serif; font-size: 1.875rem; font-weight: 600; margin-top: 0.25rem; letter-spacing: -0.02em; }
+  .icon { font-family: 'Material Symbols Outlined'; font-size: 18px; vertical-align: middle; user-select: none; }
+  .icon-sm { font-size: 16px; }
+  .icon-xs { font-size: 14px; }
+
+  .tab { padding: 0.5rem 0.75rem; font-size: 0.875rem; font-weight: 500; border-bottom: 2px solid transparent; color: var(--text-muted); cursor: pointer; background: none; border-top: none; border-left: none; border-right: none; }
+  .tab.active { border-bottom-color: var(--accent); color: var(--accent); }
+
+  .conf-bar { display: flex; align-items: center; gap: 0.25rem; }
+  .conf-bar-track { width: 3rem; height: 3px; background: var(--bg-tertiary); border-radius: 2px; overflow: hidden; }
+  .conf-bar-fill { height: 100%; border-radius: 2px; }
+  .conf-bar-fill.high { background: var(--success); }
+  .conf-bar-fill.mid { background: var(--warning); }
+  .conf-bar-fill.low { background: var(--error); }
+
+  .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .dot-active { background: var(--success); animation: pulse 2s infinite; }
+  .dot-queued { background: var(--warning); opacity: 0.7; }
+  .dot-exhausted { background: var(--text-muted); opacity: 0.4; }
+  .dot-pruned { background: var(--error); opacity: 0.7; }
+
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+  .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mono { font-family: 'Noto Sans Mono', monospace; }
+
+  .divider { height: 1px; background: var(--border-primary); margin: 0.75rem 0; }
+
+  /* Comparison grid */
+  .comparison-note {
+    background: var(--accent-subtle);
+    border: 1px solid #89b4fa30;
+    border-radius: 0.5rem;
+    padding: 1rem 1.25rem;
+    margin: 1rem 1.5rem;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+  .comparison-note strong { color: var(--accent); font-weight: 600; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+</style>
+</head>
+<body>
+
+<div class="mockup-header">
+  <h1>Research UI Redesign</h1>
+  <p>Three design directions for the deep research interface. Each mockup shows: query list, document view, live view, relationship view, workers, and per-question config.</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- OPTION A: Research Dashboard -->
+<!-- ============================================================ -->
+<div class="option-section">
+  <div class="option-label">
+    <h2>Option A — Research Dashboard</h2>
+    <div class="subtitle">Information-dense, data-forward, scannable</div>
+    <div class="philosophy">
+      Treats research queries like monitored jobs in a dashboard. Stat cards and charts stay prominent. The query list becomes a proper data table with inline sparklines and progress indicators. The document view becomes a structured report with an executive summary. The graph becomes a filterable, zoomable treemap. Workers get their own dedicated top-level page.
+    </div>
+  </div>
+
+  <!-- A1: Queries List -->
+  <div class="mockup-frame">
+    <div class="frame-label">A1 — Queries List (Data Table)</div>
+
+    <!-- Page header -->
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem;">
+      <div>
+        <h1 style="font-size: 1.5rem; font-weight: 700;">Deep Research</h1>
+        <span style="font-size: 0.875rem; color: var(--text-muted);">7 queries</span>
+      </div>
+      <div style="display: flex; gap: 0.5rem;">
+        <button class="btn btn-ghost"><span class="icon icon-sm">stop</span> Stop All</button>
+        <button class="btn btn-secondary"><span class="icon icon-sm">play_arrow</span> Run All</button>
+        <button class="btn btn-primary">+ New Query</button>
+      </div>
+    </div>
+
+    <!-- Stat cards row -->
+    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; margin-bottom: 1.25rem;">
+      <div class="card stat-card" style="border-top: 2px solid var(--accent);">
+        <div class="label">Queries</div>
+        <div class="value" style="color: var(--text-primary);">7</div>
+        <div style="font-size: 0.75rem; color: var(--success); margin-top: 0.125rem;">3 active</div>
+      </div>
+      <div class="card stat-card" style="border-top: 2px solid var(--success);">
+        <div class="label">Findings</div>
+        <div class="value" style="color: var(--text-primary);">342</div>
+      </div>
+      <div class="card stat-card" style="border-top: 2px solid var(--chart-4);">
+        <div class="label">Threads</div>
+        <div class="value" style="color: var(--text-primary);">89</div>
+      </div>
+      <div class="card stat-card">
+        <div class="label">Total Cost</div>
+        <div class="value" style="color: var(--text-primary);">$4.23</div>
+      </div>
+      <div class="card stat-card">
+        <div class="label">Avg Confidence</div>
+        <div class="value" style="color: var(--success);">72%</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.125rem;">novelty 58%</div>
+      </div>
+    </div>
+
+    <!-- Data table -->
+    <div class="card" style="overflow: hidden;">
+      <table style="width: 100%; border-collapse: collapse; font-size: 0.8125rem;">
+        <thead>
+          <tr style="background: var(--bg-secondary); border-bottom: 1px solid var(--border-primary);">
+            <th style="text-align: left; padding: 0.625rem 1rem; font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 500;">Query</th>
+            <th style="text-align: center; padding: 0.625rem 0.75rem; font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 500;">Status</th>
+            <th style="text-align: right; padding: 0.625rem 0.75rem; font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 500;">Findings</th>
+            <th style="text-align: right; padding: 0.625rem 0.75rem; font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 500;">Threads</th>
+            <th style="text-align: right; padding: 0.625rem 0.75rem; font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 500;">Confidence</th>
+            <th style="text-align: right; padding: 0.625rem 0.75rem; font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 500;">Cost</th>
+            <th style="text-align: right; padding: 0.625rem 1rem; font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 500;">Progress</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom: 1px solid var(--border-primary); cursor: pointer;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background=''">
+            <td style="padding: 0.75rem 1rem;">
+              <div style="font-weight: 500; color: var(--text-primary);">LLM Inference Optimization Techniques</div>
+              <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.125rem;">What are the latest approaches to optimizing LLM inference latency?</div>
+            </td>
+            <td style="text-align: center; padding: 0.75rem 0.75rem;"><span class="badge badge-active"><span class="dot dot-active" style="margin-right: 4px;"></span>active</span></td>
+            <td style="text-align: right; padding: 0.75rem 0.75rem; font-family: 'Noto Sans Mono', monospace;">87</td>
+            <td style="text-align: right; padding: 0.75rem 0.75rem; font-family: 'Noto Sans Mono', monospace;">24</td>
+            <td style="text-align: right; padding: 0.75rem 0.75rem;">
+              <div class="conf-bar" style="justify-content: flex-end;">
+                <div class="conf-bar-track"><div class="conf-bar-fill high" style="width: 78%;"></div></div>
+                <span class="mono" style="font-size: 0.75rem; color: var(--success);">78%</span>
+              </div>
+            </td>
+            <td style="text-align: right; padding: 0.75rem 0.75rem; font-family: 'Noto Sans Mono', monospace; color: var(--text-secondary);">$1.24</td>
+            <td style="text-align: right; padding: 0.75rem 1rem;">
+              <!-- Mini progress bar showing thread completion -->
+              <div style="display: flex; align-items: center; gap: 0.375rem; justify-content: flex-end;">
+                <div style="width: 60px; height: 4px; background: var(--bg-tertiary); border-radius: 2px; overflow: hidden;">
+                  <div style="width: 75%; height: 100%; background: var(--success); border-radius: 2px;"></div>
+                </div>
+                <span style="font-size: 0.6875rem; color: var(--text-muted);">18/24</span>
+              </div>
+            </td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--border-primary); cursor: pointer;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background=''">
+            <td style="padding: 0.75rem 1rem;">
+              <div style="font-weight: 500; color: var(--text-primary);">WebTransport vs WebSockets in 2025</div>
+              <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.125rem;">Compare WebTransport and WebSockets for real-time applications</div>
+            </td>
+            <td style="text-align: center; padding: 0.75rem 0.75rem;"><span class="badge badge-active"><span class="dot dot-active" style="margin-right: 4px;"></span>active</span></td>
+            <td style="text-align: right; padding: 0.75rem 0.75rem; font-family: 'Noto Sans Mono', monospace;">143</td>
+            <td style="text-align: right; padding: 0.75rem 0.75rem; font-family: 'Noto Sans Mono', monospace;">31</td>
+            <td style="text-align: right; padding: 0.75rem 0.75rem;">
+              <div class="conf-bar" style="justify-content: flex-end;">
+                <div class="conf-bar-track"><div class="conf-bar-fill high" style="width: 71%;"></div></div>
+                <span class="mono" style="font-size: 0.75rem; color: var(--success);">71%</span>
+              </div>
+            </td>
+            <td style="text-align: right; padding: 0.75rem 0.75rem; font-family: 'Noto Sans Mono', monospace; color: var(--text-secondary);">$1.87</td>
+            <td style="text-align: right; padding: 0.75rem 1rem;">
+              <div style="display: flex; align-items: center; gap: 0.375rem; justify-content: flex-end;">
+                <div style="width: 60px; height: 4px; background: var(--bg-tertiary); border-radius: 2px; overflow: hidden;">
+                  <div style="width: 90%; height: 100%; background: var(--success); border-radius: 2px;"></div>
+                </div>
+                <span style="font-size: 0.6875rem; color: var(--text-muted);">28/31</span>
+              </div>
+            </td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--border-primary); cursor: pointer;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background=''">
+            <td style="padding: 0.75rem 1rem;">
+              <div style="font-weight: 500; color: var(--text-primary);">CRDT Implementations for Collaborative Editing</div>
+              <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.125rem;">Survey of CRDT libraries and approaches for real-time collaboration</div>
+            </td>
+            <td style="text-align: center; padding: 0.75rem 0.75rem;"><span class="badge badge-paused">paused</span></td>
+            <td style="text-align: right; padding: 0.75rem 0.75rem; font-family: 'Noto Sans Mono', monospace;">58</td>
+            <td style="text-align: right; padding: 0.75rem 0.75rem; font-family: 'Noto Sans Mono', monospace;">15</td>
+            <td style="text-align: right; padding: 0.75rem 0.75rem;">
+              <div class="conf-bar" style="justify-content: flex-end;">
+                <div class="conf-bar-track"><div class="conf-bar-fill mid" style="width: 54%;"></div></div>
+                <span class="mono" style="font-size: 0.75rem; color: var(--warning);">54%</span>
+              </div>
+            </td>
+            <td style="text-align: right; padding: 0.75rem 0.75rem; font-family: 'Noto Sans Mono', monospace; color: var(--text-secondary);">$0.82</td>
+            <td style="text-align: right; padding: 0.75rem 1rem;">
+              <div style="display: flex; align-items: center; gap: 0.375rem; justify-content: flex-end;">
+                <div style="width: 60px; height: 4px; background: var(--bg-tertiary); border-radius: 2px; overflow: hidden;">
+                  <div style="width: 100%; height: 100%; background: var(--text-muted); border-radius: 2px; opacity: 0.5;"></div>
+                </div>
+                <span style="font-size: 0.6875rem; color: var(--text-muted);">15/15</span>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- A2: Document View (Report Format) -->
+  <div class="mockup-frame">
+    <div class="frame-label">A2 — Document View (Structured Report)</div>
+
+    <div style="display: grid; grid-template-columns: 220px 1fr; gap: 1.5rem;">
+      <!-- Sidebar TOC -->
+      <div class="card" style="padding: 1rem; height: fit-content; position: sticky; top: 1rem;">
+        <div style="font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 0.75rem; font-weight: 500;">Contents</div>
+        <div style="display: flex; flex-direction: column; gap: 0.125rem;">
+          <a href="#" style="font-size: 0.8125rem; color: var(--accent); text-decoration: none; padding: 0.375rem 0.5rem; border-radius: 0.25rem; background: var(--accent-subtle);">Executive Summary</a>
+          <a href="#" style="font-size: 0.8125rem; color: var(--text-secondary); text-decoration: none; padding: 0.375rem 0.5rem; border-radius: 0.25rem;">1. Speculative Decoding</a>
+          <a href="#" style="font-size: 0.8125rem; color: var(--text-secondary); text-decoration: none; padding: 0.375rem 0.5rem; border-radius: 0.25rem;">2. KV Cache Optimization</a>
+          <a href="#" style="font-size: 0.8125rem; color: var(--text-secondary); text-decoration: none; padding: 0.375rem 0.5rem; border-radius: 0.25rem;">3. Quantization Methods</a>
+          <a href="#" style="font-size: 0.8125rem; color: var(--text-secondary); text-decoration: none; padding: 0.375rem 0.5rem; border-radius: 0.25rem;">4. Attention Optimizations</a>
+          <a href="#" style="font-size: 0.8125rem; color: var(--text-secondary); text-decoration: none; padding: 0.375rem 0.5rem; border-radius: 0.25rem;">5. Continuous Batching</a>
+        </div>
+        <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-primary);">
+          <div style="font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 0.5rem; font-weight: 500;">Stats</div>
+          <div style="display: flex; flex-direction: column; gap: 0.375rem; font-size: 0.75rem;">
+            <div style="display: flex; justify-content: space-between;"><span style="color: var(--text-muted);">Findings</span><span class="mono" style="color: var(--text-secondary);">87</span></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: var(--text-muted);">Sources</span><span class="mono" style="color: var(--text-secondary);">156</span></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: var(--text-muted);">Avg Confidence</span><span class="mono" style="color: var(--success);">78%</span></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: var(--text-muted);">Avg Novelty</span><span class="mono" style="color: var(--text-secondary);">62%</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main document content -->
+      <div>
+        <!-- Executive summary card -->
+        <div class="card" style="padding: 1.5rem; margin-bottom: 1.5rem; border-left: 3px solid var(--accent);">
+          <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.75rem;">Executive Summary</h3>
+          <p style="font-size: 0.9375rem; color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem;">
+            Research across 24 threads identified <strong style="color: var(--text-primary);">five major categories</strong> of LLM inference optimization: speculative decoding (highest confidence, 78%), KV cache management, quantization, attention kernel optimizations, and continuous batching strategies.
+          </p>
+          <p style="font-size: 0.9375rem; color: var(--text-secondary); line-height: 1.7;">
+            Key finding: <strong style="color: var(--text-primary);">speculative decoding with draft models achieves 2-3x speedup</strong> on autoregressive generation without quality degradation. KV cache compression techniques (PagedAttention, GQA) enable up to 4x larger batch sizes. Most techniques are complementary and stack multiplicatively.
+          </p>
+          <div style="display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap;">
+            <span style="font-size: 0.6875rem; padding: 0.25rem 0.5rem; background: var(--bg-tertiary); border-radius: 0.25rem; color: var(--text-muted);">speculative-decoding</span>
+            <span style="font-size: 0.6875rem; padding: 0.25rem 0.5rem; background: var(--bg-tertiary); border-radius: 0.25rem; color: var(--text-muted);">kv-cache</span>
+            <span style="font-size: 0.6875rem; padding: 0.25rem 0.5rem; background: var(--bg-tertiary); border-radius: 0.25rem; color: var(--text-muted);">quantization</span>
+            <span style="font-size: 0.6875rem; padding: 0.25rem 0.5rem; background: var(--bg-tertiary); border-radius: 0.25rem; color: var(--text-muted);">attention</span>
+            <span style="font-size: 0.6875rem; padding: 0.25rem 0.5rem; background: var(--bg-tertiary); border-radius: 0.25rem; color: var(--text-muted);">batching</span>
+          </div>
+        </div>
+
+        <!-- Section 1 -->
+        <div style="margin-bottom: 2rem;">
+          <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+            <span style="font-size: 0.8125rem; font-family: 'Noto Sans Mono', monospace; color: var(--text-muted);">01</span>
+            <h3 style="font-size: 1.25rem; font-weight: 600;">Speculative Decoding</h3>
+            <span class="badge badge-seed">seed</span>
+            <div style="margin-left: auto; display: flex; gap: 0.75rem;">
+              <div class="conf-bar"><span style="font-size: 0.6875rem; color: var(--text-muted);">conf</span><div class="conf-bar-track"><div class="conf-bar-fill high" style="width: 85%;"></div></div><span class="mono" style="font-size: 0.6875rem; color: var(--success);">85%</span></div>
+              <div class="conf-bar"><span style="font-size: 0.6875rem; color: var(--text-muted);">novel</span><div class="conf-bar-track"><div class="conf-bar-fill mid" style="width: 58%;"></div></div><span class="mono" style="font-size: 0.6875rem; color: var(--warning);">58%</span></div>
+            </div>
+          </div>
+
+          <!-- Finding as flowing paragraph -->
+          <div style="padding-left: 2rem; border-left: 1px solid var(--border-primary);">
+            <p style="font-size: 0.9375rem; color: var(--text-secondary); line-height: 1.75; margin-bottom: 1rem;">
+              Speculative decoding uses a smaller "draft" model to generate candidate token sequences, which are then verified in parallel by the larger target model. This approach exploits the fact that verification is cheaper than generation for autoregressive models. DeepMind's approach achieves <strong style="color: var(--text-primary);">2-3x wall-clock speedup</strong> with no degradation in output quality, as rejected tokens are resampled from the target distribution.
+            </p>
+            <p style="font-size: 0.9375rem; color: var(--text-secondary); line-height: 1.75; margin-bottom: 1rem;">
+              Recent variants include Medusa (multi-head prediction without a separate draft model), Eagle (feature-level draft prediction), and staged speculative decoding for multi-step lookahead. The optimal draft model size is typically 10-20% of the target model parameters.
+            </p>
+            <!-- Source citations inline -->
+            <div style="display: flex; flex-wrap: wrap; gap: 0.375rem; margin-top: 0.75rem;">
+              <a href="#" style="font-size: 0.6875rem; color: var(--accent); text-decoration: none; padding: 0.125rem 0.5rem; background: var(--accent-subtle); border-radius: 0.25rem;">arxiv.org/abs/2302.01318</a>
+              <a href="#" style="font-size: 0.6875rem; color: var(--accent); text-decoration: none; padding: 0.125rem 0.5rem; background: var(--accent-subtle); border-radius: 0.25rem;">arxiv.org/abs/2401.10774</a>
+              <a href="#" style="font-size: 0.6875rem; color: var(--accent); text-decoration: none; padding: 0.125rem 0.5rem; background: var(--accent-subtle); border-radius: 0.25rem;">blog.vllm.ai/speculative</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2 -->
+        <div style="margin-bottom: 2rem;">
+          <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+            <span style="font-size: 0.8125rem; font-family: 'Noto Sans Mono', monospace; color: var(--text-muted);">02</span>
+            <h3 style="font-size: 1.25rem; font-weight: 600;">KV Cache Optimization</h3>
+            <span class="badge badge-followup">follow up</span>
+            <div style="margin-left: auto; display: flex; gap: 0.75rem;">
+              <div class="conf-bar"><span style="font-size: 0.6875rem; color: var(--text-muted);">conf</span><div class="conf-bar-track"><div class="conf-bar-fill high" style="width: 82%;"></div></div><span class="mono" style="font-size: 0.6875rem; color: var(--success);">82%</span></div>
+              <div class="conf-bar"><span style="font-size: 0.6875rem; color: var(--text-muted);">novel</span><div class="conf-bar-track"><div class="conf-bar-fill high" style="width: 72%;"></div></div><span class="mono" style="font-size: 0.6875rem; color: var(--success);">72%</span></div>
+            </div>
+          </div>
+          <div style="padding-left: 2rem; border-left: 1px solid var(--border-primary);">
+            <p style="font-size: 0.9375rem; color: var(--text-secondary); line-height: 1.75; margin-bottom: 1rem;">
+              PagedAttention (vLLM) applies virtual memory paging concepts to KV cache management, reducing memory waste from 60-80% to near-zero. This enables <strong style="color: var(--text-primary);">2-4x higher throughput</strong> by fitting more concurrent sequences in GPU memory. The technique stores KV cache in non-contiguous blocks mapped via a page table.
+            </p>
+            <p style="font-size: 0.9375rem; color: var(--text-secondary); line-height: 1.75;">
+              Grouped-Query Attention (GQA) shares key-value heads across query heads, reducing KV cache size by 4-8x with minimal quality loss. Combined with prefix caching for shared prompt prefixes, these techniques are now standard in production serving stacks.
+            </p>
+            <div style="display: flex; flex-wrap: wrap; gap: 0.375rem; margin-top: 0.75rem;">
+              <a href="#" style="font-size: 0.6875rem; color: var(--accent); text-decoration: none; padding: 0.125rem 0.5rem; background: var(--accent-subtle); border-radius: 0.25rem;">arxiv.org/abs/2309.06180</a>
+              <a href="#" style="font-size: 0.6875rem; color: var(--accent); text-decoration: none; padding: 0.125rem 0.5rem; background: var(--accent-subtle); border-radius: 0.25rem;">vllm.ai/docs</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- A3: Relationship View (Clustered Treemap) -->
+  <div class="mockup-frame">
+    <div class="frame-label">A3 — Relationship View (Clustered Map with Filters)</div>
+
+    <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+      <div style="display: flex; gap: 0.25rem; align-items: center;">
+        <span style="font-size: 0.75rem; color: var(--text-muted);">Filter:</span>
+        <button class="btn btn-secondary" style="font-size: 0.6875rem;">All</button>
+        <button class="btn btn-ghost" style="font-size: 0.6875rem;">Active only</button>
+        <button class="btn btn-ghost" style="font-size: 0.6875rem;">With findings</button>
+      </div>
+      <div style="display: flex; gap: 0.25rem; align-items: center;">
+        <span style="font-size: 0.75rem; color: var(--text-muted);">Color by:</span>
+        <button class="btn btn-secondary" style="font-size: 0.6875rem;">Status</button>
+        <button class="btn btn-ghost" style="font-size: 0.6875rem;">Confidence</button>
+        <button class="btn btn-ghost" style="font-size: 0.6875rem;">Depth</button>
+      </div>
+      <div style="display: flex; gap: 0.25rem; align-items: center; margin-left: auto;">
+        <span style="font-size: 0.75rem; color: var(--text-muted);">Layout:</span>
+        <button class="btn btn-secondary" style="font-size: 0.6875rem;">Tree</button>
+        <button class="btn btn-ghost" style="font-size: 0.6875rem;">Radial</button>
+        <button class="btn btn-ghost" style="font-size: 0.6875rem;">Force</button>
+      </div>
+    </div>
+
+    <!-- Clustered graph mockup -->
+    <div class="card" style="height: 450px; position: relative; overflow: hidden;">
+      <!-- Cluster groups -->
+      <div style="position: absolute; top: 30px; left: 40px; width: 280px;">
+        <div style="font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; font-weight: 500;">Speculative Decoding</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 0.375rem;">
+          <div style="padding: 0.5rem 0.625rem; border-radius: 0.375rem; border: 1px solid #22c55e50; background: #22c55e10; max-width: 130px;">
+            <div style="display: flex; align-items: center; gap: 0.25rem; margin-bottom: 0.25rem;">
+              <span class="dot dot-exhausted"></span>
+              <span style="font-size: 0.6875rem; color: var(--text-muted);">seed</span>
+              <span style="font-size: 0.625rem; color: var(--text-muted); margin-left: auto; background: var(--bg-tertiary); padding: 0 4px; border-radius: 2px;">12</span>
+            </div>
+            <div style="font-size: 0.6875rem; color: var(--text-primary); line-height: 1.3;">Speculative decoding techniques</div>
+          </div>
+          <div style="padding: 0.5rem 0.625rem; border-radius: 0.375rem; border: 1px solid var(--border-primary); background: var(--bg-tertiary); opacity: 0.7; max-width: 130px;">
+            <div style="display: flex; align-items: center; gap: 0.25rem; margin-bottom: 0.25rem;">
+              <span class="dot dot-exhausted"></span>
+              <span style="font-size: 0.6875rem; color: var(--text-muted);">follow up</span>
+              <span style="font-size: 0.625rem; color: var(--text-muted); margin-left: auto; background: var(--bg-tertiary); padding: 0 4px; border-radius: 2px;">8</span>
+            </div>
+            <div style="font-size: 0.6875rem; color: var(--text-primary); line-height: 1.3;">Medusa multi-head prediction</div>
+          </div>
+          <div style="padding: 0.5rem 0.625rem; border-radius: 0.375rem; border: 1px solid var(--border-primary); background: var(--bg-tertiary); opacity: 0.7; max-width: 130px;">
+            <div style="display: flex; align-items: center; gap: 0.25rem; margin-bottom: 0.25rem;">
+              <span class="dot dot-exhausted"></span>
+              <span style="font-size: 0.6875rem; color: var(--text-muted);">follow up</span>
+            </div>
+            <div style="font-size: 0.6875rem; color: var(--text-primary); line-height: 1.3;">Eagle feature draft</div>
+          </div>
+          <div style="padding: 0.5rem 0.625rem; border-radius: 0.375rem; border: 1px solid #eab30850; background: #eab30810; max-width: 130px;">
+            <div style="display: flex; align-items: center; gap: 0.25rem; margin-bottom: 0.25rem;">
+              <span class="dot dot-queued"></span>
+              <span style="font-size: 0.6875rem; color: var(--text-muted);">queued</span>
+            </div>
+            <div style="font-size: 0.6875rem; color: var(--text-primary); line-height: 1.3;">Draft model distillation</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="position: absolute; top: 30px; right: 40px; width: 260px;">
+        <div style="font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--chart-2); margin-bottom: 0.5rem; font-weight: 500;">KV Cache</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 0.375rem;">
+          <div style="padding: 0.5rem 0.625rem; border-radius: 0.375rem; border: 1px solid #22c55e50; background: #22c55e10; max-width: 120px;">
+            <div style="display: flex; align-items: center; gap: 0.25rem; margin-bottom: 0.25rem;">
+              <span class="dot dot-active"></span>
+              <span style="font-size: 0.6875rem; color: var(--success);">active</span>
+              <span style="font-size: 0.625rem; color: var(--text-muted); margin-left: auto; background: var(--bg-tertiary); padding: 0 4px; border-radius: 2px;">5</span>
+            </div>
+            <div style="font-size: 0.6875rem; color: var(--text-primary); line-height: 1.3;">PagedAttention</div>
+          </div>
+          <div style="padding: 0.5rem 0.625rem; border-radius: 0.375rem; border: 1px solid var(--border-primary); background: var(--bg-tertiary); opacity: 0.7; max-width: 120px;">
+            <div style="font-size: 0.6875rem; color: var(--text-primary); line-height: 1.3;">GQA variants</div>
+          </div>
+          <div style="padding: 0.5rem 0.625rem; border-radius: 0.375rem; border: 1px solid var(--border-primary); background: var(--bg-tertiary); opacity: 0.7; max-width: 120px;">
+            <div style="font-size: 0.6875rem; color: var(--text-primary); line-height: 1.3;">Prefix caching</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="position: absolute; bottom: 40px; left: 60px; width: 220px;">
+        <div style="font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--chart-3); margin-bottom: 0.5rem; font-weight: 500;">Quantization</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 0.375rem;">
+          <div style="padding: 0.5rem 0.625rem; border-radius: 0.375rem; border: 1px solid var(--border-primary); background: var(--bg-tertiary); max-width: 120px;">
+            <div style="font-size: 0.6875rem; color: var(--text-primary); line-height: 1.3;">GPTQ vs AWQ</div>
+          </div>
+          <div style="padding: 0.5rem 0.625rem; border-radius: 0.375rem; border: 1px solid var(--border-primary); background: var(--bg-tertiary); max-width: 120px;">
+            <div style="font-size: 0.6875rem; color: var(--text-primary); line-height: 1.3;">FP8 inference</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Connection lines (SVG) -->
+      <svg style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;">
+        <line x1="200" y1="140" x2="350" y2="240" stroke="#313147" stroke-width="1" stroke-dasharray="4 4"/>
+        <line x1="300" y1="80" x2="500" y2="70" stroke="#313147" stroke-width="1" stroke-dasharray="4 4"/>
+      </svg>
+
+      <!-- Detail panel (slide-out on click) -->
+      <div style="position: absolute; right: 0; top: 0; bottom: 0; width: 280px; background: var(--bg-secondary); border-left: 1px solid var(--border-primary); padding: 1rem; overflow-y: auto;">
+        <div style="font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 0.75rem;">Selected Thread</div>
+        <h4 style="font-size: 0.9375rem; font-weight: 600; margin-bottom: 0.5rem;">PagedAttention</h4>
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
+          <span class="badge badge-active"><span class="dot dot-active" style="margin-right: 4px;"></span>active</span>
+          <span class="badge badge-followup">follow up</span>
+        </div>
+        <div style="font-size: 0.8125rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 1rem;">
+          How does PagedAttention manage KV cache in non-contiguous blocks?
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 0.375rem; font-size: 0.75rem; margin-bottom: 1rem;">
+          <div style="display: flex; justify-content: space-between;"><span style="color: var(--text-muted);">Depth</span><span class="mono">2/8</span></div>
+          <div style="display: flex; justify-content: space-between;"><span style="color: var(--text-muted);">Findings</span><span class="mono">5</span></div>
+          <div style="display: flex; justify-content: space-between;"><span style="color: var(--text-muted);">Children</span><span class="mono">2</span></div>
+          <div style="display: flex; justify-content: space-between;"><span style="color: var(--text-muted);">Priority</span><span class="mono">0.85</span></div>
+        </div>
+        <div style="display: flex; gap: 0.375rem;">
+          <button class="btn btn-secondary" style="flex: 1;"><span class="icon icon-xs">visibility</span> View</button>
+          <button class="btn btn-ghost"><span class="icon icon-xs">settings</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- A4: Workers Page (Dedicated) -->
+  <div class="mockup-frame">
+    <div class="frame-label">A4 — Workers Page (Top-Level Dedicated Page)</div>
+
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem;">
+      <div>
+        <h1 style="font-size: 1.5rem; font-weight: 700;">Workers</h1>
+        <span style="font-size: 0.875rem; color: var(--text-muted);">Research engine supervisor</span>
+      </div>
+      <div style="display: flex; gap: 0.5rem;">
+        <button class="btn btn-ghost"><span class="icon icon-sm">stop</span> Stop All</button>
+        <button class="btn btn-primary"><span class="icon icon-sm">add</span> Spawn Worker</button>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1.25rem;">
+      <div class="card stat-card" style="border-top: 2px solid var(--success);">
+        <div class="label">Active Workers</div>
+        <div class="value" style="color: var(--success);">3</div>
+      </div>
+      <div class="card stat-card">
+        <div class="label">Jobs Running</div>
+        <div class="value">5</div>
+      </div>
+      <div class="card stat-card">
+        <div class="label">Jobs Pending</div>
+        <div class="value">2</div>
+      </div>
+      <div class="card stat-card">
+        <div class="label">Completed Today</div>
+        <div class="value">47</div>
+      </div>
+    </div>
+
+    <!-- Worker cards -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+      <div class="card" style="padding: 1rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+          <span class="dot dot-active"></span>
+          <span class="mono" style="font-size: 0.75rem; color: var(--text-secondary);">worker-a7b3c</span>
+          <span style="font-size: 0.6875rem; color: var(--text-muted); margin-left: auto;">uptime 23m</span>
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem;">Current job</div>
+        <div style="padding: 0.5rem 0.75rem; background: var(--success-muted); border: 1px solid #a6e3a130; border-radius: 0.375rem; margin-bottom: 0.75rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-size: 0.8125rem; color: var(--text-primary);">LLM Inference Optimization</span>
+            <span class="badge badge-active" style="font-size: 0.625rem;">running</span>
+          </div>
+          <div style="display: flex; gap: 0.75rem; margin-top: 0.375rem; font-size: 0.6875rem; color: var(--text-muted);">
+            <span>iter 3/5</span>
+            <span>12m elapsed</span>
+            <span>$0.34</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 0.375rem;">
+          <button class="btn btn-ghost" style="font-size: 0.6875rem; flex: 1;">View logs</button>
+          <button class="btn btn-ghost" style="font-size: 0.6875rem; color: var(--error);">Kill</button>
+        </div>
+      </div>
+
+      <div class="card" style="padding: 1rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+          <span class="dot dot-active"></span>
+          <span class="mono" style="font-size: 0.75rem; color: var(--text-secondary);">worker-f2e8d</span>
+          <span style="font-size: 0.6875rem; color: var(--text-muted); margin-left: auto;">uptime 18m</span>
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem;">Current job</div>
+        <div style="padding: 0.5rem 0.75rem; background: var(--success-muted); border: 1px solid #a6e3a130; border-radius: 0.375rem; margin-bottom: 0.75rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-size: 0.8125rem; color: var(--text-primary);">WebTransport vs WebSockets</span>
+            <span class="badge badge-active" style="font-size: 0.625rem;">running</span>
+          </div>
+          <div style="display: flex; gap: 0.75rem; margin-top: 0.375rem; font-size: 0.6875rem; color: var(--text-muted);">
+            <span>iter 7</span>
+            <span>18m elapsed</span>
+            <span>$0.52</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 0.375rem;">
+          <button class="btn btn-ghost" style="font-size: 0.6875rem; flex: 1;">View logs</button>
+          <button class="btn btn-ghost" style="font-size: 0.6875rem; color: var(--error);">Kill</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Job queue -->
+    <div style="margin-top: 1.25rem;">
+      <div style="font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 0.5rem;">Job Queue</div>
+      <div class="card" style="overflow: hidden;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.8125rem;">
+          <thead>
+            <tr style="border-bottom: 1px solid var(--border-primary);">
+              <th style="text-align: left; padding: 0.5rem 0.75rem; font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 500;">Job</th>
+              <th style="text-align: left; padding: 0.5rem 0.75rem; font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 500;">Query</th>
+              <th style="text-align: center; padding: 0.5rem 0.75rem; font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 500;">Status</th>
+              <th style="text-align: center; padding: 0.5rem 0.75rem; font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 500;">Worker</th>
+              <th style="text-align: right; padding: 0.5rem 0.75rem; font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 500;">Duration</th>
+              <th style="text-align: right; padding: 0.5rem 0.75rem; font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 500;"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom: 1px solid var(--border-primary);">
+              <td style="padding: 0.5rem 0.75rem;" class="mono">job-8a3f</td>
+              <td style="padding: 0.5rem 0.75rem;">LLM Inference Optimization</td>
+              <td style="padding: 0.5rem 0.75rem; text-align: center;"><span class="badge badge-active" style="font-size: 0.625rem;">running</span></td>
+              <td style="padding: 0.5rem 0.75rem; text-align: center;" class="mono" style="font-size: 0.75rem;">a7b3c</td>
+              <td style="padding: 0.5rem 0.75rem; text-align: right; color: var(--text-muted);">12m</td>
+              <td style="padding: 0.5rem 0.75rem; text-align: right;"><button class="btn btn-ghost" style="font-size: 0.625rem; color: var(--error);">cancel</button></td>
+            </tr>
+            <tr style="border-bottom: 1px solid var(--border-primary);">
+              <td style="padding: 0.5rem 0.75rem;" class="mono">job-c91d</td>
+              <td style="padding: 0.5rem 0.75rem;">CRDT Implementations</td>
+              <td style="padding: 0.5rem 0.75rem; text-align: center;"><span class="badge badge-paused" style="font-size: 0.625rem; background: #f9e2af20; color: var(--warning);">pending</span></td>
+              <td style="padding: 0.5rem 0.75rem; text-align: center; color: var(--text-muted);">—</td>
+              <td style="padding: 0.5rem 0.75rem; text-align: right; color: var(--text-muted);">queued 2m ago</td>
+              <td style="padding: 0.5rem 0.75rem; text-align: right;"><button class="btn btn-ghost" style="font-size: 0.625rem; color: var(--error);">cancel</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="comparison-note">
+    <strong>Option A summary:</strong> Dashboard-oriented. Best for users who manage many concurrent research queries and want to quickly scan status across all of them. Data table format is scannable but less visually engaging. Document view has proper narrative flow with sidebar navigation. Graph uses clustered layout with filtering to stay usable at scale. Workers get full page treatment.
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- OPTION B: Research Notebook -->
+<!-- ============================================================ -->
+<div class="option-section">
+  <div class="option-label">
+    <h2>Option B — Research Notebook</h2>
+    <div class="subtitle">Document-first, narrative-focused, reading-optimized</div>
+    <div class="philosophy">
+      Treats research as a reading and synthesis experience. The query list shows rich preview cards with AI-generated summaries. Document view has wide-margin typography optimized for reading, with inline annotations. The relationship view uses a vertical timeline showing how questions branch. Per-question config appears in a slide-over drawer. Workers are a collapsible bottom panel.
+    </div>
+  </div>
+
+  <!-- B1: Queries List -->
+  <div class="mockup-frame">
+    <div class="frame-label">B1 — Queries List (Rich Preview Cards)</div>
+
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem;">
+      <div>
+        <h1 style="font-size: 1.5rem; font-weight: 700;">Deep Research</h1>
+        <span style="font-size: 0.875rem; color: var(--text-muted);">7 queries</span>
+      </div>
+      <div style="display: flex; gap: 0.5rem;">
+        <button class="btn btn-ghost"><span class="icon icon-sm">stop</span> Stop All</button>
+        <button class="btn btn-primary">+ New Query</button>
+      </div>
+    </div>
+
+    <!-- Filter/sort bar -->
+    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; align-items: center;">
+      <div style="display: flex; gap: 0.25rem; padding: 0.125rem; background: var(--bg-tertiary); border-radius: 0.25rem;">
+        <button style="padding: 0.25rem 0.625rem; font-size: 0.75rem; background: var(--bg-secondary); color: var(--text-primary); border: none; border-radius: 0.25rem; cursor: pointer;">All</button>
+        <button style="padding: 0.25rem 0.625rem; font-size: 0.75rem; background: none; color: var(--text-muted); border: none; cursor: pointer;">Active</button>
+        <button style="padding: 0.25rem 0.625rem; font-size: 0.75rem; background: none; color: var(--text-muted); border: none; cursor: pointer;">Paused</button>
+        <button style="padding: 0.25rem 0.625rem; font-size: 0.75rem; background: none; color: var(--text-muted); border: none; cursor: pointer;">Completed</button>
+      </div>
+      <span style="font-size: 0.75rem; color: var(--text-muted); margin-left: auto;">Sort: Recent</span>
+    </div>
+
+    <!-- Query cards with previews -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+      <div class="card" style="padding: 1.25rem; cursor: pointer; transition: all 0.15s;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+          <span class="badge badge-active"><span class="dot dot-active" style="margin-right: 4px;"></span>active</span>
+          <span style="font-size: 0.6875rem; color: var(--text-muted); margin-left: auto;">2h ago</span>
+        </div>
+        <h3 style="font-size: 1.0625rem; font-weight: 600; margin-bottom: 0.375rem; line-height: 1.3;">LLM Inference Optimization Techniques</h3>
+        <p style="font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.75rem; line-height: 1.5;">What are the latest approaches to optimizing LLM inference latency?</p>
+        <!-- AI summary preview -->
+        <p style="font-size: 0.8125rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 0.75rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">
+          Five major optimization categories identified: speculative decoding (2-3x speedup), KV cache management (PagedAttention, GQA), quantization (GPTQ, AWQ), attention kernels (FlashAttention), and continuous batching...
+        </p>
+        <div style="display: flex; align-items: center; gap: 1rem; font-size: 0.6875rem; color: var(--text-muted); padding-top: 0.75rem; border-top: 1px solid var(--border-primary);">
+          <span><strong style="color: var(--text-secondary);">87</strong> findings</span>
+          <span><strong style="color: var(--text-secondary);">24</strong> threads</span>
+          <span><strong style="color: var(--text-secondary);">$1.24</strong> cost</span>
+          <div class="conf-bar" style="margin-left: auto;">
+            <div class="conf-bar-track"><div class="conf-bar-fill high" style="width: 78%;"></div></div>
+            <span class="mono" style="font-size: 0.625rem;">78%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="padding: 1.25rem; cursor: pointer;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+          <span class="badge badge-active"><span class="dot dot-active" style="margin-right: 4px;"></span>active</span>
+          <span style="font-size: 0.6875rem; color: var(--text-muted); margin-left: auto;">4h ago</span>
+        </div>
+        <h3 style="font-size: 1.0625rem; font-weight: 600; margin-bottom: 0.375rem; line-height: 1.3;">WebTransport vs WebSockets in 2025</h3>
+        <p style="font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.75rem; line-height: 1.5;">Compare WebTransport and WebSockets for real-time applications</p>
+        <p style="font-size: 0.8125rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 0.75rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">
+          WebTransport offers significant advantages over WebSockets including multiplexed streams, unreliable datagrams, and built-in QUIC benefits. Browser support now covers 90%+ of users...
+        </p>
+        <div style="display: flex; align-items: center; gap: 1rem; font-size: 0.6875rem; color: var(--text-muted); padding-top: 0.75rem; border-top: 1px solid var(--border-primary);">
+          <span><strong style="color: var(--text-secondary);">143</strong> findings</span>
+          <span><strong style="color: var(--text-secondary);">31</strong> threads</span>
+          <span><strong style="color: var(--text-secondary);">$1.87</strong> cost</span>
+          <div class="conf-bar" style="margin-left: auto;">
+            <div class="conf-bar-track"><div class="conf-bar-fill high" style="width: 71%;"></div></div>
+            <span class="mono" style="font-size: 0.625rem;">71%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="padding: 1.25rem; cursor: pointer; opacity: 0.75;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+          <span class="badge badge-paused">paused</span>
+          <span style="font-size: 0.6875rem; color: var(--text-muted); margin-left: auto;">1d ago</span>
+        </div>
+        <h3 style="font-size: 1.0625rem; font-weight: 600; margin-bottom: 0.375rem; line-height: 1.3;">CRDT Implementations for Collaborative Editing</h3>
+        <p style="font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.75rem;">Survey of CRDT libraries and approaches for real-time collaboration</p>
+        <p style="font-size: 0.8125rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 0.75rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">
+          Three major CRDT families dominate: Yjs (highest adoption), Automerge (most feature-complete), and Diamond Types (fastest). Yjs offers sub-millisecond operations on documents with 100k+ edits...
+        </p>
+        <div style="display: flex; align-items: center; gap: 1rem; font-size: 0.6875rem; color: var(--text-muted); padding-top: 0.75rem; border-top: 1px solid var(--border-primary);">
+          <span><strong style="color: var(--text-secondary);">58</strong> findings</span>
+          <span><strong style="color: var(--text-secondary);">15</strong> threads</span>
+          <span><strong style="color: var(--text-secondary);">$0.82</strong> cost</span>
+          <div class="conf-bar" style="margin-left: auto;">
+            <div class="conf-bar-track"><div class="conf-bar-fill mid" style="width: 54%;"></div></div>
+            <span class="mono" style="font-size: 0.625rem;">54%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- B2: Document View (Wide-Margin Reading) -->
+  <div class="mockup-frame">
+    <div class="frame-label">B2 — Document View (Wide-Margin Reading Layout)</div>
+
+    <div style="max-width: 800px; margin: 0 auto;">
+      <!-- Breadcrumb + controls -->
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">
+        <a href="#" style="font-size: 0.75rem; color: var(--accent); text-decoration: none;">&larr; All queries</a>
+        <div style="display: flex; gap: 0.25rem;">
+          <button class="tab active">Document</button>
+          <button class="tab">Live</button>
+          <button class="tab">Map</button>
+          <button class="tab">Workers</button>
+          <button class="tab"><span class="icon icon-xs">settings</span></button>
+        </div>
+      </div>
+
+      <!-- Title block -->
+      <div style="margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border-primary);">
+        <h1 style="font-size: 1.75rem; font-weight: 700; line-height: 1.2; margin-bottom: 0.5rem;">LLM Inference Optimization Techniques</h1>
+        <p style="font-size: 1rem; color: var(--text-muted); line-height: 1.6;">What are the latest approaches to optimizing LLM inference latency?</p>
+        <div style="display: flex; gap: 1.25rem; margin-top: 1rem; font-size: 0.75rem; color: var(--text-muted);">
+          <span>87 findings</span>
+          <span>24 threads</span>
+          <span>156 sources</span>
+          <span>$1.24 cost</span>
+          <span class="badge badge-active" style="font-size: 0.625rem;"><span class="dot dot-active" style="margin-right: 3px;"></span>active</span>
+        </div>
+      </div>
+
+      <!-- Summary card -->
+      <div style="background: var(--accent-subtle); border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 2.5rem; border: 1px solid #89b4fa20;">
+        <div style="font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); margin-bottom: 0.625rem; font-weight: 600;">Summary</div>
+        <p style="font-size: 1rem; color: var(--text-primary); line-height: 1.8;">
+          Research across 24 threads identified five major categories of LLM inference optimization. Speculative decoding achieves 2-3x speedup without quality loss. KV cache compression (PagedAttention, GQA) enables 4x larger batch sizes. Most techniques are complementary and stack multiplicatively, suggesting the optimal serving stack combines all five approaches.
+        </p>
+      </div>
+
+      <!-- Section 1 — Flowing narrative -->
+      <div style="margin-bottom: 2.5rem;">
+        <div style="display: flex; align-items: baseline; gap: 0.75rem; margin-bottom: 1rem;">
+          <h2 style="font-size: 1.375rem; font-weight: 600;">Speculative Decoding</h2>
+          <span class="badge badge-seed" style="font-size: 0.625rem;">seed</span>
+        </div>
+
+        <p style="font-size: 1rem; color: var(--text-secondary); line-height: 1.85; margin-bottom: 1.25rem;">
+          Speculative decoding uses a smaller "draft" model to generate candidate token sequences, which are then verified in parallel by the larger target model. This exploits the asymmetry between generation cost (autoregressive, sequential) and verification cost (parallel forward pass). The key insight is that verification of <em>k</em> tokens costs roughly the same as generating a single token.
+        </p>
+
+        <p style="font-size: 1rem; color: var(--text-secondary); line-height: 1.85; margin-bottom: 1.25rem;">
+          DeepMind's original approach achieves <strong style="color: var(--text-primary);">2-3x wall-clock speedup</strong> with provably identical output distribution — rejected tokens are resampled from the adjusted target distribution, ensuring no quality degradation. The acceptance rate depends on the alignment between draft and target models.
+        </p>
+
+        <!-- Annotation / key finding callout -->
+        <div style="margin: 1.5rem 0; padding: 1rem 1.25rem; border-left: 3px solid var(--success); background: var(--success-muted); border-radius: 0 0.375rem 0.375rem 0;">
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.375rem;">
+            <span class="icon icon-sm" style="color: var(--success);">lightbulb</span>
+            <span style="font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--success); font-weight: 600;">Key Finding</span>
+            <div style="margin-left: auto; display: flex; gap: 0.5rem;">
+              <div class="conf-bar"><span style="font-size: 0.625rem; color: var(--text-muted);">conf</span><div class="conf-bar-track"><div class="conf-bar-fill high" style="width: 92%;"></div></div><span class="mono" style="font-size: 0.625rem;">92%</span></div>
+            </div>
+          </div>
+          <p style="font-size: 0.9375rem; color: var(--text-primary); line-height: 1.7;">
+            The optimal draft model size is 10-20% of the target model parameters. Larger drafts have higher acceptance rates but slower generation; smaller drafts generate faster but waste verification on rejected tokens.
+          </p>
+        </div>
+
+        <p style="font-size: 1rem; color: var(--text-secondary); line-height: 1.85; margin-bottom: 1rem;">
+          Recent variants push beyond the original framework: <strong style="color: var(--text-primary);">Medusa</strong> adds multiple prediction heads to the target model itself, eliminating the need for a separate draft model. <strong style="color: var(--text-primary);">Eagle</strong> uses feature-level draft prediction from intermediate layers. Staged speculative decoding enables multi-step lookahead with nested draft models.
+        </p>
+
+        <!-- Inline sources -->
+        <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-primary);">
+          <div style="font-size: 0.6875rem; color: var(--text-muted); margin-bottom: 0.5rem;">Sources (4)</div>
+          <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+            <a href="#" style="font-size: 0.8125rem; color: var(--accent); text-decoration: none;">Fast Inference from Transformers via Speculative Decoding — Leviathan et al., 2023</a>
+            <a href="#" style="font-size: 0.8125rem; color: var(--accent); text-decoration: none;">Medusa: Simple LLM Inference Acceleration — Cai et al., 2024</a>
+            <a href="#" style="font-size: 0.8125rem; color: var(--accent); text-decoration: none;">Eagle: Speculative Sampling Requires Rethinking — Li et al., 2024</a>
+            <a href="#" style="font-size: 0.8125rem; color: var(--accent); text-decoration: none;">vLLM Blog: Speculative Decoding in Practice</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- B3: Relationship View (Branching Timeline) -->
+  <div class="mockup-frame">
+    <div class="frame-label">B3 — Relationship View (Branching Timeline)</div>
+
+    <div style="max-width: 800px; margin: 0 auto;">
+      <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; align-items: center;">
+        <span style="font-size: 0.75rem; color: var(--text-muted);">Depth:</span>
+        <button class="btn btn-secondary" style="font-size: 0.6875rem;">All</button>
+        <button class="btn btn-ghost" style="font-size: 0.6875rem;">0-2</button>
+        <button class="btn btn-ghost" style="font-size: 0.6875rem;">3-5</button>
+        <button class="btn btn-ghost" style="font-size: 0.6875rem;">6+</button>
+        <div style="flex: 1;"></div>
+        <span style="font-size: 0.75rem; color: var(--text-muted);">Hide exhausted threads</span>
+        <div style="width: 28px; height: 16px; background: var(--bg-tertiary); border-radius: 8px; position: relative; cursor: pointer;">
+          <div style="width: 12px; height: 12px; background: var(--text-muted); border-radius: 6px; position: absolute; top: 2px; left: 2px;"></div>
+        </div>
+      </div>
+
+      <!-- Timeline -->
+      <div style="position: relative; padding-left: 2rem;">
+        <!-- Vertical line -->
+        <div style="position: absolute; left: 0.625rem; top: 0; bottom: 0; width: 2px; background: var(--border-primary);"></div>
+
+        <!-- Root node -->
+        <div style="position: relative; margin-bottom: 1.5rem;">
+          <div style="position: absolute; left: -1.625rem; top: 0.25rem; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg-primary);"></div>
+          <div class="card" style="padding: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+              <h4 style="font-size: 0.9375rem; font-weight: 600;">LLM inference optimization techniques</h4>
+              <span class="badge badge-seed">seed</span>
+              <span style="font-size: 0.625rem; color: var(--text-muted); margin-left: auto;">depth 0</span>
+            </div>
+            <div style="display: flex; gap: 0.75rem; font-size: 0.6875rem; color: var(--text-muted);">
+              <span>12 findings</span>
+              <span>5 branches</span>
+              <span style="color: var(--success);">conf 85%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Branch 1 -->
+        <div style="position: relative; margin-bottom: 0.75rem; margin-left: 1.5rem;">
+          <div style="position: absolute; left: -3.125rem; top: 0.5rem; width: 10px; height: 10px; border-radius: 50%; background: var(--bg-tertiary); border: 2px solid var(--text-muted);"></div>
+          <!-- Horizontal connector -->
+          <div style="position: absolute; left: -2.375rem; top: 0.875rem; width: 1.5rem; height: 2px; background: var(--border-primary);"></div>
+          <div style="padding: 0.625rem 0.875rem; background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 0.375rem; display: flex; align-items: center; gap: 0.75rem;">
+            <span class="dot dot-exhausted"></span>
+            <span style="font-size: 0.8125rem; color: var(--text-primary); flex: 1;">Speculative decoding techniques and implementations</span>
+            <span style="font-size: 0.6875rem; color: var(--text-muted);">12 findings</span>
+            <span class="icon icon-xs" style="color: var(--text-muted);">expand_more</span>
+          </div>
+        </div>
+
+        <!-- Sub-branch -->
+        <div style="position: relative; margin-bottom: 0.75rem; margin-left: 3rem;">
+          <div style="position: absolute; left: -4.625rem; top: 0.5rem; width: 8px; height: 8px; border-radius: 50%; background: var(--chart-4); opacity: 0.6;"></div>
+          <div style="position: absolute; left: -3.875rem; top: 0.75rem; width: 1.5rem; height: 2px; background: var(--border-primary); opacity: 0.5;"></div>
+          <div style="padding: 0.5rem 0.75rem; background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 0.375rem; display: flex; align-items: center; gap: 0.75rem; opacity: 0.8;">
+            <span class="dot dot-exhausted"></span>
+            <span style="font-size: 0.8125rem; color: var(--text-secondary); flex: 1;">Medusa multi-head prediction architecture</span>
+            <span style="font-size: 0.6875rem; color: var(--text-muted);">8 findings</span>
+          </div>
+        </div>
+        <div style="position: relative; margin-bottom: 0.75rem; margin-left: 3rem;">
+          <div style="position: absolute; left: -4.625rem; top: 0.5rem; width: 8px; height: 8px; border-radius: 50%; background: var(--chart-4); opacity: 0.6;"></div>
+          <div style="position: absolute; left: -3.875rem; top: 0.75rem; width: 1.5rem; height: 2px; background: var(--border-primary); opacity: 0.5;"></div>
+          <div style="padding: 0.5rem 0.75rem; background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 0.375rem; display: flex; align-items: center; gap: 0.75rem; opacity: 0.8;">
+            <span class="dot dot-exhausted"></span>
+            <span style="font-size: 0.8125rem; color: var(--text-secondary); flex: 1;">Eagle feature-level draft prediction</span>
+            <span style="font-size: 0.6875rem; color: var(--text-muted);">6 findings</span>
+          </div>
+        </div>
+
+        <!-- Branch 2 -->
+        <div style="position: relative; margin-bottom: 0.75rem; margin-left: 1.5rem;">
+          <div style="position: absolute; left: -3.125rem; top: 0.5rem; width: 10px; height: 10px; border-radius: 50%; background: #22c55e40; border: 2px solid var(--success);"></div>
+          <div style="position: absolute; left: -2.375rem; top: 0.875rem; width: 1.5rem; height: 2px; background: var(--border-primary);"></div>
+          <div style="padding: 0.625rem 0.875rem; background: #22c55e08; border: 1px solid #22c55e30; border-radius: 0.375rem; display: flex; align-items: center; gap: 0.75rem;">
+            <span class="dot dot-active"></span>
+            <span style="font-size: 0.8125rem; color: var(--text-primary); flex: 1;">KV cache optimization and PagedAttention</span>
+            <span style="font-size: 0.6875rem; color: var(--success);">running</span>
+            <span style="font-size: 0.6875rem; color: var(--text-muted);">5 findings</span>
+            <span class="icon icon-xs" style="color: var(--text-muted);">expand_more</span>
+          </div>
+        </div>
+
+        <!-- Branch 3 -->
+        <div style="position: relative; margin-bottom: 0.75rem; margin-left: 1.5rem;">
+          <div style="position: absolute; left: -3.125rem; top: 0.5rem; width: 10px; height: 10px; border-radius: 50%; background: var(--bg-tertiary); border: 2px solid var(--text-muted);"></div>
+          <div style="position: absolute; left: -2.375rem; top: 0.875rem; width: 1.5rem; height: 2px; background: var(--border-primary);"></div>
+          <div style="padding: 0.625rem 0.875rem; background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 0.375rem; display: flex; align-items: center; gap: 0.75rem;">
+            <span class="dot dot-exhausted"></span>
+            <span style="font-size: 0.8125rem; color: var(--text-primary); flex: 1;">Quantization methods: GPTQ vs AWQ vs FP8</span>
+            <span style="font-size: 0.6875rem; color: var(--text-muted);">9 findings</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- B4: Per-Question Config (Slide-over Drawer) -->
+  <div class="mockup-frame">
+    <div class="frame-label">B4 — Per-Question Config (Slide-over Drawer)</div>
+
+    <div style="display: grid; grid-template-columns: 1fr 320px; gap: 0;">
+      <!-- Main content (blurred/dimmed) -->
+      <div style="opacity: 0.4; padding-right: 1.5rem;">
+        <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Speculative Decoding</h3>
+        <p style="font-size: 0.875rem; color: var(--text-secondary); line-height: 1.7;">Speculative decoding uses a smaller "draft" model to generate candidate token sequences...</p>
+      </div>
+
+      <!-- Config drawer -->
+      <div style="background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 0.5rem; padding: 1.25rem;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem;">
+          <h3 style="font-size: 0.9375rem; font-weight: 600;">Thread Settings</h3>
+          <button class="btn btn-ghost" style="padding: 0.25rem;"><span class="icon icon-sm">close</span></button>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+          <!-- Status -->
+          <div>
+            <label style="font-size: 0.6875rem; color: var(--text-muted); display: block; margin-bottom: 0.375rem;">Status</label>
+            <div style="display: flex; gap: 0.25rem;">
+              <button style="flex: 1; padding: 0.375rem; font-size: 0.75rem; background: var(--bg-tertiary); border: 1px solid var(--border-primary); border-radius: 0.25rem; color: var(--text-muted); cursor: pointer;">Queued</button>
+              <button style="flex: 1; padding: 0.375rem; font-size: 0.75rem; background: var(--success-muted); border: 1px solid #a6e3a140; border-radius: 0.25rem; color: var(--success); cursor: pointer;">Active</button>
+              <button style="flex: 1; padding: 0.375rem; font-size: 0.75rem; background: var(--bg-tertiary); border: 1px solid var(--border-primary); border-radius: 0.25rem; color: var(--text-muted); cursor: pointer;">Pruned</button>
+            </div>
+          </div>
+
+          <!-- Priority -->
+          <div>
+            <label style="font-size: 0.6875rem; color: var(--text-muted); display: block; margin-bottom: 0.375rem;">Priority</label>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <div style="flex: 1; height: 4px; background: var(--bg-tertiary); border-radius: 2px; overflow: hidden; position: relative;">
+                <div style="width: 75%; height: 100%; background: var(--accent); border-radius: 2px;"></div>
+                <div style="position: absolute; left: 75%; top: -4px; width: 12px; height: 12px; background: var(--accent); border-radius: 50%; transform: translateX(-50%);"></div>
+              </div>
+              <span class="mono" style="font-size: 0.75rem; color: var(--text-secondary);">0.75</span>
+            </div>
+          </div>
+
+          <!-- Max depth -->
+          <div>
+            <label style="font-size: 0.6875rem; color: var(--text-muted); display: block; margin-bottom: 0.375rem;">Max depth</label>
+            <input type="number" value="8" style="width: 100%; padding: 0.375rem 0.5rem; background: var(--bg-primary); border: 1px solid var(--border-primary); border-radius: 0.25rem; color: var(--text-primary); font-size: 0.8125rem;" />
+          </div>
+
+          <!-- Fetch source text -->
+          <div>
+            <label style="font-size: 0.6875rem; color: var(--text-muted); display: block; margin-bottom: 0.375rem;">Source text fetching</label>
+            <div style="display: flex; gap: 0.25rem;">
+              <button style="flex: 1; padding: 0.375rem; font-size: 0.6875rem; background: var(--bg-tertiary); border: 1px solid var(--border-primary); border-radius: 0.25rem; color: var(--text-muted); cursor: pointer;">Default</button>
+              <button style="flex: 1; padding: 0.375rem; font-size: 0.6875rem; background: var(--success-muted); border: 1px solid #a6e3a140; border-radius: 0.25rem; color: var(--success); cursor: pointer;">On</button>
+              <button style="flex: 1; padding: 0.375rem; font-size: 0.6875rem; background: var(--bg-tertiary); border: 1px solid var(--border-primary); border-radius: 0.25rem; color: var(--text-muted); cursor: pointer;">Off</button>
+            </div>
+          </div>
+
+          <div style="border-top: 1px solid var(--border-primary); padding-top: 1rem; margin-top: 0.5rem;">
+            <div style="display: flex; gap: 0.375rem;">
+              <button class="btn btn-ghost" style="flex: 1; font-size: 0.6875rem;">
+                <span class="icon icon-xs" style="margin-right: 2px;">replay</span> Redo
+              </button>
+              <button class="btn btn-ghost" style="flex: 1; font-size: 0.6875rem;">
+                <span class="icon icon-xs" style="margin-right: 2px;">replay</span> Redo + txt
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label style="font-size: 0.6875rem; color: var(--text-muted); display: block; margin-bottom: 0.375rem;">Metadata</label>
+            <div style="display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.6875rem;">
+              <div style="display: flex; justify-content: space-between;"><span style="color: var(--text-muted);">Thread ID</span><span class="mono" style="color: var(--text-secondary);">t-8a3fc2</span></div>
+              <div style="display: flex; justify-content: space-between;"><span style="color: var(--text-muted);">Origin</span><span>seed</span></div>
+              <div style="display: flex; justify-content: space-between;"><span style="color: var(--text-muted);">Depth</span><span>0/8</span></div>
+              <div style="display: flex; justify-content: space-between;"><span style="color: var(--text-muted);">Created</span><span>10:42 AM</span></div>
+              <div style="display: flex; justify-content: space-between;"><span style="color: var(--text-muted);">Findings</span><span>12</span></div>
+              <div style="display: flex; justify-content: space-between;"><span style="color: var(--text-muted);">Children</span><span>5</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="comparison-note">
+    <strong>Option B summary:</strong> Reading-optimized. Best for users who primarily want to consume and synthesize research results. Rich cards with AI summaries let you scan value before clicking in. Document view has proper typography with generous line height and annotated key findings. Branching timeline shows relationships more intuitively than a graph. Per-question config via slide-over drawer keeps you in context.
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- OPTION C: Research Studio -->
+<!-- ============================================================ -->
+<div class="option-section">
+  <div class="option-label">
+    <h2>Option C — Research Studio</h2>
+    <div class="subtitle">Split-pane, IDE-inspired, power-user focused</div>
+    <div class="philosophy">
+      Treats research like a development environment. Persistent sidebar with the thread tree navigator (always visible). Main panel shows content. Bottom drawer for workers and jobs. Config lives in a collapsible panel within the sidebar. Optimized for actively guiding and steering research — injecting questions, adjusting priorities, pruning threads — rather than passive reading.
+    </div>
+  </div>
+
+  <!-- C1: Detail Page (Split Layout) -->
+  <div class="mockup-frame">
+    <div class="frame-label">C1 — Detail Page (Split Pane Layout)</div>
+
+    <div style="display: grid; grid-template-columns: 280px 1fr; gap: 0; height: 600px; border: 1px solid var(--border-primary); border-radius: 0.5rem; overflow: hidden;">
+      <!-- Left sidebar: Thread navigator -->
+      <div style="background: var(--bg-secondary); border-right: 1px solid var(--border-primary); display: flex; flex-direction: column;">
+        <!-- Header -->
+        <div style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-primary);">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+            <h3 style="font-size: 0.8125rem; font-weight: 600;">Threads</h3>
+            <span style="font-size: 0.6875rem; color: var(--text-muted);">24</span>
+          </div>
+          <input placeholder="Filter threads..." style="width: 100%; padding: 0.375rem 0.5rem; background: var(--bg-primary); border: 1px solid var(--border-primary); border-radius: 0.25rem; color: var(--text-primary); font-size: 0.75rem;" />
+        </div>
+
+        <!-- Thread tree -->
+        <div style="flex: 1; overflow-y: auto; padding: 0.5rem;">
+          <!-- Seed thread -->
+          <div style="margin-bottom: 0.25rem;">
+            <div style="display: flex; align-items: center; gap: 0.375rem; padding: 0.375rem 0.5rem; border-radius: 0.25rem; background: var(--accent-subtle); cursor: pointer;">
+              <span class="icon icon-xs" style="color: var(--text-muted);">expand_more</span>
+              <span class="dot dot-exhausted"></span>
+              <span style="font-size: 0.75rem; color: var(--accent); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">LLM inference optimization</span>
+              <span style="font-size: 0.5625rem; background: var(--bg-tertiary); padding: 0 3px; border-radius: 2px; color: var(--text-muted);">12</span>
+            </div>
+
+            <!-- Children, indented -->
+            <div style="margin-left: 1.25rem;">
+              <div style="display: flex; align-items: center; gap: 0.375rem; padding: 0.375rem 0.5rem; border-radius: 0.25rem; cursor: pointer;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background=''">
+                <span class="icon icon-xs" style="color: var(--text-muted);">expand_more</span>
+                <span class="dot dot-exhausted"></span>
+                <span style="font-size: 0.75rem; color: var(--text-primary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Speculative decoding</span>
+                <span style="font-size: 0.5625rem; background: var(--bg-tertiary); padding: 0 3px; border-radius: 2px; color: var(--text-muted);">8</span>
+              </div>
+
+              <div style="margin-left: 1.25rem;">
+                <div style="display: flex; align-items: center; gap: 0.375rem; padding: 0.25rem 0.5rem; cursor: pointer;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background=''">
+                  <span class="dot dot-exhausted" style="margin-left: 1.125rem;"></span>
+                  <span style="font-size: 0.6875rem; color: var(--text-secondary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Medusa multi-head</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.375rem; padding: 0.25rem 0.5rem; cursor: pointer;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background=''">
+                  <span class="dot dot-exhausted" style="margin-left: 1.125rem;"></span>
+                  <span style="font-size: 0.6875rem; color: var(--text-secondary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Eagle feature draft</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.375rem; padding: 0.25rem 0.5rem; cursor: pointer;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background=''">
+                  <span class="dot dot-queued" style="margin-left: 1.125rem;"></span>
+                  <span style="font-size: 0.6875rem; color: var(--text-secondary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Draft model distillation</span>
+                </div>
+              </div>
+
+              <div style="display: flex; align-items: center; gap: 0.375rem; padding: 0.375rem 0.5rem; border-radius: 0.25rem; cursor: pointer;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background=''">
+                <span class="icon icon-xs" style="color: var(--text-muted);">chevron_right</span>
+                <span class="dot dot-active"></span>
+                <span style="font-size: 0.75rem; color: var(--text-primary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">KV cache optimization</span>
+                <span style="font-size: 0.5625rem; background: var(--bg-tertiary); padding: 0 3px; border-radius: 2px; color: var(--text-muted);">5</span>
+              </div>
+
+              <div style="display: flex; align-items: center; gap: 0.375rem; padding: 0.375rem 0.5rem; border-radius: 0.25rem; cursor: pointer;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background=''">
+                <span class="icon icon-xs" style="color: var(--text-muted);">chevron_right</span>
+                <span class="dot dot-exhausted"></span>
+                <span style="font-size: 0.75rem; color: var(--text-primary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Quantization methods</span>
+                <span style="font-size: 0.5625rem; background: var(--bg-tertiary); padding: 0 3px; border-radius: 2px; color: var(--text-muted);">9</span>
+              </div>
+
+              <div style="display: flex; align-items: center; gap: 0.375rem; padding: 0.375rem 0.5rem; border-radius: 0.25rem; cursor: pointer;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background=''">
+                <span class="icon icon-xs" style="color: var(--text-muted);">chevron_right</span>
+                <span class="dot dot-exhausted"></span>
+                <span style="font-size: 0.75rem; color: var(--text-primary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Attention optimizations</span>
+                <span style="font-size: 0.5625rem; background: var(--bg-tertiary); padding: 0 3px; border-radius: 2px; color: var(--text-muted);">11</span>
+              </div>
+
+              <div style="display: flex; align-items: center; gap: 0.375rem; padding: 0.375rem 0.5rem; border-radius: 0.25rem; cursor: pointer;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background=''">
+                <span class="icon icon-xs" style="color: var(--text-muted);">chevron_right</span>
+                <span class="dot dot-queued"></span>
+                <span style="font-size: 0.75rem; color: var(--text-primary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Continuous batching</span>
+                <span style="font-size: 0.5625rem; background: var(--bg-tertiary); padding: 0 3px; border-radius: 2px; color: var(--text-muted);">3</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom: inject + config -->
+        <div style="padding: 0.5rem; border-top: 1px solid var(--border-primary);">
+          <div style="display: flex; gap: 0.375rem;">
+            <input placeholder="Inject question..." style="flex: 1; padding: 0.375rem 0.5rem; background: var(--bg-primary); border: 1px solid var(--border-primary); border-radius: 0.25rem; color: var(--text-primary); font-size: 0.6875rem;" />
+            <button class="btn btn-primary" style="padding: 0.375rem 0.5rem; font-size: 0.6875rem;">Inject</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Main content area -->
+      <div style="display: flex; flex-direction: column;">
+        <!-- Content header with tabs and controls -->
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 1rem; border-bottom: 1px solid var(--border-primary); background: var(--bg-secondary);">
+          <div style="display: flex; gap: 0.125rem;">
+            <button class="tab" style="font-size: 0.75rem; padding: 0.375rem 0.625rem;">Document</button>
+            <button class="tab active" style="font-size: 0.75rem; padding: 0.375rem 0.625rem;">Live</button>
+            <button class="tab" style="font-size: 0.75rem; padding: 0.375rem 0.625rem;">Map</button>
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <span style="font-size: 0.6875rem; color: var(--text-muted);">87 findings</span>
+            <span style="font-size: 0.6875rem; color: var(--text-muted);">$1.24</span>
+            <button class="btn btn-primary" style="font-size: 0.6875rem; padding: 0.25rem 0.625rem;"><span class="icon icon-xs">play_arrow</span> Run</button>
+          </div>
+        </div>
+
+        <!-- Live view content -->
+        <div style="flex: 1; overflow-y: auto; padding: 1rem;">
+          <!-- Running banner -->
+          <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: var(--success-muted); border: 1px solid #a6e3a120; border-radius: 0.375rem; margin-bottom: 1rem;">
+            <span class="dot dot-active"></span>
+            <span style="font-size: 0.8125rem; color: var(--success); font-weight: 500;">Running</span>
+            <span style="font-size: 0.6875rem; color: var(--text-muted); margin-left: auto;">2 workers active</span>
+          </div>
+
+          <!-- Thread detail: Speculative decoding (selected from sidebar) -->
+          <div style="margin-bottom: 1.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+              <span class="dot dot-exhausted"></span>
+              <h3 style="font-size: 1rem; font-weight: 600;">Speculative decoding techniques</h3>
+              <span class="badge badge-seed" style="font-size: 0.5625rem;">seed</span>
+              <span style="font-size: 0.625rem; color: var(--text-muted);">depth 1/8</span>
+              <div style="margin-left: auto; display: flex; gap: 0.25rem;">
+                <button class="btn btn-ghost" style="padding: 0.125rem 0.375rem; font-size: 0.625rem;" title="Thread config"><span class="icon icon-xs">tune</span></button>
+                <button class="btn btn-ghost" style="padding: 0.125rem 0.375rem; font-size: 0.625rem;" title="Redo"><span class="icon icon-xs">replay</span></button>
+              </div>
+            </div>
+
+            <!-- Timeline events -->
+            <div style="margin-left: 0.75rem; padding-left: 0.75rem; border-left: 1px solid var(--border-primary);">
+              <div style="margin-bottom: 0.625rem;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.6875rem; color: var(--text-muted);">
+                  <span class="mono" style="color: #89b4fa80;">llm</span>
+                  <span class="mono">claude-sonnet-4-6</span>
+                  <span>1,847 tok</span>
+                  <span>$0.0032</span>
+                  <span>2.1s</span>
+                  <span style="margin-left: auto; color: var(--text-disabled);">10:42:15</span>
+                </div>
+              </div>
+
+              <div style="margin-bottom: 0.625rem; margin-left: 1rem;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.6875rem;">
+                  <span class="mono" style="color: var(--text-secondary);">web_search</span>
+                  <span style="color: var(--text-primary);">"speculative decoding LLM inference 2024"</span>
+                </div>
+                <div style="margin-left: 0; margin-top: 0.25rem;">
+                  <div style="display: flex; align-items: center; gap: 0.375rem; font-size: 0.6875rem;">
+                    <span class="icon icon-xs" style="color: var(--success);">check</span>
+                    <a href="#" style="color: var(--accent); text-decoration: none; font-size: 0.6875rem;">arxiv.org</a>
+                    <span style="color: var(--text-muted);">12.3k</span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 0.375rem; font-size: 0.6875rem;">
+                    <span class="icon icon-xs" style="color: var(--success);">check</span>
+                    <a href="#" style="color: var(--accent); text-decoration: none; font-size: 0.6875rem;">blog.vllm.ai</a>
+                    <span style="color: var(--text-muted);">8.7k</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Finding -->
+              <div style="margin-bottom: 0.625rem; padding: 0.5rem 0.75rem; background: #22c55e10; border-radius: 0.375rem;">
+                <div style="display: flex; align-items: center; gap: 0.375rem; margin-bottom: 0.25rem;">
+                  <span class="icon icon-sm" style="color: var(--success);">check</span>
+                  <span style="font-size: 0.8125rem; color: var(--text-primary);">Speculative decoding achieves 2-3x speedup with no quality loss</span>
+                </div>
+                <div style="display: flex; gap: 0.75rem; font-size: 0.625rem; color: var(--text-muted); margin-left: 1.375rem;">
+                  <span>conf 85%</span>
+                  <span>novel 58%</span>
+                  <span>4 sources</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom panel: Workers mini-view -->
+        <div style="border-top: 1px solid var(--border-primary); background: var(--bg-secondary);">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.375rem 0.75rem; cursor: pointer;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span class="icon icon-xs" style="color: var(--text-muted);">expand_less</span>
+              <span style="font-size: 0.6875rem; font-weight: 500; color: var(--text-secondary);">Workers</span>
+              <span style="font-size: 0.5625rem; padding: 0 0.375rem; background: var(--success-muted); color: var(--success); border-radius: 0.25rem;">2 active</span>
+            </div>
+            <div style="display: flex; gap: 0.75rem; font-size: 0.6875rem; color: var(--text-muted);">
+              <span>5 running</span>
+              <span>2 pending</span>
+              <span>47 completed</span>
+            </div>
+          </div>
+
+          <!-- Expanded worker rows -->
+          <div style="border-top: 1px solid var(--border-primary); padding: 0.5rem 0.75rem;">
+            <div style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.6875rem; margin-bottom: 0.375rem;">
+              <span class="dot dot-active"></span>
+              <span class="mono" style="color: var(--text-secondary);">worker-a7b3c</span>
+              <span style="color: var(--text-muted);">iter 3/5</span>
+              <span style="color: var(--text-muted);">12m</span>
+              <span style="color: var(--text-muted);">$0.34</span>
+              <button class="btn btn-ghost" style="font-size: 0.5625rem; padding: 0.125rem 0.375rem; margin-left: auto; color: var(--error);">kill</button>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.6875rem;">
+              <span class="dot dot-active"></span>
+              <span class="mono" style="color: var(--text-secondary);">worker-f2e8d</span>
+              <span style="color: var(--text-muted);">iter 7</span>
+              <span style="color: var(--text-muted);">18m</span>
+              <span style="color: var(--text-muted);">$0.52</span>
+              <button class="btn btn-ghost" style="font-size: 0.5625rem; padding: 0.125rem 0.375rem; margin-left: auto; color: var(--error);">kill</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- C2: Document View in Studio -->
+  <div class="mockup-frame">
+    <div class="frame-label">C2 — Document View (with Thread Navigator)</div>
+
+    <div style="display: grid; grid-template-columns: 280px 1fr; gap: 0; height: 500px; border: 1px solid var(--border-primary); border-radius: 0.5rem; overflow: hidden;">
+      <!-- Same sidebar but collapsed to show just thread names -->
+      <div style="background: var(--bg-secondary); border-right: 1px solid var(--border-primary); overflow-y: auto; padding: 0.5rem;">
+        <div style="font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); padding: 0.375rem 0.5rem; margin-bottom: 0.25rem;">Sections</div>
+        <div style="display: flex; align-items: center; gap: 0.375rem; padding: 0.5rem; border-radius: 0.25rem; background: var(--accent-subtle); cursor: pointer; margin-bottom: 0.125rem;">
+          <span style="font-size: 0.6875rem; color: var(--text-muted); font-family: 'Noto Sans Mono', monospace;">01</span>
+          <span style="font-size: 0.75rem; color: var(--accent);">Speculative Decoding</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.375rem; padding: 0.5rem; border-radius: 0.25rem; cursor: pointer; margin-bottom: 0.125rem;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background=''">
+          <span style="font-size: 0.6875rem; color: var(--text-muted); font-family: 'Noto Sans Mono', monospace;">02</span>
+          <span style="font-size: 0.75rem; color: var(--text-primary);">KV Cache Optimization</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.375rem; padding: 0.5rem; border-radius: 0.25rem; cursor: pointer; margin-bottom: 0.125rem;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background=''">
+          <span style="font-size: 0.6875rem; color: var(--text-muted); font-family: 'Noto Sans Mono', monospace;">03</span>
+          <span style="font-size: 0.75rem; color: var(--text-primary);">Quantization Methods</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.375rem; padding: 0.5rem; border-radius: 0.25rem; cursor: pointer; margin-bottom: 0.125rem;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background=''">
+          <span style="font-size: 0.6875rem; color: var(--text-muted); font-family: 'Noto Sans Mono', monospace;">04</span>
+          <span style="font-size: 0.75rem; color: var(--text-primary);">Attention Optimizations</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.375rem; padding: 0.5rem; border-radius: 0.25rem; cursor: pointer; margin-bottom: 0.125rem;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background=''">
+          <span style="font-size: 0.6875rem; color: var(--text-muted); font-family: 'Noto Sans Mono', monospace;">05</span>
+          <span style="font-size: 0.75rem; color: var(--text-primary);">Continuous Batching</span>
+        </div>
+      </div>
+
+      <!-- Document content -->
+      <div style="overflow-y: auto; padding: 2rem 2.5rem;">
+        <div style="max-width: 650px;">
+          <div style="display: flex; align-items: baseline; gap: 0.75rem; margin-bottom: 1rem;">
+            <span style="font-size: 0.8125rem; font-family: 'Noto Sans Mono', monospace; color: var(--text-muted);">01</span>
+            <h2 style="font-size: 1.375rem; font-weight: 600;">Speculative Decoding</h2>
+          </div>
+          <p style="font-size: 1rem; color: var(--text-secondary); line-height: 1.85; margin-bottom: 1.25rem;">
+            Speculative decoding uses a smaller "draft" model to generate candidate token sequences, which are then verified in parallel by the larger target model. This exploits the asymmetry between generation and verification costs in autoregressive models.
+          </p>
+          <p style="font-size: 1rem; color: var(--text-secondary); line-height: 1.85; margin-bottom: 1.25rem;">
+            The approach achieves <strong style="color: var(--text-primary);">2-3x wall-clock speedup</strong> with provably identical output distribution. Recent variants include Medusa (multi-head prediction), Eagle (feature-level drafts), and staged speculative decoding.
+          </p>
+          <div style="margin: 1.5rem 0; padding: 0.875rem 1rem; border-left: 3px solid var(--success); background: var(--success-muted); border-radius: 0 0.375rem 0.375rem 0;">
+            <p style="font-size: 0.9375rem; color: var(--text-primary); line-height: 1.7;">
+              <strong>Key:</strong> Optimal draft model size is 10-20% of the target model parameters.
+            </p>
+          </div>
+          <div style="margin-top: 1.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border-primary);">
+            <div style="display: flex; flex-wrap: wrap; gap: 0.375rem;">
+              <a href="#" style="font-size: 0.75rem; color: var(--accent); text-decoration: none;">Leviathan et al., 2023</a>
+              <span style="color: var(--text-disabled);">&middot;</span>
+              <a href="#" style="font-size: 0.75rem; color: var(--accent); text-decoration: none;">Cai et al., 2024</a>
+              <span style="color: var(--text-disabled);">&middot;</span>
+              <a href="#" style="font-size: 0.75rem; color: var(--accent); text-decoration: none;">Li et al., 2024</a>
+              <span style="color: var(--text-disabled);">&middot;</span>
+              <a href="#" style="font-size: 0.75rem; color: var(--accent); text-decoration: none;">vLLM Blog</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="comparison-note">
+    <strong>Option C summary:</strong> Power-user oriented. Best for actively steering research — you can see the thread tree, content, and workers simultaneously. The persistent sidebar means you never lose context about where you are in the tree. Trade-off: more visual complexity, less reading space for the document view. Per-thread config accessible via the tune icon on each thread row. Workers as a collapsible bottom drawer keeps them accessible without a page switch.
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Comparison Matrix -->
+<!-- ============================================================ -->
+<div class="option-section">
+  <div class="option-label">
+    <h2>Comparison Matrix</h2>
+  </div>
+  <div class="mockup-frame">
+    <table style="width: 100%; border-collapse: collapse; font-size: 0.8125rem;">
+      <thead>
+        <tr style="border-bottom: 2px solid var(--border-primary);">
+          <th style="text-align: left; padding: 0.75rem 1rem; font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 500; width: 200px;">Aspect</th>
+          <th style="text-align: left; padding: 0.75rem 1rem; font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); font-weight: 600;">A: Dashboard</th>
+          <th style="text-align: left; padding: 0.75rem 1rem; font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--chart-2); font-weight: 600;">B: Notebook</th>
+          <th style="text-align: left; padding: 0.75rem 1rem; font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--chart-4); font-weight: 600;">C: Studio</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom: 1px solid var(--border-primary);">
+          <td style="padding: 0.625rem 1rem; font-weight: 500;">Query list</td>
+          <td style="padding: 0.625rem 1rem; color: var(--text-secondary);">Data table with sparklines, progress bars, inline stats</td>
+          <td style="padding: 0.625rem 1rem; color: var(--text-secondary);">Rich cards with AI-generated summary previews, 2-column grid</td>
+          <td style="padding: 0.625rem 1rem; color: var(--text-secondary);">Same as current (not shown — focus is on detail page)</td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--border-primary);">
+          <td style="padding: 0.625rem 1rem; font-weight: 500;">Document view</td>
+          <td style="padding: 0.625rem 1rem; color: var(--text-secondary);">Report format with sidebar TOC, executive summary, sections with source citations</td>
+          <td style="padding: 0.625rem 1rem; color: var(--text-secondary);">Wide-margin reading layout, generous typography, annotated key findings, inline source lists</td>
+          <td style="padding: 0.625rem 1rem; color: var(--text-secondary);">Persistent thread navigator sidebar + focused reading pane</td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--border-primary);">
+          <td style="padding: 0.625rem 1rem; font-weight: 500;">Relationship view</td>
+          <td style="padding: 0.625rem 1rem; color: var(--text-secondary);">Clustered treemap with filter toolbar, color-by options, detail panel</td>
+          <td style="padding: 0.625rem 1rem; color: var(--text-secondary);">Branching timeline (vertical), depth filtering, collapsible branches</td>
+          <td style="padding: 0.625rem 1rem; color: var(--text-secondary);">"Map" tab in main panel, thread tree always visible in sidebar</td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--border-primary);">
+          <td style="padding: 0.625rem 1rem; font-weight: 500;">Workers</td>
+          <td style="padding: 0.625rem 1rem; color: var(--text-secondary);">Dedicated top-level page with worker cards + job queue table</td>
+          <td style="padding: 0.625rem 1rem; color: var(--text-secondary);">Collapsible bottom panel (within query detail)</td>
+          <td style="padding: 0.625rem 1rem; color: var(--text-secondary);">Collapsible bottom drawer (IDE-style)</td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--border-primary);">
+          <td style="padding: 0.625rem 1rem; font-weight: 500;">Per-question config</td>
+          <td style="padding: 0.625rem 1rem; color: var(--text-secondary);">Settings tab on detail page (existing pattern)</td>
+          <td style="padding: 0.625rem 1rem; color: var(--text-secondary);">Slide-over drawer from any view</td>
+          <td style="padding: 0.625rem 1rem; color: var(--text-secondary);">Inline via tune icon on each thread row</td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--border-primary);">
+          <td style="padding: 0.625rem 1rem; font-weight: 500;">Best for</td>
+          <td style="padding: 0.625rem 1rem; color: var(--text-secondary);">Managing many queries, operational monitoring</td>
+          <td style="padding: 0.625rem 1rem; color: var(--text-secondary);">Reading and synthesizing research results</td>
+          <td style="padding: 0.625rem 1rem; color: var(--text-secondary);">Actively steering and guiding research in real-time</td>
+        </tr>
+        <tr>
+          <td style="padding: 0.625rem 1rem; font-weight: 500;">Complexity</td>
+          <td style="padding: 0.625rem 1rem; color: var(--text-secondary);">Medium — familiar patterns, just denser</td>
+          <td style="padding: 0.625rem 1rem; color: var(--text-secondary);">Low — reading-focused, clean hierarchy</td>
+          <td style="padding: 0.625rem 1rem; color: var(--text-secondary);">High — split panes, more to learn, more on screen</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Recommendation -->
+<div class="option-section">
+  <div class="option-label">
+    <h2>Recommendation</h2>
+    <div class="philosophy">
+      These options aren't mutually exclusive. A strong hybrid approach: <strong style="color: var(--accent);">Option B's query list and document view</strong> (rich cards, reading-optimized typography, annotated findings) + <strong style="color: var(--chart-4);">Option C's thread navigator sidebar</strong> for the detail page + <strong style="color: var(--accent);">Option A's workers page</strong> as a dedicated top-level route + <strong style="color: var(--chart-2);">Option B's branching timeline</strong> as the relationship view (replacing the current DAG graph). Per-question config as a slide-over drawer (Option B) works across all layouts.
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

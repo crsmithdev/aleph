@@ -593,3 +593,132 @@ export function formatResult(label: string, r: EvalResult): string {
   const tools = [...new Set(r.toolCalls)].join(",");
   return `  ${status} [${label}] task:${r.taskSuccess ? "pass" : "fail"} ${e2e} ${art} ${agent} gate:${gate} ${dur}s tools:[${tools}]`;
 }
+
+// ── Hook scenario sandbox ───────────────────────────────────────
+
+/**
+ * Set up a minimal sandbox for hook enforcement scenarios.
+ *
+ * Unlike setupSandbox (which copies an existing scenario dir), this creates
+ * an empty git repo and writes task.md from the scenario prompt. The
+ * quality-stop-check-e2e hook is registered with a timeout long enough for
+ * realistic agent sessions.
+ *
+ * @param prompt - The task prompt to write to task.md
+ * @param depth - "full" writes a directives.jsonl with isFull=true; "quick" leaves it absent
+ * @param dataRoot - Isolated data dir for this eval; hooks write telemetry here
+ */
+export function setupHookScenarioSandbox(
+  prompt: string,
+  depth: "full" | "quick",
+  dataRoot: string,
+): string {
+  const sandbox = mkdtempSync(join(tmpdir(), "eval-hook-"));
+
+  // Minimal project structure so Claude has something real to work with
+  const srcDir = join(sandbox, "src");
+  mkdirSync(srcDir, { recursive: true });
+  writeFileSync(join(sandbox, "task.md"), prompt.trim() + "\n");
+  writeFileSync(join(sandbox, "README.md"), "# Project\n\nA minimal project for eval testing.\n");
+  writeFileSync(join(sandbox, "package.json"), JSON.stringify({
+    name: "hook-eval-sandbox",
+    version: "0.0.1",
+    type: "module",
+  }, null, 2));
+
+  const gitEnv = {
+    ...process.env,
+    GIT_AUTHOR_NAME: "eval", GIT_AUTHOR_EMAIL: "eval@test",
+    GIT_COMMITTER_NAME: "eval", GIT_COMMITTER_EMAIL: "eval@test",
+  };
+  execSync("git init -b main && git add -A && git commit -m 'initial'", {
+    cwd: sandbox, stdio: "pipe", env: gitEnv,
+  });
+
+  // If depth=full, write a directives.jsonl so the hook classifies as FULL
+  if (depth === "full") {
+    const signalsDir = join(dataRoot, "signals");
+    mkdirSync(signalsDir, { recursive: true });
+    const directivesPath = join(signalsDir, "directives.jsonl");
+    // Use a sentinel session ID that the hook can match; will be overridden
+    // per-trial by writeSessionDirective if needed, but write a broad catch-all
+    writeFileSync(directivesPath, JSON.stringify({
+      ts: new Date().toISOString(),
+      sessionId: "__hook-eval__",
+      directives: ["full"],
+    }) + "\n");
+  }
+
+  // Register the real quality-stop-check-e2e hook
+  registerSandboxHooks(sandbox, [
+    {
+      event: "Stop",
+      command: hookCmd("core/hooks/quality-stop-check-e2e.ts"),
+      timeout: 10000,
+    },
+  ]);
+
+  return sandbox;
+}
+
+/**
+ * Inject a FULL directive for a specific session ID into the sandbox's
+ * directives.jsonl so the quality-stop-check-e2e hook sees isFull=true.
+ */
+export function writeSessionDirective(dataRoot: string, sessionId: string) {
+  const signalsDir = join(dataRoot, "signals");
+  mkdirSync(signalsDir, { recursive: true });
+  const directivesPath = join(signalsDir, "directives.jsonl");
+  appendFileSync(directivesPath, JSON.stringify({
+    ts: new Date().toISOString(),
+    sessionId,
+    directives: ["full"],
+  }) + "\n");
+}
+
+// ── Hook decision reader ────────────────────────────────────────
+
+/**
+ * Read hook-events.jsonl from the sandbox's data dir and return the
+ * decision(s) written by the named hook.
+ *
+ * The quality-stop-check-e2e hook writes entries via reportHook():
+ *   { ts, hook, event, sessionId, decision, tier, detail }
+ *
+ * Returns the most recent decision, or undefined if no entries found.
+ */
+export function readHookDecisions(
+  hookEventsPath: string,
+  hookName: string,
+): Array<{ decision: string; tier?: number; detail?: string }> {
+  const events = readHookEvents(hookEventsPath);
+  return events
+    .filter((e) => e.hook === hookName && typeof e.decision === "string")
+    .map((e) => ({
+      decision: e.decision as string,
+      tier: typeof e.tier === "number" ? e.tier : undefined,
+      detail: typeof e.detail === "string" ? e.detail : undefined,
+    }));
+}
+
+/**
+ * Return the last (most recent) decision written by a hook, or undefined.
+ */
+export function lastHookDecision(
+  hookEventsPath: string,
+  hookName: string,
+): string | undefined {
+  const decisions = readHookDecisions(hookEventsPath, hookName);
+  return decisions.length > 0 ? decisions[decisions.length - 1].decision : undefined;
+}
+
+// ── Eval results JSONL writer ───────────────────────────────────
+
+/** Append a result line to ~/.construct/evals/results.jsonl. */
+export function appendEvalResult(entry: Record<string, unknown>) {
+  const { homedir } = require("os");
+  const evalsDir = join(homedir(), ".construct", "evals");
+  mkdirSync(evalsDir, { recursive: true });
+  const resultsPath = join(evalsDir, "results.jsonl");
+  appendFileSync(resultsPath, JSON.stringify(entry) + "\n");
+}

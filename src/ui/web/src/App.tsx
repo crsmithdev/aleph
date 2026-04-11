@@ -16,6 +16,8 @@ import { ResearchQueryDetailPage } from './pages/research/ResearchQueryDetailPag
 import { ResearchPlanPage } from './pages/research/ResearchPlanPage';
 import { MonitorsPage } from './pages/research/MonitorsPage';
 import { MonitorDetailPage } from './pages/research/MonitorDetailPage';
+import { ResearchWorkersPage } from './pages/research/ResearchWorkersPage';
+import { ResearchConfigPage } from './pages/research/ResearchConfigPage';
 
 // System pages
 import { OverviewPage } from './pages/system/observability/OverviewPage';
@@ -66,6 +68,8 @@ export function App() {
               <Route path="/research/queries" element={<ResearchQueriesPage />} />
               <Route path="/research/:id" element={<ResearchQueryDetailPage />} />
               <Route path="/research/:id/plan" element={<ResearchPlanPage />} />
+              <Route path="/research/workers" element={<ResearchWorkersPage />} />
+              <Route path="/research/config" element={<ResearchConfigPage />} />
               <Route path="/research/monitors" element={<MonitorsPage />} />
               <Route path="/research/monitors/:id" element={<MonitorDetailPage />} />
 

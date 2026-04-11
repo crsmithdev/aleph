@@ -94,9 +94,21 @@ export function useObsHooks(range: TimeRange, granularity?: Granularity, session
     byDayEvent: Array<{ date: string; count: number; events: Record<string, number> }>;
     unused: Array<{ command: string; event: string; blocking?: boolean; gate?: string; markerFile?: string; description?: string }>;
     markerStats?: Record<string, { writes: number; clears: number; activeNow: boolean }>;
+    gating?: Record<string, HookGatingStat>;
     queryTimeMs: number;
   }>('hooks', { range, granularity, session });
 }
+
+export type HookGatingStat = {
+  blocks: number;
+  advisories: number;
+  passes: number;
+  total: number;
+  blockRate: number;
+  advisoryRate: number;
+  ignoredAdvisories: number;
+  repeatedBlocks: number;
+};
 
 export function useObsSkills(range: TimeRange, granularity?: Granularity, session?: string) {
   return obsQuery<{
@@ -161,7 +173,7 @@ export function useObsSessions(range: TimeRange, granularity?: Granularity, sess
       gitBranch?: string;
       parentSessionId?: string;
       hasSubagents?: boolean;
-      gateInfo?: { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; mode: 'dispatched' | 'inline' | 'none' };
+      gateInfo?: { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; hookBlocks: number; hookAdvisories: number; mode: 'dispatched' | 'inline' | 'none' };
       firstUserMessage?: string;
     }>;
     avgDurationMs: number;
@@ -414,7 +426,7 @@ export function useObsSessionTrace(sessionId: string, range: TimeRange) {
     totalDurationMs: number;
     totalTokens: number;
     totalCost: number;
-    gateInfo?: { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; mode: 'dispatched' | 'inline' | 'none' };
+    gateInfo?: { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; hookBlocks: number; hookAdvisories: number; mode: 'dispatched' | 'inline' | 'none' };
     queryTimeMs: number;
   }>({
     queryKey: ['observability', 'session-trace', sessionId, range],
@@ -556,5 +568,77 @@ export function useObsEvals() {
     queryKey: ['observability', 'evals'],
     queryFn: () => api.get('/observability/evals'),
     staleTime: 30_000,
+  });
+}
+
+export type EvalScenario = {
+  name: string;
+  dirName: string;
+  description: string;
+  hook: string;
+  event: string;
+  expect: string;
+  depth: string;
+  trials: number;
+  prompt: string;
+  constraints: string[];
+};
+
+export function useObsEvalScenarios() {
+  return useQuery<{ scenarios: EvalScenario[] }>({
+    queryKey: ['observability', 'evals', 'scenarios'],
+    queryFn: () => api.get('/observability/evals/scenarios'),
+    staleTime: 30_000,
+  });
+}
+
+export function useObsEvalScenarioDetail(name: string) {
+  return useQuery<EvalScenario & { runs: EvalRun[] }>({
+    queryKey: ['observability', 'evals', 'scenarios', name],
+    queryFn: () => api.get(`/observability/evals/scenarios/${encodeURIComponent(name)}`),
+    enabled: !!name,
+    staleTime: 10_000,
+  });
+}
+
+export type EvalRun = {
+  ts: string;
+  evalName: string;
+  passed: number;
+  failed: number;
+  passAt1: boolean;
+  hookName?: string;
+  scenarioName?: string;
+  expectedDecision?: string;
+  actualDecision?: string;
+  tier?: number;
+  graders?: Array<{ type: string; result: string }>;
+};
+
+export function useObsEvalRuns(scenario?: string) {
+  return useQuery<{ runs: EvalRun[]; total: number }>({
+    queryKey: ['observability', 'evals', 'runs', scenario ?? ''],
+    queryFn: () => api.get(`/observability/evals/runs${scenario ? `?scenario=${encodeURIComponent(scenario)}` : ''}`),
+    staleTime: 10_000,
+  });
+}
+
+export function useRunEvalScenario() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => api.post(`/observability/evals/run/${encodeURIComponent(name)}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['observability', 'evals'] });
+    },
+  });
+}
+
+export function useCreateEvalScenario() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => api.post('/observability/evals/scenarios', body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['observability', 'evals', 'scenarios'] });
+    },
   });
 }
