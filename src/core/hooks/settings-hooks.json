@@ -50,6 +50,15 @@
         "hooks": [
           {
             "type": "command",
+            "command": "bun src/core/hooks/git-hygiene-stop.ts 2>/dev/null",
+            "timeout": 5000
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
             "command": "bun src/core/hooks/context-monitor-stop.ts 2>/dev/null",
             "timeout": 3000
           }
