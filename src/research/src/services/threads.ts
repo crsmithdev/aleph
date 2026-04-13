@@ -5,9 +5,7 @@ import type { ResearchThread, ThreadOrigin, ThreadStatus, PerturbationStrategy }
 function rowToThread(row: Record<string, unknown>): ResearchThread {
   return {
     ...row,
-    fetch_source_text: row.fetch_source_text === null || row.fetch_source_text === undefined
-      ? null
-      : row.fetch_source_text === 1 || row.fetch_source_text === true,
+    fetch_source_text: row.fetch_source_text == null ? null : Boolean(row.fetch_source_text),
   } as unknown as ResearchThread;
 }
 

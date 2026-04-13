@@ -1283,7 +1283,8 @@ async function runTestingGatesScenario(
     results.push(r);
 
     const dur = (r.durationMs / 1000).toFixed(1);
-    const icon = r.grade === "autonomous" ? "★" : r.grade === "single-gate" ? "✓" : r.grade === "multi-gate" ? "◐" : "✗";
+    const gradeIcons: Record<TestingGrade, string> = { autonomous: "★", "single-gate": "✓", "multi-gate": "◐", "never-tested": "✗" };
+    const icon = gradeIcons[r.grade];
     console.log(`${icon} ${r.grade} (gates=${r.totalGateBlocks}, tests=${r.testsRun}) [${dur}s]${r.error ? ` ERROR: ${r.error}` : ""}`);
   }
 

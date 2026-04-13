@@ -10,15 +10,18 @@ export interface OpenRouterConfig {
 
 const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 
-// OpenRouter pricing per 1M tokens (approximate, varies by model)
-const OPENROUTER_PRICING: Record<string, { input: number; output: number }> = {
-  'deepseek/deepseek-chat': { input: 0.14, output: 0.28 },
-  'deepseek/deepseek-r1-0528': { input: 0.50, output: 2.19 },
-  'deepseek/deepseek-r1-0528:free': { input: 0, output: 0 },
-  'google/gemini-2.0-flash-001': { input: 0.10, output: 0.40 },
-  'meta-llama/llama-3.3-70b-instruct': { input: 0.39, output: 0.39 },
-  'meta-llama/llama-3.3-70b-instruct:free': { input: 0, output: 0 },
+// OpenRouter model metadata: pricing per 1M tokens + context window size
+const OPENROUTER_MODELS: Record<string, { input: number; output: number; contextWindow: number }> = {
+  'deepseek/deepseek-chat':                   { input: 0.14, output: 0.28, contextWindow: 65536 },
+  'deepseek/deepseek-r1-0528':                { input: 0.50, output: 2.19, contextWindow: 65536 },
+  'deepseek/deepseek-r1-0528:free':           { input: 0,    output: 0,    contextWindow: 65536 },
+  'google/gemini-2.0-flash-001':              { input: 0.10, output: 0.40, contextWindow: 1048576 },
+  'meta-llama/llama-3.3-70b-instruct':        { input: 0.39, output: 0.39, contextWindow: 131072 },
+  'meta-llama/llama-3.3-70b-instruct:free':   { input: 0,    output: 0,    contextWindow: 131072 },
 };
+
+// Conservative default for unknown models (OpenRouter enforces 32k on some routes)
+const DEFAULT_CONTEXT_WINDOW = 32768;
 
 export class OpenRouterProvider implements LLMProvider {
   private config: OpenRouterConfig;
@@ -38,8 +41,13 @@ export class OpenRouterProvider implements LLMProvider {
     // Use specific model if provided and it's an OpenRouter model, else rotate
     const actualModel = model.includes('/') ? model : this.nextModel();
 
+    // Truncate prompt to fit within context window (prompt + completion must fit)
+    const contextWindow = OPENROUTER_MODELS[actualModel]?.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
+    const maxPromptTokens = contextWindow - maxTokens - 200; // 200 token safety margin
+    const truncatedPrompt = truncateToTokens(prompt, maxPromptTokens);
+
     const response = await this.fetchWithRetry(actualModel, [
-      { role: 'user', content: prompt },
+      { role: 'user', content: truncatedPrompt },
     ], maxTokens, undefined);
 
     return {
@@ -63,12 +71,14 @@ export class OpenRouterProvider implements LLMProvider {
       return `### ${r.title}\nURL: ${r.url}\n\n${r.snippet.slice(0, 3000)}`;
     }).join('\n\n---\n\n');
 
+    const contextWindow = OPENROUTER_MODELS[actualModel]?.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
+    const searchMaxTokens = 4096;
+    const maxPromptTokens = contextWindow - searchMaxTokens - 200;
+    const fullPrompt = `You are a research assistant. Based on the following web pages, answer this research query:\n\n"${query}"\n\n---\n\n${context}\n\n---\n\nProvide a detailed, factual summary with specific information from the sources above.`;
+
     const response = await this.fetchWithRetry(actualModel, [
-      {
-        role: 'user',
-        content: `You are a research assistant. Based on the following web pages, answer this research query:\n\n"${query}"\n\n---\n\n${context}\n\n---\n\nProvide a detailed, factual summary with specific information from the sources above.`,
-      },
-    ], 4096);
+      { role: 'user', content: truncateToTokens(fullPrompt, maxPromptTokens) },
+    ], searchMaxTokens);
 
     const text = response.choices[0]?.message?.content ?? '';
 
@@ -171,5 +181,27 @@ interface OpenRouterResponse {
 }
 
 export function getOpenRouterPricing(model: string): { input: number; output: number } {
-  return OPENROUTER_PRICING[model] ?? { input: 0.50, output: 1.00 }; // conservative default
+  const m = OPENROUTER_MODELS[model];
+  return m ? { input: m.input, output: m.output } : { input: 0.50, output: 1.00 };
+}
+
+export function getContextWindow(model: string): number {
+  return OPENROUTER_MODELS[model]?.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
+}
+
+// Estimate tokens (~4 chars per token) and truncate at a word boundary.
+// Truncates from the middle to preserve both the instruction header and
+// the tail (which often contains the actual question/directive).
+function truncateToTokens(text: string, maxTokens: number): string {
+  const estimatedTokens = Math.ceil(text.length / 4);
+  if (estimatedTokens <= maxTokens) return text;
+
+  const notice = '\n\n[...content truncated to fit context window...]\n\n';
+  const maxChars = maxTokens * 4 - notice.length;
+  const keepEachSide = Math.floor(maxChars / 2);
+
+  const head = text.slice(0, keepEachSide);
+  const tail = text.slice(-keepEachSide);
+
+  return head + notice + tail;
 }

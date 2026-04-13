@@ -309,7 +309,7 @@ function adaptLine(
               const errorMessage = typeof rawContent === "string"
                 ? rawContent.slice(0, 200)
                 : Array.isArray(rawContent)
-                  ? (rawContent.find((b: any) => b.type === "text")?.text ?? "").slice(0, 200)
+                  ? (rawContent.find((b: Record<string, unknown>) => b.type === "text")?.text as string ?? "").slice(0, 200)
                   : undefined;
               events.push({
                 ts, sid, kind: "tool_result", name: "error",

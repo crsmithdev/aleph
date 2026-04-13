@@ -12,7 +12,7 @@ import {
   fetchPageText, JS_RENDERED_FLAG,
   // Job imports
   createJob, getJob, getActiveJobForSession, cancelJob, listJobsForSession, cancelAllJobs, listAllJobs, listActiveJobs, jobStats,
-  type JobStatus,
+  type JobStatus, type ThreadStatus,
   deleteQuery,
   // Monitor imports
   createMonitor, getMonitor, listMonitors, updateMonitor,
@@ -193,7 +193,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
   // === Threads ===
   app.get<{ Params: { id: string }; Querystring: { status?: string } }>(
     '/queries/:id/threads',
-    async (req) => listThreads(app.sqlite, req.params.id, req.query.status as any)
+    async (req) => listThreads(app.sqlite, req.params.id, req.query.status as ThreadStatus | undefined)
   );
 
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>(
@@ -305,7 +305,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
   app.patch<{ Params: { id: string }; Body: { user_rating?: string } }>(
     '/findings/:id',
     async (req, reply) => {
-      const result = updateFinding(app.sqlite, req.params.id, req.body as any);
+      const result = updateFinding(app.sqlite, req.params.id, req.body);
       if (!result) return reply.status(404).send({ error: 'Finding not found' });
       return result;
     }
@@ -663,13 +663,29 @@ Write the full article in markdown.`,
   app.get('/workers', async () => {
     const supervisorWorkers = app.supervisor.status();
     const activeJobs = listActiveJobs(app.sqlite);
-    return supervisorWorkers.map(w => {
-      // Match by PID: claimed_by is "worker-{pid}-{timestamp}"
+
+    // Match supervisor workers to their claimed jobs
+    const knownPids = new Set(supervisorWorkers.map(w => w.pid).filter(p => p != null));
+    const result = supervisorWorkers.map(w => {
       const currentJob = w.pid != null
         ? activeJobs.find(j => j.claimed_by != null && j.claimed_by.startsWith(`worker-${w.pid}-`)) ?? null
         : null;
       return { ...w, currentJob };
     });
+
+    // Add synthetic entries for jobs claimed by workers not in this supervisor
+    let nextId = Math.max(...supervisorWorkers.map(w => w.id), -1) + 1;
+    for (const job of activeJobs) {
+      if (!job.claimed_by) continue;
+      const m = job.claimed_by.match(/^worker-(\d+)-/);
+      if (!m) continue;
+      const pid = parseInt(m[1], 10);
+      if (knownPids.has(pid)) continue;
+      knownPids.add(pid);
+      result.push({ id: nextId++, pid, status: 'running', restarts: 0, uptimeMs: null, currentJob: job });
+    }
+
+    return result;
   });
   app.post('/workers/start', async () => { app.supervisor.start(); return app.supervisor.status(); });
 

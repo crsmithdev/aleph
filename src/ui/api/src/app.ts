@@ -238,8 +238,6 @@ export async function createApp(opts?: { dbUrl?: string; workerCount?: number; s
   }, { prefix: '/api' });
 
   if (!opts?.skipStatic) {
-    const { resolve } = await import('path');
-    const { existsSync } = await import('fs');
     const webDist = resolve(import.meta.dirname || '.', '../../web/dist');
     if (existsSync(webDist)) {
       await app.register(fastifyStatic, { root: webDist, prefix: '/' });

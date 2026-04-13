@@ -97,18 +97,15 @@ export function CompactionPage() {
       align: 'right',
       sortable: true,
       width: '90px',
-      render: (row) => (
-        <span className="font-mono text-text-secondary">
-          {row.toolCallCount !== undefined ? (
-            <span className={
-              phaseBucket(row.toolCallCount) === 'early' ? 'text-green-500' :
-              phaseBucket(row.toolCallCount) === 'mid' ? 'text-yellow-500' : 'text-red-500'
-            }>
-              {row.toolCallCount}
-            </span>
-          ) : '—'}
-        </span>
-      ),
+      render: (row) => {
+        const phase = row.toolCallCount !== undefined ? phaseBucket(row.toolCallCount) : undefined;
+        const color = phase === 'early' ? 'text-green-500' : phase === 'mid' ? 'text-yellow-500' : 'text-red-500';
+        return (
+          <span className="font-mono text-text-secondary">
+            {phase ? <span className={color}>{row.toolCallCount}</span> : '—'}
+          </span>
+        );
+      },
     },
     {
       key: 'contextPct',

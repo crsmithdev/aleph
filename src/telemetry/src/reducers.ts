@@ -274,21 +274,18 @@ export function reduceTools(events: TelemetryEvent[], granularity: Granularity =
     .map(([project, count]) => ({ project, count, pct: projectTotal > 0 ? (count / projectTotal) * 100 : 0 }))
     .sort((a, b) => b.count - a.count);
 
-  const sortBuckets2 = <T extends { date: string }>(map: Map<string, T>): T[] =>
-    [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
-
-  const byDayErrors = sortBuckets2(new Map([...dayErrorMap.entries()].map(([date, tools]) => [date, {
+  const byDayErrors = sortBuckets(new Map([...dayErrorMap.entries()].map(([date, tools]) => [date, {
     date, count: [...tools.values()].reduce((s, v) => s + v, 0), tools: Object.fromEntries(tools),
   }])));
 
-  const byDayLatency = sortBuckets2(new Map([...dayLatencyMap.entries()].map(([date, toolDurations]) => [date, {
+  const byDayLatency = sortBuckets(new Map([...dayLatencyMap.entries()].map(([date, toolDurations]) => [date, {
     date, count: [...toolDurations.values()].reduce((s, v) => s + v.length, 0),
     tools: Object.fromEntries([...toolDurations.entries()].map(([tool, durations]) => [
       tool, durations.length > 0 ? Math.round(durations.reduce((s, d) => s + d, 0) / durations.length) : 0,
     ])),
   }])));
 
-  const byDaySessionCount = sortBuckets2(new Map([...dayToolSessionMap.entries()].map(([date, toolSessions]) => [date, {
+  const byDaySessionCount = sortBuckets(new Map([...dayToolSessionMap.entries()].map(([date, toolSessions]) => [date, {
     date, count: [...toolSessions.values()].reduce((s, v) => s + v.size, 0),
     tools: Object.fromEntries([...toolSessions.entries()].map(([tool, sids]) => [tool, sids.size])),
   }])));
