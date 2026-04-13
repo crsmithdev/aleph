@@ -105,8 +105,15 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       'research_monitors', 'research_plan_modifications', 'research_plans',
       'research_steps', 'research_findings', 'research_threads', 'research_jobs', 'research_queries',
     ];
-    for (const table of tables) {
-      app.sqlite.exec(`DELETE FROM ${table}`);
+    // Disable FK enforcement during wipe: some tables may have stale FK references
+    // to renamed tables (e.g. research_monitors still references research_sessions).
+    app.sqlite.exec('PRAGMA foreign_keys = OFF');
+    try {
+      for (const table of tables) {
+        app.sqlite.exec(`DELETE FROM ${table}`);
+      }
+    } finally {
+      app.sqlite.exec('PRAGMA foreign_keys = ON');
     }
     return { status: 'cleared' };
   });

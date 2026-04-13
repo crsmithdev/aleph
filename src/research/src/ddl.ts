@@ -213,4 +213,36 @@ export function applyResearchDDL(sqlite: Sqlite): void {
   try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN document TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_jobs ADD COLUMN thread_id TEXT`); } catch { /* exists */ }
   try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_rj_thread ON research_jobs(thread_id, status)`); } catch { /* exists */ }
+
+  // Fix stale FK: research_monitors.session_id may reference the old 'research_sessions'
+  // table name (pre-rename). Rebuild the table to point at research_queries.
+  try {
+    const fks = sqlite.prepare('PRAGMA foreign_key_list(research_monitors)').all() as Array<{ table: string }>;
+    const hasStaleFK = fks.some(f => f.table === 'research_sessions');
+    if (hasStaleFK) {
+      sqlite.exec('PRAGMA foreign_keys = OFF');
+      sqlite.exec(`
+        CREATE TABLE research_monitors_new (
+          id TEXT PRIMARY KEY,
+          session_id TEXT REFERENCES research_queries(id) ON DELETE SET NULL,
+          title TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'active',
+          queries TEXT NOT NULL DEFAULT '[]',
+          fetch_urls TEXT NOT NULL DEFAULT '[]',
+          schedule TEXT NOT NULL DEFAULT '0 8 * * *',
+          timezone TEXT NOT NULL DEFAULT 'America/Los_Angeles',
+          match_criteria TEXT NOT NULL DEFAULT '{}',
+          model TEXT NOT NULL DEFAULT 'claude-haiku-4-5',
+          cost_per_cycle_estimate REAL NOT NULL DEFAULT 0,
+          budget_daily_usd REAL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        INSERT INTO research_monitors_new SELECT * FROM research_monitors;
+        DROP TABLE research_monitors;
+        ALTER TABLE research_monitors_new RENAME TO research_monitors;
+      `);
+      sqlite.exec('PRAGMA foreign_keys = ON');
+    }
+  } catch { /* not applicable */ }
 }
