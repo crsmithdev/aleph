@@ -935,10 +935,70 @@ function ThreadLiveRow({
   );
 }
 
+const liveStatusDot: Record<string, string> = {
+  active: 'bg-success animate-pulse',
+  running: 'bg-success animate-pulse',
+  queued: 'bg-warning/70',
+  pending: 'bg-warning/40',
+  exhausted: 'bg-text-disabled',
+  pruned: 'bg-error/60',
+  deferred: 'bg-text-muted/30',
+};
+
+const liveOriginColor: Record<string, string> = {
+  seed: 'bg-accent/15 text-accent',
+  gap_analysis: 'bg-purple-500/15 text-purple-400',
+  follow_up: 'bg-blue-500/15 text-blue-400',
+  perturbation: 'bg-orange-500/15 text-orange-400',
+};
+
+const THREAD_PALETTE = ['#c792ea', '#82aaff', '#c3e88d', '#89ddff', '#ffcb6b', '#f78c6c', '#f07178', '#b2ccd6'];
+
+function formatEventDetail(ev: StreamEvent): { typeLabel: string; typeColor: string; detail: string } | null {
+  if (ev.type === 'finding') {
+    return {
+      typeLabel: 'finding',
+      typeColor: 'text-success',
+      detail: ev.payload.content.slice(0, 120) + (ev.payload.content.length > 120 ? '…' : ''),
+    };
+  }
+  if (ev.type === 'thread') {
+    const t = ev.payload;
+    if (t.status === 'active') return { typeLabel: 'spawn', typeColor: 'text-warning', detail: `"${t.query.split('\n')[0].slice(0, 80)}"` };
+    if (t.status === 'queued') return { typeLabel: 'queued', typeColor: 'text-warning/70', detail: `"${t.query.split('\n')[0].slice(0, 80)}"` };
+    if (t.status === 'pruned') return { typeLabel: 'pruned', typeColor: 'text-error', detail: `thread terminated` };
+    if (t.status === 'exhausted') return { typeLabel: 'done', typeColor: 'text-text-muted', detail: `thread complete` };
+    return null;
+  }
+  if (ev.type === 'step') {
+    const s = ev.payload;
+    const tools = s.tool_calls ?? [];
+    if (tools.length === 0) return { typeLabel: 'step', typeColor: 'text-accent/70', detail: s.label ?? '…' };
+    const first = tools[0];
+    const tool = first.tool ?? 'step';
+    const shortTool = tool.replace('search_web', 'search').replace('fetch_url', 'fetch');
+    let detail = '';
+    if (tool === 'search_web' || tool === 'search') {
+      const q = (first.input as Record<string, unknown>)?.query as string ?? '';
+      detail = q ? `query="${q.slice(0, 80)}"` : '';
+    } else if (tool === 'fetch_url' || tool === 'fetch') {
+      const urls = s.tool_calls.flatMap(c => c.jina_fetches ?? []).map(j => {
+        try { return new URL(j.url).hostname; } catch { return j.url; }
+      });
+      const count = s.tool_calls.flatMap(c => c.jina_fetches ?? []).length;
+      detail = urls.slice(0, 2).join(' · ') + (count > 2 ? ` +${count - 2}` : '');
+    } else {
+      detail = s.label ?? shortTool;
+    }
+    const typeColor = shortTool === 'search' ? 'text-blue-400' : shortTool === 'fetch' ? 'text-teal-400' : 'text-accent/80';
+    return { typeLabel: shortTool + (tools.length > 1 ? ` ×${tools.length}` : ''), typeColor, detail };
+  }
+  return null;
+}
+
 function LiveView({
   threads, findings, allSteps, events, isRunning, sessionId, sessionFetchText,
-  onToggleSessionFetch, activity, jobs, selectedThreadId, onSelectThread,
-  onNavigateToDocument, onNavigateToMap,
+  onToggleSessionFetch,
 }: {
   threads: ResearchThread[];
   findings: ResearchFinding[];
@@ -948,39 +1008,19 @@ function LiveView({
   sessionId: string;
   sessionFetchText: boolean;
   onToggleSessionFetch: () => void;
-  activity: ResearchActivity | undefined;
-  jobs: ResearchJob[];
-  selectedThreadId: string | null;
-  onSelectThread: (id: string) => void;
-  onNavigateToDocument: (threadId: string) => void;
-  onNavigateToMap: (threadId: string) => void;
+  // kept for call-site compat, unused in 3-pane view
+  activity?: ResearchActivity;
+  jobs?: ResearchJob[];
+  selectedThreadId?: string | null;
+  onSelectThread?: (id: string) => void;
+  onNavigateToDocument?: (threadId: string) => void;
+  onNavigateToMap?: (threadId: string) => void;
 }) {
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [viewMode, setViewMode] = useState<'hierarchical' | 'flat'>('hierarchical');
-  const [configThreadId, setConfigThreadId] = useState<string | null>(null);
-
-  // Auto-expand active threads
-  useEffect(() => {
-    const activeIds = threads.filter(t => t.status === 'active').map(t => t.id);
-    if (activeIds.length > 0) {
-      setExpandedIds(prev => {
-        const next = new Set(prev);
-        for (const id of activeIds) next.add(id);
-        return next;
-      });
-    }
-  }, [threads]);
-
-  // Auto-expand selected thread
-  useEffect(() => {
-    if (selectedThreadId) {
-      setExpandedIds(prev => {
-        const next = new Set(prev);
-        next.add(selectedThreadId);
-        return next;
-      });
-    }
-  }, [selectedThreadId]);
+  const updateThread = useUpdateThread();
+  const redoThread = useRedoThread();
+  const streamRef = useRef<HTMLDivElement>(null);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [filterFindings, setFilterFindings] = useState(false);
 
   const stepsByThread = useMemo(() => {
     const map = new Map<string, ResearchStep[]>();
@@ -1011,105 +1051,321 @@ function LiveView({
     return map;
   }, [findings]);
 
-  const childrenByThread = useMemo(() => {
-    const map = new Map<string, ResearchThread[]>();
-    for (const t of threads) {
-      if (!t.parent_thread_id) continue;
-      const arr = map.get(t.parent_thread_id) ?? [];
-      arr.push(t);
-      map.set(t.parent_thread_id, arr);
-    }
-    return map;
-  }, [threads]);
+  const ordered = useMemo(() => orderThreadsDepthFirst(threads), [threads]);
 
-  const threadById = useMemo(() => {
-    const map = new Map<string, ResearchThread>();
-    for (const t of threads) map.set(t.id, t);
-    return map;
-  }, [threads]);
-
-  // Worker label per thread: match running jobs to active threads
-  const workerByThread = useMemo(() => {
+  const threadColor = useMemo(() => {
     const map = new Map<string, string>();
-    const activeThread = activity?.active_thread;
-    if (activeThread) {
-      const runningJob = jobs.find(j => (j.status === 'running' || j.status === 'claimed') && j.claimed_by);
-      if (runningJob?.claimed_by) {
-        map.set(activeThread.id, runningJob.claimed_by.slice(0, 12));
-      }
-    }
+    ordered.forEach((t, i) => map.set(t.id, THREAD_PALETTE[i % THREAD_PALETTE.length]));
     return map;
-  }, [activity, jobs]);
+  }, [ordered]);
 
-  const orderedHierarchical = useMemo(() => orderThreadsDepthFirst(threads), [threads]);
-  const orderedFlat = useMemo(() => [...threads].sort((a, b) => b.priority - a.priority), [threads]);
-  const ordered = viewMode === 'flat' ? orderedFlat : orderedHierarchical;
+  const { highFindings, medFindings } = useMemo(() => {
+    const sorted = [...findings].sort((a, b) => b.confidence - a.confidence);
+    return {
+      highFindings: sorted.filter(f => f.confidence >= 0.7),
+      medFindings: sorted.filter(f => f.confidence >= 0.4 && f.confidence < 0.7),
+    };
+  }, [findings]);
 
-  if (ordered.length === 0) {
-    return <p className="text-sm text-text-muted text-center py-12">No threads yet. Run the engine to start.</p>;
-  }
+  const activeThreads = useMemo(() => threads.filter(t => t.status === 'active'), [threads]);
+  const queuedThreads = useMemo(() => threads.filter(t => t.status === 'queued'), [threads]);
+
+  const streamEvents = useMemo(() => {
+    const evs = [...events].reverse();
+    return filterFindings ? evs.filter(e => e.type === 'finding') : evs;
+  }, [events, filterFindings]);
+
+  useEffect(() => {
+    if (autoScroll && streamRef.current) {
+      streamRef.current.scrollTop = streamRef.current.scrollHeight;
+    }
+  }, [streamEvents, autoScroll]);
 
   return (
-    <div className="space-y-0.5">
-      {/* Controls bar */}
-      <div className="flex items-center gap-3 px-1 pb-2 mb-1 border-b border-border-primary/30">
-        <span className="text-xs text-text-muted">Full-text fetch:</span>
-        <button
-          onClick={onToggleSessionFetch}
-          className={clsx('px-2 py-1 rounded text-xs font-medium border transition-colors',
-            sessionFetchText
-              ? 'bg-green-900/40 border-green-700/40 text-green-300 hover:bg-green-900/60'
-              : 'bg-bg-secondary border-border-primary text-text-muted hover:border-border-secondary hover:text-text-secondary'
-          )}
-        >{sessionFetchText ? 'ON' : 'OFF'}</button>
-        <div className="ml-auto flex items-center gap-1">
-          {(['hierarchical', 'flat'] as const).map(mode => (
-            <button
-              key={mode}
-              onClick={() => setViewMode(mode)}
-              className={clsx('px-2 py-1 rounded text-xs border transition-colors',
-                viewMode === mode
-                  ? 'bg-accent/10 border-accent/30 text-accent'
-                  : 'bg-bg-secondary border-border-primary text-text-muted hover:text-text-secondary'
-              )}
-            >{mode}</button>
-          ))}
+    <div
+      className="flex border border-border-primary rounded-lg overflow-hidden"
+      style={{ height: 'calc(100vh - 290px)', minHeight: '520px' }}
+    >
+      {/* ── Pane 1: Thread controls (left) ── */}
+      <div className="w-52 shrink-0 flex flex-col border-r border-border-primary bg-bg-secondary overflow-hidden">
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-border-primary shrink-0">
+          <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary">Threads</span>
+          {isRunning && <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse ml-auto shrink-0" />}
+          <span className="text-xs text-text-disabled font-mono ml-auto">{threads.length}</span>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {ordered.map(thread => {
+            const isTerminal = thread.status === 'exhausted' || thread.status === 'pruned';
+            const threadFindings = findingsByThread.get(thread.id) ?? [];
+            const steps = stepsByThread.get(thread.id) ?? [];
+            const color = threadColor.get(thread.id) ?? '#8796b0';
+            const progressPct = steps.length > 0 ? Math.min(100, (steps.length / 9) * 100) : 0;
+            return (
+              <div
+                key={thread.id}
+                className="px-3 py-2 border-b border-border-primary group hover:bg-bg-tertiary transition-colors"
+                style={{ borderLeft: `2px solid ${color}30` }}
+              >
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', liveStatusDot[thread.status] ?? 'bg-text-muted/40')} />
+                  <span className="text-xs font-medium text-text-primary truncate flex-1 leading-tight">
+                    {(thread.short_query ?? thread.query.split('\n')[0]).slice(0, 36)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <span className={clsx('text-[10px] px-1 py-0.5 rounded shrink-0', liveOriginColor[thread.origin] ?? 'bg-bg-tertiary text-text-muted')}>
+                    {thread.origin.replace(/_/g, ' ')}
+                  </span>
+                  <span className="text-[10px] font-mono text-text-disabled">p:{thread.priority.toFixed(2)}</span>
+                  {threadFindings.length > 0 && (
+                    <span className="text-[10px] font-mono text-success ml-auto">{threadFindings.length}✦</span>
+                  )}
+                </div>
+                {thread.status === 'active' && (
+                  <div className="h-0.5 bg-bg-tertiary rounded-full overflow-hidden mb-1.5">
+                    <div className="h-full bg-success rounded-full transition-all" style={{ width: `${progressPct}%` }} />
+                  </div>
+                )}
+                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    title="Increase priority"
+                    onClick={() => updateThread.mutate({ id: thread.id, sessionId, priority: Math.min(1.0, thread.priority + 0.1) })}
+                    className="p-0.5 text-text-disabled hover:text-text-secondary rounded"
+                  ><Icon name="keyboard_arrow_up" size="xs" /></button>
+                  <button
+                    title="Decrease priority"
+                    onClick={() => updateThread.mutate({ id: thread.id, sessionId, priority: Math.max(0.0, thread.priority - 0.1) })}
+                    className="p-0.5 text-text-disabled hover:text-text-secondary rounded"
+                  ><Icon name="keyboard_arrow_down" size="xs" /></button>
+                  {isTerminal ? (
+                    <button
+                      title="Redo"
+                      onClick={() => redoThread.mutate({ sessionId, threadId: thread.id })}
+                      disabled={redoThread.isPending}
+                      className="px-1 py-0.5 text-[10px] text-text-disabled hover:text-blue-400 rounded"
+                    >↺</button>
+                  ) : (
+                    <button
+                      title="Prune"
+                      onClick={() => updateThread.mutate({ id: thread.id, sessionId, status: 'pruned' })}
+                      className="p-0.5 text-text-disabled hover:text-error rounded ml-auto"
+                    ><Icon name="close" size="xs" /></button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="border-t border-border-primary px-3 py-2 shrink-0 space-y-1.5">
+          <button
+            onClick={onToggleSessionFetch}
+            className={clsx('w-full text-left px-2 py-1 rounded text-xs border transition-colors',
+              sessionFetchText
+                ? 'bg-green-900/30 border-green-700/30 text-green-400'
+                : 'bg-bg-tertiary border-border-primary text-text-muted hover:text-text-secondary'
+            )}
+          >⬡ full-text: {sessionFetchText ? 'ON' : 'OFF'}</button>
         </div>
       </div>
 
-      {isRunning && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-success/5 border border-success/20 rounded-lg mb-3">
-          <span className="w-2 h-2 rounded-full bg-success animate-pulse shrink-0" />
-          <span className="text-sm text-success font-medium">Running</span>
+      {/* ── Pane 2: Findings (center) ── */}
+      <div className="flex flex-col overflow-hidden border-r border-border-primary" style={{ width: '38%' }}>
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-border-primary bg-bg-secondary shrink-0">
+          <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary">Findings</span>
+          {findings.length > 0 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-success/10 border border-success/20 text-success">{findings.length}</span>
+          )}
         </div>
-      )}
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+          {findings.length === 0 && activeThreads.length === 0 ? (
+            <p className="text-xs text-text-muted text-center py-8">No findings yet.</p>
+          ) : (
+            <>
+              {highFindings.length > 0 && (
+                <>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-text-disabled">High confidence · {highFindings.length}</p>
+                  {highFindings.map(f => (
+                    <div key={f.id} className="bg-bg-secondary border border-border-primary rounded border-l-2 border-l-success px-3 py-2 space-y-1.5">
+                      <p className="text-xs text-text-primary leading-relaxed">{f.content.slice(0, 200)}{f.content.length > 200 ? '…' : ''}</p>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {f.source_urls[0] && (
+                          <span className="text-[10px] font-mono text-blue-400 bg-blue-400/8 border border-blue-400/15 px-1 py-0.5 rounded truncate max-w-28">
+                            {(() => { try { return new URL(f.source_urls[0]).hostname; } catch { return f.source_urls[0]; } })()}
+                          </span>
+                        )}
+                        <span className="text-[10px] font-mono text-text-disabled bg-bg-tertiary border border-border-primary px-1 py-0.5 rounded">
+                          {threads.find(t => t.id === f.thread_id)?.origin?.replace(/_/g, ' ') ?? '—'}
+                        </span>
+                        <span className="text-[10px] font-mono text-text-muted ml-auto">{(f.confidence * 100).toFixed(0)}%</span>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+              {medFindings.length > 0 && (
+                <>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-text-disabled mt-3">Medium confidence · {medFindings.length}</p>
+                  {medFindings.map(f => (
+                    <div key={f.id} className="bg-bg-secondary border border-border-primary rounded border-l-2 border-l-blue-400/50 px-3 py-2 space-y-1.5">
+                      <p className="text-xs text-text-primary leading-relaxed">{f.content.slice(0, 180)}{f.content.length > 180 ? '…' : ''}</p>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {f.source_urls[0] && (
+                          <span className="text-[10px] font-mono text-blue-400 bg-blue-400/8 border border-blue-400/15 px-1 py-0.5 rounded truncate max-w-28">
+                            {(() => { try { return new URL(f.source_urls[0]).hostname; } catch { return f.source_urls[0]; } })()}
+                          </span>
+                        )}
+                        <span className="text-[10px] font-mono text-text-muted ml-auto">{(f.confidence * 100).toFixed(0)}%</span>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+              {(activeThreads.length > 0 || queuedThreads.length > 0) && (
+                <div className="mt-3 border border-dashed border-border-primary rounded px-3 py-2 space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    {activeThreads.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />}
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-text-disabled">Investigating</span>
+                  </div>
+                  {activeThreads.map(t => (
+                    <div key={t.id} className="flex items-center gap-1.5 text-[11px] text-text-secondary">
+                      <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shrink-0" />
+                      {(t.short_query ?? t.query.split('\n')[0]).slice(0, 60)}
+                    </div>
+                  ))}
+                  {queuedThreads.map(t => (
+                    <div key={t.id} className="flex items-center gap-1.5 text-[11px] text-text-muted">
+                      <span className="w-1.5 h-1.5 rounded-full bg-warning/60 shrink-0" />
+                      {(t.short_query ?? t.query.split('\n')[0]).slice(0, 60)}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
 
-      {ordered.map(thread => (
-        <ThreadLiveRow
-          key={thread.id}
-          thread={thread}
-          steps={stepsByThread.get(thread.id) ?? []}
-          threadFindings={findingsByThread.get(thread.id) ?? []}
-          childThreads={childrenByThread.get(thread.id) ?? []}
-          parentThread={thread.parent_thread_id ? (threadById.get(thread.parent_thread_id) ?? null) : null}
-          depth={viewMode === 'flat' ? 0 : thread.depth}
-          expanded={expandedIds.has(thread.id)}
-          onToggle={() => {
-            onSelectThread(thread.id);
-            setExpandedIds(prev => {
-              const next = new Set(prev);
-              next.has(thread.id) ? next.delete(thread.id) : next.add(thread.id);
-              return next;
-            });
+      {/* ── Pane 3: Live event stream (right) ── */}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0 bg-bg-primary">
+        {/* Thread color chips */}
+        <div className="flex items-center gap-0 border-b border-border-primary bg-bg-secondary overflow-x-auto shrink-0">
+          {ordered.filter(t => t.status !== 'pruned' || findingsByThread.get(t.id)?.length).slice(0, 8).map(t => {
+            const color = threadColor.get(t.id) ?? '#8796b0';
+            const label = (t.short_query ?? t.query.split('\n')[0]).slice(0, 14);
+            return (
+              <div
+                key={t.id}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 border-r border-border-primary shrink-0"
+                style={{ background: `${color}08` }}
+              >
+                <div
+                  className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold font-mono shrink-0"
+                  style={{ background: `${color}20`, color, border: `1px solid ${color}35` }}
+                >
+                  {ordered.indexOf(t) < 26 ? String.fromCharCode(65 + ordered.indexOf(t)) : '#'}
+                </div>
+                <div>
+                  <div className="text-[10px] leading-tight truncate max-w-20" style={{ color }}>{label}</div>
+                  <div className="text-[9px] text-text-disabled font-mono">{t.status === 'active' ? 'active' : t.status === 'queued' ? 'queued' : t.status}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Filter bar */}
+        <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-primary bg-bg-secondary shrink-0">
+          <span className="text-[10px] uppercase tracking-wider text-text-disabled font-semibold mr-1">Show</span>
+          <button
+            onClick={() => setFilterFindings(f => !f)}
+            className={clsx('px-1.5 py-0.5 rounded text-[11px] border font-mono transition-colors',
+              filterFindings
+                ? 'border-warning/30 bg-warning/10 text-warning'
+                : 'border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary'
+            )}
+          >★ findings</button>
+          <button
+            onClick={() => setFilterFindings(false)}
+            className="px-1.5 py-0.5 rounded text-[11px] border border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary font-mono"
+          >all</button>
+          <div className="flex-1" />
+          <button
+            onClick={() => setAutoScroll(a => !a)}
+            className={clsx('px-1.5 py-0.5 rounded text-[11px] border transition-colors',
+              autoScroll
+                ? 'border-success/25 bg-success/8 text-success'
+                : 'border-border-primary bg-bg-tertiary text-text-muted'
+            )}
+          >↓ auto-scroll</button>
+        </div>
+
+        {/* Event stream */}
+        <div
+          ref={streamRef}
+          className="flex-1 overflow-y-auto py-1"
+          onScroll={e => {
+            const el = e.currentTarget;
+            const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+            setAutoScroll(atBottom);
           }}
-          sessionId={sessionId}
-          workerLabel={workerByThread.get(thread.id) ?? null}
-          onViewInDocument={() => onNavigateToDocument(thread.id)}
-          onShowOnMap={() => onNavigateToMap(thread.id)}
-          showInlineConfig={configThreadId === thread.id}
-          onToggleConfig={() => setConfigThreadId(prev => prev === thread.id ? null : thread.id)}
-        />
-      ))}
+        >
+          {streamEvents.length === 0 && (
+            <p className="text-xs text-text-muted text-center py-8">Waiting for events…</p>
+          )}
+          {streamEvents.map((ev, i) => {
+            const formatted = formatEventDetail(ev);
+            if (!formatted) return null;
+            const threadId = ev.type === 'finding' ? ev.payload.thread_id
+              : ev.type === 'step' ? ev.payload.thread_id
+              : ev.type === 'thread' ? ev.payload.id
+              : null;
+            const color = threadId ? (threadColor.get(threadId) ?? '#8796b0') : '#8796b0';
+            const threadIdx = threadId ? ordered.findIndex(t => t.id === threadId) : -1;
+            const threadLetter = threadIdx >= 0 && threadIdx < 26 ? String.fromCharCode(65 + threadIdx) : '?';
+            const ts = ev.type === 'finding' ? ev.payload.created_at
+              : ev.type === 'step' ? ev.payload.created_at
+              : ev.type === 'thread' ? ev.payload.created_at
+              : null;
+            const timeStr = ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+            const isFinding = ev.type === 'finding';
+            const isHighFinding = isFinding && (ev.payload as ResearchFinding).confidence >= 0.7;
+            return (
+              <div
+                key={i}
+                className={clsx(
+                  'grid items-baseline px-3 py-0.5 border-l-2 transition-colors hover:bg-bg-secondary/50',
+                  isFinding
+                    ? isHighFinding
+                      ? 'bg-warning/5 border-l-warning/40'
+                      : 'bg-success/4 border-l-success/25'
+                    : 'border-l-transparent'
+                )}
+                style={{ gridTemplateColumns: '52px 22px 80px 1fr', gap: '0' }}
+              >
+                <span className="text-[10px] text-text-disabled font-mono pr-2 truncate">{timeStr}</span>
+                <span className="pr-1 flex items-center">
+                  <div
+                    className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold font-mono"
+                    style={{ background: `${color}20`, color, border: `1px solid ${color}30` }}
+                  >{threadLetter}</div>
+                </span>
+                <span className={clsx('text-[11px] font-mono pr-2 truncate', formatted.typeColor)}>{formatted.typeLabel}</span>
+                <span className="text-[11px] text-text-muted truncate">
+                  {isHighFinding && <span className="text-warning mr-1">★</span>}
+                  {formatted.detail}
+                </span>
+              </div>
+            );
+          })}
+          {isRunning && (
+            <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-success font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+              <span>running</span>
+              <span className="text-text-disabled ml-2">{events.length} events · {findings.length} findings</span>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1692,21 +1948,6 @@ export function ResearchQueryDetailPage() {
 
   return (
     <div className="flex h-[calc(100vh-64px)]">
-      {/* Left Sidebar — Thread Navigator (hidden on document tab) */}
-      {tab !== 'document' && (
-        <div className="w-[280px] shrink-0 border-r border-border-primary bg-bg-secondary/50 overflow-hidden flex flex-col">
-          <ThreadNavigator
-            threads={threadsData}
-            findingCounts={findingCounts}
-            selectedThreadId={selectedThreadId}
-            onSelectThread={(id) => {
-              setSelectedThreadId(id);
-            }}
-            sessionId={id!}
-          />
-        </div>
-      )}
-
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Header bar */}
