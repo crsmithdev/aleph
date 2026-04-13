@@ -1,5 +1,4 @@
 #!/usr/bin/env bun
-import { execSync } from "child_process";
 import { readdirSync } from "fs";
 import { resolve } from "path";
 
@@ -11,43 +10,41 @@ const testFiles = readdirSync(testsDir)
   .filter(f => f.endsWith(".test.ts"))
   .sort();
 
+type Result = { label: string; passed: number; failed: number; output: string; error: boolean };
+
+const results = await Promise.all(testFiles.map(async (file): Promise<Result> => {
+  const label = file.replace(".test.ts", "");
+  try {
+    const proc = Bun.spawn([BUN, resolve(testsDir, file)], {
+      cwd: ROOT,
+      env: process.env,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const output = await new Response(proc.stdout).text();
+    const exitCode = await proc.exited;
+
+    const summaryMatch = output.match(/(\d+) passed, (\d+) failed/);
+    const passed = summaryMatch ? parseInt(summaryMatch[1]) : 0;
+    const failed = summaryMatch ? parseInt(summaryMatch[2]) : (exitCode !== 0 ? 1 : 0);
+    return { label, passed, failed, output, error: exitCode !== 0 };
+  } catch (err: any) {
+    return { label, passed: 0, failed: 1, output: err.message ?? "", error: true };
+  }
+}));
+
 let totalPassed = 0;
 let totalFailed = 0;
 const failures: string[] = [];
 
-for (const file of testFiles) {
-  const label = file.replace(".test.ts", "");
+for (const r of results) {
   console.log(`\n${"═".repeat(60)}`);
-  console.log(`  ${label}`);
+  console.log(`  ${r.label}`);
   console.log("═".repeat(60));
-
-  try {
-    const output = execSync(`${BUN} ${resolve(testsDir, file)}`, {
-      encoding: "utf-8",
-      timeout: 120000,
-      cwd: ROOT,
-      env: process.env,
-    });
-    process.stdout.write(output);
-
-    const summaryMatch = output.match(/(\d+) passed, (\d+) failed/);
-    if (summaryMatch) {
-      totalPassed += parseInt(summaryMatch[1]);
-      totalFailed += parseInt(summaryMatch[2]);
-    }
-  } catch (err: any) {
-    const output = err.stdout ?? "";
-    process.stdout.write(output);
-
-    const summaryMatch = output.match(/(\d+) passed, (\d+) failed/);
-    if (summaryMatch) {
-      totalPassed += parseInt(summaryMatch[1]);
-      totalFailed += parseInt(summaryMatch[2]);
-    } else {
-      totalFailed++;
-    }
-    failures.push(label);
-  }
+  process.stdout.write(r.output);
+  totalPassed += r.passed;
+  totalFailed += r.failed;
+  if (r.error) failures.push(r.label);
 }
 
 const pct = totalPassed + totalFailed > 0

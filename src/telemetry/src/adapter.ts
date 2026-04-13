@@ -560,7 +560,7 @@ function corpusCacheKey(opts?: AdaptOptions): string {
 }
 
 export function clearCache(): void {
-  cacheDb.exec("DELETE FROM telemetry_cache_v4");
+  cacheDb.exec("DELETE FROM telemetry_cache_v5");
   discoveryCache = undefined;
   corpusCache = undefined;
 }

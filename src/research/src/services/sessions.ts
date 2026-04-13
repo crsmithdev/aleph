@@ -29,7 +29,7 @@ export function createSession(
   const now = new Date().toISOString();
 
   sqlite.prepare(`
-    INSERT INTO research_sessions (id, title, seed_query, status, config, created_at, updated_at)
+    INSERT INTO research_queries (id, title, seed_query, status, config, created_at, updated_at)
     VALUES (?, ?, ?, 'active', ?, ?, ?)
   `).run(id, title, seedQuery, JSON.stringify(mergedConfig), now, now);
 
@@ -37,15 +37,15 @@ export function createSession(
 }
 
 export function getSession(sqlite: Sqlite, id: string): ResearchSession | null {
-  const row = sqlite.prepare('SELECT * FROM research_sessions WHERE id = ?').get(id) as Record<string, unknown> | null;
+  const row = sqlite.prepare('SELECT * FROM research_queries WHERE id = ?').get(id) as Record<string, unknown> | null;
   return row ? rowToSession(row) : null;
 }
 
 export function listSessions(sqlite: Sqlite, status?: string): ResearchSession[] {
   if (status) {
-    return (sqlite.prepare('SELECT * FROM research_sessions WHERE status = ? ORDER BY updated_at DESC').all(status) as Record<string, unknown>[]).map(rowToSession);
+    return (sqlite.prepare('SELECT * FROM research_queries WHERE status = ? ORDER BY updated_at DESC').all(status) as Record<string, unknown>[]).map(rowToSession);
   }
-  return (sqlite.prepare('SELECT * FROM research_sessions ORDER BY updated_at DESC').all() as Record<string, unknown>[]).map(rowToSession);
+  return (sqlite.prepare('SELECT * FROM research_queries ORDER BY updated_at DESC').all() as Record<string, unknown>[]).map(rowToSession);
 }
 
 export function updateSession(
@@ -78,7 +78,7 @@ export function updateSession(
   fields.push("updated_at = datetime('now')");
   values.push(id);
 
-  sqlite.prepare(`UPDATE research_sessions SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+  sqlite.prepare(`UPDATE research_queries SET ${fields.join(', ')} WHERE id = ?`).run(...values);
   return getSession(sqlite, id);
 }
 
@@ -100,7 +100,7 @@ export function getResearchStats(sqlite: Sqlite, range: string, granularity: str
     : "date(created_at)";
 
   const sessions = sqlite.prepare(
-    'SELECT COUNT(*) as total, SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as active FROM research_sessions WHERE created_at >= ?'
+    'SELECT COUNT(*) as total, SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as active FROM research_queries WHERE created_at >= ?'
   ).get('active', cutoff) as { total: number; active: number };
 
   const findings = sqlite.prepare(
@@ -117,7 +117,7 @@ export function getResearchStats(sqlite: Sqlite, range: string, granularity: str
 
   const sessionsByDay = sqlite.prepare(`
     SELECT ${dateFn} as date, COUNT(*) as sessions
-    FROM research_sessions WHERE created_at >= ?
+    FROM research_queries WHERE created_at >= ?
     GROUP BY date ORDER BY date
   `).all(cutoff) as { date: string; sessions: number }[];
 
@@ -182,7 +182,7 @@ export function deleteSession(sqlite: Sqlite, sessionId: string): boolean {
   sqlite.prepare('DELETE FROM research_findings WHERE session_id = ?').run(sessionId);
   sqlite.prepare('DELETE FROM research_threads WHERE session_id = ?').run(sessionId);
   sqlite.prepare('DELETE FROM research_jobs WHERE session_id = ?').run(sessionId);
-  const result = sqlite.prepare('DELETE FROM research_sessions WHERE id = ?').run(sessionId);
+  const result = sqlite.prepare('DELETE FROM research_queries WHERE id = ?').run(sessionId);
   return result.changes > 0;
 }
 

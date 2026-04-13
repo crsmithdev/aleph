@@ -233,7 +233,7 @@ export class ResearchEngine {
       priority: 1.0,
       depth: 0,
       max_depth: session.config.max_thread_depth,
-      status: 'queued',
+      status: session.config.max_thread_depth > 0 ? 'queued' : 'deferred',
     });
     this.summarizeThreadAsync(seedThread.id, seedQuery, session.id, session.config);
 
@@ -292,6 +292,7 @@ export class ResearchEngine {
 
           if (iterationCount % 5 === 0) {
             await this.updateSummary(sessionId);
+            await this.updateDocument(sessionId);
           }
 
           if (currentSession.config.min_delay_between_steps_ms > 0) {
@@ -342,6 +343,70 @@ export class ResearchEngine {
     await this.generatePlan(sessionId, finalSession.config);
 
     return { iterations: iterationCount, findings: findingCount, cost: totalCost };
+  }
+
+  /** Run a single thread iteration — used by thread-level jobs.
+   *  Handles the full lifecycle: plan mods, iteration, bookkeeping, perturbation, plan/summary updates. */
+  async runThread(
+    sessionId: string,
+    threadId: string
+  ): Promise<{ finding: ResearchFinding | null; cost: number }> {
+    const session = sessions.getQuery(this.sqlite, sessionId);
+    if (!session || session.status !== 'active') {
+      throw new Error(`Session ${sessionId} not found or not active`);
+    }
+
+    const thread = threads.getThread(this.sqlite, threadId);
+    if (!thread) throw new Error(`Thread ${threadId} not found`);
+
+    // Apply any pending plan modifications before running
+    await this.applyPlanModifications(sessionId);
+
+    // Mark thread active so plan generation shows it as in-progress
+    threads.updateThread(this.sqlite, threadId, { status: 'active' });
+
+    let result: { finding: ResearchFinding | null; cost: number };
+    try {
+      result = await this.runIteration(sessionId, thread, session.config);
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.onError?.(err, thread);
+
+      steps.createStep(this.sqlite, {
+        thread_id: threadId,
+        session_id: sessionId,
+        model: session.config.model,
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        cost_usd: 0,
+        duration_ms: 0,
+        error: err.message,
+      });
+
+      const priorErrors = steps.listSteps(this.sqlite, sessionId, { threadId })
+        .filter(s => s.error).length;
+      threads.updateThread(this.sqlite, threadId, {
+        status: priorErrors <= 1 ? 'queued' : 'exhausted',
+      });
+      throw err;
+    }
+
+    threads.updateThread(this.sqlite, threadId, { status: 'exhausted' });
+
+    this.onIteration?.(1, thread, result.finding);
+
+    // Perturbation and plan generation
+    await this.maybePerturbate(sessionId, thread, session.config);
+    await this.generatePlan(sessionId, session.config);
+
+    // Periodic summary/document — every 5 exhausted threads, or on the first
+    const exhausted = threads.countExhaustedThreads(this.sqlite, sessionId);
+    if (exhausted === 1 || exhausted % 5 === 0) {
+      await this.updateSummary(sessionId);
+      await this.updateDocument(sessionId);
+    }
+
+    return result;
   }
 
   private async runIteration(
@@ -436,7 +501,7 @@ export class ResearchEngine {
         priority: 0.8,
         depth: childDepth,
         max_depth: thread.max_depth,
-        status: childDepth > thread.max_depth ? 'deferred' : 'queued',
+        status: childDepth >= thread.max_depth ? 'deferred' : 'queued',
       });
       this.summarizeThreadAsync(vThread.id, verifyQuery, sessionId, config);
     }
@@ -457,6 +522,7 @@ export class ResearchEngine {
         // Skip if a thread with the same query already exists (case-insensitive)
         if (existingQuerySet.has(question.toLowerCase().trim())) continue;
         const childDepth = thread.depth + 1;
+        console.log(`[follow_up] childDepth=${childDepth} max_depth=${thread.max_depth} gate=${childDepth >= thread.max_depth} → ${childDepth >= thread.max_depth ? 'deferred' : 'queued'}`);
         const fuThread = threads.createThread(this.sqlite, {
           session_id: sessionId,
           query: question,
@@ -468,7 +534,7 @@ export class ResearchEngine {
           priority: this.calculateChildPriority(thread, finding),
           depth: childDepth,
           max_depth: thread.max_depth,
-          status: childDepth > thread.max_depth ? 'deferred' : 'queued',
+          status: childDepth >= thread.max_depth ? 'deferred' : 'queued',
         });
         this.summarizeThreadAsync(fuThread.id, question, sessionId, config);
       }
@@ -750,9 +816,10 @@ Return ONLY valid JSON. No markdown fences.`,
     finding: { content: string; summary: string },
     config: SessionConfig
   ): Promise<{ accepted: string[]; analysis: FollowUpAnalysis }> {
-    const followUpConfig = config.follow_up ?? { min_count: 2, max_retries: 3, similarity_threshold: 0.75 };
+    const followUpConfig = config.follow_up ?? { min_count: 2, max_count: 5, max_retries: 3, similarity_threshold: 0.75 };
     const threshold = followUpConfig.similarity_threshold;
     const minCount = followUpConfig.min_count;
+    const maxCount = followUpConfig.max_count ?? 5;
     const maxRetries = followUpConfig.max_retries;
 
     let retryCount = 0;
@@ -769,15 +836,15 @@ Return ONLY valid JSON. No markdown fences.`,
 
       allCandidates = [...allCandidates, ...newCandidates];
 
-      // Add newly accepted questions
+      // Add newly accepted questions (up to max_count)
       for (const c of newCandidates) {
-        if (c.accepted) acceptedQuestions.push(c.text);
+        if (c.accepted && acceptedQuestions.length < maxCount) acceptedQuestions.push(c.text);
       }
 
       const acceptedCount = acceptedQuestions.length;
 
-      // Check if we have enough or hit retry limit
-      if (acceptedCount >= minCount || retryCount >= maxRetries) break;
+      // Check if we have enough, hit max, or hit retry limit
+      if (acceptedCount >= maxCount || acceptedCount >= minCount || retryCount >= maxRetries) break;
 
       // Not enough accepted — retry with rejection context
       const rejected = allCandidates.filter(c => !c.accepted);
@@ -953,6 +1020,8 @@ Return ONLY valid JSON. No markdown fences.`,
       .map(r => `### Search: "${r.query}"\n${r.results.slice(0, 500)}`)
       .join('\n\n---\n\n');
 
+    const maxCount = config.follow_up?.max_count ?? 5;
+
     const prompt = thread.node_type === 'topic'
       ? `You are a research scope analyst. Given a research topic and what was found, identify related subtopics that still need coverage.
 
@@ -967,6 +1036,7 @@ ${resultsText}
 What specific subtopics, aspects, or related concepts of "${thread.query}" still need detailed coverage?
 
 Rules:
+- Return exactly ${maxCount} or fewer items
 - Return focused noun phrases or named concepts (2-6 words each)
 - Each phrase must be fully self-contained and searchable on its own
 - Do not repeat what was already covered in the finding
@@ -986,6 +1056,7 @@ ${resultsText}
 Given the research question and what was found, what specific questions remain unanswered or need verification?
 
 Rules:
+- Return exactly ${maxCount} or fewer questions
 - Each question must be fully self-contained and searchable on its own
 - NO pronouns like "they/it/these/those/this" that refer back to the finding
 - Name the specific topic explicitly in each question${rejectionContext ?? ''}
@@ -1078,6 +1149,8 @@ Respond with ONLY "true" if this is a duplicate or near-duplicate, "false" other
     const allThreads = threads.listThreads(this.sqlite, sessionId);
     const parentThread = allThreads.find(t => t.status !== 'pruned') ?? allThreads[0];
 
+    const pertDepth = (parentThread?.depth ?? 0) + 1;
+    console.log(`[perturbation] pertDepth=${pertDepth} max_thread_depth=${config.max_thread_depth} gate=${pertDepth >= config.max_thread_depth} → ${pertDepth >= config.max_thread_depth ? 'deferred' : 'queued'}`);
     const pertThread = threads.createThread(this.sqlite, {
       session_id: sessionId,
       query: tangentQuery,
@@ -1087,8 +1160,9 @@ Respond with ONLY "true" if this is a duplicate or near-duplicate, "false" other
       perturbation_strategy: strategy,
       parent_thread_id: parentThread?.id ?? null,
       priority: 0.6 + (forced ? 0.1 : 0),
-      depth: (parentThread?.depth ?? 0) + 1,
+      depth: pertDepth,
       max_depth: config.max_thread_depth,
+      status: pertDepth >= config.max_thread_depth ? 'deferred' : 'queued',
     });
     this.summarizeThreadAsync(pertThread.id, tangentQuery, sessionId, config);
   }
@@ -1326,23 +1400,80 @@ Write a concise, informative summary of what has been discovered so far, key the
     sessions.updateQuery(this.sqlite, sessionId, { summary: result.text });
   }
 
-  /** Fire-and-forget LLM summarization for a thread's query.
-   *  Updates short_query in DB once the LLM responds. */
-  private summarizeThreadAsync(threadId: string, query: string, sessionId: string, config: SessionConfig): void {
-    // Short queries don't need summarization — placeholder is fine
-    if (query.length <= 80) return;
+  /** Generate a structured article from all findings.
+   *  Called periodically alongside updateSummary. */
+  async updateDocument(sessionId: string): Promise<void> {
+    const session = sessions.getQuery(this.sqlite, sessionId)!;
+    const allFindings = findings.listFindings(this.sqlite, sessionId);
+    const allThreads = threads.listThreads(this.sqlite, sessionId);
 
+    if (allFindings.length < 3) return; // not enough material
+
+    // Build source material: findings grouped with thread context
+    const threadMap = new Map(allThreads.map(t => [t.id, t]));
+    const material = allFindings.map(f => {
+      const thread = threadMap.get(f.thread_id);
+      return `[Thread: ${thread?.short_query ?? thread?.query ?? 'unknown'}]\n${f.content}`;
+    }).join('\n\n---\n\n');
+
+    // Collect all unique sources
+    const allUrls = new Map<string, { url: string; title: string }>();
+    for (const f of allFindings) {
+      for (const url of f.source_urls) {
+        if (!allUrls.has(url)) {
+          const meta = f.source_url_meta?.find(m => m.url === url);
+          allUrls.set(url, { url, title: meta?.title ?? url });
+        }
+      }
+    }
+
+    const result = await this.callLLM(
+      session.config.model,
+      `You are a skilled encyclopedia editor. Using the research findings below as source material, write a comprehensive, well-structured article about: "${session.seed_query}"
+
+Write it like a Wikipedia article:
+- Start with a concise lead section (2-3 paragraphs) that summarizes the entire topic
+- Organize the body into logical sections with short heading titles (1-5 words each, ## level)
+- Use subsections (### level) where appropriate
+- Write in flowing, connected prose — not bullet points or lists
+- Weave findings together into a coherent narrative; don't just list them sequentially
+- Use transitional phrases between paragraphs and sections
+- Where appropriate, cite sources using numbered references like [1], [2] etc.
+- End with a "## References" section listing all cited sources as numbered items
+- Do NOT include confidence scores, tags, metadata, or any research-process artifacts
+- The tone should be encyclopedic: neutral, informative, authoritative
+
+Source material (${allFindings.length} findings):
+
+${material}
+
+Available sources for citation:
+${Array.from(allUrls.values()).map((s, i) => `[${i + 1}] ${s.title} — ${s.url}`).join('\n')}
+
+Write the full article in markdown.`,
+      sessionId,
+      '',
+      session.config,
+      'generate document'
+    );
+
+    sessions.updateQuery(this.sqlite, sessionId, { document: result.text });
+  }
+
+  /** Fire-and-forget LLM title generation for a thread's query.
+   *  Produces a short conceptual section title (1-5 words) like a Wikipedia heading. */
+  private summarizeThreadAsync(threadId: string, query: string, sessionId: string, config: SessionConfig): void {
     this.callLLM(
       config.model,
-      `Summarize this research question in one short sentence (under 80 characters). Return ONLY the summary, nothing else:\n\n${query}`,
+      `Give a short conceptual section title (1-5 words) for this research topic. Like a Wikipedia section heading — a noun phrase, not a question. No quotes, no punctuation. Return ONLY the title:\n\n${query}`,
       sessionId,
       threadId,
       config,
       'summarize thread'
     ).then(result => {
-      const summary = result.text.trim();
-      if (summary && summary.length <= 100) {
-        threads.updateThread(this.sqlite, threadId, { short_query: summary });
+      const title = result.text.trim().replace(/^["']|["']$/g, '');
+      if (title && title.length <= 60) {
+        threads.updateThread(this.sqlite, threadId, { short_query: title });
       }
     }).catch(() => { /* non-critical — placeholder remains */ });
   }

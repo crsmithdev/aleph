@@ -41,6 +41,8 @@
 
 ## Browser e2e tests (`src/ui/e2e/`)
 
+These are automated CI tests using Playwright directly. For AI-driven verification in Claude Code sessions, use the `agent-browser` skill instead — it is the canonical tool for interactive e2e verification.
+
 ### `goal-flow.test.ts`
 
 Seeds goals/todos via service layer, starts API + Playwright, verifies web UI renders them.
@@ -131,7 +133,18 @@ Multi-trial A/B runner. Runs N trials comparing `with-hook` (e2e advisory Stop h
 | `broken-math` | None | `median()` uses lexicographic sort | Simple bug fix, no server to verify against |
 | `todo-app` | HTTP on port 3847 | Toggle always sets `done=false`; POST returns 200+empty instead of 201+todo | Bug fix with real server for e2e verification |
 | `todo-feature` | HTTP on port 3847 | None (feature addition) | Adding due date field, overdue filter, sort, date picker UI |
+| `commit-sequence` | None | None | Two-task feature sequence (`unique<T>` then `flatten<T>` in utils.ts); tests sequential commit workflow across multiple subagent dispatches |
+| `e2e-basic` | HTTP on port 3799 | Four arithmetic bugs (add, subtract, multiply, divide all return wrong values) | Bug fix with real HTTP server; tests e2e verification of calculator API |
+| `hook-verification-advisory` | None | None | Verifies advisory behavior: QUICK-depth single-file backend edit with no verification should emit advisory without blocking |
+| `hook-verification-gate` | None | None | Verifies gate behavior: FULL-depth multi-file change with no verification should be blocked |
+| `hook-verification-pass` | None | None | Verifies pass behavior: docs-only edits should pass silently with no hook output |
+
+**Note:** `commit-sequence`, `hook-verification-advisory`, `hook-verification-gate`, and `hook-verification-pass` are scenario definitions only (`.md` or `.yaml` files) with no standalone test runner — they are driven by `runner.ts` or the eval harness. `e2e-basic` has a `server.ts` but no test file.
 
 ## Coverage gaps
 
 - **Git hooks** (`git-pre-require-commit.ts`) — no tests
+- **`context-compact-suggest` hook** — no tests
+- **`security-scan-pre-commit` hook** — no tests
+- **`commit-sequence` scenario** — no standalone test file; requires eval runner
+- **`e2e-basic` scenario** — has `server.ts` but no test file

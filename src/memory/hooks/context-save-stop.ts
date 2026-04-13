@@ -22,7 +22,7 @@ import { dataPaths, ensureDataDirs } from "../../data/src/paths.ts";
 import { parseTranscript } from "../parse-transcript.ts";
 import { deriveIntentOutcome } from "../extract.ts";
 
-const TAG = "session-summary";
+const TAG = "context-save-stop";
 const sessionsDir = dataPaths.sessions;
 ensureDataDirs();
 

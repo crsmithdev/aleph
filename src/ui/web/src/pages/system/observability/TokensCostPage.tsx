@@ -95,8 +95,7 @@ export function TokensCostPage() {
       </ChartContainer>
 
       {cost.data.byModel.length > 0 && (
-        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
-          <h3 className="font-heading mb-3 text-sm font-medium text-text-secondary">Cost by Model</h3>
+        <ChartContainer title="Cost by Model" raw>
           <div className="flex items-center gap-6">
             <PieChart width={160} height={160}>
               <Pie data={cost.data.byModel} dataKey="usd" nameKey="model" cx="50%" cy="50%" innerRadius={45} outerRadius={70}>
@@ -115,7 +114,7 @@ export function TokensCostPage() {
               ))}
             </div>
           </div>
-        </div>
+        </ChartContainer>
       )}
 
       <QueryTiming ms={(tokens.data.queryTimeMs || 0) + (cost.data.queryTimeMs || 0)} />

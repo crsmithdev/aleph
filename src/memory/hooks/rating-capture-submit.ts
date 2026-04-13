@@ -16,7 +16,7 @@ import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 import { dataPaths, ensureDataDirs } from "../../data/src/paths.ts";
 
-const TAG = "rating-capture";
+const TAG = "rating-capture-submit";
 const ratingsFile = Bun.env.RATINGS_FILE ?? dataPaths.ratings;
 ensureDataDirs();
 

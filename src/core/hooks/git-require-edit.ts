@@ -18,7 +18,7 @@ import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 import { dataPaths } from "../../data/src/paths.ts";
 
-const TAG = "git-pre-require-commit";
+const TAG = "git-require-edit";
 const WARN_GROUPS = 3;
 
 let input: any;
@@ -65,7 +65,7 @@ if (groupCount < WARN_GROUPS) {
   process.exit(0);
 }
 
-const markerPath = `${dataPaths.signals}/git-pre-require-commit-${input.session_id}`;
+const markerPath = `${dataPaths.signals}/git-require-edit-${input.session_id}`;
 
 // Advisory only — never block
 try {
@@ -77,6 +77,6 @@ console.log(`[Construct] ${fileCount} uncommitted files across ${groupCount} are
 process.exit(0);
 
 function cleanupMarker(sessionId: string) {
-  const path = `${dataPaths.signals}/git-pre-require-commit-${sessionId}`;
+  const path = `${dataPaths.signals}/git-require-edit-${sessionId}`;
   try { unlinkSync(path); } catch {}
 }

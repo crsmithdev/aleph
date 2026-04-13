@@ -51,7 +51,7 @@ export function createThread(
     params.status ?? 'queued',
     params.priority ?? 0.5,
     params.depth ?? 0,
-    params.max_depth ?? 8,
+    params.max_depth ?? 9,
     params.min_searches ?? null,
     params.fetch_source_text === undefined ? null : (params.fetch_source_text ? 1 : 0),
     now,
@@ -75,6 +75,13 @@ export function listThreads(sqlite: Sqlite, sessionId: string, status?: ThreadSt
   return (sqlite.prepare(
     'SELECT * FROM research_threads WHERE session_id = ? ORDER BY priority DESC, created_at ASC'
   ).all(sessionId) as Record<string, unknown>[]).map(rowToThread);
+}
+
+export function hasQueuedThreads(sqlite: Sqlite, sessionId: string): boolean {
+  const row = sqlite.prepare(
+    "SELECT 1 FROM research_threads WHERE session_id = ? AND status = 'queued' LIMIT 1"
+  ).get(sessionId);
+  return !!row;
 }
 
 export function selectNextThread(sqlite: Sqlite, sessionId: string): ResearchThread | null {
@@ -143,4 +150,27 @@ export function countThreadsByOrigin(sqlite: Sqlite, sessionId: string): Record<
     'SELECT origin, COUNT(*) as count FROM research_threads WHERE session_id = ? GROUP BY origin'
   ).all(sessionId) as { origin: string; count: number }[];
   return Object.fromEntries(rows.map(r => [r.origin, r.count]));
+}
+
+export function countExhaustedThreads(sqlite: Sqlite, sessionId: string): number {
+  const row = sqlite.prepare(
+    "SELECT COUNT(*) as count FROM research_threads WHERE session_id = ? AND status = 'exhausted'"
+  ).get(sessionId) as { count: number };
+  return row.count;
+}
+
+/** Reset threads stuck in 'active' status with no corresponding active job back to 'queued'.
+ *  Handles the case where a worker dies mid-execution leaving threads orphaned. */
+export function resetOrphanedActiveThreads(sqlite: Sqlite): number {
+  const result = sqlite.prepare(`
+    UPDATE research_threads
+    SET status = 'queued', updated_at = datetime('now')
+    WHERE status = 'active'
+    AND id NOT IN (
+      SELECT thread_id FROM research_jobs
+      WHERE thread_id IS NOT NULL
+      AND status IN ('pending', 'claimed', 'running')
+    )
+  `).run();
+  return result.changes;
 }

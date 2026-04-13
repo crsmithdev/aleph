@@ -354,7 +354,7 @@ describe('monitor CRUD', () => {
   });
 
   test('proposed monitor creation', () => {
-    const session = sqlite.prepare("INSERT INTO research_sessions (id, title, seed_query) VALUES ('s1', 'Test', 'q')").run();
+    const session = sqlite.prepare("INSERT INTO research_queries (id, title, seed_query, config) VALUES ('s1', 'Test', 'q', '{}')").run();
     const thread = sqlite.prepare("INSERT INTO research_threads (id, session_id, query, origin) VALUES ('t1', 's1', 'q', 'seed')").run();
 
     const proposed = monitors.createProposedMonitor(sqlite, {

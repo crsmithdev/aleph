@@ -14,8 +14,9 @@ export const backupRoutes: FastifyPluginAsync = async (app) => {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `construct-${timestamp}.db`;
     const dest = join(backupDir, filename);
-    app.sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE)');
-    copyFileSync(dbPath, dest);
+    // Use serialize() for an atomic in-memory snapshot (WAL-safe)
+    const snapshot = app.sqlite.serialize();
+    await Bun.write(dest, snapshot);
     return { filename, createdAt: new Date().toISOString() };
   });
 

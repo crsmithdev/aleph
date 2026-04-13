@@ -10,6 +10,7 @@ import { type Granularity, type TimeRange } from '../../../components/data/TimeR
 import { ObsControlBar, FilterToggle, type DatasetDisplayMode } from '../../../components/data/ObsControlBar';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, CHART_OTHER, chartColor, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
+import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { fmtNumber, fmtMs, fmtPct, dateTime, shortRelativeTime, fmtLegendLabel } from '../../../utils/format';
 import { clsx } from 'clsx';
 
@@ -46,13 +47,7 @@ const HOOK_DATASETS: { key: HookDataset; label: string }[] = [
   { key: 'errors', label: 'Errors' },
 ];
 
-const GRAN_LABEL: Record<Granularity, string> = { minute: 'Per-Minute', hour: 'Hourly', day: 'Daily' };
-
-function fmtCalls(n: number): string {
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
-  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
-  return String(n);
-}
+import { GRAN_LABEL, fmtCalls } from '../../../utils/chart-helpers';
 
 function GatingSection({ gating }: { gating: Record<string, HookGatingStat> }) {
   const hooks = Object.entries(gating);
@@ -100,10 +95,7 @@ function GatingSection({ gating }: { gating: Record<string, HookGatingStat> }) {
 
       {/* Per-hook gating chart */}
       {chartData.length > 0 && (
-        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 h-[220px]">
-          <h3 className="font-heading text-sm font-medium text-text-secondary mb-3">Gate Decisions by Hook</h3>
-          <div className="h-[160px]">
-            <ResponsiveContainer width="100%" height="100%">
+        <ChartContainer title="Gate Decisions by Hook" height={160} className="h-[220px]">
               <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 20, top: 0, bottom: 0 }}>
                 <CartesianGrid {...gridProps} horizontal={false} />
                 <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
@@ -113,9 +105,7 @@ function GatingSection({ gating }: { gating: Record<string, HookGatingStat> }) {
                 <Bar dataKey="advisories" name="Advisories" stackId="a" fill="var(--color-warning, #f59e0b)" radius={[0, 0, 0, 0]} />
                 <Bar dataKey="passes" name="Passes" stackId="a" fill="var(--color-success, #22c55e)" radius={[0, 2, 2, 0]} />
               </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+        </ChartContainer>
       )}
 
       {/* Per-hook table */}

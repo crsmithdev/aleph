@@ -21,7 +21,7 @@ import { reportHook } from "../../hook-report.ts";
 import { parseTranscript } from "../parse-transcript.ts";
 import { extractMemories, hasMemoryStore } from "../extract.ts";
 
-const TAG = "memory-extract";
+const TAG = "memory-extract-stop";
 const VENV_PYTHON = Bun.env.MEMORY_VENV_PYTHON ?? resolve(
   Bun.env.HOME ?? "/tmp",
   ".local/share/uv/tools/mcp-memory-service/bin/python",

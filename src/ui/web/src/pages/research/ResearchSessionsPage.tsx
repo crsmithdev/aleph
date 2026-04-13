@@ -33,7 +33,7 @@ export function ResearchSessionsPage() {
   const stopAll = useStopAllResearch();
   const [newOpen, setNewOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [depth, setDepth] = useState(8);
+  const [depth, setDepth] = useState(9);
   const [provider, setProvider] = useState<string>(() => localStorage.getItem('research_default_provider') ?? 'openrouter');
   const [model, setModel] = useState<string>(() => localStorage.getItem('research_default_model') ?? '');
   const [minSearches, setMinSearches] = useState<number>(() => Number(localStorage.getItem('research_default_min_searches') ?? '2'));

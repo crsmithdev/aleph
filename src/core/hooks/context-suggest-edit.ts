@@ -12,7 +12,7 @@ import { readFileSync, writeFileSync } from "fs";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 
-const TAG = "context-compact-suggest";
+const TAG = "context-suggest-edit";
 const THRESHOLD = parseInt(process.env.COMPACT_THRESHOLD || "50", 10);
 const REMIND_EVERY = 25;
 

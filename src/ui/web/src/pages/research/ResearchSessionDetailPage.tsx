@@ -1069,7 +1069,7 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
 
   const [provider, setProvider] = useState<string>((providers.primary as string) ?? 'anthropic');
   const [model, setModel] = useState<string>((cfg.model as string) ?? '');
-  const [maxDepth, setMaxDepth] = useState<number>((cfg.max_thread_depth as number) ?? 8);
+  const [maxDepth, setMaxDepth] = useState<number>((cfg.max_thread_depth as number) ?? 9);
   const [minSearches, setMinSearches] = useState<number>((cfg.min_searches_per_thread as number) ?? 2);
   const [gapEnabled, setGapEnabled] = useState<boolean>((gapAnalysis.enabled as boolean) ?? true);
   const [maxGapSearches, setMaxGapSearches] = useState<number>((gapAnalysis.max_gap_searches as number) ?? 2);
@@ -1198,8 +1198,8 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
         <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Search</p>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>Max thread depth</label>
-            <input type="number" min={1} max={20} value={maxDepth} onChange={e => setMaxDepth(Number(e.target.value))} className={inputCls} />
+            <label className={labelCls}>Max depth <span className="text-text-muted font-normal">(0 = none, 1 = seed only)</span></label>
+            <input type="number" min={0} max={20} value={maxDepth} onChange={e => setMaxDepth(Number(e.target.value))} className={inputCls} />
           </div>
           <div>
             <label className={labelCls}>Min searches per thread</label>

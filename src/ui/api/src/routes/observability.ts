@@ -33,10 +33,14 @@ import type { Granularity, TelemetryEvent } from '@construct/telemetry';
 const MAX_MEMORY_ITEMS = 500;
 
 // ---------------------------------------------------------------------------
-// Reducer result cache (60s TTL)
+// Reducer result cache (60s TTL for aggregate views).
+// The underlying corpus cache (adapter.ts) refreshes every 5s, so aggregate
+// views may lag up to 60s behind raw events.
 // Keyed by route URL (includes path + query string) — safe for read-only
 // aggregate endpoints. Session traces are excluded (per-session, keyed by id).
 // ---------------------------------------------------------------------------
+
+const MAX_CACHE = 100;
 
 interface ResultCacheEntry {
   value: unknown;
@@ -49,24 +53,13 @@ function cachedResult<T>(key: string, ttlMs: number, fn: () => T): T {
   const now = Date.now();
   const cached = resultCache.get(key);
   if (cached && now < cached.expiresAt) return cached.value as T;
+  if (resultCache.size >= MAX_CACHE) {
+    const firstKey = resultCache.keys().next().value;
+    if (firstKey) resultCache.delete(firstKey);
+  }
   const value = fn();
   resultCache.set(key, { value, expiresAt: now + ttlMs });
   return value;
-}
-
-// Pre-handler that short-circuits before parseDaysPreHandler when the result
-// is already cached. Registered as the first preHandler in the array.
-function resultCachePreHandler(
-  req: FastifyRequest,
-  reply: { send: (body: unknown) => void },
-  done: () => void,
-) {
-  const cached = resultCache.get(req.url);
-  if (cached && Date.now() < cached.expiresAt) {
-    reply.send(cached.value);
-    return;
-  }
-  done();
 }
 
 type QueryParams = { days?: string; range?: string; granularity?: string; session?: string };
@@ -159,38 +152,6 @@ function tryRead(path: string): string | undefined {
   try { return readFileSync(path, 'utf-8'); } catch { return undefined; }
 }
 
-// Decode Claude's project encoding ("-home-user-project" → "/home/user/project")
-// by finding which prefix of the encoded segments matches a real path.
-function decodeProjectPath(encoded: string): string | undefined {
-  // Encoded path has '/' replaced by '-', with a leading '-' for root '/'.
-  // Walk the encoded string finding candidate split points.
-  const stripped = encoded.startsWith('-') ? encoded.slice(1) : encoded;
-  const candidates: string[] = [];
-  // Try all partitions of the stripped string using '-' as separator
-  // by building paths left-to-right and checking existence.
-  function tryBuild(remaining: string, current: string): void {
-    const full = '/' + current;
-    if (existsSync(full) && statSync(full).isDirectory()) {
-      candidates.push(full);
-    }
-    if (!remaining) return;
-    for (let i = 1; i <= remaining.length; i++) {
-      if (remaining[i - 1] === '-' || i === remaining.length) {
-        const seg = remaining.slice(0, i === remaining.length ? i : i - 1);
-        if (seg) tryBuild(remaining.slice(i), current ? current + '/' + seg : seg);
-        if (i < remaining.length) {
-          const segWithHyphen = remaining.slice(0, i);
-          tryBuild(remaining.slice(i), current ? current + '/' + segWithHyphen : segWithHyphen);
-        }
-      }
-    }
-  }
-  // Simpler: just replace all '-' with '/' and try that path first
-  const simple = '/' + stripped.replace(/-/g, '/');
-  if (existsSync(simple)) return simple;
-  return undefined;
-}
-
 type ContextFile = { label: string; path: string; chars: number; estTokens: number };
 
 function readContextFiles(sessionId: string): { files: ContextFile[] } {
@@ -227,7 +188,7 @@ function readContextFiles(sessionId: string): { files: ContextFile[] } {
 
   // 3. Project-local CLAUDE.md
   if (projectEncoded) {
-    const projectPath = decodeProjectPath(projectEncoded);
+    const projectPath = projectIdToPath(projectEncoded);
     if (projectPath) {
       const projectContent = addFile('Project CLAUDE.md', resolve(projectPath, '.claude', 'CLAUDE.md'));
       // Resolve @-refs in project CLAUDE.md too
@@ -278,11 +239,11 @@ function readSessionGateInfo(): Map<string, SessionGateInfo> {
   return map;
 }
 
-function toGateInfo(info: SessionGateInfo | undefined): { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; mode: 'dispatched' | 'inline' | 'none' } | undefined {
+function toGateInfo(info: SessionGateInfo | undefined): { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; hookBlocks: number; hookAdvisories: number; mode: 'dispatched' | 'inline' | 'none' } | undefined {
   if (!info) return undefined;
   if (!info.inlineOverride && info.dispatchBlocks === 0 && info.dispatchAllows === 0) return undefined;
   const mode = info.inlineOverride ? 'inline' : info.dispatchBlocks > 0 ? 'dispatched' : 'none';
-  return { ...info, mode };
+  return { ...info, hookBlocks: 0, hookAdvisories: 0, mode };
 }
 
 function readSelfReportedHookCounts(startDate?: string): Map<string, { count: number; event: string }> {
@@ -416,46 +377,46 @@ type HookMeta = {
 };
 
 const HOOK_METADATA: Record<string, HookMeta> = {
-  'isolation-pre-block-destructive-sql': {
+  'isolation-block-sql': {
     blocking: true,
     description: 'Blocks destructive SQL (DROP, TRUNCATE, DELETE without WHERE)',
   },
-  'quality-stop-check-e2e': {
+  'quality-check-stop': {
     blocking: false,
     description: 'Advisory check for e2e verification evidence after edits',
   },
-  'git-pre-require-commit': {
+  'git-require-edit': {
     blocking: true,
     gate: 'commit-nudge',
-    markerFile: 'git-pre-require-commit-{sessionId}',
+    markerFile: 'git-require-edit-{sessionId}',
     description: 'Groups dirty files by directory; warns at 3 groups, blocks at 5',
   },
-  'quality-post-format': {
+  'quality-format-edit': {
     blocking: false,
     description: 'Post-tool formatting quality checks',
   },
-  'quality-post-typecheck': {
+  'quality-typecheck-edit': {
     blocking: false,
     description: 'Runs tsc type-check after Edit/Write on .ts files',
   },
-  'routing-submit-classify': {
+  'routing-classify-submit': {
     blocking: false,
     gate: 'dispatch',
     description: 'Classifies prompt depth, matches skills, writes directives',
   },
-  'context-stop-monitor': {
+  'context-monitor-stop': {
     blocking: false,
     description: 'Monitors context window usage at stop',
   },
-  'context-precompact-backup': {
+  'context-backup-precompact': {
     blocking: false,
     description: 'Backs up transcript before context compaction',
   },
-  'context-compact-suggest': {
+  'context-suggest-edit': {
     blocking: false,
     description: 'Suggests /compact at 50 tool calls with phase-boundary decision guide',
   },
-  'security-scan-pre-commit': {
+  'security-scan-bash': {
     blocking: false,
     description: 'Scans staged diff for secrets and console.log before git commit',
   },
@@ -482,21 +443,21 @@ function readMarkerFileStats(): Record<string, { writes: number; clears: number;
   // Check git commit markers
   try {
     const signalFiles = readdirSync(dataPaths.signals);
-    const commitMarkers = signalFiles.filter(f => f.startsWith('git-pre-require-commit-'));
-    stats['git-pre-require-commit'] = {
+    const commitMarkers = signalFiles.filter(f => f.startsWith('git-require-edit-'));
+    stats['git-require-edit'] = {
       writes: 0,
       clears: 0,
       activeNow: commitMarkers.length > 0,
     };
   } catch {
-    stats['git-pre-require-commit'] = { writes: 0, clears: 0, activeNow: false };
+    stats['git-require-edit'] = { writes: 0, clears: 0, activeNow: false };
   }
 
   return stats;
 }
 
 export const observabilityRoutes: FastifyPluginAsync = async (app) => {
-  app.get<{ Querystring: QueryParams }>('/overview', { preHandler: [resultCachePreHandler, parseDaysPreHandler] }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/overview', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
     return cachedResult(req.url, 60_000, () => {
       const { result, queryTimeMs } = timed(() => aggregateOverview(obsReq.telemetryEntries, obsReq.granularity));
@@ -504,7 +465,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
-  app.get<{ Querystring: QueryParams }>('/tools', { preHandler: [resultCachePreHandler, parseDaysPreHandler] }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/tools', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
     return cachedResult(req.url, 60_000, () => {
       const { result, queryTimeMs } = timed(() => aggregateTools(obsReq.telemetryEntries, obsReq.granularity));
@@ -516,7 +477,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
-  app.get<{ Querystring: QueryParams }>('/hooks', { preHandler: [resultCachePreHandler, parseDaysPreHandler] }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/hooks', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
     return cachedResult(req.url, 60_000, () => {
       const { result, queryTimeMs } = timed(() => aggregateHooks(obsReq.telemetryEntries, obsReq.granularity));
@@ -572,7 +533,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
-  app.get<{ Querystring: QueryParams }>('/skills', { preHandler: [resultCachePreHandler, parseDaysPreHandler] }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/skills', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
     return cachedResult(req.url, 60_000, () => {
       const { result, queryTimeMs } = timed(() => aggregateSkills(obsReq.telemetryEntries, obsReq.granularity));
@@ -601,7 +562,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
-  app.get<{ Querystring: QueryParams }>('/tokens', { preHandler: [resultCachePreHandler, parseDaysPreHandler] }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/tokens', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
     return cachedResult(req.url, 60_000, () => {
       const { result, queryTimeMs } = timed(() => aggregateTokens(obsReq.telemetryEntries, obsReq.granularity));
@@ -609,7 +570,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
-  app.get<{ Querystring: QueryParams }>('/cost', { preHandler: [resultCachePreHandler, parseDaysPreHandler] }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/cost', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
     return cachedResult(req.url, 60_000, () => {
       const { result, queryTimeMs } = timed(() => aggregateCost(obsReq.telemetryEntries, obsReq.granularity));
@@ -617,7 +578,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
-  app.get<{ Querystring: QueryParams }>('/sessions', { preHandler: [resultCachePreHandler, parseDaysPreHandler] }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/sessions', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
     return cachedResult(req.url, 60_000, () => {
       const { result, queryTimeMs } = timed(() => aggregateSessions(obsReq.telemetryEntries, obsReq.granularity));
@@ -631,7 +592,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Params: { id: string }; Querystring: QueryParams }>(
     '/sessions/:id/trace',
-    { preHandler: [resultCachePreHandler, parseDaysPreHandler] },
+    { preHandler: [parseDaysPreHandler] },
     async (req) => {
       const sessionId = decodeURIComponent(req.params.id);
       return cachedResult(req.url, 30_000, () => {
@@ -653,7 +614,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Params: { name: string }; Querystring: QueryParams }>(
     '/tools/:name',
-    { preHandler: [resultCachePreHandler, parseDaysPreHandler] },
+    { preHandler: [parseDaysPreHandler] },
     async (req) => {
       const obsReq = req as ObsRequest;
       return cachedResult(req.url, 60_000, () => {
@@ -664,7 +625,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  app.get<{ Querystring: QueryParams }>('/hooks/events', { preHandler: [resultCachePreHandler, parseDaysPreHandler] }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/hooks/events', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
     return cachedResult(req.url, 60_000, () => {
       const { result, queryTimeMs } = timed(() => aggregateHookEvents(obsReq.telemetryEntries));
@@ -674,7 +635,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Params: { name: string }; Querystring: QueryParams }>(
     '/hooks/:name',
-    { preHandler: [resultCachePreHandler, parseDaysPreHandler] },
+    { preHandler: [parseDaysPreHandler] },
     async (req) => {
       const obsReq = req as ObsRequest;
       return cachedResult(req.url, 60_000, () => {
@@ -689,7 +650,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Params: { name: string }; Querystring: QueryParams }>(
     '/skills/:name',
-    { preHandler: [resultCachePreHandler, parseDaysPreHandler] },
+    { preHandler: [parseDaysPreHandler] },
     async (req) => {
       const obsReq = req as ObsRequest;
       return cachedResult(req.url, 60_000, () => {
@@ -707,7 +668,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Querystring: QueryParams }>(
     '/memory/usage',
-    { preHandler: [resultCachePreHandler, parseDaysPreHandler] },
+    { preHandler: [parseDaysPreHandler] },
     async (req) => {
       const obsReq = req as ObsRequest;
       return cachedResult(req.url, 60_000, () => {
@@ -719,7 +680,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Querystring: QueryParams }>(
     '/memory/searches',
-    { preHandler: [resultCachePreHandler, parseDaysPreHandler] },
+    { preHandler: [parseDaysPreHandler] },
     async (req) => {
       const obsReq = req as ObsRequest;
       return cachedResult(req.url, 60_000, () => {
@@ -829,7 +790,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  app.get<{ Querystring: QueryParams }>('/compaction', { preHandler: [resultCachePreHandler, parseDaysPreHandler] }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/compaction', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
     return cachedResult(req.url, 60_000, () => {
       const { result, queryTimeMs } = timed(() => aggregateCompaction(obsReq.telemetryEntries, obsReq.granularity));
@@ -837,7 +798,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
-  app.get<{ Querystring: QueryParams }>('/api-duration', { preHandler: [resultCachePreHandler, parseDaysPreHandler] }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/api-duration', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
     return cachedResult(req.url, 60_000, () => {
       const { result, queryTimeMs } = timed(() => aggregateApiDuration(obsReq.telemetryEntries, obsReq.granularity));
@@ -847,7 +808,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Querystring: QueryParams & { type?: string; search?: string; limit?: string; offset?: string } }>(
     '/events',
-    { preHandler: [resultCachePreHandler, parseDaysPreHandler] },
+    { preHandler: [parseDaysPreHandler] },
     async (req) => {
       // Events are not cached — they're paginated and search-filtered, so the URL
       // key already differentiates pages/queries, but staleness of 5s is fine.
@@ -932,7 +893,8 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     let db: Database | null = null;
     try {
       db = new Database(dbPath, { readonly: true });
-      const columns = db.query(`PRAGMA table_info("${table.replace(/"/g, '')}")`).all() as Array<{
+      const safeTable = table.replace(/[^a-zA-Z0-9_]/g, '');
+      const columns = db.query(`PRAGMA table_info("${safeTable}")`).all() as Array<{
         cid: number; name: string; type: string; notnull: number; dflt_value: string | null; pk: number;
       }>;
       return { columns: columns.map(c => ({ name: c.name, type: c.type, notnull: !!c.notnull, pk: !!c.pk, defaultValue: c.dflt_value })) };
@@ -966,7 +928,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  app.get<{ Querystring: QueryParams }>('/subagents', { preHandler: [resultCachePreHandler, parseDaysPreHandler] }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/subagents', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
     return cachedResult(req.url, 60_000, () => {
       const { result, queryTimeMs } = timed(() => aggregateSubagents(obsReq.telemetryEntries, obsReq.granularity));
@@ -1299,7 +1261,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
   // Verifications
   // ---------------------------------------------------------------------------
 
-  app.get<{ Querystring: QueryParams }>('/verifications', { preHandler: [resultCachePreHandler, parseDaysPreHandler] }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/verifications', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
     return cachedResult(req.url, 60_000, () => {
       const { result, queryTimeMs } = timed(() => aggregateVerifications(obsReq.telemetryEntries, obsReq.granularity));

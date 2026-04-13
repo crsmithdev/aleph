@@ -18,7 +18,7 @@ import { readFileSync } from "fs";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 
-const TAG = "context-stop-monitor";
+const TAG = "context-monitor-stop";
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
 catch (e) { trace(TAG, `stdin parse failed: ${(e as Error).message}`); process.exit(0); }

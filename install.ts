@@ -302,11 +302,11 @@ try {
     // Write a workspace root package.json at construct/ (not synced from src)
     await writeFile(join(constructDst, "package.json"), JSON.stringify({
       private: true,
-      workspaces: ["data", "goals", "research", "telemetry", "ui", "ui/api", "ui/web"],
+      workspaces: ["data", "eval", "goals", "research", "telemetry", "ui", "ui/api", "ui/web"],
     }, null, 2) + "\n");
     // Remove stale node_modules so bun installs fresh
     for (const rel of ["node_modules", "ui/node_modules", "ui/api/node_modules", "ui/web/node_modules",
-                        "data/node_modules", "goals/node_modules", "research/node_modules", "telemetry/node_modules"]) {
+                        "data/node_modules", "eval/node_modules", "goals/node_modules", "research/node_modules", "telemetry/node_modules"]) {
       await rm(join(constructDst, rel), { recursive: true, force: true });
     }
     await Bun.$`cd ${constructDst} && bun install`.quiet().nothrow();
@@ -402,9 +402,21 @@ try {
     step("manifest", `failed: ${(e as Error).message?.slice(0, 60) ?? "unknown"}`);
   }
 
-  // 12. Write + reload systemd service
+  // 12. Write env file + systemd services
   const serviceDir = join(Bun.env.HOME!, ".config/systemd/user");
   await mkdir(serviceDir, { recursive: true });
+
+  // Write API keys to env file (keeps them out of .service files)
+  const envFilePath = join(DATA_DIR, ".env");
+  const envLines: string[] = [];
+  for (const key of ["ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "TAVILY_API_KEY", "BRAVE_SEARCH_API_KEY", "JINA_API_KEY"]) {
+    if (Bun.env[key]) envLines.push(`${key}=${Bun.env[key]}`);
+  }
+  if (envLines.length > 0) {
+    await writeFile(envFilePath, envLines.join("\n") + "\n");
+    await Bun.$`chmod 600 ${envFilePath}`.quiet();
+  }
+
   await writeFile(join(serviceDir, "construct-ui.service"), [
     "[Unit]",
     "Description=Construct UI (API + Web)",
@@ -415,7 +427,7 @@ try {
     "WorkingDirectory=%h/.claude/construct/ui",
     "Environment=PATH=%h/.bun/bin:/usr/local/bin:/usr/bin:/bin",
     "Environment=NODE_ENV=production",
-    `Environment=ANTHROPIC_API_KEY=${Bun.env.ANTHROPIC_API_KEY || ""}`,
+    "EnvironmentFile=%h/.construct/.env",
     "ExecStart=%h/.bun/bin/bun run serve",
     "Restart=on-failure",
     "RestartSec=5",
@@ -434,7 +446,7 @@ try {
     "WorkingDirectory=%h/.claude/construct/research",
     "Environment=PATH=%h/.bun/bin:/usr/local/bin:/usr/bin:/bin",
     "Environment=NODE_ENV=production",
-    `Environment=ANTHROPIC_API_KEY=${Bun.env.ANTHROPIC_API_KEY || ""}`,
+    "EnvironmentFile=%h/.construct/.env",
     "ExecStart=%h/.bun/bin/bun src/worker.ts",
     "Restart=on-failure",
     "RestartSec=10",

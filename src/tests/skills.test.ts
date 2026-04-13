@@ -12,7 +12,7 @@ const r = createResults();
 console.log("--- skill routing ---");
 
 function skillTest(prompt: string): { skills: string[]; depth: string } {
-  const { stdout } = runHook(te, "core/hooks/routing-submit-classify.ts", JSON.stringify({ prompt }));
+  const { stdout } = runHook(te, "core/hooks/routing-classify-submit.ts", JSON.stringify({ prompt }));
   const skills = stdout.match(/Matched skills: ([^.]+)/)?.[1]?.split(", ") ?? [];
   const depth = stdout.includes("FULL") ? "FULL" : "QUICK";
   return { skills, depth };
@@ -27,9 +27,9 @@ check(r, "skill: 'add dark mode' → only lifecycle skills", addDarkSkills.every
 const fixTypoSkills = skillTest("fix the typo on line 42").skills;
 check(r, "skill: 'fix the typo' → only lifecycle skills", fixTypoSkills.every(s => CODE_DEFAULTS.includes(s)));
 
-runAndCheck(te, r, "core/hooks/routing-submit-classify.ts", "smoke", "{}");
-runAndCheck(te, r, "core/hooks/routing-submit-classify.ts", "short skip", '{"prompt":"do it"}');
-runAndCheck(te, r, "core/hooks/routing-submit-classify.ts", "malformed", "not json");
+runAndCheck(te, r, "core/hooks/routing-classify-submit.ts", "smoke", "{}");
+runAndCheck(te, r, "core/hooks/routing-classify-submit.ts", "short skip", '{"prompt":"do it"}');
+runAndCheck(te, r, "core/hooks/routing-classify-submit.ts", "malformed", "not json");
 
 // ── Depth classification ─────────────────────────────────────────────────────
 
@@ -57,7 +57,7 @@ check(r, "depth: 'read the file' → QUICK", skillTest("read the API response ha
 
 console.log("\n--- skill extensions ---");
 
-const resOut = runHook(te, "core/hooks/routing-submit-classify.ts", JSON.stringify({ prompt: "investigate how redis handles eviction policies" })).stdout;
+const resOut = runHook(te, "core/hooks/routing-classify-submit.ts", JSON.stringify({ prompt: "investigate how redis handles eviction policies" })).stdout;
 check(r, "extension: research has no project extension", !resOut.includes("Project skill extensions"));
 
 cleanupTestEnv(te);

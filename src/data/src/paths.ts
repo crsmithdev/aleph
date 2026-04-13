@@ -24,6 +24,7 @@ export const dataPaths = {
   ratings: resolve(DATA_ROOT, "signals", "ratings.jsonl"),
   directives: resolve(DATA_ROOT, "signals", "directives.jsonl"),
   hookEvents: resolve(DATA_ROOT, "signals", "hook-events.jsonl"),
+  compactionNotes: resolve(DATA_ROOT, "signals", "compaction-notes.json"),
 };
 
 const MEMORY_DIR = resolve(DATA_ROOT, "memory");

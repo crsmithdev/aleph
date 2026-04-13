@@ -48,13 +48,17 @@ class MockProvider implements LLMProvider {
     return this;
   }
 
-  // Add responses for one iteration (formulate + search + synthesize + dedup)
+  // Add responses for one iteration (formulate + search + synthesize + dedup + detectGaps)
   // Set firstIteration=true to skip dedup response (engine skips dedup when no prior findings)
   addIteration(findingOverrides?: Record<string, unknown>, firstIteration = false) {
     this.addComplete(JSON.stringify(['test query']));
     this.addSearch('Search results about the topic with useful data.');
     this.addComplete(standardFinding(findingOverrides));
     if (!firstIteration) this.addComplete('false'); // dedup
+    this.addComplete(JSON.stringify([              // detectGaps (always called by evaluateFollowUps)
+      'What are the long-term economic implications for global markets?',
+      'How do similar phenomena manifest across different geographic regions?',
+    ]));
     return this;
   }
 
@@ -105,10 +109,12 @@ function lowNoveltyFinding() {
 }
 
 function setupStandardProvider(): MockProvider {
-  return new MockProvider().addIteration(undefined, true);
+  return new MockProvider()
+    .addComplete('Sourdough Bread') // absorbs summarizeThreadAsync seed-thread call
+    .addIteration(undefined, true);
 }
 
-const NO_DELAY = { min_delay_between_steps_ms: 0 };
+const NO_DELAY = { min_delay_between_steps_ms: 0, gap_analysis: { enabled: false } };
 
 // ========== Execution Loop Resilience ==========
 
@@ -154,8 +160,8 @@ describe('execution loop resilience', () => {
       maxIterations: 20,
     });
 
-    // Very low budget: search step costs ~$0.0105, so should pause after ~2 iterations
-    const session = await engine.startSession('Budget', 'test', { budget_daily_usd: 0.02, ...NO_DELAY });
+    // Very low budget: with claude-haiku-4-5 search step costs ~$0.003, should pause after 1 iteration
+    const session = await engine.startSession('Budget', 'test', { model: 'claude-haiku-4-5', budget_daily_usd: 0.001, ...NO_DELAY });
     await engine.runIterations(session.id);
 
     const updated = sessions.getSession(sqlite, session.id);
@@ -419,7 +425,7 @@ describe('cost tracking accuracy', () => {
     const engine = new ResearchEngine({
       sqlite, provider, maxIterations: 3,
     });
-    const session = await engine.startSession('Cost', 'test', { p_serendipity: 0.0, ...NO_DELAY });
+    const session = await engine.startSession('Cost', 'test', { model: 'claude-haiku-4-5', p_serendipity: 0.0, ...NO_DELAY });
     await engine.runIterations(session.id);
 
     const stepCosts = steps.getStepCosts(sqlite, session.id);
@@ -445,7 +451,7 @@ describe('data integrity', () => {
     });
     plans.createPlan(sqlite, session.id, []);
 
-    sqlite.prepare('DELETE FROM research_sessions WHERE id = ?').run(session.id);
+    sqlite.prepare('DELETE FROM research_queries WHERE id = ?').run(session.id);
     expect(threads.listThreads(sqlite, session.id).length).toBe(0);
     expect(findings.listFindings(sqlite, session.id).length).toBe(0);
   });
@@ -477,11 +483,16 @@ describe('data integrity', () => {
     const session = sessions.createSession(sqlite, 'Test', 'q');
     const thread = threads.createThread(sqlite, { session_id: session.id, query: 'q', origin: 'seed' });
 
+    // Use explicit IDs to avoid the word-based generator's birthday-problem collisions at scale
+    const now = new Date().toISOString();
+    const stmt = sqlite.prepare(`
+      INSERT INTO research_findings
+        (id, thread_id, session_id, content, summary, source_urls, source_texts, source_url_meta,
+         source_quality, tags, confidence, novelty, actionability, follow_ups, created_at)
+      VALUES (?, ?, ?, ?, ?, '[]', '[]', '[]', 0.5, '[]', 0.5, 0.5, 0.5, '[]', ?)
+    `);
     for (let i = 0; i < 500; i++) {
-      findings.createFinding(sqlite, {
-        thread_id: thread.id, session_id: session.id,
-        content: `Finding ${i}`, summary: `Summary ${i}`,
-      });
+      stmt.run(`finding-${i}`, thread.id, session.id, `Content ${i}`, `Summary ${i}`, now);
     }
 
     expect(findings.countFindings(sqlite, session.id)).toBe(500);
@@ -499,7 +510,7 @@ describe('full engine flow', () => {
     const engine = new ResearchEngine({
       sqlite, provider, maxIterations: 1,
     });
-    const session = await engine.startSession('Full', 'sourdough bread', { p_serendipity: 0.0, ...NO_DELAY });
+    const session = await engine.startSession('Full', 'sourdough bread', { model: 'claude-haiku-4-5', p_serendipity: 0.0, ...NO_DELAY });
     const result = await engine.runIterations(session.id);
 
     expect(result.iterations).toBe(1);

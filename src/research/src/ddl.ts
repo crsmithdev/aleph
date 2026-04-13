@@ -36,7 +36,7 @@ export function applyResearchDDL(sqlite: Sqlite): void {
       status TEXT NOT NULL DEFAULT 'queued',
       priority REAL NOT NULL DEFAULT 0.5,
       depth INTEGER NOT NULL DEFAULT 0,
-      max_depth INTEGER NOT NULL DEFAULT 8,
+      max_depth INTEGER NOT NULL DEFAULT 9,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -68,7 +68,7 @@ export function applyResearchDDL(sqlite: Sqlite): void {
       session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
       finding_id TEXT REFERENCES research_findings(id) ON DELETE SET NULL,
       model TEXT NOT NULL,
-      provider TEXT NOT NULL DEFAULT 'anthropic',
+      provider TEXT NOT NULL DEFAULT 'openrouter',
       prompt_tokens INTEGER NOT NULL DEFAULT 0,
       completion_tokens INTEGER NOT NULL DEFAULT 0,
       cost_usd REAL NOT NULL DEFAULT 0,
@@ -163,6 +163,7 @@ export function applyResearchDDL(sqlite: Sqlite): void {
     CREATE TABLE IF NOT EXISTS research_jobs (
       id TEXT PRIMARY KEY,
       session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
+      thread_id TEXT REFERENCES research_threads(id) ON DELETE SET NULL,
       status TEXT NOT NULL DEFAULT 'pending',
       mode TEXT NOT NULL DEFAULT 'burst',
       max_iterations INTEGER,
@@ -191,4 +192,7 @@ export function applyResearchDDL(sqlite: Sqlite): void {
   try { sqlite.exec(`ALTER TABLE research_findings ADD COLUMN source_texts TEXT NOT NULL DEFAULT '[]'`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN min_searches INTEGER`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN fetch_source_text INTEGER`); } catch { /* exists */ }
+  try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN document TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
+  try { sqlite.exec(`ALTER TABLE research_jobs ADD COLUMN thread_id TEXT`); } catch { /* exists */ }
+  try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_rj_thread ON research_jobs(thread_id, status)`); } catch { /* exists */ }
 }

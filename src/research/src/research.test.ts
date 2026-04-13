@@ -427,7 +427,7 @@ describe('data integrity', () => {
     });
 
     // Delete session — should cascade
-    sqlite.prepare('DELETE FROM research_sessions WHERE id = ?').run(session.id);
+    sqlite.prepare('DELETE FROM research_queries WHERE id = ?').run(session.id);
     expect(threads.listThreads(sqlite, session.id).length).toBe(0);
     expect(findings.listFindings(sqlite, session.id).length).toBe(0);
   });

@@ -10,7 +10,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/memory/hooks/session-start.ts 2>/dev/null",
+            "command": "bun src/memory/hooks/context-restore-start.ts 2>/dev/null",
             "timeout": 5000
           }
         ]
@@ -21,7 +21,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/memory/hooks/rating-capture.ts 2>/dev/null",
+            "command": "bun src/memory/hooks/rating-capture-submit.ts 2>/dev/null",
             "timeout": 2000
           }
         ]
@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/core/hooks/routing-submit-classify.ts 2>/dev/null",
+            "command": "bun src/core/hooks/routing-classify-submit.ts 2>/dev/null",
             "timeout": 3000
           }
         ]
@@ -41,7 +41,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/core/hooks/quality-stop-check-e2e.ts 2>/dev/null",
+            "command": "bun src/core/hooks/quality-check-stop.ts 2>/dev/null",
             "timeout": 3000
           }
         ]
@@ -50,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/core/hooks/context-stop-monitor.ts 2>/dev/null",
+            "command": "bun src/core/hooks/context-monitor-stop.ts 2>/dev/null",
             "timeout": 3000
           }
         ]
@@ -59,7 +59,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/memory/hooks/session-summary.ts 2>/dev/null",
+            "command": "bun src/memory/hooks/context-save-stop.ts 2>/dev/null",
             "timeout": 3000
           }
         ]
@@ -68,7 +68,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/memory/hooks/memory-extract.ts 2>/dev/null",
+            "command": "bun src/memory/hooks/memory-extract-stop.ts 2>/dev/null",
             "timeout": 5000
           }
         ]
@@ -80,7 +80,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/core/hooks/isolation-pre-block-destructive-sql.ts 2>/dev/null",
+            "command": "bun src/core/hooks/isolation-block-sql.ts 2>/dev/null",
             "timeout": 3000
           }
         ]
@@ -90,7 +90,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/core/hooks/git-pre-require-commit.ts 2>/dev/null",
+            "command": "bun src/core/hooks/git-require-edit.ts 2>/dev/null",
             "timeout": 5000
           }
         ]
@@ -100,7 +100,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/core/hooks/context-compact-suggest.ts 2>/dev/null",
+            "command": "bun src/core/hooks/context-suggest-edit.ts 2>/dev/null",
             "timeout": 3000
           }
         ]
@@ -110,7 +110,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/core/hooks/security-scan-pre-commit.ts 2>/dev/null",
+            "command": "bun src/core/hooks/security-scan-bash.ts 2>/dev/null",
             "timeout": 5000
           }
         ]
@@ -122,7 +122,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/core/hooks/quality-post-format.ts 2>/dev/null",
+            "command": "bun src/core/hooks/quality-format-edit.ts 2>/dev/null",
             "timeout": 10000
           }
         ]
@@ -132,7 +132,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/core/hooks/quality-post-typecheck.ts 2>/dev/null",
+            "command": "bun src/core/hooks/quality-typecheck-edit.ts 2>/dev/null",
             "timeout": 15000
           }
         ]
@@ -143,7 +143,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/core/hooks/context-precompact-backup.ts 2>/dev/null",
+            "command": "bun src/core/hooks/context-backup-precompact.ts 2>/dev/null",
             "timeout": 5000
           }
         ]

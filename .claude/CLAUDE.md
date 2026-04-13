@@ -70,8 +70,8 @@ After any install, verify with `systemctl --user status construct-ui` and `curl 
 
 **Additional checks:**
 
-- **Hook integrity:** every hook command in `dotclaude/settings.json` points to a file that exists; every hook handles malformed stdin (JSON parse → exit 1); every hook uses `trace()` from `src/trace.ts`; no hook writes to stdout unless it has a meaningful message
-- **Duplication guard:** nothing in `.claude/` duplicates what's in `dotclaude/` (double-fire risk); CLAUDE.md rules exist in exactly one location per the ownership table
+- **Hook integrity:** every hook command in `src/core/hooks/settings-hooks.json` points to a file that exists; every hook handles malformed stdin (JSON parse → exit 1); every hook uses `trace()` from `src/trace.ts`; no hook writes to stdout unless it has a meaningful message
+- **Duplication guard:** nothing in `.claude/` duplicates what's in `src/core/hooks/settings-hooks.json` (double-fire risk); CLAUDE.md rules exist in exactly one location per the ownership table
 - **Backwards-compat cruft:** look for shims, wrappers, or fallbacks kept "for backwards compat" that nothing reads anymore; check for old file paths, renamed exports, deprecated aliases, or stale config keys; if the only consumer was removed, the compat layer is dead — remove it
 - **Install roundtrip:** run `bun install.ts` && `bun test.ts` after review; installed copies must match sources byte-for-byte
 
@@ -97,7 +97,7 @@ After any install, verify with `systemctl --user status construct-ui` and `curl 
 
 **Additional checks:**
 
-1. Every hook registered in `settings.json` is documented in the Hook Registration table
+1. Every hook registered in `src/core/hooks/settings-hooks.json` is documented in the Hook Registration table
 2. Every slash subcommand in `construct.md` is documented
 3. Every skill in `skill-rules.json` is documented
 4. Every module detection file listed matches reality

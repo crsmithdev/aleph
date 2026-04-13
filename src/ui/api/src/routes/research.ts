@@ -11,7 +11,8 @@ import {
   DEFAULT_SESSION_CONFIG,
   fetchPageText, JS_RENDERED_FLAG,
   // Job imports
-  createJob, getJob, getActiveJobForSession, cancelJob, listJobsForSession, cancelAllJobs,
+  createJob, getJob, getActiveJobForSession, cancelJob, listJobsForSession, cancelAllJobs, listAllJobs, listActiveJobs, jobStats,
+  type JobStatus,
   deleteQuery,
   // Monitor imports
   createMonitor, getMonitor, listMonitors, updateMonitor,
@@ -46,7 +47,6 @@ function placeholderShortQuery(query: string): string {
 }
 
 async function generateShortQuery(query: string): Promise<string | null> {
-  if (query.trim().length <= 80) return null; // placeholder is fine
   const openrouterKey = process.env.OPENROUTER_API_KEY;
   if (!openrouterKey) return null;
   try {
@@ -55,14 +55,14 @@ async function generateShortQuery(query: string): Promise<string | null> {
       headers: { 'Authorization': `Bearer ${openrouterKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'deepseek/deepseek-chat',
-        messages: [{ role: 'user', content: `Summarize this research question in one short sentence (under 80 characters). Return ONLY the summary, nothing else:\n\n${query}` }],
-        max_tokens: 60,
+        messages: [{ role: 'user', content: `Give a short conceptual section title (1-5 words) for this research topic. Like a Wikipedia section heading — a noun phrase, not a question. No quotes, no punctuation. Return ONLY the title:\n\n${query}` }],
+        max_tokens: 20,
       }),
     });
     if (resp.ok) {
       const data = await resp.json() as { choices: Array<{ message: { content: string } }> };
-      const summary = data.choices[0]?.message?.content?.trim();
-      if (summary && summary.length <= 100) return summary;
+      const summary = data.choices[0]?.message?.content?.trim().replace(/^["']|["']$/g, '');
+      if (summary && summary.length <= 60) return summary;
     }
   } catch { /* fall through */ }
   return null;
@@ -154,7 +154,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
         priority: 1.0,
         depth: 0,
         max_depth: query.config.max_thread_depth,
-        status: 'queued',
+        status: query.config.max_thread_depth > 0 ? 'queued' : 'deferred',
       });
       // Fire async LLM summarization for the seed thread
       generateShortQuery(seed_query).then(summary => {
@@ -166,6 +166,8 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
           updateQuery(app.sqlite, query.id, { title: llmTitle });
         }
       }).catch(() => { /* ignore */ });
+      // Auto-create a burst job so workers pick it up immediately
+      createJob(app.sqlite, { session_id: query.id, mode: 'burst' });
       return reply.status(201).send(query);
     }
   );
@@ -348,6 +350,92 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
+  // === Document generation ===
+  app.post<{ Params: { id: string } }>(
+    '/queries/:id/generate-document',
+    async (req, reply) => {
+      const queryId = req.params.id;
+      const query = getQuery(app.sqlite, queryId);
+      if (!query) return reply.status(404).send({ error: 'Query not found' });
+
+      const allQueryFindings = listFindings(app.sqlite, queryId);
+      const allQueryThreads = listThreads(app.sqlite, queryId);
+
+      if (allQueryFindings.length < 3) {
+        return reply.status(400).send({ error: 'Not enough findings to generate an article (need at least 3)' });
+      }
+
+      const openrouterKey = process.env.OPENROUTER_API_KEY;
+      if (!openrouterKey) return reply.status(400).send({ error: 'OpenRouter API key required' });
+
+      // Build source material
+      const threadMap = new Map(allQueryThreads.map(t => [t.id, t]));
+      const material = allQueryFindings.map(f => {
+        const thread = threadMap.get(f.thread_id);
+        return `[Section: ${thread?.short_query ?? thread?.query ?? 'unknown'}]\n${f.content}`;
+      }).join('\n\n---\n\n');
+
+      // Collect sources
+      const allUrls = new Map<string, { url: string; title: string }>();
+      for (const f of allQueryFindings) {
+        for (const url of f.source_urls) {
+          if (!allUrls.has(url)) {
+            const meta = (f.source_url_meta as Array<{ url: string; title: string }>)?.find(m => m.url === url);
+            allUrls.set(url, { url, title: meta?.title ?? url });
+          }
+        }
+      }
+
+      const model = (query.config as any)?.model || 'deepseek/deepseek-chat';
+      const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${openrouterKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          messages: [{
+            role: 'user',
+            content: `You are a skilled encyclopedia editor. Using the research findings below as source material, write a comprehensive, well-structured article about: "${query.seed_query}"
+
+Write it like a Wikipedia article:
+- Start with a concise lead section (2-3 paragraphs) that summarizes the entire topic
+- Organize the body into logical sections with short heading titles (1-5 words each, ## level)
+- Use subsections (### level) where appropriate
+- Write in flowing, connected prose — not bullet points or lists
+- Weave findings together into a coherent narrative; don't just list them sequentially
+- Use transitional phrases between paragraphs and sections
+- Where sources are relevant, cite them using numbered references like [1], [2] etc.
+- End with a "## References" section listing all cited sources as numbered items
+- Do NOT include confidence scores, tags, metadata, or any research-process artifacts
+- The tone should be encyclopedic: neutral, informative, authoritative
+
+Source material (${allQueryFindings.length} findings):
+
+${material}
+
+Available sources for citation:
+${Array.from(allUrls.values()).map((s, i) => `[${i + 1}] ${s.title} — ${s.url}`).join('\n')}
+
+Write the full article in markdown.`,
+          }],
+          max_tokens: 8000,
+        }),
+      });
+
+      if (!resp.ok) {
+        const errText = await resp.text();
+        return reply.status(502).send({ error: `LLM call failed: ${errText}` });
+      }
+
+      const data = await resp.json() as { choices: Array<{ message: { content: string } }> };
+      let doc = data.choices[0]?.message?.content?.trim() ?? '';
+      // Strip markdown code fences if the LLM wrapped the output
+      doc = doc.replace(/^```(?:markdown)?\s*\n?/i, '').replace(/\n?```\s*$/, '');
+
+      updateQuery(app.sqlite, queryId, { document: doc });
+      return reply.send({ document: doc });
+    }
+  );
+
   // === Costs ===
   app.get<{ Params: { id: string } }>(
     '/queries/:id/costs',
@@ -500,15 +588,19 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
 
   function maskKey(key: string | undefined): string {
     if (!key) return '';
-    if (key.length <= 8) return '••••';
-    return '••••' + key.slice(-4);
+    if (key.length <= 8) return '*'.repeat(key.length);
+    return key.slice(0, 4) + '····' + key.slice(-4);
   }
 
   app.get('/config', async () => {
     const cfg = loadProviderConfig();
+    const recentModels = (app.sqlite.prepare(
+      `SELECT model FROM research_steps WHERE model != '' GROUP BY model ORDER BY MAX(created_at) DESC LIMIT 10`
+    ).all() as { model: string }[]).map(r => r.model);
     return {
       llm_provider: cfg.llm_provider ?? (process.env.ANTHROPIC_API_KEY ? 'anthropic' : 'openrouter'),
       model: cfg.model ?? '',
+      recent_models: recentModels,
       search_provider: cfg.search_provider ?? (process.env.TAVILY_API_KEY ? 'tavily' : process.env.BRAVE_SEARCH_API_KEY ? 'brave' : 'duckduckgo'),
       fulltext_provider: cfg.fulltext_provider ?? (process.env.JINA_API_KEY ? 'jina' : 'local'),
       // Masked keys — indicate whether set
@@ -520,7 +612,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
         jina: { set: !!process.env.JINA_API_KEY, masked: maskKey(process.env.JINA_API_KEY) },
       },
       // Research defaults
-      max_thread_depth: cfg.max_thread_depth ?? 8,
+      max_thread_depth: cfg.max_thread_depth ?? 9,
       min_searches: cfg.min_searches ?? 2,
       fetch_source_text: cfg.fetch_source_text ?? false,
       gap_analysis: cfg.gap_analysis ?? true,
@@ -568,8 +660,48 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // === Worker supervisor ===
-  app.get('/workers', async () => app.supervisor.status());
+  app.get('/workers', async () => {
+    const supervisorWorkers = app.supervisor.status();
+    const activeJobs = listActiveJobs(app.sqlite);
+    return supervisorWorkers.map(w => {
+      // Match by PID: claimed_by is "worker-{pid}-{timestamp}"
+      const currentJob = w.pid != null
+        ? activeJobs.find(j => j.claimed_by != null && j.claimed_by.startsWith(`worker-${w.pid}-`)) ?? null
+        : null;
+      return { ...w, currentJob };
+    });
+  });
   app.post('/workers/start', async () => { app.supervisor.start(); return app.supervisor.status(); });
+
+  // Worker scaling
+  app.post('/workers/add', async () => {
+    const w = app.supervisor.addWorker();
+    return w;
+  });
+
+  app.post('/workers/remove', async () => {
+    const id = await app.supervisor.removeWorker();
+    return { removed: id };
+  });
+
+  app.post<{ Params: { id: string } }>('/workers/:id/kill', async (req) => {
+    const id = parseInt(req.params.id, 10);
+    const ok = await app.supervisor.killWorker(id);
+    return { killed: ok };
+  });
+
+  // Job history & stats
+  app.get('/jobs', async (req) => {
+    const url = new URL(req.url, 'http://localhost');
+    const limit = parseInt(url.searchParams.get('limit') ?? '50', 10);
+    const offset = parseInt(url.searchParams.get('offset') ?? '0', 10);
+    const status = url.searchParams.get('status') as JobStatus | null;
+    return listAllJobs(app.sqlite, { limit, offset, status: status || undefined });
+  });
+
+  app.get('/jobs/stats', async () => {
+    return jobStats(app.sqlite);
+  });
 
   // === Global run/stop ===
   app.post('/run-all', async () => {

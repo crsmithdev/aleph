@@ -9,8 +9,7 @@ import { type TimeRange, type Granularity } from '../../../components/data/TimeR
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, CHART_OTHER, chartColor, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { dateTime, fmtNumber, fmtMs, fmtToolName } from '../../../utils/format';
-
-const GRAN_LABEL: Record<string, string> = { minute: 'Per-Minute', hour: 'Hourly', day: 'Daily' };
+import { GRAN_LABEL } from '../../../utils/chart-helpers';
 
 type EventsDataset = 'activity' | 'tokens';
 const EVENTS_DATASETS: { key: EventsDataset; label: string }[] = [

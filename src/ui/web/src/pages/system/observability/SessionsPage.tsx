@@ -62,7 +62,7 @@ function sliceRanked<T extends Record<string, unknown>>(items: T[], valueKey: st
   const other = { ...Object.fromEntries(Object.keys(items[0] ?? {}).map(k => [k, k === valueKey ? otherValue : 'Other'])) } as unknown as T;
   return [...top, other];
 }
-const GRAN_LABEL: Record<string, string> = { minute: 'Per-Minute', hour: 'Hourly', day: 'Daily' };
+import { GRAN_LABEL } from '../../../utils/chart-helpers';
 
 type SessionRow = {
   sessionId: string;
@@ -210,7 +210,7 @@ export function SessionsPage() {
       render: (row) => (
         <span className="font-mono text-base whitespace-nowrap">
           <span className="text-text-secondary">{fmtNumber(row.userMessages + row.assistantMessages)}</span>
-          <span className="text-text-disabled ml-1">({fmtNumber(row.assistantMessages)} / {fmtNumber(row.userMessages)})</span>
+          <span className="text-text-muted ml-1">({fmtNumber(row.assistantMessages)} / {fmtNumber(row.userMessages)})</span>
         </span>
       ),
     },

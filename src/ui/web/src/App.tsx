@@ -14,8 +14,6 @@ import { SummaryPage } from './pages/life/SummaryPage';
 import { ResearchQueriesPage } from './pages/research/ResearchQueriesPage';
 import { ResearchQueryDetailPage } from './pages/research/ResearchQueryDetailPage';
 import { ResearchPlanPage } from './pages/research/ResearchPlanPage';
-import { MonitorsPage } from './pages/research/MonitorsPage';
-import { MonitorDetailPage } from './pages/research/MonitorDetailPage';
 import { ResearchWorkersPage } from './pages/research/ResearchWorkersPage';
 import { ResearchConfigPage } from './pages/research/ResearchConfigPage';
 
@@ -64,14 +62,12 @@ export function App() {
               <Route path="/habits" element={<HabitsPage />} />
 
               {/* Research */}
-              <Route path="/research" element={<Navigate to="/research/queries" replace />} />
-              <Route path="/research/queries" element={<ResearchQueriesPage />} />
+              <Route path="/research" element={<ResearchQueriesPage />} />
+              <Route path="/research/queries" element={<Navigate to="/research" replace />} />
               <Route path="/research/:id" element={<ResearchQueryDetailPage />} />
               <Route path="/research/:id/plan" element={<ResearchPlanPage />} />
               <Route path="/research/workers" element={<ResearchWorkersPage />} />
               <Route path="/research/config" element={<ResearchConfigPage />} />
-              <Route path="/research/monitors" element={<MonitorsPage />} />
-              <Route path="/research/monitors/:id" element={<MonitorDetailPage />} />
 
               {/* Observability */}
               <Route path="/observability" element={<OverviewPage />} />

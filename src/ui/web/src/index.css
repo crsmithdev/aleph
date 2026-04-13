@@ -147,5 +147,18 @@ dialog::backdrop {
 .md-content hr { border: none; border-top: 1px solid var(--border-primary); margin: 0.5rem 0; }
 .md-content.md-sm h1, .md-content.md-sm h2, .md-content.md-sm h3 { font-size: 0.6875rem; }
 
+/* Article view — override compact md-content for long-form reading */
+.md-content.article-view { font-size: 1rem; line-height: 1.85; color: var(--text-primary); }
+.md-content.article-view p { margin-bottom: 1rem; color: var(--text-secondary); }
+.md-content.article-view ul { font-size: 1rem; padding-left: 1.5rem; margin-bottom: 1rem; }
+.md-content.article-view ol { font-size: 1rem; padding-left: 1.5rem; margin-bottom: 1rem; }
+.md-content.article-view li { margin-bottom: 0.25rem; color: var(--text-secondary); }
+.md-content.article-view blockquote { border-left-width: 3px; padding-left: 1rem; margin: 1.5rem 0; }
+.md-content.article-view code { font-size: 0.9em; }
+.md-content.article-view pre { padding: 1rem; margin-bottom: 1rem; }
+.md-content.article-view hr { margin: 2rem 0; }
+.md-content.article-view table { font-size: 0.9375rem; }
+.md-content.article-view th, .md-content.article-view td { padding: 0.5rem 0.75rem; }
+
 /* Recharts legend — override default li margin so legendProps gap controls spacing */
 .recharts-legend-item { margin-right: 0 !important; }

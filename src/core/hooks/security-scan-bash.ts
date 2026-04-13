@@ -14,7 +14,7 @@ import { execSync } from "child_process";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 
-const TAG = "security-scan-pre-commit";
+const TAG = "security-scan-bash";
 
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }

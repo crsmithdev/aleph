@@ -10,6 +10,7 @@ export interface ResearchQuery {
   status: 'active' | 'paused' | 'completed' | 'archived';
   config: Record<string, unknown>;
   summary: string;
+  document: string;
   user_notes: string;
   created_at: string;
   updated_at: string;
@@ -119,10 +120,72 @@ export function useResearchStats(range: string, granularity: string) {
 }
 
 // --- Workers (global) ---
+export interface WorkerStatus {
+  id: number;
+  pid: number | null;
+  status: 'starting' | 'running' | 'stopping' | 'stopped' | 'backoff';
+  restarts: number;
+  uptimeMs: number | null;
+  currentJob: ResearchJob | null;
+}
+
 export function useResearchWorkers() {
   return useQuery({
     queryKey: ['research-workers'],
-    queryFn: () => api.get<{ running: boolean; workers: number; queued: number }>('/research/workers'),
+    queryFn: () => api.get<WorkerStatus[]>('/research/workers'),
+    refetchInterval: 5000,
+  });
+}
+
+export function useAddWorker() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<WorkerStatus>('/research/workers/add', {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['research-workers'] }),
+  });
+}
+
+export function useRemoveWorker() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<{ removed: number | null }>('/research/workers/remove', {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['research-workers'] }),
+  });
+}
+
+export function useKillWorker() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.post<{ killed: boolean }>(`/research/workers/${id}/kill`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['research-workers'] }),
+  });
+}
+
+export interface JobStatsData {
+  total: number;
+  completed: number;
+  failed: number;
+  cancelled: number;
+  avgDurationMs: number | null;
+  byDay: { date: string; completed: number; failed: number; avgDurationMs: number | null }[];
+}
+
+export function useJobStats() {
+  return useQuery({
+    queryKey: ['research-job-stats'],
+    queryFn: () => api.get<JobStatsData>('/research/jobs/stats'),
+    refetchInterval: 10000,
+  });
+}
+
+export function useAllJobs(opts?: { limit?: number; status?: string }) {
+  const params = new URLSearchParams();
+  if (opts?.limit) params.set('limit', String(opts.limit));
+  if (opts?.status) params.set('status', opts.status);
+  const qs = params.toString();
+  return useQuery({
+    queryKey: ['research-all-jobs', opts?.limit, opts?.status],
+    queryFn: () => api.get<ResearchJob[]>(`/research/jobs${qs ? `?${qs}` : ''}`),
     refetchInterval: 5000,
   });
 }
@@ -157,6 +220,7 @@ export interface ProviderKeyInfo {
 export interface ProviderConfig {
   llm_provider: string;
   model: string;
+  recent_models: string[];
   search_provider: string;
   fulltext_provider: string;
   keys: {
@@ -448,6 +512,18 @@ export function useResearchActivity(sessionId: string, opts?: { refetchInterval?
   });
 }
 
+// --- Document generation ---
+export function useGenerateDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sessionId }: { sessionId: string }) =>
+      api.post<{ document: string }>(`/research/queries/${sessionId}/generate-document`, {}),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['research-queries', vars.sessionId] });
+    },
+  });
+}
+
 // --- Delete query ---
 export function useDeleteResearchQuery() {
   const qc = useQueryClient();
@@ -528,6 +604,7 @@ export function useCancelJob() {
 export interface ResearchJob {
   id: string;
   session_id: string;
+  thread_id: string | null;
   status: string;
   mode: string;
   max_iterations: number | null;

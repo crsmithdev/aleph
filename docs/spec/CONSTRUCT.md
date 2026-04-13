@@ -3,7 +3,7 @@
 Behavior-oriented spec for functional testing and drift detection. Every claim here is testable.
 
 For the telemetry system architecture, see [TELEMETRY.md](TELEMETRY.md).
-For the autonomous research system, see [SPEC-RESEARCH.md](SPEC-RESEARCH.md).
+For the autonomous research system, see [RESEARCH.md](RESEARCH.md).
 
 ## Session Lifecycle
 
@@ -64,6 +64,10 @@ Ratings 1-3 trigger a console message: `[Construct] Low rating (N) — store wha
 **TypeScript gate** — after every `Edit` or `Write` on `.ts/.tsx` files, `quality-post-typecheck.ts` finds the nearest `tsconfig.json` and runs `tsc --noEmit`. If errors are found, prints a summary of up to 5 errors.
 
 **SQL guard** — before any MCP SQL tool call (`execute_sql`, `apply_migration`, `run_query`), `isolation-pre-block-destructive-sql.ts` blocks destructive operations: `DROP TABLE/DATABASE/SCHEMA`, `TRUNCATE`, `DELETE FROM` without WHERE, `ALTER TABLE DROP COLUMN`.
+
+**Context compaction advisory** — before every `Edit` or `Write` tool use, `context-compact-suggest.ts` checks token usage. When context is approaching limits, emits an advisory suggesting compaction. Advisory only — does not block the tool call.
+
+**Security scan** — before every `Bash` tool use, `security-scan-pre-commit.ts` scans the command for security issues (credential exposure, dangerous patterns, etc.). Advisory only — emits a warning but does not block execution.
 
 ### Ending a session
 
@@ -233,7 +237,7 @@ Per-database: file size, WAL size (warning if >10MB), table count, total rows. T
 
 ## UI — Research Pages
 
-Research pages provide a UI for the autonomous research system. For the full data model, engine behavior, and API, see [SPEC-RESEARCH.md](SPEC-RESEARCH.md).
+Research pages provide a UI for the autonomous research system. For the full data model, engine behavior, and API, see [RESEARCH.md](RESEARCH.md).
 
 ### Sessions (`/research`)
 
@@ -294,6 +298,11 @@ List of existing backups with filename, creation date, file size. Create and res
 
 **Overwritten on upgrade:** all hooks, skills, meta files, non-ALLCAPS files in construct/.
 
+## Dev and Production Ports
+
+- **Dev:** port 3001 — `bun dev-server.ts` from repo root, Vite HMR, live from `src/`
+- **Prod:** port 3000 — systemd `construct-ui.service`, deployed via `bun install.ts`
+
 ## Path Resolution
 
 Two roots: `~/.claude` for code/config, `~/.construct` for user data.
@@ -322,17 +331,16 @@ Four optional files in `construct/core/identity/`, preserved on upgrade:
 
 ## Hook Registration
 
-All hooks in `settings.json`:
+All hooks registered in `settings-hooks.json` (source: `src/core/hooks/settings-hooks.json`):
 
 | Event | Hooks (in order) | Timeouts |
 |-------|-----------------|----------|
-| SessionStart | memory/hooks/session-start.ts | 5000ms |
-| UserPromptSubmit | memory/hooks/rating-capture.ts, skills/hooks/routing-submit-classify.ts | 2000ms, 3000ms |
-| Stop | skills/hooks/quality-stop-check-e2e.ts, skills/hooks/context-stop-monitor.ts, memory/hooks/session-summary.ts, memory/hooks/memory-extract.ts | 3000ms, 3000ms, 3000ms, 5000ms |
-| PreToolUse | skills/hooks/isolation-pre-block-destructive-sql.ts (matcher: `mcp__.*(?:execute_sql\|apply_migration\|run_query)`), skills/hooks/git-pre-require-commit.ts (matcher: `Edit\|Write`) | 3000ms, 5000ms |
-| PostToolUse | skills/hooks/quality-post-format.ts (matcher: `Edit\|Write`), skills/hooks/quality-post-typecheck.ts (matcher: `Edit\|Write`) | 10000ms, 15000ms |
-| PreCompact | skills/hooks/context-precompact-backup.ts | 5000ms |
-| Notification | skills/hooks/notify-event-toast.ts | 3000ms |
+| SessionStart | `src/memory/hooks/session-start.ts` | 5000ms |
+| UserPromptSubmit | `src/memory/hooks/rating-capture.ts`, `src/core/hooks/routing-submit-classify.ts` | 2000ms, 3000ms |
+| Stop | `src/core/hooks/quality-stop-check-e2e.ts`, `src/core/hooks/context-stop-monitor.ts`, `src/memory/hooks/session-summary.ts`, `src/memory/hooks/memory-extract.ts` | 3000ms, 3000ms, 3000ms, 5000ms |
+| PreToolUse | `src/core/hooks/isolation-pre-block-destructive-sql.ts` (matcher: `mcp__.*(?:execute_sql\|apply_migration\|run_query)`), `src/core/hooks/git-pre-require-commit.ts` (matcher: `Edit\|Write`), `src/core/hooks/context-compact-suggest.ts` (matcher: `Edit\|Write`), `src/core/hooks/security-scan-pre-commit.ts` (matcher: `Bash`) | 3000ms, 5000ms, 3000ms, 5000ms |
+| PostToolUse | `src/core/hooks/quality-post-format.ts` (matcher: `Edit\|Write`), `src/core/hooks/quality-post-typecheck.ts` (matcher: `Edit\|Write`) | 10000ms, 15000ms |
+| PreCompact | `src/core/hooks/context-precompact-backup.ts` | 5000ms |
 
 ## Module Detection
 
@@ -345,3 +353,29 @@ All hooks in `settings.json`:
 | construct-eval | `construct/eval/runner.ts` |
 | construct-goals | `construct/goals/src/index.ts` |
 | construct-ui | `construct/ui/api/src/app.ts` |
+
+## Common Questions
+
+**Q: How do I add a new hook?**
+Add the script to `src/core/hooks/` (or `src/memory/hooks/` for session/memory hooks), register it in `src/core/hooks/settings-hooks.json` with event, command, and timeout, then run `bun install.ts` to deploy. Validate the JSON with `npm run validate`.
+
+**Q: What triggers FULL depth classification?**
+Architectural keywords in the prompt (`architect`, `redesign`, `refactor`, `migrate`, `schema`, `structure`, `plan`, `propose`, `authenticat*`, `authorizat*`, `integrat*`, `api endpoint`, `rename all`, `move all`, `replace all`, `across all`, `every file`, `all files`, `end to end`, `full stack`) or prompt length ≥ 40 words. QUICK classification is silent.
+
+**Q: How do I prevent the SQL guard from blocking a query?**
+The guard only blocks: `DROP TABLE/DATABASE/SCHEMA`, `TRUNCATE`, `DELETE FROM` without a WHERE clause, and `ALTER TABLE DROP COLUMN`. Add a WHERE clause to DELETE queries. Qualified deletes (e.g. `DELETE FROM t WHERE id = ?`) are allowed.
+
+**Q: What's the difference between session-summary and memory-extract?**
+`session-summary.ts` writes a structured `.md` file to `~/.construct/sessions/` for any session with ≥4 messages — always fires, no conditions on content. `memory-extract.ts` only runs for substantive sessions (≥6 messages and at least one file edit) and skips entirely if Claude already called `memory_store` voluntarily. Session summaries are human-readable digests; extracted memories are semantic store entries intended for future retrieval.
+
+**Q: How do I preserve a custom file across upgrades?**
+Name it with ALL CAPS (e.g. `PROJECTS.md`) and place it in `~/.claude/construct/core/identity/` or `~/.claude/construct/memory/`. The installer detects all ALL CAPS `.md` files in those two directories and restores them after syncing. Files with any lowercase letters in the name are overwritten.
+
+**Q: Why does the verification gate fire even on small prompts?**
+The gate fires for any non-question prompt ≥5 words. "Small" doesn't exempt it — the threshold is word count, not change size. It fires when edits are present in the turn; if no files were edited, the Stop hook skips silently.
+
+**Q: Where is the UI served during development vs production?**
+Dev: `bun dev-server.ts` → `http://localhost:3001` (Fastify + Vite middleware in one process, hot-reload). Prod: systemd `construct-ui.service` → port 3000 (pre-built SPA). Port overridable via `PORT` or `API_PORT` env var.
+
+**Q: How do I add a new skill?**
+Create `src/skills/<name>/SKILL.md` with the skill playbook. Add keyword triggers to `src/skills/skill-rules.json`. Run `bun install.ts` to deploy the skill as a slash command and register it for keyword activation.

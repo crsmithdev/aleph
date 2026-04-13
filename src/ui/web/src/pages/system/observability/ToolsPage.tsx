@@ -32,47 +32,7 @@ const DATASETS: { key: Dataset; label: string }[] = [
   { key: 'sessions', label: 'Sessions' },
 ];
 
-function fmtCalls(n: number): string {
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
-  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
-  return String(n);
-}
-
-function rankedKeysFromRecord(days: { tools?: Record<string, number>; projects?: Record<string, number> }[], field: 'tools' | 'projects'): [string, number][] {
-  const totals: Record<string, number> = {};
-  for (const day of days) {
-    for (const [k, v] of Object.entries((day as Record<string, unknown>)[field] as Record<string, number> ?? {})) {
-      totals[k] = (totals[k] ?? 0) + v;
-    }
-  }
-  return Object.entries(totals).sort((a, b) => b[1] - a[1]);
-}
-
-function topKeysFromRecord(days: { tools?: Record<string, number>; projects?: Record<string, number> }[], field: 'tools' | 'projects', n: number, mode: DatasetDisplayMode): string[] {
-  const ranked = rankedKeysFromRecord(days, field);
-  if (mode === 'all') return ranked.map(([k]) => k);
-  const top = ranked.slice(0, n).map(([k]) => k);
-  if (mode === 'top-n-other' && ranked.length > n) top.push('Other');
-  return top;
-}
-
-function stackByDay<T extends { date: string }>(days: T[], keys: string[], field: 'tools' | 'projects', mode: DatasetDisplayMode): Record<string, unknown>[] {
-  const hasOther = mode === 'top-n-other' && keys.includes('Other');
-  const realKeys = keys.filter(k => k !== 'Other');
-  return days.map(day => {
-    const entry: Record<string, unknown> = { date: day.date };
-    const source = (day as Record<string, unknown>)[field] as Record<string, number> ?? {};
-    for (const k of realKeys) entry[k] = source[k] ?? 0;
-    if (hasOther) {
-      let other = 0;
-      for (const [k, v] of Object.entries(source)) {
-        if (!realKeys.includes(k)) other += v;
-      }
-      entry['Other'] = other;
-    }
-    return entry;
-  });
-}
+import { fmtCalls, rankedKeysFromRecord, topKeysFromRecord, stackByDay } from '../../../utils/chart-helpers';
 
 export function ToolsPage() {
   const [range, setRange] = useState<TimeRange>('30d');

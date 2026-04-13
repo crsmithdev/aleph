@@ -48,10 +48,12 @@ export function ResearchQueriesPage() {
   const stopAll = useStopAllResearch();
   const [newOpen, setNewOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [depth, setDepth] = useState(8);
+  const [depth, setDepth] = useState(9);
   const [provider, setProvider] = useState<string>(() => localStorage.getItem('research_default_provider') ?? 'openrouter');
-  const [model, setModel] = useState<string>(() => localStorage.getItem('research_default_model') ?? '');
+  const [model, setModel] = useState<string>(() => localStorage.getItem('research_default_model') ?? 'deepseek/deepseek-chat');
   const [minSearches, setMinSearches] = useState<number>(() => Number(localStorage.getItem('research_default_min_searches') ?? '2'));
+  const [gapAnalysis, setGapAnalysis] = useState<boolean>(() => localStorage.getItem('research_default_gap_analysis') !== 'false');
+  const [maxGapSearches, setMaxGapSearches] = useState<number>(() => Number(localStorage.getItem('research_default_max_gap_searches') ?? '2'));
   const clearDb = useClearResearchDB();
   const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -67,13 +69,16 @@ export function ResearchQueriesPage() {
     localStorage.setItem('research_default_provider', provider);
     if (model) localStorage.setItem('research_default_model', model);
     localStorage.setItem('research_default_min_searches', String(minSearches));
+    localStorage.setItem('research_default_gap_analysis', String(gapAnalysis));
+    localStorage.setItem('research_default_max_gap_searches', String(maxGapSearches));
     createSession.mutate({
       seed_query: query.trim(),
       config: {
         max_thread_depth: depth,
         min_searches_per_thread: minSearches,
-        model: model || undefined,
+        model: model || 'deepseek/deepseek-chat',
         providers: { primary: provider as 'anthropic' | 'openrouter' | 'ollama' },
+        gap_analysis: { enabled: gapAnalysis, max_gap_searches: maxGapSearches },
       },
     }, {
       onSuccess: () => { setQuery(''); setDepth(8); setNewOpen(false); },
@@ -124,7 +129,7 @@ export function ResearchQueriesPage() {
             onSuccess: () => {
               createSession.mutate({
                 seed_query: 'How are personal AI assistants evolving to become persistent, context-aware companions that learn from user interactions over time? What architectures, memory systems, and interaction patterns are emerging in tools like Claude Code, Cursor, and open-source alternatives?',
-                config: { max_thread_depth: 6, min_searches_per_thread: 2, providers: { primary: 'openrouter' } },
+                config: { max_thread_depth: 7, min_searches_per_thread: 2, providers: { primary: 'openrouter' } },
               });
             },
           });
@@ -231,6 +236,28 @@ export function ResearchQueriesPage() {
               className="w-12 bg-bg-primary border border-border-primary rounded px-1.5 py-1 text-sm text-text-primary text-center focus:outline-none focus:border-accent"
             />
           </label>
+          <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={gapAnalysis}
+              onChange={e => setGapAnalysis(e.target.checked)}
+              className="w-3.5 h-3.5 accent-accent"
+            />
+            Gaps
+          </label>
+          {gapAnalysis && (
+            <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0">
+              Gap size
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={maxGapSearches}
+                onChange={e => setMaxGapSearches(Number(e.target.value))}
+                className="w-12 bg-bg-primary border border-border-primary rounded px-1.5 py-1 text-sm text-text-primary text-center focus:outline-none focus:border-accent"
+              />
+            </label>
+          )}
           <Button type="submit" loading={createSession.isPending}>Start</Button>
           <Button variant="ghost" onClick={() => setNewOpen(false)}>Cancel</Button>
         </form>

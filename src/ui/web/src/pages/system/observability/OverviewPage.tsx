@@ -147,8 +147,7 @@ export function OverviewPage() {
         const otherUsd = cost.data.byModel.slice(5).reduce((s, r) => s + r.usd, 0);
         const donut = otherUsd > 0 ? [...top5, { model: 'Other', usd: otherUsd, pct: 0 }] : top5;
         return (
-          <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
-            <h3 className="font-heading mb-3 text-sm font-medium text-text-secondary">Cost by Model</h3>
+          <ChartContainer title="Cost by Model" raw>
             <div className="flex gap-3 h-[180px]">
               <div className="flex-1 min-w-0 flex items-center">
                 <ResponsiveContainer width="100%" height={180}>
@@ -170,7 +169,7 @@ export function OverviewPage() {
                 ))}
               </div>
             </div>
-          </div>
+          </ChartContainer>
         );
       })()}
 
@@ -180,9 +179,7 @@ export function OverviewPage() {
           .filter(s => s.cost > 0 || (s.linesAdded + s.linesRemoved) > 0)
           .map(s => ({ churn: s.linesAdded + s.linesRemoved, cost: s.cost, name: s.sessionId.slice(0, 8) }));
         return (
-          <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
-            <h3 className="font-heading mb-3 text-sm font-medium text-text-secondary">Cost vs Code Output</h3>
-            <ResponsiveContainer width="100%" height={200}>
+          <ChartContainer title="Cost vs Code Output" height={200}>
               <ScatterChart>
                 <CartesianGrid {...gridProps} />
                 <XAxis dataKey="churn" type="number" {...axisProps} name="Lines Changed" tickFormatter={(v) => fmtNumber(Number(v))} label={{ value: 'Lines Changed', position: 'insideBottom', offset: -4, style: { fontSize: 10, fill: 'var(--color-text-muted)' } }} />
@@ -191,17 +188,14 @@ export function OverviewPage() {
                 <Tooltip contentStyle={tooltipStyle} formatter={(v, name) => name === 'cost' ? [`$${Number(v).toFixed(4)}`, 'Cost'] : [fmtNumber(Number(v)), 'Lines Changed']} />
                 <Scatter data={scatterData} fill={CHART_PALETTE[0]} fillOpacity={0.7} />
               </ScatterChart>
-            </ResponsiveContainer>
-          </div>
+          </ChartContainer>
         );
       })()}
 
       {hooks.data && hooks.data.ranked.filter(r => r.count > 0).length > 0 && (() => {
         const topHooks = [...hooks.data!.ranked].filter(r => r.count > 0).sort((a, b) => b.p50Ms - a.p50Ms).slice(0, 10);
         return (
-          <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
-            <h3 className="font-heading mb-3 text-sm font-medium text-text-secondary">Hook Latency (p50)</h3>
-            <ResponsiveContainer width="100%" height={Math.max(160, topHooks.length * 24)}>
+          <ChartContainer title="Hook Latency (p50)" height={Math.max(160, topHooks.length * 24)}>
               <BarChart layout="vertical" data={topHooks}>
                 <CartesianGrid {...gridProps} horizontal={false} />
                 <XAxis type="number" {...axisProps} tickFormatter={(v) => `${v}ms`} />
@@ -209,8 +203,7 @@ export function OverviewPage() {
                 <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${v}ms`, 'p50 Latency']} />
                 <Bar dataKey="p50Ms" fill={CHART_PALETTE[1]} name="p50 Latency" radius={[0, 2, 2, 0]} />
               </BarChart>
-            </ResponsiveContainer>
-          </div>
+          </ChartContainer>
         );
       })()}
 
@@ -224,9 +217,7 @@ export function OverviewPage() {
           return row;
         });
         return (
-          <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
-            <h3 className="font-heading mb-3 text-sm font-medium text-text-secondary">Skill → Tool Usage</h3>
-            <ResponsiveContainer width="100%" height={Math.max(160, topSkills.length * 28)}>
+          <ChartContainer title="Skill → Tool Usage" height={Math.max(160, topSkills.length * 28)}>
               <BarChart layout="vertical" data={barData}>
                 <CartesianGrid {...gridProps} horizontal={false} />
                 <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
@@ -236,8 +227,7 @@ export function OverviewPage() {
                   <Bar key={tool} dataKey={tool} name={fmtLegendLabel(tool)} stackId="a" fill={chartColor(tool, i)} radius={i === allTools.length - 1 ? [0, 2, 2, 0] : [0, 0, 0, 0]} />
                 ))}
               </BarChart>
-            </ResponsiveContainer>
-          </div>
+          </ChartContainer>
         );
       })()}
 

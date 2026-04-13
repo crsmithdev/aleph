@@ -13,8 +13,11 @@ const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 // OpenRouter pricing per 1M tokens (approximate, varies by model)
 const OPENROUTER_PRICING: Record<string, { input: number; output: number }> = {
   'deepseek/deepseek-chat': { input: 0.14, output: 0.28 },
+  'deepseek/deepseek-r1-0528': { input: 0.50, output: 2.19 },
+  'deepseek/deepseek-r1-0528:free': { input: 0, output: 0 },
   'google/gemini-2.0-flash-001': { input: 0.10, output: 0.40 },
   'meta-llama/llama-3.3-70b-instruct': { input: 0.39, output: 0.39 },
+  'meta-llama/llama-3.3-70b-instruct:free': { input: 0, output: 0 },
 };
 
 export class OpenRouterProvider implements LLMProvider {
@@ -91,21 +94,29 @@ export class OpenRouterProvider implements LLMProvider {
 
     for (let attempt = 0; attempt < attempts; attempt++) {
       try {
-        const res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.config.apiKey}`,
-            ...(this.config.siteUrl ? { 'HTTP-Referer': this.config.siteUrl } : {}),
-            ...(this.config.siteName ? { 'X-Title': this.config.siteName } : {}),
-          },
-          body: JSON.stringify({
-            model,
-            messages,
-            max_tokens: maxTokens,
-            ...(plugins ? { plugins } : {}),
-          }),
-        });
+        const abort = new AbortController();
+        const timeout = setTimeout(() => abort.abort(), 120_000); // 2-minute hard timeout
+        let res: Response;
+        try {
+          res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+            method: 'POST',
+            signal: abort.signal,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.config.apiKey}`,
+              ...(this.config.siteUrl ? { 'HTTP-Referer': this.config.siteUrl } : {}),
+              ...(this.config.siteName ? { 'X-Title': this.config.siteName } : {}),
+            },
+            body: JSON.stringify({
+              model,
+              messages,
+              max_tokens: maxTokens,
+              ...(plugins ? { plugins } : {}),
+            }),
+          });
+        } finally {
+          clearTimeout(timeout);
+        }
 
         if (!res.ok) {
           const body = await res.text();
@@ -116,7 +127,11 @@ export class OpenRouterProvider implements LLMProvider {
           throw new Error(`OpenRouter ${res.status}: ${body}`);
         }
 
-        return await res.json() as OpenRouterResponse;
+        const data = await res.json() as OpenRouterResponse;
+        if (!data.choices || !Array.isArray(data.choices)) {
+          throw new Error(`OpenRouter bad response (no choices): ${JSON.stringify(data).slice(0, 300)}`);
+        }
+        return data;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
         if (attempt < attempts - 1) {

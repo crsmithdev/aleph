@@ -150,7 +150,7 @@ export function fmtProject(raw: string): string {
   // "-home-crsmi" → "crsmi/~"
   const cleaned = raw.replace(/^-/, '').replace(/^home-/, '');
   const parts = cleaned.split('-').filter(Boolean);
-  if (parts.length >= 2) return parts.join('/').toLowerCase();
+  if (parts.length >= 2) return `${parts[0]}/${parts.slice(1).join('-')}`.toLowerCase();
   if (parts.length === 1) return `${parts[0].toLowerCase()}/~`;
   return raw.toLowerCase();
 }

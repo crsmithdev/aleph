@@ -15,8 +15,14 @@ export async function fetchSearchResults(query: string): Promise<SearchResult[]>
   const tavily = process.env.TAVILY_API_KEY;
   const brave = process.env.BRAVE_SEARCH_API_KEY;
 
-  if (tavily) return tavilySearch(query, tavily);
-  if (brave) return braveSearch(query, brave);
+  if (tavily) {
+    try { return await tavilySearch(query, tavily); }
+    catch { /* fall through to next provider */ }
+  }
+  if (brave) {
+    try { return await braveSearch(query, brave); }
+    catch { /* fall through to DDG */ }
+  }
   return duckduckgoSearch(query);
 }
 

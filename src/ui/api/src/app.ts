@@ -1,19 +1,3 @@
-// Load .env from ~/construct/.env (project root)
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
-try {
-  const envPath = resolve(process.env.HOME ?? '', 'construct', '.env');
-  for (const line of readFileSync(envPath, 'utf-8').split('\n')) {
-    const t = line.trim();
-    if (!t || t.startsWith('#')) continue;
-    const eq = t.indexOf('=');
-    if (eq < 0) continue;
-    const key = t.slice(0, eq).trim();
-    const val = t.slice(eq + 1).trim();
-    if (!process.env[key]) process.env[key] = val;
-  }
-} catch { /* no .env — keys must be set externally */ }
-
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import cors from '@fastify/cors';
@@ -50,6 +34,36 @@ declare module 'fastify' {
     eventBus: EventBus;
     supervisor: WorkerSupervisor;
   }
+}
+
+type SqliteDb = ReturnType<typeof createDb>['sqlite'];
+
+function applyObsDDL(sqlite: SqliteDb) {
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS obs_memory_snapshots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      taken_at TEXT NOT NULL DEFAULT (datetime('now')),
+      total INTEGER NOT NULL,
+      by_type TEXT NOT NULL,
+      health TEXT NOT NULL,
+      by_tag TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_obs_memory_taken_at ON obs_memory_snapshots(taken_at);
+  `);
+}
+
+function applyWebhookDDL(sqlite: SqliteDb) {
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS webhooks (
+      id TEXT PRIMARY KEY,
+      url TEXT NOT NULL,
+      events TEXT NOT NULL DEFAULT '[]',
+      secret TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
 }
 
 function git(cmd: string, cwd?: string): string {
@@ -246,30 +260,10 @@ export async function createApp(opts?: { dbUrl?: string; workerCount?: number; s
     applyDDL(sqlite);
     // Research domain DDL
     applyResearchDDL(sqlite);
-    // Observability DDL
-    sqlite.exec(`
-      CREATE TABLE IF NOT EXISTS obs_memory_snapshots (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        taken_at TEXT NOT NULL DEFAULT (datetime('now')),
-        total INTEGER NOT NULL,
-        by_type TEXT NOT NULL,
-        health TEXT NOT NULL,
-        by_tag TEXT NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS idx_obs_memory_taken_at ON obs_memory_snapshots(taken_at);
-    `);
-    // Webhooks DDL (UI infrastructure) — schema types: see db/schema.ts
-    sqlite.exec(`
-      CREATE TABLE IF NOT EXISTS webhooks (
-        id TEXT PRIMARY KEY,
-        url TEXT NOT NULL,
-        events TEXT NOT NULL DEFAULT '[]',
-        secret TEXT,
-        active INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-      );
-    `);
+    // Observability DDL — TODO: move to @construct/telemetry as applyObsDDL()
+    applyObsDDL(sqlite);
+    // Webhooks DDL — TODO: move to dedicated module, types in db/schema.ts
+    applyWebhookDDL(sqlite);
   });
 
   app.addHook('onClose', async () => {

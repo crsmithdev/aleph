@@ -60,13 +60,14 @@ export const listSessions = listQueries;
 export function updateQuery(
   sqlite: Sqlite,
   id: string,
-  updates: Partial<Pick<ResearchQuery, 'status' | 'summary' | 'user_notes' | 'title'>> & { config?: Partial<SessionConfig> }
+  updates: Partial<Pick<ResearchQuery, 'status' | 'summary' | 'document' | 'user_notes' | 'title'>> & { config?: Partial<SessionConfig> }
 ): ResearchQuery | null {
   const fields: string[] = [];
   const values: unknown[] = [];
 
   if (updates.status !== undefined) { fields.push('status = ?'); values.push(updates.status); }
   if (updates.summary !== undefined) { fields.push('summary = ?'); values.push(updates.summary); }
+  if (updates.document !== undefined) { fields.push('document = ?'); values.push(updates.document); }
   if (updates.user_notes !== undefined) { fields.push('user_notes = ?'); values.push(updates.user_notes); }
   if (updates.title !== undefined) { fields.push('title = ?'); values.push(updates.title); }
   if (updates.config !== undefined) {

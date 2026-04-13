@@ -41,7 +41,7 @@ export function createStep(
     params.session_id,
     params.finding_id ?? null,
     params.model,
-    params.provider ?? 'anthropic',
+    params.provider ?? 'openrouter',
     params.prompt_tokens,
     params.completion_tokens,
     params.cost_usd,

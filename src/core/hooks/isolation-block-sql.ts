@@ -13,7 +13,7 @@
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 
-const TAG = "isolation-pre-block-destructive-sql";
+const TAG = "isolation-block-sql";
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
 catch (e) {

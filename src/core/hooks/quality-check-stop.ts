@@ -6,7 +6,9 @@
  * checks for proportional verification evidence, and either passes silently,
  * advises, or blocks (JSON decision) based on tier and session depth.
  *
- * Hard blocks only fire when: isFULL session + tier ≥ 2 + zero verification.
+ * Hard blocks fire when: (isFULL OR multi-file edit) + tier ≥ 2 + zero verification.
+ * Single-file non-FULL edits get advisory only. This prevents the "hallucinated
+ * test results" failure mode where agents claim tests pass without running them.
  */
 import { readFileSync, existsSync } from "fs";
 import { trace } from "../../trace.ts";
@@ -14,7 +16,7 @@ import { reportHook } from "../../hook-report.ts";
 import { E2E_CMD, ARTIFACT_CMD, UNIT_TEST_CMD, HOOK_INVOCATION, FUNCTIONAL_CMD } from "../../eval/patterns.ts";
 import { dataPaths } from "../../data/src/paths.ts";
 
-const TAG = "quality-stop-check-e2e";
+const TAG = "quality-check-stop";
 
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
@@ -166,13 +168,13 @@ if (tier === 1) {
   exitWith("advisory", `[Construct] You edited ${fileList} without running tests. Quick check: bun test`);
 }
 
-// Tier 2: block if isFULL + zero verification
+// Tier 2: block on multi-file backend changes with zero verification
 if (tier === 2) {
   if (anyVerification) exitWith("pass");
-  if (isFull) {
+  if (isFull || fileCount >= 2) {
     exitWith("block", JSON.stringify({
       decision: "block",
-      reason: `Full-scope backend change (${fileCount} files: ${fileList}) with no verification. Run tests (bun test) or curl the affected endpoint before finishing.`,
+      reason: `Backend change (${fileCount} files: ${fileList}) with no test evidence. Run tests (bun test) or curl the affected endpoint before finishing.`,
     }));
   }
   exitWith("advisory", `[Construct] Backend change (${fileList}) — no verification done. Consider: bun test, or curl the endpoint.`);
@@ -190,10 +192,10 @@ if (tier === 3) {
 // Tier 4: block if isFULL + zero verification
 if (hasE2E && hasArtifact) exitWith("pass");
 
-if (isFull && !anyVerification) {
+if (!anyVerification && (isFull || fileCount >= 2)) {
   exitWith("block", JSON.stringify({
     decision: "block",
-    reason: `Full-scope change (${fileCount} files across ${dirCount} dirs: ${fileList}) with no verification. Start the system, exercise the changed behavior, and capture output before finishing.`,
+    reason: `Cross-cutting change (${fileCount} files across ${dirCount} dirs: ${fileList}) with no verification. Start the system, exercise the changed behavior, and capture output before finishing.`,
   }));
 }
 

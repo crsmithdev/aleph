@@ -1,10 +1,11 @@
+import './env.js';
 import { createApp } from './app.js';
 import { config } from './config.js';
 import { resolve } from 'path';
 import { join } from 'path';
 
 const isDev = config.nodeEnv === 'development';
-const port = isDev ? parseInt(process.env.PORT || '3001', 10) : config.port;
+const port = config.port;
 
 const app = await createApp({ skipStatic: isDev });
 

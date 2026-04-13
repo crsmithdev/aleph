@@ -1,0 +1,44 @@
+# Construct
+
+> Claude Code-native personal AI infrastructure: hooks, skills, memory, autonomous research, and a web observability UI — all running inside your Claude Code environment. Installs to `~/.claude/construct/` via `bun install.ts`. User data lives in `~/.construct/` and is never modified by the installer. Dev server runs on port 3001; production systemd service runs on port 3000.
+
+## Quick Start
+
+- [README.md](README.md): Install (`bun install.ts`), dev server (`bun dev-server.ts`), symlink-mode dev (`/link`), upgrade, tests, env vars, research workers
+- [INSTALL.md](INSTALL.md): Full installation steps, upgrade preservation rules, post-install verification per module
+
+## Architecture
+
+- [README.md#modules](README.md): Nine modules (construct-core, construct-memory, construct-skills, construct-data, construct-telemetry, construct-eval, construct-goals, construct-research, construct-ui) with dependency graph
+- [README.md#directory-layout](README.md): Directory map — src/core/, src/memory/, src/skills/, src/data/, src/telemetry/, src/eval/, src/goals/, src/research/, src/ui/
+
+## Hooks and Skills
+
+- [docs/HOOKS.md](docs/HOOKS.md): All 14 registered hooks — events (SessionStart, UserPromptSubmit, Stop, PreToolUse, PostToolUse, PreCompact), script paths, timeouts, fail-closed vs fail-open, behavior detail per hook
+- [docs/SKILLS.md](docs/SKILLS.md): 19 keyword-triggered skill playbooks, always-active skills, slash commands (global and project-local), routing via skill-rules.json
+- [docs/AGENTS.md](docs/AGENTS.md): Agent definitions in src/agents/ — code-debugger, code-reviewer, design-reviewer, docs-optimizer, docs-reviewer, skill-creator; when to use each vs skills
+
+## Specifications
+
+- [docs/spec/CONSTRUCT.md](docs/spec/CONSTRUCT.md): Session lifecycle, depth classification, verification gate, rating capture, quality hooks, TypeScript gate, SQL guard, context monitoring, statusline, notifications, skills/commands table, UI pages (Life, Observability, Research, Settings), installer steps, path resolution, identity layer, full hook registration table
+- [docs/spec/TELEMETRY.md](docs/spec/TELEMETRY.md): JSONL parsing pipeline (Claude CLI → parser → aggregator → API → UI), SessionEntry type, all aggregate output types, pricing model, memory snapshots, all /api/observability/* endpoints
+- [docs/spec/RESEARCH.md](docs/spec/RESEARCH.md): Research engine iteration loop, data model (sessions, threads, findings, steps, plans, jobs, monitors), perturbation strategies, provider selection (Anthropic/OpenRouter/Ollama), scheduling modes, worker supervisor, all /api/research/* endpoints including SSE stream
+- [docs/spec/EVAL.md](docs/spec/EVAL.md): Eval harness sandbox, Agent SDK runner, real hook delegation, tool classification, assertion model, all 8 scenarios (broken-math, todo-app, todo-feature, commit-sequence, e2e-basic, hook-verification-advisory/gate/pass), A/B runner
+
+## Tests
+
+- [docs/TESTS.md](docs/TESTS.md): Complete test listing — hook tests, telemetry unit tests, API tests, browser e2e tests (Playwright), behavioral evals (Agent SDK), coverage gaps
+
+## Source Reference
+
+- `src/core/hooks/settings-hooks.json`: Hook registrations (source of truth for which hooks fire and when)
+- `src/skills/skill-rules.json`: Keyword routing config (source of truth for skill auto-activation)
+- `src/core/CLAUDE.md`: Construct behavioral rules installed to ~/.claude/CLAUDE.md
+- `src/data/src/paths.ts`: All path constants (~/.claude/construct/, ~/.construct/*)
+- `install.ts`: Installer — 14 steps from backup to service restart
+- `test.ts`: Test runner — scans src/tests/, requires 90%+ pass
+
+## Optional
+
+- [docs/TODO.md](docs/TODO.md): Known gaps and planned work
+- [docs/IDEAS.md](docs/IDEAS.md): Future feature ideas

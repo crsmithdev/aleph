@@ -7,7 +7,7 @@ description: Guide context compaction at logical task phase boundaries rather th
 
 ## When to Use
 
-- Session is approaching context limits (80%+ — context-stop-monitor will warn)
+- Session is approaching context limits (80%+ — context-monitor-stop will warn)
 - Completing a major phase (research done, plan finalized, debugging resolved)
 - Switching to an unrelated task within the same session
 - After a failed approach: compact before trying a new strategy
@@ -44,9 +44,9 @@ description: Guide context compaction at logical task phase boundaries rather th
 
 ## Integration
 
-The `context-compact-suggest` hook fires on Edit/Write and counts tool calls.
+The `context-suggest-edit` hook fires on Edit/Write and counts tool calls.
 At 50 calls it suggests compaction; reminds every 25 after. The suggestion
-includes this decision table inline. The `context-stop-monitor` hook warns
+includes this decision table inline. The `context-monitor-stop` hook warns
 at 80% and 90% context usage.
 
 ## Done when

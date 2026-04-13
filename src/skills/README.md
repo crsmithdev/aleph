@@ -7,8 +7,8 @@ Depth classification, keyword-matched skill evaluation, skill routing config, qu
 ## Contents
 
 - `skill-rules.json` — keyword routing config
-- `hooks/routing-submit-classify.ts` — depth classification + skill eval at UserPromptSubmit
-- `hooks/quality-post-format.ts` — per-file lint/format on Edit/Write (PostToolUse)
+- `hooks/routing-classify-submit.ts` — depth classification + skill eval at UserPromptSubmit
+- `hooks/quality-format-edit.ts` — per-file lint/format on Edit/Write (PostToolUse)
 - `build/SKILL.md` — unified implementation lifecycle: design, plan, TDD execute, review, finish
 - `debugging/SKILL.md` — systematic 4-phase root cause debugging
 - `verification/SKILL.md` — verification-before-completion enforcement

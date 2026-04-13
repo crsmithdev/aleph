@@ -5,6 +5,7 @@ export interface ResearchQuery {
   status: 'active' | 'paused' | 'completed' | 'archived';
   config: SessionConfig;
   summary: string;
+  document: string;
   user_notes: string;
   created_at: string;
   updated_at: string;
@@ -44,6 +45,7 @@ export interface SessionConfig {
   perturbation: PerturbationConfig;
   follow_up: {
     min_count: number;        // default 2
+    max_count: number;        // default 5 — hard cap on spawned follow-ups per iteration
     max_retries: number;      // default 3
     similarity_threshold: number; // default 0.75
   };
@@ -67,7 +69,7 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
   budget_daily_usd: 5.0,
   budget_total_usd: null,
   budget_alert_threshold: 0.80,
-  max_thread_depth: 8,
+  max_thread_depth: 9,
   p_serendipity: 0.15,
   max_perturbation_probability: 0.40,
   novelty_threshold: 0.3,
@@ -91,6 +93,7 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
   },
   follow_up: {
     min_count: 2,
+    max_count: 5,
     max_retries: 3,
     similarity_threshold: 0.75,
   },
@@ -362,6 +365,7 @@ export type JobMode = 'burst' | 'background' | 'scheduled';
 export interface ResearchJob {
   id: string;
   session_id: string;
+  thread_id: string | null;
   status: JobStatus;
   mode: JobMode;
   max_iterations: number | null;

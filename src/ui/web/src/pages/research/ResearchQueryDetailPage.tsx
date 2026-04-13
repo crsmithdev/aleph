@@ -11,6 +11,7 @@ import {
   useResearchActivity, useCancelJob, useResearchJobs, useResearchStream,
   useResearchSteps, useUpdateThread, useDeleteResearchQuery, useUpdateQueryConfig,
   useResearchEnvCheck, useFetchThreadText, useRedoThread, useFetchFindingText,
+  useGenerateDocument,
   type ResearchFinding, type ResearchThread, type ResearchActivity,
   type ResearchJob, type StreamEvent, type ResearchStep,
 } from '../../api/research-hooks';
@@ -297,273 +298,235 @@ function ThreadNavigator({
 // Document Tab
 // ---------------------------------------------------------------------------
 
-function FindingCard({ finding, index, isHighlighted, onViewThread, onShowOnMap }: {
-  finding: ResearchFinding;
-  index: number;
-  isHighlighted: boolean;
-  onViewThread: () => void;
-  onShowOnMap: () => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-
-  return (
-    <div className={clsx(
-      'py-3',
-      isHighlighted && 'bg-accent/5 border-l-2 border-accent pl-3 -ml-3'
-    )}>
-      <div className="flex items-start gap-3">
-        <span className="text-text-muted text-xs font-mono shrink-0 mt-0.5">[{index}]</span>
-        <div className="flex-1 min-w-0">
-          <p className="text-base text-text-primary">{finding.summary}</p>
-          <div className="flex items-center gap-4 mt-1.5 flex-wrap">
-            <ConfBar label="conf" value={finding.confidence} />
-            <ConfBar label="novel" value={finding.novelty} />
-            {finding.source_urls.length > 0 && (
-              <span className="text-xs text-text-muted">{finding.source_urls.length} source{finding.source_urls.length !== 1 ? 's' : ''}</span>
-            )}
-            {finding.tags.map(tag => (
-              <span key={tag} className="px-1.5 py-0.5 bg-bg-tertiary text-text-muted text-xs rounded">{tag}</span>
-            ))}
-          </div>
-          {expanded && (
-            <div className="mt-3 space-y-3">
-              <Md>{finding.content}</Md>
-              {finding.source_texts && finding.source_texts.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs text-text-muted uppercase tracking-wide">Sources</p>
-                  {finding.source_texts.map((text, i) => (
-                    <div key={i} className="bg-bg-tertiary/30 rounded px-2 py-1.5">
-                      {finding.source_urls[i] && (
-                        <a href={finding.source_urls[i]} target="_blank" rel="noopener noreferrer"
-                          className="block text-xs text-accent hover:underline truncate mb-1">
-                          {finding.source_urls[i]}
-                        </a>
-                      )}
-                      <Md className="md-sm">{text.length > 2000 ? text.slice(0, 2000) + '\n\n...' : text}</Md>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {finding.source_urls.length > (finding.source_texts?.length ?? 0) && (
-                <div className="space-y-1.5">
-                  {finding.source_urls.slice(finding.source_texts?.length ?? 0).map((url, i) => {
-                    const meta = finding.source_url_meta?.find(m => m.url === url);
-                    return (
-                      <div key={i} className="space-y-0.5">
-                        <a href={url} target="_blank" rel="noopener noreferrer"
-                          className="block text-xs text-accent hover:underline truncate">[{i + 1 + (finding.source_texts?.length ?? 0)}] {url}</a>
-                        {meta && <p className="text-xs text-text-muted/70">{meta.title} — {meta.snippet}</p>}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-          <div className="flex items-center gap-3 mt-1.5">
-            <button onClick={() => setExpanded(e => !e)} className="text-xs text-accent hover:underline">
-              {expanded ? 'collapse' : 'expand'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function DocumentView({
-  findings, threads, onNavigateToThread, onNavigateToMap, summary,
+  findings, threads, onNavigateToThread, onNavigateToMap, document, sessionId,
 }: {
   findings: ResearchFinding[];
   threads: ResearchThread[];
   onNavigateToThread: (threadId: string) => void;
   onNavigateToMap: (threadId: string) => void;
-  summary?: string;
+  document?: string;
+  sessionId: string;
 }) {
-  const sectionRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const generateDoc = useGenerateDocument();
+  const hasFindings = findings.length >= 3;
 
-  const findingsByThread = useMemo(() => {
-    const map = new Map<string, ResearchFinding[]>();
-    for (const f of findings) {
-      const arr = map.get(f.thread_id) ?? [];
-      arr.push(f);
-      map.set(f.thread_id, arr);
+  // Strip markdown code fences if present
+  const cleanDoc = useMemo(() => {
+    if (!document) return '';
+    return document.replace(/^```(?:markdown)?\s*\n?/i, '').replace(/\n?```\s*$/, '');
+  }, [document]);
+
+  // Extract TOC from document markdown (## headings)
+  const tocEntries = useMemo(() => {
+    if (!cleanDoc) return [];
+    const entries: { id: string; title: string; level: number }[] = [];
+    for (const line of cleanDoc.split('\n')) {
+      const m = line.match(/^(#{2,3})\s+(.+)/);
+      if (m) {
+        const title = m[2].trim();
+        const id = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        entries.push({ id, title, level: m[1].length });
+      }
     }
-    return map;
-  }, [findings]);
+    return entries;
+  }, [document]);
 
-  const sectionsThreads = useMemo(() =>
-    threads
-      .filter(t => (findingsByThread.get(t.id) ?? []).length > 0)
-      .sort((a, b) => {
-        if (a.origin === 'seed') return -1;
-        if (b.origin === 'seed') return 1;
-        return a.depth - b.depth || a.created_at.localeCompare(b.created_at);
-      }),
-    [threads, findingsByThread]
-  );
-
-  function scrollToSection(threadId: string) {
-    sectionRefs.current.get(threadId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  function scrollToHeading(id: string) {
+    const el = window.document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  if (sectionsThreads.length === 0) {
-    return <p className="text-sm text-text-muted text-center py-12">No findings yet. Run the engine to start researching.</p>;
+  if (!hasFindings) {
+    return <p className="text-sm text-text-muted text-center py-12">Not enough findings yet. Run the engine to gather more research material.</p>;
+  }
+
+  if (!document) {
+    return (
+      <div className="text-center py-12 space-y-4">
+        <p className="text-sm text-text-muted">No article generated yet.</p>
+        <Button
+          onClick={() => generateDoc.mutate({ sessionId })}
+          loading={generateDoc.isPending}
+        >
+          Generate Article
+        </Button>
+      </div>
+    );
   }
 
   return (
     <div className="flex gap-8">
-      {/* Main document */}
+      {/* Main article */}
       <div className="flex-1 min-w-0">
         <div className="max-w-3xl mx-auto">
-
-          {/* Summary card */}
-          {summary && (
-            <div className="bg-accent/5 border border-accent/20 rounded-lg p-5 mb-10">
-              <p className="text-xs text-accent uppercase tracking-widest font-semibold mb-3">Summary</p>
-              <div className="text-base text-text-primary leading-relaxed">
-                <Md>{summary}</Md>
-              </div>
-            </div>
-          )}
-
-          {/* Sections */}
-          <div className="space-y-12">
-            {sectionsThreads.map((thread) => {
-              const sectionFindings = (findingsByThread.get(thread.id) ?? [])
-                .slice().sort((a, b) => b.confidence - a.confidence);
-              const sectionUrls = Array.from(new Set(sectionFindings.flatMap(f => f.source_urls)));
-
-              return (
-                <section
-                  key={thread.id}
-                  ref={el => { if (el) sectionRefs.current.set(thread.id, el); }}
-                >
-                  {/* Section heading */}
-                  <div className="flex items-center gap-3 mb-5">
-                    <h2 className="text-[1.375rem] font-semibold text-text-primary leading-snug flex-1">
-                      {thread.query}
-                    </h2>
-                    <OriginBadge origin={thread.origin} />
-                  </div>
-
-                  {/* Findings as prose */}
-                  <div className="space-y-5">
-                    {sectionFindings.map((finding) => {
-                      const isKey = finding.confidence > 0.8;
-
-                      if (isKey) {
-                        return (
-                          <div
-                            key={finding.id}
-                            className="pl-4 border-l-[3px] border-success bg-success/5 rounded-r py-3 pr-3"
-                          >
-                            <div className="flex items-center gap-2 mb-2">
-                              <Icon name="lightbulb" size="xs" className="text-success shrink-0" />
-                              <span className="text-xs text-success uppercase tracking-widest font-semibold">Key Finding</span>
-                              <div className="ml-auto flex items-center gap-3">
-                                <ConfBar label="conf" value={finding.confidence} />
-                                <ConfBar label="novel" value={finding.novelty} />
-                              </div>
-                            </div>
-                            <div className="text-base text-text-primary leading-[1.85]">
-                              <Md>{finding.content}</Md>
-                            </div>
-                            {finding.tags.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5 mt-2">
-                                {finding.tags.map(tag => (
-                                  <span key={tag} className="px-1.5 py-0.5 bg-bg-tertiary text-text-muted text-xs rounded">{tag}</span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <div key={finding.id} className="text-base text-text-secondary leading-[1.85]">
-                          <Md>{finding.content}</Md>
-                          {finding.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 mt-2">
-                              {finding.tags.map(tag => (
-                                <span key={tag} className="px-1.5 py-0.5 bg-bg-tertiary text-text-muted text-xs rounded">{tag}</span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Section sources */}
-                  {sectionUrls.length > 0 && (
-                    <div className="mt-5 pt-4 border-t border-border-primary/30">
-                      <p className="text-xs text-text-muted uppercase tracking-wide mb-2">
-                        Sources ({sectionUrls.length})
-                      </p>
-                      <div className="space-y-1">
-                        {sectionUrls.map((url, i) => {
-                          let host = url;
-                          try { host = new URL(url).hostname; } catch { /* keep url */ }
-                          const meta = sectionFindings.flatMap(f => f.source_url_meta ?? []).find(m => m.url === url);
-                          return (
-                            <a
-                              key={i}
-                              href={url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-baseline gap-1.5 text-xs text-accent hover:underline"
-                              title={url}
-                            >
-                              <span className="text-text-muted font-mono shrink-0">[{i + 1}]</span>
-                              <span className="truncate">{meta?.title ?? host}</span>
-                            </a>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Cross-nav */}
-                  <div className="mt-3 flex items-center gap-4">
-                    <button
-                      onClick={() => onNavigateToThread(thread.id)}
-                      className="text-xs text-text-muted hover:text-accent transition-colors"
-                    >
-                      View thread &rarr;
-                    </button>
-                    <button
-                      onClick={() => onNavigateToMap(thread.id)}
-                      className="text-xs text-text-muted hover:text-accent transition-colors"
-                    >
-                      Show on map &rarr;
-                    </button>
-                  </div>
-                </section>
-              );
-            })}
+          {/* Regenerate control */}
+          <div className="flex items-center justify-end mb-6 gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => generateDoc.mutate({ sessionId })}
+              loading={generateDoc.isPending}
+            >
+              <Icon name="refresh" size="xs" className="mr-1" />
+              Regenerate
+            </Button>
           </div>
+
+          {/* Rendered article */}
+          <article className="md-content article-view text-base text-text-primary leading-[1.85]">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                h2: ({ children, ...props }) => {
+                  const text = String(children);
+                  const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+                  return <h2 id={id} className="font-heading text-xl font-semibold text-text-primary mt-10 mb-4 pb-2 border-b border-border-primary/30" {...props}>{children}</h2>;
+                },
+                h3: ({ children, ...props }) => {
+                  const text = String(children);
+                  const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+                  return <h3 id={id} className="font-heading text-lg font-medium text-text-primary mt-8 mb-3" {...props}>{children}</h3>;
+                },
+                p: ({ children }) => <p className="mb-4 text-text-secondary">{children}</p>,
+                a: ({ href, children }) => (
+                  <a href={href} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">{children}</a>
+                ),
+                blockquote: ({ children }) => (
+                  <blockquote className="border-l-[3px] border-accent/30 pl-4 my-4 text-text-muted italic">{children}</blockquote>
+                ),
+                ol: ({ children }) => <ol className="list-decimal pl-6 mb-4 space-y-1 text-text-secondary">{children}</ol>,
+                ul: ({ children }) => <ul className="list-disc pl-6 mb-4 space-y-1 text-text-secondary">{children}</ul>,
+              }}
+            >
+              {cleanDoc}
+            </ReactMarkdown>
+          </article>
+
+          {/* Bibliography */}
+          {findings.length > 0 && (
+            <ReferencesSection findings={findings} />
+          )}
         </div>
       </div>
 
       {/* Sidebar TOC */}
-      {sectionsThreads.length > 2 && (
-        <div className="w-48 shrink-0 hidden xl:block">
-          <div className="sticky top-4 space-y-1">
-            <p className="text-xs text-text-muted uppercase tracking-wide mb-2">Sections</p>
-            {sectionsThreads.map((thread, idx) => (
+      {tocEntries.length > 2 && (
+        <div className="w-52 shrink-0 hidden xl:block">
+          <div className="sticky top-4 space-y-0.5">
+            <p className="text-xs text-text-muted uppercase tracking-wide mb-2 font-medium">Contents</p>
+            {tocEntries.map((entry, idx) => (
               <button
-                key={thread.id}
-                onClick={() => scrollToSection(thread.id)}
-                className="block w-full text-left px-2 py-1 text-xs text-text-secondary hover:text-text-primary hover:bg-bg-tertiary/30 rounded truncate"
+                key={idx}
+                onClick={() => scrollToHeading(entry.id)}
+                className={clsx(
+                  'block w-full text-left py-1 text-xs text-text-secondary hover:text-text-primary hover:bg-bg-tertiary/30 rounded truncate transition-colors',
+                  entry.level === 2 ? 'px-2' : 'px-4 text-text-muted'
+                )}
               >
-                <span className="text-text-muted font-mono mr-1">{String(idx + 1).padStart(2, '0')}</span>
-                {thread.short_query ?? thread.query.slice(0, 40)}
+                {entry.title}
               </button>
             ))}
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// References (bibliography-style, part of the article typographic system)
+// ---------------------------------------------------------------------------
+
+function domainFrom(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
+}
+
+function RefEntry({ finding, index }: { finding: ResearchFinding; index: number }) {
+  const [open, setOpen] = useState(false);
+  const sources = finding.source_url_meta?.length
+    ? finding.source_url_meta
+    : finding.source_urls.map(url => ({ url, title: '', snippet: '' }));
+  const domains = [...new Set(sources.map(s => domainFrom(s.url)))];
+
+  return (
+    <div className="group">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full text-left py-2 flex items-start gap-3 transition-colors"
+      >
+        <span className="text-xs text-text-muted font-mono shrink-0 mt-0.5 w-5 text-right">{index}</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-text-secondary leading-relaxed group-hover:text-text-primary transition-colors">
+            {finding.summary}
+          </p>
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            {domains.length > 0 && (
+              <span className="text-xs text-text-muted">
+                {domains.slice(0, 2).join(' · ')}{domains.length > 2 ? ` · +${domains.length - 2}` : ''}
+              </span>
+            )}
+            {domains.length > 0 && finding.tags.length > 0 && (
+              <span className="text-text-disabled">·</span>
+            )}
+            {finding.tags.map(tag => (
+              <span key={tag} className="text-xs text-text-muted">{tag}</span>
+            ))}
+            <span className="text-xs text-text-disabled ml-auto">
+              {(finding.confidence * 100).toFixed(0)}% conf
+              {finding.novelty > 0.3 && <>{' · '}{(finding.novelty * 100).toFixed(0)}% novel</>}
+            </span>
+          </div>
+        </div>
+      </button>
+
+      {open && (
+        <div className="ml-8 pb-3 space-y-2">
+          {sources.length > 0 && (
+            <div className="space-y-0.5">
+              {sources.map((src, i) => (
+                <a
+                  key={i}
+                  href={src.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-xs hover:underline truncate"
+                  title={src.url}
+                >
+                  <span className="text-text-muted">{domainFrom(src.url)}</span>
+                  {src.title && <span className="text-accent ml-1.5">{src.title}</span>}
+                  {!src.title && <span className="text-accent ml-1.5">{src.url}</span>}
+                </a>
+              ))}
+            </div>
+          )}
+
+          {finding.follow_ups.length > 0 && (
+            <p className="text-xs text-text-muted italic leading-relaxed">
+              See also: {finding.follow_ups.join('; ')}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReferencesSection({ findings }: { findings: ResearchFinding[] }) {
+  const sorted = useMemo(
+    () => [...findings].sort((a, b) => b.confidence - a.confidence),
+    [findings],
+  );
+
+  return (
+    <div className="mt-12">
+      <hr className="border-border-primary/30 mb-10" />
+      <h2 className="font-heading text-xl font-semibold text-text-primary mb-6 pb-2 border-b border-border-primary/30">
+        References
+      </h2>
+      <div className="space-y-0.5">
+        {sorted.map((f, i) => <RefEntry key={f.id} finding={f} index={i + 1} />)}
+      </div>
     </div>
   );
 }
@@ -1729,19 +1692,20 @@ export function ResearchQueryDetailPage() {
 
   return (
     <div className="flex h-[calc(100vh-64px)]">
-      {/* Left Sidebar — Thread Navigator */}
-      <div className="w-[280px] shrink-0 border-r border-border-primary bg-bg-secondary/50 overflow-hidden flex flex-col">
-        <ThreadNavigator
-          threads={threadsData}
-          findingCounts={findingCounts}
-          selectedThreadId={selectedThreadId}
-          onSelectThread={(id) => {
-            setSelectedThreadId(id);
-            // In live view, selecting a thread auto-expands it (handled in LiveView)
-          }}
-          sessionId={id!}
-        />
-      </div>
+      {/* Left Sidebar — Thread Navigator (hidden on document tab) */}
+      {tab !== 'document' && (
+        <div className="w-[280px] shrink-0 border-r border-border-primary bg-bg-secondary/50 overflow-hidden flex flex-col">
+          <ThreadNavigator
+            threads={threadsData}
+            findingCounts={findingCounts}
+            selectedThreadId={selectedThreadId}
+            onSelectThread={(id) => {
+              setSelectedThreadId(id);
+            }}
+            sessionId={id!}
+          />
+        </div>
+      )}
 
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
@@ -1884,6 +1848,8 @@ export function ResearchQueryDetailPage() {
               threads={threadsData}
               onNavigateToThread={navigateToThread}
               onNavigateToMap={navigateToMap}
+              document={session?.document || undefined}
+              sessionId={id!}
             />
           )}
           {tab === 'live' && (

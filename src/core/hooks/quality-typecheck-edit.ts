@@ -18,7 +18,7 @@ import { execSync } from "child_process";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 
-const TAG = "quality-post-typecheck";
+const TAG = "quality-typecheck-edit";
 let input: any;
 try { input = JSON.parse(await Bun.stdin.text()); }
 catch (e) {

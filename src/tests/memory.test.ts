@@ -17,8 +17,8 @@ te.env.RATINGS_FILE = ratingsFile;
 
 // ── Session start ────────────────────────────────────────────────────────────
 
-console.log("--- session-start ---");
-runAndCheck(te, r, "memory/hooks/session-start.ts", "smoke", "{}", { expectStdout: ["Session Start"] });
+console.log("--- context-restore-start ---");
+runAndCheck(te, r, "memory/hooks/context-restore-start.ts", "smoke", "{}", { expectStdout: ["Session Start"] });
 
 // Morning briefing: no new sessions since last interactive → no digest
 {
@@ -27,7 +27,7 @@ runAndCheck(te, r, "memory/hooks/session-start.ts", "smoke", "{}", { expectStdou
   const futureSession = resolve(sessionsDir, "9998-01-01-000000.md");
   writeFileSync(futureSession, "# Session: 9998-01-01\n\n- Intent: test\n- Outcome: done\n- Tools: none; files: none\n- Edits: 0 tool calls, 0 files\n- Messages: 4 (2 user, 2 assistant)\n");
   writeFileSync(briefingMarker, "9998-01-01-000000.md");
-  const { stdout } = runHook(te, "memory/hooks/session-start.ts", "{}");
+  const { stdout } = runHook(te, "memory/hooks/context-restore-start.ts", "{}");
   check(r, "morning-briefing: no digest when no new sessions", !stdout.includes("Background Work"));
   check(r, "morning-briefing: still shows session count", stdout.includes("Sessions:"));
   check(r, "morning-briefing: still shows last session header", stdout.includes("Last session ("));
@@ -51,7 +51,7 @@ runAndCheck(te, r, "memory/hooks/session-start.ts", "smoke", "{}", { expectStdou
 
   writeFileSync(briefingMarker, "2000-01-01-000000.md");
 
-  const { stdout } = runHook(te, "memory/hooks/session-start.ts", "{}");
+  const { stdout } = runHook(te, "memory/hooks/context-restore-start.ts", "{}");
 
   check(r, "morning-briefing: shows background work header", stdout.includes("Background Work"));
   check(r, "morning-briefing: shows completed work section", stdout.includes("Completed") || stdout.includes("Done"));
@@ -77,7 +77,7 @@ runAndCheck(te, r, "memory/hooks/session-start.ts", "smoke", "{}", { expectStdou
   writeFileSync(s1, "# Session: 2000-02-01\n\n- Intent: first session\n- Outcome: done\n- Tools: none; files: none\n- Edits: 0 tool calls, 0 files\n- Messages: 4 (2 user, 2 assistant)\n");
   writeFileSync(s2, "# Session: 2000-02-01\n\n- Intent: second session background task\n- Outcome: completed background work\n- Tools: Bash; files: none\n- Edits: 0 tool calls, 0 files\n- Messages: 4 (2 user, 2 assistant)\n");
 
-  const { stdout } = runHook(te, "memory/hooks/session-start.ts", "{}");
+  const { stdout } = runHook(te, "memory/hooks/context-restore-start.ts", "{}");
   check(r, "morning-briefing: no marker + multiple sessions shows briefing", stdout.includes("Background Work"));
 
   try { unlinkSync(s1); } catch {}
@@ -92,7 +92,7 @@ console.log("\n--- rating-capture ---");
 function ratingTest(prompt: string): { rating: number | null; output: string } {
   let linesBefore = 0;
   try { linesBefore = readFileSync(ratingsFile, "utf-8").trim().split("\n").filter(Boolean).length; } catch {}
-  const { stdout } = runHook(te, "memory/hooks/rating-capture.ts", JSON.stringify({ prompt }));
+  const { stdout } = runHook(te, "memory/hooks/rating-capture-submit.ts", JSON.stringify({ prompt }));
   let linesAfter = 0;
   try { linesAfter = readFileSync(ratingsFile, "utf-8").trim().split("\n").filter(Boolean).length; } catch {}
   if (linesAfter > linesBefore) {
@@ -118,17 +118,17 @@ check(r, "rating: 'rate this' alone → no match", ratingTest("rate this").ratin
 const lowResult = ratingTest("2");
 check(r, "rating: low rating warns", lowResult.rating === 2 && lowResult.output.includes("Low rating"));
 
-runAndCheck(te, r, "memory/hooks/rating-capture.ts", "malformed", "not json");
+runAndCheck(te, r, "memory/hooks/rating-capture-submit.ts", "malformed", "not json");
 
 // ── Session summary ──────────────────────────────────────────────────────────
 
 console.log("\n--- session-summary ---");
 {
   const tinyTranscript = writeTranscript(te, "tiny", [userMsg("hi"), assistantMsg("hello")]);
-  runAndCheck(te, r, "memory/hooks/session-summary.ts", "too few", JSON.stringify({ transcript_path: tinyTranscript }));
+  runAndCheck(te, r, "memory/hooks/context-save-stop.ts", "too few", JSON.stringify({ transcript_path: tinyTranscript }));
   try { unlinkSync(tinyTranscript); } catch {}
 }
-runAndCheck(te, r, "memory/hooks/session-summary.ts", "malformed", "not json");
+runAndCheck(te, r, "memory/hooks/context-save-stop.ts", "malformed", "not json");
 
 // ── Memory extraction ───────────────────────────────────────────────────────
 
@@ -145,7 +145,7 @@ console.log("\n--- memory-extract ---");
     userMsg("good"),
     assistantMsg("done"),
   ]);
-  runAndCheck(te, r, "memory/hooks/memory-extract.ts", "extracts from substantive session",
+  runAndCheck(te, r, "memory/hooks/memory-extract-stop.ts", "extracts from substantive session",
     JSON.stringify({ transcript_path: extractFile }));
   try { unlinkSync(extractFile); } catch {}
 }
@@ -161,19 +161,19 @@ console.log("\n--- memory-extract ---");
     userMsg("good"),
     assistantMsg("done"),
   ]);
-  runAndCheck(te, r, "memory/hooks/memory-extract.ts", "skips when memory_store present",
+  runAndCheck(te, r, "memory/hooks/memory-extract-stop.ts", "skips when memory_store present",
     JSON.stringify({ transcript_path: extractStoreFile }));
   try { unlinkSync(extractStoreFile); } catch {}
 }
 
 {
   const extractSmall = writeTranscript(te, "extract-small", [userMsg("hi"), assistantMsg("hello")]);
-  runAndCheck(te, r, "memory/hooks/memory-extract.ts", "skips non-substantive",
+  runAndCheck(te, r, "memory/hooks/memory-extract-stop.ts", "skips non-substantive",
     JSON.stringify({ transcript_path: extractSmall }));
   try { unlinkSync(extractSmall); } catch {}
 }
 
-runAndCheck(te, r, "memory/hooks/memory-extract.ts", "malformed stdin", "not json");
+runAndCheck(te, r, "memory/hooks/memory-extract-stop.ts", "malformed stdin", "not json");
 
 // Heuristic tests via direct import
 {
@@ -251,11 +251,11 @@ console.log("\n--- session recall ---");
   ]);
 
   const beforeSessions = new Set(readdirSync(sessionsDir));
-  runHook(te, "memory/hooks/session-summary.ts", JSON.stringify({ transcript_path: recallTranscript }));
+  runHook(te, "memory/hooks/context-save-stop.ts", JSON.stringify({ transcript_path: recallTranscript }));
   const newSessions = readdirSync(sessionsDir).filter(f => !beforeSessions.has(f));
 
   if (newSessions.length === 0) {
-    check(r, "session-summary did not create a file", false);
+    check(r, "context-save-stop did not create a file", false);
   } else {
     const summary = readFileSync(resolve(sessionsDir, newSessions[0]), "utf-8");
 
@@ -272,7 +272,7 @@ console.log("\n--- session recall ---");
 
     const seedFile = resolve(sessionsDir, "9999-99-99-999999.md");
     writeFileSync(seedFile, summary);
-    const { stdout: startOut } = runHook(te, "memory/hooks/session-start.ts", "{}");
+    const { stdout: startOut } = runHook(te, "memory/hooks/context-restore-start.ts", "{}");
     check(r, "recall: start shows what was worked on", startOut.includes("webhook") || startOut.includes("payments") || startOut.includes("500"));
     check(r, "recall: start shows work is unfinished", startOut.includes("failing") || startOut.includes("pick that up") || startOut.includes("next time") || startOut.includes("2 test"));
     try { unlinkSync(seedFile); } catch {}

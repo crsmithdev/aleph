@@ -39,7 +39,7 @@ const SKILL_DATASETS: { key: SkillDataset; label: string }[] = [
   { key: 'latency', label: 'Latency' },
 ];
 
-const GRAN_LABEL: Record<Granularity, string> = { minute: 'Per-Minute', hour: 'Hourly', day: 'Daily' };
+import { GRAN_LABEL } from '../../../utils/chart-helpers';
 
 export function SkillsPage() {
   const [range, setRange] = useState<TimeRange>('30d');

@@ -5,7 +5,9 @@ import { ResearchEngine, type LLMProvider } from './engine.js';
 import { OpenRouterProvider } from './providers/openrouter.js';
 import { Heartbeat, StepRateLimiter, isInActiveWindow, msUntilNextWindow } from './scheduler.js';
 import * as jobs from './services/jobs.js';
+import { countActiveJobsForSession, getQueuedThreadsForNewJobs, createThreadJobIfNone, reclaimDeadWorkerJobs } from './services/jobs.js';
 import * as sessions from './services/queries.js';
+import { resetOrphanedActiveThreads } from './services/threads.js';
 
 const POLL_INTERVAL_MS = 5_000;
 const HEARTBEAT_INTERVAL_MS = 60_000;
@@ -67,6 +69,10 @@ const { sqlite } = createDb();
 sqlite.exec('PRAGMA busy_timeout = 5000');
 applyResearchDDL(sqlite);
 
+// On startup: reclaim jobs from dead worker PIDs (orphans from previous server runs)
+const deadReclaimed = reclaimDeadWorkerJobs(sqlite);
+if (deadReclaimed > 0) console.log(`[worker] reclaimed ${deadReclaimed} job(s) from dead workers`);
+
 console.log(`[worker] started (${workerId})`);
 
 async function sleep(ms: number): Promise<void> {
@@ -103,7 +109,25 @@ function checkScheduledSessions(): void {
   }
 }
 
-async function executeJob(job: import('./types.js').ResearchJob): Promise<void> {
+/** Create one thread-level job per queued thread that has no active job,
+ *  up to max_concurrent_threads slots per session. */
+function checkQueuedThreads(): void {
+  const activeSessions = sessions.listSessions(sqlite, 'active');
+  for (const session of activeSessions) {
+    if (session.config.schedule.mode === 'scheduled') continue; // handled by checkScheduledSessions
+    const maxConcurrent = session.config.max_concurrent_threads ?? 3;
+    const activeCount = countActiveJobsForSession(sqlite, session.id);
+    if (activeCount >= maxConcurrent) continue;
+    const slots = maxConcurrent - activeCount;
+    const queuedThreads = getQueuedThreadsForNewJobs(sqlite, session.id, slots);
+    for (const thread of queuedThreads) {
+      const created = createThreadJobIfNone(sqlite, { session_id: session.id, thread_id: thread.id });
+      if (created) console.log(`[worker] queued thread job for thread ${thread.id.slice(0, 8)} (session=${session.id.slice(0, 8)})`);
+    }
+  }
+}
+
+async function executeSessionJob(job: import('./types.js').ResearchJob): Promise<void> {
   jobs.markRunning(sqlite, job.id, workerId);
   console.log(`[worker] executing job ${job.id} (session=${job.session_id}, mode=${job.mode})`);
 
@@ -205,13 +229,91 @@ async function executeJob(job: import('./types.js').ResearchJob): Promise<void> 
   }
 }
 
+async function executeThreadJob(job: import('./types.js').ResearchJob): Promise<void> {
+  jobs.markRunning(sqlite, job.id, workerId);
+  console.log(`[worker] executing thread job ${job.id.slice(0, 8)} (thread=${job.thread_id?.slice(0, 8)}, session=${job.session_id.slice(0, 8)})`);
+
+  if (!job.thread_id) {
+    jobs.failJob(sqlite, job.id, workerId, 'thread_id missing on thread job');
+    return;
+  }
+
+  const session = sessions.getSession(sqlite, job.session_id);
+  if (!session) {
+    jobs.failJob(sqlite, job.id, workerId, 'Session not found');
+    return;
+  }
+
+  // Budget check before starting
+  const costData = sessions.getQueryCost(sqlite, job.session_id);
+  if (session.config.budget_daily_usd && costData.today_cost >= session.config.budget_daily_usd) {
+    sessions.updateQuery(sqlite, job.session_id, { status: 'paused' });
+    jobs.completeJob(sqlite, job.id, workerId);
+    return;
+  }
+  if (session.config.budget_total_usd && costData.total_cost >= session.config.budget_total_usd) {
+    sessions.updateQuery(sqlite, job.session_id, { status: 'paused' });
+    jobs.completeJob(sqlite, job.id, workerId);
+    return;
+  }
+
+  const controller = new AbortController();
+  const shutdownCheck = setInterval(() => {
+    if (shutdownRequested) controller.abort();
+  }, 1_000);
+  const cancelCheck = setInterval(() => {
+    const current = jobs.getJob(sqlite, job.id);
+    if (current?.status === 'cancelled') controller.abort();
+  }, 5_000);
+
+  const heartbeat = new Heartbeat(() => {
+    jobs.updateHeartbeat(sqlite, job.id, workerId, 0);
+  });
+  heartbeat.start(HEARTBEAT_INTERVAL_MS);
+
+  const engine = new ResearchEngine({
+    sqlite,
+    provider: buildProvider(session),
+    signal: controller.signal,
+  });
+
+  try {
+    await engine.runThread(job.session_id, job.thread_id);
+    jobs.completeJob(sqlite, job.id, workerId);
+    console.log(`[worker] thread job ${job.id.slice(0, 8)} completed`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === 'This operation was aborted' || msg.includes('AbortError')) {
+      console.log(`[worker] thread job ${job.id.slice(0, 8)} aborted`);
+    } else {
+      jobs.failJob(sqlite, job.id, workerId, msg);
+      console.error(`[worker] thread job ${job.id.slice(0, 8)} failed:`, msg);
+    }
+  } finally {
+    heartbeat.stop();
+    clearInterval(shutdownCheck);
+    clearInterval(cancelCheck);
+  }
+}
+
+async function executeJob(job: import('./types.js').ResearchJob): Promise<void> {
+  if (job.thread_id) {
+    return executeThreadJob(job);
+  }
+  return executeSessionJob(job);
+}
+
 // Main loop
 while (!shutdownRequested) {
   try {
     const reclaimed = jobs.reclaimStaleJobs(sqlite);
     if (reclaimed > 0) console.log(`[worker] reclaimed ${reclaimed} stale job(s)`);
 
+    const orphaned = resetOrphanedActiveThreads(sqlite);
+    if (orphaned > 0) console.log(`[worker] reset ${orphaned} orphaned active thread(s) to queued`);
+
     checkScheduledSessions();
+    checkQueuedThreads();
 
     const pending = jobs.findPendingJob(sqlite);
     if (!pending) {

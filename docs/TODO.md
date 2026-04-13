@@ -2,59 +2,33 @@
 
 - handling of subagents in sessions
 - learning / feedback loop
-- easy eval system
-- hook audit
+- [~] easy eval system ~
+- hook metrics
 - tests audit / rebuild
-- docs audi / rebuild / optimization / codebase skill
+- docs audit / rebuild / optimization / codebase skill
 - agents / subagents page?
 - minor session fixes / search
 
 # Research
 
-# Document view
-- Getting better, but still feels like a list.  
-- The document needs some structure / direction / narrative.  Compare our document on consciousness vs the wikipedia article on the subject (https://en.wikipedia.org/wiki/Consciousness):  the article has a flow from start to finish, a kind of narrative direction, that starts with the general idea, drops back into fundamental concepts, etymology, then does a whole walk forward through history, brings in modern concepts, alternative perspectives, etc.  So ours needs to be structured in some way, it will probably vary per topic, that makes it feel like that.  That probably will require more LLM calls.
-- One thing in particular in both document and live views is that the questions look very unnatural as headers for sections, given how extremely long they are.  Also, it's unlikely in any document that the questions asked in the process of making it would be the names of sections, the wikipedia article has very short phrases, usually 1-5 words, that are conceptual rather than direct representations of the question.
-- The threads sidebar should be repurposed:  in threads view it's an outline for something that's right next to it, the question names are too long to work in an outline, and the document view doesn't benefit from them at all.
 - There are also queries made about a topic, not directly as a question.  We should probably aim for those kind of queries to have 'follow-up questions' that are presented at least as topics themselves.  e.g. "topic A -> topic B" instead of "topic A -> long text of a question about topic B
 
-# Providers page
-- The panels should show only what's relevant to selected provider, e.g. if I have OpenRouter active, I only see the OpenRouter key view / input.     
-- represent the full API key in the UI, just use '*' in place of most of the digits, instead of striking out a few and hiding the rest.'
-- Readability should not even have a green checkmark at all, nor Duck Duck Go
-- Restore the 'gap size' option , along the gap analysis checkbox
-- Remove the defaults section.
+# Research
+- create a 'companion' document to the RESEARCH spec in docs/spec1.  whereas the spec is a behaviorally-focused document, this should be technically-focused, and include in complete detail how key workflows work.  So, what does the job and worker system look like, what are the steps involved, constraints, checks, etc., and walk through the whole flow with a single job for illustration.  Spec out other key workflows as needed.
 
-# Queries page
-- This shouldn't be a page of its own, this is just what you see when clicking 'research' and should not be in the sidebar at all.
-- The settings that pop up when a new question is being added should include gap analysis enabled / size controls.  
-- Model default is DeepSeek V3.  When a full model name is entered into the text box, is it possible to query for cost?  Or have some representation of it at the point of submitting a question.
-- More follow-up questions than specified are being generated, e.g. default is 8, actual is nearly 2x it seems.  Lower the default to 5, ensure only that many are generated
+# Workers
+- add a Queued Jobs table, that shows the current qeued jobs, above the job history chart.
+- where workers displayh "idle -- waiting for jobs", that should be a display of either the thread / mode / job id, or should just have some simple placeholder
+- can we add expansion to both the job history and queue table that shows more details about the job and its params (or its outcome)?
+- Limit each table to a reasonable number of rows and add pagination.
+- durations are wrong and often negative
+- some jobs do not have a thread listed, what are they doing?
 
+# Document view
+- Add links to bottom-of-the-page citations
+- add to each document section a display that includes the full links of sources used for a document section, the tags that were applied to it, and also highlights the questions taht were involved in producing it.  It should be collapsible and take up minimal space whewn collapsed.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# Thread / live view
+- instead of a hierarchy or list for the main view, display threads in three sections:  active (a worker is working on it), finished (a worker is done working on it) and queued (hasn't been picked up yet). 
+- move things from place to place in realtime as their states change, perhaps for things a user is activelyh looking at we could have a way to delay that ui action so theyh can finish reading, but also see while that's the state has changed.
+- The sidebar can keep the heirarchical view and list view,  

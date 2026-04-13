@@ -2,7 +2,7 @@
 
 Behavior-oriented spec for the autonomous research system. Every claim here is testable.
 
-See [SPEC.md](SPEC.md) for the application lifecycle. See [TELEMETRY.md](TELEMETRY.md) for observability.
+See [CONSTRUCT.md](CONSTRUCT.md) for the application lifecycle. See [TELEMETRY.md](TELEMETRY.md) for observability.
 
 ## Purpose
 
@@ -464,3 +464,26 @@ Multi-tab interface for a single session.
 | Module | Detection file |
 |---|---|
 | construct-research | `construct/research/src/engine.ts` |
+
+## Common Questions
+
+**Q: How do I start a research session programmatically?**
+`POST /api/research/sessions` with `{ seed_query, title?, config? }` to create it, then `POST /api/research/sessions/:id/run` with `{ mode: 'burst', iterations: 5 }` to start workers on it. Workers must be running (started automatically by the UI, or via `systemctl --user start construct-research-worker`).
+
+**Q: Why is a thread not being picked up by workers?**
+Check in order: (1) thread `status` must be `queued`, (2) no existing `claimed`/`running` job for the session — check `GET /api/research/sessions/:id/running`, (3) `OPENROUTER_API_KEY` is set in the worker's environment, (4) daily budget not exceeded — check `GET /api/research/sessions/:id/costs`.
+
+**Q: How do I inject a question into a running session?**
+`POST /api/research/sessions/:id/threads` with `{ query, priority?, max_depth? }`. The thread gets `origin: 'user_injected'` and is picked up on the next iteration. Set `priority: 1.0` to have it picked up before other queued threads.
+
+**Q: What's the difference between burst, background, and scheduled modes?**
+`burst` runs exactly `max_iterations` iterations then stops — good for on-demand runs. `background` runs continuously but only during `active_windows` time slots (configured in session config) — good for overnight research. `scheduled` is like background but intended to be triggered by an external scheduler (e.g. cron). `interactive` runs immediately with no window checks.
+
+**Q: How do I stop all research without losing any findings?**
+`POST /api/research/stop-all` cancels all running jobs but preserves every session, thread, finding, and step. Workers exit gracefully (SIGTERM, 30s window). Resume with `POST /api/research/run-all`.
+
+**Q: When does a thread get marked exhausted?**
+A thread is exhausted when any of: (1) `isCovered()` returns true — ≥3 findings, avg confidence >0.65, avg novelty <0.3; (2) it has reached `max_thread_depth`; (3) it has completed `min_searches_per_thread` steps with no new findings. A session completes when all threads are exhausted and no new threads are spawning.
+
+**Q: How does deduplication prevent redundant threads?**
+Before spawning any new thread (follow-up, gap, or perturbation), the engine computes Jaccard similarity between the candidate query and all existing thread queries. Candidates with similarity ≥ `dedup_similarity_threshold` (default 0.85) against any existing thread are dropped silently.

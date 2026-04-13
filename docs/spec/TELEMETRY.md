@@ -2,8 +2,8 @@
 
 Technical specification for the telemetry and observability system. Covers data ingestion, aggregation, storage, and the API surface.
 
-See [SPEC.md](SPEC.md) for the user-facing observability UI pages.
-See [SPEC-RESEARCH.md](SPEC-RESEARCH.md) for the autonomous research system.
+See [CONSTRUCT.md](CONSTRUCT.md) for the user-facing observability UI pages.
+See [RESEARCH.md](RESEARCH.md) for the autonomous research system.
 
 ## Architecture Overview
 
@@ -267,6 +267,8 @@ All endpoints are under `/api/observability/`. Routes with `parseDaysPreHandler`
 
 All responses include `queryTimeMs`.
 
+The API server runs on port 3001 in dev (`bun dev-server.ts`) and port 3000 in production (systemd `construct-ui.service`).
+
 | Method | Path | Aggregator | Notes |
 |---|---|---|---|
 | GET | `/overview` | `aggregateOverview` | |
@@ -293,3 +295,26 @@ All responses include `queryTimeMs`.
 ## CLI Status (`src/status.ts`)
 
 The `ccstatusline` binary and the `/gist` command both call `getStatus(7)` from `@construct/telemetry`, which returns a `StatusSummary` for the last 7 days. The status output includes: session count, message count, tool call count, total cost, top 5 tools, top 3 hooks, and top 3 skills.
+
+## Common Questions
+
+**Q: How do I get the total cost for a specific session?**
+Use `GET /api/observability/sessions?session=<id>` — the response includes `SessionMetric.cost` per session. Alternatively, call `GET /api/observability/sessions/:id/trace` which includes per-turn cost breakdown.
+
+**Q: Why does cache efficiency show 0% even though I'm using prompt caching?**
+Cache efficiency = `cacheReadTokens / (inputTokens + cacheReadTokens)`. If the selected time window contains no cache reads (e.g. filtering to a single session with no prior cache), it shows 0%. Expand the time range or check that the model and prompt structure support caching.
+
+**Q: How do I add a new model to the pricing table?**
+Add an entry to `src/telemetry/src/pricing.ts` using the model prefix as the key. Prefix matching is used: `claude-opus-4` matches `claude-opus-4-6`, `claude-opus-4-5`, etc. Use the most specific prefix that doesn't overlap with other models.
+
+**Q: How often does the in-memory parser cache refresh?**
+Files are re-parsed only when their `mtime` changes. The cache lives for the process lifetime — it is not persisted. Restart the API server to force a full re-parse of all JSONL files.
+
+**Q: What JSONL event types does the parser skip?**
+The parser handles: `assistant`, `user`, `progress`, `system`. Any other `type` values in the JSONL are silently skipped. This includes any future Claude CLI event types that the parser hasn't been updated to handle.
+
+**Q: How do I query observability data for a specific project only?**
+Pass `?projects=<project-name>` to any endpoint that uses `parseDaysPreHandler`. The `projects` parameter filters JSONL discovery to that project's directory under `~/.claude/projects/`.
+
+**Q: How are subagent sessions handled in aggregations?**
+Subagent JSONL files live at `<session>/subagents/agent-<id>.jsonl`. The parser discovers them and sets `parentSessionId` on their entries. `aggregateSessions` exposes `hasSubagents` and `parentSessionId` on `SessionMetric`. The Sessions UI page shows subagent sessions indented under their parent.
