@@ -121,25 +121,6 @@ export function ResearchQueriesPage() {
         onGranularityChange={setGranularity}
       />
 
-      {/* Dev: wipe & start */}
-      <button
-        onClick={() => {
-          if (visibleSessions.length > 0 && !confirm('This will delete ALL research data. Continue?')) return;
-          clearDb.mutate(undefined, {
-            onSuccess: () => {
-              createSession.mutate({
-                seed_query: 'How are personal AI assistants evolving to become persistent, context-aware companions that learn from user interactions over time? What architectures, memory systems, and interaction patterns are emerging in tools like Claude Code, Cursor, and open-source alternatives?',
-                config: { max_thread_depth: 7, min_searches_per_thread: 2, providers: { primary: 'openrouter' } },
-              });
-            },
-          });
-        }}
-        disabled={clearDb.isPending || createSession.isPending}
-        className="self-start px-3 py-1.5 text-xs rounded border border-dashed border-border-secondary text-text-muted hover:text-red-400 hover:border-red-400/50 hover:bg-red-500/5 transition-colors"
-      >
-        {clearDb.isPending || createSession.isPending ? 'Starting...' : 'Wipe & start test query'}
-      </button>
-
       {stats.data && (
         <>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -260,6 +241,15 @@ export function ResearchQueriesPage() {
           )}
           <Button type="submit" loading={createSession.isPending}>Start</Button>
           <Button variant="ghost" onClick={() => setNewOpen(false)}>Cancel</Button>
+          <button
+            type="button"
+            onClick={() => {
+              if (!confirm('This will delete ALL research data. Continue?')) return;
+              clearDb.mutate();
+            }}
+            disabled={clearDb.isPending}
+            className="px-3 py-1.5 text-xs rounded border border-dashed border-border-secondary text-text-muted hover:text-red-400 hover:border-red-400/50 hover:bg-red-500/5 transition-colors shrink-0"
+          >{clearDb.isPending ? 'Wiping...' : 'Wipe all'}</button>
         </form>
       )}
 

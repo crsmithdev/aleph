@@ -81,6 +81,15 @@
             "timeout": 5000
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun src/memory/hooks/memory-consolidate-stop.ts 2>/dev/null",
+            "timeout": 3000
+          }
+        ]
       }
     ],
     "PreToolUse": [
@@ -143,6 +152,16 @@
             "type": "command",
             "command": "bun src/core/hooks/quality-typecheck-edit.ts 2>/dev/null",
             "timeout": 15000
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun src/memory/hooks/signal-capture-posttooluse.ts 2>/dev/null",
+            "timeout": 1000
           }
         ]
       }

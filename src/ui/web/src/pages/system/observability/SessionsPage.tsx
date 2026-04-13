@@ -82,6 +82,9 @@ type SessionRow = {
   parentSessionId?: string;
   gateInfo?: { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; hookBlocks: number; hookAdvisories: number; mode: 'dispatched' | 'inline' | 'none' };
   firstUserMessage?: string;
+  intent?: string;
+  outcome?: string;
+  sessionNotes?: string[];
 };
 
 export function SessionsPage() {
@@ -174,10 +177,19 @@ export function SessionsPage() {
       sortable: true,
       render: (row) => (
         <div className="flex flex-col gap-0.5 min-w-0">
-          {row.firstUserMessage && !row.firstUserMessage.startsWith('Caveat:') && (
+          {row.parentSessionId && <span className="text-text-muted text-xs">↳ subagent</span>}
+          {row.intent ? (
+            <span className="text-text-primary text-base truncate" title={row.intent}>
+              {row.intent.length > 100 ? row.intent.slice(0, 100) + '…' : row.intent}
+            </span>
+          ) : (row.firstUserMessage && !row.firstUserMessage.startsWith('Caveat:') && (
             <span className="text-text-primary text-base truncate">
-              {row.parentSessionId && <span className="text-text-muted mr-1">↳</span>}
-              {(() => { const t = stripMarkdown(row.firstUserMessage!); return t.length > 120 ? t.slice(0, 120) + '…' : t; })()}
+              {(() => { const t = stripMarkdown(row.firstUserMessage!); return t.length > 100 ? t.slice(0, 100) + '…' : t; })()}
+            </span>
+          ))}
+          {row.outcome && (
+            <span className="text-text-muted text-xs truncate" title={row.outcome}>
+              → {row.outcome.length > 90 ? row.outcome.slice(0, 90) + '…' : row.outcome}
             </span>
           )}
         </div>

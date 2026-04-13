@@ -25,12 +25,15 @@ export const dataPaths = {
   directives: resolve(DATA_ROOT, "signals", "directives.jsonl"),
   hookEvents: resolve(DATA_ROOT, "signals", "hook-events.jsonl"),
   compactionNotes: resolve(DATA_ROOT, "signals", "compaction-notes.json"),
+  toolSignals: resolve(DATA_ROOT, "signals", "tool-signals.jsonl"),
+  consolidationState: resolve(DATA_ROOT, "signals", "consolidation-state.json"),
+  learnedRules: resolve(DATA_ROOT, "signals", "learned-rules.md"),
 };
 
-const MEMORY_DIR = resolve(DATA_ROOT, "memory");
-
+// Default matches memory-writer.py's default so reads and writes use the same DB.
+// Override via MEMORY_DB_PATH env var.
 export function getMemoryDbPath(): string {
-  return process.env.MEMORY_DB_PATH || resolve(MEMORY_DIR, "sqlite_vec.db");
+  return process.env.MEMORY_DB_PATH || resolve(homedir(), ".local/share/mcp-memory/sqlite_vec.db");
 }
 
 export const externalPaths = {
@@ -42,5 +45,4 @@ export function ensureDataDirs(): void {
   mkdirSync(dataPaths.backups, { recursive: true });
   mkdirSync(dataPaths.sessions, { recursive: true });
   mkdirSync(dataPaths.signals, { recursive: true });
-  mkdirSync(MEMORY_DIR, { recursive: true });
 }

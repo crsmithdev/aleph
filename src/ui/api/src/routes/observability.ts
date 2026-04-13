@@ -422,6 +422,196 @@ const HOOK_METADATA: Record<string, HookMeta> = {
   },
 };
 
+// ---------------------------------------------------------------------------
+// Hook group inference from name prefix
+// ---------------------------------------------------------------------------
+
+const HOOK_GROUP_MAP: Record<string, string> = {
+  quality: 'Quality',
+  memory: 'Memory',
+  git: 'Git',
+  context: 'Context',
+  routing: 'Routing',
+  signal: 'Signals',
+  isolation: 'Isolation',
+  security: 'Security',
+  consolidator: 'Memory',
+  'context-save': 'Context',
+  'context-restore': 'Context',
+  'context-monitor': 'Context',
+  'context-backup': 'Context',
+  'context-suggest': 'Context',
+};
+
+function hookGroup(command: string): string | undefined {
+  const base = command.replace(/\.ts$/, '');
+  for (const [prefix, group] of Object.entries(HOOK_GROUP_MAP)) {
+    if (base.startsWith(prefix + '-') || base === prefix) return group;
+  }
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Hook gating stats from hook-events.jsonl
+// ---------------------------------------------------------------------------
+
+type HookGatingStat = {
+  blocks: number;
+  advisories: number;
+  passes: number;
+  total: number;
+  blockRate: number;
+  advisoryRate: number;
+  ignoredAdvisories: number;
+  repeatedBlocks: number;
+  topPatterns: Array<{ detail: string; count: number }>;
+};
+
+function readHookGatingStats(startDate?: string): Record<string, HookGatingStat> {
+  const hookEventsPath = dataPaths.hookEvents;
+  if (!existsSync(hookEventsPath)) return {};
+  type Entry = { ts: string; hook: string; event: string; sessionId: string; decision?: string; detail?: string };
+  type HookAccum = {
+    blocks: number;
+    advisories: number;
+    passes: number;
+    sessionAdvisories: Map<string, boolean>;
+    sessionBlocks: Map<string, number>;
+    detailCounts: Map<string, number>;
+  };
+  const perHook: Record<string, HookAccum> = {};
+  try {
+    const lines = readFileSync(hookEventsPath, 'utf-8').split('\n').filter(Boolean);
+    for (const line of lines) {
+      try {
+        const entry = JSON.parse(line) as Entry;
+        if (startDate && entry.ts < startDate) continue;
+        const hook = entry.hook;
+        if (!perHook[hook]) {
+          perHook[hook] = { blocks: 0, advisories: 0, passes: 0, sessionAdvisories: new Map(), sessionBlocks: new Map(), detailCounts: new Map() };
+        }
+        const h = perHook[hook];
+        if (entry.decision === 'block') {
+          h.blocks++;
+          h.sessionBlocks.set(entry.sessionId, (h.sessionBlocks.get(entry.sessionId) ?? 0) + 1);
+          if (h.sessionAdvisories.has(entry.sessionId) && !h.sessionAdvisories.get(entry.sessionId)) {
+            h.sessionAdvisories.set(entry.sessionId, true); // advisory ignored → then blocked
+          }
+        } else if (entry.decision === 'advisory') {
+          h.advisories++;
+          if (!h.sessionAdvisories.has(entry.sessionId)) h.sessionAdvisories.set(entry.sessionId, false);
+        } else {
+          h.passes++;
+        }
+        if (entry.detail) {
+          h.detailCounts.set(entry.detail, (h.detailCounts.get(entry.detail) ?? 0) + 1);
+        }
+      } catch {}
+    }
+  } catch {}
+  const result: Record<string, HookGatingStat> = {};
+  for (const [hook, h] of Object.entries(perHook)) {
+    if (h.blocks === 0 && h.advisories === 0) continue;
+    const ignoredAdvisories = [...h.sessionAdvisories.values()].filter(Boolean).length;
+    const repeatedBlocks = [...h.sessionBlocks.values()].filter(n => n >= 2).length;
+    const total = h.blocks + h.advisories + h.passes;
+    const topPatterns = [...h.detailCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([detail, count]) => ({ detail, count }));
+    result[hook] = {
+      blocks: h.blocks, advisories: h.advisories, passes: h.passes, total,
+      blockRate: total > 0 ? h.blocks / total : 0,
+      advisoryRate: total > 0 ? h.advisories / total : 0,
+      ignoredAdvisories, repeatedBlocks, topPatterns,
+    };
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Session files reader (from context-save-stop.ts output)
+// ---------------------------------------------------------------------------
+
+type SessionFileSummary = {
+  filename: string;
+  timestamp: string; // ISO from filename
+  intent: string;
+  outcome: string;
+  milestones: string[];
+  notes: string[];
+};
+
+function parseSessionFile(content: string): Pick<SessionFileSummary, 'intent' | 'outcome' | 'milestones' | 'notes'> {
+  const lines = content.split('\n');
+  const intent = lines.find(l => l.startsWith('- Intent:'))?.replace('- Intent:', '').trim() ?? '';
+  const outcome = lines.find(l => l.startsWith('- Outcome:'))?.replace('- Outcome:', '').trim() ?? '';
+  const milestonesIdx = lines.findIndex(l => l.trimStart() === '- Milestones:');
+  const milestones = milestonesIdx === -1 ? [] : lines
+    .slice(milestonesIdx + 1)
+    .filter(l => l.trim().startsWith('- ') && !l.trim().startsWith('- Tools:') && !l.trim().startsWith('- Edits:') && !l.trim().startsWith('- Messages:') && !l.trim().startsWith('- Notes:') && !l.trim().startsWith('- Intent:') && !l.trim().startsWith('- Outcome:'))
+    .map(l => l.trim().replace(/^- /, ''))
+    .slice(0, 4);
+  const notesIdx = lines.findIndex(l => l.trimStart() === '- Notes:');
+  const notes = notesIdx === -1 ? [] : lines
+    .slice(notesIdx + 1)
+    .filter(l => l.trim().startsWith('- '))
+    .map(l => l.trim().replace(/^- /, ''))
+    .slice(0, 3);
+  return { intent, outcome, milestones, notes };
+}
+
+function filenameToTimestamp(filename: string): string | null {
+  // 2026-04-13-141748 → 2026-04-13T14:17:48Z
+  const m = filename.match(/^(\d{4}-\d{2}-\d{2})-(\d{2})(\d{2})(\d{2})/);
+  if (!m) return null;
+  return `${m[1]}T${m[2]}:${m[3]}:${m[4]}Z`;
+}
+
+function readSessionFiles(limit = 200): SessionFileSummary[] {
+  const dir = dataPaths.sessions;
+  if (!existsSync(dir)) return [];
+  try {
+    const files = readdirSync(dir)
+      .filter(f => f.endsWith('.md') && !f.startsWith('.'))
+      .sort()
+      .reverse()
+      .slice(0, limit);
+    const results: SessionFileSummary[] = [];
+    for (const f of files) {
+      const timestamp = filenameToTimestamp(f.replace('.md', ''));
+      if (!timestamp) continue;
+      try {
+        const content = readFileSync(resolve(dir, f), 'utf-8');
+        results.push({ filename: f, timestamp, ...parseSessionFile(content) });
+      } catch {}
+    }
+    return results;
+  } catch { return []; }
+}
+
+// Build a map: ISO-timestamp → session file summary for fast lookup
+function buildSessionFileMap(files: SessionFileSummary[]): Map<string, SessionFileSummary> {
+  return new Map(files.map(f => [f.timestamp, f]));
+}
+
+// Match a session by lastTimestamp to the closest session file (within 120s)
+function matchSessionFile(
+  lastTimestamp: string,
+  fileMap: Map<string, SessionFileSummary>,
+  sortedTimestamps: string[],
+): SessionFileSummary | undefined {
+  const target = new Date(lastTimestamp).getTime();
+  let best: SessionFileSummary | undefined;
+  let bestDelta = 120_000;
+  for (const ts of sortedTimestamps) {
+    const delta = Math.abs(new Date(ts).getTime() - target);
+    if (delta < bestDelta) { bestDelta = delta; best = fileMap.get(ts); }
+    if (delta > 120_000) continue;
+  }
+  return best;
+}
+
 function readMarkerFileStats(): Record<string, { writes: number; clears: number; activeNow: boolean }> {
   const stats: Record<string, { writes: number; clears: number; activeNow: boolean }> = {};
   // Check require-e2e marker
@@ -499,6 +689,8 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       const merged = [...rankedMap.values()].sort((a, b) => b.count - a.count);
 
       const markerStats = readMarkerFileStats();
+      const gatingStartDate = new Date(Date.now() - days * 86400000).toISOString();
+      const gating = readHookGatingStats(gatingStartDate);
       const ranked = merged.map((h) => {
         const name = h.command.replace(/\.ts$/, '');
         const meta = HOOK_METADATA[name];
@@ -509,6 +701,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
           gate: meta?.gate,
           markerFile: meta?.markerFile,
           description: meta?.description,
+          group: hookGroup(h.command),
         };
       });
       const registered = getRegisteredHooks();
@@ -529,7 +722,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
         if (h.event) byEventMap.set(h.event, (byEventMap.get(h.event) || 0) + h.count);
       }
       const byEvent = [...byEventMap.entries()].map(([event, count]) => ({ event, count })).sort((a, b) => b.count - a.count);
-      return { ...result, ranked, unused, markerStats, byEvent, queryTimeMs };
+      return { ...result, ranked, unused, markerStats, byEvent, gating, queryTimeMs };
     });
   });
 
@@ -583,8 +776,19 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     return cachedResult(req.url, 60_000, () => {
       const { result, queryTimeMs } = timed(() => aggregateSessions(obsReq.telemetryEntries, obsReq.granularity));
       const gateMap = readSessionGateInfo();
+      const sessionFiles = readSessionFiles(500);
+      const fileMap = buildSessionFileMap(sessionFiles);
+      const sortedTimestamps = [...fileMap.keys()].sort();
       for (const session of result.sessions) {
         session.gateInfo = toGateInfo(gateMap.get(session.sessionId));
+        if (session.lastTimestamp) {
+          const match = matchSessionFile(session.lastTimestamp, fileMap, sortedTimestamps);
+          if (match) {
+            session.intent = match.intent;
+            session.outcome = match.outcome;
+            session.sessionNotes = match.notes;
+          }
+        }
       }
       return { ...result, queryTimeMs };
     });
@@ -789,6 +993,136 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       }
     },
   );
+
+  // ---------------------------------------------------------------------------
+  // Signal file endpoints (ratings, directives, tool-signals, consolidation)
+  // ---------------------------------------------------------------------------
+
+  app.get('/signals/ratings', async () => {
+    return cachedResult('/signals/ratings', 60_000, () => {
+      const path = dataPaths.ratings;
+      if (!existsSync(path)) return { ratings: [], total: 0 };
+      try {
+        type RatingEntry = { timestamp: string; rating: string; type?: string; context?: string };
+        const lines = readFileSync(path, 'utf-8').split('\n').filter(Boolean);
+        const ratings: RatingEntry[] = [];
+        const byType: Record<string, number> = {};
+        const byDay: Record<string, { positive: number; negative: number }> = {};
+        for (const line of lines) {
+          try {
+            const entry = JSON.parse(line) as RatingEntry;
+            ratings.push(entry);
+            const t = entry.type ?? 'unknown';
+            byType[t] = (byType[t] ?? 0) + 1;
+            const day = entry.timestamp?.slice(0, 10);
+            if (day) {
+              if (!byDay[day]) byDay[day] = { positive: 0, negative: 0 };
+              if (entry.rating === 'positive' || entry.rating === '👍') byDay[day].positive++;
+              else byDay[day].negative++;
+            }
+          } catch {}
+        }
+        ratings.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+        const byDayArr = Object.entries(byDay).sort((a, b) => a[0].localeCompare(b[0])).map(([date, v]) => ({ date, ...v }));
+        return { ratings: ratings.slice(0, 200), total: ratings.length, byType, byDay: byDayArr };
+      } catch { return { ratings: [], total: 0 }; }
+    });
+  });
+
+  app.get('/signals/directives', async () => {
+    return cachedResult('/signals/directives', 60_000, () => {
+      const path = dataPaths.directives;
+      if (!existsSync(path)) return { directives: [], total: 0 };
+      try {
+        type DirectiveEntry = { ts: string; sessionId: string; directives: string[]; promptWords?: number };
+        const lines = readFileSync(path, 'utf-8').split('\n').filter(Boolean);
+        const directives: DirectiveEntry[] = [];
+        const depthCounts: Record<string, number> = {};
+        const skillHits: Record<string, number> = {};
+        const byDay: Record<string, { full: number; quick: number; total: number }> = {};
+        for (const line of lines) {
+          try {
+            const entry = JSON.parse(line) as DirectiveEntry;
+            directives.push(entry);
+            const day = entry.ts?.slice(0, 10);
+            if (day) {
+              if (!byDay[day]) byDay[day] = { full: 0, quick: 0, total: 0 };
+              byDay[day].total++;
+            }
+            for (const d of entry.directives ?? []) {
+              const upper = d.toUpperCase();
+              if (upper.startsWith('FULL')) {
+                depthCounts['FULL'] = (depthCounts['FULL'] ?? 0) + 1;
+                if (day) byDay[day].full++;
+              } else if (upper.startsWith('QUICK')) {
+                depthCounts['QUICK'] = (depthCounts['QUICK'] ?? 0) + 1;
+                if (day) byDay[day].quick++;
+              }
+              // Skill matches: entries like "SKILL:research" or just skill names
+              const skillMatch = d.match(/^(?:SKILL:|skill:)(.+)$/i);
+              if (skillMatch) skillHits[skillMatch[1]] = (skillHits[skillMatch[1]] ?? 0) + 1;
+            }
+          } catch {}
+        }
+        directives.sort((a, b) => b.ts.localeCompare(a.ts));
+        const byDayArr = Object.entries(byDay).sort((a, b) => a[0].localeCompare(b[0])).map(([date, v]) => ({ date, ...v }));
+        const topSkills = Object.entries(skillHits).sort((a, b) => b[1] - a[1]).slice(0, 20).map(([skill, count]) => ({ skill, count }));
+        return { directives: directives.slice(0, 200), total: directives.length, depthCounts, byDay: byDayArr, topSkills };
+      } catch { return { directives: [], total: 0 }; }
+    });
+  });
+
+  app.get('/signals/tool-signals', async () => {
+    return cachedResult('/signals/tool-signals', 60_000, () => {
+      const path = dataPaths.toolSignals;
+      if (!existsSync(path)) return { signals: [], byFile: [], total: 0 };
+      try {
+        type ToolSignalEntry = { type: string; file: string; count: number; sessionId: string; timestamp: string };
+        const lines = readFileSync(path, 'utf-8').split('\n').filter(Boolean);
+        const signals: ToolSignalEntry[] = [];
+        const fileCounts: Record<string, number> = {};
+        for (const line of lines) {
+          try {
+            const entry = JSON.parse(line) as ToolSignalEntry;
+            signals.push(entry);
+            if (entry.type === 're-edit') fileCounts[entry.file] = (fileCounts[entry.file] ?? 0) + 1;
+          } catch {}
+        }
+        signals.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+        const byFile = Object.entries(fileCounts).sort((a, b) => b[1] - a[1]).slice(0, 50).map(([file, count]) => ({ file, count }));
+        return { signals: signals.slice(0, 200), byFile, total: signals.length };
+      } catch { return { signals: [], byFile: [], total: 0 }; }
+    });
+  });
+
+  app.get('/signals/consolidation', async () => {
+    return cachedResult('/signals/consolidation', 30_000, () => {
+      const statePath = dataPaths.consolidationState;
+      const rulesPath = dataPaths.learnedRules;
+      let state: { lastRun?: string; lastMemoryCount?: number } = {};
+      let rules: string[] = [];
+      if (existsSync(statePath)) {
+        try { state = JSON.parse(readFileSync(statePath, 'utf-8')); } catch {}
+      }
+      if (existsSync(rulesPath)) {
+        try {
+          rules = readFileSync(rulesPath, 'utf-8')
+            .split('\n')
+            .filter(l => l.startsWith('- '))
+            .map(l => l.slice(2).trim());
+        } catch {}
+      }
+      return { state, rules, rulesPath: existsSync(rulesPath) ? rulesPath : null };
+    });
+  });
+
+  app.get<{ Querystring: { limit?: string } }>('/signals/sessions', async (req) => {
+    return cachedResult(req.url, 60_000, () => {
+      const limit = Math.min(Math.max(parseInt(req.query.limit || '100', 10) || 100, 1), 500);
+      const files = readSessionFiles(limit);
+      return { sessions: files, total: files.length };
+    });
+  });
 
   app.get<{ Querystring: QueryParams }>('/compaction', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;

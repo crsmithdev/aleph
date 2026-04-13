@@ -14,10 +14,11 @@
  *
  * Never blocks (always exit 0). Missing Python or empty transcript → silent skip.
  */
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
+import { dataPaths } from "../../data/src/paths.ts";
 import { parseTranscript } from "../parse-transcript.ts";
 import { extractMemories, hasMemoryStore } from "../extract.ts";
 
@@ -48,6 +49,22 @@ if (hasMemoryStore(transcript)) {
 
 const memories = extractMemories(transcript);
 trace(TAG, `extracted ${memories.length} memories`);
+
+// Augment with re-edit signals from this session
+if (existsSync(dataPaths.toolSignals)) {
+  try {
+    const lines = readFileSync(dataPaths.toolSignals, "utf8").trim().split("\n").filter(Boolean);
+    for (const line of lines) {
+      const sig = JSON.parse(line);
+      if (sig.sessionId !== input.session_id || sig.type !== "re-edit") continue;
+      memories.push({
+        content: `Re-edit friction: ${sig.file} required ${sig.count}+ edits in one session — approach needed multiple corrections.`,
+        tags: "preference,auto_extract",
+        memory_type: "observation",
+      });
+    }
+  } catch (e) { trace(TAG, `tool signals read failed: ${(e as Error).message}`); }
+}
 
 if (memories.length === 0) { process.exit(0); }
 

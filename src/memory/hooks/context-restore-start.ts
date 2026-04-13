@@ -22,7 +22,7 @@
  *
  * Never blocks (always exit 0). All failures are swallowed with trace logging.
  */
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync, statSync } from "fs";
 import { resolve, dirname } from "path";
 import { execSync } from "child_process";
 import { Database } from "bun:sqlite";
@@ -186,6 +186,23 @@ try {
 } catch (e) {
   trace(TAG, `compaction notes injection failed: ${(e as Error).message}`);
 }
+
+// Learned rules injection (auto-consolidated behavioral patterns)
+try {
+  if (existsSync(dataPaths.learnedRules)) {
+    const stat = statSync(dataPaths.learnedRules);
+    if (Date.now() - stat.mtimeMs < 30 * 24 * 60 * 60 * 1000) {
+      const ruleLines = readFileSync(dataPaths.learnedRules, "utf8")
+        .split("\n").filter(l => l.startsWith("- ")).join("\n").slice(0, 600);
+      if (ruleLines) {
+        out.push("\n=== Learned Behavioral Rules ===");
+        out.push(ruleLines);
+        out.push("=========================");
+        trace(TAG, `injected learned-rules (${ruleLines.length} chars)`);
+      }
+    }
+  }
+} catch (e) { trace(TAG, `learned-rules injection failed: ${(e as Error).message}`); }
 
 // Fire-and-forget memory snapshot for observability
 try {

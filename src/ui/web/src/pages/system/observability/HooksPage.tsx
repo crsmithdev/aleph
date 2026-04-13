@@ -29,6 +29,7 @@ type HookRow = {
   gate?: string;
   markerFile?: string;
   description?: string;
+  group?: string;
 };
 
 type InvocationRow = {
@@ -317,7 +318,7 @@ export function HooksPage() {
   }));
   const unusedRows: HookRow[] = (data.unused || []).map(h => ({
     command: h.command, event: h.event, count: 0, avgMs: 0, p50Ms: 0, p95Ms: 0, errors: 0, active: true, successRate: 100,
-    blocking: h.blocking, gate: h.gate, markerFile: h.markerFile, description: h.description,
+    blocking: h.blocking, gate: h.gate, markerFile: h.markerFile, description: h.description, group: h.group,
   }));
 
   const missingCount = rankedWithRate.filter(r => !r.active).length;
@@ -463,6 +464,17 @@ export function HooksPage() {
 
   const activeFilterCount = (showMissing ? 1 : 0) + (showUnused ? 1 : 0);
 
+  const GROUP_COLORS: Record<string, string> = {
+    Quality: 'bg-blue-500/15 text-blue-400',
+    Memory: 'bg-purple-500/15 text-purple-400',
+    Git: 'bg-orange-500/15 text-orange-400',
+    Context: 'bg-cyan-500/15 text-cyan-400',
+    Routing: 'bg-green-500/15 text-green-400',
+    Signals: 'bg-yellow-500/15 text-yellow-400',
+    Isolation: 'bg-red-500/15 text-red-400',
+    Security: 'bg-rose-500/15 text-rose-400',
+  };
+
   const columns: Column<HookRow>[] = [
     {
       key: 'command',
@@ -470,11 +482,24 @@ export function HooksPage() {
       sortable: true,
       shrink: true,
       render: (row) => (
-        <span className={clsx('font-mono', row.count === 0 ? 'text-text-muted' : 'text-text-primary')}>
-          {row.command}
-          {row.count === 0 && <span className="ml-2 text-xs text-text-disabled uppercase">unused</span>}
-          {!row.active && row.count > 0 && <span className="ml-2 text-xs text-warning uppercase">missing</span>}
-        </span>
+        <div className="space-y-0.5">
+          <div className="flex items-center gap-2">
+            {row.group && (
+              <span className={clsx('text-[10px] font-medium px-1.5 py-0.5 rounded uppercase tracking-wide shrink-0', GROUP_COLORS[row.group] ?? 'bg-bg-tertiary text-text-muted')}>
+                {row.group}
+              </span>
+            )}
+            <span className={clsx('font-mono', row.count === 0 ? 'text-text-muted' : 'text-text-primary')}>
+              {row.command}
+            </span>
+            {row.blocking && <span className="text-[10px] px-1 py-0.5 rounded bg-error/15 text-error uppercase tracking-wide shrink-0">blocking</span>}
+            {row.count === 0 && <span className="text-xs text-text-disabled uppercase">unused</span>}
+            {!row.active && row.count > 0 && <span className="text-xs text-warning uppercase">missing</span>}
+          </div>
+          {row.description && (
+            <div className="text-xs text-text-muted pl-0.5">{row.description}</div>
+          )}
+        </div>
       ),
     },
     {

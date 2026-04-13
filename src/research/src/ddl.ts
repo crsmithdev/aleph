@@ -8,6 +8,24 @@ export function applyResearchDDL(sqlite: Sqlite): void {
     const hasSessions = sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='research_sessions'").get();
     if (!hasQueries && hasSessions) {
       sqlite.exec('ALTER TABLE research_sessions RENAME TO research_queries');
+    } else if (hasQueries && hasSessions) {
+      // Both tables exist: dependent tables have stale FK refs to research_sessions.
+      // Drop and let CREATE TABLE IF NOT EXISTS below recreate with correct FKs.
+      // Safe because these tables have no rows (all inserts failed due to stale FK).
+      sqlite.exec('PRAGMA foreign_keys = OFF');
+      sqlite.exec(`
+        DROP TABLE IF EXISTS research_proposed_monitors;
+        DROP TABLE IF EXISTS research_monitor_alerts;
+        DROP TABLE IF EXISTS research_monitor_snapshots;
+        DROP TABLE IF EXISTS research_plan_modifications;
+        DROP TABLE IF EXISTS research_plans;
+        DROP TABLE IF EXISTS research_jobs;
+        DROP TABLE IF EXISTS research_steps;
+        DROP TABLE IF EXISTS research_findings;
+        DROP TABLE IF EXISTS research_threads;
+        DROP TABLE IF EXISTS research_sessions;
+      `);
+      sqlite.exec('PRAGMA foreign_keys = ON');
     }
   } catch { /* already renamed or not applicable */ }
 

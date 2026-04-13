@@ -116,6 +116,13 @@ export function HookDetailPage() {
 
   const hasTriggers = data.invocations.some((inv: InvocationRow) => inv.trigger);
 
+  function exitLabel(code?: number): { label: string; cls: string } | null {
+    if (code === undefined || code === null) return null;
+    if (code === 0) return { label: 'pass', cls: 'text-success' };
+    if (code === 2) return { label: 'block', cls: 'text-error font-medium' };
+    return { label: `crash(${code})`, cls: 'text-error' };
+  }
+
   const invocationColumns: Column<InvocationRow>[] = [
     {
       key: 'timestamp',
@@ -123,6 +130,18 @@ export function HookDetailPage() {
       shrink: true,
       sortable: true,
       render: (row) => <span className="font-mono text-text-secondary whitespace-nowrap">{compactDate(row.timestamp)}</span>,
+    },
+    {
+      key: 'exitCode',
+      label: 'Result',
+      shrink: true,
+      render: (row) => {
+        const lbl = exitLabel(row.exitCode);
+        if (lbl) return <span className={clsx('text-xs font-mono', lbl.cls)}>{lbl.label}</span>;
+        return row.isError
+          ? <span className="text-xs text-error">error</span>
+          : <span className="text-xs text-success">pass</span>;
+      },
     },
     ...(hasTriggers ? [{
       key: 'trigger',
@@ -236,6 +255,44 @@ export function HookDetailPage() {
           accent={data.p95Ms > 0 ? (data.p95Ms < 500 ? 'success' : data.p95Ms < 2000 ? 'warning' : 'error') : undefined}
         />
       </div>
+
+      {(data.description || data.gating) && (
+        <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 space-y-3">
+          {data.description && (
+            <div>
+              <span className="text-xs font-medium text-text-muted uppercase tracking-wide">Description</span>
+              <p className="mt-1 text-sm text-text-secondary">{data.description}</p>
+            </div>
+          )}
+          {data.gating && (
+            <div>
+              <span className="text-xs font-medium text-text-muted uppercase tracking-wide">
+                Gating Activity ({fmtNumber(data.gating.total)} decisions)
+              </span>
+              <div className="mt-2 flex flex-wrap gap-3">
+                {data.gating.blocks > 0 && <span className="text-sm text-error">{fmtNumber(data.gating.blocks)} blocks ({fmtPct(data.gating.blockRate * 100)})</span>}
+                {data.gating.advisories > 0 && <span className="text-sm text-warning">{fmtNumber(data.gating.advisories)} advisories</span>}
+                {data.gating.ignoredAdvisories > 0 && <span className="text-sm text-warning">{data.gating.ignoredAdvisories} ignored</span>}
+                {data.gating.repeatedBlocks > 0 && <span className="text-sm text-error">{data.gating.repeatedBlocks} repeated blocks</span>}
+                {data.gating.passes > 0 && <span className="text-sm text-success">{fmtNumber(data.gating.passes)} passes</span>}
+              </div>
+              {data.gating.topPatterns && data.gating.topPatterns.length > 0 && (
+                <div className="mt-3">
+                  <span className="text-xs text-text-muted">Top patterns:</span>
+                  <div className="mt-1 space-y-1">
+                    {data.gating.topPatterns.map((p, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        <span className="text-text-muted font-mono w-6 text-right shrink-0">{p.count}×</span>
+                        <span className="text-text-secondary font-mono truncate">{p.detail}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {data.byDay.length > 0 && (
         <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 h-[350px] flex flex-col">

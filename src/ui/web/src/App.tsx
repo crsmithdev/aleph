@@ -35,6 +35,7 @@ import { EvalsPage } from './pages/system/observability/EvalsPage';
 import { CompactionPage } from './pages/system/observability/CompactionPage';
 import { SessionTracePage } from './pages/system/observability/SessionTracePage';
 import { TurnTracePage } from './pages/system/observability/TurnTracePage';
+import { SignalsPage } from './pages/system/observability/SignalsPage';
 import { SettingsPage } from './pages/system/SettingsPage';
 
 const queryClient = new QueryClient({
@@ -86,6 +87,7 @@ export function App() {
               <Route path="/observability/compaction" element={<CompactionPage />} />
               <Route path="/observability/events" element={<EventsPage />} />
               <Route path="/observability/memory" element={<MemoryPage />} />
+              <Route path="/observability/signals" element={<SignalsPage />} />
               <Route path="/observability/db" element={<DbStatsPage />} />
               {/* Settings */}
               <Route path="/settings" element={<SettingsPage />} />
