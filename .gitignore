@@ -26,3 +26,4 @@ test-results/
 playwright-report/
 src/dashboard/api/data/
 evidence/
+.trace
