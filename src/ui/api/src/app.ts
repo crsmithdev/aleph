@@ -119,7 +119,7 @@ export async function createApp(opts?: { dbUrl?: string; workerCount?: number; s
   const eventBus = new EventBus();
   app.decorate('eventBus', eventBus);
 
-  const workerCount = opts?.workerCount ?? parseInt(process.env.WORKER_COUNT || '3', 10);
+  const workerCount = opts?.workerCount ?? parseInt(process.env.WORKER_COUNT || '1', 10);
   const supervisor = new WorkerSupervisor(workerCount);
   app.decorate('supervisor', supervisor);
 

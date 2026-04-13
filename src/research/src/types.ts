@@ -76,14 +76,18 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
   dedup_similarity_threshold: 0.85,
   diminishing_returns_threshold: 0.25,
   diminishing_returns_window: 20,
-  min_delay_between_steps_ms: 2000,
-  max_steps_per_hour: 60,
-  max_concurrent_threads: 3,
-  model: 'deepseek/deepseek-chat',
+  min_delay_between_steps_ms: 8000,
+  max_steps_per_hour: 30,
+  max_concurrent_threads: 2,
+  model: 'openrouter/free',
   providers: {
     primary: 'openrouter',
     openrouter_models: [
-      'deepseek/deepseek-chat',
+      'openrouter/free',
+      'meta-llama/llama-3.3-70b-instruct:free',
+      'google/gemma-3-27b-it:free',
+      'nousresearch/hermes-3-llama-3.1-405b:free',
+      'qwen/qwen3-next-80b-a3b-instruct:free',
     ],
   },
   schedule: {

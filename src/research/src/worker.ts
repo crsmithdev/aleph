@@ -56,7 +56,7 @@ if (!process.env.OPENROUTER_API_KEY) {
 const openrouterApiKey = process.env.OPENROUTER_API_KEY;
 
 function buildProvider(session: { config: { model?: string; providers?: { openrouter_api_key?: string; openrouter_models?: string[] } } }): LLMProvider {
-  const model = session.config.model ?? 'deepseek/deepseek-chat';
+  const model = session.config.model ?? 'openrouter/free';
   const key = session.config.providers?.openrouter_api_key ?? openrouterApiKey;
   if (!key) throw new Error('OpenRouter API key not set (pass via session config or OPENROUTER_API_KEY env)');
   const models = session.config.providers?.openrouter_models?.length

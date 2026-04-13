@@ -12,12 +12,16 @@ const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 
 // OpenRouter model metadata: pricing per 1M tokens + context window size
 const OPENROUTER_MODELS: Record<string, { input: number; output: number; contextWindow: number }> = {
-  'deepseek/deepseek-chat':                   { input: 0.14, output: 0.28, contextWindow: 65536 },
-  'deepseek/deepseek-r1-0528':                { input: 0.50, output: 2.19, contextWindow: 65536 },
-  'deepseek/deepseek-r1-0528:free':           { input: 0,    output: 0,    contextWindow: 65536 },
-  'google/gemini-2.0-flash-001':              { input: 0.10, output: 0.40, contextWindow: 1048576 },
-  'meta-llama/llama-3.3-70b-instruct':        { input: 0.39, output: 0.39, contextWindow: 131072 },
-  'meta-llama/llama-3.3-70b-instruct:free':   { input: 0,    output: 0,    contextWindow: 131072 },
+  'deepseek/deepseek-chat':                          { input: 0.14, output: 0.28, contextWindow: 65536 },
+  'deepseek/deepseek-r1-0528':                       { input: 0.50, output: 2.19, contextWindow: 65536 },
+  'google/gemini-2.0-flash-001':                     { input: 0.10, output: 0.40, contextWindow: 1048576 },
+  'meta-llama/llama-3.3-70b-instruct':               { input: 0.39, output: 0.39, contextWindow: 131072 },
+  // Free tier models (no credit cost, subject to rate limits — use rotation)
+  'openrouter/free':                                  { input: 0,    output: 0,    contextWindow: 200000 },
+  'meta-llama/llama-3.3-70b-instruct:free':          { input: 0,    output: 0,    contextWindow: 65536 },
+  'google/gemma-3-27b-it:free':                      { input: 0,    output: 0,    contextWindow: 131072 },
+  'nousresearch/hermes-3-llama-3.1-405b:free':       { input: 0,    output: 0,    contextWindow: 131072 },
+  'qwen/qwen3-next-80b-a3b-instruct:free':           { input: 0,    output: 0,    contextWindow: 262144 },
 };
 
 // Conservative default for unknown models (OpenRouter enforces 32k on some routes)
@@ -38,47 +42,76 @@ export class OpenRouterProvider implements LLMProvider {
   }
 
   async complete(model: string, prompt: string, maxTokens: number): Promise<LLMResult> {
-    // Use specific model if provided and it's an OpenRouter model, else rotate
-    const actualModel = model.includes('/') ? model : this.nextModel();
+    // When a specific OpenRouter model is requested, use it; otherwise rotate through the pool.
+    const pinned = model.includes('/');
+    const totalModels = this.config.models.length;
+    const attempts = pinned ? 3 : Math.max(3, totalModels);
+    let lastError: Error | null = null;
 
-    // Truncate prompt to fit within context window (prompt + completion must fit)
-    const contextWindow = OPENROUTER_MODELS[actualModel]?.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
-    const maxPromptTokens = contextWindow - maxTokens - 200; // 200 token safety margin
-    const truncatedPrompt = truncateToTokens(prompt, maxPromptTokens);
-
-    const response = await this.fetchWithRetry(actualModel, [
-      { role: 'user', content: truncatedPrompt },
-    ], maxTokens, undefined);
-
-    return {
-      text: response.choices[0]?.message?.content ?? '',
-      promptTokens: response.usage?.prompt_tokens ?? 0,
-      completionTokens: response.usage?.completion_tokens ?? 0,
-      model: response.model ?? actualModel,
-    };
+    for (let i = 0; i < attempts; i++) {
+      const actualModel = pinned ? model : this.nextModel();
+      const contextWindow = OPENROUTER_MODELS[actualModel]?.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
+      const maxPromptTokens = contextWindow - maxTokens - 200;
+      const truncatedPrompt = truncateToTokens(prompt, maxPromptTokens);
+      try {
+        const response = await this.fetchWithRetry(actualModel, [
+          { role: 'user', content: truncatedPrompt },
+        ], maxTokens, undefined, 1); // single attempt inside; rotation handles retries
+        return {
+          text: response.choices[0]?.message?.content ?? '',
+          promptTokens: response.usage?.prompt_tokens ?? 0,
+          completionTokens: response.usage?.completion_tokens ?? 0,
+          model: response.model ?? actualModel,
+        };
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        const msg = lastError.message;
+        // On rate-limit or credit errors, try the next model in the pool
+        if (msg.includes('429') || msg.includes('402') || msg.includes('529') || msg.includes('rate')) continue;
+        throw lastError; // non-retriable error
+      }
+    }
+    throw lastError ?? new Error('All models exhausted');
   }
 
   async searchWeb(model: string, query: string): Promise<WebSearchResult> {
-    const actualModel = model.includes('/') ? model : this.nextModel();
-
     // 1. Get URLs from search engine (Tavily → Brave → DuckDuckGo)
     const searchResults = await fetchSearchResults(query);
 
     const sourceUrls = searchResults.map(r => r.url);
 
-    // 2. Synthesize with the LLM using search snippets
+    // 2. Synthesize with the LLM — rotate models on rate-limit errors
     const context = searchResults.map(r => {
       return `### ${r.title}\nURL: ${r.url}\n\n${r.snippet.slice(0, 3000)}`;
     }).join('\n\n---\n\n');
 
-    const contextWindow = OPENROUTER_MODELS[actualModel]?.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
+    const pinned = model.includes('/');
+    const totalModels = this.config.models.length;
+    const attempts = pinned ? 3 : Math.max(3, totalModels);
     const searchMaxTokens = 4096;
-    const maxPromptTokens = contextWindow - searchMaxTokens - 200;
-    const fullPrompt = `You are a research assistant. Based on the following web pages, answer this research query:\n\n"${query}"\n\n---\n\n${context}\n\n---\n\nProvide a detailed, factual summary with specific information from the sources above.`;
+    let lastError: Error | null = null;
+    let response: OpenRouterResponse | null = null;
 
-    const response = await this.fetchWithRetry(actualModel, [
-      { role: 'user', content: truncateToTokens(fullPrompt, maxPromptTokens) },
-    ], searchMaxTokens);
+    for (let i = 0; i < attempts; i++) {
+      const actualModel = pinned ? model : this.nextModel();
+      const contextWindow = OPENROUTER_MODELS[actualModel]?.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
+      const maxPromptTokens = contextWindow - searchMaxTokens - 200;
+      const fullPrompt = `You are a research assistant. Based on the following web pages, answer this research query:\n\n"${query}"\n\n---\n\n${context}\n\n---\n\nProvide a detailed, factual summary with specific information from the sources above.`;
+      try {
+        response = await this.fetchWithRetry(actualModel, [
+          { role: 'user', content: truncateToTokens(fullPrompt, maxPromptTokens) },
+        ], searchMaxTokens, undefined, 1);
+        break;
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        const msg = lastError.message;
+        if (msg.includes('429') || msg.includes('402') || msg.includes('529') || msg.includes('rate')) continue;
+        throw lastError;
+      }
+    }
+    if (!response) throw lastError ?? new Error('All models exhausted');
+
+    const actualModelUsed = response.model ?? model;
 
     const text = response.choices[0]?.message?.content ?? '';
 
@@ -89,7 +122,7 @@ export class OpenRouterProvider implements LLMProvider {
       sourceUrlMeta: searchResults.map(r => ({ url: r.url, title: r.title, snippet: r.snippet.slice(0, 200) })),
       promptTokens: response.usage?.prompt_tokens ?? 0,
       completionTokens: response.usage?.completion_tokens ?? 0,
-      model: response.model ?? actualModel,
+      model: actualModelUsed,
     };
   }
 
