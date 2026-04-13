@@ -389,7 +389,7 @@ function SectionMetaPanel({
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center gap-2 px-3 py-1.5 bg-bg-secondary/40 hover:bg-bg-tertiary/30 transition-colors text-left"
       >
-        <Icon name="expand_more" size="xs" className={clsx('w-3 h-3 text-text-muted/60 transition-transform shrink-0', !open && '-rotate-90')} />
+        <Icon name="expand_more" size="xs" className={clsx('text-text-muted/60 transition-transform flex-none leading-none', !open && '-rotate-90')} />
         <span className="text-text-muted/70">
           {sectionFindings.length} {sectionFindings.length === 1 ? 'source' : 'sources'}
           {allTags.length > 0 && <span className="text-text-disabled"> · {allTags.slice(0, 3).join(', ')}</span>}
