@@ -295,6 +295,147 @@ function ThreadNavigator({
 }
 
 // ---------------------------------------------------------------------------
+// Document helpers
+// ---------------------------------------------------------------------------
+
+interface ParsedSection {
+  headingTitle: string;
+  headingId: string;
+  headingLevel: number; // 0 = preamble, 2 or 3 = actual heading
+  content: string;
+  citationNums: Set<number>;
+}
+
+function parseDocumentSections(text: string): ParsedSection[] {
+  const citRegex = /\[(\d+)\](?![\(\[])/g;
+  const extractCitations = (s: string) =>
+    new Set([...s.matchAll(citRegex)].map(m => parseInt(m[1])));
+
+  const parts = text.split(/(?=^#{2,3} )/m);
+  const sections: ParsedSection[] = [];
+
+  for (const part of parts) {
+    const m = part.match(/^(#{2,3}) (.+?)(?:\r?\n|$)([\s\S]*)/);
+    if (m) {
+      const title = m[2].trim();
+      const id = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      sections.push({
+        headingTitle: title,
+        headingId: id,
+        headingLevel: m[1].length,
+        content: m[3] ?? '',
+        citationNums: extractCitations(part),
+      });
+    } else if (part.trim()) {
+      sections.push({ headingTitle: '', headingId: '', headingLevel: 0, content: part, citationNums: extractCitations(part) });
+    }
+  }
+  return sections;
+}
+
+/** Replace bare [N] citations with markdown links pointing to #ref-N */
+function addCitationLinks(text: string): string {
+  return text.replace(/\[(\d+)\](?![\(\[])/g, (_, n) => `[[${n}]](#ref-${n})`);
+}
+
+// ---------------------------------------------------------------------------
+// Section metadata panel (sources · tags · questions)
+// ---------------------------------------------------------------------------
+
+function SectionMetaPanel({
+  citationNums, sortedFindings, threadById,
+}: {
+  citationNums: Set<number>;
+  sortedFindings: ResearchFinding[];
+  threadById: Map<string, ResearchThread>;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const sectionFindings = useMemo(
+    () => [...citationNums].sort((a, b) => a - b).map(n => sortedFindings[n - 1]).filter(Boolean),
+    [citationNums, sortedFindings],
+  );
+  if (sectionFindings.length === 0) return null;
+
+  const uniqueSources = useMemo(() => {
+    const all = sectionFindings.flatMap(f =>
+      f.source_url_meta?.length
+        ? f.source_url_meta
+        : f.source_urls.map(url => ({ url, title: '', snippet: '' }))
+    );
+    return [...new Map(all.map(s => [s.url, s])).values()];
+  }, [sectionFindings]);
+
+  const allTags = useMemo(
+    () => [...new Set(sectionFindings.flatMap(f => f.tags))],
+    [sectionFindings],
+  );
+
+  const questions = useMemo(
+    () => [...new Set(
+      sectionFindings.map(f => {
+        const t = threadById.get(f.thread_id);
+        return t?.short_query ?? t?.query ?? '';
+      }).filter(Boolean)
+    )],
+    [sectionFindings, threadById],
+  );
+
+  const citLabel = [...citationNums].sort((a, b) => a - b).join(', ');
+
+  return (
+    <div className="my-3 rounded border border-border-primary/20 text-xs overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-2 px-3 py-1.5 bg-bg-secondary/40 hover:bg-bg-tertiary/30 transition-colors text-left"
+      >
+        <Icon name="expand_more" size="xs" className={clsx('w-3 h-3 text-text-muted/60 transition-transform shrink-0', !open && '-rotate-90')} />
+        <span className="text-text-muted/70">
+          {sectionFindings.length} {sectionFindings.length === 1 ? 'source' : 'sources'}
+          {allTags.length > 0 && <span className="text-text-disabled"> · {allTags.slice(0, 3).join(', ')}</span>}
+        </span>
+        <span className="ml-auto text-text-disabled font-mono">[{citLabel}]</span>
+      </button>
+
+      {open && (
+        <div className="px-3 py-2.5 space-y-3 bg-bg-primary/20 border-t border-border-primary/20">
+          {uniqueSources.length > 0 && (
+            <div>
+              <p className="text-text-disabled uppercase tracking-wide text-xs mb-1 font-medium">Sources</p>
+              <div className="space-y-0.5">
+                {uniqueSources.map((src, i) => (
+                  <a key={i} href={src.url} target="_blank" rel="noopener noreferrer"
+                     className="block text-accent/75 hover:text-accent hover:underline truncate" title={src.url}>
+                    {src.title || src.url}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+          {allTags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {allTags.map(tag => (
+                <span key={tag} className="px-1.5 py-0.5 rounded bg-bg-tertiary/70 text-text-muted">{tag}</span>
+              ))}
+            </div>
+          )}
+          {questions.length > 0 && (
+            <div>
+              <p className="text-text-disabled uppercase tracking-wide text-xs mb-1 font-medium">Questions</p>
+              <ul className="space-y-0.5">
+                {questions.map((q, i) => (
+                  <li key={i} className="text-text-muted italic leading-relaxed">{q}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Document Tab
 // ---------------------------------------------------------------------------
 
@@ -317,20 +458,21 @@ function DocumentView({
     return document.replace(/^```(?:markdown)?\s*\n?/i, '').replace(/\n?```\s*$/, '');
   }, [document]);
 
-  // Extract TOC from document markdown (## headings)
-  const tocEntries = useMemo(() => {
-    if (!cleanDoc) return [];
-    const entries: { id: string; title: string; level: number }[] = [];
-    for (const line of cleanDoc.split('\n')) {
-      const m = line.match(/^(#{2,3})\s+(.+)/);
-      if (m) {
-        const title = m[2].trim();
-        const id = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-        entries.push({ id, title, level: m[1].length });
-      }
-    }
-    return entries;
-  }, [document]);
+  // Parse document into sections for per-section metadata + TOC
+  const docSections = useMemo(() => parseDocumentSections(cleanDoc), [cleanDoc]);
+
+  // Sorted findings for citation index lookup (1-based)
+  const sortedFindings = useMemo(
+    () => [...findings].sort((a, b) => b.confidence - a.confidence),
+    [findings],
+  );
+
+  const threadById = useMemo(() => new Map(threads.map(t => [t.id, t])), [threads]);
+
+  const tocEntries = useMemo(
+    () => docSections.filter(s => s.headingLevel >= 2).map(s => ({ id: s.headingId, title: s.headingTitle, level: s.headingLevel })),
+    [docSections],
+  );
 
   function scrollToHeading(id: string) {
     const el = window.document.getElementById(id);
@@ -373,34 +515,61 @@ function DocumentView({
             </Button>
           </div>
 
-          {/* Rendered article */}
+          {/* Rendered article — section-by-section so we can inject metadata panels */}
           <article className="md-content article-view text-base text-text-primary leading-[1.85]">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                h2: ({ children, ...props }) => {
-                  const text = String(children);
-                  const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-                  return <h2 id={id} className="font-heading text-xl font-semibold text-text-primary mt-10 mb-4 pb-2 border-b border-border-primary/30" {...props}>{children}</h2>;
+            {docSections.map((section, idx) => {
+              const mdComponents = {
+                p: ({ children }: React.HTMLAttributes<HTMLParagraphElement>) => <p className="mb-4 text-text-secondary">{children}</p>,
+                a: ({ href, children, ...rest }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
+                  const isInternal = href?.startsWith('#ref-');
+                  return (
+                    <a
+                      {...rest}
+                      href={href}
+                      {...(!isInternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                      onClick={isInternal ? (e) => {
+                        e.preventDefault();
+                        const el = window.document.getElementById(href!.slice(1));
+                        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      } : undefined}
+                      className={clsx('hover:underline', isInternal ? 'text-text-muted text-sm font-mono' : 'text-accent')}
+                    >
+                      {children}
+                    </a>
+                  );
                 },
-                h3: ({ children, ...props }) => {
-                  const text = String(children);
-                  const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-                  return <h3 id={id} className="font-heading text-lg font-medium text-text-primary mt-8 mb-3" {...props}>{children}</h3>;
-                },
-                p: ({ children }) => <p className="mb-4 text-text-secondary">{children}</p>,
-                a: ({ href, children }) => (
-                  <a href={href} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">{children}</a>
-                ),
-                blockquote: ({ children }) => (
+                blockquote: ({ children }: React.HTMLAttributes<HTMLElement>) => (
                   <blockquote className="border-l-[3px] border-accent/30 pl-4 my-4 text-text-muted italic">{children}</blockquote>
                 ),
-                ol: ({ children }) => <ol className="list-decimal pl-6 mb-4 space-y-1 text-text-secondary">{children}</ol>,
-                ul: ({ children }) => <ul className="list-disc pl-6 mb-4 space-y-1 text-text-secondary">{children}</ul>,
-              }}
-            >
-              {cleanDoc}
-            </ReactMarkdown>
+                ol: ({ children }: React.HTMLAttributes<HTMLOListElement>) => <ol className="list-decimal pl-6 mb-4 space-y-1 text-text-secondary">{children}</ol>,
+                ul: ({ children }: React.HTMLAttributes<HTMLUListElement>) => <ul className="list-disc pl-6 mb-4 space-y-1 text-text-secondary">{children}</ul>,
+              };
+
+              return (
+                <div key={idx}>
+                  {section.headingLevel === 2 && (
+                    <h2 id={section.headingId} className="font-heading text-xl font-semibold text-text-primary mt-10 mb-4 pb-2 border-b border-border-primary/30">
+                      {section.headingTitle}
+                    </h2>
+                  )}
+                  {section.headingLevel === 3 && (
+                    <h3 id={section.headingId} className="font-heading text-lg font-medium text-text-primary mt-8 mb-3">
+                      {section.headingTitle}
+                    </h3>
+                  )}
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                    {addCitationLinks(section.content)}
+                  </ReactMarkdown>
+                  {section.citationNums.size > 0 && (
+                    <SectionMetaPanel
+                      citationNums={section.citationNums}
+                      sortedFindings={sortedFindings}
+                      threadById={threadById}
+                    />
+                  )}
+                </div>
+              );
+            })}
           </article>
 
           {/* Bibliography */}
@@ -450,7 +619,7 @@ function RefEntry({ finding, index }: { finding: ResearchFinding; index: number 
   const domains = [...new Set(sources.map(s => domainFrom(s.url)))];
 
   return (
-    <div className="group">
+    <div id={`ref-${index}`} className="group">
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full text-left py-2 flex items-start gap-3 transition-colors"
