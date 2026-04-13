@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'child_process';
+import { spawn, spawnSync, type ChildProcess } from 'child_process';
 import { resolve } from 'path';
 
 const DEFAULT_WORKER_SCRIPT = resolve(import.meta.dirname, '../../../research/src/worker.ts');
@@ -45,11 +45,24 @@ export class WorkerSupervisor {
     this.gracePeriodMs = opts.gracePeriodMs ?? SIGTERM_GRACE_MS;
     this.maxRestarts_ = opts.maxRestarts ?? MAX_RESTARTS;
     this.baseBackoffMs_ = opts.baseBackoffMs ?? BASE_BACKOFF_MS;
+    // Kill orphaned worker processes from previous server runs
+    this.killOrphans();
     // Ensure child workers are killed when parent exits (HMR, SIGTERM, etc.)
     const cleanup = () => { this.stopSync(); process.exit(); };
     process.on('SIGTERM', cleanup);
     process.on('SIGINT', cleanup);
     process.on('exit', () => this.stopSync());
+  }
+
+  /** Kill orphaned worker processes from previous server runs (PPID=1, same script). */
+  private killOrphans() {
+    try {
+      const result = spawnSync('pgrep', ['-f', this.scriptPath], { encoding: 'utf-8' });
+      const pids = (result.stdout ?? '').trim().split('\n').map(Number).filter(p => p && p !== process.pid);
+      for (const pid of pids) {
+        try { process.kill(pid, 'SIGKILL'); console.log(`[supervisor] killed orphaned worker pid=${pid}`); } catch { /* already gone */ }
+      }
+    } catch { /* pgrep not available */ }
   }
 
   /** Synchronous best-effort kill for use in exit handlers */
@@ -63,6 +76,7 @@ export class WorkerSupervisor {
   }
 
   start() {
+    if (this.workers.length > 0) return; // already started
     for (let i = 0; i < this.count; i++) {
       const w: ManagedWorker = {
         id: i, process: null, pid: null, status: 'stopped',
