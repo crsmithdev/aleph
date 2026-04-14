@@ -186,8 +186,9 @@ function rangeToCutoff(range: string): string {
 
 export function deleteQuery(sqlite: Sqlite, queryId: string): boolean {
   // Delete in dependency order
-  sqlite.prepare('DELETE FROM research_monitor_alerts WHERE session_id = ?').run(queryId);
-  sqlite.prepare('DELETE FROM research_monitor_snapshots WHERE session_id = ?').run(queryId);
+  sqlite.prepare('DELETE FROM research_monitor_alerts WHERE monitor_id IN (SELECT id FROM research_monitors WHERE session_id = ?)').run(queryId);
+  sqlite.prepare('DELETE FROM research_monitor_snapshots WHERE monitor_id IN (SELECT id FROM research_monitors WHERE session_id = ?)').run(queryId);
+  sqlite.prepare('DELETE FROM research_monitors WHERE session_id = ?').run(queryId);
   sqlite.prepare('DELETE FROM research_proposed_monitors WHERE session_id = ?').run(queryId);
   sqlite.prepare('DELETE FROM research_plan_modifications WHERE plan_id IN (SELECT id FROM research_plans WHERE session_id = ?)').run(queryId);
   sqlite.prepare('DELETE FROM research_plans WHERE session_id = ?').run(queryId);

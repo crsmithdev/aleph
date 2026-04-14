@@ -2,6 +2,7 @@ import type { Sqlite } from '@construct/data';
 import { generateId } from './id.js';
 import type { ResearchSession, SessionConfig } from '../types.js';
 import { DEFAULT_SESSION_CONFIG } from '../types.js';
+import { deleteQuery } from './queries.js';
 
 function rowToSession(row: Record<string, unknown>): ResearchSession {
   const stored = JSON.parse(row.config as string) as Partial<SessionConfig>;
@@ -171,19 +172,9 @@ function rangeToCutoff(range: string): string {
   }
 }
 
+/** @deprecated Use deleteQuery from services/queries */
 export function deleteSession(sqlite: Sqlite, sessionId: string): boolean {
-  // Delete in dependency order
-  sqlite.prepare('DELETE FROM research_monitor_alerts WHERE session_id = ?').run(sessionId);
-  sqlite.prepare('DELETE FROM research_monitor_snapshots WHERE session_id = ?').run(sessionId);
-  sqlite.prepare('DELETE FROM research_proposed_monitors WHERE session_id = ?').run(sessionId);
-  sqlite.prepare('DELETE FROM research_plan_modifications WHERE plan_id IN (SELECT id FROM research_plans WHERE session_id = ?)').run(sessionId);
-  sqlite.prepare('DELETE FROM research_plans WHERE session_id = ?').run(sessionId);
-  sqlite.prepare('DELETE FROM research_steps WHERE session_id = ?').run(sessionId);
-  sqlite.prepare('DELETE FROM research_findings WHERE session_id = ?').run(sessionId);
-  sqlite.prepare('DELETE FROM research_threads WHERE session_id = ?').run(sessionId);
-  sqlite.prepare('DELETE FROM research_jobs WHERE session_id = ?').run(sessionId);
-  const result = sqlite.prepare('DELETE FROM research_queries WHERE id = ?').run(sessionId);
-  return result.changes > 0;
+  return deleteQuery(sqlite, sessionId);
 }
 
 export function getSessionCost(sqlite: Sqlite, sessionId: string): { total_cost: number; step_count: number; today_cost: number } {
