@@ -116,7 +116,10 @@ function ErrorDisplay({ error }: { error: string }) {
   let formatted = error;
   try {
     const parsed = JSON.parse(error);
-    formatted = JSON.stringify(parsed, null, 2);
+    if (parsed !== null && typeof parsed === 'object') {
+      formatted = JSON.stringify(parsed, null, 2);
+    }
+    // primitives (string, number) — show as-is without re-stringifying
   } catch {
     // not JSON, show raw
   }
@@ -387,8 +390,8 @@ function QueuedJobsTable({ jobs, queryMap, onCancel, cancelPending }: {
       key: 'session_id',
       label: 'Query',
       render: (row) => (
-        <Link to={`/research/${row.session_id}`} className="text-sm text-accent hover:underline truncate block max-w-xs" onClick={e => e.stopPropagation()}>
-          {queryMap[row.session_id] ?? row.session_id.slice(0, 12)}
+        <Link to={`/research/${row.session_id}`} className="text-sm text-accent hover:underline" onClick={e => e.stopPropagation()}>
+          {queryMap[row.session_id] ?? row.session_id}
         </Link>
       ),
     },
@@ -415,9 +418,14 @@ function QueuedJobsTable({ jobs, queryMap, onCancel, cancelPending }: {
       label: '',
       shrink: true,
       render: (row) => (
-        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onCancel(row.id); }} disabled={cancelPending}>
-          Cancel
-        </Button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onCancel(row.id); }}
+          disabled={cancelPending}
+          title="Cancel job"
+          className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-red-400 hover:bg-red-900/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          ✕
+        </button>
       ),
     },
   ];
@@ -458,8 +466,8 @@ function JobHistoryTable({ jobs, queryMap, onCancel, cancelPending }: {
       key: 'session_id',
       label: 'Query',
       render: (row) => (
-        <Link to={`/research/${row.session_id}`} className="text-sm text-accent hover:underline truncate block max-w-xs" onClick={e => e.stopPropagation()}>
-          {queryMap[row.session_id] ?? row.session_id.slice(0, 12)}
+        <Link to={`/research/${row.session_id}`} className="text-sm text-accent hover:underline" onClick={e => e.stopPropagation()}>
+          {queryMap[row.session_id] ?? row.session_id}
         </Link>
       ),
     },
@@ -481,7 +489,7 @@ function JobHistoryTable({ jobs, queryMap, onCancel, cancelPending }: {
       label: 'Thread',
       shrink: true,
       render: (row) => row.thread_id
-        ? <span className="font-mono text-xs text-text-muted whitespace-nowrap">{row.thread_id.slice(0, 8)}</span>
+        ? <span className="font-mono text-xs text-text-muted whitespace-nowrap">{row.thread_id}</span>
         : <span className="text-xs text-text-muted">—</span>,
     },
     {
@@ -514,9 +522,14 @@ function JobHistoryTable({ jobs, queryMap, onCancel, cancelPending }: {
       shrink: true,
       render: (row) =>
         row.status === 'running' || row.status === 'pending' || row.status === 'claimed' ? (
-          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onCancel(row.id); }} disabled={cancelPending}>
-            Cancel
-          </Button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onCancel(row.id); }}
+            disabled={cancelPending}
+            title="Cancel job"
+            className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-red-400 hover:bg-red-900/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            ✕
+          </button>
         ) : null,
     },
   ];
