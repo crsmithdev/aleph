@@ -68,15 +68,20 @@ const isDirty = status.length > 0;
 const unpushed = git(`git log origin/${branch}..HEAD --oneline 2>/dev/null`);
 const hasUnpushed = unpushed.length > 0 && !isMain; // don't nag about pushing main
 
-trace(TAG, `branch=${branch} isMain=${isMain} dirty=${isDirty} unpushed=${hasUnpushed} madeEdits=${madeEdits}`);
+// Allow main when the last commit was a merge or squash (i.e. the /ship workflow landed here)
+const lastCommitSubject = git("git log -1 --pretty=%s HEAD 2>/dev/null");
+const lastCommitParents = git("git log -1 --pretty=%P HEAD 2>/dev/null").split(/\s+/).filter(Boolean).length;
+const isPostShip = isMain && (lastCommitParents >= 2 || /^Merge\b/i.test(lastCommitSubject) || /\(squashed\)/i.test(lastCommitSubject));
+
+trace(TAG, `branch=${branch} isMain=${isMain} dirty=${isDirty} unpushed=${hasUnpushed} madeEdits=${madeEdits} isPostShip=${isPostShip}`);
 
 // --- Build violations ---
 const violations: string[] = [];
 
-if (isMain && madeEdits) {
+if (isMain && madeEdits && !isPostShip) {
   violations.push("Working directly on main — create a feature branch for this work");
 }
-if (isDirty) {
+if (isDirty && !isPostShip) {
   const fileCount = status.split("\n").filter(Boolean).length;
   violations.push(`${fileCount} uncommitted file${fileCount === 1 ? "" : "s"} in working tree — commit before ending`);
 }
