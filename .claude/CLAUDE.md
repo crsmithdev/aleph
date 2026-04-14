@@ -62,9 +62,7 @@ When working in a worktree (`.worktrees/<name>`), the main repo's dev server at 
 **Correct verification for worktree changes:**
 - `bun test.ts` from the worktree root — sufficient for backend logic, hooks, API routes
 - `bun run build` in `src/ui` — catches frontend type errors and build failures
-- For live HTTP testing: `kill $(ss -tlnp | grep 3001 | grep -oP 'pid=\K[0-9]+')` then `bun run --cwd src/ui start` from the **worktree root**
-
-**Never** start a server on port 3002 or any non-standard port.
+- For live HTTP testing, start a temporary server on any available port (e.g. `PORT=3002 bun run --cwd src/ui start`) — **kill it when done**. Orphaned worktree servers are a problem; always clean up.
 
 ## Directory map
 
@@ -127,4 +125,4 @@ When working in a worktree (`.worktrees/<name>`), the main repo's dev server at 
 | Hook works | Pipe test input, check stdout | "Code looks correct" |
 | Backend logic works | `bun test.ts` passes | Running install.ts or starting a new server |
 | Frontend compiles | `bun run build` in `src/ui` passes | "TypeScript looks correct" |
-| Worktree changes work | `bun test.ts` + `bun run build` from worktree root | Testing against the 3001 server (which serves different code) |
+| Worktree changes work | `bun test.ts` + `bun run build` from worktree root; temporary port OK for HTTP testing if needed — kill it after | Testing against the 3001 server (which serves different code) |
