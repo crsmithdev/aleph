@@ -48,7 +48,8 @@ export function ResearchQueriesPage() {
   const stopAll = useStopAllResearch();
   const [newOpen, setNewOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [depth, setDepth] = useState(9);
+  const [depth, setDepth] = useState(5);
+  const [maxTotalThreads, setMaxTotalThreads] = useState<number>(() => Number(localStorage.getItem('research_default_max_total_threads') ?? '200'));
   const [provider, setProvider] = useState<string>(() => localStorage.getItem('research_default_provider') ?? 'openrouter');
   const [model, setModel] = useState<string>(() => localStorage.getItem('research_default_model') ?? 'deepseek/deepseek-chat');
   const [minSearches, setMinSearches] = useState<number>(() => Number(localStorage.getItem('research_default_min_searches') ?? '2'));
@@ -71,17 +72,19 @@ export function ResearchQueriesPage() {
     localStorage.setItem('research_default_min_searches', String(minSearches));
     localStorage.setItem('research_default_gap_analysis', String(gapAnalysis));
     localStorage.setItem('research_default_max_gap_searches', String(maxGapSearches));
+    localStorage.setItem('research_default_max_total_threads', String(maxTotalThreads));
     createSession.mutate({
       seed_query: query.trim(),
       config: {
         max_thread_depth: depth,
+        max_total_threads: maxTotalThreads,
         min_searches_per_thread: minSearches,
         model: model || 'deepseek/deepseek-chat',
         providers: { primary: provider as 'anthropic' | 'openrouter' | 'ollama' },
         gap_analysis: { enabled: gapAnalysis, max_gap_searches: maxGapSearches },
       },
     }, {
-      onSuccess: () => { setQuery(''); setDepth(8); setNewOpen(false); },
+      onSuccess: () => { setQuery(''); setDepth(5); setNewOpen(false); },
     });
   }
 
@@ -173,7 +176,7 @@ export function ResearchQueriesPage() {
             className="flex-1 bg-bg-primary border border-border-primary rounded-md px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
             autoFocus
           />
-          <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0">
+          <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0" title="Max follow-up depth. Lower = more focused, higher = broader exploration.">
             Depth
             <input
               type="number"
@@ -182,6 +185,18 @@ export function ResearchQueriesPage() {
               value={depth}
               onChange={e => setDepth(Number(e.target.value))}
               className="w-12 bg-bg-primary border border-border-primary rounded px-1.5 py-1 text-sm text-text-primary text-center focus:outline-none focus:border-accent"
+            />
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0" title="Hard cap on total threads spawned. Prevents runaway branching. 0 = unlimited.">
+            Max threads
+            <input
+              type="number"
+              min={0}
+              max={2000}
+              step={50}
+              value={maxTotalThreads}
+              onChange={e => setMaxTotalThreads(Number(e.target.value))}
+              className="w-16 bg-bg-primary border border-border-primary rounded px-1.5 py-1 text-sm text-text-primary text-center focus:outline-none focus:border-accent"
             />
           </label>
           <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0">

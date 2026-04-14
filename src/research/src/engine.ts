@@ -557,32 +557,59 @@ export class ResearchEngine {
     // max_depth so they don't run until (if ever) the depth limit is raised.
     const updatedFindings = findings.listFindings(this.sqlite, thread.session_id, { threadId: thread.id });
     if (!isCovered(updatedFindings)) {
-      const existingQuerySet = new Set(
-        threads.listThreads(this.sqlite, thread.session_id).map(t => t.query.toLowerCase().trim())
-      );
-      for (const question of followUpQuestions) {
-        // Skip malformed or context-dependent questions
-        if (typeof question !== 'string' || question.trim().length < 10) continue;
-        // Reject questions with unresolved pronouns — they can't stand alone as search queries
-        if (/\b(they|them|their|it|its|this|these|those|such)\b/i.test(question.trim())) continue;
-        // Skip if a thread with the same query already exists (case-insensitive)
-        if (existingQuerySet.has(question.toLowerCase().trim())) continue;
-        const childDepth = thread.depth + 1;
-        console.log(`[follow_up] childDepth=${childDepth} max_depth=${thread.max_depth} gate=${childDepth >= thread.max_depth} → ${childDepth >= thread.max_depth ? 'deferred' : 'queued'}`);
-        const fuThread = threads.createThread(this.sqlite, {
-          session_id: sessionId,
-          query: question,
-          short_query: placeholderShortQuery(question),
-          node_type: classify(question),
-          origin: 'follow_up',
-          parent_thread_id: thread.id,
-          spawned_from_finding_id: finding.id,
-          priority: this.calculateChildPriority(thread, finding),
-          depth: childDepth,
-          max_depth: thread.max_depth,
-          status: childDepth >= thread.max_depth ? 'deferred' : 'queued',
-        });
-        this.summarizeThreadAsync(fuThread.id, question, sessionId, config);
+      const maxTotal = config.max_total_threads ?? 200;
+      const totalNow = threads.countAllThreads(this.sqlite, sessionId);
+      if (maxTotal > 0 && totalNow >= maxTotal) {
+        console.log(`[follow_up] skip all — total threads ${totalNow} >= max_total_threads ${maxTotal}`);
+      } else {
+        const session = sessions.getQuery(this.sqlite, sessionId)!;
+        const seedQuery = session.seed_query;
+        const tc = config.topic_coherence;
+        const existingQuerySet = new Set(
+          threads.listThreads(this.sqlite, thread.session_id).map(t => t.query.toLowerCase().trim())
+        );
+        for (const question of followUpQuestions) {
+          // Skip malformed or context-dependent questions
+          if (typeof question !== 'string' || question.trim().length < 10) continue;
+          // Reject questions with unresolved pronouns — they can't stand alone as search queries
+          if (/\b(they|them|their|it|its|this|these|those|such)\b/i.test(question.trim())) continue;
+          // Skip if a thread with the same query already exists (case-insensitive)
+          if (existingQuerySet.has(question.toLowerCase().trim())) continue;
+          // Topic coherence: per-hop similarity gate (how related is this to the parent thread?)
+          const hopSim = jaccardSimilarity(question, thread.query);
+          if (tc && tc.hop_similarity_min > 0 && hopSim < tc.hop_similarity_min) {
+            console.log(`[follow_up] skip "${question}" — hop_sim=${hopSim.toFixed(3)} < ${tc.hop_similarity_min}`);
+            continue;
+          }
+          // Topic coherence: seed similarity gate (how related is this to the original topic?)
+          const seedSim = jaccardSimilarity(question, seedQuery);
+          if (tc && tc.seed_similarity_min > 0 && seedSim < tc.seed_similarity_min) {
+            console.log(`[follow_up] skip "${question}" — seed_sim=${seedSim.toFixed(3)} < ${tc.seed_similarity_min}`);
+            continue;
+          }
+          // Re-check total cap before each spawn (other concurrent threads may have spawned)
+          if (maxTotal > 0 && threads.countAllThreads(this.sqlite, sessionId) >= maxTotal) {
+            console.log(`[follow_up] skip remaining — hit max_total_threads ${maxTotal}`);
+            break;
+          }
+          const childDepth = thread.depth + 1;
+          console.log(`[follow_up] childDepth=${childDepth} max_depth=${thread.max_depth} seed_sim=${seedSim.toFixed(3)} hop_sim=${hopSim.toFixed(3)} → ${childDepth >= thread.max_depth ? 'deferred' : 'queued'}`);
+          const fuThread = threads.createThread(this.sqlite, {
+            session_id: sessionId,
+            query: question,
+            short_query: placeholderShortQuery(question),
+            node_type: classify(question),
+            origin: 'follow_up',
+            parent_thread_id: thread.id,
+            spawned_from_finding_id: finding.id,
+            priority: this.calculateChildPriority(thread, finding),
+            depth: childDepth,
+            max_depth: thread.max_depth,
+            seed_similarity: seedSim,
+            status: childDepth >= thread.max_depth ? 'deferred' : 'queued',
+          });
+          this.summarizeThreadAsync(fuThread.id, question, sessionId, config);
+        }
       }
     }
 
@@ -1156,8 +1183,10 @@ Respond with ONLY "true" if this is a duplicate or near-duplicate, "false" other
     thread: ResearchThread,
     config: SessionConfig
   ): Promise<void> {
-    // Depth-scaled probability
-    const p = config.p_serendipity + (thread.depth / config.max_thread_depth) * 0.15;
+    // Depth-scaled probability: decreases at depth so shallow threads explore more freely
+    // than deep threads that have already wandered from the seed.
+    const depthFactor = config.max_thread_depth > 0 ? 1 - (thread.depth / config.max_thread_depth) * 0.5 : 1;
+    const p = config.p_serendipity * depthFactor;
     if (Math.random() > p) return;
 
     await this.spawnPerturbationThreads(sessionId, config, false);
@@ -1168,6 +1197,13 @@ Respond with ONLY "true" if this is a duplicate or near-duplicate, "false" other
     config: SessionConfig,
     forced: boolean
   ): Promise<void> {
+    // Respect total thread cap
+    const maxTotal = config.max_total_threads ?? 200;
+    if (maxTotal > 0 && threads.countAllThreads(this.sqlite, sessionId) >= maxTotal) {
+      console.log(`[perturbation] skip — hit max_total_threads ${maxTotal}`);
+      return;
+    }
+
     // Pick a strategy not recently used (cooldown)
     const available = PERTURBATION_STRATEGIES.filter(
       s => !this.recentPerturbationStrategies.includes(s)

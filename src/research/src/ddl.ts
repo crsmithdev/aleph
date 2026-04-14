@@ -214,6 +214,7 @@ export function applyResearchDDL(sqlite: Sqlite): void {
   try { sqlite.exec(`ALTER TABLE research_jobs ADD COLUMN thread_id TEXT`); } catch { /* exists */ }
   try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_rj_thread ON research_jobs(thread_id, status)`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN retry_after TEXT`); } catch { /* exists */ }
+  try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN seed_similarity REAL`); } catch { /* exists */ }
 
   // Fix stale FK: research_monitors.session_id may reference the old 'research_sessions'
   // table name (pre-rename). Rebuild the table to point at research_queries.

@@ -19,6 +19,7 @@ export interface SessionConfig {
   budget_total_usd: number | null;
   budget_alert_threshold: number;
   max_thread_depth: number;
+  max_total_threads: number;
   p_serendipity: number;
   max_perturbation_probability: number;
   novelty_threshold: number;
@@ -28,6 +29,10 @@ export interface SessionConfig {
   min_delay_between_steps_ms: number;
   max_steps_per_hour: number;
   max_concurrent_threads: number;
+  topic_coherence: {
+    seed_similarity_min: number;  // 0 = disabled; min jaccard similarity to original seed query
+    hop_similarity_min: number;   // 0 = disabled; min jaccard similarity to parent thread query
+  };
   model: string;
   providers: {
     primary: 'openrouter';
@@ -69,7 +74,8 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
   budget_daily_usd: 5.0,
   budget_total_usd: null,
   budget_alert_threshold: 0.80,
-  max_thread_depth: 9,
+  max_thread_depth: 5,
+  max_total_threads: 200,
   p_serendipity: 0.15,
   max_perturbation_probability: 0.40,
   novelty_threshold: 0.3,
@@ -96,6 +102,10 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
     max_count: 5,
     max_retries: 3,
     similarity_threshold: 0.75,
+  },
+  topic_coherence: {
+    seed_similarity_min: 0.0,
+    hop_similarity_min: 0.0,
   },
   min_searches_per_thread: 2,
   fetch_source_text: false,
@@ -182,6 +192,7 @@ export interface ResearchThread {
   max_depth: number;
   min_searches: number | null;
   fetch_source_text?: boolean | null;
+  seed_similarity: number | null;
   retry_after: string | null;
   created_at: string;
   updated_at: string;
