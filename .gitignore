@@ -1,4 +1,5 @@
 .claude/worktrees/
+.worktrees/
 .claude/commands/
 .claude/MEMORY.md
 .claude/settings.local.json
