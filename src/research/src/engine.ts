@@ -313,11 +313,26 @@ export class ResearchEngine {
             error: err.message,
           });
 
-          const priorErrors = steps.listSteps(this.sqlite, sessionId, { threadId: thread.id })
-            .filter(s => s.error).length;
-          threads.updateThread(this.sqlite, thread.id, {
-            status: priorErrors <= 1 ? 'queued' : 'exhausted',
-          });
+          const isTransient = (msg: string) =>
+            msg.includes('429') || msg.includes('402') || msg.includes('529') || msg.toLowerCase().includes('rate');
+          const isRateLimit = isTransient(err.message);
+          const allSteps = steps.listSteps(this.sqlite, sessionId, { threadId: thread.id });
+          const priorErrors = allSteps.filter(s => s.error).length;
+
+          if (isRateLimit) {
+            let rateLimitStreak = 0;
+            for (const s of [...allSteps].reverse()) {
+              if (s.error && isTransient(s.error)) { rateLimitStreak++; } else { break; }
+            }
+            const backoffMs = Math.min(30_000 * Math.pow(2, rateLimitStreak - 1), 600_000);
+            const retryAfter = new Date(Date.now() + backoffMs).toISOString().replace('T', ' ').replace('Z', '');
+            threads.updateThread(this.sqlite, thread.id, { status: 'queued', retry_after: retryAfter });
+          } else {
+            threads.updateThread(this.sqlite, thread.id, {
+              status: priorErrors <= 1 ? 'queued' : 'exhausted',
+              retry_after: null,
+            });
+          }
 
           iterationCount++;
         }

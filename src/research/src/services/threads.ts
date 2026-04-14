@@ -98,6 +98,7 @@ export function claimNextThread(sqlite: Sqlite, sessionId: string): ResearchThre
   const row = sqlite.prepare(`
     SELECT * FROM research_threads
     WHERE session_id = ? AND status = 'queued'
+      AND (retry_after IS NULL OR retry_after <= datetime('now'))
     ORDER BY priority DESC, created_at ASC
     LIMIT 1
   `).get(sessionId) as Record<string, unknown> | null;
