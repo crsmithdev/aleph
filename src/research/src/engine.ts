@@ -321,7 +321,7 @@ export class ResearchEngine {
 
           if (isRateLimit) {
             let rateLimitStreak = 0;
-            for (const s of [...allSteps].reverse()) {
+            for (const s of allSteps) {  // DESC order — newest first
               if (s.error && isTransient(s.error)) { rateLimitStreak++; } else { break; }
             }
             const backoffMs = Math.min(30_000 * Math.pow(2, rateLimitStreak - 1), 600_000);
@@ -412,9 +412,10 @@ export class ResearchEngine {
       const allSteps = steps.listSteps(this.sqlite, sessionId, { threadId });
       const priorErrors = allSteps.filter(s => s.error).length;
 
-      // Count consecutive transient errors scanning backward; reset on any success or non-transient error
+      // Count consecutive transient errors from the most recent step backward
+      // allSteps is ORDER BY created_at DESC — iterate newest-first
       let rateLimitStreak = 0;
-      for (const s of [...allSteps].reverse()) {
+      for (const s of allSteps) {
         if (s.error && isTransient(s.error)) {
           rateLimitStreak++;
         } else {

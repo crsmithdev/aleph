@@ -149,8 +149,8 @@ describe('engine: thread backoff on 429', () => {
     // Simulate a success by inserting a successful step (no error)
     db.prepare(`
       INSERT INTO research_steps (id, thread_id, session_id, model, prompt_tokens, completion_tokens, cost_usd, duration_ms, created_at)
-      VALUES ('step-ok', ?, ?, 'test-model', 100, 100, 0, 100, datetime('now'))
-    `).run(threadId, sessionId);
+      VALUES ('step-ok', ?, ?, 'test-model', 100, 100, 0, 100, ?)
+    `).run(threadId, sessionId, new Date().toISOString());
 
     const before = Date.now();
     await expect(engine.runThread(sessionId, threadId)).rejects.toThrow();
