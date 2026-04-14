@@ -79,15 +79,11 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
   min_delay_between_steps_ms: 8000,
   max_steps_per_hour: 30,
   max_concurrent_threads: 2,
-  model: 'openrouter/free',
+  model: 'deepseek/deepseek-chat',
   providers: {
     primary: 'openrouter',
     openrouter_models: [
-      'openrouter/free',
-      'meta-llama/llama-3.3-70b-instruct:free',
-      'google/gemma-3-27b-it:free',
-      'nousresearch/hermes-3-llama-3.1-405b:free',
-      'qwen/qwen3-next-80b-a3b-instruct:free',
+      'deepseek/deepseek-chat',
     ],
   },
   schedule: {
