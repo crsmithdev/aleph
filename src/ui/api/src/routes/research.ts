@@ -198,6 +198,263 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
+  // === Export ===
+  app.get<{ Params: { id: string }; Querystring: { format?: string } }>(
+    '/queries/:id/export',
+    async (req, reply) => {
+      const { id } = req.params;
+      const format = req.query.format === 'md' ? 'md' : 'json';
+
+      const query = getQuery(app.sqlite, id);
+      if (!query) return reply.status(404).send({ error: 'Query not found' });
+
+      const threads = listThreads(app.sqlite, id);
+      const findings = listFindings(app.sqlite, id);
+      const steps = listSteps(app.sqlite, id);
+      const jobs = listJobsForSession(app.sqlite, id);
+      const plan = getLatestPlan(app.sqlite, id);
+
+      const findingsByThread = new Map<string, typeof findings>();
+      for (const f of findings) {
+        if (!findingsByThread.has(f.thread_id)) findingsByThread.set(f.thread_id, []);
+        findingsByThread.get(f.thread_id)!.push(f);
+      }
+      const stepsByThread = new Map<string, typeof steps>();
+      for (const s of steps) {
+        const key = s.thread_id;
+        if (!stepsByThread.has(key)) stepsByThread.set(key, []);
+        stepsByThread.get(key)!.push(s);
+      }
+
+      const slug = (query.title ?? query.seed_query).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase().slice(0, 60);
+      const filename = `research-${slug}-${id.slice(0, 8)}`;
+
+      if (format === 'json') {
+        const payload = {
+          query: {
+            id: query.id,
+            title: query.title,
+            seed_query: query.seed_query,
+            status: query.status,
+            config: query.config,
+            summary: query.summary,
+            created_at: query.created_at,
+            updated_at: query.updated_at,
+          },
+          plan: plan ? { items: plan.items, status: plan.status, generated_at: plan.generated_at } : null,
+          jobs: jobs.map(j => ({
+            id: j.id, status: j.status, mode: j.mode,
+            iterations_completed: j.iterations_completed, max_iterations: j.max_iterations,
+            started_at: j.started_at, completed_at: j.completed_at, error: j.error,
+          })),
+          threads: threads.map(t => ({
+            id: t.id,
+            query: t.query,
+            short_query: t.short_query,
+            origin: t.origin,
+            depth: t.depth,
+            max_depth: t.max_depth,
+            status: t.status,
+            priority: t.priority,
+            perturbation_strategy: t.perturbation_strategy,
+            parent_thread_id: t.parent_thread_id,
+            spawned_from_finding_id: t.spawned_from_finding_id,
+            node_type: t.node_type,
+            created_at: t.created_at,
+            updated_at: t.updated_at,
+            findings: (findingsByThread.get(t.id) ?? []).map(f => ({
+              id: f.id,
+              content: f.content,
+              summary: f.summary,
+              source_urls: f.source_urls,
+              source_quality: f.source_quality,
+              tags: f.tags,
+              confidence: f.confidence,
+              novelty: f.novelty,
+              actionability: f.actionability,
+              user_rating: f.user_rating,
+              follow_ups: f.follow_ups,
+              follow_up_analysis: f.follow_up_analysis,
+              created_at: f.created_at,
+            })),
+            steps: (stepsByThread.get(t.id) ?? []).map(s => ({
+              id: s.id,
+              label: s.label,
+              model: s.model,
+              provider: s.provider,
+              prompt_tokens: s.prompt_tokens,
+              completion_tokens: s.completion_tokens,
+              cost_usd: s.cost_usd,
+              duration_ms: s.duration_ms,
+              tool_calls: s.tool_calls,
+              error: s.error,
+              created_at: s.created_at,
+            })),
+          })),
+        };
+        reply.header('Content-Type', 'application/json');
+        reply.header('Content-Disposition', `attachment; filename="${filename}.json"`);
+        return reply.send(JSON.stringify(payload, null, 2));
+      }
+
+      // Markdown format
+      const lines: string[] = [];
+      lines.push(`# Research: ${query.title}`);
+      lines.push('');
+      lines.push(`**Seed query:** ${query.seed_query}`);
+      lines.push(`**Status:** ${query.status}`);
+      lines.push(`**Created:** ${query.created_at}`);
+      const cfg = query.config as Record<string, unknown>;
+      if (cfg) {
+        lines.push('');
+        lines.push('## Configuration');
+        lines.push('');
+        lines.push(`| Setting | Value |`);
+        lines.push(`| --- | --- |`);
+        for (const [k, v] of Object.entries(cfg)) {
+          if (v !== null && v !== undefined && typeof v !== 'object') {
+            lines.push(`| ${k} | ${v} |`);
+          }
+        }
+      }
+      if (query.summary) {
+        lines.push('');
+        lines.push('## Summary');
+        lines.push('');
+        lines.push(query.summary);
+      }
+
+      // Jobs
+      if (jobs.length > 0) {
+        lines.push('');
+        lines.push('## Jobs');
+        lines.push('');
+        for (const j of jobs) {
+          lines.push(`- **${j.status}** (${j.mode}) — ${j.iterations_completed ?? 0}/${j.max_iterations ?? '∞'} iterations${j.error ? ` — Error: ${j.error}` : ''}`);
+        }
+      }
+
+      // Plan
+      if (plan?.items?.length) {
+        lines.push('');
+        lines.push('## Execution Plan');
+        lines.push('');
+        for (const item of plan.items) {
+          lines.push(`${item.rank}. **${item.thread_query}** — ${item.rationale ?? ''}`);
+        }
+      }
+
+      // Threads
+      lines.push('');
+      lines.push('## Threads');
+      lines.push('');
+
+      const threadById = new Map(threads.map(t => [t.id, t]));
+
+      function getAncestry(t: (typeof threads)[0]): string {
+        const parts: string[] = [];
+        let cur = t;
+        while (cur.parent_thread_id) {
+          const p = threadById.get(cur.parent_thread_id);
+          if (!p) break;
+          parts.unshift(p.short_query ?? p.query.slice(0, 60));
+          cur = p;
+        }
+        return parts.length ? parts.join(' → ') : '';
+      }
+
+      // Sort threads depth-first
+      function buildOrder(parentId: string | null): (typeof threads)[0][] {
+        return threads
+          .filter(t => t.parent_thread_id === parentId)
+          .sort((a, b) => a.created_at.localeCompare(b.created_at))
+          .flatMap(t => [t, ...buildOrder(t.id)]);
+      }
+      const ordered = buildOrder(null);
+
+      for (const t of ordered) {
+        const indent = '#'.repeat(Math.min(t.depth + 3, 6));
+        lines.push(`${indent} ${t.short_query ?? t.query.slice(0, 80)}`);
+        lines.push('');
+        lines.push(`> ${t.query}`);
+        lines.push('');
+
+        const meta: string[] = [
+          `**Origin:** ${t.origin}`,
+          `**Depth:** ${t.depth}`,
+          `**Status:** ${t.status}`,
+          `**Priority:** ${t.priority.toFixed(2)}`,
+        ];
+        if (t.perturbation_strategy) meta.push(`**Perturbation:** ${t.perturbation_strategy}`);
+        if (t.spawned_from_finding_id) meta.push(`**Spawned from finding:** ${t.spawned_from_finding_id}`);
+        const ancestry = getAncestry(t);
+        if (ancestry) meta.push(`**Parent chain:** ${ancestry}`);
+        lines.push(meta.join(' · '));
+        lines.push('');
+
+        // Steps
+        const tSteps = stepsByThread.get(t.id) ?? [];
+        if (tSteps.length > 0) {
+          lines.push('**Steps:**');
+          lines.push('');
+          for (const s of tSteps) {
+            const costStr = s.cost_usd != null ? ` $${s.cost_usd.toFixed(4)}` : '';
+            const tokStr = s.prompt_tokens != null ? ` ${s.prompt_tokens}+${s.completion_tokens}tok` : '';
+            const durStr = s.duration_ms != null ? ` ${s.duration_ms}ms` : '';
+            lines.push(`- **${s.label ?? 'step'}** · ${s.model ?? ''}${tokStr}${costStr}${durStr}${s.error ? ` · ⚠ ${s.error}` : ''}`);
+            if (s.tool_calls?.length) {
+              for (const tc of s.tool_calls as Array<{ name?: string; input?: unknown }>) {
+                lines.push(`  - Tool: \`${tc.name ?? 'unknown'}\``);
+              }
+            }
+          }
+          lines.push('');
+        }
+
+        // Findings
+        const tFindings = findingsByThread.get(t.id) ?? [];
+        if (tFindings.length > 0) {
+          lines.push(`**Findings (${tFindings.length}):**`);
+          lines.push('');
+          for (const f of tFindings) {
+            const scores: string[] = [];
+            if (f.confidence != null) scores.push(`conf ${(f.confidence * 100).toFixed(0)}%`);
+            if (f.novelty != null) scores.push(`novelty ${(f.novelty * 100).toFixed(0)}%`);
+            if (f.actionability != null) scores.push(`action ${(f.actionability * 100).toFixed(0)}%`);
+            const scoreStr = scores.length ? ` [${scores.join(', ')}]` : '';
+            const ratingStr = f.user_rating ? ` · rated: ${f.user_rating}` : '';
+            lines.push(`#### Finding${scoreStr}${ratingStr}`);
+            lines.push('');
+            if (f.summary) { lines.push(`*${f.summary}*`); lines.push(''); }
+            lines.push(f.content);
+            lines.push('');
+            if (f.source_urls?.length) {
+              lines.push(`**Sources:** ${f.source_urls.join(', ')}`);
+              lines.push('');
+            }
+            if (f.tags?.length) { lines.push(`**Tags:** ${f.tags.join(', ')}`); lines.push(''); }
+            if (f.follow_ups?.length) {
+              lines.push(`**Follow-ups spawned:**`);
+              for (const fu of f.follow_ups as string[]) lines.push(`- ${fu}`);
+              lines.push('');
+            }
+          }
+        } else {
+          lines.push('*No findings.*');
+          lines.push('');
+        }
+
+        lines.push('---');
+        lines.push('');
+      }
+
+      const md = lines.join('\n');
+      reply.header('Content-Type', 'text/markdown; charset=utf-8');
+      reply.header('Content-Disposition', `attachment; filename="${filename}.md"`);
+      return reply.send(md);
+    }
+  );
+
   // === Threads ===
   app.get<{ Params: { id: string }; Querystring: { status?: string } }>(
     '/queries/:id/threads',

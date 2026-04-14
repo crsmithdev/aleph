@@ -2152,6 +2152,22 @@ export function ResearchQueryDetailPage() {
               <p className="text-sm text-text-muted mt-0.5 truncate">{session.seed_query}</p>
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { const a = document.createElement('a'); a.href = `/api/research/queries/${id}/export?format=md`; a.download = ''; a.click(); }}
+              >
+                <Icon name="download" size="xs" className="mr-1" />
+                .md
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { const a = document.createElement('a'); a.href = `/api/research/queries/${id}/export?format=json`; a.download = ''; a.click(); }}
+              >
+                <Icon name="download" size="xs" className="mr-1" />
+                .json
+              </Button>
               {(session.status === 'active' || session.status === 'paused') && (
                 <Button
                   variant={session.status === 'active' ? 'secondary' : 'primary'}
