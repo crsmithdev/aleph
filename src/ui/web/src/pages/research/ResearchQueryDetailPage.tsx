@@ -1840,12 +1840,17 @@ function SettingsView({
   const cfg = session.config as Record<string, unknown>;
   const providers = (cfg.providers as Record<string, unknown>) ?? {};
   const gapAnalysis = (cfg.gap_analysis as Record<string, unknown>) ?? {};
+  const followUpCfg = (cfg.follow_up as Record<string, unknown>) ?? {};
+  const topicCoherence = (cfg.topic_coherence as Record<string, unknown>) ?? {};
 
   const [title, setTitle] = useState(session.title);
   const [provider, setProvider] = useState<string>((providers.primary as string) ?? 'anthropic');
   const [model, setModel] = useState<string>((cfg.model as string) ?? '');
-  const [maxDepth, setMaxDepth] = useState<number>((cfg.max_thread_depth as number) ?? 8);
+  const [maxDepth, setMaxDepth] = useState<number>((cfg.max_thread_depth as number) ?? 5);
+  const [maxTotalThreads, setMaxTotalThreads] = useState<number>((cfg.max_total_threads as number) ?? 200);
   const [minSearches, setMinSearches] = useState<number>((cfg.min_searches_per_thread as number) ?? 2);
+  const [maxConcurrentThreads, setMaxConcurrentThreads] = useState<number>((cfg.max_concurrent_threads as number) ?? 2);
+  const [maxStepsPerHour, setMaxStepsPerHour] = useState<number>((cfg.max_steps_per_hour as number) ?? 30);
   const [gapEnabled, setGapEnabled] = useState<boolean>((gapAnalysis.enabled as boolean) ?? true);
   const [maxGapSearches, setMaxGapSearches] = useState<number>((gapAnalysis.max_gap_searches as number) ?? 2);
   const [fetchSourceText, setFetchSourceText] = useState<boolean>((cfg.fetch_source_text as boolean) ?? false);
@@ -1856,6 +1861,11 @@ function SettingsView({
   const [localModel, setLocalModel] = useState<string>((providers.local_model as string) ?? '');
   const [localBaseUrl, setLocalBaseUrl] = useState<string>((providers.local_base_url as string) ?? 'http://localhost:11434');
   const [budgetDaily, setBudgetDaily] = useState<number>((cfg.budget_daily_usd as number) ?? 5.0);
+  const [pSerendipity, setPSerendipity] = useState<number>((cfg.p_serendipity as number) ?? 0.15);
+  const [followUpMin, setFollowUpMin] = useState<number>((followUpCfg.min_count as number) ?? 2);
+  const [followUpMax, setFollowUpMax] = useState<number>((followUpCfg.max_count as number) ?? 5);
+  const [seedSimilarityMin, setSeedSimilarityMin] = useState<number>((topicCoherence.seed_similarity_min as number) ?? 0.0);
+  const [hopSimilarityMin, setHopSimilarityMin] = useState<number>((topicCoherence.hop_similarity_min as number) ?? 0.0);
   const [saved, setSaved] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
@@ -1868,9 +1878,22 @@ function SettingsView({
     const config: Record<string, unknown> = {
       model,
       max_thread_depth: maxDepth,
+      max_total_threads: maxTotalThreads,
       min_searches_per_thread: minSearches,
+      max_concurrent_threads: maxConcurrentThreads,
+      max_steps_per_hour: maxStepsPerHour,
       fetch_source_text: fetchSourceText,
       budget_daily_usd: budgetDaily,
+      p_serendipity: pSerendipity,
+      follow_up: {
+        ...(followUpCfg as object),
+        min_count: followUpMin,
+        max_count: followUpMax,
+      },
+      topic_coherence: {
+        seed_similarity_min: seedSimilarityMin,
+        hop_similarity_min: hopSimilarityMin,
+      },
       gap_analysis: { enabled: gapEnabled, max_gap_searches: maxGapSearches },
       providers: {
         primary: provider,
@@ -1984,12 +2007,59 @@ function SettingsView({
         <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Search</p>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>Max thread depth</label>
+            <label className={labelCls} title="How many follow-up levels deep to explore. Each level spawns new threads from the previous level's findings.">Max thread depth</label>
             <input type="number" min={1} max={20} value={maxDepth} onChange={e => setMaxDepth(Number(e.target.value))} className={inputCls} />
           </div>
           <div>
-            <label className={labelCls}>Min searches per thread</label>
+            <label className={labelCls} title="Hard cap on total threads created for this query. Prevents runaway branching. 0 = unlimited.">Max total threads</label>
+            <input type="number" min={0} max={2000} step={50} value={maxTotalThreads} onChange={e => setMaxTotalThreads(Number(e.target.value))} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls} title="Minimum web searches per thread before synthesis.">Min searches per thread</label>
             <input type="number" min={1} max={10} value={minSearches} onChange={e => setMinSearches(Number(e.target.value))} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls} title="How many threads can run simultaneously.">Concurrent threads</label>
+            <input type="number" min={1} max={10} value={maxConcurrentThreads} onChange={e => setMaxConcurrentThreads(Number(e.target.value))} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls} title="Maximum LLM calls per hour across all threads. Reduces API costs and rate-limit errors.">Max steps / hour</label>
+            <input type="number" min={1} max={200} value={maxStepsPerHour} onChange={e => setMaxStepsPerHour(Number(e.target.value))} className={inputCls} />
+          </div>
+        </div>
+      </div>
+
+      {/* Exploration */}
+      <div>
+        <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Exploration</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className={labelCls} title="Base probability that a completed thread spawns a serendipitous tangent using a random perturbation strategy. Decreases with depth.">Serendipity (0–1)</label>
+            <input type="number" min={0} max={1} step={0.05} value={pSerendipity} onChange={e => setPSerendipity(Number(e.target.value))} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls} title="Min follow-up questions generated per finding.">Follow-ups min</label>
+            <input type="number" min={0} max={10} value={followUpMin} onChange={e => setFollowUpMin(Number(e.target.value))} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls} title="Max follow-up questions generated per finding.">Follow-ups max</label>
+            <input type="number" min={1} max={20} value={followUpMax} onChange={e => setFollowUpMax(Number(e.target.value))} className={inputCls} />
+          </div>
+        </div>
+      </div>
+
+      {/* Topic Coherence */}
+      <div>
+        <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Topic Coherence</p>
+        <p className="text-xs text-text-muted mb-3">Jaccard similarity gates to prevent topic drift. 0 = disabled (allow any follow-up).</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className={labelCls} title="Minimum token overlap between each follow-up and the original seed query. Catches gradual drift away from the starting topic. Start with 0.05–0.10 to prune only extreme outliers.">Seed similarity floor</label>
+            <input type="number" min={0} max={1} step={0.01} value={seedSimilarityMin} onChange={e => setSeedSimilarityMin(Number(e.target.value))} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls} title="Minimum token overlap between each follow-up and its parent thread. Catches sudden single-hop lurches into unrelated territory. Start with 0.10–0.20.">Per-hop similarity floor</label>
+            <input type="number" min={0} max={1} step={0.01} value={hopSimilarityMin} onChange={e => setHopSimilarityMin(Number(e.target.value))} className={inputCls} />
           </div>
         </div>
       </div>

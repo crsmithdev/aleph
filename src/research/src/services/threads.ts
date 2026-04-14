@@ -25,6 +25,7 @@ export function createThread(
     max_depth?: number;
     min_searches?: number | null;
     fetch_source_text?: boolean | null;
+    seed_similarity?: number | null;
     status?: ThreadStatus;
   }
 ): ResearchThread {
@@ -34,8 +35,8 @@ export function createThread(
   sqlite.prepare(`
     INSERT INTO research_threads
       (id, session_id, parent_thread_id, spawned_from_finding_id, query, short_query, node_type, origin,
-       perturbation_strategy, status, priority, depth, max_depth, min_searches, fetch_source_text, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       perturbation_strategy, status, priority, depth, max_depth, min_searches, fetch_source_text, seed_similarity, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     params.session_id,
@@ -49,9 +50,10 @@ export function createThread(
     params.status ?? 'queued',
     params.priority ?? 0.5,
     params.depth ?? 0,
-    params.max_depth ?? 9,
+    params.max_depth ?? 5,
     params.min_searches ?? null,
     params.fetch_source_text === undefined ? null : (params.fetch_source_text ? 1 : 0),
+    params.seed_similarity ?? null,
     now,
     now
   );
@@ -150,6 +152,13 @@ export function countThreadsByOrigin(sqlite: Sqlite, sessionId: string): Record<
     'SELECT origin, COUNT(*) as count FROM research_threads WHERE session_id = ? GROUP BY origin'
   ).all(sessionId) as { origin: string; count: number }[];
   return Object.fromEntries(rows.map(r => [r.origin, r.count]));
+}
+
+export function countAllThreads(sqlite: Sqlite, sessionId: string): number {
+  const row = sqlite.prepare(
+    'SELECT COUNT(*) as count FROM research_threads WHERE session_id = ?'
+  ).get(sessionId) as { count: number };
+  return row.count;
 }
 
 export function countExhaustedThreads(sqlite: Sqlite, sessionId: string): number {

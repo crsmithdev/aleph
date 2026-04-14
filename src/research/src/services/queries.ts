@@ -14,6 +14,7 @@ function rowToQuery(row: Record<string, unknown>): ResearchQuery {
     schedule: { ...DEFAULT_SESSION_CONFIG.schedule, ...(stored.schedule ?? {}) },
     perturbation: { ...DEFAULT_SESSION_CONFIG.perturbation, ...(stored.perturbation ?? {}) },
     follow_up: { ...DEFAULT_SESSION_CONFIG.follow_up, ...(stored.follow_up ?? {}) },
+    topic_coherence: { ...DEFAULT_SESSION_CONFIG.topic_coherence, ...(stored.topic_coherence ?? {}) },
   };
   return { ...row, config } as unknown as ResearchQuery;
 }
@@ -77,6 +78,7 @@ export function updateQuery(
         providers: { ...existing.config.providers, ...(updates.config.providers ?? {}) },
         gap_analysis: { ...existing.config.gap_analysis, ...(updates.config.gap_analysis ?? {}) },
         follow_up: { ...existing.config.follow_up, ...(updates.config.follow_up ?? {}) },
+        topic_coherence: { ...existing.config.topic_coherence, ...(updates.config.topic_coherence ?? {}) },
       };
       fields.push('config = ?');
       values.push(JSON.stringify(merged));
