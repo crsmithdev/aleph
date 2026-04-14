@@ -34,8 +34,32 @@ const statusColors: Record<string, string> = {
   idle: 'bg-blue-900/50 text-blue-300',
   completed: 'bg-blue-900/50 text-blue-300',
   failed: 'bg-red-900/50 text-red-300',
+  rate_limit: 'bg-orange-900/50 text-orange-300',
   cancelled: 'bg-bg-tertiary text-text-muted',
 };
+
+function jobDisplayStatus(job: ResearchJob): string {
+  if (job.status === 'failed' && job.error) {
+    const e = job.error;
+    if (e.includes('429') || e.includes('529') || e.toLowerCase().includes('rate limit') || e.toLowerCase().includes('rate-limit')) {
+      return 'rate_limit';
+    }
+  }
+  return job.status;
+}
+
+function JobStatusBadge({ job }: { job: ResearchJob }) {
+  const display = jobDisplayStatus(job);
+  const label = display === 'rate_limit' ? 'rate limit' : display;
+  return (
+    <span
+      className={clsx('px-2 py-0.5 rounded text-xs font-medium', statusColors[display] ?? 'bg-bg-tertiary text-text-muted')}
+      title={display === 'rate_limit' ? job.error ?? undefined : undefined}
+    >
+      {label}
+    </span>
+  );
+}
 
 const workerDotColors: Record<string, string> = {
   starting: 'bg-yellow-400',
@@ -340,7 +364,7 @@ function QueuedJobsTable({ jobs, queryMap, onCancel, cancelPending }: {
       key: 'status',
       label: 'Status',
       shrink: true,
-      render: (row) => <StatusBadge status={row.status} />,
+      render: (row) => <JobStatusBadge job={row} />,
     },
     {
       key: 'mode',
@@ -412,7 +436,7 @@ function JobHistoryTable({ jobs, queryMap, onCancel, cancelPending }: {
       label: 'Status',
       shrink: true,
       sortable: true,
-      render: (row) => <StatusBadge status={row.status} />,
+      render: (row) => <JobStatusBadge job={row} />,
     },
     {
       key: 'mode',

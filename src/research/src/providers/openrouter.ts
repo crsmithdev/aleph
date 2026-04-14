@@ -67,8 +67,14 @@ export class OpenRouterProvider implements LLMProvider {
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
         const msg = lastError.message;
-        // On rate-limit or credit errors, try the next model in the pool
-        if (msg.includes('429') || msg.includes('402') || msg.includes('529') || msg.includes('rate')) continue;
+        // On rate-limit or credit errors, rotate to next model in the pool.
+        // Brief pause before retrying on rate-limit (not credit) errors to let upstream recover.
+        if (msg.includes('429') || msg.includes('402') || msg.includes('529') || msg.includes('rate')) {
+          if (msg.includes('429') || msg.includes('529') || msg.includes('rate')) {
+            await new Promise(r => setTimeout(r, 1500));
+          }
+          continue;
+        }
         throw lastError; // non-retriable error
       }
     }
@@ -106,7 +112,12 @@ export class OpenRouterProvider implements LLMProvider {
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
         const msg = lastError.message;
-        if (msg.includes('429') || msg.includes('402') || msg.includes('529') || msg.includes('rate')) continue;
+        if (msg.includes('429') || msg.includes('402') || msg.includes('529') || msg.includes('rate')) {
+          if (msg.includes('429') || msg.includes('529') || msg.includes('rate')) {
+            await new Promise(r => setTimeout(r, 1500));
+          }
+          continue;
+        }
         throw lastError;
       }
     }
