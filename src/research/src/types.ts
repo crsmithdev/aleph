@@ -186,6 +186,7 @@ export interface ResearchThread {
   max_depth: number;
   min_searches: number | null;
   fetch_source_text?: boolean | null;
+  retry_after: string | null;
   created_at: string;
   updated_at: string;
 }

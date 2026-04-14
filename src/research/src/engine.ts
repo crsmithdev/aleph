@@ -384,12 +384,22 @@ export class ResearchEngine {
       });
 
       const isRateLimit = err.message.includes('429') || err.message.includes('529') || err.message.toLowerCase().includes('rate');
-      const priorErrors = steps.listSteps(this.sqlite, sessionId, { threadId })
-        .filter(s => s.error).length;
-      // Rate-limit errors are transient — always requeue so the thread retries when limits clear
-      threads.updateThread(this.sqlite, threadId, {
-        status: isRateLimit || priorErrors <= 1 ? 'queued' : 'exhausted',
-      });
+      const allErrors = steps.listSteps(this.sqlite, sessionId, { threadId }).filter(s => s.error);
+      const priorErrors = allErrors.length;
+      const consecutiveRateLimits = allErrors.reverse().findIndex(s => !s.error?.toLowerCase().includes('rate') && !s.error?.includes('429') && !s.error?.includes('529'));
+      const rateLimitStreak = consecutiveRateLimits === -1 ? priorErrors : consecutiveRateLimits;
+
+      if (isRateLimit) {
+        // Exponential backoff: 30s, 60s, 120s, 240s, cap at 10 min
+        const backoffMs = Math.min(30_000 * Math.pow(2, rateLimitStreak), 600_000);
+        const retryAfter = new Date(Date.now() + backoffMs).toISOString().replace('T', ' ').replace('Z', '');
+        threads.updateThread(this.sqlite, threadId, { status: 'queued', retry_after: retryAfter });
+      } else {
+        threads.updateThread(this.sqlite, threadId, {
+          status: priorErrors <= 1 ? 'queued' : 'exhausted',
+          retry_after: null,
+        });
+      }
       throw err;
     }
 

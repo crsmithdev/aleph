@@ -220,6 +220,7 @@ export function getQueuedThreadsForNewJobs(
     FROM research_threads t
     LEFT JOIN research_jobs j ON j.thread_id = t.id AND j.status IN ('pending', 'claimed', 'running')
     WHERE t.session_id = ? AND t.status = 'queued' AND j.id IS NULL
+      AND (t.retry_after IS NULL OR t.retry_after <= datetime('now'))
     ORDER BY t.priority DESC, t.created_at ASC
     LIMIT ?
   `).all(sessionId, limit) as Array<{ id: string; query: string; priority: number }>;
