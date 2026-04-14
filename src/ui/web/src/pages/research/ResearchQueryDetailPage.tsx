@@ -440,7 +440,7 @@ function SectionMetaPanel({
 // ---------------------------------------------------------------------------
 
 function DocumentView({
-  findings, threads, onNavigateToThread, onNavigateToMap, document, sessionId,
+  findings, threads, onNavigateToThread, onNavigateToMap, document, sessionId, title,
 }: {
   findings: ResearchFinding[];
   threads: ResearchThread[];
@@ -448,8 +448,10 @@ function DocumentView({
   onNavigateToMap: (threadId: string) => void;
   document?: string;
   sessionId: string;
+  title?: string;
 }) {
   const generateDoc = useGenerateDocument();
+
   const hasFindings = findings.length >= 3;
 
   // Strip markdown code fences if present
@@ -457,6 +459,17 @@ function DocumentView({
     if (!document) return '';
     return document.replace(/^```(?:markdown)?\s*\n?/i, '').replace(/\n?```\s*$/, '');
   }, [document]);
+
+  function exportMarkdown() {
+    if (!cleanDoc) return;
+    const blob = new Blob([cleanDoc], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = window.document.createElement('a');
+    a.href = url;
+    a.download = `${(title || sessionId).replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   // Parse document into sections for per-section metadata + TOC
   const docSections = useMemo(() => parseDocumentSections(cleanDoc), [cleanDoc]);
@@ -502,8 +515,16 @@ function DocumentView({
       {/* Main article */}
       <div className="flex-1 min-w-0">
         <div className="max-w-3xl mx-auto">
-          {/* Regenerate control */}
+          {/* Regenerate / Export controls */}
           <div className="flex items-center justify-end mb-6 gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={exportMarkdown}
+            >
+              <Icon name="download" size="xs" className="mr-1" />
+              Export .md
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -2260,6 +2281,7 @@ export function ResearchQueryDetailPage() {
               onNavigateToMap={navigateToMap}
               document={session?.document || undefined}
               sessionId={id!}
+              title={session?.title}
             />
           )}
           {tab === 'live' && (
