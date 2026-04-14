@@ -270,7 +270,7 @@ describe('getQueuedThreadsForNewJobs: retry_after filtering', () => {
 
 // ─── OpenRouterProvider model rotation ──────────────────────────────────────
 
-describe('OpenRouterProvider: model rotation on errors', () => {
+describe('OpenRouterProvider: fail-fast on errors', () => {
   const originalFetch = globalThis.fetch;
 
   afterEach(() => {
@@ -293,52 +293,25 @@ describe('OpenRouterProvider: model rotation on errors', () => {
     });
   }
 
-  test('returns result when first model succeeds', async () => {
+  test('returns result on success', async () => {
     globalThis.fetch = async () => makeOkResponse('model-a');
-    const provider = new OpenRouterProvider({ apiKey: 'test', models: ['model-a', 'model-b'] });
+    const provider = new OpenRouterProvider({ apiKey: 'test', models: ['model-a'] });
     const result = await provider.complete('model-a', 'prompt', 100);
     expect(result.text).toBe('answer');
   });
 
-  test('rotates to next model on 429 and succeeds', async () => {
+  test('throws immediately on 429', async () => {
     let calls = 0;
-    globalThis.fetch = async () => {
-      calls++;
-      if (calls === 1) return makeErrorResponse(429, 'rate limited');
-      return makeOkResponse('model-b');
-    };
-    const provider = new OpenRouterProvider({ apiKey: 'test', models: ['model-a', 'model-b'] });
-    const result = await provider.complete('model-a', 'prompt', 100);
-    expect(result.text).toBe('answer');
-    expect(calls).toBe(2);
-  });
-
-  test('rotates to next model on 402 credit error', async () => {
-    let calls = 0;
-    globalThis.fetch = async () => {
-      calls++;
-      if (calls === 1) return makeErrorResponse(402, 'insufficient credits');
-      return makeOkResponse('model-b');
-    };
-    const provider = new OpenRouterProvider({ apiKey: 'test', models: ['model-a', 'model-b'] });
-    const result = await provider.complete('model-a', 'prompt', 100);
-    expect(result.text).toBe('answer');
-    expect(calls).toBe(2);
-  });
-
-  test('throws after all models are exhausted', async () => {
-    globalThis.fetch = async () => makeErrorResponse(429, 'rate limited');
-    const provider = new OpenRouterProvider({ apiKey: 'test', models: ['model-a', 'model-b'] });
+    globalThis.fetch = async () => { calls++; return makeErrorResponse(429, 'rate limited'); };
+    const provider = new OpenRouterProvider({ apiKey: 'test', models: ['model-a'] });
     await expect(provider.complete('model-a', 'prompt', 100)).rejects.toThrow('429');
+    expect(calls).toBe(1);
   });
 
-  test('non-retriable error (500) throws immediately without rotation', async () => {
+  test('throws immediately on 500', async () => {
     let calls = 0;
-    globalThis.fetch = async () => {
-      calls++;
-      return makeErrorResponse(500, 'internal server error');
-    };
-    const provider = new OpenRouterProvider({ apiKey: 'test', models: ['model-a', 'model-b', 'model-c'] });
+    globalThis.fetch = async () => { calls++; return makeErrorResponse(500, 'internal server error'); };
+    const provider = new OpenRouterProvider({ apiKey: 'test', models: ['model-a'] });
     await expect(provider.complete('model-a', 'prompt', 100)).rejects.toThrow('500');
     expect(calls).toBe(1);
   });

@@ -31,103 +31,39 @@ const DEFAULT_CONTEXT_WINDOW = 32768;
 
 export class OpenRouterProvider implements LLMProvider {
   private config: OpenRouterConfig;
-  private modelIndex = 0;
 
   constructor(config: OpenRouterConfig) {
     this.config = config;
   }
 
-  private nextModel(): string {
-    const model = this.config.models[this.modelIndex % this.config.models.length];
-    this.modelIndex++;
-    return model;
-  }
-
   async complete(model: string, prompt: string, maxTokens: number): Promise<LLMResult> {
-    // If model is already in the pool, rotate through pool on failures.
-    // If model is a specific non-pool model, try it once then fall back to pool.
-    const isInPool = this.config.models.includes(model);
-    const totalModels = this.config.models.length;
-    const attempts = isInPool ? Math.max(3, totalModels) : 1 + Math.max(3, totalModels);
-    let lastError: Error | null = null;
-
-    for (let i = 0; i < attempts; i++) {
-      const actualModel = (!isInPool && i === 0) ? model : this.nextModel();
-      const contextWindow = OPENROUTER_MODELS[actualModel]?.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
-      const maxPromptTokens = contextWindow - maxTokens - 200;
-      const truncatedPrompt = truncateToTokens(prompt, maxPromptTokens);
-      try {
-        const response = await this.fetchWithRetry(actualModel, [
-          { role: 'user', content: truncatedPrompt },
-        ], maxTokens, undefined, 1); // single attempt inside; rotation handles retries
-        return {
-          text: response.choices[0]?.message?.content ?? '',
-          promptTokens: response.usage?.prompt_tokens ?? 0,
-          completionTokens: response.usage?.completion_tokens ?? 0,
-          model: response.model ?? actualModel,
-        };
-      } catch (err) {
-        lastError = err instanceof Error ? err : new Error(String(err));
-        const msg = lastError.message;
-        // On rate-limit or credit errors, rotate to next model in the pool.
-        // Brief pause before retrying on rate-limit (not credit) errors to let upstream recover.
-        const isRotatable = msg.includes('429') || msg.includes('402') || msg.includes('404') ||
-          msg.includes('529') || msg.includes('rate');
-        if (isRotatable) {
-          if (msg.includes('429') || msg.includes('529') || msg.includes('rate')) {
-            await new Promise(r => setTimeout(r, 1500));
-          }
-          continue;
-        }
-        throw lastError; // non-retriable error
-      }
-    }
-    throw lastError ?? new Error('All models exhausted');
+    const contextWindow = OPENROUTER_MODELS[model]?.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
+    const truncatedPrompt = truncateToTokens(prompt, contextWindow - maxTokens - 200);
+    const response = await this.fetchWithRetry(model, [
+      { role: 'user', content: truncatedPrompt },
+    ], maxTokens);
+    return {
+      text: response.choices[0]?.message?.content ?? '',
+      promptTokens: response.usage?.prompt_tokens ?? 0,
+      completionTokens: response.usage?.completion_tokens ?? 0,
+      model: response.model ?? model,
+    };
   }
 
   async searchWeb(model: string, query: string): Promise<WebSearchResult> {
-    // 1. Get URLs from search engine (Tavily → Brave → DuckDuckGo)
     const searchResults = await fetchSearchResults(query);
-
     const sourceUrls = searchResults.map(r => r.url);
 
-    // 2. Synthesize with the LLM — rotate models on rate-limit errors
-    const context = searchResults.map(r => {
-      return `### ${r.title}\nURL: ${r.url}\n\n${r.snippet.slice(0, 3000)}`;
-    }).join('\n\n---\n\n');
+    const context = searchResults.map(r =>
+      `### ${r.title}\nURL: ${r.url}\n\n${r.snippet.slice(0, 3000)}`
+    ).join('\n\n---\n\n');
 
-    const isInPool = this.config.models.includes(model);
-    const totalModels = this.config.models.length;
-    const attempts = isInPool ? Math.max(3, totalModels) : 1 + Math.max(3, totalModels);
     const searchMaxTokens = 4096;
-    let lastError: Error | null = null;
-    let response: OpenRouterResponse | null = null;
-
-    for (let i = 0; i < attempts; i++) {
-      const actualModel = (!isInPool && i === 0) ? model : this.nextModel();
-      const contextWindow = OPENROUTER_MODELS[actualModel]?.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
-      const maxPromptTokens = contextWindow - searchMaxTokens - 200;
-      const fullPrompt = `You are a research assistant. Based on the following web pages, answer this research query:\n\n"${query}"\n\n---\n\n${context}\n\n---\n\nProvide a detailed, factual summary with specific information from the sources above.`;
-      try {
-        response = await this.fetchWithRetry(actualModel, [
-          { role: 'user', content: truncateToTokens(fullPrompt, maxPromptTokens) },
-        ], searchMaxTokens, undefined, 1);
-        break;
-      } catch (err) {
-        lastError = err instanceof Error ? err : new Error(String(err));
-        const msg = lastError.message;
-        const isRotatable = msg.includes('429') || msg.includes('402') || msg.includes('404') ||
-          msg.includes('529') || msg.includes('rate');
-        if (isRotatable) {
-          if (msg.includes('429') || msg.includes('529') || msg.includes('rate')) {
-            await new Promise(r => setTimeout(r, 1500));
-          }
-          continue;
-        }
-        throw lastError;
-      }
-    }
-    if (!response) throw lastError ?? new Error('All models exhausted');
+    const contextWindow = OPENROUTER_MODELS[model]?.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
+    const fullPrompt = `You are a research assistant. Based on the following web pages, answer this research query:\n\n"${query}"\n\n---\n\n${context}\n\n---\n\nProvide a detailed, factual summary with specific information from the sources above.`;
+    const response = await this.fetchWithRetry(model, [
+      { role: 'user', content: truncateToTokens(fullPrompt, contextWindow - searchMaxTokens - 200) },
+    ], searchMaxTokens);
 
     const actualModelUsed = response.model ?? model;
 
@@ -148,65 +84,42 @@ export class OpenRouterProvider implements LLMProvider {
     model: string,
     messages: Array<{ role: string; content: string }>,
     maxTokens: number,
-    plugins?: Array<{ id: string; max_results?: number }>,
-    attempts = 3
+    plugins?: Array<{ id: string; max_results?: number }>
   ): Promise<OpenRouterResponse> {
-    let lastError: Error | null = null;
-
-    for (let attempt = 0; attempt < attempts; attempt++) {
-      try {
-        const abort = new AbortController();
-        const timeout = setTimeout(() => abort.abort(), 120_000); // 2-minute hard timeout
-        let res: Response;
-        try {
-          res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
-            method: 'POST',
-            signal: abort.signal,
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${this.config.apiKey}`,
-              ...(this.config.siteUrl ? { 'HTTP-Referer': this.config.siteUrl } : {}),
-              ...(this.config.siteName ? { 'X-Title': this.config.siteName } : {}),
-            },
-            body: JSON.stringify({
-              model,
-              messages,
-              max_tokens: maxTokens,
-              ...(plugins ? { plugins } : {}),
-            }),
-          });
-        } finally {
-          clearTimeout(timeout);
-        }
-
-        if (!res.ok) {
-          const body = await res.text();
-          if ((res.status === 429 || res.status === 529) && attempt < attempts - 1) {
-            await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt + 1) * 5000));
-            continue;
-          }
-          throw new Error(`OpenRouter ${res.status}: ${body}`);
-        }
-
-        const data = await res.json() as OpenRouterResponse;
-        if (!data.choices || !Array.isArray(data.choices)) {
-          throw new Error(`OpenRouter bad response (no choices): ${JSON.stringify(data).slice(0, 300)}`);
-        }
-        return data;
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        if (attempt < attempts - 1) {
-          const msg = lastError.message;
-          if (msg.includes('429') || msg.includes('rate') || msg.includes('529')) {
-            await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt + 1) * 5000));
-            continue;
-          }
-        }
-        throw lastError;
-      }
+    const abort = new AbortController();
+    const timeout = setTimeout(() => abort.abort(), 120_000);
+    let res: Response;
+    try {
+      res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+        method: 'POST',
+        signal: abort.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.config.apiKey}`,
+          ...(this.config.siteUrl ? { 'HTTP-Referer': this.config.siteUrl } : {}),
+          ...(this.config.siteName ? { 'X-Title': this.config.siteName } : {}),
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          max_tokens: maxTokens,
+          ...(plugins ? { plugins } : {}),
+        }),
+      });
+    } finally {
+      clearTimeout(timeout);
     }
 
-    throw lastError ?? new Error('OpenRouter request failed');
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`OpenRouter ${res.status}: ${body}`);
+    }
+
+    const data = await res.json() as OpenRouterResponse;
+    if (!data.choices || !Array.isArray(data.choices)) {
+      throw new Error(`OpenRouter bad response (no choices): ${JSON.stringify(data).slice(0, 300)}`);
+    }
+    return data;
   }
 }
 
