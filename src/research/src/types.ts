@@ -84,6 +84,9 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
     primary: 'openrouter',
     openrouter_models: [
       'deepseek/deepseek-chat',
+      'meta-llama/llama-3.3-70b-instruct',
+      'google/gemini-flash-1.5',
+      'mistralai/mistral-small',
     ],
   },
   schedule: {
