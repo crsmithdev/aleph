@@ -1,7 +1,7 @@
 import { clsx } from 'clsx';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { Button } from '../../components/ui/Button';
 import { StatCard } from '../../components/data/StatCard';
@@ -18,7 +18,7 @@ import {
   useRemoveWorker,
   useKillWorker,
   useCancelJob,
-  useRunResearch,
+  useRunAllResearch,
   useStopAllResearch,
   type ResearchJob,
   type WorkerStatus,
@@ -53,7 +53,7 @@ function JobStatusBadge({ job }: { job: ResearchJob }) {
   const label = display === 'rate_limit' ? 'rate limit' : display;
   return (
     <span
-      className={clsx('px-2 py-0.5 rounded text-xs font-medium', statusColors[display] ?? 'bg-bg-tertiary text-text-muted')}
+      className={clsx('px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap', statusColors[display] ?? 'bg-bg-tertiary text-text-muted')}
       title={display === 'rate_limit' ? job.error ?? undefined : undefined}
     >
       {label}
@@ -72,7 +72,7 @@ const workerDotColors: Record<string, string> = {
 
 function StatusBadge({ status }: { status: string }) {
   return (
-    <span className={clsx('px-2 py-0.5 rounded text-xs font-medium', statusColors[status] ?? 'bg-bg-tertiary text-text-muted')}>
+    <span className={clsx('px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap', statusColors[status] ?? 'bg-bg-tertiary text-text-muted')}>
       {status}
     </span>
   );
@@ -106,72 +106,103 @@ function LiveDuration({ from }: { from: string | null }) {
     const iv = setInterval(() => setTick(t => t + 1), 1000);
     return () => clearInterval(iv);
   }, [from]);
-  return <span className="text-xs tabular-nums text-text-muted font-mono">{elapsed(from)}</span>;
+  return <span className="text-xs tabular-nums text-text-muted font-mono whitespace-nowrap">{elapsed(from)}</span>;
+}
+
+// Copyable error display with JSON formatting
+function ErrorDisplay({ error }: { error: string }) {
+  const [copied, setCopied] = useState(false);
+
+  let formatted = error;
+  try {
+    const parsed = JSON.parse(error);
+    formatted = JSON.stringify(parsed, null, 2);
+  } catch {
+    // not JSON, show raw
+  }
+
+  const copy = () => {
+    navigator.clipboard.writeText(error).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <div className="mt-1 relative">
+      <button
+        onClick={copy}
+        className="absolute top-1.5 right-1.5 text-xs text-text-muted hover:text-text-primary px-1.5 py-0.5 rounded bg-bg-primary/70 hover:bg-bg-primary border border-border-primary/50 transition-colors"
+      >
+        {copied ? '✓ Copied' : 'Copy'}
+      </button>
+      <pre className="text-red-300 bg-red-900/20 rounded p-2 pr-16 font-mono text-xs whitespace-pre-wrap break-all overflow-auto max-h-48 leading-relaxed">
+        {formatted}
+      </pre>
+    </div>
+  );
 }
 
 // Expanded job detail panel
 function JobDetail({ job, queryMap }: { job: ResearchJob; queryMap: Record<string, string> }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-      <div className="space-y-2">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="space-y-2.5">
         <div>
-          <span className="text-text-muted uppercase tracking-wider">Job ID</span>
-          <p className="font-mono text-text-secondary mt-0.5">{job.id}</p>
+          <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Job ID</p>
+          <p className="font-mono text-sm text-text-secondary break-all">{job.id}</p>
         </div>
         <div>
-          <span className="text-text-muted uppercase tracking-wider">Query</span>
-          <p className="mt-0.5">
-            <Link to={`/research/${job.session_id}`} className="font-mono text-accent hover:underline">
-              {queryMap[job.session_id] ?? job.session_id}
-            </Link>
-          </p>
+          <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Query</p>
+          <Link to={`/research/${job.session_id}`} className="font-mono text-sm text-accent hover:underline">
+            {queryMap[job.session_id] ?? job.session_id}
+          </Link>
         </div>
         {job.thread_id && (
           <div>
-            <span className="text-text-muted uppercase tracking-wider">Thread</span>
-            <p className="font-mono text-text-secondary mt-0.5">{job.thread_id}</p>
+            <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Thread</p>
+            <p className="font-mono text-sm text-text-secondary break-all">{job.thread_id}</p>
           </div>
         )}
         {job.claimed_by && (
           <div>
-            <span className="text-text-muted uppercase tracking-wider">Worker</span>
-            <p className="font-mono text-text-secondary mt-0.5">{job.claimed_by}</p>
+            <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Worker</p>
+            <p className="font-mono text-sm text-text-secondary">{job.claimed_by}</p>
           </div>
         )}
         <div>
-          <span className="text-text-muted uppercase tracking-wider">Mode / Iterations</span>
-          <p className="text-text-secondary mt-0.5">
+          <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Mode / Iterations</p>
+          <p className="text-sm text-text-secondary">
             {job.mode} &middot; {job.iterations_completed}{job.max_iterations ? `/${job.max_iterations}` : ''} iter
           </p>
         </div>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         <div>
-          <span className="text-text-muted uppercase tracking-wider">Created</span>
-          <p className="font-mono text-text-secondary mt-0.5">{job.created_at}</p>
+          <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Created</p>
+          <p className="font-mono text-sm text-text-secondary">{job.created_at}</p>
         </div>
         {job.started_at && (
           <div>
-            <span className="text-text-muted uppercase tracking-wider">Started</span>
-            <p className="font-mono text-text-secondary mt-0.5">{job.started_at}</p>
+            <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Started</p>
+            <p className="font-mono text-sm text-text-secondary">{job.started_at}</p>
           </div>
         )}
         {job.completed_at && (
           <div>
-            <span className="text-text-muted uppercase tracking-wider">Completed</span>
-            <p className="font-mono text-text-secondary mt-0.5">{job.completed_at}</p>
+            <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Completed</p>
+            <p className="font-mono text-sm text-text-secondary">{job.completed_at}</p>
           </div>
         )}
         {job.heartbeat_at && (
           <div>
-            <span className="text-text-muted uppercase tracking-wider">Last Heartbeat</span>
-            <p className="font-mono text-text-secondary mt-0.5">{job.heartbeat_at}</p>
+            <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Last Heartbeat</p>
+            <p className="font-mono text-sm text-text-secondary">{job.heartbeat_at}</p>
           </div>
         )}
         {job.error && (
           <div>
-            <span className="text-red-400 uppercase tracking-wider">Error</span>
-            <p className="mt-0.5 text-red-300 bg-red-900/20 rounded p-2 font-mono whitespace-pre-wrap break-all">{job.error}</p>
+            <p className="text-xs text-red-400 uppercase tracking-wider mb-0.5">Error</p>
+            <ErrorDisplay error={job.error} />
           </div>
         )}
       </div>
@@ -238,9 +269,10 @@ function WorkerCard({
           </div>
         </div>
       ) : (
-        <div className="bg-bg-primary border border-border-primary/40 rounded p-3 flex items-center justify-between opacity-50">
+        <div className="bg-bg-primary border border-border-primary/40 rounded p-3 flex items-center gap-3 opacity-50">
+          <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', workerDotColors[displayStatus] ?? 'bg-bg-tertiary')} />
           <span className="font-mono text-xs text-text-muted">worker-{worker.id}</span>
-          <span className="text-xs text-text-muted">no active job</span>
+          <span className="text-xs text-text-muted ml-auto">idle</span>
         </div>
       )}
     </div>
@@ -349,7 +381,7 @@ function QueuedJobsTable({ jobs, queryMap, onCancel, cancelPending }: {
       key: 'id',
       label: 'Job',
       shrink: true,
-      render: (row) => <span className="font-mono text-xs text-text-muted">{row.id.slice(0, 8)}</span>,
+      render: (row) => <span className="font-mono text-xs text-text-muted whitespace-nowrap">{row.id.slice(0, 8)}</span>,
     },
     {
       key: 'session_id',
@@ -370,13 +402,13 @@ function QueuedJobsTable({ jobs, queryMap, onCancel, cancelPending }: {
       key: 'mode',
       label: 'Mode',
       shrink: true,
-      render: (row) => <span className="text-xs text-text-muted">{row.mode}</span>,
+      render: (row) => <span className="text-xs text-text-muted whitespace-nowrap">{row.mode}</span>,
     },
     {
       key: 'created_at',
       label: 'Queued',
       shrink: true,
-      render: (row) => <span className="text-xs tabular-nums text-text-muted">{elapsed(row.created_at)} ago</span>,
+      render: (row) => <span className="text-xs tabular-nums text-text-muted whitespace-nowrap">{elapsed(row.created_at)} ago</span>,
     },
     {
       key: 'claimed_by',
@@ -420,7 +452,7 @@ function JobHistoryTable({ jobs, queryMap, onCancel, cancelPending }: {
       key: 'id',
       label: 'Job',
       shrink: true,
-      render: (row) => <span className="font-mono text-xs text-text-muted">{row.id.slice(0, 8)}</span>,
+      render: (row) => <span className="font-mono text-xs text-text-muted whitespace-nowrap">{row.id.slice(0, 8)}</span>,
     },
     {
       key: 'session_id',
@@ -442,38 +474,38 @@ function JobHistoryTable({ jobs, queryMap, onCancel, cancelPending }: {
       key: 'mode',
       label: 'Mode',
       shrink: true,
-      render: (row) => <span className="text-xs text-text-muted">{row.mode}</span>,
+      render: (row) => <span className="text-xs text-text-muted whitespace-nowrap">{row.mode}</span>,
     },
     {
       key: 'thread_id',
       label: 'Thread',
       shrink: true,
       render: (row) => row.thread_id
-        ? <span className="font-mono text-xs text-text-muted">{row.thread_id.slice(0, 8)}</span>
+        ? <span className="font-mono text-xs text-text-muted whitespace-nowrap">{row.thread_id.slice(0, 8)}</span>
         : <span className="text-xs text-text-muted">—</span>,
     },
     {
       key: 'iterations_completed',
-      label: 'Iterations',
+      label: '↻',
       shrink: true,
       align: 'right',
       sortable: true,
       render: (row) => (
-        <span className="text-xs tabular-nums text-text-secondary">
+        <span className="text-xs tabular-nums text-text-secondary whitespace-nowrap">
           {row.iterations_completed}{row.max_iterations ? `/${row.max_iterations}` : ''}
         </span>
       ),
     },
     {
       key: 'started_at',
-      label: 'Duration',
+      label: '⏱',
       shrink: true,
       align: 'right',
       render: (row) => {
         const isActive = row.status === 'running' || row.status === 'claimed';
         return isActive
           ? <LiveDuration from={row.started_at} />
-          : <span className="text-xs tabular-nums text-text-muted">{elapsed(row.started_at, row.completed_at)}</span>;
+          : <span className="text-xs tabular-nums text-text-muted whitespace-nowrap">{elapsed(row.started_at, row.completed_at)}</span>;
       },
     },
     {
@@ -515,19 +547,18 @@ export function ResearchWorkersPage() {
   const removeWorker = useRemoveWorker();
   const killWorker = useKillWorker();
   const cancelJob = useCancelJob();
-  const runResearch = useRunResearch();
+  const runAll = useRunAllResearch();
   const stopAll = useStopAllResearch();
 
   const queryMap: Record<string, string> = Object.fromEntries(
     queries.map((q) => [q.id, q.title || q.seed_query])
   );
 
-  const activeQueries = queries.filter(q => q.status === 'active');
-
   const runningJobs = allJobs.filter(j => j.status === 'running' || j.status === 'claimed');
   const pendingJobs = allJobs.filter(j => j.status === 'pending' || j.status === 'claimed');
   const historyJobs = allJobs.filter(j => j.status !== 'pending');
 
+  const isActive = runningJobs.length > 0 || pendingJobs.length > 0;
   const runningWorkers = workers.filter(w => w.status === 'running');
   const successRate = stats && stats.total > 0
     ? ((stats.completed / stats.total) * 100)
@@ -550,21 +581,12 @@ export function ResearchWorkersPage() {
               removePending={removeWorker.isPending}
             />
             <Button
-              variant="ghost"
+              variant={isActive ? 'ghost' : 'primary'}
               size="sm"
-              onClick={() => stopAll.mutate()}
-              loading={stopAll.isPending}
+              onClick={() => isActive ? stopAll.mutate() : runAll.mutate()}
+              loading={isActive ? stopAll.isPending : runAll.isPending}
             >
-              Stop All
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => activeQueries.forEach(q => runResearch.mutate({ sessionId: q.id }))}
-              loading={runResearch.isPending}
-              disabled={activeQueries.length === 0}
-            >
-              Run All ({activeQueries.length})
+              {isActive ? 'Pause All' : 'Resume All'}
             </Button>
           </div>
         }
