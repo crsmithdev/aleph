@@ -106,7 +106,7 @@ function LiveDuration({ from }: { from: string | null }) {
     const iv = setInterval(() => setTick(t => t + 1), 1000);
     return () => clearInterval(iv);
   }, [from]);
-  return <span className="text-xs tabular-nums text-text-muted font-mono whitespace-nowrap">{elapsed(from)}</span>;
+  return <span className="text-sm tabular-nums text-text-muted font-mono whitespace-nowrap">{elapsed(from)}</span>;
 }
 
 // Copyable error display with JSON formatting
@@ -384,7 +384,7 @@ function QueuedJobsTable({ jobs, queryMap, onCancel, cancelPending }: {
       key: 'id',
       label: 'Job',
       shrink: true,
-      render: (row) => <span className="font-mono text-xs text-text-muted whitespace-nowrap">{row.id.slice(0, 8)}</span>,
+      render: (row) => <span className="font-mono text-sm text-text-muted whitespace-nowrap">{row.id.slice(0, 8)}</span>,
     },
     {
       key: 'session_id',
@@ -405,13 +405,13 @@ function QueuedJobsTable({ jobs, queryMap, onCancel, cancelPending }: {
       key: 'mode',
       label: 'Mode',
       shrink: true,
-      render: (row) => <span className="text-xs text-text-muted whitespace-nowrap">{row.mode}</span>,
+      render: (row) => <span className="text-sm text-text-muted whitespace-nowrap">{row.mode}</span>,
     },
     {
       key: 'created_at',
       label: 'Queued',
       shrink: true,
-      render: (row) => <span className="text-xs tabular-nums text-text-muted whitespace-nowrap">{elapsed(row.created_at)} ago</span>,
+      render: (row) => <span className="text-sm tabular-nums text-text-muted whitespace-nowrap">{elapsed(row.created_at)} ago</span>,
     },
     {
       key: 'claimed_by',
@@ -460,7 +460,7 @@ function JobHistoryTable({ jobs, queryMap, onCancel, cancelPending }: {
       key: 'id',
       label: 'Job',
       shrink: true,
-      render: (row) => <span className="font-mono text-xs text-text-muted whitespace-nowrap">{row.id.slice(0, 8)}</span>,
+      render: (row) => <span className="font-mono text-sm text-text-muted whitespace-nowrap">{row.id.slice(0, 8)}</span>,
     },
     {
       key: 'session_id',
@@ -482,15 +482,15 @@ function JobHistoryTable({ jobs, queryMap, onCancel, cancelPending }: {
       key: 'mode',
       label: 'Mode',
       shrink: true,
-      render: (row) => <span className="text-xs text-text-muted whitespace-nowrap">{row.mode}</span>,
+      render: (row) => <span className="text-sm text-text-muted whitespace-nowrap">{row.mode}</span>,
     },
     {
       key: 'thread_id',
       label: 'Thread',
       shrink: true,
       render: (row) => row.thread_id
-        ? <span className="font-mono text-xs text-text-muted whitespace-nowrap">{row.thread_id}</span>
-        : <span className="text-xs text-text-muted">—</span>,
+        ? <span className="font-mono text-sm text-text-muted whitespace-nowrap">{row.thread_id}</span>
+        : <span className="text-sm text-text-muted">—</span>,
     },
     {
       key: 'iterations_completed',
@@ -499,7 +499,7 @@ function JobHistoryTable({ jobs, queryMap, onCancel, cancelPending }: {
       align: 'right',
       sortable: true,
       render: (row) => (
-        <span className="text-xs tabular-nums text-text-secondary whitespace-nowrap">
+        <span className="text-sm tabular-nums text-text-secondary whitespace-nowrap">
           {row.iterations_completed}{row.max_iterations ? `/${row.max_iterations}` : ''}
         </span>
       ),
@@ -513,7 +513,7 @@ function JobHistoryTable({ jobs, queryMap, onCancel, cancelPending }: {
         const isActive = row.status === 'running' || row.status === 'claimed';
         return isActive
           ? <LiveDuration from={row.started_at} />
-          : <span className="text-xs tabular-nums text-text-muted whitespace-nowrap">{elapsed(row.started_at, row.completed_at)}</span>;
+          : <span className="text-sm tabular-nums text-text-muted whitespace-nowrap">{elapsed(row.started_at, row.completed_at)}</span>;
       },
     },
     {
