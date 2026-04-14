@@ -161,6 +161,24 @@ describe('engine: thread backoff on 429', () => {
     expect(retryMs).toBeLessThan(before + 40_000);
   });
 
+  test('402 credit error extends streak same as 429', async () => {
+    // 429 then 402 — streak should be 2, backoff ~60s
+    const engine429 = new ResearchEngine({ sqlite: db, provider: new ThrowingProvider('OpenRouter 429: rate limited') });
+    await expect(engine429.runThread(sessionId, threadId)).rejects.toThrow();
+    threads.updateThread(db, threadId, { status: 'queued', retry_after: null });
+
+    const engine402 = new ResearchEngine({ sqlite: db, provider: new ThrowingProvider('OpenRouter 402: Provider returned error') });
+    const before = Date.now();
+    await expect(engine402.runThread(sessionId, threadId)).rejects.toThrow();
+
+    const t = threads.getThread(db, threadId)!;
+    expect(t.status).toBe('queued');
+    const retryMs = parseRetryAfter(t.retry_after!).getTime();
+    // Streak=2 → 60s backoff
+    expect(retryMs).toBeGreaterThan(before + 55_000);
+    expect(retryMs).toBeLessThan(before + 70_000);
+  });
+
   test('non-rate-limit error: thread goes queued on first, exhausted on third', async () => {
     const engine = new ResearchEngine({ sqlite: db, provider: new ThrowingProvider('Network timeout') });
 
@@ -180,6 +198,7 @@ describe('engine: thread backoff on 429', () => {
   test('rate-limit message variants are all detected', async () => {
     const variants = [
       'OpenRouter 429: {"code":429}',
+      'OpenRouter 402: {"error":{"message":"Provider returned error"}}',
       'OpenRouter 529: overloaded',
       'Rate limit exceeded: @ratelimit/too-many-requests',
     ];

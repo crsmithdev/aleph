@@ -372,6 +372,13 @@ export class ResearchEngine {
       const err = error instanceof Error ? error : new Error(String(error));
       this.onError?.(err, thread);
 
+      // Abort/cancel: job was externally cancelled — leave thread queued, don't record a step
+      const isAbort = err.message === 'This operation was aborted' || err.message.includes('AbortError');
+      if (isAbort) {
+        threads.updateThread(this.sqlite, threadId, { status: 'queued', retry_after: null });
+        throw err;
+      }
+
       steps.createStep(this.sqlite, {
         thread_id: threadId,
         session_id: sessionId,
@@ -383,15 +390,17 @@ export class ResearchEngine {
         error: err.message,
       });
 
-      const isRateLimit = err.message.includes('429') || err.message.includes('529') || err.message.toLowerCase().includes('rate');
+      const isTransient = (msg: string) =>
+        msg.includes('429') || msg.includes('402') || msg.includes('529') || msg.toLowerCase().includes('rate');
+
+      const isRateLimit = isTransient(err.message);
       const allSteps = steps.listSteps(this.sqlite, sessionId, { threadId });
       const priorErrors = allSteps.filter(s => s.error).length;
 
-      // Count consecutive rate-limit errors scanning backward; reset on any success or different error
+      // Count consecutive transient errors scanning backward; reset on any success or non-transient error
       let rateLimitStreak = 0;
       for (const s of [...allSteps].reverse()) {
-        const e = s.error ?? '';
-        if (e.includes('429') || e.includes('529') || e.toLowerCase().includes('rate')) {
+        if (s.error && isTransient(s.error)) {
           rateLimitStreak++;
         } else {
           break;
