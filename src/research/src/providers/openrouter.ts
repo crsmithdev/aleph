@@ -42,14 +42,15 @@ export class OpenRouterProvider implements LLMProvider {
   }
 
   async complete(model: string, prompt: string, maxTokens: number): Promise<LLMResult> {
-    // When a specific OpenRouter model is requested, use it; otherwise rotate through the pool.
-    const pinned = model.includes('/');
+    // If model is already in the pool, rotate through pool on failures.
+    // If model is a specific non-pool model, try it once then fall back to pool.
+    const isInPool = this.config.models.includes(model);
     const totalModels = this.config.models.length;
-    const attempts = pinned ? 3 : Math.max(3, totalModels);
+    const attempts = isInPool ? Math.max(3, totalModels) : 1 + Math.max(3, totalModels);
     let lastError: Error | null = null;
 
     for (let i = 0; i < attempts; i++) {
-      const actualModel = pinned ? model : this.nextModel();
+      const actualModel = (!isInPool && i === 0) ? model : this.nextModel();
       const contextWindow = OPENROUTER_MODELS[actualModel]?.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
       const maxPromptTokens = contextWindow - maxTokens - 200;
       const truncatedPrompt = truncateToTokens(prompt, maxPromptTokens);
@@ -85,15 +86,15 @@ export class OpenRouterProvider implements LLMProvider {
       return `### ${r.title}\nURL: ${r.url}\n\n${r.snippet.slice(0, 3000)}`;
     }).join('\n\n---\n\n');
 
-    const pinned = model.includes('/');
+    const isInPool = this.config.models.includes(model);
     const totalModels = this.config.models.length;
-    const attempts = pinned ? 3 : Math.max(3, totalModels);
+    const attempts = isInPool ? Math.max(3, totalModels) : 1 + Math.max(3, totalModels);
     const searchMaxTokens = 4096;
     let lastError: Error | null = null;
     let response: OpenRouterResponse | null = null;
 
     for (let i = 0; i < attempts; i++) {
-      const actualModel = pinned ? model : this.nextModel();
+      const actualModel = (!isInPool && i === 0) ? model : this.nextModel();
       const contextWindow = OPENROUTER_MODELS[actualModel]?.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
       const maxPromptTokens = contextWindow - searchMaxTokens - 200;
       const fullPrompt = `You are a research assistant. Based on the following web pages, answer this research query:\n\n"${query}"\n\n---\n\n${context}\n\n---\n\nProvide a detailed, factual summary with specific information from the sources above.`;
