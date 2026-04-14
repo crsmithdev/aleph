@@ -125,3 +125,6 @@ When working in a worktree (`.worktrees/<name>`), the main repo's dev server at 
 | Install works | Run `bun install.ts` (verify runs automatically) | "Files copied" |
 | Docs match behavior | Run docs-review skill | "I updated the docs" |
 | Hook works | Pipe test input, check stdout | "Code looks correct" |
+| Backend logic works | `bun test.ts` passes | Running install.ts or starting a new server |
+| Frontend compiles | `bun run build` in `src/ui` passes | "TypeScript looks correct" |
+| Worktree changes work | `bun test.ts` + `bun run build` from worktree root | Testing against the 3001 server (which serves different code) |
