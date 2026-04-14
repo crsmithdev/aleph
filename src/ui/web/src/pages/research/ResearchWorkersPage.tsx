@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { PageHeader } from '../../components/layout/PageHeader';
@@ -57,7 +57,7 @@ function StatusBadge({ status }: { status: string }) {
 function elapsed(from: string | null, to?: string | null): string {
   if (!from) return '—';
   const end = to ? new Date(to).getTime() : Date.now();
-  const ms = end - new Date(from).getTime();
+  const ms = Math.max(0, end - new Date(from).getTime());
   const s = Math.floor(ms / 1000);
   if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
@@ -72,6 +72,87 @@ function fmtUptime(ms: number | null): string {
   const m = Math.floor(s / 60);
   if (m < 60) return `${m}m ${s % 60}s`;
   return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+// Live clock for running jobs
+function LiveDuration({ from }: { from: string | null }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!from) return;
+    const iv = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(iv);
+  }, [from]);
+  return <span className="text-xs tabular-nums text-text-muted font-mono">{elapsed(from)}</span>;
+}
+
+// Expanded job detail panel
+function JobDetail({ job, queryMap }: { job: ResearchJob; queryMap: Record<string, string> }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+      <div className="space-y-2">
+        <div>
+          <span className="text-text-muted uppercase tracking-wider">Job ID</span>
+          <p className="font-mono text-text-secondary mt-0.5">{job.id}</p>
+        </div>
+        <div>
+          <span className="text-text-muted uppercase tracking-wider">Query</span>
+          <p className="mt-0.5">
+            <Link to={`/research/${job.session_id}`} className="font-mono text-accent hover:underline">
+              {queryMap[job.session_id] ?? job.session_id}
+            </Link>
+          </p>
+        </div>
+        {job.thread_id && (
+          <div>
+            <span className="text-text-muted uppercase tracking-wider">Thread</span>
+            <p className="font-mono text-text-secondary mt-0.5">{job.thread_id}</p>
+          </div>
+        )}
+        {job.claimed_by && (
+          <div>
+            <span className="text-text-muted uppercase tracking-wider">Worker</span>
+            <p className="font-mono text-text-secondary mt-0.5">{job.claimed_by}</p>
+          </div>
+        )}
+        <div>
+          <span className="text-text-muted uppercase tracking-wider">Mode / Iterations</span>
+          <p className="text-text-secondary mt-0.5">
+            {job.mode} &middot; {job.iterations_completed}{job.max_iterations ? `/${job.max_iterations}` : ''} iter
+          </p>
+        </div>
+      </div>
+      <div className="space-y-2">
+        <div>
+          <span className="text-text-muted uppercase tracking-wider">Created</span>
+          <p className="font-mono text-text-secondary mt-0.5">{job.created_at}</p>
+        </div>
+        {job.started_at && (
+          <div>
+            <span className="text-text-muted uppercase tracking-wider">Started</span>
+            <p className="font-mono text-text-secondary mt-0.5">{job.started_at}</p>
+          </div>
+        )}
+        {job.completed_at && (
+          <div>
+            <span className="text-text-muted uppercase tracking-wider">Completed</span>
+            <p className="font-mono text-text-secondary mt-0.5">{job.completed_at}</p>
+          </div>
+        )}
+        {job.heartbeat_at && (
+          <div>
+            <span className="text-text-muted uppercase tracking-wider">Last Heartbeat</span>
+            <p className="font-mono text-text-secondary mt-0.5">{job.heartbeat_at}</p>
+          </div>
+        )}
+        {job.error && (
+          <div>
+            <span className="text-red-400 uppercase tracking-wider">Error</span>
+            <p className="mt-0.5 text-red-300 bg-red-900/20 rounded p-2 font-mono whitespace-pre-wrap break-all">{job.error}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // --- Worker Card ---
@@ -89,7 +170,6 @@ function WorkerCard({
   onKill: (id: number) => void;
   killPending: boolean;
 }) {
-  // Show "idle" when process is running but not working on a job
   const displayStatus = worker.status === 'running' && !currentJob ? 'idle' : worker.status;
 
   return (
@@ -130,11 +210,14 @@ function WorkerCard({
               ? <span className="font-mono">thread {currentJob.thread_id.slice(0, 8)}</span>
               : <span>{currentJob.iterations_completed}{currentJob.max_iterations ? `/${currentJob.max_iterations}` : ''} iter</span>
             }
-            <span>{elapsed(currentJob.started_at)} elapsed</span>
+            <LiveDuration from={currentJob.started_at} />
           </div>
         </div>
       ) : (
-        <div className="text-xs text-text-muted italic">Idle — waiting for jobs</div>
+        <div className="bg-bg-primary border border-border-primary/40 rounded p-3 flex items-center justify-between opacity-50">
+          <span className="font-mono text-xs text-text-muted">worker-{worker.id}</span>
+          <span className="text-xs text-text-muted">no active job</span>
+        </div>
       )}
     </div>
   );
@@ -227,14 +310,16 @@ function PerformanceCharts({ byDay }: { byDay: { date: string; completed: number
   );
 }
 
-// --- Job History Table ---
+// --- Queued Jobs Table ---
 
-function JobHistoryTable({ jobs, queryMap, onCancel, cancelPending }: {
+function QueuedJobsTable({ jobs, queryMap, onCancel, cancelPending }: {
   jobs: ResearchJob[];
   queryMap: Record<string, string>;
   onCancel: (jobId: string) => void;
   cancelPending: boolean;
 }) {
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+
   const columns: Column<ResearchJob>[] = [
     {
       key: 'id',
@@ -246,7 +331,78 @@ function JobHistoryTable({ jobs, queryMap, onCancel, cancelPending }: {
       key: 'session_id',
       label: 'Query',
       render: (row) => (
-        <Link to={`/research/${row.session_id}`} className="text-sm text-accent hover:underline truncate block max-w-xs">
+        <Link to={`/research/${row.session_id}`} className="text-sm text-accent hover:underline truncate block max-w-xs" onClick={e => e.stopPropagation()}>
+          {queryMap[row.session_id] ?? row.session_id.slice(0, 12)}
+        </Link>
+      ),
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      shrink: true,
+      render: (row) => <StatusBadge status={row.status} />,
+    },
+    {
+      key: 'mode',
+      label: 'Mode',
+      shrink: true,
+      render: (row) => <span className="text-xs text-text-muted">{row.mode}</span>,
+    },
+    {
+      key: 'created_at',
+      label: 'Queued',
+      shrink: true,
+      render: (row) => <span className="text-xs tabular-nums text-text-muted">{elapsed(row.created_at)} ago</span>,
+    },
+    {
+      key: 'claimed_by',
+      label: '',
+      shrink: true,
+      render: (row) => (
+        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onCancel(row.id); }} disabled={cancelPending}>
+          Cancel
+        </Button>
+      ),
+    },
+  ];
+
+  return (
+    <DataTable
+      data={jobs}
+      columns={columns}
+      keyField="id"
+      emptyMessage="No queued jobs."
+      defaultSort={{ key: 'created_at', dir: 'asc' }}
+      pageSize={20}
+      expandedKey={expandedKey}
+      onExpandToggle={setExpandedKey}
+      renderExpanded={(row) => <JobDetail job={row} queryMap={queryMap} />}
+    />
+  );
+}
+
+// --- Job History Table ---
+
+function JobHistoryTable({ jobs, queryMap, onCancel, cancelPending }: {
+  jobs: ResearchJob[];
+  queryMap: Record<string, string>;
+  onCancel: (jobId: string) => void;
+  cancelPending: boolean;
+}) {
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+
+  const columns: Column<ResearchJob>[] = [
+    {
+      key: 'id',
+      label: 'Job',
+      shrink: true,
+      render: (row) => <span className="font-mono text-xs text-text-muted">{row.id.slice(0, 8)}</span>,
+    },
+    {
+      key: 'session_id',
+      label: 'Query',
+      render: (row) => (
+        <Link to={`/research/${row.session_id}`} className="text-sm text-accent hover:underline truncate block max-w-xs" onClick={e => e.stopPropagation()}>
           {queryMap[row.session_id] ?? row.session_id.slice(0, 12)}
         </Link>
       ),
@@ -273,12 +429,6 @@ function JobHistoryTable({ jobs, queryMap, onCancel, cancelPending }: {
         : <span className="text-xs text-text-muted">—</span>,
     },
     {
-      key: 'claimed_by',
-      label: 'Worker',
-      shrink: true,
-      render: (row) => <span className="font-mono text-xs text-text-secondary">{row.claimed_by?.slice(0, 12) ?? '—'}</span>,
-    },
-    {
       key: 'iterations_completed',
       label: 'Iterations',
       shrink: true,
@@ -295,11 +445,12 @@ function JobHistoryTable({ jobs, queryMap, onCancel, cancelPending }: {
       label: 'Duration',
       shrink: true,
       align: 'right',
-      render: (row) => (
-        <span className="text-xs tabular-nums text-text-muted">
-          {elapsed(row.started_at, row.completed_at)}
-        </span>
-      ),
+      render: (row) => {
+        const isActive = row.status === 'running' || row.status === 'claimed';
+        return isActive
+          ? <LiveDuration from={row.started_at} />
+          : <span className="text-xs tabular-nums text-text-muted">{elapsed(row.started_at, row.completed_at)}</span>;
+      },
     },
     {
       key: 'created_at',
@@ -321,7 +472,10 @@ function JobHistoryTable({ jobs, queryMap, onCancel, cancelPending }: {
       keyField="id"
       emptyMessage="No jobs yet."
       defaultSort={{ key: 'created_at', dir: 'desc' }}
-      maxRows={50}
+      pageSize={25}
+      expandedKey={expandedKey}
+      onExpandToggle={setExpandedKey}
+      renderExpanded={(row) => <JobDetail job={row} queryMap={queryMap} />}
     />
   );
 }
@@ -331,7 +485,7 @@ function JobHistoryTable({ jobs, queryMap, onCancel, cancelPending }: {
 export function ResearchWorkersPage() {
   const { data: queries = [] } = useResearchQueries();
   const { data: workers = [], isLoading: workersLoading } = useResearchWorkers();
-  const { data: allJobs = [] } = useAllJobs({ limit: 100 });
+  const { data: allJobs = [] } = useAllJobs({ limit: 500 });
   const { data: stats } = useJobStats();
   const addWorker = useAddWorker();
   const removeWorker = useRemoveWorker();
@@ -347,7 +501,8 @@ export function ResearchWorkersPage() {
   const activeQueries = queries.filter(q => q.status === 'active');
 
   const runningJobs = allJobs.filter(j => j.status === 'running' || j.status === 'claimed');
-  const pendingJobs = allJobs.filter(j => j.status === 'pending');
+  const pendingJobs = allJobs.filter(j => j.status === 'pending' || j.status === 'claimed');
+  const historyJobs = allJobs.filter(j => j.status !== 'pending');
 
   const runningWorkers = workers.filter(w => w.status === 'running');
   const successRate = stats && stats.total > 0
@@ -424,6 +579,21 @@ export function ResearchWorkersPage() {
         </div>
       )}
 
+      {/* Queued jobs */}
+      <div>
+        <p className="text-xs text-text-muted uppercase tracking-wide mb-3">
+          Queued Jobs {pendingJobs.length > 0 && <span className="normal-case ml-1 text-yellow-400">({pendingJobs.length})</span>}
+        </p>
+        <div className="bg-bg-secondary border border-border-primary rounded-lg overflow-hidden">
+          <QueuedJobsTable
+            jobs={pendingJobs}
+            queryMap={queryMap}
+            onCancel={(jobId) => cancelJob.mutate({ jobId })}
+            cancelPending={cancelJob.isPending}
+          />
+        </div>
+      </div>
+
       {/* Performance charts */}
       {stats && stats.byDay.length > 0 && (
         <div>
@@ -437,7 +607,7 @@ export function ResearchWorkersPage() {
         <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Job History</p>
         <div className="bg-bg-secondary border border-border-primary rounded-lg overflow-hidden">
           <JobHistoryTable
-            jobs={allJobs}
+            jobs={historyJobs}
             queryMap={queryMap}
             onCancel={(jobId) => cancelJob.mutate({ jobId })}
             cancelPending={cancelJob.isPending}
