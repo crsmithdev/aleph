@@ -44,14 +44,27 @@ Claude Code merges `.claude/` (project) with `~/.claude/` (global) at runtime. I
 
 Always develop against **port 3001**. Both share data at `~/.construct/`.
 
+The dev server is **usually already running** at http://localhost:3001. Check with `ss -tlnp | grep 3001` before starting a new one. **Never use any other port** (3002, etc.) — only 3000 and 3001 exist for this project.
+
 ## Dev workflow
 
 1. Edit source in `src/`
-2. Run `bun dev-server.ts` to see changes live at http://localhost:3001
+2. Changes are served live via Vite HMR — **no restart needed** for UI changes; API changes are picked up via `--watch`
 3. Run `bun test.ts` to verify
-4. Run `bun install.ts` to deploy to production (port 3000)
+4. Run `bun install.ts` **only** to deploy to production (port 3000) — not required to see or verify dev changes
 
 After any install, verify with `systemctl --user status construct-ui` and `curl http://localhost:3000/api/system/info`.
+
+## Verification in worktrees
+
+When working in a worktree (`.worktrees/<name>`), the main repo's dev server at 3001 is running **different code**. Do not use it for worktree verification.
+
+**Correct verification for worktree changes:**
+- `bun test.ts` from the worktree root — sufficient for backend logic, hooks, API routes
+- `bun run build` in `src/ui` — catches frontend type errors and build failures
+- For live HTTP testing: `kill $(ss -tlnp | grep 3001 | grep -oP 'pid=\K[0-9]+')` then `bun run --cwd src/ui start` from the **worktree root**
+
+**Never** start a server on port 3002 or any non-standard port.
 
 ## Directory map
 
