@@ -145,11 +145,11 @@ export function DataTable<T>({
                     <td
                       key={col.key}
                       className={clsx(
-                        'px-4 py-2.5 align-middle',
-                        col.align === 'right' ? 'text-right' : 'text-left',
-                        col.shrink ? 'whitespace-nowrap' : !col.width && 'overflow-hidden text-ellipsis whitespace-nowrap'
+                        'px-4 py-2.5 align-middle whitespace-nowrap',
+                        col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left',
+                        col.width && 'overflow-hidden text-ellipsis'
                       )}
-                      style={col.shrink ? { width: '1px' } : col.width ? { width: col.width, maxWidth: col.width } : { maxWidth: 0 }}
+                      style={col.shrink ? { width: '1px' } : col.width ? { width: col.width, maxWidth: col.width } : undefined}
                     >
                       {col.render
                         ? col.render(row)
