@@ -2211,20 +2211,20 @@ export function ResearchQueryDetailPage() {
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Header bar */}
-        <div className="px-6 py-4 border-b border-border-primary bg-bg-primary shrink-0">
-          {/* Breadcrumb */}
-          <Link to="/research/queries" className="text-xs text-accent hover:underline">&larr; All queries</Link>
-
-          {/* Title + controls */}
-          <div className="flex items-center justify-between mt-2">
-            <div className="min-w-0">
-              <h1 className="font-heading text-2xl font-bold text-text-primary truncate">{session.title}</h1>
-              <p className="text-sm text-text-muted mt-0.5 truncate">{session.seed_query}</p>
+        <div className="border-b border-border-primary bg-bg-primary shrink-0">
+          {/* Title row — h-14 matches sidebar "Construct" header height */}
+          <div className="h-14 flex items-center justify-between px-6">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <Icon name="search" size="sm" className="text-text-muted shrink-0" />
+              <Link to="/research" className="font-heading text-2xl font-bold text-text-muted hover:text-text-primary whitespace-nowrap shrink-0 leading-none">Research</Link>
+              <span className="font-heading text-2xl font-bold text-text-muted shrink-0 leading-none">›</span>
+              <h1 className="font-heading text-2xl font-bold text-text-primary truncate min-w-0 leading-none">{session.title}</h1>
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-4">
               <Button
                 variant="ghost"
                 size="sm"
+                aria-label="Export as Markdown"
                 onClick={() => { const a = document.createElement('a'); a.href = `/api/research/queries/${id}/export?format=md`; a.download = ''; a.click(); }}
               >
                 <Icon name="download" size="xs" className="mr-1" />
@@ -2233,6 +2233,7 @@ export function ResearchQueryDetailPage() {
               <Button
                 variant="ghost"
                 size="sm"
+                aria-label="Export as JSON"
                 onClick={() => { const a = document.createElement('a'); a.href = `/api/research/queries/${id}/export?format=json`; a.download = ''; a.click(); }}
               >
                 <Icon name="download" size="xs" className="mr-1" />
@@ -2263,6 +2264,10 @@ export function ResearchQueryDetailPage() {
               )}
             </div>
           </div>
+
+          {/* Secondary content */}
+          <div className="px-6 pb-0">
+            <p className="text-sm text-text-muted truncate mb-2">{session.seed_query}</p>
 
           {/* Env warnings */}
           {envCheck && (envCheck.errors.length > 0 || envCheck.warnings.length > 0 || envCheck.jina_balance !== null) && (
@@ -2321,6 +2326,7 @@ export function ResearchQueryDetailPage() {
               value={runIterations}
               onChange={e => setRunIterations(e.target.value)}
               placeholder="N"
+              aria-label="Number of iterations"
               className="w-16 bg-bg-secondary border border-border-primary rounded px-2 py-1 text-xs text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent"
               title="Number of iterations (blank = default)"
             />
@@ -2355,6 +2361,7 @@ export function ResearchQueryDetailPage() {
               </button>
             ))}
           </div>
+          </div>{/* end secondary content */}
         </div>
 
         {/* Tab content */}
