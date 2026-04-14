@@ -11,7 +11,7 @@ import {
   useResearchActivity, useCancelJob, useResearchJobs, useResearchStream,
   useResearchSteps, useUpdateThread, useDeleteResearchQuery, useUpdateQueryConfig,
   useResearchEnvCheck, useFetchThreadText, useRedoThread, useFetchFindingText,
-  useGenerateDocument,
+  useGenerateDocument, useResearchWorkers,
   type ResearchFinding, type ResearchThread, type ResearchActivity,
   type ResearchJob, type StreamEvent, type ResearchStep,
 } from '../../api/research-hooks';
@@ -208,6 +208,7 @@ function ThreadNavigator({
         </div>
         <input
           type="text"
+          aria-label="Filter threads"
           value={filter}
           onChange={e => setFilter(e.target.value)}
           placeholder="Filter threads..."
@@ -280,6 +281,7 @@ function ThreadNavigator({
         <div className="flex gap-1.5">
           <input
             type="text"
+            aria-label="Inject question"
             value={newQuestion}
             onChange={e => setNewQuestion(e.target.value)}
             placeholder="Inject question..."
@@ -1125,6 +1127,15 @@ function ThreadLiveRow({
   );
 }
 
+const workerDotCls: Record<string, string> = {
+  starting: 'bg-yellow-400 animate-pulse',
+  running: 'bg-green-400',
+  idle: 'bg-blue-400',
+  stopping: 'bg-orange-400',
+  stopped: 'bg-text-muted/20',
+  backoff: 'bg-red-400',
+};
+
 const liveStatusDot: Record<string, string> = {
   active: 'bg-success animate-pulse',
   running: 'bg-success animate-pulse',
@@ -1211,6 +1222,8 @@ function LiveView({
   const streamRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const [filterFindings, setFilterFindings] = useState(false);
+  const [expandedFindingId, setExpandedFindingId] = useState<string | null>(null);
+  const [detailThreadId, setDetailThreadId] = useState<string | null>(null);
 
   const stepsByThread = useMemo(() => {
     const map = new Map<string, ResearchStep[]>();
@@ -1279,8 +1292,8 @@ function LiveView({
       {/* ── Pane 1: Thread controls (left) ── */}
       <div className="w-52 shrink-0 flex flex-col border-r border-border-primary bg-bg-secondary overflow-hidden">
         <div className="flex items-center gap-2 px-3 py-2 border-b border-border-primary shrink-0">
+          {isRunning && <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shrink-0" />}
           <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary">Threads</span>
-          {isRunning && <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse ml-auto shrink-0" />}
           <span className="text-xs text-text-disabled font-mono ml-auto">{threads.length}</span>
         </div>
         <div className="flex-1 overflow-y-auto">
@@ -1293,8 +1306,16 @@ function LiveView({
             return (
               <div
                 key={thread.id}
-                className="px-3 py-2 border-b border-border-primary group hover:bg-bg-tertiary transition-colors"
-                style={{ borderLeft: `2px solid ${color}30` }}
+                role="button"
+                tabIndex={0}
+                aria-pressed={detailThreadId === thread.id}
+                onClick={() => setDetailThreadId(prev => prev === thread.id ? null : thread.id)}
+                onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setDetailThreadId(prev => prev === thread.id ? null : thread.id)}
+                className={clsx(
+                  'px-3 py-2 border-b border-border-primary group hover:bg-bg-tertiary transition-colors cursor-pointer focus:outline-none focus:ring-1 focus:ring-inset focus:ring-accent/50',
+                  detailThreadId === thread.id && 'bg-bg-tertiary/60'
+                )}
+                style={{ borderLeft: `2px solid ${detailThreadId === thread.id ? color : color + '30'}` }}
               >
                 <div className="flex items-center gap-1.5 mb-1">
                   <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', liveStatusDot[thread.status] ?? 'bg-text-muted/40')} />
@@ -1374,40 +1395,122 @@ function LiveView({
               {highFindings.length > 0 && (
                 <>
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-text-disabled">High confidence · {highFindings.length}</p>
-                  {highFindings.map(f => (
-                    <div key={f.id} className="bg-bg-secondary border border-border-primary rounded border-l-2 border-l-success px-3 py-2 space-y-1.5">
-                      <p className="text-xs text-text-primary leading-relaxed">{f.content.slice(0, 200)}{f.content.length > 200 ? '…' : ''}</p>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {f.source_urls[0] && (
-                          <span className="text-[10px] font-mono text-blue-400 bg-blue-400/8 border border-blue-400/15 px-1 py-0.5 rounded truncate max-w-28">
-                            {(() => { try { return new URL(f.source_urls[0]).hostname; } catch { return f.source_urls[0]; } })()}
-                          </span>
+                  {highFindings.map(f => {
+                    const isExpanded = expandedFindingId === f.id;
+                    const srcMeta = f.source_url_meta?.length ? f.source_url_meta : f.source_urls.map(u => ({ url: u, title: '', snippet: '' }));
+                    const thread = threads.find(t => t.id === f.thread_id);
+                    return (
+                      <div key={f.id}
+                        role="button"
+                        tabIndex={0}
+                        aria-expanded={isExpanded}
+                        onClick={() => setExpandedFindingId(isExpanded ? null : f.id)}
+                        onKeyDown={e => e.key === 'Enter' || e.key === ' ' ? setExpandedFindingId(isExpanded ? null : f.id) : null}
+                        className="bg-bg-secondary border border-border-primary rounded border-l-2 border-l-success px-3 py-2 space-y-1.5 cursor-pointer hover:bg-bg-tertiary/30 transition-colors focus:outline-none focus:ring-1 focus:ring-accent/50"
+                      >
+                        <p className="text-xs text-text-primary leading-relaxed">
+                          {isExpanded ? f.content : (f.content.slice(0, 200) + (f.content.length > 200 ? '…' : ''))}
+                        </p>
+                        {isExpanded && (
+                          <div className="space-y-1.5 pt-1 border-t border-border-primary/30">
+                            {srcMeta.length > 0 && (
+                              <div className="space-y-0.5">
+                                {srcMeta.map((src, i) => {
+                                  let host = src.url;
+                                  try { host = new URL(src.url).hostname; } catch { /* keep */ }
+                                  return (
+                                    <a key={i} href={src.url} target="_blank" rel="noopener noreferrer"
+                                      onClick={e => e.stopPropagation()}
+                                      className="block text-[11px] text-accent hover:underline truncate">
+                                      {src.title || host}
+                                    </a>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            {f.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {f.tags.map(tag => (
+                                  <span key={tag} className="px-1 py-0.5 rounded bg-bg-tertiary text-[10px] text-text-muted">{tag}</span>
+                                ))}
+                              </div>
+                            )}
+                            {thread && (
+                              <p className="text-[10px] text-text-disabled italic truncate">{thread.short_query ?? thread.query}</p>
+                            )}
+                          </div>
                         )}
-                        <span className="text-[10px] font-mono text-text-disabled bg-bg-tertiary border border-border-primary px-1 py-0.5 rounded">
-                          {threads.find(t => t.id === f.thread_id)?.origin?.replace(/_/g, ' ') ?? '—'}
-                        </span>
-                        <span className="text-[10px] font-mono text-text-muted ml-auto">{(f.confidence * 100).toFixed(0)}%</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {f.source_urls[0] && !isExpanded && (
+                            <span className="text-[10px] font-mono text-blue-400 bg-blue-400/8 border border-blue-400/15 px-1 py-0.5 rounded truncate max-w-28">
+                              {(() => { try { return new URL(f.source_urls[0]).hostname; } catch { return f.source_urls[0]; } })()}
+                            </span>
+                          )}
+                          <span className="text-[10px] font-mono text-text-disabled bg-bg-tertiary border border-border-primary px-1 py-0.5 rounded">
+                            {thread?.origin?.replace(/_/g, ' ') ?? '—'}
+                          </span>
+                          <span className="text-[10px] font-mono text-text-muted ml-auto">{(f.confidence * 100).toFixed(0)}%</span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </>
               )}
               {medFindings.length > 0 && (
                 <>
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-text-disabled mt-3">Medium confidence · {medFindings.length}</p>
-                  {medFindings.map(f => (
-                    <div key={f.id} className="bg-bg-secondary border border-border-primary rounded border-l-2 border-l-blue-400/50 px-3 py-2 space-y-1.5">
-                      <p className="text-xs text-text-primary leading-relaxed">{f.content.slice(0, 180)}{f.content.length > 180 ? '…' : ''}</p>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {f.source_urls[0] && (
-                          <span className="text-[10px] font-mono text-blue-400 bg-blue-400/8 border border-blue-400/15 px-1 py-0.5 rounded truncate max-w-28">
-                            {(() => { try { return new URL(f.source_urls[0]).hostname; } catch { return f.source_urls[0]; } })()}
-                          </span>
+                  {medFindings.map(f => {
+                    const isExpanded = expandedFindingId === f.id;
+                    const srcMeta = f.source_url_meta?.length ? f.source_url_meta : f.source_urls.map(u => ({ url: u, title: '', snippet: '' }));
+                    return (
+                      <div key={f.id}
+                        role="button"
+                        tabIndex={0}
+                        aria-expanded={isExpanded}
+                        onClick={() => setExpandedFindingId(isExpanded ? null : f.id)}
+                        onKeyDown={e => e.key === 'Enter' || e.key === ' ' ? setExpandedFindingId(isExpanded ? null : f.id) : null}
+                        className="bg-bg-secondary border border-border-primary rounded border-l-2 border-l-blue-400/50 px-3 py-2 space-y-1.5 cursor-pointer hover:bg-bg-tertiary/30 transition-colors focus:outline-none focus:ring-1 focus:ring-accent/50"
+                      >
+                        <p className="text-xs text-text-primary leading-relaxed">
+                          {isExpanded ? f.content : (f.content.slice(0, 180) + (f.content.length > 180 ? '…' : ''))}
+                        </p>
+                        {isExpanded && (
+                          <div className="space-y-1.5 pt-1 border-t border-border-primary/30">
+                            {srcMeta.length > 0 && (
+                              <div className="space-y-0.5">
+                                {srcMeta.map((src, i) => {
+                                  let host = src.url;
+                                  try { host = new URL(src.url).hostname; } catch { /* keep */ }
+                                  return (
+                                    <a key={i} href={src.url} target="_blank" rel="noopener noreferrer"
+                                      onClick={e => e.stopPropagation()}
+                                      className="block text-[11px] text-accent hover:underline truncate">
+                                      {src.title || host}
+                                    </a>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            {f.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {f.tags.map(tag => (
+                                  <span key={tag} className="px-1 py-0.5 rounded bg-bg-tertiary text-[10px] text-text-muted">{tag}</span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         )}
-                        <span className="text-[10px] font-mono text-text-muted ml-auto">{(f.confidence * 100).toFixed(0)}%</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {f.source_urls[0] && !isExpanded && (
+                            <span className="text-[10px] font-mono text-blue-400 bg-blue-400/8 border border-blue-400/15 px-1 py-0.5 rounded truncate max-w-28">
+                              {(() => { try { return new URL(f.source_urls[0]).hostname; } catch { return f.source_urls[0]; } })()}
+                            </span>
+                          )}
+                          <span className="text-[10px] font-mono text-text-muted ml-auto">{(f.confidence * 100).toFixed(0)}%</span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </>
               )}
               {(activeThreads.length > 0 || queuedThreads.length > 0) && (
@@ -1435,126 +1538,242 @@ function LiveView({
         </div>
       </div>
 
-      {/* ── Pane 3: Live event stream (right) ── */}
+      {/* ── Pane 3: Thread detail OR Live event stream (right) ── */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0 bg-bg-primary">
-        {/* Thread color chips */}
-        <div className="flex items-center gap-0 border-b border-border-primary bg-bg-secondary overflow-x-auto shrink-0">
-          {ordered.filter(t => t.status !== 'pruned' || findingsByThread.get(t.id)?.length).slice(0, 8).map(t => {
-            const color = threadColor.get(t.id) ?? '#8796b0';
-            const label = (t.short_query ?? t.query.split('\n')[0]).slice(0, 14);
-            return (
-              <div
-                key={t.id}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 border-r border-border-primary shrink-0"
-                style={{ background: `${color}08` }}
-              >
-                <div
-                  className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold font-mono shrink-0"
-                  style={{ background: `${color}20`, color, border: `1px solid ${color}35` }}
-                >
-                  {ordered.indexOf(t) < 26 ? String.fromCharCode(65 + ordered.indexOf(t)) : '#'}
-                </div>
-                <div>
-                  <div className="text-[10px] leading-tight truncate max-w-20" style={{ color }}>{label}</div>
-                  <div className="text-[9px] text-text-disabled font-mono">{t.status === 'active' ? 'active' : t.status === 'queued' ? 'queued' : t.status}</div>
-                </div>
+        {detailThreadId ? (() => {
+          const dt = threads.find(t => t.id === detailThreadId);
+          if (!dt) return null;
+          const dtSteps = [...(stepsByThread.get(detailThreadId) ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at));
+          const dtFindings = findingsByThread.get(detailThreadId) ?? [];
+          const dtColor = threadColor.get(detailThreadId) ?? '#8796b0';
+          return (
+            <>
+              {/* Thread detail header */}
+              <div className="flex items-center gap-2 px-3 py-2 border-b border-border-primary bg-bg-secondary shrink-0">
+                <button
+                  onClick={() => setDetailThreadId(null)}
+                  className="text-[11px] text-text-muted hover:text-text-primary font-mono px-1.5 py-0.5 rounded border border-border-primary hover:border-border-secondary transition-colors shrink-0"
+                >← stream</button>
+                <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', liveStatusDot[dt.status] ?? 'bg-text-muted/40')} />
+                <span className="text-xs font-medium text-text-primary truncate flex-1">
+                  {dt.short_query ?? dt.query.split('\n')[0]}
+                </span>
+                <span className={clsx('text-[10px] px-1 py-0.5 rounded shrink-0', liveOriginColor[dt.origin] ?? 'bg-bg-tertiary text-text-muted')}>
+                  {dt.origin.replace(/_/g, ' ')}
+                </span>
               </div>
-            );
-          })}
-        </div>
 
-        {/* Filter bar */}
-        <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-primary bg-bg-secondary shrink-0">
-          <span className="text-[10px] uppercase tracking-wider text-text-disabled font-semibold mr-1">Show</span>
-          <button
-            onClick={() => setFilterFindings(f => !f)}
-            className={clsx('px-1.5 py-0.5 rounded text-[11px] border font-mono transition-colors',
-              filterFindings
-                ? 'border-warning/30 bg-warning/10 text-warning'
-                : 'border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary'
-            )}
-          >★ findings</button>
-          <button
-            onClick={() => setFilterFindings(false)}
-            className="px-1.5 py-0.5 rounded text-[11px] border border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary font-mono"
-          >all</button>
-          <div className="flex-1" />
-          <button
-            onClick={() => setAutoScroll(a => !a)}
-            className={clsx('px-1.5 py-0.5 rounded text-[11px] border transition-colors',
-              autoScroll
-                ? 'border-success/25 bg-success/8 text-success'
-                : 'border-border-primary bg-bg-tertiary text-text-muted'
-            )}
-          >↓ auto-scroll</button>
-        </div>
+              {/* Thread detail body */}
+              <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+                {/* Metadata */}
+                <div className="flex items-center gap-4 text-xs text-text-muted">
+                  <span>depth <span className="text-text-secondary font-mono">{dt.depth}/{dt.max_depth}</span></span>
+                  <span>priority <span className="text-text-secondary font-mono">{dt.priority.toFixed(2)}</span></span>
+                  <span>created <span className="text-text-secondary">{new Date(dt.created_at).toLocaleTimeString()}</span></span>
+                </div>
 
-        {/* Event stream */}
-        <div
-          ref={streamRef}
-          className="flex-1 overflow-y-auto py-1"
-          onScroll={e => {
-            const el = e.currentTarget;
-            const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
-            setAutoScroll(atBottom);
-          }}
-        >
-          {streamEvents.length === 0 && (
-            <p className="text-xs text-text-muted text-center py-8">Waiting for events…</p>
-          )}
-          {streamEvents.map((ev, i) => {
-            const formatted = formatEventDetail(ev);
-            if (!formatted) return null;
-            const threadId = ev.type === 'finding' ? ev.payload.thread_id
-              : ev.type === 'step' ? ev.payload.thread_id
-              : ev.type === 'thread' ? ev.payload.id
-              : null;
-            const color = threadId ? (threadColor.get(threadId) ?? '#8796b0') : '#8796b0';
-            const threadIdx = threadId ? ordered.findIndex(t => t.id === threadId) : -1;
-            const threadLetter = threadIdx >= 0 && threadIdx < 26 ? String.fromCharCode(65 + threadIdx) : '?';
-            const ts = ev.type === 'finding' ? ev.payload.created_at
-              : ev.type === 'step' ? ev.payload.created_at
-              : ev.type === 'thread' ? ev.payload.created_at
-              : null;
-            const timeStr = ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
-            const isFinding = ev.type === 'finding';
-            const isHighFinding = isFinding && (ev.payload as ResearchFinding).confidence >= 0.7;
-            return (
-              <div
-                key={i}
-                className={clsx(
-                  'grid items-baseline px-3 py-0.5 border-l-2 transition-colors hover:bg-bg-secondary/50',
-                  isFinding
-                    ? isHighFinding
-                      ? 'bg-warning/5 border-l-warning/40'
-                      : 'bg-success/4 border-l-success/25'
-                    : 'border-l-transparent'
+                {/* Full query if differs from short */}
+                {dt.short_query && dt.query !== dt.short_query && (
+                  <p className="text-sm text-text-secondary leading-relaxed">{dt.query}</p>
                 )}
-                style={{ gridTemplateColumns: '52px 22px 80px 1fr', gap: '0' }}
-              >
-                <span className="text-[10px] text-text-disabled font-mono pr-2 truncate">{timeStr}</span>
-                <span className="pr-1 flex items-center">
-                  <div
-                    className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold font-mono"
-                    style={{ background: `${color}20`, color, border: `1px solid ${color}30` }}
-                  >{threadLetter}</div>
-                </span>
-                <span className={clsx('text-[11px] font-mono pr-2 truncate', formatted.typeColor)}>{formatted.typeLabel}</span>
-                <span className="text-[11px] text-text-muted truncate">
-                  {isHighFinding && <span className="text-warning mr-1">★</span>}
-                  {formatted.detail}
-                </span>
+
+                {/* Steps */}
+                {dtSteps.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-text-disabled mb-1.5">Steps · {dtSteps.length}</p>
+                    <div className="space-y-2">
+                      {dtSteps.map((step, si) => (
+                        <div key={step.id} className="space-y-1">
+                          <div className="flex items-center gap-2 text-[11px] text-text-muted">
+                            <span className="text-blue-400/80 font-mono shrink-0">llm</span>
+                            <span className="font-mono truncate">{step.model}</span>
+                            <span className="text-text-muted/70">{step.prompt_tokens + step.completion_tokens} tok</span>
+                            {step.cost_usd > 0 && <span className="text-text-muted/70">${step.cost_usd.toFixed(4)}</span>}
+                            <span className="text-text-disabled ml-auto">{new Date(step.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                          </div>
+                          {step.tool_calls.map((tc, ti) => (
+                            <div key={`${si}-${ti}`} className="pl-3 flex items-start gap-2">
+                              <span className="text-text-secondary/80 text-[11px] font-mono shrink-0">{tc.tool}</span>
+                              {tc.input && (
+                                <span className="text-[11px] text-text-primary break-words flex-1">
+                                  {tc.tool === 'web_search' && (tc.input as Record<string,unknown>).query
+                                    ? `"${(tc.input as Record<string,unknown>).query as string}"`
+                                    : <span className="text-text-secondary/70 text-[10px]">{JSON.stringify(tc.input).slice(0, 100)}</span>}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                          {step.error && (
+                            <p className="pl-3 text-[11px] text-red-400 break-words">{step.error}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Findings */}
+                {dtFindings.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-text-disabled mb-1.5">Findings · {dtFindings.length}</p>
+                    <div className="space-y-2">
+                      {dtFindings.map(f => (
+                        <div key={f.id} className="bg-bg-secondary border border-border-primary rounded border-l-2 px-3 py-2 space-y-1.5"
+                          style={{ borderLeftColor: dtColor + '80' }}>
+                          <p className="text-xs text-text-primary leading-relaxed">{f.content}</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <ConfBar label="conf" value={f.confidence} />
+                            <ConfBar label="novel" value={f.novelty} />
+                            {f.source_urls.map((url, i) => {
+                              let host = url;
+                              try { host = new URL(url).hostname; } catch { /* keep */ }
+                              return (
+                                <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                                  className="text-[10px] text-accent hover:underline truncate max-w-32">{host}</a>
+                              );
+                            })}
+                          </div>
+                          {f.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {f.tags.map(tag => (
+                                <span key={tag} className="px-1 py-0.5 rounded bg-bg-tertiary text-[10px] text-text-muted">{tag}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {dtSteps.length === 0 && dtFindings.length === 0 && (
+                  <p className="text-xs text-text-muted italic text-center py-8">No steps or findings yet.</p>
+                )}
               </div>
-            );
-          })}
-          {isRunning && (
-            <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-success font-mono">
-              <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-              <span>running</span>
-              <span className="text-text-disabled ml-2">{events.length} events · {findings.length} findings</span>
+            </>
+          );
+        })() : (
+          <>
+            {/* Thread color chips */}
+            <div className="flex items-center gap-0 border-b border-border-primary bg-bg-secondary overflow-x-auto shrink-0">
+              {ordered.filter(t => t.status !== 'pruned' || findingsByThread.get(t.id)?.length).slice(0, 8).map(t => {
+                const color = threadColor.get(t.id) ?? '#8796b0';
+                const label = (t.short_query ?? t.query.split('\n')[0]).slice(0, 14);
+                return (
+                  <div
+                    key={t.id}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 border-r border-border-primary shrink-0"
+                    style={{ background: `${color}08` }}
+                  >
+                    <div
+                      className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold font-mono shrink-0"
+                      style={{ background: `${color}20`, color, border: `1px solid ${color}35` }}
+                    >
+                      {ordered.indexOf(t) < 26 ? String.fromCharCode(65 + ordered.indexOf(t)) : '#'}
+                    </div>
+                    <div>
+                      <div className="text-[10px] leading-tight truncate max-w-20" style={{ color }}>{label}</div>
+                      <div className="text-[9px] text-text-disabled font-mono">{t.status === 'active' ? 'active' : t.status === 'queued' ? 'queued' : t.status}</div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          )}
-        </div>
+
+            {/* Filter bar */}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-primary bg-bg-secondary shrink-0">
+              <span className="text-[10px] uppercase tracking-wider text-text-disabled font-semibold mr-1">Show</span>
+              <button
+                onClick={() => setFilterFindings(f => !f)}
+                className={clsx('px-1.5 py-0.5 rounded text-[11px] border font-mono transition-colors',
+                  filterFindings
+                    ? 'border-warning/30 bg-warning/10 text-warning'
+                    : 'border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary'
+                )}
+              >★ findings</button>
+              <button
+                onClick={() => setFilterFindings(false)}
+                className="px-1.5 py-0.5 rounded text-[11px] border border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary font-mono"
+              >all</button>
+              <div className="flex-1" />
+              <button
+                onClick={() => setAutoScroll(a => !a)}
+                className={clsx('px-1.5 py-0.5 rounded text-[11px] border transition-colors',
+                  autoScroll
+                    ? 'border-success/25 bg-success/8 text-success'
+                    : 'border-border-primary bg-bg-tertiary text-text-muted'
+                )}
+              >↓ auto-scroll</button>
+            </div>
+
+            {/* Event stream */}
+            <div
+              ref={streamRef}
+              className="flex-1 overflow-y-auto py-1"
+              onScroll={e => {
+                const el = e.currentTarget;
+                const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+                setAutoScroll(atBottom);
+              }}
+            >
+              {streamEvents.length === 0 && (
+                <p className="text-xs text-text-muted text-center py-8">Waiting for events…</p>
+              )}
+              {streamEvents.map((ev, i) => {
+                const formatted = formatEventDetail(ev);
+                if (!formatted) return null;
+                const threadId = ev.type === 'finding' ? ev.payload.thread_id
+                  : ev.type === 'step' ? ev.payload.thread_id
+                  : ev.type === 'thread' ? ev.payload.id
+                  : null;
+                const color = threadId ? (threadColor.get(threadId) ?? '#8796b0') : '#8796b0';
+                const threadIdx = threadId ? ordered.findIndex(t => t.id === threadId) : -1;
+                const threadLetter = threadIdx >= 0 && threadIdx < 26 ? String.fromCharCode(65 + threadIdx) : '?';
+                const ts = ev.type === 'finding' ? ev.payload.created_at
+                  : ev.type === 'step' ? ev.payload.created_at
+                  : ev.type === 'thread' ? ev.payload.created_at
+                  : null;
+                const timeStr = ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+                const isFinding = ev.type === 'finding';
+                const isHighFinding = isFinding && (ev.payload as ResearchFinding).confidence >= 0.7;
+                return (
+                  <div
+                    key={i}
+                    className={clsx(
+                      'grid items-baseline px-3 py-0.5 border-l-2 transition-colors hover:bg-bg-secondary/50',
+                      isFinding
+                        ? isHighFinding
+                          ? 'bg-warning/5 border-l-warning/40'
+                          : 'bg-success/4 border-l-success/25'
+                        : 'border-l-transparent'
+                    )}
+                    style={{ gridTemplateColumns: '52px 22px 80px 1fr', gap: '0' }}
+                  >
+                    <span className="text-[10px] text-text-disabled font-mono pr-2 truncate">{timeStr}</span>
+                    <span className="pr-1 flex items-center">
+                      <div
+                        className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold font-mono"
+                        style={{ background: `${color}20`, color, border: `1px solid ${color}30` }}
+                      >{threadLetter}</div>
+                    </span>
+                    <span className={clsx('text-[11px] font-mono pr-2 truncate', formatted.typeColor)}>{formatted.typeLabel}</span>
+                    <span className="text-[11px] text-text-muted truncate">
+                      {isHighFinding && <span className="text-warning mr-1">★</span>}
+                      {formatted.detail}
+                    </span>
+                  </div>
+                );
+              })}
+              {isRunning && (
+                <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-success font-mono">
+                  <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                  <span>running</span>
+                  <span className="text-text-disabled ml-2">{events.length} events · {findings.length} findings</span>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -2163,6 +2382,7 @@ export function ResearchQueryDetailPage() {
   const { events } = useResearchStream(id!);
   const { data: envCheck } = useResearchEnvCheck();
   const { data: jobs = [] } = useResearchJobs(id!);
+  const { data: workers = [] } = useResearchWorkers();
   const updateQuery = useUpdateResearchQuery();
   const updateConfig = useUpdateQueryConfig();
   const runResearch = useRunResearch();
@@ -2343,6 +2563,18 @@ export function ResearchQueryDetailPage() {
                 <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
                 <span className="text-xs text-success">Running</span>
               </span>
+            )}
+            {workers.length > 0 && (
+              <div className="flex items-center gap-1 ml-3" title={`${workers.length} worker${workers.length !== 1 ? 's' : ''}`}>
+                {workers.map(w => (
+                  <span
+                    key={w.id}
+                    title={`Worker ${w.id}: ${w.status}${w.currentJob ? ` · running` : ''}`}
+                    className={clsx('w-2 h-2 rounded-full shrink-0', workerDotCls[w.status] ?? 'bg-text-muted/30')}
+                  />
+                ))}
+                <span className="text-xs text-text-disabled ml-0.5 font-mono">{workers.filter(w => w.status !== 'stopped').length}w</span>
+              </div>
             )}
           </div>
 
