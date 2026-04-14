@@ -383,10 +383,12 @@ export class ResearchEngine {
         error: err.message,
       });
 
+      const isRateLimit = err.message.includes('429') || err.message.includes('529') || err.message.toLowerCase().includes('rate');
       const priorErrors = steps.listSteps(this.sqlite, sessionId, { threadId })
         .filter(s => s.error).length;
+      // Rate-limit errors are transient — always requeue so the thread retries when limits clear
       threads.updateThread(this.sqlite, threadId, {
-        status: priorErrors <= 1 ? 'queued' : 'exhausted',
+        status: isRateLimit || priorErrors <= 1 ? 'queued' : 'exhausted',
       });
       throw err;
     }

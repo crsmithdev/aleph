@@ -14,6 +14,7 @@ import {
   createJob, getJob, getActiveJobForSession, cancelJob, listJobsForSession, cancelAllJobs, listAllJobs, listActiveJobs, jobStats,
   type JobStatus, type ThreadStatus,
   deleteQuery,
+  OpenRouterProvider,
   // Monitor imports
   createMonitor, getMonitor, listMonitors, updateMonitor,
   listSnapshots, listAlerts, updateAlert,
@@ -368,8 +369,8 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       const allQueryFindings = listFindings(app.sqlite, queryId);
       const allQueryThreads = listThreads(app.sqlite, queryId);
 
-      if (allQueryFindings.length < 3) {
-        return reply.status(400).send({ error: 'Not enough findings to generate an article (need at least 3)' });
+      if (allQueryFindings.length < 1) {
+        return reply.status(400).send({ error: 'No findings to generate an article from' });
       }
 
       const openrouterKey = process.env.OPENROUTER_API_KEY;
@@ -393,15 +394,17 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
         }
       }
 
-      const model = (query.config as any)?.model || 'deepseek/deepseek-chat';
-      const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${openrouterKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model,
-          messages: [{
-            role: 'user',
-            content: `You are a skilled encyclopedia editor. Using the research findings below as source material, write a comprehensive, well-structured article about: "${query.seed_query}"
+      const cfg = query.config as any;
+      const primaryModel: string = cfg?.model || 'deepseek/deepseek-chat';
+      const poolModels: string[] = cfg?.providers?.openrouter_models ?? [];
+      // Use all available models (primary first if not already in pool, then pool) for rotation
+      const allModels = poolModels.includes(primaryModel)
+        ? poolModels
+        : [primaryModel, ...poolModels];
+
+      const provider = new OpenRouterProvider({ apiKey: openrouterKey, models: allModels });
+
+      const prompt = `You are a skilled encyclopedia editor. Using the research findings below as source material, write a comprehensive, well-structured article about: "${query.seed_query}"
 
 Write it like a Wikipedia article:
 - Start with a concise lead section (2-3 paragraphs) that summarizes the entire topic
@@ -422,19 +425,17 @@ ${material}
 Available sources for citation:
 ${Array.from(allUrls.values()).map((s, i) => `[${i + 1}] ${s.title} — ${s.url}`).join('\n')}
 
-Write the full article in markdown.`,
-          }],
-          max_tokens: 8000,
-        }),
-      });
+Write the full article in markdown.`;
 
-      if (!resp.ok) {
-        const errText = await resp.text();
-        return reply.status(502).send({ error: `LLM call failed: ${errText}` });
+      let result: { text: string };
+      try {
+        result = await provider.complete(allModels[0], prompt, 4096);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return reply.status(502).send({ error: `LLM call failed: ${msg}` });
       }
 
-      const data = await resp.json() as { choices: Array<{ message: { content: string } }> };
-      let doc = data.choices[0]?.message?.content?.trim() ?? '';
+      let doc = result.text.trim();
       // Strip markdown code fences if the LLM wrapped the output
       doc = doc.replace(/^```(?:markdown)?\s*\n?/i, '').replace(/\n?```\s*$/, '');
 
