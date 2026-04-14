@@ -1558,6 +1558,14 @@ function LiveView({
                 <span className={clsx('text-[10px] px-1 py-0.5 rounded shrink-0', liveOriginColor[dt.origin] ?? 'bg-bg-tertiary text-text-muted')}>
                   {dt.origin.replace(/_/g, ' ')}
                 </span>
+                <a
+                  href={`/api/research/queries/${sessionId}/export/log?thread_id=${dt.id}`}
+                  download
+                  title="Save thread activity log (.md)"
+                  className="text-text-disabled hover:text-text-secondary shrink-0 p-0.5 rounded"
+                >
+                  <Icon name="download" size="xs" />
+                </a>
               </div>
 
               {/* Thread detail body */}
@@ -2437,20 +2445,22 @@ export function ResearchQueryDetailPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                aria-label="Export as Markdown"
-                onClick={() => { const a = document.createElement('a'); a.href = `/api/research/queries/${id}/export?format=md`; a.download = ''; a.click(); }}
+                aria-label="Save document as Markdown"
+                title="Save document (.md)"
+                onClick={() => { const a = document.createElement('a'); a.href = `/api/research/queries/${id}/export/document`; a.download = ''; a.click(); }}
               >
-                <Icon name="download" size="xs" className="mr-1" />
-                .md
+                <Icon name="article" size="xs" className="mr-1" />
+                doc
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
-                aria-label="Export as JSON"
-                onClick={() => { const a = document.createElement('a'); a.href = `/api/research/queries/${id}/export?format=json`; a.download = ''; a.click(); }}
+                aria-label="Save activity log as Markdown"
+                title="Save full activity log (.md) — all threads, steps, findings"
+                onClick={() => { const a = document.createElement('a'); a.href = `/api/research/queries/${id}/export/log`; a.download = ''; a.click(); }}
               >
-                <Icon name="download" size="xs" className="mr-1" />
-                .json
+                <Icon name="receipt_long" size="xs" className="mr-1" />
+                log
               </Button>
               {(session.status === 'active' || session.status === 'paused') && (
                 <Button
