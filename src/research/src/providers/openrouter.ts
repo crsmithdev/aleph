@@ -12,7 +12,7 @@ const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 
 // OpenRouter model metadata: pricing per 1M tokens + context window size
 const OPENROUTER_MODELS: Record<string, { input: number; output: number; contextWindow: number }> = {
-  'deepseek/deepseek-chat':                          { input: 0.14, output: 0.28, contextWindow: 65536 },
+  'deepseek/deepseek-chat':                          { input: 0.14, output: 0.28, contextWindow: 32768 },
   'deepseek/deepseek-r1-0528':                       { input: 0.50, output: 2.19, contextWindow: 65536 },
   'google/gemini-2.0-flash-001':                     { input: 0.10, output: 0.40, contextWindow: 1048576 },
   'meta-llama/llama-3.3-70b-instruct':               { input: 0.39, output: 0.39, contextWindow: 131072 },
@@ -112,6 +112,14 @@ export class OpenRouterProvider implements LLMProvider {
 
     if (!res.ok) {
       const body = await res.text();
+      // Try to surface the upstream error message clearly (502 wraps upstream 400/5xx)
+      if (res.status === 502) {
+        try {
+          const parsed = JSON.parse(body);
+          const upstream = parsed?.error?.message ?? body;
+          throw new Error(`OpenRouter 502 (upstream error): ${upstream}`);
+        } catch { /* fall through to generic */ }
+      }
       throw new Error(`OpenRouter ${res.status}: ${body}`);
     }
 
