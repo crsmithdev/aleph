@@ -447,11 +447,9 @@ function QueuedJobsTable({ jobs, queryMap, onCancel, cancelPending }: {
 
 // --- Job History Table ---
 
-function JobHistoryTable({ jobs, queryMap, onCancel, cancelPending }: {
+function JobHistoryTable({ jobs, queryMap }: {
   jobs: ResearchJob[];
   queryMap: Record<string, string>;
-  onCancel: (jobId: string) => void;
-  cancelPending: boolean;
 }) {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
@@ -515,22 +513,6 @@ function JobHistoryTable({ jobs, queryMap, onCancel, cancelPending }: {
           ? <LiveDuration from={row.started_at} />
           : <span className="text-sm tabular-nums text-text-muted whitespace-nowrap">{elapsed(row.started_at, row.completed_at)}</span>;
       },
-    },
-    {
-      key: 'created_at',
-      label: '',
-      shrink: true,
-      render: (row) =>
-        row.status === 'running' || row.status === 'pending' || row.status === 'claimed' ? (
-          <button
-            onClick={(e) => { e.stopPropagation(); onCancel(row.id); }}
-            disabled={cancelPending}
-            title="Cancel job"
-            className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-red-400 hover:bg-red-900/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            ✕
-          </button>
-        ) : null,
     },
   ];
 
@@ -668,8 +650,6 @@ export function ResearchWorkersPage() {
           <JobHistoryTable
             jobs={historyJobs}
             queryMap={queryMap}
-            onCancel={(jobId) => cancelJob.mutate({ jobId })}
-            cancelPending={cancelJob.isPending}
           />
         </div>
       </div>
