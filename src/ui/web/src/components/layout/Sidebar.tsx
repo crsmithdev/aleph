@@ -40,6 +40,7 @@ const navGroups: NavItem[][] = [
       label: 'Research',
       icon: 'search',
       children: [
+        { to: '/research/queries', label: 'Queries', icon: 'list' },
         { to: '/research/workers', label: 'Workers', icon: 'engineering' },
         { to: '/research/config', label: 'Providers', icon: 'tune' },
       ],

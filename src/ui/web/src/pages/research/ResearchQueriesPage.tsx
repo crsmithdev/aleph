@@ -2,17 +2,10 @@ import { Icon } from '../../components/ui/Icon';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
-import { useResearchQueries, useCreateResearchQuery, useUpdateResearchQuery, useResearchStats, useRunAllResearch, useStopAllResearch, useClearResearchDB } from '../../api/research-hooks';
+import { useResearchQueries, useCreateResearchQuery, useUpdateResearchQuery, useRunAllResearch, useStopAllResearch, useClearResearchDB } from '../../api/research-hooks';
 import { Button } from '../../components/ui/Button';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
-import { StatCard } from '../../components/data/StatCard';
-import { ObsControlBar } from '../../components/data/ObsControlBar';
-import { type TimeRange, type Granularity } from '../../components/data/TimeRangeSelector';
-import { ChartContainer } from '../../components/charts/ChartContainer';
-import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps, xAxisDateProps } from '../../components/charts/chartTheme';
-import { fmtCurrency, fmtNumber, fmtPct, granLabel } from '../../utils/format';
 
 type StatusFilter = 'all' | 'active' | 'paused' | 'completed';
 
@@ -38,10 +31,7 @@ const statusBadgeColors: Record<string, string> = {
 };
 
 export function ResearchQueriesPage() {
-  const [range, setRange] = useState<TimeRange>('30d');
-  const [granularity, setGranularity] = useState<Granularity>('day');
   const { data: sessions = [], isLoading, isError } = useResearchQueries();
-  const stats = useResearchStats(range, granularity);
   const createSession = useCreateResearchQuery();
   const updateSession = useUpdateResearchQuery();
   const runAll = useRunAllResearch();
@@ -56,7 +46,6 @@ export function ResearchQueriesPage() {
   const [gapAnalysis, setGapAnalysis] = useState<boolean>(() => localStorage.getItem('research_default_gap_analysis') !== 'false');
   const [maxGapSearches, setMaxGapSearches] = useState<number>(() => Number(localStorage.getItem('research_default_max_gap_searches') ?? '2'));
   const clearDb = useClearResearchDB();
-  const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   const visibleSessions = sessions.filter(s => s.status !== 'archived');
@@ -90,81 +79,31 @@ export function ResearchQueriesPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <ObsControlBar
-        title={
-          <div className="flex items-center justify-between w-full">
-            <div>
-              <h1 className="font-heading text-2xl font-bold text-text-primary">Deep Research</h1>
-              <p className="text-sm text-text-muted mt-0.5">
-                {visibleSessions.length} quer{visibleSessions.length !== 1 ? 'ies' : 'y'}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => stopAll.mutate()}
-                loading={stopAll.isPending}
-                disabled={runAll.isPending}
-              >Stop All</Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => runAll.mutate()}
-                loading={runAll.isPending}
-                disabled={stopAll.isPending}
-              >Run All</Button>
-              <Button onClick={() => setNewOpen(!newOpen)}>+ New query</Button>
-            </div>
-          </div>
-        }
-        range={range}
-        onRangeChange={setRange}
-        granularity={granularity}
-        onGranularityChange={setGranularity}
-      />
-
-      {stats.data && (
-        <>
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <StatCard label="Queries" value={fmtNumber(stats.data.totalSessions)} accent="default" detailContent={<><span className="text-success font-medium">{stats.data.activeSessions}</span><span className="text-text-muted"> active</span></>} />
-            <StatCard label="Findings" value={fmtNumber(stats.data.totalFindings)} accent="success" />
-            <StatCard label="Total Cost" value={fmtCurrency(stats.data.totalCost)} />
-            <StatCard
-              label="Avg Confidence"
-              value={fmtPct(stats.data.avgConfidence)}
-              accent={stats.data.avgConfidence >= 70 ? 'success' : stats.data.avgConfidence >= 40 ? 'warning' : 'error'}
-              detailContent={<><span className="text-text-muted">novelty </span><span className="text-text-secondary font-medium">{fmtPct(stats.data.avgNovelty)}</span></>}
-            />
-          </div>
-
-          {stats.data.byDay.length > 0 && (
-            <ChartContainer title={granLabel(granularity, "Activity")} chartType={chartType} onChartTypeChange={setChartType}>
-              {chartType === 'bar' ? (
-                <BarChart data={stats.data.byDay}>
-                  <CartesianGrid {...gridProps} />
-                  <XAxis dataKey="date" {...xAxisDateProps} />
-                  <YAxis {...axisProps} />
-                  <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                  <Legend {...legendProps} />
-                  <Bar dataKey="findings" fill={CHART_PALETTE[0]} name="Findings" />
-                  <Bar dataKey="sessions" fill={CHART_PALETTE[1]} name="Sessions" />
-                </BarChart>
-              ) : (
-                <AreaChart data={stats.data.byDay}>
-                  <CartesianGrid {...gridProps} />
-                  <XAxis dataKey="date" {...xAxisDateProps} />
-                  <YAxis {...axisProps} />
-                  <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                  <Legend {...legendProps} />
-                  <Area type="monotone" dataKey="findings" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} name="Findings" />
-                  <Area type="monotone" dataKey="sessions" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} name="Sessions" />
-                </AreaChart>
-              )}
-            </ChartContainer>
-          )}
-        </>
-      )}
+      <div className="sticky top-0 z-10 h-14 bg-bg-primary flex items-center justify-between gap-2 mb-4">
+        <div>
+          <h1 className="font-heading text-2xl font-bold text-text-primary">Queries</h1>
+          <p className="text-sm text-text-muted mt-0.5">
+            {visibleSessions.length} quer{visibleSessions.length !== 1 ? 'ies' : 'y'}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => stopAll.mutate()}
+            loading={stopAll.isPending}
+            disabled={runAll.isPending}
+          >Pause All</Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => runAll.mutate()}
+            loading={runAll.isPending}
+            disabled={stopAll.isPending}
+          >Resume All</Button>
+          <Button size="sm" onClick={() => setNewOpen(!newOpen)}>+ New query</Button>
+        </div>
+      </div>
 
       {newOpen && (
         <form onSubmit={handleCreate} className="bg-bg-secondary border border-border-primary rounded-lg p-4 flex gap-3 items-center">
