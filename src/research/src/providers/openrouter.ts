@@ -16,6 +16,8 @@ const OPENROUTER_MODELS: Record<string, { input: number; output: number; context
   'deepseek/deepseek-r1-0528':                       { input: 0.50, output: 2.19, contextWindow: 65536 },
   'google/gemini-2.0-flash-001':                     { input: 0.10, output: 0.40, contextWindow: 1048576 },
   'meta-llama/llama-3.3-70b-instruct':               { input: 0.39, output: 0.39, contextWindow: 131072 },
+  'qwen/qwen-2.5-72b-instruct':                      { input: 0.13, output: 0.40, contextWindow: 131072 },
+  'mistralai/mixtral-8x7b-instruct':                 { input: 0.24, output: 0.24, contextWindow: 32768  },
   // Free tier models (no credit cost, subject to rate limits — use rotation)
   'openrouter/free':                                  { input: 0,    output: 0,    contextWindow: 200000 },
   'meta-llama/llama-3.3-70b-instruct:free':          { input: 0,    output: 0,    contextWindow: 65536 },
@@ -69,7 +71,9 @@ export class OpenRouterProvider implements LLMProvider {
         const msg = lastError.message;
         // On rate-limit or credit errors, rotate to next model in the pool.
         // Brief pause before retrying on rate-limit (not credit) errors to let upstream recover.
-        if (msg.includes('429') || msg.includes('402') || msg.includes('529') || msg.includes('rate')) {
+        const isRotatable = msg.includes('429') || msg.includes('402') || msg.includes('404') ||
+          msg.includes('529') || msg.includes('rate');
+        if (isRotatable) {
           if (msg.includes('429') || msg.includes('529') || msg.includes('rate')) {
             await new Promise(r => setTimeout(r, 1500));
           }
@@ -112,7 +116,9 @@ export class OpenRouterProvider implements LLMProvider {
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
         const msg = lastError.message;
-        if (msg.includes('429') || msg.includes('402') || msg.includes('529') || msg.includes('rate')) {
+        const isRotatable = msg.includes('429') || msg.includes('402') || msg.includes('404') ||
+          msg.includes('529') || msg.includes('rate');
+        if (isRotatable) {
           if (msg.includes('429') || msg.includes('529') || msg.includes('rate')) {
             await new Promise(r => setTimeout(r, 1500));
           }
