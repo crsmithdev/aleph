@@ -676,8 +676,6 @@ export function useResearchStream(sessionId: string) {
               return [...old, parsed.payload];
             }
           );
-          qc.invalidateQueries({ queryKey: ['research-running', sessionId] });
-          qc.invalidateQueries({ queryKey: ['research-activity', sessionId] });
         }
 
         setEvents(prev => [parsed, ...prev].slice(0, 500));
