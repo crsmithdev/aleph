@@ -384,7 +384,7 @@ function QueuedJobsTable({ jobs, queryMap, onCancel, cancelPending }: {
       key: 'id',
       label: 'Job',
       shrink: true,
-      render: (row) => <span className="font-mono text-sm text-text-muted whitespace-nowrap">{row.id.slice(0, 8)}</span>,
+      render: (row) => <span className="font-mono text-sm text-text-muted whitespace-nowrap">{row.id}</span>,
     },
     {
       key: 'session_id',
@@ -460,7 +460,7 @@ function JobHistoryTable({ jobs, queryMap, onCancel, cancelPending }: {
       key: 'id',
       label: 'Job',
       shrink: true,
-      render: (row) => <span className="font-mono text-sm text-text-muted whitespace-nowrap">{row.id.slice(0, 8)}</span>,
+      render: (row) => <span className="font-mono text-sm text-text-muted whitespace-nowrap">{row.id}</span>,
     },
     {
       key: 'session_id',

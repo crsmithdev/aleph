@@ -105,7 +105,7 @@ export function DataTable<T>({
                   col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left',
                   col.sortable && 'cursor-pointer select-none hover:text-text-secondary'
                 )}
-                style={col.shrink ? { width: '1px' } : col.width ? { width: col.width } : undefined}
+                style={col.shrink ? { width: '1px' } : col.width ? { width: col.width } : { width: '100%' }}
                 onClick={col.sortable ? () => handleSort(col.key) : undefined}
               >
                 <span className="inline-flex items-center gap-1">
@@ -147,9 +147,9 @@ export function DataTable<T>({
                       className={clsx(
                         'px-4 py-2.5 align-middle whitespace-nowrap',
                         col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left',
-                        col.width && 'overflow-hidden text-ellipsis'
+                        (col.width || (!col.shrink && !col.width)) && 'overflow-hidden text-ellipsis'
                       )}
-                      style={col.shrink ? { width: '1px' } : col.width ? { width: col.width, maxWidth: col.width } : undefined}
+                      style={col.shrink ? { width: '1px' } : col.width ? { width: col.width, maxWidth: col.width } : { width: '100%', maxWidth: 0 }}
                     >
                       {col.render
                         ? col.render(row)
