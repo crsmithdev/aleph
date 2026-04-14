@@ -1285,13 +1285,10 @@ function LiveView({
   }, [streamEvents, autoScroll]);
 
   return (
-    <div
-      className="flex border border-border-primary rounded-lg overflow-hidden"
-      style={{ height: 'calc(100vh - 290px)', minHeight: '520px' }}
-    >
+    <div className="flex h-full overflow-hidden">
       {/* ── Pane 1: Thread controls (left) ── */}
       <div className="w-52 shrink-0 flex flex-col border-r border-border-primary bg-bg-secondary overflow-hidden">
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-border-primary shrink-0">
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-border-primary shrink-0 h-[37px]">
           {isRunning && <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shrink-0" />}
           <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary">Threads</span>
           <span className="text-xs text-text-disabled font-mono ml-auto">{threads.length}</span>
@@ -1381,7 +1378,7 @@ function LiveView({
 
       {/* ── Pane 2: Findings (center) ── */}
       <div className="flex flex-col overflow-hidden border-r border-border-primary" style={{ width: '38%' }}>
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-border-primary bg-bg-secondary shrink-0">
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-border-primary bg-bg-secondary shrink-0 h-[37px]">
           <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary">Findings</span>
           {findings.length > 0 && (
             <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-success/10 border border-success/20 text-success">{findings.length}</span>
@@ -1549,7 +1546,7 @@ function LiveView({
           return (
             <>
               {/* Thread detail header */}
-              <div className="flex items-center gap-2 px-3 py-2 border-b border-border-primary bg-bg-secondary shrink-0">
+              <div className="flex items-center gap-2 px-3 py-2 border-b border-border-primary bg-bg-secondary shrink-0 h-[37px]">
                 <button
                   onClick={() => setDetailThreadId(null)}
                   className="text-[11px] text-text-muted hover:text-text-primary font-mono px-1.5 py-0.5 rounded border border-border-primary hover:border-border-secondary transition-colors shrink-0"
@@ -1654,30 +1651,26 @@ function LiveView({
           );
         })() : (
           <>
-            {/* Thread color chips */}
-            <div className="flex items-center gap-0 border-b border-border-primary bg-bg-secondary overflow-x-auto shrink-0">
-              {ordered.filter(t => t.status !== 'pruned' || findingsByThread.get(t.id)?.length).slice(0, 8).map(t => {
-                const color = threadColor.get(t.id) ?? '#8796b0';
-                const label = (t.short_query ?? t.query.split('\n')[0]).slice(0, 14);
-                return (
-                  <div
-                    key={t.id}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 border-r border-border-primary shrink-0"
-                    style={{ background: `${color}08` }}
-                  >
+            {/* Event log header + thread legend */}
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-border-primary bg-bg-secondary shrink-0 h-[37px]">
+              <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary shrink-0">Event Log</span>
+              <div className="flex items-center gap-1 ml-2 overflow-hidden">
+                {ordered.filter(t => t.status !== 'pruned' || findingsByThread.get(t.id)?.length).slice(0, 20).map(t => {
+                  const color = threadColor.get(t.id) ?? '#8796b0';
+                  const label = t.short_query ?? t.query.split('\n')[0];
+                  const idx = ordered.indexOf(t);
+                  const letter = idx < 26 ? String.fromCharCode(65 + idx) : '#';
+                  return (
                     <div
-                      className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold font-mono shrink-0"
+                      key={t.id}
+                      title={`${letter}: ${label} (${t.status})`}
+                      className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold font-mono shrink-0 cursor-default"
                       style={{ background: `${color}20`, color, border: `1px solid ${color}35` }}
-                    >
-                      {ordered.indexOf(t) < 26 ? String.fromCharCode(65 + ordered.indexOf(t)) : '#'}
-                    </div>
-                    <div>
-                      <div className="text-[10px] leading-tight truncate max-w-20" style={{ color }}>{label}</div>
-                      <div className="text-[9px] text-text-disabled font-mono">{t.status === 'active' ? 'active' : t.status === 'queued' ? 'queued' : t.status}</div>
-                    </div>
-                  </div>
-                );
-              })}
+                    >{letter}</div>
+                  );
+                })}
+              </div>
+              <span className="text-xs text-text-disabled font-mono ml-auto">{events.length}</span>
             </div>
 
             {/* Filter bar */}
@@ -1733,7 +1726,7 @@ function LiveView({
                   : ev.type === 'step' ? ev.payload.created_at
                   : ev.type === 'thread' ? ev.payload.created_at
                   : null;
-                const timeStr = ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+                const timeStr = ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '';
                 const isFinding = ev.type === 'finding';
                 const isHighFinding = isFinding && (ev.payload as ResearchFinding).confidence >= 0.7;
                 return (
@@ -1747,7 +1740,7 @@ function LiveView({
                           : 'bg-success/4 border-l-success/25'
                         : 'border-l-transparent'
                     )}
-                    style={{ gridTemplateColumns: '52px 22px 80px 1fr', gap: '0' }}
+                    style={{ gridTemplateColumns: '64px 22px 80px 1fr', gap: '0' }}
                   >
                     <span className="text-[10px] text-text-disabled font-mono pr-2 truncate">{timeStr}</span>
                     <span className="pr-1 flex items-center">
@@ -2579,7 +2572,7 @@ export function ResearchQueryDetailPage() {
           </div>
 
           {/* Tab bar */}
-          <div className="flex gap-1 mt-3 -mb-[17px]">
+          <div className="flex gap-1 mt-3 -mb-px relative z-10">
             {([
               { key: 'document' as const, label: `Document (${findingsData.length})` },
               { key: 'live' as const, label: `Live (${threadsData.length})` },
@@ -2588,7 +2581,7 @@ export function ResearchQueryDetailPage() {
             ]).map(t => (
               <button key={t.key} onClick={() => setTab(t.key)}
                 className={clsx('px-3 py-2 text-sm font-medium border-b-2 transition-colors',
-                  tab === t.key ? 'border-accent text-accent' : 'border-transparent text-text-muted hover:text-text-secondary')}>
+                  tab === t.key ? 'border-accent text-accent bg-bg-primary' : 'border-transparent text-text-muted hover:text-text-secondary')}>
                 {t.label}
               </button>
             ))}
@@ -2597,19 +2590,8 @@ export function ResearchQueryDetailPage() {
         </div>
 
         {/* Tab content */}
-        <div className="flex-1 overflow-y-auto px-6 py-5">
-          {tab === 'document' && (
-            <DocumentView
-              findings={findingsData}
-              threads={threadsData}
-              onNavigateToThread={navigateToThread}
-              onNavigateToMap={navigateToMap}
-              document={session?.document || undefined}
-              sessionId={id!}
-              title={session?.title}
-            />
-          )}
-          {tab === 'live' && (
+        {tab === 'live' ? (
+          <div className="flex-1 overflow-hidden min-h-0">
             <LiveView
               threads={threadsData}
               findings={findingsData}
@@ -2626,22 +2608,36 @@ export function ResearchQueryDetailPage() {
               onNavigateToDocument={navigateToDocument}
               onNavigateToMap={navigateToMap}
             />
-          )}
-          {tab === 'map' && (
-            <MapView
-              threads={threadsData}
-              findingCounts={findingCounts}
-              onNavigateToLive={navigateToThread}
-            />
-          )}
-          {tab === 'settings' && (
-            <SettingsView
-              session={session}
-              sessionId={id!}
-              onDelete={() => deleteQuery.mutate({ id: id! }, { onSuccess: () => { window.location.href = '/research/queries'; } })}
-            />
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto px-6 py-5">
+            {tab === 'document' && (
+              <DocumentView
+                findings={findingsData}
+                threads={threadsData}
+                onNavigateToThread={navigateToThread}
+                onNavigateToMap={navigateToMap}
+                document={session?.document || undefined}
+                sessionId={id!}
+                title={session?.title}
+              />
+            )}
+            {tab === 'map' && (
+              <MapView
+                threads={threadsData}
+                findingCounts={findingCounts}
+                onNavigateToLive={navigateToThread}
+              />
+            )}
+            {tab === 'settings' && (
+              <SettingsView
+                session={session}
+                sessionId={id!}
+                onDelete={() => deleteQuery.mutate({ id: id! }, { onSuccess: () => { window.location.href = '/research/queries'; } })}
+              />
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

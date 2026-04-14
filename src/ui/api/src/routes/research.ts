@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
+import { readSessionLog, sessionLogPath } from '../research-logger.js';
 import { resolve, dirname } from 'path';
 import {
   listQueries, getQuery, createQuery, updateQuery, getQueryCost, getResearchStats,
@@ -1080,6 +1081,17 @@ Write the full article in markdown.`;
       clearInterval(pollInterval);
       clearInterval(heartbeatInterval);
       if (!reply.raw.writableEnded) reply.raw.end();
+    }
+  );
+
+  // === Event log (pre-built, served for fast initial load) ===
+  app.get<{ Params: { id: string } }>(
+    '/queries/:id/events',
+    async (req, reply) => {
+      const query = getQuery(app.sqlite, req.params.id);
+      if (!query) return reply.status(404).send({ error: 'Query not found' });
+      const events = readSessionLog(req.params.id);
+      return { events, log_path: existsSync(sessionLogPath(req.params.id)) ? sessionLogPath(req.params.id) : null };
     }
   );
 

@@ -26,6 +26,7 @@ import { execSync } from 'child_process';
 import { claudePaths, dataPaths, getMemoryDbPath } from '@construct/data';
 import { createLogStream } from './logger.js';
 import { WorkerSupervisor } from './worker-supervisor.js';
+import { startResearchLogger } from './research-logger.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -125,6 +126,11 @@ export async function createApp(opts?: { dbUrl?: string; workerCount?: number; s
 
   const historyService = new HistoryService(db, eventBus);
   historyService.start();
+
+  // Start background research event logger (only in non-test environments)
+  if (opts?.dbUrl !== ':memory:') {
+    startResearchLogger(sqlite);
+  }
 
   await app.register(cors, {
     origin: (origin, cb) => {
