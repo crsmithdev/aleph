@@ -680,7 +680,7 @@ export function useResearchStream(sessionId: string) {
           );
         }
 
-        setEvents(prev => [parsed, ...prev].slice(0, 500));
+        setEvents(prev => [parsed, ...prev].slice(0, 1000));
       } catch { /* ignore parse errors */ }
     };
 

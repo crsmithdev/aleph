@@ -1154,6 +1154,7 @@ const liveOriginColor: Record<string, string> = {
 };
 
 const THREAD_PALETTE = ['#c792ea', '#82aaff', '#c3e88d', '#89ddff', '#ffcb6b', '#f78c6c', '#f07178', '#b2ccd6'];
+const RENDER_WINDOW = 500; // max DOM nodes in the event stream list
 
 type Chip = { text: string; color: string };
 
@@ -1714,7 +1715,12 @@ function LiveView({
             {streamEvents.length === 0 && (
               <p className="text-xs text-text-muted text-center py-8">Waiting for events…</p>
             )}
-            {streamEvents.map(ev => {
+            {streamEvents.length > RENDER_WINDOW && (
+              <p className="text-[10px] text-text-muted text-center py-1.5 border-b border-border-primary/20">
+                {streamEvents.length - RENDER_WINDOW} older events not shown
+              </p>
+            )}
+            {streamEvents.slice(-RENDER_WINDOW).map(ev => {
               const formatted = formatEventDetail(ev);
               if (!formatted) return null;
               const evKey = ev.type === 'thread'

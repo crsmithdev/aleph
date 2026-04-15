@@ -977,7 +977,7 @@ Write the full article in markdown.`;
             }
           }
 
-          const steps = listSteps(app.sqlite, queryId, { limit: 200 });
+          const steps = listSteps(app.sqlite, queryId, { limit: 1000 });
           for (const s of steps) {
             if (!sentSteps.has(s.id)) {
               sentSteps.add(s.id);
