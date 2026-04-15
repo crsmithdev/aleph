@@ -1168,18 +1168,22 @@ function stepChips(s: ResearchStep): Chip[] {
   if (m) {
     if (m.decision === 'gap_analysis') {
       const hasGaps = m.has_gaps as boolean;
-      chips.push({ text: hasGaps ? `${m.gap_count as number} gaps` : 'no gaps', color: hasGaps ? 'text-warning' : 'text-text-muted' });
+      const gapCount = m.gap_count as number;
+      const gapMax = m.gap_max as number | undefined;
+      const gapText = hasGaps ? (gapMax != null ? `${gapCount}/${gapMax} gaps` : `${gapCount} gaps`) : 'no gaps';
+      chips.push({ text: gapText, color: hasGaps ? 'text-warning' : 'text-text-muted' });
     } else if (m.decision === 'synthesis') {
       chips.push({ text: `conf ${((m.confidence as number) * 100).toFixed(0)}%`, color: 'text-success' });
       chips.push({ text: `nov ${((m.novelty as number) * 100).toFixed(0)}%`, color: 'text-blue-400' });
     } else if (m.decision === 'dedup') {
       const dup = m.is_duplicate as boolean;
-      chips.push({ text: dup ? 'duplicate' : 'unique', color: dup ? 'text-error' : 'text-text-muted' });
+      chips.push({ text: dup ? 'duplicate' : 'unique', color: dup ? 'text-error' : 'text-success' });
       chips.push({ text: `vs ${m.existing_count as number}`, color: 'text-text-muted' });
     } else if (m.decision === 'follow_up_eval') {
-      chips.push({ text: `${m.accepted_count as number}✓ ${m.rejected_count as number}✗`, color: 'text-text-muted' });
+      chips.push({ text: `${m.accepted_count as number}✓`, color: 'text-success' });
+      chips.push({ text: `${m.rejected_count as number}✗`, color: 'text-error/70' });
     } else if (m.decision === 'formulate_queries') {
-      chips.push({ text: `${(m.queries as string[]).length} queries`, color: 'text-text-muted' });
+      chips.push({ text: `${(m.queries as string[]).length} queries`, color: 'text-blue-400' });
     }
   }
   return chips;
