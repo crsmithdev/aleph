@@ -512,10 +512,12 @@ function ThreadLiveRow({
                           <span className="text-xs text-text-muted/70" title="Quality score">quality:{(c.quality_score*100).toFixed(0)}%</span>
                           <span className="text-xs text-text-muted/70" title="Rank score (aggregate)">rank:{(c.rank_score*100).toFixed(0)}%</span>
                           <span className="text-xs text-text-muted/70" title="Distance from parent">dist:{(c.distance_from_parent*100).toFixed(0)}%</span>
-                          <span className={clsx('text-xs', c.jaccard_similarity > (threadFindings[0]?.follow_up_analysis?.similarity_threshold ?? 0.75) ? 'text-red-400' : 'text-text-muted/70')}
-                            title="Jaccard similarity (too-similar = rejected)">
-                            Jaccard:{(c.jaccard_similarity*100).toFixed(0)}%
-                          </span>
+                          {c.dedup_similarity > 0 && (
+                            <span className={clsx('text-xs', c.dedup_similarity > (threadFindings[0]?.follow_up_analysis?.similarity_threshold ?? 0.75) ? 'text-red-400' : 'text-text-muted/70')}
+                              title="Max similarity vs previously-accepted candidates (deduplication score)">
+                              dedup:{(c.dedup_similarity*100).toFixed(0)}%
+                            </span>
+                          )}
                           {c.embedding_similarity !== null && c.embedding_similarity !== undefined && (
                             <span className="text-xs text-text-muted/70" title="Embedding (cosine) similarity">emb:{(c.embedding_similarity*100).toFixed(0)}%</span>
                           )}

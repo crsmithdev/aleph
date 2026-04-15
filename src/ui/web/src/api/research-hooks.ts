@@ -57,7 +57,7 @@ export interface ResearchFinding {
     candidates: Array<{
       text: string;
       quality_score: number;
-      jaccard_similarity: number;
+      dedup_similarity: number;
       embedding_similarity: number | null;
       llm_similarity: number | null;
       similarity_method: string;

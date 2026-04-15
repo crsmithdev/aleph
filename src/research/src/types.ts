@@ -254,7 +254,7 @@ export interface ToolCallRecord {
 export interface FollowUpCandidate {
   text: string;
   quality_score: number;       // 0–1: relevance + specificity + focus
-  jaccard_similarity: number;  // vs most-similar accepted question
+  dedup_similarity: number;    // max similarity vs previously-accepted candidates (0.0 = first candidate, no prior comparisons)
   embedding_similarity: number | null;
   llm_similarity: number | null;
   similarity_method: 'jaccard' | 'embedding' | 'llm';

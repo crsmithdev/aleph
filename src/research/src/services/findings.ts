@@ -2,6 +2,20 @@ import type { Sqlite } from '@construct/data';
 import { generateId } from './id.js';
 import type { ResearchFinding, FollowUpAnalysis } from '../types.js';
 
+function migrateFollowUpAnalysis(analysis: FollowUpAnalysis): FollowUpAnalysis {
+  return {
+    ...analysis,
+    candidates: analysis.candidates?.map(c => {
+      const legacy = c as unknown as Record<string, unknown>;
+      if ('jaccard_similarity' in legacy && !('dedup_similarity' in legacy)) {
+        const { jaccard_similarity, ...rest } = legacy;
+        return { ...rest, dedup_similarity: jaccard_similarity } as typeof c;
+      }
+      return c;
+    }),
+  };
+}
+
 function rowToFinding(row: Record<string, unknown>): ResearchFinding {
   return {
     ...row,
@@ -10,7 +24,7 @@ function rowToFinding(row: Record<string, unknown>): ResearchFinding {
     source_url_meta: JSON.parse((row.source_url_meta as string) ?? '[]'),
     tags: JSON.parse(row.tags as string),
     follow_ups: JSON.parse((row.follow_ups ?? row.follow_up_questions ?? '[]') as string),
-    follow_up_analysis: row.follow_up_analysis ? JSON.parse(row.follow_up_analysis as string) : undefined,
+    follow_up_analysis: row.follow_up_analysis ? migrateFollowUpAnalysis(JSON.parse(row.follow_up_analysis as string)) : undefined,
   } as unknown as ResearchFinding;
 }
 

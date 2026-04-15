@@ -510,12 +510,12 @@ export class ResearchEngine {
       similarity_threshold: followUpAnalysis.similarity_threshold,
       candidates: followUpAnalysis.candidates.map((c: {
         text: string; accepted: boolean; rejection_reason: string | null;
-        jaccard_similarity: number; rank_score: number;
+        dedup_similarity: number; rank_score: number;
       }) => ({
         text: c.text.slice(0, 120),
         accepted: c.accepted,
         reason: c.rejection_reason,
-        sim: Math.round(c.jaccard_similarity * 100) / 100,
+        sim: Math.round(c.dedup_similarity * 100) / 100,
         rank: Math.round(c.rank_score * 100) / 100,
       })),
     });
@@ -1071,7 +1071,7 @@ Return ONLY valid JSON. No markdown fences.`,
         candidates.push({
           text: question,
           quality_score,
-          jaccard_similarity: 1.0,
+          dedup_similarity: 1.0,
           embedding_similarity: null,
           llm_similarity: null,
           similarity_method: 'jaccard',
@@ -1107,7 +1107,7 @@ Return ONLY valid JSON. No markdown fences.`,
       const candidate: FollowUpCandidate = {
         text: question,
         quality_score,
-        jaccard_similarity: maxSimilarity,
+        dedup_similarity: maxSimilarity,
         embedding_similarity: embeddingSim,
         llm_similarity: llmSim,
         similarity_method: usedMethod,
