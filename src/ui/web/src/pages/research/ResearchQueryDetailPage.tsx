@@ -1807,11 +1807,12 @@ function LiveView({
                 <div
                   key={evKey}
                   className={clsx(
-                    'border-b border-border-primary/20 transition-colors',
+                    'border-b border-border-primary/20 border-l-2 transition-colors',
                     isFinding
                       ? isHighFinding ? 'bg-warning/5' : 'bg-success/4'
                       : isExpanded ? 'bg-bg-secondary/60' : 'hover:bg-bg-secondary/40'
                   )}
+                  style={{ borderLeftColor: `${color}${isHighFinding ? 'cc' : '60'}` }}
                 >
                   {/* Collapsed row */}
                   <div
@@ -1819,12 +1820,8 @@ function LiveView({
                     tabIndex={0}
                     onClick={() => setExpandedEventKey(prev => prev === evKey ? null : evKey)}
                     onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setExpandedEventKey(prev => prev === evKey ? null : evKey)}
-                    className="grid items-baseline px-3 py-1 border-l-2 cursor-pointer focus:outline-none"
-                    style={{
-                      gridTemplateColumns: '44px minmax(140px, 140px) 1fr',
-                      gap: '0',
-                      borderLeftColor: `${color}${isHighFinding ? '90' : '50'}`,
-                    }}
+                    className="grid items-baseline px-3 py-1 cursor-pointer focus:outline-none"
+                    style={{ gridTemplateColumns: '44px minmax(140px, 140px) 1fr', gap: '0' }}
                   >
                     <span className="text-sm text-text-muted font-mono pr-2 truncate">{timeStr}</span>
                     <span className={clsx('text-sm font-mono pr-2 truncate', formatted.typeColor)}>{formatted.typeLabel}</span>
@@ -1837,7 +1834,7 @@ function LiveView({
                   </div>
                   {/* Expanded content */}
                   {isExpanded && (
-                    <div className="px-3 pb-2.5 pt-1 space-y-1.5 border-l-2 ml-[64px]" style={{ borderLeftColor: `${color}40` }}>
+                    <div className="px-3 pb-2.5 pt-1 space-y-1.5 border-l-2 ml-[54px]" style={{ borderLeftColor: `${color}40` }}>
                       {ev.type === 'step' && (() => {
                         const s = ev.payload;
                         return (
