@@ -1279,7 +1279,8 @@ function LiveView({
   const redoThread = useRedoThread();
   const streamRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
-  const [filterFindings, setFilterFindings] = useState(false);
+  const [filterType, setFilterType] = useState<'all' | 'finding' | 'thread' | 'step' | 'search' | 'fetch' | 'error'>('all');
+  const [searchText, setSearchText] = useState('');
   const [expandedFindingId, setExpandedFindingId] = useState<string | null>(null);
   const [filterThreadId, setFilterThreadId] = useState<string | null>(null);
   const [expandedEventKey, setExpandedEventKey] = useState<string | null>(null);
@@ -1377,7 +1378,12 @@ function LiveView({
     });
 
     let evs = enriched.reverse();
-    if (filterFindings) evs = evs.filter(e => e.type === 'finding');
+    if (filterType === 'finding') evs = evs.filter(e => e.type === 'finding');
+    else if (filterType === 'thread') evs = evs.filter(e => e.type === 'thread');
+    else if (filterType === 'step') evs = evs.filter(e => e.type === 'step');
+    else if (filterType === 'search') evs = evs.filter(e => e.type === 'step' && (e.payload.tool_calls ?? []).some(tc => tc.tool === 'web_search' || tc.tool === 'search_web' || tc.tool === 'search'));
+    else if (filterType === 'fetch') evs = evs.filter(e => e.type === 'step' && (e.payload.tool_calls ?? []).some(tc => tc.tool === 'fetch_url' || tc.tool === 'fetch'));
+    else if (filterType === 'error') evs = evs.filter(e => e.type === 'step' && !!(e.payload as ResearchStep).error);
     if (filterThreadId) {
       evs = evs.filter(e => {
         if (e.type === 'finding') return (e.payload as ResearchFinding).thread_id === filterThreadId;
@@ -1386,8 +1392,22 @@ function LiveView({
         return true;
       });
     }
+    if (searchText.trim()) {
+      const q = searchText.trim().toLowerCase();
+      evs = evs.filter(e => {
+        const f = formatEventDetail(e);
+        if (!f) return false;
+        const haystack = [f.typeLabel, f.detail, ...(f.chips?.map(c => c.text) ?? [])].join(' ').toLowerCase();
+        // fuzzy: all query chars must appear in order
+        let qi = 0;
+        for (let i = 0; i < haystack.length && qi < q.length; i++) {
+          if (haystack[i] === q[qi]) qi++;
+        }
+        return qi === q.length;
+      });
+    }
     return evs;
-  }, [events, filterFindings, filterThreadId]);
+  }, [events, filterType, filterThreadId, searchText]);
 
   useLayoutEffect(() => {
     if (autoScroll && streamRef.current) {
@@ -1698,34 +1718,50 @@ function LiveView({
               </div>
             )}
             <span className="text-sm text-text-muted font-mono ml-auto shrink-0">
-              {filterThreadId ? `${streamEvents.length} / ${events.length}` : events.length}
+              {streamEvents.length !== events.length ? `${streamEvents.length} / ${events.length}` : events.length}
             </span>
           </div>
 
           {/* Filter bar */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-primary bg-bg-secondary shrink-0">
-            <span className="text-sm text-text-muted font-semibold mr-1">Show</span>
+            <input
+              type="text"
+              value={searchText}
+              onChange={e => setSearchText(e.target.value)}
+              placeholder="search…"
+              className="flex-1 min-w-0 bg-bg-tertiary border border-border-primary rounded px-2 py-0.5 text-sm text-text-secondary placeholder:text-text-disabled focus:outline-none focus:border-accent/50"
+            />
+            <select
+              value={filterType}
+              onChange={e => setFilterType(e.target.value as typeof filterType)}
+              className="bg-bg-tertiary border border-border-primary rounded px-1.5 py-0.5 text-sm text-text-secondary focus:outline-none focus:border-accent/50 shrink-0"
+            >
+              <option value="all">all</option>
+              <option value="finding">findings</option>
+              <option value="thread">threads</option>
+              <option value="step">steps</option>
+              <option value="search">search</option>
+              <option value="fetch">fetch</option>
+              <option value="error">errors</option>
+            </select>
             <button
-              onClick={() => setFilterFindings(f => !f)}
-              className={clsx('px-1.5 py-0.5 rounded text-sm border font-mono transition-colors',
-                filterFindings
-                  ? 'border-warning/30 bg-warning/10 text-warning'
-                  : 'border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary'
-              )}
-            >★ findings</button>
+              onClick={() => { if (streamRef.current) streamRef.current.scrollTop = 0; }}
+              title="Scroll to first"
+              className="px-1.5 py-0.5 rounded text-sm border border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary transition-colors font-mono"
+            >▲</button>
             <button
-              onClick={() => setFilterFindings(false)}
-              className="px-1.5 py-0.5 rounded text-sm border border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary font-mono"
-            >all</button>
-            <div className="flex-1" />
+              onClick={() => { if (streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight; }}
+              title="Scroll to last"
+              className="px-1.5 py-0.5 rounded text-sm border border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary transition-colors font-mono"
+            >▼</button>
             <button
               onClick={() => setAutoScroll(a => !a)}
-              className={clsx('px-1.5 py-0.5 rounded text-sm border transition-colors',
+              className={clsx('px-1.5 py-0.5 rounded text-sm border transition-colors shrink-0',
                 autoScroll
                   ? 'border-success/25 bg-success/8 text-success'
                   : 'border-border-primary bg-bg-tertiary text-text-muted'
               )}
-            >↓ auto-scroll</button>
+            >↓ auto</button>
           </div>
 
           {/* Event stream */}
@@ -1797,7 +1833,7 @@ function LiveView({
                     )}
                     style={{ gridTemplateColumns: '44px 22px 120px 1fr', gap: '0' }}
                   >
-                    <span className="text-sm text-text-muted/50 font-mono pr-2 truncate">{timeStr}</span>
+                    <span className="text-sm text-text-muted font-mono pr-2 truncate">{timeStr}</span>
                     <span className="pr-1 flex items-center">
                       <div
                         className="w-4 h-4 rounded flex items-center justify-center text-sm font-bold font-mono"
@@ -1805,9 +1841,9 @@ function LiveView({
                       >{threadLetter}</div>
                     </span>
                     <span className={clsx('text-sm font-mono pr-2 truncate', formatted.typeColor)}>{formatted.typeLabel}</span>
-                    <span className="text-sm text-text-muted min-w-0 flex items-baseline gap-1.5 overflow-hidden">
+                    <span className="text-sm min-w-0 flex items-baseline gap-1.5 overflow-hidden">
                       {isHighFinding && <span className="text-warning shrink-0">★</span>}
-                      {displayDetail && <span className="truncate">{displayDetail}</span>}
+                      {displayDetail && <span className="truncate text-text-secondary">{displayDetail}</span>}
                       {formatted.chips && formatted.chips.map((chip, ci) => (
                         <span key={ci} className={clsx('text-sm font-mono shrink-0', chip.color)}>{chip.text}</span>
                       ))}
@@ -2327,6 +2363,7 @@ function SettingsView({
   const [followUpMax, setFollowUpMax] = useState<number>((followUpCfg.max_count as number) ?? 5);
   const [seedSimilarityMin, setSeedSimilarityMin] = useState<number>((topicCoherence.seed_similarity_min as number) ?? 0.0);
   const [hopSimilarityMin, setHopSimilarityMin] = useState<number>((topicCoherence.hop_similarity_min as number) ?? 0.0);
+  const [burstIterations, setBurstIterations] = useState<number>((cfg.burst_iterations as number) ?? 10);
   const [scheduleDays, setScheduleDays] = useState<string[]>(initWindow.days);
   const [scheduleStart, setScheduleStart] = useState<string>(initWindow.start);
   const [scheduleEnd, setScheduleEnd] = useState<string>(initWindow.end);
@@ -2362,6 +2399,7 @@ function SettingsView({
         hop_similarity_min: hopSimilarityMin,
       },
       gap_analysis: { enabled: gapEnabled, max_gap_searches: maxGapSearches },
+      burst_iterations: burstIterations,
       schedule: {
         ...scheduleCfg,
         active_windows: [{ days: scheduleDays, start: scheduleStart, end: scheduleEnd }],
@@ -2589,8 +2627,12 @@ function SettingsView({
       {/* Schedule */}
       <div>
         <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Schedule</p>
-        <p className="text-sm text-text-muted mb-3">Window for scheduled mode. Days and times when the engine is allowed to run.</p>
         <div className="space-y-3">
+          <div className="max-w-[160px]">
+            <label className={labelCls}>Burst iterations</label>
+            <input type="number" min={1} max={999} value={burstIterations} onChange={e => setBurstIterations(Math.max(1, parseInt(e.target.value) || 10))} className={inputCls} />
+          </div>
+          <p className="text-sm text-text-muted">Window for scheduled mode — days and times when the engine is allowed to run.</p>
           <div className="flex items-center gap-1 flex-wrap">
             {(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const).map(day => (
               <button
@@ -2681,7 +2723,6 @@ export function ResearchQueryDetailPage() {
   const [tab, setTab] = useState<'document' | 'live' | 'map' | 'settings'>('document');
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [burstN, setBurstN] = useState<number>(5);
 
   const scheduleCfg = (session?.config?.schedule) as Record<string, unknown> | undefined;
 
@@ -2716,30 +2757,29 @@ export function ResearchQueryDetailPage() {
   }
 
   const activeJobs = jobs.filter(j => j.status === 'running' || j.status === 'claimed');
-  const activeJob = activeJobs[0] ?? null;
 
-  const isBurstActive = isRunning && activeJob?.mode === 'burst';
-  const isBackgroundActive = isRunning && activeJob?.mode === 'background';
-  const isScheduledActive = scheduleCfg?.mode === 'scheduled' && session?.status === 'active';
+  const isEnabled = session.status === 'active';
+  const selectedMode = (scheduleCfg?.mode as string) ?? 'background';
 
   function cancelAll() { for (const j of activeJobs) cancelJob.mutate({ jobId: j.id }); }
 
-  function handleBurst() {
-    if (isBurstActive) { cancelAll(); return; }
-    runResearch.mutate({ sessionId: id!, mode: 'burst', iterations: burstN });
+  function setRunMode(mode: 'burst' | 'background' | 'scheduled') {
+    updateConfig.mutate({ id: id!, config: { schedule: { ...(scheduleCfg as object), mode } } });
   }
 
-  function handleBackground() {
-    if (isBackgroundActive) { cancelAll(); return; }
-    runResearch.mutate({ sessionId: id!, mode: 'background' });
-  }
-
-  function handleScheduled() {
-    if (isScheduledActive) {
+  function handleToggleEnabled() {
+    if (isEnabled) {
       updateQuery.mutate({ id: id!, status: 'paused' });
+      cancelAll();
     } else {
-      updateConfig.mutate({ id: id!, config: { schedule: { ...scheduleCfg, mode: 'scheduled' } } });
-      if (session?.status !== 'active') updateQuery.mutate({ id: id!, status: 'active' });
+      updateQuery.mutate({ id: id!, status: 'active' });
+      if (selectedMode === 'burst') {
+        const iterations = (session!.config as Record<string, unknown>).burst_iterations as number ?? 10;
+        runResearch.mutate({ sessionId: id!, mode: 'burst', iterations });
+      } else if (selectedMode === 'background') {
+        runResearch.mutate({ sessionId: id!, mode: 'background' });
+      }
+      // scheduled: worker picks it up automatically when windows are active
     }
   }
 
@@ -2780,23 +2820,18 @@ export function ResearchQueryDetailPage() {
               </Button>
               {/* Run mode controls */}
               <div className="flex items-center gap-1">
-                <input
-                  type="number" min={1} max={99} value={burstN}
-                  onChange={e => setBurstN(Math.max(1, parseInt(e.target.value) || 5))}
-                  title="Burst iterations"
-                  className="w-8 text-center rounded-md text-xs py-1 bg-bg-tertiary text-text-muted focus:outline-none focus:ring-0 border-0"
-                />
-                {([
-                  { key: 'burst', label: 'Burst', active: isBurstActive, onClick: handleBurst },
-                  { key: 'background', label: 'Background', active: isBackgroundActive, onClick: handleBackground },
-                  { key: 'scheduled', label: 'Scheduled', active: isScheduledActive, onClick: handleScheduled },
-                ] as const).map(m => (
-                  <button key={m.key} onClick={m.onClick}
-                    className={clsx('rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
-                      m.active ? 'bg-accent text-white' : 'text-text-muted hover:text-text-primary hover:bg-bg-tertiary'
+                {(['burst', 'background', 'scheduled'] as const).map(m => (
+                  <button key={m} onClick={() => setRunMode(m)}
+                    className={clsx('rounded-md px-2.5 py-1 text-xs font-medium transition-colors capitalize',
+                      selectedMode === m ? 'bg-accent text-white' : 'text-text-muted hover:text-text-primary hover:bg-bg-tertiary'
                     )}
-                  >{m.label}</button>
+                  >{m}</button>
                 ))}
+                <button onClick={handleToggleEnabled}
+                  className={clsx('rounded-md px-2.5 py-1 text-xs font-medium transition-colors ml-1',
+                    isEnabled ? 'bg-success/20 text-success hover:bg-success/30' : 'text-text-muted hover:text-text-primary hover:bg-bg-tertiary border border-border-primary'
+                  )}
+                >{isEnabled ? 'Enabled' : 'Enable'}</button>
               </div>
               {deleteConfirm ? (
                 <div className="flex items-center gap-1.5">

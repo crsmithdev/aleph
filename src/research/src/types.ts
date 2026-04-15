@@ -54,6 +54,7 @@ export interface SessionConfig {
     max_retries: number;      // default 3
     similarity_threshold: number; // default 0.75
   };
+  burst_iterations: number;
   min_searches_per_thread: number;
   fetch_source_text: boolean;
   gap_analysis: {
@@ -107,6 +108,7 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
     seed_similarity_min: 0.0,
     hop_similarity_min: 0.0,
   },
+  burst_iterations: 10,
   min_searches_per_thread: 2,
   fetch_source_text: false,
   gap_analysis: {
