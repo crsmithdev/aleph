@@ -1,5 +1,5 @@
 import { Icon } from '../../components/ui/Icon';
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { clsx } from 'clsx';
 import ReactMarkdown from 'react-markdown';
@@ -1173,15 +1173,18 @@ function stepChips(s: ResearchStep): Chip[] {
   if (m) {
     if (m.decision === 'gap_analysis') {
       const hasGaps = m.has_gaps as boolean;
-      chips.push({ text: hasGaps ? `gaps: ${m.gap_count as number}` : 'no gaps', color: hasGaps ? 'text-warning' : 'text-text-muted' });
+      chips.push({ text: hasGaps ? `${m.gap_count as number} gaps` : 'no gaps', color: hasGaps ? 'text-warning' : 'text-text-muted' });
     } else if (m.decision === 'synthesis') {
       chips.push({ text: `conf ${((m.confidence as number) * 100).toFixed(0)}%`, color: 'text-success' });
       chips.push({ text: `nov ${((m.novelty as number) * 100).toFixed(0)}%`, color: 'text-blue-400' });
     } else if (m.decision === 'dedup') {
       const dup = m.is_duplicate as boolean;
       chips.push({ text: dup ? 'duplicate' : 'unique', color: dup ? 'text-error' : 'text-text-muted' });
+      chips.push({ text: `vs ${m.existing_count as number}`, color: 'text-text-disabled' });
     } else if (m.decision === 'follow_up_eval') {
-      chips.push({ text: `${m.accepted_count as number} accepted`, color: 'text-success' });
+      chips.push({ text: `${m.accepted_count as number}✓ ${m.rejected_count as number}✗`, color: 'text-text-muted' });
+    } else if (m.decision === 'formulate_queries') {
+      chips.push({ text: `${(m.queries as string[]).length} queries`, color: 'text-text-muted' });
     }
   }
   return chips;
@@ -1209,11 +1212,12 @@ function formatEventDetail(ev: StreamEvent & { threadDiff?: string }): { typeLab
     if (diff && !diff.includes(' → ')) {
       return { typeLabel: 'thread', typeColor: 'text-text-disabled', detail: `${name} · ${diff}` };
     }
-    if (t.status === 'active') return { typeLabel: 'spawn', typeColor: 'text-warning', detail: `"${name}"` };
-    if (t.status === 'queued') return { typeLabel: 'queued', typeColor: 'text-warning/70', detail: `"${name}"` };
+    const originTag = t.origin !== 'seed' ? ` [${t.origin.replace(/_/g, '·')} d${t.depth}]` : ` [d${t.depth}]`;
+    if (t.status === 'active') return { typeLabel: 'spawn', typeColor: 'text-warning', detail: `"${name}"${originTag}` };
+    if (t.status === 'queued') return { typeLabel: 'queued', typeColor: 'text-warning/70', detail: `"${name}"${originTag}` };
     if (t.status === 'pruned') return { typeLabel: 'pruned', typeColor: 'text-error', detail: `"${name}"` };
     if (t.status === 'exhausted') return { typeLabel: 'done', typeColor: 'text-text-muted', detail: `"${name}"` };
-    if (t.status === 'deferred') return { typeLabel: 'deferred', typeColor: 'text-text-disabled', detail: `"${name}"` };
+    if (t.status === 'deferred') return { typeLabel: 'deferred', typeColor: 'text-text-disabled', detail: `"${name}"${originTag}` };
     if (diff) return { typeLabel: 'thread', typeColor: 'text-text-disabled', detail: `${name} · ${diff}` };
     return null;
   }
@@ -1368,7 +1372,7 @@ function LiveView({
     return evs;
   }, [events, filterFindings, filterThreadId]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (autoScroll && streamRef.current) {
       streamRef.current.scrollTop = streamRef.current.scrollHeight;
     }
@@ -1713,7 +1717,9 @@ function LiveView({
             {streamEvents.map(ev => {
               const formatted = formatEventDetail(ev);
               if (!formatted) return null;
-              const evKey = `${ev.type}:${(ev.payload as { id: string }).id}`;
+              const evKey = ev.type === 'thread'
+                ? `thread:${ev.payload.id}:${ev.payload.updated_at ?? ev.payload.created_at}`
+                : `${ev.type}:${(ev.payload as { id: string }).id}`;
               const isExpanded = expandedEventKey === evKey;
               const threadId = ev.type === 'finding' ? ev.payload.thread_id
                 : ev.type === 'step' ? ev.payload.thread_id
@@ -1726,7 +1732,7 @@ function LiveView({
                 : ev.type === 'step' ? ev.payload.created_at
                 : ev.type === 'thread' ? ev.payload.created_at
                 : null;
-              const timeStr = ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '';
+              const timeStr = ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
               const isFinding = ev.type === 'finding';
               const isHighFinding = isFinding && (ev.payload as ResearchFinding).confidence >= 0.7;
               return (
@@ -1751,9 +1757,9 @@ function LiveView({
                         ? isHighFinding ? 'border-l-warning/40' : 'border-l-success/25'
                         : isExpanded ? 'border-l-accent/40' : 'border-l-transparent'
                     )}
-                    style={{ gridTemplateColumns: '64px 22px 100px 1fr', gap: '0' }}
+                    style={{ gridTemplateColumns: '44px 22px 100px 1fr', gap: '0' }}
                   >
-                    <span className="text-[10px] text-text-disabled font-mono pr-2 truncate">{timeStr}</span>
+                    <span className="text-[10px] text-text-disabled/50 font-mono pr-2 truncate">{timeStr}</span>
                     <span className="pr-1 flex items-center">
                       <div
                         className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold font-mono"
@@ -1830,15 +1836,42 @@ function LiveView({
                                 </div>
                               );
                               if (m.decision === 'dedup') return (
-                                <p className={clsx('text-[11px]', (m.is_duplicate as boolean) ? 'text-error' : 'text-text-disabled')}>
-                                  {(m.is_duplicate as boolean) ? 'duplicate detected' : `unique · checked ${m.existing_count as number} findings`}
-                                </p>
+                                <div className="space-y-1 text-[11px]">
+                                  <p className={clsx((m.is_duplicate as boolean) ? 'text-error' : 'text-text-muted')}>
+                                    {(m.is_duplicate as boolean) ? 'duplicate detected' : `unique · checked ${m.existing_count as number} findings`}
+                                  </p>
+                                  {(m.new_summary as string) && (
+                                    <p className="text-text-disabled italic">new: "{m.new_summary as string}"</p>
+                                  )}
+                                  {(m.compared_to as string[] | undefined)?.map((s, i) => (
+                                    <p key={i} className="pl-3 text-text-disabled/70 truncate">vs: "{s}"</p>
+                                  ))}
+                                </div>
                               );
                               if (m.decision === 'follow_up_eval') return (
-                                <p className="text-[11px] text-text-muted">
-                                  {m.accepted_count as number} follow-ups accepted, {m.rejected_count as number} rejected
-                                  {(m.retry_count as number) > 0 && ` (${m.retry_count as number} retries)`}
-                                </p>
+                                <div className="space-y-0.5 text-[11px]">
+                                  <p className="text-text-muted">
+                                    {m.accepted_count as number} accepted · {m.rejected_count as number} rejected
+                                    {(m.retry_count as number) > 0 && ` · ${m.retry_count as number} retries`}
+                                    {(m.similarity_threshold as number) && ` · sim≥${(m.similarity_threshold as number).toFixed(2)}`}
+                                  </p>
+                                  {(m.candidates as Array<{text: string; accepted: boolean; reason: string|null; sim: number; rank: number}> | undefined)?.map((c, i) => (
+                                    <div key={i} className={clsx('pl-2 flex gap-2 items-baseline', c.accepted ? 'text-text-secondary' : 'text-text-disabled/60')}>
+                                      <span className="shrink-0">{c.accepted ? '✓' : '✗'}</span>
+                                      <span className="truncate flex-1">"{c.text}"</span>
+                                      <span className="font-mono shrink-0 text-[10px]">sim {c.sim.toFixed(2)}</span>
+                                      {c.reason && <span className="text-error/70 shrink-0 text-[10px] truncate max-w-32">{c.reason}</span>}
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                              if (m.decision === 'formulate_queries') return (
+                                <div className="space-y-0.5 text-[11px]">
+                                  <p className="text-text-muted">{(m.queries as string[]).length} queries formulated{(m.skipped_duplicates as number) > 0 && `, ${m.skipped_duplicates as number} skipped (already searched)`}</p>
+                                  {(m.queries as string[]).map((q, i) => (
+                                    <p key={i} className="pl-2 text-text-secondary/80 truncate">→ "{q}"</p>
+                                  ))}
+                                </div>
                               );
                               return null;
                             })()}

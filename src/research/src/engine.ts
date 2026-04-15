@@ -519,6 +519,17 @@ export class ResearchEngine {
       accepted_count: followUpQuestions.length,
       rejected_count: followUpAnalysis.candidates.filter((c: { accepted: boolean }) => !c.accepted).length,
       retry_count: followUpAnalysis.retry_count,
+      similarity_threshold: followUpAnalysis.similarity_threshold,
+      candidates: followUpAnalysis.candidates.map((c: {
+        text: string; accepted: boolean; rejection_reason: string | null;
+        jaccard_similarity: number; rank_score: number;
+      }) => ({
+        text: c.text.slice(0, 120),
+        accepted: c.accepted,
+        reason: c.rejection_reason,
+        sim: Math.round(c.jaccard_similarity * 100) / 100,
+        rank: Math.round(c.rank_score * 100) / 100,
+      })),
     });
 
     // Step 5: Store finding
@@ -696,6 +707,12 @@ Return ONLY a JSON array of search query strings. No other text.`,
         if (seen.has(lower) || searchedLower.has(lower)) return false;
         seen.add(lower);
         return true;
+      });
+      if (result.stepId) steps.updateStepMetadata(this.sqlite, result.stepId, {
+        decision: 'formulate_queries',
+        queries: deduped,
+        total_candidates: candidates.length,
+        skipped_duplicates: candidates.length - deduped.length,
       });
       if (deduped.length > 0) return deduped;
       // All LLM suggestions already searched — only fall back to thread.query if not yet searched
@@ -1196,7 +1213,9 @@ Respond with ONLY "true" if this is a duplicate or near-duplicate, "false" other
 
     const isDuplicate = result.text.trim().toLowerCase() === 'true';
     if (result.stepId) steps.updateStepMetadata(this.sqlite, result.stepId, {
-      decision: 'dedup', is_duplicate: isDuplicate, existing_count: existing.length
+      decision: 'dedup', is_duplicate: isDuplicate, existing_count: existing.length,
+      new_summary: newSummary.slice(0, 120),
+      compared_to: existing.slice(0, 5).map(f => f.summary.slice(0, 100)),
     });
     return isDuplicate;
   }
