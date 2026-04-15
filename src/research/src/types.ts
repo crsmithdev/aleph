@@ -84,7 +84,7 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
   diminishing_returns_window: 20,
   min_delay_between_steps_ms: 8000,
   max_steps_per_hour: 30,
-  max_concurrent_threads: 2,
+  max_concurrent_threads: 3,
   model: 'deepseek/deepseek-chat',
   providers: {
     primary: 'openrouter',
