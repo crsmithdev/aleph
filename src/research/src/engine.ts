@@ -840,7 +840,7 @@ If has_gaps is true, gap_queries must contain ${config.gap_analysis.max_gap_sear
       }
       if (result.stepId) steps.updateStepMetadata(this.sqlite, result.stepId, {
         decision: 'gap_analysis', has_gaps: gapQueries.length > 0,
-        gap_count: gapQueries.length, gap_queries: gapQueries
+        gap_count: gapQueries.length, gap_max: config.gap_analysis.max_gap_searches ?? 2, gap_queries: gapQueries
       });
     } catch {
       return [];
