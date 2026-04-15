@@ -1326,7 +1326,16 @@ function LiveView({
   const queuedThreads = useMemo(() => threads.filter(t => t.status === 'queued'), [threads]);
 
   const streamEvents = useMemo(() => {
-    let evs = [...events].reverse();
+    // Deduplicate thread events: only show first occurrence of each (thread_id, status) pair.
+    // Thread updated_at changes on every step, causing repeated 'spawn' events for the same thread.
+    const seenThreadStatus = new Set<string>();
+    let evs = [...events].filter(e => {
+      if (e.type !== 'thread') return true;
+      const key = `${e.payload.id}:${e.payload.status}`;
+      if (seenThreadStatus.has(key)) return false;
+      seenThreadStatus.add(key);
+      return true;
+    }).reverse();
     if (filterFindings) evs = evs.filter(e => e.type === 'finding');
     if (filterThreadId) {
       evs = evs.filter(e => {
