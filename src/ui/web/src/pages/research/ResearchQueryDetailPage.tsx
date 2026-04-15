@@ -2633,6 +2633,20 @@ export function ResearchQueryDetailPage() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [runIterations, setRunIterations] = useState<string>('');
 
+  const scheduleCfg = (session?.config?.schedule) as Record<string, unknown> | undefined;
+  const rawScheduleMode = (scheduleCfg?.mode as string) ?? 'background';
+  const initialRunMode = rawScheduleMode === 'interactive' ? 'background' : rawScheduleMode as 'burst' | 'background' | 'scheduled';
+  const [runMode, setRunMode] = useState<'burst' | 'background' | 'scheduled'>(initialRunMode);
+
+  const initialWindows = (scheduleCfg?.active_windows as Array<{ days: string[]; start: string; end: string }>) ?? [];
+  const firstWindow = initialWindows[0] ?? { days: ['mon', 'tue', 'wed', 'thu', 'fri'], start: '09:00', end: '17:00' };
+  const [scheduleDays, setScheduleDays] = useState<string[]>(firstWindow.days);
+  const [scheduleStart, setScheduleStart] = useState<string>(firstWindow.start);
+  const [scheduleEnd, setScheduleEnd] = useState<string>(firstWindow.end);
+  const [scheduleTimezone, setScheduleTimezone] = useState<string>(
+    (scheduleCfg?.timezone as string) ?? Intl.DateTimeFormat().resolvedOptions().timeZone
+  );
+
   const findingCounts = useMemo(() => {
     const map = new Map<string, number>();
     for (const f of findingsData) map.set(f.thread_id, (map.get(f.thread_id) ?? 0) + 1);
@@ -2777,38 +2791,129 @@ export function ResearchQueryDetailPage() {
           </div>
 
           {/* Run controls */}
-          <div className="flex items-center gap-2 mt-3">
-            <Button
-              size="sm"
-              loading={runResearch.isPending}
-              onClick={() => {
-                const iters = runIterations.trim() ? parseInt(runIterations, 10) : undefined;
-                runResearch.mutate({ sessionId: id!, iterations: iters });
-              }}
-            >Run</Button>
-            <input
-              type="number"
-              min={1}
-              value={runIterations}
-              onChange={e => setRunIterations(e.target.value)}
-              placeholder="N"
-              aria-label="Number of iterations"
-              className="w-16 bg-bg-secondary border border-border-primary rounded px-2 py-1 text-xs text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent"
-              title="Number of iterations (blank = default)"
-            />
-            {activeJobs.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="!text-red-400 hover:!text-red-300"
-                onClick={() => { for (const j of activeJobs) cancelJob.mutate({ jobId: j.id }); }}
-              >Cancel</Button>
+          <div className="mt-3 space-y-2">
+            {/* Mode selector */}
+            <div className="flex items-center gap-1">
+              {(['burst', 'background', 'scheduled'] as const).map(m => (
+                <button
+                  key={m}
+                  onClick={() => setRunMode(m)}
+                  className={clsx(
+                    'px-2 py-0.5 text-xs rounded border transition-colors capitalize',
+                    runMode === m
+                      ? 'border-accent text-accent bg-accent/10'
+                      : 'border-border-primary text-text-muted hover:text-text-secondary hover:border-border-secondary'
+                  )}
+                >{m}</button>
+              ))}
+            </div>
+
+            {/* Burst */}
+            {runMode === 'burst' && (
+              <div className="flex items-center gap-2">
+                <Button size="sm" loading={runResearch.isPending}
+                  onClick={() => {
+                    const iters = runIterations.trim() ? parseInt(runIterations, 10) : undefined;
+                    runResearch.mutate({ sessionId: id!, iterations: iters, mode: 'burst' });
+                  }}
+                >Run</Button>
+                <input
+                  type="number" min={1} value={runIterations}
+                  onChange={e => setRunIterations(e.target.value)}
+                  placeholder="iterations"
+                  aria-label="Number of iterations"
+                  className="w-24 bg-bg-secondary border border-border-primary rounded px-2 py-1 text-xs text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent"
+                />
+                {activeJobs.length > 0 && (
+                  <Button variant="ghost" size="sm" className="!text-red-400 hover:!text-red-300"
+                    onClick={() => { for (const j of activeJobs) cancelJob.mutate({ jobId: j.id }); }}
+                  >Cancel</Button>
+                )}
+                {isRunning && (
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                    <span className="text-xs text-success">Running</span>
+                  </span>
+                )}
+              </div>
             )}
-            {isRunning && (
-              <span className="flex items-center gap-1.5 ml-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                <span className="text-xs text-success">Running</span>
-              </span>
+
+            {/* Background */}
+            {runMode === 'background' && (
+              <div className="flex items-center gap-2">
+                <Button size="sm" loading={runResearch.isPending}
+                  onClick={() => runResearch.mutate({ sessionId: id!, mode: 'background' })}
+                >Run</Button>
+                {activeJobs.length > 0 && (
+                  <Button variant="ghost" size="sm" className="!text-red-400 hover:!text-red-300"
+                    onClick={() => { for (const j of activeJobs) cancelJob.mutate({ jobId: j.id }); }}
+                  >Cancel</Button>
+                )}
+                {isRunning && (
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                    <span className="text-xs text-success">Running</span>
+                  </span>
+                )}
+                <span className="text-xs text-text-disabled">runs until exhausted or cancelled</span>
+              </div>
+            )}
+
+            {/* Scheduled */}
+            {runMode === 'scheduled' && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const).map(day => (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => setScheduleDays(prev =>
+                        prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
+                      )}
+                      className={clsx(
+                        'px-1.5 py-0.5 text-xs rounded border transition-colors capitalize',
+                        scheduleDays.includes(day)
+                          ? 'border-accent text-accent bg-accent/10'
+                          : 'border-border-primary text-text-muted hover:border-border-secondary'
+                      )}
+                    >{day}</button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input type="time" value={scheduleStart} onChange={e => setScheduleStart(e.target.value)}
+                    className="bg-bg-secondary border border-border-primary rounded px-2 py-1 text-xs text-text-primary focus:outline-none focus:border-accent" />
+                  <span className="text-xs text-text-muted">—</span>
+                  <input type="time" value={scheduleEnd} onChange={e => setScheduleEnd(e.target.value)}
+                    className="bg-bg-secondary border border-border-primary rounded px-2 py-1 text-xs text-text-primary focus:outline-none focus:border-accent" />
+                  <input
+                    type="text" value={scheduleTimezone} onChange={e => setScheduleTimezone(e.target.value)}
+                    placeholder="Timezone"
+                    className="w-48 bg-bg-secondary border border-border-primary rounded px-2 py-1 text-xs text-text-primary focus:outline-none focus:border-accent"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" loading={updateConfig.isPending}
+                    onClick={() => {
+                      updateConfig.mutate({
+                        id: id!,
+                        config: {
+                          schedule: {
+                            mode: 'scheduled',
+                            active_windows: [{ days: scheduleDays, start: scheduleStart, end: scheduleEnd }],
+                            timezone: scheduleTimezone,
+                          },
+                        },
+                      });
+                      if (session.status !== 'active') updateQuery.mutate({ id: id!, status: 'active' });
+                    }}
+                  >Enable Schedule</Button>
+                  {scheduleCfg?.mode === 'scheduled' && (
+                    <span className="text-xs text-text-muted">
+                      {scheduleDays.length === 0 ? 'No days selected' : `${scheduleDays.join(', ')} ${scheduleStart}–${scheduleEnd} ${scheduleTimezone}`}
+                    </span>
+                  )}
+                </div>
+              </div>
             )}
           </div>
 

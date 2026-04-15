@@ -39,7 +39,7 @@ export interface SessionConfig {
     openrouter_models: string[];
   };
   schedule: {
-    mode: 'interactive' | 'background' | 'scheduled' | 'burst';
+    mode: 'background' | 'scheduled' | 'burst';
     active_windows: Array<{
       days: string[];
       start: string;
@@ -93,7 +93,7 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
     ],
   },
   schedule: {
-    mode: 'interactive',
+    mode: 'background',
     active_windows: [],
     timezone: 'America/Los_Angeles',
   },
