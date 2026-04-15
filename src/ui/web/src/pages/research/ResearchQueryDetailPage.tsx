@@ -2761,9 +2761,10 @@ export function ResearchQueryDetailPage() {
   }
 
   const activeJobs = jobs.filter(j => j.status === 'running' || j.status === 'claimed');
+  const activeJob = activeJobs[0] ?? null;
 
   const isEnabled = session.status === 'active';
-  const selectedMode = (scheduleCfg?.mode as string) ?? 'background';
+  const selectedMode = activeJob?.mode ?? (scheduleCfg?.mode as string) ?? 'background';
 
   function cancelAll() { for (const j of activeJobs) cancelJob.mutate({ jobId: j.id }); }
 
