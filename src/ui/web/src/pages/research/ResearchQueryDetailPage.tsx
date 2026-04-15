@@ -1534,7 +1534,7 @@ function LiveView({
                                   return (
                                     <a key={i} href={src.url} target="_blank" rel="noopener noreferrer"
                                       onClick={e => e.stopPropagation()}
-                                      className="block text-[11px] text-accent hover:underline truncate">
+                                      className="block text-xs text-accent hover:underline truncate">
                                       {src.title || host}
                                     </a>
                                   );
@@ -1597,7 +1597,7 @@ function LiveView({
                                   return (
                                     <a key={i} href={src.url} target="_blank" rel="noopener noreferrer"
                                       onClick={e => e.stopPropagation()}
-                                      className="block text-[11px] text-accent hover:underline truncate">
+                                      className="block text-xs text-accent hover:underline truncate">
                                       {src.title || host}
                                     </a>
                                   );
@@ -1838,32 +1838,32 @@ function LiveView({
                             {s.tool_calls.map((tc, ti) => (
                               <div key={ti} className="space-y-0.5">
                                 <div className="flex items-start gap-2">
-                                  <span className="text-text-secondary/80 text-[11px] font-mono shrink-0">
+                                  <span className="text-text-secondary/80 text-xs font-mono shrink-0">
                                     {tc.tool === 'web_search' ? 'search' : tc.tool}
                                   </span>
                                   {tc.input && (
-                                    <span className="text-[11px] text-text-primary break-words flex-1">
+                                    <span className="text-xs text-text-primary break-words flex-1">
                                       {(tc.tool === 'web_search' || tc.tool === 'search_web') && (tc.input as Record<string,unknown>).query
                                         ? `"${(tc.input as Record<string,unknown>).query as string}"`
-                                        : <span className="text-text-secondary/70 text-[10px]">{JSON.stringify(tc.input).slice(0, 160)}</span>}
+                                        : <span className="text-text-secondary/70 text-xs">{JSON.stringify(tc.input).slice(0, 160)}</span>}
                                     </span>
                                   )}
                                 </div>
                                 {tc.jina_fetches && tc.jina_fetches.length > 0 && (
-                                  <div className="pl-3 text-[10px] text-text-muted">
+                                  <div className="pl-3 text-xs text-text-muted">
                                     {tc.jina_fetches.map((j, ji) => {
                                       let host = j.url; try { host = new URL(j.url).hostname; } catch { /* keep */ }
                                       return <span key={ji} className={clsx('mr-2', j.ok ? 'text-teal-400' : 'text-error')}>{host}</span>;
                                     })}
                                   </div>
                                 )}
-                                {tc.output && <p className="pl-3 text-[10px] text-text-muted/80 break-words">{tc.output.slice(0, 300)}{tc.output.length > 300 ? '…' : ''}</p>}
+                                {tc.output && <p className="pl-3 text-xs text-text-muted/80 break-words">{tc.output.slice(0, 300)}{tc.output.length > 300 ? '…' : ''}</p>}
                               </div>
                             ))}
                             {s.metadata && (() => {
                               const m = s.metadata;
                               if (m.decision === 'gap_analysis') return (
-                                <div className="text-[11px]">
+                                <div className="text-xs">
                                   <span className={m.has_gaps ? 'text-warning' : 'text-text-muted'}>
                                     {m.has_gaps
                                       ? `${m.gap_count as number} gap${(m.gap_count as number) !== 1 ? 's' : ''} found — searching below`
@@ -1872,7 +1872,7 @@ function LiveView({
                                 </div>
                               );
                               if (m.decision === 'synthesis') return (
-                                <div className="flex gap-3 text-[11px] font-mono">
+                                <div className="flex gap-3 text-xs font-mono">
                                   <span className="text-success">conf {((m.confidence as number) * 100).toFixed(0)}%</span>
                                   <span className="text-blue-400">novel {((m.novelty as number) * 100).toFixed(0)}%</span>
                                   <span className="text-text-muted">act {((m.actionability as number) * 100).toFixed(0)}%</span>
@@ -1882,7 +1882,7 @@ function LiveView({
                                 </div>
                               );
                               if (m.decision === 'dedup') return (
-                                <div className="space-y-1 text-[11px]">
+                                <div className="space-y-1 text-xs">
                                   <p className={clsx((m.is_duplicate as boolean) ? 'text-error' : 'text-text-muted')}>
                                     {(m.is_duplicate as boolean) ? 'duplicate detected' : `unique · checked ${m.existing_count as number} findings`}
                                   </p>
@@ -1895,7 +1895,7 @@ function LiveView({
                                 </div>
                               );
                               if (m.decision === 'follow_up_eval') return (
-                                <div className="space-y-0.5 text-[11px]">
+                                <div className="space-y-0.5 text-xs">
                                   <p className="text-text-muted">
                                     {m.accepted_count as number} accepted · {m.rejected_count as number} rejected
                                     {(m.retry_count as number) > 0 && ` · ${m.retry_count as number} retries`}
@@ -1905,14 +1905,14 @@ function LiveView({
                                     <div key={i} className={clsx('pl-2 flex gap-2 items-baseline', c.accepted ? 'text-text-secondary' : 'text-text-muted/60')}>
                                       <span className="shrink-0">{c.accepted ? '✓' : '✗'}</span>
                                       <span className="truncate flex-1">"{c.text}"</span>
-                                      <span className="font-mono shrink-0 text-[10px]">sim {c.sim.toFixed(2)}</span>
-                                      {c.reason && <span className="text-error/70 shrink-0 text-[10px] truncate max-w-32">{c.reason}</span>}
+                                      <span className="font-mono shrink-0 text-xs">sim {c.sim.toFixed(2)}</span>
+                                      {c.reason && <span className="text-error/70 shrink-0 text-xs truncate max-w-32">{c.reason}</span>}
                                     </div>
                                   ))}
                                 </div>
                               );
                               if (m.decision === 'formulate_queries') return (
-                                <div className="space-y-0.5 text-[11px]">
+                                <div className="space-y-0.5 text-xs">
                                   <p className="text-text-muted">{(m.queries as string[]).length} queries formulated{(m.skipped_duplicates as number) > 0 && `, ${m.skipped_duplicates as number} skipped (already searched)`}</p>
                                   {(m.queries as string[]).map((q, i) => (
                                     <p key={i} className="pl-2 text-text-secondary/80 truncate">→ "{q}"</p>
@@ -1921,7 +1921,7 @@ function LiveView({
                               );
                               return null;
                             })()}
-                            {s.error && <p className="text-[11px] text-red-400 break-words">{s.error}</p>}
+                            {s.error && <p className="text-xs text-red-400 break-words">{s.error}</p>}
                           </div>
                         );
                       })()}
@@ -1931,7 +1931,7 @@ function LiveView({
                         return (
                           <div className="space-y-1.5">
                             <p className="text-xs text-text-primary leading-relaxed">{f.content}</p>
-                            <div className="flex items-center gap-3 text-[11px] font-mono flex-wrap">
+                            <div className="flex items-center gap-3 text-xs font-mono flex-wrap">
                               <span className={f.confidence >= 0.7 ? 'text-success' : f.confidence >= 0.4 ? 'text-warning' : 'text-error'}>
                                 conf {(f.confidence * 100).toFixed(0)}%
                               </span>
@@ -1945,7 +1945,7 @@ function LiveView({
                                   return (
                                     <a key={si} href={src.url} target="_blank" rel="noopener noreferrer"
                                       onClick={e => e.stopPropagation()}
-                                      className="block text-[11px] text-accent hover:underline truncate">
+                                      className="block text-xs text-accent hover:underline truncate">
                                       {src.title || host}
                                     </a>
                                   );
@@ -1955,23 +1955,23 @@ function LiveView({
                             {f.tags.length > 0 && (
                               <div className="flex flex-wrap gap-1">
                                 {f.tags.map(tag => (
-                                  <span key={tag} className="px-1 py-0.5 rounded bg-bg-tertiary text-[10px] text-text-muted">{tag}</span>
+                                  <span key={tag} className="px-1 py-0.5 rounded bg-bg-tertiary text-xs text-text-muted">{tag}</span>
                                 ))}
                               </div>
                             )}
                             {f.follow_up_analysis && (
                               <div className="space-y-1 pt-1 border-t border-border-primary/30">
-                                <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                                <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">
                                   Follow-up candidates · threshold {(f.follow_up_analysis.similarity_threshold * 100).toFixed(0)}%
                                   {f.follow_up_analysis.retry_count > 0 && ` · ${f.follow_up_analysis.retry_count} retries`}
                                 </p>
                                 {f.follow_up_analysis.candidates.map((c, ci) => (
                                   <div key={ci} className="flex items-start gap-2">
-                                    <span className={clsx('text-[10px] font-mono shrink-0 mt-0.5', c.accepted ? 'text-success' : 'text-error')}>
+                                    <span className={clsx('text-xs font-mono shrink-0 mt-0.5', c.accepted ? 'text-success' : 'text-error')}>
                                       {c.accepted ? '✓' : '✗'}
                                     </span>
-                                    <span className={clsx('text-[11px] flex-1', c.accepted ? 'text-text-primary' : 'text-text-muted')}>{c.text}</span>
-                                    <span className="text-[10px] font-mono text-text-muted shrink-0">
+                                    <span className={clsx('text-xs flex-1', c.accepted ? 'text-text-primary' : 'text-text-muted')}>{c.text}</span>
+                                    <span className="text-xs font-mono text-text-muted shrink-0">
                                       q:{(c.quality_score * 100).toFixed(0)}% r:{(c.rank_score * 100).toFixed(0)}%
                                     </span>
                                   </div>
@@ -1984,12 +1984,12 @@ function LiveView({
                       {ev.type === 'thread' && (() => {
                         const t = ev.payload;
                         return (
-                          <div className="space-y-1 text-[11px] text-text-muted">
+                          <div className="space-y-1 text-xs text-text-muted">
                             <p className="text-text-secondary">{t.query}</p>
                             <div className="flex items-center gap-3">
                               <span>depth <span className="font-mono">{t.depth}/{t.max_depth}</span></span>
                               <span>priority <span className="font-mono">{t.priority.toFixed(2)}</span></span>
-                              <span className={clsx('px-1 py-0.5 rounded text-[10px]', liveOriginColor[t.origin] ?? 'bg-bg-tertiary text-text-muted')}>
+                              <span className={clsx('px-1 py-0.5 rounded text-xs', liveOriginColor[t.origin] ?? 'bg-bg-tertiary text-text-muted')}>
                                 {t.origin.replace(/_/g, ' ')}
                               </span>
                               {t.perturbation_strategy && (
@@ -2005,7 +2005,7 @@ function LiveView({
               );
             })}
             {isRunning && (
-              <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-success font-mono">
+              <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-success font-mono">
                 <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
                 <span>running</span>
                 <span className="text-text-muted ml-2">{events.length} events · {findings.length} findings</span>
