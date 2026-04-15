@@ -499,7 +499,7 @@ export class ResearchEngine {
 
     // Step 4b: Detect gaps and evaluate/score follow-up questions
     const { accepted: followUpQuestions, analysis: followUpAnalysis } = await this.evaluateFollowUps(
-      thread, allSearchResults, synthesisResult, config
+      thread, searchResults, synthesisResult, config
     );
     const lastFollowUpStep = steps.getLatestStepByLabel(this.sqlite, thread.id, 'evaluate follow-ups');
     if (lastFollowUpStep) steps.updateStepMetadata(this.sqlite, lastFollowUpStep.id, {
