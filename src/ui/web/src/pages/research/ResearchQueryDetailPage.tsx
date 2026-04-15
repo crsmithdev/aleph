@@ -1821,9 +1821,9 @@ function LiveView({
                     onClick={() => setExpandedEventKey(prev => prev === evKey ? null : evKey)}
                     onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setExpandedEventKey(prev => prev === evKey ? null : evKey)}
                     className="grid items-baseline px-3 py-1 cursor-pointer focus:outline-none"
-                    style={{ gridTemplateColumns: '44px minmax(140px, 140px) 1fr', gap: '0' }}
+                    style={{ gridTemplateColumns: '38px minmax(140px, 140px) 1fr', gap: '0' }}
                   >
-                    <span className="text-sm text-text-muted font-mono pr-2 truncate">{timeStr}</span>
+                    <span className="text-sm text-text-muted font-mono pr-1.5">{timeStr}</span>
                     <span className={clsx('text-sm font-mono pr-2 truncate', formatted.typeColor)}>{formatted.typeLabel}</span>
                     <span className="text-sm min-w-0 flex items-baseline gap-1.5 overflow-hidden">
                       {displayDetail && <span className="truncate text-text-secondary">{displayDetail}</span>}
