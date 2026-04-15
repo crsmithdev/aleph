@@ -2300,6 +2300,9 @@ function SettingsView({
   const gapAnalysis = (cfg.gap_analysis as Record<string, unknown>) ?? {};
   const followUpCfg = (cfg.follow_up as Record<string, unknown>) ?? {};
   const topicCoherence = (cfg.topic_coherence as Record<string, unknown>) ?? {};
+  const scheduleCfg = (cfg.schedule as Record<string, unknown>) ?? {};
+  const initWindows = (scheduleCfg.active_windows as Array<{ days: string[]; start: string; end: string }>) ?? [];
+  const initWindow = initWindows[0] ?? { days: ['mon', 'tue', 'wed', 'thu', 'fri'], start: '09:00', end: '17:00' };
 
   const [title, setTitle] = useState(session.title);
   const [provider, setProvider] = useState<string>((providers.primary as string) ?? 'anthropic');
@@ -2324,6 +2327,12 @@ function SettingsView({
   const [followUpMax, setFollowUpMax] = useState<number>((followUpCfg.max_count as number) ?? 5);
   const [seedSimilarityMin, setSeedSimilarityMin] = useState<number>((topicCoherence.seed_similarity_min as number) ?? 0.0);
   const [hopSimilarityMin, setHopSimilarityMin] = useState<number>((topicCoherence.hop_similarity_min as number) ?? 0.0);
+  const [scheduleDays, setScheduleDays] = useState<string[]>(initWindow.days);
+  const [scheduleStart, setScheduleStart] = useState<string>(initWindow.start);
+  const [scheduleEnd, setScheduleEnd] = useState<string>(initWindow.end);
+  const [scheduleTimezone, setScheduleTimezone] = useState<string>(
+    (scheduleCfg.timezone as string) ?? Intl.DateTimeFormat().resolvedOptions().timeZone
+  );
   const [saved, setSaved] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
@@ -2353,6 +2362,11 @@ function SettingsView({
         hop_similarity_min: hopSimilarityMin,
       },
       gap_analysis: { enabled: gapEnabled, max_gap_searches: maxGapSearches },
+      schedule: {
+        ...scheduleCfg,
+        active_windows: [{ days: scheduleDays, start: scheduleStart, end: scheduleEnd }],
+        timezone: scheduleTimezone,
+      },
       providers: {
         primary: provider,
         ...(provider === 'openrouter' ? {
@@ -2572,6 +2586,42 @@ function SettingsView({
         </div>
       </div>
 
+      {/* Schedule */}
+      <div>
+        <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Schedule</p>
+        <p className="text-sm text-text-muted mb-3">Window for scheduled mode. Days and times when the engine is allowed to run.</p>
+        <div className="space-y-3">
+          <div className="flex items-center gap-1 flex-wrap">
+            {(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const).map(day => (
+              <button
+                key={day} type="button"
+                onClick={() => setScheduleDays(prev =>
+                  prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
+                )}
+                className={clsx(
+                  'px-2 py-0.5 text-xs rounded-md font-medium transition-colors capitalize',
+                  scheduleDays.includes(day)
+                    ? 'bg-accent text-white'
+                    : 'text-text-muted hover:text-text-primary hover:bg-bg-tertiary border border-border-primary'
+                )}
+              >{day}</button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <input type="time" value={scheduleStart} onChange={e => setScheduleStart(e.target.value)}
+              className="bg-bg-primary border border-border-primary rounded px-2 py-1.5 text-sm text-text-primary focus:outline-none focus:border-accent" />
+            <span className="text-sm text-text-muted">—</span>
+            <input type="time" value={scheduleEnd} onChange={e => setScheduleEnd(e.target.value)}
+              className="bg-bg-primary border border-border-primary rounded px-2 py-1.5 text-sm text-text-primary focus:outline-none focus:border-accent" />
+          </div>
+          <div>
+            <label className={labelCls}>Timezone</label>
+            <input type="text" value={scheduleTimezone} onChange={e => setScheduleTimezone(e.target.value)}
+              className={inputCls} placeholder="e.g. America/Los_Angeles" />
+          </div>
+        </div>
+      </div>
+
       {/* Budget */}
       <div>
         <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Budget</p>
@@ -2631,21 +2681,9 @@ export function ResearchQueryDetailPage() {
   const [tab, setTab] = useState<'document' | 'live' | 'map' | 'settings'>('document');
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [runIterations, setRunIterations] = useState<string>('');
+  const [burstN, setBurstN] = useState<number>(5);
 
   const scheduleCfg = (session?.config?.schedule) as Record<string, unknown> | undefined;
-  const rawScheduleMode = (scheduleCfg?.mode as string) ?? 'background';
-  const initialRunMode = rawScheduleMode === 'interactive' ? 'background' : rawScheduleMode as 'burst' | 'background' | 'scheduled';
-  const [runMode, setRunMode] = useState<'burst' | 'background' | 'scheduled'>(initialRunMode);
-
-  const initialWindows = (scheduleCfg?.active_windows as Array<{ days: string[]; start: string; end: string }>) ?? [];
-  const firstWindow = initialWindows[0] ?? { days: ['mon', 'tue', 'wed', 'thu', 'fri'], start: '09:00', end: '17:00' };
-  const [scheduleDays, setScheduleDays] = useState<string[]>(firstWindow.days);
-  const [scheduleStart, setScheduleStart] = useState<string>(firstWindow.start);
-  const [scheduleEnd, setScheduleEnd] = useState<string>(firstWindow.end);
-  const [scheduleTimezone, setScheduleTimezone] = useState<string>(
-    (scheduleCfg?.timezone as string) ?? Intl.DateTimeFormat().resolvedOptions().timeZone
-  );
 
   const findingCounts = useMemo(() => {
     const map = new Map<string, number>();
@@ -2678,6 +2716,32 @@ export function ResearchQueryDetailPage() {
   }
 
   const activeJobs = jobs.filter(j => j.status === 'running' || j.status === 'claimed');
+  const activeJob = activeJobs[0] ?? null;
+
+  const isBurstActive = isRunning && activeJob?.mode === 'burst';
+  const isBackgroundActive = isRunning && activeJob?.mode === 'background';
+  const isScheduledActive = scheduleCfg?.mode === 'scheduled' && session?.status === 'active';
+
+  function cancelAll() { for (const j of activeJobs) cancelJob.mutate({ jobId: j.id }); }
+
+  function handleBurst() {
+    if (isBurstActive) { cancelAll(); return; }
+    runResearch.mutate({ sessionId: id!, mode: 'burst', iterations: burstN });
+  }
+
+  function handleBackground() {
+    if (isBackgroundActive) { cancelAll(); return; }
+    runResearch.mutate({ sessionId: id!, mode: 'background' });
+  }
+
+  function handleScheduled() {
+    if (isScheduledActive) {
+      updateQuery.mutate({ id: id!, status: 'paused' });
+    } else {
+      updateConfig.mutate({ id: id!, config: { schedule: { ...scheduleCfg, mode: 'scheduled' } } });
+      if (session?.status !== 'active') updateQuery.mutate({ id: id!, status: 'active' });
+    }
+  }
 
   return (
     <div className="flex h-[calc(100vh-64px)]">
@@ -2714,16 +2778,26 @@ export function ResearchQueryDetailPage() {
                 <Icon name="receipt_long" size="xs" className="mr-1" />
                 log
               </Button>
-              {(session.status === 'active' || session.status === 'paused') && (
-                <Button
-                  variant={session.status === 'active' ? 'secondary' : 'primary'}
-                  size="sm"
-                  loading={updateQuery.isPending}
-                  onClick={() => updateQuery.mutate({ id: id!, status: session.status === 'active' ? 'paused' : 'active' })}
-                >
-                  {session.status === 'active' ? 'Disable' : 'Enable'}
-                </Button>
-              )}
+              {/* Run mode controls */}
+              <div className="flex items-center gap-1">
+                <input
+                  type="number" min={1} max={99} value={burstN}
+                  onChange={e => setBurstN(Math.max(1, parseInt(e.target.value) || 5))}
+                  title="Burst iterations"
+                  className="w-8 text-center rounded-md text-xs py-1 bg-bg-tertiary text-text-muted focus:outline-none focus:ring-0 border-0"
+                />
+                {([
+                  { key: 'burst', label: 'Burst', active: isBurstActive, onClick: handleBurst },
+                  { key: 'background', label: 'Background', active: isBackgroundActive, onClick: handleBackground },
+                  { key: 'scheduled', label: 'Scheduled', active: isScheduledActive, onClick: handleScheduled },
+                ] as const).map(m => (
+                  <button key={m.key} onClick={m.onClick}
+                    className={clsx('rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                      m.active ? 'bg-accent text-white' : 'text-text-muted hover:text-text-primary hover:bg-bg-tertiary'
+                    )}
+                  >{m.label}</button>
+                ))}
+              </div>
               {deleteConfirm ? (
                 <div className="flex items-center gap-1.5">
                   <span className="text-sm text-text-muted">Delete?</span>
@@ -2787,133 +2861,6 @@ export function ResearchQueryDetailPage() {
               <span className="text-sm text-text-muted">
                 {workers.filter(w => w.status !== 'stopped').length} workers
               </span>
-            )}
-          </div>
-
-          {/* Run controls */}
-          <div className="mt-3 space-y-2">
-            {/* Mode selector */}
-            <div className="flex items-center gap-1">
-              {(['burst', 'background', 'scheduled'] as const).map(m => (
-                <button
-                  key={m}
-                  onClick={() => setRunMode(m)}
-                  className={clsx(
-                    'px-2 py-0.5 text-sm rounded border transition-colors capitalize',
-                    runMode === m
-                      ? 'border-accent text-accent bg-accent/10'
-                      : 'border-border-primary text-text-muted hover:text-text-secondary hover:border-border-secondary'
-                  )}
-                >{m}</button>
-              ))}
-            </div>
-
-            {/* Burst */}
-            {runMode === 'burst' && (
-              <div className="flex items-center gap-2">
-                <Button size="sm" loading={runResearch.isPending}
-                  onClick={() => {
-                    const iters = runIterations.trim() ? parseInt(runIterations, 10) : undefined;
-                    runResearch.mutate({ sessionId: id!, iterations: iters, mode: 'burst' });
-                  }}
-                >Run</Button>
-                <input
-                  type="number" min={1} value={runIterations}
-                  onChange={e => setRunIterations(e.target.value)}
-                  placeholder="iterations"
-                  aria-label="Number of iterations"
-                  className="w-24 bg-bg-secondary border border-border-primary rounded px-2 py-1 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent"
-                />
-                {activeJobs.length > 0 && (
-                  <Button variant="ghost" size="sm" className="!text-red-400 hover:!text-red-300"
-                    onClick={() => { for (const j of activeJobs) cancelJob.mutate({ jobId: j.id }); }}
-                  >Cancel</Button>
-                )}
-                {isRunning && (
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                    <span className="text-sm text-success">Running</span>
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Background */}
-            {runMode === 'background' && (
-              <div className="flex items-center gap-2">
-                <Button size="sm" loading={runResearch.isPending}
-                  onClick={() => runResearch.mutate({ sessionId: id!, mode: 'background' })}
-                >Run</Button>
-                {activeJobs.length > 0 && (
-                  <Button variant="ghost" size="sm" className="!text-red-400 hover:!text-red-300"
-                    onClick={() => { for (const j of activeJobs) cancelJob.mutate({ jobId: j.id }); }}
-                  >Cancel</Button>
-                )}
-                {isRunning && (
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                    <span className="text-sm text-success">Running</span>
-                  </span>
-                )}
-                <span className="text-sm text-text-disabled">runs until exhausted or cancelled</span>
-              </div>
-            )}
-
-            {/* Scheduled */}
-            {runMode === 'scheduled' && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const).map(day => (
-                    <button
-                      key={day}
-                      type="button"
-                      onClick={() => setScheduleDays(prev =>
-                        prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
-                      )}
-                      className={clsx(
-                        'px-1.5 py-0.5 text-sm rounded border transition-colors capitalize',
-                        scheduleDays.includes(day)
-                          ? 'border-accent text-accent bg-accent/10'
-                          : 'border-border-primary text-text-muted hover:border-border-secondary'
-                      )}
-                    >{day}</button>
-                  ))}
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <input type="time" value={scheduleStart} onChange={e => setScheduleStart(e.target.value)}
-                    className="bg-bg-secondary border border-border-primary rounded px-2 py-1 text-sm text-text-primary focus:outline-none focus:border-accent" />
-                  <span className="text-sm text-text-muted">—</span>
-                  <input type="time" value={scheduleEnd} onChange={e => setScheduleEnd(e.target.value)}
-                    className="bg-bg-secondary border border-border-primary rounded px-2 py-1 text-sm text-text-primary focus:outline-none focus:border-accent" />
-                  <input
-                    type="text" value={scheduleTimezone} onChange={e => setScheduleTimezone(e.target.value)}
-                    placeholder="Timezone"
-                    className="w-48 bg-bg-secondary border border-border-primary rounded px-2 py-1 text-sm text-text-primary focus:outline-none focus:border-accent"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button size="sm" loading={updateConfig.isPending}
-                    onClick={() => {
-                      updateConfig.mutate({
-                        id: id!,
-                        config: {
-                          schedule: {
-                            mode: 'scheduled',
-                            active_windows: [{ days: scheduleDays, start: scheduleStart, end: scheduleEnd }],
-                            timezone: scheduleTimezone,
-                          },
-                        },
-                      });
-                      if (session.status !== 'active') updateQuery.mutate({ id: id!, status: 'active' });
-                    }}
-                  >Enable Schedule</Button>
-                  {scheduleCfg?.mode === 'scheduled' && (
-                    <span className="text-sm text-text-muted">
-                      {scheduleDays.length === 0 ? 'No days selected' : `${scheduleDays.join(', ')} ${scheduleStart}–${scheduleEnd} ${scheduleTimezone}`}
-                    </span>
-                  )}
-                </div>
-              </div>
             )}
           </div>
 
