@@ -1255,8 +1255,10 @@ function formatEventDetail(ev: StreamEvent & { threadDiff?: string }): { typeLab
     } else {
       detail = s.label ?? shortTool;
     }
-    const typeColor = shortTool === 'search' ? 'text-blue-400' : shortTool === 'fetch' ? 'text-teal-400' : 'text-accent/80';
-    return { typeLabel: shortTool + (tools.length > 1 ? ` ×${tools.length}` : ''), typeColor, detail, chips };
+    const isGapSearch = s.label === 'gap search';
+    const typeLabel = isGapSearch ? 'gap search' : shortTool + (tools.length > 1 ? ` ×${tools.length}` : '');
+    const typeColor = isGapSearch ? 'text-orange-400' : shortTool === 'search' ? 'text-blue-400' : shortTool === 'fetch' ? 'text-teal-400' : 'text-accent/80';
+    return { typeLabel, typeColor, detail, chips };
   }
   return null;
 }
@@ -1837,13 +1839,12 @@ function LiveView({
                             {s.metadata && (() => {
                               const m = s.metadata;
                               if (m.decision === 'gap_analysis') return (
-                                <div className="text-[11px] space-y-0.5">
+                                <div className="text-[11px]">
                                   <span className={m.has_gaps ? 'text-warning' : 'text-text-muted'}>
-                                    {m.has_gaps ? `${m.gap_count as number} gap${(m.gap_count as number) !== 1 ? 's' : ''} found — spawned as new threads` : 'no gaps found'}
+                                    {m.has_gaps
+                                      ? `${m.gap_count as number} gap${(m.gap_count as number) !== 1 ? 's' : ''} found — searching below`
+                                      : 'no gaps found'}
                                   </span>
-                                  {(m.gap_queries as string[]).map((q, qi) => (
-                                    <div key={qi} className="pl-3 text-text-secondary text-[10px]">→ "{q}"</div>
-                                  ))}
                                 </div>
                               );
                               if (m.decision === 'synthesis') return (

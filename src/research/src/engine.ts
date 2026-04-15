@@ -728,7 +728,8 @@ Return ONLY a JSON array of search query strings. No other text.`,
     sessionId: string,
     threadId: string,
     config: SessionConfig,
-    fetchSourceTextOverride?: boolean | null
+    fetchSourceTextOverride?: boolean | null,
+    label?: string
   ): Promise<Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[]; sourceUrlMeta: Array<{ url: string; title: string; snippet: string }> }>> {
     const results = await Promise.all(queries.map(async (query) => {
       const startTime = Date.now();
@@ -745,6 +746,7 @@ Return ONLY a JSON array of search query strings. No other text.`,
           cost_usd: cost,
           tool_calls: [{ tool: 'web_search', input: { query }, output: result.text.slice(0, 2000), jina_fetches: result.jinaFetches }],
           duration_ms: Date.now() - startTime,
+          ...(label ? { label } : {}),
         });
 
         if (!result.text.trim()) return null;
@@ -780,6 +782,7 @@ Return ONLY a JSON array of search query strings. No other text.`,
           tool_calls: [{ tool: 'web_search', input: { query }, error: err.message }],
           duration_ms: Date.now() - startTime,
           error: err.message,
+          ...(label ? { label } : {}),
         });
         return null;
       }
@@ -836,7 +839,7 @@ If has_gaps is true, gap_queries must contain ${config.gap_analysis.max_gap_sear
     }
 
     if (gapQueries.length === 0) return [];
-    return this.executeSearches(gapQueries, thread.session_id, thread.id, config, thread.fetch_source_text ?? null);
+    return this.executeSearches(gapQueries, thread.session_id, thread.id, config, thread.fetch_source_text ?? null, 'gap search');
   }
 
   private async synthesizeFinding(
