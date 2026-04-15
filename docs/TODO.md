@@ -11,9 +11,7 @@
 - add more detail to errors as they are reported.  At least to disambiguate blocking hooks that return nonzero -- it is expected if they exit(2), it's actually an ERROR if they crash for another reason.
 - Highlight scripts that are part of a group of scripts, e.g. I want to know which ones are related.
 - I want to know more about logically how the hooks are working, e.g. we know if they failed or not, and the timing, but I'd like to see the patterns that were caught, if they failed a few times and Claude had some issues following them, etc.
-- surfaced ratings, consolidation / context state saved / restored, and make available the compacted summaries of whatever else is saved as part of any of that.  
-- 
-
+- surfaced ratings, consolidation / context state saved / restored, and make available the compacted summaries of whatever else is saved as part of any of that.  - 
 
 # Research
 
@@ -21,13 +19,9 @@
 - it may make sense to build the graph not from questions themselves, but topics or tags.  Eventually, we'll be trying to connect things across sessions, and that likely won't be done by question.  It would probably solve the problem with the current map where it becomes basicaly unusable after even one layer of follow-ups.    
 
 
+# Observability Sessions
+- In the trace view (e.g.  http://localhost:3001/observability/sessions/e64caa15-47a5-4504-a774-766cd8cc0067), the first message shown differs from what's shown on the list.  On the list 'request interrupted by user' is shown as the starting message, here it's not, it's a message that was interrupted and then replaced with a slight variation.  Rather than just fix this, go through transcripts and compare them to data served to his page, make sure we are displaying all of them, getting the turn #s right, showing messages that are actual user input as user input, and same for the agent, but also surfacing clearly the other things that happen.  Only attribute things to a user or agent as a message if they said it, if it  was part of the conversation otherwise, don't hide it, display it and make it clear it's not conversational text.
+- Similar to the above, hook output shows as a user message.  Consider a different way to display that, without dropping it entirely.
 
-# Thread / live view events log.
-- there's an 'export' button to export data about the query / threads in at the top, in md and json.  Rather than reconstruct this on-demand when that gets clicked, build up a log file of that information over time, so that when clicking on it, only a minimum amount of work (summarization, updating the document etc.) has to be done.  You might even be able to use this as the source for events data on the page.
-- fix the container / sizing of this section, it has a slight scroll but shouldn't ever.  It shouldn't have a second set of margins or look like it's wrapped in an extra container.
-- The top-row A-G display of thread names doesn't work functionally, it gets cut off way too easily.  suggest alternatives.
-- fix alignment of borders and fonts across the "Threads / Findings / Event Log" top row, they are uneven vertically C:\Users\crsmi\OneDrive\Desktop\2026-04-13 19_34_04-Phone Link.png
-- timestamps get cut off every time, need a compact representation or a different approach.
-- data displayed is incomplete.  for example, many events just say "web_search" for type and "web_search" for detail. What URL was being searched for, what model is searching for it?  Similar issues:  "summarize thread" -> what thread?  synthesize finding -> what source / thread?  gao analysis -> what was the gap found to be, etc.?   Many steps just say 'step' as a type and have '...' as detail, this shouldn't be that ambiguous.   
-/search for interesting ways of doing a page like the Threads / Live view in a research session.  It needs to be totally rethought and I'd like to see an original design that's functional and not too based on the current version as well as stands out from other approaches.  Give me a bunch of mockups, at least 5, of creative variations on that page. 
-- why does it say '500 events' here when only a tiny % are visible?
+- error list tab
+ are we using the 'topic coherenced' / jaccard similarity measures that we have an input for on the settings page?
