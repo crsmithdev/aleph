@@ -1438,7 +1438,7 @@ function LiveView({
                   {threadFindings.length > 0 && (
                     <span className="text-xs font-mono text-success ml-auto">{threadFindings.length}✦</span>
                   )}
-                  <span className="text-[10px] font-mono text-text-muted opacity-0 group-hover:opacity-100 transition-opacity ml-auto">p:{thread.priority.toFixed(2)}</span>
+                  <span className="text-xs font-mono text-text-muted opacity-0 group-hover:opacity-100 transition-opacity ml-auto">p:{thread.priority.toFixed(2)}</span>
                 </div>
                 {thread.status === 'active' && (
                   <div className="h-0.5 bg-bg-tertiary rounded-full overflow-hidden mb-1.5">
@@ -1461,7 +1461,7 @@ function LiveView({
                       title="Redo"
                       onClick={() => redoThread.mutate({ sessionId, threadId: thread.id })}
                       disabled={redoThread.isPending}
-                      className="px-1 py-0.5 text-[10px] text-text-disabled hover:text-blue-400 rounded"
+                      className="px-1 py-0.5 text-xs text-text-disabled hover:text-blue-400 rounded"
                     >↺</button>
                   ) : (
                     <button
@@ -1497,7 +1497,7 @@ function LiveView({
         <div className="flex items-center gap-2 px-3 py-2 border-b border-border-primary bg-bg-secondary shrink-0 h-[37px]">
           <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary">Findings</span>
           {findings.length > 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-success/10 border border-success/20 text-success">{findings.length}</span>
+            <span className="text-xs px-1.5 py-0.5 rounded font-mono bg-success/10 border border-success/20 text-success">{findings.length}</span>
           )}
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
@@ -1668,14 +1668,14 @@ function LiveView({
               return (
                 <div className="flex items-center gap-2 flex-1 overflow-hidden ml-2">
                   <div
-                    className="text-[10px] px-1.5 py-0.5 rounded border truncate max-w-48"
+                    className="text-xs px-1.5 py-0.5 rounded border truncate max-w-48"
                     style={{ background: `${ftColor}15`, borderColor: `${ftColor}35`, color: ftColor }}
                   >
                     {ft ? (ft.short_query ?? ft.query.split('\n')[0]).slice(0, 40) : filterThreadId.slice(0, 12)}
                   </div>
                   <button
                     onClick={() => setFilterThreadId(null)}
-                    className="text-[10px] text-text-muted hover:text-text-primary px-1 py-0.5 rounded border border-border-primary shrink-0 transition-colors"
+                    className="text-xs text-text-muted hover:text-text-primary px-1 py-0.5 rounded border border-border-primary shrink-0 transition-colors"
                   >× clear</button>
                 </div>
               );
@@ -1690,7 +1690,7 @@ function LiveView({
                     <div
                       key={t.id}
                       title={`${letter}: ${label} (${t.status})`}
-                      className="w-4 h-4 rounded flex items-center justify-center text-[10px] font-bold font-mono shrink-0 cursor-default"
+                      className="w-4 h-4 rounded flex items-center justify-center text-xs font-bold font-mono shrink-0 cursor-default"
                       style={{ background: `${color}20`, color, border: `1px solid ${color}35` }}
                     >{letter}</div>
                   );
@@ -1707,7 +1707,7 @@ function LiveView({
             <span className="text-xs text-text-muted font-semibold mr-1">Show</span>
             <button
               onClick={() => setFilterFindings(f => !f)}
-              className={clsx('px-1.5 py-0.5 rounded text-[11px] border font-mono transition-colors',
+              className={clsx('px-1.5 py-0.5 rounded text-xs border font-mono transition-colors',
                 filterFindings
                   ? 'border-warning/30 bg-warning/10 text-warning'
                   : 'border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary'
@@ -1715,12 +1715,12 @@ function LiveView({
             >★ findings</button>
             <button
               onClick={() => setFilterFindings(false)}
-              className="px-1.5 py-0.5 rounded text-[11px] border border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary font-mono"
+              className="px-1.5 py-0.5 rounded text-xs border border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary font-mono"
             >all</button>
             <div className="flex-1" />
             <button
               onClick={() => setAutoScroll(a => !a)}
-              className={clsx('px-1.5 py-0.5 rounded text-[11px] border transition-colors',
+              className={clsx('px-1.5 py-0.5 rounded text-xs border transition-colors',
                 autoScroll
                   ? 'border-success/25 bg-success/8 text-success'
                   : 'border-border-primary bg-bg-tertiary text-text-muted'
@@ -1742,7 +1742,7 @@ function LiveView({
               <p className="text-xs text-text-muted text-center py-8">Waiting for events…</p>
             )}
             {streamEvents.length > RENDER_WINDOW && (
-              <p className="text-[10px] text-text-muted text-center py-1.5 border-b border-border-primary/20">
+              <p className="text-xs text-text-muted text-center py-1.5 border-b border-border-primary/20">
                 {streamEvents.length - RENDER_WINDOW} older events not shown
               </p>
             )}
@@ -1797,19 +1797,19 @@ function LiveView({
                     )}
                     style={{ gridTemplateColumns: '44px 22px 120px 1fr', gap: '0' }}
                   >
-                    <span className="text-[10px] text-text-muted/50 font-mono pr-2 truncate">{timeStr}</span>
+                    <span className="text-xs text-text-muted/50 font-mono pr-2 truncate">{timeStr}</span>
                     <span className="pr-1 flex items-center">
                       <div
-                        className="w-4 h-4 rounded flex items-center justify-center text-[10px] font-bold font-mono"
+                        className="w-4 h-4 rounded flex items-center justify-center text-xs font-bold font-mono"
                         style={{ background: `${color}20`, color, border: `1px solid ${color}30` }}
                       >{threadLetter}</div>
                     </span>
-                    <span className={clsx('text-[11px] font-mono pr-2 truncate', formatted.typeColor)}>{formatted.typeLabel}</span>
-                    <span className="text-[11px] text-text-muted min-w-0 flex items-baseline gap-1.5 overflow-hidden">
+                    <span className={clsx('text-xs font-mono pr-2 truncate', formatted.typeColor)}>{formatted.typeLabel}</span>
+                    <span className="text-xs text-text-muted min-w-0 flex items-baseline gap-1.5 overflow-hidden">
                       {isHighFinding && <span className="text-warning shrink-0">★</span>}
                       {displayDetail && <span className="truncate">{displayDetail}</span>}
                       {formatted.chips && formatted.chips.map((chip, ci) => (
-                        <span key={ci} className={clsx('text-[11px] font-mono shrink-0', chip.color)}>{chip.text}</span>
+                        <span key={ci} className={clsx('text-xs font-mono shrink-0', chip.color)}>{chip.text}</span>
                       ))}
                     </span>
                   </div>
@@ -1820,16 +1820,16 @@ function LiveView({
                         const s = ev.payload;
                         return (
                           <div className="space-y-1">
-                            <div className="flex items-center gap-2 text-[11px] text-text-muted flex-wrap">
+                            <div className="flex items-center gap-2 text-xs text-text-muted flex-wrap">
                               <span className="text-blue-400/80 font-mono">llm</span>
                               <span className="font-mono">{s.model}</span>
                               <span>{s.prompt_tokens}+{s.completion_tokens} tok</span>
                               {s.cost_usd > 0 && <span>${s.cost_usd.toFixed(4)}</span>}
                               {s.duration_ms > 0 && <span>{(s.duration_ms / 1000).toFixed(1)}s</span>}
                             </div>
-                            {s.label && s.tool_calls.length > 0 && <p className="text-[10px] text-text-muted font-mono">{s.label}</p>}
+                            {s.label && s.tool_calls.length > 0 && <p className="text-xs text-text-muted font-mono">{s.label}</p>}
                             {s.label === 'summarize thread' && thread && (
-                              <div className="text-[11px] space-y-0.5">
+                              <div className="text-xs space-y-0.5">
                                 <p className="text-text-muted">Generates short conceptual title for thread</p>
                                 <p className="text-text-secondary/80 truncate">query: "{thread.query.split('\n')[0]}"</p>
                                 {thread.short_query && <p className="text-text-secondary">title: "{thread.short_query}"</p>}

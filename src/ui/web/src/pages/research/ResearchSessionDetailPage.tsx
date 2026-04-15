@@ -723,12 +723,12 @@ function ThreadLiveView({
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 mb-1.5">
-                  <span className={clsx('text-[10px] px-1 py-0.5 rounded shrink-0', liveOriginColor[thread.origin] ?? 'bg-bg-tertiary text-text-muted')}>
+                  <span className={clsx('text-xs px-1 py-0.5 rounded shrink-0', liveOriginColor[thread.origin] ?? 'bg-bg-tertiary text-text-muted')}>
                     {thread.origin.replace(/_/g, ' ')}
                   </span>
-                  <span className="text-[10px] font-mono text-text-disabled">p:{thread.priority.toFixed(2)}</span>
+                  <span className="text-xs font-mono text-text-disabled">p:{thread.priority.toFixed(2)}</span>
                   {threadFindings.length > 0 && (
-                    <span className="text-[10px] font-mono text-success ml-auto">{threadFindings.length}✦</span>
+                    <span className="text-xs font-mono text-success ml-auto">{threadFindings.length}✦</span>
                   )}
                 </div>
                 {thread.status === 'active' && (
@@ -756,7 +756,7 @@ function ThreadLiveView({
                       title="Redo"
                       onClick={() => redoThread.mutate({ sessionId, threadId: thread.id })}
                       disabled={redoThread.isPending}
-                      className="px-1 py-0.5 text-[10px] text-text-disabled hover:text-blue-400 rounded"
+                      className="px-1 py-0.5 text-xs text-text-disabled hover:text-blue-400 rounded"
                     >↺</button>
                   ) : (
                     <button
@@ -790,7 +790,7 @@ function ThreadLiveView({
         <div className="flex items-center gap-2 px-4 py-2 border-b border-border-primary bg-bg-secondary shrink-0">
           <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary">Findings</span>
           {findings.length > 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-success/10 border border-success/20 text-success">{findings.length}</span>
+            <span className="text-xs px-1.5 py-0.5 rounded font-mono bg-success/10 border border-success/20 text-success">{findings.length}</span>
           )}
         </div>
 
@@ -802,20 +802,20 @@ function ThreadLiveView({
             <>
               {highFindings.length > 0 && (
                 <>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-text-disabled">High confidence · {highFindings.length}</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-text-disabled">High confidence · {highFindings.length}</p>
                   {highFindings.map(f => (
                     <div key={f.id} className="bg-bg-secondary border border-border-primary rounded border-l-2 border-l-success px-3 py-2 space-y-1.5">
                       <p className="text-xs text-text-primary leading-relaxed">{f.content.slice(0, 200)}{f.content.length > 200 ? '…' : ''}</p>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {f.source_urls[0] && (
-                          <span className="text-[10px] font-mono text-blue-400 bg-blue-400/8 border border-blue-400/15 px-1 py-0.5 rounded truncate max-w-28">
+                          <span className="text-xs font-mono text-blue-400 bg-blue-400/8 border border-blue-400/15 px-1 py-0.5 rounded truncate max-w-28">
                             {(() => { try { return new URL(f.source_urls[0]).hostname; } catch { return f.source_urls[0]; } })()}
                           </span>
                         )}
-                        <span className="text-[10px] font-mono text-text-disabled bg-bg-tertiary border border-border-primary px-1 py-0.5 rounded">
+                        <span className="text-xs font-mono text-text-disabled bg-bg-tertiary border border-border-primary px-1 py-0.5 rounded">
                           {threads.find(t => t.id === f.thread_id)?.origin?.replace(/_/g, ' ') ?? '—'}
                         </span>
-                        <span className="text-[10px] font-mono text-text-muted ml-auto">{(f.confidence * 100).toFixed(0)}%</span>
+                        <span className="text-xs font-mono text-text-muted ml-auto">{(f.confidence * 100).toFixed(0)}%</span>
                       </div>
                     </div>
                   ))}
@@ -824,17 +824,17 @@ function ThreadLiveView({
 
               {medFindings.length > 0 && (
                 <>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-text-disabled mt-3">Medium confidence · {medFindings.length}</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-text-disabled mt-3">Medium confidence · {medFindings.length}</p>
                   {medFindings.map(f => (
                     <div key={f.id} className="bg-bg-secondary border border-border-primary rounded border-l-2 border-l-blue-400/50 px-3 py-2 space-y-1.5">
                       <p className="text-xs text-text-primary leading-relaxed">{f.content.slice(0, 180)}{f.content.length > 180 ? '…' : ''}</p>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {f.source_urls[0] && (
-                          <span className="text-[10px] font-mono text-blue-400 bg-blue-400/8 border border-blue-400/15 px-1 py-0.5 rounded truncate max-w-28">
+                          <span className="text-xs font-mono text-blue-400 bg-blue-400/8 border border-blue-400/15 px-1 py-0.5 rounded truncate max-w-28">
                             {(() => { try { return new URL(f.source_urls[0]).hostname; } catch { return f.source_urls[0]; } })()}
                           </span>
                         )}
-                        <span className="text-[10px] font-mono text-text-muted ml-auto">{(f.confidence * 100).toFixed(0)}%</span>
+                        <span className="text-xs font-mono text-text-muted ml-auto">{(f.confidence * 100).toFixed(0)}%</span>
                       </div>
                     </div>
                   ))}
@@ -845,16 +845,16 @@ function ThreadLiveView({
                 <div className="mt-3 border border-dashed border-border-primary rounded px-3 py-2 space-y-1.5">
                   <div className="flex items-center gap-1.5">
                     {activeThreads.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />}
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-text-disabled">Investigating</span>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-text-disabled">Investigating</span>
                   </div>
                   {activeThreads.map(t => (
-                    <div key={t.id} className="flex items-center gap-1.5 text-[11px] text-text-secondary">
+                    <div key={t.id} className="flex items-center gap-1.5 text-xs text-text-secondary">
                       <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shrink-0" />
                       {(t.short_query ?? t.query.split('\n')[0]).slice(0, 60)}
                     </div>
                   ))}
                   {queuedThreads.map(t => (
-                    <div key={t.id} className="flex items-center gap-1.5 text-[11px] text-text-muted">
+                    <div key={t.id} className="flex items-center gap-1.5 text-xs text-text-muted">
                       <span className="w-1.5 h-1.5 rounded-full bg-warning/60 shrink-0" />
                       {(t.short_query ?? t.query.split('\n')[0]).slice(0, 60)}
                     </div>
@@ -880,14 +880,14 @@ function ThreadLiveView({
                 style={{ background: `${color}08` }}
               >
                 <div
-                  className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold font-mono shrink-0"
+                  className="w-4 h-4 rounded flex items-center justify-center text-xs font-bold font-mono shrink-0"
                   style={{ background: `${color}20`, color, border: `1px solid ${color}35` }}
                 >
                   {ordered.indexOf(t) < 26 ? String.fromCharCode(65 + ordered.indexOf(t)) : '#'}
                 </div>
                 <div>
-                  <div className="text-[10px] leading-tight truncate max-w-20" style={{ color }}>{label}</div>
-                  <div className="text-[9px] text-text-disabled font-mono">{t.status === 'active' ? 'active' : t.status === 'queued' ? 'queued' : t.status}</div>
+                  <div className="text-xs leading-tight truncate max-w-20" style={{ color }}>{label}</div>
+                  <div className="text-xs text-text-disabled font-mono">{t.status === 'active' ? 'active' : t.status === 'queued' ? 'queued' : t.status}</div>
                 </div>
               </div>
             );
@@ -896,10 +896,10 @@ function ThreadLiveView({
 
         {/* Filter bar */}
         <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-primary bg-bg-secondary shrink-0">
-          <span className="text-[10px] uppercase tracking-wider text-text-disabled font-semibold mr-1">Show</span>
+          <span className="text-xs uppercase tracking-wider text-text-disabled font-semibold mr-1">Show</span>
           <button
             onClick={() => setFilterFindings(f => !f)}
-            className={clsx('px-1.5 py-0.5 rounded text-[11px] border font-mono transition-colors',
+            className={clsx('px-1.5 py-0.5 rounded text-xs border font-mono transition-colors',
               filterFindings
                 ? 'border-warning/30 bg-warning/10 text-warning'
                 : 'border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary'
@@ -907,12 +907,12 @@ function ThreadLiveView({
           >★ findings</button>
           <button
             onClick={() => setFilterFindings(false)}
-            className="px-1.5 py-0.5 rounded text-[11px] border border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary font-mono"
+            className="px-1.5 py-0.5 rounded text-xs border border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary font-mono"
           >all</button>
           <div className="flex-1" />
           <button
             onClick={() => setAutoScroll(a => !a)}
-            className={clsx('px-1.5 py-0.5 rounded text-[11px] border transition-colors',
+            className={clsx('px-1.5 py-0.5 rounded text-xs border transition-colors',
               autoScroll
                 ? 'border-success/25 bg-success/8 text-success'
                 : 'border-border-primary bg-bg-tertiary text-text-muted'
@@ -963,15 +963,15 @@ function ThreadLiveView({
                 )}
                 style={{ gridTemplateColumns: '52px 22px 80px 1fr', gap: '0' }}
               >
-                <span className="text-[10px] text-text-disabled font-mono pr-2 truncate">{timeStr}</span>
+                <span className="text-xs text-text-disabled font-mono pr-2 truncate">{timeStr}</span>
                 <span className="pr-1 flex items-center">
                   <div
-                    className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold font-mono"
+                    className="w-4 h-4 rounded flex items-center justify-center text-xs font-bold font-mono"
                     style={{ background: `${color}20`, color, border: `1px solid ${color}30` }}
                   >{threadLetter}</div>
                 </span>
-                <span className={clsx('text-[11px] font-mono pr-2 truncate', formatted.typeColor)}>{formatted.typeLabel}</span>
-                <span className="text-[11px] text-text-muted truncate">
+                <span className={clsx('text-xs font-mono pr-2 truncate', formatted.typeColor)}>{formatted.typeLabel}</span>
+                <span className="text-xs text-text-muted truncate">
                   {isHighFinding && <span className="text-warning mr-1">★</span>}
                   {formatted.detail}
                 </span>
@@ -979,7 +979,7 @@ function ThreadLiveView({
             );
           })}
           {isRunning && (
-            <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-success font-mono">
+            <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-success font-mono">
               <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
               <span>running</span>
               <span className="text-text-disabled ml-2">{events.length} events · {findings.length} findings</span>
