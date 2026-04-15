@@ -1863,44 +1863,44 @@ function LiveView({
                               {s.cost_usd > 0 && <span>${s.cost_usd.toFixed(4)}</span>}
                               {s.duration_ms > 0 && <span>{(s.duration_ms / 1000).toFixed(1)}s</span>}
                             </div>
-                            {s.label && s.tool_calls.length > 0 && <p className="text-sm text-text-muted font-mono">{s.label}</p>}
+                            {s.label && s.tool_calls.length > 0 && <p className="text-sm text-text-secondary font-mono">{s.label}</p>}
                             {s.label === 'summarize thread' && thread && (
                               <div className="text-sm space-y-0.5">
-                                <p className="text-text-muted">Generates short conceptual title for thread</p>
-                                <p className="text-text-secondary/80 truncate">query: "{thread.query.split('\n')[0]}"</p>
-                                {thread.short_query && <p className="text-text-secondary">title: "{thread.short_query}"</p>}
+                                <p className="text-text-secondary">Generates short conceptual title for thread</p>
+                                <p className="text-text-secondary truncate">query: "{thread.query.split('\n')[0]}"</p>
+                                {thread.short_query && <p className="text-text-primary">title: "{thread.short_query}"</p>}
                               </div>
                             )}
                             {s.tool_calls.map((tc, ti) => (
                               <div key={ti} className="space-y-0.5">
                                 <div className="flex items-start gap-2">
-                                  <span className="text-text-secondary/80 text-sm font-mono shrink-0">
+                                  <span className="text-text-secondary text-sm font-mono shrink-0">
                                     {tc.tool === 'web_search' ? 'search' : tc.tool}
                                   </span>
                                   {tc.input && (
                                     <span className="text-sm text-text-primary break-words flex-1">
                                       {(tc.tool === 'web_search' || tc.tool === 'search_web') && (tc.input as Record<string,unknown>).query
                                         ? `"${(tc.input as Record<string,unknown>).query as string}"`
-                                        : <span className="text-text-secondary/70 text-sm">{JSON.stringify(tc.input).slice(0, 160)}</span>}
+                                        : <span className="text-text-secondary text-sm font-mono">{JSON.stringify(tc.input).slice(0, 160)}</span>}
                                     </span>
                                   )}
                                 </div>
                                 {tc.jina_fetches && tc.jina_fetches.length > 0 && (
-                                  <div className="pl-3 text-sm text-text-muted">
+                                  <div className="pl-3 text-sm text-text-secondary">
                                     {tc.jina_fetches.map((j, ji) => {
                                       let host = j.url; try { host = new URL(j.url).hostname; } catch { /* keep */ }
                                       return <span key={ji} className={clsx('mr-2', j.ok ? 'text-teal-400' : 'text-error')}>{host}</span>;
                                     })}
                                   </div>
                                 )}
-                                {tc.output && <p className="pl-3 text-sm text-text-muted/80 break-words">{tc.output.slice(0, 300)}{tc.output.length > 300 ? '…' : ''}</p>}
+                                {tc.output && <p className="pl-3 text-sm text-text-secondary/70 break-words">{tc.output.slice(0, 300)}{tc.output.length > 300 ? '…' : ''}</p>}
                               </div>
                             ))}
                             {s.metadata && (() => {
                               const m = s.metadata;
                               if (m.decision === 'gap_analysis') return (
                                 <div className="text-sm">
-                                  <span className={m.has_gaps ? 'text-warning' : 'text-text-muted'}>
+                                  <span className={m.has_gaps ? 'text-warning' : 'text-text-secondary'}>
                                     {m.has_gaps
                                       ? `${m.gap_count as number} gap${(m.gap_count as number) !== 1 ? 's' : ''} found — searching below`
                                       : 'no gaps found'}
@@ -1913,26 +1913,26 @@ function LiveView({
                                   <span className="text-blue-400">novel {((m.novelty as number) * 100).toFixed(0)}%</span>
                                   <span className="text-text-muted">act {((m.actionability as number) * 100).toFixed(0)}%</span>
                                   {(m.tags as string[]).length > 0 && (
-                                    <span className="text-text-muted">{(m.tags as string[]).join(', ')}</span>
+                                    <span className="text-text-secondary">{(m.tags as string[]).join(', ')}</span>
                                   )}
                                 </div>
                               );
                               if (m.decision === 'dedup') return (
                                 <div className="space-y-1 text-sm">
-                                  <p className={clsx((m.is_duplicate as boolean) ? 'text-error' : 'text-text-muted')}>
+                                  <p className={clsx((m.is_duplicate as boolean) ? 'text-error' : 'text-text-secondary')}>
                                     {(m.is_duplicate as boolean) ? 'duplicate detected' : `unique · checked ${m.existing_count as number} findings`}
                                   </p>
                                   {(m.new_summary as string) && (
-                                    <p className="text-text-muted italic">new: "{m.new_summary as string}"</p>
+                                    <p className="text-text-secondary italic">new: "{m.new_summary as string}"</p>
                                   )}
                                   {(m.compared_to as string[] | undefined)?.map((s, i) => (
-                                    <p key={i} className="pl-3 text-text-muted/70 truncate">vs: "{s}"</p>
+                                    <p key={i} className="pl-3 text-text-secondary/60 truncate">vs: "{s}"</p>
                                   ))}
                                 </div>
                               );
                               if (m.decision === 'follow_up_eval') return (
                                 <div className="space-y-0.5 text-sm">
-                                  <p className="text-text-muted">
+                                  <p className="text-text-secondary">
                                     {m.accepted_count as number} accepted · {m.rejected_count as number} rejected
                                     {(m.retry_count as number) > 0 && ` · ${m.retry_count as number} retries`}
                                     {(m.similarity_threshold as number) && ` · sim≥${(m.similarity_threshold as number).toFixed(2)}`}
@@ -1949,7 +1949,7 @@ function LiveView({
                               );
                               if (m.decision === 'formulate_queries') return (
                                 <div className="space-y-0.5 text-sm">
-                                  <p className="text-text-muted">{(m.queries as string[]).length} queries formulated{(m.skipped_duplicates as number) > 0 && `, ${m.skipped_duplicates as number} skipped (already searched)`}</p>
+                                  <p className="text-text-secondary">{(m.queries as string[]).length} queries formulated{(m.skipped_duplicates as number) > 0 && `, ${m.skipped_duplicates as number} skipped (already searched)`}</p>
                                   {(m.queries as string[]).map((q, i) => (
                                     <p key={i} className="pl-2 text-text-secondary/80 truncate">→ "{q}"</p>
                                   ))}
@@ -1957,7 +1957,11 @@ function LiveView({
                               );
                               return null;
                             })()}
-                            {s.error && <p className="text-sm text-red-400 break-words">{s.error}</p>}
+                            {s.error && (
+                              <div className="mt-1 p-2 rounded bg-error/8 border border-error/20">
+                                <p className="text-sm font-mono text-error break-words whitespace-pre-wrap">{s.error}</p>
+                              </div>
+                            )}
                           </div>
                         );
                       })()}
