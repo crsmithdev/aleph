@@ -7,6 +7,7 @@ function rowToStep(row: Record<string, unknown>): ResearchStep {
     ...row,
     tool_calls: JSON.parse(row.tool_calls as string),
     label: row.label ?? null,
+    metadata: row.metadata ? JSON.parse(row.metadata as string) : null,
   } as unknown as ResearchStep;
 }
 
@@ -25,6 +26,7 @@ export function createStep(
     duration_ms: number;
     error?: string | null;
     label?: string | null;
+    metadata?: Record<string, unknown> | null;
   }
 ): ResearchStep {
   const id = generateId();
@@ -33,8 +35,8 @@ export function createStep(
   sqlite.prepare(`
     INSERT INTO research_steps
       (id, thread_id, session_id, finding_id, model, provider,
-       prompt_tokens, completion_tokens, cost_usd, tool_calls, duration_ms, error, label, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       prompt_tokens, completion_tokens, cost_usd, tool_calls, duration_ms, error, label, metadata, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     params.thread_id,
@@ -49,6 +51,7 @@ export function createStep(
     params.duration_ms,
     params.error ?? null,
     params.label ?? null,
+    JSON.stringify(params.metadata ?? null),
     now
   );
 
@@ -57,6 +60,18 @@ export function createStep(
 
 export function getStep(sqlite: Sqlite, id: string): ResearchStep | null {
   const row = sqlite.prepare('SELECT * FROM research_steps WHERE id = ?').get(id) as Record<string, unknown> | null;
+  return row ? rowToStep(row) : null;
+}
+
+export function updateStepMetadata(sqlite: Sqlite, stepId: string, metadata: Record<string, unknown>): void {
+  sqlite.prepare('UPDATE research_steps SET metadata = ? WHERE id = ?')
+    .run(JSON.stringify(metadata), stepId);
+}
+
+export function getLatestStepByLabel(sqlite: Sqlite, threadId: string, label: string): ResearchStep | null {
+  const row = sqlite.prepare(
+    'SELECT * FROM research_steps WHERE thread_id = ? AND label = ? ORDER BY created_at DESC LIMIT 1'
+  ).get(threadId, label) as Record<string, unknown> | null;
   return row ? rowToStep(row) : null;
 }
 

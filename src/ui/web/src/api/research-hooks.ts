@@ -418,6 +418,7 @@ export interface ResearchStep {
   duration_ms: number;
   error: string | null;
   label: string | null;
+  metadata: Record<string, unknown> | null;
   created_at: string;
 }
 

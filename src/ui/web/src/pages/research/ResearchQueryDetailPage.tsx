@@ -1155,12 +1155,50 @@ const liveOriginColor: Record<string, string> = {
 
 const THREAD_PALETTE = ['#c792ea', '#82aaff', '#c3e88d', '#89ddff', '#ffcb6b', '#f78c6c', '#f07178', '#b2ccd6'];
 
-function formatEventDetail(ev: StreamEvent): { typeLabel: string; typeColor: string; detail: string } | null {
+type Chip = { text: string; color: string };
+
+function fmtTokens(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+}
+
+function stepChips(s: ResearchStep): Chip[] {
+  const chips: Chip[] = [];
+  const shortModel = s.model.includes('/') ? s.model.split('/').pop()! : s.model;
+  chips.push({ text: shortModel, color: 'text-text-disabled' });
+  const tok = s.prompt_tokens + s.completion_tokens;
+  if (tok > 0) chips.push({ text: `${fmtTokens(tok)} tok`, color: 'text-text-disabled' });
+  if (s.cost_usd > 0) chips.push({ text: `$${s.cost_usd.toFixed(4)}`, color: 'text-text-disabled' });
+  // Outcome chips from metadata
+  const m = s.metadata;
+  if (m) {
+    if (m.decision === 'gap_analysis') {
+      const hasGaps = m.has_gaps as boolean;
+      chips.push({ text: hasGaps ? `gaps: ${m.gap_count as number}` : 'no gaps', color: hasGaps ? 'text-warning' : 'text-text-muted' });
+    } else if (m.decision === 'synthesis') {
+      chips.push({ text: `conf ${((m.confidence as number) * 100).toFixed(0)}%`, color: 'text-success' });
+      chips.push({ text: `nov ${((m.novelty as number) * 100).toFixed(0)}%`, color: 'text-blue-400' });
+    } else if (m.decision === 'dedup') {
+      const dup = m.is_duplicate as boolean;
+      chips.push({ text: dup ? 'duplicate' : 'unique', color: dup ? 'text-error' : 'text-text-muted' });
+    } else if (m.decision === 'follow_up_eval') {
+      chips.push({ text: `${m.accepted_count as number} accepted`, color: 'text-success' });
+    }
+  }
+  return chips;
+}
+
+function formatEventDetail(ev: StreamEvent): { typeLabel: string; typeColor: string; detail: string; chips?: Chip[] } | null {
   if (ev.type === 'finding') {
+    const f = ev.payload;
+    const chips: Chip[] = [
+      { text: `conf ${(f.confidence * 100).toFixed(0)}%`, color: f.confidence >= 0.7 ? 'text-success' : f.confidence >= 0.4 ? 'text-warning' : 'text-error' },
+      { text: `nov ${(f.novelty * 100).toFixed(0)}%`, color: 'text-blue-400' },
+    ];
     return {
       typeLabel: 'finding',
       typeColor: 'text-success',
-      detail: ev.payload.content.slice(0, 120) + (ev.payload.content.length > 120 ? '…' : ''),
+      detail: (f.summary || f.content).slice(0, 100) + ((f.summary || f.content).length > 100 ? '…' : ''),
+      chips,
     };
   }
   if (ev.type === 'thread') {
@@ -1174,14 +1212,27 @@ function formatEventDetail(ev: StreamEvent): { typeLabel: string; typeColor: str
   if (ev.type === 'step') {
     const s = ev.payload;
     const tools = s.tool_calls ?? [];
-    if (tools.length === 0) return { typeLabel: 'step', typeColor: 'text-accent/70', detail: s.label ?? '…' };
+    const chips = stepChips(s);
+    // No tools — label-only step (e.g. gap analysis, synthesis, dedup)
+    if (tools.length === 0) {
+      const labelMap: Record<string, string> = {
+        'gap analysis': 'text-orange-400',
+        'synthesize finding': 'text-purple-400',
+        'dedup check': 'text-text-muted',
+        'evaluate follow-ups': 'text-teal-400',
+        'summarize thread': 'text-text-disabled',
+      };
+      const lbl = s.label ?? 'step';
+      const color = labelMap[lbl] ?? 'text-accent/70';
+      return { typeLabel: lbl, typeColor: color, detail: '', chips };
+    }
     const first = tools[0];
     const tool = first.tool ?? 'step';
     const shortTool = tool.replace('search_web', 'search').replace('fetch_url', 'fetch');
     let detail = '';
     if (tool === 'search_web' || tool === 'search') {
       const q = (first.input as Record<string, unknown>)?.query as string ?? '';
-      detail = q ? `query="${q.slice(0, 80)}"` : '';
+      detail = q ? `"${q.slice(0, 80)}"` : '';
     } else if (tool === 'fetch_url' || tool === 'fetch') {
       const urls = s.tool_calls.flatMap(c => c.jina_fetches ?? []).map(j => {
         try { return new URL(j.url).hostname; } catch { return j.url; }
@@ -1192,7 +1243,7 @@ function formatEventDetail(ev: StreamEvent): { typeLabel: string; typeColor: str
       detail = s.label ?? shortTool;
     }
     const typeColor = shortTool === 'search' ? 'text-blue-400' : shortTool === 'fetch' ? 'text-teal-400' : 'text-accent/80';
-    return { typeLabel: shortTool + (tools.length > 1 ? ` ×${tools.length}` : ''), typeColor, detail };
+    return { typeLabel: shortTool + (tools.length > 1 ? ` ×${tools.length}` : ''), typeColor, detail, chips };
   }
   return null;
 }
@@ -1223,7 +1274,8 @@ function LiveView({
   const [autoScroll, setAutoScroll] = useState(true);
   const [filterFindings, setFilterFindings] = useState(false);
   const [expandedFindingId, setExpandedFindingId] = useState<string | null>(null);
-  const [detailThreadId, setDetailThreadId] = useState<string | null>(null);
+  const [filterThreadId, setFilterThreadId] = useState<string | null>(null);
+  const [expandedEventKey, setExpandedEventKey] = useState<string | null>(null);
 
   const stepsByThread = useMemo(() => {
     const map = new Map<string, ResearchStep[]>();
@@ -1274,9 +1326,18 @@ function LiveView({
   const queuedThreads = useMemo(() => threads.filter(t => t.status === 'queued'), [threads]);
 
   const streamEvents = useMemo(() => {
-    const evs = [...events].reverse();
-    return filterFindings ? evs.filter(e => e.type === 'finding') : evs;
-  }, [events, filterFindings]);
+    let evs = [...events].reverse();
+    if (filterFindings) evs = evs.filter(e => e.type === 'finding');
+    if (filterThreadId) {
+      evs = evs.filter(e => {
+        if (e.type === 'finding') return e.payload.thread_id === filterThreadId;
+        if (e.type === 'step') return e.payload.thread_id === filterThreadId;
+        if (e.type === 'thread') return e.payload.id === filterThreadId;
+        return true;
+      });
+    }
+    return evs;
+  }, [events, filterFindings, filterThreadId]);
 
   useEffect(() => {
     if (autoScroll && streamRef.current) {
@@ -1305,14 +1366,14 @@ function LiveView({
                 key={thread.id}
                 role="button"
                 tabIndex={0}
-                aria-pressed={detailThreadId === thread.id}
-                onClick={() => setDetailThreadId(prev => prev === thread.id ? null : thread.id)}
-                onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setDetailThreadId(prev => prev === thread.id ? null : thread.id)}
+                aria-pressed={filterThreadId === thread.id}
+                onClick={() => setFilterThreadId(prev => prev === thread.id ? null : thread.id)}
+                onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setFilterThreadId(prev => prev === thread.id ? null : thread.id)}
                 className={clsx(
                   'px-3 py-2 border-b border-border-primary group hover:bg-bg-tertiary transition-colors cursor-pointer focus:outline-none focus:ring-1 focus:ring-inset focus:ring-accent/50',
-                  detailThreadId === thread.id && 'bg-bg-tertiary/60'
+                  filterThreadId === thread.id && 'bg-bg-tertiary/60'
                 )}
-                style={{ borderLeft: `2px solid ${detailThreadId === thread.id ? color : color + '30'}` }}
+                style={{ borderLeft: `2px solid ${filterThreadId === thread.id ? color : color + '30'}` }}
               >
                 <div className="flex items-center gap-1.5 mb-1">
                   <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', liveStatusDot[thread.status] ?? 'bg-text-muted/40')} />
@@ -1535,133 +1596,30 @@ function LiveView({
         </div>
       </div>
 
-      {/* ── Pane 3: Thread detail OR Live event stream (right) ── */}
+      {/* ── Pane 3: Live event stream (right) ── */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0 bg-bg-primary">
-        {detailThreadId ? (() => {
-          const dt = threads.find(t => t.id === detailThreadId);
-          if (!dt) return null;
-          const dtSteps = [...(stepsByThread.get(detailThreadId) ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at));
-          const dtFindings = findingsByThread.get(detailThreadId) ?? [];
-          const dtColor = threadColor.get(detailThreadId) ?? '#8796b0';
-          return (
-            <>
-              {/* Thread detail header */}
-              <div className="flex items-center gap-2 px-3 py-2 border-b border-border-primary bg-bg-secondary shrink-0 h-[37px]">
-                <button
-                  onClick={() => setDetailThreadId(null)}
-                  className="text-[11px] text-text-muted hover:text-text-primary font-mono px-1.5 py-0.5 rounded border border-border-primary hover:border-border-secondary transition-colors shrink-0"
-                >← stream</button>
-                <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', liveStatusDot[dt.status] ?? 'bg-text-muted/40')} />
-                <span className="text-xs font-medium text-text-primary truncate flex-1">
-                  {dt.short_query ?? dt.query.split('\n')[0]}
-                </span>
-                <span className={clsx('text-[10px] px-1 py-0.5 rounded shrink-0', liveOriginColor[dt.origin] ?? 'bg-bg-tertiary text-text-muted')}>
-                  {dt.origin.replace(/_/g, ' ')}
-                </span>
-                <a
-                  href={`/api/research/queries/${sessionId}/export/log?thread_id=${dt.id}`}
-                  download
-                  title="Save thread activity log (.md)"
-                  className="text-text-disabled hover:text-text-secondary shrink-0 p-0.5 rounded"
-                >
-                  <Icon name="download" size="xs" />
-                </a>
-              </div>
-
-              {/* Thread detail body */}
-              <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-                {/* Metadata */}
-                <div className="flex items-center gap-4 text-xs text-text-muted">
-                  <span>depth <span className="text-text-secondary font-mono">{dt.depth}/{dt.max_depth}</span></span>
-                  <span>priority <span className="text-text-secondary font-mono">{dt.priority.toFixed(2)}</span></span>
-                  <span>created <span className="text-text-secondary">{new Date(dt.created_at).toLocaleTimeString()}</span></span>
+        <>
+          {/* Event log header */}
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border-primary bg-bg-secondary shrink-0 h-[37px]">
+            <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary shrink-0">Event Log</span>
+            {filterThreadId ? (() => {
+              const ft = threads.find(t => t.id === filterThreadId);
+              const ftColor = threadColor.get(filterThreadId) ?? '#8796b0';
+              return (
+                <div className="flex items-center gap-2 flex-1 overflow-hidden ml-2">
+                  <div
+                    className="text-[10px] px-1.5 py-0.5 rounded border truncate max-w-48"
+                    style={{ background: `${ftColor}15`, borderColor: `${ftColor}35`, color: ftColor }}
+                  >
+                    {ft ? (ft.short_query ?? ft.query.split('\n')[0]).slice(0, 40) : filterThreadId.slice(0, 12)}
+                  </div>
+                  <button
+                    onClick={() => setFilterThreadId(null)}
+                    className="text-[10px] text-text-muted hover:text-text-primary px-1 py-0.5 rounded border border-border-primary shrink-0 transition-colors"
+                  >× clear</button>
                 </div>
-
-                {/* Full query if differs from short */}
-                {dt.short_query && dt.query !== dt.short_query && (
-                  <p className="text-sm text-text-secondary leading-relaxed">{dt.query}</p>
-                )}
-
-                {/* Steps */}
-                {dtSteps.length > 0 && (
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-text-disabled mb-1.5">Steps · {dtSteps.length}</p>
-                    <div className="space-y-2">
-                      {dtSteps.map((step, si) => (
-                        <div key={step.id} className="space-y-1">
-                          <div className="flex items-center gap-2 text-[11px] text-text-muted">
-                            <span className="text-blue-400/80 font-mono shrink-0">llm</span>
-                            <span className="font-mono truncate">{step.model}</span>
-                            <span className="text-text-muted/70">{step.prompt_tokens + step.completion_tokens} tok</span>
-                            {step.cost_usd > 0 && <span className="text-text-muted/70">${step.cost_usd.toFixed(4)}</span>}
-                            <span className="text-text-disabled ml-auto">{new Date(step.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-                          </div>
-                          {step.tool_calls.map((tc, ti) => (
-                            <div key={`${si}-${ti}`} className="pl-3 flex items-start gap-2">
-                              <span className="text-text-secondary/80 text-[11px] font-mono shrink-0">{tc.tool}</span>
-                              {tc.input && (
-                                <span className="text-[11px] text-text-primary break-words flex-1">
-                                  {tc.tool === 'web_search' && (tc.input as Record<string,unknown>).query
-                                    ? `"${(tc.input as Record<string,unknown>).query as string}"`
-                                    : <span className="text-text-secondary/70 text-[10px]">{JSON.stringify(tc.input).slice(0, 100)}</span>}
-                                </span>
-                              )}
-                            </div>
-                          ))}
-                          {step.error && (
-                            <p className="pl-3 text-[11px] text-red-400 break-words">{step.error}</p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Findings */}
-                {dtFindings.length > 0 && (
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-text-disabled mb-1.5">Findings · {dtFindings.length}</p>
-                    <div className="space-y-2">
-                      {dtFindings.map(f => (
-                        <div key={f.id} className="bg-bg-secondary border border-border-primary rounded border-l-2 px-3 py-2 space-y-1.5"
-                          style={{ borderLeftColor: dtColor + '80' }}>
-                          <p className="text-xs text-text-primary leading-relaxed">{f.content}</p>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <ConfBar label="conf" value={f.confidence} />
-                            <ConfBar label="novel" value={f.novelty} />
-                            {f.source_urls.map((url, i) => {
-                              let host = url;
-                              try { host = new URL(url).hostname; } catch { /* keep */ }
-                              return (
-                                <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                                  className="text-[10px] text-accent hover:underline truncate max-w-32">{host}</a>
-                              );
-                            })}
-                          </div>
-                          {f.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1">
-                              {f.tags.map(tag => (
-                                <span key={tag} className="px-1 py-0.5 rounded bg-bg-tertiary text-[10px] text-text-muted">{tag}</span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {dtSteps.length === 0 && dtFindings.length === 0 && (
-                  <p className="text-xs text-text-muted italic text-center py-8">No steps or findings yet.</p>
-                )}
-              </div>
-            </>
-          );
-        })() : (
-          <>
-            {/* Event log header + thread legend */}
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-border-primary bg-bg-secondary shrink-0 h-[37px]">
-              <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary shrink-0">Event Log</span>
+              );
+            })() : (
               <div className="flex items-center gap-1 ml-2 overflow-hidden">
                 {ordered.filter(t => t.status !== 'pruned' || findingsByThread.get(t.id)?.length).slice(0, 20).map(t => {
                   const color = threadColor.get(t.id) ?? '#8796b0';
@@ -1678,77 +1636,93 @@ function LiveView({
                   );
                 })}
               </div>
-              <span className="text-xs text-text-disabled font-mono ml-auto">{events.length}</span>
-            </div>
+            )}
+            <span className="text-xs text-text-disabled font-mono ml-auto shrink-0">
+              {filterThreadId ? `${streamEvents.length} / ${events.length}` : events.length}
+            </span>
+          </div>
 
-            {/* Filter bar */}
-            <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-primary bg-bg-secondary shrink-0">
-              <span className="text-[10px] uppercase tracking-wider text-text-disabled font-semibold mr-1">Show</span>
-              <button
-                onClick={() => setFilterFindings(f => !f)}
-                className={clsx('px-1.5 py-0.5 rounded text-[11px] border font-mono transition-colors',
-                  filterFindings
-                    ? 'border-warning/30 bg-warning/10 text-warning'
-                    : 'border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary'
-                )}
-              >★ findings</button>
-              <button
-                onClick={() => setFilterFindings(false)}
-                className="px-1.5 py-0.5 rounded text-[11px] border border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary font-mono"
-              >all</button>
-              <div className="flex-1" />
-              <button
-                onClick={() => setAutoScroll(a => !a)}
-                className={clsx('px-1.5 py-0.5 rounded text-[11px] border transition-colors',
-                  autoScroll
-                    ? 'border-success/25 bg-success/8 text-success'
-                    : 'border-border-primary bg-bg-tertiary text-text-muted'
-                )}
-              >↓ auto-scroll</button>
-            </div>
-
-            {/* Event stream */}
-            <div
-              ref={streamRef}
-              className="flex-1 overflow-y-auto py-1"
-              onScroll={e => {
-                const el = e.currentTarget;
-                const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
-                setAutoScroll(atBottom);
-              }}
-            >
-              {streamEvents.length === 0 && (
-                <p className="text-xs text-text-muted text-center py-8">Waiting for events…</p>
+          {/* Filter bar */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-primary bg-bg-secondary shrink-0">
+            <span className="text-[10px] uppercase tracking-wider text-text-disabled font-semibold mr-1">Show</span>
+            <button
+              onClick={() => setFilterFindings(f => !f)}
+              className={clsx('px-1.5 py-0.5 rounded text-[11px] border font-mono transition-colors',
+                filterFindings
+                  ? 'border-warning/30 bg-warning/10 text-warning'
+                  : 'border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary'
               )}
-              {streamEvents.map((ev, i) => {
-                const formatted = formatEventDetail(ev);
-                if (!formatted) return null;
-                const threadId = ev.type === 'finding' ? ev.payload.thread_id
-                  : ev.type === 'step' ? ev.payload.thread_id
-                  : ev.type === 'thread' ? ev.payload.id
-                  : null;
-                const color = threadId ? (threadColor.get(threadId) ?? '#8796b0') : '#8796b0';
-                const threadIdx = threadId ? ordered.findIndex(t => t.id === threadId) : -1;
-                const threadLetter = threadIdx >= 0 && threadIdx < 26 ? String.fromCharCode(65 + threadIdx) : '?';
-                const ts = ev.type === 'finding' ? ev.payload.created_at
-                  : ev.type === 'step' ? ev.payload.created_at
-                  : ev.type === 'thread' ? ev.payload.created_at
-                  : null;
-                const timeStr = ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '';
-                const isFinding = ev.type === 'finding';
-                const isHighFinding = isFinding && (ev.payload as ResearchFinding).confidence >= 0.7;
-                return (
+            >★ findings</button>
+            <button
+              onClick={() => setFilterFindings(false)}
+              className="px-1.5 py-0.5 rounded text-[11px] border border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary font-mono"
+            >all</button>
+            <div className="flex-1" />
+            <button
+              onClick={() => setAutoScroll(a => !a)}
+              className={clsx('px-1.5 py-0.5 rounded text-[11px] border transition-colors',
+                autoScroll
+                  ? 'border-success/25 bg-success/8 text-success'
+                  : 'border-border-primary bg-bg-tertiary text-text-muted'
+              )}
+            >↓ auto-scroll</button>
+          </div>
+
+          {/* Event stream */}
+          <div
+            ref={streamRef}
+            className="flex-1 overflow-y-auto py-1"
+            onScroll={e => {
+              const el = e.currentTarget;
+              const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+              setAutoScroll(atBottom);
+            }}
+          >
+            {streamEvents.length === 0 && (
+              <p className="text-xs text-text-muted text-center py-8">Waiting for events…</p>
+            )}
+            {streamEvents.map(ev => {
+              const formatted = formatEventDetail(ev);
+              if (!formatted) return null;
+              const evKey = `${ev.type}:${(ev.payload as { id: string }).id}`;
+              const isExpanded = expandedEventKey === evKey;
+              const threadId = ev.type === 'finding' ? ev.payload.thread_id
+                : ev.type === 'step' ? ev.payload.thread_id
+                : ev.type === 'thread' ? ev.payload.id
+                : null;
+              const color = threadId ? (threadColor.get(threadId) ?? '#8796b0') : '#8796b0';
+              const threadIdx = threadId ? ordered.findIndex(t => t.id === threadId) : -1;
+              const threadLetter = threadIdx >= 0 && threadIdx < 26 ? String.fromCharCode(65 + threadIdx) : '?';
+              const ts = ev.type === 'finding' ? ev.payload.created_at
+                : ev.type === 'step' ? ev.payload.created_at
+                : ev.type === 'thread' ? ev.payload.created_at
+                : null;
+              const timeStr = ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '';
+              const isFinding = ev.type === 'finding';
+              const isHighFinding = isFinding && (ev.payload as ResearchFinding).confidence >= 0.7;
+              return (
+                <div
+                  key={evKey}
+                  className={clsx(
+                    'border-b border-border-primary/20 transition-colors',
+                    isFinding
+                      ? isHighFinding ? 'bg-warning/5' : 'bg-success/4'
+                      : isExpanded ? 'bg-bg-secondary/60' : 'hover:bg-bg-secondary/40'
+                  )}
+                >
+                  {/* Collapsed row */}
                   <div
-                    key={i}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setExpandedEventKey(prev => prev === evKey ? null : evKey)}
+                    onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setExpandedEventKey(prev => prev === evKey ? null : evKey)}
                     className={clsx(
-                      'grid items-baseline px-3 py-0.5 border-l-2 transition-colors hover:bg-bg-secondary/50',
+                      'grid items-baseline px-3 py-0.5 border-l-2 cursor-pointer focus:outline-none',
                       isFinding
-                        ? isHighFinding
-                          ? 'bg-warning/5 border-l-warning/40'
-                          : 'bg-success/4 border-l-success/25'
-                        : 'border-l-transparent'
+                        ? isHighFinding ? 'border-l-warning/40' : 'border-l-success/25'
+                        : isExpanded ? 'border-l-accent/40' : 'border-l-transparent'
                     )}
-                    style={{ gridTemplateColumns: '64px 22px 80px 1fr', gap: '0' }}
+                    style={{ gridTemplateColumns: '64px 22px 100px 1fr', gap: '0' }}
                   >
                     <span className="text-[10px] text-text-disabled font-mono pr-2 truncate">{timeStr}</span>
                     <span className="pr-1 flex items-center">
@@ -1758,23 +1732,179 @@ function LiveView({
                       >{threadLetter}</div>
                     </span>
                     <span className={clsx('text-[11px] font-mono pr-2 truncate', formatted.typeColor)}>{formatted.typeLabel}</span>
-                    <span className="text-[11px] text-text-muted truncate">
-                      {isHighFinding && <span className="text-warning mr-1">★</span>}
-                      {formatted.detail}
+                    <span className="text-[11px] text-text-muted min-w-0 flex items-baseline gap-1.5 overflow-hidden">
+                      {isHighFinding && <span className="text-warning shrink-0">★</span>}
+                      {formatted.detail && <span className="truncate">{formatted.detail}</span>}
+                      {formatted.chips && formatted.chips.map((chip, ci) => (
+                        <span key={ci} className={clsx('text-[10px] font-mono shrink-0', chip.color)}>{chip.text}</span>
+                      ))}
                     </span>
                   </div>
-                );
-              })}
-              {isRunning && (
-                <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-success font-mono">
-                  <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                  <span>running</span>
-                  <span className="text-text-disabled ml-2">{events.length} events · {findings.length} findings</span>
+                  {/* Expanded content */}
+                  {isExpanded && (
+                    <div className="px-3 pb-2.5 pt-1 space-y-1.5 border-l-2 border-l-accent/20 ml-[86px]">
+                      {ev.type === 'step' && (() => {
+                        const s = ev.payload;
+                        return (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 text-[11px] text-text-muted flex-wrap">
+                              <span className="text-blue-400/80 font-mono">llm</span>
+                              <span className="font-mono">{s.model}</span>
+                              <span>{s.prompt_tokens}+{s.completion_tokens} tok</span>
+                              {s.cost_usd > 0 && <span>${s.cost_usd.toFixed(4)}</span>}
+                              {s.duration_ms > 0 && <span>{(s.duration_ms / 1000).toFixed(1)}s</span>}
+                            </div>
+                            {s.label && <p className="text-[10px] text-text-disabled font-mono">{s.label}</p>}
+                            {s.tool_calls.map((tc, ti) => (
+                              <div key={ti} className="space-y-0.5">
+                                <div className="flex items-start gap-2">
+                                  <span className="text-text-secondary/80 text-[11px] font-mono shrink-0">{tc.tool}</span>
+                                  {tc.input && (
+                                    <span className="text-[11px] text-text-primary break-words flex-1">
+                                      {(tc.tool === 'web_search' || tc.tool === 'search_web') && (tc.input as Record<string,unknown>).query
+                                        ? `"${(tc.input as Record<string,unknown>).query as string}"`
+                                        : <span className="text-text-secondary/70 text-[10px]">{JSON.stringify(tc.input).slice(0, 160)}</span>}
+                                    </span>
+                                  )}
+                                </div>
+                                {tc.jina_fetches && tc.jina_fetches.length > 0 && (
+                                  <div className="pl-3 text-[10px] text-text-muted">
+                                    {tc.jina_fetches.map((j, ji) => {
+                                      let host = j.url; try { host = new URL(j.url).hostname; } catch { /* keep */ }
+                                      return <span key={ji} className={clsx('mr-2', j.ok ? 'text-teal-400' : 'text-error')}>{host}</span>;
+                                    })}
+                                  </div>
+                                )}
+                                {tc.output && <p className="pl-3 text-[10px] text-text-muted/80 break-words">{tc.output.slice(0, 300)}{tc.output.length > 300 ? '…' : ''}</p>}
+                              </div>
+                            ))}
+                            {s.metadata && (() => {
+                              const m = s.metadata;
+                              if (m.decision === 'gap_analysis') return (
+                                <div className="text-[11px] space-y-0.5">
+                                  <span className={m.has_gaps ? 'text-warning' : 'text-text-disabled'}>
+                                    {m.has_gaps ? `gaps found: ${m.gap_count as number}` : 'no gaps found'}
+                                  </span>
+                                  {(m.gap_queries as string[]).map((q, qi) => (
+                                    <div key={qi} className="pl-3 text-text-secondary text-[10px]">→ "{q}"</div>
+                                  ))}
+                                </div>
+                              );
+                              if (m.decision === 'synthesis') return (
+                                <div className="flex gap-3 text-[11px] font-mono">
+                                  <span className="text-success">conf {((m.confidence as number) * 100).toFixed(0)}%</span>
+                                  <span className="text-blue-400">novel {((m.novelty as number) * 100).toFixed(0)}%</span>
+                                  <span className="text-text-muted">act {((m.actionability as number) * 100).toFixed(0)}%</span>
+                                  {(m.tags as string[]).length > 0 && (
+                                    <span className="text-text-disabled">{(m.tags as string[]).join(', ')}</span>
+                                  )}
+                                </div>
+                              );
+                              if (m.decision === 'dedup') return (
+                                <p className={clsx('text-[11px]', (m.is_duplicate as boolean) ? 'text-error' : 'text-text-disabled')}>
+                                  {(m.is_duplicate as boolean) ? 'duplicate detected' : `unique · checked ${m.existing_count as number} findings`}
+                                </p>
+                              );
+                              if (m.decision === 'follow_up_eval') return (
+                                <p className="text-[11px] text-text-muted">
+                                  {m.accepted_count as number} follow-ups accepted, {m.rejected_count as number} rejected
+                                  {(m.retry_count as number) > 0 && ` (${m.retry_count as number} retries)`}
+                                </p>
+                              );
+                              return null;
+                            })()}
+                            {s.error && <p className="text-[11px] text-red-400 break-words">{s.error}</p>}
+                          </div>
+                        );
+                      })()}
+                      {ev.type === 'finding' && (() => {
+                        const f = ev.payload;
+                        const srcMeta = f.source_url_meta?.length ? f.source_url_meta : f.source_urls.map(u => ({ url: u, title: '', snippet: '' }));
+                        return (
+                          <div className="space-y-1.5">
+                            <p className="text-xs text-text-primary leading-relaxed">{f.content}</p>
+                            <div className="flex items-center gap-3 text-[11px] font-mono flex-wrap">
+                              <span className={f.confidence >= 0.7 ? 'text-success' : f.confidence >= 0.4 ? 'text-warning' : 'text-error'}>
+                                conf {(f.confidence * 100).toFixed(0)}%
+                              </span>
+                              <span className="text-blue-400">novel {(f.novelty * 100).toFixed(0)}%</span>
+                              <span className="text-text-muted">act {(f.actionability * 100).toFixed(0)}%</span>
+                            </div>
+                            {srcMeta.length > 0 && (
+                              <div className="space-y-0.5">
+                                {srcMeta.map((src, si) => {
+                                  let host = src.url; try { host = new URL(src.url).hostname; } catch { /* keep */ }
+                                  return (
+                                    <a key={si} href={src.url} target="_blank" rel="noopener noreferrer"
+                                      onClick={e => e.stopPropagation()}
+                                      className="block text-[11px] text-accent hover:underline truncate">
+                                      {src.title || host}
+                                    </a>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            {f.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {f.tags.map(tag => (
+                                  <span key={tag} className="px-1 py-0.5 rounded bg-bg-tertiary text-[10px] text-text-muted">{tag}</span>
+                                ))}
+                              </div>
+                            )}
+                            {f.follow_up_analysis && (
+                              <div className="space-y-1 pt-1 border-t border-border-primary/30">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-text-disabled">
+                                  Follow-up candidates · threshold {(f.follow_up_analysis.similarity_threshold * 100).toFixed(0)}%
+                                  {f.follow_up_analysis.retry_count > 0 && ` · ${f.follow_up_analysis.retry_count} retries`}
+                                </p>
+                                {f.follow_up_analysis.candidates.map((c, ci) => (
+                                  <div key={ci} className="flex items-start gap-2">
+                                    <span className={clsx('text-[10px] font-mono shrink-0 mt-0.5', c.accepted ? 'text-success' : 'text-error')}>
+                                      {c.accepted ? '✓' : '✗'}
+                                    </span>
+                                    <span className={clsx('text-[11px] flex-1', c.accepted ? 'text-text-primary' : 'text-text-muted')}>{c.text}</span>
+                                    <span className="text-[10px] font-mono text-text-disabled shrink-0">
+                                      q:{(c.quality_score * 100).toFixed(0)}% r:{(c.rank_score * 100).toFixed(0)}%
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                      {ev.type === 'thread' && (() => {
+                        const t = ev.payload;
+                        return (
+                          <div className="space-y-1 text-[11px] text-text-muted">
+                            <p className="text-text-secondary">{t.query}</p>
+                            <div className="flex items-center gap-3">
+                              <span>depth <span className="font-mono">{t.depth}/{t.max_depth}</span></span>
+                              <span>priority <span className="font-mono">{t.priority.toFixed(2)}</span></span>
+                              <span className={clsx('px-1 py-0.5 rounded text-[10px]', liveOriginColor[t.origin] ?? 'bg-bg-tertiary text-text-muted')}>
+                                {t.origin.replace(/_/g, ' ')}
+                              </span>
+                              {t.perturbation_strategy && (
+                                <span className="text-orange-400/70">{t.perturbation_strategy.replace(/_/g, ' ')}</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </>
-        )}
+              );
+            })}
+            {isRunning && (
+              <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-success font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                <span>running</span>
+                <span className="text-text-disabled ml-2">{events.length} events · {findings.length} findings</span>
+              </div>
+            )}
+          </div>
+        </>
       </div>
     </div>
   );

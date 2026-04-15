@@ -232,6 +232,7 @@ export interface ResearchStep {
   duration_ms: number;
   error: string | null;
   label: string | null;
+  metadata: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -269,6 +270,12 @@ export interface FollowUpAnalysis {
   retry_count: number;
   min_required: number;
 }
+
+export type StepMetadata =
+  | { decision: 'gap_analysis'; has_gaps: boolean; gap_count: number; gap_queries: string[] }
+  | { decision: 'synthesis'; confidence: number; novelty: number; actionability: number; tags: string[] }
+  | { decision: 'dedup'; is_duplicate: boolean; existing_count: number }
+  | { decision: 'follow_up_eval'; accepted_count: number; rejected_count: number; retry_count: number }
 
 export interface ResearchPlan {
   id: string;

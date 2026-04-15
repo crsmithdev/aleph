@@ -93,6 +93,7 @@ export function applyResearchDDL(sqlite: Sqlite): void {
       tool_calls TEXT NOT NULL DEFAULT '[]',
       duration_ms INTEGER NOT NULL DEFAULT 0,
       error TEXT,
+      metadata TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_rs_session_created ON research_steps(session_id, created_at);

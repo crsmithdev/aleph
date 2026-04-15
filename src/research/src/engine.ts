@@ -504,7 +504,7 @@ export class ResearchEngine {
     }
 
     // Step 4: Check for duplicates
-    const isDuplicate = await this.checkDuplicate(sessionId, synthesisResult.summary, config);
+    const isDuplicate = await this.checkDuplicate(sessionId, thread.id, synthesisResult.summary, config);
     if (isDuplicate) {
       synthesisResult.novelty = Math.min(synthesisResult.novelty, 0.2);
     }
@@ -513,6 +513,13 @@ export class ResearchEngine {
     const { accepted: followUpQuestions, analysis: followUpAnalysis } = await this.evaluateFollowUps(
       thread, allSearchResults, synthesisResult, config
     );
+    const lastFollowUpStep = steps.getLatestStepByLabel(this.sqlite, thread.id, 'evaluate follow-ups');
+    if (lastFollowUpStep) steps.updateStepMetadata(this.sqlite, lastFollowUpStep.id, {
+      decision: 'follow_up_eval',
+      accepted_count: followUpQuestions.length,
+      rejected_count: followUpAnalysis.candidates.filter((c: { accepted: boolean }) => !c.accepted).length,
+      retry_count: followUpAnalysis.retry_count,
+    });
 
     // Step 5: Store finding
     const finding = findings.createFinding(this.sqlite, {
@@ -803,6 +810,10 @@ If has_gaps is true, gap_queries must contain ${config.gap_analysis.max_gap_sear
       if (parsed.has_gaps && Array.isArray(parsed.gap_queries)) {
         gapQueries = parsed.gap_queries.slice(0, config.gap_analysis.max_gap_searches ?? 2);
       }
+      if (result.stepId) steps.updateStepMetadata(this.sqlite, result.stepId, {
+        decision: 'gap_analysis', has_gaps: gapQueries.length > 0,
+        gap_count: gapQueries.length, gap_queries: gapQueries
+      });
     } catch {
       return [];
     }
@@ -865,6 +876,13 @@ Return ONLY valid JSON. No markdown fences.`,
       const parsed = JSON.parse(text);
       // Collect all sourceUrlMeta from search results
       const allMeta = searchResults.flatMap(r => r.sourceUrlMeta ?? []);
+      if (result.stepId) steps.updateStepMetadata(this.sqlite, result.stepId, {
+        decision: 'synthesis',
+        confidence: parsed.confidence ?? 0.5,
+        novelty: parsed.novelty ?? 0.5,
+        actionability: parsed.actionability ?? 0.5,
+        tags: parsed.tags ?? []
+      });
       return {
         content: parsed.content ?? '',
         summary: parsed.summary ?? '',
@@ -1154,7 +1172,7 @@ Return ONLY a JSON array of question strings. No other text.`;
     }
   }
 
-  private async checkDuplicate(sessionId: string, newSummary: string, config: SessionConfig): Promise<boolean> {
+  private async checkDuplicate(sessionId: string, threadId: string, newSummary: string, config: SessionConfig): Promise<boolean> {
     const existing = findings.getRecentFindings(this.sqlite, sessionId, 50);
     if (existing.length === 0) return false;
 
@@ -1171,11 +1189,16 @@ Existing findings:
 
 Respond with ONLY "true" if this is a duplicate or near-duplicate, "false" otherwise.`,
       sessionId,
-      '',
-      config
+      threadId,
+      config,
+      'dedup check'
     );
 
-    return result.text.trim().toLowerCase() === 'true';
+    const isDuplicate = result.text.trim().toLowerCase() === 'true';
+    if (result.stepId) steps.updateStepMetadata(this.sqlite, result.stepId, {
+      decision: 'dedup', is_duplicate: isDuplicate, existing_count: existing.length
+    });
+    return isDuplicate;
   }
 
   private async maybePerturbate(
@@ -1567,14 +1590,15 @@ Write the full article in markdown.`,
     threadId: string,
     config: SessionConfig,
     label?: string
-  ): Promise<LLMResult & { cost: number }> {
+  ): Promise<LLMResult & { cost: number; stepId: string | null }> {
     const startTime = Date.now();
     const result = await this.provider.complete(model, prompt, 8192);
 
     const cost = calculateCost(result.model, result.promptTokens, result.completionTokens);
 
+    let stepId: string | null = null;
     if (sessionId && threadId) {
-      steps.createStep(this.sqlite, {
+      const step = steps.createStep(this.sqlite, {
         thread_id: threadId,
         session_id: sessionId,
         model: result.model,
@@ -1584,8 +1608,9 @@ Write the full article in markdown.`,
         label: label ?? null,
         duration_ms: Date.now() - startTime,
       });
+      stepId = step.id;
     }
 
-    return { ...result, cost };
+    return { ...result, cost, stepId };
   }
 }
