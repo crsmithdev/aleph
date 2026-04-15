@@ -1884,9 +1884,7 @@ function LiveView({
                               if (m.decision === 'gap_analysis') return (
                                 <div className="text-sm">
                                   <span className={m.has_gaps ? 'text-warning' : 'text-text-secondary'}>
-                                    {m.has_gaps
-                                      ? `${m.gap_count as number} gap${(m.gap_count as number) !== 1 ? 's' : ''} found — searching below`
-                                      : 'no gaps found'}
+                                    {m.has_gaps ? `${m.gap_count as number} gaps` : 'no gaps'}
                                   </span>
                                 </div>
                               );
