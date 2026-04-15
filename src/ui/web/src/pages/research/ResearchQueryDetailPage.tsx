@@ -1289,6 +1289,28 @@ function LiveView({
   const [expandedFindingId, setExpandedFindingId] = useState<string | null>(null);
   const [filterThreadId, setFilterThreadId] = useState<string | null>(null);
   const [expandedEventKey, setExpandedEventKey] = useState<string | null>(null);
+  const [threadPanelWidth, setThreadPanelWidth] = useState(260);
+  const [findingsPanelWidth, setFindingsPanelWidth] = useState(380);
+
+  const startResizeThread = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = threadPanelWidth;
+    const onMove = (ev: MouseEvent) => setThreadPanelWidth(Math.max(180, Math.min(420, startW + ev.clientX - startX)));
+    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  const startResizeFindings = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = findingsPanelWidth;
+    const onMove = (ev: MouseEvent) => setFindingsPanelWidth(Math.max(260, Math.min(640, startW + ev.clientX - startX)));
+    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
 
   const stepsByThread = useMemo(() => {
     const map = new Map<string, ResearchStep[]>();
@@ -1382,7 +1404,7 @@ function LiveView({
   return (
     <div className="flex h-full overflow-hidden">
       {/* ── Pane 1: Thread controls (left) ── */}
-      <div className="w-52 shrink-0 flex flex-col border-r border-border-primary bg-bg-secondary overflow-hidden">
+      <div className="shrink-0 flex flex-col bg-bg-secondary overflow-hidden" style={{ width: threadPanelWidth }}>
         <div className="flex items-center gap-2 px-3 py-2 border-b border-border-primary shrink-0 h-[37px]">
           {isRunning && <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shrink-0" />}
           <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary">Threads</span>
@@ -1412,17 +1434,17 @@ function LiveView({
                 <div className="flex items-center gap-1.5 mb-1">
                   <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', liveStatusDot[thread.status] ?? 'bg-text-muted/40')} />
                   <span className="text-xs font-medium text-text-primary truncate flex-1 leading-tight">
-                    {(thread.short_query ?? thread.query.split('\n')[0]).slice(0, 36)}
+                    {thread.short_query ?? thread.query.split('\n')[0]}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 mb-1.5">
-                  <span className={clsx('text-[10px] px-1 py-0.5 rounded shrink-0', liveOriginColor[thread.origin] ?? 'bg-bg-tertiary text-text-muted')}>
+                  <span className={clsx('text-xs px-1 py-0.5 rounded shrink-0', liveOriginColor[thread.origin] ?? 'bg-bg-tertiary text-text-muted')}>
                     {thread.origin.replace(/_/g, ' ')}
                   </span>
-                  <span className="text-[10px] font-mono text-text-disabled">p:{thread.priority.toFixed(2)}</span>
                   {threadFindings.length > 0 && (
-                    <span className="text-[10px] font-mono text-success ml-auto">{threadFindings.length}✦</span>
+                    <span className="text-xs font-mono text-success ml-auto">{threadFindings.length}✦</span>
                   )}
+                  <span className="text-[10px] font-mono text-text-muted opacity-0 group-hover:opacity-100 transition-opacity ml-auto">p:{thread.priority.toFixed(2)}</span>
                 </div>
                 {thread.status === 'active' && (
                   <div className="h-0.5 bg-bg-tertiary rounded-full overflow-hidden mb-1.5">
@@ -1471,8 +1493,13 @@ function LiveView({
         </div>
       </div>
 
+      {/* Resize handle 1 */}
+      <div
+        className="w-1 shrink-0 cursor-col-resize bg-border-primary hover:bg-accent/40 transition-colors"
+        onMouseDown={startResizeThread}
+      />
       {/* ── Pane 2: Findings (center) ── */}
-      <div className="flex flex-col overflow-hidden border-r border-border-primary" style={{ width: '38%' }}>
+      <div className="flex flex-col overflow-hidden" style={{ width: findingsPanelWidth, minWidth: 0 }}>
         <div className="flex items-center gap-2 px-3 py-2 border-b border-border-primary bg-bg-secondary shrink-0 h-[37px]">
           <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary">Findings</span>
           {findings.length > 0 && (
@@ -1486,7 +1513,7 @@ function LiveView({
             <>
               {highFindings.length > 0 && (
                 <>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-text-disabled">High confidence · {highFindings.length}</p>
+                  <p className="text-xs font-semibold text-text-secondary">High confidence · {highFindings.length}</p>
                   {highFindings.map(f => {
                     const isExpanded = expandedFindingId === f.id;
                     const srcMeta = f.source_url_meta?.length ? f.source_url_meta : f.source_urls.map(u => ({ url: u, title: '', snippet: '' }));
@@ -1523,25 +1550,25 @@ function LiveView({
                             {f.tags.length > 0 && (
                               <div className="flex flex-wrap gap-1">
                                 {f.tags.map(tag => (
-                                  <span key={tag} className="px-1 py-0.5 rounded bg-bg-tertiary text-[10px] text-text-muted">{tag}</span>
+                                  <span key={tag} className="px-1 py-0.5 rounded bg-bg-tertiary text-xs text-text-muted">{tag}</span>
                                 ))}
                               </div>
                             )}
                             {thread && (
-                              <p className="text-[10px] text-text-disabled italic truncate">{thread.short_query ?? thread.query}</p>
+                              <p className="text-xs text-text-muted italic truncate">{thread.short_query ?? thread.query}</p>
                             )}
                           </div>
                         )}
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {f.source_urls[0] && !isExpanded && (
-                            <span className="text-[10px] font-mono text-blue-400 bg-blue-400/8 border border-blue-400/15 px-1 py-0.5 rounded truncate max-w-28">
+                            <span className="text-xs font-mono text-blue-400 bg-blue-400/8 border border-blue-400/15 px-1 py-0.5 rounded truncate max-w-28">
                               {(() => { try { return new URL(f.source_urls[0]).hostname; } catch { return f.source_urls[0]; } })()}
                             </span>
                           )}
-                          <span className="text-[10px] font-mono text-text-disabled bg-bg-tertiary border border-border-primary px-1 py-0.5 rounded">
+                          <span className="text-xs font-mono text-text-muted bg-bg-tertiary border border-border-primary px-1 py-0.5 rounded">
                             {thread?.origin?.replace(/_/g, ' ') ?? '—'}
                           </span>
-                          <span className="text-[10px] font-mono text-text-muted ml-auto">{(f.confidence * 100).toFixed(0)}%</span>
+                          <span className="text-xs font-mono text-text-muted ml-auto">{(f.confidence * 100).toFixed(0)}%</span>
                         </div>
                       </div>
                     );
@@ -1550,7 +1577,7 @@ function LiveView({
               )}
               {medFindings.length > 0 && (
                 <>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-text-disabled mt-3">Medium confidence · {medFindings.length}</p>
+                  <p className="text-xs font-semibold text-text-secondary mt-3">Medium confidence · {medFindings.length}</p>
                   {medFindings.map(f => {
                     const isExpanded = expandedFindingId === f.id;
                     const srcMeta = f.source_url_meta?.length ? f.source_url_meta : f.source_urls.map(u => ({ url: u, title: '', snippet: '' }));
@@ -1586,7 +1613,7 @@ function LiveView({
                             {f.tags.length > 0 && (
                               <div className="flex flex-wrap gap-1">
                                 {f.tags.map(tag => (
-                                  <span key={tag} className="px-1 py-0.5 rounded bg-bg-tertiary text-[10px] text-text-muted">{tag}</span>
+                                  <span key={tag} className="px-1 py-0.5 rounded bg-bg-tertiary text-xs text-text-muted">{tag}</span>
                                 ))}
                               </div>
                             )}
@@ -1594,35 +1621,35 @@ function LiveView({
                         )}
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {f.source_urls[0] && !isExpanded && (
-                            <span className="text-[10px] font-mono text-blue-400 bg-blue-400/8 border border-blue-400/15 px-1 py-0.5 rounded truncate max-w-28">
+                            <span className="text-xs font-mono text-blue-400 bg-blue-400/8 border border-blue-400/15 px-1 py-0.5 rounded truncate max-w-28">
                               {(() => { try { return new URL(f.source_urls[0]).hostname; } catch { return f.source_urls[0]; } })()}
                             </span>
                           )}
-                          <span className="text-[10px] font-mono text-text-muted ml-auto">{(f.confidence * 100).toFixed(0)}%</span>
+                          <span className="text-xs font-mono text-text-muted ml-auto">{(f.confidence * 100).toFixed(0)}%</span>
                         </div>
                       </div>
                     );
                   })}
                 </>
               )}
-              {(activeThreads.length > 0 || queuedThreads.length > 0) && (
-                <div className="mt-3 border border-dashed border-border-primary rounded px-3 py-2 space-y-1.5">
-                  <div className="flex items-center gap-1.5">
-                    {activeThreads.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />}
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-text-disabled">Investigating</span>
-                  </div>
+              {activeThreads.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  <p className="text-xs font-semibold text-text-secondary">Investigating</p>
                   {activeThreads.map(t => (
-                    <div key={t.id} className="flex items-center gap-1.5 text-[11px] text-text-secondary">
+                    <div key={t.id} className="flex items-center gap-2 text-xs text-text-secondary">
                       <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shrink-0" />
-                      {(t.short_query ?? t.query.split('\n')[0]).slice(0, 60)}
+                      <span className="truncate">{(t.short_query ?? t.query.split('\n')[0]).slice(0, 60)}</span>
                     </div>
                   ))}
-                  {queuedThreads.map(t => (
-                    <div key={t.id} className="flex items-center gap-1.5 text-[11px] text-text-muted">
+                  {queuedThreads.slice(0, 3).map(t => (
+                    <div key={t.id} className="flex items-center gap-2 text-xs text-text-muted">
                       <span className="w-1.5 h-1.5 rounded-full bg-warning/60 shrink-0" />
-                      {(t.short_query ?? t.query.split('\n')[0]).slice(0, 60)}
+                      <span className="truncate">{(t.short_query ?? t.query.split('\n')[0]).slice(0, 60)}</span>
                     </div>
                   ))}
+                  {queuedThreads.length > 3 && (
+                    <p className="text-xs text-text-muted pl-3.5">+{queuedThreads.length - 3} queued</p>
+                  )}
                 </div>
               )}
             </>
@@ -1630,6 +1657,11 @@ function LiveView({
         </div>
       </div>
 
+      {/* Resize handle 2 */}
+      <div
+        className="w-1 shrink-0 cursor-col-resize bg-border-primary hover:bg-accent/40 transition-colors"
+        onMouseDown={startResizeFindings}
+      />
       {/* ── Pane 3: Live event stream (right) ── */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0 bg-bg-primary">
         <>
@@ -1664,7 +1696,7 @@ function LiveView({
                     <div
                       key={t.id}
                       title={`${letter}: ${label} (${t.status})`}
-                      className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold font-mono shrink-0 cursor-default"
+                      className="w-4 h-4 rounded flex items-center justify-center text-[10px] font-bold font-mono shrink-0 cursor-default"
                       style={{ background: `${color}20`, color, border: `1px solid ${color}35` }}
                     >{letter}</div>
                   );
@@ -1678,7 +1710,7 @@ function LiveView({
 
           {/* Filter bar */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-primary bg-bg-secondary shrink-0">
-            <span className="text-[10px] uppercase tracking-wider text-text-muted font-semibold mr-1">Show</span>
+            <span className="text-xs text-text-muted font-semibold mr-1">Show</span>
             <button
               onClick={() => setFilterFindings(f => !f)}
               className={clsx('px-1.5 py-0.5 rounded text-[11px] border font-mono transition-colors',
@@ -1764,17 +1796,17 @@ function LiveView({
                     onClick={() => setExpandedEventKey(prev => prev === evKey ? null : evKey)}
                     onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setExpandedEventKey(prev => prev === evKey ? null : evKey)}
                     className={clsx(
-                      'grid items-baseline px-3 py-0.5 border-l-2 cursor-pointer focus:outline-none',
+                      'grid items-baseline px-3 py-1 border-l-2 cursor-pointer focus:outline-none',
                       isFinding
                         ? isHighFinding ? 'border-l-warning/40' : 'border-l-success/25'
                         : isExpanded ? 'border-l-accent/40' : 'border-l-transparent'
                     )}
-                    style={{ gridTemplateColumns: '44px 22px 100px 1fr', gap: '0' }}
+                    style={{ gridTemplateColumns: '44px 22px 120px 1fr', gap: '0' }}
                   >
                     <span className="text-[10px] text-text-muted/50 font-mono pr-2 truncate">{timeStr}</span>
                     <span className="pr-1 flex items-center">
                       <div
-                        className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold font-mono"
+                        className="w-4 h-4 rounded flex items-center justify-center text-[10px] font-bold font-mono"
                         style={{ background: `${color}20`, color, border: `1px solid ${color}30` }}
                       >{threadLetter}</div>
                     </span>
@@ -1783,7 +1815,7 @@ function LiveView({
                       {isHighFinding && <span className="text-warning shrink-0">★</span>}
                       {displayDetail && <span className="truncate">{displayDetail}</span>}
                       {formatted.chips && formatted.chips.map((chip, ci) => (
-                        <span key={ci} className={clsx('text-[10px] font-mono shrink-0', chip.color)}>{chip.text}</span>
+                        <span key={ci} className={clsx('text-[11px] font-mono shrink-0', chip.color)}>{chip.text}</span>
                       ))}
                     </span>
                   </div>
