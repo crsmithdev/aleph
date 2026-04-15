@@ -1164,10 +1164,10 @@ function fmtTokens(n: number): string {
 function stepChips(s: ResearchStep): Chip[] {
   const chips: Chip[] = [];
   const shortModel = s.model.includes('/') ? s.model.split('/').pop()! : s.model;
-  chips.push({ text: shortModel, color: 'text-text-disabled' });
+  chips.push({ text: shortModel, color: 'text-text-muted' });
   const tok = s.prompt_tokens + s.completion_tokens;
-  if (tok > 0) chips.push({ text: `${fmtTokens(tok)} tok`, color: 'text-text-disabled' });
-  if (s.cost_usd > 0) chips.push({ text: `$${s.cost_usd.toFixed(4)}`, color: 'text-text-disabled' });
+  if (tok > 0) chips.push({ text: `${fmtTokens(tok)} tok`, color: 'text-text-muted' });
+  if (s.cost_usd > 0) chips.push({ text: `$${s.cost_usd.toFixed(4)}`, color: 'text-text-muted' });
   // Outcome chips from metadata
   const m = s.metadata;
   if (m) {
@@ -1180,7 +1180,7 @@ function stepChips(s: ResearchStep): Chip[] {
     } else if (m.decision === 'dedup') {
       const dup = m.is_duplicate as boolean;
       chips.push({ text: dup ? 'duplicate' : 'unique', color: dup ? 'text-error' : 'text-text-muted' });
-      chips.push({ text: `vs ${m.existing_count as number}`, color: 'text-text-disabled' });
+      chips.push({ text: `vs ${m.existing_count as number}`, color: 'text-text-muted' });
     } else if (m.decision === 'follow_up_eval') {
       chips.push({ text: `${m.accepted_count as number}✓ ${m.rejected_count as number}✗`, color: 'text-text-muted' });
     } else if (m.decision === 'formulate_queries') {
@@ -1210,15 +1210,15 @@ function formatEventDetail(ev: StreamEvent & { threadDiff?: string }): { typeLab
     const name = (t.short_query ?? t.query.split('\n')[0]).slice(0, 60);
     // If we have a diff and it's not a status transition, show what changed
     if (diff && !diff.includes(' → ')) {
-      return { typeLabel: 'thread', typeColor: 'text-text-disabled', detail: `${name} · ${diff}` };
+      return { typeLabel: 'thread', typeColor: 'text-text-muted', detail: `${name} · ${diff}` };
     }
     const originTag = t.origin !== 'seed' ? ` [${t.origin.replace(/_/g, '·')} d${t.depth}]` : ` [d${t.depth}]`;
     if (t.status === 'active') return { typeLabel: 'spawn', typeColor: 'text-warning', detail: `"${name}"${originTag}` };
     if (t.status === 'queued') return { typeLabel: 'queued', typeColor: 'text-warning/70', detail: `"${name}"${originTag}` };
     if (t.status === 'pruned') return { typeLabel: 'pruned', typeColor: 'text-error', detail: `"${name}"` };
     if (t.status === 'exhausted') return { typeLabel: 'done', typeColor: 'text-text-muted', detail: `"${name}"` };
-    if (t.status === 'deferred') return { typeLabel: 'deferred', typeColor: 'text-text-disabled', detail: `"${name}"${originTag}` };
-    if (diff) return { typeLabel: 'thread', typeColor: 'text-text-disabled', detail: `${name} · ${diff}` };
+    if (t.status === 'deferred') return { typeLabel: 'deferred', typeColor: 'text-text-muted', detail: `"${name}"${originTag}` };
+    if (diff) return { typeLabel: 'thread', typeColor: 'text-text-muted', detail: `${name} · ${diff}` };
     return null;
   }
   if (ev.type === 'step') {
@@ -1232,7 +1232,7 @@ function formatEventDetail(ev: StreamEvent & { threadDiff?: string }): { typeLab
         'synthesize finding': 'text-purple-400',
         'dedup check': 'text-text-muted',
         'evaluate follow-ups': 'text-teal-400',
-        'summarize thread': 'text-text-disabled',
+        'summarize thread': 'text-text-muted',
       };
       const lbl = s.label ?? 'step';
       const color = labelMap[lbl] ?? 'text-accent/70';
@@ -1240,9 +1240,9 @@ function formatEventDetail(ev: StreamEvent & { threadDiff?: string }): { typeLab
     }
     const first = tools[0];
     const tool = first.tool ?? 'step';
-    const shortTool = tool.replace('search_web', 'search').replace('fetch_url', 'fetch');
+    const shortTool = tool.replace('web_search', 'search').replace('search_web', 'search').replace('fetch_url', 'fetch');
     let detail = '';
-    if (tool === 'search_web' || tool === 'search') {
+    if (tool === 'web_search' || tool === 'search_web' || tool === 'search') {
       const q = (first.input as Record<string, unknown>)?.query as string ?? '';
       detail = q ? `"${q.slice(0, 80)}"` : '';
     } else if (tool === 'fetch_url' || tool === 'fetch') {
@@ -1670,14 +1670,14 @@ function LiveView({
                 })}
               </div>
             )}
-            <span className="text-xs text-text-disabled font-mono ml-auto shrink-0">
+            <span className="text-xs text-text-muted font-mono ml-auto shrink-0">
               {filterThreadId ? `${streamEvents.length} / ${events.length}` : events.length}
             </span>
           </div>
 
           {/* Filter bar */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-primary bg-bg-secondary shrink-0">
-            <span className="text-[10px] uppercase tracking-wider text-text-disabled font-semibold mr-1">Show</span>
+            <span className="text-[10px] uppercase tracking-wider text-text-muted font-semibold mr-1">Show</span>
             <button
               onClick={() => setFilterFindings(f => !f)}
               className={clsx('px-1.5 py-0.5 rounded text-[11px] border font-mono transition-colors',
@@ -1726,6 +1726,7 @@ function LiveView({
                 : ev.type === 'thread' ? ev.payload.id
                 : null;
               const color = threadId ? (threadColor.get(threadId) ?? '#8796b0') : '#8796b0';
+              const thread = threadId ? ordered.find(t => t.id === threadId) ?? null : null;
               const threadIdx = threadId ? ordered.findIndex(t => t.id === threadId) : -1;
               const threadLetter = threadIdx >= 0 && threadIdx < 26 ? String.fromCharCode(65 + threadIdx) : '?';
               const ts = ev.type === 'finding' ? ev.payload.created_at
@@ -1734,6 +1735,11 @@ function LiveView({
                 : null;
               const timeStr = ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
               const isFinding = ev.type === 'finding';
+              // For label-only steps with no detail, show abbreviated thread query
+              const isLabelOnlyStep = ev.type === 'step' && (ev.payload.tool_calls ?? []).length === 0;
+              const threadQ = thread ? (thread.short_query ?? thread.query.split('\n')[0]) : null;
+              const abbrevThreadQ = threadQ ? (threadQ.length > 50 ? threadQ.slice(0, 47) + '…' : threadQ) : null;
+              const displayDetail = formatted.detail || (isLabelOnlyStep && abbrevThreadQ) || '';
               const isHighFinding = isFinding && (ev.payload as ResearchFinding).confidence >= 0.7;
               return (
                 <div
@@ -1759,7 +1765,7 @@ function LiveView({
                     )}
                     style={{ gridTemplateColumns: '44px 22px 100px 1fr', gap: '0' }}
                   >
-                    <span className="text-[10px] text-text-disabled/50 font-mono pr-2 truncate">{timeStr}</span>
+                    <span className="text-[10px] text-text-muted/50 font-mono pr-2 truncate">{timeStr}</span>
                     <span className="pr-1 flex items-center">
                       <div
                         className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold font-mono"
@@ -1769,7 +1775,7 @@ function LiveView({
                     <span className={clsx('text-[11px] font-mono pr-2 truncate', formatted.typeColor)}>{formatted.typeLabel}</span>
                     <span className="text-[11px] text-text-muted min-w-0 flex items-baseline gap-1.5 overflow-hidden">
                       {isHighFinding && <span className="text-warning shrink-0">★</span>}
-                      {formatted.detail && <span className="truncate">{formatted.detail}</span>}
+                      {displayDetail && <span className="truncate">{displayDetail}</span>}
                       {formatted.chips && formatted.chips.map((chip, ci) => (
                         <span key={ci} className={clsx('text-[10px] font-mono shrink-0', chip.color)}>{chip.text}</span>
                       ))}
@@ -1789,11 +1795,20 @@ function LiveView({
                               {s.cost_usd > 0 && <span>${s.cost_usd.toFixed(4)}</span>}
                               {s.duration_ms > 0 && <span>{(s.duration_ms / 1000).toFixed(1)}s</span>}
                             </div>
-                            {s.label && <p className="text-[10px] text-text-disabled font-mono">{s.label}</p>}
+                            {s.label && s.tool_calls.length > 0 && <p className="text-[10px] text-text-muted font-mono">{s.label}</p>}
+                            {s.label === 'summarize thread' && thread && (
+                              <div className="text-[11px] space-y-0.5">
+                                <p className="text-text-muted">Generates short conceptual title for thread</p>
+                                <p className="text-text-secondary/80 truncate">query: "{thread.query.split('\n')[0]}"</p>
+                                {thread.short_query && <p className="text-text-secondary">title: "{thread.short_query}"</p>}
+                              </div>
+                            )}
                             {s.tool_calls.map((tc, ti) => (
                               <div key={ti} className="space-y-0.5">
                                 <div className="flex items-start gap-2">
-                                  <span className="text-text-secondary/80 text-[11px] font-mono shrink-0">{tc.tool}</span>
+                                  <span className="text-text-secondary/80 text-[11px] font-mono shrink-0">
+                                    {tc.tool === 'web_search' ? 'search' : tc.tool}
+                                  </span>
                                   {tc.input && (
                                     <span className="text-[11px] text-text-primary break-words flex-1">
                                       {(tc.tool === 'web_search' || tc.tool === 'search_web') && (tc.input as Record<string,unknown>).query
@@ -1817,8 +1832,8 @@ function LiveView({
                               const m = s.metadata;
                               if (m.decision === 'gap_analysis') return (
                                 <div className="text-[11px] space-y-0.5">
-                                  <span className={m.has_gaps ? 'text-warning' : 'text-text-disabled'}>
-                                    {m.has_gaps ? `gaps found: ${m.gap_count as number}` : 'no gaps found'}
+                                  <span className={m.has_gaps ? 'text-warning' : 'text-text-muted'}>
+                                    {m.has_gaps ? `${m.gap_count as number} gap${(m.gap_count as number) !== 1 ? 's' : ''} found — spawned as new threads` : 'no gaps found'}
                                   </span>
                                   {(m.gap_queries as string[]).map((q, qi) => (
                                     <div key={qi} className="pl-3 text-text-secondary text-[10px]">→ "{q}"</div>
@@ -1831,7 +1846,7 @@ function LiveView({
                                   <span className="text-blue-400">novel {((m.novelty as number) * 100).toFixed(0)}%</span>
                                   <span className="text-text-muted">act {((m.actionability as number) * 100).toFixed(0)}%</span>
                                   {(m.tags as string[]).length > 0 && (
-                                    <span className="text-text-disabled">{(m.tags as string[]).join(', ')}</span>
+                                    <span className="text-text-muted">{(m.tags as string[]).join(', ')}</span>
                                   )}
                                 </div>
                               );
@@ -1841,10 +1856,10 @@ function LiveView({
                                     {(m.is_duplicate as boolean) ? 'duplicate detected' : `unique · checked ${m.existing_count as number} findings`}
                                   </p>
                                   {(m.new_summary as string) && (
-                                    <p className="text-text-disabled italic">new: "{m.new_summary as string}"</p>
+                                    <p className="text-text-muted italic">new: "{m.new_summary as string}"</p>
                                   )}
                                   {(m.compared_to as string[] | undefined)?.map((s, i) => (
-                                    <p key={i} className="pl-3 text-text-disabled/70 truncate">vs: "{s}"</p>
+                                    <p key={i} className="pl-3 text-text-muted/70 truncate">vs: "{s}"</p>
                                   ))}
                                 </div>
                               );
@@ -1856,7 +1871,7 @@ function LiveView({
                                     {(m.similarity_threshold as number) && ` · sim≥${(m.similarity_threshold as number).toFixed(2)}`}
                                   </p>
                                   {(m.candidates as Array<{text: string; accepted: boolean; reason: string|null; sim: number; rank: number}> | undefined)?.map((c, i) => (
-                                    <div key={i} className={clsx('pl-2 flex gap-2 items-baseline', c.accepted ? 'text-text-secondary' : 'text-text-disabled/60')}>
+                                    <div key={i} className={clsx('pl-2 flex gap-2 items-baseline', c.accepted ? 'text-text-secondary' : 'text-text-muted/60')}>
                                       <span className="shrink-0">{c.accepted ? '✓' : '✗'}</span>
                                       <span className="truncate flex-1">"{c.text}"</span>
                                       <span className="font-mono shrink-0 text-[10px]">sim {c.sim.toFixed(2)}</span>
@@ -1915,7 +1930,7 @@ function LiveView({
                             )}
                             {f.follow_up_analysis && (
                               <div className="space-y-1 pt-1 border-t border-border-primary/30">
-                                <p className="text-[10px] font-semibold uppercase tracking-wider text-text-disabled">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
                                   Follow-up candidates · threshold {(f.follow_up_analysis.similarity_threshold * 100).toFixed(0)}%
                                   {f.follow_up_analysis.retry_count > 0 && ` · ${f.follow_up_analysis.retry_count} retries`}
                                 </p>
@@ -1925,7 +1940,7 @@ function LiveView({
                                       {c.accepted ? '✓' : '✗'}
                                     </span>
                                     <span className={clsx('text-[11px] flex-1', c.accepted ? 'text-text-primary' : 'text-text-muted')}>{c.text}</span>
-                                    <span className="text-[10px] font-mono text-text-disabled shrink-0">
+                                    <span className="text-[10px] font-mono text-text-muted shrink-0">
                                       q:{(c.quality_score * 100).toFixed(0)}% r:{(c.rank_score * 100).toFixed(0)}%
                                     </span>
                                   </div>
@@ -1962,7 +1977,7 @@ function LiveView({
               <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-success font-mono">
                 <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
                 <span>running</span>
-                <span className="text-text-disabled ml-2">{events.length} events · {findings.length} findings</span>
+                <span className="text-text-muted ml-2">{events.length} events · {findings.length} findings</span>
               </div>
             )}
           </div>
