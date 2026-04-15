@@ -1459,14 +1459,6 @@ function LiveView({
               >
                 <div className="flex items-center gap-1.5 mb-1">
                   <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', liveStatusDot[thread.status] ?? 'bg-text-muted/40')} />
-                  {(() => {
-                    const tidx = ordered.indexOf(thread);
-                    const tletter = tidx >= 0 && tidx < 26 ? String.fromCharCode(65 + tidx) : tidx >= 26 ? '#' : '?';
-                    const tcolor = color;
-                    return (
-                      <span className="text-sm font-bold font-mono shrink-0" style={{ color: tcolor }}>{tletter}</span>
-                    );
-                  })()}
                   <span className="text-sm font-medium text-text-primary truncate flex-1 leading-tight">
                     {thread.short_query ?? thread.query.split('\n')[0]}
                   </span>
@@ -1702,7 +1694,7 @@ function LiveView({
           {/* Event log header */}
           <div className="flex items-center gap-2 px-3 py-2 border-b border-border-primary bg-bg-secondary shrink-0 h-[37px]">
             <span className="text-sm font-semibold uppercase tracking-wider text-text-secondary shrink-0">Event Log</span>
-            {filterThreadId ? (() => {
+            {filterThreadId && (() => {
               const ft = threads.find(t => t.id === filterThreadId);
               const ftColor = threadColor.get(filterThreadId) ?? '#8796b0';
               return (
@@ -1719,31 +1711,7 @@ function LiveView({
                   >× clear</button>
                 </div>
               );
-            })() : (
-              <div className="flex items-center gap-1 ml-2 overflow-hidden">
-                {ordered.filter(t => t.status !== 'pruned' || findingsByThread.get(t.id)?.length).slice(0, 20).map(t => {
-                  const color = threadColor.get(t.id) ?? '#8796b0';
-                  const label = t.short_query ?? t.query.split('\n')[0];
-                  const idx = ordered.indexOf(t);
-                  const letter = idx < 26 ? String.fromCharCode(65 + idx) : '#';
-                  const isFiltered = filterThreadId === t.id;
-                  return (
-                    <button
-                      key={t.id}
-                      title={`${letter}: ${label} (${t.status}) — click to filter`}
-                      onClick={() => setFilterThreadId(prev => prev === t.id ? null : t.id)}
-                      className="w-4 h-4 rounded flex items-center justify-center text-sm font-bold font-mono shrink-0 cursor-pointer hover:opacity-100 transition-opacity focus:outline-none"
-                      style={{
-                        background: isFiltered ? `${color}40` : `${color}20`,
-                        color,
-                        border: `1px solid ${isFiltered ? color : color + '35'}`,
-                        opacity: isFiltered ? 1 : 0.7,
-                      }}
-                    >{letter}</button>
-                  );
-                })}
-              </div>
-            )}
+            })()}
             <span className="text-sm text-text-muted font-mono ml-auto shrink-0">
               {streamEvents.length !== events.length ? `${streamEvents.length} / ${events.length}` : events.length}
             </span>
@@ -1823,7 +1791,6 @@ function LiveView({
               const color = threadId ? (threadColor.get(threadId) ?? '#8796b0') : '#8796b0';
               const thread = threadId ? ordered.find(t => t.id === threadId) ?? null : null;
               const threadIdx = threadId ? ordered.findIndex(t => t.id === threadId) : -1;
-              const threadLetter = threadIdx < 0 ? '?' : threadIdx < 26 ? String.fromCharCode(65 + threadIdx) : '#';
               const ts = ev.type === 'finding' ? ev.payload.created_at
                 : ev.type === 'step' ? ev.payload.created_at
                 : ev.type === 'thread' ? ev.payload.created_at
@@ -1852,21 +1819,14 @@ function LiveView({
                     tabIndex={0}
                     onClick={() => setExpandedEventKey(prev => prev === evKey ? null : evKey)}
                     onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setExpandedEventKey(prev => prev === evKey ? null : evKey)}
-                    className={clsx(
-                      'grid items-baseline px-3 py-1 border-l-2 cursor-pointer focus:outline-none',
-                      isFinding
-                        ? isHighFinding ? 'border-l-warning/40' : 'border-l-success/25'
-                        : isExpanded ? 'border-l-accent/40' : 'border-l-transparent'
-                    )}
-                    style={{ gridTemplateColumns: '44px 22px minmax(140px, 140px) 1fr', gap: '0' }}
+                    className="grid items-baseline px-3 py-1 border-l-2 cursor-pointer focus:outline-none"
+                    style={{
+                      gridTemplateColumns: '44px minmax(140px, 140px) 1fr',
+                      gap: '0',
+                      borderLeftColor: `${color}${isHighFinding ? '90' : '50'}`,
+                    }}
                   >
                     <span className="text-sm text-text-muted font-mono pr-2 truncate">{timeStr}</span>
-                    <span className="pr-1 flex items-center">
-                      <div
-                        className="w-4 h-4 rounded flex items-center justify-center text-sm font-bold font-mono"
-                        style={{ background: `${color}20`, color, border: `1px solid ${color}30` }}
-                      >{threadLetter}</div>
-                    </span>
                     <span className={clsx('text-sm font-mono pr-2 truncate', formatted.typeColor)}>{formatted.typeLabel}</span>
                     <span className="text-sm min-w-0 flex items-baseline gap-1.5 overflow-hidden">
                       {displayDetail && <span className="truncate text-text-secondary">{displayDetail}</span>}
@@ -1877,7 +1837,7 @@ function LiveView({
                   </div>
                   {/* Expanded content */}
                   {isExpanded && (
-                    <div className="px-3 pb-2.5 pt-1 space-y-1.5 border-l-2 border-l-accent/20 ml-[86px]">
+                    <div className="px-3 pb-2.5 pt-1 space-y-1.5 border-l-2 ml-[64px]" style={{ borderLeftColor: `${color}40` }}>
                       {ev.type === 'step' && (() => {
                         const s = ev.payload;
                         return (
@@ -2831,16 +2791,6 @@ export function ResearchQueryDetailPage() {
               <h1 className="font-heading text-2xl font-bold text-text-primary truncate min-w-0 leading-none">{session.title}</h1>
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-label="Save document as Markdown"
-                title="Save document (.md)"
-                onClick={() => { const a = document.createElement('a'); a.href = `/api/research/queries/${id}/export/document`; a.download = ''; a.click(); }}
-              >
-                <Icon name="article" size="xs" className="mr-1" />
-                doc
-              </Button>
               <Button
                 variant="ghost"
                 size="sm"
