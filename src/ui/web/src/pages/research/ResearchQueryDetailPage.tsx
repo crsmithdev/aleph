@@ -1129,14 +1129,6 @@ function ThreadLiveRow({
   );
 }
 
-const workerDotCls: Record<string, string> = {
-  starting: 'bg-yellow-400 animate-pulse',
-  running: 'bg-green-400',
-  idle: 'bg-blue-400',
-  stopping: 'bg-orange-400',
-  stopped: 'bg-text-muted/20',
-  backoff: 'bg-red-400',
-};
 
 const liveStatusDot: Record<string, string> = {
   active: 'bg-success animate-pulse',
@@ -2736,7 +2728,7 @@ export function ResearchQueryDetailPage() {
 
           {/* Secondary content */}
           <div className="px-6 pb-0">
-            <p className="text-sm text-text-muted truncate mb-2">{session.seed_query}</p>
+            <p className="text-sm text-text-muted line-clamp-3 mb-2">{session.seed_query}</p>
 
           {/* Env warnings */}
           {envCheck && (envCheck.errors.length > 0 || envCheck.warnings.length > 0 || envCheck.jina_balance !== null) && (
@@ -2777,6 +2769,11 @@ export function ResearchQueryDetailPage() {
                 <span className="text-sm font-semibold text-text-primary tabular-nums">{stat.value}</span>
               </div>
             ))}
+            {workers.length > 0 && (
+              <span className="text-xs text-text-muted">
+                {workers.filter(w => w.status !== 'stopped').length} workers
+              </span>
+            )}
           </div>
 
           {/* Run controls */}
@@ -2812,18 +2809,6 @@ export function ResearchQueryDetailPage() {
                 <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
                 <span className="text-xs text-success">Running</span>
               </span>
-            )}
-            {workers.length > 0 && (
-              <div className="flex items-center gap-1 ml-3" title={`${workers.length} worker${workers.length !== 1 ? 's' : ''}`}>
-                {workers.map(w => (
-                  <span
-                    key={w.id}
-                    title={`Worker ${w.id}: ${w.status}${w.currentJob ? ` · running` : ''}`}
-                    className={clsx('w-2 h-2 rounded-full shrink-0', workerDotCls[w.status] ?? 'bg-text-muted/30')}
-                  />
-                ))}
-                <span className="text-xs text-text-disabled ml-0.5 font-mono">{workers.filter(w => w.status !== 'stopped').length}w</span>
-              </div>
             )}
           </div>
 

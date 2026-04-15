@@ -218,6 +218,18 @@ export function applyResearchDDL(sqlite: Sqlite): void {
   try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN seed_similarity REAL`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_steps ADD COLUMN metadata TEXT`); } catch { /* exists */ }
 
+  // Backfill cost_usd for steps stored before pricing was configured (idempotent — only touches cost_usd=0 rows)
+  sqlite.exec(`
+    UPDATE research_steps SET cost_usd =
+      CASE model
+        WHEN 'deepseek/deepseek-chat'    THEN (prompt_tokens * 0.27 + completion_tokens * 1.10) / 1000000.0
+        WHEN 'deepseek/deepseek-chat-v3' THEN (prompt_tokens * 0.27 + completion_tokens * 1.10) / 1000000.0
+        ELSE cost_usd
+      END
+    WHERE cost_usd = 0 AND (prompt_tokens > 0 OR completion_tokens > 0)
+      AND model IN ('deepseek/deepseek-chat', 'deepseek/deepseek-chat-v3')
+  `);
+
   // Fix stale FK: research_monitors.session_id may reference the old 'research_sessions'
   // table name (pre-rename). Rebuild the table to point at research_queries.
   try {
