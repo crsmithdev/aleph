@@ -1807,12 +1807,12 @@ function LiveView({
                 <div
                   key={evKey}
                   className={clsx(
-                    'border-b border-border-primary/20 border-l-2 transition-colors',
+                    'border-b border-border-primary/20 transition-colors',
                     isFinding
                       ? isHighFinding ? 'bg-warning/5' : 'bg-success/4'
                       : isExpanded ? 'bg-bg-secondary/60' : 'hover:bg-bg-secondary/40'
                   )}
-                  style={{ borderLeftColor: `${color}${isHighFinding ? 'cc' : '60'}` }}
+                  style={{ borderLeft: `6px solid ${color}${isHighFinding ? 'cc' : '60'}` }}
                 >
                   {/* Collapsed row */}
                   <div
