@@ -491,18 +491,6 @@ export class ResearchEngine {
     let synthesisResult = await this.synthesizeFinding(thread, searchResults, sessionId, config);
     if (!synthesisResult) return { finding: null, cost: 0 };
 
-    // Step 3b: Gap analysis — identify missing information and search for it
-    let allSearchResults = searchResults;
-    if (config.gap_analysis?.enabled && synthesisResult) {
-      const gapResults = await this.gapAnalysis(thread, searchResults, synthesisResult, config);
-      if (gapResults.length > 0) {
-        allSearchResults = [...searchResults, ...gapResults];
-        // Re-synthesize with all results combined
-        const augmented = await this.synthesizeFinding(thread, allSearchResults, sessionId, config);
-        if (augmented) Object.assign(synthesisResult, augmented);
-      }
-    }
-
     // Step 4: Check for duplicates
     const isDuplicate = await this.checkDuplicate(sessionId, thread.id, synthesisResult.summary, config);
     if (isDuplicate) {
@@ -631,6 +619,29 @@ export class ResearchEngine {
       }
     }
 
+    // Step 7: Spawn gap threads — identify knowledge gaps and queue them as high-priority threads.
+    // Runs after follow-ups so gap threads get a slight priority boost and don't compete with
+    // the current finding's follow-up questions for the same worker slots.
+    if (config.gap_analysis?.enabled) {
+      const gapQueries = await this.identifyGaps(thread, searchResults, synthesisResult, config);
+      for (const query of gapQueries) {
+        const gapThread = threads.createThread(this.sqlite, {
+          session_id: sessionId,
+          query,
+          short_query: placeholderShortQuery(query),
+          node_type: 'question',
+          origin: 'gap_analysis',
+          parent_thread_id: thread.id,
+          spawned_from_finding_id: finding.id,
+          priority: Math.min(1.0, (thread.priority ?? 0.5) + 0.15),
+          depth: thread.depth,       // same depth as parent — filling the same knowledge level
+          max_depth: thread.max_depth,
+          status: 'queued',
+        });
+        this.summarizeThreadAsync(gapThread.id, query, sessionId, config);
+      }
+    }
+
     const totalCost = synthesisResult.totalCost;
     return { finding, cost: totalCost };
   }
@@ -728,8 +739,7 @@ Return ONLY a JSON array of search query strings. No other text.`,
     sessionId: string,
     threadId: string,
     config: SessionConfig,
-    fetchSourceTextOverride?: boolean | null,
-    label?: string
+    fetchSourceTextOverride?: boolean | null
   ): Promise<Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[]; sourceUrlMeta: Array<{ url: string; title: string; snippet: string }> }>> {
     const results = await Promise.all(queries.map(async (query) => {
       const startTime = Date.now();
@@ -746,7 +756,6 @@ Return ONLY a JSON array of search query strings. No other text.`,
           cost_usd: cost,
           tool_calls: [{ tool: 'web_search', input: { query }, output: result.text.slice(0, 2000), jina_fetches: result.jinaFetches }],
           duration_ms: Date.now() - startTime,
-          ...(label ? { label } : {}),
         });
 
         if (!result.text.trim()) return null;
@@ -782,7 +791,6 @@ Return ONLY a JSON array of search query strings. No other text.`,
           tool_calls: [{ tool: 'web_search', input: { query }, error: err.message }],
           duration_ms: Date.now() - startTime,
           error: err.message,
-          ...(label ? { label } : {}),
         });
         return null;
       }
@@ -791,12 +799,12 @@ Return ONLY a JSON array of search query strings. No other text.`,
     return results.filter((r): r is { query: string; results: string; sourceTexts: string[]; sourceUrls: string[]; sourceUrlMeta: Array<{ url: string; title: string; snippet: string }> } => r !== null);
   }
 
-  private async gapAnalysis(
+  private async identifyGaps(
     thread: ResearchThread,
-    initialSearchResults: Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[]; sourceUrlMeta: Array<{ url: string; title: string; snippet: string }> }>,
-    draftFinding: { content: string; summary: string },
+    searchResults: Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[] }>,
+    finding: { content: string; summary: string },
     config: SessionConfig
-  ): Promise<Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[]; sourceUrlMeta: Array<{ url: string; title: string; snippet: string }> }>> {
+  ): Promise<string[]> {
     if (!config.gap_analysis?.enabled) return [];
 
     const result = await this.callLLM(
@@ -806,7 +814,7 @@ Return ONLY a JSON array of search query strings. No other text.`,
 Research question: "${thread.query}"
 
 Draft finding:
-${draftFinding.content}
+${finding.content}
 
 Identify specific gaps. What important facts, data points, or aspects are still unclear or missing that would make this finding more complete?
 
@@ -838,8 +846,7 @@ If has_gaps is true, gap_queries must contain ${config.gap_analysis.max_gap_sear
       return [];
     }
 
-    if (gapQueries.length === 0) return [];
-    return this.executeSearches(gapQueries, thread.session_id, thread.id, config, thread.fetch_source_text ?? null, 'gap search');
+    return gapQueries;
   }
 
   private async synthesizeFinding(

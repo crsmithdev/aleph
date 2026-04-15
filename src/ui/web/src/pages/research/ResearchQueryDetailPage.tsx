@@ -1255,10 +1255,8 @@ function formatEventDetail(ev: StreamEvent & { threadDiff?: string }): { typeLab
     } else {
       detail = s.label ?? shortTool;
     }
-    const isGapSearch = s.label === 'gap search';
-    const typeLabel = isGapSearch ? 'gap search' : shortTool + (tools.length > 1 ? ` ×${tools.length}` : '');
-    const typeColor = isGapSearch ? 'text-orange-400' : shortTool === 'search' ? 'text-blue-400' : shortTool === 'fetch' ? 'text-teal-400' : 'text-accent/80';
-    return { typeLabel, typeColor, detail, chips };
+    const typeColor = shortTool === 'search' ? 'text-blue-400' : shortTool === 'fetch' ? 'text-teal-400' : 'text-accent/80';
+    return { typeLabel: shortTool + (tools.length > 1 ? ` ×${tools.length}` : ''), typeColor, detail, chips };
   }
   return null;
 }
