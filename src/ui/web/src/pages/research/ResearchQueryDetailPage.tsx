@@ -1187,7 +1187,7 @@ function stepChips(s: ResearchStep): Chip[] {
   return chips;
 }
 
-function formatEventDetail(ev: StreamEvent): { typeLabel: string; typeColor: string; detail: string; chips?: Chip[] } | null {
+function formatEventDetail(ev: StreamEvent & { threadDiff?: string }): { typeLabel: string; typeColor: string; detail: string; chips?: Chip[] } | null {
   if (ev.type === 'finding') {
     const f = ev.payload;
     const chips: Chip[] = [
@@ -1203,10 +1203,18 @@ function formatEventDetail(ev: StreamEvent): { typeLabel: string; typeColor: str
   }
   if (ev.type === 'thread') {
     const t = ev.payload;
-    if (t.status === 'active') return { typeLabel: 'spawn', typeColor: 'text-warning', detail: `"${t.query.split('\n')[0].slice(0, 80)}"` };
-    if (t.status === 'queued') return { typeLabel: 'queued', typeColor: 'text-warning/70', detail: `"${t.query.split('\n')[0].slice(0, 80)}"` };
-    if (t.status === 'pruned') return { typeLabel: 'pruned', typeColor: 'text-error', detail: `thread terminated` };
-    if (t.status === 'exhausted') return { typeLabel: 'done', typeColor: 'text-text-muted', detail: `thread complete` };
+    const diff = ev.threadDiff;
+    const name = (t.short_query ?? t.query.split('\n')[0]).slice(0, 60);
+    // If we have a diff and it's not a status transition, show what changed
+    if (diff && !diff.includes(' → ')) {
+      return { typeLabel: 'thread', typeColor: 'text-text-disabled', detail: `${name} · ${diff}` };
+    }
+    if (t.status === 'active') return { typeLabel: 'spawn', typeColor: 'text-warning', detail: `"${name}"` };
+    if (t.status === 'queued') return { typeLabel: 'queued', typeColor: 'text-warning/70', detail: `"${name}"` };
+    if (t.status === 'pruned') return { typeLabel: 'pruned', typeColor: 'text-error', detail: `"${name}"` };
+    if (t.status === 'exhausted') return { typeLabel: 'done', typeColor: 'text-text-muted', detail: `"${name}"` };
+    if (t.status === 'deferred') return { typeLabel: 'deferred', typeColor: 'text-text-disabled', detail: `"${name}"` };
+    if (diff) return { typeLabel: 'thread', typeColor: 'text-text-disabled', detail: `${name} · ${diff}` };
     return null;
   }
   if (ev.type === 'step') {
@@ -1325,21 +1333,33 @@ function LiveView({
   const activeThreads = useMemo(() => threads.filter(t => t.status === 'active'), [threads]);
   const queuedThreads = useMemo(() => threads.filter(t => t.status === 'queued'), [threads]);
 
+  // Enrich thread events with a diff vs the previous event for the same thread.
+  // Thread updated_at bumps for: status changes, short_query set, priority changed, retry_after set.
+  type EnrichedEvent = StreamEvent & { threadDiff?: string };
+
   const streamEvents = useMemo(() => {
-    // Deduplicate thread events: only show first occurrence of each (thread_id, status) pair.
-    // Thread updated_at changes on every step, causing repeated 'spawn' events for the same thread.
-    const seenThreadStatus = new Set<string>();
-    let evs = [...events].filter(e => {
-      if (e.type !== 'thread') return true;
-      const key = `${e.payload.id}:${e.payload.status}`;
-      if (seenThreadStatus.has(key)) return false;
-      seenThreadStatus.add(key);
-      return true;
-    }).reverse();
+    const prevState = new Map<string, ResearchThread>();
+    const enriched: EnrichedEvent[] = events.map(ev => {
+      if (ev.type !== 'thread') return ev;
+      const t = ev.payload;
+      const prev = prevState.get(t.id);
+      prevState.set(t.id, t);
+      if (!prev) return ev; // first event — show as normal spawn/queued/etc.
+      const changes: string[] = [];
+      if (prev.status !== t.status) changes.push(`${prev.status} → ${t.status}`);
+      if (prev.short_query !== t.short_query && t.short_query) changes.push(`titled`);
+      if (Math.abs((prev.priority ?? 0) - (t.priority ?? 0)) > 0.005)
+        changes.push(`priority ${prev.priority.toFixed(2)} → ${t.priority.toFixed(2)}`);
+      if (!prev.retry_after && t.retry_after) changes.push(`backoff`);
+      if (prev.retry_after && !t.retry_after && prev.status === t.status) changes.push(`retry`);
+      return { ...ev, threadDiff: changes.join(' · ') || null } as EnrichedEvent;
+    });
+
+    let evs = enriched.reverse();
     if (filterFindings) evs = evs.filter(e => e.type === 'finding');
     if (filterThreadId) {
       evs = evs.filter(e => {
-        if (e.type === 'finding') return e.payload.thread_id === filterThreadId;
+        if (e.type === 'finding') return (e.payload as ResearchFinding).thread_id === filterThreadId;
         if (e.type === 'step') return e.payload.thread_id === filterThreadId;
         if (e.type === 'thread') return e.payload.id === filterThreadId;
         return true;
