@@ -788,7 +788,7 @@ function SystemContextBreakdown({
               ))}
               {unknownEst > 100 && (
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] text-text-disabled truncate flex-1">System prompt / hooks / settings</span>
+                  <span className="text-[11px] text-text-disabled truncate flex-1">Base system prompt + tool defs</span>
                   <span className="text-[11px] text-text-disabled font-mono shrink-0">~{fmtNumber(unknownEst)}</span>
                 </div>
               )}

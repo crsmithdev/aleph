@@ -187,8 +187,9 @@ function readContextFiles(sessionId: string): { files: ContextFile[] } {
   }
 
   // 3. Project-local CLAUDE.md
+  let projectPath: string | undefined;
   if (projectEncoded) {
-    const projectPath = projectIdToPath(projectEncoded);
+    projectPath = projectIdToPath(projectEncoded) ?? undefined;
     if (projectPath) {
       const projectContent = addFile('Project CLAUDE.md', resolve(projectPath, '.claude', 'CLAUDE.md'));
       // Resolve @-refs in project CLAUDE.md too
@@ -200,6 +201,14 @@ function readContextFiles(sessionId: string): { files: ContextFile[] } {
         }
       }
     }
+  }
+
+  // 4. Settings files — Claude Code reads these and injects permissions + hook names into context
+  addFile('Global settings.json', resolve(claudePaths.root, 'settings.json'));
+  addFile('Global settings.local.json', resolve(claudePaths.root, 'settings.local.json'));
+  if (projectPath) {
+    addFile('Project settings.json', resolve(projectPath, '.claude', 'settings.json'));
+    addFile('Project settings.local.json', resolve(projectPath, '.claude', 'settings.local.json'));
   }
 
   return { files };
