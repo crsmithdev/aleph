@@ -1,4 +1,3 @@
-import { Icon } from '../../../components/ui/Icon';
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
@@ -364,13 +363,12 @@ export function ToolDetailPage() {
           <div className="flex items-center gap-2">
             <Link
               to="/observability/tools"
-              className="flex items-center gap-1 text-text-muted hover:text-text-primary transition-colors"
+              className="font-heading text-2xl font-bold text-text-muted hover:text-text-primary transition-colors leading-none"
             >
-              <Icon name="build" size="xs" className="text-text-muted" />
-              <span className="font-heading text-lg text-text-muted">Tools</span>
+              Tools
             </Link>
-            <Icon name="chevron_right" size="xs" className="text-text-disabled" />
-            <h1 className="font-heading text-lg font-semibold text-text-primary">{fmtToolName(toolName!)}</h1>
+            <span className="font-heading text-2xl font-bold text-text-muted leading-none">&raquo;</span>
+            <h1 className="font-heading text-2xl font-bold text-text-primary leading-none">{fmtToolName(toolName!)}</h1>
           </div>
         }
         datasets={visibleDatasets}
@@ -389,7 +387,7 @@ export function ToolDetailPage() {
         activeFilterCount={activeFilterCount}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 !mt-0">
         <StatCard label="Tool Calls" value={fmtNumber(data.totalCount)} accent="neutral" />
         <StatCard
           label="Errors"

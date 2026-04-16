@@ -75,25 +75,21 @@ export function MonitorDetailPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <Link to="/research/monitors" className="text-xs text-accent hover:underline">&larr; All monitors</Link>
-        <div className="flex items-center justify-between mt-2">
-          <div>
-            <h1 className="font-heading text-2xl font-bold text-text-primary">{monitor.title}</h1>
-            <p className="text-sm text-text-muted mt-0.5">{monitor.queries.join(', ')}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {monitor.status === 'active' && (
-              <Button variant="secondary" size="sm" onClick={() => updateMonitor.mutate({ id: id!, status: 'paused' })}>
-                Pause
-              </Button>
-            )}
-            {monitor.status === 'paused' && (
-              <Button variant="secondary" size="sm" onClick={() => updateMonitor.mutate({ id: id!, status: 'active' })}>
-                Resume
-              </Button>
-            )}
-          </div>
+      <div className="sticky top-0 z-10 h-14 bg-bg-primary border-b border-border-primary flex items-center gap-2">
+        <Link to="/research/monitors" className="font-heading text-2xl font-bold text-text-muted hover:text-text-primary transition-colors leading-none whitespace-nowrap shrink-0">Monitors</Link>
+        <span className="font-heading text-2xl font-bold text-text-muted leading-none shrink-0">&raquo;</span>
+        <h1 className="font-heading text-2xl font-bold text-text-primary leading-none truncate min-w-0 flex-1">{monitor.title}</h1>
+        <div className="flex items-center gap-2 shrink-0">
+          {monitor.status === 'active' && (
+            <Button variant="secondary" size="sm" onClick={() => updateMonitor.mutate({ id: id!, status: 'paused' })}>
+              Pause
+            </Button>
+          )}
+          {monitor.status === 'paused' && (
+            <Button variant="secondary" size="sm" onClick={() => updateMonitor.mutate({ id: id!, status: 'active' })}>
+              Resume
+            </Button>
+          )}
         </div>
       </div>
 

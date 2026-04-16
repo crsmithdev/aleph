@@ -589,7 +589,7 @@ export function HooksPage() {
         onDisplayNChange={setDisplayN}
       />
 
-      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4 !mt-0">
         <StatCard label="Active Hooks" value={fmtNumber(activeHooks)} />
         <StatCard label="Executions" value={fmtCalls(totalExecutions)} accent="neutral" />
         <StatCard

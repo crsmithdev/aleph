@@ -314,7 +314,7 @@ export function SessionsPage() {
         onDisplayNChange={setDisplayN}
       />
 
-      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4 !mt-0">
         <StatCard label="Sessions" value={fmtNumber(data.sessions.length)} />
         <StatCard label="Avg Duration" value={fmtDuration(data.avgDurationMs)} />
         <StatCard label="Messages" value={fmtNumber(data.totalUserMessages + data.totalAssistantMessages)} />

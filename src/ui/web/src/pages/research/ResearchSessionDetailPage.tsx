@@ -1625,45 +1625,41 @@ export function ResearchSessionDetailPage() {
   return (
     <div className="flex flex-col gap-5">
       {/* Header */}
-      <div>
-        <Link to="/research" className="text-sm text-accent hover:underline">&larr; All sessions</Link>
-        <div className="flex items-center justify-between mt-2">
-          <div>
-            <h1 className="font-heading text-2xl font-bold text-text-primary">{session.title}</h1>
-            <p className="text-sm text-text-muted mt-0.5">{session.seed_query_short || session.seed_query}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {(session.status === 'active' || session.status === 'paused') && (
-              <Button
-                variant={session.status === 'active' ? 'secondary' : 'primary'}
-                size="sm"
-                loading={updateSession.isPending}
-                onClick={() => updateSession.mutate({ id: id!, status: session.status === 'active' ? 'paused' : 'active' })}
-              >
-                {session.status === 'active' ? 'Disable' : 'Enable'}
-              </Button>
-            )}
-            {deleteConfirm ? (
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm text-text-muted">Delete session?</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="!bg-red-900/50 !text-red-300 hover:!bg-red-900/80"
-                  loading={deleteSession.isPending}
-                  onClick={() => deleteSession.mutate({ id: id! }, { onSuccess: () => { window.location.href = '/research'; } })}
-                >Confirm</Button>
-                <Button variant="ghost" size="sm" onClick={() => setDeleteConfirm(false)}>Cancel</Button>
-              </div>
-            ) : (
+      <div className="sticky top-0 z-10 h-14 bg-bg-primary border-b border-border-primary flex items-center gap-2">
+        <Link to="/research" className="font-heading text-2xl font-bold text-text-muted hover:text-text-primary transition-colors leading-none whitespace-nowrap shrink-0">Research Sessions</Link>
+        <span className="font-heading text-2xl font-bold text-text-muted leading-none shrink-0">&raquo;</span>
+        <h1 className="font-heading text-2xl font-bold text-text-primary leading-none truncate min-w-0 flex-1">{session.title}</h1>
+        <div className="flex items-center gap-2 shrink-0">
+          {(session.status === 'active' || session.status === 'paused') && (
+            <Button
+              variant={session.status === 'active' ? 'secondary' : 'primary'}
+              size="sm"
+              loading={updateSession.isPending}
+              onClick={() => updateSession.mutate({ id: id!, status: session.status === 'active' ? 'paused' : 'active' })}
+            >
+              {session.status === 'active' ? 'Disable' : 'Enable'}
+            </Button>
+          )}
+          {deleteConfirm ? (
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm text-text-muted">Delete session?</span>
               <Button
                 variant="ghost"
                 size="sm"
-                className="!text-red-400 hover:!text-red-300"
-                onClick={() => setDeleteConfirm(true)}
-              >Delete</Button>
-            )}
-          </div>
+                className="!bg-red-900/50 !text-red-300 hover:!bg-red-900/80"
+                loading={deleteSession.isPending}
+                onClick={() => deleteSession.mutate({ id: id! }, { onSuccess: () => { window.location.href = '/research'; } })}
+              >Confirm</Button>
+              <Button variant="ghost" size="sm" onClick={() => setDeleteConfirm(false)}>Cancel</Button>
+            </div>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="!text-red-400 hover:!text-red-300"
+              onClick={() => setDeleteConfirm(true)}
+            >Delete</Button>
+          )}
         </div>
       </div>
 

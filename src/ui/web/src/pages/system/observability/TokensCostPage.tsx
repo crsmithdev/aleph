@@ -36,7 +36,7 @@ export function TokensCostPage() {
     <div className="space-y-6">
       <ObsControlBar title={<h1 className="font-heading text-2xl font-bold text-text-primary">Tokens</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity} />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 !mt-0">
         <StatCard label="Total Cost" value={fmtCurrency(cost.data.totalUsd)} accent="success" />
         <StatCard label="Avg / Day" value={fmtCurrency(avgDaily)} />
         <StatCard

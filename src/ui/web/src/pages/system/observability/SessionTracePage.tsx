@@ -1184,15 +1184,16 @@ export function SessionTracePage() {
       <div ref={topRef} />
 
       {/* Page header */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="sticky top-0 z-10 h-14 bg-bg-primary border-b border-border-primary flex flex-wrap items-center gap-2">
         <Link
           to="/observability/sessions"
-          className="text-xl text-text-muted hover:text-text-primary transition-colors"
+          className="font-heading text-2xl font-bold text-text-muted hover:text-text-primary transition-colors leading-none"
         >
-          «
+          Sessions
         </Link>
-        <h1 className="font-heading text-xl font-semibold text-text-primary">
-          Session <span className="font-mono text-accent">{sessionId.slice(0, 8)}</span>
+        <span className="font-heading text-2xl font-bold text-text-muted leading-none">&raquo;</span>
+        <h1 className="font-heading text-2xl font-bold text-text-primary leading-none">
+          <span className="font-mono text-accent">{sessionId.slice(0, 8)}</span>
         </h1>
         {data.project && (
           <span className="rounded-md bg-bg-tertiary px-2 py-0.5 text-xs text-text-muted font-mono">

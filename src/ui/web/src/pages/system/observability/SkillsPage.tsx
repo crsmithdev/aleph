@@ -322,7 +322,7 @@ export function SkillsPage() {
         onDisplayNChange={setDisplayN}
       />
 
-      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4 !mt-0">
         <StatCard label="Total Invocations" value={fmtNumber(totalInvocations)} />
         <StatCard label="Active Skills" value={fmtNumber(activeSkills)} />
         <StatCard label="Commands" value={fmtNumber(commandCount)} />

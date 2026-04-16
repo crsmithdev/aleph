@@ -157,7 +157,7 @@ export function SubagentsPage() {
         activeFilterCount={bgOnly ? 1 : 0}
       />
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-4 gap-4 !mt-0">
         <StatCard
           label="Active Now"
           value={<span className={data.activeNow > 0 ? 'text-accent' : ''}>{fmtNumber(data.activeNow)}</span>}

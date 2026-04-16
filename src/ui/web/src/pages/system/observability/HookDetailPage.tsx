@@ -1,4 +1,3 @@
-import { Icon } from '../../../components/ui/Icon';
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
@@ -200,13 +199,12 @@ export function HookDetailPage() {
           <div className="flex items-center gap-2">
             <Link
               to="/observability/hooks"
-              className="flex items-center gap-1 text-text-muted hover:text-text-primary transition-colors"
+              className="font-heading text-2xl font-bold text-text-muted hover:text-text-primary transition-colors leading-none"
             >
-              <Icon name="webhook" size="xs" className="text-text-muted" />
-              <span className="font-heading text-lg text-text-muted">Hooks</span>
+              Hooks
             </Link>
-            <Icon name="chevron_right" size="xs" className="text-text-disabled" />
-            <h1 className="font-heading text-lg font-semibold text-text-primary">{hookName}</h1>
+            <span className="font-heading text-2xl font-bold text-text-muted leading-none">&raquo;</span>
+            <h1 className="font-heading text-2xl font-bold text-text-primary leading-none">{hookName}</h1>
             {data.event && (
               <span className="rounded-md bg-bg-tertiary px-2 py-0.5 text-xs text-text-muted font-mono">{data.event}</span>
             )}
@@ -232,7 +230,7 @@ export function HookDetailPage() {
         activeFilterCount={activeFilterCount}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 !mt-0">
         <StatCard label="Executions" value={fmtNumber(data.totalCount)} accent="neutral" />
         <StatCard
           label="Errors"

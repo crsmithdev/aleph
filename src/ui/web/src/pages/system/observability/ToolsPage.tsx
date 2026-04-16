@@ -269,7 +269,7 @@ export function ToolsPage() {
         onDisplayNChange={setDisplayN}
       />
 
-      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4 !mt-0">
         <StatCard label="Active Tools" value={fmtNumber(activeTools)} />
         <StatCard label="Tool Calls" value={fmtCalls(totalCalls)} accent="neutral" />
         <StatCard

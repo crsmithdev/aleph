@@ -264,22 +264,14 @@ export function GoalDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Back link */}
-      <Link
-        to="/goals"
-        className="inline-flex items-center gap-1.5 text-sm text-text-muted hover:text-text-secondary transition-colors w-fit"
-      >
-        <Icon name="arrow_back" size="xs" />
-        All goals
-      </Link>
-
-      {/* Goal header — wide layout */}
-      <div className="bg-bg-secondary border border-border-primary rounded-lg p-5">
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex-1 min-w-0">
-            <InlineEdit value={goal.title} onSave={(title) => handleUpdate({ title })} />
-          </div>
-          <div className="flex items-center gap-2 flex-wrap shrink-0">
+      {/* Goal header */}
+      <div className="sticky top-0 z-10 h-14 bg-bg-primary border-b border-border-primary flex items-center gap-2">
+        <Link to="/goals" className="font-heading text-2xl font-bold text-text-muted hover:text-text-primary transition-colors leading-none whitespace-nowrap shrink-0">Goals</Link>
+        <span className="font-heading text-2xl font-bold text-text-muted leading-none shrink-0">&raquo;</span>
+        <div className="flex-1 min-w-0">
+          <InlineEdit value={goal.title} onSave={(title) => handleUpdate({ title })} />
+        </div>
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
             <CategoryManager goalId={id} currentCategories={goal.categories ?? []} />
             <select
               value={goal.priority}
@@ -308,7 +300,6 @@ export function GoalDetailPage() {
               ))}
             </select>
           </div>
-        </div>
       </div>
 
       {/* Action buttons */}

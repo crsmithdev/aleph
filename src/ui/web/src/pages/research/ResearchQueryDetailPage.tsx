@@ -2884,9 +2884,8 @@ export function ResearchQueryDetailPage() {
           {/* Title row — h-14 matches sidebar "Construct" header height */}
           <div className="h-14 flex items-center justify-between px-6">
             <div className="flex items-center gap-2 min-w-0 flex-1">
-              <Icon name="search" size="sm" className="text-text-muted shrink-0" />
-              <Link to="/research" className="font-heading text-2xl font-bold text-text-muted hover:text-text-primary whitespace-nowrap shrink-0 leading-none">Research</Link>
-              <span className="font-heading text-2xl font-bold text-text-muted shrink-0 leading-none">›</span>
+              <Link to="/research" className="font-heading text-2xl font-bold text-text-muted hover:text-text-primary whitespace-nowrap shrink-0 leading-none">Research Sessions</Link>
+              <span className="font-heading text-2xl font-bold text-text-muted shrink-0 leading-none">&raquo;</span>
               <h1 className="font-heading text-2xl font-bold text-text-primary truncate min-w-0 leading-none">{session.title}</h1>
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-4">

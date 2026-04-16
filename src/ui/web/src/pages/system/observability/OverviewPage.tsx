@@ -35,7 +35,7 @@ export function OverviewPage() {
     <div className="space-y-6">
       <ObsControlBar title={<h1 className="font-heading text-2xl font-bold text-text-primary">Observability</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity} />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5 !mt-0">
         <StatCard label="Sessions" value={fmtNumber(data.sessions)} />
         <StatCard label="Messages" value={fmtNumber(data.messages)} />
         <StatCard label="Tool Calls" value={fmtNumber(data.toolCalls)} />

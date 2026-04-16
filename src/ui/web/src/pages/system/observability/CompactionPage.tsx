@@ -144,7 +144,7 @@ export function CompactionPage() {
         onGranularityChange={setGranularity}
       />
 
-      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4 !mt-0">
         <StatCard label="Total Compactions" value={String(data.totalCompactions)} />
         <StatCard label="Avg Pre-tokens" value={fmtNumber(data.avgPreTokens)} />
         <StatCard label="Avg Tool Calls" value={avgToolCalls > 0 ? String(avgToolCalls) : '—'} />
