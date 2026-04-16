@@ -557,7 +557,7 @@ function readDirectives(since?: Date): TelemetryEvent[] {
 }
 
 // ---------------------------------------------------------------------------
-// Event corpus cache (5s TTL — deduplicates concurrent dashboard requests)
+// Event corpus cache (60s TTL — amortizes the 8s corpus load across requests)
 // ---------------------------------------------------------------------------
 
 interface CorpusCache {
@@ -596,12 +596,13 @@ export function adaptAllSessions(opts?: AdaptOptions): TelemetryEvent[] {
   }
 
   allEvents.push(...readDirectives(opts?.since));
-  corpusCache = { events: allEvents, expiresAt: Date.now() + 5_000, key };
+  corpusCache = { events: allEvents, expiresAt: Date.now() + 60_000, key };
   return allEvents;
 }
 
 export function adaptSessionsForDays(days: number, opts?: Omit<AdaptOptions, "since">): TelemetryEvent[] {
-  const since = new Date();
+  // Round to the nearest minute so concurrent requests share the same corpus cache key.
+  const since = new Date(Math.floor(Date.now() / 60_000) * 60_000);
   since.setDate(since.getDate() - days);
   return adaptAllSessions({ ...opts, since });
 }

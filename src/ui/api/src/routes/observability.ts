@@ -33,11 +33,11 @@ import type { Granularity, TelemetryEvent } from '@construct/telemetry';
 const MAX_MEMORY_ITEMS = 500;
 
 // ---------------------------------------------------------------------------
-// Reducer result cache (60s TTL for aggregate views).
-// The underlying corpus cache (adapter.ts) refreshes every 5s, so aggregate
-// views may lag up to 60s behind raw events.
-// Keyed by route URL (includes path + query string) — safe for read-only
-// aggregate endpoints. Session traces are excluded (per-session, keyed by id).
+// Reducer result cache: 5-minute TTL for heavy aggregate views (tools, hooks,
+// sessions, cost, etc.); 60s for lighter detail views. The underlying corpus
+// cache (adapter.ts) refreshes every 5s, so aggregate views may lag behind raw
+// events by at most the TTL. Keyed by route URL (path + query string) — safe
+// for read-only aggregate endpoints. Session traces excluded (per-session id).
 // ---------------------------------------------------------------------------
 
 const MAX_CACHE = 100;
@@ -649,7 +649,7 @@ function readMarkerFileStats(): Record<string, { writes: number; clears: number;
 export const observabilityRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: QueryParams }>('/overview', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    return cachedResult(req.url, 60_000, () => {
+    return cachedResult(req.url, 300_000, () => {
       const { result, queryTimeMs } = timed(() => aggregateOverview(obsReq.telemetryEntries, obsReq.granularity));
       return { ...result, queryTimeMs };
     });
@@ -657,7 +657,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Querystring: QueryParams }>('/tools', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    return cachedResult(req.url, 60_000, () => {
+    return cachedResult(req.url, 300_000, () => {
       const { result, queryTimeMs } = timed(() => aggregateTools(obsReq.telemetryEntries, obsReq.granularity));
       const ranked = result.ranked.map((t) => ({
         ...t,
@@ -669,7 +669,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Querystring: QueryParams }>('/hooks', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    return cachedResult(req.url, 60_000, () => {
+    return cachedResult(req.url, 300_000, () => {
       const { result, queryTimeMs } = timed(() => aggregateHooks(obsReq.telemetryEntries, obsReq.granularity));
 
       // Merge self-reported hook events (for hooks on events Claude Code doesn't log)
@@ -728,7 +728,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Querystring: QueryParams }>('/skills', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    return cachedResult(req.url, 60_000, () => {
+    return cachedResult(req.url, 300_000, () => {
       const { result, queryTimeMs } = timed(() => aggregateSkills(obsReq.telemetryEntries, obsReq.granularity));
       const registeredSkills = new Set(getRegisteredSkills());
       const commandNames = getCommandNames();
@@ -757,7 +757,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Querystring: QueryParams }>('/tokens', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    return cachedResult(req.url, 60_000, () => {
+    return cachedResult(req.url, 300_000, () => {
       const { result, queryTimeMs } = timed(() => aggregateTokens(obsReq.telemetryEntries, obsReq.granularity));
       return { ...result, queryTimeMs };
     });
@@ -765,7 +765,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Querystring: QueryParams }>('/cost', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    return cachedResult(req.url, 60_000, () => {
+    return cachedResult(req.url, 300_000, () => {
       const { result, queryTimeMs } = timed(() => aggregateCost(obsReq.telemetryEntries, obsReq.granularity));
       return { ...result, queryTimeMs };
     });
@@ -773,7 +773,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
 
   app.get<{ Querystring: QueryParams }>('/sessions', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    return cachedResult(req.url, 60_000, () => {
+    return cachedResult(req.url, 300_000, () => {
       const { result, queryTimeMs } = timed(() => aggregateSessions(obsReq.telemetryEntries, obsReq.granularity));
       const gateMap = readSessionGateInfo();
       const sessionFiles = readSessionFiles(500);
@@ -1601,5 +1601,24 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       const { result, queryTimeMs } = timed(() => aggregateVerifications(obsReq.telemetryEntries, obsReq.granularity));
       return { ...result, queryTimeMs };
     });
+  });
+
+  // Pre-warm the cache for the most expensive endpoints on server start so the
+  // first user request is always fast. Runs after all plugins are registered.
+  app.addHook('onReady', (done) => {
+    // Fire-and-forget background warmup — don't block server startup
+    // URLs must match what the browser sends (granularity=day is omitted when default)
+    const warmupUrls = [
+      '/observability/tools?range=30d',
+      '/observability/hooks?range=30d',
+      '/observability/sessions?range=30d',
+      '/observability/cost?range=30d',
+      '/observability/tokens?range=30d',
+      '/observability/overview?range=30d',
+    ];
+    for (const url of warmupUrls) {
+      app.inject({ method: 'GET', url: `/api${url}` }).catch(() => {});
+    }
+    done();
   });
 };
