@@ -1539,7 +1539,7 @@ function LiveView({
         <div className="flex flex-col border-b border-border-primary bg-bg-secondary shrink-0">
           <div className="flex items-center gap-2 px-3 py-2 h-[37px]">
             <span className="text-sm font-semibold uppercase tracking-wider text-text-secondary">Findings</span>
-            <span className="text-sm text-text-disabled font-mono ml-auto">{findings.length}</span>
+            <span className="text-sm text-text-muted font-mono ml-auto">{findings.length}</span>
           </div>
           <div className="px-3 pb-2">
             <input
@@ -1570,7 +1570,7 @@ function LiveView({
                     const originCls = thread?.origin === 'follow_up' ? 'text-blue-400/80'
                       : thread?.origin === 'perturbation' ? 'text-purple-400/80'
                       : thread?.origin === 'user_injected' ? 'text-amber-400/80'
-                      : 'text-text-disabled';
+                      : 'text-text-muted';
                     return (
                       <div key={f.id}
                         role="button"
@@ -1587,7 +1587,7 @@ function LiveView({
                           <div className="space-y-2 pt-1.5 border-t border-border-primary/30">
                             {srcMeta.length > 0 && (
                               <div>
-                                <p className="text-xs text-text-disabled uppercase tracking-wide mb-1">Sources</p>
+                                <p className="text-xs text-text-muted uppercase tracking-wide mb-1">Sources</p>
                                 <ol className="list-decimal list-inside space-y-0.5">
                                   {srcMeta.map((src, i) => {
                                     let host = src.url;
@@ -1622,13 +1622,13 @@ function LiveView({
                             {f.tags.length > 0 && (
                               <div className="flex flex-wrap gap-1 flex-1 min-w-0 overflow-hidden">
                                 {f.tags.slice(0, 3).map(tag => (
-                                  <span key={tag} className="text-xs text-text-disabled bg-bg-tertiary border border-border-primary/40 px-1 py-0.5 rounded whitespace-nowrap">{tag}</span>
+                                  <span key={tag} className="text-xs text-text-muted bg-bg-tertiary border border-border-primary/60 px-1 py-0.5 rounded whitespace-nowrap">{tag}</span>
                                 ))}
                               </div>
                             )}
                             <div className="flex items-center gap-1.5 ml-auto shrink-0">
                               {originLabel && <span className={clsx('text-xs font-mono', originCls)}>{originLabel}</span>}
-                              <span className="text-xs font-mono text-text-disabled">{(f.confidence * 100).toFixed(0)}%</span>
+                              <span className="text-xs font-mono text-text-secondary">{(f.confidence * 100).toFixed(0)}%</span>
                             </div>
                           </div>
                         )}
@@ -1651,7 +1651,7 @@ function LiveView({
                     const originCls = thread?.origin === 'follow_up' ? 'text-blue-400/80'
                       : thread?.origin === 'perturbation' ? 'text-purple-400/80'
                       : thread?.origin === 'user_injected' ? 'text-amber-400/80'
-                      : 'text-text-disabled';
+                      : 'text-text-muted';
                     return (
                       <div key={f.id}
                         role="button"
@@ -1668,7 +1668,7 @@ function LiveView({
                           <div className="space-y-2 pt-1.5 border-t border-border-primary/30">
                             {srcMeta.length > 0 && (
                               <div>
-                                <p className="text-xs text-text-disabled uppercase tracking-wide mb-1">Sources</p>
+                                <p className="text-xs text-text-muted uppercase tracking-wide mb-1">Sources</p>
                                 <ol className="list-decimal list-inside space-y-0.5">
                                   {srcMeta.map((src, i) => {
                                     let host = src.url;
@@ -1703,13 +1703,13 @@ function LiveView({
                             {f.tags.length > 0 && (
                               <div className="flex flex-wrap gap-1 flex-1 min-w-0 overflow-hidden">
                                 {f.tags.slice(0, 3).map(tag => (
-                                  <span key={tag} className="text-xs text-text-disabled bg-bg-tertiary border border-border-primary/40 px-1 py-0.5 rounded whitespace-nowrap">{tag}</span>
+                                  <span key={tag} className="text-xs text-text-muted bg-bg-tertiary border border-border-primary/60 px-1 py-0.5 rounded whitespace-nowrap">{tag}</span>
                                 ))}
                               </div>
                             )}
                             <div className="flex items-center gap-1.5 ml-auto shrink-0">
                               {originLabel && <span className={clsx('text-xs font-mono', originCls)}>{originLabel}</span>}
-                              <span className="text-xs font-mono text-text-disabled">{(f.confidence * 100).toFixed(0)}%</span>
+                              <span className="text-xs font-mono text-text-secondary">{(f.confidence * 100).toFixed(0)}%</span>
                             </div>
                           </div>
                         )}
