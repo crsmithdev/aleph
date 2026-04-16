@@ -1889,7 +1889,7 @@ function LiveView({
                 : ev.type === 'step' ? ev.payload.created_at
                 : ev.type === 'thread' ? ev.payload.created_at
                 : null;
-              const timeStr = ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+              const timeStr = ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '';
               const isFinding = ev.type === 'finding';
               // For label-only steps with no detail, show abbreviated thread query
               const isLabelOnlyStep = ev.type === 'step' && (ev.payload.tool_calls ?? []).length === 0;
