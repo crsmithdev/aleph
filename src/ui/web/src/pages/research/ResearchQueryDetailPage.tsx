@@ -1916,7 +1916,7 @@ function LiveView({
                     onClick={() => setExpandedEventKey(prev => prev === evKey ? null : evKey)}
                     onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setExpandedEventKey(prev => prev === evKey ? null : evKey)}
                     className="grid items-baseline px-3 py-1 cursor-pointer focus:outline-none"
-                    style={{ gridTemplateColumns: '48px minmax(140px, 140px) 1fr', gap: '0' }}
+                    style={{ gridTemplateColumns: '72px minmax(140px, 140px) 1fr', gap: '0' }}
                   >
                     <span className="text-sm text-text-muted font-mono pr-1.5 overflow-hidden">{timeStr}</span>
                     <span className={clsx('text-sm font-mono pr-2 truncate', formatted.typeColor)}>{formatted.typeLabel}</span>
@@ -1929,7 +1929,7 @@ function LiveView({
                   </div>
                   {/* Expanded content */}
                   {isExpanded && (
-                    <div className="px-3 pb-2.5 pt-1 space-y-1.5 border-l-2 ml-[54px]" style={{ borderLeftColor: `${color}40` }}>
+                    <div className="px-3 pb-2.5 pt-1 space-y-1.5 border-l-2 ml-[78px]" style={{ borderLeftColor: `${color}40` }}>
                       {ev.type === 'step' && (() => {
                         const s = ev.payload;
                         return (
