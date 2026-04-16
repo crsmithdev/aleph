@@ -178,15 +178,24 @@ export function SessionsPage() {
       render: (row) => (
         <div className="flex flex-col gap-0.5 min-w-0">
           {row.parentSessionId && <span className="text-text-muted text-xs">↳ subagent</span>}
-          {row.intent ? (
-            <span className="text-text-primary text-base truncate" title={row.intent}>
-              {row.intent.length > 100 ? row.intent.slice(0, 100) + '…' : row.intent}
-            </span>
-          ) : (row.firstUserMessage && !row.firstUserMessage.startsWith('Caveat:') && (
-            <span className="text-text-primary text-base truncate">
-              {(() => { const t = stripMarkdown(row.firstUserMessage!); return t.length > 100 ? t.slice(0, 100) + '…' : t; })()}
-            </span>
-          ))}
+          {(() => {
+            const meaningfulIntent = row.intent && row.intent.toLowerCase() !== 'unknown task' ? row.intent : undefined;
+            if (meaningfulIntent) {
+              return (
+                <span className="text-text-primary text-base truncate" title={meaningfulIntent}>
+                  {meaningfulIntent.length > 100 ? meaningfulIntent.slice(0, 100) + '…' : meaningfulIntent}
+                </span>
+              );
+            }
+            if (row.firstUserMessage && !row.firstUserMessage.startsWith('Caveat:')) {
+              return (
+                <span className="text-text-primary text-base truncate">
+                  {(() => { const t = stripMarkdown(row.firstUserMessage!); return t.length > 100 ? t.slice(0, 100) + '…' : t; })()}
+                </span>
+              );
+            }
+            return null;
+          })()}
           {row.outcome && (
             <span className="text-text-muted text-xs truncate" title={row.outcome}>
               → {row.outcome.length > 90 ? row.outcome.slice(0, 90) + '…' : row.outcome}

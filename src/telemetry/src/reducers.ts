@@ -1401,6 +1401,16 @@ export function reduceSessionTrace(events: TelemetryEvent[], sessionId: string):
         });
       }
 
+      if (e.kind === "hook_feedback") {
+        spans.push({
+          id: `span-${t}-${spanCounter++}`, kind: "hook",
+          label: "stop.blocked",
+          startMs: offsetMs, durationMs: 0,
+          isError: true,
+          detail: (e.data?.text as string) || e.err,
+        });
+      }
+
       if (e.kind === "tokens") {
         const d = e.data || {};
         const inp = (d.input as number) || 0;

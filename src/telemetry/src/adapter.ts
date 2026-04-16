@@ -22,8 +22,9 @@ const { sqlite: cacheDb } = createDb(dataPaths.db);
 cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache`);
 cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v4`);
 cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v5`);
+cacheDb.exec(`DROP TABLE IF EXISTS telemetry_cache_v6`);
 cacheDb.exec(`
-  CREATE TABLE IF NOT EXISTS telemetry_cache_v5 (
+  CREATE TABLE IF NOT EXISTS telemetry_cache_v6 (
     file_path TEXT PRIMARY KEY,
     mtime_ms INTEGER NOT NULL,
     size INTEGER NOT NULL,
@@ -32,10 +33,10 @@ cacheDb.exec(`
 `);
 
 const insertCache = cacheDb.prepare(
-  `INSERT OR REPLACE INTO telemetry_cache_v5 (file_path, mtime_ms, size, events) VALUES (?, ?, ?, ?)`
+  `INSERT OR REPLACE INTO telemetry_cache_v6 (file_path, mtime_ms, size, events) VALUES (?, ?, ?, ?)`
 );
 const selectCache = cacheDb.prepare(
-  `SELECT mtime_ms, size, events FROM telemetry_cache_v5 WHERE file_path = ?`
+  `SELECT mtime_ms, size, events FROM telemetry_cache_v6 WHERE file_path = ?`
 );
 
 // ---------------------------------------------------------------------------
@@ -330,10 +331,22 @@ function adaptLine(
       }
 
       if (userText) {
-        events.push({
-          ts, sid, kind: "message", name: "user",
-          data: { ...meta, text: userText.slice(0, 500), role: "user" },
-        });
+        // Stop-hook feedback is injected as a user message by Claude Code but is not a real user turn.
+        // Emit as hook_feedback so it doesn't create a fake turn boundary in the trace.
+        const isHookFeedback =
+          userText.startsWith("Stop hook feedback:") ||
+          userText.startsWith("Stop hook blocking error:");
+        if (isHookFeedback) {
+          events.push({
+            ts, sid, kind: "hook_feedback", name: "blocked",
+            data: { ...meta, text: userText.slice(0, 500) },
+          });
+        } else {
+          events.push({
+            ts, sid, kind: "message", name: "user",
+            data: { ...meta, text: userText.slice(0, 500), role: "user" },
+          });
+        }
       }
     }
   }
@@ -560,7 +573,7 @@ function corpusCacheKey(opts?: AdaptOptions): string {
 }
 
 export function clearCache(): void {
-  cacheDb.exec("DELETE FROM telemetry_cache_v5");
+  cacheDb.exec("DELETE FROM telemetry_cache_v6");
   discoveryCache = undefined;
   corpusCache = undefined;
 }
