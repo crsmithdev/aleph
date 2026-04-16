@@ -682,7 +682,9 @@ export function useResearchStream(sessionId: string) {
           );
         }
 
-        setEvents(prev => [parsed, ...prev].slice(0, 1000));
+        if (parsed.type !== 'job') {
+          setEvents(prev => [parsed, ...prev].slice(0, 1000));
+        }
       } catch { /* ignore parse errors */ }
     };
 
