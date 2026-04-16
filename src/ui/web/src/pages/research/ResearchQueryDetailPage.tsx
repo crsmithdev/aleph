@@ -1210,18 +1210,18 @@ function formatEventDetail(ev: StreamEvent & { threadDiff?: string }): { typeLab
     // Non-status changes (titled, priority, backoff, retry)
     if (diff && !diff.includes(' → ')) {
       if (diff === 'titled') return { typeLabel: 'named', typeColor: 'text-text-muted/70', detail: `"${name}"` };
-      return { typeLabel: 'updated', typeColor: 'text-text-muted', detail: `${name} · ${diff}` };
+      return { typeLabel: 'update', typeColor: 'text-text-muted', detail: `${name} · ${diff}` };
     }
     // Specific status transitions
-    if (diff === 'paused → active') return { typeLabel: 'resumed', typeColor: 'text-success/80', detail: `"${name}"` };
+    if (diff === 'paused → active') return { typeLabel: 'resume', typeColor: 'text-success/80', detail: `"${name}"` };
     const originTag = t.origin !== 'seed' ? ` [${t.origin.replace(/_/g, '·')} d${t.depth}]` : ` [d${t.depth}]`;
-    if (t.status === 'active') return { typeLabel: 'started', typeColor: 'text-warning', detail: `"${name}"${originTag}` };
-    if (t.status === 'queued') return { typeLabel: 'queued', typeColor: 'text-warning/70', detail: `"${name}"${originTag}` };
-    if (t.status === 'pruned') return { typeLabel: 'pruned', typeColor: 'text-error', detail: `"${name}"` };
-    if (t.status === 'paused') return { typeLabel: 'paused', typeColor: 'text-warning/60', detail: `"${name}"` };
-    if (t.status === 'exhausted') return { typeLabel: 'finished', typeColor: 'text-text-muted', detail: `"${name}"` };
-    if (t.status === 'deferred') return { typeLabel: 'deferred', typeColor: 'text-text-muted', detail: `"${name}"${originTag}` };
-    if (diff) return { typeLabel: 'updated', typeColor: 'text-text-muted', detail: `${name} · ${diff}` };
+    if (t.status === 'active') return { typeLabel: 'start', typeColor: 'text-warning', detail: `"${name}"${originTag}` };
+    if (t.status === 'queued') return { typeLabel: 'queue', typeColor: 'text-warning/70', detail: `"${name}"${originTag}` };
+    if (t.status === 'pruned') return { typeLabel: 'prune', typeColor: 'text-error', detail: `"${name}"` };
+    if (t.status === 'paused') return { typeLabel: 'pause', typeColor: 'text-warning/60', detail: `"${name}"` };
+    if (t.status === 'exhausted') return { typeLabel: 'done', typeColor: 'text-text-muted', detail: `"${name}"` };
+    if (t.status === 'deferred') return { typeLabel: 'defer', typeColor: 'text-text-muted', detail: `"${name}"${originTag}` };
+    if (diff) return { typeLabel: 'update', typeColor: 'text-text-muted', detail: `${name} · ${diff}` };
     return null;
   }
   if (ev.type === 'step') {
@@ -1233,15 +1233,16 @@ function formatEventDetail(ev: StreamEvent & { threadDiff?: string }): { typeLab
       const labelAliases: Record<string, string> = {
         'synthesize finding': 'synthesis',
         'synthesize findings': 'synthesis',
-        'evaluate follow-ups': 'eval follow-ups',
+        'evaluate follow-ups': 'followups',
         'summarize thread': 'summarize',
         'dedup check': 'dedup',
+        'gap analysis': 'gaps',
       };
       const labelColors: Record<string, string> = {
-        'gap analysis': 'text-orange-400',
+        'gaps': 'text-orange-400',
         'synthesis': 'text-purple-400',
         'dedup': 'text-text-muted',
-        'eval follow-ups': 'text-teal-400',
+        'followups': 'text-teal-400',
         'summarize': 'text-text-muted',
       };
       const rawLbl = s.label ?? 'step';
