@@ -7,7 +7,7 @@ import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { type TimeRange } from '../../../components/data/TimeRangeSelector';
-import { fmtNumber, fmtMs, fmtCurrency, dateTime, fmtDuration, fmtToolName, cleanMessage, formatModelName, fmtProject } from '../../../utils/format';
+import { fmtNumber, fmtMs, fmtCurrency, dateTime, fmtDuration, fmtToolName, cleanMessage, formatModelName, fmtProject, modelContextWindow } from '../../../utils/format';
 import { clsx } from 'clsx';
 
 type TraceCompaction = {
@@ -753,11 +753,13 @@ function UserBlock({ turn, sessionId, prevTurn }: {
 function SystemContextBreakdown({
   systemEst,
   totalContextTokens,
+  maxContextTokens,
   contextFiles,
   firstTurnCacheRead,
 }: {
   systemEst: number;
   totalContextTokens: number;
+  maxContextTokens: number;
   contextFiles?: ContextFile[];
   firstTurnCacheRead?: number;
 }) {
@@ -771,7 +773,8 @@ function SystemContextBreakdown({
   const baseOverhead = measured
     ? Math.max(0, firstTurnCacheRead! - knownFileTokens)
     : Math.max(0, systemEst - knownFileTokens);
-  const pct = totalContextTokens > 0 ? Math.round(displayTotal / totalContextTokens * 100) : 0;
+  const pctUsed = totalContextTokens > 0 ? Math.round(displayTotal / totalContextTokens * 100) : 0;
+  const pctMax = maxContextTokens > 0 ? Math.round(displayTotal / maxContextTokens * 100) : 0;
 
   return (
     <div className="border-t border-border-primary/40">
@@ -783,7 +786,7 @@ function SystemContextBreakdown({
           <Icon name="expand_more" size="xs" className={clsx('shrink-0 transition-transform duration-150', open ? 'rotate-180' : '')} />
           System / CLAUDE.md / settings
         </span>
-        <span className="text-xs text-text-muted font-mono">{fmtNumber(displayTotal)} ({pct}%)</span>
+        <span className="text-xs text-text-muted font-mono">{fmtNumber(displayTotal)} ({pctUsed}% · {pctMax}% max)</span>
       </button>
       {open && (
         <div className="px-4 pb-2.5 space-y-1">
@@ -836,6 +839,7 @@ function ContextPanel({ turns, contextFiles, onTurnClick }: {
 
   const lastTurn = turns[turns.length - 1];
   const totalContextTokens = lastTurn?.contextTokens;
+  const maxContextTokens = modelContextWindow(lastTurn?.model);
 
   // Build items from what we have
   const userItems: ContextItem[] = turns
@@ -918,7 +922,7 @@ function ContextPanel({ turns, contextFiles, onTurnClick }: {
         <span className="text-sm font-medium text-text-secondary leading-none">Context</span>
         {totalContextTokens ? (
           <span className="text-xs text-text-muted leading-none">
-            {fmtNumber(totalContextTokens)} tokens
+            {fmtNumber(totalContextTokens)} / {fmtNumber(maxContextTokens)} tokens ({Math.round(totalContextTokens / maxContextTokens * 100)}% of max)
           </span>
         ) : (
           <span className="text-xs text-text-disabled leading-none">token data unavailable</span>
@@ -953,6 +957,7 @@ function ContextPanel({ turns, contextFiles, onTurnClick }: {
               count={userItems.length}
               totalEst={totalUserEst}
               totalContextTokens={totalContextTokens}
+              maxContextTokens={maxContextTokens}
               items={sortedUserItems}
               view={view}
               onTurnClick={onTurnClick}
@@ -964,6 +969,7 @@ function ContextPanel({ turns, contextFiles, onTurnClick }: {
               count={toolItems.length}
               totalEst={totalToolEst}
               totalContextTokens={totalContextTokens}
+              maxContextTokens={maxContextTokens}
               items={sortedToolItems}
               view={view}
               onTurnClick={onTurnClick}
@@ -975,6 +981,7 @@ function ContextPanel({ turns, contextFiles, onTurnClick }: {
               count={assistantItems.length}
               totalEst={totalAssistantEst}
               totalContextTokens={totalContextTokens}
+              maxContextTokens={maxContextTokens}
               items={sortedAssistantItems}
               view={view}
               onTurnClick={onTurnClick}
@@ -995,6 +1002,7 @@ function ContextPanel({ turns, contextFiles, onTurnClick }: {
         <SystemContextBreakdown
           systemEst={systemEst}
           totalContextTokens={totalContextTokens}
+          maxContextTokens={maxContextTokens}
           contextFiles={contextFiles}
           firstTurnCacheRead={firstTurnCacheRead}
         />
@@ -1012,6 +1020,7 @@ function ContextGroup({
   count,
   totalEst,
   totalContextTokens,
+  maxContextTokens,
   items,
   view,
   onTurnClick,
@@ -1020,6 +1029,7 @@ function ContextGroup({
   count: number;
   totalEst: number;
   totalContextTokens?: number;
+  maxContextTokens?: number;
   items: ContextItem[];
   view: 'category' | 'size';
   onTurnClick?: (index: number) => void;
@@ -1027,7 +1037,8 @@ function ContextGroup({
   const [open, setOpen] = useState(true);
   if (count === 0) return null;
 
-  const pct = totalContextTokens ? Math.round(totalEst / totalContextTokens * 100) : 0;
+  const pctUsed = totalContextTokens ? Math.round(totalEst / totalContextTokens * 100) : 0;
+  const pctMax = maxContextTokens ? Math.round(totalEst / maxContextTokens * 100) : 0;
 
   return (
     <div>
@@ -1039,7 +1050,7 @@ function ContextGroup({
         <span className="text-sm font-medium text-text-primary shrink-0 whitespace-nowrap leading-none">{label}</span>
         <span className="text-xs text-text-muted shrink-0 leading-none">{count}</span>
         <span className="ml-auto text-xs text-text-muted font-mono shrink-0 whitespace-nowrap leading-none">
-          {fmtNumber(totalEst)}{totalContextTokens ? ` (${pct}%)` : ''}
+          {fmtNumber(totalEst)}{totalContextTokens ? ` (${pctUsed}% · ${pctMax}% max)` : ''}
         </span>
       </button>
 
