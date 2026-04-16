@@ -224,7 +224,7 @@ function SpanRow({ span, sessionId }: { span: Span; sessionId: string }) {
       : span.kind === 'verify'
       ? (span.label.includes('FAIL') ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-green-500/10 border-green-500/30 text-green-400')
       : isSubagent
-      ? 'bg-agent/20 border-agent-border text-white'
+      ? 'bg-agent/20 border-agent-border text-text-primary'
       : 'bg-accent/10 border-accent/30 text-accent';
 
   return (
@@ -256,7 +256,7 @@ function SpanRow({ span, sessionId }: { span: Span; sessionId: string }) {
           : span.kind === 'hook' && hookDecision === 'pass' ? 'text-success'
           : span.kind === 'hook' ? 'text-purple-300'
           : span.kind === 'verify' ? (span.label.includes('FAIL') ? 'text-red-400' : 'text-green-400')
-          : isSubagent ? 'text-white' : 'text-sky-300')}>
+          : isSubagent ? 'text-text-primary' : 'text-sky-500')}>
           {span.subagentSessionId ? (
             <Link
               to={`/observability/sessions/${encodeURIComponent(span.subagentSessionId)}`}

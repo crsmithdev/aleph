@@ -53,7 +53,7 @@ export function GoalCard({ goal }: GoalCardProps) {
         <div className="flex items-start justify-between gap-2 flex-wrap">
           <span
             className={`text-sm font-medium leading-snug ${
-              isDone ? 'text-text-muted line-through' : 'text-text-primary group-hover:text-white'
+              isDone ? 'text-text-muted line-through' : 'text-text-primary'
             }`}
           >
             {goal.title}

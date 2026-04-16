@@ -36,7 +36,7 @@ const SEGMENT_STYLES: Record<string, { bg: string; border: string; text: string 
   tool:  { bg: 'bg-accent/40',       border: 'border-accent/60',       text: 'text-text-secondary' },
   hook:  { bg: 'bg-purple-500/40',   border: 'border-purple-500/60',   text: 'text-purple-500' },
   token: { bg: 'bg-blue-500/40',     border: 'border-blue-500/60',     text: 'text-blue-500' },
-  agent:  { bg: 'bg-agent',              border: 'border-agent-border',      text: 'text-white' },
+  agent:  { bg: 'bg-agent',              border: 'border-agent-border',      text: 'text-text-primary' },
   verify: { bg: 'bg-green-500/40',     border: 'border-green-500/60',    text: 'text-green-400' },
   error: { bg: 'bg-error/30',        border: 'border-error/60',        text: 'text-error' },
 };
@@ -278,7 +278,7 @@ export function TurnTracePage() {
                     </span>
                   )}
                   {showDuration && (
-                    <span className={clsx('text-[9px] font-mono leading-tight', seg.kind === 'agent' ? 'text-white/70' : 'text-text-muted/70')}>
+                    <span className={clsx('text-[9px] font-mono leading-tight', seg.kind === 'agent' ? 'text-text-secondary/70' : 'text-text-muted/70')}>
                       {fmtMs(seg.durationMs)}
                     </span>
                   )}
