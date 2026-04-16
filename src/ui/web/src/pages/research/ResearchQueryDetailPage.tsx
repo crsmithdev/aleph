@@ -233,7 +233,7 @@ function ThreadNavigator({
       <div className="flex-1 overflow-y-auto">
         {visibleFiltered.map(thread => {
           const fc = findingCounts.get(thread.id) ?? 0;
-          const display = thread.short_query ?? (thread.query.length > 60 ? thread.query.slice(0, 60) + '...' : thread.query);
+          const display = thread.short_query ?? thread.query;
           const isSelected = selectedThreadId === thread.id;
           const depth = viewMode === 'hierarchical' ? thread.depth : 0;
           const canExpand = viewMode === 'hierarchical' && hasChildren(thread.id);
@@ -757,7 +757,7 @@ function ThreadLiveRow({
   const hasAnalysis = threadFindings.some(f => f.follow_up_analysis);
   const childQuerySet = new Set(childThreads.map(t => t.query.toLowerCase().trim()));
 
-  const displayText = thread.short_query ?? (thread.query.length > 100 ? thread.query.slice(0, 100) + '...' : thread.query);
+  const displayText = thread.short_query ?? thread.query;
   const threadFetch = thread.fetch_source_text;
 
   function handleFetchToggle() {
@@ -1216,21 +1216,21 @@ function formatEventDetail(ev: StreamEvent & { threadDiff?: string }): { typeLab
   if (ev.type === 'thread') {
     const t = ev.payload;
     const diff = ev.threadDiff;
-    const name = (t.short_query ?? t.query.split('\n')[0]).slice(0, 60);
+    const name = t.short_query ?? t.query;
     // Non-status changes (titled, priority, backoff, retry)
     if (diff && !diff.includes(' → ')) {
-      if (diff === 'titled') return { typeLabel: 'named', typeColor: 'text-text-muted/70', detail: `"${name}"` };
+      if (diff === 'titled') return { typeLabel: 'named', typeColor: 'text-text-muted/70', detail: name };
       return { typeLabel: 'update', typeColor: 'text-text-muted', detail: `${name} · ${diff}` };
     }
     // Specific status transitions
-    if (diff === 'paused → active') return { typeLabel: 'resume', typeColor: 'text-success/80', detail: `"${name}"` };
+    if (diff === 'paused → active') return { typeLabel: 'resume', typeColor: 'text-success/80', detail: name };
     const originTag = t.origin !== 'seed' ? ` [${t.origin.replace(/_/g, '·')} d${t.depth}]` : ` [d${t.depth}]`;
-    if (t.status === 'active') return { typeLabel: 'start', typeColor: 'text-warning', detail: `"${name}"${originTag}` };
-    if (t.status === 'queued') return { typeLabel: 'queue', typeColor: 'text-warning/70', detail: `"${name}"${originTag}` };
-    if (t.status === 'pruned') return { typeLabel: 'prune', typeColor: 'text-error', detail: `"${name}"` };
-    if (t.status === 'paused') return { typeLabel: 'pause', typeColor: 'text-warning/60', detail: `"${name}"` };
-    if (t.status === 'exhausted') return { typeLabel: 'done', typeColor: 'text-text-muted', detail: `"${name}"` };
-    if (t.status === 'deferred') return { typeLabel: 'defer', typeColor: 'text-text-muted', detail: `"${name}"${originTag}` };
+    if (t.status === 'active') return { typeLabel: 'start', typeColor: 'text-warning', detail: `${name}${originTag}` };
+    if (t.status === 'queued') return { typeLabel: 'queue', typeColor: 'text-warning/70', detail: `${name}${originTag}` };
+    if (t.status === 'pruned') return { typeLabel: 'prune', typeColor: 'text-error', detail: name };
+    if (t.status === 'paused') return { typeLabel: 'pause', typeColor: 'text-warning/60', detail: name };
+    if (t.status === 'exhausted') return { typeLabel: 'done', typeColor: 'text-text-muted', detail: name };
+    if (t.status === 'deferred') return { typeLabel: 'defer', typeColor: 'text-text-muted', detail: `${name}${originTag}` };
     if (diff) return { typeLabel: 'update', typeColor: 'text-text-muted', detail: `${name} · ${diff}` };
     return null;
   }
@@ -1503,7 +1503,7 @@ function LiveView({
               >
                 <div className="flex items-start gap-1.5 mb-1">
                   <span className="text-sm font-medium text-text-primary line-clamp-2 flex-1 leading-snug">
-                    {thread.short_query ?? thread.query.split('\n')[0]}
+                    {thread.short_query ?? thread.query}
                   </span>
                   {threadFindings.length > 0 && (
                     <span className="text-xs font-mono text-success shrink-0 leading-5">{threadFindings.length}✦</span>
@@ -1753,13 +1753,13 @@ function LiveView({
                   {activeThreads.map(t => (
                     <div key={t.id} className="flex items-center gap-2 text-sm text-text-secondary">
                       <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shrink-0" />
-                      <span className="truncate">{(t.short_query ?? t.query.split('\n')[0]).slice(0, 60)}</span>
+                      <span className="truncate">{t.short_query ?? t.query}</span>
                     </div>
                   ))}
                   {queuedThreads.slice(0, 3).map(t => (
                     <div key={t.id} className="flex items-center gap-2 text-sm text-text-muted">
                       <span className="w-1.5 h-1.5 rounded-full bg-warning/60 shrink-0" />
-                      <span className="truncate">{(t.short_query ?? t.query.split('\n')[0]).slice(0, 60)}</span>
+                      <span className="truncate">{t.short_query ?? t.query}</span>
                     </div>
                   ))}
                   {queuedThreads.length > 3 && (
@@ -1792,7 +1792,7 @@ function LiveView({
                     className="text-sm px-1.5 py-0.5 rounded border truncate max-w-48"
                     style={{ background: `${ftColor}15`, borderColor: `${ftColor}35`, color: ftColor }}
                   >
-                    {ft ? (ft.short_query ?? ft.query.split('\n')[0]).slice(0, 40) : filterThreadId.slice(0, 12)}
+                    {ft ? (ft.short_query ?? ft.query) : filterThreadId.slice(0, 12)}
                   </div>
                   <button
                     onClick={() => setFilterThreadId(null)}
@@ -1893,8 +1893,7 @@ function LiveView({
               const isFinding = ev.type === 'finding';
               // For label-only steps with no detail, show abbreviated thread query
               const isLabelOnlyStep = ev.type === 'step' && (ev.payload.tool_calls ?? []).length === 0;
-              const threadQ = thread ? (thread.short_query ?? thread.query.split('\n')[0]) : null;
-              const abbrevThreadQ = threadQ ? (threadQ.length > 50 ? threadQ.slice(0, 47) + '…' : threadQ) : null;
+              const abbrevThreadQ = thread ? (thread.short_query ?? thread.query) : null;
               const displayDetail = formatted.detail || (isLabelOnlyStep && abbrevThreadQ) || '';
               const isHighFinding = isFinding && (ev.payload as ResearchFinding).confidence >= 0.7;
               const isError = ev.type === 'step' && !!(ev.payload as ResearchStep).error;
@@ -1946,8 +1945,8 @@ function LiveView({
                             {s.label === 'summarize thread' && thread && (
                               <div className="text-sm space-y-0.5">
                                 <p className="text-text-secondary">Generates short conceptual title for thread</p>
-                                <p className="text-text-secondary truncate">query: "{thread.query.split('\n')[0]}"</p>
-                                {thread.short_query && <p className="text-text-primary">title: "{thread.short_query}"</p>}
+                                <p className="text-text-secondary truncate">query: {thread.short_query ?? thread.query}</p>
+                                {thread.short_query && <p className="text-text-primary">title: {thread.short_query}</p>}
                               </div>
                             )}
                             {s.tool_calls.map((tc, ti) => (
@@ -2915,7 +2914,7 @@ export function ResearchQueryDetailPage() {
 
           {/* Secondary content */}
           <div className="px-6 pb-0">
-            <p className="text-sm text-text-muted line-clamp-3 mb-2">{session.seed_query}</p>
+            <p className="text-sm text-text-muted line-clamp-3 mb-2">{session.seed_query_short || session.seed_query}</p>
 
           {/* Env warnings */}
           {envCheck && (envCheck.errors.length > 0 || envCheck.warnings.length > 0 || envCheck.jina_balance !== null) && (

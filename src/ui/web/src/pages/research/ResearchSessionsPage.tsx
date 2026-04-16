@@ -244,7 +244,7 @@ export function ResearchSessionsPage() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
                     <h3 className="text-sm font-medium text-text-primary truncate">{session.title}</h3>
-                    <p className="text-xs text-text-muted mt-1 truncate">{session.seed_query}</p>
+                    <p className="text-xs text-text-muted mt-1 truncate">{session.seed_query_short || session.seed_query}</p>
                   </div>
                   <span className={clsx('px-2 py-0.5 rounded text-xs font-medium ml-3', statusColors[session.status])}>
                     {session.status}

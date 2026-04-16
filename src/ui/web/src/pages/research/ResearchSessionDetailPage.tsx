@@ -160,7 +160,7 @@ function DocumentView({ findings, threads }: { findings: ResearchFinding[]; thre
             >
               <div className="flex items-center gap-3 min-w-0">
                 <span className="text-text-muted text-sm font-mono shrink-0">{String(sectionIdx + 1).padStart(2, '0')}</span>
-                <span className="text-base font-medium text-text-primary truncate">{thread.query}</span>
+                <span className="text-base font-medium text-text-primary truncate">{thread.short_query ?? thread.query}</span>
                 <span className={clsx('px-1.5 py-0.5 rounded text-sm shrink-0',
                   thread.origin === 'seed' ? 'bg-accent/10 text-accent' : 'bg-accent/5 text-accent/70'
                 )}>{thread.origin.replace('_', ' ')}</span>
@@ -247,12 +247,9 @@ function ThreadLiveRow({
   const hasAnalysis = threadFindings.some(f => f.follow_up_analysis);
   const childQuerySet = new Set(childThreads.map(t => t.query.toLowerCase().trim()));
 
-  // Thread query display: first line as header, rest expandable
-  const queryLines = thread.query.split('\n');
-  const queryFirstLine = queryLines[0].length > 100
-    ? queryLines[0].slice(0, 100) + '…'
-    : queryLines[0];
-  const queryHasMore = queryLines.length > 1 || queryLines[0].length > 100;
+  // Thread query display: short_query as header, full query expandable
+  const queryFirstLine = thread.short_query ?? thread.query;
+  const queryHasMore = !thread.short_query && thread.query.length > 100;
 
   // Per-thread fetch_source_text: null means use session default
   const threadFetch = thread.fetch_source_text;
@@ -575,8 +572,8 @@ function formatEventDetail(ev: StreamEvent): { typeLabel: string; typeColor: str
   }
   if (ev.type === 'thread') {
     const t = ev.payload;
-    if (t.status === 'active') return { typeLabel: 'spawn', typeColor: 'text-warning', detail: `"${t.query.split('\n')[0].slice(0, 80)}"` };
-    if (t.status === 'queued') return { typeLabel: 'queued', typeColor: 'text-warning/70', detail: `"${t.query.split('\n')[0].slice(0, 80)}"` };
+    if (t.status === 'active') return { typeLabel: 'spawn', typeColor: 'text-warning', detail: t.short_query ?? t.query };
+    if (t.status === 'queued') return { typeLabel: 'queued', typeColor: 'text-warning/70', detail: t.short_query ?? t.query };
     if (t.status === 'pruned') return { typeLabel: 'pruned', typeColor: 'text-error', detail: `thread terminated` };
     if (t.status === 'exhausted') return { typeLabel: 'done', typeColor: 'text-text-muted', detail: `thread complete` };
     return null;
@@ -719,7 +716,7 @@ function ThreadLiveView({
                 <div className="flex items-center gap-1.5 mb-1">
                   <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', liveStatusDot[thread.status] ?? 'bg-text-muted/40')} />
                   <span className="text-sm font-medium text-text-primary truncate flex-1 leading-tight">
-                    {(thread.short_query ?? thread.query.split('\n')[0]).slice(0, 36)}
+                    {thread.short_query ?? thread.query}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 mb-1.5">
@@ -850,13 +847,13 @@ function ThreadLiveView({
                   {activeThreads.map(t => (
                     <div key={t.id} className="flex items-center gap-1.5 text-sm text-text-secondary">
                       <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shrink-0" />
-                      {(t.short_query ?? t.query.split('\n')[0]).slice(0, 60)}
+                      {t.short_query ?? t.query}
                     </div>
                   ))}
                   {queuedThreads.map(t => (
                     <div key={t.id} className="flex items-center gap-1.5 text-sm text-text-muted">
                       <span className="w-1.5 h-1.5 rounded-full bg-warning/60 shrink-0" />
-                      {(t.short_query ?? t.query.split('\n')[0]).slice(0, 60)}
+                      {t.short_query ?? t.query}
                     </div>
                   ))}
                 </div>
@@ -872,7 +869,7 @@ function ThreadLiveView({
         <div className="flex items-center gap-0 border-b border-border-primary bg-bg-secondary overflow-x-auto shrink-0">
           {ordered.filter(t => t.status !== 'pruned' || findingsByThread.get(t.id)?.length).slice(0, 8).map(t => {
             const color = threadColor.get(t.id) ?? '#8796b0';
-            const label = (t.short_query ?? t.query.split('\n')[0]).slice(0, 14);
+            const label = t.short_query ?? t.query;
             return (
               <div
                 key={t.id}
@@ -1042,7 +1039,7 @@ function ThreadNode({ data }: { data: ResearchThread & { findingCount: number } 
           <span className="ml-auto text-sm bg-bg-tertiary text-text-muted px-1 rounded">{data.findingCount}</span>
         )}
       </div>
-      <p className="text-sm leading-tight line-clamp-2 text-text-primary">{data.query}</p>
+      <p className="text-sm leading-tight line-clamp-2 text-text-primary">{data.short_query ?? data.query}</p>
       <Handle type="source" position={Position.Bottom} className="!bg-border-primary" />
     </div>
   );
@@ -1633,7 +1630,7 @@ export function ResearchSessionDetailPage() {
         <div className="flex items-center justify-between mt-2">
           <div>
             <h1 className="font-heading text-2xl font-bold text-text-primary">{session.title}</h1>
-            <p className="text-sm text-text-muted mt-0.5">{session.seed_query}</p>
+            <p className="text-sm text-text-muted mt-0.5">{session.seed_query_short || session.seed_query}</p>
           </div>
           <div className="flex items-center gap-2">
             {(session.status === 'active' || session.status === 'paused') && (

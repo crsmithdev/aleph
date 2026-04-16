@@ -203,6 +203,8 @@ export function applyResearchDDL(sqlite: Sqlite): void {
 
   // Migrations
   try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN short_query TEXT`); } catch { /* exists */ }
+  try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN seed_query_short TEXT`); } catch { /* exists */ }
+  try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN seed_query_super_short TEXT`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_steps ADD COLUMN label TEXT`); } catch { /* exists */ }
   try { sqlite.exec("ALTER TABLE research_findings ADD COLUMN source_url_meta TEXT NOT NULL DEFAULT '[]'"); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_findings ADD COLUMN follow_up_analysis TEXT`); } catch { /* exists */ }

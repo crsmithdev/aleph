@@ -260,7 +260,7 @@ export function ResearchQueriesPage() {
                 </div>
 
                 {/* Seed query */}
-                <p className="text-xs text-text-muted mb-3 truncate">{session.seed_query}</p>
+                <p className="text-xs text-text-muted mb-3 truncate">{session.seed_query_short || session.seed_query}</p>
 
                 {/* Summary preview */}
                 {session.summary ? (

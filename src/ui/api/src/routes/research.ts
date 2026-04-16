@@ -23,9 +23,13 @@ import {
 } from '@construct/research';
 
 function sanitizeQuery(q: string): string {
-  const trimmed = q.trim().replace(/\s+/g, ' ');
-  if (!trimmed) return trimmed;
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+  let t = q.trim().replace(/\s+/g, ' ');
+  // Remove outer quotes (straight and curly)
+  t = t.replace(/^[\u201C\u201D\u2018\u2019"']+|[\u201C\u201D\u2018\u2019"']+$/g, '').trim();
+  // Replace underscores with spaces
+  t = t.replace(/_/g, ' ');
+  if (!t) return t;
+  return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
 function summarizeQuery(query: string): string {
@@ -41,11 +45,46 @@ function summarizeQuery(query: string): string {
   return words.length > 8 ? words.slice(0, 8).join(' ') : t;
 }
 
+function heuristicSeedQueryShort(query: string): string {
+  const t = query.trim();
+  // First sentence ending with punctuation
+  const sentEnd = t.search(/[?!.]/);
+  if (sentEnd > 10 && sentEnd < 150) return t.slice(0, sentEnd + 1).trim();
+  // Fall back to first 120 chars
+  return t.length <= 120 ? t : t.slice(0, 120) + '…';
+}
+
+function heuristicSeedQuerySuperShort(query: string): string {
+  return summarizeQuery(query);
+}
+
 function placeholderShortQuery(query: string): string {
   const t = query.trim();
   const MAX = 80;
   if (t.length <= MAX) return t;
   return t.slice(0, MAX) + '…';
+}
+
+async function generateSeedQueryShort(query: string): Promise<string | null> {
+  const openrouterKey = process.env.OPENROUTER_API_KEY;
+  if (!openrouterKey) return null;
+  try {
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${openrouterKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'deepseek/deepseek-chat',
+        messages: [{ role: 'user', content: `Restate this research question as a single clear sentence. Return ONLY the sentence, no quotes:\n\n${query}` }],
+        max_tokens: 60,
+      }),
+    });
+    if (resp.ok) {
+      const data = await resp.json() as { choices: Array<{ message: { content: string } }> };
+      const result = data.choices[0]?.message?.content?.trim().replace(/^["']|["']$/g, '');
+      if (result && result.length <= 200) return result;
+    }
+  } catch { /* fall through */ }
+  return null;
 }
 
 async function generateShortQuery(query: string): Promise<string | null> {
@@ -148,11 +187,15 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       const { seed_query: rawQuery, title, config } = req.body;
       const seed_query = sanitizeQuery(rawQuery ?? '');
       if (!seed_query) return reply.status(400).send({ error: 'seed_query is required' });
+      const seed_query_short = heuristicSeedQueryShort(seed_query);
+      const seed_query_super_short = heuristicSeedQuerySuperShort(seed_query);
       const query = createQuery(
         app.sqlite,
         title ?? summarizeQuery(seed_query),
         seed_query,
-        config as Partial<typeof DEFAULT_SESSION_CONFIG>
+        config as Partial<typeof DEFAULT_SESSION_CONFIG>,
+        seed_query_short,
+        seed_query_super_short,
       );
       // Create seed thread
       const seedThread = createThread(app.sqlite, {
@@ -174,6 +217,13 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
         if (llmTitle !== query.title) {
           updateQuery(app.sqlite, query.id, { title: llmTitle });
         }
+      }).catch(() => { /* ignore */ });
+      // Fire async LLM short/super-short generation for the query itself
+      generateSeedQueryShort(seed_query).then(short => {
+        if (short) updateQuery(app.sqlite, query.id, { seed_query_short: short });
+      }).catch(() => { /* ignore */ });
+      generateShortQuery(seed_query).then(superShort => {
+        if (superShort) updateQuery(app.sqlite, query.id, { seed_query_super_short: superShort });
       }).catch(() => { /* ignore */ });
       // Auto-create a burst job so workers pick it up immediately
       createJob(app.sqlite, { session_id: query.id, mode: 'burst' });

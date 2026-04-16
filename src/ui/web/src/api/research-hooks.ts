@@ -7,6 +7,8 @@ export interface ResearchQuery {
   id: string;
   title: string;
   seed_query: string;
+  seed_query_short: string | null;
+  seed_query_super_short: string | null;
   status: 'active' | 'paused' | 'completed' | 'archived';
   config: Record<string, unknown>;
   summary: string;

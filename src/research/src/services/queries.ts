@@ -23,16 +23,18 @@ export function createQuery(
   sqlite: Sqlite,
   title: string,
   seedQuery: string,
-  config?: Partial<SessionConfig>
+  config?: Partial<SessionConfig>,
+  seedQueryShort?: string | null,
+  seedQuerySuperShort?: string | null,
 ): ResearchQuery {
   const id = generateId();
   const mergedConfig = { ...DEFAULT_SESSION_CONFIG, ...config };
   const now = new Date().toISOString();
 
   sqlite.prepare(`
-    INSERT INTO research_queries (id, title, seed_query, status, config, created_at, updated_at)
-    VALUES (?, ?, ?, 'active', ?, ?, ?)
-  `).run(id, title, seedQuery, JSON.stringify(mergedConfig), now, now);
+    INSERT INTO research_queries (id, title, seed_query, seed_query_short, seed_query_super_short, status, config, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?)
+  `).run(id, title, seedQuery, seedQueryShort ?? null, seedQuerySuperShort ?? null, JSON.stringify(mergedConfig), now, now);
 
   return getQuery(sqlite, id)!;
 }
@@ -61,7 +63,7 @@ export const listSessions = listQueries;
 export function updateQuery(
   sqlite: Sqlite,
   id: string,
-  updates: Partial<Pick<ResearchQuery, 'status' | 'summary' | 'document' | 'user_notes' | 'title'>> & { config?: Partial<SessionConfig> }
+  updates: Partial<Pick<ResearchQuery, 'status' | 'summary' | 'document' | 'user_notes' | 'title' | 'seed_query_short' | 'seed_query_super_short'>> & { config?: Partial<SessionConfig> }
 ): ResearchQuery | null {
   const fields: string[] = [];
   const values: unknown[] = [];
@@ -71,6 +73,8 @@ export function updateQuery(
   if (updates.document !== undefined) { fields.push('document = ?'); values.push(updates.document); }
   if (updates.user_notes !== undefined) { fields.push('user_notes = ?'); values.push(updates.user_notes); }
   if (updates.title !== undefined) { fields.push('title = ?'); values.push(updates.title); }
+  if (updates.seed_query_short !== undefined) { fields.push('seed_query_short = ?'); values.push(updates.seed_query_short); }
+  if (updates.seed_query_super_short !== undefined) { fields.push('seed_query_super_short = ?'); values.push(updates.seed_query_super_short); }
   if (updates.config !== undefined) {
     const existing = getQuery(sqlite, id);
     if (existing) {
