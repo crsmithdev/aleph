@@ -704,7 +704,7 @@ Return ONLY a JSON array of search query strings. No other text.`,
       thread.session_id,
       thread.id,
       config,
-      'formulate queries'
+      'formulate'
     );
 
     try {
