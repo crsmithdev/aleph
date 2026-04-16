@@ -162,12 +162,3 @@ dialog::backdrop {
 
 /* Recharts legend — override default li margin so legendProps gap controls spacing */
 .recharts-legend-item { margin-right: 0 !important; }
-
-/* Chart enter animation — bottom-to-top fade replacing Recharts' left-right wipe */
-@keyframes chart-enter {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.recharts-responsive-container {
-  animation: chart-enter 0.35s ease-out both;
-}
