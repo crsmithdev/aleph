@@ -8,8 +8,11 @@ import { clsx } from 'clsx';
 import { toDateStr, longDate } from '../../utils/format';
 
 type PeriodSummaryData = {
+  goalsCreated?: { count: number; items: Array<{ title: string }> };
   goalsCompleted?: { count: number; items: Array<{ goalId: string; details: { title?: string; prevState?: string } }> };
+  todosCreated?: { count: number; items: Array<{ title: string }> };
   todosCompleted?: { count: number; items: Array<{ title: string }> };
+  habitsCreated?: { count: number; items: Array<{ title: string }> };
 };
 
 interface GitStats {
@@ -39,13 +42,17 @@ function SectionHeader({ label, count }: { label: string; count?: number }) {
   );
 }
 
-function BulletList({ items }: { items: string[] }) {
+type ListItem = { text: string; kind: 'created' | 'completed' };
+
+function BulletList({ items }: { items: ListItem[] }) {
   return (
     <ul className="space-y-0.5">
       {items.map((item, i) => (
         <li key={i} className="flex items-start gap-1.5 text-sm text-text-secondary">
-          <span className="text-text-disabled mt-0.5">·</span>
-          <span>{item}</span>
+          <span className={clsx('mt-0.5 text-xs font-bold leading-none', item.kind === 'created' ? 'text-accent' : 'text-success')}>
+            {item.kind === 'created' ? '+' : '✓'}
+          </span>
+          <span>{item.text}</span>
         </li>
       ))}
     </ul>
@@ -55,19 +62,28 @@ function BulletList({ items }: { items: string[] }) {
 function PeriodSummary({ start, end, dateDisplay, data, isLoading, completedHabits, gitStats }: PeriodSummaryProps) {
   const [copied, setCopied] = useState(false);
 
-  const completedGoals = data?.goalsCompleted?.items ?? [];
-  const completedTodos = data?.todosCompleted?.items ?? [];
+  const createdGoals: ListItem[] = (data?.goalsCreated?.items ?? []).map((g) => ({ text: g.title, kind: 'created' }));
+  const completedGoalItems: ListItem[] = (data?.goalsCompleted?.items ?? []).map((g) => ({ text: g.details?.title ?? g.goalId, kind: 'completed' }));
+  const goalItems = [...createdGoals, ...completedGoalItems];
+
+  const createdTodos: ListItem[] = (data?.todosCreated?.items ?? []).map((t) => ({ text: t.title, kind: 'created' }));
+  const completedTodoItems: ListItem[] = (data?.todosCompleted?.items ?? []).map((t) => ({ text: t.title, kind: 'completed' }));
+  const todoItems = [...createdTodos, ...completedTodoItems];
+
+  const createdHabits: ListItem[] = (data?.habitsCreated?.items ?? []).map((h) => ({ text: h.title, kind: 'created' }));
+  const followedHabits: ListItem[] = completedHabits.map((h) => ({ text: h, kind: 'completed' }));
+  const habitItems = [...createdHabits, ...followedHabits];
 
   const buildCopyText = () => {
     const lines: string[] = [`Summary — ${dateDisplay}`, ''];
-    if (completedGoals.length > 0) {
-      lines.push('Goals:', ...completedGoals.map((g) => `  - ${g.details?.title ?? g.goalId}`), '');
+    if (goalItems.length > 0) {
+      lines.push('Goals:', ...goalItems.map((g) => `  ${g.kind === 'created' ? '+' : '✓'} ${g.text}`), '');
     }
-    if (completedTodos.length > 0) {
-      lines.push('Todos:', ...completedTodos.map((t) => `  - ${t.title}`), '');
+    if (todoItems.length > 0) {
+      lines.push('Todos:', ...todoItems.map((t) => `  ${t.kind === 'created' ? '+' : '✓'} ${t.text}`), '');
     }
-    if (completedHabits.length > 0) {
-      lines.push('Habits:', ...completedHabits.map((h) => `  - ${h}`), '');
+    if (habitItems.length > 0) {
+      lines.push('Habits:', ...habitItems.map((h) => `  ${h.kind === 'created' ? '+' : '✓'} ${h.text}`), '');
     }
     if (gitStats && gitStats.commits > 0) {
       lines.push(`Construct: +${gitStats.added} LOC / -${gitStats.deleted} LOC · ${gitStats.commits} commit${gitStats.commits !== 1 ? 's' : ''}`);
@@ -106,26 +122,26 @@ function PeriodSummary({ start, end, dateDisplay, data, isLoading, completedHabi
       ) : (
         <div className="divide-y divide-border-primary/50 mt-1">
           {/* Goals */}
-          {completedGoals.length > 0 && (
+          {goalItems.length > 0 && (
             <div className="pb-3">
-              <SectionHeader label="Goals" count={completedGoals.length} />
-              <BulletList items={completedGoals.map((g) => g.details?.title ?? g.goalId)} />
+              <SectionHeader label="Goals" count={goalItems.length} />
+              <BulletList items={goalItems} />
             </div>
           )}
 
           {/* Todos */}
-          {completedTodos.length > 0 && (
+          {todoItems.length > 0 && (
             <div className="pb-3">
-              <SectionHeader label="Todos" count={completedTodos.length} />
-              <BulletList items={completedTodos.map((t) => t.title)} />
+              <SectionHeader label="Todos" count={todoItems.length} />
+              <BulletList items={todoItems} />
             </div>
           )}
 
           {/* Habits */}
-          {completedHabits.length > 0 && (
+          {habitItems.length > 0 && (
             <div className="pb-3">
-              <SectionHeader label="Habits" count={completedHabits.length} />
-              <BulletList items={completedHabits} />
+              <SectionHeader label="Habits" count={habitItems.length} />
+              <BulletList items={habitItems} />
             </div>
           )}
 

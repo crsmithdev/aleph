@@ -1,6 +1,6 @@
 import { and, gte, lte, sql, eq } from 'drizzle-orm';
 import type { Db } from '@construct/data';
-import { goals, todos, notes, historyLogs } from '../schema.js';
+import { goals, todos, notes, historyLogs, habits } from '../schema.js';
 
 export function getSummary(db: Db, start: string, end: string, tzOffsetMinutes?: number) {
   // Adjust query boundaries for timezone: timestamps are stored as UTC ISO strings,
@@ -56,6 +56,18 @@ export function getSummary(db: Db, start: string, end: string, tzOffsetMinutes?:
     )
     .all();
 
+  const todosCreated = db
+    .select()
+    .from(todos)
+    .where(and(gte(todos.createdAt, startTs), lte(todos.createdAt, endTs)))
+    .all();
+
+  const habitsCreated = db
+    .select()
+    .from(habits)
+    .where(and(gte(habits.createdAt, startTs), lte(habits.createdAt, endTs)))
+    .all();
+
   const notesAdded = db
     .select()
     .from(notes)
@@ -81,7 +93,9 @@ export function getSummary(db: Db, start: string, end: string, tzOffsetMinutes?:
         details: JSON.parse(l.details),
       })),
     },
+    todosCreated: { count: todosCreated.length, items: todosCreated },
     todosCompleted: { count: todosCompleted.length, items: todosCompleted },
+    habitsCreated: { count: habitsCreated.length, items: habitsCreated },
     notesAdded: { count: notesAdded.length, items: notesAdded },
   };
 }
