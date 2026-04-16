@@ -42,7 +42,7 @@ export function StatCard({
 }) {
 
   return (
-    <div className={clsx('border-t-2 border-border-primary', compact ? 'pt-3' : 'pt-4', className)}>
+    <div className={clsx('bg-bg-secondary rounded-lg', compact ? 'p-3' : 'p-4', className)}>
       <div className="font-sans text-xs uppercase tracking-wide text-text-secondary mb-1">{label}</div>
       <div className={clsx('font-heading font-semibold tracking-tight whitespace-nowrap flex items-baseline gap-2', compact ? 'text-3xl' : 'text-5xl', accentColors[accent ?? 'default'])}>
         <span>{value}</span>
