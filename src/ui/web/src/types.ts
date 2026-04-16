@@ -71,6 +71,7 @@ export interface GoalMeta {
   todoCount?: number;
   noteCount?: number;
   habitCount?: number;
+  linkedGoals?: Goal[];
 }
 
 export interface HistoryLog {
