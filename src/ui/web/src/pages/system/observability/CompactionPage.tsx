@@ -182,7 +182,7 @@ export function CompactionPage() {
                     <XAxis dataKey="date" {...xAxisDateProps} />
                     <YAxis {...axisProps} allowDecimals={false} />
                     <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                    <Bar dataKey="count" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Compactions" />
+                    <Bar isAnimationActive={false} dataKey="count" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Compactions" />
                   </BarChart>
                 ) : (
                   <AreaChart data={data.byDay} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
@@ -190,7 +190,7 @@ export function CompactionPage() {
                     <XAxis dataKey="date" {...xAxisDateProps} />
                     <YAxis {...axisProps} allowDecimals={false} />
                     <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                    <Area type="monotone" dataKey="count" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Compactions" />
+                    <Area isAnimationActive={false} type="monotone" dataKey="count" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Compactions" />
                   </AreaChart>
                 )}
               </ResponsiveContainer>
@@ -208,7 +208,7 @@ export function CompactionPage() {
                   <XAxis type="number" {...axisProps} allowDecimals={false} />
                   <YAxis type="category" dataKey="phase" {...axisProps} width={80} />
                   <Tooltip contentStyle={tooltipStyle} />
-                  <Bar dataKey="count" radius={[0, 2, 2, 0]} name="Count">
+                  <Bar isAnimationActive={false} dataKey="count" radius={[0, 2, 2, 0]} name="Count">
                     {distData.map((entry) => (
                       <Cell key={entry.phase} fill={entry.color} />
                     ))}

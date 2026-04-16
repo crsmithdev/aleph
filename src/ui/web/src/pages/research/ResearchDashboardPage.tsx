@@ -70,8 +70,8 @@ export function ResearchDashboardPage() {
                   <YAxis {...axisProps} />
                   <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                   <Legend {...legendProps} />
-                  <Bar dataKey="findings" fill={CHART_PALETTE[0]} name="Findings" />
-                  <Bar dataKey="sessions" fill={CHART_PALETTE[1]} name="Sessions" />
+                  <Bar isAnimationActive={false} dataKey="findings" fill={CHART_PALETTE[0]} name="Findings" />
+                  <Bar isAnimationActive={false} dataKey="sessions" fill={CHART_PALETTE[1]} name="Sessions" />
                 </BarChart>
               ) : (
                 <AreaChart data={stats.data.byDay}>
@@ -80,8 +80,8 @@ export function ResearchDashboardPage() {
                   <YAxis {...axisProps} />
                   <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                   <Legend {...legendProps} />
-                  <Area type="monotone" dataKey="findings" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} name="Findings" />
-                  <Area type="monotone" dataKey="sessions" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} name="Sessions" />
+                  <Area isAnimationActive={false} type="monotone" dataKey="findings" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} name="Findings" />
+                  <Area isAnimationActive={false} type="monotone" dataKey="sessions" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} name="Sessions" />
                 </AreaChart>
               )}
             </ChartContainer>

@@ -166,7 +166,7 @@ function ResultsTab() {
                 formatter={(v) => [`${v}%`, 'Pass rate']}
                 labelFormatter={labelFormatter}
               />
-              <Line type="monotone" dataKey="passRate" stroke={CHART_PALETTE[0]} strokeWidth={2} dot={false} name="Pass %" />
+              <Line isAnimationActive={false} type="monotone" dataKey="passRate" stroke={CHART_PALETTE[0]} strokeWidth={2} dot={false} name="Pass %" />
             </LineChart>
           </ResponsiveContainer>
         </ChartContainer>

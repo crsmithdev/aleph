@@ -315,7 +315,7 @@ export function SkillDetailPage() {
                     <ResponsiveContainer width="100%" height="100%">
                       {distChartType === 'donut' ? (
                         <PieChart>
-                          <Pie data={cfg.distData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                          <Pie isAnimationActive={false} data={cfg.distData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
                             {cfg.distData.map((_, i) => <Cell key={i} fill={cfg.colors[i] || CHART_PALETTE[i % CHART_PALETTE.length]} />)}
                           </Pie>
                           <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
@@ -326,7 +326,7 @@ export function SkillDetailPage() {
                           <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
                           <YAxis type="category" dataKey="name" {...axisProps} width={72} tick={{ fontSize: 10 }} />
                           <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
-                          <Bar dataKey="value" name="Count" radius={[0, 2, 2, 0]}>
+                          <Bar isAnimationActive={false} dataKey="value" name="Count" radius={[0, 2, 2, 0]}>
                             {cfg.distData.map((_, i) => <Cell key={i} fill={cfg.colors[i] || CHART_PALETTE[i % CHART_PALETTE.length]} />)}
                           </Bar>
                         </BarChart>

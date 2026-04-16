@@ -339,8 +339,8 @@ function PerformanceCharts({ byDay }: { byDay: { date: string; completed: number
             <XAxis dataKey="date" {...xAxisDateProps} />
             <YAxis {...axisProps} />
             <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-            <Bar dataKey="Completed" stackId="a" fill="var(--c-success)" radius={[0, 0, 0, 0]} />
-            <Bar dataKey="Failed" stackId="a" fill="var(--c-error)" radius={[2, 2, 0, 0]} />
+            <Bar isAnimationActive={false} dataKey="Completed" stackId="a" fill="var(--c-success)" radius={[0, 0, 0, 0]} />
+            <Bar isAnimationActive={false} dataKey="Failed" stackId="a" fill="var(--c-error)" radius={[2, 2, 0, 0]} />
           </BarChart>
         ) : (
           <AreaChart data={jobData}>
@@ -348,8 +348,8 @@ function PerformanceCharts({ byDay }: { byDay: { date: string; completed: number
             <XAxis dataKey="date" {...xAxisDateProps} />
             <YAxis {...axisProps} />
             <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-            <Area type="monotone" dataKey="Completed" stackId="a" stroke="var(--c-success)" fill="var(--c-success)" fillOpacity={0.4} dot={false} />
-            <Area type="monotone" dataKey="Failed" stackId="a" stroke="var(--c-error)" fill="var(--c-error)" fillOpacity={0.4} dot={false} />
+            <Area isAnimationActive={false} type="monotone" dataKey="Completed" stackId="a" stroke="var(--c-success)" fill="var(--c-success)" fillOpacity={0.4} dot={false} />
+            <Area isAnimationActive={false} type="monotone" dataKey="Failed" stackId="a" stroke="var(--c-error)" fill="var(--c-error)" fillOpacity={0.4} dot={false} />
           </AreaChart>
         )}
       </ChartContainer>
@@ -361,7 +361,7 @@ function PerformanceCharts({ byDay }: { byDay: { date: string; completed: number
             <XAxis dataKey="date" {...xAxisDateProps} />
             <YAxis {...axisProps} tickFormatter={(v) => fmtMs(v)} />
             <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v) => [fmtMs(Number(v)), 'Avg Duration']} />
-            <Area type="monotone" dataKey="Avg Duration" stroke="var(--c-accent)" fill="var(--c-accent)" fillOpacity={0.15} dot={false} />
+            <Area isAnimationActive={false} type="monotone" dataKey="Avg Duration" stroke="var(--c-accent)" fill="var(--c-accent)" fillOpacity={0.15} dot={false} />
           </AreaChart>
         </ChartContainer>
       )}

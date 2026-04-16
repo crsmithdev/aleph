@@ -77,8 +77,8 @@ export function OverviewPage() {
             <XAxis dataKey="date" {...xAxisDateProps} />
             <YAxis {...axisProps} />
             <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-            <Bar dataKey="messages" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Messages" />
-            <Bar dataKey="sessions" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Sessions" />
+            <Bar isAnimationActive={false} dataKey="messages" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Messages" />
+            <Bar isAnimationActive={false} dataKey="sessions" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Sessions" />
           </BarChart>
         ) : (
           <AreaChart data={data.byDay}>
@@ -86,8 +86,8 @@ export function OverviewPage() {
             <XAxis dataKey="date" {...xAxisDateProps} />
             <YAxis {...axisProps} />
             <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-            <Area type="monotone" dataKey="messages" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.15} name="Messages" />
-            <Area type="monotone" dataKey="sessions" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.15} name="Sessions" />
+            <Area isAnimationActive={false} type="monotone" dataKey="messages" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.15} name="Messages" />
+            <Area isAnimationActive={false} type="monotone" dataKey="sessions" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.15} name="Sessions" />
           </AreaChart>
         )}
       </ChartContainer>
@@ -101,9 +101,9 @@ export function OverviewPage() {
               <YAxis {...axisProps} tickFormatter={fmtNumber} />
               <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
               <Legend {...legendProps} />
-              <Bar dataKey="input" stackId="tokens" fill={CHART_PALETTE[0]} name="Input" />
-              <Bar dataKey="output" stackId="tokens" fill={CHART_PALETTE[1]} name="Output" />
-              <Bar dataKey="cacheRead" stackId="tokens" fill={CHART_PALETTE[2]} name="Cache Read" />
+              <Bar isAnimationActive={false} dataKey="input" stackId="tokens" fill={CHART_PALETTE[0]} name="Input" />
+              <Bar isAnimationActive={false} dataKey="output" stackId="tokens" fill={CHART_PALETTE[1]} name="Output" />
+              <Bar isAnimationActive={false} dataKey="cacheRead" stackId="tokens" fill={CHART_PALETTE[2]} name="Cache Read" />
             </BarChart>
           ) : (
             <AreaChart data={tokens.data.byDay}>
@@ -112,9 +112,9 @@ export function OverviewPage() {
               <YAxis {...axisProps} tickFormatter={fmtNumber} />
               <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
               <Legend {...legendProps} />
-              <Area type="monotone" dataKey="input" stackId="tokens" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} name="Input" />
-              <Area type="monotone" dataKey="output" stackId="tokens" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} name="Output" />
-              <Area type="monotone" dataKey="cacheRead" stackId="tokens" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.3} name="Cache Read" />
+              <Area isAnimationActive={false} type="monotone" dataKey="input" stackId="tokens" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} name="Input" />
+              <Area isAnimationActive={false} type="monotone" dataKey="output" stackId="tokens" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} name="Output" />
+              <Area isAnimationActive={false} type="monotone" dataKey="cacheRead" stackId="tokens" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.3} name="Cache Read" />
             </AreaChart>
           )}
         </ChartContainer>
@@ -128,7 +128,7 @@ export function OverviewPage() {
               <XAxis dataKey="date" {...xAxisDateProps} />
               <YAxis {...axisProps} tickFormatter={(v: number) => `$${v.toFixed(2)}`} />
               <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(value) => [fmtCurrency(Number(value ?? 0)), 'Cost']} />
-              <Bar dataKey="usd" fill={CHART_PALETTE[3]} radius={[2, 2, 0, 0]} name="Cost" />
+              <Bar isAnimationActive={false} dataKey="usd" fill={CHART_PALETTE[3]} radius={[2, 2, 0, 0]} name="Cost" />
             </BarChart>
           ) : (
             <AreaChart data={cost.data.byDay}>
@@ -136,7 +136,7 @@ export function OverviewPage() {
               <XAxis dataKey="date" {...xAxisDateProps} />
               <YAxis {...axisProps} tickFormatter={(v: number) => `$${v.toFixed(2)}`} />
               <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(value) => [fmtCurrency(Number(value ?? 0)), 'Cost']} />
-              <Area type="monotone" dataKey="usd" stroke={CHART_PALETTE[3]} fill={CHART_PALETTE[3]} fillOpacity={0.3} name="Cost" />
+              <Area isAnimationActive={false} type="monotone" dataKey="usd" stroke={CHART_PALETTE[3]} fill={CHART_PALETTE[3]} fillOpacity={0.3} name="Cost" />
             </AreaChart>
           )}
         </ChartContainer>
@@ -152,7 +152,7 @@ export function OverviewPage() {
               <div className="flex-1 min-w-0 flex items-center">
                 <ResponsiveContainer width="100%" height={180}>
                   <PieChart>
-                    <Pie data={donut} dataKey="usd" nameKey="model" cx="50%" cy="50%" innerRadius="38%" outerRadius="90%">
+                    <Pie isAnimationActive={false} data={donut} dataKey="usd" nameKey="model" cx="50%" cy="50%" innerRadius="38%" outerRadius="90%">
                       {donut.map((entry, i) => <Cell key={i} fill={entry.model === 'Other' ? CHART_OTHER : CHART_PALETTE[i % CHART_PALETTE.length]} />)}
                     </Pie>
                     <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtCurrency(Number(v)), formatModelName(String(n))]} />
@@ -201,7 +201,7 @@ export function OverviewPage() {
                 <XAxis type="number" {...axisProps} tickFormatter={(v) => `${v}ms`} />
                 <YAxis type="category" dataKey="command" {...axisProps} width={140} tick={{ fontSize: 10 }} />
                 <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${v}ms`, 'p50 Latency']} />
-                <Bar dataKey="p50Ms" fill={CHART_PALETTE[1]} name="p50 Latency" radius={[0, 2, 2, 0]} />
+                <Bar isAnimationActive={false} dataKey="p50Ms" fill={CHART_PALETTE[1]} name="p50 Latency" radius={[0, 2, 2, 0]} />
               </BarChart>
           </ChartContainer>
         );
@@ -224,7 +224,7 @@ export function OverviewPage() {
                 <YAxis type="category" dataKey="skill" {...axisProps} width={120} tick={{ fontSize: 10 }} />
                 <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                 {allTools.map((tool, i) => (
-                  <Bar key={tool} dataKey={tool} name={fmtLegendLabel(tool)} stackId="a" fill={chartColor(tool, i)} radius={i === allTools.length - 1 ? [0, 2, 2, 0] : [0, 0, 0, 0]} />
+                  <Bar isAnimationActive={false} key={tool} dataKey={tool} name={fmtLegendLabel(tool)} stackId="a" fill={chartColor(tool, i)} radius={i === allTools.length - 1 ? [0, 2, 2, 0] : [0, 0, 0, 0]} />
                 ))}
               </BarChart>
           </ChartContainer>
