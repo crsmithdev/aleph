@@ -1564,12 +1564,11 @@ function LiveView({
                     const srcMeta = f.source_url_meta?.length ? f.source_url_meta : f.source_urls.map(u => ({ url: u, title: '', snippet: '' }));
                     const thread = threads.find(t => t.id === f.thread_id);
                     const originLabel = !thread || thread.origin === 'seed' ? null
-                      : thread.origin === 'perturbation' && thread.perturbation_strategy ? thread.perturbation_strategy.replace(/_/g, ' ')
-                      : thread.origin === 'follow_up' ? 'follow-up'
-                      : thread.origin.replace(/_/g, ' ');
-                    const originCls = thread?.origin === 'follow_up' ? 'text-blue-400/80'
-                      : thread?.origin === 'perturbation' ? 'text-purple-400/80'
-                      : thread?.origin === 'user_injected' ? 'text-amber-400/80'
+                      : thread.origin === 'perturbation' && thread.perturbation_strategy ? thread.perturbation_strategy.replace(/_/g, '·')
+                      : thread.origin.replace(/_/g, '·');
+                    const originCls = thread?.origin === 'follow_up' ? 'text-blue-400'
+                      : thread?.origin === 'perturbation' ? 'text-orange-400'
+                      : thread?.origin === 'user_injected' ? 'text-yellow-400'
                       : 'text-text-muted';
                     return (
                       <div key={f.id}
@@ -1645,12 +1644,11 @@ function LiveView({
                     const srcMeta = f.source_url_meta?.length ? f.source_url_meta : f.source_urls.map(u => ({ url: u, title: '', snippet: '' }));
                     const thread = threads.find(t => t.id === f.thread_id);
                     const originLabel = !thread || thread.origin === 'seed' ? null
-                      : thread.origin === 'perturbation' && thread.perturbation_strategy ? thread.perturbation_strategy.replace(/_/g, ' ')
-                      : thread.origin === 'follow_up' ? 'follow-up'
-                      : thread.origin.replace(/_/g, ' ');
-                    const originCls = thread?.origin === 'follow_up' ? 'text-blue-400/80'
-                      : thread?.origin === 'perturbation' ? 'text-purple-400/80'
-                      : thread?.origin === 'user_injected' ? 'text-amber-400/80'
+                      : thread.origin === 'perturbation' && thread.perturbation_strategy ? thread.perturbation_strategy.replace(/_/g, '·')
+                      : thread.origin.replace(/_/g, '·');
+                    const originCls = thread?.origin === 'follow_up' ? 'text-blue-400'
+                      : thread?.origin === 'perturbation' ? 'text-orange-400'
+                      : thread?.origin === 'user_injected' ? 'text-yellow-400'
                       : 'text-text-muted';
                     return (
                       <div key={f.id}
