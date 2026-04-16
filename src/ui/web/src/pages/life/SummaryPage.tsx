@@ -68,7 +68,6 @@ function PeriodSummary({ start, end, dateDisplay, data, isLoading, completedHabi
 
   const createdTodos: ListItem[] = (data?.todosCreated?.items ?? []).map((t) => ({ text: t.title, kind: 'created' }));
   const completedTodoItems: ListItem[] = (data?.todosCompleted?.items ?? []).map((t) => ({ text: t.title, kind: 'completed' }));
-  const todoItems = [...createdTodos, ...completedTodoItems];
 
   const createdHabits: ListItem[] = (data?.habitsCreated?.items ?? []).map((h) => ({ text: h.title, kind: 'created' }));
   const followedHabits: ListItem[] = completedHabits.map((h) => ({ text: h, kind: 'completed' }));
@@ -79,8 +78,11 @@ function PeriodSummary({ start, end, dateDisplay, data, isLoading, completedHabi
     if (goalItems.length > 0) {
       lines.push('Goals:', ...goalItems.map((g) => `  ${g.kind === 'created' ? '+' : '✓'} ${g.text}`), '');
     }
-    if (todoItems.length > 0) {
-      lines.push('Todos:', ...todoItems.map((t) => `  ${t.kind === 'created' ? '+' : '✓'} ${t.text}`), '');
+    if (createdTodos.length > 0) {
+      lines.push('Todos added:', ...createdTodos.map((t) => `  + ${t.text}`), '');
+    }
+    if (completedTodoItems.length > 0) {
+      lines.push('Todos finished:', ...completedTodoItems.map((t) => `  ✓ ${t.text}`), '');
     }
     if (habitItems.length > 0) {
       lines.push('Habits:', ...habitItems.map((h) => `  ${h.kind === 'created' ? '+' : '✓'} ${h.text}`), '');
@@ -129,11 +131,19 @@ function PeriodSummary({ start, end, dateDisplay, data, isLoading, completedHabi
             </div>
           )}
 
-          {/* Todos */}
-          {todoItems.length > 0 && (
+          {/* Todos added */}
+          {createdTodos.length > 0 && (
             <div className="pb-3">
-              <SectionHeader label="Todos" count={todoItems.length} />
-              <BulletList items={todoItems} />
+              <SectionHeader label="Todos added" count={createdTodos.length} />
+              <BulletList items={createdTodos} />
+            </div>
+          )}
+
+          {/* Todos finished */}
+          {completedTodoItems.length > 0 && (
+            <div className="pb-3">
+              <SectionHeader label="Todos finished" count={completedTodoItems.length} />
+              <BulletList items={completedTodoItems} />
             </div>
           )}
 
