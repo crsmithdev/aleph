@@ -754,15 +754,24 @@ function SystemContextBreakdown({
   systemEst,
   totalContextTokens,
   contextFiles,
+  firstTurnCacheRead,
 }: {
   systemEst: number;
   totalContextTokens: number;
   contextFiles?: ContextFile[];
+  firstTurnCacheRead?: number;
 }) {
   const [open, setOpen] = useState(false);
   const knownFileTokens = contextFiles?.reduce((s, f) => s + f.estTokens, 0) ?? 0;
-  const unknownEst = Math.max(0, systemEst - knownFileTokens);
-  const pct = Math.round(systemEst / totalContextTokens * 100);
+
+  // Prefer direct measurement (turn-0 cacheRead) over top-down remainder estimate.
+  // At session start, cacheRead = exactly what's cached before any conversation = system prompt.
+  const measured = firstTurnCacheRead != null && firstTurnCacheRead > knownFileTokens;
+  const displayTotal = measured ? firstTurnCacheRead! : systemEst;
+  const baseOverhead = measured
+    ? Math.max(0, firstTurnCacheRead! - knownFileTokens)
+    : Math.max(0, systemEst - knownFileTokens);
+  const pct = totalContextTokens > 0 ? Math.round(displayTotal / totalContextTokens * 100) : 0;
 
   return (
     <div className="border-t border-border-primary/40">
@@ -774,29 +783,30 @@ function SystemContextBreakdown({
           <Icon name="expand_more" size="xs" className={clsx('shrink-0 transition-transform duration-150', open ? 'rotate-180' : '')} />
           System / CLAUDE.md / settings
         </span>
-        <span className="text-xs text-text-muted font-mono">{fmtNumber(systemEst)} ({pct}%)</span>
+        <span className="text-xs text-text-muted font-mono">{fmtNumber(displayTotal)} ({pct}%)</span>
       </button>
       {open && (
         <div className="px-4 pb-2.5 space-y-1">
-          {contextFiles && contextFiles.length > 0 ? (
-            <>
-              {contextFiles.map((f, i) => (
-                <div key={i} className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] text-text-muted truncate flex-1" title={f.path}>{f.label}</span>
-                  <span className="text-[11px] text-text-disabled font-mono shrink-0">{fmtNumber(f.estTokens)}</span>
-                </div>
-              ))}
-              {unknownEst > 100 && (
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] text-text-disabled truncate flex-1">Base system prompt + tool defs</span>
-                  <span className="text-[11px] text-text-disabled font-mono shrink-0">~{fmtNumber(unknownEst)}</span>
-                </div>
-              )}
-            </>
-          ) : (
+          {contextFiles && contextFiles.length > 0 && contextFiles.map((f, i) => (
+            <div key={i} className="flex items-center justify-between gap-2">
+              <span className="text-[11px] text-text-muted truncate flex-1" title={f.path}>{f.label}</span>
+              <span className="text-[11px] text-text-disabled font-mono shrink-0">{fmtNumber(f.estTokens)}</span>
+            </div>
+          ))}
+          {baseOverhead > 100 && (
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] text-text-disabled">System prompt / CLAUDE.md / settings</span>
-              <span className="text-[11px] text-text-disabled font-mono">~{fmtNumber(systemEst)}</span>
+              <span className="text-[11px] text-text-disabled truncate flex-1">
+                Base system prompt + tool defs{measured ? '' : ' (est)'}
+              </span>
+              <span className="text-[11px] text-text-disabled font-mono shrink-0">
+                {measured ? '' : '~'}{fmtNumber(baseOverhead)}
+              </span>
+            </div>
+          )}
+          {!contextFiles?.length && !measured && (
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] text-text-disabled">Base system prompt + tool defs (est)</span>
+              <span className="text-[11px] text-text-disabled font-mono">~{fmtNumber(displayTotal)}</span>
             </div>
           )}
         </div>
@@ -884,6 +894,10 @@ function ContextPanel({ turns, contextFiles, onTurnClick }: {
   const systemEst = totalContextTokens
     ? Math.max(0, totalContextTokens - totalUserEst - totalToolEst - totalAssistantEst)
     : 0;
+
+  // Use turn-0 cacheRead as a direct measurement of the base system overhead.
+  // At session start, nothing from conversation is cached yet, so cacheRead = system prompt only.
+  const firstTurnCacheRead = turns.find(t => (t.cacheReadTokens ?? 0) > 0)?.cacheReadTokens;
 
   // Flat sorted view
   const flatItems = [...userItems, ...toolItems, ...assistantItems].sort((a, b) =>
@@ -982,6 +996,7 @@ function ContextPanel({ turns, contextFiles, onTurnClick }: {
           systemEst={systemEst}
           totalContextTokens={totalContextTokens}
           contextFiles={contextFiles}
+          firstTurnCacheRead={firstTurnCacheRead}
         />
       )}
 
