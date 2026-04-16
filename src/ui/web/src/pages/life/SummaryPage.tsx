@@ -70,7 +70,7 @@ function PeriodSummary({ start, end, dateDisplay, data, isLoading, completedHabi
       lines.push('Habits:', ...completedHabits.map((h) => `  - ${h}`), '');
     }
     if (gitStats && gitStats.commits > 0) {
-      lines.push(`Construct: +${gitStats.added} / -${gitStats.deleted} lines · ${gitStats.commits} commit${gitStats.commits !== 1 ? 's' : ''}`);
+      lines.push(`Construct: +${gitStats.added} LOC / -${gitStats.deleted} LOC · ${gitStats.commits} commit${gitStats.commits !== 1 ? 's' : ''}`);
     }
     return lines.join('\n').trim();
   };
@@ -134,8 +134,9 @@ function PeriodSummary({ start, end, dateDisplay, data, isLoading, completedHabi
             <div className="pt-3">
               <SectionHeader label="Construct" />
               <div className="flex items-baseline gap-3 text-sm pl-1 flex-wrap">
-                <span className="text-success font-mono whitespace-nowrap">+{gitStats.added} / −{gitStats.deleted} lines</span>
-                <span className="text-text-secondary whitespace-nowrap">{gitStats.commits} commit{gitStats.commits !== 1 ? 's' : ''}</span>
+                <span className="whitespace-nowrap"><span className="text-success font-mono">+{gitStats.added}</span><span className="text-text-muted"> LOC</span></span>
+                <span className="whitespace-nowrap"><span className="text-error font-mono">−{gitStats.deleted}</span><span className="text-text-muted"> LOC</span></span>
+                <span className="whitespace-nowrap"><span className="text-accent font-mono">{gitStats.commits}</span><span className="text-text-secondary"> commit{gitStats.commits !== 1 ? 's' : ''}</span></span>
               </div>
             </div>
           )}
