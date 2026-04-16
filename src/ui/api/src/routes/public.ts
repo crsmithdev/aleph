@@ -46,14 +46,6 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
       `<li style="padding:6px 0;border-bottom:1px solid #f1f5f9;color:#374151">${t.title}${t.goalTitle ? ` <span style="color:#9ca3af;font-size:12px">↳ ${t.goalTitle}</span>` : ''}</li>`
     ).join('');
 
-    const habitItems = habits.map((h: any) => {
-      const done = h.completedThisPeriod;
-      const dot = done
-        ? `<span style="color:#22c55e;font-size:18px">●</span>`
-        : `<span style="color:#e5e7eb;font-size:18px">●</span>`;
-      return `<li style="padding:6px 0;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:8px">${dot}<span style="color:#374151">${h.title}</span><span style="color:#9ca3af;font-size:12px">${h.frequency}</span></li>`;
-    }).join('');
-
     const completedHabits = habits.filter((h: any) => h.completedThisPeriod);
     const completedHabitItems = completedHabits.map((h: any) =>
       `<li style="padding:6px 0;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:8px"><span style="color:#22c55e;font-size:18px">●</span><span style="color:#374151">${h.title}</span></li>`
@@ -96,15 +88,10 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
     <ul>${todoItems || '<li style="padding:12px 0;color:#9ca3af">No active todos</li>'}</ul>
   </div>
 
-  <div class="section">
-    <div class="section-header">Habits followed today (${completedHabits.length})</div>
-    <ul>${completedHabitItems || '<li style="padding:12px 0;color:#9ca3af">None completed today</li>'}</ul>
-  </div>
-
-  <div class="section">
-    <div class="section-header">All habits (${habits.length})</div>
-    <ul>${habitItems || '<li style="padding:12px 0;color:#9ca3af">No habits</li>'}</ul>
-  </div>
+  ${completedHabits.length > 0 ? `<div class="section">
+    <div class="section-header">Habits (${completedHabits.length})</div>
+    <ul>${completedHabitItems}</ul>
+  </div>` : ''}
 </div>
 </body>
 </html>`;

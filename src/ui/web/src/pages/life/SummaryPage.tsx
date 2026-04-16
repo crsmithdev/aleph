@@ -21,7 +21,6 @@ interface GitStats {
 interface PeriodSummaryProps {
   start: string;
   end: string;
-  heading: string;
   dateDisplay: string;
   data: PeriodSummaryData | undefined;
   isLoading: boolean;
@@ -40,10 +39,6 @@ function SectionHeader({ label, count }: { label: string; count?: number }) {
   );
 }
 
-function EmptyLine() {
-  return <p className="text-xs text-text-disabled italic pl-1">None</p>;
-}
-
 function BulletList({ items }: { items: string[] }) {
   return (
     <ul className="space-y-0.5">
@@ -57,36 +52,27 @@ function BulletList({ items }: { items: string[] }) {
   );
 }
 
-function PeriodSummary({ start, end, heading, dateDisplay, data, isLoading, completedHabits, gitStats }: PeriodSummaryProps) {
+function PeriodSummary({ start, end, dateDisplay, data, isLoading, completedHabits, gitStats }: PeriodSummaryProps) {
   const [copied, setCopied] = useState(false);
 
   const completedGoals = data?.goalsCompleted?.items ?? [];
   const completedTodos = data?.todosCompleted?.items ?? [];
 
   const buildCopyText = () => {
-    const lines: string[] = [
-      dateDisplay,
-      heading,
-      '',
-      'Goals:',
-      ...(completedGoals.length > 0
-        ? completedGoals.map((g) => `  - ${g.details?.title ?? g.goalId}`)
-        : ['  (none)']),
-      '',
-      'Todos:',
-      ...(completedTodos.length > 0
-        ? completedTodos.map((t) => `  - ${t.title}`)
-        : ['  (none)']),
-      '',
-      'Habits:',
-      ...(completedHabits.length > 0
-        ? completedHabits.map((h) => `  - ${h}`)
-        : ['  (none)']),
-    ];
-    if (gitStats && gitStats.commits > 0) {
-      lines.push('', `Construct: +${gitStats.added} / -${gitStats.deleted} lines · ${gitStats.commits} commit${gitStats.commits !== 1 ? 's' : ''}`);
+    const lines: string[] = [`Summary — ${dateDisplay}`, ''];
+    if (completedGoals.length > 0) {
+      lines.push('Goals:', ...completedGoals.map((g) => `  - ${g.details?.title ?? g.goalId}`), '');
     }
-    return lines.join('\n');
+    if (completedTodos.length > 0) {
+      lines.push('Todos:', ...completedTodos.map((t) => `  - ${t.title}`), '');
+    }
+    if (completedHabits.length > 0) {
+      lines.push('Habits:', ...completedHabits.map((h) => `  - ${h}`), '');
+    }
+    if (gitStats && gitStats.commits > 0) {
+      lines.push(`Construct: +${gitStats.added} / -${gitStats.deleted} lines · ${gitStats.commits} commit${gitStats.commits !== 1 ? 's' : ''}`);
+    }
+    return lines.join('\n').trim();
   };
 
   const handleCopy = () => {
@@ -99,11 +85,8 @@ function PeriodSummary({ start, end, heading, dateDisplay, data, isLoading, comp
   return (
     <div className="bg-bg-secondary border border-border-primary rounded-lg px-4 pt-3 pb-4">
       {/* Header row */}
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-sm font-semibold text-text-primary">{dateDisplay}</p>
-          <p className="text-xs text-text-muted mt-0.5">{heading}</p>
-        </div>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-text-primary">Summary — {dateDisplay}</p>
         <button
           onClick={handleCopy}
           disabled={isLoading}
@@ -123,43 +106,39 @@ function PeriodSummary({ start, end, heading, dateDisplay, data, isLoading, comp
       ) : (
         <div className="divide-y divide-border-primary/50 mt-1">
           {/* Goals */}
-          <div className="pb-3">
-            <SectionHeader label="Goals" count={completedGoals.length} />
-            {completedGoals.length > 0
-              ? <BulletList items={completedGoals.map((g) => g.details?.title ?? g.goalId)} />
-              : <EmptyLine />}
-          </div>
+          {completedGoals.length > 0 && (
+            <div className="pb-3">
+              <SectionHeader label="Goals" count={completedGoals.length} />
+              <BulletList items={completedGoals.map((g) => g.details?.title ?? g.goalId)} />
+            </div>
+          )}
 
           {/* Todos */}
-          <div className="pb-3">
-            <SectionHeader label="Todos" count={completedTodos.length} />
-            {completedTodos.length > 0
-              ? <BulletList items={completedTodos.map((t) => t.title)} />
-              : <EmptyLine />}
-          </div>
+          {completedTodos.length > 0 && (
+            <div className="pb-3">
+              <SectionHeader label="Todos" count={completedTodos.length} />
+              <BulletList items={completedTodos.map((t) => t.title)} />
+            </div>
+          )}
 
           {/* Habits */}
-          <div className="pb-3">
-            <SectionHeader label="Habits" count={completedHabits.length} />
-            {completedHabits.length > 0
-              ? <BulletList items={completedHabits} />
-              : <EmptyLine />}
-          </div>
+          {completedHabits.length > 0 && (
+            <div className="pb-3">
+              <SectionHeader label="Habits" count={completedHabits.length} />
+              <BulletList items={completedHabits} />
+            </div>
+          )}
 
           {/* Git stats */}
-          <div className="pt-3">
-            <SectionHeader label="Construct" />
-            {gitStats && gitStats.commits > 0 ? (
-              <div className="flex items-center gap-3 text-sm pl-1">
-                <span className="text-success font-mono">+{gitStats.added}</span>
-                <span className="text-error font-mono">−{gitStats.deleted}</span>
-                <span className="text-text-disabled">·</span>
-                <span className="text-text-secondary">{gitStats.commits} commit{gitStats.commits !== 1 ? 's' : ''}</span>
+          {gitStats && gitStats.commits > 0 && (
+            <div className="pt-3">
+              <SectionHeader label="Construct" />
+              <div className="flex items-baseline gap-3 text-sm pl-1 flex-wrap">
+                <span className="text-success font-mono whitespace-nowrap">+{gitStats.added} / −{gitStats.deleted} lines</span>
+                <span className="text-text-secondary whitespace-nowrap">{gitStats.commits} commit{gitStats.commits !== 1 ? 's' : ''}</span>
               </div>
-            ) : (
-              <EmptyLine />
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -334,7 +313,6 @@ export function SummaryPage() {
       <PeriodSummary
         start={start}
         end={end}
-        heading={heading}
         dateDisplay={dateDisplay}
         data={data as PeriodSummaryData | undefined}
         isLoading={isLoading}
