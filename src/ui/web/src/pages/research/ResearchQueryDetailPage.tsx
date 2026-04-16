@@ -1299,6 +1299,7 @@ function LiveView({
   const [filterType, setFilterType] = useState<'all' | 'finding' | 'thread' | 'step' | 'search' | 'fetch' | 'error'>('all');
   const [searchText, setSearchText] = useState('');
   const [expandedFindingId, setExpandedFindingId] = useState<string | null>(null);
+  const [findingsSearch, setFindingsSearch] = useState('');
   const [filterThreadId, setFilterThreadId] = useState<string | null>(null);
   const [expandedEventKey, setExpandedEventKey] = useState<string | null>(null);
   const [threadPanelWidth, setThreadPanelWidth] = useState(260);
@@ -1363,11 +1364,15 @@ function LiveView({
 
   const { highFindings, medFindings } = useMemo(() => {
     const sorted = [...findings].sort((a, b) => b.confidence - a.confidence);
+    const q = findingsSearch.trim().toLowerCase();
+    const filtered = q
+      ? sorted.filter(f => f.content.toLowerCase().includes(q) || f.summary.toLowerCase().includes(q) || f.tags.some(t => t.toLowerCase().includes(q)))
+      : sorted;
     return {
-      highFindings: sorted.filter(f => f.confidence >= 0.7),
-      medFindings: sorted.filter(f => f.confidence >= 0.4 && f.confidence < 0.7),
+      highFindings: filtered.filter(f => f.confidence >= 0.7),
+      medFindings: filtered.filter(f => f.confidence >= 0.4 && f.confidence < 0.7),
     };
-  }, [findings]);
+  }, [findings, findingsSearch]);
 
   const activeThreads = useMemo(() => threads.filter(t => t.status === 'active'), [threads]);
   const queuedThreads = useMemo(() => threads.filter(t => t.status === 'queued'), [threads]);
@@ -1531,24 +1536,41 @@ function LiveView({
       />
       {/* ── Pane 2: Findings (center) ── */}
       <div className="flex flex-col overflow-hidden" style={{ width: findingsPanelWidth, minWidth: 0 }}>
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-border-primary bg-bg-secondary shrink-0 h-[37px]">
-          <span className="text-sm font-semibold uppercase tracking-wider text-text-secondary">Findings</span>
-          {findings.length > 0 && (
-            <span className="text-sm px-1.5 py-0.5 rounded font-mono bg-success/10 border border-success/20 text-success">{findings.length}</span>
-          )}
+        <div className="flex flex-col border-b border-border-primary bg-bg-secondary shrink-0">
+          <div className="flex items-center gap-2 px-3 py-2 h-[37px]">
+            <span className="text-sm font-semibold uppercase tracking-wider text-text-secondary">Findings</span>
+            <span className="text-sm text-text-disabled font-mono ml-auto">{findings.length}</span>
+          </div>
+          <div className="px-3 pb-2">
+            <input
+              type="text"
+              value={findingsSearch}
+              onChange={e => setFindingsSearch(e.target.value)}
+              placeholder="search…"
+              className="w-full bg-bg-tertiary border border-border-primary rounded px-2 py-0.5 text-sm text-text-secondary placeholder:text-text-disabled focus:outline-none focus:border-accent/50"
+            />
+          </div>
         </div>
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+        <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
           {findings.length === 0 && activeThreads.length === 0 ? (
             <p className="text-sm text-text-muted text-center py-8">No findings yet.</p>
           ) : (
             <>
               {highFindings.length > 0 && (
                 <>
-                  <p className="text-sm font-semibold text-text-secondary">High confidence · {highFindings.length}</p>
+                  <p className="text-xs text-text-muted uppercase tracking-wide">High confidence ({highFindings.length})</p>
                   {highFindings.map(f => {
                     const isExpanded = expandedFindingId === f.id;
                     const srcMeta = f.source_url_meta?.length ? f.source_url_meta : f.source_urls.map(u => ({ url: u, title: '', snippet: '' }));
                     const thread = threads.find(t => t.id === f.thread_id);
+                    const originLabel = !thread || thread.origin === 'seed' ? null
+                      : thread.origin === 'perturbation' && thread.perturbation_strategy ? thread.perturbation_strategy.replace(/_/g, ' ')
+                      : thread.origin === 'follow_up' ? 'follow-up'
+                      : thread.origin.replace(/_/g, ' ');
+                    const originCls = thread?.origin === 'follow_up' ? 'text-blue-400/80'
+                      : thread?.origin === 'perturbation' ? 'text-purple-400/80'
+                      : thread?.origin === 'user_injected' ? 'text-amber-400/80'
+                      : 'text-text-disabled';
                     return (
                       <div key={f.id}
                         role="button"
@@ -1558,49 +1580,58 @@ function LiveView({
                         onKeyDown={e => e.key === 'Enter' || e.key === ' ' ? setExpandedFindingId(isExpanded ? null : f.id) : null}
                         className="bg-bg-secondary border border-border-primary rounded border-l-2 border-l-success px-3 py-2 space-y-1.5 cursor-pointer hover:bg-bg-tertiary/30 transition-colors focus:outline-none focus:ring-1 focus:ring-accent/50"
                       >
-                        <p className="text-sm text-text-primary leading-relaxed">
-                          {isExpanded ? f.content : (f.content.slice(0, 200) + (f.content.length > 200 ? '…' : ''))}
-                        </p>
+                        <Md className={clsx('text-sm leading-relaxed', !isExpanded && 'line-clamp-4')}>
+                          {isExpanded ? f.content : f.content}
+                        </Md>
                         {isExpanded && (
-                          <div className="space-y-1.5 pt-1 border-t border-border-primary/30">
+                          <div className="space-y-2 pt-1.5 border-t border-border-primary/30">
                             {srcMeta.length > 0 && (
-                              <div className="space-y-0.5">
-                                {srcMeta.map((src, i) => {
-                                  let host = src.url;
-                                  try { host = new URL(src.url).hostname; } catch { /* keep */ }
-                                  return (
-                                    <a key={i} href={src.url} target="_blank" rel="noopener noreferrer"
-                                      onClick={e => e.stopPropagation()}
-                                      className="block text-sm text-accent hover:underline truncate">
-                                      {src.title || host}
-                                    </a>
-                                  );
-                                })}
+                              <div>
+                                <p className="text-xs text-text-disabled uppercase tracking-wide mb-1">Sources</p>
+                                <ol className="list-decimal list-inside space-y-0.5">
+                                  {srcMeta.map((src, i) => {
+                                    let host = src.url;
+                                    try { host = new URL(src.url).hostname; } catch { /* keep */ }
+                                    return (
+                                      <li key={i} className="text-sm text-text-muted">
+                                        <a href={src.url} target="_blank" rel="noopener noreferrer"
+                                          onClick={e => e.stopPropagation()}
+                                          className="text-accent hover:underline">
+                                          {src.title || host}
+                                        </a>
+                                      </li>
+                                    );
+                                  })}
+                                </ol>
                               </div>
                             )}
                             {f.tags.length > 0 && (
                               <div className="flex flex-wrap gap-1">
                                 {f.tags.map(tag => (
-                                  <span key={tag} className="px-1 py-0.5 rounded bg-bg-tertiary text-sm text-text-muted">{tag}</span>
+                                  <span key={tag} className="px-1 py-0.5 rounded bg-bg-tertiary text-xs text-text-muted border border-border-primary/50">{tag}</span>
                                 ))}
                               </div>
                             )}
                             {thread && (
-                              <p className="text-sm text-text-muted italic truncate">{thread.short_query ?? thread.query}</p>
+                              <p className="text-xs text-text-muted italic truncate">{thread.short_query ?? thread.query}</p>
                             )}
                           </div>
                         )}
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {f.source_urls[0] && !isExpanded && (
-                            <span className="text-sm font-mono text-blue-400 bg-blue-400/8 border border-blue-400/15 px-1 py-0.5 rounded truncate max-w-28">
-                              {(() => { try { return new URL(f.source_urls[0]).hostname; } catch { return f.source_urls[0]; } })()}
-                            </span>
-                          )}
-                          <span className="text-sm font-mono text-text-muted bg-bg-tertiary border border-border-primary px-1 py-0.5 rounded">
-                            {thread?.origin?.replace(/_/g, ' ') ?? '—'}
-                          </span>
-                          <span className="text-sm font-mono text-text-muted ml-auto">{(f.confidence * 100).toFixed(0)}%</span>
-                        </div>
+                        {!isExpanded && (
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            {f.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1 flex-1 min-w-0 overflow-hidden">
+                                {f.tags.slice(0, 3).map(tag => (
+                                  <span key={tag} className="text-xs text-text-disabled bg-bg-tertiary border border-border-primary/40 px-1 py-0.5 rounded whitespace-nowrap">{tag}</span>
+                                ))}
+                              </div>
+                            )}
+                            <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                              {originLabel && <span className={clsx('text-xs font-mono', originCls)}>{originLabel}</span>}
+                              <span className="text-xs font-mono text-text-disabled">{(f.confidence * 100).toFixed(0)}%</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -1608,10 +1639,19 @@ function LiveView({
               )}
               {medFindings.length > 0 && (
                 <>
-                  <p className="text-sm font-semibold text-text-secondary mt-3">Medium confidence · {medFindings.length}</p>
+                  <p className="text-xs text-text-muted uppercase tracking-wide mt-3">Medium confidence ({medFindings.length})</p>
                   {medFindings.map(f => {
                     const isExpanded = expandedFindingId === f.id;
                     const srcMeta = f.source_url_meta?.length ? f.source_url_meta : f.source_urls.map(u => ({ url: u, title: '', snippet: '' }));
+                    const thread = threads.find(t => t.id === f.thread_id);
+                    const originLabel = !thread || thread.origin === 'seed' ? null
+                      : thread.origin === 'perturbation' && thread.perturbation_strategy ? thread.perturbation_strategy.replace(/_/g, ' ')
+                      : thread.origin === 'follow_up' ? 'follow-up'
+                      : thread.origin.replace(/_/g, ' ');
+                    const originCls = thread?.origin === 'follow_up' ? 'text-blue-400/80'
+                      : thread?.origin === 'perturbation' ? 'text-purple-400/80'
+                      : thread?.origin === 'user_injected' ? 'text-amber-400/80'
+                      : 'text-text-disabled';
                     return (
                       <div key={f.id}
                         role="button"
@@ -1621,43 +1661,58 @@ function LiveView({
                         onKeyDown={e => e.key === 'Enter' || e.key === ' ' ? setExpandedFindingId(isExpanded ? null : f.id) : null}
                         className="bg-bg-secondary border border-border-primary rounded border-l-2 border-l-blue-400/50 px-3 py-2 space-y-1.5 cursor-pointer hover:bg-bg-tertiary/30 transition-colors focus:outline-none focus:ring-1 focus:ring-accent/50"
                       >
-                        <p className="text-sm text-text-primary leading-relaxed">
-                          {isExpanded ? f.content : (f.content.slice(0, 180) + (f.content.length > 180 ? '…' : ''))}
-                        </p>
+                        <Md className={clsx('text-sm leading-relaxed', !isExpanded && 'line-clamp-4')}>
+                          {f.content}
+                        </Md>
                         {isExpanded && (
-                          <div className="space-y-1.5 pt-1 border-t border-border-primary/30">
+                          <div className="space-y-2 pt-1.5 border-t border-border-primary/30">
                             {srcMeta.length > 0 && (
-                              <div className="space-y-0.5">
-                                {srcMeta.map((src, i) => {
-                                  let host = src.url;
-                                  try { host = new URL(src.url).hostname; } catch { /* keep */ }
-                                  return (
-                                    <a key={i} href={src.url} target="_blank" rel="noopener noreferrer"
-                                      onClick={e => e.stopPropagation()}
-                                      className="block text-sm text-accent hover:underline truncate">
-                                      {src.title || host}
-                                    </a>
-                                  );
-                                })}
+                              <div>
+                                <p className="text-xs text-text-disabled uppercase tracking-wide mb-1">Sources</p>
+                                <ol className="list-decimal list-inside space-y-0.5">
+                                  {srcMeta.map((src, i) => {
+                                    let host = src.url;
+                                    try { host = new URL(src.url).hostname; } catch { /* keep */ }
+                                    return (
+                                      <li key={i} className="text-sm text-text-muted">
+                                        <a href={src.url} target="_blank" rel="noopener noreferrer"
+                                          onClick={e => e.stopPropagation()}
+                                          className="text-accent hover:underline">
+                                          {src.title || host}
+                                        </a>
+                                      </li>
+                                    );
+                                  })}
+                                </ol>
                               </div>
                             )}
                             {f.tags.length > 0 && (
                               <div className="flex flex-wrap gap-1">
                                 {f.tags.map(tag => (
-                                  <span key={tag} className="px-1 py-0.5 rounded bg-bg-tertiary text-sm text-text-muted">{tag}</span>
+                                  <span key={tag} className="px-1 py-0.5 rounded bg-bg-tertiary text-xs text-text-muted border border-border-primary/50">{tag}</span>
                                 ))}
                               </div>
                             )}
+                            {thread && (
+                              <p className="text-xs text-text-muted italic truncate">{thread.short_query ?? thread.query}</p>
+                            )}
                           </div>
                         )}
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {f.source_urls[0] && !isExpanded && (
-                            <span className="text-sm font-mono text-blue-400 bg-blue-400/8 border border-blue-400/15 px-1 py-0.5 rounded truncate max-w-28">
-                              {(() => { try { return new URL(f.source_urls[0]).hostname; } catch { return f.source_urls[0]; } })()}
-                            </span>
-                          )}
-                          <span className="text-sm font-mono text-text-muted ml-auto">{(f.confidence * 100).toFixed(0)}%</span>
-                        </div>
+                        {!isExpanded && (
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            {f.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1 flex-1 min-w-0 overflow-hidden">
+                                {f.tags.slice(0, 3).map(tag => (
+                                  <span key={tag} className="text-xs text-text-disabled bg-bg-tertiary border border-border-primary/40 px-1 py-0.5 rounded whitespace-nowrap">{tag}</span>
+                                ))}
+                              </div>
+                            )}
+                            <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                              {originLabel && <span className={clsx('text-xs font-mono', originCls)}>{originLabel}</span>}
+                              <span className="text-xs font-mono text-text-disabled">{(f.confidence * 100).toFixed(0)}%</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
