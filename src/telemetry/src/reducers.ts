@@ -591,6 +591,9 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
     firstUserMessage?: string;
   }>();
 
+  // Track which sessions have a pending skill injection (next user message should be skipped)
+  const pendingSkillInjection = new Map<string, boolean>();
+
   function getSession(sid: string, project: string, ts: string, parentSessionId?: string) {
     if (!sessionMap.has(sid)) {
       sessionMap.set(sid, {
@@ -627,7 +630,9 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
     if (e.kind === "message" && e.data?.role === "user") {
       bucket.messages++; bucket.userMessages++;
       sess.userMessages++;
-      if (!sess.firstUserMessage && e.data?.text) {
+      if (pendingSkillInjection.get(e.sid)) {
+        pendingSkillInjection.set(e.sid, false);
+      } else if (!sess.firstUserMessage && e.data?.text) {
         const raw = e.data.text as string;
         const SKIP_COMMANDS = new Set(["clear", "reset"]);
         if (raw.includes("local-command-caveat")) { /* skip */ }
@@ -647,7 +652,9 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
           const cleaned = raw.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim().slice(0, 100);
           const isUrl = /^https?:\/\/\S+$/.test(cleaned);
           const isFilePath = /^[A-Za-z]:[\\\/]/.test(cleaned) || /^\/[\w/.-]+$/.test(cleaned);
-          if (cleaned && !isUrl && !isFilePath) sess.firstUserMessage = cleaned;
+          const isInterrupted = cleaned === "[Request interrupted by user]";
+          const isMarkdownHeading = /^#+ /.test(raw.trimStart());
+          if (cleaned && !isUrl && !isFilePath && !isInterrupted && !isMarkdownHeading) sess.firstUserMessage = cleaned;
         }
       }
     }
@@ -656,6 +663,7 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
       sess.toolCalls++;
       const tool = e.data?.tool as string;
       if (tool === "Agent") sess.hasSubagents = true;
+      if (tool === "Skill") pendingSkillInjection.set(e.sid, true);
       const linesAdded = (e.data?.linesAdded as number) || 0;
       const linesRemoved = (e.data?.linesRemoved as number) || 0;
       if (linesAdded) { sess.linesAdded += linesAdded; bucket.linesAdded += linesAdded; }

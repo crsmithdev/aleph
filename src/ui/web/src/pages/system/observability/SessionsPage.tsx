@@ -178,7 +178,11 @@ export function SessionsPage() {
         <div className="flex flex-col gap-0.5 min-w-0">
           {row.parentSessionId && <span className="text-text-muted text-xs">↳ subagent</span>}
           {(() => {
-            const meaningfulIntent = row.intent && row.intent.toLowerCase() !== 'unknown task' ? row.intent : undefined;
+            const SKIP_INTENTS = new Set(['unknown task', '[request interrupted by user]']);
+            const meaningfulIntent = row.intent
+              && !SKIP_INTENTS.has(row.intent.toLowerCase())
+              && !/^#+ /.test(row.intent.trimStart())
+              ? row.intent : undefined;
             if (meaningfulIntent) {
               return (
                 <span className="text-text-primary text-base truncate" title={meaningfulIntent}>
