@@ -76,7 +76,7 @@ export const fonts: FontDef[] = [
   { id: 'source-sans-3', name: 'Source Sans 3', family: "'Source Sans 3'" },
   { id: 'space-grotesk', name: 'Space Grotesk', family: "'Space Grotesk'" },
   { id: 'spinnaker', name: 'Spinnaker', family: "'Spinnaker'" },
-  { id: 'tasa-orbiter', name: 'TASA Orbiter', family: "'Tasa Orbiter'" },
+  { id: 'tasa-orbiter', name: 'TASA Orbiter', family: "'TASA Orbiter'" },
   { id: 'tauri', name: 'Tauri', family: "'Tauri'" },
   { id: 'telex', name: 'Telex', family: "'Telex'" },
   { id: 'urbanist', name: 'Urbanist', family: "'Urbanist'" },
