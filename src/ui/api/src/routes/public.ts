@@ -54,6 +54,11 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
       return `<li style="padding:6px 0;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:8px">${dot}<span style="color:#374151">${h.title}</span><span style="color:#9ca3af;font-size:12px">${h.frequency}</span></li>`;
     }).join('');
 
+    const completedHabits = habits.filter((h: any) => h.completedThisPeriod);
+    const completedHabitItems = completedHabits.map((h: any) =>
+      `<li style="padding:6px 0;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:8px"><span style="color:#22c55e;font-size:18px">●</span><span style="color:#374151">${h.title}</span></li>`
+    ).join('');
+
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -92,7 +97,12 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
   </div>
 
   <div class="section">
-    <div class="section-header">Habits (${habits.length})</div>
+    <div class="section-header">Habits followed today (${completedHabits.length})</div>
+    <ul>${completedHabitItems || '<li style="padding:12px 0;color:#9ca3af">None completed today</li>'}</ul>
+  </div>
+
+  <div class="section">
+    <div class="section-header">All habits (${habits.length})</div>
     <ul>${habitItems || '<li style="padding:12px 0;color:#9ca3af">No habits</li>'}</ul>
   </div>
 </div>

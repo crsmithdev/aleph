@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSummary } from '../../api/hooks';
+import { useSummary, useHabits } from '../../api/hooks';
 import { StatCard } from '../../components/data/StatCard';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
@@ -18,15 +18,16 @@ interface PeriodSummaryProps {
   heading: string;
   data: PeriodSummaryData | undefined;
   isLoading: boolean;
+  completedHabits: string[];
 }
 
-function PeriodSummary({ start, end, heading, data, isLoading }: PeriodSummaryProps) {
+function PeriodSummary({ start, end, heading, data, isLoading, completedHabits }: PeriodSummaryProps) {
   const [copied, setCopied] = useState(false);
 
   const completedGoals = data?.goalsCompleted?.items ?? [];
   const completedTodos = data?.todosCompleted?.items ?? [];
 
-  const hasAnything = completedGoals.length > 0 || completedTodos.length > 0;
+  const hasAnything = completedGoals.length > 0 || completedTodos.length > 0 || completedHabits.length > 0;
 
   const dateLabel = start === end ? start : `${start} to ${end}`;
 
@@ -38,7 +39,10 @@ function PeriodSummary({ start, end, heading, data, isLoading }: PeriodSummaryPr
           ? ['Goals completed:', ...completedGoals.map((g) => `  - ${g.details?.title ?? g.goalId}`), '']
           : []),
         ...(completedTodos.length > 0
-          ? ['Todos completed:', ...completedTodos.map((t) => `  - ${t.title}`)]
+          ? ['Todos completed:', ...completedTodos.map((t) => `  - ${t.title}`), '']
+          : []),
+        ...(completedHabits.length > 0
+          ? ['Habits followed today:', ...completedHabits.map((h) => `  - ${h}`)]
           : []),
       ].join('\n')
     : `Nothing completed — ${dateLabel}`;
@@ -156,6 +160,9 @@ export function SummaryPage() {
   const { data: summary, isLoading, isError } = useSummary(start, end);
   const data = summary as SummaryData | undefined;
 
+  const { data: habits } = useHabits();
+  const completedHabits = (habits ?? []).filter((h) => h.completedThisPeriod).map((h) => h.title);
+
   const dateDisplay =
     start === end
       ? longDate(start)
@@ -236,7 +243,7 @@ export function SummaryPage() {
         </div>
       )}
 
-      <PeriodSummary start={start} end={end} heading={heading} data={data as PeriodSummaryData | undefined} isLoading={isLoading} />
+      <PeriodSummary start={start} end={end} heading={heading} data={data as PeriodSummaryData | undefined} isLoading={isLoading} completedHabits={completedHabits} />
     </div>
   );
 }
