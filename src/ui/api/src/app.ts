@@ -17,6 +17,7 @@ import { summaryRoutes } from './routes/summary.js';
 import { webhookRoutes } from './routes/webhooks.js';
 import { observabilityRoutes } from './routes/observability.js';
 import { researchRoutes } from './routes/research.js';
+import { publicRoutes } from './routes/public.js';
 import { EventBus, HistoryService, applyDDL } from '@construct/goals';
 import { applyResearchDDL } from '@construct/research';
 import { webhooks } from './db/schema.js';
@@ -243,12 +244,14 @@ export async function createApp(opts?: { dbUrl?: string; workerCount?: number; s
     });
   }, { prefix: '/api' });
 
+  await app.register(publicRoutes, { prefix: '/public' });
+
   if (!opts?.skipStatic) {
     const webDist = resolve(import.meta.dirname || '.', '../../web/dist');
     if (existsSync(webDist)) {
       await app.register(fastifyStatic, { root: webDist, prefix: '/' });
       app.setNotFoundHandler((req, reply) => {
-        if (!req.url.startsWith('/api')) {
+        if (!req.url.startsWith('/api') && !req.url.startsWith('/public')) {
           return reply.sendFile('index.html');
         }
         reply.status(404).send({ error: 'Not found' });
