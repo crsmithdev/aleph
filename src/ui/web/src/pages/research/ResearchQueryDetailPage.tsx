@@ -1518,29 +1518,29 @@ function LiveView({
                   <span className={clsx('text-xs px-1 py-0.5 rounded shrink-0', liveOriginColor[thread.origin] ?? 'bg-bg-tertiary text-text-muted')}>
                     {thread.origin.replace(/_/g, ' ')}
                   </span>
-                  <span className="text-xs font-mono text-text-muted ml-auto opacity-60 group-hover:opacity-100 transition-opacity">p:{thread.priority.toFixed(2)}</span>
+                  <span className="text-xs font-mono text-text-muted ml-auto">p:{thread.priority.toFixed(2)}</span>
                   <button
                     title="Increase priority"
                     onClick={e => { e.stopPropagation(); updateThread.mutate({ id: thread.id, sessionId, priority: Math.min(1.0, thread.priority + 0.1) }); }}
-                    className="p-0.5 text-text-muted opacity-60 hover:opacity-100 hover:text-text-secondary rounded"
+                    className="p-0.5 text-text-muted hover:text-text-primary rounded hover:bg-bg-primary/40"
                   ><Icon name="keyboard_arrow_up" size="xs" /></button>
                   <button
                     title="Decrease priority"
                     onClick={e => { e.stopPropagation(); updateThread.mutate({ id: thread.id, sessionId, priority: Math.max(0.0, thread.priority - 0.1) }); }}
-                    className="p-0.5 text-text-muted opacity-60 hover:opacity-100 hover:text-text-secondary rounded"
+                    className="p-0.5 text-text-muted hover:text-text-primary rounded hover:bg-bg-primary/40"
                   ><Icon name="keyboard_arrow_down" size="xs" /></button>
                   {isTerminal ? (
                     <button
                       title="Redo"
                       onClick={e => { e.stopPropagation(); redoThread.mutate({ sessionId, threadId: thread.id }); }}
                       disabled={redoThread.isPending}
-                      className="px-1 py-0.5 text-sm text-text-muted opacity-60 hover:opacity-100 hover:text-blue-400 rounded"
+                      className="px-1 py-0.5 text-sm text-text-secondary hover:text-blue-400 rounded hover:bg-bg-primary/40"
                     >↺</button>
                   ) : (
                     <button
                       title="Prune"
                       onClick={e => { e.stopPropagation(); updateThread.mutate({ id: thread.id, sessionId, status: 'pruned' }); }}
-                      className="p-0.5 text-text-muted opacity-60 hover:opacity-100 hover:text-error rounded"
+                      className="p-0.5 text-text-muted hover:text-error rounded hover:bg-bg-primary/40"
                     ><Icon name="close" size="xs" /></button>
                   )}
                 </div>
@@ -1804,6 +1804,11 @@ function LiveView({
             <span className="text-sm text-text-muted font-mono ml-auto shrink-0">
               {streamEvents.length !== events.length ? `${streamEvents.length} / ${events.length}` : events.length}
             </span>
+            <button
+              title="Download activity log (.md)"
+              onClick={() => { const a = document.createElement('a'); a.href = `/api/research/queries/${sessionId}/export/log`; a.download = ''; a.click(); }}
+              className="p-1 rounded text-text-muted hover:text-text-secondary hover:bg-bg-tertiary transition-colors shrink-0"
+            ><Icon name="download" size="xs" /></button>
           </div>
 
           {/* Filter bar */}
@@ -1892,14 +1897,16 @@ function LiveView({
               const abbrevThreadQ = threadQ ? (threadQ.length > 50 ? threadQ.slice(0, 47) + '…' : threadQ) : null;
               const displayDetail = formatted.detail || (isLabelOnlyStep && abbrevThreadQ) || '';
               const isHighFinding = isFinding && (ev.payload as ResearchFinding).confidence >= 0.7;
+              const isError = ev.type === 'step' && !!(ev.payload as ResearchStep).error;
               return (
                 <div
                   key={evKey}
                   className={clsx(
                     'border-b border-border-primary/20 transition-colors',
-                    isFinding
-                      ? isHighFinding ? 'bg-warning/5' : 'bg-success/4'
-                      : isExpanded ? 'bg-bg-secondary/60' : 'hover:bg-bg-secondary/40'
+                    isError ? 'bg-error/8'
+                      : isFinding
+                        ? isHighFinding ? 'bg-warning/5' : 'bg-success/4'
+                        : isExpanded ? 'bg-bg-secondary/60' : 'hover:bg-bg-secondary/40'
                   )}
                   style={{ borderLeft: `6px solid ${color}${isHighFinding ? 'cc' : '60'}` }}
                 >
@@ -2875,15 +2882,6 @@ export function ResearchQueryDetailPage() {
               <h1 className="font-heading text-2xl font-bold text-text-primary truncate min-w-0 leading-none">{session.title}</h1>
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-label="Download activity log as Markdown"
-                title="Download activity log (.md) — all threads, steps, findings"
-                onClick={() => { const a = document.createElement('a'); a.href = `/api/research/queries/${id}/export/log`; a.download = ''; a.click(); }}
-              >
-                <Icon name="download" size="xs" />
-              </Button>
               {/* Run mode controls */}
               <div className="flex items-center gap-1">
                 {(['burst', 'background', 'scheduled'] as const).map(m => (
