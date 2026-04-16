@@ -29,6 +29,23 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
     });
 
+    const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+    const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
+    const startTs = todayStart.toISOString();
+    const endTs = todayEnd.toISOString();
+
+    const goalsCreatedToday = app.sqlite.prepare(
+      `SELECT title FROM goals WHERE created_at >= ? AND created_at <= ? AND state != 'canceled'`
+    ).all(startTs, endTs) as { title: string }[];
+
+    const todosCreatedToday = app.sqlite.prepare(
+      `SELECT title FROM todos WHERE created_at >= ? AND created_at <= ?`
+    ).all(startTs, endTs) as { title: string }[];
+
+    const habitsCreatedToday = app.sqlite.prepare(
+      `SELECT title FROM habits WHERE created_at >= ? AND created_at <= ?`
+    ).all(startTs, endTs) as { title: string }[];
+
     const createdPrefix = `<span style="color:#6366f1;font-weight:700;font-size:12px;margin-right:6px">+</span>`;
     const completedPrefix = `<span style="color:#22c55e;font-weight:700;font-size:12px;margin-right:6px">✓</span>`;
 
@@ -66,23 +83,6 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
     })();
 
     const completedHabits = habits.filter((h: any) => h.completedThisPeriod);
-
-    const todayStart = new Date(); todayStart.setHours(0,0,0,0);
-    const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
-    const startTs = todayStart.toISOString();
-    const endTs = todayEnd.toISOString();
-
-    const goalsCreatedToday = app.sqlite.prepare(
-      `SELECT title FROM goals WHERE created_at >= ? AND created_at <= ? AND state != 'canceled'`
-    ).all(startTs, endTs) as { title: string }[];
-
-    const todosCreatedToday = app.sqlite.prepare(
-      `SELECT title FROM todos WHERE created_at >= ? AND created_at <= ?`
-    ).all(startTs, endTs) as { title: string }[];
-
-    const habitsCreatedToday = app.sqlite.prepare(
-      `SELECT title FROM habits WHERE created_at >= ? AND created_at <= ?`
-    ).all(startTs, endTs) as { title: string }[];
 
     const completedHabitItems = completedHabits.map((h: any) =>
       `<li style="padding:6px 0;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:8px"><span style="color:#22c55e;font-size:18px">●</span><span style="color:#374151">${h.title}</span></li>`
