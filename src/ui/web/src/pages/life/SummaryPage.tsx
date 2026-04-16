@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSummary, useHabits } from '../../api/hooks';
+import { useSummary, useHabits, useGitStats } from '../../api/hooks';
 import { StatCard } from '../../components/data/StatCard';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
@@ -12,57 +12,103 @@ type PeriodSummaryData = {
   todosCompleted?: { count: number; items: Array<{ title: string }> };
 };
 
+interface GitStats {
+  commits: number;
+  added: number;
+  deleted: number;
+}
+
 interface PeriodSummaryProps {
   start: string;
   end: string;
   heading: string;
+  dateDisplay: string;
   data: PeriodSummaryData | undefined;
   isLoading: boolean;
   completedHabits: string[];
+  gitStats: GitStats | undefined;
 }
 
-function PeriodSummary({ start, end, heading, data, isLoading, completedHabits }: PeriodSummaryProps) {
+function SectionHeader({ label, count }: { label: string; count?: number }) {
+  return (
+    <div className="flex items-center gap-2 pt-3 pb-1">
+      <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">{label}</span>
+      {count !== undefined && (
+        <span className="text-xs text-text-disabled">({count})</span>
+      )}
+    </div>
+  );
+}
+
+function EmptyLine() {
+  return <p className="text-xs text-text-disabled italic pl-1">None</p>;
+}
+
+function BulletList({ items }: { items: string[] }) {
+  return (
+    <ul className="space-y-0.5">
+      {items.map((item, i) => (
+        <li key={i} className="flex items-start gap-1.5 text-sm text-text-secondary">
+          <span className="text-text-disabled mt-0.5">·</span>
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function PeriodSummary({ start, end, heading, dateDisplay, data, isLoading, completedHabits, gitStats }: PeriodSummaryProps) {
   const [copied, setCopied] = useState(false);
 
   const completedGoals = data?.goalsCompleted?.items ?? [];
   const completedTodos = data?.todosCompleted?.items ?? [];
 
-  const hasAnything = completedGoals.length > 0 || completedTodos.length > 0 || completedHabits.length > 0;
-
-  const dateLabel = start === end ? start : `${start} to ${end}`;
-
-  const text = hasAnything
-    ? [
-        `${heading} — ${dateLabel}`,
-        '',
-        ...(completedGoals.length > 0
-          ? ['Goals completed:', ...completedGoals.map((g) => `  - ${g.details?.title ?? g.goalId}`), '']
-          : []),
-        ...(completedTodos.length > 0
-          ? ['Todos completed:', ...completedTodos.map((t) => `  - ${t.title}`), '']
-          : []),
-        ...(completedHabits.length > 0
-          ? ['Habits followed today:', ...completedHabits.map((h) => `  - ${h}`)]
-          : []),
-      ].join('\n')
-    : `Nothing completed — ${dateLabel}`;
+  const buildCopyText = () => {
+    const lines: string[] = [
+      dateDisplay,
+      heading,
+      '',
+      'Goals:',
+      ...(completedGoals.length > 0
+        ? completedGoals.map((g) => `  - ${g.details?.title ?? g.goalId}`)
+        : ['  (none)']),
+      '',
+      'Todos:',
+      ...(completedTodos.length > 0
+        ? completedTodos.map((t) => `  - ${t.title}`)
+        : ['  (none)']),
+      '',
+      'Habits:',
+      ...(completedHabits.length > 0
+        ? completedHabits.map((h) => `  - ${h}`)
+        : ['  (none)']),
+    ];
+    if (gitStats && gitStats.commits > 0) {
+      lines.push('', `Construct: +${gitStats.added} / -${gitStats.deleted} lines · ${gitStats.commits} commit${gitStats.commits !== 1 ? 's' : ''}`);
+    }
+    return lines.join('\n');
+  };
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(text).then(() => {
+    navigator.clipboard.writeText(buildCopyText()).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
   };
 
   return (
-    <div className="bg-bg-secondary border border-border-primary rounded-lg p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-text-primary">{heading}</h2>
+    <div className="bg-bg-secondary border border-border-primary rounded-lg px-4 pt-3 pb-4">
+      {/* Header row */}
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold text-text-primary">{dateDisplay}</p>
+          <p className="text-xs text-text-muted mt-0.5">{heading}</p>
+        </div>
         <button
           onClick={handleCopy}
           disabled={isLoading}
           className={clsx(
-            'px-3 py-1 text-xs rounded-md border transition-colors',
+            'flex-shrink-0 px-3 py-1 text-xs rounded-md border transition-colors mt-0.5',
             copied
               ? 'bg-success/10 border-success text-success'
               : 'bg-bg-tertiary border-border-primary text-text-secondary hover:text-text-primary hover:border-border-secondary'
@@ -71,10 +117,50 @@ function PeriodSummary({ start, end, heading, data, isLoading, completedHabits }
           {copied ? 'Copied!' : 'Copy'}
         </button>
       </div>
+
       {isLoading ? (
-        <div className="text-xs text-text-muted">Loading...</div>
+        <div className="text-xs text-text-muted mt-4">Loading...</div>
       ) : (
-        <pre className="text-sm text-text-secondary whitespace-pre-wrap font-mono leading-relaxed">{text}</pre>
+        <div className="divide-y divide-border-primary/50 mt-1">
+          {/* Goals */}
+          <div className="pb-3">
+            <SectionHeader label="Goals" count={completedGoals.length} />
+            {completedGoals.length > 0
+              ? <BulletList items={completedGoals.map((g) => g.details?.title ?? g.goalId)} />
+              : <EmptyLine />}
+          </div>
+
+          {/* Todos */}
+          <div className="pb-3">
+            <SectionHeader label="Todos" count={completedTodos.length} />
+            {completedTodos.length > 0
+              ? <BulletList items={completedTodos.map((t) => t.title)} />
+              : <EmptyLine />}
+          </div>
+
+          {/* Habits */}
+          <div className="pb-3">
+            <SectionHeader label="Habits" count={completedHabits.length} />
+            {completedHabits.length > 0
+              ? <BulletList items={completedHabits} />
+              : <EmptyLine />}
+          </div>
+
+          {/* Git stats */}
+          <div className="pt-3">
+            <SectionHeader label="Construct" />
+            {gitStats && gitStats.commits > 0 ? (
+              <div className="flex items-center gap-3 text-sm pl-1">
+                <span className="text-success font-mono">+{gitStats.added}</span>
+                <span className="text-error font-mono">−{gitStats.deleted}</span>
+                <span className="text-text-disabled">·</span>
+                <span className="text-text-secondary">{gitStats.commits} commit{gitStats.commits !== 1 ? 's' : ''}</span>
+              </div>
+            ) : (
+              <EmptyLine />
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -163,6 +249,8 @@ export function SummaryPage() {
   const { data: habits } = useHabits();
   const completedHabits = (habits ?? []).filter((h) => h.completedThisPeriod).map((h) => h.title);
 
+  const { data: gitStats } = useGitStats(start, end);
+
   const dateDisplay =
     start === end
       ? longDate(start)
@@ -187,7 +275,7 @@ export function SummaryPage() {
               className={clsx(
                 'px-3 py-1.5 text-sm rounded-lg border transition-colors',
                 preset === p.value
-                  ? 'bg-accent border-accent text-white'
+                  ? 'bg-accent/15 border-accent text-accent font-medium'
                   : 'bg-bg-secondary border-border-primary text-text-secondary hover:text-text-primary hover:border-border-secondary'
               )}
             >
@@ -243,7 +331,16 @@ export function SummaryPage() {
         </div>
       )}
 
-      <PeriodSummary start={start} end={end} heading={heading} data={data as PeriodSummaryData | undefined} isLoading={isLoading} completedHabits={completedHabits} />
+      <PeriodSummary
+        start={start}
+        end={end}
+        heading={heading}
+        dateDisplay={dateDisplay}
+        data={data as PeriodSummaryData | undefined}
+        isLoading={isLoading}
+        completedHabits={completedHabits}
+        gitStats={gitStats}
+      />
     </div>
   );
 }

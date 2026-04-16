@@ -298,3 +298,11 @@ export function useSummary(startDate: string, endDate: string) {
   });
 }
 
+export function useGitStats(startDate: string, endDate: string) {
+  return useQuery({
+    queryKey: ['summary', 'git', startDate, endDate],
+    queryFn: () => api.get<{ commits: number; added: number; deleted: number }>(`/summary/git?start=${startDate}&end=${endDate}`),
+    enabled: !!startDate && !!endDate,
+  });
+}
+
