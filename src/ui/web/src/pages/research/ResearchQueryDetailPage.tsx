@@ -1140,6 +1140,16 @@ const liveStatusDot: Record<string, string> = {
   deferred: 'bg-text-muted/30',
 };
 
+const liveStatusBorder: Record<string, string> = {
+  active: 'border-l-success',
+  running: 'border-l-success',
+  queued: 'border-l-warning/70',
+  pending: 'border-l-warning/40',
+  exhausted: 'border-l-text-disabled',
+  pruned: 'border-l-error/60',
+  deferred: 'border-l-text-muted/30',
+};
+
 const liveOriginColor: Record<string, string> = {
   seed: 'bg-accent/15 text-accent',
   gap_analysis: 'bg-purple-500/15 text-purple-400',
@@ -1300,6 +1310,7 @@ function LiveView({
   const [searchText, setSearchText] = useState('');
   const [expandedFindingId, setExpandedFindingId] = useState<string | null>(null);
   const [findingsSearch, setFindingsSearch] = useState('');
+  const [threadSearch, setThreadSearch] = useState('');
   const [filterThreadId, setFilterThreadId] = useState<string | null>(null);
   const [expandedEventKey, setExpandedEventKey] = useState<string | null>(null);
   const [threadPanelWidth, setThreadPanelWidth] = useState(260);
@@ -1355,6 +1366,19 @@ function LiveView({
   }, [findings]);
 
   const ordered = useMemo(() => orderThreadsDepthFirst(threads), [threads]);
+
+  const filteredThreads = useMemo(() => {
+    if (!threadSearch.trim()) return ordered;
+    const q = threadSearch.trim().toLowerCase();
+    return ordered.filter(t => {
+      const hay = (t.short_query ?? t.query).toLowerCase();
+      let qi = 0;
+      for (let i = 0; i < hay.length && qi < q.length; i++) {
+        if (hay[i] === q[qi]) qi++;
+      }
+      return qi === q.length;
+    });
+  }, [ordered, threadSearch]);
 
   const threadColor = useMemo(() => {
     const map = new Map<string, string>();
@@ -1441,17 +1465,27 @@ function LiveView({
     <div className="flex h-full overflow-hidden">
       {/* ── Pane 1: Thread controls (left) ── */}
       <div className="shrink-0 flex flex-col bg-bg-secondary overflow-hidden" style={{ width: threadPanelWidth }}>
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-border-primary shrink-0 h-[37px]">
-          {isRunning && <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shrink-0" />}
-          <span className="text-sm font-semibold uppercase tracking-wider text-text-secondary">Threads</span>
-          <span className="text-sm text-text-disabled font-mono ml-auto">{threads.length}</span>
+        <div className="flex flex-col border-b border-border-primary shrink-0">
+          <div className="flex items-center gap-2 px-3 py-2 h-[37px]">
+            {isRunning && <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shrink-0" />}
+            <span className="text-sm font-semibold uppercase tracking-wider text-text-secondary">Threads</span>
+            <span className="text-sm text-text-disabled font-mono ml-auto">{threads.length}</span>
+          </div>
+          <div className="px-3 pb-2">
+            <input
+              type="text"
+              value={threadSearch}
+              onChange={e => setThreadSearch(e.target.value)}
+              placeholder="search…"
+              className="w-full bg-bg-tertiary border border-border-primary rounded px-2 py-0.5 text-sm text-text-secondary placeholder:text-text-disabled focus:outline-none focus:border-accent/50"
+            />
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {ordered.map(thread => {
+          {filteredThreads.map(thread => {
             const isTerminal = thread.status === 'exhausted' || thread.status === 'pruned';
             const threadFindings = findingsByThread.get(thread.id) ?? [];
             const steps = stepsByThread.get(thread.id) ?? [];
-            const color = threadColor.get(thread.id) ?? '#8796b0';
             const progressPct = steps.length > 0 ? Math.min(100, (steps.length / 9) * 100) : 0;
             return (
               <div
@@ -1462,54 +1496,51 @@ function LiveView({
                 onClick={() => setFilterThreadId(prev => prev === thread.id ? null : thread.id)}
                 onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setFilterThreadId(prev => prev === thread.id ? null : thread.id)}
                 className={clsx(
-                  'px-3 py-2 border-b border-border-primary group hover:bg-bg-tertiary transition-colors cursor-pointer focus:outline-none focus:ring-1 focus:ring-inset focus:ring-accent/50',
+                  'pl-3 pr-3 pt-1.5 pb-1.5 border-b border-border-primary border-l-4 group hover:bg-bg-tertiary transition-colors cursor-pointer focus:outline-none focus:ring-1 focus:ring-inset focus:ring-accent/50',
+                  liveStatusBorder[thread.status] ?? 'border-l-text-muted/30',
                   filterThreadId === thread.id && 'bg-bg-tertiary/60'
                 )}
-                style={{ borderLeft: `2px solid ${filterThreadId === thread.id ? color : color + '30'}` }}
               >
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', liveStatusDot[thread.status] ?? 'bg-text-muted/40')} />
-                  <span className="text-sm font-medium text-text-primary truncate flex-1 leading-tight">
+                <div className="flex items-start gap-1.5 mb-1">
+                  <span className="text-sm font-medium text-text-primary line-clamp-2 flex-1 leading-snug">
                     {thread.short_query ?? thread.query.split('\n')[0]}
                   </span>
-                </div>
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <span className={clsx('text-sm px-1 py-0.5 rounded shrink-0', liveOriginColor[thread.origin] ?? 'bg-bg-tertiary text-text-muted')}>
-                    {thread.origin.replace(/_/g, ' ')}
-                  </span>
                   {threadFindings.length > 0 && (
-                    <span className="text-sm font-mono text-success ml-auto">{threadFindings.length}✦</span>
+                    <span className="text-xs font-mono text-success shrink-0 leading-5">{threadFindings.length}✦</span>
                   )}
-                  <span className="text-sm font-mono text-text-muted opacity-0 group-hover:opacity-100 transition-opacity ml-auto">p:{thread.priority.toFixed(2)}</span>
                 </div>
                 {thread.status === 'active' && (
-                  <div className="h-0.5 bg-bg-tertiary rounded-full overflow-hidden mb-1.5">
+                  <div className="h-0.5 bg-bg-tertiary rounded-full overflow-hidden mb-1">
                     <div className="h-full bg-success rounded-full transition-all" style={{ width: `${progressPct}%` }} />
                   </div>
                 )}
-                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1">
+                  <span className={clsx('text-xs px-1 py-0.5 rounded shrink-0', liveOriginColor[thread.origin] ?? 'bg-bg-tertiary text-text-muted')}>
+                    {thread.origin.replace(/_/g, ' ')}
+                  </span>
+                  <span className="text-xs font-mono text-text-muted ml-auto opacity-60 group-hover:opacity-100 transition-opacity">p:{thread.priority.toFixed(2)}</span>
                   <button
                     title="Increase priority"
-                    onClick={() => updateThread.mutate({ id: thread.id, sessionId, priority: Math.min(1.0, thread.priority + 0.1) })}
-                    className="p-0.5 text-text-disabled hover:text-text-secondary rounded"
+                    onClick={e => { e.stopPropagation(); updateThread.mutate({ id: thread.id, sessionId, priority: Math.min(1.0, thread.priority + 0.1) }); }}
+                    className="p-0.5 text-text-muted opacity-60 hover:opacity-100 hover:text-text-secondary rounded"
                   ><Icon name="keyboard_arrow_up" size="xs" /></button>
                   <button
                     title="Decrease priority"
-                    onClick={() => updateThread.mutate({ id: thread.id, sessionId, priority: Math.max(0.0, thread.priority - 0.1) })}
-                    className="p-0.5 text-text-disabled hover:text-text-secondary rounded"
+                    onClick={e => { e.stopPropagation(); updateThread.mutate({ id: thread.id, sessionId, priority: Math.max(0.0, thread.priority - 0.1) }); }}
+                    className="p-0.5 text-text-muted opacity-60 hover:opacity-100 hover:text-text-secondary rounded"
                   ><Icon name="keyboard_arrow_down" size="xs" /></button>
                   {isTerminal ? (
                     <button
                       title="Redo"
-                      onClick={() => redoThread.mutate({ sessionId, threadId: thread.id })}
+                      onClick={e => { e.stopPropagation(); redoThread.mutate({ sessionId, threadId: thread.id }); }}
                       disabled={redoThread.isPending}
-                      className="px-1 py-0.5 text-sm text-text-disabled hover:text-blue-400 rounded"
+                      className="px-1 py-0.5 text-sm text-text-muted opacity-60 hover:opacity-100 hover:text-blue-400 rounded"
                     >↺</button>
                   ) : (
                     <button
                       title="Prune"
-                      onClick={() => updateThread.mutate({ id: thread.id, sessionId, status: 'pruned' })}
-                      className="p-0.5 text-text-disabled hover:text-error rounded ml-auto"
+                      onClick={e => { e.stopPropagation(); updateThread.mutate({ id: thread.id, sessionId, status: 'pruned' }); }}
+                      className="p-0.5 text-text-muted opacity-60 hover:opacity-100 hover:text-error rounded"
                     ><Icon name="close" size="xs" /></button>
                   )}
                 </div>
