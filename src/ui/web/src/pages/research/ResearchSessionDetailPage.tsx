@@ -1594,7 +1594,7 @@ export function ResearchSessionDetailPage() {
   const { data: costs } = useResearchCosts(id!);
   const { data: activity } = useResearchActivity(id!, { refetchInterval: isRunning ? 3000 : undefined });
   const { data: allSteps = [] } = useResearchSteps(id!, undefined, { refetchInterval: isRunning ? 3000 : undefined });
-  const { events } = useResearchStream(id!);
+  const { events } = useResearchStream(id!, isRunning);
   const { data: envCheck } = useResearchEnvCheck();
   const updateSession = useUpdateResearchSession();
   const updateConfig = useUpdateSessionConfig();

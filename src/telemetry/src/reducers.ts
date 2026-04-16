@@ -644,7 +644,7 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
             }
           }
         } else {
-          const cleaned = raw.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim().slice(0, 200);
+          const cleaned = raw.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim().slice(0, 100);
           if (cleaned) sess.firstUserMessage = cleaned;
         }
       }

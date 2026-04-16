@@ -639,12 +639,12 @@ export type StreamEvent =
   | { type: 'step'; payload: ResearchStep }
   | { type: 'job'; payload: ResearchJob };
 
-export function useResearchStream(sessionId: string) {
+export function useResearchStream(sessionId: string, enabled = true) {
   const qc = useQueryClient();
   const [events, setEvents] = useState<StreamEvent[]>([]);
 
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId || !enabled) return;
     const es = new EventSource(`/api/research/queries/${sessionId}/stream`);
 
     es.onmessage = (event: MessageEvent) => {
@@ -693,7 +693,7 @@ export function useResearchStream(sessionId: string) {
     };
 
     return () => es.close();
-  }, [sessionId, qc]);
+  }, [sessionId, qc, enabled]);
 
   return { events };
 }

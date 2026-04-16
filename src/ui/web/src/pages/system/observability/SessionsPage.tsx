@@ -84,7 +84,6 @@ type SessionRow = {
   firstUserMessage?: string;
   intent?: string;
   outcome?: string;
-  sessionNotes?: string[];
 };
 
 export function SessionsPage() {
@@ -650,9 +649,10 @@ export function SessionsPage() {
       </div>
 
       <DataTable<SessionRow>
-        data={filteredSessions.slice(0, 50)}
+        data={filteredSessions}
         columns={sessionColumns}
         keyField="sessionId"
+        pageSize={50}
         onRowClick={(row) => navigate(`/observability/sessions/${encodeURIComponent(row.sessionId)}`)}
       />
 

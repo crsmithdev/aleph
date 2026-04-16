@@ -784,9 +784,9 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
         if (session.lastTimestamp) {
           const match = matchSessionFile(session.lastTimestamp, fileMap, sortedTimestamps);
           if (match) {
-            session.intent = match.intent;
-            session.outcome = match.outcome;
-            session.sessionNotes = match.notes;
+            session.intent = match.intent ? match.intent.slice(0, 100) : match.intent;
+            session.outcome = match.outcome ? match.outcome.slice(0, 90) : match.outcome;
+            // sessionNotes omitted from list view
           }
         }
       }
