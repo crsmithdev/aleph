@@ -1160,7 +1160,7 @@ const liveOriginColor: Record<string, string> = {
 const THREAD_PALETTE = ['#c792ea', '#82aaff', '#c3e88d', '#89ddff', '#ffcb6b', '#f78c6c', '#f07178', '#b2ccd6'];
 const RENDER_WINDOW = 500; // max DOM nodes in the event stream list
 
-type Chip = { text: string; color: string };
+type Chip = { text: string; color: string; meta?: boolean };
 
 function fmtTokens(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
@@ -1169,10 +1169,10 @@ function fmtTokens(n: number): string {
 function stepChips(s: ResearchStep): Chip[] {
   const chips: Chip[] = [];
   const shortModel = s.model.includes('/') ? s.model.split('/').pop()! : s.model;
-  chips.push({ text: shortModel, color: 'text-text-muted' });
+  chips.push({ text: shortModel, color: 'text-text-muted', meta: true });
   const tok = s.prompt_tokens + s.completion_tokens;
-  if (tok > 0) chips.push({ text: fmtTokens(tok), color: 'text-text-muted' });
-  if (s.cost_usd > 0) chips.push({ text: `$${s.cost_usd.toFixed(4)}`, color: 'text-text-muted' });
+  if (tok > 0) chips.push({ text: fmtTokens(tok), color: 'text-text-muted', meta: true });
+  if (s.cost_usd > 0) chips.push({ text: `$${s.cost_usd.toFixed(5)}`, color: 'text-text-muted', meta: true });
   // Outcome chips from metadata
   const m = s.metadata;
   if (m) {
@@ -1247,6 +1247,7 @@ function formatEventDetail(ev: StreamEvent & { threadDiff?: string }): { typeLab
         'summarize thread': 'summarize',
         'dedup check': 'dedup',
         'gap analysis': 'gaps',
+        'formulate queries': 'formulate',
       };
       const labelColors: Record<string, string> = {
         'gaps': 'text-orange-400',
@@ -1254,6 +1255,7 @@ function formatEventDetail(ev: StreamEvent & { threadDiff?: string }): { typeLab
         'dedup': 'text-text-muted',
         'followups': 'text-teal-400',
         'summarize': 'text-text-muted',
+        'formulate': 'text-blue-400',
       };
       const rawLbl = s.label ?? 'step';
       const lbl = labelAliases[rawLbl] ?? rawLbl;
@@ -1916,20 +1918,27 @@ function LiveView({
                     onClick={() => setExpandedEventKey(prev => prev === evKey ? null : evKey)}
                     onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setExpandedEventKey(prev => prev === evKey ? null : evKey)}
                     className="grid items-baseline px-3 py-1 cursor-pointer focus:outline-none"
-                    style={{ gridTemplateColumns: '72px minmax(140px, 140px) 1fr', gap: '0' }}
+                    style={{ gridTemplateColumns: '72px 90px auto 1fr auto', gap: '0' }}
                   >
                     <span className="text-sm text-text-muted font-mono pr-1.5 overflow-hidden">{timeStr}</span>
-                    <span className={clsx('text-sm font-mono pr-2 truncate', formatted.typeColor)}>{formatted.typeLabel}</span>
-                    <span className="text-sm min-w-0 flex items-baseline gap-1.5 overflow-hidden">
-                      {displayDetail && <span className="truncate text-text-secondary">{displayDetail}</span>}
-                      {formatted.chips && formatted.chips.map((chip, ci) => (
-                        <span key={ci} className={clsx('text-sm font-mono shrink-0', chip.color)}>{chip.text}</span>
+                    <span className={clsx('text-sm font-mono pr-2 shrink-0', formatted.typeColor)}>{formatted.typeLabel}</span>
+                    <span className="flex items-baseline gap-1.5 pr-2 shrink-0">
+                      {formatted.chips?.filter(c => !c.meta).map((chip, ci) => (
+                        <span key={ci} className={clsx('text-sm font-mono', chip.color)}>{chip.text}</span>
+                      ))}
+                    </span>
+                    <span className="text-sm min-w-0 truncate text-text-secondary pr-2">
+                      {displayDetail}
+                    </span>
+                    <span className="flex items-baseline gap-1.5 justify-end shrink-0">
+                      {formatted.chips?.filter(c => c.meta).map((chip, ci) => (
+                        <span key={ci} className={clsx('text-sm font-mono', chip.color)}>{chip.text}</span>
                       ))}
                     </span>
                   </div>
                   {/* Expanded content */}
                   {isExpanded && (
-                    <div className="px-3 pb-2.5 pt-1 space-y-1.5 border-l-2 ml-[78px]" style={{ borderLeftColor: `${color}40` }}>
+                    <div className="px-3 pb-2.5 pt-1 space-y-1.5 border-l-2 ml-[168px]" style={{ borderLeftColor: `${color}40` }}>
                       {ev.type === 'step' && (() => {
                         const s = ev.payload;
                         return (
