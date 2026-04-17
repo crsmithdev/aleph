@@ -13,6 +13,7 @@ import * as threads from './services/threads.js';
 import * as findings from './services/findings.js';
 import * as steps from './services/steps.js';
 import * as plans from './services/plans.js';
+import * as concepts from './services/concepts.js';
 
 export interface SearchOptions {
   synthesisChars: number;
@@ -542,6 +543,15 @@ export class ResearchEngine {
       follow_ups: followUpQuestions,
       follow_up_analysis: followUpAnalysis,
     });
+
+    // Step 5a: Extract concepts from the finding and link them to this finding.
+    // Fire-and-forget is tempting, but doing it inline keeps the knowledge graph
+    // consistent with the document generator's next run.
+    try {
+      await this.extractConceptsForFinding(finding, thread, config);
+    } catch (err) {
+      console.warn(`[concepts] extraction failed for ${finding.id}:`, err);
+    }
 
     // Step 5b: Spawn verify thread for low-confidence findings (non-recursive)
     if (synthesisResult.confidence < 0.4 && thread.origin !== 'verify') {
@@ -1511,6 +1521,77 @@ Ordered from most to least important. Each rationale should explain relevance to
     }
   }
 
+  /** Extract concepts from a finding, upsert them into the session's knowledge graph,
+   *  and attach them (and any relations the LLM returns) to the finding. */
+  private async extractConceptsForFinding(
+    finding: ResearchFinding,
+    thread: ResearchThread,
+    config: SessionConfig,
+  ): Promise<void> {
+    const sessionId = finding.session_id;
+    const prompt = `Extract the distinct concepts this finding is about. A concept is a noun phrase that names a thing, idea, practice, organism, place, person, technique, or principle — something that could appear as a section title in an encyclopedia.
+
+Return ONLY JSON of the form:
+{
+  "concepts": [
+    { "name": "Canonical Name", "aliases": ["alt name", "abbrev"], "summary": "one-sentence definition grounded in this finding", "key_facts": ["concrete fact 1", "concrete fact 2"] }
+  ],
+  "relations": [
+    { "from": "Canonical Name", "to": "Other Canonical Name", "relation": "short lowercase verb phrase (uses, contrasts_with, depends_on, part_of, example_of)" }
+  ]
+}
+
+Guidelines:
+- 1 to 5 concepts. Pick the most load-bearing nouns only — not every mentioned term.
+- Concept names: title-case, no quotes, no trailing punctuation. Prefer the most canonical form (e.g. "Mycorrhizal Fungi" not "mycorrhizal fungi partners").
+- summary: one sentence, ≤ 160 chars, based on this finding alone.
+- key_facts: 0–4 short declarative sentences. Each must be grounded in the finding, not general knowledge.
+- relations: optional; only if the finding itself asserts the relation. Skip otherwise.
+- Do NOT invent concepts that aren't present. Do NOT include the research session title unless the finding explicitly elaborates on it.
+
+Thread context: "${thread.query}"
+
+Finding:
+${finding.content}
+
+Return JSON only, no preamble.`;
+
+    const result = await this.callLLM(
+      config.model,
+      prompt,
+      sessionId,
+      thread.id,
+      config,
+      'extract concepts',
+    );
+
+    const parsed = parseConceptExtraction(result.text);
+    if (!parsed) return;
+
+    const nameToId = new Map<string, string>();
+    for (const c of parsed.concepts) {
+      if (!c.name || typeof c.name !== 'string') continue;
+      const concept = concepts.upsertConcept(this.sqlite, sessionId, {
+        canonical_name: c.name,
+        aliases: Array.isArray(c.aliases) ? c.aliases.filter((a: unknown) => typeof a === 'string') as string[] : [],
+        summary: typeof c.summary === 'string' ? c.summary : '',
+        key_facts: Array.isArray(c.key_facts) ? c.key_facts.filter((f: unknown) => typeof f === 'string') as string[] : [],
+      });
+      concepts.linkFindingToConcept(this.sqlite, sessionId, finding.id, concept.id);
+      nameToId.set(c.name.trim().toLowerCase(), concept.id);
+    }
+
+    for (const r of parsed.relations) {
+      if (!r.from || !r.to || !r.relation) continue;
+      const fromId = nameToId.get(r.from.trim().toLowerCase())
+        ?? concepts.findConceptByName(this.sqlite, sessionId, r.from)?.id;
+      const toId = nameToId.get(r.to.trim().toLowerCase())
+        ?? concepts.findConceptByName(this.sqlite, sessionId, r.to)?.id;
+      if (!fromId || !toId) continue;
+      concepts.linkConcepts(this.sqlite, sessionId, fromId, toId, r.relation, [finding.id]);
+    }
+  }
+
   private async updateSummary(sessionId: string): Promise<void> {
     const session = sessions.getQuery(this.sqlite, sessionId)!;
     const recentFindings = findings.getRecentFindings(this.sqlite, sessionId, 20);
@@ -1649,5 +1730,38 @@ Write the full article in markdown.`,
     }
 
     return { ...result, cost, stepId };
+  }
+}
+
+interface ConceptExtraction {
+  concepts: Array<{ name: string; aliases?: string[]; summary?: string; key_facts?: string[] }>;
+  relations: Array<{ from: string; to: string; relation: string }>;
+}
+
+/** Parse the JSON returned by the concept extraction LLM call.
+ *  Tolerant of code fences and preamble — finds the first balanced JSON object. */
+export function parseConceptExtraction(text: string): ConceptExtraction | null {
+  if (!text) return null;
+  const stripped = text.replace(/^\s*```(?:json)?/i, '').replace(/```\s*$/, '').trim();
+
+  // Find the first balanced {...}
+  let start = stripped.indexOf('{');
+  if (start < 0) return null;
+  let depth = 0;
+  let end = -1;
+  for (let i = start; i < stripped.length; i++) {
+    const ch = stripped[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') { depth--; if (depth === 0) { end = i; break; } }
+  }
+  if (end < 0) return null;
+
+  try {
+    const obj = JSON.parse(stripped.slice(start, end + 1)) as Partial<ConceptExtraction>;
+    const conceptsArr = Array.isArray(obj.concepts) ? obj.concepts : [];
+    const relationsArr = Array.isArray(obj.relations) ? obj.relations : [];
+    return { concepts: conceptsArr as ConceptExtraction['concepts'], relations: relationsArr as ConceptExtraction['relations'] };
+  } catch {
+    return null;
   }
 }
