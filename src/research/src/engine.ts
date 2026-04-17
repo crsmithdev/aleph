@@ -1623,23 +1623,131 @@ Write a concise, informative summary of what has been discovered so far, key the
     sessions.updateQuery(this.sqlite, sessionId, { summary: result.text });
   }
 
-  /** Generate a structured article from all findings.
-   *  Called periodically alongside updateSummary. */
+  /** Generate a structured article from the session's concepts.
+   *  Walks concepts ordered by finding count, generating one section per concept
+   *  with a per-section token budget from config.llm_max_output_tokens.
+   *  Falls back to a single-pass article when no concepts exist yet. */
   async updateDocument(sessionId: string): Promise<void> {
     const session = sessions.getQuery(this.sqlite, sessionId)!;
     const allFindings = findings.listFindings(this.sqlite, sessionId);
+    if (allFindings.length < 3) return;
+
+    const conceptStats = concepts.listConcepts(this.sqlite, sessionId);
+
+    // Cap the per-concept doc at 15 sections to bound cost. Rare topics get folded
+    // into an "Other" section (simple concat of their finding summaries).
+    const MAX_CONCEPT_SECTIONS = 15;
+    const topConcepts = conceptStats.filter(c => c.finding_count > 0).slice(0, MAX_CONCEPT_SECTIONS);
+
+    if (topConcepts.length === 0) {
+      await this.generateDocumentLegacy(sessionId, session, allFindings);
+      return;
+    }
+
+    // Build the global citation index once so every section uses the same numbering.
+    const citationIndex = buildCitationIndex(allFindings);
+
+    const findingMap = new Map(allFindings.map(f => [f.id, f]));
+    const sectionBodies: string[] = [];
+
+    for (const c of topConcepts) {
+      const findingIds = concepts.listFindingsForConcept(this.sqlite, c.id);
+      const conceptFindings = findingIds.map(id => findingMap.get(id)).filter((f): f is ResearchFinding => !!f);
+      if (conceptFindings.length === 0) continue;
+
+      const material = conceptFindings.map(f => f.content).join('\n\n---\n\n');
+      const conceptSources = concepts.getSourcesForConcept(this.sqlite, c.id);
+      const citationLines = conceptSources
+        .map(s => `[${citationIndex.get(s.url)}] ${s.title} — ${s.url}`)
+        .filter(line => !line.startsWith('[undefined]'));
+
+      const prompt = `You are writing one section of an encyclopedia article about "${session.seed_query}".
+
+This section is about: ${c.canonical_name}${c.aliases.length ? ` (aka ${c.aliases.slice(0, 3).join(', ')})` : ''}
+
+Write the section as flowing prose:
+- Start with "## ${c.canonical_name}" as the heading. Do not repeat the heading.
+- Do NOT include a lead section or references section — those are composed elsewhere.
+- Write 2–4 paragraphs. Use ### subsections only if the finding material genuinely covers multiple aspects.
+- Cite sources using the numeric markers already assigned below, e.g. "[3]" — do not renumber.
+- Do not add confidence scores, tags, or research-process artifacts.
+- Encyclopedic tone: neutral, informative, specific.
+
+Concept summary (from prior extractions): ${c.summary || '(none yet)'}
+Key facts (do not copy verbatim; weave in as prose): ${c.key_facts.slice(0, 8).join(' | ') || '(none)'}
+
+Source findings (${conceptFindings.length}):
+${material}
+
+Citations available for this section:
+${citationLines.length ? citationLines.join('\n') : '(no sources attached)'}
+
+Write only the section, starting with "## ${c.canonical_name}".`;
+
+      try {
+        const result = await this.callLLM(
+          session.config.model,
+          prompt,
+          sessionId,
+          '',
+          session.config,
+          `generate section: ${c.canonical_name}`,
+        );
+        sectionBodies.push(result.text.trim());
+      } catch (err) {
+        console.warn(`[doc] section failed for "${c.canonical_name}":`, err);
+      }
+    }
+
+    if (sectionBodies.length === 0) return;
+
+    const lead = await this.generateLeadSection(sessionId, session.seed_query, topConcepts, session.config);
+    const referencesSection = buildReferencesSection(citationIndex, allFindings);
+    const doc = [lead, ...sectionBodies, referencesSection].filter(Boolean).join('\n\n');
+
+    sessions.updateQuery(this.sqlite, sessionId, { document: doc });
+  }
+
+  private async generateLeadSection(
+    sessionId: string,
+    seedQuery: string,
+    topConcepts: ConceptSummary[],
+    config: SessionConfig,
+  ): Promise<string> {
+    const bullets = topConcepts.slice(0, 10)
+      .map(c => `- ${c.canonical_name}: ${c.summary || '(no summary)'}`)
+      .join('\n');
+
+    const result = await this.callLLM(
+      config.model,
+      `Write a 2-3 paragraph lead section for an encyclopedia article about: "${seedQuery}"
+
+The article's body covers these concepts (for orientation only — do not enumerate them):
+${bullets}
+
+Write only the lead section in flowing prose. Do not include a heading — the lead has no "##" line. Do not cite specific sources; the body sections handle citations. Do not mention "this article" or meta-commentary.`,
+      sessionId,
+      '',
+      config,
+      'generate lead section',
+    );
+    return result.text.trim();
+  }
+
+  /** Fallback used only when no concepts have been extracted yet.
+   *  Produces the old-style single-pass article. */
+  private async generateDocumentLegacy(
+    sessionId: string,
+    session: ResearchQuery,
+    allFindings: ResearchFinding[],
+  ): Promise<void> {
     const allThreads = threads.listThreads(this.sqlite, sessionId);
-
-    if (allFindings.length < 3) return; // not enough material
-
-    // Build source material: findings grouped with thread context
     const threadMap = new Map(allThreads.map(t => [t.id, t]));
     const material = allFindings.map(f => {
       const thread = threadMap.get(f.thread_id);
       return `[Thread: ${thread?.short_query ?? thread?.query ?? 'unknown'}]\n${f.content}`;
     }).join('\n\n---\n\n');
 
-    // Collect all unique sources
     const allUrls = new Map<string, { url: string; title: string }>();
     for (const f of allFindings) {
       for (const url of f.source_urls) {
@@ -1731,6 +1839,44 @@ Write the full article in markdown.`,
 
     return { ...result, cost, stepId };
   }
+}
+
+interface ConceptSummary {
+  id: string;
+  canonical_name: string;
+  aliases: string[];
+  summary: string;
+  key_facts: string[];
+  finding_count: number;
+}
+
+/** Build { url → citation_number } across all findings, in stable insertion order. */
+function buildCitationIndex(allFindings: ResearchFinding[]): Map<string, number> {
+  const idx = new Map<string, number>();
+  let n = 1;
+  for (const f of allFindings) {
+    for (const url of f.source_urls) {
+      if (!idx.has(url)) idx.set(url, n++);
+    }
+  }
+  return idx;
+}
+
+function buildReferencesSection(citationIndex: Map<string, number>, allFindings: ResearchFinding[]): string {
+  if (citationIndex.size === 0) return '';
+
+  const titleByUrl = new Map<string, string>();
+  for (const f of allFindings) {
+    for (const m of f.source_url_meta ?? []) {
+      if (!titleByUrl.has(m.url)) titleByUrl.set(m.url, m.title || m.url);
+    }
+  }
+
+  const lines = [...citationIndex.entries()]
+    .sort((a, b) => a[1] - b[1])
+    .map(([url, n]) => `${n}. [${titleByUrl.get(url) ?? url}](${url})`);
+
+  return `## References\n\n${lines.join('\n')}`;
 }
 
 interface ConceptExtraction {
