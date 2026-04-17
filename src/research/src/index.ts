@@ -10,6 +10,11 @@ export * from './services/steps.js';
 export * from './services/plans.js';
 export * from './services/monitors.js';
 export * from './services/jobs.js';
+export {
+  upsertConcept, linkFindingToConcept, linkConcepts,
+  getConcept, findConceptByName, listConcepts, listConceptLinks,
+  listFindingsForConcept, listConceptIdsForFinding, getSourcesForConcept,
+} from './services/concepts.js';
 export { MonitorEngine } from './monitor-engine.js';
 export type { MonitorEngineOptions } from './monitor-engine.js';
 export { OpenRouterProvider, getOpenRouterPricing } from './providers/openrouter.js';

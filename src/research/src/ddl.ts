@@ -206,6 +206,42 @@ export function applyResearchDDL(sqlite: Sqlite): void {
       config TEXT NOT NULL DEFAULT '{}',
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS research_concepts (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
+      canonical_name TEXT NOT NULL,
+      aliases TEXT NOT NULL DEFAULT '[]',
+      summary TEXT NOT NULL DEFAULT '',
+      key_facts TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_rc_session ON research_concepts(session_id);
+    CREATE INDEX IF NOT EXISTS idx_rc_canonical ON research_concepts(session_id, canonical_name);
+
+    CREATE TABLE IF NOT EXISTS research_concept_links (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
+      from_concept_id TEXT NOT NULL REFERENCES research_concepts(id) ON DELETE CASCADE,
+      to_concept_id TEXT NOT NULL REFERENCES research_concepts(id) ON DELETE CASCADE,
+      relation TEXT NOT NULL,
+      evidence_finding_ids TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(from_concept_id, to_concept_id, relation)
+    );
+    CREATE INDEX IF NOT EXISTS idx_rcl_session ON research_concept_links(session_id);
+    CREATE INDEX IF NOT EXISTS idx_rcl_from ON research_concept_links(from_concept_id);
+
+    CREATE TABLE IF NOT EXISTS research_finding_concepts (
+      finding_id TEXT NOT NULL REFERENCES research_findings(id) ON DELETE CASCADE,
+      concept_id TEXT NOT NULL REFERENCES research_concepts(id) ON DELETE CASCADE,
+      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (finding_id, concept_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_rfc_concept ON research_finding_concepts(concept_id);
+    CREATE INDEX IF NOT EXISTS idx_rfc_session ON research_finding_concepts(session_id);
   `);
 
   // Migrations

@@ -228,6 +228,32 @@ export interface ResearchFinding {
   created_at: string;
 }
 
+export interface Concept {
+  id: string;
+  session_id: string;
+  canonical_name: string;
+  aliases: string[];
+  summary: string;
+  key_facts: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConceptLink {
+  id: string;
+  session_id: string;
+  from_concept_id: string;
+  to_concept_id: string;
+  relation: string;
+  evidence_finding_ids: string[];
+  created_at: string;
+}
+
+export interface ConceptWithStats extends Concept {
+  finding_count: number;
+  source_count: number;
+}
+
 export interface ResearchStep {
   id: string;
   thread_id: string;
