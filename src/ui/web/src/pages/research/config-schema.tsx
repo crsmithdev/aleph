@@ -133,87 +133,113 @@ export function ConfigForm({
     savedTimer.current = setTimeout(() => setSavedPath(null), 1500);
   }
 
+  const overriddenCount = baseline
+    ? SCHEMA.filter(f => {
+        const v = getByPath(value, f.path);
+        const b = getByPath(baseline, f.path);
+        return b !== undefined && !deepEqual(v, b);
+      }).length
+    : 0;
+
   return (
     <div className="flex flex-col gap-6 max-w-4xl">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-text-primary">{title}</h2>
-          {subtitle && <p className="text-sm text-text-muted mt-1">{subtitle}</p>}
-        </div>
-        {onResetAll && (
-          <button
-            onClick={() => {
-              if (confirm('Reset all fields?')) onResetAll();
-            }}
-            className="text-sm text-text-muted hover:text-text-primary border border-border-primary rounded px-3 py-1.5"
-          >
-            {resetAllLabel}
-          </button>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {CARD_ORDER.map(group => (
-          <Card key={group} meta={GROUP_META[group]}>
-            {SCHEMA.filter(f => f.group === group && !f.advanced).map(field => (
-              <Row
-                key={field.path}
-                field={field}
-                value={getByPath(value, field.path)}
-                baseline={baseline ? getByPath(baseline, field.path) : undefined}
-                saved={savedPath === field.path}
-                onSave={handleSave}
-                onResetField={onResetField}
-              />
-            ))}
-          </Card>
-        ))}
-      </div>
-
-      <div>
-        <button
-          onClick={() => setShowAdvanced(v => !v)}
-          className="text-sm text-text-muted hover:text-accent select-none"
-        >
-          {showAdvanced ? '▾' : '▸'} {showAdvanced ? 'Hide' : 'Show'} advanced (perturbation, coherence, rate limits)
-        </button>
-
-        {showAdvanced && (
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-            {CARD_ORDER.map(group => {
-              const advFields = SCHEMA.filter(f => f.group === group && f.advanced);
-              if (advFields.length === 0) return null;
-              return (
-                <Card key={`adv-${group}`} meta={{ title: GROUP_META[group].title, sub: 'advanced' }}>
-                  {advFields.map(field => (
-                    <Row
-                      key={field.path}
-                      field={field}
-                      value={getByPath(value, field.path)}
-                      baseline={baseline ? getByPath(baseline, field.path) : undefined}
-                      saved={savedPath === field.path}
-                      onSave={handleSave}
-                      onResetField={onResetField}
-                    />
-                  ))}
-                </Card>
-              );
-            })}
+      <div className="border border-border-primary/40 rounded bg-bg-secondary p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-base font-medium text-text-primary">{title}</h2>
+            {subtitle && <p className="text-sm text-text-muted mt-1">{subtitle}</p>}
+            {baseline && (
+              <p className="text-sm text-text-muted mt-1.5">
+                {overriddenCount === 0
+                  ? 'No fields differ from the defaults.'
+                  : `${overriddenCount} field${overriddenCount === 1 ? '' : 's'} differ from the defaults.`}
+              </p>
+            )}
           </div>
-        )}
+          {onResetAll && (
+            <button
+              onClick={() => { if (confirm('Reset all fields?')) onResetAll(); }}
+              className="text-sm text-text-muted hover:text-text-primary border border-border-primary/40 rounded px-3 py-1.5 shrink-0"
+            >
+              {resetAllLabel}
+            </button>
+          )}
+        </div>
+
+        {CARD_ORDER.map(group => {
+          const fields = SCHEMA.filter(f => f.group === group && !f.advanced);
+          if (fields.length === 0) return null;
+          return (
+            <div key={group} className="mt-5">
+              <GroupHeading meta={GROUP_META[group]} />
+              <div>
+                {fields.map(field => (
+                  <Row
+                    key={field.path}
+                    field={field}
+                    value={getByPath(value, field.path)}
+                    baseline={baseline ? getByPath(baseline, field.path) : undefined}
+                    saved={savedPath === field.path}
+                    onSave={handleSave}
+                    onResetField={onResetField}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+
+        <div className="mt-5 pt-4 border-t border-border-primary/30">
+          <button
+            onClick={() => setShowAdvanced(v => !v)}
+            className="text-sm text-text-muted hover:text-accent select-none"
+          >
+            {showAdvanced ? '\u25be' : '\u25b8'} {showAdvanced ? 'Hide' : 'Show'} advanced (perturbation, coherence, rate limits)
+          </button>
+
+          {showAdvanced && (
+            <div className="mt-3">
+              {CARD_ORDER.map(group => {
+                const advFields = SCHEMA.filter(f => f.group === group && f.advanced);
+                if (advFields.length === 0) return null;
+                return (
+                  <div key={`adv-${group}`} className="mt-4">
+                    <GroupHeading meta={{ title: GROUP_META[group].title, sub: 'advanced' }} />
+                    <div>
+                      {advFields.map(field => (
+                        <Row
+                          key={field.path}
+                          field={field}
+                          value={getByPath(value, field.path)}
+                          baseline={baseline ? getByPath(baseline, field.path) : undefined}
+                          saved={savedPath === field.path}
+                          onSave={handleSave}
+                          onResetField={onResetField}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
+
+      {baseline && (
+        <p className="text-sm text-text-muted">
+          Changing mid-flight values takes effect on the next iteration. In-flight LLM calls complete with current config.
+        </p>
+      )}
     </div>
   );
 }
 
-function Card({ meta, children }: { meta: { title: string; sub: string }; children: React.ReactNode }) {
+function GroupHeading({ meta }: { meta: { title: string; sub: string } }) {
   return (
-    <div className="bg-bg-secondary border border-border-primary rounded-lg p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-base font-semibold text-text-primary">{meta.title}</h3>
-        <span className="text-sm text-text-muted">{meta.sub}</span>
-      </div>
-      <div className="divide-y divide-border-primary">{children}</div>
+    <div className="flex items-baseline justify-between mb-1 pb-1 border-b border-border-primary/30">
+      <h3 className="text-sm font-medium text-text-muted uppercase tracking-[0.08em]">{meta.title}</h3>
+      <span className="text-sm text-text-muted">{meta.sub}</span>
     </div>
   );
 }
@@ -235,31 +261,34 @@ function Row({
 }) {
   const overridden = baseline !== undefined && !deepEqual(value, baseline);
   return (
-    <div className="grid grid-cols-[1fr_auto] gap-3 items-center py-2.5">
-      <div className="text-sm">
-        <span className="text-text-primary inline-flex items-center gap-2">
-          {overridden && (
-            <span
-              className="w-1.5 h-1.5 rounded-full bg-warning inline-block"
-              title={`Overridden — default is ${formatValue(baseline)}`}
-            />
+    <div className="grid grid-cols-1 sm:grid-cols-[260px_minmax(0,1fr)] gap-x-4 gap-y-1 items-center py-3 border-b border-border-primary/30 last:border-b-0">
+      <div>
+        <div className="text-sm font-medium text-text-primary flex items-center gap-1.5 font-mono">
+          {field.path}
+          {field.isNew && (
+            <span className="text-sm uppercase tracking-[0.06em] bg-success/10 text-success px-1.5 py-[1px] rounded">new</span>
           )}
-          {field.label}
-        </span>
-        {field.isNew && (
-          <span className="ml-2 inline-block text-sm uppercase tracking-wider bg-green-500/10 text-green-400 px-2 py-0.5 rounded">new</span>
-        )}
-        {field.hint && <span className="block text-sm text-text-muted mt-0.5">{field.hint}</span>}
+        </div>
+        {field.hint && <div className="text-sm text-text-muted mt-0.5">{field.hint}</div>}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        {overridden && (
+          <span
+            className="w-1.5 h-1.5 rounded-full bg-warning inline-block shrink-0"
+            title={`Overridden - default is ${formatValue(baseline)}`}
+          />
+        )}
         <FieldInput field={field} value={value} onSave={onSave} />
+        {baseline !== undefined && (
+          <span className="text-sm text-text-muted font-mono">default: {formatValue(baseline)}</span>
+        )}
         {overridden && onResetField && (
           <button
             onClick={() => onResetField(field.path)}
             title={`Reset to default (${formatValue(baseline)})`}
-            className="text-sm text-text-muted hover:text-text-primary"
+            className="text-sm text-text-muted hover:text-text-primary border border-border-primary/40 rounded px-2 py-[2px]"
           >
-            <Icon name="refresh" size="sm" />
+            reset
           </button>
         )}
         <SavedTick visible={saved} />
