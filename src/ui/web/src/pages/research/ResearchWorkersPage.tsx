@@ -14,6 +14,7 @@ import {
   useResearchWorkers,
   useAllJobs,
   useJobStats,
+  useResearchStats,
   useAddWorker,
   useRemoveWorker,
   useKillWorker,
@@ -23,7 +24,7 @@ import {
   type ResearchJob,
   type WorkerStatus,
 } from '../../api/research-hooks';
-import { fmtNumber, fmtMs, fmtPct } from '../../utils/format';
+import { fmtNumber, fmtMs, fmtPct, fmtCurrency } from '../../utils/format';
 
 // --- Helpers ---
 
@@ -369,9 +370,9 @@ function PerformanceCharts({ byDay }: { byDay: { date: string; completed: number
   );
 }
 
-// --- Queued Jobs Table ---
+// --- In-Flight Jobs Table (running + pending) ---
 
-function QueuedJobsTable({ jobs, queryMap, onCancel, cancelPending }: {
+function InFlightJobsTable({ jobs, queryMap, onCancel, cancelPending }: {
   jobs: ResearchJob[];
   queryMap: Record<string, string>;
   onCancel: (jobId: string) => void;
@@ -408,13 +409,37 @@ function QueuedJobsTable({ jobs, queryMap, onCancel, cancelPending }: {
       render: (row) => <span className="text-sm text-text-muted whitespace-nowrap">{row.mode}</span>,
     },
     {
-      key: 'created_at',
-      label: 'Queued',
+      key: 'claimed_by',
+      label: 'Worker',
       shrink: true,
-      render: (row) => <span className="text-sm tabular-nums text-text-muted whitespace-nowrap">{elapsed(row.created_at)} ago</span>,
+      render: (row) => row.claimed_by
+        ? <span className="font-mono text-sm text-text-secondary whitespace-nowrap">{row.claimed_by}</span>
+        : <span className="text-sm text-text-muted">—</span>,
     },
     {
-      key: 'claimed_by',
+      key: 'iterations_completed',
+      label: '↻',
+      shrink: true,
+      align: 'right',
+      render: (row) => (
+        <span className="text-sm tabular-nums text-text-secondary whitespace-nowrap">
+          {row.iterations_completed}{row.max_iterations ? `/${row.max_iterations}` : ''}
+        </span>
+      ),
+    },
+    {
+      key: 'started_at',
+      label: 'Elapsed',
+      shrink: true,
+      align: 'right',
+      render: (row) => {
+        const isRunning = row.status === 'running' || row.status === 'claimed';
+        if (isRunning && row.started_at) return <LiveDuration from={row.started_at} />;
+        return <span className="text-sm tabular-nums text-text-muted whitespace-nowrap">queued {elapsed(row.created_at)}</span>;
+      },
+    },
+    {
+      key: 'id',
       label: '',
       shrink: true,
       render: (row) => (
@@ -435,8 +460,7 @@ function QueuedJobsTable({ jobs, queryMap, onCancel, cancelPending }: {
       data={jobs}
       columns={columns}
       keyField="id"
-      emptyMessage="No queued jobs."
-      defaultSort={{ key: 'created_at', dir: 'asc' }}
+      emptyMessage="Nothing in flight."
       pageSize={20}
       expandedKey={expandedKey}
       onExpandToggle={setExpandedKey}
@@ -538,6 +562,7 @@ export function ResearchWorkersPage() {
   const { data: workers = [], isLoading: workersLoading } = useResearchWorkers();
   const { data: allJobs = [] } = useAllJobs({ limit: 500 });
   const { data: stats } = useJobStats();
+  const { data: throughput } = useResearchStats('7d', 'day');
   const addWorker = useAddWorker();
   const removeWorker = useRemoveWorker();
   const killWorker = useKillWorker();
@@ -550,14 +575,26 @@ export function ResearchWorkersPage() {
   );
 
   const runningJobs = allJobs.filter(j => j.status === 'running' || j.status === 'claimed');
-  const pendingJobs = allJobs.filter(j => j.status === 'pending' || j.status === 'claimed');
-  const historyJobs = allJobs.filter(j => j.status !== 'pending');
+  const pendingJobs = allJobs.filter(j => j.status === 'pending');
+  const inFlightJobs = [...runningJobs, ...pendingJobs].sort((a, b) => {
+    const rank = (s: string) => (s === 'running' ? 0 : s === 'claimed' ? 1 : 2);
+    const d = rank(a.status) - rank(b.status);
+    if (d !== 0) return d;
+    return a.created_at.localeCompare(b.created_at);
+  });
+  const historyJobs = allJobs.filter(j => j.status !== 'pending' && j.status !== 'running' && j.status !== 'claimed');
 
   const isActive = runningJobs.length > 0 || pendingJobs.length > 0;
   const runningWorkers = workers.filter(w => w.status === 'running');
   const successRate = stats && stats.total > 0
     ? ((stats.completed / stats.total) * 100)
     : null;
+
+  // Today's throughput — derived from existing stats endpoint (byDay ascending).
+  const today = throughput?.byDay?.[throughput.byDay.length - 1];
+  const todayFindings = today?.findings ?? 0;
+  const todaySpend = today?.cost ?? 0;
+  const activeQueries = queries.filter(q => q.status === 'active').length;
 
   if (workersLoading) return <PageLoading />;
 
@@ -587,7 +624,34 @@ export function ResearchWorkersPage() {
         }
       />
 
-      {/* Stats */}
+      {/* Throughput — today's output across all queries */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard
+          label="Active Queries"
+          value={fmtNumber(activeQueries)}
+          accent={activeQueries > 0 ? 'success' : 'neutral'}
+          detailContent={
+            <><span className="text-text-muted">of </span><span className="text-text-secondary font-medium">{queries.length}</span><span className="text-text-muted"> total</span></>
+          }
+        />
+        <StatCard
+          label="Findings Today"
+          value={fmtNumber(todayFindings)}
+          accent="success"
+        />
+        <StatCard
+          label="Spend Today"
+          value={fmtCurrency(todaySpend)}
+          accent="default"
+        />
+        <StatCard
+          label="Total Cost · 7d"
+          value={fmtCurrency(throughput?.totalCost ?? 0)}
+          accent="neutral"
+        />
+      </div>
+
+      {/* Job stats */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
         <StatCard label="Workers" value={fmtNumber(runningWorkers.length)} accent="success" />
         <StatCard label="Running" value={fmtNumber(runningJobs.length)} accent="default" />
@@ -620,14 +684,16 @@ export function ResearchWorkersPage() {
         </div>
       )}
 
-      {/* Queued jobs */}
+      {/* In-flight jobs — running + queued */}
       <div>
         <p className="text-sm text-text-muted uppercase tracking-wide mb-3">
-          Queued Jobs {pendingJobs.length > 0 && <span className="normal-case ml-1 text-yellow-400">({pendingJobs.length})</span>}
+          In Flight
+          {runningJobs.length > 0 && <span className="normal-case ml-2 text-success">{runningJobs.length} running</span>}
+          {pendingJobs.length > 0 && <span className="normal-case ml-2 text-warning">{pendingJobs.length} queued</span>}
         </p>
         <div className="bg-bg-secondary border border-border-primary rounded-lg overflow-hidden">
-          <QueuedJobsTable
-            jobs={pendingJobs}
+          <InFlightJobsTable
+            jobs={inFlightJobs}
             queryMap={queryMap}
             onCancel={(jobId) => cancelJob.mutate({ jobId })}
             cancelPending={cancelJob.isPending}
