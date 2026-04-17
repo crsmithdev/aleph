@@ -2908,13 +2908,15 @@ function ConceptInspector({ concept }: { concept: import('../../api/research-hoo
 }
 
 function SessionConfigView({
-  session, sessionId,
+  session, sessionId, onDelete,
 }: {
   session: { id: string; config: Record<string, unknown> };
   sessionId: string;
+  onDelete?: () => void;
 }) {
   const updateConfig = useUpdateQueryConfig();
   const { data: defaults, isLoading } = useResearchDefaults();
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   if (isLoading || !defaults) return <PageLoading />;
 
@@ -2928,14 +2930,59 @@ function SessionConfigView({
   };
 
   return (
-    <ConfigForm
-      title="Session config"
-      subtitle="Per-query overrides. The dot marks a value that differs from the defaults; changes apply to the next iteration."
-      value={session.config}
-      baseline={defaults as unknown as Record<string, unknown>}
-      onSave={save}
-      onResetField={resetField}
-    />
+    <div className="space-y-6">
+      <ConfigForm
+        title="Session config"
+        subtitle="Per-query overrides. The dot marks a value that differs from the defaults; changes apply to the next iteration."
+        value={session.config}
+        baseline={defaults as unknown as Record<string, unknown>}
+        onSave={save}
+        onResetField={resetField}
+      />
+      {onDelete && (
+        <div className="border border-error/30 rounded p-4 bg-error/5">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-sm font-medium text-text-primary">Delete this query</div>
+              <div className="text-sm text-text-muted mt-0.5">
+                Removes the query, all threads, findings, and sources. This cannot be undone.
+              </div>
+            </div>
+            {confirmDelete ? (
+              <div className="flex gap-2">
+                <Button size="sm" variant="secondary" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+                <Button size="sm" variant="danger" onClick={onDelete}>Confirm delete</Button>
+              </div>
+            ) : (
+              <Button size="sm" variant="danger" onClick={() => setConfirmDelete(true)}>Delete query</Button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EventsView({
+  activity, events, isRunning,
+}: {
+  activity: ResearchActivity | undefined;
+  events: StreamEvent[];
+  isRunning: boolean;
+}) {
+  const total = (activity?.recent_steps.length ?? 0) + events.length;
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-sm text-text-muted">
+          Most recent first &middot; session-scoped {isRunning && <span>&middot; <span className="text-accent">auto-updates</span></span>}
+        </div>
+        <div className="text-sm text-text-muted tabular-nums">{total} events</div>
+      </div>
+      <div className="text-sm text-text-muted py-8 text-center border border-dashed border-border-primary/40 rounded">
+        Events view coming soon &mdash; kind-colored activity grid with filter chips.
+      </div>
+    </div>
   );
 }
 
@@ -3338,7 +3385,7 @@ export function ResearchQueryDetailPage() {
   const cancelJob = useCancelJob();
   const deleteQuery = useDeleteResearchQuery();
 
-  const [tab, setTab] = useState<'document' | 'live' | 'map' | 'knowledge' | 'sources' | 'config' | 'settings'>('document');
+  const [tab, setTab] = useState<'document' | 'knowledge' | 'process' | 'sources' | 'events' | 'config'>('document');
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
@@ -3350,15 +3397,24 @@ export function ResearchQueryDetailPage() {
     return map;
   }, [findingsData]);
 
+  const { data: conceptsData } = useConcepts(id ?? '');
+  const conceptsCount = conceptsData?.length ?? 0;
+  const { data: sourcesData } = useSources(id ?? '');
+  const sourcesTotal = useMemo(() => {
+    const c = sourcesData?.counts;
+    if (!c) return 0;
+    return (c.pending ?? 0) + (c.extracted ?? 0) + (c.failed ?? 0) + (c.skipped ?? 0);
+  }, [sourcesData]);
+
   // Cross-navigation helpers
   const navigateToThread = useCallback((threadId: string) => {
     setSelectedThreadId(threadId);
-    setTab('live');
+    setTab('process');
   }, []);
 
   const navigateToMap = useCallback((threadId: string) => {
     setSelectedThreadId(threadId);
-    setTab('map');
+    setTab('process');
   }, []);
 
   const navigateToDocument = useCallback((threadId: string) => {
@@ -3500,18 +3556,25 @@ export function ResearchQueryDetailPage() {
           {/* Tab bar */}
           <div className="flex gap-1 mt-3 -mb-px relative z-10">
             {([
-              { key: 'document' as const, label: `Document (${findingsData.length})` },
-              { key: 'live' as const, label: `Live (${threadsData.length})` },
-              { key: 'map' as const, label: `Map` },
-              { key: 'knowledge' as const, label: 'Knowledge' },
-              { key: 'sources' as const, label: 'Sources' },
-              { key: 'config' as const, label: 'Config' },
-              { key: 'settings' as const, label: 'Settings' },
+              { key: 'document' as const, label: 'Document', count: undefined },
+              { key: 'knowledge' as const, label: 'Knowledge', count: conceptsCount },
+              { key: 'process' as const, label: 'Process', count: threadsData.length },
+              { key: 'sources' as const, label: 'Sources', count: sourcesTotal },
+              { key: 'events' as const, label: 'Events', count: undefined },
+              { key: 'config' as const, label: 'Config', count: undefined },
             ]).map(t => (
               <button key={t.key} onClick={() => setTab(t.key)}
-                className={clsx('px-3 py-2 text-sm font-medium border-b-2 transition-colors',
+                className={clsx('px-3 py-2 text-sm font-medium border-b-2 transition-colors inline-flex items-center gap-1.5',
                   tab === t.key ? 'border-accent text-accent bg-bg-primary' : 'border-transparent text-text-muted hover:text-text-secondary')}>
                 {t.label}
+                {t.count !== undefined && t.count > 0 && (
+                  <span className={clsx(
+                    'text-sm tabular-nums px-1.5 py-[1px] rounded',
+                    tab === t.key ? 'bg-accent/10 text-accent' : 'bg-bg-tertiary text-text-muted',
+                  )}>
+                    {t.count}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -3519,63 +3582,46 @@ export function ResearchQueryDetailPage() {
         </div>
 
         {/* Tab content */}
-        {tab === 'live' ? (
-          <div className="flex-1 overflow-hidden min-h-0">
-            <LiveView
-              threads={threadsData}
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          {tab === 'document' && (
+            <DocumentView
               findings={findingsData}
-              allSteps={allSteps}
+              threads={threadsData}
+              onNavigateToThread={navigateToThread}
+              onNavigateToMap={navigateToMap}
+              document={session?.document || undefined}
+              sessionId={id!}
+              title={session?.title}
+            />
+          )}
+          {tab === 'process' && (
+            <MapView
+              threads={threadsData}
+              findingCounts={findingCounts}
+              onNavigateToLive={navigateToThread}
+            />
+          )}
+          {tab === 'knowledge' && (
+            <KnowledgeView sessionId={id!} />
+          )}
+          {tab === 'sources' && (
+            <SourcesView sessionId={id!} />
+          )}
+          {tab === 'events' && (
+            <EventsView
+              activity={activity}
               events={events}
               isRunning={isRunning}
-              sessionId={id!}
-              sessionFetchText={sessionFetchText}
-              onToggleSessionFetch={handleToggleSessionFetch}
-              activity={activity}
-              jobs={jobs}
-              selectedThreadId={selectedThreadId}
-              onSelectThread={setSelectedThreadId}
-              onNavigateToDocument={navigateToDocument}
-              onNavigateToMap={navigateToMap}
             />
-          </div>
-        ) : (
-          <div className="flex-1 overflow-y-auto px-6 py-5">
-            {tab === 'document' && (
-              <DocumentView
-                findings={findingsData}
-                threads={threadsData}
-                onNavigateToThread={navigateToThread}
-                onNavigateToMap={navigateToMap}
-                document={session?.document || undefined}
-                sessionId={id!}
-                title={session?.title}
-              />
-            )}
-            {tab === 'map' && (
-              <MapView
-                threads={threadsData}
-                findingCounts={findingCounts}
-                onNavigateToLive={navigateToThread}
-              />
-            )}
-            {tab === 'knowledge' && (
-              <KnowledgeView sessionId={id!} />
-            )}
-            {tab === 'sources' && (
-              <SourcesView sessionId={id!} />
-            )}
-            {tab === 'config' && (
-              <SessionConfigView session={session} sessionId={id!} />
-            )}
-            {tab === 'settings' && (
-              <SettingsView
-                session={session}
-                sessionId={id!}
-                onDelete={() => deleteQuery.mutate({ id: id! }, { onSuccess: () => { window.location.href = '/research/queries'; } })}
-              />
-            )}
-          </div>
-        )}
+          )}
+          {tab === 'config' && (
+            <SessionConfigView
+              session={session}
+              sessionId={id!}
+              onDelete={() => deleteQuery.mutate({ id: id! }, { onSuccess: () => { window.location.href = '/research/queries'; } })}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
