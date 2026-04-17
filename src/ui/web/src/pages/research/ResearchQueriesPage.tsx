@@ -2,7 +2,7 @@ import { Icon } from '../../components/ui/Icon';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { useResearchQueries, useCreateResearchQuery, useUpdateResearchQuery, useRunAllResearch, useStopAllResearch, useClearResearchDB } from '../../api/research-hooks';
+import { useResearchQueries, useCreateResearchQuery, useUpdateResearchQuery, useRunAllResearch, useStopAllResearch, useClearResearchDB, useResearchDefaults } from '../../api/research-hooks';
 import { Button } from '../../components/ui/Button';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
@@ -36,17 +36,37 @@ export function ResearchQueriesPage() {
   const updateSession = useUpdateResearchQuery();
   const runAll = useRunAllResearch();
   const stopAll = useStopAllResearch();
+  const { data: defaults } = useResearchDefaults();
   const [newOpen, setNewOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [depth, setDepth] = useState(5);
-  const [maxTotalThreads, setMaxTotalThreads] = useState<number>(() => Number(localStorage.getItem('research_default_max_total_threads') ?? '200'));
-  const [provider, setProvider] = useState<string>(() => localStorage.getItem('research_default_provider') ?? 'openrouter');
-  const [model, setModel] = useState<string>(() => localStorage.getItem('research_default_model') ?? 'deepseek/deepseek-chat');
-  const [minSearches, setMinSearches] = useState<number>(() => Number(localStorage.getItem('research_default_min_searches') ?? '2'));
-  const [gapAnalysis, setGapAnalysis] = useState<boolean>(() => localStorage.getItem('research_default_gap_analysis') !== 'false');
-  const [maxGapSearches, setMaxGapSearches] = useState<number>(() => Number(localStorage.getItem('research_default_max_gap_searches') ?? '2'));
+  const [depth, setDepth] = useState(3);
+  const [maxTotalThreads, setMaxTotalThreads] = useState<number>(150);
+  const [provider, setProvider] = useState<string>('openrouter');
+  const [model, setModel] = useState<string>('deepseek/deepseek-chat');
+  const [minSearches, setMinSearches] = useState<number>(2);
+  const [gapAnalysis, setGapAnalysis] = useState<boolean>(true);
+  const [maxGapSearches, setMaxGapSearches] = useState<number>(2);
   const clearDb = useClearResearchDB();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+
+  function seedFromDefaults() {
+    if (!defaults) return;
+    setDepth(defaults.max_thread_depth);
+    setMaxTotalThreads(defaults.max_total_threads);
+    setMinSearches(defaults.min_searches_per_thread);
+    setProvider(defaults.providers.primary);
+    setModel(defaults.model);
+    setGapAnalysis(defaults.gap_analysis.enabled);
+    setMaxGapSearches(defaults.gap_analysis.max_gap_searches);
+  }
+
+  function toggleNewOpen() {
+    if (!newOpen) {
+      seedFromDefaults();
+      setQuery('');
+    }
+    setNewOpen(!newOpen);
+  }
 
   const visibleSessions = sessions.filter(s => s.status !== 'archived');
   const filteredSessions = statusFilter === 'all'
@@ -56,12 +76,6 @@ export function ResearchQueriesPage() {
   function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!query.trim()) return;
-    localStorage.setItem('research_default_provider', provider);
-    if (model) localStorage.setItem('research_default_model', model);
-    localStorage.setItem('research_default_min_searches', String(minSearches));
-    localStorage.setItem('research_default_gap_analysis', String(gapAnalysis));
-    localStorage.setItem('research_default_max_gap_searches', String(maxGapSearches));
-    localStorage.setItem('research_default_max_total_threads', String(maxTotalThreads));
     createSession.mutate({
       seed_query: query.trim(),
       config: {
@@ -73,7 +87,7 @@ export function ResearchQueriesPage() {
         gap_analysis: { enabled: gapAnalysis, max_gap_searches: maxGapSearches },
       },
     }, {
-      onSuccess: () => { setQuery(''); setDepth(5); setNewOpen(false); },
+      onSuccess: () => { setQuery(''); setNewOpen(false); },
     });
   }
 
@@ -101,7 +115,7 @@ export function ResearchQueriesPage() {
             loading={runAll.isPending}
             disabled={stopAll.isPending}
           >Resume All</Button>
-          <Button size="sm" onClick={() => setNewOpen(!newOpen)}>+ New query</Button>
+          <Button size="sm" onClick={toggleNewOpen}>+ New query</Button>
         </div>
       </div>
 
