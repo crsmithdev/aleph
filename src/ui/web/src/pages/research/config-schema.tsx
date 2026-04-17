@@ -247,7 +247,7 @@ function Row({
           {field.label}
         </span>
         {field.isNew && (
-          <span className="ml-2 inline-block text-xs uppercase tracking-wider bg-green-500/10 text-green-400 px-2 py-0.5 rounded">new</span>
+          <span className="ml-2 inline-block text-sm uppercase tracking-wider bg-green-500/10 text-green-400 px-2 py-0.5 rounded">new</span>
         )}
         {field.hint && <span className="block text-sm text-text-muted mt-0.5">{field.hint}</span>}
       </div>

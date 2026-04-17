@@ -115,7 +115,7 @@ export function ResearchQueriesPage() {
             className="flex-1 bg-bg-primary border border-border-primary rounded-md px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
             autoFocus
           />
-          <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0" title="Max follow-up depth. Lower = more focused, higher = broader exploration.">
+          <label className="flex items-center gap-1.5 text-sm text-text-muted shrink-0" title="Max follow-up depth. Lower = more focused, higher = broader exploration.">
             Depth
             <input
               type="number"
@@ -126,7 +126,7 @@ export function ResearchQueriesPage() {
               className="w-12 bg-bg-primary border border-border-primary rounded px-1.5 py-1 text-sm text-text-primary text-center focus:outline-none focus:border-accent"
             />
           </label>
-          <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0" title="Hard cap on total threads spawned. Prevents runaway branching. 0 = unlimited.">
+          <label className="flex items-center gap-1.5 text-sm text-text-muted shrink-0" title="Hard cap on total threads spawned. Prevents runaway branching. 0 = unlimited.">
             Max threads
             <input
               type="number"
@@ -138,7 +138,7 @@ export function ResearchQueriesPage() {
               className="w-16 bg-bg-primary border border-border-primary rounded px-1.5 py-1 text-sm text-text-primary text-center focus:outline-none focus:border-accent"
             />
           </label>
-          <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0">
+          <label className="flex items-center gap-1.5 text-sm text-text-muted shrink-0">
             Provider
             <select
               value={provider}
@@ -150,7 +150,7 @@ export function ResearchQueriesPage() {
               <option value="ollama">Local</option>
             </select>
           </label>
-          <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0">
+          <label className="flex items-center gap-1.5 text-sm text-text-muted shrink-0">
             Model
             <input
               type="text"
@@ -160,7 +160,7 @@ export function ResearchQueriesPage() {
               className="w-36 bg-bg-primary border border-border-primary rounded px-1.5 py-1 text-sm text-text-primary focus:outline-none focus:border-accent"
             />
           </label>
-          <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0">
+          <label className="flex items-center gap-1.5 text-sm text-text-muted shrink-0">
             Min searches
             <input
               type="number"
@@ -171,7 +171,7 @@ export function ResearchQueriesPage() {
               className="w-12 bg-bg-primary border border-border-primary rounded px-1.5 py-1 text-sm text-text-primary text-center focus:outline-none focus:border-accent"
             />
           </label>
-          <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0 cursor-pointer select-none">
+          <label className="flex items-center gap-1.5 text-sm text-text-muted shrink-0 cursor-pointer select-none">
             <input
               type="checkbox"
               checked={gapAnalysis}
@@ -181,7 +181,7 @@ export function ResearchQueriesPage() {
             Gaps
           </label>
           {gapAnalysis && (
-            <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0">
+            <label className="flex items-center gap-1.5 text-sm text-text-muted shrink-0">
               Gap size
               <input
                 type="number"
@@ -202,7 +202,7 @@ export function ResearchQueriesPage() {
               clearDb.mutate();
             }}
             disabled={clearDb.isPending}
-            className="px-3 py-1.5 text-xs rounded border border-dashed border-border-secondary text-text-muted hover:text-red-400 hover:border-red-400/50 hover:bg-red-500/5 transition-colors shrink-0"
+            className="px-3 py-1.5 text-sm rounded border border-dashed border-border-secondary text-text-muted hover:text-red-400 hover:border-red-400/50 hover:bg-red-500/5 transition-colors shrink-0"
           >{clearDb.isPending ? 'Wiping...' : 'Wipe all'}</button>
         </form>
       )}
@@ -215,7 +215,7 @@ export function ResearchQueriesPage() {
               key={f.value}
               onClick={() => setStatusFilter(f.value)}
               className={clsx(
-                'px-3 py-1.5 rounded text-xs font-medium transition-colors',
+                'px-3 py-1.5 rounded text-sm font-medium transition-colors',
                 statusFilter === f.value
                   ? 'bg-bg-tertiary text-text-primary'
                   : 'text-text-muted hover:text-text-secondary hover:bg-bg-secondary'
@@ -251,7 +251,7 @@ export function ResearchQueriesPage() {
                     {session.title || session.seed_query}
                   </h3>
                   <span className={clsx(
-                    'flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium shrink-0',
+                    'flex items-center gap-1.5 px-2 py-0.5 rounded text-sm font-medium shrink-0',
                     statusBadgeColors[session.status]
                   )}>
                     <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', statusDotColors[session.status])} />
@@ -260,21 +260,21 @@ export function ResearchQueriesPage() {
                 </div>
 
                 {/* Seed query */}
-                <p className="text-xs text-text-muted mb-3 truncate">{session.seed_query_short || session.seed_query}</p>
+                <p className="text-sm text-text-muted mb-3 truncate">{session.seed_query_short || session.seed_query}</p>
 
                 {/* Summary preview */}
                 {session.summary ? (
-                  <p className="text-xs text-text-secondary leading-relaxed line-clamp-3 flex-1">
+                  <p className="text-sm text-text-secondary leading-relaxed line-clamp-3 flex-1">
                     {session.summary}
                   </p>
                 ) : (
-                  <p className="text-xs text-text-muted italic flex-1">No summary yet.</p>
+                  <p className="text-sm text-text-muted italic flex-1">No summary yet.</p>
                 )}
               </Link>
 
               {/* Footer */}
               <div className="px-4 pb-3 pt-2 border-t border-border-primary flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 text-xs text-text-muted">
+                <div className="flex items-center gap-3 text-sm text-text-muted">
                   <span>{new Date(session.created_at).toLocaleDateString()}</span>
                 </div>
                 <button

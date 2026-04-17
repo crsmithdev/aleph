@@ -53,7 +53,7 @@ function JobStatusBadge({ job }: { job: ResearchJob }) {
   const label = display === 'rate_limit' ? 'rate limit' : display;
   return (
     <span
-      className={clsx('px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap', statusColors[display] ?? 'bg-bg-tertiary text-text-muted')}
+      className={clsx('px-2 py-0.5 rounded text-sm font-medium whitespace-nowrap', statusColors[display] ?? 'bg-bg-tertiary text-text-muted')}
       title={display === 'rate_limit' ? job.error ?? undefined : undefined}
     >
       {label}
@@ -72,7 +72,7 @@ const workerDotColors: Record<string, string> = {
 
 function StatusBadge({ status }: { status: string }) {
   return (
-    <span className={clsx('px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap', statusColors[status] ?? 'bg-bg-tertiary text-text-muted')}>
+    <span className={clsx('px-2 py-0.5 rounded text-sm font-medium whitespace-nowrap', statusColors[status] ?? 'bg-bg-tertiary text-text-muted')}>
       {status}
     </span>
   );
@@ -134,11 +134,11 @@ function ErrorDisplay({ error }: { error: string }) {
     <div className="mt-1 relative">
       <button
         onClick={copy}
-        className="absolute top-1.5 right-1.5 text-xs text-text-muted hover:text-text-primary px-1.5 py-0.5 rounded bg-bg-primary/70 hover:bg-bg-primary border border-border-primary/50 transition-colors"
+        className="absolute top-1.5 right-1.5 text-sm text-text-muted hover:text-text-primary px-1.5 py-0.5 rounded bg-bg-primary/70 hover:bg-bg-primary border border-border-primary/50 transition-colors"
       >
         {copied ? '✓ Copied' : 'Copy'}
       </button>
-      <pre className="text-red-300 bg-red-900/20 rounded p-2 pr-16 font-mono text-xs whitespace-pre-wrap break-all overflow-auto max-h-48 leading-relaxed">
+      <pre className="text-red-300 bg-red-900/20 rounded p-2 pr-16 font-mono text-sm whitespace-pre-wrap break-all overflow-auto max-h-48 leading-relaxed">
         {formatted}
       </pre>
     </div>
@@ -151,29 +151,29 @@ function JobDetail({ job, queryMap }: { job: ResearchJob; queryMap: Record<strin
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div className="space-y-2.5">
         <div>
-          <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Job ID</p>
+          <p className="text-sm text-text-muted uppercase tracking-wider mb-0.5">Job ID</p>
           <p className="font-mono text-sm text-text-secondary break-all">{job.id}</p>
         </div>
         <div>
-          <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Query</p>
+          <p className="text-sm text-text-muted uppercase tracking-wider mb-0.5">Query</p>
           <Link to={`/research/${job.session_id}`} className="font-mono text-sm text-accent hover:underline">
             {queryMap[job.session_id] ?? job.session_id}
           </Link>
         </div>
         {job.thread_id && (
           <div>
-            <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Thread</p>
+            <p className="text-sm text-text-muted uppercase tracking-wider mb-0.5">Thread</p>
             <p className="font-mono text-sm text-text-secondary break-all">{job.thread_id}</p>
           </div>
         )}
         {job.claimed_by && (
           <div>
-            <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Worker</p>
+            <p className="text-sm text-text-muted uppercase tracking-wider mb-0.5">Worker</p>
             <p className="font-mono text-sm text-text-secondary">{job.claimed_by}</p>
           </div>
         )}
         <div>
-          <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Mode / Iterations</p>
+          <p className="text-sm text-text-muted uppercase tracking-wider mb-0.5">Mode / Iterations</p>
           <p className="text-sm text-text-secondary">
             {job.mode} &middot; {job.iterations_completed}{job.max_iterations ? `/${job.max_iterations}` : ''} iter
           </p>
@@ -181,30 +181,30 @@ function JobDetail({ job, queryMap }: { job: ResearchJob; queryMap: Record<strin
       </div>
       <div className="space-y-2.5">
         <div>
-          <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Created</p>
+          <p className="text-sm text-text-muted uppercase tracking-wider mb-0.5">Created</p>
           <p className="font-mono text-sm text-text-secondary">{job.created_at}</p>
         </div>
         {job.started_at && (
           <div>
-            <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Started</p>
+            <p className="text-sm text-text-muted uppercase tracking-wider mb-0.5">Started</p>
             <p className="font-mono text-sm text-text-secondary">{job.started_at}</p>
           </div>
         )}
         {job.completed_at && (
           <div>
-            <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Completed</p>
+            <p className="text-sm text-text-muted uppercase tracking-wider mb-0.5">Completed</p>
             <p className="font-mono text-sm text-text-secondary">{job.completed_at}</p>
           </div>
         )}
         {job.heartbeat_at && (
           <div>
-            <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Last Heartbeat</p>
+            <p className="text-sm text-text-muted uppercase tracking-wider mb-0.5">Last Heartbeat</p>
             <p className="font-mono text-sm text-text-secondary">{job.heartbeat_at}</p>
           </div>
         )}
         {job.error && (
           <div>
-            <p className="text-xs text-red-400 uppercase tracking-wider mb-0.5">Error</p>
+            <p className="text-sm text-red-400 uppercase tracking-wider mb-0.5">Error</p>
             <ErrorDisplay error={job.error} />
           </div>
         )}
@@ -248,7 +248,7 @@ function WorkerCard({
         </Button>
       </div>
 
-      <div className="flex items-center gap-4 text-xs text-text-muted">
+      <div className="flex items-center gap-4 text-sm text-text-muted">
         <span>PID {worker.pid ?? '—'}</span>
         <span>Up {fmtUptime(worker.uptimeMs)}</span>
         {worker.restarts > 0 && <span className="text-yellow-400">{worker.restarts} restarts</span>}
@@ -262,7 +262,7 @@ function WorkerCard({
           >
             {queryTitle ?? currentJob.session_id.slice(0, 12)}
           </Link>
-          <div className="flex items-center gap-3 flex-wrap text-xs text-text-muted">
+          <div className="flex items-center gap-3 flex-wrap text-sm text-text-muted">
             <StatusBadge status={currentJob.status} />
             {currentJob.thread_id
               ? <span className="font-mono">thread {currentJob.thread_id.slice(0, 8)}</span>
@@ -274,8 +274,8 @@ function WorkerCard({
       ) : (
         <div className="bg-bg-primary border border-border-primary/40 rounded p-3 flex items-center gap-3 opacity-50">
           <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', workerDotColors[displayStatus] ?? 'bg-bg-tertiary')} />
-          <span className="font-mono text-xs text-text-muted">worker-{worker.id}</span>
-          <span className="text-xs text-text-muted ml-auto">idle</span>
+          <span className="font-mono text-sm text-text-muted">worker-{worker.id}</span>
+          <span className="text-sm text-text-muted ml-auto">idle</span>
         </div>
       )}
     </div>
@@ -604,7 +604,7 @@ export function ResearchWorkersPage() {
       {/* Worker cards */}
       {workers.length > 0 && (
         <div>
-          <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Workers</p>
+          <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Workers</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {workers.map((w) => (
               <WorkerCard
@@ -622,7 +622,7 @@ export function ResearchWorkersPage() {
 
       {/* Queued jobs */}
       <div>
-        <p className="text-xs text-text-muted uppercase tracking-wide mb-3">
+        <p className="text-sm text-text-muted uppercase tracking-wide mb-3">
           Queued Jobs {pendingJobs.length > 0 && <span className="normal-case ml-1 text-yellow-400">({pendingJobs.length})</span>}
         </p>
         <div className="bg-bg-secondary border border-border-primary rounded-lg overflow-hidden">
@@ -638,14 +638,14 @@ export function ResearchWorkersPage() {
       {/* Performance charts */}
       {stats && stats.byDay.length > 0 && (
         <div>
-          <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Performance</p>
+          <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Performance</p>
           <PerformanceCharts byDay={stats.byDay} />
         </div>
       )}
 
       {/* Job history */}
       <div>
-        <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Job History</p>
+        <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Job History</p>
         <div className="bg-bg-secondary border border-border-primary rounded-lg overflow-hidden">
           <JobHistoryTable
             jobs={historyJobs}

@@ -1509,7 +1509,7 @@ function LiveView({
                     {thread.short_query ?? thread.query}
                   </span>
                   {threadFindings.length > 0 && (
-                    <span className="text-xs font-mono text-success shrink-0 leading-5">{threadFindings.length}✦</span>
+                    <span className="text-sm font-mono text-success shrink-0 leading-5">{threadFindings.length}✦</span>
                   )}
                 </div>
                 {thread.status === 'active' && (
@@ -1518,10 +1518,10 @@ function LiveView({
                   </div>
                 )}
                 <div className="flex items-center gap-1">
-                  <span className={clsx('text-xs px-1 py-0.5 rounded shrink-0', liveOriginColor[thread.origin] ?? 'bg-bg-tertiary text-text-muted')}>
+                  <span className={clsx('text-sm px-1 py-0.5 rounded shrink-0', liveOriginColor[thread.origin] ?? 'bg-bg-tertiary text-text-muted')}>
                     {thread.origin.replace(/_/g, ' ')}
                   </span>
-                  <span className="text-xs font-mono text-text-muted ml-auto">p:{thread.priority.toFixed(2)}</span>
+                  <span className="text-sm font-mono text-text-muted ml-auto">p:{thread.priority.toFixed(2)}</span>
                   <button
                     title="Increase priority"
                     onClick={e => { e.stopPropagation(); updateThread.mutate({ id: thread.id, sessionId, priority: Math.min(1.0, thread.priority + 0.1) }); }}
@@ -2765,7 +2765,7 @@ function SettingsView({
                   prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
                 )}
                 className={clsx(
-                  'px-2 py-0.5 text-xs rounded-md font-medium transition-colors capitalize',
+                  'px-2 py-0.5 text-sm rounded-md font-medium transition-colors capitalize',
                   scheduleDays.includes(day)
                     ? 'bg-accent text-white'
                     : 'text-text-muted hover:text-text-primary hover:bg-bg-tertiary border border-border-primary'
@@ -2926,13 +2926,13 @@ export function ResearchQueryDetailPage() {
               <div className="flex items-center gap-1">
                 {(['burst', 'background', 'scheduled'] as const).map(m => (
                   <button key={m} onClick={() => setRunMode(m)}
-                    className={clsx('rounded-md px-2.5 py-1 text-xs font-medium transition-colors capitalize',
+                    className={clsx('rounded-md px-2.5 py-1 text-sm font-medium transition-colors capitalize',
                       selectedMode === m ? 'bg-accent text-white' : 'text-text-muted hover:text-text-primary hover:bg-bg-tertiary'
                     )}
                   >{m}</button>
                 ))}
                 <button onClick={handleToggleEnabled}
-                  className={clsx('rounded-md px-2.5 py-1 text-xs font-medium transition-colors ml-1',
+                  className={clsx('rounded-md px-2.5 py-1 text-sm font-medium transition-colors ml-1',
                     isEnabled ? 'bg-success/20 text-success hover:bg-success/30' : 'text-text-muted hover:text-text-primary hover:bg-bg-tertiary border border-border-primary'
                   )}
                 >{isEnabled ? 'Enabled' : 'Enable'}</button>

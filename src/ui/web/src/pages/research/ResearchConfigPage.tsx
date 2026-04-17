@@ -36,7 +36,7 @@ function SaveIndicator({ visible }: { visible: boolean }) {
   return (
     <span
       className={clsx(
-        'inline-flex items-center gap-1 text-xs text-green-400 transition-opacity duration-300',
+        'inline-flex items-center gap-1 text-sm text-green-400 transition-opacity duration-300',
         visible ? 'opacity-100' : 'opacity-0'
       )}
     >
@@ -87,8 +87,8 @@ function KeyField({
             placeholder="Paste API key..."
             className={clsx(inputCls, 'flex-1')}
           />
-          <button onClick={handleSave} className="text-xs text-accent hover:text-accent/80 font-medium">Save</button>
-          <button onClick={() => { setEditing(false); setValue(''); }} className="text-xs text-text-muted hover:text-text-primary">Cancel</button>
+          <button onClick={handleSave} className="text-sm text-accent hover:text-accent/80 font-medium">Save</button>
+          <button onClick={() => { setEditing(false); setValue(''); }} className="text-sm text-text-muted hover:text-text-primary">Cancel</button>
         </div>
       </div>
     );
@@ -100,12 +100,12 @@ function KeyField({
       {keyInfo.set ? (
         <div className="flex items-center gap-2">
           <span className="text-sm text-text-muted font-mono flex-1 truncate" title={keyInfo.masked}>{elideKey(keyInfo.masked)}</span>
-          <button onClick={() => setEditing(true)} className="text-xs text-text-muted hover:text-text-primary shrink-0">Change</button>
+          <button onClick={() => setEditing(true)} className="text-sm text-text-muted hover:text-text-primary shrink-0">Change</button>
         </div>
       ) : (
         <div className="flex items-center gap-2">
           <span className="text-sm text-text-muted italic flex-1">Not configured</span>
-          <button onClick={() => setEditing(true)} className="text-xs text-accent hover:text-accent/80 font-medium shrink-0">Change</button>
+          <button onClick={() => setEditing(true)} className="text-sm text-accent hover:text-accent/80 font-medium shrink-0">Change</button>
         </div>
       )}
     </div>
@@ -227,7 +227,7 @@ function ModelCombobox({
             >
               <span className="font-mono truncate">{model}</span>
               {recentModels.includes(model) && (
-                <span className="text-xs text-text-muted ml-2 shrink-0">used</span>
+                <span className="text-sm text-text-muted ml-2 shrink-0">used</span>
               )}
             </li>
           ))}
