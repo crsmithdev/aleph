@@ -2433,106 +2433,209 @@ function EnvBadge({ set, label }: { set: boolean; label: string }) {
     : <span className="inline-flex items-center gap-1 text-sm font-medium text-error"><span className="w-1.5 h-1.5 rounded-full bg-error inline-block" />{label} not set</span>;
 }
 
+function formatFetched(iso: string | null | undefined): string {
+  if (!iso) return '-';
+  const secs = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (secs < 60) return `${secs}s ago`;
+  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+  if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
+  if (secs < 172800) return 'yesterday';
+  return `${Math.floor(secs / 86400)}d ago`;
+}
+
+function kbSize(n: number): string {
+  if (n < 1024) return `${n}b`;
+  return `${Math.round(n / 1024)}kB`;
+}
+
+function SourceExtractionPill({ src }: { src: Source }) {
+  const s = src.extraction_status;
+  const base = 'inline-flex items-center text-sm px-2 py-[1px] border rounded whitespace-nowrap';
+  if (s === 'extracted') {
+    const size = src.extracted_text ? ` · ${kbSize(src.extracted_text.length)}` : '';
+    return (
+      <span className={clsx(base, 'bg-success/15 text-success border-success/30')}>
+        extracted{size}
+      </span>
+    );
+  }
+  if (s === 'failed') {
+    const label = src.error ? `${src.error.slice(0, 12)} · retry` : 'failed · retry';
+    return (
+      <span className={clsx(base, 'bg-error/15 text-error border-error/30')}>
+        {label}
+      </span>
+    );
+  }
+  if (s === 'claimed') {
+    return (
+      <span className={clsx(base, 'bg-warning/15 text-warning border-warning/30')}>
+        extracting&hellip;
+      </span>
+    );
+  }
+  if (s === 'skipped') {
+    return (
+      <span className={clsx(base, 'bg-bg-tertiary text-text-muted border-border-primary/30')}>
+        snippet only
+      </span>
+    );
+  }
+  return (
+    <span className={clsx(base, 'bg-warning/15 text-warning border-warning/30')}>
+      pending
+    </span>
+  );
+}
+
 function SourcesView({ sessionId }: { sessionId: string }) {
-  const [filter, setFilter] = useState<SourceExtractionStatus | 'all'>('all');
-  const { data, isLoading } = useSources(sessionId, filter);
+  const { data, isLoading } = useSources(sessionId);
+  const { data: findings } = useResearchFindings(sessionId);
   const retry = useRetrySource();
   const skip = useSkipSource();
+  const [busy, setBusy] = useState(false);
 
   if (isLoading) return <PageLoading />;
   const items: Source[] = data?.items ?? [];
   const counts = data?.counts ?? { pending: 0, extracted: 0, failed: 0, skipped: 0 };
   const total = counts.pending + counts.extracted + counts.failed + counts.skipped;
+  const inProgress = items.filter(s => s.extraction_status === 'claimed').length;
 
-  const tabs: Array<{ key: SourceExtractionStatus | 'all'; label: string; n: number }> = [
-    { key: 'all', label: 'All', n: total },
-    { key: 'pending', label: 'Pending', n: counts.pending },
-    { key: 'extracted', label: 'Extracted', n: counts.extracted },
-    { key: 'failed', label: 'Failed', n: counts.failed },
-    { key: 'skipped', label: 'Skipped', n: counts.skipped },
-  ];
+  // finding counts per url
+  const findingsByUrl = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const f of findings ?? []) {
+      const urls = f.source_url_meta?.length ? f.source_url_meta.map(s => s.url) : f.source_urls;
+      for (const u of urls) m.set(u, (m.get(u) ?? 0) + 1);
+    }
+    return m;
+  }, [findings]);
 
-  const statusBadge = (s: SourceExtractionStatus) => {
-    const map: Record<SourceExtractionStatus, string> = {
-      pending: 'text-text-muted bg-bg-secondary',
-      claimed: 'text-accent bg-accent/10',
-      extracted: 'text-success bg-success/10',
-      failed: 'text-error bg-error/10',
-      skipped: 'text-text-muted bg-bg-secondary',
-    };
-    return <span className={clsx('px-1.5 py-0.5 rounded text-sm font-medium', map[s])}>{s}</span>;
-  };
+  async function retryAllFailed() {
+    setBusy(true);
+    try {
+      for (const s of items.filter(s => s.extraction_status === 'failed')) {
+        await retry.mutateAsync({ sourceId: s.id, sessionId });
+      }
+    } finally { setBusy(false); }
+  }
+
+  async function extractAllSnippetOnly() {
+    setBusy(true);
+    try {
+      for (const s of items.filter(s => s.extraction_status === 'skipped')) {
+        await retry.mutateAsync({ sourceId: s.id, sessionId });
+      }
+    } finally { setBusy(false); }
+  }
 
   return (
-    <div className="max-w-[72ch] mx-auto">
-      <div className="flex items-center gap-2 mb-4 pb-2 border-b border-border">
-        {tabs.map(t => (
-          <button key={t.key} onClick={() => setFilter(t.key)}
-            className={clsx('px-2 py-1 text-sm rounded transition-colors',
-              filter === t.key ? 'bg-bg-secondary text-text-primary' : 'text-text-muted hover:text-text-secondary')}>
-            {t.label} <span className="text-text-muted">({t.n})</span>
-          </button>
-        ))}
+    <div>
+      {/* Stats + bulk-action header */}
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+        <div className="flex items-center gap-5 text-sm">
+          <span><span className="text-text-primary font-medium tabular-nums">{total}</span>{' '}<span className="text-text-muted">total</span></span>
+          <span><span className="text-success font-medium tabular-nums">{counts.extracted}</span>{' '}<span className="text-text-muted">extracted</span></span>
+          <span><span className="text-warning font-medium tabular-nums">{counts.skipped}</span>{' '}<span className="text-text-muted">snippet only</span></span>
+          <span><span className="text-info font-medium tabular-nums">{inProgress}</span>{' '}<span className="text-text-muted">in progress</span></span>
+          <span><span className="text-error font-medium tabular-nums">{counts.failed}</span>{' '}<span className="text-text-muted">failed</span></span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="secondary" onClick={extractAllSnippetOnly} disabled={busy || counts.skipped === 0}>
+            Extract all (snippet only)
+          </Button>
+          <Button size="sm" variant="secondary" onClick={retryAllFailed} disabled={busy || counts.failed === 0}>
+            Retry failed
+          </Button>
+        </div>
       </div>
 
-      {items.length === 0 ? (
-        <div className="text-sm text-text-muted py-8 text-center">No sources in this bucket.</div>
-      ) : (
-        <ul className="space-y-2">
-          {items.map(src => (
-            <li key={src.id} className="border border-border rounded p-3 bg-bg-primary">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    {statusBadge(src.extraction_status)}
-                    {src.attempt_count > 0 && (
-                      <span className="text-sm text-text-muted">attempts: {src.attempt_count}</span>
+      {/* Table */}
+      <div className="border border-border-primary/40 rounded bg-bg-primary overflow-hidden">
+        <table className="w-full text-sm border-collapse">
+          <colgroup>
+            <col style={{ width: '40%' }} />
+            <col style={{ width: '14%' }} />
+            <col style={{ width: '22%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '10%' }} />
+            <col style={{ width: '6%' }} />
+          </colgroup>
+          <thead>
+            <tr className="border-b border-border-primary/40 text-text-muted text-left">
+              <th className="font-medium px-3 py-2">Source</th>
+              <th className="font-medium px-3 py-2">Extraction</th>
+              <th className="font-medium px-3 py-2">Concepts linked</th>
+              <th className="font-medium px-3 py-2 text-right">Findings</th>
+              <th className="font-medium px-3 py-2">Fetched</th>
+              <th className="font-medium px-3 py-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {items.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-3 py-8 text-center text-text-muted">
+                  No sources registered for this query yet.
+                </td>
+              </tr>
+            ) : items.map(src => {
+              const findingCount = findingsByUrl.get(src.url) ?? 0;
+              const canExtract = src.extraction_status === 'skipped' || src.extraction_status === 'failed';
+              const canSkip = src.extraction_status === 'pending' || src.extraction_status === 'claimed';
+              const action = canExtract ? 'extract' : canSkip ? 'skip' : 'open';
+              return (
+                <tr key={src.id} className="border-b border-border-primary/30 last:border-b-0 align-top">
+                  <td className="px-3 py-2.5">
+                    <div className="text-text-primary font-medium truncate" title={src.title || undefined}>
+                      {src.title || domainFrom(src.url)}
+                    </div>
+                    <div className="text-sm text-text-muted truncate" title={src.url}>
+                      {src.url.replace(/^https?:\/\//, '')}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <SourceExtractionPill src={src} />
+                  </td>
+                  <td className="px-3 py-2.5 text-text-muted">
+                    <span className="text-sm">&mdash;</span>
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-text-secondary">
+                    {findingCount}
+                  </td>
+                  <td className="px-3 py-2.5 text-sm text-text-muted">
+                    {formatFetched(src.fetched_at ?? src.updated_at)}
+                  </td>
+                  <td className="px-3 py-2.5 text-sm">
+                    {action === 'extract' && (
+                      <button
+                        onClick={() => retry.mutate({ sourceId: src.id, sessionId })}
+                        disabled={retry.isPending}
+                        className="text-accent hover:underline disabled:opacity-50"
+                      >
+                        extract
+                      </button>
                     )}
-                  </div>
-                  <a href={src.url} target="_blank" rel="noopener noreferrer"
-                    className="block text-sm font-medium text-accent hover:underline truncate">
-                    {src.title || src.url}
-                  </a>
-                  <div className="text-sm text-text-muted truncate mt-0.5">{src.url}</div>
-                  {src.snippet && (
-                    <div className="text-sm text-text-secondary mt-1.5 line-clamp-2">{src.snippet}</div>
-                  )}
-                  {src.error && (
-                    <div className="text-sm text-error mt-1.5 font-mono">{src.error}</div>
-                  )}
-                  {src.extracted_text && (
-                    <details className="mt-2">
-                      <summary className="text-sm text-text-muted cursor-pointer hover:text-text-secondary">
-                        Extracted text ({src.extracted_text.length.toLocaleString()} chars)
-                      </summary>
-                      <pre className="mt-2 text-sm bg-bg-secondary p-2 rounded max-h-64 overflow-auto whitespace-pre-wrap">
-                        {src.extracted_text.slice(0, 4000)}
-                        {src.extracted_text.length > 4000 && '\n\n...[truncated]'}
-                      </pre>
-                    </details>
-                  )}
-                </div>
-                <div className="flex flex-col gap-1.5 shrink-0">
-                  {(src.extraction_status === 'failed' || src.extraction_status === 'skipped') && (
-                    <Button size="sm" variant="secondary"
-                      onClick={() => retry.mutate({ sourceId: src.id, sessionId })}
-                      disabled={retry.isPending}>
-                      Retry
-                    </Button>
-                  )}
-                  {src.extraction_status === 'pending' && (
-                    <Button size="sm" variant="secondary"
-                      onClick={() => skip.mutate({ sourceId: src.id, sessionId })}
-                      disabled={skip.isPending}>
-                      Skip
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+                    {action === 'skip' && (
+                      <button
+                        onClick={() => skip.mutate({ sourceId: src.id, sessionId })}
+                        disabled={skip.isPending}
+                        className="text-text-muted hover:text-text-secondary hover:underline disabled:opacity-50"
+                      >
+                        skip
+                      </button>
+                    )}
+                    {action === 'open' && (
+                      <a href={src.url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                        open
+                      </a>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
