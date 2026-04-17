@@ -63,6 +63,9 @@ export interface SessionConfig {
     enabled: boolean;
     max_gap_searches: number;
   };
+  llm_max_output_tokens: number;     // per-call LLM output ceiling
+  snippet_synthesis_chars: number;   // chars per search result passed to synthesis
+  snippet_display_chars: number;     // chars per source stored for citation UI
 }
 
 export interface PerturbationConfig {
@@ -117,6 +120,9 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
     enabled: true,
     max_gap_searches: 2,
   },
+  llm_max_output_tokens: 8192,
+  snippet_synthesis_chars: 3000,
+  snippet_display_chars: 200,
   perturbation: {
     depth_scaling: true,
     chain_length: 2,

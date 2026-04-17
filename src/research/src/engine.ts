@@ -14,9 +14,14 @@ import * as findings from './services/findings.js';
 import * as steps from './services/steps.js';
 import * as plans from './services/plans.js';
 
+export interface SearchOptions {
+  synthesisChars: number;
+  displayChars: number;
+}
+
 export interface LLMProvider {
   complete(model: string, prompt: string, maxTokens: number): Promise<LLMResult>;
-  searchWeb(model: string, query: string): Promise<WebSearchResult>;
+  searchWeb(model: string, query: string, options?: SearchOptions): Promise<WebSearchResult>;
   embed?(text: string): Promise<number[]>;
 }
 
@@ -744,7 +749,10 @@ Return ONLY a JSON array of search query strings. No other text.`,
     const results = await Promise.all(queries.map(async (query) => {
       const startTime = Date.now();
       try {
-        const result = await this.provider.searchWeb(config.model, query);
+        const result = await this.provider.searchWeb(config.model, query, {
+          synthesisChars: config.snippet_synthesis_chars,
+          displayChars: config.snippet_display_chars,
+        });
         const cost = calculateCost(result.model, result.promptTokens, result.completionTokens);
 
         steps.createStep(this.sqlite, {
@@ -1621,7 +1629,7 @@ Write the full article in markdown.`,
     label?: string
   ): Promise<LLMResult & { cost: number; stepId: string | null }> {
     const startTime = Date.now();
-    const result = await this.provider.complete(model, prompt, 8192);
+    const result = await this.provider.complete(model, prompt, config.llm_max_output_tokens);
 
     const cost = calculateCost(result.model, result.promptTokens, result.completionTokens);
 
