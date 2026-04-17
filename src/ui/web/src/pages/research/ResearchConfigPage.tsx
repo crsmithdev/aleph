@@ -4,6 +4,7 @@ import { PageHeader } from '../../components/layout/PageHeader';
 import { Icon } from '../../components/ui/Icon';
 import { useProviderConfig, useUpdateProviderConfig } from '../../api/research-hooks';
 import { PageLoading } from '../../components/ui/Spinner';
+import { ResearchDefaultsPanel } from './ResearchDefaultsPanel';
 
 const inputCls =
   'bg-bg-primary border border-border-primary rounded px-2.5 py-2 text-sm text-text-primary focus:outline-none focus:border-accent w-full';
@@ -260,7 +261,42 @@ function ProviderButton({
   );
 }
 
+type ConfigTab = 'providers' | 'defaults';
+
 export function ResearchConfigPage() {
+  const [tab, setTab] = useState<ConfigTab>('providers');
+
+  return (
+    <div className="flex flex-col gap-4">
+      <PageHeader title="Research Config" />
+
+      <div className="flex gap-1 border-b border-border-primary">
+        <TabButton active={tab === 'providers'} onClick={() => setTab('providers')}>Providers</TabButton>
+        <TabButton active={tab === 'defaults'} onClick={() => setTab('defaults')}>Defaults</TabButton>
+      </div>
+
+      {tab === 'providers' ? <ProvidersPanel /> : <ResearchDefaultsPanel />}
+    </div>
+  );
+}
+
+function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={clsx(
+        'px-4 py-2 text-sm border-b-2 -mb-px transition-colors',
+        active
+          ? 'border-accent text-text-primary'
+          : 'border-transparent text-text-muted hover:text-text-primary'
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ProvidersPanel() {
   const { data: config, isLoading } = useProviderConfig();
   const update = useUpdateProviderConfig();
   const [saved, setSaved] = useState(false);
@@ -284,7 +320,6 @@ export function ResearchConfigPage() {
 
   return (
     <div className="flex flex-col gap-6 max-w-2xl">
-      <PageHeader title="Providers" />
 
       {/* LLM Provider */}
       <div>

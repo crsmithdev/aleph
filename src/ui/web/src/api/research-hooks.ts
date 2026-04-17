@@ -261,6 +261,70 @@ export function useUpdateProviderConfig() {
   });
 }
 
+// --- Research defaults (persisted SessionConfig) ---
+export interface ResearchDefaults {
+  budget_daily_usd: number;
+  budget_total_usd: number | null;
+  budget_alert_threshold: number;
+  max_thread_depth: number;
+  max_total_threads: number;
+  p_serendipity: number;
+  max_perturbation_probability: number;
+  novelty_threshold: number;
+  dedup_similarity_threshold: number;
+  diminishing_returns_threshold: number;
+  diminishing_returns_window: number;
+  min_delay_between_steps_ms: number;
+  max_steps_per_hour: number;
+  max_concurrent_threads: number;
+  model: string;
+  providers: { primary: 'openrouter'; openrouter_models: string[] };
+  schedule: { mode: string; active_windows: unknown[]; timezone: string };
+  topic_coherence: { seed_similarity_min: number; hop_similarity_min: number };
+  follow_up: { min_count: number; max_count: number; max_retries: number; similarity_threshold: number };
+  perturbation: {
+    depth_scaling: boolean;
+    chain_length: number;
+    strategy_cooldown: number;
+    forced_diversity_threshold: number;
+    strategy_weights: Record<string, number>;
+  };
+  burst_iterations: number;
+  min_searches_per_thread: number;
+  fetch_source_text: boolean;
+  gap_analysis: { enabled: boolean; max_gap_searches: number };
+  llm_max_output_tokens: number;
+  snippet_synthesis_chars: number;
+  snippet_display_chars: number;
+}
+
+export function useResearchDefaults() {
+  return useQuery({
+    queryKey: ['research-defaults'],
+    queryFn: () => api.get<ResearchDefaults>('/research/defaults'),
+    staleTime: 30_000,
+  });
+}
+
+export function useUpdateResearchDefaults() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: Partial<ResearchDefaults>) =>
+      api.put<ResearchDefaults>('/research/defaults', patch),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['research-defaults'] });
+    },
+  });
+}
+
+export function useResetResearchDefaults() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<ResearchDefaults>('/research/defaults/reset', {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['research-defaults'] }),
+  });
+}
+
 // --- Queries ---
 export function useResearchQueries(status?: string) {
   const params = status ? `?status=${status}` : '';
