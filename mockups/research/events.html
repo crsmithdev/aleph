@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Events · Research</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  .top-metrics{
+    display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px
+  }
+  .metric-card{
+    background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;padding:14px 16px
+  }
+  .metric-card .lbl{color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+  .metric-card .val{color:var(--text-primary);font-size:22px;font-weight:600;margin-top:6px;font-variant-numeric:tabular-nums}
+  .metric-card .sub{color:var(--text-muted);font-size:11px;margin-top:3px}
+  .metric-card.green .val{color:var(--success)}
+  .metric-card.amber .val{color:var(--warning)}
+
+  .layout{display:grid;grid-template-columns:1fr 360px;gap:16px}
+
+  .feed{background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .feed-head{display:flex;justify-content:space-between;align-items:center;padding:12px 18px;border-bottom:1px solid var(--border)}
+  .feed-head .live{display:flex;align-items:center;gap:6px;color:var(--success);font-size:11px}
+  .feed-head .live .dot{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 0 3px rgba(152,195,121,.2)}
+  .filters{display:flex;gap:6px}
+  .chip{background:var(--bg-primary);border:1px solid var(--border);color:var(--text-secondary);padding:3px 9px;border-radius:12px;font-size:11px;cursor:pointer}
+  .chip.on{background:var(--accent-dim);border-color:var(--accent);color:#fff}
+
+  .event{display:grid;grid-template-columns:78px 94px 180px 1fr 80px;gap:14px;padding:10px 18px;border-bottom:1px solid var(--border);font-size:12px;align-items:center}
+  .event:last-child{border-bottom:none}
+  .event .t{color:var(--text-muted);font-variant-numeric:tabular-nums}
+  .event .kind{font-size:11px;padding:1px 8px;border-radius:8px;background:var(--bg-tertiary);color:var(--text-secondary);justify-self:start}
+  .event.search .kind{color:var(--info)}
+  .event.synth .kind{color:var(--accent)}
+  .event.finding .kind{color:var(--success)}
+  .event.dedup .kind{color:var(--warning)}
+  .event.extract .kind{color:var(--info)}
+  .event.error .kind{color:var(--error)}
+  .event .sess{color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .event .sess a{color:var(--text-secondary)}
+  .event .sess a:hover{color:var(--accent)}
+  .event .cost{color:var(--text-muted);font-family:ui-monospace,monospace;text-align:right;white-space:nowrap}
+  .event strong{color:var(--text-primary);font-weight:500}
+
+  /* right panel */
+  .panel-card{background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;margin-bottom:14px;overflow:hidden}
+  .panel-card-head{padding:11px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+  .panel-card-head h3{margin:0;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em}
+  .panel-card-body{padding:12px 16px}
+
+  .worker{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px dashed var(--border);font-size:12px}
+  .worker:last-child{border-bottom:none}
+  .worker .name{display:flex;align-items:center;gap:8px;color:var(--text-primary)}
+  .worker .status{font-size:11px;color:var(--text-muted)}
+  .worker .dot{width:7px;height:7px;border-radius:50%;background:var(--success)}
+  .worker.idle .dot{background:var(--text-muted)}
+  .worker.err .dot{background:var(--error)}
+
+  .mini-bar{height:3px;background:var(--bg-tertiary);border-radius:2px;overflow:hidden;width:80px;margin-top:4px}
+  .mini-bar > span{display:block;height:100%;background:var(--accent)}
+
+  .queue-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:12px;border-bottom:1px dashed var(--border)}
+  .queue-row:last-child{border-bottom:none}
+  .queue-row .host{color:var(--text-primary);font-family:ui-monospace,monospace;font-size:11px}
+
+  .spend-bar{display:flex;height:14px;border-radius:3px;overflow:hidden;margin-top:8px}
+  .spend-bar span{display:block;height:100%}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">Construct</div>
+    <div class="sidebar-section">Research</div>
+    <a class="sidebar-link" href="queries.html"><span class="dot"></span>Queries</a>
+    <a class="sidebar-link active" href="events.html"><span class="dot"></span>Events</a>
+    <a class="sidebar-link" href="#"><span class="dot"></span>Workers</a>
+    <a class="sidebar-link" href="#"><span class="dot"></span>Monitors</a>
+    <a class="sidebar-link" href="../research-config/index.html"><span class="dot"></span>Config</a>
+  </aside>
+
+  <main class="main">
+    <div class="page-header">
+      <div>
+        <h1>Events</h1>
+        <p class="sub">All activity across research queries · live</p>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn">Pause all</button>
+        <button class="btn">Export CSV</button>
+      </div>
+    </div>
+
+    <div class="top-metrics">
+      <div class="metric-card"><div class="lbl">Active sessions</div><div class="val">3</div><div class="sub">of 14 total</div></div>
+      <div class="metric-card"><div class="lbl">Steps · last hour</div><div class="val">148</div><div class="sub">▲ 22% vs prior</div></div>
+      <div class="metric-card green"><div class="lbl">Findings · 24h</div><div class="val">87</div><div class="sub">42 new concepts</div></div>
+      <div class="metric-card amber"><div class="lbl">Extraction queue</div><div class="val">47</div><div class="sub">3 running · 5 failed</div></div>
+      <div class="metric-card"><div class="lbl">Spend · today</div><div class="val">$4.62</div>
+        <div class="spend-bar">
+          <span style="width:42%;background:var(--accent)" title="synthesis"></span>
+          <span style="width:28%;background:var(--info)" title="extraction"></span>
+          <span style="width:18%;background:var(--warning)" title="follow-up"></span>
+          <span style="width:12%;background:var(--success)" title="doc-gen"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="layout">
+      <div class="feed">
+        <div class="feed-head">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span class="live"><span class="dot"></span> LIVE</span>
+            <span class="tiny dim">Showing 40 of ~2,100 events · last 1h</span>
+          </div>
+          <div class="filters">
+            <span class="chip on">All</span>
+            <span class="chip">Findings</span>
+            <span class="chip">Searches</span>
+            <span class="chip">Synthesis</span>
+            <span class="chip">Extraction</span>
+            <span class="chip">Errors</span>
+          </div>
+        </div>
+
+        <div class="event finding">
+          <div class="t">12:03:41</div>
+          <div class="kind">finding</div>
+          <div class="sess"><a href="query-detail.html#doc">Solid-state batteries</a></div>
+          <div><strong>CATL condensed-matter battery</strong> — polymer-ceramic hybrid; aviation certification H2 2026 · 2 new concepts</div>
+          <div class="cost">novelty 0.71</div>
+        </div>
+        <div class="event dedup">
+          <div class="t">12:03:38</div>
+          <div class="kind">dedup</div>
+          <div class="sess"><a href="#">Solid-state batteries</a></div>
+          <div>Flagged 0.91 similar to f-044 · novelty capped</div>
+          <div class="cost"></div>
+        </div>
+        <div class="event synth">
+          <div class="t">12:03:12</div>
+          <div class="kind">synth</div>
+          <div class="sess"><a href="#">Solid-state batteries</a></div>
+          <div>claude-opus-4.7 · in 4,812 · out 1,108</div>
+          <div class="cost">$0.091</div>
+        </div>
+        <div class="event extract">
+          <div class="t">12:02:49</div>
+          <div class="kind">extract</div>
+          <div class="sess"><a href="#">Solid-state batteries</a></div>
+          <div>catl.com/news/2026/condensed-matter-aviation → 8,124 chars</div>
+          <div class="cost"></div>
+        </div>
+        <div class="event search">
+          <div class="t">12:02:31</div>
+          <div class="kind">search</div>
+          <div class="sess"><a href="#">Solid-state batteries</a></div>
+          <div>Tavily · "CATL condensed matter battery 2026 aviation" · 10 results · 3 new</div>
+          <div class="cost">$0.006</div>
+        </div>
+        <div class="event finding">
+          <div class="t">12:01:55</div>
+          <div class="kind">finding</div>
+          <div class="sess"><a href="#">Fusion power startups</a></div>
+          <div><strong>Commonwealth Fusion SPARC first-plasma</strong> slips to Q2 2027 · novelty 0.66</div>
+          <div class="cost"></div>
+        </div>
+        <div class="event search">
+          <div class="t">12:01:22</div>
+          <div class="kind">search</div>
+          <div class="sess"><a href="#">Fusion power startups</a></div>
+          <div>Brave · "Commonwealth Fusion SPARC first plasma 2026 delay" · 10 results</div>
+          <div class="cost">$0.004</div>
+        </div>
+        <div class="event finding">
+          <div class="t">12:01:04</div>
+          <div class="kind">finding</div>
+          <div class="sess"><a href="#">Solid-state batteries</a></div>
+          <div><strong>QuantumScape FlexFrame sampling</strong> to PowerCo · novelty 0.84</div>
+          <div class="cost"></div>
+        </div>
+        <div class="event synth">
+          <div class="t">12:00:38</div>
+          <div class="kind">synth</div>
+          <div class="sess"><a href="#">Solid-state batteries</a></div>
+          <div>claude-opus-4.7 · in 5,920 · out 1,402</div>
+          <div class="cost">$0.118</div>
+        </div>
+        <div class="event extract">
+          <div class="t">12:00:02</div>
+          <div class="kind">extract</div>
+          <div class="sess"><a href="#">Solid-state batteries</a></div>
+          <div>quantumscape.com/investors/flexframe-2026 → 18,204 chars</div>
+          <div class="cost"></div>
+        </div>
+        <div class="event error">
+          <div class="t">11:59:44</div>
+          <div class="kind">error</div>
+          <div class="sess"><a href="#">Solid-state batteries</a></div>
+          <div>Extraction 403 · idemitsu.com/assets/pdf/solid-electrolyte.pdf · retry 2/3</div>
+          <div class="cost"></div>
+        </div>
+        <div class="event finding">
+          <div class="t">11:58:30</div>
+          <div class="kind">finding</div>
+          <div class="sess"><a href="#">Fusion power startups</a></div>
+          <div><strong>Helion Polaris</strong> pulse-cadence achieved 10 Hz · novelty 0.77</div>
+          <div class="cost"></div>
+        </div>
+        <div class="event synth">
+          <div class="t">11:58:02</div>
+          <div class="kind">synth</div>
+          <div class="sess"><a href="#">Fusion power startups</a></div>
+          <div>claude-opus-4.7 · in 4,020 · out 948</div>
+          <div class="cost">$0.079</div>
+        </div>
+        <div class="event search">
+          <div class="t">11:57:31</div>
+          <div class="kind">search</div>
+          <div class="sess"><a href="#">Fusion power startups</a></div>
+          <div>Tavily · "Helion Polaris pulse frequency 2026"</div>
+          <div class="cost">$0.006</div>
+        </div>
+        <div class="event dedup">
+          <div class="t">11:56:18</div>
+          <div class="kind">dedup</div>
+          <div class="sess"><a href="#">Solid-state batteries</a></div>
+          <div>Candidate 0.88 similar to f-039 · skipped</div>
+          <div class="cost"></div>
+        </div>
+      </div>
+
+      <!-- right rail -->
+      <div>
+        <div class="panel-card">
+          <div class="panel-card-head"><h3>Workers</h3><span class="tiny dim">4 active</span></div>
+          <div class="panel-card-body">
+            <div class="worker"><div class="name"><span class="dot"></span>worker-01</div><div style="text-align:right"><div class="status">synth · thr-q18</div><div class="mini-bar"><span style="width:62%"></span></div></div></div>
+            <div class="worker"><div class="name"><span class="dot"></span>worker-02</div><div style="text-align:right"><div class="status">search · thr-f09</div><div class="mini-bar"><span style="width:18%"></span></div></div></div>
+            <div class="worker"><div class="name"><span class="dot"></span>worker-03</div><div style="text-align:right"><div class="status">extract · src-091</div><div class="mini-bar"><span style="width:44%"></span></div></div></div>
+            <div class="worker idle"><div class="name"><span class="dot"></span>worker-04</div><div class="status">idle · 6s</div></div>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <div class="panel-card-head"><h3>Extraction queue</h3><span class="tiny dim">47 pending</span></div>
+          <div class="panel-card-body">
+            <div class="queue-row"><div class="host">quantumscape.com</div><div><span class="pill pill-active" style="padding:1px 6px">running</span></div></div>
+            <div class="queue-row"><div class="host">sciencedirect.com</div><div><span class="pill pill-active" style="padding:1px 6px">running</span></div></div>
+            <div class="queue-row"><div class="host">catl.com</div><div><span class="pill pill-active" style="padding:1px 6px">running</span></div></div>
+            <div class="queue-row"><div class="host">idemitsu.com</div><div><span class="pill pill-error" style="padding:1px 6px">403</span></div></div>
+            <div class="queue-row"><div class="host">nature.com</div><div><span class="tiny dim">queued · p1</span></div></div>
+            <div class="queue-row"><div class="host">iopscience.iop.org</div><div><span class="tiny dim">queued · p1</span></div></div>
+            <div class="queue-row"><div class="host">ses.ai</div><div><span class="tiny dim">queued · p2</span></div></div>
+            <div class="queue-row"><div class="host">ieee.org</div><div><span class="tiny dim">queued · p2</span></div></div>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <div class="panel-card-head"><h3>Budget · today</h3><span class="tiny dim">of $25 cap</span></div>
+          <div class="panel-card-body">
+            <div style="font-size:20px;font-weight:600;color:var(--text-primary);font-variant-numeric:tabular-nums">$4.62</div>
+            <div class="bar" style="margin-top:8px"><span style="width:18%"></span></div>
+            <div style="display:flex;gap:14px;font-size:11px;color:var(--text-muted);margin-top:12px;flex-wrap:wrap">
+              <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--accent);margin-right:4px"></span>synth $1.94</span>
+              <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--info);margin-right:4px"></span>extract $1.29</span>
+              <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--warning);margin-right:4px"></span>follow-up $0.83</span>
+              <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--success);margin-right:4px"></span>doc $0.56</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <div class="panel-card-head"><h3>Recent concepts</h3></div>
+          <div class="panel-card-body" style="display:flex;flex-wrap:wrap;gap:4px">
+            <span class="pill">condensed-matter</span>
+            <span class="pill">Helion Polaris</span>
+            <span class="pill">FlexFrame</span>
+            <span class="pill">LLZO</span>
+            <span class="pill">PowerCo</span>
+            <span class="pill">PPES</span>
+            <span class="pill">Idemitsu</span>
+            <span class="pill">SPARC delay</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>
