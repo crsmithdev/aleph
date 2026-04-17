@@ -22,6 +22,7 @@
   "devDependencies": {
     "@mozilla/readability": "^0.6.0",
     "linkedom": "^0.18.12",
-    "node-html-parser": "^7.1.0"
+    "node-html-parser": "^7.1.0",
+    "typescript": "^6.0.3"
   }
 }
