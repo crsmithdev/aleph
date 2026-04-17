@@ -12,6 +12,7 @@ import {
   DEFAULT_SESSION_CONFIG,
   getDefaults, updateDefaults, resetDefaults,
   listConcepts, listConceptLinks, getConcept, listFindingsForConcept, getSourcesForConcept,
+  listSources, getSource, countSourcesByStatus, retrySource, skipSource,
   fetchPageText, JS_RENDERED_FLAG,
   // Job imports
   createJob, getJob, getActiveJobForSession, cancelJob, listJobsForSession, cancelAllJobs, listAllJobs, listActiveJobs, jobStats,
@@ -575,6 +576,36 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       const findingIds = listFindingsForConcept(app.sqlite, concept.id);
       const sources = getSourcesForConcept(app.sqlite, concept.id);
       return { ...concept, finding_ids: findingIds, sources };
+    }
+  );
+
+  // === Sources (extraction queue) ===
+  app.get<{ Params: { id: string }; Querystring: { status?: string; limit?: string } }>(
+    '/queries/:id/sources',
+    async (req) => {
+      const status = req.query.status as 'pending' | 'extracted' | 'failed' | 'skipped' | 'all' | undefined;
+      const limit = req.query.limit ? parseInt(req.query.limit) : undefined;
+      const items = listSources(app.sqlite, req.params.id, { status, limit });
+      const counts = countSourcesByStatus(app.sqlite, req.params.id);
+      return { items, counts };
+    }
+  );
+
+  app.post<{ Params: { sourceId: string } }>(
+    '/sources/:sourceId/retry',
+    async (req, reply) => {
+      const source = getSource(app.sqlite, req.params.sourceId);
+      if (!source) return reply.status(404).send({ error: 'Source not found' });
+      return retrySource(app.sqlite, req.params.sourceId);
+    }
+  );
+
+  app.post<{ Params: { sourceId: string } }>(
+    '/sources/:sourceId/skip',
+    async (req, reply) => {
+      const source = getSource(app.sqlite, req.params.sourceId);
+      if (!source) return reply.status(404).send({ error: 'Source not found' });
+      return skipSource(app.sqlite, req.params.sourceId);
     }
   );
 

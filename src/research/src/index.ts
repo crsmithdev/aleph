@@ -30,3 +30,5 @@ export type { TaskType, ModelConfig, ProviderConfig } from './providers/router.j
 export * from './perturbation.js';
 export * from './scheduler.js';
 export { fetchPageText, JS_RENDERED_FLAG } from './providers/websearch.js';
+export { drainPendingSources } from './extractor.js';
+export type { DrainOptions, DrainResult } from './extractor.js';
