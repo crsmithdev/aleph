@@ -1,6 +1,7 @@
 import type { Sqlite } from '@construct/data';
 import { fetchPageContent } from './providers/websearch.js';
 import * as sources from './services/sources.js';
+import type { Source } from './types.js';
 
 const MAX_EXTRACTED_CHARS = 100_000;
 const MAX_ATTEMPTS = 3;
@@ -12,6 +13,10 @@ export interface DrainOptions {
   concurrency?: number;
   /** Scope to a single session (otherwise drains across all). */
   sessionId?: string;
+  /** Fired after each successful extraction. Called with the final source row
+   *  (extraction_status='extracted', extracted_text populated). Errors are caught
+   *  by the drainer and logged — they don't fail the overall drain. */
+  onExtracted?: (source: Source) => Promise<void> | void;
 }
 
 export interface DrainResult {
@@ -65,6 +70,14 @@ export async function drainPendingSources(
         const text = result.page.content.slice(0, MAX_EXTRACTED_CHARS);
         sources.completeExtraction(sqlite, src.id, text);
         extracted++;
+        if (opts.onExtracted) {
+          try {
+            const finalRow = sources.getSource(sqlite, src.id);
+            if (finalRow) await opts.onExtracted(finalRow);
+          } catch (err) {
+            console.warn(`[extractor] onExtracted failed for ${src.id}:`, err);
+          }
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         sources.failExtraction(sqlite, src.id, msg);

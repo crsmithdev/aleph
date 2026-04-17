@@ -1538,8 +1538,14 @@ Ordered from most to least important. Each rationale should explain relevance to
     finding: ResearchFinding,
     thread: ResearchThread,
     config: SessionConfig,
+    extraSources: Array<{ url: string; text: string }> = [],
   ): Promise<void> {
     const sessionId = finding.session_id;
+    const extraBlock = extraSources.length > 0
+      ? `\n\nFull source text (newly extracted — prefer these for grounding concrete key_facts):\n${extraSources
+          .map(s => `--- ${s.url} ---\n${s.text.slice(0, 4000)}`)
+          .join('\n\n')}`
+      : '';
     const prompt = `Extract the distinct concepts this finding is about. A concept is a noun phrase that names a thing, idea, practice, organism, place, person, technique, or principle — something that could appear as a section title in an encyclopedia.
 
 Return ONLY JSON of the form:
@@ -1563,7 +1569,7 @@ Guidelines:
 Thread context: "${thread.query}"
 
 Finding:
-${finding.content}
+${finding.content}${extraBlock}
 
 Return JSON only, no preamble.`;
 
@@ -1849,6 +1855,32 @@ Write the full article in markdown.`,
     }
 
     return { ...result, cost, stepId };
+  }
+
+  /** After a source is extracted, re-run concept extraction for each finding that
+   *  cites the URL — now with the newly-extracted full text as additional context.
+   *  Caller is responsible for only invoking this on successful extractions. */
+  async relinkConceptsForSource(source: import('./types.js').Source): Promise<void> {
+    if (!source.extracted_text) return;
+    const citingIds = sources.findingsCitingSource(this.sqlite, source);
+    if (citingIds.length === 0) return;
+
+    const session = sessions.getQuery(this.sqlite, source.session_id);
+    if (!session) return;
+
+    for (const fid of citingIds) {
+      const finding = findings.getFinding(this.sqlite, fid);
+      if (!finding) continue;
+      const thread = threads.getThread(this.sqlite, finding.thread_id);
+      if (!thread) continue;
+      try {
+        await this.extractConceptsForFinding(finding, thread, session.config, [
+          { url: source.url, text: source.extracted_text },
+        ]);
+      } catch (err) {
+        console.warn(`[concepts] relink failed for finding ${fid} / source ${source.id}:`, err);
+      }
+    }
   }
 }
 

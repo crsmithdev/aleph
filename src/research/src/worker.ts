@@ -320,7 +320,23 @@ while (!shutdownRequested) {
     // throws inside fetchPageContent → per-source failExtraction will record the reason).
     if (process.env.JINA_API_KEY) {
       try {
-        const r = await drainPendingSources(sqlite, { batchSize: 5, concurrency: 3 });
+        const r = await drainPendingSources(sqlite, {
+          batchSize: 5,
+          concurrency: 3,
+          onExtracted: async (source) => {
+            // Re-run concept extraction for findings citing this URL with the
+            // newly-available full text as context. Build a per-session engine
+            // because concept extraction uses the session's configured model.
+            const session = sessions.getSession(sqlite, source.session_id);
+            if (!session) return;
+            try {
+              const engine = new ResearchEngine({ sqlite, provider: buildProvider(session) });
+              await engine.relinkConceptsForSource(source);
+            } catch (err) {
+              console.warn(`[worker] relink concepts failed for ${source.id}:`, err);
+            }
+          },
+        });
         if (r.claimed > 0) {
           console.log(`[worker] extraction drained ${r.claimed} (ok=${r.extracted}, fail=${r.failed}, skip=${r.skipped})`);
         }
