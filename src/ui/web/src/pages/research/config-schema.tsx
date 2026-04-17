@@ -142,7 +142,7 @@ export function ConfigForm({
     : 0;
 
   return (
-    <div className="flex flex-col gap-6 max-w-4xl">
+    <div className="flex flex-col gap-6 max-w-[1800px]">
       <div className="border border-border-primary/40 rounded bg-bg-secondary p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -166,28 +166,30 @@ export function ConfigForm({
           )}
         </div>
 
-        {CARD_ORDER.map(group => {
-          const fields = SCHEMA.filter(f => f.group === group && !f.advanced);
-          if (fields.length === 0) return null;
-          return (
-            <div key={group} className="mt-5">
-              <GroupHeading meta={GROUP_META[group]} />
-              <div>
-                {fields.map(field => (
-                  <Row
-                    key={field.path}
-                    field={field}
-                    value={getByPath(value, field.path)}
-                    baseline={baseline ? getByPath(baseline, field.path) : undefined}
-                    saved={savedPath === field.path}
-                    onSave={handleSave}
-                    onResetField={onResetField}
-                  />
-                ))}
+        <div className="mt-5 grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-x-10">
+          {CARD_ORDER.map(group => {
+            const fields = SCHEMA.filter(f => f.group === group && !f.advanced);
+            if (fields.length === 0) return null;
+            return (
+              <div key={group} className="break-inside-avoid mb-6">
+                <GroupHeading meta={GROUP_META[group]} />
+                <div>
+                  {fields.map(field => (
+                    <Row
+                      key={field.path}
+                      field={field}
+                      value={getByPath(value, field.path)}
+                      baseline={baseline ? getByPath(baseline, field.path) : undefined}
+                      saved={savedPath === field.path}
+                      onSave={handleSave}
+                      onResetField={onResetField}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
 
         <div className="mt-5 pt-4 border-t border-border-primary/30">
           <button
@@ -198,12 +200,12 @@ export function ConfigForm({
           </button>
 
           {showAdvanced && (
-            <div className="mt-3">
+            <div className="mt-3 grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-x-10">
               {CARD_ORDER.map(group => {
                 const advFields = SCHEMA.filter(f => f.group === group && f.advanced);
                 if (advFields.length === 0) return null;
                 return (
-                  <div key={`adv-${group}`} className="mt-4">
+                  <div key={`adv-${group}`} className="break-inside-avoid mb-4">
                     <GroupHeading meta={{ title: GROUP_META[group].title, sub: 'advanced' }} />
                     <div>
                       {advFields.map(field => (
@@ -272,12 +274,14 @@ function Row({
         {field.hint && <div className="text-sm text-text-muted mt-0.5">{field.hint}</div>}
       </div>
       <div className="flex items-center gap-2 flex-wrap">
-        {overridden && (
-          <span
-            className="w-1.5 h-1.5 rounded-full bg-warning inline-block shrink-0"
-            title={`Overridden - default is ${formatValue(baseline)}`}
-          />
-        )}
+        <span
+          className={clsx(
+            'w-1.5 h-1.5 rounded-full inline-block shrink-0',
+            overridden ? 'bg-warning' : 'bg-transparent'
+          )}
+          title={overridden ? `Overridden - default is ${formatValue(baseline)}` : undefined}
+          aria-hidden={!overridden}
+        />
         <FieldInput field={field} value={value} onSave={onSave} />
         {baseline !== undefined && (
           <span className="text-sm text-text-muted font-mono">default: {formatValue(baseline)}</span>
@@ -387,25 +391,36 @@ function FieldInput({
     if (raw !== value) onSave(field.path, raw);
   }
 
+  const isDollar = field.unit === '$';
   return (
     <div className="flex items-center gap-1">
-      {field.unit === '$' && <span className="text-sm text-text-muted">$</span>}
-      <input
-        type={field.kind === 'number' ? 'number' : 'text'}
-        value={String(draft)}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-          if (e.key === 'Escape') { setDraft(value == null ? '' : String(value)); (e.target as HTMLInputElement).blur(); }
-        }}
-        min={field.min}
-        max={field.max}
-        step={field.step}
-        placeholder={field.nullable ? 'null' : undefined}
-        className={clsx(inputCls, field.kind === 'number' ? 'w-24 text-right' : 'w-56')}
-      />
-      {field.unit && field.unit !== '$' && <span className="text-sm text-text-muted">{field.unit}</span>}
+      <div className="relative">
+        {isDollar && (
+          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-sm text-text-muted pointer-events-none select-none">
+            $
+          </span>
+        )}
+        <input
+          type={field.kind === 'number' ? 'number' : 'text'}
+          value={String(draft)}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+            if (e.key === 'Escape') { setDraft(value == null ? '' : String(value)); (e.target as HTMLInputElement).blur(); }
+          }}
+          min={field.min}
+          max={field.max}
+          step={field.step}
+          placeholder={field.nullable ? 'null' : undefined}
+          className={clsx(
+            inputCls,
+            field.kind === 'number' ? 'w-24 text-right' : 'w-56',
+            isDollar && 'pl-5'
+          )}
+        />
+      </div>
+      {field.unit && !isDollar && <span className="text-sm text-text-muted">{field.unit}</span>}
     </div>
   );
 }
