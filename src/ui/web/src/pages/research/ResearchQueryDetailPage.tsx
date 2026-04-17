@@ -517,11 +517,6 @@ function DocumentView({
     );
   }
 
-  const sortedFindingsForBib = useMemo(
-    () => [...findings].sort((a, b) => b.confidence - a.confidence),
-    [findings],
-  );
-
   return (
     <div className="grid grid-cols-1 xl:grid-cols-[200px_minmax(0,1fr)_300px] gap-7">
       {/* Left TOC rail */}
@@ -624,7 +619,7 @@ function DocumentView({
       {/* Right bibliography rail */}
       <aside className="hidden xl:block">
         <div className="sticky top-4 max-h-[calc(100vh-6rem)] overflow-y-auto pr-1">
-          <BibliographyRail findings={sortedFindingsForBib} sessionId={sessionId} />
+          <BibliographyRail findings={sortedFindings} sessionId={sessionId} />
         </div>
       </aside>
     </div>
@@ -2495,13 +2490,6 @@ function SourcesView({ sessionId }: { sessionId: string }) {
   const skip = useSkipSource();
   const [busy, setBusy] = useState(false);
 
-  if (isLoading) return <PageLoading />;
-  const items: Source[] = data?.items ?? [];
-  const counts = data?.counts ?? { pending: 0, extracted: 0, failed: 0, skipped: 0 };
-  const total = counts.pending + counts.extracted + counts.failed + counts.skipped;
-  const inProgress = items.filter(s => s.extraction_status === 'claimed').length;
-
-  // finding counts per url
   const findingsByUrl = useMemo(() => {
     const m = new Map<string, number>();
     for (const f of findings ?? []) {
@@ -2510,6 +2498,12 @@ function SourcesView({ sessionId }: { sessionId: string }) {
     }
     return m;
   }, [findings]);
+
+  if (isLoading) return <PageLoading />;
+  const items: Source[] = data?.items ?? [];
+  const counts = data?.counts ?? { pending: 0, extracted: 0, failed: 0, skipped: 0 };
+  const total = counts.pending + counts.extracted + counts.failed + counts.skipped;
+  const inProgress = items.filter(s => s.extraction_status === 'claimed').length;
 
   async function retryAllFailed() {
     setBusy(true);
