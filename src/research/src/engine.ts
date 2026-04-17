@@ -14,6 +14,7 @@ import * as findings from './services/findings.js';
 import * as steps from './services/steps.js';
 import * as plans from './services/plans.js';
 import * as concepts from './services/concepts.js';
+import * as sources from './services/sources.js';
 
 export interface SearchOptions {
   synthesisChars: number;
@@ -544,7 +545,17 @@ export class ResearchEngine {
       follow_up_analysis: followUpAnalysis,
     });
 
-    // Step 5a: Extract concepts from the finding and link them to this finding.
+    // Step 5a: Register source URLs in the extraction queue so the worker
+    // can fetch full text independently of the synthesis path.
+    if (synthesisResult.sourceUrlMeta && synthesisResult.sourceUrlMeta.length > 0) {
+      try {
+        sources.registerSources(this.sqlite, sessionId, synthesisResult.sourceUrlMeta, 'pending');
+      } catch (err) {
+        console.warn(`[sources] register failed for finding ${finding.id}:`, err);
+      }
+    }
+
+    // Step 5b: Extract concepts from the finding and link them to this finding.
     // Fire-and-forget is tempting, but doing it inline keeps the knowledge graph
     // consistent with the document generator's next run.
     try {

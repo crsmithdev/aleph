@@ -254,6 +254,24 @@ export interface ConceptWithStats extends Concept {
   source_count: number;
 }
 
+export type SourceExtractionStatus = 'pending' | 'extracted' | 'failed' | 'skipped';
+
+export interface Source {
+  id: string;
+  session_id: string;
+  url: string;
+  title: string;
+  snippet: string;
+  extraction_status: SourceExtractionStatus;
+  extracted_text: string | null;
+  extracted_at: string | null;
+  fetched_at: string | null;
+  error: string | null;
+  attempt_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ResearchStep {
   id: string;
   thread_id: string;

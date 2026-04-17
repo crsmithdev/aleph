@@ -242,6 +242,25 @@ export function applyResearchDDL(sqlite: Sqlite): void {
     );
     CREATE INDEX IF NOT EXISTS idx_rfc_concept ON research_finding_concepts(concept_id);
     CREATE INDEX IF NOT EXISTS idx_rfc_session ON research_finding_concepts(session_id);
+
+    CREATE TABLE IF NOT EXISTS research_sources (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
+      url TEXT NOT NULL,
+      title TEXT NOT NULL DEFAULT '',
+      snippet TEXT NOT NULL DEFAULT '',
+      extraction_status TEXT NOT NULL DEFAULT 'pending',
+      extracted_text TEXT,
+      extracted_at TEXT,
+      fetched_at TEXT,
+      error TEXT,
+      attempt_count INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(session_id, url)
+    );
+    CREATE INDEX IF NOT EXISTS idx_rsrc_session_status ON research_sources(session_id, extraction_status);
+    CREATE INDEX IF NOT EXISTS idx_rsrc_status ON research_sources(extraction_status, created_at);
   `);
 
   // Migrations
@@ -274,6 +293,37 @@ export function applyResearchDDL(sqlite: Sqlite): void {
     WHERE cost_usd = 0 AND (prompt_tokens > 0 OR completion_tokens > 0)
       AND model IN ('deepseek/deepseek-chat', 'deepseek/deepseek-chat-v3')
   `);
+
+  // Seed research_sources from existing findings' source_url_meta.
+  // Existing URLs go in as 'skipped' — the queue is forward-looking, we don't
+  // want a backlog drain to re-fetch everything on first boot after upgrade.
+  try {
+    const already = sqlite.prepare('SELECT 1 FROM research_sources LIMIT 1').get();
+    if (!already) {
+      const rows = sqlite.prepare(
+        'SELECT id, session_id, source_url_meta FROM research_findings WHERE source_url_meta IS NOT NULL AND source_url_meta != \'[]\''
+      ).all() as Array<{ id: string; session_id: string; source_url_meta: string }>;
+      const insert = sqlite.prepare(
+        `INSERT OR IGNORE INTO research_sources (id, session_id, url, title, snippet, extraction_status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'skipped', datetime('now'), datetime('now'))`
+      );
+      const seed = sqlite.transaction((items: Array<{ sid: string; url: string; title: string; snippet: string }>) => {
+        for (const it of items) {
+          insert.run(`src_${it.sid.slice(0, 8)}_${Buffer.from(it.url).toString('base64').slice(0, 16)}`, it.sid, it.url, it.title, it.snippet);
+        }
+      });
+      const items: Array<{ sid: string; url: string; title: string; snippet: string }> = [];
+      for (const r of rows) {
+        try {
+          const meta = JSON.parse(r.source_url_meta) as Array<{ url: string; title?: string; snippet?: string }>;
+          for (const m of meta) {
+            if (m && m.url) items.push({ sid: r.session_id, url: m.url, title: m.title ?? '', snippet: m.snippet ?? '' });
+          }
+        } catch { /* skip malformed */ }
+      }
+      if (items.length > 0) seed(items);
+    }
+  } catch { /* table or data absent */ }
 
   // Fix stale FK: research_monitors.session_id may reference the old 'research_sessions'
   // table name (pre-rename). Rebuild the table to point at research_queries.

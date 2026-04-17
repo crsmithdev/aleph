@@ -15,6 +15,12 @@ export {
   getConcept, findConceptByName, listConcepts, listConceptLinks,
   listFindingsForConcept, listConceptIdsForFinding, getSourcesForConcept,
 } from './services/concepts.js';
+export {
+  registerSource, registerSources, listSources, getSource,
+  countSourcesByStatus, claimPendingSources,
+  completeExtraction, failExtraction, retrySource, skipSource,
+  findingsCitingSource,
+} from './services/sources.js';
 export { MonitorEngine } from './monitor-engine.js';
 export type { MonitorEngineOptions } from './monitor-engine.js';
 export { OpenRouterProvider, getOpenRouterPricing } from './providers/openrouter.js';
