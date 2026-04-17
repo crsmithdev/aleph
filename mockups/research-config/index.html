@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Research Config — Mockups</title>
+<title>Research Config — Mockup</title>
 <style>
   :root {
     --bg-primary:#282c34;
@@ -22,47 +22,63 @@
     --warning:#e5c07b;
     --error:#e06c75;
     --edited:#e5c07b;
+
+    --t-meta:14px;
+    --t-body:14px;
+    --t-h3:16px;
+    --t-h2:18px;
+    --t-h1:22px;
+
+    --sp-1:4px;
+    --sp-2:8px;
+    --sp-3:12px;
+    --sp-4:16px;
+    --sp-5:20px;
+    --sp-6:24px;
   }
   *,*::before,*::after{box-sizing:border-box}
   html,body{margin:0;padding:0}
   body{
     background:var(--bg-primary);
     color:var(--text-primary);
-    font:13px/1.5 ui-sans-serif,-apple-system,"Inter","Segoe UI",sans-serif;
+    font:var(--t-body)/1.5 ui-sans-serif,-apple-system,"Inter","Segoe UI",sans-serif;
     padding:40px 48px 120px;
   }
-  h1{font-size:22px;font-weight:600;color:var(--text-primary);margin:0 0 4px}
-  h2{font-size:16px;font-weight:600;color:var(--text-primary);margin:0}
-  h3{font-size:13px;font-weight:600;color:var(--text-secondary);margin:0 0 12px;letter-spacing:.02em;text-transform:uppercase}
-  .mock-intro{color:var(--text-muted);margin-bottom:28px;font-size:13px}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+
+  h1{font-size:var(--t-h1);font-weight:600;color:var(--text-primary);margin:0 0 var(--sp-1)}
+  h2{font-size:var(--t-h2);font-weight:600;color:var(--text-primary);margin:0}
+  h3{font-size:var(--t-h3);font-weight:600;color:var(--text-primary);margin:0 0 var(--sp-3)}
+  .mock-intro{color:var(--text-muted);margin-bottom:28px;font-size:var(--t-body);max-width:780px}
+  .mock-intro code{font-size:var(--t-body)}
+
   .variant{
     border:1px solid var(--border);
     border-radius:10px;
     background:var(--bg-secondary);
-    padding:24px;
+    padding:var(--sp-6);
     margin-bottom:48px;
   }
   .variant-header{
-    display:flex;align-items:baseline;gap:12px;
+    display:flex;align-items:baseline;gap:var(--sp-3);
     border-bottom:1px solid var(--border);
-    padding-bottom:14px;margin-bottom:20px;
+    padding-bottom:var(--sp-3);margin-bottom:var(--sp-5);
   }
   .variant-tag{
-    font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-    background:var(--accent);color:#1a1a1a;padding:3px 8px;border-radius:4px;
+    font-size:var(--t-meta);font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    background:var(--accent);color:#1a1a1a;padding:3px 10px;border-radius:4px;
   }
-  .variant-sub{color:var(--text-muted);font-size:12px}
+  .variant-sub{color:var(--text-muted);font-size:var(--t-body)}
 
   /* shared controls */
-  .field-label{display:block;color:var(--text-secondary);font-size:12px;margin-bottom:4px}
-  .field-hint{color:var(--text-muted);font-size:11px;margin-top:3px}
-  .field-unit{color:var(--text-muted);font-size:11px;margin-left:6px}
+  .field-hint{color:var(--text-muted);font-size:var(--t-body);margin-top:3px}
+  .field-unit{color:var(--text-muted);font-size:var(--t-body);margin-left:6px}
   input[type="text"],input[type="number"],select{
     background:var(--bg-primary);
     border:1px solid var(--border);
     border-radius:4px;
     color:var(--text-primary);
-    padding:6px 8px;font:inherit;outline:none;
+    padding:6px var(--sp-2);font:inherit;font-size:var(--t-body);outline:none;
     transition:border-color .15s;
   }
   input[type="text"]:focus,input[type="number"]:focus,select:focus{border-color:var(--accent)}
@@ -84,118 +100,46 @@
     display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--edited);margin-right:6px;
     vertical-align:middle;
   }
-  .reset-btn{
-    background:none;border:none;color:var(--text-muted);cursor:pointer;font:inherit;
-    font-size:11px;padding:0 4px;
-  }
-  .reset-btn:hover{color:var(--accent)}
-
-  /* =========== VARIANT A: grouped cards (single page) =========== */
-  .a-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
-  .a-card{
-    background:var(--bg-primary);
-    border:1px solid var(--border);
-    border-radius:8px;
-    padding:16px 18px;
-  }
-  .a-card-head{
-    display:flex;align-items:center;justify-content:space-between;
-    margin-bottom:14px;
-  }
-  .a-card h3{margin:0;color:var(--text-primary);font-size:13px;text-transform:none;letter-spacing:0}
-  .a-card-sub{color:var(--text-muted);font-size:11px}
-  .a-row{
-    display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;
-    padding:8px 0;border-bottom:1px dashed var(--border);
-  }
-  .a-row:last-child{border-bottom:none}
-  .a-row-label{font-size:12px}
-  .a-row-label .hint{display:block;color:var(--text-muted);font-size:11px;margin-top:2px}
-  .a-show-advanced{
-    margin-top:20px;color:var(--text-muted);font-size:12px;cursor:pointer;user-select:none;
-  }
-  .a-show-advanced:hover{color:var(--accent)}
-
-  /* =========== VARIANT B: two-pane settings =========== */
-  .b-container{display:grid;grid-template-columns:200px 1fr;gap:24px;min-height:520px}
-  .b-nav{
-    border-right:1px solid var(--border);
-    padding-right:12px;
-  }
-  .b-nav-item{
-    display:flex;align-items:center;justify-content:space-between;
-    padding:8px 10px;border-radius:6px;cursor:pointer;color:var(--text-secondary);font-size:13px;
-  }
-  .b-nav-item:hover{background:var(--bg-tertiary)}
-  .b-nav-item.active{background:var(--bg-tertiary);color:var(--text-primary);font-weight:500}
-  .b-nav-badge{
-    font-size:10px;background:var(--bg-tertiary);color:var(--text-muted);
-    padding:1px 6px;border-radius:8px;
-  }
-  .b-nav-item.active .b-nav-badge{background:var(--accent-dim);color:var(--accent)}
-  .b-panel{padding:0 4px}
-  .b-panel-head{margin-bottom:20px}
-  .b-panel-head h2{margin-bottom:4px}
-  .b-panel-head .sub{color:var(--text-muted);font-size:12px}
-  .b-field{
-    display:grid;grid-template-columns:220px 1fr;gap:16px;align-items:start;
-    padding:16px 0;border-bottom:1px solid var(--border);
-  }
-  .b-field:last-child{border-bottom:none}
-  .b-field-label{padding-top:7px}
-  .b-field-label .name{color:var(--text-primary);font-size:13px;font-weight:500}
-  .b-field-label .hint{display:block;color:var(--text-muted);font-size:11px;margin-top:3px;line-height:1.5}
-  .b-field-control{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-
-  /* =========== VARIANT C: dense table =========== */
-  .c-table{
-    width:100%;border-collapse:separate;border-spacing:0;
-    font-size:12px;
-  }
-  .c-table th{
-    text-align:left;color:var(--text-muted);font-weight:500;font-size:11px;text-transform:uppercase;
-    letter-spacing:.06em;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--bg-primary);
-    position:sticky;top:0;
-  }
-  .c-table td{
-    padding:7px 12px;border-bottom:1px solid var(--border);vertical-align:middle;
-  }
-  .c-group-row td{
-    background:var(--bg-primary);
-    color:var(--text-secondary);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
-    padding:10px 12px;
-  }
-  .c-key{color:var(--text-primary)}
-  .c-default{color:var(--text-muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}
-  .c-hint{color:var(--text-muted);font-size:11px;max-width:360px}
-  .c-value-cell{white-space:nowrap}
-  .c-toolbar{
-    display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;
-  }
-  .c-search{
-    background:var(--bg-primary);border:1px solid var(--border);border-radius:4px;
-    color:var(--text-primary);padding:5px 10px;width:240px;font:inherit;
-  }
-  .c-filters{display:flex;gap:6px}
-  .chip{
-    background:var(--bg-tertiary);color:var(--text-secondary);
-    padding:3px 10px;border-radius:12px;font-size:11px;cursor:pointer;border:1px solid transparent;
-  }
-  .chip.active{background:var(--accent-dim);color:var(--accent);border-color:var(--accent)}
   .status-pill{
-    font-size:10px;padding:1px 6px;border-radius:8px;
+    font-size:var(--t-meta);font-weight:500;letter-spacing:.06em;text-transform:uppercase;
+    padding:2px 8px;border-radius:8px;
     background:var(--bg-tertiary);color:var(--text-muted);
   }
   .status-pill.edited{background:#4a3a1a;color:var(--warning)}
   .status-pill.new{background:#1e3a1e;color:var(--success)}
+
+  /* =========== Grouped cards (Variant A) =========== */
+  .a-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--sp-4)}
+  .a-card{
+    background:var(--bg-primary);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:var(--sp-4) 18px;
+  }
+  .a-card-head{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:var(--sp-3);
+  }
+  .a-card h3{margin:0;color:var(--text-primary);font-size:var(--t-h3);text-transform:none;letter-spacing:0}
+  .a-card-sub{color:var(--text-muted);font-size:var(--t-meta);font-weight:500;letter-spacing:.02em}
+  .a-row{
+    display:grid;grid-template-columns:1fr auto;gap:var(--sp-3);align-items:center;
+    padding:10px 0;border-bottom:1px solid var(--border);
+  }
+  .a-row:last-child{border-bottom:none}
+  .a-row-label{font-size:var(--t-body)}
+  .a-row-label .hint{display:block;color:var(--text-muted);font-size:var(--t-body);margin-top:3px;line-height:1.5}
+  .a-show-advanced{
+    margin-top:var(--sp-5);color:var(--text-muted);font-size:var(--t-body);cursor:pointer;user-select:none;
+  }
+  .a-show-advanced:hover{color:var(--accent)}
 </style>
 </head>
 <body>
 
-<h1>Research Config — three variants</h1>
-<p class="mock-intro">Same fields, three layouts. Same data shown in each. Pick one, I'll build it. The header would live inside the existing <code>ResearchConfigPage</code> as a new <em>Defaults</em> tab alongside the existing <em>Providers</em> tab. Values flagged <span class="status-pill edited">edited</span> differ from shipped defaults. Values flagged <span class="status-pill new">new</span> are the three we're lifting out of hardcode.</p>
+<h1>Research Config — Variant A</h1>
+<p class="mock-intro">Grouped cards, single-page scroll. Same fields, all visible, no navigation cost. This page lives inside the existing <code>ResearchConfigPage</code> as a new <em>Defaults</em> tab alongside <em>Providers</em>. Values flagged <span class="status-pill edited">edited</span> differ from shipped defaults. Values flagged <span class="status-pill new">new</span> are the three we're lifting out of hardcode.</p>
 
-<!-- =================== VARIANT A =================== -->
 <section class="variant">
   <div class="variant-header">
     <span class="variant-tag">Variant A</span>
@@ -257,7 +201,7 @@
       </div>
       <div class="a-row">
         <div class="a-row-label">Follow-ups per iteration<span class="hint">min / max</span></div>
-        <div><input type="number" class="narrow" value="2" style="width:50px"> / <input type="number" class="narrow" value="5" style="width:50px"></div>
+        <div><input type="number" class="narrow" value="2" style="width:60px"> / <input type="number" class="narrow" value="5" style="width:60px"></div>
       </div>
     </div>
 
@@ -316,7 +260,7 @@
       </div>
       <div class="a-row">
         <div class="a-row-label">Fallback chain</div>
-        <div style="color:var(--text-muted);font-size:11px">sonnet-4.6 → gpt-5 → haiku-4.5</div>
+        <div style="color:var(--text-muted);font-size:var(--t-body)">sonnet-4.6 → gpt-5 → haiku-4.5</div>
       </div>
     </div>
 
@@ -325,243 +269,8 @@
   <div class="a-show-advanced">▸ Show advanced (perturbation, coherence, schedule, serendipity)</div>
 </section>
 
-<!-- =================== VARIANT B =================== -->
-<section class="variant">
-  <div class="variant-header">
-    <span class="variant-tag">Variant B</span>
-    <h2>Two-pane settings navigator</h2>
-    <span class="variant-sub">focused editing, feels like Linear/macOS settings</span>
-  </div>
-
-  <div class="b-container">
-    <nav class="b-nav">
-      <div class="b-nav-item">Budget <span class="b-nav-badge">3</span></div>
-      <div class="b-nav-item">Depth &amp; Breadth <span class="b-nav-badge">4</span></div>
-      <div class="b-nav-item">Quality <span class="b-nav-badge">4</span></div>
-      <div class="b-nav-item active">Generation <span class="b-nav-badge">4</span></div>
-      <div class="b-nav-item">Extraction <span class="b-nav-badge">3</span></div>
-      <div class="b-nav-item">Models <span class="b-nav-badge">2</span></div>
-      <div class="b-nav-item">Perturbation <span class="b-nav-badge">5</span></div>
-      <div class="b-nav-item">Schedule <span class="b-nav-badge">3</span></div>
-    </nav>
-
-    <div class="b-panel">
-      <div class="b-panel-head">
-        <h2>Generation</h2>
-        <div class="sub">Shape and size of what the model produces per call.</div>
-      </div>
-
-      <div class="b-field">
-        <div class="b-field-label">
-          <div class="name">LLM max output tokens <span class="status-pill new">new</span></div>
-          <div class="hint">Ceiling on every <code>callLLM</code>. Raising this lets the doc generator emit longer sections; cost scales with output length.</div>
-        </div>
-        <div class="b-field-control">
-          <input type="number" class="medium" value="8192">
-          <span class="field-unit">tokens</span>
-          <button class="reset-btn">reset</button>
-        </div>
-      </div>
-
-      <div class="b-field">
-        <div class="b-field-label">
-          <div class="name">Synthesis chars per source <span class="status-pill edited">edited</span> <span class="status-pill new">new</span></div>
-          <div class="hint">How much of each search result is passed to the synthesis step. Tavily returns paragraph-sized content; Brave returns ~300 chars, so beyond that is no-op for Brave.</div>
-        </div>
-        <div class="b-field-control">
-          <span class="edited-dot"></span>
-          <input type="number" class="medium" value="6000">
-          <span class="field-unit">chars</span>
-          <button class="reset-btn">reset to 3000</button>
-        </div>
-      </div>
-
-      <div class="b-field">
-        <div class="b-field-label">
-          <div class="name">Display snippet chars <span class="status-pill new">new</span></div>
-          <div class="hint">Stored on each finding for the citation UI. Does not affect research quality — only what shows under a source card.</div>
-        </div>
-        <div class="b-field-control">
-          <input type="number" class="medium" value="200">
-          <span class="field-unit">chars</span>
-          <button class="reset-btn">reset</button>
-        </div>
-      </div>
-
-      <div class="b-field">
-        <div class="b-field-label">
-          <div class="name">Document generation mode</div>
-          <div class="hint"><code>single-pass</code> writes the whole doc in one call (capped by max output). <code>per-section</code> generates each concept section independently and assembles — recommended for long outputs.</div>
-        </div>
-        <div class="b-field-control">
-          <select>
-            <option>single-pass</option>
-            <option selected>per-section</option>
-          </select>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- =================== VARIANT C =================== -->
-<section class="variant">
-  <div class="variant-header">
-    <span class="variant-tag">Variant C</span>
-    <h2>Dense table (power-user view)</h2>
-    <span class="variant-sub">one row per setting, search + filter, diff-friendly</span>
-  </div>
-
-  <div class="c-toolbar">
-    <input class="c-search" placeholder="Search settings…" value="">
-    <div class="c-filters">
-      <span class="chip active">All</span>
-      <span class="chip">Edited</span>
-      <span class="chip">Newly exposed</span>
-      <span class="chip">Advanced</span>
-    </div>
-  </div>
-
-  <table class="c-table">
-    <thead>
-      <tr>
-        <th style="width:32%">Key</th>
-        <th style="width:18%">Value</th>
-        <th style="width:12%">Default</th>
-        <th style="width:32%">Description</th>
-        <th style="width:6%"></th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr class="c-group-row"><td colspan="5">Budget</td></tr>
-      <tr>
-        <td><span class="c-key">budget.daily_usd</span></td>
-        <td class="c-value-cell">$<input type="number" class="narrow" value="5.00" step="0.50"></td>
-        <td class="c-default">5.00</td>
-        <td class="c-hint">Hard cap; dispatcher halts on exceed</td>
-        <td></td>
-      </tr>
-      <tr>
-        <td><span class="c-key">budget.total_usd</span></td>
-        <td class="c-value-cell"><input type="text" class="narrow" value="—"></td>
-        <td class="c-default">null</td>
-        <td class="c-hint">Lifetime cap; null = unlimited</td>
-        <td></td>
-      </tr>
-      <tr>
-        <td><span class="c-key">budget.alert_threshold</span></td>
-        <td class="c-value-cell"><input type="number" class="narrow" value="0.80" step="0.05"></td>
-        <td class="c-default">0.80</td>
-        <td class="c-hint">Fraction of budget that triggers warning</td>
-        <td></td>
-      </tr>
-
-      <tr class="c-group-row"><td colspan="5">Depth &amp; Breadth</td></tr>
-      <tr>
-        <td><span class="c-key">max_thread_depth</span></td>
-        <td class="c-value-cell"><input type="number" class="narrow" value="5"></td>
-        <td class="c-default">5</td>
-        <td class="c-hint">Hops from seed thread before hard stop</td>
-        <td></td>
-      </tr>
-      <tr>
-        <td><span class="c-key">max_total_threads</span></td>
-        <td class="c-value-cell"><input type="number" class="narrow" value="200"></td>
-        <td class="c-default">200</td>
-        <td class="c-hint">Session-wide thread ceiling</td>
-        <td></td>
-      </tr>
-
-      <tr class="c-group-row"><td colspan="5">Quality</td></tr>
-      <tr>
-        <td><span class="c-key">novelty_threshold</span></td>
-        <td class="c-value-cell"><input type="number" class="narrow" value="0.30" step="0.05"></td>
-        <td class="c-default">0.30</td>
-        <td class="c-hint">Findings below this are dropped</td>
-        <td></td>
-      </tr>
-      <tr>
-        <td><span class="c-key">dedup_similarity_threshold</span></td>
-        <td class="c-value-cell"><input type="number" class="narrow" value="0.85" step="0.05"></td>
-        <td class="c-default">0.85</td>
-        <td class="c-hint">LLM similarity score → flag as duplicate</td>
-        <td></td>
-      </tr>
-      <tr>
-        <td><span class="c-key">follow_up.min_count</span></td>
-        <td class="c-value-cell"><input type="number" class="narrow" value="2"></td>
-        <td class="c-default">2</td>
-        <td class="c-hint">Min follow-ups to accept per iteration</td>
-        <td></td>
-      </tr>
-      <tr>
-        <td><span class="c-key">follow_up.max_count</span></td>
-        <td class="c-value-cell"><input type="number" class="narrow" value="5"></td>
-        <td class="c-default">5</td>
-        <td class="c-hint">Hard cap on spawned follow-ups</td>
-        <td></td>
-      </tr>
-
-      <tr class="c-group-row"><td colspan="5">Generation</td></tr>
-      <tr>
-        <td><span class="c-key">llm_max_output_tokens</span> <span class="status-pill new">new</span></td>
-        <td class="c-value-cell"><input type="number" class="medium" value="8192"></td>
-        <td class="c-default">8192</td>
-        <td class="c-hint">Per-call output ceiling. Raising helps long docs; raises cost.</td>
-        <td></td>
-      </tr>
-      <tr>
-        <td><span class="c-key">snippet.synthesis_chars</span> <span class="status-pill new">new</span></td>
-        <td class="c-value-cell"><input type="number" class="medium" value="6000"></td>
-        <td class="c-default">3000</td>
-        <td class="c-hint"><span class="edited-dot"></span>Per-source truncation before synthesis</td>
-        <td><button class="reset-btn">reset</button></td>
-      </tr>
-      <tr>
-        <td><span class="c-key">snippet.display_chars</span> <span class="status-pill new">new</span></td>
-        <td class="c-value-cell"><input type="number" class="medium" value="200"></td>
-        <td class="c-default">200</td>
-        <td class="c-hint">Stored with finding for citation UI</td>
-        <td></td>
-      </tr>
-      <tr>
-        <td><span class="c-key">doc_generation.mode</span></td>
-        <td class="c-value-cell">
-          <select><option>single-pass</option><option selected>per-section</option></select>
-        </td>
-        <td class="c-default">single-pass</td>
-        <td class="c-hint"><span class="edited-dot"></span>Per-section unblocks long docs</td>
-        <td><button class="reset-btn">reset</button></td>
-      </tr>
-
-      <tr class="c-group-row"><td colspan="5">Extraction</td></tr>
-      <tr>
-        <td><span class="c-key">extraction.enabled</span></td>
-        <td class="c-value-cell"><span class="toggle on"></span></td>
-        <td class="c-default">false</td>
-        <td class="c-hint"><span class="edited-dot"></span>Queue full-text fetches for sources</td>
-        <td><button class="reset-btn">reset</button></td>
-      </tr>
-      <tr>
-        <td><span class="c-key">extraction.auto_top_n</span></td>
-        <td class="c-value-cell"><input type="number" class="narrow" value="3"></td>
-        <td class="c-default">3</td>
-        <td class="c-hint">How many top sources to auto-extract</td>
-        <td></td>
-      </tr>
-      <tr>
-        <td><span class="c-key">extraction.concurrency</span></td>
-        <td class="c-value-cell"><input type="number" class="narrow" value="2"></td>
-        <td class="c-default">2</td>
-        <td class="c-hint">Parallel fetches</td>
-        <td></td>
-      </tr>
-    </tbody>
-  </table>
-</section>
-
 <p class="mock-intro" style="margin-top:0">
-  <strong>Per-session overrides</strong> — independent of which variant above: the session detail page gets a "Config" panel reusing the same field components. Each field shows the effective value, a subtle dot when overridden from default, and a per-field reset. Global defaults page governs new sessions; in-flight sessions keep their frozen config.
+  <strong>Per-session overrides</strong> — the session detail page gets a "Config" panel reusing the same field components. Each field shows the effective value, a subtle dot when overridden from default, and a per-field reset. Global defaults page governs new sessions; in-flight sessions keep their frozen config.
 </p>
 
 </body>

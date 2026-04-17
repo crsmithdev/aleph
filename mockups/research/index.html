@@ -6,18 +6,18 @@
 <link rel="stylesheet" href="common.css">
 <style>
   body{padding:40px}
-  .nav-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:24px;max-width:900px}
+  .nav-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--sp-3);margin-top:var(--sp-6);max-width:900px}
   .nav-card{
-    display:block;padding:20px;background:var(--bg-secondary);
+    display:block;padding:var(--sp-5);background:var(--bg-secondary);
     border:1px solid var(--border);border-radius:10px;color:var(--text-primary);text-decoration:none;
   }
   .nav-card:hover{border-color:var(--accent);text-decoration:none}
-  .nav-card h3{margin:0 0 6px;font-size:14px}
-  .nav-card p{margin:0;color:var(--text-muted);font-size:12px;line-height:1.5}
+  .nav-card h3{margin:0 0 6px;font-size:var(--t-h3);font-weight:600}
+  .nav-card p{margin:0;color:var(--text-muted);font-size:var(--t-body);line-height:1.5}
 </style>
 </head>
 <body>
-  <h1 style="font-size:22px;margin:0">Research — UI mockups</h1>
+  <h1 style="font-size:var(--t-h1);margin:0">Research — UI mockups</h1>
   <p class="dim" style="margin-top:6px">Static HTML previews. Consistent theme, representative data. Pick structures and I'll build.</p>
 
   <div class="nav-grid">
@@ -46,8 +46,8 @@
       <p>Live activity feed across sessions; per-worker status; step stream.</p>
     </a>
     <a class="nav-card" href="../research-config/index.html">
-      <h3>Config — three variants →</h3>
-      <p>The three defaults-page mockups from earlier.</p>
+      <h3>Config — Variant A →</h3>
+      <p>Defaults page: grouped cards, single scroll.</p>
     </a>
   </div>
 </body>

@@ -5,33 +5,40 @@
 <title>Queries · Research</title>
 <link rel="stylesheet" href="common.css">
 <style>
-  .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:12px;flex-wrap:wrap}
+  .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--sp-4);gap:var(--sp-3);flex-wrap:wrap}
   .search{
     background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;
-    color:var(--text-primary);padding:6px 10px;width:280px;font:inherit;font-size:13px;
+    color:var(--text-primary);padding:6px 10px;width:280px;font:inherit;font-size:var(--t-body);
   }
   .filters{display:flex;gap:6px}
   .chip{
     background:var(--bg-secondary);color:var(--text-secondary);
-    padding:4px 10px;border-radius:12px;font-size:11px;cursor:pointer;border:1px solid var(--border);
+    padding:4px 10px;border-radius:12px;font-size:var(--t-meta);cursor:pointer;border:1px solid var(--border);
   }
   .chip.active{background:var(--accent-dim);color:#fff;border-color:var(--accent)}
   .chip .n{color:var(--text-muted);margin-left:4px}
   .chip.active .n{color:#fff;opacity:.8}
   .title-cell .q{color:var(--text-primary);font-weight:500;display:block}
-  .title-cell .sub{color:var(--text-muted);font-size:11px;margin-top:2px}
+  .title-cell .sub{color:var(--text-muted);font-size:var(--t-meta);margin-top:2px}
   .metric-stack{display:flex;gap:18px;align-items:center}
   .metric{display:flex;flex-direction:column}
-  .metric .n{color:var(--text-primary);font-size:13px;font-weight:500;font-variant-numeric:tabular-nums}
-  .metric .l{color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-top:1px}
+  .metric .n{color:var(--text-primary);font-size:var(--t-body);font-weight:500;font-variant-numeric:tabular-nums}
+  .metric .l{color:var(--text-muted);font-size:var(--t-meta);text-transform:uppercase;letter-spacing:.05em;margin-top:1px}
   .budget-cell{min-width:140px}
-  .budget-cell .amt{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;font-variant-numeric:tabular-nums}
+  .budget-cell .amt{display:flex;justify-content:space-between;font-size:var(--t-body);margin-bottom:4px;font-variant-numeric:tabular-nums}
   .budget-cell .amt .limit{color:var(--text-muted)}
   td.actions{text-align:right;white-space:nowrap}
   .icon-btn{
-    background:transparent;border:none;color:var(--text-muted);cursor:pointer;padding:4px 6px;
+    background:transparent;border:none;color:var(--text-muted);cursor:pointer;padding:4px 6px;font-size:var(--t-body);
   }
   .icon-btn:hover{color:var(--accent)}
+
+  .summary-cards{margin-top:var(--sp-6);display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-3);max-width:1100px}
+  .summary-cards .label{color:var(--text-muted);font-size:var(--t-meta);font-weight:500;letter-spacing:.02em}
+  .summary-cards .big{margin-top:10px;font-size:var(--t-h2);color:var(--text-primary);font-weight:600}
+  .summary-cards .hint{color:var(--text-muted);font-size:var(--t-meta);margin-top:10px}
+
+  .sparkline-tooltip[data-tip]:hover{cursor:help}
 </style>
 </head>
 <body>
@@ -39,15 +46,15 @@
   <aside class="sidebar">
     <div class="sidebar-brand">Construct</div>
     <div class="sidebar-section">Research</div>
-    <a class="sidebar-link active" href="queries.html"><span class="dot"></span>Queries</a>
-    <a class="sidebar-link" href="events.html"><span class="dot"></span>Events</a>
-    <a class="sidebar-link" href="#"><span class="dot"></span>Workers</a>
-    <a class="sidebar-link" href="#"><span class="dot"></span>Monitors</a>
-    <a class="sidebar-link" href="../research-config/index.html"><span class="dot"></span>Config</a>
+    <a class="sidebar-link active" href="queries.html">Queries</a>
+    <a class="sidebar-link" href="events.html">Events</a>
+    <a class="sidebar-link" href="#">Workers</a>
+    <a class="sidebar-link" href="#">Monitors</a>
+    <a class="sidebar-link" href="../research-config/index.html">Config</a>
     <div class="sidebar-section">Life</div>
-    <a class="sidebar-link" href="#"><span class="dot"></span>Summary</a>
-    <a class="sidebar-link" href="#"><span class="dot"></span>Goals</a>
-    <a class="sidebar-link" href="#"><span class="dot"></span>Todos</a>
+    <a class="sidebar-link" href="#">Summary</a>
+    <a class="sidebar-link" href="#">Goals</a>
+    <a class="sidebar-link" href="#">Todos</a>
   </aside>
 
   <main class="main">
@@ -56,7 +63,7 @@
         <h1>Research queries</h1>
         <p class="sub">14 queries · 3 active · $24.17 spent this week</p>
       </div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:var(--sp-2)">
         <button class="btn">Import</button>
         <button class="btn btn-primary">+ New query</button>
       </div>
@@ -105,12 +112,13 @@
               <div class="bar"><span style="width:34%"></span></div>
             </td>
             <td>
-              <svg class="sparkline" width="80" height="22" viewBox="0 0 80 22">
+              <svg class="sparkline sparkline-tooltip" data-tip="7d: 3 4 2 6 4 9 7" width="80" height="22" viewBox="0 0 80 22">
+                <title>7d findings: 3 4 2 6 4 9 7</title>
                 <polyline fill="none" stroke="#c678dd" stroke-width="1.5"
                   points="0,18 8,14 16,16 24,10 32,12 40,7 48,9 56,5 64,8 72,4 80,6"/>
               </svg>
             </td>
-            <td class="dim tiny">3m ago</td>
+            <td class="dim t-meta">3m ago</td>
             <td class="actions"><button class="icon-btn">⋯</button></td>
           </tr>
 
@@ -132,12 +140,13 @@
               <div class="bar warn"><span style="width:79%"></span></div>
             </td>
             <td>
-              <svg class="sparkline" width="80" height="22" viewBox="0 0 80 22">
+              <svg class="sparkline sparkline-tooltip" width="80" height="22" viewBox="0 0 80 22">
+                <title>7d findings: 8 9 11 10 12 9 13</title>
                 <polyline fill="none" stroke="#c678dd" stroke-width="1.5"
                   points="0,5 8,6 16,3 24,5 32,4 40,8 48,4 56,7 64,3 72,6 80,2"/>
               </svg>
             </td>
-            <td class="dim tiny">12s ago</td>
+            <td class="dim t-meta">12s ago</td>
             <td class="actions"><button class="icon-btn">⋯</button></td>
           </tr>
 
@@ -159,12 +168,13 @@
               <div class="bar"><span style="width:38%"></span></div>
             </td>
             <td>
-              <svg class="sparkline" width="80" height="22" viewBox="0 0 80 22">
+              <svg class="sparkline sparkline-tooltip" width="80" height="22" viewBox="0 0 80 22">
+                <title>7d findings: 5 4 6 3 2 1 1</title>
                 <polyline fill="none" stroke="#848da0" stroke-width="1.5"
                   points="0,8 8,10 16,7 24,12 32,14 40,14 48,15 56,16 64,16 72,16 80,16"/>
               </svg>
             </td>
-            <td class="dim tiny">2h ago</td>
+            <td class="dim t-meta">2h ago</td>
             <td class="actions"><button class="icon-btn">⋯</button></td>
           </tr>
 
@@ -186,12 +196,13 @@
               <div class="bar"><span style="width:73%"></span></div>
             </td>
             <td>
-              <svg class="sparkline" width="80" height="22" viewBox="0 0 80 22">
+              <svg class="sparkline sparkline-tooltip" width="80" height="22" viewBox="0 0 80 22">
+                <title>7d findings: 11 13 9 11 8 5 3</title>
                 <polyline fill="none" stroke="#848da0" stroke-width="1.5"
                   points="0,5 8,3 16,6 24,4 32,7 40,9 48,12 56,14 64,15 72,16 80,16"/>
               </svg>
             </td>
-            <td class="dim tiny">yesterday</td>
+            <td class="dim t-meta">yesterday</td>
             <td class="actions"><button class="icon-btn">⋯</button></td>
           </tr>
 
@@ -213,12 +224,13 @@
               <div class="bar"><span style="width:51%"></span></div>
             </td>
             <td>
-              <svg class="sparkline" width="80" height="22" viewBox="0 0 80 22">
+              <svg class="sparkline sparkline-tooltip" width="80" height="22" viewBox="0 0 80 22">
+                <title>7d findings: 10 12 9 11 8 6 3</title>
                 <polyline fill="none" stroke="#848da0" stroke-width="1.5"
                   points="0,6 8,4 16,7 24,5 32,8 40,10 48,12 56,14 64,15 72,16 80,16"/>
               </svg>
             </td>
-            <td class="dim tiny">3d ago</td>
+            <td class="dim t-meta">3d ago</td>
             <td class="actions"><button class="icon-btn">⋯</button></td>
           </tr>
 
@@ -240,12 +252,13 @@
               <div class="bar err"><span style="width:100%"></span></div>
             </td>
             <td>
-              <svg class="sparkline" width="80" height="22" viewBox="0 0 80 22">
+              <svg class="sparkline sparkline-tooltip" width="80" height="22" viewBox="0 0 80 22">
+                <title>7d findings: 7 8 6 8 7 4 2</title>
                 <polyline fill="none" stroke="#848da0" stroke-width="1.5"
                   points="0,9 8,7 16,10 24,7 32,8 40,11 48,13 56,14 64,16 72,16 80,16"/>
               </svg>
             </td>
-            <td class="dim tiny">5d ago</td>
+            <td class="dim t-meta">5d ago</td>
             <td class="actions"><button class="icon-btn">⋯</button></td>
           </tr>
 
@@ -267,21 +280,22 @@
               <div class="bar"><span style="width:65%"></span></div>
             </td>
             <td>
-              <svg class="sparkline" width="80" height="22" viewBox="0 0 80 22">
+              <svg class="sparkline sparkline-tooltip" width="80" height="22" viewBox="0 0 80 22">
+                <title>7d findings: 12 10 11 8 6 4 2</title>
                 <polyline fill="none" stroke="#848da0" stroke-width="1.5"
                   points="0,4 8,6 16,5 24,8 32,10 40,12 48,14 56,15 64,16 72,16 80,16"/>
               </svg>
             </td>
-            <td class="dim tiny">1w ago</td>
+            <td class="dim t-meta">1w ago</td>
             <td class="actions"><button class="icon-btn">⋯</button></td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <div style="margin-top:24px;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;max-width:1100px">
+    <div class="summary-cards">
       <div class="card card-pad">
-        <div class="tiny dim">Top concepts this month</div>
+        <div class="label">Top concepts this month</div>
         <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px">
           <span class="pill">solid-state electrolyte · 8</span>
           <span class="pill">QuantumScape · 7</span>
@@ -291,22 +305,22 @@
           <span class="pill">CRYSTALS-Kyber · 4</span>
           <span class="pill">semaglutide · 4</span>
         </div>
-        <div class="tiny dim" style="margin-top:10px">Cross-session concept reuse. Click a concept to see contributing queries.</div>
+        <div class="hint">Cross-session concept reuse. Click a concept to see contributing queries.</div>
       </div>
 
       <div class="card card-pad">
-        <div class="tiny dim">Extraction queue</div>
-        <div style="margin-top:10px;font-size:18px;color:var(--text-primary);font-weight:600">47 <span class="tiny dim" style="font-weight:400">pending</span></div>
-        <div style="display:flex;gap:14px;margin-top:8px">
-          <div><span class="pill pill-active" style="padding:1px 6px"></span><span class="tiny"> 3 running</span></div>
-          <div><span class="pill pill-pending" style="padding:1px 6px"></span><span class="tiny"> 44 queued</span></div>
-          <div><span class="pill pill-error" style="padding:1px 6px"></span><span class="tiny"> 5 failed</span></div>
+        <div class="label">Extraction queue</div>
+        <div class="big">47 <span class="t-meta dim" style="font-weight:400">pending</span></div>
+        <div style="display:flex;gap:var(--sp-3);margin-top:var(--sp-2);flex-wrap:wrap">
+          <span class="t-meta"><span class="pill pill-active" style="padding:1px 6px"></span> 3 running</span>
+          <span class="t-meta"><span class="pill pill-pending" style="padding:1px 6px"></span> 44 queued</span>
+          <span class="t-meta"><span class="pill pill-error" style="padding:1px 6px"></span> 5 failed</span>
         </div>
       </div>
 
       <div class="card card-pad">
-        <div class="tiny dim">Spend · last 7 days</div>
-        <div style="margin-top:10px;font-size:18px;color:var(--text-primary);font-weight:600">$24.17</div>
+        <div class="label">Spend · last 7 days</div>
+        <div class="big">$24.17</div>
         <svg width="100%" height="40" viewBox="0 0 200 40" preserveAspectRatio="none">
           <polyline fill="none" stroke="#c678dd" stroke-width="1.5"
             points="0,35 30,30 60,25 90,28 120,18 150,14 180,12 200,8"/>
