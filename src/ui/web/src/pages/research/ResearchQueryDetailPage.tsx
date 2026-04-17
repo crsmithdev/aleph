@@ -517,34 +517,53 @@ function DocumentView({
     );
   }
 
+  const sortedFindingsForBib = useMemo(
+    () => [...findings].sort((a, b) => b.confidence - a.confidence),
+    [findings],
+  );
+
   return (
-    <div className="flex gap-8">
-      {/* Main article */}
-      <div className="flex-1 min-w-0">
-        <div className="max-w-3xl mx-auto">
+    <div className="grid grid-cols-1 xl:grid-cols-[200px_minmax(0,1fr)_300px] gap-7">
+      {/* Left TOC rail */}
+      {tocEntries.length > 2 ? (
+        <aside className="hidden xl:block">
+          <div className="sticky top-4 space-y-0.5">
+            <h4 className="text-sm text-text-muted uppercase tracking-[0.08em] mb-2.5 font-medium">Contents</h4>
+            <ul className="list-none p-0 m-0">
+              {tocEntries.map((entry, idx) => (
+                <li key={idx}>
+                  <button
+                    onClick={() => scrollToHeading(entry.id)}
+                    className={clsx(
+                      'block w-full text-left py-1 text-sm hover:text-text-primary hover:bg-bg-tertiary/30 rounded truncate transition-colors',
+                      entry.level === 2 ? 'px-2 text-text-secondary' : 'pl-4 pr-2 text-text-muted text-sm',
+                    )}
+                  >
+                    {entry.title}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </aside>
+      ) : <div className="hidden xl:block" />}
+
+      {/* Center: article */}
+      <div className="min-w-0">
+        <div className="max-w-[720px] mx-auto">
           {/* Regenerate / Export controls */}
           <div className="flex items-center justify-end mb-6 gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={exportMarkdown}
-            >
+            <Button variant="ghost" size="sm" onClick={exportMarkdown}>
               <Icon name="download" size="xs" className="mr-1" />
               Export .md
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => generateDoc.mutate({ sessionId })}
-              loading={generateDoc.isPending}
-            >
+            <Button variant="ghost" size="sm" onClick={() => generateDoc.mutate({ sessionId })} loading={generateDoc.isPending}>
               <Icon name="refresh" size="xs" className="mr-1" />
               Regenerate
             </Button>
           </div>
 
-          {/* Rendered article — section-by-section so we can inject metadata panels */}
-          <article className="md-content article-view text-base text-text-primary leading-[1.85]">
+          <article className="md-content article-view text-base text-text-primary leading-[1.7]">
             {docSections.map((section, idx) => {
               const mdComponents = {
                 p: ({ children }: React.HTMLAttributes<HTMLParagraphElement>) => <p className="mb-4 text-text-secondary">{children}</p>,
@@ -599,130 +618,127 @@ function DocumentView({
               );
             })}
           </article>
-
-          {/* Bibliography */}
-          {findings.length > 0 && (
-            <ReferencesSection findings={findings} />
-          )}
         </div>
       </div>
 
-      {/* Sidebar TOC */}
-      {tocEntries.length > 2 && (
-        <div className="w-52 shrink-0 hidden xl:block">
-          <div className="sticky top-4 space-y-0.5">
-            <p className="text-sm text-text-muted uppercase tracking-wide mb-2 font-medium">Contents</p>
-            {tocEntries.map((entry, idx) => (
-              <button
-                key={idx}
-                onClick={() => scrollToHeading(entry.id)}
-                className={clsx(
-                  'block w-full text-left py-1 text-sm text-text-secondary hover:text-text-primary hover:bg-bg-tertiary/30 rounded truncate transition-colors',
-                  entry.level === 2 ? 'px-2' : 'px-4 text-text-muted'
-                )}
-              >
-                {entry.title}
-              </button>
-            ))}
-          </div>
+      {/* Right bibliography rail */}
+      <aside className="hidden xl:block">
+        <div className="sticky top-4 max-h-[calc(100vh-6rem)] overflow-y-auto pr-1">
+          <BibliographyRail findings={sortedFindingsForBib} sessionId={sessionId} />
         </div>
-      )}
+      </aside>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// References (bibliography-style, part of the article typographic system)
+// Bibliography rail (right side of Document view)
 // ---------------------------------------------------------------------------
 
 function domainFrom(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
 }
 
-function RefEntry({ finding, index }: { finding: ResearchFinding; index: number }) {
-  const [open, setOpen] = useState(false);
-  const sources = finding.source_url_meta?.length
-    ? finding.source_url_meta
-    : finding.source_urls.map(url => ({ url, title: '', snippet: '' }));
-  const domains = [...new Set(sources.map(s => domainFrom(s.url)))];
-
-  return (
-    <div id={`ref-${index}`} className="group">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full text-left py-2 flex items-start gap-3 transition-colors"
-      >
-        <span className="text-sm text-text-muted font-mono shrink-0 mt-0.5 w-5 text-right">{index}</span>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm text-text-secondary leading-relaxed group-hover:text-text-primary transition-colors">
-            {finding.summary}
-          </p>
-          <div className="flex items-center gap-2 mt-1 flex-wrap">
-            {domains.length > 0 && (
-              <span className="text-sm text-text-muted">
-                {domains.slice(0, 2).join(' · ')}{domains.length > 2 ? ` · +${domains.length - 2}` : ''}
-              </span>
-            )}
-            {domains.length > 0 && finding.tags.length > 0 && (
-              <span className="text-text-disabled">·</span>
-            )}
-            {finding.tags.map(tag => (
-              <span key={tag} className="text-sm text-text-muted">{tag}</span>
-            ))}
-            <span className="text-sm text-text-disabled ml-auto">
-              {(finding.confidence * 100).toFixed(0)}% conf
-              {finding.novelty > 0.3 && <>{' · '}{(finding.novelty * 100).toFixed(0)}% novel</>}
-            </span>
-          </div>
-        </div>
-      </button>
-
-      {open && (
-        <div className="ml-8 pb-3 space-y-2">
-          {sources.length > 0 && (
-            <div className="space-y-0.5">
-              {sources.map((src, i) => (
-                <a
-                  key={i}
-                  href={src.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block text-sm hover:underline truncate"
-                  title={src.url}
-                >
-                  <span className="text-text-muted">{domainFrom(src.url)}</span>
-                  {src.title && <span className="text-accent ml-1.5">{src.title}</span>}
-                  {!src.title && <span className="text-accent ml-1.5">{src.url}</span>}
-                </a>
-              ))}
-            </div>
-          )}
-
-          {finding.follow_ups.length > 0 && (
-            <p className="text-sm text-text-muted italic leading-relaxed">
-              See also: {finding.follow_ups.join('; ')}
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  );
+function extractionPillClass(status: SourceExtractionStatus): string {
+  switch (status) {
+    case 'extracted':
+      return 'bg-success/15 text-success border-success/30';
+    case 'failed':
+      return 'bg-error/15 text-error border-error/30';
+    case 'skipped':
+      return 'bg-bg-tertiary text-text-muted border-border-primary/30';
+    case 'pending':
+    case 'claimed':
+    default:
+      return 'bg-warning/15 text-warning border-warning/30';
+  }
 }
 
-function ReferencesSection({ findings }: { findings: ResearchFinding[] }) {
-  const sorted = useMemo(
-    () => [...findings].sort((a, b) => b.confidence - a.confidence),
-    [findings],
-  );
+function extractionPillLabel(status: SourceExtractionStatus): string {
+  if (status === 'claimed') return 'extracting';
+  return status;
+}
+
+function BibliographyRail({
+  findings,
+  sessionId,
+}: {
+  findings: ResearchFinding[];
+  sessionId: string;
+}) {
+  const { data: sourcesData } = useSources(sessionId);
+  const sourceByUrl = useMemo(() => {
+    const m = new Map<string, Source>();
+    for (const s of sourcesData?.items ?? []) m.set(s.url, s);
+    return m;
+  }, [sourcesData]);
+
+  const items = useMemo(() => {
+    return findings.map((f, i) => {
+      const urls = f.source_url_meta?.length
+        ? f.source_url_meta.map(s => s.url)
+        : f.source_urls;
+      const primaryUrl = urls[0];
+      const primarySource = primaryUrl ? sourceByUrl.get(primaryUrl) : undefined;
+      const domain = primaryUrl ? domainFrom(primaryUrl) : '';
+      const title = f.source_url_meta?.[0]?.title || f.summary;
+      return {
+        index: i + 1,
+        finding: f,
+        title,
+        href: primaryUrl,
+        domain,
+        status: primarySource?.extraction_status as SourceExtractionStatus | undefined,
+      };
+    });
+  }, [findings, sourceByUrl]);
 
   return (
-    <div className="mt-12">
-      <hr className="border-border-primary/30 mb-10" />
-      <h2 className="font-heading text-xl font-semibold text-text-primary mb-6 pb-2 border-b border-border-primary/30">
-        References
-      </h2>
-      <div className="space-y-0.5">
-        {sorted.map((f, i) => <RefEntry key={f.id} finding={f} index={i + 1} />)}
+    <div>
+      <h4 className="text-sm text-text-muted font-medium uppercase tracking-[0.08em] mb-2.5">
+        References &middot; {items.length}
+      </h4>
+      <div>
+        {items.map(({ index, finding, title, href, domain, status }) => (
+          <div
+            key={finding.id}
+            id={`ref-${index}`}
+            className="py-2.5 border-b border-border-primary/30 last:border-b-0"
+          >
+            <span className="text-accent font-mono text-sm mr-1.5">[{index}]</span>
+            {href ? (
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-text-primary text-sm leading-snug hover:underline"
+              >
+                {title}
+              </a>
+            ) : (
+              <span className="text-text-primary text-sm leading-snug">{title}</span>
+            )}
+            {(domain || finding.confidence > 0) && (
+              <div className="text-sm text-text-muted mt-0.5">
+                {domain}
+                {domain && <span className="mx-1">&middot;</span>}
+                <span>{(finding.confidence * 100).toFixed(0)}% conf</span>
+              </div>
+            )}
+            {status && (
+              <div className="mt-1">
+                <span
+                  className={clsx(
+                    'inline-flex items-center text-sm px-2 py-[1px] border rounded',
+                    extractionPillClass(status),
+                  )}
+                >
+                  {extractionPillLabel(status)}
+                </span>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
