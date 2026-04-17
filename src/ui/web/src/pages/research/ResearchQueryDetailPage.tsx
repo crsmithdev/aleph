@@ -2963,24 +2963,182 @@ function SessionConfigView({
   );
 }
 
+type EventKind = 'search' | 'synth' | 'finding' | 'extract' | 'dedup';
+
+interface TimelineEvent {
+  id: string;
+  kind: EventKind;
+  ts: string;
+  threadId: string;
+  threadLabel: string;
+  detail: React.ReactNode;
+}
+
+function stepEventKind(step: ResearchStep): EventKind {
+  const tools = step.tool_calls ?? [];
+  const hasExtract = tools.some(t => (t.jina_fetches?.length ?? 0) > 0);
+  const hasSearch = tools.some(t => t.tool === 'web_search' || t.tool === 'tavily' || /search/i.test(t.tool));
+  if (hasExtract) return 'extract';
+  if (hasSearch) return 'search';
+  return 'synth';
+}
+
+function formatTime(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  } catch { return ''; }
+}
+
+function kindClass(kind: EventKind): string {
+  switch (kind) {
+    case 'search': return 'text-info';
+    case 'synth': return 'text-accent';
+    case 'finding': return 'text-success';
+    case 'extract': return 'text-info';
+    case 'dedup': return 'text-warning';
+  }
+}
+
 function EventsView({
-  activity, events, isRunning,
+  steps, findings, threads, isRunning,
 }: {
-  activity: ResearchActivity | undefined;
-  events: StreamEvent[];
+  steps: ResearchStep[];
+  findings: ResearchFinding[];
+  threads: ResearchThread[];
   isRunning: boolean;
 }) {
-  const total = (activity?.recent_steps.length ?? 0) + events.length;
+  const [filter, setFilter] = useState<'all' | EventKind>('all');
+
+  const threadShortId = useCallback((tid: string) => {
+    const idx = threads.findIndex(t => t.id === tid);
+    if (idx < 0) return tid.slice(0, 8);
+    return `thr-${String(idx + 1).padStart(2, '0')}`;
+  }, [threads]);
+
+  const timeline = useMemo<TimelineEvent[]>(() => {
+    const out: TimelineEvent[] = [];
+
+    for (const s of steps) {
+      const kind = stepEventKind(s);
+      let detail: React.ReactNode;
+      if (kind === 'search') {
+        const sq = s.tool_calls.find(t => t.input && typeof t.input.query === 'string');
+        const query = sq?.input?.query as string | undefined;
+        detail = (
+          <span>
+            {query ? <span className="text-text-primary">&ldquo;{query}&rdquo;</span> : <span className="text-text-muted">search</span>}
+            {' '}
+            <span className="text-text-muted">&middot; {s.model}</span>
+          </span>
+        );
+      } else if (kind === 'extract') {
+        const fetches = s.tool_calls.flatMap(t => t.jina_fetches ?? []);
+        const ok = fetches.filter(f => f.ok);
+        const bytes = ok.reduce((a, f) => a + (f.content_length ?? 0), 0);
+        detail = (
+          <span className="text-text-secondary">
+            {ok.length}/{fetches.length} fetched {bytes > 0 && <span className="text-text-muted">&middot; {kbSize(bytes)}</span>}
+            {fetches.filter(f => !f.ok).map((f, i) => (
+              <span key={i} className="text-error ml-2">{f.error?.slice(0, 40)}</span>
+            ))}
+          </span>
+        );
+      } else {
+        const cost = s.cost_usd > 0 ? `$${s.cost_usd.toFixed(3)}` : '';
+        detail = (
+          <span className="text-text-secondary">
+            {s.model} <span className="text-text-muted">&middot; in {s.prompt_tokens.toLocaleString()} &middot; out {s.completion_tokens.toLocaleString()}{cost && ` · ${cost}`}</span>
+          </span>
+        );
+      }
+      out.push({
+        id: `step-${s.id}`,
+        kind,
+        ts: s.created_at,
+        threadId: s.thread_id,
+        threadLabel: threadShortId(s.thread_id),
+        detail,
+      });
+    }
+
+    for (const f of findings) {
+      out.push({
+        id: `find-${f.id}`,
+        kind: 'finding',
+        ts: f.created_at,
+        threadId: f.thread_id,
+        threadLabel: threadShortId(f.thread_id),
+        detail: (
+          <span>
+            <span className="text-text-primary font-medium">{f.summary.slice(0, 140)}</span>
+            <span className="text-text-muted">
+              {' '}&middot; {(f.confidence * 100).toFixed(0)}% conf
+              {f.novelty > 0.3 && ` · ${(f.novelty * 100).toFixed(0)}% novel`}
+            </span>
+          </span>
+        ),
+      });
+    }
+
+    out.sort((a, b) => b.ts.localeCompare(a.ts));
+    return out;
+  }, [steps, findings, threadShortId]);
+
+  const filtered = filter === 'all' ? timeline : timeline.filter(e => e.kind === filter);
+
+  const chips: Array<{ key: 'all' | EventKind; label: string }> = [
+    { key: 'all', label: 'All' },
+    { key: 'search', label: 'Searches' },
+    { key: 'finding', label: 'Findings' },
+    { key: 'extract', label: 'Extraction' },
+    { key: 'synth', label: 'LLM calls' },
+  ];
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
         <div className="text-sm text-text-muted">
-          Most recent first &middot; session-scoped {isRunning && <span>&middot; <span className="text-accent">auto-updates</span></span>}
+          Most recent first &middot; session-scoped
+          {isRunning && <> &middot; <span className="text-accent">auto-updates</span></>}
         </div>
-        <div className="text-sm text-text-muted tabular-nums">{total} events</div>
+        <div className="flex items-center gap-1.5">
+          {chips.map(c => (
+            <button
+              key={c.key}
+              onClick={() => setFilter(c.key)}
+              className={clsx(
+                'px-2 py-[3px] text-sm rounded border transition-colors',
+                filter === c.key
+                  ? 'border-accent/40 text-accent bg-accent/10'
+                  : 'border-border-primary/40 text-text-muted hover:text-text-secondary',
+              )}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="text-sm text-text-muted py-8 text-center border border-dashed border-border-primary/40 rounded">
-        Events view coming soon &mdash; kind-colored activity grid with filter chips.
+
+      <div className="border border-border-primary/40 rounded bg-bg-secondary overflow-hidden">
+        {filtered.length === 0 ? (
+          <div className="text-sm text-text-muted py-8 text-center">No events in this filter.</div>
+        ) : filtered.slice(0, 200).map(e => (
+          <div
+            key={e.id}
+            className="grid grid-cols-[84px_96px_96px_minmax(0,1fr)] gap-3 items-center px-4 py-2 border-b border-border-primary/30 last:border-b-0 text-sm"
+          >
+            <div className="text-sm text-text-muted tabular-nums">{formatTime(e.ts)}</div>
+            <div className={clsx('text-sm font-medium', kindClass(e.kind))}>{e.kind}</div>
+            <div className="text-sm text-text-muted font-mono truncate">{e.threadLabel}</div>
+            <div className="min-w-0 truncate">{e.detail}</div>
+          </div>
+        ))}
+        {filtered.length > 200 && (
+          <div className="text-sm text-text-muted py-2 text-center border-t border-border-primary/30">
+            Showing 200 of {filtered.length} events
+          </div>
+        )}
       </div>
     </div>
   );
@@ -3609,8 +3767,9 @@ export function ResearchQueryDetailPage() {
           )}
           {tab === 'events' && (
             <EventsView
-              activity={activity}
-              events={events}
+              steps={allSteps}
+              findings={findingsData}
+              threads={threadsData}
               isRunning={isRunning}
             />
           )}
