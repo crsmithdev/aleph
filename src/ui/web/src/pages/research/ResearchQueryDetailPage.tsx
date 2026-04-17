@@ -3867,11 +3867,7 @@ export function ResearchQueryDetailPage() {
             />
           )}
           {tab === 'process' && (
-            <MapView
-              threads={threadsData}
-              findingCounts={findingCounts}
-              onNavigateToLive={navigateToThread}
-            />
+            <p className="text-sm text-text-muted text-center py-12">Process view is being redesigned.</p>
           )}
           {tab === 'knowledge' && (
             <KnowledgeView sessionId={id!} />
