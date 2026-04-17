@@ -10,10 +10,12 @@ import {
   getStepCosts, listSteps,
   applyResearchDDL,
   DEFAULT_SESSION_CONFIG,
+  getDefaults, updateDefaults, resetDefaults,
   fetchPageText, JS_RENDERED_FLAG,
   // Job imports
   createJob, getJob, getActiveJobForSession, cancelJob, listJobsForSession, cancelAllJobs, listAllJobs, listActiveJobs, jobStats,
   type JobStatus, type ThreadStatus,
+  type SessionConfig,
   deleteQuery,
   OpenRouterProvider,
   // Monitor imports
@@ -867,6 +869,19 @@ Write the full article in markdown.`;
     const patch = req.body;
     saveProviderConfig(patch);
     return { status: 'saved' };
+  });
+
+  // === Research defaults (persisted SessionConfig) ===
+  app.get('/defaults', async () => {
+    return getDefaults(app.sqlite);
+  });
+
+  app.put<{ Body: Partial<SessionConfig> }>('/defaults', async (req) => {
+    return updateDefaults(app.sqlite, req.body ?? {});
+  });
+
+  app.post('/defaults/reset', async () => {
+    return resetDefaults(app.sqlite);
   });
 
   // === Env check (kept for backward compat + consumer-page warnings) ===

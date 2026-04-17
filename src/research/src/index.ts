@@ -3,6 +3,7 @@ export * from './types.js';
 export { ResearchEngine, AnthropicProvider } from './engine.js';
 export type { EngineOptions, LLMProvider, LLMResult, WebSearchResult } from './engine.js';
 export * from './services/queries.js';
+export { getDefaults, updateDefaults, resetDefaults } from './services/defaults.js';
 export * from './services/threads.js';
 export * from './services/findings.js';
 export * from './services/steps.js';

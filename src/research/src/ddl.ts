@@ -1,4 +1,5 @@
 import type { Sqlite } from '@construct/data';
+import { seedDefaults } from './services/defaults.js';
 
 export function applyResearchDDL(sqlite: Sqlite): void {
   // Run rename migration BEFORE CREATE TABLE so it doesn't create an empty research_queries first
@@ -199,6 +200,12 @@ export function applyResearchDDL(sqlite: Sqlite): void {
     CREATE INDEX IF NOT EXISTS idx_rj_status ON research_jobs(status, created_at);
     CREATE INDEX IF NOT EXISTS idx_rj_session ON research_jobs(session_id, status);
     CREATE INDEX IF NOT EXISTS idx_rj_heartbeat ON research_jobs(status, heartbeat_at);
+
+    CREATE TABLE IF NOT EXISTS research_defaults (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      config TEXT NOT NULL DEFAULT '{}',
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
   // Migrations
@@ -263,4 +270,6 @@ export function applyResearchDDL(sqlite: Sqlite): void {
       sqlite.exec('PRAGMA foreign_keys = ON');
     }
   } catch { /* not applicable */ }
+
+  seedDefaults(sqlite);
 }
