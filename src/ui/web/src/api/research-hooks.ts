@@ -456,6 +456,57 @@ export function useConceptDetail(sessionId: string, conceptId: string | null) {
   });
 }
 
+export type SourceExtractionStatus = 'pending' | 'extracted' | 'failed' | 'skipped' | 'claimed';
+
+export interface Source {
+  id: string;
+  session_id: string;
+  url: string;
+  title: string;
+  snippet: string;
+  extraction_status: SourceExtractionStatus;
+  extracted_text: string | null;
+  extracted_at: string | null;
+  fetched_at: string | null;
+  error: string | null;
+  attempt_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SourcesResponse {
+  items: Source[];
+  counts: Record<'pending' | 'extracted' | 'failed' | 'skipped', number>;
+}
+
+export function useSources(sessionId: string, status?: SourceExtractionStatus | 'all') {
+  const q = status && status !== 'all' ? `?status=${status}` : '';
+  return useQuery({
+    queryKey: ['research-sources', sessionId, status ?? 'all'],
+    queryFn: () => api.get<SourcesResponse>(`/research/queries/${sessionId}/sources${q}`),
+    enabled: !!sessionId,
+    refetchInterval: 10_000,
+  });
+}
+
+export function useRetrySource() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sourceId }: { sourceId: string; sessionId: string }) =>
+      api.post<Source>(`/research/sources/${sourceId}/retry`, {}),
+    onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: ['research-sources', vars.sessionId] }),
+  });
+}
+
+export function useSkipSource() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sourceId }: { sourceId: string; sessionId: string }) =>
+      api.post<Source>(`/research/sources/${sourceId}/skip`, {}),
+    onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: ['research-sources', vars.sessionId] }),
+  });
+}
+
 export function useInjectThread() {
   const qc = useQueryClient();
   return useMutation({

@@ -13,9 +13,11 @@ import {
   useResearchEnvCheck, useFetchThreadText, useRedoThread, useFetchFindingText,
   useGenerateDocument, useResearchWorkers, useResearchDefaults,
   useConcepts, useConceptLinks, useConceptDetail,
+  useSources, useRetrySource, useSkipSource,
   type ResearchFinding, type ResearchThread, type ResearchActivity,
   type ResearchJob, type StreamEvent, type ResearchStep,
   type ConceptWithStats,
+  type Source, type SourceExtractionStatus,
 } from '../../api/research-hooks';
 import { Button } from '../../components/ui/Button';
 import { PageLoading } from '../../components/ui/Spinner';
@@ -2415,6 +2417,110 @@ function EnvBadge({ set, label }: { set: boolean; label: string }) {
     : <span className="inline-flex items-center gap-1 text-sm font-medium text-error"><span className="w-1.5 h-1.5 rounded-full bg-error inline-block" />{label} not set</span>;
 }
 
+function SourcesView({ sessionId }: { sessionId: string }) {
+  const [filter, setFilter] = useState<SourceExtractionStatus | 'all'>('all');
+  const { data, isLoading } = useSources(sessionId, filter);
+  const retry = useRetrySource();
+  const skip = useSkipSource();
+
+  if (isLoading) return <PageLoading />;
+  const items: Source[] = data?.items ?? [];
+  const counts = data?.counts ?? { pending: 0, extracted: 0, failed: 0, skipped: 0 };
+  const total = counts.pending + counts.extracted + counts.failed + counts.skipped;
+
+  const tabs: Array<{ key: SourceExtractionStatus | 'all'; label: string; n: number }> = [
+    { key: 'all', label: 'All', n: total },
+    { key: 'pending', label: 'Pending', n: counts.pending },
+    { key: 'extracted', label: 'Extracted', n: counts.extracted },
+    { key: 'failed', label: 'Failed', n: counts.failed },
+    { key: 'skipped', label: 'Skipped', n: counts.skipped },
+  ];
+
+  const statusBadge = (s: SourceExtractionStatus) => {
+    const map: Record<SourceExtractionStatus, string> = {
+      pending: 'text-text-muted bg-bg-secondary',
+      claimed: 'text-accent bg-accent/10',
+      extracted: 'text-success bg-success/10',
+      failed: 'text-error bg-error/10',
+      skipped: 'text-text-muted bg-bg-secondary',
+    };
+    return <span className={clsx('px-1.5 py-0.5 rounded text-sm font-medium', map[s])}>{s}</span>;
+  };
+
+  return (
+    <div className="max-w-[72ch] mx-auto">
+      <div className="flex items-center gap-2 mb-4 pb-2 border-b border-border">
+        {tabs.map(t => (
+          <button key={t.key} onClick={() => setFilter(t.key)}
+            className={clsx('px-2 py-1 text-sm rounded transition-colors',
+              filter === t.key ? 'bg-bg-secondary text-text-primary' : 'text-text-muted hover:text-text-secondary')}>
+            {t.label} <span className="text-text-muted">({t.n})</span>
+          </button>
+        ))}
+      </div>
+
+      {items.length === 0 ? (
+        <div className="text-sm text-text-muted py-8 text-center">No sources in this bucket.</div>
+      ) : (
+        <ul className="space-y-2">
+          {items.map(src => (
+            <li key={src.id} className="border border-border rounded p-3 bg-bg-primary">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    {statusBadge(src.extraction_status)}
+                    {src.attempt_count > 0 && (
+                      <span className="text-sm text-text-muted">attempts: {src.attempt_count}</span>
+                    )}
+                  </div>
+                  <a href={src.url} target="_blank" rel="noopener noreferrer"
+                    className="block text-sm font-medium text-accent hover:underline truncate">
+                    {src.title || src.url}
+                  </a>
+                  <div className="text-sm text-text-muted truncate mt-0.5">{src.url}</div>
+                  {src.snippet && (
+                    <div className="text-sm text-text-secondary mt-1.5 line-clamp-2">{src.snippet}</div>
+                  )}
+                  {src.error && (
+                    <div className="text-sm text-error mt-1.5 font-mono">{src.error}</div>
+                  )}
+                  {src.extracted_text && (
+                    <details className="mt-2">
+                      <summary className="text-sm text-text-muted cursor-pointer hover:text-text-secondary">
+                        Extracted text ({src.extracted_text.length.toLocaleString()} chars)
+                      </summary>
+                      <pre className="mt-2 text-sm bg-bg-secondary p-2 rounded max-h-64 overflow-auto whitespace-pre-wrap">
+                        {src.extracted_text.slice(0, 4000)}
+                        {src.extracted_text.length > 4000 && '\n\n...[truncated]'}
+                      </pre>
+                    </details>
+                  )}
+                </div>
+                <div className="flex flex-col gap-1.5 shrink-0">
+                  {(src.extraction_status === 'failed' || src.extraction_status === 'skipped') && (
+                    <Button size="sm" variant="secondary"
+                      onClick={() => retry.mutate({ sourceId: src.id, sessionId })}
+                      disabled={retry.isPending}>
+                      Retry
+                    </Button>
+                  )}
+                  {src.extraction_status === 'pending' && (
+                    <Button size="sm" variant="secondary"
+                      onClick={() => skip.mutate({ sourceId: src.id, sessionId })}
+                      disabled={skip.isPending}>
+                      Skip
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function KnowledgeView({ sessionId }: { sessionId: string }) {
   const { data: concepts, isLoading } = useConcepts(sessionId);
   const { data: links } = useConceptLinks(sessionId);
@@ -3113,7 +3219,7 @@ export function ResearchQueryDetailPage() {
   const cancelJob = useCancelJob();
   const deleteQuery = useDeleteResearchQuery();
 
-  const [tab, setTab] = useState<'document' | 'live' | 'map' | 'knowledge' | 'config' | 'settings'>('document');
+  const [tab, setTab] = useState<'document' | 'live' | 'map' | 'knowledge' | 'sources' | 'config' | 'settings'>('document');
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
@@ -3279,6 +3385,7 @@ export function ResearchQueryDetailPage() {
               { key: 'live' as const, label: `Live (${threadsData.length})` },
               { key: 'map' as const, label: `Map` },
               { key: 'knowledge' as const, label: 'Knowledge' },
+              { key: 'sources' as const, label: 'Sources' },
               { key: 'config' as const, label: 'Config' },
               { key: 'settings' as const, label: 'Settings' },
             ]).map(t => (
@@ -3334,6 +3441,9 @@ export function ResearchQueryDetailPage() {
             )}
             {tab === 'knowledge' && (
               <KnowledgeView sessionId={id!} />
+            )}
+            {tab === 'sources' && (
+              <SourcesView sessionId={id!} />
             )}
             {tab === 'config' && (
               <SessionConfigView session={session} sessionId={id!} />
