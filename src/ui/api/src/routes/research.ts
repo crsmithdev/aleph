@@ -11,6 +11,7 @@ import {
   applyResearchDDL,
   DEFAULT_SESSION_CONFIG,
   getDefaults, updateDefaults, resetDefaults,
+  listConcepts, listConceptLinks, getConcept, listFindingsForConcept, getSourcesForConcept,
   fetchPageText, JS_RENDERED_FLAG,
   // Job imports
   createJob, getJob, getActiveJobForSession, cancelJob, listJobsForSession, cancelAllJobs, listAllJobs, listActiveJobs, jobStats,
@@ -552,6 +553,28 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       const result = updateFinding(app.sqlite, req.params.id, req.body);
       if (!result) return reply.status(404).send({ error: 'Finding not found' });
       return result;
+    }
+  );
+
+  // === Concepts (knowledge graph) ===
+  app.get<{ Params: { id: string } }>('/queries/:id/concepts', async (req) => {
+    return listConcepts(app.sqlite, req.params.id);
+  });
+
+  app.get<{ Params: { id: string } }>('/queries/:id/concept-links', async (req) => {
+    return listConceptLinks(app.sqlite, req.params.id);
+  });
+
+  app.get<{ Params: { id: string; conceptId: string } }>(
+    '/queries/:id/concepts/:conceptId',
+    async (req, reply) => {
+      const concept = getConcept(app.sqlite, req.params.conceptId);
+      if (!concept || concept.session_id !== req.params.id) {
+        return reply.status(404).send({ error: 'Concept not found' });
+      }
+      const findingIds = listFindingsForConcept(app.sqlite, concept.id);
+      const sources = getSourcesForConcept(app.sqlite, concept.id);
+      return { ...concept, finding_ids: findingIds, sources };
     }
   );
 

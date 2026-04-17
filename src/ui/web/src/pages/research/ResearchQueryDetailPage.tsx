@@ -12,8 +12,10 @@ import {
   useResearchSteps, useUpdateThread, useDeleteResearchQuery, useUpdateQueryConfig,
   useResearchEnvCheck, useFetchThreadText, useRedoThread, useFetchFindingText,
   useGenerateDocument, useResearchWorkers, useResearchDefaults,
+  useConcepts, useConceptLinks, useConceptDetail,
   type ResearchFinding, type ResearchThread, type ResearchActivity,
   type ResearchJob, type StreamEvent, type ResearchStep,
+  type ConceptWithStats,
 } from '../../api/research-hooks';
 import { Button } from '../../components/ui/Button';
 import { PageLoading } from '../../components/ui/Spinner';
@@ -2413,6 +2415,273 @@ function EnvBadge({ set, label }: { set: boolean; label: string }) {
     : <span className="inline-flex items-center gap-1 text-sm font-medium text-error"><span className="w-1.5 h-1.5 rounded-full bg-error inline-block" />{label} not set</span>;
 }
 
+function KnowledgeView({ sessionId }: { sessionId: string }) {
+  const { data: concepts, isLoading } = useConcepts(sessionId);
+  const { data: links } = useConceptLinks(sessionId);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { data: detail } = useConceptDetail(sessionId, selectedId);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const cyRef = useRef<cytoscape.Core | null>(null);
+
+  const elements = useMemo((): cytoscape.ElementDefinition[] => {
+    if (!concepts) return [];
+    const nodes: cytoscape.ElementDefinition[] = concepts.map(c => ({
+      data: {
+        id: c.id,
+        label: c.canonical_name,
+        findingCount: c.finding_count,
+        sourceCount: c.source_count,
+      },
+    }));
+    const byId = new Set(concepts.map(c => c.id));
+    const edges: cytoscape.ElementDefinition[] = (links ?? [])
+      .filter(l => byId.has(l.from_concept_id) && byId.has(l.to_concept_id))
+      .map(l => ({
+        data: {
+          id: l.id,
+          source: l.from_concept_id,
+          target: l.to_concept_id,
+          label: l.relation,
+        },
+      }));
+    return [...nodes, ...edges];
+  }, [concepts, links]);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const cy = cytoscape({
+      container: containerRef.current,
+      elements,
+      style: [
+        {
+          selector: 'node',
+          style: {
+            'background-color': '#89b4fa',
+            'label': 'data(label)',
+            'color': '#1e1e2e',
+            'font-size': '14px',
+            'font-weight': 'bold',
+            'text-valign': 'center',
+            'text-halign': 'center',
+            'text-wrap': 'wrap',
+            'text-max-width': '140px',
+            'shape': 'round-rectangle',
+            'width': (ele: cytoscape.NodeSingular) => {
+              const lbl = ele.data('label') as string | undefined;
+              return Math.max(90, Math.min(180, (lbl?.length ?? 10) * 8));
+            },
+            'height': 40,
+            'padding': '8px',
+            'border-width': 1.5,
+            'border-color': '#313147',
+          } as cytoscape.Css.Node,
+        },
+        {
+          selector: 'node:selected',
+          style: {
+            'border-color': '#f9e2af',
+            'border-width': 3,
+          } as cytoscape.Css.Node,
+        },
+        {
+          selector: 'node.dimmed',
+          style: { 'opacity': 0.3 } as cytoscape.Css.Node,
+        },
+        {
+          selector: 'edge',
+          style: {
+            'line-color': '#45475a',
+            'curve-style': 'bezier',
+            'target-arrow-shape': 'triangle',
+            'target-arrow-color': '#45475a',
+            'arrow-scale': 0.9,
+            'width': 1.5,
+            'label': 'data(label)',
+            'font-size': '14px',
+            'color': '#a6adc8',
+            'text-background-color': '#1e1e2e',
+            'text-background-opacity': 0.8,
+            'text-background-padding': '2px',
+          } as cytoscape.Css.Edge,
+        },
+        {
+          selector: 'edge.highlighted',
+          style: {
+            'line-color': '#f9e2af',
+            'target-arrow-color': '#f9e2af',
+            'width': 2.5,
+          } as cytoscape.Css.Edge,
+        },
+      ],
+      layout: {
+        name: 'fcose',
+        animate: true,
+        animationDuration: 500,
+        nodeRepulsion: 8000,
+        idealEdgeLength: 110,
+        gravity: 0.25,
+        gravityRange: 3.8,
+        nodeSeparation: 90,
+      } as cytoscape.LayoutOptions,
+    });
+
+    cy.on('tap', 'node', (evt) => {
+      const id = evt.target.data('id') as string;
+      setSelectedId(id);
+    });
+
+    cy.on('mouseover', 'node', (evt) => {
+      const node = evt.target as cytoscape.NodeSingular;
+      cy.elements().not(node.connectedEdges()).not(node).addClass('dimmed');
+      node.connectedEdges().addClass('highlighted');
+    });
+
+    cy.on('mouseout', 'node', () => {
+      cy.elements().removeClass('dimmed highlighted');
+    });
+
+    cy.on('tap', (evt) => {
+      if (evt.target === cy) setSelectedId(null);
+    });
+
+    cyRef.current = cy;
+    return () => { cy.destroy(); cyRef.current = null; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    cy.json({ elements });
+    cy.layout({
+      name: 'fcose',
+      animate: true,
+      animationDuration: 350,
+      nodeRepulsion: 8000,
+      idealEdgeLength: 110,
+    } as cytoscape.LayoutOptions).run();
+  }, [elements]);
+
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy || !selectedId) return;
+    cy.$('node:selected').unselect();
+    cy.$id(selectedId).select();
+  }, [selectedId]);
+
+  if (isLoading) return <PageLoading />;
+  if (!concepts || concepts.length === 0) {
+    return (
+      <div className="p-8 text-sm text-text-muted">
+        No concepts have been extracted yet. Run the session for a few iterations — concepts are
+        extracted from each finding after synthesis.
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-[70vh]">
+      <div ref={containerRef} className="flex-1 border border-border rounded bg-bg-secondary" />
+      <aside className="w-96 ml-4 flex flex-col gap-4 overflow-y-auto">
+        {selectedId && detail ? (
+          <ConceptInspector concept={detail} />
+        ) : (
+          <ConceptList concepts={concepts} selectedId={selectedId} onSelect={setSelectedId} />
+        )}
+      </aside>
+    </div>
+  );
+}
+
+function ConceptList({
+  concepts, selectedId, onSelect,
+}: {
+  concepts: ConceptWithStats[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="border border-border rounded bg-bg-secondary">
+      <div className="px-3 py-2 text-sm font-semibold border-b border-border">
+        {concepts.length} concepts
+      </div>
+      <ul className="divide-y divide-border">
+        {concepts.map(c => (
+          <li key={c.id}>
+            <button
+              onClick={() => onSelect(c.id)}
+              className={`w-full text-left px-3 py-2 hover:bg-bg-hover ${
+                selectedId === c.id ? 'bg-bg-hover' : ''
+              }`}
+            >
+              <div className="text-sm font-medium">{c.canonical_name}</div>
+              <div className="text-sm text-text-muted">
+                {c.finding_count} findings · {c.source_count} sources
+              </div>
+              {c.summary && (
+                <div className="text-sm text-text-muted mt-1 line-clamp-2">{c.summary}</div>
+              )}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ConceptInspector({ concept }: { concept: import('../../api/research-hooks').ConceptDetail }) {
+  return (
+    <div className="border border-border rounded bg-bg-secondary p-4 flex flex-col gap-3">
+      <div>
+        <div className="text-base font-semibold">{concept.canonical_name}</div>
+        {concept.aliases.length > 0 && (
+          <div className="text-sm text-text-muted mt-1">
+            Also known as: {concept.aliases.join(', ')}
+          </div>
+        )}
+      </div>
+
+      {concept.summary && (
+        <p className="text-sm leading-relaxed">{concept.summary}</p>
+      )}
+
+      {concept.key_facts.length > 0 && (
+        <div>
+          <div className="text-sm font-semibold mb-1">Key facts</div>
+          <ul className="list-disc pl-5 text-sm space-y-1">
+            {concept.key_facts.map((f, i) => <li key={i}>{f}</li>)}
+          </ul>
+        </div>
+      )}
+
+      <div className="text-sm text-text-muted">
+        {concept.finding_count} findings · {concept.sources.length} sources
+      </div>
+
+      {concept.sources.length > 0 && (
+        <div>
+          <div className="text-sm font-semibold mb-1">Sources</div>
+          <ul className="space-y-1">
+            {concept.sources.slice(0, 15).map((s, i) => (
+              <li key={i} className="text-sm">
+                <a
+                  href={s.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-accent hover:underline"
+                >
+                  {s.title || s.url}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SessionConfigView({
   session, sessionId,
 }: {
@@ -2844,7 +3113,7 @@ export function ResearchQueryDetailPage() {
   const cancelJob = useCancelJob();
   const deleteQuery = useDeleteResearchQuery();
 
-  const [tab, setTab] = useState<'document' | 'live' | 'map' | 'config' | 'settings'>('document');
+  const [tab, setTab] = useState<'document' | 'live' | 'map' | 'knowledge' | 'config' | 'settings'>('document');
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
@@ -3009,6 +3278,7 @@ export function ResearchQueryDetailPage() {
               { key: 'document' as const, label: `Document (${findingsData.length})` },
               { key: 'live' as const, label: `Live (${threadsData.length})` },
               { key: 'map' as const, label: `Map` },
+              { key: 'knowledge' as const, label: 'Knowledge' },
               { key: 'config' as const, label: 'Config' },
               { key: 'settings' as const, label: 'Settings' },
             ]).map(t => (
@@ -3061,6 +3331,9 @@ export function ResearchQueryDetailPage() {
                 findingCounts={findingCounts}
                 onNavigateToLive={navigateToThread}
               />
+            )}
+            {tab === 'knowledge' && (
+              <KnowledgeView sessionId={id!} />
             )}
             {tab === 'config' && (
               <SessionConfigView session={session} sessionId={id!} />

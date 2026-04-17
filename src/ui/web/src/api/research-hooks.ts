@@ -400,6 +400,62 @@ export function useResearchThreads(sessionId: string, opts?: { refetchInterval?:
   });
 }
 
+export interface ConceptWithStats {
+  id: string;
+  session_id: string;
+  canonical_name: string;
+  aliases: string[];
+  summary: string;
+  key_facts: string[];
+  finding_count: number;
+  source_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConceptLink {
+  id: string;
+  session_id: string;
+  from_concept_id: string;
+  to_concept_id: string;
+  relation: string;
+  evidence_finding_ids: string[];
+  created_at: string;
+}
+
+export interface ConceptDetail extends ConceptWithStats {
+  finding_ids: string[];
+  sources: Array<{ url: string; title: string; snippet: string }>;
+}
+
+export function useConcepts(sessionId: string) {
+  return useQuery({
+    queryKey: ['research-concepts', sessionId],
+    queryFn: () => api.get<ConceptWithStats[]>(`/research/queries/${sessionId}/concepts`),
+    enabled: !!sessionId,
+    refetchInterval: 15_000,
+  });
+}
+
+export function useConceptLinks(sessionId: string) {
+  return useQuery({
+    queryKey: ['research-concept-links', sessionId],
+    queryFn: () => api.get<ConceptLink[]>(`/research/queries/${sessionId}/concept-links`),
+    enabled: !!sessionId,
+    refetchInterval: 15_000,
+  });
+}
+
+export function useConceptDetail(sessionId: string, conceptId: string | null) {
+  return useQuery({
+    queryKey: ['research-concept', sessionId, conceptId],
+    queryFn: () => api.get<ConceptDetail>(
+      `/research/queries/${sessionId}/concepts/${conceptId ?? ''}`
+    ),
+    enabled: !!sessionId && !!conceptId,
+  });
+}
+
 export function useInjectThread() {
   const qc = useQueryClient();
   return useMutation({
