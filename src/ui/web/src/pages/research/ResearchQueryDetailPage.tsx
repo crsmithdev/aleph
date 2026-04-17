@@ -16,7 +16,7 @@ import {
   useSources, useRetrySource, useSkipSource,
   type ResearchFinding, type ResearchThread, type ResearchActivity,
   type ResearchJob, type StreamEvent, type ResearchStep,
-  type ConceptWithStats,
+  type ConceptWithStats, type ConceptLink,
   type Source, type SourceExtractionStatus,
 } from '../../api/research-hooks';
 import { Button } from '../../components/ui/Button';
@@ -2640,18 +2640,30 @@ function SourcesView({ sessionId }: { sessionId: string }) {
   );
 }
 
+type KnowledgeFilter = 'all' | 'hub' | 'recent';
+
 function KnowledgeView({ sessionId }: { sessionId: string }) {
   const { data: concepts, isLoading } = useConcepts(sessionId);
   const { data: links } = useConceptLinks(sessionId);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { data: detail } = useConceptDetail(sessionId, selectedId);
+  const [filter, setFilter] = useState<KnowledgeFilter>('all');
 
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
 
-  const elements = useMemo((): cytoscape.ElementDefinition[] => {
+  const filteredConcepts = useMemo(() => {
     if (!concepts) return [];
-    const nodes: cytoscape.ElementDefinition[] = concepts.map(c => ({
+    if (filter === 'hub') return concepts.filter(c => c.finding_count >= 3);
+    if (filter === 'recent') {
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+      return concepts.filter(c => new Date(c.updated_at).getTime() >= cutoff);
+    }
+    return concepts;
+  }, [concepts, filter]);
+
+  const elements = useMemo((): cytoscape.ElementDefinition[] => {
+    const nodes: cytoscape.ElementDefinition[] = filteredConcepts.map(c => ({
       data: {
         id: c.id,
         label: c.canonical_name,
@@ -2659,7 +2671,7 @@ function KnowledgeView({ sessionId }: { sessionId: string }) {
         sourceCount: c.source_count,
       },
     }));
-    const byId = new Set(concepts.map(c => c.id));
+    const byId = new Set(filteredConcepts.map(c => c.id));
     const edges: cytoscape.ElementDefinition[] = (links ?? [])
       .filter(l => byId.has(l.from_concept_id) && byId.has(l.to_concept_id))
       .map(l => ({
@@ -2671,7 +2683,7 @@ function KnowledgeView({ sessionId }: { sessionId: string }) {
         },
       }));
     return [...nodes, ...edges];
-  }, [concepts, links]);
+  }, [filteredConcepts, links]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -2805,14 +2817,59 @@ function KnowledgeView({ sessionId }: { sessionId: string }) {
     );
   }
 
+  const chips: Array<{ key: KnowledgeFilter; label: string; n: number }> = [
+    { key: 'all', label: 'All concepts', n: concepts.length },
+    { key: 'hub', label: '≥3 findings', n: concepts.filter(c => c.finding_count >= 3).length },
+    {
+      key: 'recent',
+      label: 'Updated 24h',
+      n: concepts.filter(c => new Date(c.updated_at).getTime() >= Date.now() - 86_400_000).length,
+    },
+  ];
+
   return (
-    <div className="flex h-[70vh]">
-      <div ref={containerRef} className="flex-1 border border-border rounded bg-bg-secondary" />
-      <aside className="w-96 ml-4 flex flex-col gap-4 overflow-y-auto">
+    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-6 h-[calc(100vh-240px)]">
+      <div className="flex flex-col min-h-0">
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <div className="flex items-center gap-1.5">
+            {chips.map(c => (
+              <button
+                key={c.key}
+                onClick={() => setFilter(c.key)}
+                className={clsx(
+                  'px-2.5 py-[3px] text-sm rounded border transition-colors inline-flex items-center gap-1.5',
+                  filter === c.key
+                    ? 'border-accent/40 text-accent bg-accent/10'
+                    : 'border-border-primary/40 text-text-muted hover:text-text-secondary',
+                )}
+              >
+                {c.label}
+                <span className="text-sm tabular-nums opacity-70">{c.n}</span>
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Button size="sm" variant="ghost" onClick={() => cyRef.current?.fit(undefined, 30)}>Fit</Button>
+            <Button size="sm" variant="ghost"
+              onClick={() => cyRef.current?.layout({ name: 'fcose', animate: true, animationDuration: 500 } as cytoscape.LayoutOptions).run()}
+            >
+              Relayout
+            </Button>
+          </div>
+        </div>
+        <div ref={containerRef} className="flex-1 border border-border-primary/40 rounded bg-bg-secondary min-h-0" />
+      </div>
+      <aside className="flex flex-col gap-4 overflow-y-auto min-h-0">
         {selectedId && detail ? (
-          <ConceptInspector concept={detail} />
+          <ConceptInspector
+            concept={detail}
+            allLinks={links ?? []}
+            allConcepts={concepts}
+            onSelect={setSelectedId}
+            onClose={() => setSelectedId(null)}
+          />
         ) : (
-          <ConceptList concepts={concepts} selectedId={selectedId} onSelect={setSelectedId} />
+          <ConceptList concepts={filteredConcepts} selectedId={selectedId} onSelect={setSelectedId} />
         )}
       </aside>
     </div>
@@ -2855,54 +2912,117 @@ function ConceptList({
   );
 }
 
-function ConceptInspector({ concept }: { concept: import('../../api/research-hooks').ConceptDetail }) {
+function ConceptInspector({
+  concept, allLinks, allConcepts, onSelect, onClose,
+}: {
+  concept: import('../../api/research-hooks').ConceptDetail;
+  allLinks: ConceptLink[];
+  allConcepts: ConceptWithStats[];
+  onSelect: (id: string) => void;
+  onClose: () => void;
+}) {
+  const related = useMemo(() => {
+    const byId = new Map(allConcepts.map(c => [c.id, c]));
+    const neighbors = new Set<string>();
+    for (const link of allLinks) {
+      if (link.from_concept_id === concept.id) neighbors.add(link.to_concept_id);
+      else if (link.to_concept_id === concept.id) neighbors.add(link.from_concept_id);
+    }
+    return Array.from(neighbors).map(id => byId.get(id)).filter((c): c is ConceptWithStats => !!c);
+  }, [allLinks, allConcepts, concept.id]);
+
   return (
-    <div className="border border-border rounded bg-bg-secondary p-4 flex flex-col gap-3">
-      <div>
-        <div className="text-base font-semibold">{concept.canonical_name}</div>
-        {concept.aliases.length > 0 && (
-          <div className="text-sm text-text-muted mt-1">
-            Also known as: {concept.aliases.join(', ')}
+    <div className="border border-border-primary/40 rounded bg-bg-secondary p-4 flex flex-col gap-4 text-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="text-lg font-semibold text-text-primary truncate">{concept.canonical_name}</h3>
+          {concept.aliases.length > 0 && (
+            <div className="text-sm text-text-muted mt-0.5 truncate" title={concept.aliases.join(', ')}>
+              aliases: {concept.aliases.join(' &middot; ')}
+            </div>
+          )}
+        </div>
+        <button
+          onClick={onClose}
+          className="text-text-muted hover:text-text-primary shrink-0 text-sm px-1"
+          title="Close inspector"
+        >
+          &times;
+        </button>
+      </div>
+
+      {/* Stat tiles */}
+      <div className="flex gap-5">
+        {[
+          { n: concept.finding_count, l: 'findings' },
+          { n: concept.sources.length, l: 'sources' },
+          { n: related.length, l: 'related' },
+        ].map(s => (
+          <div key={s.l} className="flex flex-col">
+            <span className="text-text-primary text-base font-semibold tabular-nums">{s.n}</span>
+            <span className="text-sm text-text-muted uppercase tracking-[0.05em] mt-0.5">{s.l}</span>
           </div>
-        )}
+        ))}
       </div>
 
       {concept.summary && (
-        <p className="text-sm leading-relaxed">{concept.summary}</p>
+        <div>
+          <h5 className="text-sm text-text-muted font-medium uppercase tracking-[0.08em] mb-1.5">Summary</h5>
+          <p className="text-sm leading-snug text-text-secondary">{concept.summary}</p>
+        </div>
       )}
 
       {concept.key_facts.length > 0 && (
         <div>
-          <div className="text-sm font-semibold mb-1">Key facts</div>
-          <ul className="list-disc pl-5 text-sm space-y-1">
+          <h5 className="text-sm text-text-muted font-medium uppercase tracking-[0.08em] mb-1.5">Key facts</h5>
+          <ul className="list-disc pl-5 space-y-1 text-text-secondary leading-snug">
             {concept.key_facts.map((f, i) => <li key={i}>{f}</li>)}
           </ul>
         </div>
       )}
 
-      <div className="text-sm text-text-muted">
-        {concept.finding_count} findings · {concept.sources.length} sources
-      </div>
+      {related.length > 0 && (
+        <div>
+          <h5 className="text-sm text-text-muted font-medium uppercase tracking-[0.08em] mb-1.5">Related concepts</h5>
+          <div className="flex flex-wrap gap-1.5">
+            {related.slice(0, 12).map(r => (
+              <button
+                key={r.id}
+                onClick={() => onSelect(r.id)}
+                className="text-sm px-2 py-[2px] rounded border border-border-primary/40 text-text-secondary hover:border-accent/40 hover:text-accent transition-colors"
+              >
+                {r.canonical_name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {concept.sources.length > 0 && (
         <div>
-          <div className="text-sm font-semibold mb-1">Sources</div>
+          <h5 className="text-sm text-text-muted font-medium uppercase tracking-[0.08em] mb-1.5">Sources</h5>
           <ul className="space-y-1">
-            {concept.sources.slice(0, 15).map((s, i) => (
-              <li key={i} className="text-sm">
+            {concept.sources.slice(0, 8).map((s, i) => (
+              <li key={i}>
                 <a
                   href={s.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-accent hover:underline"
+                  className="text-accent hover:underline truncate block"
+                  title={s.url}
                 >
-                  {s.title || s.url}
+                  {s.title || domainFrom(s.url)}
                 </a>
               </li>
             ))}
           </ul>
         </div>
       )}
+
+      <div className="flex gap-1.5 pt-1 border-t border-border-primary/30">
+        <Button size="sm" variant="ghost" disabled title="Merge with another concept (coming soon)">Merge&hellip;</Button>
+        <Button size="sm" variant="ghost" disabled title="Rename concept (coming soon)">Rename</Button>
+      </div>
     </div>
   );
 }
