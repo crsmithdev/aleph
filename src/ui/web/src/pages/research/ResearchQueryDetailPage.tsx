@@ -11,13 +11,14 @@ import {
   useResearchActivity, useCancelJob, useResearchJobs, useResearchStream,
   useResearchSteps, useUpdateThread, useDeleteResearchQuery, useUpdateQueryConfig,
   useResearchEnvCheck, useFetchThreadText, useRedoThread, useFetchFindingText,
-  useGenerateDocument, useResearchWorkers,
+  useGenerateDocument, useResearchWorkers, useResearchDefaults,
   type ResearchFinding, type ResearchThread, type ResearchActivity,
   type ResearchJob, type StreamEvent, type ResearchStep,
 } from '../../api/research-hooks';
 import { Button } from '../../components/ui/Button';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
+import { ConfigForm, patchByPath, getByPath } from './config-schema';
 import cytoscape from 'cytoscape';
 // @ts-expect-error cytoscape-fcose has no bundled types
 import fcose from 'cytoscape-fcose';
@@ -2412,6 +2413,38 @@ function EnvBadge({ set, label }: { set: boolean; label: string }) {
     : <span className="inline-flex items-center gap-1 text-sm font-medium text-error"><span className="w-1.5 h-1.5 rounded-full bg-error inline-block" />{label} not set</span>;
 }
 
+function SessionConfigView({
+  session, sessionId,
+}: {
+  session: { id: string; config: Record<string, unknown> };
+  sessionId: string;
+}) {
+  const updateConfig = useUpdateQueryConfig();
+  const { data: defaults, isLoading } = useResearchDefaults();
+
+  if (isLoading || !defaults) return <PageLoading />;
+
+  const save = (path: string, value: unknown) => {
+    updateConfig.mutate({ id: sessionId, config: patchByPath(path, value) });
+  };
+
+  const resetField = (path: string) => {
+    const defaultValue = getByPath(defaults, path);
+    updateConfig.mutate({ id: sessionId, config: patchByPath(path, defaultValue) });
+  };
+
+  return (
+    <ConfigForm
+      title="Session config"
+      subtitle="Per-query overrides. The dot marks a value that differs from the defaults; changes apply to the next iteration."
+      value={session.config}
+      baseline={defaults as unknown as Record<string, unknown>}
+      onSave={save}
+      onResetField={resetField}
+    />
+  );
+}
+
 function SettingsView({
   session, sessionId, onDelete,
 }: {
@@ -2811,7 +2844,7 @@ export function ResearchQueryDetailPage() {
   const cancelJob = useCancelJob();
   const deleteQuery = useDeleteResearchQuery();
 
-  const [tab, setTab] = useState<'document' | 'live' | 'map' | 'settings'>('document');
+  const [tab, setTab] = useState<'document' | 'live' | 'map' | 'config' | 'settings'>('document');
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
@@ -2976,6 +3009,7 @@ export function ResearchQueryDetailPage() {
               { key: 'document' as const, label: `Document (${findingsData.length})` },
               { key: 'live' as const, label: `Live (${threadsData.length})` },
               { key: 'map' as const, label: `Map` },
+              { key: 'config' as const, label: 'Config' },
               { key: 'settings' as const, label: 'Settings' },
             ]).map(t => (
               <button key={t.key} onClick={() => setTab(t.key)}
@@ -3027,6 +3061,9 @@ export function ResearchQueryDetailPage() {
                 findingCounts={findingCounts}
                 onNavigateToLive={navigateToThread}
               />
+            )}
+            {tab === 'config' && (
+              <SessionConfigView session={session} sessionId={id!} />
             )}
             {tab === 'settings' && (
               <SettingsView
