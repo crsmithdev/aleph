@@ -19,7 +19,7 @@ export interface ResearchQuery {
   seed_query: string;
   seed_query_short: string | null;
   seed_query_super_short: string | null;
-  status: 'active' | 'paused' | 'completed' | 'archived';
+  status: 'active' | 'paused' | 'exhausted' | 'halted' | 'completed' | 'archived';
   config: Record<string, unknown>;
   summary: string;
   document: string;

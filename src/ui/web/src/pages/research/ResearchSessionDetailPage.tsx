@@ -1630,14 +1630,14 @@ export function ResearchSessionDetailPage() {
         <span className="font-heading text-2xl font-bold text-text-muted leading-none shrink-0">&raquo;</span>
         <h1 className="font-heading text-2xl font-bold text-text-primary leading-none truncate min-w-0 flex-1">{session.title}</h1>
         <div className="flex items-center gap-2 shrink-0">
-          {(session.status === 'active' || session.status === 'paused') && (
+          {(session.status === 'active' || session.status === 'paused' || session.status === 'exhausted' || session.status === 'halted') && (
             <Button
               variant={session.status === 'active' ? 'secondary' : 'primary'}
               size="sm"
               loading={updateSession.isPending}
               onClick={() => updateSession.mutate({ id: id!, status: session.status === 'active' ? 'paused' : 'active' })}
             >
-              {session.status === 'active' ? 'Disable' : 'Enable'}
+              {session.status === 'active' ? 'Disable' : 'Resume'}
             </Button>
           )}
           {deleteConfirm ? (
