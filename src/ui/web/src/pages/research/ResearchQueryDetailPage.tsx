@@ -2322,7 +2322,7 @@ function MapView({
               STATUS_COLORS[ele.data('status') as string] ?? DEFAULT_NODE_COLOR,
             'label': 'data(label)',
             'color': '#1e1e2e',
-            'font-size': '10px',
+            'font-size': '14px',
             'font-weight': 'bold',
             'text-valign': 'center',
             'text-halign': 'center',
