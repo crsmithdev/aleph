@@ -3743,11 +3743,18 @@ export function ResearchQueryDetailPage() {
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [pendingConceptName, setPendingConceptName] = useState<string | null>(null);
+  const [processView, setProcessView] = useState<'live' | 'map'>('live');
 
   const navigateToConcept = useCallback((name: string) => {
     setPendingConceptName(name);
     setTab('knowledge');
   }, []);
+
+  const findingCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const f of findingsData) map.set(f.thread_id, (map.get(f.thread_id) ?? 0) + 1);
+    return map;
+  }, [findingsData]);
 
   const scheduleCfg = (session?.config?.schedule) as Record<string, unknown> | undefined;
 
@@ -3768,6 +3775,13 @@ export function ResearchQueryDetailPage() {
 
   const navigateToMap = useCallback((threadId: string) => {
     setSelectedThreadId(threadId);
+    setProcessView('map');
+    setTab('process');
+  }, []);
+
+  const navigateToLive = useCallback((threadId: string) => {
+    setSelectedThreadId(threadId);
+    setProcessView('live');
     setTab('process');
   }, []);
 
@@ -3950,22 +3964,50 @@ export function ResearchQueryDetailPage() {
             />
           )}
           {tab === 'process' && (
-            <LiveView
-              threads={threadsData}
-              findings={findingsData}
-              allSteps={allSteps}
-              events={events}
-              isRunning={isRunning}
-              sessionId={id!}
-              sessionFetchText={sessionFetchText}
-              onToggleSessionFetch={handleToggleSessionFetch}
-              activity={activity}
-              jobs={jobs}
-              selectedThreadId={selectedThreadId}
-              onSelectThread={setSelectedThreadId}
-              onNavigateToDocument={navigateToDocument}
-              onNavigateToMap={navigateToMap}
-            />
+            <div className="flex flex-col h-full">
+              <div className="flex items-center gap-1 mb-3 shrink-0">
+                {(['live', 'map'] as const).map(v => (
+                  <button
+                    key={v}
+                    onClick={() => setProcessView(v)}
+                    className={clsx(
+                      'px-3 py-1 rounded text-sm uppercase tracking-[0.06em] transition-colors',
+                      processView === v
+                        ? 'bg-accent/10 text-accent'
+                        : 'text-text-muted hover:text-text-secondary'
+                    )}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+              <div className="flex-1 min-h-0">
+                {processView === 'live' ? (
+                  <LiveView
+                    threads={threadsData}
+                    findings={findingsData}
+                    allSteps={allSteps}
+                    events={events}
+                    isRunning={isRunning}
+                    sessionId={id!}
+                    sessionFetchText={sessionFetchText}
+                    onToggleSessionFetch={handleToggleSessionFetch}
+                    activity={activity}
+                    jobs={jobs}
+                    selectedThreadId={selectedThreadId}
+                    onSelectThread={setSelectedThreadId}
+                    onNavigateToDocument={navigateToDocument}
+                    onNavigateToMap={navigateToMap}
+                  />
+                ) : (
+                  <MapView
+                    threads={threadsData}
+                    findingCounts={findingCounts}
+                    onNavigateToLive={navigateToLive}
+                  />
+                )}
+              </div>
+            </div>
           )}
           {tab === 'knowledge' && (
             <KnowledgeView
