@@ -16,6 +16,7 @@ import {
   useJobStats,
   useResearchStats,
   useResearchSummary,
+  useCrossSessionStream,
   useAddWorker,
   useRemoveWorker,
   useKillWorker,
@@ -23,6 +24,7 @@ import {
   useRunAllResearch,
   useStopAllResearch,
   type ResearchJob,
+  type StreamEvent,
   type WorkerStatus,
 } from '../../api/research-hooks';
 import { fmtNumber, fmtMs, fmtPct, fmtCurrency } from '../../utils/format';
@@ -556,6 +558,168 @@ function JobHistoryTable({ jobs, queryMap }: {
   );
 }
 
+// --- Activity Rail (cross-session live event feed + recent concepts) ---
+
+function relativeTime(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const t = new Date(iso.replace(' ', 'T') + (iso.includes('Z') || iso.includes('+') ? '' : 'Z')).getTime();
+  const ms = Date.now() - t;
+  if (!Number.isFinite(ms) || ms < 0) return 'now';
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
+
+// Uppercase type label — color conveys category without a pill.
+const eventKindClass: Record<string, string> = {
+  finding: 'text-success',
+  thread: 'text-accent',
+  step: 'text-text-muted',
+  job: 'text-text-muted',
+  session: 'text-warning',
+};
+
+function describeEvent(ev: StreamEvent, queryMap: Record<string, string>): {
+  kind: string;
+  title: string;
+  detail: string | null;
+  sessionId: string | null;
+  sessionTitle: string | null;
+  at: string;
+} {
+  if (ev.type === 'finding') {
+    const f = ev.payload;
+    return {
+      kind: 'finding',
+      title: f.summary || f.content.slice(0, 120),
+      detail: null,
+      sessionId: f.session_id,
+      sessionTitle: queryMap[f.session_id] ?? null,
+      at: f.created_at,
+    };
+  }
+  if (ev.type === 'thread') {
+    const t = ev.payload;
+    const name = t.short_query ?? t.query ?? '';
+    return {
+      kind: 'thread',
+      title: name,
+      detail: t.status,
+      sessionId: t.session_id,
+      sessionTitle: queryMap[t.session_id] ?? null,
+      at: t.updated_at,
+    };
+  }
+  if (ev.type === 'step') {
+    const s = ev.payload;
+    const label = typeof s.label === 'string' ? s.label : '';
+    return {
+      kind: 'step',
+      title: label || 'step',
+      detail: null,
+      sessionId: s.session_id,
+      sessionTitle: queryMap[s.session_id] ?? null,
+      at: s.created_at,
+    };
+  }
+  if (ev.type === 'job') {
+    const j = ev.payload;
+    return {
+      kind: 'job',
+      title: `job ${j.status}`,
+      detail: j.error ? j.error.slice(0, 80) : null,
+      sessionId: j.session_id,
+      sessionTitle: queryMap[j.session_id] ?? null,
+      at: j.updated_at,
+    };
+  }
+  const s = ev.payload;
+  return {
+    kind: 'session',
+    title: s.status,
+    detail: s.title,
+    sessionId: s.id,
+    sessionTitle: s.title,
+    at: s.updated_at,
+  };
+}
+
+function ActivityRail({
+  events,
+  queryMap,
+  recentConcepts,
+}: {
+  events: StreamEvent[];
+  queryMap: Record<string, string>;
+  recentConcepts: Array<{ name: string; session_id: string; session_title: string; created_at: string }>;
+}) {
+  return (
+    <aside className="flex flex-col gap-4 text-sm">
+      {recentConcepts.length > 0 && (
+        <div>
+          <p className="text-sm text-text-muted uppercase tracking-wide mb-2">Recent concepts</p>
+          <div className="flex flex-wrap gap-1.5">
+            {recentConcepts.slice(0, 12).map((c, i) => (
+              <Link
+                key={`${c.session_id}:${c.name}:${i}`}
+                to={`/research/${c.session_id}`}
+                title={c.session_title}
+                className="px-2 py-0.5 rounded bg-bg-secondary border border-border-primary text-text-secondary hover:text-text-primary hover:border-accent transition-colors"
+              >
+                {c.name}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <p className="text-sm text-text-muted uppercase tracking-wide mb-2">
+          Activity
+          {events.length > 0 && <span className="normal-case ml-2 text-text-muted">live</span>}
+        </p>
+        <div className="bg-bg-secondary border border-border-primary rounded-lg overflow-hidden">
+          {events.length === 0 ? (
+            <p className="p-3 text-text-muted">Waiting for activity…</p>
+          ) : (
+            <ul className="divide-y divide-border-primary max-h-[560px] overflow-y-auto">
+              {events.map((ev, i) => {
+                const d = describeEvent(ev, queryMap);
+                return (
+                  <li key={`${d.kind}:${d.at}:${i}`} className="px-3 py-2 flex flex-col gap-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className={clsx('text-sm uppercase tracking-wide shrink-0', eventKindClass[d.kind] ?? 'text-text-muted')}>
+                        {d.kind}
+                      </span>
+                      <span className="text-sm text-text-muted ml-auto tabular-nums shrink-0">{relativeTime(d.at)}</span>
+                    </div>
+                    <p className="text-sm text-text-primary line-clamp-2">{d.title || '—'}</p>
+                    {(d.sessionTitle || d.detail) && (
+                      <p className="text-sm text-text-muted truncate">
+                        {d.sessionId ? (
+                          <Link to={`/research/${d.sessionId}`} className="hover:text-accent">
+                            {d.sessionTitle ?? d.sessionId.slice(0, 12)}
+                          </Link>
+                        ) : null}
+                        {d.sessionTitle && d.detail ? <span> · </span> : null}
+                        {d.detail ?? ''}
+                      </p>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+    </aside>
+  );
+}
+
 // --- Main Page ---
 
 export function ResearchWorkersPage() {
@@ -565,6 +729,7 @@ export function ResearchWorkersPage() {
   const { data: stats } = useJobStats();
   const { data: throughput } = useResearchStats('7d', 'day');
   const { data: summary } = useResearchSummary();
+  const { events: liveEvents } = useCrossSessionStream();
   const addWorker = useAddWorker();
   const removeWorker = useRemoveWorker();
   const killWorker = useKillWorker();
@@ -625,6 +790,9 @@ export function ResearchWorkersPage() {
           </div>
         }
       />
+
+      <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_320px] xl:gap-6">
+      <div className="flex flex-col gap-6 min-w-0">
 
       {/* Throughput — today's output across all queries */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
@@ -735,6 +903,16 @@ export function ResearchWorkersPage() {
             queryMap={queryMap}
           />
         </div>
+      </div>
+
+      </div>
+      <div className="mt-6 xl:mt-0">
+        <ActivityRail
+          events={liveEvents}
+          queryMap={queryMap}
+          recentConcepts={summary?.recentConcepts ?? []}
+        />
+      </div>
       </div>
     </div>
   );
