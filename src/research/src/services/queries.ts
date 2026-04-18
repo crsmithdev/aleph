@@ -63,6 +63,89 @@ export function listQueries(sqlite: Sqlite, status?: string): ResearchQuery[] {
 /** @deprecated Use listQueries */
 export const listSessions = listQueries;
 
+export interface QueryStats {
+  findings: number;
+  concepts: number;
+  sources: number;
+  threads: number;
+  cost: number;
+  last_step_at: string | null;
+  findings_by_day: number[]; // length 7, oldest → newest; today is last
+}
+
+function emptyStats(): QueryStats {
+  return { findings: 0, concepts: 0, sources: 0, threads: 0, cost: 0, last_step_at: null, findings_by_day: [0, 0, 0, 0, 0, 0, 0] };
+}
+
+/**
+ * Compute per-session aggregates for the given query ids in one DB roundtrip per metric.
+ * Returns a Map keyed by session id; every requested id is present (zero-filled if missing).
+ */
+export function computeQueryStats(sqlite: Sqlite, ids: string[]): Map<string, QueryStats> {
+  const map = new Map<string, QueryStats>();
+  for (const id of ids) map.set(id, emptyStats());
+  if (ids.length === 0) return map;
+
+  const placeholders = ids.map(() => '?').join(',');
+
+  const countRows = (table: string, field: keyof QueryStats) => {
+    const rows = sqlite.prepare(
+      `SELECT session_id, COUNT(*) as n FROM ${table} WHERE session_id IN (${placeholders}) GROUP BY session_id`
+    ).all(...ids) as { session_id: string; n: number }[];
+    for (const r of rows) {
+      const s = map.get(r.session_id);
+      if (s) (s[field] as number) = r.n;
+    }
+  };
+
+  countRows('research_findings', 'findings');
+  countRows('research_concepts', 'concepts');
+  countRows('research_sources', 'sources');
+  countRows('research_threads', 'threads');
+
+  const stepRows = sqlite.prepare(
+    `SELECT session_id, COALESCE(SUM(cost_usd), 0) as cost, MAX(created_at) as last_step_at
+     FROM research_steps WHERE session_id IN (${placeholders}) GROUP BY session_id`
+  ).all(...ids) as { session_id: string; cost: number; last_step_at: string | null }[];
+  for (const r of stepRows) {
+    const s = map.get(r.session_id);
+    if (s) { s.cost = r.cost; s.last_step_at = r.last_step_at; }
+  }
+
+  // 7-day findings series, aligned to today as the last bucket
+  const now = new Date();
+  const cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+  const cutoffIso = cutoff.toISOString();
+  const dayIdx = new Map<string, number>();
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(cutoff);
+    d.setDate(d.getDate() + i);
+    dayIdx.set(d.toISOString().slice(0, 10), i);
+  }
+  const byDay = sqlite.prepare(
+    `SELECT session_id, date(created_at) as d, COUNT(*) as n
+     FROM research_findings
+     WHERE session_id IN (${placeholders}) AND created_at >= ?
+     GROUP BY session_id, d`
+  ).all(...ids, cutoffIso) as { session_id: string; d: string; n: number }[];
+  for (const r of byDay) {
+    const idx = dayIdx.get(r.d);
+    if (idx === undefined) continue;
+    const s = map.get(r.session_id);
+    if (s) s.findings_by_day[idx] = r.n;
+  }
+
+  return map;
+}
+
+export type ResearchQueryWithStats = ResearchQuery & { stats: QueryStats };
+
+export function listQueriesWithStats(sqlite: Sqlite, status?: string): ResearchQueryWithStats[] {
+  const queries = listQueries(sqlite, status);
+  const stats = computeQueryStats(sqlite, queries.map(q => q.id));
+  return queries.map(q => ({ ...q, stats: stats.get(q.id) ?? emptyStats() }));
+}
+
 export function updateQuery(
   sqlite: Sqlite,
   id: string,
