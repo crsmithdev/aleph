@@ -1621,6 +1621,35 @@ Return JSON only, no preamble.`;
     }
   }
 
+  /** Extract concepts for findings that don't have any concept links yet.
+   *  Used by the worker to catch up findings that predate the concept feature
+   *  or whose initial extraction failed. Runs one finding at a time so a single
+   *  bad response doesn't poison a whole batch. Returns count successfully
+   *  processed (linked ≥1 concept). */
+  async backfillConcepts(sessionId: string, batchSize: number = 10): Promise<number> {
+    const session = sessions.getQuery(this.sqlite, sessionId);
+    if (!session) return 0;
+
+    const missing = concepts.findingsMissingConcepts(this.sqlite, sessionId, batchSize);
+    if (missing.length === 0) return 0;
+
+    let processed = 0;
+    for (const { id } of missing) {
+      if (this.signal?.aborted) break;
+      const finding = findings.getFinding(this.sqlite, id);
+      if (!finding) continue;
+      const thread = threads.getThread(this.sqlite, finding.thread_id);
+      if (!thread) continue;
+      try {
+        await this.extractConceptsForFinding(finding, thread, session.config);
+        processed++;
+      } catch (err) {
+        console.warn(`[concepts] backfill failed for ${id}:`, err);
+      }
+    }
+    return processed;
+  }
+
   private async updateSummary(sessionId: string): Promise<void> {
     const session = sessions.getQuery(this.sqlite, sessionId)!;
     const recentFindings = findings.getRecentFindings(this.sqlite, sessionId, 20);

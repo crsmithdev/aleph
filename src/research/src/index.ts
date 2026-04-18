@@ -14,6 +14,7 @@ export {
   upsertConcept, linkFindingToConcept, linkConcepts,
   getConcept, findConceptByName, listConcepts, listConceptLinks,
   listFindingsForConcept, listConceptIdsForFinding, getSourcesForConcept,
+  findingsMissingConcepts, sessionsMissingConcepts,
 } from './services/concepts.js';
 export {
   registerSource, registerSources, listSources, getSource,

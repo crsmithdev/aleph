@@ -212,6 +212,40 @@ export function listConceptIdsForFinding(sqlite: Sqlite, findingId: string): str
   return rows.map(r => r.concept_id);
 }
 
+/** Find findings that have no concept links yet. Used by the worker to backfill
+ *  pre-existing findings that predate concept extraction or whose extraction failed.
+ *  Oldest-first so the user sees concepts populate in the order findings came in. */
+export function findingsMissingConcepts(
+  sqlite: Sqlite,
+  sessionId: string | null,
+  limit: number
+): Array<{ id: string; session_id: string }> {
+  const sql = `
+    SELECT f.id, f.session_id FROM research_findings f
+    LEFT JOIN research_finding_concepts fc ON fc.finding_id = f.id
+    WHERE fc.finding_id IS NULL
+    ${sessionId ? 'AND f.session_id = ?' : ''}
+    ORDER BY f.created_at ASC
+    LIMIT ?
+  `;
+  const params: unknown[] = sessionId ? [sessionId, limit] : [limit];
+  return sqlite.prepare(sql).all(...params) as Array<{ id: string; session_id: string }>;
+}
+
+/** Sessions that have at least one finding but no concepts yet — the common
+ *  shape after a pre-extraction session resumes. */
+export function sessionsMissingConcepts(sqlite: Sqlite, limit: number): string[] {
+  const rows = sqlite.prepare(`
+    SELECT f.session_id FROM research_findings f
+    LEFT JOIN research_finding_concepts fc ON fc.finding_id = f.id
+    WHERE fc.finding_id IS NULL
+    GROUP BY f.session_id
+    ORDER BY MIN(f.created_at) ASC
+    LIMIT ?
+  `).all(limit) as Array<{ session_id: string }>;
+  return rows.map(r => r.session_id);
+}
+
 /** Collect unique source URLs across all findings linked to the given concept. */
 export function getSourcesForConcept(
   sqlite: Sqlite,

@@ -9,6 +9,7 @@ import * as jobs from './services/jobs.js';
 import { countActiveJobsForSession, getQueuedThreadsForNewJobs, createThreadJobIfNone, reclaimDeadWorkerJobs } from './services/jobs.js';
 import * as sessions from './services/queries.js';
 import { resetOrphanedActiveThreads } from './services/threads.js';
+import { sessionsMissingConcepts } from './services/concepts.js';
 
 const POLL_INTERVAL_MS = 5_000;
 const HEARTBEAT_INTERVAL_MS = 60_000;
@@ -315,6 +316,24 @@ while (!shutdownRequested) {
 
     checkScheduledSessions();
     checkQueuedThreads();
+
+    // Backfill concepts for findings that have none yet. Handles both the
+    // pre-feature case (sessions created before concept extraction existed)
+    // and transient failures from the inline extraction path.
+    try {
+      const sessionIds = sessionsMissingConcepts(sqlite, 1);
+      if (sessionIds.length > 0) {
+        const sid = sessionIds[0];
+        const session = sessions.getQuery(sqlite, sid);
+        if (session) {
+          const engine = new ResearchEngine({ sqlite, provider: buildProvider(session) });
+          const done = await engine.backfillConcepts(sid, 5);
+          if (done > 0) console.log(`[worker] backfilled concepts for ${done} finding(s) in session ${sid}`);
+        }
+      }
+    } catch (err) {
+      console.warn('[worker] concept backfill error:', err);
+    }
 
     // Drain the extraction queue (no-op when JINA key is missing; drainPendingSources
     // throws inside fetchPageContent → per-source failExtraction will record the reason).
