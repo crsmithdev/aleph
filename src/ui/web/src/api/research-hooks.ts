@@ -3,6 +3,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 
 // Types matching the API response shapes
+export interface QueryStats {
+  findings: number;
+  concepts: number;
+  sources: number;
+  threads: number;
+  cost: number;
+  last_step_at: string | null;
+  findings_by_day: number[]; // length 7, oldest → newest
+}
+
 export interface ResearchQuery {
   id: string;
   title: string;
@@ -16,6 +26,7 @@ export interface ResearchQuery {
   user_notes: string;
   created_at: string;
   updated_at: string;
+  stats?: QueryStats; // populated by GET /research/queries (list endpoint)
 }
 
 /** @deprecated Use ResearchQuery */

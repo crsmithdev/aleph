@@ -6,7 +6,7 @@ import { useResearchQueries, useCreateResearchQuery, useUpdateResearchQuery, use
 import { Button } from '../../components/ui/Button';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
-import { fmtCurrency } from '../../utils/format';
+import { fmtCurrency, shortRelativeTime } from '../../utils/format';
 
 type StatusFilter = 'all' | 'active' | 'paused' | 'completed';
 
@@ -30,6 +30,23 @@ const statusBadgeColors: Record<string, string> = {
   completed: 'bg-blue-900/50 text-blue-300',
   archived: 'bg-bg-tertiary text-text-muted',
 };
+
+function Sparkline({ values, active }: { values: number[]; active: boolean }) {
+  const max = Math.max(...values, 1);
+  const w = 72;
+  const h = 20;
+  const stepX = values.length > 1 ? w / (values.length - 1) : w;
+  const points = values
+    .map((v, i) => `${(i * stepX).toFixed(1)},${(h - (v / max) * (h - 2) - 1).toFixed(1)}`)
+    .join(' ');
+  const stroke = active ? '#c678dd' : '#848da0';
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
+      <title>7d findings: {values.join(' ')}</title>
+      <polyline fill="none" stroke={stroke} strokeWidth={1.5} points={points} />
+    </svg>
+  );
+}
 
 export function ResearchQueriesPage() {
   const { data: sessions = [], isLoading, isError } = useResearchQueries();
@@ -306,12 +323,32 @@ export function ResearchQueriesPage() {
 
               {/* Footer */}
               <div className="px-4 pb-3 pt-2 border-t border-border-primary flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 text-sm text-text-muted">
-                  <span>{new Date(session.created_at).toLocaleDateString()}</span>
+                <div className="flex items-center gap-3 text-sm text-text-muted min-w-0">
+                  {session.stats && (session.stats.findings + session.stats.concepts + session.stats.sources > 0) ? (
+                    <div className="flex items-center gap-2.5 tabular-nums shrink-0">
+                      <span title="Findings"><span className="text-text-secondary">{session.stats.findings}</span>F</span>
+                      <span className="text-text-muted/50">·</span>
+                      <span title="Concepts"><span className="text-text-secondary">{session.stats.concepts}</span>C</span>
+                      <span className="text-text-muted/50">·</span>
+                      <span title="Sources"><span className="text-text-secondary">{session.stats.sources}</span>S</span>
+                    </div>
+                  ) : (
+                    <span>{new Date(session.created_at).toLocaleDateString()}</span>
+                  )}
+                  {session.stats && session.stats.findings_by_day.some(n => n > 0) && (
+                    <span className="shrink-0 text-text-muted/70">
+                      <Sparkline values={session.stats.findings_by_day} active={session.status === 'active'} />
+                    </span>
+                  )}
+                  {session.stats?.last_step_at && (
+                    <span className="shrink-0 text-sm" title={`Last step ${new Date(session.stats.last_step_at).toLocaleString()}`}>
+                      {shortRelativeTime(session.stats.last_step_at)}
+                    </span>
+                  )}
                 </div>
                 <button
                   onClick={() => updateSession.mutate({ id: session.id, status: 'archived' })}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity text-text-muted hover:text-red-400 p-1 rounded"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-text-muted hover:text-red-400 p-1 rounded shrink-0"
                   title="Archive"
                 >
                   <Icon name="close" size="xs" />
