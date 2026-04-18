@@ -1,5 +1,5 @@
 import { Icon } from '../../components/ui/Icon';
-import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { clsx } from 'clsx';
 import ReactMarkdown from 'react-markdown';
@@ -446,13 +446,43 @@ function SectionMetaPanel({
 // Document Tab
 // ---------------------------------------------------------------------------
 
+function conceptSlug(name: string): string {
+  return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+function FactBox({ raw }: { raw: string }) {
+  const rows = raw.split('\n').map(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return null;
+    const eq = trimmed.indexOf('=');
+    if (eq < 0) return { term: trimmed, value: '' };
+    return { term: trimmed.slice(0, eq).trim(), value: trimmed.slice(eq + 1).trim() };
+  }).filter((r): r is { term: string; value: string } => r !== null && r.term.length > 0);
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="bg-bg-secondary border border-border-primary/40 rounded-lg px-4 py-3 my-4">
+      <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-sm">
+        {rows.map((r, i) => (
+          <React.Fragment key={i}>
+            <dt className="text-text-muted uppercase tracking-[0.04em] text-sm font-medium">{r.term}</dt>
+            <dd className="text-text-primary font-mono tabular-nums">{r.value}</dd>
+          </React.Fragment>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
 function DocumentView({
-  findings, threads, onNavigateToThread, onNavigateToMap, document, sessionId, title,
+  findings, threads, onNavigateToThread, onNavigateToMap, onNavigateToConcept, document, sessionId, title,
 }: {
   findings: ResearchFinding[];
   threads: ResearchThread[];
   onNavigateToThread: (threadId: string) => void;
   onNavigateToMap: (threadId: string) => void;
+  onNavigateToConcept: (name: string) => void;
   document?: string;
   sessionId: string;
   title?: string;
@@ -461,10 +491,14 @@ function DocumentView({
 
   const hasFindings = findings.length >= 3;
 
-  // Strip markdown code fences if present
+  // Strip markdown code fences; rewrite [[Concept]] wiki-links into concept: anchors.
   const cleanDoc = useMemo(() => {
     if (!document) return '';
-    return document.replace(/^```(?:markdown)?\s*\n?/i, '').replace(/\n?```\s*$/, '');
+    const stripped = document.replace(/^```(?:markdown)?\s*\n?/i, '').replace(/\n?```\s*$/, '');
+    return stripped.replace(/\[\[([^\[\]\n]+?)\]\]/g, (_m, name: string) => {
+      const trimmed = name.trim();
+      return `[${trimmed}](#concept:${conceptSlug(trimmed)})`;
+    });
   }, [document]);
 
   function exportMarkdown() {
@@ -563,26 +597,56 @@ function DocumentView({
               const mdComponents = {
                 p: ({ children }: React.HTMLAttributes<HTMLParagraphElement>) => <p className="mb-4 text-text-secondary">{children}</p>,
                 a: ({ href, children, ...rest }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
-                  const isInternal = href?.startsWith('#ref-');
+                  const isCitation = href?.startsWith('#ref-');
+                  const isConcept = href?.startsWith('#concept:');
+                  if (isConcept) {
+                    const label = typeof children === 'string' ? children : React.Children.toArray(children).map(c => typeof c === 'string' ? c : '').join('');
+                    return (
+                      <a
+                        href={href}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          onNavigateToConcept(label.trim());
+                        }}
+                        className="text-info border-b border-dotted border-info/60 hover:border-info cursor-pointer"
+                      >
+                        {children}
+                      </a>
+                    );
+                  }
                   return (
                     <a
                       {...rest}
                       href={href}
-                      {...(!isInternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-                      onClick={isInternal ? (e) => {
+                      {...(!isCitation ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                      onClick={isCitation ? (e) => {
                         e.preventDefault();
                         const el = window.document.getElementById(href!.slice(1));
                         el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                       } : undefined}
-                      className={clsx('hover:underline', isInternal ? 'text-text-muted text-sm font-mono' : 'text-accent')}
+                      className={clsx('hover:underline', isCitation ? 'text-text-muted text-sm font-mono' : 'text-accent')}
                     >
                       {children}
                     </a>
                   );
                 },
                 blockquote: ({ children }: React.HTMLAttributes<HTMLElement>) => (
-                  <blockquote className="border-l-[3px] border-accent/30 pl-4 my-4 text-text-muted italic">{children}</blockquote>
+                  <blockquote className="border-l-[3px] border-accent pl-4 pr-3 py-2 my-4 rounded-r-md bg-bg-secondary text-text-secondary italic">{children}</blockquote>
                 ),
+                code: ({ className, children, ...rest }: React.HTMLAttributes<HTMLElement> & { className?: string }) => {
+                  if (className === 'language-facts') {
+                    return <FactBox raw={String(children).replace(/\n$/, '')} />;
+                  }
+                  return <code className={clsx(className, 'px-1 py-0.5 rounded bg-bg-tertiary text-sm font-mono')} {...rest}>{children}</code>;
+                },
+                pre: ({ children }: React.HTMLAttributes<HTMLPreElement>) => {
+                  // If the inner code is a fact-box, render it unwrapped (no <pre>).
+                  const child = React.Children.toArray(children)[0] as React.ReactElement<{ className?: string }> | undefined;
+                  if (child && React.isValidElement(child) && child.props?.className === 'language-facts') {
+                    return <>{child}</>;
+                  }
+                  return <pre className="bg-bg-secondary border border-border-primary/30 rounded-md p-3 my-4 overflow-x-auto text-sm">{children}</pre>;
+                },
                 ol: ({ children }: React.HTMLAttributes<HTMLOListElement>) => <ol className="list-decimal pl-6 mb-4 space-y-1 text-text-secondary">{children}</ol>,
                 ul: ({ children }: React.HTMLAttributes<HTMLUListElement>) => <ul className="list-disc pl-6 mb-4 space-y-1 text-text-secondary">{children}</ul>,
               };
@@ -2636,12 +2700,30 @@ function SourcesView({ sessionId }: { sessionId: string }) {
 
 type KnowledgeFilter = 'all' | 'hub' | 'recent';
 
-function KnowledgeView({ sessionId }: { sessionId: string }) {
+function KnowledgeView({
+  sessionId,
+  pendingConceptName,
+  onConsumePending,
+}: {
+  sessionId: string;
+  pendingConceptName?: string | null;
+  onConsumePending?: () => void;
+}) {
   const { data: concepts, isLoading } = useConcepts(sessionId);
   const { data: links } = useConceptLinks(sessionId);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { data: detail } = useConceptDetail(sessionId, selectedId);
   const [filter, setFilter] = useState<KnowledgeFilter>('all');
+
+  useEffect(() => {
+    if (!pendingConceptName || !concepts || concepts.length === 0) return;
+    const slugify = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const targetSlug = slugify(pendingConceptName);
+    const match = concepts.find(c => slugify(c.canonical_name) === targetSlug)
+      ?? concepts.find(c => c.aliases.some(a => slugify(a) === targetSlug));
+    if (match) setSelectedId(match.id);
+    onConsumePending?.();
+  }, [pendingConceptName, concepts, onConsumePending]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
@@ -3660,6 +3742,12 @@ export function ResearchQueryDetailPage() {
   const [tab, setTab] = useState<'document' | 'knowledge' | 'process' | 'sources' | 'events' | 'config'>('document');
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [pendingConceptName, setPendingConceptName] = useState<string | null>(null);
+
+  const navigateToConcept = useCallback((name: string) => {
+    setPendingConceptName(name);
+    setTab('knowledge');
+  }, []);
 
   const scheduleCfg = (session?.config?.schedule) as Record<string, unknown> | undefined;
 
@@ -3861,6 +3949,7 @@ export function ResearchQueryDetailPage() {
               threads={threadsData}
               onNavigateToThread={navigateToThread}
               onNavigateToMap={navigateToMap}
+              onNavigateToConcept={navigateToConcept}
               document={session?.document || undefined}
               sessionId={id!}
               title={session?.title}
@@ -3870,7 +3959,11 @@ export function ResearchQueryDetailPage() {
             <p className="text-sm text-text-muted text-center py-12">Process view is being redesigned.</p>
           )}
           {tab === 'knowledge' && (
-            <KnowledgeView sessionId={id!} />
+            <KnowledgeView
+              sessionId={id!}
+              pendingConceptName={pendingConceptName}
+              onConsumePending={() => setPendingConceptName(null)}
+            />
           )}
           {tab === 'sources' && (
             <SourcesView sessionId={id!} />

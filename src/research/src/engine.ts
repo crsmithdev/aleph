@@ -1690,6 +1690,11 @@ Write a concise, informative summary of what has been discovered so far, key the
         .map(s => `[${citationIndex.get(s.url)}] ${s.title} — ${s.url}`)
         .filter(line => !line.startsWith('[undefined]'));
 
+      const relatedConceptNames = topConcepts
+        .filter(other => other.id !== c.id)
+        .map(other => other.canonical_name)
+        .slice(0, 12);
+
       const prompt = `You are writing one section of an encyclopedia article about "${session.seed_query}".
 
 This section is about: ${c.canonical_name}${c.aliases.length ? ` (aka ${c.aliases.slice(0, 3).join(', ')})` : ''}
@@ -1701,6 +1706,13 @@ Write the section as flowing prose:
 - Cite sources using the numeric markers already assigned below, e.g. "[3]" — do not renumber.
 - Do not add confidence scores, tags, or research-process artifacts.
 - Encyclopedic tone: neutral, informative, specific.
+
+Optional typographic constructs (use only when the material warrants, never forced):
+- Cross-reference another covered concept by wrapping its name in double brackets: [[Concept Name]]. Use only for names in the related-concepts list below.
+- A single short blockquote (\`> \`) may carry a striking source quotation that would lose impact as paraphrase. At most one per section.
+- A fenced \`\`\`facts block may list 3–6 compact key–value rows in "Term = Value [n]" form when the findings contain clean numeric or categorical facts. Omit the block entirely if the facts are already prose-shaped.
+
+Related concepts available for [[wiki-link]] cross-reference: ${relatedConceptNames.length ? relatedConceptNames.join(', ') : '(none)'}
 
 Concept summary (from prior extractions): ${c.summary || '(none yet)'}
 Key facts (do not copy verbatim; weave in as prose): ${c.key_facts.slice(0, 8).join(' | ') || '(none)'}
