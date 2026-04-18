@@ -3751,12 +3751,6 @@ export function ResearchQueryDetailPage() {
 
   const scheduleCfg = (session?.config?.schedule) as Record<string, unknown> | undefined;
 
-  const findingCounts = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const f of findingsData) map.set(f.thread_id, (map.get(f.thread_id) ?? 0) + 1);
-    return map;
-  }, [findingsData]);
-
   const { data: conceptsData } = useConcepts(id ?? '');
   const conceptsCount = conceptsData?.length ?? 0;
   const { data: sourcesData } = useSources(id ?? '');
@@ -3956,7 +3950,22 @@ export function ResearchQueryDetailPage() {
             />
           )}
           {tab === 'process' && (
-            <p className="text-sm text-text-muted text-center py-12">Process view is being redesigned.</p>
+            <LiveView
+              threads={threadsData}
+              findings={findingsData}
+              allSteps={allSteps}
+              events={events}
+              isRunning={isRunning}
+              sessionId={id!}
+              sessionFetchText={sessionFetchText}
+              onToggleSessionFetch={handleToggleSessionFetch}
+              activity={activity}
+              jobs={jobs}
+              selectedThreadId={selectedThreadId}
+              onSelectThread={setSelectedThreadId}
+              onNavigateToDocument={navigateToDocument}
+              onNavigateToMap={navigateToMap}
+            />
           )}
           {tab === 'knowledge' && (
             <KnowledgeView
