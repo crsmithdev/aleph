@@ -845,11 +845,45 @@ export function useResearchJobs(sessionId: string) {
 }
 
 // --- SSE Stream ---
+export type StreamSessionEvent = {
+  id: string;
+  title: string;
+  seed_query: string;
+  status: string;
+  updated_at: string;
+};
+
 export type StreamEvent =
   | { type: 'finding'; payload: ResearchFinding }
   | { type: 'thread'; payload: ResearchThread }
   | { type: 'step'; payload: ResearchStep }
-  | { type: 'job'; payload: ResearchJob };
+  | { type: 'job'; payload: ResearchJob }
+  | { type: 'session'; payload: StreamSessionEvent };
+
+// Cross-session: single multiplexed stream for workers page / global activity rail.
+// Only accumulates into the `events` list — no query-cache writes.
+export function useCrossSessionStream(enabled = true, maxEvents = 200) {
+  const [events, setEvents] = useState<StreamEvent[]>([]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const es = new EventSource(`/api/research/stream`);
+
+    es.onmessage = (event: MessageEvent) => {
+      try {
+        const parsed: StreamEvent = JSON.parse(event.data);
+        setEvents(prev => [parsed, ...prev].slice(0, maxEvents));
+      } catch { /* ignore parse errors */ }
+    };
+
+    es.onerror = () => { /* EventSource auto-reconnects */ };
+
+    return () => es.close();
+  }, [enabled, maxEvents]);
+
+  return { events };
+}
+
 
 export function useResearchStream(sessionId: string, enabled = true) {
   const qc = useQueryClient();

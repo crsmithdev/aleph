@@ -1131,6 +1131,95 @@ Write the full article in markdown.`;
     }
   );
 
+  // === Cross-session SSE stream ===
+  //
+  // Fans out finding/thread/step/job events across every session. Poll cadence
+  // matches the per-session stream (500ms) and each client holds its own
+  // cursors keyed by created_at / updated_at so reconnects don't redeliver
+  // history already sent.
+  app.get('/stream', async (req, reply) => {
+    reply.hijack();
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+    reply.raw.flushHeaders();
+
+    let closed = false;
+    req.raw.on('close', () => { closed = true; });
+
+    const send = (type: string, payload: unknown) => {
+      if (!closed) reply.raw.write(`data: ${JSON.stringify({ type, payload })}\n\n`);
+    };
+
+    // Start at "now" — deliver only new activity after connect, not history.
+    const startedAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    let findingCursor = startedAt;
+    let threadCursor = startedAt;
+    let stepCursor = startedAt;
+    let jobCursor = startedAt;
+    let sessionCursor = startedAt;
+
+    const poll = () => {
+      if (closed) return;
+      try {
+        const newFindings = app.sqlite.prepare(
+          `SELECT * FROM research_findings WHERE created_at > ? ORDER BY created_at LIMIT 100`
+        ).all(findingCursor) as Record<string, unknown>[];
+        for (const row of newFindings) {
+          send('finding', row);
+          findingCursor = String(row.created_at);
+        }
+
+        const newThreads = app.sqlite.prepare(
+          `SELECT * FROM research_threads WHERE updated_at > ? ORDER BY updated_at LIMIT 100`
+        ).all(threadCursor) as Record<string, unknown>[];
+        for (const row of newThreads) {
+          send('thread', row);
+          threadCursor = String(row.updated_at);
+        }
+
+        const newSteps = app.sqlite.prepare(
+          `SELECT * FROM research_steps WHERE created_at > ? ORDER BY created_at LIMIT 100`
+        ).all(stepCursor) as Record<string, unknown>[];
+        for (const row of newSteps) {
+          send('step', row);
+          stepCursor = String(row.created_at);
+        }
+
+        const newJobs = app.sqlite.prepare(
+          `SELECT * FROM research_jobs WHERE updated_at > ? ORDER BY updated_at LIMIT 100`
+        ).all(jobCursor) as Record<string, unknown>[];
+        for (const row of newJobs) {
+          send('job', row);
+          jobCursor = String(row.updated_at);
+        }
+
+        const newSessions = app.sqlite.prepare(
+          `SELECT id, title, seed_query, status, updated_at FROM research_queries WHERE updated_at > ? ORDER BY updated_at LIMIT 100`
+        ).all(sessionCursor) as Record<string, unknown>[];
+        for (const row of newSessions) {
+          send('session', row);
+          sessionCursor = String(row.updated_at);
+        }
+      } catch {
+        // ignore SQLite errors during polling
+      }
+    };
+
+    const pollInterval = setInterval(poll, 500);
+    const heartbeatInterval = setInterval(() => {
+      if (!closed) reply.raw.write(': heartbeat\n\n');
+    }, 15_000);
+
+    await new Promise<void>(resolve => req.raw.on('close', resolve));
+    clearInterval(pollInterval);
+    clearInterval(heartbeatInterval);
+    if (!reply.raw.writableEnded) reply.raw.end();
+  });
+
   // === Event log (pre-built, served for fast initial load) ===
   app.get<{ Params: { id: string } }>(
     '/queries/:id/events',
