@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
+import { readSessionLog, sessionLogPath } from '../research-logger.js';
 import { resolve, dirname } from 'path';
 import {
   listQueries, getQuery, createQuery, updateQuery, getQueryCost, getResearchStats,
@@ -9,10 +10,14 @@ import {
   getStepCosts, listSteps,
   applyResearchDDL,
   DEFAULT_SESSION_CONFIG,
+  getDefaults, updateDefaults, resetDefaults,
+  listConcepts, listConceptLinks, getConcept, listFindingsForConcept, getSourcesForConcept,
+  listSources, getSource, countSourcesByStatus, retrySource, skipSource,
   fetchPageText, JS_RENDERED_FLAG,
   // Job imports
   createJob, getJob, getActiveJobForSession, cancelJob, listJobsForSession, cancelAllJobs, listAllJobs, listActiveJobs, jobStats,
   type JobStatus, type ThreadStatus,
+  type SessionConfig,
   deleteQuery,
   OpenRouterProvider,
   // Monitor imports
@@ -22,9 +27,13 @@ import {
 } from '@construct/research';
 
 function sanitizeQuery(q: string): string {
-  const trimmed = q.trim().replace(/\s+/g, ' ');
-  if (!trimmed) return trimmed;
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+  let t = q.trim().replace(/\s+/g, ' ');
+  // Remove outer quotes (straight and curly)
+  t = t.replace(/^[\u201C\u201D\u2018\u2019"']+|[\u201C\u201D\u2018\u2019"']+$/g, '').trim();
+  // Replace underscores with spaces
+  t = t.replace(/_/g, ' ');
+  if (!t) return t;
+  return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
 function summarizeQuery(query: string): string {
@@ -40,11 +49,46 @@ function summarizeQuery(query: string): string {
   return words.length > 8 ? words.slice(0, 8).join(' ') : t;
 }
 
+function heuristicSeedQueryShort(query: string): string {
+  const t = query.trim();
+  // First sentence ending with punctuation
+  const sentEnd = t.search(/[?!.]/);
+  if (sentEnd > 10 && sentEnd < 150) return t.slice(0, sentEnd + 1).trim();
+  // Fall back to first 120 chars
+  return t.length <= 120 ? t : t.slice(0, 120) + '…';
+}
+
+function heuristicSeedQuerySuperShort(query: string): string {
+  return summarizeQuery(query);
+}
+
 function placeholderShortQuery(query: string): string {
   const t = query.trim();
   const MAX = 80;
   if (t.length <= MAX) return t;
   return t.slice(0, MAX) + '…';
+}
+
+async function generateSeedQueryShort(query: string): Promise<string | null> {
+  const openrouterKey = process.env.OPENROUTER_API_KEY;
+  if (!openrouterKey) return null;
+  try {
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${openrouterKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'deepseek/deepseek-chat',
+        messages: [{ role: 'user', content: `Restate this research question as a single clear sentence. Return ONLY the sentence, no quotes:\n\n${query}` }],
+        max_tokens: 60,
+      }),
+    });
+    if (resp.ok) {
+      const data = await resp.json() as { choices: Array<{ message: { content: string } }> };
+      const result = data.choices[0]?.message?.content?.trim().replace(/^["']|["']$/g, '');
+      if (result && result.length <= 200) return result;
+    }
+  } catch { /* fall through */ }
+  return null;
 }
 
 async function generateShortQuery(query: string): Promise<string | null> {
@@ -147,11 +191,15 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       const { seed_query: rawQuery, title, config } = req.body;
       const seed_query = sanitizeQuery(rawQuery ?? '');
       if (!seed_query) return reply.status(400).send({ error: 'seed_query is required' });
+      const seed_query_short = heuristicSeedQueryShort(seed_query);
+      const seed_query_super_short = heuristicSeedQuerySuperShort(seed_query);
       const query = createQuery(
         app.sqlite,
         title ?? summarizeQuery(seed_query),
         seed_query,
-        config as Partial<typeof DEFAULT_SESSION_CONFIG>
+        config as Partial<typeof DEFAULT_SESSION_CONFIG>,
+        seed_query_short,
+        seed_query_super_short,
       );
       // Create seed thread
       const seedThread = createThread(app.sqlite, {
@@ -173,6 +221,13 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
         if (llmTitle !== query.title) {
           updateQuery(app.sqlite, query.id, { title: llmTitle });
         }
+      }).catch(() => { /* ignore */ });
+      // Fire async LLM short/super-short generation for the query itself
+      generateSeedQueryShort(seed_query).then(short => {
+        if (short) updateQuery(app.sqlite, query.id, { seed_query_short: short });
+      }).catch(() => { /* ignore */ });
+      generateShortQuery(seed_query).then(superShort => {
+        if (superShort) updateQuery(app.sqlite, query.id, { seed_query_super_short: superShort });
       }).catch(() => { /* ignore */ });
       // Auto-create a burst job so workers pick it up immediately
       createJob(app.sqlite, { session_id: query.id, mode: 'burst' });
@@ -198,21 +253,68 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
-  // === Export ===
-  app.get<{ Params: { id: string }; Querystring: { format?: string } }>(
-    '/queries/:id/export',
+  // === Export: document (.md) ===
+  app.get<{ Params: { id: string } }>(
+    '/queries/:id/export/document',
     async (req, reply) => {
       const { id } = req.params;
-      const format = req.query.format === 'md' ? 'md' : 'json';
+      const query = getQuery(app.sqlite, id);
+      if (!query) return reply.status(404).send({ error: 'Query not found' });
+
+      const slug = (query.title ?? query.seed_query).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase().slice(0, 60);
+      const filename = `${slug}-${id.slice(0, 8)}`;
+
+      // Use pre-generated document if available
+      const doc = query.document as string | undefined;
+      if (doc) {
+        reply.header('Content-Type', 'text/markdown; charset=utf-8');
+        reply.header('Content-Disposition', `attachment; filename="${filename}.md"`);
+        return reply.send(doc);
+      }
+
+      // Fall back: minimal document from findings
+      const findings = listFindings(app.sqlite, id).filter(f => f.confidence >= 0.5);
+      const lines: string[] = [];
+      lines.push(`# ${query.title}`);
+      lines.push('');
+      lines.push(`*${query.seed_query}*`);
+      lines.push('');
+      if (findings.length === 0) {
+        lines.push('*No findings yet.*');
+      } else {
+        for (const f of findings) {
+          lines.push(`## Finding`);
+          lines.push('');
+          if (f.summary) { lines.push(`**${f.summary}**`); lines.push(''); }
+          lines.push(f.content);
+          lines.push('');
+          if (f.source_urls?.length) lines.push(`*Sources: ${f.source_urls.join(', ')}*`);
+          lines.push('');
+        }
+      }
+      reply.header('Content-Type', 'text/markdown; charset=utf-8');
+      reply.header('Content-Disposition', `attachment; filename="${filename}.md"`);
+      return reply.send(lines.join('\n'));
+    }
+  );
+
+  // === Export: thread activity log (.md) — session or single thread ===
+  app.get<{ Params: { id: string }; Querystring: { thread_id?: string } }>(
+    '/queries/:id/export/log',
+    async (req, reply) => {
+      const { id } = req.params;
+      const { thread_id } = req.query;
 
       const query = getQuery(app.sqlite, id);
       if (!query) return reply.status(404).send({ error: 'Query not found' });
 
-      const threads = listThreads(app.sqlite, id);
+      const allThreads = listThreads(app.sqlite, id);
+      const threads = thread_id ? allThreads.filter(t => t.id === thread_id) : allThreads;
+
+      if (thread_id && threads.length === 0) return reply.status(404).send({ error: 'Thread not found' });
+
       const findings = listFindings(app.sqlite, id);
       const steps = listSteps(app.sqlite, id);
-      const jobs = listJobsForSession(app.sqlite, id);
-      const plan = getLatestPlan(app.sqlite, id);
 
       const findingsByThread = new Map<string, typeof findings>();
       for (const f of findings) {
@@ -221,227 +323,95 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       }
       const stepsByThread = new Map<string, typeof steps>();
       for (const s of steps) {
-        const key = s.thread_id;
-        if (!stepsByThread.has(key)) stepsByThread.set(key, []);
-        stepsByThread.get(key)!.push(s);
+        if (!stepsByThread.has(s.thread_id)) stepsByThread.set(s.thread_id, []);
+        stepsByThread.get(s.thread_id)!.push(s);
       }
+      const threadById = new Map(allThreads.map(t => [t.id, t]));
 
       const slug = (query.title ?? query.seed_query).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase().slice(0, 60);
-      const filename = `research-${slug}-${id.slice(0, 8)}`;
+      const suffix = thread_id ? `-thread-${thread_id.slice(0, 8)}` : '';
+      const filename = `${slug}-log${suffix}-${id.slice(0, 8)}`;
 
-      if (format === 'json') {
-        const payload = {
-          query: {
-            id: query.id,
-            title: query.title,
-            seed_query: query.seed_query,
-            status: query.status,
-            config: query.config,
-            summary: query.summary,
-            created_at: query.created_at,
-            updated_at: query.updated_at,
-          },
-          plan: plan ? { items: plan.items, status: plan.status, generated_at: plan.generated_at } : null,
-          jobs: jobs.map(j => ({
-            id: j.id, status: j.status, mode: j.mode,
-            iterations_completed: j.iterations_completed, max_iterations: j.max_iterations,
-            started_at: j.started_at, completed_at: j.completed_at, error: j.error,
-          })),
-          threads: threads.map(t => ({
-            id: t.id,
-            query: t.query,
-            short_query: t.short_query,
-            origin: t.origin,
-            depth: t.depth,
-            max_depth: t.max_depth,
-            status: t.status,
-            priority: t.priority,
-            perturbation_strategy: t.perturbation_strategy,
-            parent_thread_id: t.parent_thread_id,
-            spawned_from_finding_id: t.spawned_from_finding_id,
-            node_type: t.node_type,
-            created_at: t.created_at,
-            updated_at: t.updated_at,
-            findings: (findingsByThread.get(t.id) ?? []).map(f => ({
-              id: f.id,
-              content: f.content,
-              summary: f.summary,
-              source_urls: f.source_urls,
-              source_quality: f.source_quality,
-              tags: f.tags,
-              confidence: f.confidence,
-              novelty: f.novelty,
-              actionability: f.actionability,
-              user_rating: f.user_rating,
-              follow_ups: f.follow_ups,
-              follow_up_analysis: f.follow_up_analysis,
-              created_at: f.created_at,
-            })),
-            steps: (stepsByThread.get(t.id) ?? []).map(s => ({
-              id: s.id,
-              label: s.label,
-              model: s.model,
-              provider: s.provider,
-              prompt_tokens: s.prompt_tokens,
-              completion_tokens: s.completion_tokens,
-              cost_usd: s.cost_usd,
-              duration_ms: s.duration_ms,
-              tool_calls: s.tool_calls,
-              error: s.error,
-              created_at: s.created_at,
-            })),
-          })),
-        };
-        reply.header('Content-Type', 'application/json');
-        reply.header('Content-Disposition', `attachment; filename="${filename}.json"`);
-        return reply.send(JSON.stringify(payload, null, 2));
-      }
-
-      // Markdown format
       const lines: string[] = [];
-      lines.push(`# Research: ${query.title}`);
+      lines.push(`# Activity Log: ${query.title}${thread_id ? ` — thread ${thread_id.slice(0, 8)}` : ''}`);
       lines.push('');
-      lines.push(`**Seed query:** ${query.seed_query}`);
-      lines.push(`**Status:** ${query.status}`);
-      lines.push(`**Created:** ${query.created_at}`);
-      const cfg = query.config as Record<string, unknown>;
-      if (cfg) {
-        lines.push('');
-        lines.push('## Configuration');
-        lines.push('');
-        lines.push(`| Setting | Value |`);
-        lines.push(`| --- | --- |`);
-        for (const [k, v] of Object.entries(cfg)) {
-          if (v !== null && v !== undefined && typeof v !== 'object') {
-            lines.push(`| ${k} | ${v} |`);
-          }
-        }
-      }
-      if (query.summary) {
-        lines.push('');
-        lines.push('## Summary');
-        lines.push('');
-        lines.push(query.summary);
-      }
-
-      // Jobs
-      if (jobs.length > 0) {
-        lines.push('');
-        lines.push('## Jobs');
-        lines.push('');
-        for (const j of jobs) {
-          lines.push(`- **${j.status}** (${j.mode}) — ${j.iterations_completed ?? 0}/${j.max_iterations ?? '∞'} iterations${j.error ? ` — Error: ${j.error}` : ''}`);
-        }
-      }
-
-      // Plan
-      if (plan?.items?.length) {
-        lines.push('');
-        lines.push('## Execution Plan');
-        lines.push('');
-        for (const item of plan.items) {
-          lines.push(`${item.rank}. **${item.thread_query}** — ${item.rationale ?? ''}`);
-        }
-      }
-
-      // Threads
-      lines.push('');
-      lines.push('## Threads');
+      lines.push(`**Session:** ${id}`);
+      lines.push(`**Generated:** ${new Date().toISOString()}`);
       lines.push('');
 
-      const threadById = new Map(threads.map(t => [t.id, t]));
-
-      function getAncestry(t: (typeof threads)[0]): string {
-        const parts: string[] = [];
-        let cur = t;
-        while (cur.parent_thread_id) {
-          const p = threadById.get(cur.parent_thread_id);
-          if (!p) break;
-          parts.unshift(p.short_query ?? p.query.slice(0, 60));
-          cur = p;
-        }
-        return parts.length ? parts.join(' → ') : '';
-      }
-
-      // Sort threads depth-first
-      function buildOrder(parentId: string | null): (typeof threads)[0][] {
-        return threads
+      // Sort depth-first for session log
+      function buildOrder(parentId: string | null): (typeof allThreads)[0][] {
+        return allThreads
           .filter(t => t.parent_thread_id === parentId)
           .sort((a, b) => a.created_at.localeCompare(b.created_at))
           .flatMap(t => [t, ...buildOrder(t.id)]);
       }
-      const ordered = buildOrder(null);
+      const ordered = thread_id ? threads : buildOrder(null);
 
       for (const t of ordered) {
-        const indent = '#'.repeat(Math.min(t.depth + 3, 6));
-        lines.push(`${indent} ${t.short_query ?? t.query.slice(0, 80)}`);
+        const tSteps = (stepsByThread.get(t.id) ?? []).sort((a, b) => a.created_at.localeCompare(b.created_at));
+        const tFindings = findingsByThread.get(t.id) ?? [];
+
+        lines.push(`## Thread: ${t.short_query ?? t.query.slice(0, 80)}`);
         lines.push('');
         lines.push(`> ${t.query}`);
         lines.push('');
 
+        const parentThread = t.parent_thread_id ? threadById.get(t.parent_thread_id) : null;
         const meta: string[] = [
-          `**Origin:** ${t.origin}`,
-          `**Depth:** ${t.depth}`,
-          `**Status:** ${t.status}`,
-          `**Priority:** ${t.priority.toFixed(2)}`,
+          `depth ${t.depth}`,
+          `origin: ${t.origin}`,
+          `status: **${t.status}**`,
         ];
-        if (t.perturbation_strategy) meta.push(`**Perturbation:** ${t.perturbation_strategy}`);
-        if (t.spawned_from_finding_id) meta.push(`**Spawned from finding:** ${t.spawned_from_finding_id}`);
-        const ancestry = getAncestry(t);
-        if (ancestry) meta.push(`**Parent chain:** ${ancestry}`);
+        if (parentThread) meta.push(`parent: *${parentThread.short_query ?? parentThread.query.slice(0, 60)}*`);
+        if (t.perturbation_strategy) meta.push(`perturbation: ${t.perturbation_strategy}`);
         lines.push(meta.join(' · '));
         lines.push('');
 
-        // Steps
-        const tSteps = stepsByThread.get(t.id) ?? [];
         if (tSteps.length > 0) {
-          lines.push('**Steps:**');
+          lines.push('### Steps');
           lines.push('');
           for (const s of tSteps) {
-            const costStr = s.cost_usd != null ? ` $${s.cost_usd.toFixed(4)}` : '';
-            const tokStr = s.prompt_tokens != null ? ` ${s.prompt_tokens}+${s.completion_tokens}tok` : '';
-            const durStr = s.duration_ms != null ? ` ${s.duration_ms}ms` : '';
-            lines.push(`- **${s.label ?? 'step'}** · ${s.model ?? ''}${tokStr}${costStr}${durStr}${s.error ? ` · ⚠ ${s.error}` : ''}`);
+            const time = new Date(s.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+            const tokStr = s.prompt_tokens != null ? ` · ${s.prompt_tokens}+${s.completion_tokens} tok` : '';
+            const costStr = s.cost_usd > 0 ? ` · $${s.cost_usd.toFixed(4)}` : '';
+            const durStr = s.duration_ms ? ` · ${s.duration_ms}ms` : '';
+            lines.push(`- \`${time}\` **${s.label ?? s.model ?? 'step'}** — ${s.model ?? ''}${tokStr}${costStr}${durStr}${s.error ? ` ⚠ ${s.error}` : ''}`);
             if (s.tool_calls?.length) {
-              for (const tc of s.tool_calls as Array<{ name?: string; input?: unknown }>) {
-                lines.push(`  - Tool: \`${tc.name ?? 'unknown'}\``);
+              for (const tc of s.tool_calls as Array<{ tool?: string; name?: string; input?: Record<string, unknown> }>) {
+                const toolName = tc.tool ?? tc.name ?? 'unknown';
+                const query = tc.input?.query as string | undefined;
+                const detail = query ? ` "${query}"` : '';
+                lines.push(`  - \`${toolName}\`${detail}`);
               }
             }
           }
           lines.push('');
         }
 
-        // Findings
-        const tFindings = findingsByThread.get(t.id) ?? [];
         if (tFindings.length > 0) {
-          lines.push(`**Findings (${tFindings.length}):**`);
+          lines.push('### Findings');
           lines.push('');
           for (const f of tFindings) {
-            const scores: string[] = [];
-            if (f.confidence != null) scores.push(`conf ${(f.confidence * 100).toFixed(0)}%`);
-            if (f.novelty != null) scores.push(`novelty ${(f.novelty * 100).toFixed(0)}%`);
-            if (f.actionability != null) scores.push(`action ${(f.actionability * 100).toFixed(0)}%`);
-            const scoreStr = scores.length ? ` [${scores.join(', ')}]` : '';
-            const ratingStr = f.user_rating ? ` · rated: ${f.user_rating}` : '';
-            lines.push(`#### Finding${scoreStr}${ratingStr}`);
+            const conf = `conf ${(f.confidence * 100).toFixed(0)}%`;
+            const novel = `novelty ${(f.novelty * 100).toFixed(0)}%`;
+            lines.push(`#### ${f.summary ?? 'Finding'} [${conf}, ${novel}]`);
             lines.push('');
-            if (f.summary) { lines.push(`*${f.summary}*`); lines.push(''); }
             lines.push(f.content);
             lines.push('');
             if (f.source_urls?.length) {
-              lines.push(`**Sources:** ${f.source_urls.join(', ')}`);
+              lines.push('**Sources:**');
+              for (const u of f.source_urls) lines.push(`- ${u}`);
               lines.push('');
             }
-            if (f.tags?.length) { lines.push(`**Tags:** ${f.tags.join(', ')}`); lines.push(''); }
+            if (f.tags?.length) lines.push(`*Tags: ${f.tags.join(', ')}*`);
             if (f.follow_ups?.length) {
-              lines.push(`**Follow-ups spawned:**`);
-              for (const fu of f.follow_ups as string[]) lines.push(`- ${fu}`);
               lines.push('');
+              lines.push('**Follow-up questions spawned:**');
+              for (const fu of f.follow_ups as string[]) lines.push(`- ${fu}`);
             }
+            lines.push('');
           }
-        } else {
-          lines.push('*No findings.*');
-          lines.push('');
         }
 
         lines.push('---');
@@ -452,6 +422,17 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       reply.header('Content-Type', 'text/markdown; charset=utf-8');
       reply.header('Content-Disposition', `attachment; filename="${filename}.md"`);
       return reply.send(md);
+    }
+  );
+
+  // Legacy export alias — kept for any existing bookmarks
+  app.get<{ Params: { id: string }; Querystring: { format?: string } }>(
+    '/queries/:id/export',
+    async (req, reply) => {
+      const dest = req.query.format === 'md'
+        ? `/api/research/queries/${req.params.id}/export/document`
+        : `/api/research/queries/${req.params.id}/export/log`;
+      return reply.redirect(dest);
     }
   );
 
@@ -573,6 +554,58 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       const result = updateFinding(app.sqlite, req.params.id, req.body);
       if (!result) return reply.status(404).send({ error: 'Finding not found' });
       return result;
+    }
+  );
+
+  // === Concepts (knowledge graph) ===
+  app.get<{ Params: { id: string } }>('/queries/:id/concepts', async (req) => {
+    return listConcepts(app.sqlite, req.params.id);
+  });
+
+  app.get<{ Params: { id: string } }>('/queries/:id/concept-links', async (req) => {
+    return listConceptLinks(app.sqlite, req.params.id);
+  });
+
+  app.get<{ Params: { id: string; conceptId: string } }>(
+    '/queries/:id/concepts/:conceptId',
+    async (req, reply) => {
+      const concept = getConcept(app.sqlite, req.params.conceptId);
+      if (!concept || concept.session_id !== req.params.id) {
+        return reply.status(404).send({ error: 'Concept not found' });
+      }
+      const findingIds = listFindingsForConcept(app.sqlite, concept.id);
+      const sources = getSourcesForConcept(app.sqlite, concept.id);
+      return { ...concept, finding_ids: findingIds, sources };
+    }
+  );
+
+  // === Sources (extraction queue) ===
+  app.get<{ Params: { id: string }; Querystring: { status?: string; limit?: string } }>(
+    '/queries/:id/sources',
+    async (req) => {
+      const status = req.query.status as 'pending' | 'extracted' | 'failed' | 'skipped' | 'all' | undefined;
+      const limit = req.query.limit ? parseInt(req.query.limit) : undefined;
+      const items = listSources(app.sqlite, req.params.id, { status, limit });
+      const counts = countSourcesByStatus(app.sqlite, req.params.id);
+      return { items, counts };
+    }
+  );
+
+  app.post<{ Params: { sourceId: string } }>(
+    '/sources/:sourceId/retry',
+    async (req, reply) => {
+      const source = getSource(app.sqlite, req.params.sourceId);
+      if (!source) return reply.status(404).send({ error: 'Source not found' });
+      return retrySource(app.sqlite, req.params.sourceId);
+    }
+  );
+
+  app.post<{ Params: { sourceId: string } }>(
+    '/sources/:sourceId/skip',
+    async (req, reply) => {
+      const source = getSource(app.sqlite, req.params.sourceId);
+      if (!source) return reply.status(404).send({ error: 'Source not found' });
+      return skipSource(app.sqlite, req.params.sourceId);
     }
   );
 
@@ -892,6 +925,19 @@ Write the full article in markdown.`;
     return { status: 'saved' };
   });
 
+  // === Research defaults (persisted SessionConfig) ===
+  app.get('/defaults', async () => {
+    return getDefaults(app.sqlite);
+  });
+
+  app.put<{ Body: Partial<SessionConfig> }>('/defaults', async (req) => {
+    return updateDefaults(app.sqlite, req.body ?? {});
+  });
+
+  app.post('/defaults/reset', async () => {
+    return resetDefaults(app.sqlite);
+  });
+
   // === Env check (kept for backward compat + consumer-page warnings) ===
   app.get('/env-check', async () => {
     const anthropic = !!process.env.ANTHROPIC_API_KEY;
@@ -1050,7 +1096,7 @@ Write the full article in markdown.`;
             }
           }
 
-          const steps = listSteps(app.sqlite, queryId, { limit: 200 });
+          const steps = listSteps(app.sqlite, queryId, { limit: 1000 });
           for (const s of steps) {
             if (!sentSteps.has(s.id)) {
               sentSteps.add(s.id);
@@ -1080,6 +1126,17 @@ Write the full article in markdown.`;
       clearInterval(pollInterval);
       clearInterval(heartbeatInterval);
       if (!reply.raw.writableEnded) reply.raw.end();
+    }
+  );
+
+  // === Event log (pre-built, served for fast initial load) ===
+  app.get<{ Params: { id: string } }>(
+    '/queries/:id/events',
+    async (req, reply) => {
+      const query = getQuery(app.sqlite, req.params.id);
+      if (!query) return reply.status(404).send({ error: 'Query not found' });
+      const events = readSessionLog(req.params.id);
+      return { events, log_path: existsSync(sessionLogPath(req.params.id)) ? sessionLogPath(req.params.id) : null };
     }
   );
 

@@ -23,7 +23,7 @@ if (isDev) {
     appType: 'spa',
   });
   await app.use((req: any, res: any, next: any) => {
-    if (req.url?.startsWith('/api/')) return next();
+    if (req.url?.startsWith('/api/') || req.url?.startsWith('/public')) return next();
     vite.middlewares(req, res, next);
   });
 }

@@ -5,6 +5,7 @@ import { PRIORITY, GOAL_STATE } from '../../types';
 import type { Todo, Habit } from '../../types';
 import {
   useGoal,
+  useGoals,
   useNotes,
   useCreateNote,
   useUpdateNote,
@@ -20,6 +21,8 @@ import {
   useUpdateHabit,
   useDeleteHabit,
   useCreateHabit,
+  useLinkGoal,
+  useUnlinkGoal,
 } from '../../api/hooks';
 import { priorityColors, stateColors } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -198,6 +201,41 @@ function LinkSearch<T extends { id: string; title: string }>({
   );
 }
 
+function GoalLinkRow({ linkableGoals, onLink }: { linkableGoals: { id: string; title: string; state: string }[]; onLink: (g: { id: string; title: string; state: string }) => void }) {
+  const [open, setOpen] = useState(false);
+
+  if (!open) {
+    return (
+      <div className="flex items-center gap-2 py-0.5">
+        <button
+          onClick={() => setOpen(true)}
+          className="flex items-center gap-1 text-xs text-text-muted hover:text-text-secondary transition-colors"
+        >
+          <Icon name="open_in_new" size="xs" />
+          Link a goal
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-2">
+        <button onClick={() => setOpen(false)} className="text-xs text-text-muted hover:text-text-secondary">Close</button>
+      </div>
+      {linkableGoals.length > 0 ? (
+        <LinkSearch
+          items={linkableGoals}
+          onLink={(g) => { onLink(g); setOpen(false); }}
+          renderExtra={(g) => <span className="text-text-disabled text-xs capitalize">{g.state.replace(/_/g, ' ')}</span>}
+        />
+      ) : (
+        <p className="text-xs text-text-disabled py-1 px-2">No other goals to link.</p>
+      )}
+    </div>
+  );
+}
+
 export function GoalDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -209,8 +247,11 @@ export function GoalDetailPage() {
   const { data: history = [] } = useHistory(id);
   const { data: todosData } = useTodos(true);
   const { data: habitsData = [] } = useHabits();
+  const { data: allGoals = [] } = useGoals();
 
   const updateGoal = useUpdateGoal();
+  const linkGoal = useLinkGoal(id);
+  const unlinkGoal = useUnlinkGoal(id);
   const createNote = useCreateNote(id);
   const createTodo = useCreateTodo();
   const updateNote = useUpdateNote(id);
@@ -262,24 +303,19 @@ export function GoalDetailPage() {
   const linkedHabits = habitsData.filter((h: Habit) => h.goalId === id);
   const unlinkedHabits = habitsData.filter((h: Habit) => !h.goalId);
 
+  const linkedGoalIds = new Set((goal.linkedGoals ?? []).map((g) => g.id));
+  const linkableGoals = allGoals.filter((g) => g.id !== id && !linkedGoalIds.has(g.id));
+
   return (
     <div className="flex flex-col gap-6">
-      {/* Back link */}
-      <Link
-        to="/goals"
-        className="inline-flex items-center gap-1.5 text-sm text-text-muted hover:text-text-secondary transition-colors w-fit"
-      >
-        <Icon name="arrow_back" size="xs" />
-        All goals
-      </Link>
-
-      {/* Goal header — wide layout */}
-      <div className="bg-bg-secondary border border-border-primary rounded-lg p-5">
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex-1 min-w-0">
-            <InlineEdit value={goal.title} onSave={(title) => handleUpdate({ title })} />
-          </div>
-          <div className="flex items-center gap-2 flex-wrap shrink-0">
+      {/* Goal header */}
+      <div className="sticky top-0 z-10 h-14 bg-bg-primary border-b border-border-primary flex items-center gap-2">
+        <Link to="/goals" className="font-heading text-2xl font-bold text-text-muted hover:text-text-primary transition-colors leading-none whitespace-nowrap shrink-0">Goals</Link>
+        <span className="font-heading text-2xl font-bold text-text-muted leading-none shrink-0">&raquo;</span>
+        <div className="flex-1 min-w-0">
+          <InlineEdit value={goal.title} onSave={(title) => handleUpdate({ title })} />
+        </div>
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
             <CategoryManager goalId={id} currentCategories={goal.categories ?? []} />
             <select
               value={goal.priority}
@@ -308,7 +344,6 @@ export function GoalDetailPage() {
               ))}
             </select>
           </div>
-        </div>
       </div>
 
       {/* Action buttons */}
@@ -458,6 +493,33 @@ export function GoalDetailPage() {
             />
           ) : undefined}
         />
+      </section>
+
+      {/* Related Goals section */}
+      <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider">Related Goals</h2>
+        {(goal.linkedGoals ?? []).length > 0 && (
+          <div className="flex flex-col gap-1">
+            {(goal.linkedGoals ?? []).map((linked) => (
+              <div key={linked.id} className="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary border border-border-primary rounded group">
+                <Link
+                  to={`/goals/${linked.id}`}
+                  className="flex-1 text-sm text-text-primary hover:text-accent transition-colors"
+                >
+                  {linked.title}
+                </Link>
+                <span className="text-xs text-text-disabled capitalize">{linked.state.replace(/_/g, ' ')}</span>
+                <button
+                  onClick={() => unlinkGoal.mutate(linked.id)}
+                  className="text-xs text-text-muted hover:text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity px-1.5 py-0.5 rounded hover:bg-bg-tertiary"
+                >
+                  Unlink
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <GoalLinkRow linkableGoals={linkableGoals} onLink={(g) => linkGoal.mutate(g.id)} />
       </section>
 
       {/* History section */}

@@ -7,6 +7,8 @@ export interface ResearchQuery {
   id: string;
   title: string;
   seed_query: string;
+  seed_query_short: string | null;
+  seed_query_super_short: string | null;
   status: 'active' | 'paused' | 'completed' | 'archived';
   config: Record<string, unknown>;
   summary: string;
@@ -33,6 +35,7 @@ export interface ResearchThread {
   max_depth: number;
   min_searches: number | null;
   fetch_source_text: boolean | null;
+  retry_after: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -56,7 +59,7 @@ export interface ResearchFinding {
     candidates: Array<{
       text: string;
       quality_score: number;
-      jaccard_similarity: number;
+      dedup_similarity: number;
       embedding_similarity: number | null;
       llm_similarity: number | null;
       similarity_method: string;
@@ -258,6 +261,70 @@ export function useUpdateProviderConfig() {
   });
 }
 
+// --- Research defaults (persisted SessionConfig) ---
+export interface ResearchDefaults {
+  budget_daily_usd: number;
+  budget_total_usd: number | null;
+  budget_alert_threshold: number;
+  max_thread_depth: number;
+  max_total_threads: number;
+  p_serendipity: number;
+  max_perturbation_probability: number;
+  novelty_threshold: number;
+  dedup_similarity_threshold: number;
+  diminishing_returns_threshold: number;
+  diminishing_returns_window: number;
+  min_delay_between_steps_ms: number;
+  max_steps_per_hour: number;
+  max_concurrent_threads: number;
+  model: string;
+  providers: { primary: 'openrouter'; openrouter_models: string[] };
+  schedule: { mode: string; active_windows: unknown[]; timezone: string };
+  topic_coherence: { seed_similarity_min: number; hop_similarity_min: number };
+  follow_up: { min_count: number; max_count: number; max_retries: number; similarity_threshold: number };
+  perturbation: {
+    depth_scaling: boolean;
+    chain_length: number;
+    strategy_cooldown: number;
+    forced_diversity_threshold: number;
+    strategy_weights: Record<string, number>;
+  };
+  burst_iterations: number;
+  min_searches_per_thread: number;
+  fetch_source_text: boolean;
+  gap_analysis: { enabled: boolean; max_gap_searches: number };
+  llm_max_output_tokens: number;
+  snippet_synthesis_chars: number;
+  snippet_display_chars: number;
+}
+
+export function useResearchDefaults() {
+  return useQuery({
+    queryKey: ['research-defaults'],
+    queryFn: () => api.get<ResearchDefaults>('/research/defaults'),
+    staleTime: 30_000,
+  });
+}
+
+export function useUpdateResearchDefaults() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: Partial<ResearchDefaults>) =>
+      api.put<ResearchDefaults>('/research/defaults', patch),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['research-defaults'] });
+    },
+  });
+}
+
+export function useResetResearchDefaults() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<ResearchDefaults>('/research/defaults/reset', {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['research-defaults'] }),
+  });
+}
+
 // --- Queries ---
 export function useResearchQueries(status?: string) {
   const params = status ? `?status=${status}` : '';
@@ -330,6 +397,113 @@ export function useResearchThreads(sessionId: string, opts?: { refetchInterval?:
     queryFn: () => api.get<ResearchThread[]>(`/research/queries/${sessionId}/threads`),
     enabled: !!sessionId,
     refetchInterval: opts?.refetchInterval,
+  });
+}
+
+export interface ConceptWithStats {
+  id: string;
+  session_id: string;
+  canonical_name: string;
+  aliases: string[];
+  summary: string;
+  key_facts: string[];
+  finding_count: number;
+  source_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConceptLink {
+  id: string;
+  session_id: string;
+  from_concept_id: string;
+  to_concept_id: string;
+  relation: string;
+  evidence_finding_ids: string[];
+  created_at: string;
+}
+
+export interface ConceptDetail extends ConceptWithStats {
+  finding_ids: string[];
+  sources: Array<{ url: string; title: string; snippet: string }>;
+}
+
+export function useConcepts(sessionId: string) {
+  return useQuery({
+    queryKey: ['research-concepts', sessionId],
+    queryFn: () => api.get<ConceptWithStats[]>(`/research/queries/${sessionId}/concepts`),
+    enabled: !!sessionId,
+    refetchInterval: 15_000,
+  });
+}
+
+export function useConceptLinks(sessionId: string) {
+  return useQuery({
+    queryKey: ['research-concept-links', sessionId],
+    queryFn: () => api.get<ConceptLink[]>(`/research/queries/${sessionId}/concept-links`),
+    enabled: !!sessionId,
+    refetchInterval: 15_000,
+  });
+}
+
+export function useConceptDetail(sessionId: string, conceptId: string | null) {
+  return useQuery({
+    queryKey: ['research-concept', sessionId, conceptId],
+    queryFn: () => api.get<ConceptDetail>(
+      `/research/queries/${sessionId}/concepts/${conceptId ?? ''}`
+    ),
+    enabled: !!sessionId && !!conceptId,
+  });
+}
+
+export type SourceExtractionStatus = 'pending' | 'extracted' | 'failed' | 'skipped' | 'claimed';
+
+export interface Source {
+  id: string;
+  session_id: string;
+  url: string;
+  title: string;
+  snippet: string;
+  extraction_status: SourceExtractionStatus;
+  extracted_text: string | null;
+  extracted_at: string | null;
+  fetched_at: string | null;
+  error: string | null;
+  attempt_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SourcesResponse {
+  items: Source[];
+  counts: Record<'pending' | 'extracted' | 'failed' | 'skipped', number>;
+}
+
+export function useSources(sessionId: string, status?: SourceExtractionStatus | 'all') {
+  const q = status && status !== 'all' ? `?status=${status}` : '';
+  return useQuery({
+    queryKey: ['research-sources', sessionId, status ?? 'all'],
+    queryFn: () => api.get<SourcesResponse>(`/research/queries/${sessionId}/sources${q}`),
+    enabled: !!sessionId,
+    refetchInterval: 10_000,
+  });
+}
+
+export function useRetrySource() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sourceId }: { sourceId: string; sessionId: string }) =>
+      api.post<Source>(`/research/sources/${sourceId}/retry`, {}),
+    onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: ['research-sources', vars.sessionId] }),
+  });
+}
+
+export function useSkipSource() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sourceId }: { sourceId: string; sessionId: string }) =>
+      api.post<Source>(`/research/sources/${sourceId}/skip`, {}),
+    onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: ['research-sources', vars.sessionId] }),
   });
 }
 
@@ -418,6 +592,7 @@ export interface ResearchStep {
   duration_ms: number;
   error: string | null;
   label: string | null;
+  metadata: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -635,12 +810,12 @@ export type StreamEvent =
   | { type: 'step'; payload: ResearchStep }
   | { type: 'job'; payload: ResearchJob };
 
-export function useResearchStream(sessionId: string) {
+export function useResearchStream(sessionId: string, enabled = true) {
   const qc = useQueryClient();
   const [events, setEvents] = useState<StreamEvent[]>([]);
 
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId || !enabled) return;
     const es = new EventSource(`/api/research/queries/${sessionId}/stream`);
 
     es.onmessage = (event: MessageEvent) => {
@@ -678,7 +853,9 @@ export function useResearchStream(sessionId: string) {
           );
         }
 
-        setEvents(prev => [parsed, ...prev].slice(0, 500));
+        if (parsed.type !== 'job') {
+          setEvents(prev => [parsed, ...prev].slice(0, 1000));
+        }
       } catch { /* ignore parse errors */ }
     };
 
@@ -687,7 +864,7 @@ export function useResearchStream(sessionId: string) {
     };
 
     return () => es.close();
-  }, [sessionId, qc]);
+  }, [sessionId, qc, enabled]);
 
   return { events };
 }

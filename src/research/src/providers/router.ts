@@ -1,4 +1,4 @@
-import type { LLMProvider, LLMResult, WebSearchResult } from '../engine.js';
+import type { LLMProvider, LLMResult, SearchOptions, WebSearchResult } from '../engine.js';
 import { OpenRouterProvider } from './openrouter.js';
 
 export type TaskType =
@@ -53,8 +53,8 @@ export class ModelRouter implements LLMProvider {
     return this.getProvider().complete(model, prompt, maxTokens);
   }
 
-  async searchWeb(model: string, query: string): Promise<WebSearchResult> {
-    return this.getProvider().searchWeb(model, query);
+  async searchWeb(model: string, query: string, options?: SearchOptions): Promise<WebSearchResult> {
+    return this.getProvider().searchWeb(model, query, options);
   }
 
   completeForTask(taskType: TaskType, prompt: string, maxTokens = 4096): Promise<LLMResult> {

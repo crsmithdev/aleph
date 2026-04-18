@@ -80,10 +80,10 @@ export function MonitorsPage() {
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <h3 className="text-sm font-medium text-text-primary truncate">{monitor.title}</h3>
-                  <p className="text-xs text-text-muted mt-1">{monitor.queries.join(', ')}</p>
-                  <p className="text-xs text-text-muted mt-1">Schedule: {monitor.schedule}</p>
+                  <p className="text-sm text-text-muted mt-1">{monitor.queries.join(', ')}</p>
+                  <p className="text-sm text-text-muted mt-1">Schedule: {monitor.schedule}</p>
                 </div>
-                <span className={clsx('px-2 py-0.5 rounded text-xs font-medium ml-3', statusColors[monitor.status])}>
+                <span className={clsx('px-2 py-0.5 rounded text-sm font-medium ml-3', statusColors[monitor.status])}>
                   {monitor.status}
                 </span>
               </div>

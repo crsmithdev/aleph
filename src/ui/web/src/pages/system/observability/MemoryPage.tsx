@@ -157,7 +157,7 @@ export function MemoryPage() {
 
       {/* Stats */}
       {latest && (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5 !mt-0">
           <StatCard label="Total Memories" value={fmtNumber(latest.total)} />
           <StatCard
             label="Health Score"
@@ -194,8 +194,8 @@ export function MemoryPage() {
                   <YAxis {...axisProps} />
                   <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                   <Legend {...legendProps} />
-                  <Bar dataKey="stores" stackId="usage" fill={CHART_PALETTE[1]} radius={[0, 0, 0, 0]} name="Stores" />
-                  <Bar dataKey="searches" stackId="usage" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Searches" />
+                  <Bar isAnimationActive={false} dataKey="stores" stackId="usage" fill={CHART_PALETTE[1]} radius={[0, 0, 0, 0]} name="Stores" />
+                  <Bar isAnimationActive={false} dataKey="searches" stackId="usage" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Searches" />
                 </BarChart>
               ) : (
                 <AreaChart data={usage.data.byDay}>
@@ -204,8 +204,8 @@ export function MemoryPage() {
                   <YAxis {...axisProps} />
                   <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                   <Legend {...legendProps} />
-                  <Area type="monotone" dataKey="stores" stackId="usage" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} strokeWidth={2} dot={false} name="Stores" />
-                  <Area type="monotone" dataKey="searches" stackId="usage" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} strokeWidth={2} dot={false} name="Searches" />
+                  <Area isAnimationActive={false} type="monotone" dataKey="stores" stackId="usage" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} strokeWidth={2} dot={false} name="Stores" />
+                  <Area isAnimationActive={false} type="monotone" dataKey="searches" stackId="usage" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} strokeWidth={2} dot={false} name="Searches" />
                 </AreaChart>
               )}
             </ChartContainer>

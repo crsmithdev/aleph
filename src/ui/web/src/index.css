@@ -124,14 +124,14 @@ dialog::backdrop {
 
 /* Markdown content rendering */
 .md-content {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: var(--text-secondary);
 }
 .md-content p { margin-bottom: 0.5rem; }
 .md-content p:last-child { margin-bottom: 0; }
 .md-content h1 { font-size: 0.875rem; font-weight: 600; margin-bottom: 0.25rem; }
-.md-content h2 { font-size: 0.75rem; font-weight: 600; margin-bottom: 0.25rem; }
-.md-content h3 { font-size: 0.75rem; font-weight: 600; margin-bottom: 0.25rem; }
+.md-content h2 { font-size: 0.875rem; font-weight: 600; margin-bottom: 0.25rem; }
+.md-content h3 { font-size: 0.875rem; font-weight: 600; margin-bottom: 0.25rem; }
 .md-content ul { list-style-type: disc; padding-left: 1rem; margin-bottom: 0.5rem; }
 .md-content ol { list-style-type: decimal; padding-left: 1rem; margin-bottom: 0.5rem; }
 .md-content li { margin-bottom: 0.125rem; }
@@ -145,7 +145,7 @@ dialog::backdrop {
 .md-content table { border-collapse: collapse; margin-bottom: 0.5rem; }
 .md-content th, .md-content td { border: 1px solid var(--border-primary); padding: 0.25rem 0.5rem; }
 .md-content hr { border: none; border-top: 1px solid var(--border-primary); margin: 0.5rem 0; }
-.md-content.md-sm h1, .md-content.md-sm h2, .md-content.md-sm h3 { font-size: 0.6875rem; }
+.md-content.md-sm h1, .md-content.md-sm h2, .md-content.md-sm h3 { font-size: 0.875rem; }
 
 /* Article view — override compact md-content for long-form reading */
 .md-content.article-view { font-size: 1rem; line-height: 1.85; color: var(--text-primary); }

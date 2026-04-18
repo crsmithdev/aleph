@@ -35,14 +35,14 @@ function timeAgo(iso: string): string {
 function ConfBar({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex items-center gap-1">
-      <span className="text-xs text-text-muted">{label}</span>
+      <span className="text-sm text-text-muted">{label}</span>
       <div className="w-12 h-1 bg-bg-tertiary rounded-full overflow-hidden">
         <div
           className={clsx('h-full rounded-full', value > 0.7 ? 'bg-success' : value > 0.4 ? 'bg-warning' : 'bg-error')}
           style={{ width: `${value * 100}%` }}
         />
       </div>
-      <span className="text-xs text-text-muted">{(value * 100).toFixed(0)}%</span>
+      <span className="text-sm text-text-muted">{(value * 100).toFixed(0)}%</span>
     </div>
   );
 }
@@ -62,17 +62,17 @@ function FindingRow({ finding, index }: { finding: ResearchFinding; index: numbe
   return (
     <div className="px-4 py-3">
       <div className="flex items-start gap-3">
-        <span className="text-text-muted text-xs font-mono shrink-0 mt-0.5">[{index}]</span>
+        <span className="text-text-muted text-sm font-mono shrink-0 mt-0.5">[{index}]</span>
         <div className="flex-1 min-w-0">
           <p className="text-base text-text-primary">{finding.summary}</p>
           <div className="flex items-center gap-4 mt-1.5">
             <ConfBar label="conf" value={finding.confidence} />
             <ConfBar label="novel" value={finding.novelty} />
             {finding.source_urls.length > 0 && (
-              <span className="text-xs text-text-muted">{finding.source_urls.length} source{finding.source_urls.length !== 1 ? 's' : ''}</span>
+              <span className="text-sm text-text-muted">{finding.source_urls.length} source{finding.source_urls.length !== 1 ? 's' : ''}</span>
             )}
             {finding.tags.map(tag => (
-              <span key={tag} className="px-1.5 py-0.5 bg-bg-tertiary text-text-muted text-xs rounded">{tag}</span>
+              <span key={tag} className="px-1.5 py-0.5 bg-bg-tertiary text-text-muted text-sm rounded">{tag}</span>
             ))}
           </div>
           {expanded && (
@@ -80,12 +80,12 @@ function FindingRow({ finding, index }: { finding: ResearchFinding; index: numbe
               <Md>{finding.content}</Md>
               {finding.source_texts && finding.source_texts.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-xs text-text-muted uppercase tracking-wide">Sources</p>
+                  <p className="text-sm text-text-muted uppercase tracking-wide">Sources</p>
                   {finding.source_texts.map((text, i) => (
                     <div key={i} className="bg-bg-tertiary/30 rounded px-2 py-1.5">
                       {finding.source_urls[i] && (
                         <a href={finding.source_urls[i]} target="_blank" rel="noopener noreferrer"
-                          className="block text-xs text-accent hover:underline truncate mb-1">
+                          className="block text-sm text-accent hover:underline truncate mb-1">
                           {finding.source_urls[i]}
                         </a>
                       )}
@@ -98,13 +98,13 @@ function FindingRow({ finding, index }: { finding: ResearchFinding; index: numbe
                 <div className="space-y-0.5">
                   {finding.source_urls.slice(finding.source_texts.length).map((url, i) => (
                     <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                      className="block text-xs text-accent hover:underline truncate">[{i + 1 + finding.source_texts.length}] {url}</a>
+                      className="block text-sm text-accent hover:underline truncate">[{i + 1 + finding.source_texts.length}] {url}</a>
                   ))}
                 </div>
               )}
             </div>
           )}
-          <button onClick={() => setExpanded(e => !e)} className="text-xs text-accent mt-1.5 hover:underline">
+          <button onClick={() => setExpanded(e => !e)} className="text-sm text-accent mt-1.5 hover:underline">
             {expanded ? 'collapse' : 'expand'}
           </button>
         </div>
@@ -159,14 +159,14 @@ function DocumentView({ findings, threads }: { findings: ResearchFinding[]; thre
               className="w-full px-4 py-3 flex items-center justify-between hover:bg-bg-tertiary/30 transition-colors text-left"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <span className="text-text-muted text-xs font-mono shrink-0">{String(sectionIdx + 1).padStart(2, '0')}</span>
-                <span className="text-base font-medium text-text-primary truncate">{thread.query}</span>
-                <span className={clsx('px-1.5 py-0.5 rounded text-xs shrink-0',
+                <span className="text-text-muted text-sm font-mono shrink-0">{String(sectionIdx + 1).padStart(2, '0')}</span>
+                <span className="text-base font-medium text-text-primary truncate">{thread.short_query ?? thread.query}</span>
+                <span className={clsx('px-1.5 py-0.5 rounded text-sm shrink-0',
                   thread.origin === 'seed' ? 'bg-accent/10 text-accent' : 'bg-accent/5 text-accent/70'
                 )}>{thread.origin.replace('_', ' ')}</span>
               </div>
               <div className="flex items-center gap-3 shrink-0 ml-3">
-                <span className="text-xs text-text-muted">{sectionFindings.length} finding{sectionFindings.length !== 1 ? 's' : ''}</span>
+                <span className="text-sm text-text-muted">{sectionFindings.length} finding{sectionFindings.length !== 1 ? 's' : ''}</span>
                 <Icon name="expand_more" size="xs" className={clsx('w-4 h-4 text-text-muted transition-transform', isCollapsed && 'rotate-180')} />
               </div>
             </button>
@@ -247,12 +247,9 @@ function ThreadLiveRow({
   const hasAnalysis = threadFindings.some(f => f.follow_up_analysis);
   const childQuerySet = new Set(childThreads.map(t => t.query.toLowerCase().trim()));
 
-  // Thread query display: first line as header, rest expandable
-  const queryLines = thread.query.split('\n');
-  const queryFirstLine = queryLines[0].length > 100
-    ? queryLines[0].slice(0, 100) + '…'
-    : queryLines[0];
-  const queryHasMore = queryLines.length > 1 || queryLines[0].length > 100;
+  // Thread query display: short_query as header, full query expandable
+  const queryFirstLine = thread.short_query ?? thread.query;
+  const queryHasMore = !thread.short_query && thread.query.length > 100;
 
   // Per-thread fetch_source_text: null means use session default
   const threadFetch = thread.fetch_source_text;
@@ -280,21 +277,21 @@ function ThreadLiveRow({
                 {queryFirstLine}
                 {queryHasMore && !expanded && <span className="text-text-muted/50">…</span>}
               </span>
-              <span className={clsx('px-1 py-0.5 rounded text-xs shrink-0', liveOriginColor[thread.origin] ?? 'bg-bg-tertiary text-text-muted')}>
+              <span className={clsx('px-1 py-0.5 rounded text-sm shrink-0', liveOriginColor[thread.origin] ?? 'bg-bg-tertiary text-text-muted')}>
                 {thread.origin.replace(/_/g, ' ')}
               </span>
               {thread.priority !== undefined && (
-                <span className="text-xs text-text-muted font-mono shrink-0">p:{thread.priority.toFixed(2)}</span>
+                <span className="text-sm text-text-muted font-mono shrink-0">p:{thread.priority.toFixed(2)}</span>
               )}
               {thread.status === 'exhausted' && threadFindings.length > 0 && (
-                <span className="text-xs text-text-muted shrink-0">{threadFindings.length} finding{threadFindings.length !== 1 ? 's' : ''}</span>
+                <span className="text-sm text-text-muted shrink-0">{threadFindings.length} finding{threadFindings.length !== 1 ? 's' : ''}</span>
               )}
               {thread.status === 'active' && (
-                <span className="text-xs text-success shrink-0">running…</span>
+                <span className="text-sm text-success shrink-0">running…</span>
               )}
               {/* Fetch-text indicator — always visible, shows per-thread override */}
               {threadFetch !== null && (
-                <span className={clsx('px-1 py-0.5 rounded text-xs shrink-0 font-mono',
+                <span className={clsx('px-1 py-0.5 rounded text-sm shrink-0 font-mono',
                   threadFetch ? 'bg-success/10 text-success' : 'bg-error/10 text-error/70'
                 )}>
                   {threadFetch ? <><Icon name="check" size="xs" className="text-green-400" /> full-text</> : <><Icon name="close" size="xs" className="text-red-400" /> full-text</>}
@@ -309,7 +306,7 @@ function ThreadLiveRow({
           <button
             title={threadFetch === true ? 'Full-text ON — click to turn OFF' : threadFetch === false ? 'Full-text OFF — click to use session default' : 'Full-text: using session default — click to force ON'}
             onClick={handleFetchToggle}
-            className={clsx('px-1.5 py-0.5 rounded text-xs border transition-colors',
+            className={clsx('px-1.5 py-0.5 rounded text-sm border transition-colors',
               threadFetch === true
                 ? 'bg-green-900/40 border-green-700/40 text-green-400 hover:bg-green-900/60'
                 : threadFetch === false
@@ -333,7 +330,7 @@ function ThreadLiveRow({
                 title="Redo thread (re-run all searches and generate new findings)"
                 onClick={() => redoThread.mutate({ sessionId, threadId: thread.id })}
                 disabled={redoThread.isPending}
-                className="p-1 text-text-muted hover:text-blue-400 rounded text-xs"
+                className="p-1 text-text-muted hover:text-blue-400 rounded text-sm"
               >↺</button>
             )}
             {isTerminal && (
@@ -341,14 +338,14 @@ function ThreadLiveRow({
                 title="Redo thread with full-text fetching (clears findings, re-runs with source text)"
                 onClick={() => redoThread.mutate({ sessionId, threadId: thread.id, fetch_source_text: true })}
                 disabled={redoThread.isPending}
-                className="p-1 text-text-muted hover:text-green-400 rounded text-xs font-mono"
+                className="p-1 text-text-muted hover:text-green-400 rounded text-sm font-mono"
               >↺txt</button>
             )}
             {!isTerminal && (
               <button
                 title="Reject thread"
                 onClick={() => updateThread.mutate({ id: thread.id, sessionId, status: 'pruned' })}
-                className="p-1 text-text-muted hover:text-red-400 rounded text-xs"
+                className="p-1 text-text-muted hover:text-red-400 rounded text-sm"
               ><Icon name="close" size="xs" /></button>
             )}
           </div>
@@ -363,7 +360,7 @@ function ThreadLiveRow({
           )}
 
           {/* Thread metadata */}
-          <div className="flex items-center gap-3 py-0.5 text-xs text-text-secondary">
+          <div className="flex items-center gap-3 py-0.5 text-sm text-text-secondary">
             <span>created {new Date(thread.created_at).toLocaleTimeString()}</span>
             <span>depth {thread.depth}/{thread.max_depth}</span>
             {thread.id && <span className="font-mono">{thread.id}</span>}
@@ -371,7 +368,7 @@ function ThreadLiveRow({
 
           {/* Perturbation info */}
           {thread.origin === 'perturbation' && thread.perturbation_strategy && (
-            <div className="py-1 px-2 bg-orange-900/10 border border-orange-800/30 rounded text-xs space-y-0.5">
+            <div className="py-1 px-2 bg-orange-900/10 border border-orange-800/30 rounded text-sm space-y-0.5">
               <div className="flex items-center gap-1.5">
                 <span className="text-orange-400 font-medium">perturbation</span>
                 <span className="text-orange-300/70 font-mono">{thread.perturbation_strategy}</span>
@@ -393,7 +390,7 @@ function ThreadLiveRow({
           {timelineSteps.map((step, si) => (
             <div key={step.id} className="py-0.5 space-y-1">
               {/* LLM invocation header */}
-              <div className="flex items-center gap-2 text-xs text-text-muted">
+              <div className="flex items-center gap-2 text-sm text-text-muted">
                 <span className="text-blue-400/80 font-mono shrink-0">llm</span>
                 <span className="font-mono">{step.model}</span>
                 <span className="text-text-muted/70">
@@ -405,8 +402,8 @@ function ThreadLiveRow({
               </div>
               {step.error && (
                 <div className="flex items-start gap-1.5 pl-4">
-                  <span className="text-red-400 text-xs shrink-0">error:</span>
-                  <span className="text-xs text-red-300 break-words">{step.error}</span>
+                  <span className="text-red-400 text-sm shrink-0">error:</span>
+                  <span className="text-sm text-red-300 break-words">{step.error}</span>
                 </div>
               )}
               {/* Tool calls as event rows */}
@@ -414,16 +411,16 @@ function ThreadLiveRow({
                 <div key={`${si}-${ti}`} className="pl-4 space-y-0.5">
                   {/* Tool call header */}
                   <div className="flex items-start gap-2">
-                    <span className="text-text-secondary/80 text-xs font-mono shrink-0">{tc.tool}</span>
+                    <span className="text-text-secondary/80 text-sm font-mono shrink-0">{tc.tool}</span>
                     {tc.input && (
                       <span className="text-sm text-text-primary break-words flex-1">
                         {tc.tool === 'web_search' && tc.input.query
                           ? <span className="text-text-primary">"{tc.input.query as string}"</span>
-                          : <span className="text-text-secondary/70 text-xs">{JSON.stringify(tc.input).slice(0, 120)}</span>}
+                          : <span className="text-text-secondary/70 text-sm">{JSON.stringify(tc.input).slice(0, 120)}</span>}
                       </span>
                     )}
                     {tc.error && (
-                      <span className="flex items-center gap-0.5 text-xs text-red-400 shrink-0" title={tc.error}><Icon name="close" size="xs" /> error</span>
+                      <span className="flex items-center gap-0.5 text-sm text-red-400 shrink-0" title={tc.error}><Icon name="close" size="xs" /> error</span>
                     )}
                   </div>
                   {/* Fetched pages as event rows (replacing badges) */}
@@ -434,18 +431,18 @@ function ThreadLiveRow({
                         try { hostname = new URL(jf.url).hostname; } catch { /* keep url */ }
                         return (
                           <div key={ji} className="flex items-center gap-2">
-                            <span className={clsx('text-xs shrink-0', jf.ok ? 'text-green-400' : 'text-red-400')}>
+                            <span className={clsx('text-sm shrink-0', jf.ok ? 'text-green-400' : 'text-red-400')}>
                               {jf.ok ? <Icon name="check" size="xs" /> : <Icon name="close" size="xs" />}
                             </span>
                             <a
                               href={jf.url}
                               target="_blank"
                               rel="noreferrer"
-                              className="text-xs text-accent hover:underline truncate max-w-[300px]"
+                              className="text-sm text-accent hover:underline truncate max-w-[300px]"
                             >{hostname}</a>
                             {jf.ok
-                              ? <span className="text-xs text-text-muted/60 shrink-0">{(jf.content_length / 1000).toFixed(1)}k</span>
-                              : <span className="text-xs text-red-400/70 shrink-0" title={jf.error ?? 'fetch failed'}>{jf.error ?? 'failed'}</span>
+                              ? <span className="text-sm text-text-muted/60 shrink-0">{(jf.content_length / 1000).toFixed(1)}k</span>
+                              : <span className="text-sm text-red-400/70 shrink-0" title={jf.error ?? 'fetch failed'}>{jf.error ?? 'failed'}</span>
                             }
                           </div>
                         );
@@ -453,7 +450,7 @@ function ThreadLiveRow({
                     </div>
                   )}
                   {tc.error && (
-                    <div className="pl-4 text-xs text-red-400/80 break-words">{tc.error}</div>
+                    <div className="pl-4 text-sm text-red-400/80 break-words">{tc.error}</div>
                   )}
                 </div>
               ))}
@@ -467,22 +464,22 @@ function ThreadLiveRow({
               <div className="flex-1 min-w-0">
                 <p className="text-base text-text-primary">{f.summary}</p>
                 <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                  <span className="text-xs text-text-muted" title="Confidence score">conf {(f.confidence * 100).toFixed(0)}%</span>
-                  <span className="text-xs text-text-muted" title="Novelty score">novel {(f.novelty * 100).toFixed(0)}%</span>
-                  <span className="text-xs text-text-muted" title="Actionability score">act {(f.actionability * 100).toFixed(0)}%</span>
-                  {f.source_urls.length > 0 && <span className="text-xs text-text-muted">{f.source_urls.length} src</span>}
+                  <span className="text-sm text-text-muted" title="Confidence score">conf {(f.confidence * 100).toFixed(0)}%</span>
+                  <span className="text-sm text-text-muted" title="Novelty score">novel {(f.novelty * 100).toFixed(0)}%</span>
+                  <span className="text-sm text-text-muted" title="Actionability score">act {(f.actionability * 100).toFixed(0)}%</span>
+                  {f.source_urls.length > 0 && <span className="text-sm text-text-muted">{f.source_urls.length} src</span>}
                   {f.source_texts.filter(t => t.length > 0).length > 0
-                    ? <span className="text-xs text-green-400/70">{f.source_texts.filter(t => t.length > 0).length} full-text</span>
+                    ? <span className="text-sm text-green-400/70">{f.source_texts.filter(t => t.length > 0).length} full-text</span>
                     : f.source_urls.length > 0 && (
                       <button
                         title="Fetch full-text for this finding's sources"
                         onClick={() => fetchFindingText.mutate({ sessionId, findingId: f.id })}
                         disabled={fetchFindingText.isPending}
-                        className="text-xs text-text-muted/50 hover:text-green-400 font-mono opacity-0 group-hover/finding:opacity-100 transition-opacity"
+                        className="text-sm text-text-muted/50 hover:text-green-400 font-mono opacity-0 group-hover/finding:opacity-100 transition-opacity"
                       >↓txt</button>
                     )
                   }
-                  {f.confidence < 0.4 && <span className="text-xs text-red-400">low confidence</span>}
+                  {f.confidence < 0.4 && <span className="text-sm text-red-400">low confidence</span>}
                 </div>
               </div>
             </div>
@@ -492,42 +489,44 @@ function ThreadLiveRow({
           {hasAnalysis && (
             <div className="mt-1.5 pt-1 border-t border-border-primary/30">
               <div className="flex items-center gap-2 mb-1">
-                <p className="text-xs text-text-muted uppercase tracking-wide">Follow-up analysis</p>
+                <p className="text-sm text-text-muted uppercase tracking-wide">Follow-up analysis</p>
                 {(threadFindings[0]?.follow_up_analysis?.retry_count ?? 0) > 0 && (
-                  <span className="text-xs text-text-muted/60">{threadFindings[0]?.follow_up_analysis?.retry_count} retries</span>
+                  <span className="text-sm text-text-muted/60">{threadFindings[0]?.follow_up_analysis?.retry_count} retries</span>
                 )}
-                <span className="text-xs text-text-muted/60">threshold: {((threadFindings[0]?.follow_up_analysis?.similarity_threshold ?? 0.75) * 100).toFixed(0)}%</span>
+                <span className="text-sm text-text-muted/60">threshold: {((threadFindings[0]?.follow_up_analysis?.similarity_threshold ?? 0.75) * 100).toFixed(0)}%</span>
               </div>
               {followUpCandidates.map((c, i) => {
                 const spawned = childQuerySet.has((c.text ?? '').toLowerCase().trim());
                 return (
                   <div key={i} className={clsx('py-0.5 px-1 rounded mb-0.5', c.accepted ? '' : 'opacity-50')}>
                     <div className="flex items-start gap-1.5">
-                      <span className={clsx('text-xs shrink-0 mt-0.5', c.accepted ? 'text-purple-400' : 'text-text-muted')}>
+                      <span className={clsx('text-sm shrink-0 mt-0.5', c.accepted ? 'text-purple-400' : 'text-text-muted')}>
                         {c.accepted ? (spawned ? <Icon name="arrow_forward" size="xs" /> : <span>·</span>) : <Icon name="close" size="xs" />}
                       </span>
                       <div className="flex-1 min-w-0">
                         <span className={clsx('text-sm break-words', c.accepted ? (spawned ? 'text-text-secondary' : 'text-text-muted') : 'text-text-muted/50 line-through')}>{c.text}</span>
                         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                          <span className="text-xs text-text-muted/70" title="Quality score">quality:{(c.quality_score*100).toFixed(0)}%</span>
-                          <span className="text-xs text-text-muted/70" title="Rank score (aggregate)">rank:{(c.rank_score*100).toFixed(0)}%</span>
-                          <span className="text-xs text-text-muted/70" title="Distance from parent">dist:{(c.distance_from_parent*100).toFixed(0)}%</span>
-                          <span className={clsx('text-xs', c.jaccard_similarity > (threadFindings[0]?.follow_up_analysis?.similarity_threshold ?? 0.75) ? 'text-red-400' : 'text-text-muted/70')}
-                            title="Jaccard similarity (too-similar = rejected)">
-                            Jaccard:{(c.jaccard_similarity*100).toFixed(0)}%
-                          </span>
+                          <span className="text-sm text-text-muted/70" title="Quality score">quality:{(c.quality_score*100).toFixed(0)}%</span>
+                          <span className="text-sm text-text-muted/70" title="Rank score (aggregate)">rank:{(c.rank_score*100).toFixed(0)}%</span>
+                          <span className="text-sm text-text-muted/70" title="Distance from parent">dist:{(c.distance_from_parent*100).toFixed(0)}%</span>
+                          {c.dedup_similarity > 0 && (
+                            <span className={clsx('text-sm', c.dedup_similarity > (threadFindings[0]?.follow_up_analysis?.similarity_threshold ?? 0.75) ? 'text-red-400' : 'text-text-muted/70')}
+                              title="Max similarity vs previously-accepted candidates (deduplication score)">
+                              dedup:{(c.dedup_similarity*100).toFixed(0)}%
+                            </span>
+                          )}
                           {c.embedding_similarity !== null && c.embedding_similarity !== undefined && (
-                            <span className="text-xs text-text-muted/70" title="Embedding (cosine) similarity">emb:{(c.embedding_similarity*100).toFixed(0)}%</span>
+                            <span className="text-sm text-text-muted/70" title="Embedding (cosine) similarity">emb:{(c.embedding_similarity*100).toFixed(0)}%</span>
                           )}
                           {c.llm_similarity !== null && c.llm_similarity !== undefined && (
-                            <span className="text-xs text-text-muted/70" title="LLM similarity score">llm:{(c.llm_similarity*100).toFixed(0)}%</span>
+                            <span className="text-sm text-text-muted/70" title="LLM similarity score">llm:{(c.llm_similarity*100).toFixed(0)}%</span>
                           )}
                           {c.similarity_method !== 'jaccard' && (
-                            <span className="text-xs text-accent/70 font-mono">[{c.similarity_method}]</span>
+                            <span className="text-sm text-accent/70 font-mono">[{c.similarity_method}]</span>
                           )}
-                          {c.accepted && spawned && <span className="text-xs text-purple-400">spawned</span>}
+                          {c.accepted && spawned && <span className="text-sm text-purple-400">spawned</span>}
                           {!c.accepted && c.rejection_reason && (
-                            <span className="text-xs text-red-400/70 italic truncate max-w-[120px]" title={c.rejection_reason}>{c.rejection_reason}</span>
+                            <span className="text-sm text-red-400/70 italic truncate max-w-[120px]" title={c.rejection_reason}>{c.rejection_reason}</span>
                           )}
                         </div>
                       </div>
@@ -541,14 +540,14 @@ function ThreadLiveRow({
           {/* Fallback: old follow_ups display when no analysis data */}
           {!hasAnalysis && threadFindings.some(f => (f.follow_ups ?? []).length > 0) && (
             <div className="mt-1.5 pt-1 border-t border-border-primary/30">
-              <p className="text-xs text-text-muted uppercase tracking-wide mb-0.5">Follow-ups</p>
+              <p className="text-sm text-text-muted uppercase tracking-wide mb-0.5">Follow-ups</p>
               {Array.from(new Set(threadFindings.flatMap(f => f.follow_ups ?? []))).map((q, i) => {
                 const spawned = childQuerySet.has(q.toLowerCase().trim());
                 return (
                   <div key={i} className="flex items-start gap-1.5 py-0.5">
-                    <span className="text-xs text-text-muted shrink-0 mt-0.5">{spawned ? '→' : '·'}</span>
+                    <span className="text-sm text-text-muted shrink-0 mt-0.5">{spawned ? '→' : '·'}</span>
                     <span className={clsx('text-sm break-words', spawned ? 'text-text-secondary' : 'text-text-muted')}>{q}</span>
-                    {spawned && <span className="text-xs text-purple-400 shrink-0 mt-0.5">spawned</span>}
+                    {spawned && <span className="text-sm text-purple-400 shrink-0 mt-0.5">spawned</span>}
                   </div>
                 );
               })}
@@ -573,8 +572,8 @@ function formatEventDetail(ev: StreamEvent): { typeLabel: string; typeColor: str
   }
   if (ev.type === 'thread') {
     const t = ev.payload;
-    if (t.status === 'active') return { typeLabel: 'spawn', typeColor: 'text-warning', detail: `"${t.query.split('\n')[0].slice(0, 80)}"` };
-    if (t.status === 'queued') return { typeLabel: 'queued', typeColor: 'text-warning/70', detail: `"${t.query.split('\n')[0].slice(0, 80)}"` };
+    if (t.status === 'active') return { typeLabel: 'spawn', typeColor: 'text-warning', detail: t.short_query ?? t.query };
+    if (t.status === 'queued') return { typeLabel: 'queued', typeColor: 'text-warning/70', detail: t.short_query ?? t.query };
     if (t.status === 'pruned') return { typeLabel: 'pruned', typeColor: 'text-error', detail: `thread terminated` };
     if (t.status === 'exhausted') return { typeLabel: 'done', typeColor: 'text-text-muted', detail: `thread complete` };
     return null;
@@ -695,9 +694,9 @@ function ThreadLiveView({
       <div className="w-52 shrink-0 flex flex-col border-r border-border-primary bg-bg-secondary overflow-hidden">
         {/* Header */}
         <div className="flex items-center gap-2 px-3 py-2 border-b border-border-primary shrink-0">
-          <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary">Threads</span>
+          <span className="text-sm font-semibold uppercase tracking-wider text-text-secondary">Threads</span>
           {isRunning && <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse ml-auto shrink-0" />}
-          <span className="text-xs text-text-disabled font-mono ml-auto">{threads.length}</span>
+          <span className="text-sm text-text-disabled font-mono ml-auto">{threads.length}</span>
         </div>
 
         {/* Thread list */}
@@ -716,17 +715,17 @@ function ThreadLiveView({
               >
                 <div className="flex items-center gap-1.5 mb-1">
                   <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', liveStatusDot[thread.status] ?? 'bg-text-muted/40')} />
-                  <span className="text-xs font-medium text-text-primary truncate flex-1 leading-tight">
-                    {(thread.short_query ?? thread.query.split('\n')[0]).slice(0, 36)}
+                  <span className="text-sm font-medium text-text-primary truncate flex-1 leading-tight">
+                    {thread.short_query ?? thread.query}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 mb-1.5">
-                  <span className={clsx('text-[10px] px-1 py-0.5 rounded shrink-0', liveOriginColor[thread.origin] ?? 'bg-bg-tertiary text-text-muted')}>
+                  <span className={clsx('text-sm px-1 py-0.5 rounded shrink-0', liveOriginColor[thread.origin] ?? 'bg-bg-tertiary text-text-muted')}>
                     {thread.origin.replace(/_/g, ' ')}
                   </span>
-                  <span className="text-[10px] font-mono text-text-disabled">p:{thread.priority.toFixed(2)}</span>
+                  <span className="text-sm font-mono text-text-disabled">p:{thread.priority.toFixed(2)}</span>
                   {threadFindings.length > 0 && (
-                    <span className="text-[10px] font-mono text-success ml-auto">{threadFindings.length}✦</span>
+                    <span className="text-sm font-mono text-success ml-auto">{threadFindings.length}✦</span>
                   )}
                 </div>
                 {thread.status === 'active' && (
@@ -754,7 +753,7 @@ function ThreadLiveView({
                       title="Redo"
                       onClick={() => redoThread.mutate({ sessionId, threadId: thread.id })}
                       disabled={redoThread.isPending}
-                      className="px-1 py-0.5 text-[10px] text-text-disabled hover:text-blue-400 rounded"
+                      className="px-1 py-0.5 text-sm text-text-disabled hover:text-blue-400 rounded"
                     >↺</button>
                   ) : (
                     <button
@@ -773,7 +772,7 @@ function ThreadLiveView({
         <div className="border-t border-border-primary px-3 py-2 shrink-0 space-y-1.5">
           <button
             onClick={onToggleSessionFetch}
-            className={clsx('w-full text-left px-2 py-1 rounded text-xs border transition-colors',
+            className={clsx('w-full text-left px-2 py-1 rounded text-sm border transition-colors',
               sessionFetchText
                 ? 'bg-green-900/30 border-green-700/30 text-green-400'
                 : 'bg-bg-tertiary border-border-primary text-text-muted hover:text-text-secondary'
@@ -786,34 +785,34 @@ function ThreadLiveView({
       <div className="flex flex-col overflow-hidden border-r border-border-primary" style={{ width: '38%' }}>
         {/* Header */}
         <div className="flex items-center gap-2 px-4 py-2 border-b border-border-primary bg-bg-secondary shrink-0">
-          <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary">Findings</span>
+          <span className="text-sm font-semibold uppercase tracking-wider text-text-secondary">Findings</span>
           {findings.length > 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-success/10 border border-success/20 text-success">{findings.length}</span>
+            <span className="text-sm px-1.5 py-0.5 rounded font-mono bg-success/10 border border-success/20 text-success">{findings.length}</span>
           )}
         </div>
 
         {/* Findings scroll area */}
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
           {findings.length === 0 && activeThreads.length === 0 ? (
-            <p className="text-xs text-text-muted text-center py-8">No findings yet.</p>
+            <p className="text-sm text-text-muted text-center py-8">No findings yet.</p>
           ) : (
             <>
               {highFindings.length > 0 && (
                 <>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-text-disabled">High confidence · {highFindings.length}</p>
+                  <p className="text-sm font-semibold uppercase tracking-wider text-text-disabled">High confidence · {highFindings.length}</p>
                   {highFindings.map(f => (
                     <div key={f.id} className="bg-bg-secondary border border-border-primary rounded border-l-2 border-l-success px-3 py-2 space-y-1.5">
-                      <p className="text-xs text-text-primary leading-relaxed">{f.content.slice(0, 200)}{f.content.length > 200 ? '…' : ''}</p>
+                      <p className="text-sm text-text-primary leading-relaxed">{f.content.slice(0, 200)}{f.content.length > 200 ? '…' : ''}</p>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {f.source_urls[0] && (
-                          <span className="text-[10px] font-mono text-blue-400 bg-blue-400/8 border border-blue-400/15 px-1 py-0.5 rounded truncate max-w-28">
+                          <span className="text-sm font-mono text-blue-400 bg-blue-400/8 border border-blue-400/15 px-1 py-0.5 rounded truncate max-w-28">
                             {(() => { try { return new URL(f.source_urls[0]).hostname; } catch { return f.source_urls[0]; } })()}
                           </span>
                         )}
-                        <span className="text-[10px] font-mono text-text-disabled bg-bg-tertiary border border-border-primary px-1 py-0.5 rounded">
+                        <span className="text-sm font-mono text-text-disabled bg-bg-tertiary border border-border-primary px-1 py-0.5 rounded">
                           {threads.find(t => t.id === f.thread_id)?.origin?.replace(/_/g, ' ') ?? '—'}
                         </span>
-                        <span className="text-[10px] font-mono text-text-muted ml-auto">{(f.confidence * 100).toFixed(0)}%</span>
+                        <span className="text-sm font-mono text-text-muted ml-auto">{(f.confidence * 100).toFixed(0)}%</span>
                       </div>
                     </div>
                   ))}
@@ -822,17 +821,17 @@ function ThreadLiveView({
 
               {medFindings.length > 0 && (
                 <>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-text-disabled mt-3">Medium confidence · {medFindings.length}</p>
+                  <p className="text-sm font-semibold uppercase tracking-wider text-text-disabled mt-3">Medium confidence · {medFindings.length}</p>
                   {medFindings.map(f => (
                     <div key={f.id} className="bg-bg-secondary border border-border-primary rounded border-l-2 border-l-blue-400/50 px-3 py-2 space-y-1.5">
-                      <p className="text-xs text-text-primary leading-relaxed">{f.content.slice(0, 180)}{f.content.length > 180 ? '…' : ''}</p>
+                      <p className="text-sm text-text-primary leading-relaxed">{f.content.slice(0, 180)}{f.content.length > 180 ? '…' : ''}</p>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {f.source_urls[0] && (
-                          <span className="text-[10px] font-mono text-blue-400 bg-blue-400/8 border border-blue-400/15 px-1 py-0.5 rounded truncate max-w-28">
+                          <span className="text-sm font-mono text-blue-400 bg-blue-400/8 border border-blue-400/15 px-1 py-0.5 rounded truncate max-w-28">
                             {(() => { try { return new URL(f.source_urls[0]).hostname; } catch { return f.source_urls[0]; } })()}
                           </span>
                         )}
-                        <span className="text-[10px] font-mono text-text-muted ml-auto">{(f.confidence * 100).toFixed(0)}%</span>
+                        <span className="text-sm font-mono text-text-muted ml-auto">{(f.confidence * 100).toFixed(0)}%</span>
                       </div>
                     </div>
                   ))}
@@ -843,18 +842,18 @@ function ThreadLiveView({
                 <div className="mt-3 border border-dashed border-border-primary rounded px-3 py-2 space-y-1.5">
                   <div className="flex items-center gap-1.5">
                     {activeThreads.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />}
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-text-disabled">Investigating</span>
+                    <span className="text-sm font-semibold uppercase tracking-wider text-text-disabled">Investigating</span>
                   </div>
                   {activeThreads.map(t => (
-                    <div key={t.id} className="flex items-center gap-1.5 text-[11px] text-text-secondary">
+                    <div key={t.id} className="flex items-center gap-1.5 text-sm text-text-secondary">
                       <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shrink-0" />
-                      {(t.short_query ?? t.query.split('\n')[0]).slice(0, 60)}
+                      {t.short_query ?? t.query}
                     </div>
                   ))}
                   {queuedThreads.map(t => (
-                    <div key={t.id} className="flex items-center gap-1.5 text-[11px] text-text-muted">
+                    <div key={t.id} className="flex items-center gap-1.5 text-sm text-text-muted">
                       <span className="w-1.5 h-1.5 rounded-full bg-warning/60 shrink-0" />
-                      {(t.short_query ?? t.query.split('\n')[0]).slice(0, 60)}
+                      {t.short_query ?? t.query}
                     </div>
                   ))}
                 </div>
@@ -870,7 +869,7 @@ function ThreadLiveView({
         <div className="flex items-center gap-0 border-b border-border-primary bg-bg-secondary overflow-x-auto shrink-0">
           {ordered.filter(t => t.status !== 'pruned' || findingsByThread.get(t.id)?.length).slice(0, 8).map(t => {
             const color = threadColor.get(t.id) ?? '#8796b0';
-            const label = (t.short_query ?? t.query.split('\n')[0]).slice(0, 14);
+            const label = t.short_query ?? t.query;
             return (
               <div
                 key={t.id}
@@ -878,14 +877,14 @@ function ThreadLiveView({
                 style={{ background: `${color}08` }}
               >
                 <div
-                  className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold font-mono shrink-0"
+                  className="w-4 h-4 rounded flex items-center justify-center text-sm font-bold font-mono shrink-0"
                   style={{ background: `${color}20`, color, border: `1px solid ${color}35` }}
                 >
                   {ordered.indexOf(t) < 26 ? String.fromCharCode(65 + ordered.indexOf(t)) : '#'}
                 </div>
                 <div>
-                  <div className="text-[10px] leading-tight truncate max-w-20" style={{ color }}>{label}</div>
-                  <div className="text-[9px] text-text-disabled font-mono">{t.status === 'active' ? 'active' : t.status === 'queued' ? 'queued' : t.status}</div>
+                  <div className="text-sm leading-tight truncate max-w-20" style={{ color }}>{label}</div>
+                  <div className="text-sm text-text-disabled font-mono">{t.status === 'active' ? 'active' : t.status === 'queued' ? 'queued' : t.status}</div>
                 </div>
               </div>
             );
@@ -894,10 +893,10 @@ function ThreadLiveView({
 
         {/* Filter bar */}
         <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-primary bg-bg-secondary shrink-0">
-          <span className="text-[10px] uppercase tracking-wider text-text-disabled font-semibold mr-1">Show</span>
+          <span className="text-sm uppercase tracking-wider text-text-disabled font-semibold mr-1">Show</span>
           <button
             onClick={() => setFilterFindings(f => !f)}
-            className={clsx('px-1.5 py-0.5 rounded text-[11px] border font-mono transition-colors',
+            className={clsx('px-1.5 py-0.5 rounded text-sm border font-mono transition-colors',
               filterFindings
                 ? 'border-warning/30 bg-warning/10 text-warning'
                 : 'border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary'
@@ -905,12 +904,12 @@ function ThreadLiveView({
           >★ findings</button>
           <button
             onClick={() => setFilterFindings(false)}
-            className="px-1.5 py-0.5 rounded text-[11px] border border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary font-mono"
+            className="px-1.5 py-0.5 rounded text-sm border border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary font-mono"
           >all</button>
           <div className="flex-1" />
           <button
             onClick={() => setAutoScroll(a => !a)}
-            className={clsx('px-1.5 py-0.5 rounded text-[11px] border transition-colors',
+            className={clsx('px-1.5 py-0.5 rounded text-sm border transition-colors',
               autoScroll
                 ? 'border-success/25 bg-success/8 text-success'
                 : 'border-border-primary bg-bg-tertiary text-text-muted'
@@ -929,7 +928,7 @@ function ThreadLiveView({
           }}
         >
           {streamEvents.length === 0 && (
-            <p className="text-xs text-text-muted text-center py-8">Waiting for events…</p>
+            <p className="text-sm text-text-muted text-center py-8">Waiting for events…</p>
           )}
           {streamEvents.map((ev, i) => {
             const formatted = formatEventDetail(ev);
@@ -961,15 +960,15 @@ function ThreadLiveView({
                 )}
                 style={{ gridTemplateColumns: '52px 22px 80px 1fr', gap: '0' }}
               >
-                <span className="text-[10px] text-text-disabled font-mono pr-2 truncate">{timeStr}</span>
+                <span className="text-sm text-text-disabled font-mono pr-2 truncate">{timeStr}</span>
                 <span className="pr-1 flex items-center">
                   <div
-                    className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold font-mono"
+                    className="w-4 h-4 rounded flex items-center justify-center text-sm font-bold font-mono"
                     style={{ background: `${color}20`, color, border: `1px solid ${color}30` }}
                   >{threadLetter}</div>
                 </span>
-                <span className={clsx('text-[11px] font-mono pr-2 truncate', formatted.typeColor)}>{formatted.typeLabel}</span>
-                <span className="text-[11px] text-text-muted truncate">
+                <span className={clsx('text-sm font-mono pr-2 truncate', formatted.typeColor)}>{formatted.typeLabel}</span>
+                <span className="text-sm text-text-muted truncate">
                   {isHighFinding && <span className="text-warning mr-1">★</span>}
                   {formatted.detail}
                 </span>
@@ -977,7 +976,7 @@ function ThreadLiveView({
             );
           })}
           {isRunning && (
-            <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-success font-mono">
+            <div className="flex items-center gap-2 px-3 py-1.5 text-sm text-success font-mono">
               <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
               <span>running</span>
               <span className="text-text-disabled ml-2">{events.length} events · {findings.length} findings</span>
@@ -1035,12 +1034,12 @@ function ThreadNode({ data }: { data: ResearchThread & { findingCount: number } 
       <Handle type="target" position={Position.Top} className="!bg-border-primary" />
       <div className="flex items-center gap-1.5">
         <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', statusDot[data.status] ?? 'bg-text-muted')} />
-        <span className="text-xs text-text-muted uppercase tracking-wide">{data.origin.replace('_', ' ')}</span>
+        <span className="text-sm text-text-muted uppercase tracking-wide">{data.origin.replace('_', ' ')}</span>
         {data.findingCount > 0 && (
-          <span className="ml-auto text-xs bg-bg-tertiary text-text-muted px-1 rounded">{data.findingCount}</span>
+          <span className="ml-auto text-sm bg-bg-tertiary text-text-muted px-1 rounded">{data.findingCount}</span>
         )}
       </div>
-      <p className="text-xs leading-tight line-clamp-2 text-text-primary">{data.query}</p>
+      <p className="text-sm leading-tight line-clamp-2 text-text-primary">{data.short_query ?? data.query}</p>
       <Handle type="source" position={Position.Bottom} className="!bg-border-primary" />
     </div>
   );
@@ -1171,7 +1170,7 @@ function WorkersTab({ sessionId }: { sessionId: string }) {
     <div className="space-y-6">
       {/* Section 1: Overall stats */}
       <div>
-        <p className="text-xs text-text-muted uppercase tracking-wide mb-2">Overall</p>
+        <p className="text-sm text-text-muted uppercase tracking-wide mb-2">Overall</p>
         <div className="grid grid-cols-4 gap-3">
           {[
             { label: 'Running', value: counts.running, accent: counts.running > 0 ? 'text-green-400' : 'text-text-primary' },
@@ -1180,7 +1179,7 @@ function WorkersTab({ sessionId }: { sessionId: string }) {
             { label: 'Failed', value: counts.failed, accent: counts.failed > 0 ? 'text-red-400' : 'text-text-primary' },
           ].map(s => (
             <div key={s.label} className="bg-bg-secondary border border-border-primary rounded-lg p-3">
-              <p className="text-xs text-text-muted">{s.label}</p>
+              <p className="text-sm text-text-muted">{s.label}</p>
               <p className={clsx('text-lg font-semibold', s.accent)}>{s.value}</p>
             </div>
           ))}
@@ -1190,15 +1189,15 @@ function WorkersTab({ sessionId }: { sessionId: string }) {
       {/* Section 2: Workers */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <p className="text-xs text-text-muted uppercase tracking-wide">Workers ({workers.length})</p>
+          <p className="text-sm text-text-muted uppercase tracking-wide">Workers ({workers.length})</p>
           <button
             onClick={() => runResearch.mutate({ sessionId, mode: 'background' })}
-            className="text-xs text-accent hover:underline"
+            className="text-sm text-accent hover:underline"
             disabled={runResearch.isPending}
           >+ Spawn worker</button>
         </div>
         {workers.length === 0 ? (
-          <p className="text-xs text-text-muted py-4 text-center">No workers active. Start a job to spawn one.</p>
+          <p className="text-sm text-text-muted py-4 text-center">No workers active. Start a job to spawn one.</p>
         ) : (
           <div className="bg-bg-secondary border border-border-primary rounded-lg overflow-hidden">
             {workers.map(worker => {
@@ -1215,13 +1214,13 @@ function WorkersTab({ sessionId }: { sessionId: string }) {
                     className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-bg-tertiary/30 transition-colors text-left"
                   >
                     <span className={clsx('w-2 h-2 rounded-full shrink-0', activeWorkerJob ? 'bg-success animate-pulse' : 'bg-text-muted/40')} />
-                    <span className="text-xs font-mono text-text-secondary flex-1 truncate">{worker.id}</span>
-                    <span className="text-xs text-text-muted shrink-0">{worker.jobs.length} job{worker.jobs.length !== 1 ? 's' : ''}</span>
-                    <span className="text-xs text-text-muted shrink-0">{workerLifetime(worker)}</span>
+                    <span className="text-sm font-mono text-text-secondary flex-1 truncate">{worker.id}</span>
+                    <span className="text-sm text-text-muted shrink-0">{worker.jobs.length} job{worker.jobs.length !== 1 ? 's' : ''}</span>
+                    <span className="text-sm text-text-muted shrink-0">{workerLifetime(worker)}</span>
                     {activeWorkerJob && (
                       <button
                         onClick={e => { e.stopPropagation(); cancelJob.mutate({ jobId: activeWorkerJob.id }); }}
-                        className="text-xs text-red-400 hover:text-red-300 shrink-0 px-1"
+                        className="text-sm text-red-400 hover:text-red-300 shrink-0 px-1"
                         title="Kill worker (cancel current job)"
                       >kill</button>
                     )}
@@ -1230,7 +1229,7 @@ function WorkersTab({ sessionId }: { sessionId: string }) {
                   {isExpanded && (
                     <div className="px-3 pb-2 pl-8 space-y-1">
                       {worker.jobs.map(job => (
-                        <div key={job.id} className="text-xs flex items-center gap-2">
+                        <div key={job.id} className="text-sm flex items-center gap-2">
                           <span className={clsx('px-1.5 py-0.5 rounded font-medium', jobStatusStyle[job.status] ?? 'bg-bg-tertiary text-text-muted')}>
                             {job.status}
                           </span>
@@ -1251,9 +1250,9 @@ function WorkersTab({ sessionId }: { sessionId: string }) {
 
       {/* Section 3: Jobs */}
       <div>
-        <p className="text-xs text-text-muted uppercase tracking-wide mb-2">Jobs ({jobs.length})</p>
+        <p className="text-sm text-text-muted uppercase tracking-wide mb-2">Jobs ({jobs.length})</p>
         {jobs.length === 0 ? (
-          <p className="text-xs text-text-muted py-4 text-center">No jobs yet. Hit Run to start.</p>
+          <p className="text-sm text-text-muted py-4 text-center">No jobs yet. Hit Run to start.</p>
         ) : (
           <div className="space-y-1">
             {/* Active jobs */}
@@ -1268,16 +1267,16 @@ function WorkersTab({ sessionId }: { sessionId: string }) {
                   className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-success/10 transition-colors"
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shrink-0" />
-                  <span className="font-mono text-xs text-text-secondary flex-1 truncate">{job.id}</span>
-                  <span className={clsx('px-1.5 py-0.5 rounded text-xs font-medium', jobStatusStyle[job.status] ?? '')}>{job.status}</span>
-                  <span className="text-xs text-text-muted">{job.mode}</span>
-                  <span className="text-xs text-text-muted font-mono">{job.iterations_completed}{job.max_iterations ? `/${job.max_iterations}` : ''}</span>
-                  <span className="text-xs text-text-muted">{jobDuration(job)}</span>
-                  <button onClick={e => { e.stopPropagation(); cancelJob.mutate({ jobId: job.id }); }} className="text-xs text-red-400 hover:text-red-300 shrink-0">cancel</button>
+                  <span className="font-mono text-sm text-text-secondary flex-1 truncate">{job.id}</span>
+                  <span className={clsx('px-1.5 py-0.5 rounded text-sm font-medium', jobStatusStyle[job.status] ?? '')}>{job.status}</span>
+                  <span className="text-sm text-text-muted">{job.mode}</span>
+                  <span className="text-sm text-text-muted font-mono">{job.iterations_completed}{job.max_iterations ? `/${job.max_iterations}` : ''}</span>
+                  <span className="text-sm text-text-muted">{jobDuration(job)}</span>
+                  <button onClick={e => { e.stopPropagation(); cancelJob.mutate({ jobId: job.id }); }} className="text-sm text-red-400 hover:text-red-300 shrink-0">cancel</button>
                   <Icon name="expand_more" size="xs" className={clsx('w-3 h-3 text-text-muted shrink-0 transition-transform', expandedJobs.has(job.id) && 'rotate-180')} />
                 </button>
                 {expandedJobs.has(job.id) && (
-                  <div className="px-3 pb-2 pl-6 text-xs space-y-0.5 text-text-muted border-t border-success/20">
+                  <div className="px-3 pb-2 pl-6 text-sm space-y-0.5 text-text-muted border-t border-success/20">
                     <div className="pt-1.5 grid grid-cols-2 gap-x-4">
                       <span>id: <span className="font-mono text-text-secondary">{job.id}</span></span>
                       <span>worker: <span className="font-mono text-text-secondary">{job.claimed_by ?? '—'}</span></span>
@@ -1302,15 +1301,15 @@ function WorkersTab({ sessionId }: { sessionId: string }) {
                   className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-warning/10 transition-colors"
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-yellow-400/70 shrink-0" />
-                  <span className="font-mono text-xs text-text-secondary flex-1 truncate">{job.id}</span>
-                  <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-warning/15 text-warning">queued</span>
-                  <span className="text-xs text-text-muted">{job.mode}</span>
-                  <span className="text-xs text-text-muted">{timeAgo(job.created_at)}</span>
-                  <button onClick={e => { e.stopPropagation(); cancelJob.mutate({ jobId: job.id }); }} className="text-xs text-red-400 hover:text-red-300 shrink-0">cancel</button>
+                  <span className="font-mono text-sm text-text-secondary flex-1 truncate">{job.id}</span>
+                  <span className="px-1.5 py-0.5 rounded text-sm font-medium bg-warning/15 text-warning">queued</span>
+                  <span className="text-sm text-text-muted">{job.mode}</span>
+                  <span className="text-sm text-text-muted">{timeAgo(job.created_at)}</span>
+                  <button onClick={e => { e.stopPropagation(); cancelJob.mutate({ jobId: job.id }); }} className="text-sm text-red-400 hover:text-red-300 shrink-0">cancel</button>
                   <Icon name="expand_more" size="xs" className={clsx('w-3 h-3 text-text-muted shrink-0 transition-transform', expandedJobs.has(job.id) && 'rotate-180')} />
                 </button>
                 {expandedJobs.has(job.id) && (
-                  <div className="px-3 pb-2 pl-6 text-xs text-text-muted border-t border-warning/20 pt-1.5">
+                  <div className="px-3 pb-2 pl-6 text-sm text-text-muted border-t border-warning/20 pt-1.5">
                     <span>id: <span className="font-mono text-text-secondary">{job.id}</span></span>
                   </div>
                 )}
@@ -1330,16 +1329,16 @@ function WorkersTab({ sessionId }: { sessionId: string }) {
                       })}
                       className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-bg-tertiary/30 transition-colors"
                     >
-                      <span className="text-text-muted text-xs font-mono shrink-0">{pastJobs.length - i}</span>
-                      <span className="font-mono text-xs text-text-muted flex-1 truncate">{job.id}</span>
-                      <span className={clsx('px-1.5 py-0.5 rounded text-xs font-medium', jobStatusStyle[job.status] ?? 'bg-bg-tertiary text-text-muted')}>{job.status}</span>
-                      <span className="text-xs text-text-muted">{job.mode}</span>
-                      <span className="text-xs text-text-muted font-mono">{job.iterations_completed}{job.max_iterations ? `/${job.max_iterations}` : ''}</span>
-                      <span className="text-xs text-text-muted">{jobDuration(job)}</span>
+                      <span className="text-text-muted text-sm font-mono shrink-0">{pastJobs.length - i}</span>
+                      <span className="font-mono text-sm text-text-muted flex-1 truncate">{job.id}</span>
+                      <span className={clsx('px-1.5 py-0.5 rounded text-sm font-medium', jobStatusStyle[job.status] ?? 'bg-bg-tertiary text-text-muted')}>{job.status}</span>
+                      <span className="text-sm text-text-muted">{job.mode}</span>
+                      <span className="text-sm text-text-muted font-mono">{job.iterations_completed}{job.max_iterations ? `/${job.max_iterations}` : ''}</span>
+                      <span className="text-sm text-text-muted">{jobDuration(job)}</span>
                       <Icon name="expand_more" size="xs" className={clsx('w-3 h-3 text-text-muted shrink-0 transition-transform', expandedJobs.has(job.id) && 'rotate-180')} />
                     </button>
                     {expandedJobs.has(job.id) && (
-                      <div className="px-3 pb-2 pl-6 text-xs text-text-muted border-t border-border-primary/40 pt-1.5 space-y-0.5">
+                      <div className="px-3 pb-2 pl-6 text-sm text-text-muted border-t border-border-primary/40 pt-1.5 space-y-0.5">
                         <div className="grid grid-cols-2 gap-x-4">
                           <span>id: <span className="font-mono text-text-secondary">{job.id}</span></span>
                           {job.claimed_by && <span>worker: <span className="font-mono text-text-secondary">{job.claimed_by}</span></span>}
@@ -1364,8 +1363,8 @@ function WorkersTab({ sessionId }: { sessionId: string }) {
 
 function EnvBadge({ set, label }: { set: boolean; label: string }) {
   return set
-    ? <span className="inline-flex items-center gap-1 text-xs font-medium text-success"><span className="w-1.5 h-1.5 rounded-full bg-success inline-block" />{label}</span>
-    : <span className="inline-flex items-center gap-1 text-xs font-medium text-error"><span className="w-1.5 h-1.5 rounded-full bg-error inline-block" />{label} not set</span>;
+    ? <span className="inline-flex items-center gap-1 text-sm font-medium text-success"><span className="w-1.5 h-1.5 rounded-full bg-success inline-block" />{label}</span>
+    : <span className="inline-flex items-center gap-1 text-sm font-medium text-error"><span className="w-1.5 h-1.5 rounded-full bg-error inline-block" />{label} not set</span>;
 }
 
 function SessionSettings({ session, sessionId }: { session: { id: string; config: Record<string, unknown> }; sessionId: string }) {
@@ -1418,7 +1417,7 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
   }
 
   const inputCls = 'bg-bg-primary border border-border-primary rounded px-2 py-1.5 text-sm text-text-primary focus:outline-none focus:border-accent w-full';
-  const labelCls = 'block text-xs text-text-muted mb-1';
+  const labelCls = 'block text-sm text-text-muted mb-1';
 
   return (
     <form onSubmit={handleSave} className="space-y-6 max-w-lg">
@@ -1426,7 +1425,7 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
       {envCheck && envCheck.errors.length > 0 && (
         <div className="rounded border border-red-500/50 bg-red-500/10 p-3 space-y-1">
           {envCheck.errors.map((e, i) => (
-            <p key={i} className="text-xs text-red-400 flex items-start gap-1.5 font-medium">
+            <p key={i} className="text-sm text-red-400 flex items-start gap-1.5 font-medium">
               <Icon name="close" size="xs" className="mt-0.5 shrink-0" />{e}
             </p>
           ))}
@@ -1436,7 +1435,7 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
       {envCheck && envCheck.warnings.length > 0 && (
         <div className="rounded border border-yellow-500/30 bg-yellow-500/10 p-3 space-y-1">
           {envCheck.warnings.map((w, i) => (
-            <p key={i} className="text-xs text-yellow-400 flex items-start gap-1.5">
+            <p key={i} className="text-sm text-yellow-400 flex items-start gap-1.5">
               <span className="mt-0.5 shrink-0">⚠</span>{w}
             </p>
           ))}
@@ -1444,7 +1443,7 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
       )}
       {/* Provider */}
       <div>
-        <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Provider</p>
+        <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Provider</p>
         <div className="flex gap-2 mb-4">
           {(['anthropic', 'openrouter', 'ollama'] as const).map(p => (
             <button key={p} type="button"
@@ -1463,7 +1462,7 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
             <div className="mt-1.5">
               {envCheck
                 ? <EnvBadge set={envCheck.anthropic} label="ANTHROPIC_API_KEY" />
-                : <span className="text-xs text-text-muted/60">Uses ANTHROPIC_API_KEY env var</span>}
+                : <span className="text-sm text-text-muted/60">Uses ANTHROPIC_API_KEY env var</span>}
             </div>
           </div>
         )}
@@ -1503,7 +1502,7 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
 
       {/* Search */}
       <div>
-        <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Search</p>
+        <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Search</p>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>Max depth <span className="text-text-muted font-normal">(0 = none, 1 = seed only)</span></label>
@@ -1518,7 +1517,7 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
 
       {/* Source text */}
       <div>
-        <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Source Text</p>
+        <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Source Text</p>
         <label className="flex items-start gap-2 cursor-pointer">
           <input type="checkbox" checked={fetchSourceText} onChange={e => setFetchSourceText(e.target.checked)}
             className="w-4 h-4 accent-accent mt-0.5" />
@@ -1527,20 +1526,20 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
             <div className="mt-1 flex flex-col gap-1">
               {envCheck ? (
                 <>
-                  <span className="text-xs text-text-muted">Page extractor: {' '}
+                  <span className="text-sm text-text-muted">Page extractor: {' '}
                     <EnvBadge set={envCheck.jina} label={envCheck.jina ? 'Jina (active)' : 'JINA_API_KEY'} />
-                    {!envCheck.jina && <span className="text-xs text-red-400 ml-1 font-medium">— will throw, no fallback</span>}
+                    {!envCheck.jina && <span className="text-sm text-red-400 ml-1 font-medium">— will throw, no fallback</span>}
                   </span>
-                  <span className="text-xs text-text-muted">Search: {' '}
+                  <span className="text-sm text-text-muted">Search: {' '}
                     {envCheck.searchProvider === 'tavily' && <EnvBadge set={true} label="Tavily (active)" />}
                     {envCheck.searchProvider === 'brave' && <EnvBadge set={true} label="Brave (active)" />}
                     {envCheck.searchProvider === 'duckduckgo' && (
-                      <><EnvBadge set={false} label="TAVILY_API_KEY" /><span className="text-xs text-text-muted ml-1">— falling back to DuckDuckGo</span></>
+                      <><EnvBadge set={false} label="TAVILY_API_KEY" /><span className="text-sm text-text-muted ml-1">— falling back to DuckDuckGo</span></>
                     )}
                   </span>
                 </>
               ) : (
-                <span className="text-xs text-text-muted">requires JINA_API_KEY — no fallback</span>
+                <span className="text-sm text-text-muted">requires JINA_API_KEY — no fallback</span>
               )}
             </div>
           </div>
@@ -1549,13 +1548,13 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
 
       {/* Gap analysis */}
       <div>
-        <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Gap Analysis</p>
+        <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Gap Analysis</p>
         <div className="space-y-3">
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={gapEnabled} onChange={e => setGapEnabled(e.target.checked)}
               className="w-4 h-4 accent-accent" />
             <span className="text-sm text-text-primary">Enabled</span>
-            <span className="text-xs text-text-muted">(runs a second LLM pass to find missing information)</span>
+            <span className="text-sm text-text-muted">(runs a second LLM pass to find missing information)</span>
           </label>
           {gapEnabled && (
             <div className="max-w-[160px]">
@@ -1568,7 +1567,7 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
 
       {/* Budget */}
       <div>
-        <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Budget</p>
+        <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Budget</p>
         <div className="max-w-[160px]">
           <label className={labelCls}>Daily limit (USD)</label>
           <input type="number" min={0} step={0.5} value={budgetDaily} onChange={e => setBudgetDaily(Number(e.target.value))} className={inputCls} />
@@ -1577,7 +1576,7 @@ function SessionSettings({ session, sessionId }: { session: { id: string; config
 
       <div className="flex items-center gap-3">
         <Button type="submit" loading={updateConfig.isPending}>Save</Button>
-        {saved && <span className="text-xs text-green-400">Saved</span>}
+        {saved && <span className="text-sm text-green-400">Saved</span>}
       </div>
     </form>
   );
@@ -1595,7 +1594,7 @@ export function ResearchSessionDetailPage() {
   const { data: costs } = useResearchCosts(id!);
   const { data: activity } = useResearchActivity(id!, { refetchInterval: isRunning ? 3000 : undefined });
   const { data: allSteps = [] } = useResearchSteps(id!, undefined, { refetchInterval: isRunning ? 3000 : undefined });
-  const { events } = useResearchStream(id!);
+  const { events } = useResearchStream(id!, isRunning);
   const { data: envCheck } = useResearchEnvCheck();
   const updateSession = useUpdateResearchSession();
   const updateConfig = useUpdateSessionConfig();
@@ -1626,45 +1625,41 @@ export function ResearchSessionDetailPage() {
   return (
     <div className="flex flex-col gap-5">
       {/* Header */}
-      <div>
-        <Link to="/research" className="text-xs text-accent hover:underline">&larr; All sessions</Link>
-        <div className="flex items-center justify-between mt-2">
-          <div>
-            <h1 className="font-heading text-2xl font-bold text-text-primary">{session.title}</h1>
-            <p className="text-sm text-text-muted mt-0.5">{session.seed_query}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {(session.status === 'active' || session.status === 'paused') && (
-              <Button
-                variant={session.status === 'active' ? 'secondary' : 'primary'}
-                size="sm"
-                loading={updateSession.isPending}
-                onClick={() => updateSession.mutate({ id: id!, status: session.status === 'active' ? 'paused' : 'active' })}
-              >
-                {session.status === 'active' ? 'Disable' : 'Enable'}
-              </Button>
-            )}
-            {deleteConfirm ? (
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-text-muted">Delete session?</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="!bg-red-900/50 !text-red-300 hover:!bg-red-900/80"
-                  loading={deleteSession.isPending}
-                  onClick={() => deleteSession.mutate({ id: id! }, { onSuccess: () => { window.location.href = '/research'; } })}
-                >Confirm</Button>
-                <Button variant="ghost" size="sm" onClick={() => setDeleteConfirm(false)}>Cancel</Button>
-              </div>
-            ) : (
+      <div className="sticky top-0 z-10 h-14 bg-bg-primary border-b border-border-primary flex items-center gap-2">
+        <Link to="/research" className="font-heading text-2xl font-bold text-text-muted hover:text-text-primary transition-colors leading-none whitespace-nowrap shrink-0">Research Sessions</Link>
+        <span className="font-heading text-2xl font-bold text-text-muted leading-none shrink-0">&raquo;</span>
+        <h1 className="font-heading text-2xl font-bold text-text-primary leading-none truncate min-w-0 flex-1">{session.title}</h1>
+        <div className="flex items-center gap-2 shrink-0">
+          {(session.status === 'active' || session.status === 'paused') && (
+            <Button
+              variant={session.status === 'active' ? 'secondary' : 'primary'}
+              size="sm"
+              loading={updateSession.isPending}
+              onClick={() => updateSession.mutate({ id: id!, status: session.status === 'active' ? 'paused' : 'active' })}
+            >
+              {session.status === 'active' ? 'Disable' : 'Enable'}
+            </Button>
+          )}
+          {deleteConfirm ? (
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm text-text-muted">Delete session?</span>
               <Button
                 variant="ghost"
                 size="sm"
-                className="!text-red-400 hover:!text-red-300"
-                onClick={() => setDeleteConfirm(true)}
-              >Delete</Button>
-            )}
-          </div>
+                className="!bg-red-900/50 !text-red-300 hover:!bg-red-900/80"
+                loading={deleteSession.isPending}
+                onClick={() => deleteSession.mutate({ id: id! }, { onSuccess: () => { window.location.href = '/research'; } })}
+              >Confirm</Button>
+              <Button variant="ghost" size="sm" onClick={() => setDeleteConfirm(false)}>Cancel</Button>
+            </div>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="!text-red-400 hover:!text-red-300"
+              onClick={() => setDeleteConfirm(true)}
+            >Delete</Button>
+          )}
         </div>
       </div>
 
@@ -1675,19 +1670,19 @@ export function ResearchSessionDetailPage() {
           {envCheck.errors.map((e, i) => (
             <div key={i} className="rounded border border-red-500/50 bg-red-500/10 px-3 py-2 flex items-center gap-2">
               <Icon name="close" size="xs" className="text-red-400 shrink-0" />
-              <span className="text-xs text-red-400 font-medium">{e}</span>
+              <span className="text-sm text-red-400 font-medium">{e}</span>
             </div>
           ))}
           {envCheck.warnings.map((w, i) => (
             <div key={i} className="rounded border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 flex items-center gap-2">
-              <span className="text-yellow-400 text-xs shrink-0">⚠</span>
-              <span className="text-xs text-yellow-400">{w}</span>
+              <span className="text-yellow-400 text-sm shrink-0">⚠</span>
+              <span className="text-sm text-yellow-400">{w}</span>
             </div>
           ))}
           {envCheck.jina_balance !== null && (
             <div className="rounded border border-border-primary bg-bg-secondary px-3 py-2 flex items-center gap-2">
-              <span className="text-xs text-text-muted">Jina balance:</span>
-              <span className={`text-xs font-medium tabular-nums ${envCheck.jina_balance < 100_000 ? 'text-red-400' : envCheck.jina_balance < 1_000_000 ? 'text-yellow-400' : 'text-green-400'}`}>
+              <span className="text-sm text-text-muted">Jina balance:</span>
+              <span className={`text-sm font-medium tabular-nums ${envCheck.jina_balance < 100_000 ? 'text-red-400' : envCheck.jina_balance < 1_000_000 ? 'text-yellow-400' : 'text-green-400'}`}>
                 {envCheck.jina_balance.toLocaleString()} tokens
               </span>
             </div>
@@ -1704,7 +1699,7 @@ export function ResearchSessionDetailPage() {
           { label: 'Today', value: costs ? `$${costs.today_cost.toFixed(3)}` : '...' },
         ].map(stat => (
           <div key={stat.label} className="bg-bg-secondary border border-border-primary rounded-lg p-3">
-            <p className="text-xs text-text-muted">{stat.label}</p>
+            <p className="text-sm text-text-muted">{stat.label}</p>
             <p className="text-lg font-semibold text-text-primary">{stat.value}</p>
           </div>
         ))}

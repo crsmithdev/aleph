@@ -1,0 +1,866 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Solid-state battery timelines · Query</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  .header-bar{
+    display:flex;justify-content:space-between;align-items:flex-start;gap:var(--sp-4);margin-bottom:var(--sp-1)
+  }
+  .header-bar h1{font-size:var(--t-h1);font-weight:600;margin:0;color:var(--text-primary);line-height:1.3}
+  .header-meta{color:var(--text-muted);font-size:var(--t-body);margin-top:6px;display:flex;gap:var(--sp-4);flex-wrap:wrap;align-items:center}
+  .budget-inline{display:flex;align-items:center;gap:10px;min-width:220px}
+  .budget-inline .bar{width:140px}
+  .budget-inline .lbl{font-size:var(--t-meta);color:var(--text-muted)}
+  .actions-row{display:flex;gap:var(--sp-2)}
+
+  /* CSS-only tabs via :target */
+  .panel{display:none}
+  #doc:target ~ .panel-doc,
+  #knowledge:target ~ .panel-knowledge,
+  #process:target ~ .panel-process,
+  #sources:target ~ .panel-sources,
+  #events:target ~ .panel-events,
+  #config:target ~ .panel-config{display:block}
+  body:not(:has(:target)) .panel-doc{display:block}
+
+  .tab-strip a{color:inherit;text-decoration:none}
+
+  /* ===== Document panel ===== */
+  .doc-layout{display:grid;grid-template-columns:200px 1fr 300px;gap:28px}
+  .toc{position:sticky;top:var(--sp-5);align-self:start}
+  .toc h4{color:var(--text-muted);font-size:var(--t-meta);font-weight:500;text-transform:uppercase;letter-spacing:.08em;margin:0 0 10px}
+  .toc ul{list-style:none;padding:0;margin:0}
+  .toc li{padding:4px 0;font-size:var(--t-body);color:var(--text-secondary);cursor:pointer}
+  .toc li.active{color:var(--accent)}
+  .toc li.sub{padding-left:10px;font-size:var(--t-meta);color:var(--text-muted)}
+
+  article.doc{max-width:720px;color:var(--text-primary);font-size:var(--t-body-lg);line-height:1.7}
+  article.doc h2{font-size:var(--t-h2);margin:32px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border);font-weight:600}
+  article.doc h3{font-size:var(--t-h3);margin:var(--sp-5) 0 var(--sp-2);color:var(--text-primary);font-weight:600}
+  article.doc p{margin:0 0 var(--sp-3)}
+  article.doc .citation{color:var(--accent);font-size:var(--t-meta);vertical-align:super;margin-left:1px;line-height:0}
+  article.doc .citation a{color:var(--accent);text-decoration:none}
+  .concept-link{color:var(--info);border-bottom:1px dotted var(--info);cursor:pointer}
+  .pullquote{border-left:3px solid var(--accent);padding:var(--sp-2) var(--sp-3);color:var(--text-secondary);font-style:italic;margin:var(--sp-4) 0;background:var(--bg-secondary);border-radius:0 6px 6px 0}
+  .fact-row{
+    display:grid;grid-template-columns:200px 1fr;gap:var(--sp-3);padding:var(--sp-2) 0;font-size:var(--t-body);
+  }
+  .fact-row:nth-child(even){background:rgba(255,255,255,.015)}
+  .fact-row dt{color:var(--text-muted)}
+  .fact-box{background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:var(--sp-3) 18px;margin:var(--sp-4) 0}
+  .fact-box .label{font-size:var(--t-meta);font-weight:500;color:var(--text-muted);letter-spacing:.02em;margin-bottom:var(--sp-2)}
+
+  /* bibliography rail */
+  .bib{position:sticky;top:var(--sp-5);align-self:start}
+  .bib h4{color:var(--text-muted);font-size:var(--t-meta);font-weight:500;text-transform:uppercase;letter-spacing:.08em;margin:0 0 10px}
+  .bib-item{padding:10px 0;border-bottom:1px solid var(--border)}
+  .bib-item:last-child{border-bottom:none}
+  .bib-item .num{color:var(--accent);font-family:ui-monospace,monospace;margin-right:6px;font-size:var(--t-meta)}
+  .bib-item a{color:var(--text-primary);font-size:var(--t-body);line-height:1.4}
+  .bib-item .src{color:var(--text-muted);font-size:var(--t-meta);margin-top:2px}
+  .bib-item .ext{display:inline-flex;gap:4px;margin-top:3px}
+
+  /* ===== Knowledge graph panel ===== */
+  .kn-layout{display:grid;grid-template-columns:1fr 340px;gap:var(--sp-6);height:calc(100vh - 220px)}
+  .graph-wrap{position:relative;background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .graph-toolbar{
+    position:absolute;top:10px;left:10px;right:10px;display:flex;justify-content:space-between;align-items:center;
+    gap:var(--sp-2);z-index:2;
+  }
+  .graph-toolbar .btn{padding:4px 10px}
+  .kn-filters{display:flex;gap:4px}
+  .kn-filters .chip{padding:3px 10px;font-size:var(--t-meta)}
+  .concept-panel{background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;padding:18px;overflow-y:auto}
+  .concept-panel .name{font-size:var(--t-h3);font-weight:600;color:var(--text-primary);margin:0 0 4px}
+  .concept-panel .aliases{color:var(--text-muted);font-size:var(--t-meta);margin-bottom:var(--sp-3)}
+  .concept-panel h5{font-size:var(--t-meta);font-weight:500;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin:var(--sp-4) 0 6px}
+  .concept-panel ul{margin:0;padding-left:var(--sp-4);font-size:var(--t-body)}
+  .concept-panel ul li{margin:4px 0;line-height:1.5}
+  .concept-panel ul li sup{color:var(--accent);font-size:var(--t-meta)}
+  .concept-panel .stats{display:flex;gap:var(--sp-3);margin-bottom:var(--sp-3)}
+  .concept-panel .stat{display:flex;flex-direction:column}
+  .concept-panel .stat .n{color:var(--text-primary);font-size:var(--t-body);font-weight:600;font-variant-numeric:tabular-nums}
+  .concept-panel .stat .l{color:var(--text-muted);font-size:var(--t-meta);text-transform:uppercase;letter-spacing:.05em;margin-top:1px}
+  .related-chips{display:flex;flex-wrap:wrap;gap:4px}
+  .related-chips .pill{cursor:pointer}
+
+  /* ===== Process tree panel ===== */
+  .tree-wrap{background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;padding:var(--sp-5);overflow-x:auto}
+  .tree svg{display:block;min-width:900px}
+  .process-legend{display:flex;gap:var(--sp-4);font-size:var(--t-meta);color:var(--text-muted);margin-top:10px;flex-wrap:wrap;align-items:center}
+
+  /* ===== Sources panel ===== */
+  .sources-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--sp-3);gap:var(--sp-3)}
+  .ext-stats{display:flex;gap:var(--sp-4);font-size:var(--t-body)}
+  .ext-stats .ct{font-weight:500;color:var(--text-primary);margin-right:3px}
+
+  /* ===== Events panel ===== */
+  .events-list{background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px}
+  .events-list .event{display:grid;grid-template-columns:82px 100px 110px 1fr;gap:var(--sp-3);padding:10px 18px;border-bottom:1px solid var(--border);font-size:var(--t-body);align-items:center}
+  .events-list .event:last-child{border-bottom:none}
+  .events-list .event .t{color:var(--text-muted);font-variant-numeric:tabular-nums;font-size:var(--t-meta)}
+  .events-list .event .kind{
+    font-size:var(--t-meta);font-weight:500;text-transform:uppercase;letter-spacing:.06em;
+    padding:2px 10px;border-radius:8px;background:var(--bg-tertiary);color:var(--text-secondary);justify-self:start;
+  }
+  .events-list .event.search .kind{color:var(--info)}
+  .events-list .event.synth .kind{color:var(--accent)}
+  .events-list .event.finding .kind{color:var(--success)}
+  .events-list .event.dedup .kind{color:var(--warning)}
+  .events-list .event.extract .kind{color:var(--info)}
+  .events-list .event .thr{color:var(--text-muted);font-family:ui-monospace,monospace;font-size:var(--t-meta)}
+
+  /* ===== Config panel ===== */
+  .cfg-row{display:grid;grid-template-columns:260px 1fr;gap:var(--sp-4);padding:var(--sp-3) 0;border-bottom:1px solid var(--border);align-items:center}
+  .cfg-row:last-child{border-bottom:none}
+  .cfg-row .name{color:var(--text-primary);font-size:var(--t-body);font-weight:500}
+  .cfg-row .hint{color:var(--text-muted);font-size:var(--t-meta);margin-top:3px}
+  .cfg-row .val{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap}
+  .cfg-row input[type="number"],.cfg-row input[type="text"]{
+    background:var(--bg-primary);border:1px solid var(--border);border-radius:4px;
+    color:var(--text-primary);padding:5px var(--sp-2);font:inherit;font-size:var(--t-body);width:100px;
+  }
+  .cfg-row .override-dot{width:6px;height:6px;border-radius:50%;background:var(--warning)}
+  .cfg-row .default{color:var(--text-muted);font-size:var(--t-meta);font-family:ui-monospace,monospace}
+
+  .events-filters{display:flex;gap:6px}
+  .events-filters .chip{padding:4px 10px;font-size:var(--t-meta);background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;color:var(--text-secondary);cursor:pointer}
+  .events-filters .chip.active{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">Construct</div>
+    <div class="sidebar-section">Research</div>
+    <a class="sidebar-link active" href="queries.html">Queries</a>
+    <a class="sidebar-link" href="events.html">Events</a>
+    <a class="sidebar-link" href="#">Workers</a>
+    <a class="sidebar-link" href="#">Monitors</a>
+    <a class="sidebar-link" href="../research-config/index.html">Config</a>
+  </aside>
+
+  <main class="main">
+    <nav class="t-meta dim" style="margin-bottom:var(--sp-2)"><a href="queries.html">Queries</a> / Solid-state battery commercialization timelines</nav>
+
+    <div class="header-bar">
+      <div>
+        <h1>Solid-state battery commercialization timelines</h1>
+        <div class="header-meta">
+          <span class="pill pill-active">active</span>
+          <span>Started 2026-04-12</span>
+          <span>31 threads · 47 findings · <strong style="color:var(--text-primary)">23 concepts</strong></span>
+          <span class="dim">Last step 3m ago</span>
+        </div>
+      </div>
+      <div class="actions-row">
+        <div class="budget-inline">
+          <span class="lbl">Budget</span>
+          <div class="bar"><span style="width:34%"></span></div>
+          <span class="mono">$8.42 / $25</span>
+        </div>
+        <button class="btn btn-primary">Pause</button>
+        <button class="btn">Export</button>
+      </div>
+    </div>
+
+    <!-- Tab anchors (must appear before panels for :target sibling selectors) -->
+    <div id="doc" tabindex="-1"></div>
+    <div id="knowledge" tabindex="-1"></div>
+    <div id="process" tabindex="-1"></div>
+    <div id="sources" tabindex="-1"></div>
+    <div id="events" tabindex="-1"></div>
+    <div id="config" tabindex="-1"></div>
+
+    <div class="tabs tab-strip">
+      <a href="#doc"><div class="tab active">Document</div></a>
+      <a href="#knowledge"><div class="tab">Knowledge <span class="count">23</span></div></a>
+      <a href="#process"><div class="tab">Process <span class="count">31</span></div></a>
+      <a href="#sources"><div class="tab">Sources <span class="count">118</span></div></a>
+      <a href="#events"><div class="tab">Events</div></a>
+      <a href="#config"><div class="tab">Config</div></a>
+    </div>
+
+    <!-- =================== DOCUMENT =================== -->
+    <section class="panel panel-doc">
+      <div class="doc-layout">
+        <aside class="toc">
+          <h4>Contents</h4>
+          <ul>
+            <li class="active">Overview</li>
+            <li>Technology paths</li>
+            <li class="sub">Sulfide electrolytes</li>
+            <li class="sub">Oxide electrolytes</li>
+            <li class="sub">Polymer hybrids</li>
+            <li>Lead manufacturers</li>
+            <li class="sub">QuantumScape</li>
+            <li class="sub">Toyota</li>
+            <li class="sub">SES &amp; CATL</li>
+            <li>Commercialization timelines</li>
+            <li>Open problems</li>
+            <li class="sub">Dendrite suppression</li>
+            <li class="sub">Manufacturing cost</li>
+            <li>References</li>
+          </ul>
+        </aside>
+
+        <article class="doc">
+          <h2>Overview</h2>
+          <p>
+            <span class="concept-link">Solid-state batteries</span> (SSBs) replace the flammable liquid electrolyte of a conventional lithium-ion cell with a solid ion conductor, promising higher energy density, faster charging, and reduced fire risk<span class="citation"><a href="#">[1]</a></span><span class="citation"><a href="#">[2]</a></span>. As of mid-2026, no passenger EV ships with a commercial SSB, but three production paths have reached pilot-line or pre-production status: sulfide electrolyte cells from <span class="concept-link">Toyota</span> and <span class="concept-link">SES</span><span class="citation"><a href="#">[4]</a></span>, oxide electrolyte cells from <span class="concept-link">QuantumScape</span><span class="citation"><a href="#">[7]</a></span>, and polymer-hybrid cells from <span class="concept-link">CATL</span> and <span class="concept-link">ProLogium</span><span class="citation"><a href="#">[11]</a></span>.
+          </p>
+
+          <div class="fact-box">
+            <div class="label">Key facts</div>
+            <dl style="margin:0">
+              <div class="fact-row"><dt>Energy density target</dt><dd>400–500 Wh/kg (vs. ~270 for NMC)<span class="citation"><a href="#">[3]</a></span></dd></div>
+              <div class="fact-row"><dt>Cycle life at 25°C</dt><dd>QuantumScape FlexFrame: &gt;800 cycles @ 15-min charge<span class="citation"><a href="#">[7]</a></span></dd></div>
+              <div class="fact-row"><dt>Earliest EV launch</dt><dd>Toyota bZ-series, claimed H2 2027<span class="citation"><a href="#">[5]</a></span></dd></div>
+              <div class="fact-row"><dt>Est. pack cost at scale</dt><dd>$125–180 / kWh (vs. ~$95 for 2025 NMC)<span class="citation"><a href="#">[9]</a></span></dd></div>
+            </dl>
+          </div>
+
+          <h2>Technology paths</h2>
+          <h3>Sulfide electrolytes</h3>
+          <p>
+            Sulfide-based solid electrolytes (e.g. Li₆PS₅Cl and Li₁₀GeP₂S₁₂) offer the highest room-temperature ionic conductivity — 10⁻² S/cm, on par with liquid carbonates<span class="citation"><a href="#">[3]</a></span>. Toyota's 2023 patent disclosures and subsequent sampling to Japanese automakers<span class="citation"><a href="#">[5]</a></span> represent the most mature sulfide path. The chief manufacturing challenge is H₂S liberation on contact with moisture; both Toyota and <span class="concept-link">Idemitsu</span> operate dry-room fabs to contain this<span class="citation"><a href="#">[6]</a></span>.
+          </p>
+
+          <div class="pullquote">
+            "We have solved the durability problem. The remaining work is cost, and cost is a manufacturing problem, not a chemistry problem."
+            — Hideki Iba, Toyota chief battery engineer, Oct 2025<span class="citation"><a href="#">[5]</a></span>
+          </div>
+
+          <h3>Oxide electrolytes</h3>
+          <p>
+            Oxide electrolytes (garnet Li₇La₃Zr₂O₁₂ and variants) are chemically stable in air but have lower bulk ionic conductivity and require sintering temperatures that complicate co-processing with cathode materials<span class="citation"><a href="#">[8]</a></span>. QuantumScape's "FlexFrame" architecture, publicly disclosed at its 2026 cell-sampling announcement, reportedly addresses the interfacial impedance problem via a ceramic-separator-only (anode-free) design<span class="citation"><a href="#">[7]</a></span>.
+          </p>
+
+          <h2>Lead manufacturers</h2>
+          <p>
+            <span class="concept-link">QuantumScape</span> began sampling 24-layer FlexFrame cells to PowerCo (Volkswagen's cell subsidiary) in Q1 2026, with a stated target of first commercial cells in 2027<span class="citation"><a href="#">[7]</a></span>. Toyota has committed to a 2027 launch of a bZ-branded vehicle with a sulfide SSB pack from its joint venture with <span class="concept-link">Panasonic (PPES)</span><span class="citation"><a href="#">[5]</a></span>. CATL announced in March 2026 that its "condensed matter" battery — a polymer–ceramic hybrid — would enter civil-aviation certification trials in late 2026<span class="citation"><a href="#">[11]</a></span>.
+          </p>
+
+          <h2>Commercialization timelines</h2>
+          <p class="dim" style="font-style:italic">[sections continue — truncated for the mockup]</p>
+        </article>
+
+        <aside class="bib">
+          <h4>References · 11 of 118</h4>
+          <div class="bib-item">
+            <span class="num">[1]</span>
+            <a href="#">Solid-state battery — IEEE Spectrum overview (2025)</a>
+            <div class="src">spectrum.ieee.org · Jan 2025</div>
+            <div class="ext"><span class="pill pill-done" style="padding:1px 8px">extracted</span></div>
+          </div>
+          <div class="bib-item">
+            <span class="num">[2]</span>
+            <a href="#">The fire-safety case for solid electrolytes</a>
+            <div class="src">nature.com · 2024</div>
+            <div class="ext"><span class="pill pill-done" style="padding:1px 8px">extracted</span></div>
+          </div>
+          <div class="bib-item">
+            <span class="num">[3]</span>
+            <a href="#">Ionic conductivity of Li₆PS₅Cl — review</a>
+            <div class="src">cell.com · 2023</div>
+            <div class="ext"><span class="pill pill-done" style="padding:1px 8px">extracted</span></div>
+          </div>
+          <div class="bib-item">
+            <span class="num">[4]</span>
+            <a href="#">SES 2025 Battery Day — sulfide path</a>
+            <div class="src">ses.ai · Oct 2025</div>
+            <div class="ext"><span class="pill pill-pending" style="padding:1px 8px">pending</span></div>
+          </div>
+          <div class="bib-item">
+            <span class="num">[5]</span>
+            <a href="#">Iba interview: Toyota's 2027 SSB plan</a>
+            <div class="src">nikkei.com · Oct 2025</div>
+            <div class="ext"><span class="pill pill-done" style="padding:1px 8px">extracted</span></div>
+          </div>
+          <div class="bib-item">
+            <span class="num">[6]</span>
+            <a href="#">Idemitsu sulfide manufacturing overview</a>
+            <div class="src">idemitsu.com · 2024</div>
+            <div class="ext"><span class="pill pill-error" style="padding:1px 8px">403 · retry</span></div>
+          </div>
+          <div class="bib-item">
+            <span class="num">[7]</span>
+            <a href="#">QuantumScape FlexFrame sampling letter</a>
+            <div class="src">quantumscape.com · Q1 2026</div>
+            <div class="ext"><span class="pill pill-done" style="padding:1px 8px">extracted</span></div>
+          </div>
+          <div class="bib-item">
+            <span class="num">[8]</span>
+            <a href="#">LLZO sintering review</a>
+            <div class="src">sciencedirect.com · 2024</div>
+            <div class="ext"><span class="pill" style="padding:1px 8px">snippet only</span></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- =================== KNOWLEDGE =================== -->
+    <section class="panel panel-knowledge">
+      <div class="kn-layout">
+        <div class="graph-wrap">
+          <div class="graph-toolbar">
+            <div class="kn-filters">
+              <span class="chip active">All concepts</span>
+              <span class="chip">≥3 findings</span>
+              <span class="chip">Cross-query</span>
+              <span class="chip">Contested</span>
+            </div>
+            <div>
+              <button class="btn">Layout</button>
+              <button class="btn">Fit</button>
+            </div>
+          </div>
+
+          <svg width="100%" height="100%" viewBox="0 0 800 560" style="position:absolute;inset:0">
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                <path d="M0,0 L10,5 L0,10 z" fill="#5c6370" />
+              </marker>
+            </defs>
+            <g stroke="#5c6370" stroke-width="1" fill="none" opacity=".6">
+              <line x1="400" y1="280" x2="250" y2="180"/>
+              <line x1="400" y1="280" x2="560" y2="180"/>
+              <line x1="400" y1="280" x2="250" y2="400"/>
+              <line x1="400" y1="280" x2="560" y2="400"/>
+              <line x1="400" y1="280" x2="400" y2="120"/>
+              <line x1="250" y1="180" x2="120" y2="100"/>
+              <line x1="250" y1="180" x2="120" y2="240"/>
+              <line x1="560" y1="180" x2="680" y2="100"/>
+              <line x1="560" y1="180" x2="680" y2="240"/>
+              <line x1="560" y1="180" x2="400" y2="120"/>
+              <line x1="250" y1="400" x2="120" y2="460"/>
+              <line x1="560" y1="400" x2="680" y2="460"/>
+              <line x1="400" y1="280" x2="250" y2="400" stroke-width="1.5"/>
+              <line x1="560" y1="400" x2="400" y2="280" stroke-dasharray="4 3"/>
+            </g>
+
+            <g font-family="ui-sans-serif,system-ui" font-size="14" fill="#abb2bf" text-anchor="middle">
+              <g>
+                <circle cx="400" cy="280" r="32" fill="#c678dd" stroke="#c678dd" stroke-width="2"/>
+                <text x="400" y="285" fill="#1a1a1a" font-weight="600">Solid-state battery</text>
+              </g>
+              <g>
+                <circle cx="250" cy="180" r="24" fill="#21252b" stroke="#c678dd" stroke-width="2"/>
+                <text x="250" y="184">Sulfide electrolyte</text>
+              </g>
+              <g>
+                <circle cx="560" cy="180" r="24" fill="#21252b" stroke="#c678dd" stroke-width="2"/>
+                <text x="560" y="184">Oxide electrolyte</text>
+              </g>
+              <g>
+                <circle cx="400" cy="120" r="20" fill="#21252b" stroke="#98c379" stroke-width="1.5"/>
+                <text x="400" y="124">Polymer hybrid</text>
+              </g>
+
+              <g>
+                <circle cx="120" cy="100" r="22" fill="#21252b" stroke="#61afef" stroke-width="1.5"/>
+                <text x="120" y="104">Toyota</text>
+              </g>
+              <g>
+                <circle cx="120" cy="240" r="18" fill="#21252b" stroke="#61afef" stroke-width="1.5"/>
+                <text x="120" y="244">SES</text>
+              </g>
+              <g>
+                <circle cx="680" cy="100" r="26" fill="#21252b" stroke="#61afef" stroke-width="2"/>
+                <text x="680" y="104">QuantumScape</text>
+              </g>
+              <g>
+                <circle cx="680" cy="240" r="20" fill="#21252b" stroke="#61afef" stroke-width="1.5"/>
+                <text x="680" y="244">ProLogium</text>
+              </g>
+
+              <g>
+                <circle cx="250" cy="400" r="22" fill="#21252b" stroke="#e5c07b" stroke-width="1.5"/>
+                <text x="250" y="404">Dendrites</text>
+              </g>
+              <g>
+                <circle cx="560" cy="400" r="24" fill="#21252b" stroke="#e5c07b" stroke-width="1.5"/>
+                <text x="560" y="404">Manufacturing cost</text>
+              </g>
+              <g>
+                <circle cx="120" cy="460" r="18" fill="#21252b" stroke="#e5c07b" stroke-width="1.5"/>
+                <text x="120" y="464">H₂S release</text>
+              </g>
+              <g>
+                <circle cx="680" cy="460" r="20" fill="#21252b" stroke="#e5c07b" stroke-width="1.5"/>
+                <text x="680" y="464">Sintering temp</text>
+              </g>
+            </g>
+
+            <g font-family="ui-sans-serif,system-ui" font-size="14" fill="#848da0">
+              <circle cx="20" cy="534" r="4" fill="#c678dd"/><text x="30" y="538">Technology</text>
+              <circle cx="120" cy="534" r="4" fill="none" stroke="#61afef"/><text x="130" y="538">Org / person</text>
+              <circle cx="230" cy="534" r="4" fill="none" stroke="#e5c07b"/><text x="240" y="538">Problem</text>
+              <circle cx="320" cy="534" r="4" fill="none" stroke="#98c379"/><text x="330" y="538">Approach</text>
+              <text x="440" y="538" fill="#5c6370">— solid: supported · --- contested</text>
+            </g>
+          </svg>
+        </div>
+
+        <aside class="concept-panel">
+          <div class="name">QuantumScape</div>
+          <div class="aliases">aliases: QS · QuantumScape Corporation · NYSE:QS</div>
+
+          <div class="stats">
+            <div class="stat"><div class="n">9</div><div class="l">findings</div></div>
+            <div class="stat"><div class="n">11</div><div class="l">sources</div></div>
+            <div class="stat"><div class="n">3</div><div class="l">other queries</div></div>
+          </div>
+
+          <h5>Summary</h5>
+          <div style="font-size:var(--t-body);line-height:1.55">
+            US-based solid-state battery developer. Pursues an anode-free oxide-electrolyte architecture ("FlexFrame"). Began sampling 24-layer cells to PowerCo in Q1 2026 with commercial cells targeted for 2027.
+          </div>
+
+          <h5>Key facts</h5>
+          <ul>
+            <li>Anode-free oxide (LLZO) architecture<sup>[7]</sup></li>
+            <li>&gt;800 cycles @ 15-min charge, 25°C<sup>[7]</sup></li>
+            <li>PowerCo joint development agreement since 2022<sup>[12]</sup></li>
+            <li>Commercial cell target: 2027<sup>[7]</sup></li>
+            <li>Sintering-free LLZO process claimed<sup>[14]</sup></li>
+          </ul>
+
+          <h5>Related concepts</h5>
+          <div class="related-chips">
+            <span class="pill">Oxide electrolyte</span>
+            <span class="pill">LLZO</span>
+            <span class="pill">PowerCo</span>
+            <span class="pill">Volkswagen</span>
+            <span class="pill">FlexFrame</span>
+            <span class="pill">anode-free</span>
+          </div>
+
+          <h5>Cross-query appearances</h5>
+          <ul>
+            <li>EV battery supply chain (Feb 2026) — 4 findings</li>
+            <li>VW platform strategy (Jan 2026) — 2 findings</li>
+          </ul>
+
+          <div style="margin-top:var(--sp-4);display:flex;gap:6px">
+            <button class="btn">Merge…</button>
+            <button class="btn">Rename</button>
+            <button class="btn btn-ghost">Open in graph</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- =================== PROCESS =================== -->
+    <section class="panel panel-process">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--sp-3)">
+        <div>
+          <div style="font-size:var(--t-body);color:var(--text-secondary)">Process view</div>
+          <div class="t-meta dim">How the session explored — threads as questions, edges as follow-up / perturbation reasons. Useful for debugging search paths.</div>
+        </div>
+        <div class="events-filters">
+          <span class="chip active">Tree</span>
+          <span class="chip">Timeline</span>
+          <span class="chip">Metrics</span>
+        </div>
+      </div>
+
+      <div class="tree-wrap">
+        <div class="tree">
+          <svg width="100%" height="460" viewBox="0 0 1000 460">
+            <defs>
+              <marker id="arrow2" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                <path d="M0,0 L10,5 L0,10 z" fill="#5c6370" />
+              </marker>
+            </defs>
+
+            <g stroke="#5c6370" stroke-width="1.2" fill="none" marker-end="url(#arrow2)">
+              <path d="M500,50 L250,150"/>
+              <path d="M500,50 L500,150"/>
+              <path d="M500,50 L750,150"/>
+              <path d="M250,180 L120,280"/>
+              <path d="M250,180 L250,280"/>
+              <path d="M250,180 L380,280"/>
+              <path d="M500,180 L500,280"/>
+              <path d="M750,180 L640,280"/>
+              <path d="M750,180 L880,280"/>
+              <path d="M120,310 L120,410"/>
+              <path d="M250,310 L250,410"/>
+              <path d="M500,310 L500,410"/>
+              <path d="M880,310 L880,410"/>
+            </g>
+
+            <g font-family="ui-sans-serif,system-ui" font-size="14" fill="#abb2bf">
+              <g>
+                <rect x="380" y="20" width="240" height="60" rx="6" fill="#2c313a" stroke="#c678dd" stroke-width="2"/>
+                <text x="500" y="44" text-anchor="middle" fill="#c678dd" font-weight="600">SEED</text>
+                <text x="500" y="62" text-anchor="middle">Solid-state battery commercialization</text>
+                <text x="500" y="76" text-anchor="middle" fill="#5c6370" font-size="14">9 findings · 3 concepts</text>
+              </g>
+
+              <g>
+                <rect x="150" y="150" width="200" height="60" rx="6" fill="#2c313a" stroke="#3e4452"/>
+                <text x="250" y="176" text-anchor="middle">Lead manufacturers?</text>
+                <text x="250" y="194" text-anchor="middle" fill="#5c6370" font-size="14">6 findings · 5 concepts</text>
+              </g>
+              <g>
+                <rect x="400" y="150" width="200" height="60" rx="6" fill="#2c313a" stroke="#3e4452"/>
+                <text x="500" y="176" text-anchor="middle">Electrolyte chemistry paths</text>
+                <text x="500" y="194" text-anchor="middle" fill="#5c6370" font-size="14">8 findings · 4 concepts</text>
+              </g>
+              <g>
+                <rect x="650" y="150" width="200" height="60" rx="6" fill="#2c313a" stroke="#3e4452"/>
+                <text x="750" y="176" text-anchor="middle">Open technical problems</text>
+                <text x="750" y="194" text-anchor="middle" fill="#5c6370" font-size="14">7 findings · 4 concepts</text>
+              </g>
+
+              <g>
+                <rect x="40" y="280" width="160" height="48" rx="6" fill="#2c313a" stroke="#3e4452"/>
+                <text x="120" y="302" text-anchor="middle">Toyota 2027 roadmap</text>
+                <text x="120" y="318" text-anchor="middle" fill="#5c6370" font-size="14">4 findings</text>
+              </g>
+              <g>
+                <rect x="170" y="280" width="160" height="48" rx="6" fill="#2c313a" stroke="#98c379" stroke-width="1.5"/>
+                <text x="250" y="302" text-anchor="middle">QuantumScape sampling</text>
+                <text x="250" y="318" text-anchor="middle" fill="#5c6370" font-size="14">5 findings · active</text>
+              </g>
+              <g>
+                <rect x="300" y="280" width="160" height="48" rx="6" fill="#2c313a" stroke="#3e4452"/>
+                <text x="380" y="302" text-anchor="middle">SES + CATL pilots</text>
+                <text x="380" y="318" text-anchor="middle" fill="#5c6370" font-size="14">3 findings</text>
+              </g>
+              <g>
+                <rect x="420" y="280" width="160" height="48" rx="6" fill="#2c313a" stroke="#3e4452"/>
+                <text x="500" y="302" text-anchor="middle">Sulfide vs oxide tradeoffs</text>
+                <text x="500" y="318" text-anchor="middle" fill="#5c6370" font-size="14">5 findings</text>
+              </g>
+              <g>
+                <rect x="560" y="280" width="160" height="48" rx="6" fill="#2c313a" stroke="#e5c07b" stroke-width="1.5"/>
+                <text x="640" y="302" text-anchor="middle">Dendrite suppression</text>
+                <text x="640" y="318" text-anchor="middle" fill="#5c6370" font-size="14">3 findings · pruned</text>
+              </g>
+              <g>
+                <rect x="800" y="280" width="160" height="48" rx="6" fill="#2c313a" stroke="#3e4452"/>
+                <text x="880" y="302" text-anchor="middle">Manufacturing cost</text>
+                <text x="880" y="318" text-anchor="middle" fill="#5c6370" font-size="14">4 findings</text>
+              </g>
+
+              <g>
+                <rect x="40" y="410" width="160" height="40" rx="6" fill="#2c313a" stroke="#3e4452" stroke-dasharray="3 2"/>
+                <text x="120" y="434" text-anchor="middle" fill="#5c6370">PPES cell line detail</text>
+              </g>
+              <g>
+                <rect x="170" y="410" width="160" height="40" rx="6" fill="#2c313a" stroke="#98c379" stroke-width="1.5"/>
+                <text x="250" y="434" text-anchor="middle">FlexFrame architecture</text>
+              </g>
+              <g>
+                <rect x="420" y="410" width="160" height="40" rx="6" fill="#2c313a" stroke="#3e4452"/>
+                <text x="500" y="434" text-anchor="middle">Interface impedance</text>
+              </g>
+              <g>
+                <rect x="800" y="410" width="160" height="40" rx="6" fill="#2c313a" stroke="#3e4452"/>
+                <text x="880" y="434" text-anchor="middle">Dry-room capex</text>
+              </g>
+            </g>
+          </svg>
+        </div>
+        <div class="process-legend">
+          <span><span class="pill pill-active">active</span> currently running</span>
+          <span><span class="pill pill-exhausted">pruned</span> diminishing returns</span>
+          <span><span class="pill pill-pending">pending</span> queued for depth</span>
+          <span class="dim">— dashed edges: perturbation spawn · solid: direct follow-up</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== SOURCES =================== -->
+    <section class="panel panel-sources">
+      <div class="sources-head">
+        <div class="ext-stats">
+          <span><span class="ct">118</span><span class="dim">total</span></span>
+          <span><span class="ct" style="color:var(--success)">72</span><span class="dim">extracted</span></span>
+          <span><span class="ct" style="color:var(--warning)">38</span><span class="dim">snippet only</span></span>
+          <span><span class="ct" style="color:var(--info)">3</span><span class="dim">in progress</span></span>
+          <span><span class="ct" style="color:var(--error)">5</span><span class="dim">failed</span></span>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn">Extract all (snippet only)</button>
+          <button class="btn">Retry failed</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <table class="data">
+          <thead>
+            <tr>
+              <th style="width:40%">Source</th>
+              <th style="width:11%">Extraction</th>
+              <th style="width:22%">Concepts linked</th>
+              <th style="width:8%">Findings</th>
+              <th style="width:9%">Fetched</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <div style="color:var(--text-primary);font-weight:500">QuantumScape FlexFrame sampling letter</div>
+                <div class="t-meta dim">quantumscape.com/investors/flexframe-2026</div>
+              </td>
+              <td><span class="pill pill-done">extracted · 18kB</span></td>
+              <td><div style="display:flex;flex-wrap:wrap;gap:3px"><span class="pill">QuantumScape</span><span class="pill">FlexFrame</span><span class="pill">LLZO</span></div></td>
+              <td>4</td>
+              <td class="t-meta dim">2h ago</td>
+              <td class="t-meta"><a href="#">open</a></td>
+            </tr>
+            <tr>
+              <td>
+                <div style="color:var(--text-primary);font-weight:500">Iba interview: Toyota's 2027 SSB plan</div>
+                <div class="t-meta dim">nikkei.com/asia/Toyota-Battery-Iba-2025</div>
+              </td>
+              <td><span class="pill pill-done">extracted · 12kB</span></td>
+              <td><div style="display:flex;flex-wrap:wrap;gap:3px"><span class="pill">Toyota</span><span class="pill">Sulfide electrolyte</span><span class="pill">PPES</span></div></td>
+              <td>3</td>
+              <td class="t-meta dim">2h ago</td>
+              <td class="t-meta"><a href="#">open</a></td>
+            </tr>
+            <tr>
+              <td>
+                <div style="color:var(--text-primary);font-weight:500">Idemitsu sulfide manufacturing overview</div>
+                <div class="t-meta dim">idemitsu.com/assets/pdf/solid-electrolyte.pdf</div>
+              </td>
+              <td><span class="pill pill-error">403 · 2 retries</span></td>
+              <td><div style="display:flex;flex-wrap:wrap;gap:3px"><span class="pill">Idemitsu</span><span class="pill">Sulfide electrolyte</span></div></td>
+              <td>1</td>
+              <td class="t-meta dim">yesterday</td>
+              <td class="t-meta"><a href="#">retry</a></td>
+            </tr>
+            <tr>
+              <td>
+                <div style="color:var(--text-primary);font-weight:500">LLZO sintering review</div>
+                <div class="t-meta dim">sciencedirect.com/science/article/pii/S2405829724003108</div>
+              </td>
+              <td><span class="pill pill-pending">extracting…</span></td>
+              <td><div style="display:flex;flex-wrap:wrap;gap:3px"><span class="pill">Oxide electrolyte</span><span class="pill">LLZO</span><span class="pill">Sintering temp</span></div></td>
+              <td>2</td>
+              <td class="t-meta dim">2m ago</td>
+              <td class="t-meta"><a href="#">cancel</a></td>
+            </tr>
+            <tr>
+              <td>
+                <div style="color:var(--text-primary);font-weight:500">SES 2025 Battery Day deck</div>
+                <div class="t-meta dim">ses.ai/investors/battery-day-2025</div>
+              </td>
+              <td><span class="pill">snippet only</span></td>
+              <td><div style="display:flex;flex-wrap:wrap;gap:3px"><span class="pill">SES</span><span class="pill">Sulfide electrolyte</span></div></td>
+              <td>2</td>
+              <td class="t-meta dim">2h ago</td>
+              <td class="t-meta"><a href="#">extract</a></td>
+            </tr>
+            <tr>
+              <td>
+                <div style="color:var(--text-primary);font-weight:500">CATL condensed-matter aviation announcement</div>
+                <div class="t-meta dim">catl.com/news/2026/condensed-matter-aviation</div>
+              </td>
+              <td><span class="pill pill-done">extracted · 8kB</span></td>
+              <td><div style="display:flex;flex-wrap:wrap;gap:3px"><span class="pill">CATL</span><span class="pill">Polymer hybrid</span></div></td>
+              <td>2</td>
+              <td class="t-meta dim">1h ago</td>
+              <td class="t-meta"><a href="#">open</a></td>
+            </tr>
+            <tr>
+              <td>
+                <div style="color:var(--text-primary);font-weight:500">Dendrite suppression — 2024 JECS review</div>
+                <div class="t-meta dim">iopscience.iop.org/article/10.1149/1945-7111/ad3fde</div>
+              </td>
+              <td><span class="pill">snippet only</span></td>
+              <td><div style="display:flex;flex-wrap:wrap;gap:3px"><span class="pill">Dendrites</span></div></td>
+              <td>1</td>
+              <td class="t-meta dim">3h ago</td>
+              <td class="t-meta"><a href="#">extract</a></td>
+            </tr>
+            <tr>
+              <td>
+                <div style="color:var(--text-primary);font-weight:500">ProLogium pilot line press release</div>
+                <div class="t-meta dim">prologium.com/news/2026-pilot</div>
+              </td>
+              <td><span class="pill pill-done">extracted · 6kB</span></td>
+              <td><div style="display:flex;flex-wrap:wrap;gap:3px"><span class="pill">ProLogium</span><span class="pill">Polymer hybrid</span></div></td>
+              <td>1</td>
+              <td class="t-meta dim">yesterday</td>
+              <td class="t-meta"><a href="#">open</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- =================== EVENTS (per-session) =================== -->
+    <section class="panel panel-events">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--sp-3)">
+        <div class="t-meta dim">Most recent first · session-scoped · auto-updates</div>
+        <div class="events-filters">
+          <span class="chip active">All</span>
+          <span class="chip">Searches</span>
+          <span class="chip">Findings</span>
+          <span class="chip">Extraction</span>
+          <span class="chip">LLM calls</span>
+        </div>
+      </div>
+
+      <div class="events-list">
+        <div class="event finding">
+          <div class="t">12:03:41</div>
+          <div class="kind">finding</div>
+          <div class="thr">thr-q18</div>
+          <div><strong style="color:var(--text-primary)">CATL condensed-matter battery</strong> — polymer-ceramic hybrid; civil aviation certification H2 2026 · novelty 0.71 · 2 new concepts</div>
+        </div>
+        <div class="event dedup">
+          <div class="t">12:03:38</div>
+          <div class="kind">dedup</div>
+          <div class="thr">thr-q18</div>
+          <div>Candidate flagged 0.91 similar to finding <span class="mono">f-044</span> — capped novelty to 0.2</div>
+        </div>
+        <div class="event synth">
+          <div class="t">12:03:12</div>
+          <div class="kind">synthesis</div>
+          <div class="thr">thr-q18</div>
+          <div>anthropic/claude-opus-4.7 · in 4,812 · out 1,108 · $0.091</div>
+        </div>
+        <div class="event extract">
+          <div class="t">12:02:49</div>
+          <div class="kind">extraction</div>
+          <div class="thr">src-091</div>
+          <div>catl.com/news/2026/condensed-matter-aviation → 8,124 chars extracted · 2 new concepts linked</div>
+        </div>
+        <div class="event search">
+          <div class="t">12:02:31</div>
+          <div class="kind">search</div>
+          <div class="thr">thr-q18</div>
+          <div>Tavily · "CATL condensed matter battery 2026 aviation" · 10 results · 3 new urls</div>
+        </div>
+        <div class="event finding">
+          <div class="t">12:01:04</div>
+          <div class="kind">finding</div>
+          <div class="thr">thr-q11</div>
+          <div><strong style="color:var(--text-primary)">QuantumScape FlexFrame sampling</strong> to PowerCo Q1 2026 · novelty 0.84 · concept <em>FlexFrame</em> promoted</div>
+        </div>
+        <div class="event synth">
+          <div class="t">12:00:38</div>
+          <div class="kind">synthesis</div>
+          <div class="thr">thr-q11</div>
+          <div>anthropic/claude-opus-4.7 · in 5,920 · out 1,402 · $0.118</div>
+        </div>
+        <div class="event extract">
+          <div class="t">12:00:02</div>
+          <div class="kind">extraction</div>
+          <div class="thr">src-088</div>
+          <div>quantumscape.com/investors/flexframe-2026 → 18,204 chars</div>
+        </div>
+        <div class="event extract">
+          <div class="t">11:59:44</div>
+          <div class="kind">extraction</div>
+          <div class="thr">src-087</div>
+          <div><span class="pill pill-error" style="padding:1px 8px">403</span> idemitsu.com/assets/pdf/solid-electrolyte.pdf · retry 2/3</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== CONFIG (per-session overrides) =================== -->
+    <section class="panel panel-config">
+      <div class="card card-pad" style="margin-bottom:var(--sp-3)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:var(--sp-4)">
+          <div>
+            <div style="font-weight:500;font-size:var(--t-body)">Per-session overrides</div>
+            <div class="t-meta dim" style="margin-top:3px">Three fields differ from defaults. Global defaults live at <a href="../research-config/index.html">Config</a>.</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn">Reset all to default</button>
+            <button class="btn btn-primary">Save</button>
+          </div>
+        </div>
+
+        <div style="margin-top:var(--sp-3)">
+          <div class="cfg-row">
+            <div>
+              <div class="name">llm_max_output_tokens</div>
+              <div class="hint">Per-call ceiling for LLM output.</div>
+            </div>
+            <div class="val">
+              <input type="number" value="8192">
+              <span class="default">default: 8192</span>
+            </div>
+          </div>
+
+          <div class="cfg-row">
+            <div>
+              <div class="name">snippet.synthesis_chars</div>
+              <div class="hint">Chars of each source passed to the synthesis step.</div>
+            </div>
+            <div class="val">
+              <span class="override-dot"></span>
+              <input type="number" value="6000">
+              <span class="default">default: 3000</span>
+              <button class="btn btn-ghost">reset</button>
+            </div>
+          </div>
+
+          <div class="cfg-row">
+            <div>
+              <div class="name">extraction.enabled</div>
+              <div class="hint">Run full-text fetch on search results.</div>
+            </div>
+            <div class="val">
+              <span class="override-dot"></span>
+              <span class="pill pill-active">on</span>
+              <span class="default">default: off</span>
+              <button class="btn btn-ghost">reset</button>
+            </div>
+          </div>
+
+          <div class="cfg-row">
+            <div>
+              <div class="name">doc_generation.mode</div>
+              <div class="hint">single-pass or per-section assembly.</div>
+            </div>
+            <div class="val">
+              <span class="override-dot"></span>
+              <span class="mono">per-section</span>
+              <span class="default">default: single-pass</span>
+              <button class="btn btn-ghost">reset</button>
+            </div>
+          </div>
+
+          <div class="cfg-row">
+            <div>
+              <div class="name">budget.total_usd</div>
+              <div class="hint">Lifetime cap; null = unlimited.</div>
+            </div>
+            <div class="val">
+              <input type="text" value="25.00">
+              <span class="default">default: null</span>
+            </div>
+          </div>
+
+          <div class="cfg-row">
+            <div>
+              <div class="name">novelty_threshold</div>
+              <div class="hint">Minimum novelty score to store a finding.</div>
+            </div>
+            <div class="val">
+              <input type="number" value="0.30" step="0.05">
+              <span class="default">default: 0.30</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="t-meta dim">Changing mid-flight values takes effect on the next iteration. In-flight LLM calls complete with current config.</div>
+    </section>
+
+  </main>
+</div>
+</body>
+</html>

@@ -322,7 +322,7 @@ export function SkillsPage() {
         onDisplayNChange={setDisplayN}
       />
 
-      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4 !mt-0">
         <StatCard label="Total Invocations" value={fmtNumber(totalInvocations)} />
         <StatCard label="Active Skills" value={fmtNumber(activeSkills)} />
         <StatCard label="Commands" value={fmtNumber(commandCount)} />
@@ -370,8 +370,8 @@ export function SkillsPage() {
                         <XAxis dataKey="date" {...xAxisDateProps} />
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
-                        <Bar dataKey="command" stackId="a" fill={CHART_PALETTE[0]} radius={[0, 0, 0, 0]} name="Command" />
-                        <Bar dataKey="skill" stackId="a" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Skill" />
+                        <Bar isAnimationActive={false} dataKey="command" stackId="a" fill={CHART_PALETTE[0]} radius={[0, 0, 0, 0]} name="Command" />
+                        <Bar isAnimationActive={false} dataKey="skill" stackId="a" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Skill" />
                       </BarChart>
                     ) : (
                       <AreaChart data={stackedByType}>
@@ -379,8 +379,8 @@ export function SkillsPage() {
                         <XAxis dataKey="date" {...xAxisDateProps} />
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
-                        <Area type="monotone" dataKey="command" stackId="a" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.4} strokeWidth={1.5} dot={false} name="Command" />
-                        <Area type="monotone" dataKey="skill" stackId="a" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.4} strokeWidth={1.5} dot={false} name="Skill" />
+                        <Area isAnimationActive={false} type="monotone" dataKey="command" stackId="a" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.4} strokeWidth={1.5} dot={false} name="Command" />
+                        <Area isAnimationActive={false} type="monotone" dataKey="skill" stackId="a" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.4} strokeWidth={1.5} dot={false} name="Skill" />
                       </AreaChart>
                     )
                   ) : dataset === 'sessions' ? (
@@ -391,7 +391,7 @@ export function SkillsPage() {
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                         {topSessionSkillNames.map((skill, i) => (
-                          <Bar key={skill} dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" fill={chartColor(skill, i)} radius={i === topSessionSkillNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
+                          <Bar isAnimationActive={false} key={skill} dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" fill={chartColor(skill, i)} radius={i === topSessionSkillNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
                         ))}
                       </BarChart>
                     ) : (
@@ -401,7 +401,7 @@ export function SkillsPage() {
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                         {topSessionSkillNames.map((skill, i) => (
-                          <Area key={skill} type="monotone" dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" stroke={chartColor(skill, i)} fill={chartColor(skill, i)} fillOpacity={0.3} dot={false} />
+                          <Area isAnimationActive={false} key={skill} type="monotone" dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" stroke={chartColor(skill, i)} fill={chartColor(skill, i)} fillOpacity={0.3} dot={false} />
                         ))}
                       </AreaChart>
                     )
@@ -413,7 +413,7 @@ export function SkillsPage() {
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                         {topErrorSkillNames.map((skill, i) => (
-                          <Bar key={skill} dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" fill={chartColor(skill, i)} radius={i === topErrorSkillNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
+                          <Bar isAnimationActive={false} key={skill} dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" fill={chartColor(skill, i)} radius={i === topErrorSkillNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
                         ))}
                       </BarChart>
                     ) : (
@@ -423,7 +423,7 @@ export function SkillsPage() {
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                         {topErrorSkillNames.map((skill, i) => (
-                          <Area key={skill} type="monotone" dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" stroke={chartColor(skill, i)} fill={chartColor(skill, i)} fillOpacity={0.3} dot={false} />
+                          <Area isAnimationActive={false} key={skill} type="monotone" dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" stroke={chartColor(skill, i)} fill={chartColor(skill, i)} fillOpacity={0.3} dot={false} />
                         ))}
                       </AreaChart>
                     )
@@ -435,7 +435,7 @@ export function SkillsPage() {
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtMs(Number(v)), fmtLegendLabel(String(n))]} />
                         {topLatencySkillNames.map((skill, i) => (
-                          <Bar key={skill} dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" fill={chartColor(skill, i)} radius={i === topLatencySkillNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
+                          <Bar isAnimationActive={false} key={skill} dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" fill={chartColor(skill, i)} radius={i === topLatencySkillNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
                         ))}
                       </BarChart>
                     ) : (
@@ -445,7 +445,7 @@ export function SkillsPage() {
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtMs(Number(v)), fmtLegendLabel(String(n))]} />
                         {topLatencySkillNames.map((skill, i) => (
-                          <Area key={skill} type="monotone" dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" stroke={chartColor(skill, i)} fill={chartColor(skill, i)} fillOpacity={0.3} dot={false} />
+                          <Area isAnimationActive={false} key={skill} type="monotone" dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" stroke={chartColor(skill, i)} fill={chartColor(skill, i)} fillOpacity={0.3} dot={false} />
                         ))}
                       </AreaChart>
                     )
@@ -457,7 +457,7 @@ export function SkillsPage() {
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                         {topSkillNames.map((skill, i) => (
-                          <Bar key={skill} dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" fill={chartColor(skill, i)} radius={i === topSkillNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
+                          <Bar isAnimationActive={false} key={skill} dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" fill={chartColor(skill, i)} radius={i === topSkillNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
                         ))}
                       </BarChart>
                     ) : (
@@ -466,7 +466,7 @@ export function SkillsPage() {
                         <XAxis dataKey="date" {...xAxisDateProps} />
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                        <Bar dataKey="count" fill={CHART_PALETTE[3]} radius={[2, 2, 0, 0]} name="Invocations" />
+                        <Bar isAnimationActive={false} dataKey="count" fill={CHART_PALETTE[3]} radius={[2, 2, 0, 0]} name="Invocations" />
                       </BarChart>
                     )
                   ) : (
@@ -477,7 +477,7 @@ export function SkillsPage() {
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                         {topSkillNames.map((skill, i) => (
-                          <Area key={skill} type="monotone" dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" stroke={chartColor(skill, i)} fill={chartColor(skill, i)} fillOpacity={0.3} dot={false} />
+                          <Area isAnimationActive={false} key={skill} type="monotone" dataKey={skill} name={fmtLegendLabel(skill)} stackId="a" stroke={chartColor(skill, i)} fill={chartColor(skill, i)} fillOpacity={0.3} dot={false} />
                         ))}
                       </AreaChart>
                     ) : (
@@ -486,7 +486,7 @@ export function SkillsPage() {
                         <XAxis dataKey="date" {...xAxisDateProps} />
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                        <Area type="monotone" dataKey="count" stroke={CHART_PALETTE[3]} fill={CHART_PALETTE[3]} fillOpacity={0.15} dot={false} name="Invocations" />
+                        <Area isAnimationActive={false} type="monotone" dataKey="count" stroke={CHART_PALETTE[3]} fill={CHART_PALETTE[3]} fillOpacity={0.15} dot={false} name="Invocations" />
                       </AreaChart>
                     )
                   )}
@@ -522,7 +522,7 @@ export function SkillsPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     {distChartType === 'donut' ? (
                       <PieChart>
-                        <Pie data={activeDonut as any[]} dataKey="count" nameKey={dataset === 'by-type' ? 'type' : 'skill'} cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                        <Pie isAnimationActive={false} data={activeDonut as any[]} dataKey="count" nameKey={dataset === 'by-type' ? 'type' : 'skill'} cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
                           {activeDonut.map((entry: any, i: number) => <Cell key={i} fill={chartColor(String(entry[dataset === 'by-type' ? 'type' : 'skill']), i)} />)}
                         </Pie>
                         <Tooltip contentStyle={tooltipStyle} formatter={(v: unknown, n: unknown) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
@@ -533,7 +533,7 @@ export function SkillsPage() {
                         <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
                         <YAxis type="category" dataKey={dataset === 'by-type' ? 'type' : 'skill'} {...axisProps} width={80} tick={{ fontSize: 10 }} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
-                        <Bar dataKey="count" name="Count" radius={[0, 2, 2, 0]}>
+                        <Bar isAnimationActive={false} dataKey="count" name="Count" radius={[0, 2, 2, 0]}>
                           {activeDonut.map((entry: any, i: number) => <Cell key={i} fill={chartColor(String(entry[dataset === 'by-type' ? 'type' : 'skill']), i)} />)}
                         </Bar>
                       </BarChart>
@@ -551,7 +551,7 @@ export function SkillsPage() {
                         <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
                         <YAxis type="category" dataKey="skill" {...axisProps} width={80} tick={{ fontSize: 10 }} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(v) => [fmtNumber(Number(v)), 'Errors']} />
-                        <Bar dataKey="errors" fill={CHART_PALETTE[4]} name="Errors" radius={[0, 2, 2, 0]} />
+                        <Bar isAnimationActive={false} dataKey="errors" fill={CHART_PALETTE[4]} name="Errors" radius={[0, 2, 2, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (
@@ -569,7 +569,7 @@ export function SkillsPage() {
                         <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtMs(Number(v))} />
                         <YAxis type="category" dataKey="skill" {...axisProps} width={80} tick={{ fontSize: 10 }} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(v) => [fmtMs(Number(v)), 'p50 Latency']} />
-                        <Bar dataKey="p50Ms" fill={CHART_PALETTE[1]} name="p50 Latency" radius={[0, 2, 2, 0]} />
+                        <Bar isAnimationActive={false} dataKey="p50Ms" fill={CHART_PALETTE[1]} name="p50 Latency" radius={[0, 2, 2, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (

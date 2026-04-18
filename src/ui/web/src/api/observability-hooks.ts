@@ -179,7 +179,6 @@ export function useObsSessions(range: TimeRange, granularity?: Granularity, sess
       firstUserMessage?: string;
       intent?: string;
       outcome?: string;
-      sessionNotes?: string[];
     }>;
     avgDurationMs: number;
     totalUserMessages: number;

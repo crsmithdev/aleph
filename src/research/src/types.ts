@@ -2,6 +2,8 @@ export interface ResearchQuery {
   id: string;
   title: string;
   seed_query: string;
+  seed_query_short: string | null;
+  seed_query_super_short: string | null;
   status: 'active' | 'paused' | 'completed' | 'archived';
   config: SessionConfig;
   summary: string;
@@ -39,7 +41,7 @@ export interface SessionConfig {
     openrouter_models: string[];
   };
   schedule: {
-    mode: 'interactive' | 'background' | 'scheduled' | 'burst';
+    mode: 'background' | 'scheduled' | 'burst';
     active_windows: Array<{
       days: string[];
       start: string;
@@ -54,12 +56,16 @@ export interface SessionConfig {
     max_retries: number;      // default 3
     similarity_threshold: number; // default 0.75
   };
+  burst_iterations: number;
   min_searches_per_thread: number;
   fetch_source_text: boolean;
   gap_analysis: {
     enabled: boolean;
     max_gap_searches: number;
   };
+  llm_max_output_tokens: number;     // per-call LLM output ceiling
+  snippet_synthesis_chars: number;   // chars per search result passed to synthesis
+  snippet_display_chars: number;     // chars per source stored for citation UI
 }
 
 export interface PerturbationConfig {
@@ -74,8 +80,8 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
   budget_daily_usd: 5.0,
   budget_total_usd: null,
   budget_alert_threshold: 0.80,
-  max_thread_depth: 5,
-  max_total_threads: 200,
+  max_thread_depth: 3,
+  max_total_threads: 150,
   p_serendipity: 0.15,
   max_perturbation_probability: 0.40,
   novelty_threshold: 0.3,
@@ -84,7 +90,7 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
   diminishing_returns_window: 20,
   min_delay_between_steps_ms: 8000,
   max_steps_per_hour: 30,
-  max_concurrent_threads: 2,
+  max_concurrent_threads: 3,
   model: 'deepseek/deepseek-chat',
   providers: {
     primary: 'openrouter',
@@ -93,13 +99,13 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
     ],
   },
   schedule: {
-    mode: 'interactive',
+    mode: 'background',
     active_windows: [],
     timezone: 'America/Los_Angeles',
   },
   follow_up: {
     min_count: 2,
-    max_count: 5,
+    max_count: 4,
     max_retries: 3,
     similarity_threshold: 0.75,
   },
@@ -107,12 +113,16 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
     seed_similarity_min: 0.0,
     hop_similarity_min: 0.0,
   },
+  burst_iterations: 10,
   min_searches_per_thread: 2,
   fetch_source_text: false,
   gap_analysis: {
     enabled: true,
     max_gap_searches: 2,
   },
+  llm_max_output_tokens: 8192,
+  snippet_synthesis_chars: 3000,
+  snippet_display_chars: 200,
   perturbation: {
     depth_scaling: true,
     chain_length: 2,
@@ -218,6 +228,50 @@ export interface ResearchFinding {
   created_at: string;
 }
 
+export interface Concept {
+  id: string;
+  session_id: string;
+  canonical_name: string;
+  aliases: string[];
+  summary: string;
+  key_facts: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConceptLink {
+  id: string;
+  session_id: string;
+  from_concept_id: string;
+  to_concept_id: string;
+  relation: string;
+  evidence_finding_ids: string[];
+  created_at: string;
+}
+
+export interface ConceptWithStats extends Concept {
+  finding_count: number;
+  source_count: number;
+}
+
+export type SourceExtractionStatus = 'pending' | 'extracted' | 'failed' | 'skipped';
+
+export interface Source {
+  id: string;
+  session_id: string;
+  url: string;
+  title: string;
+  snippet: string;
+  extraction_status: SourceExtractionStatus;
+  extracted_text: string | null;
+  extracted_at: string | null;
+  fetched_at: string | null;
+  error: string | null;
+  attempt_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ResearchStep {
   id: string;
   thread_id: string;
@@ -232,6 +286,7 @@ export interface ResearchStep {
   duration_ms: number;
   error: string | null;
   label: string | null;
+  metadata: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -253,7 +308,7 @@ export interface ToolCallRecord {
 export interface FollowUpCandidate {
   text: string;
   quality_score: number;       // 0–1: relevance + specificity + focus
-  jaccard_similarity: number;  // vs most-similar accepted question
+  dedup_similarity: number;    // max similarity vs previously-accepted candidates (0.0 = first candidate, no prior comparisons)
   embedding_similarity: number | null;
   llm_similarity: number | null;
   similarity_method: 'jaccard' | 'embedding' | 'llm';
@@ -269,6 +324,12 @@ export interface FollowUpAnalysis {
   retry_count: number;
   min_required: number;
 }
+
+export type StepMetadata =
+  | { decision: 'gap_analysis'; has_gaps: boolean; gap_count: number; gap_queries: string[] }
+  | { decision: 'synthesis'; confidence: number; novelty: number; actionability: number; tags: string[] }
+  | { decision: 'dedup'; is_duplicate: boolean; existing_count: number }
+  | { decision: 'follow_up_eval'; accepted_count: number; rejected_count: number; retry_count: number }
 
 export interface ResearchPlan {
   id: string;
@@ -397,4 +458,6 @@ export const MODEL_PRICING: Record<string, { input: number; output: number }> = 
   'claude-sonnet-4-6': { input: 3.0, output: 15.0 },
   'claude-haiku-4-5': { input: 0.80, output: 4.0 },
   'claude-opus-4-6': { input: 15.0, output: 75.0 },
+  'deepseek/deepseek-chat': { input: 0.27, output: 1.10 },
+  'deepseek/deepseek-chat-v3': { input: 0.27, output: 1.10 },
 };

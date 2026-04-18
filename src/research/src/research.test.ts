@@ -954,7 +954,7 @@ describe('scoreAndRankFollowUps', () => {
     const c = candidates[0];
     expect(typeof c.text).toBe('string');
     expect(typeof c.quality_score).toBe('number');
-    expect(typeof c.jaccard_similarity).toBe('number');
+    expect(typeof c.dedup_similarity).toBe('number');
     expect(typeof c.distance_from_parent).toBe('number');
     expect(typeof c.rank_score).toBe('number');
     expect(typeof c.accepted).toBe('boolean');

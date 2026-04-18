@@ -157,7 +157,7 @@ export function SubagentsPage() {
         activeFilterCount={bgOnly ? 1 : 0}
       />
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-4 gap-4 !mt-0">
         <StatCard
           label="Active Now"
           value={<span className={data.activeNow > 0 ? 'text-accent' : ''}>{fmtNumber(data.activeNow)}</span>}
@@ -179,8 +179,8 @@ export function SubagentsPage() {
             <YAxis {...axisProps} />
             <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
             <Legend {...legendProps} />
-            <Bar dataKey="backgroundCount" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Background" stackId="a" />
-            <Bar dataKey="foregroundCount" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Foreground" stackId="a" />
+            <Bar isAnimationActive={false} dataKey="backgroundCount" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Background" stackId="a" />
+            <Bar isAnimationActive={false} dataKey="foregroundCount" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Foreground" stackId="a" />
           </BarChart>
         </ChartContainer>
       )}

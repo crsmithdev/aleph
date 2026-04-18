@@ -166,8 +166,8 @@ function RoutingTab() {
             <XAxis dataKey="date" {...axisProps} />
             <YAxis {...axisProps} />
             <Tooltip contentStyle={tooltipStyle} />
-            <Bar dataKey="full" name="Full" stackId="a" fill={CHART_PALETTE[0]} />
-            <Bar dataKey="quick" name="Quick" stackId="a" fill={CHART_PALETTE[2]} radius={[2, 2, 0, 0]} />
+            <Bar isAnimationActive={false} dataKey="full" name="Full" stackId="a" fill={CHART_PALETTE[0]} />
+            <Bar isAnimationActive={false} dataKey="quick" name="Quick" stackId="a" fill={CHART_PALETTE[2]} radius={[2, 2, 0, 0]} />
           </BarChart>
         </ChartContainer>
       )}
@@ -259,7 +259,7 @@ function ReEditsTab() {
                 <XAxis type="number" {...axisProps} />
                 <YAxis type="category" dataKey="file" {...axisProps} width={200} tick={{ fontSize: 10 }} />
                 <Tooltip contentStyle={tooltipStyle} />
-                <Bar dataKey="count" name="Re-edit events" fill={CHART_PALETTE[4]} radius={[0, 2, 2, 0]} />
+                <Bar isAnimationActive={false} dataKey="count" name="Re-edit events" fill={CHART_PALETTE[4]} radius={[0, 2, 2, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -326,8 +326,8 @@ function RatingsTab() {
             <XAxis dataKey="date" {...axisProps} />
             <YAxis {...axisProps} />
             <Tooltip contentStyle={tooltipStyle} />
-            <Bar dataKey="positive" name="Positive" stackId="a" fill={CHART_PALETTE[2]} />
-            <Bar dataKey="negative" name="Negative" stackId="a" fill={CHART_PALETTE[4]} radius={[2, 2, 0, 0]} />
+            <Bar isAnimationActive={false} dataKey="positive" name="Positive" stackId="a" fill={CHART_PALETTE[2]} />
+            <Bar isAnimationActive={false} dataKey="negative" name="Negative" stackId="a" fill={CHART_PALETTE[4]} radius={[2, 2, 0, 0]} />
           </BarChart>
         </ChartContainer>
       )}

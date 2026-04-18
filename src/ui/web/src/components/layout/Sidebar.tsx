@@ -40,6 +40,7 @@ const navGroups: NavItem[][] = [
       label: 'Research',
       icon: 'search',
       children: [
+        { to: '/research/queries', label: 'Queries', icon: 'list' },
         { to: '/research/workers', label: 'Workers', icon: 'engineering' },
         { to: '/research/config', label: 'Providers', icon: 'tune' },
       ],
@@ -117,7 +118,7 @@ function SidebarLink({ to, label, icon, depth = 0, collapsed = false, disabled =
               ? 'pl-2.5 text-accent font-medium'
               : depth > 0
                 ? 'text-accent font-medium'
-                : 'rounded-lg bg-accent text-white font-medium pl-2.5'
+                : 'rounded-lg bg-accent/15 text-accent font-medium pl-2.5'
             : depth > 0
               ? 'text-text-muted hover:text-text-primary hover:bg-bg-tertiary pl-5'
               : 'pl-2.5 text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded-lg'
@@ -409,7 +410,7 @@ export function Sidebar() {
                 item.disabled
                   ? 'text-text-muted opacity-40 cursor-not-allowed pointer-events-none'
                   : isActive
-                    ? 'rounded-lg bg-accent text-white'
+                    ? 'rounded-lg bg-accent/15 text-accent'
                     : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded-lg'
               )
             }

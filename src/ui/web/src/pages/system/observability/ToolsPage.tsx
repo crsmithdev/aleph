@@ -269,7 +269,7 @@ export function ToolsPage() {
         onDisplayNChange={setDisplayN}
       />
 
-      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4 !mt-0">
         <StatCard label="Active Tools" value={fmtNumber(activeTools)} />
         <StatCard label="Tool Calls" value={fmtCalls(totalCalls)} accent="neutral" />
         <StatCard
@@ -329,7 +329,7 @@ export function ToolsPage() {
                         <XAxis dataKey="date" {...xAxisDateProps} />
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v) => [v, 'Calls/Session']} />
-                        <Area type="monotone" dataKey="velocity" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Velocity" />
+                        <Area isAnimationActive={false} type="monotone" dataKey="velocity" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Velocity" />
                       </AreaChart>
                     ) : chartType === 'bar' ? (
                       <BarChart data={tsData}>
@@ -338,7 +338,7 @@ export function ToolsPage() {
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
                         {tsKeys.map((name, i) => (
-                          <Bar key={name} dataKey={name} name={fmtLegendLabel(name)} stackId="a" fill={chartColor(name, i)} radius={i === tsKeys.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
+                          <Bar isAnimationActive={false} key={name} dataKey={name} name={fmtLegendLabel(name)} stackId="a" fill={chartColor(name, i)} radius={i === tsKeys.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
                         ))}
                       </BarChart>
                     ) : (
@@ -348,7 +348,7 @@ export function ToolsPage() {
                         <YAxis {...axisProps} />
                         <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
                         {tsKeys.map((name, i) => (
-                          <Area key={name} type="monotone" dataKey={name} name={fmtLegendLabel(name)} stackId="a" stroke={chartColor(name, i)} fill={chartColor(name, i)} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
+                          <Area isAnimationActive={false} key={name} type="monotone" dataKey={name} name={fmtLegendLabel(name)} stackId="a" stroke={chartColor(name, i)} fill={chartColor(name, i)} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
                         ))}
                       </AreaChart>
                     )}
@@ -385,7 +385,7 @@ export function ToolsPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     {distChartType === 'donut' ? (
                       <PieChart>
-                        <Pie data={callsDonut} dataKey="count" nameKey="tool" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                        <Pie isAnimationActive={false} data={callsDonut} dataKey="count" nameKey="tool" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
                           {callsDonut.map((entry: any, i) => <Cell key={i} fill={chartColor(String(entry.tool ?? ''), i)} />)}
                         </Pie>
                         <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
@@ -396,7 +396,7 @@ export function ToolsPage() {
                         <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
                         <YAxis type="category" dataKey="tool" {...axisProps} width={72} tick={{ fontSize: 10 }} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
-                        <Bar dataKey="count" name="Calls" radius={[0, 2, 2, 0]}>
+                        <Bar isAnimationActive={false} dataKey="count" name="Calls" radius={[0, 2, 2, 0]}>
                           {callsDonut.map((entry: any, i) => <Cell key={i} fill={chartColor(String(entry.tool ?? ''), i)} />)}
                         </Bar>
                       </BarChart>
@@ -414,8 +414,8 @@ export function ToolsPage() {
                         <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
                         <YAxis type="category" dataKey="tool" {...axisProps} width={72} tick={{ fontSize: 10 }} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
-                        <Bar dataKey="linesAdded" stackId="a" fill={CHART_PALETTE[2]} name="Added" radius={[0, 0, 0, 0]} />
-                        <Bar dataKey="linesRemoved" stackId="a" fill={CHART_PALETTE[4]} name="Removed" radius={[0, 2, 2, 0]} />
+                        <Bar isAnimationActive={false} dataKey="linesAdded" stackId="a" fill={CHART_PALETTE[2]} name="Added" radius={[0, 0, 0, 0]} />
+                        <Bar isAnimationActive={false} dataKey="linesRemoved" stackId="a" fill={CHART_PALETTE[4]} name="Removed" radius={[0, 2, 2, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (
@@ -430,7 +430,7 @@ export function ToolsPage() {
                     <ResponsiveContainer width="100%" height="100%">
                       {distChartType === 'donut' ? (
                         <PieChart>
-                          <Pie data={projectsDonut} dataKey="count" nameKey="project" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                          <Pie isAnimationActive={false} data={projectsDonut} dataKey="count" nameKey="project" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
                             {projectsDonut.map((entry: any, i) => <Cell key={i} fill={chartColor(String(entry.project ?? ''), i)} />)}
                           </Pie>
                           <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
@@ -441,7 +441,7 @@ export function ToolsPage() {
                           <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
                           <YAxis type="category" dataKey="project" {...axisProps} width={72} tick={{ fontSize: 10 }} />
                           <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
-                          <Bar dataKey="count" name="Usage" radius={[0, 2, 2, 0]}>
+                          <Bar isAnimationActive={false} dataKey="count" name="Usage" radius={[0, 2, 2, 0]}>
                             {projectsDonut.map((entry: any, i) => <Cell key={i} fill={chartColor(String(entry.project ?? ''), i)} />)}
                           </Bar>
                         </BarChart>
@@ -462,7 +462,7 @@ export function ToolsPage() {
                         <XAxis type="number" {...axisProps} />
                         <YAxis type="category" dataKey="tool" {...axisProps} width={72} tick={{ fontSize: 10 }} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(v) => [v, 'Calls/Session']} />
-                        <Bar dataKey="velocity" name="Velocity" radius={[0, 2, 2, 0]}>
+                        <Bar isAnimationActive={false} dataKey="velocity" name="Velocity" radius={[0, 2, 2, 0]}>
                           {topVelocityTools.map((entry: any, i) => <Cell key={i} fill={chartColor(String(entry.tool ?? ''), i)} />)}
                         </Bar>
                       </BarChart>
@@ -482,7 +482,7 @@ export function ToolsPage() {
                         <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
                         <YAxis type="category" dataKey="tool" {...axisProps} width={72} tick={{ fontSize: 10 }} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(v) => [fmtNumber(Number(v)), 'Errors']} />
-                        <Bar dataKey="errorCount" name="Errors" radius={[0, 2, 2, 0]}>
+                        <Bar isAnimationActive={false} dataKey="errorCount" name="Errors" radius={[0, 2, 2, 0]}>
                           {topErrorTools.map((entry: any, i) => <Cell key={i} fill={chartColor(String(entry.tool ?? ''), i)} />)}
                         </Bar>
                       </BarChart>
@@ -502,7 +502,7 @@ export function ToolsPage() {
                         <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtMs(Number(v))} />
                         <YAxis type="category" dataKey="tool" {...axisProps} width={72} tick={{ fontSize: 10 }} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(v) => [fmtMs(Number(v)), 'p50 Latency']} />
-                        <Bar dataKey="p50Ms" name="p50 Latency" radius={[0, 2, 2, 0]}>
+                        <Bar isAnimationActive={false} dataKey="p50Ms" name="p50 Latency" radius={[0, 2, 2, 0]}>
                           {topLatencyTools.map((entry: any, i) => <Cell key={i} fill={chartColor(String(entry.tool ?? ''), i)} />)}
                         </Bar>
                       </BarChart>
@@ -519,7 +519,7 @@ export function ToolsPage() {
                     <ResponsiveContainer width="100%" height="100%">
                       {distChartType === 'donut' ? (
                         <PieChart>
-                          <Pie data={sessionsDonut} dataKey="count" nameKey="tool" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                          <Pie isAnimationActive={false} data={sessionsDonut} dataKey="count" nameKey="tool" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
                             {sessionsDonut.map((entry: any, i) => <Cell key={i} fill={chartColor(String(entry.tool ?? ''), i)} />)}
                           </Pie>
                           <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
@@ -530,7 +530,7 @@ export function ToolsPage() {
                           <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
                           <YAxis type="category" dataKey="tool" {...axisProps} width={72} tick={{ fontSize: 10 }} />
                           <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
-                          <Bar dataKey="count" name="Sessions" radius={[0, 2, 2, 0]}>
+                          <Bar isAnimationActive={false} dataKey="count" name="Sessions" radius={[0, 2, 2, 0]}>
                             {sessionsDonut.map((entry: any, i) => <Cell key={i} fill={chartColor(String(entry.tool ?? ''), i)} />)}
                           </Bar>
                         </BarChart>

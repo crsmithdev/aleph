@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { listGoals, getGoal, createGoal, updateGoal, deleteGoal, setCategories } from '@construct/goals';
+import { listGoals, getGoal, createGoal, updateGoal, deleteGoal, setCategories, linkGoals, unlinkGoals } from '@construct/goals';
 
 export const goalRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: { state?: string; priority?: string; category?: string; archived?: string } }>(
@@ -29,6 +29,25 @@ export const goalRoutes: FastifyPluginAsync = async (app) => {
     if (!ok) return reply.status(404).send({ error: 'Goal not found' });
     return reply.status(204).send();
   });
+
+  app.post<{ Params: { id: string }; Body: { linkedGoalId: string } }>(
+    '/:id/links',
+    async (req, reply) => {
+      const { linkedGoalId } = req.body;
+      if (!linkedGoalId) return reply.status(400).send({ error: 'linkedGoalId is required' });
+      const ok = linkGoals(app.db, req.params.id, linkedGoalId);
+      if (!ok) return reply.status(404).send({ error: 'Goal not found' });
+      return reply.status(204).send();
+    }
+  );
+
+  app.delete<{ Params: { id: string; otherId: string } }>(
+    '/:id/links/:otherId',
+    async (req, reply) => {
+      unlinkGoals(app.db, req.params.id, req.params.otherId);
+      return reply.status(204).send();
+    }
+  );
 
   app.put<{ Params: { id: string }; Body: { categoryIds: string[] } }>(
     '/:id/categories',

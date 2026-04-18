@@ -103,19 +103,19 @@ export function ResearchSessionsPage() {
           {envCheck.errors.map((e, i) => (
             <div key={i} className="rounded border border-red-500/50 bg-red-500/10 px-3 py-2 flex items-center gap-2">
               <Icon name="close" size="xs" className="text-red-400 shrink-0" />
-              <span className="text-xs text-red-400 font-medium">{e}</span>
+              <span className="text-sm text-red-400 font-medium">{e}</span>
             </div>
           ))}
           {envCheck.warnings.map((w, i) => (
             <div key={i} className="rounded border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 flex items-center gap-2">
-              <span className="text-yellow-400 text-xs shrink-0">⚠</span>
-              <span className="text-xs text-yellow-400">{w}</span>
+              <span className="text-yellow-400 text-sm shrink-0">⚠</span>
+              <span className="text-sm text-yellow-400">{w}</span>
             </div>
           ))}
           {envCheck.jina_balance !== null && (
             <div className="rounded border border-border-primary bg-bg-secondary px-3 py-2 flex items-center gap-2">
-              <span className="text-xs text-text-muted">Jina balance:</span>
-              <span className={clsx('text-xs font-medium tabular-nums', envCheck.jina_balance < 100_000 ? 'text-red-400' : envCheck.jina_balance < 1_000_000 ? 'text-yellow-400' : 'text-green-400')}>
+              <span className="text-sm text-text-muted">Jina balance:</span>
+              <span className={clsx('text-sm font-medium tabular-nums', envCheck.jina_balance < 100_000 ? 'text-red-400' : envCheck.jina_balance < 1_000_000 ? 'text-yellow-400' : 'text-green-400')}>
                 {envCheck.jina_balance.toLocaleString()} tokens
               </span>
             </div>
@@ -146,8 +146,8 @@ export function ResearchSessionsPage() {
                   <YAxis {...axisProps} />
                   <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                   <Legend {...legendProps} />
-                  <Bar dataKey="findings" fill={CHART_PALETTE[0]} name="Findings" />
-                  <Bar dataKey="sessions" fill={CHART_PALETTE[1]} name="Sessions" />
+                  <Bar isAnimationActive={false} dataKey="findings" fill={CHART_PALETTE[0]} name="Findings" />
+                  <Bar isAnimationActive={false} dataKey="sessions" fill={CHART_PALETTE[1]} name="Sessions" />
                 </BarChart>
               ) : (
                 <AreaChart data={stats.data.byDay}>
@@ -156,8 +156,8 @@ export function ResearchSessionsPage() {
                   <YAxis {...axisProps} />
                   <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
                   <Legend {...legendProps} />
-                  <Area type="monotone" dataKey="findings" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} name="Findings" />
-                  <Area type="monotone" dataKey="sessions" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} name="Sessions" />
+                  <Area isAnimationActive={false} type="monotone" dataKey="findings" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} name="Findings" />
+                  <Area isAnimationActive={false} type="monotone" dataKey="sessions" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} name="Sessions" />
                 </AreaChart>
               )}
             </ChartContainer>
@@ -176,7 +176,7 @@ export function ResearchSessionsPage() {
             className="flex-1 bg-bg-primary border border-border-primary rounded-md px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
             autoFocus
           />
-          <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0">
+          <label className="flex items-center gap-1.5 text-sm text-text-muted shrink-0">
             Depth
             <input
               type="number"
@@ -187,7 +187,7 @@ export function ResearchSessionsPage() {
               className="w-12 bg-bg-primary border border-border-primary rounded px-1.5 py-1 text-sm text-text-primary text-center focus:outline-none focus:border-accent"
             />
           </label>
-          <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0">
+          <label className="flex items-center gap-1.5 text-sm text-text-muted shrink-0">
             Provider
             <select
               value={provider}
@@ -199,7 +199,7 @@ export function ResearchSessionsPage() {
               <option value="ollama">Local</option>
             </select>
           </label>
-          <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0">
+          <label className="flex items-center gap-1.5 text-sm text-text-muted shrink-0">
             Model
             <input
               type="text"
@@ -209,7 +209,7 @@ export function ResearchSessionsPage() {
               className="w-36 bg-bg-primary border border-border-primary rounded px-1.5 py-1 text-sm text-text-primary focus:outline-none focus:border-accent"
             />
           </label>
-          <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0">
+          <label className="flex items-center gap-1.5 text-sm text-text-muted shrink-0">
             Min searches
             <input
               type="number"
@@ -244,22 +244,22 @@ export function ResearchSessionsPage() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
                     <h3 className="text-sm font-medium text-text-primary truncate">{session.title}</h3>
-                    <p className="text-xs text-text-muted mt-1 truncate">{session.seed_query}</p>
+                    <p className="text-sm text-text-muted mt-1 truncate">{session.seed_query_short || session.seed_query}</p>
                   </div>
-                  <span className={clsx('px-2 py-0.5 rounded text-xs font-medium ml-3', statusColors[session.status])}>
+                  <span className={clsx('px-2 py-0.5 rounded text-sm font-medium ml-3', statusColors[session.status])}>
                     {session.status}
                   </span>
                 </div>
                 {session.summary && (
-                  <p className="text-xs text-text-secondary mt-2 line-clamp-2">{session.summary}</p>
+                  <p className="text-sm text-text-secondary mt-2 line-clamp-2">{session.summary}</p>
                 )}
-                <p className="text-xs text-text-muted mt-2">
+                <p className="text-sm text-text-muted mt-2">
                   Created {new Date(session.created_at).toLocaleDateString()}
                 </p>
               </Link>
               <button
                 onClick={() => updateSession.mutate({ id: session.id, status: 'archived' })}
-                className="text-xs text-text-muted hover:text-red-400 transition-colors shrink-0 mt-1"
+                className="text-sm text-text-muted hover:text-red-400 transition-colors shrink-0 mt-1"
                 title="Archive"
               >
                 Archive

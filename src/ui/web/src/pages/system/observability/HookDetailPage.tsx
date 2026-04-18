@@ -1,4 +1,3 @@
-import { Icon } from '../../../components/ui/Icon';
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
@@ -200,13 +199,12 @@ export function HookDetailPage() {
           <div className="flex items-center gap-2">
             <Link
               to="/observability/hooks"
-              className="flex items-center gap-1 text-text-muted hover:text-text-primary transition-colors"
+              className="font-heading text-2xl font-bold text-text-muted hover:text-text-primary transition-colors leading-none"
             >
-              <Icon name="webhook" size="xs" className="text-text-muted" />
-              <span className="font-heading text-lg text-text-muted">Hooks</span>
+              Hooks
             </Link>
-            <Icon name="chevron_right" size="xs" className="text-text-disabled" />
-            <h1 className="font-heading text-lg font-semibold text-text-primary">{hookName}</h1>
+            <span className="font-heading text-2xl font-bold text-text-muted leading-none">&raquo;</span>
+            <h1 className="font-heading text-2xl font-bold text-text-primary leading-none">{hookName}</h1>
             {data.event && (
               <span className="rounded-md bg-bg-tertiary px-2 py-0.5 text-xs text-text-muted font-mono">{data.event}</span>
             )}
@@ -232,7 +230,7 @@ export function HookDetailPage() {
         activeFilterCount={activeFilterCount}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 !mt-0">
         <StatCard label="Executions" value={fmtNumber(data.totalCount)} accent="neutral" />
         <StatCard
           label="Errors"
@@ -388,7 +386,7 @@ export function HookDetailPage() {
                     <ResponsiveContainer width="100%" height="100%">
                       {distChartType === 'donut' ? (
                         <PieChart>
-                          <Pie data={cfg.distData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                          <Pie isAnimationActive={false} data={cfg.distData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
                             {cfg.distData.map((_, i) => <Cell key={i} fill={cfg.colors[i] || CHART_PALETTE[i % CHART_PALETTE.length]} />)}
                           </Pie>
                           <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
@@ -399,7 +397,7 @@ export function HookDetailPage() {
                           <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
                           <YAxis type="category" dataKey="name" {...axisProps} width={72} tick={{ fontSize: 10 }} />
                           <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
-                          <Bar dataKey="value" name="Count" radius={[0, 2, 2, 0]}>
+                          <Bar isAnimationActive={false} dataKey="value" name="Count" radius={[0, 2, 2, 0]}>
                             {cfg.distData.map((_, i) => <Cell key={i} fill={cfg.colors[i] || CHART_PALETTE[i % CHART_PALETTE.length]} />)}
                           </Bar>
                         </BarChart>

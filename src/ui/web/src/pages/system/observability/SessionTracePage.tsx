@@ -7,7 +7,7 @@ import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { type TimeRange } from '../../../components/data/TimeRangeSelector';
-import { fmtNumber, fmtMs, fmtCurrency, dateTime, fmtDuration, fmtToolName, cleanMessage, formatModelName, fmtProject } from '../../../utils/format';
+import { fmtNumber, fmtMs, fmtCurrency, dateTime, fmtDuration, fmtToolName, cleanMessage, formatModelName, fmtProject, modelContextWindow } from '../../../utils/format';
 import { clsx } from 'clsx';
 
 type TraceCompaction = {
@@ -224,7 +224,7 @@ function SpanRow({ span, sessionId }: { span: Span; sessionId: string }) {
       : span.kind === 'verify'
       ? (span.label.includes('FAIL') ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-green-500/10 border-green-500/30 text-green-400')
       : isSubagent
-      ? 'bg-agent/20 border-agent-border text-white'
+      ? 'bg-agent/20 border-agent-border text-text-primary'
       : 'bg-accent/10 border-accent/30 text-accent';
 
   return (
@@ -256,7 +256,7 @@ function SpanRow({ span, sessionId }: { span: Span; sessionId: string }) {
           : span.kind === 'hook' && hookDecision === 'pass' ? 'text-success'
           : span.kind === 'hook' ? 'text-purple-300'
           : span.kind === 'verify' ? (span.label.includes('FAIL') ? 'text-red-400' : 'text-green-400')
-          : isSubagent ? 'text-white' : 'text-sky-300')}>
+          : isSubagent ? 'text-text-primary' : 'text-sky-500')}>
           {span.subagentSessionId ? (
             <Link
               to={`/observability/sessions/${encodeURIComponent(span.subagentSessionId)}`}
@@ -753,16 +753,28 @@ function UserBlock({ turn, sessionId, prevTurn }: {
 function SystemContextBreakdown({
   systemEst,
   totalContextTokens,
+  maxContextTokens,
   contextFiles,
+  firstTurnCacheRead,
 }: {
   systemEst: number;
   totalContextTokens: number;
+  maxContextTokens: number;
   contextFiles?: ContextFile[];
+  firstTurnCacheRead?: number;
 }) {
   const [open, setOpen] = useState(false);
   const knownFileTokens = contextFiles?.reduce((s, f) => s + f.estTokens, 0) ?? 0;
-  const unknownEst = Math.max(0, systemEst - knownFileTokens);
-  const pct = Math.round(systemEst / totalContextTokens * 100);
+
+  // Prefer direct measurement (turn-0 cacheRead) over top-down remainder estimate.
+  // At session start, cacheRead = exactly what's cached before any conversation = system prompt.
+  const measured = firstTurnCacheRead != null && firstTurnCacheRead > knownFileTokens;
+  const displayTotal = measured ? firstTurnCacheRead! : systemEst;
+  const baseOverhead = measured
+    ? Math.max(0, firstTurnCacheRead! - knownFileTokens)
+    : Math.max(0, systemEst - knownFileTokens);
+  const pctUsed = totalContextTokens > 0 ? Math.round(displayTotal / totalContextTokens * 100) : 0;
+  const pctMax = maxContextTokens > 0 ? Math.round(displayTotal / maxContextTokens * 100) : 0;
 
   return (
     <div className="border-t border-border-primary/40">
@@ -774,29 +786,30 @@ function SystemContextBreakdown({
           <Icon name="expand_more" size="xs" className={clsx('shrink-0 transition-transform duration-150', open ? 'rotate-180' : '')} />
           System / CLAUDE.md / settings
         </span>
-        <span className="text-xs text-text-muted font-mono">{fmtNumber(systemEst)} ({pct}%)</span>
+        <span className="text-xs text-text-muted font-mono">{fmtNumber(displayTotal)} ({pctUsed}% · {pctMax}% max)</span>
       </button>
       {open && (
         <div className="px-4 pb-2.5 space-y-1">
-          {contextFiles && contextFiles.length > 0 ? (
-            <>
-              {contextFiles.map((f, i) => (
-                <div key={i} className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] text-text-muted truncate flex-1" title={f.path}>{f.label}</span>
-                  <span className="text-[11px] text-text-disabled font-mono shrink-0">{fmtNumber(f.estTokens)}</span>
-                </div>
-              ))}
-              {unknownEst > 100 && (
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] text-text-disabled truncate flex-1">System prompt / hooks / settings</span>
-                  <span className="text-[11px] text-text-disabled font-mono shrink-0">~{fmtNumber(unknownEst)}</span>
-                </div>
-              )}
-            </>
-          ) : (
+          {contextFiles && contextFiles.length > 0 && contextFiles.map((f, i) => (
+            <div key={i} className="flex items-center justify-between gap-2">
+              <span className="text-[11px] text-text-muted truncate flex-1" title={f.path}>{f.label}</span>
+              <span className="text-[11px] text-text-disabled font-mono shrink-0">{fmtNumber(f.estTokens)}</span>
+            </div>
+          ))}
+          {baseOverhead > 100 && (
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] text-text-disabled">System prompt / CLAUDE.md / settings</span>
-              <span className="text-[11px] text-text-disabled font-mono">~{fmtNumber(systemEst)}</span>
+              <span className="text-[11px] text-text-disabled truncate flex-1">
+                Base system prompt + tool defs{measured ? '' : ' (est)'}
+              </span>
+              <span className="text-[11px] text-text-disabled font-mono shrink-0">
+                {measured ? '' : '~'}{fmtNumber(baseOverhead)}
+              </span>
+            </div>
+          )}
+          {!contextFiles?.length && !measured && (
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] text-text-disabled">Base system prompt + tool defs (est)</span>
+              <span className="text-[11px] text-text-disabled font-mono">~{fmtNumber(displayTotal)}</span>
             </div>
           )}
         </div>
@@ -826,6 +839,7 @@ function ContextPanel({ turns, contextFiles, onTurnClick }: {
 
   const lastTurn = turns[turns.length - 1];
   const totalContextTokens = lastTurn?.contextTokens;
+  const maxContextTokens = modelContextWindow(lastTurn?.model);
 
   // Build items from what we have
   const userItems: ContextItem[] = turns
@@ -885,6 +899,10 @@ function ContextPanel({ turns, contextFiles, onTurnClick }: {
     ? Math.max(0, totalContextTokens - totalUserEst - totalToolEst - totalAssistantEst)
     : 0;
 
+  // Use turn-0 cacheRead as a direct measurement of the base system overhead.
+  // At session start, nothing from conversation is cached yet, so cacheRead = system prompt only.
+  const firstTurnCacheRead = turns.find(t => (t.cacheReadTokens ?? 0) > 0)?.cacheReadTokens;
+
   // Flat sorted view
   const flatItems = [...userItems, ...toolItems, ...assistantItems].sort((a, b) =>
     view === 'size' ? b.estTokens - a.estTokens : a.turnIndex - b.turnIndex,
@@ -904,7 +922,7 @@ function ContextPanel({ turns, contextFiles, onTurnClick }: {
         <span className="text-sm font-medium text-text-secondary leading-none">Context</span>
         {totalContextTokens ? (
           <span className="text-xs text-text-muted leading-none">
-            {fmtNumber(totalContextTokens)} tokens
+            {fmtNumber(totalContextTokens)} / {fmtNumber(maxContextTokens)} tokens ({Math.round(totalContextTokens / maxContextTokens * 100)}% of max)
           </span>
         ) : (
           <span className="text-xs text-text-disabled leading-none">token data unavailable</span>
@@ -939,6 +957,7 @@ function ContextPanel({ turns, contextFiles, onTurnClick }: {
               count={userItems.length}
               totalEst={totalUserEst}
               totalContextTokens={totalContextTokens}
+              maxContextTokens={maxContextTokens}
               items={sortedUserItems}
               view={view}
               onTurnClick={onTurnClick}
@@ -950,6 +969,7 @@ function ContextPanel({ turns, contextFiles, onTurnClick }: {
               count={toolItems.length}
               totalEst={totalToolEst}
               totalContextTokens={totalContextTokens}
+              maxContextTokens={maxContextTokens}
               items={sortedToolItems}
               view={view}
               onTurnClick={onTurnClick}
@@ -961,6 +981,7 @@ function ContextPanel({ turns, contextFiles, onTurnClick }: {
               count={assistantItems.length}
               totalEst={totalAssistantEst}
               totalContextTokens={totalContextTokens}
+              maxContextTokens={maxContextTokens}
               items={sortedAssistantItems}
               view={view}
               onTurnClick={onTurnClick}
@@ -981,7 +1002,9 @@ function ContextPanel({ turns, contextFiles, onTurnClick }: {
         <SystemContextBreakdown
           systemEst={systemEst}
           totalContextTokens={totalContextTokens}
+          maxContextTokens={maxContextTokens}
           contextFiles={contextFiles}
+          firstTurnCacheRead={firstTurnCacheRead}
         />
       )}
 
@@ -997,6 +1020,7 @@ function ContextGroup({
   count,
   totalEst,
   totalContextTokens,
+  maxContextTokens,
   items,
   view,
   onTurnClick,
@@ -1005,6 +1029,7 @@ function ContextGroup({
   count: number;
   totalEst: number;
   totalContextTokens?: number;
+  maxContextTokens?: number;
   items: ContextItem[];
   view: 'category' | 'size';
   onTurnClick?: (index: number) => void;
@@ -1012,7 +1037,8 @@ function ContextGroup({
   const [open, setOpen] = useState(true);
   if (count === 0) return null;
 
-  const pct = totalContextTokens ? Math.round(totalEst / totalContextTokens * 100) : 0;
+  const pctUsed = totalContextTokens ? Math.round(totalEst / totalContextTokens * 100) : 0;
+  const pctMax = maxContextTokens ? Math.round(totalEst / maxContextTokens * 100) : 0;
 
   return (
     <div>
@@ -1024,7 +1050,7 @@ function ContextGroup({
         <span className="text-sm font-medium text-text-primary shrink-0 whitespace-nowrap leading-none">{label}</span>
         <span className="text-xs text-text-muted shrink-0 leading-none">{count}</span>
         <span className="ml-auto text-xs text-text-muted font-mono shrink-0 whitespace-nowrap leading-none">
-          {fmtNumber(totalEst)}{totalContextTokens ? ` (${pct}%)` : ''}
+          {fmtNumber(totalEst)}{totalContextTokens ? ` (${pctUsed}% · ${pctMax}% max)` : ''}
         </span>
       </button>
 
@@ -1184,15 +1210,16 @@ export function SessionTracePage() {
       <div ref={topRef} />
 
       {/* Page header */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="sticky top-0 z-10 h-14 bg-bg-primary border-b border-border-primary flex flex-wrap items-center gap-2">
         <Link
           to="/observability/sessions"
-          className="text-xl text-text-muted hover:text-text-primary transition-colors"
+          className="font-heading text-2xl font-bold text-text-muted hover:text-text-primary transition-colors leading-none"
         >
-          «
+          Sessions
         </Link>
-        <h1 className="font-heading text-xl font-semibold text-text-primary">
-          Session <span className="font-mono text-accent">{sessionId.slice(0, 8)}</span>
+        <span className="font-heading text-2xl font-bold text-text-muted leading-none">&raquo;</span>
+        <h1 className="font-heading text-2xl font-bold text-text-primary leading-none">
+          <span className="font-mono text-accent">{sessionId.slice(0, 8)}</span>
         </h1>
         {data.project && (
           <span className="rounded-md bg-bg-tertiary px-2 py-0.5 text-xs text-text-muted font-mono">

@@ -67,6 +67,12 @@ export function applyDDL(sqlite: Sqlite): void {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_history_goal ON history_logs(goal_id);
+    CREATE TABLE IF NOT EXISTS goal_links (
+      goal_id TEXT NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+      linked_goal_id TEXT NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+      PRIMARY KEY (goal_id, linked_goal_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_goal_links_linked ON goal_links(linked_goal_id);
   `);
 
   // Migrations — guarded to only run when needed, never concurrently

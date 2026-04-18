@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Research Config — Mockup</title>
+<style>
+  :root {
+    --bg-primary:#282c34;
+    --bg-secondary:#21252b;
+    --bg-tertiary:#2c313a;
+    --bg-hover:#2c313a;
+    --bg-contrast:#1e2227;
+    --text-primary:#abb2bf;
+    --text-secondary:#848da0;
+    --text-muted:#5c6370;
+    --text-disabled:#3e4452;
+    --border:#3e4452;
+    --accent:#c678dd;
+    --accent-dim:#7a4c8a;
+    --success:#98c379;
+    --warning:#e5c07b;
+    --error:#e06c75;
+    --edited:#e5c07b;
+
+    --t-meta:14px;
+    --t-body:14px;
+    --t-h3:16px;
+    --t-h2:18px;
+    --t-h1:22px;
+
+    --sp-1:4px;
+    --sp-2:8px;
+    --sp-3:12px;
+    --sp-4:16px;
+    --sp-5:20px;
+    --sp-6:24px;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg-primary);
+    color:var(--text-primary);
+    font:var(--t-body)/1.5 ui-sans-serif,-apple-system,"Inter","Segoe UI",sans-serif;
+    padding:40px 48px 120px;
+  }
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+
+  h1{font-size:var(--t-h1);font-weight:600;color:var(--text-primary);margin:0 0 var(--sp-1)}
+  h2{font-size:var(--t-h2);font-weight:600;color:var(--text-primary);margin:0}
+  h3{font-size:var(--t-h3);font-weight:600;color:var(--text-primary);margin:0 0 var(--sp-3)}
+  .mock-intro{color:var(--text-muted);margin-bottom:28px;font-size:var(--t-body);max-width:780px}
+  .mock-intro code{font-size:var(--t-body)}
+
+  .variant{
+    border:1px solid var(--border);
+    border-radius:10px;
+    background:var(--bg-secondary);
+    padding:var(--sp-6);
+    margin-bottom:48px;
+  }
+  .variant-header{
+    display:flex;align-items:baseline;gap:var(--sp-3);
+    border-bottom:1px solid var(--border);
+    padding-bottom:var(--sp-3);margin-bottom:var(--sp-5);
+  }
+  .variant-tag{
+    font-size:var(--t-meta);font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    background:var(--accent);color:#1a1a1a;padding:3px 10px;border-radius:4px;
+  }
+  .variant-sub{color:var(--text-muted);font-size:var(--t-body)}
+
+  /* shared controls */
+  .field-hint{color:var(--text-muted);font-size:var(--t-body);margin-top:3px}
+  .field-unit{color:var(--text-muted);font-size:var(--t-body);margin-left:6px}
+  input[type="text"],input[type="number"],select{
+    background:var(--bg-primary);
+    border:1px solid var(--border);
+    border-radius:4px;
+    color:var(--text-primary);
+    padding:6px var(--sp-2);font:inherit;font-size:var(--t-body);outline:none;
+    transition:border-color .15s;
+  }
+  input[type="text"]:focus,input[type="number"]:focus,select:focus{border-color:var(--accent)}
+  input.narrow{width:90px}
+  input.medium{width:120px}
+  select{width:160px}
+  .toggle{
+    display:inline-block;position:relative;width:34px;height:18px;
+    background:var(--bg-tertiary);border-radius:9px;cursor:pointer;vertical-align:middle;
+    border:1px solid var(--border);
+  }
+  .toggle::after{
+    content:"";position:absolute;top:1px;left:1px;width:14px;height:14px;border-radius:50%;
+    background:var(--text-muted);transition:transform .15s,background .15s;
+  }
+  .toggle.on{background:var(--accent-dim);border-color:var(--accent)}
+  .toggle.on::after{transform:translateX(16px);background:var(--accent)}
+  .edited-dot{
+    display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--edited);margin-right:6px;
+    vertical-align:middle;
+  }
+  .status-pill{
+    font-size:var(--t-meta);font-weight:500;letter-spacing:.06em;text-transform:uppercase;
+    padding:2px 8px;border-radius:8px;
+    background:var(--bg-tertiary);color:var(--text-muted);
+  }
+  .status-pill.edited{background:#4a3a1a;color:var(--warning)}
+  .status-pill.new{background:#1e3a1e;color:var(--success)}
+
+  /* =========== Grouped cards (Variant A) =========== */
+  .a-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--sp-4)}
+  .a-card{
+    background:var(--bg-primary);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:var(--sp-4) 18px;
+  }
+  .a-card-head{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:var(--sp-3);
+  }
+  .a-card h3{margin:0;color:var(--text-primary);font-size:var(--t-h3);text-transform:none;letter-spacing:0}
+  .a-card-sub{color:var(--text-muted);font-size:var(--t-meta);font-weight:500;letter-spacing:.02em}
+  .a-row{
+    display:grid;grid-template-columns:1fr auto;gap:var(--sp-3);align-items:center;
+    padding:10px 0;border-bottom:1px solid var(--border);
+  }
+  .a-row:last-child{border-bottom:none}
+  .a-row-label{font-size:var(--t-body)}
+  .a-row-label .hint{display:block;color:var(--text-muted);font-size:var(--t-body);margin-top:3px;line-height:1.5}
+  .a-show-advanced{
+    margin-top:var(--sp-5);color:var(--text-muted);font-size:var(--t-body);cursor:pointer;user-select:none;
+  }
+  .a-show-advanced:hover{color:var(--accent)}
+</style>
+</head>
+<body>
+
+<h1>Research Config — Variant A</h1>
+<p class="mock-intro">Grouped cards, single-page scroll. Same fields, all visible, no navigation cost. This page lives inside the existing <code>ResearchConfigPage</code> as a new <em>Defaults</em> tab alongside <em>Providers</em>. Values flagged <span class="status-pill edited">edited</span> differ from shipped defaults. Values flagged <span class="status-pill new">new</span> are the three we're lifting out of hardcode.</p>
+
+<section class="variant">
+  <div class="variant-header">
+    <span class="variant-tag">Variant A</span>
+    <h2>Grouped cards, all visible</h2>
+    <span class="variant-sub">one-page scroll, scan-friendly, no navigation cost</span>
+  </div>
+
+  <div class="a-grid">
+
+    <div class="a-card">
+      <div class="a-card-head"><h3>Budget</h3><span class="a-card-sub">spend ceilings</span></div>
+      <div class="a-row">
+        <div class="a-row-label">Daily budget<span class="hint">Hard cap — dispatcher halts when exceeded</span></div>
+        <div>$<input type="number" class="narrow" value="5.00" step="0.50"></div>
+      </div>
+      <div class="a-row">
+        <div class="a-row-label">Total budget<span class="hint">Null = unlimited</span></div>
+        <div><input type="text" class="narrow" value="—" placeholder="null"></div>
+      </div>
+      <div class="a-row">
+        <div class="a-row-label">Alert threshold<span class="hint">Warn at % of budget</span></div>
+        <div><input type="number" class="narrow" value="80" step="5"><span class="field-unit">%</span></div>
+      </div>
+    </div>
+
+    <div class="a-card">
+      <div class="a-card-head"><h3>Depth &amp; Breadth</h3><span class="a-card-sub">search exploration</span></div>
+      <div class="a-row">
+        <div class="a-row-label">Max thread depth</div>
+        <div><input type="number" class="narrow" value="5"></div>
+      </div>
+      <div class="a-row">
+        <div class="a-row-label">Max total threads</div>
+        <div><input type="number" class="narrow" value="200"></div>
+      </div>
+      <div class="a-row">
+        <div class="a-row-label">Min searches per thread</div>
+        <div><input type="number" class="narrow" value="2"></div>
+      </div>
+      <div class="a-row">
+        <div class="a-row-label">Burst iterations</div>
+        <div><input type="number" class="narrow" value="5"></div>
+      </div>
+    </div>
+
+    <div class="a-card">
+      <div class="a-card-head"><h3>Quality</h3><span class="a-card-sub">novelty &amp; dedup</span></div>
+      <div class="a-row">
+        <div class="a-row-label">Novelty threshold<span class="hint">Discard findings below this</span></div>
+        <div><input type="number" class="narrow" value="0.30" step="0.05"></div>
+      </div>
+      <div class="a-row">
+        <div class="a-row-label">Dedup similarity</div>
+        <div><input type="number" class="narrow" value="0.85" step="0.05"></div>
+      </div>
+      <div class="a-row">
+        <div class="a-row-label">Diminishing returns window</div>
+        <div><input type="number" class="narrow" value="20"></div>
+      </div>
+      <div class="a-row">
+        <div class="a-row-label">Follow-ups per iteration<span class="hint">min / max</span></div>
+        <div><input type="number" class="narrow" value="2" style="width:60px"> / <input type="number" class="narrow" value="5" style="width:60px"></div>
+      </div>
+    </div>
+
+    <div class="a-card">
+      <div class="a-card-head"><h3>Generation</h3><span class="a-card-sub">LLM output shape</span></div>
+      <div class="a-row">
+        <div class="a-row-label">LLM max output tokens <span class="status-pill new">new</span><span class="hint">Per LLM call ceiling</span></div>
+        <div><input type="number" class="medium" value="8192"></div>
+      </div>
+      <div class="a-row">
+        <div class="a-row-label">Synthesis chars / source <span class="status-pill new">new</span><span class="hint">Passed to per-thread synthesis</span></div>
+        <div><input type="number" class="medium" value="3000"></div>
+      </div>
+      <div class="a-row">
+        <div class="a-row-label">Display snippet chars <span class="status-pill new">new</span><span class="hint">Stored for citation UI</span></div>
+        <div><input type="number" class="medium" value="200"></div>
+      </div>
+      <div class="a-row">
+        <div class="a-row-label">Document generation mode</div>
+        <div>
+          <select>
+            <option>Single pass</option>
+            <option selected>Per-section</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="a-card">
+      <div class="a-card-head"><h3>Extraction</h3><span class="a-card-sub">full-text fetching</span></div>
+      <div class="a-row">
+        <div class="a-row-label">Fetch source text<span class="hint">Queue extraction for top sources</span></div>
+        <div><span class="toggle on"></span></div>
+      </div>
+      <div class="a-row">
+        <div class="a-row-label">Auto-extract top N</div>
+        <div><input type="number" class="narrow" value="3"></div>
+      </div>
+      <div class="a-row">
+        <div class="a-row-label">Concurrency</div>
+        <div><input type="number" class="narrow" value="2"></div>
+      </div>
+    </div>
+
+    <div class="a-card">
+      <div class="a-card-head"><h3>Models</h3><span class="a-card-sub">primary provider</span></div>
+      <div class="a-row">
+        <div class="a-row-label">Primary</div>
+        <div>
+          <select>
+            <option>anthropic/claude-sonnet-4.6</option>
+            <option selected>anthropic/claude-opus-4.7</option>
+            <option>openai/gpt-5</option>
+          </select>
+        </div>
+      </div>
+      <div class="a-row">
+        <div class="a-row-label">Fallback chain</div>
+        <div style="color:var(--text-muted);font-size:var(--t-body)">sonnet-4.6 → gpt-5 → haiku-4.5</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="a-show-advanced">▸ Show advanced (perturbation, coherence, schedule, serendipity)</div>
+</section>
+
+<p class="mock-intro" style="margin-top:0">
+  <strong>Per-session overrides</strong> — the session detail page gets a "Config" panel reusing the same field components. Each field shows the effective value, a subtle dot when overridden from default, and a per-field reset. Global defaults page governs new sessions; in-flight sessions keep their frozen config.
+</p>
+
+</body>
+</html>

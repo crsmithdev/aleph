@@ -1,20 +1,23 @@
 import type { Sqlite } from '@construct/data';
 import { generateId } from './id.js';
 import type { ResearchQuery, SessionConfig } from '../types.js';
-import { DEFAULT_SESSION_CONFIG } from '../types.js';
+import { getDefaults } from './defaults.js';
 
-function rowToQuery(row: Record<string, unknown>): ResearchQuery {
+function rowToQuery(sqlite: Sqlite, row: Record<string, unknown>): ResearchQuery {
   const stored = JSON.parse(row.config as string) as Partial<SessionConfig>;
-  // Deep-merge with defaults so queries created before new config fields were added
-  // still get valid defaults (e.g. follow_up added later).
+  // Deep-merge with persisted defaults so queries created before new config
+  // fields were added still get valid defaults, and default changes propagate
+  // to existing queries that haven't overridden them.
+  const defaults = getDefaults(sqlite);
   const config: SessionConfig = {
-    ...DEFAULT_SESSION_CONFIG,
+    ...defaults,
     ...stored,
-    providers: { ...DEFAULT_SESSION_CONFIG.providers, ...(stored.providers ?? {}) },
-    schedule: { ...DEFAULT_SESSION_CONFIG.schedule, ...(stored.schedule ?? {}) },
-    perturbation: { ...DEFAULT_SESSION_CONFIG.perturbation, ...(stored.perturbation ?? {}) },
-    follow_up: { ...DEFAULT_SESSION_CONFIG.follow_up, ...(stored.follow_up ?? {}) },
-    topic_coherence: { ...DEFAULT_SESSION_CONFIG.topic_coherence, ...(stored.topic_coherence ?? {}) },
+    providers: { ...defaults.providers, ...(stored.providers ?? {}) },
+    schedule: { ...defaults.schedule, ...(stored.schedule ?? {}) },
+    perturbation: { ...defaults.perturbation, ...(stored.perturbation ?? {}) },
+    follow_up: { ...defaults.follow_up, ...(stored.follow_up ?? {}) },
+    topic_coherence: { ...defaults.topic_coherence, ...(stored.topic_coherence ?? {}) },
+    gap_analysis: { ...defaults.gap_analysis, ...(stored.gap_analysis ?? {}) },
   };
   return { ...row, config } as unknown as ResearchQuery;
 }
@@ -23,16 +26,18 @@ export function createQuery(
   sqlite: Sqlite,
   title: string,
   seedQuery: string,
-  config?: Partial<SessionConfig>
+  config?: Partial<SessionConfig>,
+  seedQueryShort?: string | null,
+  seedQuerySuperShort?: string | null,
 ): ResearchQuery {
   const id = generateId();
-  const mergedConfig = { ...DEFAULT_SESSION_CONFIG, ...config };
+  const mergedConfig = { ...getDefaults(sqlite), ...config };
   const now = new Date().toISOString();
 
   sqlite.prepare(`
-    INSERT INTO research_queries (id, title, seed_query, status, config, created_at, updated_at)
-    VALUES (?, ?, ?, 'active', ?, ?, ?)
-  `).run(id, title, seedQuery, JSON.stringify(mergedConfig), now, now);
+    INSERT INTO research_queries (id, title, seed_query, seed_query_short, seed_query_super_short, status, config, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?)
+  `).run(id, title, seedQuery, seedQueryShort ?? null, seedQuerySuperShort ?? null, JSON.stringify(mergedConfig), now, now);
 
   return getQuery(sqlite, id)!;
 }
@@ -42,17 +47,17 @@ export const createSession = createQuery;
 
 export function getQuery(sqlite: Sqlite, id: string): ResearchQuery | null {
   const row = sqlite.prepare('SELECT * FROM research_queries WHERE id = ?').get(id) as Record<string, unknown> | null;
-  return row ? rowToQuery(row) : null;
+  return row ? rowToQuery(sqlite, row) : null;
 }
 
 /** @deprecated Use getQuery */
 export const getSession = getQuery;
 
 export function listQueries(sqlite: Sqlite, status?: string): ResearchQuery[] {
-  if (status) {
-    return (sqlite.prepare('SELECT * FROM research_queries WHERE status = ? ORDER BY updated_at DESC').all(status) as Record<string, unknown>[]).map(rowToQuery);
-  }
-  return (sqlite.prepare('SELECT * FROM research_queries ORDER BY updated_at DESC').all() as Record<string, unknown>[]).map(rowToQuery);
+  const rows = status
+    ? sqlite.prepare('SELECT * FROM research_queries WHERE status = ? ORDER BY updated_at DESC').all(status) as Record<string, unknown>[]
+    : sqlite.prepare('SELECT * FROM research_queries ORDER BY updated_at DESC').all() as Record<string, unknown>[];
+  return rows.map(row => rowToQuery(sqlite, row));
 }
 
 /** @deprecated Use listQueries */
@@ -61,7 +66,7 @@ export const listSessions = listQueries;
 export function updateQuery(
   sqlite: Sqlite,
   id: string,
-  updates: Partial<Pick<ResearchQuery, 'status' | 'summary' | 'document' | 'user_notes' | 'title'>> & { config?: Partial<SessionConfig> }
+  updates: Partial<Pick<ResearchQuery, 'status' | 'summary' | 'document' | 'user_notes' | 'title' | 'seed_query_short' | 'seed_query_super_short'>> & { config?: Partial<SessionConfig> }
 ): ResearchQuery | null {
   const fields: string[] = [];
   const values: unknown[] = [];
@@ -71,6 +76,8 @@ export function updateQuery(
   if (updates.document !== undefined) { fields.push('document = ?'); values.push(updates.document); }
   if (updates.user_notes !== undefined) { fields.push('user_notes = ?'); values.push(updates.user_notes); }
   if (updates.title !== undefined) { fields.push('title = ?'); values.push(updates.title); }
+  if (updates.seed_query_short !== undefined) { fields.push('seed_query_short = ?'); values.push(updates.seed_query_short); }
+  if (updates.seed_query_super_short !== undefined) { fields.push('seed_query_super_short = ?'); values.push(updates.seed_query_super_short); }
   if (updates.config !== undefined) {
     const existing = getQuery(sqlite, id);
     if (existing) {

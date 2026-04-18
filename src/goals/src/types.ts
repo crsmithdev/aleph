@@ -62,10 +62,21 @@ export interface HistoryLog {
   createdAt: string;
 }
 
+export interface LinkedGoal {
+  id: string;
+  title: string;
+  priority: string;
+  state: string;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface GoalWithMeta extends Goal {
   categories: Category[];
   latestNote: Note | null;
   todoCount: number;
   noteCount: number;
   habitCount: number;
+  linkedGoals: LinkedGoal[];
 }

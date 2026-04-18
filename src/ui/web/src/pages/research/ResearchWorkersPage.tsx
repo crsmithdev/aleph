@@ -14,6 +14,7 @@ import {
   useResearchWorkers,
   useAllJobs,
   useJobStats,
+  useResearchStats,
   useAddWorker,
   useRemoveWorker,
   useKillWorker,
@@ -23,7 +24,7 @@ import {
   type ResearchJob,
   type WorkerStatus,
 } from '../../api/research-hooks';
-import { fmtNumber, fmtMs, fmtPct } from '../../utils/format';
+import { fmtNumber, fmtMs, fmtPct, fmtCurrency } from '../../utils/format';
 
 // --- Helpers ---
 
@@ -53,7 +54,7 @@ function JobStatusBadge({ job }: { job: ResearchJob }) {
   const label = display === 'rate_limit' ? 'rate limit' : display;
   return (
     <span
-      className={clsx('px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap', statusColors[display] ?? 'bg-bg-tertiary text-text-muted')}
+      className={clsx('px-2 py-0.5 rounded text-sm font-medium whitespace-nowrap', statusColors[display] ?? 'bg-bg-tertiary text-text-muted')}
       title={display === 'rate_limit' ? job.error ?? undefined : undefined}
     >
       {label}
@@ -72,7 +73,7 @@ const workerDotColors: Record<string, string> = {
 
 function StatusBadge({ status }: { status: string }) {
   return (
-    <span className={clsx('px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap', statusColors[status] ?? 'bg-bg-tertiary text-text-muted')}>
+    <span className={clsx('px-2 py-0.5 rounded text-sm font-medium whitespace-nowrap', statusColors[status] ?? 'bg-bg-tertiary text-text-muted')}>
       {status}
     </span>
   );
@@ -134,11 +135,11 @@ function ErrorDisplay({ error }: { error: string }) {
     <div className="mt-1 relative">
       <button
         onClick={copy}
-        className="absolute top-1.5 right-1.5 text-xs text-text-muted hover:text-text-primary px-1.5 py-0.5 rounded bg-bg-primary/70 hover:bg-bg-primary border border-border-primary/50 transition-colors"
+        className="absolute top-1.5 right-1.5 text-sm text-text-muted hover:text-text-primary px-1.5 py-0.5 rounded bg-bg-primary/70 hover:bg-bg-primary border border-border-primary/50 transition-colors"
       >
         {copied ? '✓ Copied' : 'Copy'}
       </button>
-      <pre className="text-red-300 bg-red-900/20 rounded p-2 pr-16 font-mono text-xs whitespace-pre-wrap break-all overflow-auto max-h-48 leading-relaxed">
+      <pre className="text-red-300 bg-red-900/20 rounded p-2 pr-16 font-mono text-sm whitespace-pre-wrap break-all overflow-auto max-h-48 leading-relaxed">
         {formatted}
       </pre>
     </div>
@@ -151,29 +152,29 @@ function JobDetail({ job, queryMap }: { job: ResearchJob; queryMap: Record<strin
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div className="space-y-2.5">
         <div>
-          <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Job ID</p>
+          <p className="text-sm text-text-muted uppercase tracking-wider mb-0.5">Job ID</p>
           <p className="font-mono text-sm text-text-secondary break-all">{job.id}</p>
         </div>
         <div>
-          <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Query</p>
+          <p className="text-sm text-text-muted uppercase tracking-wider mb-0.5">Query</p>
           <Link to={`/research/${job.session_id}`} className="font-mono text-sm text-accent hover:underline">
             {queryMap[job.session_id] ?? job.session_id}
           </Link>
         </div>
         {job.thread_id && (
           <div>
-            <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Thread</p>
+            <p className="text-sm text-text-muted uppercase tracking-wider mb-0.5">Thread</p>
             <p className="font-mono text-sm text-text-secondary break-all">{job.thread_id}</p>
           </div>
         )}
         {job.claimed_by && (
           <div>
-            <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Worker</p>
+            <p className="text-sm text-text-muted uppercase tracking-wider mb-0.5">Worker</p>
             <p className="font-mono text-sm text-text-secondary">{job.claimed_by}</p>
           </div>
         )}
         <div>
-          <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Mode / Iterations</p>
+          <p className="text-sm text-text-muted uppercase tracking-wider mb-0.5">Mode / Iterations</p>
           <p className="text-sm text-text-secondary">
             {job.mode} &middot; {job.iterations_completed}{job.max_iterations ? `/${job.max_iterations}` : ''} iter
           </p>
@@ -181,30 +182,30 @@ function JobDetail({ job, queryMap }: { job: ResearchJob; queryMap: Record<strin
       </div>
       <div className="space-y-2.5">
         <div>
-          <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Created</p>
+          <p className="text-sm text-text-muted uppercase tracking-wider mb-0.5">Created</p>
           <p className="font-mono text-sm text-text-secondary">{job.created_at}</p>
         </div>
         {job.started_at && (
           <div>
-            <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Started</p>
+            <p className="text-sm text-text-muted uppercase tracking-wider mb-0.5">Started</p>
             <p className="font-mono text-sm text-text-secondary">{job.started_at}</p>
           </div>
         )}
         {job.completed_at && (
           <div>
-            <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Completed</p>
+            <p className="text-sm text-text-muted uppercase tracking-wider mb-0.5">Completed</p>
             <p className="font-mono text-sm text-text-secondary">{job.completed_at}</p>
           </div>
         )}
         {job.heartbeat_at && (
           <div>
-            <p className="text-xs text-text-muted uppercase tracking-wider mb-0.5">Last Heartbeat</p>
+            <p className="text-sm text-text-muted uppercase tracking-wider mb-0.5">Last Heartbeat</p>
             <p className="font-mono text-sm text-text-secondary">{job.heartbeat_at}</p>
           </div>
         )}
         {job.error && (
           <div>
-            <p className="text-xs text-red-400 uppercase tracking-wider mb-0.5">Error</p>
+            <p className="text-sm text-red-400 uppercase tracking-wider mb-0.5">Error</p>
             <ErrorDisplay error={job.error} />
           </div>
         )}
@@ -248,7 +249,7 @@ function WorkerCard({
         </Button>
       </div>
 
-      <div className="flex items-center gap-4 text-xs text-text-muted">
+      <div className="flex items-center gap-4 text-sm text-text-muted">
         <span>PID {worker.pid ?? '—'}</span>
         <span>Up {fmtUptime(worker.uptimeMs)}</span>
         {worker.restarts > 0 && <span className="text-yellow-400">{worker.restarts} restarts</span>}
@@ -262,7 +263,7 @@ function WorkerCard({
           >
             {queryTitle ?? currentJob.session_id.slice(0, 12)}
           </Link>
-          <div className="flex items-center gap-3 flex-wrap text-xs text-text-muted">
+          <div className="flex items-center gap-3 flex-wrap text-sm text-text-muted">
             <StatusBadge status={currentJob.status} />
             {currentJob.thread_id
               ? <span className="font-mono">thread {currentJob.thread_id.slice(0, 8)}</span>
@@ -274,8 +275,8 @@ function WorkerCard({
       ) : (
         <div className="bg-bg-primary border border-border-primary/40 rounded p-3 flex items-center gap-3 opacity-50">
           <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', workerDotColors[displayStatus] ?? 'bg-bg-tertiary')} />
-          <span className="font-mono text-xs text-text-muted">worker-{worker.id}</span>
-          <span className="text-xs text-text-muted ml-auto">idle</span>
+          <span className="font-mono text-sm text-text-muted">worker-{worker.id}</span>
+          <span className="text-sm text-text-muted ml-auto">idle</span>
         </div>
       )}
     </div>
@@ -339,8 +340,8 @@ function PerformanceCharts({ byDay }: { byDay: { date: string; completed: number
             <XAxis dataKey="date" {...xAxisDateProps} />
             <YAxis {...axisProps} />
             <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-            <Bar dataKey="Completed" stackId="a" fill="var(--c-success)" radius={[0, 0, 0, 0]} />
-            <Bar dataKey="Failed" stackId="a" fill="var(--c-error)" radius={[2, 2, 0, 0]} />
+            <Bar isAnimationActive={false} dataKey="Completed" stackId="a" fill="var(--c-success)" radius={[0, 0, 0, 0]} />
+            <Bar isAnimationActive={false} dataKey="Failed" stackId="a" fill="var(--c-error)" radius={[2, 2, 0, 0]} />
           </BarChart>
         ) : (
           <AreaChart data={jobData}>
@@ -348,8 +349,8 @@ function PerformanceCharts({ byDay }: { byDay: { date: string; completed: number
             <XAxis dataKey="date" {...xAxisDateProps} />
             <YAxis {...axisProps} />
             <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-            <Area type="monotone" dataKey="Completed" stackId="a" stroke="var(--c-success)" fill="var(--c-success)" fillOpacity={0.4} dot={false} />
-            <Area type="monotone" dataKey="Failed" stackId="a" stroke="var(--c-error)" fill="var(--c-error)" fillOpacity={0.4} dot={false} />
+            <Area isAnimationActive={false} type="monotone" dataKey="Completed" stackId="a" stroke="var(--c-success)" fill="var(--c-success)" fillOpacity={0.4} dot={false} />
+            <Area isAnimationActive={false} type="monotone" dataKey="Failed" stackId="a" stroke="var(--c-error)" fill="var(--c-error)" fillOpacity={0.4} dot={false} />
           </AreaChart>
         )}
       </ChartContainer>
@@ -361,7 +362,7 @@ function PerformanceCharts({ byDay }: { byDay: { date: string; completed: number
             <XAxis dataKey="date" {...xAxisDateProps} />
             <YAxis {...axisProps} tickFormatter={(v) => fmtMs(v)} />
             <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v) => [fmtMs(Number(v)), 'Avg Duration']} />
-            <Area type="monotone" dataKey="Avg Duration" stroke="var(--c-accent)" fill="var(--c-accent)" fillOpacity={0.15} dot={false} />
+            <Area isAnimationActive={false} type="monotone" dataKey="Avg Duration" stroke="var(--c-accent)" fill="var(--c-accent)" fillOpacity={0.15} dot={false} />
           </AreaChart>
         </ChartContainer>
       )}
@@ -369,9 +370,9 @@ function PerformanceCharts({ byDay }: { byDay: { date: string; completed: number
   );
 }
 
-// --- Queued Jobs Table ---
+// --- In-Flight Jobs Table (running + pending) ---
 
-function QueuedJobsTable({ jobs, queryMap, onCancel, cancelPending }: {
+function InFlightJobsTable({ jobs, queryMap, onCancel, cancelPending }: {
   jobs: ResearchJob[];
   queryMap: Record<string, string>;
   onCancel: (jobId: string) => void;
@@ -384,7 +385,7 @@ function QueuedJobsTable({ jobs, queryMap, onCancel, cancelPending }: {
       key: 'id',
       label: 'Job',
       shrink: true,
-      render: (row) => <span className="font-mono text-sm text-text-muted whitespace-nowrap">{row.id.slice(0, 8)}</span>,
+      render: (row) => <span className="font-mono text-sm text-text-muted whitespace-nowrap">{row.id}</span>,
     },
     {
       key: 'session_id',
@@ -408,13 +409,37 @@ function QueuedJobsTable({ jobs, queryMap, onCancel, cancelPending }: {
       render: (row) => <span className="text-sm text-text-muted whitespace-nowrap">{row.mode}</span>,
     },
     {
-      key: 'created_at',
-      label: 'Queued',
+      key: 'claimed_by',
+      label: 'Worker',
       shrink: true,
-      render: (row) => <span className="text-sm tabular-nums text-text-muted whitespace-nowrap">{elapsed(row.created_at)} ago</span>,
+      render: (row) => row.claimed_by
+        ? <span className="font-mono text-sm text-text-secondary whitespace-nowrap">{row.claimed_by}</span>
+        : <span className="text-sm text-text-muted">—</span>,
     },
     {
-      key: 'claimed_by',
+      key: 'iterations_completed',
+      label: '↻',
+      shrink: true,
+      align: 'right',
+      render: (row) => (
+        <span className="text-sm tabular-nums text-text-secondary whitespace-nowrap">
+          {row.iterations_completed}{row.max_iterations ? `/${row.max_iterations}` : ''}
+        </span>
+      ),
+    },
+    {
+      key: 'started_at',
+      label: 'Elapsed',
+      shrink: true,
+      align: 'right',
+      render: (row) => {
+        const isRunning = row.status === 'running' || row.status === 'claimed';
+        if (isRunning && row.started_at) return <LiveDuration from={row.started_at} />;
+        return <span className="text-sm tabular-nums text-text-muted whitespace-nowrap">queued {elapsed(row.created_at)}</span>;
+      },
+    },
+    {
+      key: 'id',
       label: '',
       shrink: true,
       render: (row) => (
@@ -435,8 +460,7 @@ function QueuedJobsTable({ jobs, queryMap, onCancel, cancelPending }: {
       data={jobs}
       columns={columns}
       keyField="id"
-      emptyMessage="No queued jobs."
-      defaultSort={{ key: 'created_at', dir: 'asc' }}
+      emptyMessage="Nothing in flight."
       pageSize={20}
       expandedKey={expandedKey}
       onExpandToggle={setExpandedKey}
@@ -447,11 +471,9 @@ function QueuedJobsTable({ jobs, queryMap, onCancel, cancelPending }: {
 
 // --- Job History Table ---
 
-function JobHistoryTable({ jobs, queryMap, onCancel, cancelPending }: {
+function JobHistoryTable({ jobs, queryMap }: {
   jobs: ResearchJob[];
   queryMap: Record<string, string>;
-  onCancel: (jobId: string) => void;
-  cancelPending: boolean;
 }) {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
@@ -460,7 +482,7 @@ function JobHistoryTable({ jobs, queryMap, onCancel, cancelPending }: {
       key: 'id',
       label: 'Job',
       shrink: true,
-      render: (row) => <span className="font-mono text-sm text-text-muted whitespace-nowrap">{row.id.slice(0, 8)}</span>,
+      render: (row) => <span className="font-mono text-sm text-text-muted whitespace-nowrap">{row.id}</span>,
     },
     {
       key: 'session_id',
@@ -516,22 +538,6 @@ function JobHistoryTable({ jobs, queryMap, onCancel, cancelPending }: {
           : <span className="text-sm tabular-nums text-text-muted whitespace-nowrap">{elapsed(row.started_at, row.completed_at)}</span>;
       },
     },
-    {
-      key: 'created_at',
-      label: '',
-      shrink: true,
-      render: (row) =>
-        row.status === 'running' || row.status === 'pending' || row.status === 'claimed' ? (
-          <button
-            onClick={(e) => { e.stopPropagation(); onCancel(row.id); }}
-            disabled={cancelPending}
-            title="Cancel job"
-            className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-red-400 hover:bg-red-900/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            ✕
-          </button>
-        ) : null,
-    },
   ];
 
   return (
@@ -556,6 +562,7 @@ export function ResearchWorkersPage() {
   const { data: workers = [], isLoading: workersLoading } = useResearchWorkers();
   const { data: allJobs = [] } = useAllJobs({ limit: 500 });
   const { data: stats } = useJobStats();
+  const { data: throughput } = useResearchStats('7d', 'day');
   const addWorker = useAddWorker();
   const removeWorker = useRemoveWorker();
   const killWorker = useKillWorker();
@@ -568,14 +575,26 @@ export function ResearchWorkersPage() {
   );
 
   const runningJobs = allJobs.filter(j => j.status === 'running' || j.status === 'claimed');
-  const pendingJobs = allJobs.filter(j => j.status === 'pending' || j.status === 'claimed');
-  const historyJobs = allJobs.filter(j => j.status !== 'pending');
+  const pendingJobs = allJobs.filter(j => j.status === 'pending');
+  const inFlightJobs = [...runningJobs, ...pendingJobs].sort((a, b) => {
+    const rank = (s: string) => (s === 'running' ? 0 : s === 'claimed' ? 1 : 2);
+    const d = rank(a.status) - rank(b.status);
+    if (d !== 0) return d;
+    return a.created_at.localeCompare(b.created_at);
+  });
+  const historyJobs = allJobs.filter(j => j.status !== 'pending' && j.status !== 'running' && j.status !== 'claimed');
 
   const isActive = runningJobs.length > 0 || pendingJobs.length > 0;
   const runningWorkers = workers.filter(w => w.status === 'running');
   const successRate = stats && stats.total > 0
     ? ((stats.completed / stats.total) * 100)
     : null;
+
+  // Today's throughput — derived from existing stats endpoint (byDay ascending).
+  const today = throughput?.byDay?.[throughput.byDay.length - 1];
+  const todayFindings = today?.findings ?? 0;
+  const todaySpend = today?.cost ?? 0;
+  const activeQueries = queries.filter(q => q.status === 'active').length;
 
   if (workersLoading) return <PageLoading />;
 
@@ -605,7 +624,34 @@ export function ResearchWorkersPage() {
         }
       />
 
-      {/* Stats */}
+      {/* Throughput — today's output across all queries */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard
+          label="Active Queries"
+          value={fmtNumber(activeQueries)}
+          accent={activeQueries > 0 ? 'success' : 'neutral'}
+          detailContent={
+            <><span className="text-text-muted">of </span><span className="text-text-secondary font-medium">{queries.length}</span><span className="text-text-muted"> total</span></>
+          }
+        />
+        <StatCard
+          label="Findings Today"
+          value={fmtNumber(todayFindings)}
+          accent="success"
+        />
+        <StatCard
+          label="Spend Today"
+          value={fmtCurrency(todaySpend)}
+          accent="default"
+        />
+        <StatCard
+          label="Total Cost · 7d"
+          value={fmtCurrency(throughput?.totalCost ?? 0)}
+          accent="neutral"
+        />
+      </div>
+
+      {/* Job stats */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
         <StatCard label="Workers" value={fmtNumber(runningWorkers.length)} accent="success" />
         <StatCard label="Running" value={fmtNumber(runningJobs.length)} accent="default" />
@@ -622,7 +668,7 @@ export function ResearchWorkersPage() {
       {/* Worker cards */}
       {workers.length > 0 && (
         <div>
-          <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Workers</p>
+          <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Workers</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {workers.map((w) => (
               <WorkerCard
@@ -638,14 +684,16 @@ export function ResearchWorkersPage() {
         </div>
       )}
 
-      {/* Queued jobs */}
+      {/* In-flight jobs — running + queued */}
       <div>
-        <p className="text-xs text-text-muted uppercase tracking-wide mb-3">
-          Queued Jobs {pendingJobs.length > 0 && <span className="normal-case ml-1 text-yellow-400">({pendingJobs.length})</span>}
+        <p className="text-sm text-text-muted uppercase tracking-wide mb-3">
+          In Flight
+          {runningJobs.length > 0 && <span className="normal-case ml-2 text-success">{runningJobs.length} running</span>}
+          {pendingJobs.length > 0 && <span className="normal-case ml-2 text-warning">{pendingJobs.length} queued</span>}
         </p>
         <div className="bg-bg-secondary border border-border-primary rounded-lg overflow-hidden">
-          <QueuedJobsTable
-            jobs={pendingJobs}
+          <InFlightJobsTable
+            jobs={inFlightJobs}
             queryMap={queryMap}
             onCancel={(jobId) => cancelJob.mutate({ jobId })}
             cancelPending={cancelJob.isPending}
@@ -656,20 +704,18 @@ export function ResearchWorkersPage() {
       {/* Performance charts */}
       {stats && stats.byDay.length > 0 && (
         <div>
-          <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Performance</p>
+          <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Performance</p>
           <PerformanceCharts byDay={stats.byDay} />
         </div>
       )}
 
       {/* Job history */}
       <div>
-        <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Job History</p>
+        <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Job History</p>
         <div className="bg-bg-secondary border border-border-primary rounded-lg overflow-hidden">
           <JobHistoryTable
             jobs={historyJobs}
             queryMap={queryMap}
-            onCancel={(jobId) => cancelJob.mutate({ jobId })}
-            cancelPending={cancelJob.isPending}
           />
         </div>
       </div>

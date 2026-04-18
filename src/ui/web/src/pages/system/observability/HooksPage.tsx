@@ -102,9 +102,9 @@ function GatingSection({ gating }: { gating: Record<string, HookGatingStat> }) {
                 <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
                 <YAxis type="category" dataKey="name" {...axisProps} width={110} tick={{ fontSize: 10 }} />
                 <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
-                <Bar dataKey="blocks" name="Blocks" stackId="a" fill="var(--color-error, #ef4444)" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="advisories" name="Advisories" stackId="a" fill="var(--color-warning, #f59e0b)" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="passes" name="Passes" stackId="a" fill="var(--color-success, #22c55e)" radius={[0, 2, 2, 0]} />
+                <Bar isAnimationActive={false} dataKey="blocks" name="Blocks" stackId="a" fill="var(--color-error, #ef4444)" radius={[0, 0, 0, 0]} />
+                <Bar isAnimationActive={false} dataKey="advisories" name="Advisories" stackId="a" fill="var(--color-warning, #f59e0b)" radius={[0, 0, 0, 0]} />
+                <Bar isAnimationActive={false} dataKey="passes" name="Passes" stackId="a" fill="var(--color-success, #22c55e)" radius={[0, 2, 2, 0]} />
               </BarChart>
         </ChartContainer>
       )}
@@ -589,7 +589,7 @@ export function HooksPage() {
         onDisplayNChange={setDisplayN}
       />
 
-      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4 !mt-0">
         <StatCard label="Active Hooks" value={fmtNumber(activeHooks)} />
         <StatCard label="Executions" value={fmtCalls(totalExecutions)} accent="neutral" />
         <StatCard
@@ -653,7 +653,7 @@ export function HooksPage() {
                           <YAxis {...axisProps} />
                           <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                           {activeKeys.map((name, i) => (
-                            <Bar key={name} dataKey={name} name={fmtLegendLabel(name)} stackId="a" fill={chartColor(name, i)} radius={i === activeKeys.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
+                            <Bar isAnimationActive={false} key={name} dataKey={name} name={fmtLegendLabel(name)} stackId="a" fill={chartColor(name, i)} radius={i === activeKeys.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
                           ))}
                         </BarChart>
                       ) : (
@@ -663,7 +663,7 @@ export function HooksPage() {
                           <YAxis {...axisProps} />
                           <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
                           {activeKeys.map((name, i) => (
-                            <Area key={name} type="monotone" dataKey={name} name={fmtLegendLabel(name)} stackId="a" stroke={chartColor(name, i)} fill={chartColor(name, i)} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
+                            <Area isAnimationActive={false} key={name} type="monotone" dataKey={name} name={fmtLegendLabel(name)} stackId="a" stroke={chartColor(name, i)} fill={chartColor(name, i)} fillOpacity={0.4} strokeWidth={1.5} dot={false} />
                           ))}
                         </AreaChart>
                       )}
@@ -683,7 +683,7 @@ export function HooksPage() {
                       {eventDonut.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
-                            <Pie data={eventDonut} dataKey="count" nameKey="event" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                            <Pie isAnimationActive={false} data={eventDonut} dataKey="count" nameKey="event" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
                               {eventDonut.map((entry, i) => <Cell key={i} fill={(entry as any).event === 'Other' ? CHART_OTHER : CHART_PALETTE[i % CHART_PALETTE.length]} />)}
                             </Pie>
                             <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
@@ -704,7 +704,7 @@ export function HooksPage() {
                             <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtMs(Number(v))} />
                             <YAxis type="category" dataKey="command" {...axisProps} width={90} tick={{ fontSize: 10 }} />
                             <Tooltip contentStyle={tooltipStyle} formatter={(v) => [fmtMs(Number(v)), 'p50 Latency']} />
-                            <Bar dataKey="p50Ms" fill={CHART_PALETTE[1]} name="p50 Latency" radius={[0, 2, 2, 0]} />
+                            <Bar isAnimationActive={false} dataKey="p50Ms" fill={CHART_PALETTE[1]} name="p50 Latency" radius={[0, 2, 2, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
                       ) : (
@@ -722,7 +722,7 @@ export function HooksPage() {
                             <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
                             <YAxis type="category" dataKey="command" {...axisProps} width={90} tick={{ fontSize: 10 }} />
                             <Tooltip contentStyle={tooltipStyle} formatter={(v) => [fmtNumber(Number(v)), 'Errors']} />
-                            <Bar dataKey="errors" fill={CHART_PALETTE[4]} name="Errors" radius={[0, 2, 2, 0]} />
+                            <Bar isAnimationActive={false} dataKey="errors" fill={CHART_PALETTE[4]} name="Errors" radius={[0, 2, 2, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
                       ) : (

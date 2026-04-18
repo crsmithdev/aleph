@@ -87,7 +87,7 @@ export function ObsControlBar({
   const rangeLabel = range === 'session' ? 'Sess' : range;
 
   return (
-    <div className="sticky top-0 z-10 h-14 bg-bg-primary flex items-center gap-2 mb-4">
+    <div className="sticky top-0 z-10 h-14 bg-bg-primary flex items-center gap-2 border-b border-border-primary">
       <div className="flex-1 min-w-0">{title}</div>
 
       {/* Left group: dataset | filters | options */}

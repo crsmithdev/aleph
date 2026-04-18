@@ -13,10 +13,17 @@ import * as threads from './services/threads.js';
 import * as findings from './services/findings.js';
 import * as steps from './services/steps.js';
 import * as plans from './services/plans.js';
+import * as concepts from './services/concepts.js';
+import * as sources from './services/sources.js';
+
+export interface SearchOptions {
+  synthesisChars: number;
+  displayChars: number;
+}
 
 export interface LLMProvider {
   complete(model: string, prompt: string, maxTokens: number): Promise<LLMResult>;
-  searchWeb(model: string, query: string): Promise<WebSearchResult>;
+  searchWeb(model: string, query: string, options?: SearchOptions): Promise<WebSearchResult>;
   embed?(text: string): Promise<number[]>;
 }
 
@@ -491,28 +498,34 @@ export class ResearchEngine {
     let synthesisResult = await this.synthesizeFinding(thread, searchResults, sessionId, config);
     if (!synthesisResult) return { finding: null, cost: 0 };
 
-    // Step 3b: Gap analysis — identify missing information and search for it
-    let allSearchResults = searchResults;
-    if (config.gap_analysis?.enabled && synthesisResult) {
-      const gapResults = await this.gapAnalysis(thread, searchResults, synthesisResult, config);
-      if (gapResults.length > 0) {
-        allSearchResults = [...searchResults, ...gapResults];
-        // Re-synthesize with all results combined
-        const augmented = await this.synthesizeFinding(thread, allSearchResults, sessionId, config);
-        if (augmented) Object.assign(synthesisResult, augmented);
-      }
-    }
-
     // Step 4: Check for duplicates
-    const isDuplicate = await this.checkDuplicate(sessionId, synthesisResult.summary, config);
+    const isDuplicate = await this.checkDuplicate(sessionId, thread.id, synthesisResult.summary, config);
     if (isDuplicate) {
       synthesisResult.novelty = Math.min(synthesisResult.novelty, 0.2);
     }
 
     // Step 4b: Detect gaps and evaluate/score follow-up questions
     const { accepted: followUpQuestions, analysis: followUpAnalysis } = await this.evaluateFollowUps(
-      thread, allSearchResults, synthesisResult, config
+      thread, searchResults, synthesisResult, config
     );
+    const lastFollowUpStep = steps.getLatestStepByLabel(this.sqlite, thread.id, 'evaluate follow-ups');
+    if (lastFollowUpStep) steps.updateStepMetadata(this.sqlite, lastFollowUpStep.id, {
+      decision: 'follow_up_eval',
+      accepted_count: followUpQuestions.length,
+      rejected_count: followUpAnalysis.candidates.filter((c: { accepted: boolean }) => !c.accepted).length,
+      retry_count: followUpAnalysis.retry_count,
+      similarity_threshold: followUpAnalysis.similarity_threshold,
+      candidates: followUpAnalysis.candidates.map((c: {
+        text: string; accepted: boolean; rejection_reason: string | null;
+        dedup_similarity: number; rank_score: number;
+      }) => ({
+        text: c.text.slice(0, 120),
+        accepted: c.accepted,
+        reason: c.rejection_reason,
+        sim: Math.round(c.dedup_similarity * 100) / 100,
+        rank: Math.round(c.rank_score * 100) / 100,
+      })),
+    });
 
     // Step 5: Store finding
     const finding = findings.createFinding(this.sqlite, {
@@ -531,6 +544,25 @@ export class ResearchEngine {
       follow_ups: followUpQuestions,
       follow_up_analysis: followUpAnalysis,
     });
+
+    // Step 5a: Register source URLs in the extraction queue so the worker
+    // can fetch full text independently of the synthesis path.
+    if (synthesisResult.sourceUrlMeta && synthesisResult.sourceUrlMeta.length > 0) {
+      try {
+        sources.registerSources(this.sqlite, sessionId, synthesisResult.sourceUrlMeta, 'pending');
+      } catch (err) {
+        console.warn(`[sources] register failed for finding ${finding.id}:`, err);
+      }
+    }
+
+    // Step 5b: Extract concepts from the finding and link them to this finding.
+    // Fire-and-forget is tempting, but doing it inline keeps the knowledge graph
+    // consistent with the document generator's next run.
+    try {
+      await this.extractConceptsForFinding(finding, thread, config);
+    } catch (err) {
+      console.warn(`[concepts] extraction failed for ${finding.id}:`, err);
+    }
 
     // Step 5b: Spawn verify thread for low-confidence findings (non-recursive)
     if (synthesisResult.confidence < 0.4 && thread.origin !== 'verify') {
@@ -613,6 +645,29 @@ export class ResearchEngine {
       }
     }
 
+    // Step 7: Spawn gap threads — identify knowledge gaps and queue them as high-priority threads.
+    // Runs after follow-ups so gap threads get a slight priority boost and don't compete with
+    // the current finding's follow-up questions for the same worker slots.
+    if (config.gap_analysis?.enabled) {
+      const gapQueries = await this.identifyGaps(thread, searchResults, synthesisResult, config);
+      for (const query of gapQueries) {
+        const gapThread = threads.createThread(this.sqlite, {
+          session_id: sessionId,
+          query,
+          short_query: placeholderShortQuery(query),
+          node_type: 'question',
+          origin: 'gap_analysis',
+          parent_thread_id: thread.id,
+          spawned_from_finding_id: finding.id,
+          priority: Math.min(1.0, (thread.priority ?? 0.5) + 0.15),
+          depth: thread.depth,       // same depth as parent — filling the same knowledge level
+          max_depth: thread.max_depth,
+          status: 'queued',
+        });
+        this.summarizeThreadAsync(gapThread.id, query, sessionId, config);
+      }
+    }
+
     const totalCost = synthesisResult.totalCost;
     return { finding, cost: totalCost };
   }
@@ -675,7 +730,7 @@ Return ONLY a JSON array of search query strings. No other text.`,
       thread.session_id,
       thread.id,
       config,
-      'formulate queries'
+      'formulate'
     );
 
     try {
@@ -689,6 +744,12 @@ Return ONLY a JSON array of search query strings. No other text.`,
         if (seen.has(lower) || searchedLower.has(lower)) return false;
         seen.add(lower);
         return true;
+      });
+      if (result.stepId) steps.updateStepMetadata(this.sqlite, result.stepId, {
+        decision: 'formulate_queries',
+        queries: deduped,
+        total_candidates: candidates.length,
+        skipped_duplicates: candidates.length - deduped.length,
       });
       if (deduped.length > 0) return deduped;
       // All LLM suggestions already searched — only fall back to thread.query if not yet searched
@@ -709,7 +770,10 @@ Return ONLY a JSON array of search query strings. No other text.`,
     const results = await Promise.all(queries.map(async (query) => {
       const startTime = Date.now();
       try {
-        const result = await this.provider.searchWeb(config.model, query);
+        const result = await this.provider.searchWeb(config.model, query, {
+          synthesisChars: config.snippet_synthesis_chars,
+          displayChars: config.snippet_display_chars,
+        });
         const cost = calculateCost(result.model, result.promptTokens, result.completionTokens);
 
         steps.createStep(this.sqlite, {
@@ -764,12 +828,12 @@ Return ONLY a JSON array of search query strings. No other text.`,
     return results.filter((r): r is { query: string; results: string; sourceTexts: string[]; sourceUrls: string[]; sourceUrlMeta: Array<{ url: string; title: string; snippet: string }> } => r !== null);
   }
 
-  private async gapAnalysis(
+  private async identifyGaps(
     thread: ResearchThread,
-    initialSearchResults: Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[]; sourceUrlMeta: Array<{ url: string; title: string; snippet: string }> }>,
-    draftFinding: { content: string; summary: string },
+    searchResults: Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[] }>,
+    finding: { content: string; summary: string },
     config: SessionConfig
-  ): Promise<Array<{ query: string; results: string; sourceTexts: string[]; sourceUrls: string[]; sourceUrlMeta: Array<{ url: string; title: string; snippet: string }> }>> {
+  ): Promise<string[]> {
     if (!config.gap_analysis?.enabled) return [];
 
     const result = await this.callLLM(
@@ -779,7 +843,7 @@ Return ONLY a JSON array of search query strings. No other text.`,
 Research question: "${thread.query}"
 
 Draft finding:
-${draftFinding.content}
+${finding.content}
 
 Identify specific gaps. What important facts, data points, or aspects are still unclear or missing that would make this finding more complete?
 
@@ -803,12 +867,15 @@ If has_gaps is true, gap_queries must contain ${config.gap_analysis.max_gap_sear
       if (parsed.has_gaps && Array.isArray(parsed.gap_queries)) {
         gapQueries = parsed.gap_queries.slice(0, config.gap_analysis.max_gap_searches ?? 2);
       }
+      if (result.stepId) steps.updateStepMetadata(this.sqlite, result.stepId, {
+        decision: 'gap_analysis', has_gaps: gapQueries.length > 0,
+        gap_count: gapQueries.length, gap_max: config.gap_analysis.max_gap_searches ?? 2, gap_queries: gapQueries
+      });
     } catch {
       return [];
     }
 
-    if (gapQueries.length === 0) return [];
-    return this.executeSearches(gapQueries, thread.session_id, thread.id, config, thread.fetch_source_text ?? null);
+    return gapQueries;
   }
 
   private async synthesizeFinding(
@@ -865,6 +932,13 @@ Return ONLY valid JSON. No markdown fences.`,
       const parsed = JSON.parse(text);
       // Collect all sourceUrlMeta from search results
       const allMeta = searchResults.flatMap(r => r.sourceUrlMeta ?? []);
+      if (result.stepId) steps.updateStepMetadata(this.sqlite, result.stepId, {
+        decision: 'synthesis',
+        confidence: parsed.confidence ?? 0.5,
+        novelty: parsed.novelty ?? 0.5,
+        actionability: parsed.actionability ?? 0.5,
+        tags: parsed.tags ?? []
+      });
       return {
         content: parsed.content ?? '',
         summary: parsed.summary ?? '',
@@ -1026,7 +1100,7 @@ Return ONLY valid JSON. No markdown fences.`,
         candidates.push({
           text: question,
           quality_score,
-          jaccard_similarity: 1.0,
+          dedup_similarity: 1.0,
           embedding_similarity: null,
           llm_similarity: null,
           similarity_method: 'jaccard',
@@ -1062,7 +1136,7 @@ Return ONLY valid JSON. No markdown fences.`,
       const candidate: FollowUpCandidate = {
         text: question,
         quality_score,
-        jaccard_similarity: maxSimilarity,
+        dedup_similarity: maxSimilarity,
         embedding_similarity: embeddingSim,
         llm_similarity: llmSim,
         similarity_method: usedMethod,
@@ -1154,7 +1228,7 @@ Return ONLY a JSON array of question strings. No other text.`;
     }
   }
 
-  private async checkDuplicate(sessionId: string, newSummary: string, config: SessionConfig): Promise<boolean> {
+  private async checkDuplicate(sessionId: string, threadId: string, newSummary: string, config: SessionConfig): Promise<boolean> {
     const existing = findings.getRecentFindings(this.sqlite, sessionId, 50);
     if (existing.length === 0) return false;
 
@@ -1171,11 +1245,18 @@ Existing findings:
 
 Respond with ONLY "true" if this is a duplicate or near-duplicate, "false" otherwise.`,
       sessionId,
-      '',
-      config
+      threadId,
+      config,
+      'dedup check'
     );
 
-    return result.text.trim().toLowerCase() === 'true';
+    const isDuplicate = result.text.trim().toLowerCase() === 'true';
+    if (result.stepId) steps.updateStepMetadata(this.sqlite, result.stepId, {
+      decision: 'dedup', is_duplicate: isDuplicate, existing_count: existing.length,
+      new_summary: newSummary.slice(0, 120),
+      compared_to: existing.slice(0, 5).map(f => f.summary.slice(0, 100)),
+    });
+    return isDuplicate;
   }
 
   private async maybePerturbate(
@@ -1451,6 +1532,83 @@ Ordered from most to least important. Each rationale should explain relevance to
     }
   }
 
+  /** Extract concepts from a finding, upsert them into the session's knowledge graph,
+   *  and attach them (and any relations the LLM returns) to the finding. */
+  private async extractConceptsForFinding(
+    finding: ResearchFinding,
+    thread: ResearchThread,
+    config: SessionConfig,
+    extraSources: Array<{ url: string; text: string }> = [],
+  ): Promise<void> {
+    const sessionId = finding.session_id;
+    const extraBlock = extraSources.length > 0
+      ? `\n\nFull source text (newly extracted — prefer these for grounding concrete key_facts):\n${extraSources
+          .map(s => `--- ${s.url} ---\n${s.text.slice(0, 4000)}`)
+          .join('\n\n')}`
+      : '';
+    const prompt = `Extract the distinct concepts this finding is about. A concept is a noun phrase that names a thing, idea, practice, organism, place, person, technique, or principle — something that could appear as a section title in an encyclopedia.
+
+Return ONLY JSON of the form:
+{
+  "concepts": [
+    { "name": "Canonical Name", "aliases": ["alt name", "abbrev"], "summary": "one-sentence definition grounded in this finding", "key_facts": ["concrete fact 1", "concrete fact 2"] }
+  ],
+  "relations": [
+    { "from": "Canonical Name", "to": "Other Canonical Name", "relation": "short lowercase verb phrase (uses, contrasts_with, depends_on, part_of, example_of)" }
+  ]
+}
+
+Guidelines:
+- 1 to 5 concepts. Pick the most load-bearing nouns only — not every mentioned term.
+- Concept names: title-case, no quotes, no trailing punctuation. Prefer the most canonical form (e.g. "Mycorrhizal Fungi" not "mycorrhizal fungi partners").
+- summary: one sentence, ≤ 160 chars, based on this finding alone.
+- key_facts: 0–4 short declarative sentences. Each must be grounded in the finding, not general knowledge.
+- relations: optional; only if the finding itself asserts the relation. Skip otherwise.
+- Do NOT invent concepts that aren't present. Do NOT include the research session title unless the finding explicitly elaborates on it.
+
+Thread context: "${thread.query}"
+
+Finding:
+${finding.content}${extraBlock}
+
+Return JSON only, no preamble.`;
+
+    const result = await this.callLLM(
+      config.model,
+      prompt,
+      sessionId,
+      thread.id,
+      config,
+      'extract concepts',
+    );
+
+    const parsed = parseConceptExtraction(result.text);
+    if (!parsed) return;
+
+    const nameToId = new Map<string, string>();
+    for (const c of parsed.concepts) {
+      if (!c.name || typeof c.name !== 'string') continue;
+      const concept = concepts.upsertConcept(this.sqlite, sessionId, {
+        canonical_name: c.name,
+        aliases: Array.isArray(c.aliases) ? c.aliases.filter((a: unknown) => typeof a === 'string') as string[] : [],
+        summary: typeof c.summary === 'string' ? c.summary : '',
+        key_facts: Array.isArray(c.key_facts) ? c.key_facts.filter((f: unknown) => typeof f === 'string') as string[] : [],
+      });
+      concepts.linkFindingToConcept(this.sqlite, sessionId, finding.id, concept.id);
+      nameToId.set(c.name.trim().toLowerCase(), concept.id);
+    }
+
+    for (const r of parsed.relations) {
+      if (!r.from || !r.to || !r.relation) continue;
+      const fromId = nameToId.get(r.from.trim().toLowerCase())
+        ?? concepts.findConceptByName(this.sqlite, sessionId, r.from)?.id;
+      const toId = nameToId.get(r.to.trim().toLowerCase())
+        ?? concepts.findConceptByName(this.sqlite, sessionId, r.to)?.id;
+      if (!fromId || !toId) continue;
+      concepts.linkConcepts(this.sqlite, sessionId, fromId, toId, r.relation, [finding.id]);
+    }
+  }
+
   private async updateSummary(sessionId: string): Promise<void> {
     const session = sessions.getQuery(this.sqlite, sessionId)!;
     const recentFindings = findings.getRecentFindings(this.sqlite, sessionId, 20);
@@ -1482,23 +1640,131 @@ Write a concise, informative summary of what has been discovered so far, key the
     sessions.updateQuery(this.sqlite, sessionId, { summary: result.text });
   }
 
-  /** Generate a structured article from all findings.
-   *  Called periodically alongside updateSummary. */
+  /** Generate a structured article from the session's concepts.
+   *  Walks concepts ordered by finding count, generating one section per concept
+   *  with a per-section token budget from config.llm_max_output_tokens.
+   *  Falls back to a single-pass article when no concepts exist yet. */
   async updateDocument(sessionId: string): Promise<void> {
     const session = sessions.getQuery(this.sqlite, sessionId)!;
     const allFindings = findings.listFindings(this.sqlite, sessionId);
+    if (allFindings.length < 3) return;
+
+    const conceptStats = concepts.listConcepts(this.sqlite, sessionId);
+
+    // Cap the per-concept doc at 15 sections to bound cost. Rare topics get folded
+    // into an "Other" section (simple concat of their finding summaries).
+    const MAX_CONCEPT_SECTIONS = 15;
+    const topConcepts = conceptStats.filter(c => c.finding_count > 0).slice(0, MAX_CONCEPT_SECTIONS);
+
+    if (topConcepts.length === 0) {
+      await this.generateDocumentLegacy(sessionId, session, allFindings);
+      return;
+    }
+
+    // Build the global citation index once so every section uses the same numbering.
+    const citationIndex = buildCitationIndex(allFindings);
+
+    const findingMap = new Map(allFindings.map(f => [f.id, f]));
+    const sectionBodies: string[] = [];
+
+    for (const c of topConcepts) {
+      const findingIds = concepts.listFindingsForConcept(this.sqlite, c.id);
+      const conceptFindings = findingIds.map(id => findingMap.get(id)).filter((f): f is ResearchFinding => !!f);
+      if (conceptFindings.length === 0) continue;
+
+      const material = conceptFindings.map(f => f.content).join('\n\n---\n\n');
+      const conceptSources = concepts.getSourcesForConcept(this.sqlite, c.id);
+      const citationLines = conceptSources
+        .map(s => `[${citationIndex.get(s.url)}] ${s.title} — ${s.url}`)
+        .filter(line => !line.startsWith('[undefined]'));
+
+      const prompt = `You are writing one section of an encyclopedia article about "${session.seed_query}".
+
+This section is about: ${c.canonical_name}${c.aliases.length ? ` (aka ${c.aliases.slice(0, 3).join(', ')})` : ''}
+
+Write the section as flowing prose:
+- Start with "## ${c.canonical_name}" as the heading. Do not repeat the heading.
+- Do NOT include a lead section or references section — those are composed elsewhere.
+- Write 2–4 paragraphs. Use ### subsections only if the finding material genuinely covers multiple aspects.
+- Cite sources using the numeric markers already assigned below, e.g. "[3]" — do not renumber.
+- Do not add confidence scores, tags, or research-process artifacts.
+- Encyclopedic tone: neutral, informative, specific.
+
+Concept summary (from prior extractions): ${c.summary || '(none yet)'}
+Key facts (do not copy verbatim; weave in as prose): ${c.key_facts.slice(0, 8).join(' | ') || '(none)'}
+
+Source findings (${conceptFindings.length}):
+${material}
+
+Citations available for this section:
+${citationLines.length ? citationLines.join('\n') : '(no sources attached)'}
+
+Write only the section, starting with "## ${c.canonical_name}".`;
+
+      try {
+        const result = await this.callLLM(
+          session.config.model,
+          prompt,
+          sessionId,
+          '',
+          session.config,
+          `generate section: ${c.canonical_name}`,
+        );
+        sectionBodies.push(result.text.trim());
+      } catch (err) {
+        console.warn(`[doc] section failed for "${c.canonical_name}":`, err);
+      }
+    }
+
+    if (sectionBodies.length === 0) return;
+
+    const lead = await this.generateLeadSection(sessionId, session.seed_query, topConcepts, session.config);
+    const referencesSection = buildReferencesSection(citationIndex, allFindings);
+    const doc = [lead, ...sectionBodies, referencesSection].filter(Boolean).join('\n\n');
+
+    sessions.updateQuery(this.sqlite, sessionId, { document: doc });
+  }
+
+  private async generateLeadSection(
+    sessionId: string,
+    seedQuery: string,
+    topConcepts: ConceptSummary[],
+    config: SessionConfig,
+  ): Promise<string> {
+    const bullets = topConcepts.slice(0, 10)
+      .map(c => `- ${c.canonical_name}: ${c.summary || '(no summary)'}`)
+      .join('\n');
+
+    const result = await this.callLLM(
+      config.model,
+      `Write a 2-3 paragraph lead section for an encyclopedia article about: "${seedQuery}"
+
+The article's body covers these concepts (for orientation only — do not enumerate them):
+${bullets}
+
+Write only the lead section in flowing prose. Do not include a heading — the lead has no "##" line. Do not cite specific sources; the body sections handle citations. Do not mention "this article" or meta-commentary.`,
+      sessionId,
+      '',
+      config,
+      'generate lead section',
+    );
+    return result.text.trim();
+  }
+
+  /** Fallback used only when no concepts have been extracted yet.
+   *  Produces the old-style single-pass article. */
+  private async generateDocumentLegacy(
+    sessionId: string,
+    session: ResearchQuery,
+    allFindings: ResearchFinding[],
+  ): Promise<void> {
     const allThreads = threads.listThreads(this.sqlite, sessionId);
-
-    if (allFindings.length < 3) return; // not enough material
-
-    // Build source material: findings grouped with thread context
     const threadMap = new Map(allThreads.map(t => [t.id, t]));
     const material = allFindings.map(f => {
       const thread = threadMap.get(f.thread_id);
       return `[Thread: ${thread?.short_query ?? thread?.query ?? 'unknown'}]\n${f.content}`;
     }).join('\n\n---\n\n');
 
-    // Collect all unique sources
     const allUrls = new Map<string, { url: string; title: string }>();
     for (const f of allFindings) {
       for (const url of f.source_urls) {
@@ -1567,14 +1833,15 @@ Write the full article in markdown.`,
     threadId: string,
     config: SessionConfig,
     label?: string
-  ): Promise<LLMResult & { cost: number }> {
+  ): Promise<LLMResult & { cost: number; stepId: string | null }> {
     const startTime = Date.now();
-    const result = await this.provider.complete(model, prompt, 8192);
+    const result = await this.provider.complete(model, prompt, config.llm_max_output_tokens);
 
     const cost = calculateCost(result.model, result.promptTokens, result.completionTokens);
 
+    let stepId: string | null = null;
     if (sessionId && threadId) {
-      steps.createStep(this.sqlite, {
+      const step = steps.createStep(this.sqlite, {
         thread_id: threadId,
         session_id: sessionId,
         model: result.model,
@@ -1584,8 +1851,106 @@ Write the full article in markdown.`,
         label: label ?? null,
         duration_ms: Date.now() - startTime,
       });
+      stepId = step.id;
     }
 
-    return { ...result, cost };
+    return { ...result, cost, stepId };
+  }
+
+  /** After a source is extracted, re-run concept extraction for each finding that
+   *  cites the URL — now with the newly-extracted full text as additional context.
+   *  Caller is responsible for only invoking this on successful extractions. */
+  async relinkConceptsForSource(source: import('./types.js').Source): Promise<void> {
+    if (!source.extracted_text) return;
+    const citingIds = sources.findingsCitingSource(this.sqlite, source);
+    if (citingIds.length === 0) return;
+
+    const session = sessions.getQuery(this.sqlite, source.session_id);
+    if (!session) return;
+
+    for (const fid of citingIds) {
+      const finding = findings.getFinding(this.sqlite, fid);
+      if (!finding) continue;
+      const thread = threads.getThread(this.sqlite, finding.thread_id);
+      if (!thread) continue;
+      try {
+        await this.extractConceptsForFinding(finding, thread, session.config, [
+          { url: source.url, text: source.extracted_text },
+        ]);
+      } catch (err) {
+        console.warn(`[concepts] relink failed for finding ${fid} / source ${source.id}:`, err);
+      }
+    }
+  }
+}
+
+interface ConceptSummary {
+  id: string;
+  canonical_name: string;
+  aliases: string[];
+  summary: string;
+  key_facts: string[];
+  finding_count: number;
+}
+
+/** Build { url → citation_number } across all findings, in stable insertion order. */
+function buildCitationIndex(allFindings: ResearchFinding[]): Map<string, number> {
+  const idx = new Map<string, number>();
+  let n = 1;
+  for (const f of allFindings) {
+    for (const url of f.source_urls) {
+      if (!idx.has(url)) idx.set(url, n++);
+    }
+  }
+  return idx;
+}
+
+function buildReferencesSection(citationIndex: Map<string, number>, allFindings: ResearchFinding[]): string {
+  if (citationIndex.size === 0) return '';
+
+  const titleByUrl = new Map<string, string>();
+  for (const f of allFindings) {
+    for (const m of f.source_url_meta ?? []) {
+      if (!titleByUrl.has(m.url)) titleByUrl.set(m.url, m.title || m.url);
+    }
+  }
+
+  const lines = [...citationIndex.entries()]
+    .sort((a, b) => a[1] - b[1])
+    .map(([url, n]) => `${n}. [${titleByUrl.get(url) ?? url}](${url})`);
+
+  return `## References\n\n${lines.join('\n')}`;
+}
+
+interface ConceptExtraction {
+  concepts: Array<{ name: string; aliases?: string[]; summary?: string; key_facts?: string[] }>;
+  relations: Array<{ from: string; to: string; relation: string }>;
+}
+
+/** Parse the JSON returned by the concept extraction LLM call.
+ *  Tolerant of code fences and preamble — finds the first balanced JSON object. */
+export function parseConceptExtraction(text: string): ConceptExtraction | null {
+  if (!text) return null;
+  const stripped = text.replace(/^\s*```(?:json)?/i, '').replace(/```\s*$/, '').trim();
+
+  // Find the first balanced {...}
+  let start = stripped.indexOf('{');
+  if (start < 0) return null;
+  let depth = 0;
+  let end = -1;
+  for (let i = start; i < stripped.length; i++) {
+    const ch = stripped[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') { depth--; if (depth === 0) { end = i; break; } }
+  }
+  if (end < 0) return null;
+
+  try {
+    const obj = JSON.parse(stripped.slice(start, end + 1)) as Partial<ConceptExtraction>;
+    const conceptsArr = Array.isArray(obj.concepts) ? obj.concepts : [];
+    const relationsArr = Array.isArray(obj.relations) ? obj.relations : [];
+    return { concepts: conceptsArr as ConceptExtraction['concepts'], relations: relationsArr as ConceptExtraction['relations'] };
+  } catch {
+    return null;
   }
 }

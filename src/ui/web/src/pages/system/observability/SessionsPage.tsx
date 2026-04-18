@@ -84,7 +84,6 @@ type SessionRow = {
   firstUserMessage?: string;
   intent?: string;
   outcome?: string;
-  sessionNotes?: string[];
 };
 
 export function SessionsPage() {
@@ -178,15 +177,28 @@ export function SessionsPage() {
       render: (row) => (
         <div className="flex flex-col gap-0.5 min-w-0">
           {row.parentSessionId && <span className="text-text-muted text-xs">↳ subagent</span>}
-          {row.intent ? (
-            <span className="text-text-primary text-base truncate" title={row.intent}>
-              {row.intent.length > 100 ? row.intent.slice(0, 100) + '…' : row.intent}
-            </span>
-          ) : (row.firstUserMessage && !row.firstUserMessage.startsWith('Caveat:') && (
-            <span className="text-text-primary text-base truncate">
-              {(() => { const t = stripMarkdown(row.firstUserMessage!); return t.length > 100 ? t.slice(0, 100) + '…' : t; })()}
-            </span>
-          ))}
+          {(() => {
+            const SKIP_INTENTS = new Set(['unknown task', '[request interrupted by user]']);
+            const meaningfulIntent = row.intent
+              && !SKIP_INTENTS.has(row.intent.toLowerCase())
+              && !/^#+ /.test(row.intent.trimStart())
+              ? row.intent : undefined;
+            if (meaningfulIntent) {
+              return (
+                <span className="text-text-primary text-base truncate" title={meaningfulIntent}>
+                  {meaningfulIntent.length > 100 ? meaningfulIntent.slice(0, 100) + '…' : meaningfulIntent}
+                </span>
+              );
+            }
+            if (row.firstUserMessage && !row.firstUserMessage.startsWith('Caveat:')) {
+              return (
+                <span className="text-text-primary text-base truncate">
+                  {(() => { const t = stripMarkdown(row.firstUserMessage!); return t.length > 100 ? t.slice(0, 100) + '…' : t; })()}
+                </span>
+              );
+            }
+            return null;
+          })()}
           {row.outcome && (
             <span className="text-text-muted text-xs truncate" title={row.outcome}>
               → {row.outcome.length > 90 ? row.outcome.slice(0, 90) + '…' : row.outcome}
@@ -306,7 +318,7 @@ export function SessionsPage() {
         onDisplayNChange={setDisplayN}
       />
 
-      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4 !mt-0">
         <StatCard label="Sessions" value={fmtNumber(data.sessions.length)} />
         <StatCard label="Avg Duration" value={fmtDuration(data.avgDurationMs)} />
         <StatCard label="Messages" value={fmtNumber(data.totalUserMessages + data.totalAssistantMessages)} />
@@ -350,8 +362,8 @@ export function SessionsPage() {
                       <XAxis dataKey="date" {...xAxisDateProps} />
                       <YAxis {...axisProps} />
                       <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                      <Bar dataKey="foregroundCount" stackId="d" fill={CHART_PALETTE[0]} radius={[0, 0, 0, 0]} name="Foreground" />
-                      <Bar dataKey="backgroundCount" stackId="d" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Background" />
+                      <Bar isAnimationActive={false} dataKey="foregroundCount" stackId="d" fill={CHART_PALETTE[0]} radius={[0, 0, 0, 0]} name="Foreground" />
+                      <Bar isAnimationActive={false} dataKey="backgroundCount" stackId="d" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Background" />
                     </BarChart>
                   ) : (
                     <ComposedChart data={subagents.data?.byDay ?? []}>
@@ -359,8 +371,8 @@ export function SessionsPage() {
                       <XAxis dataKey="date" {...xAxisDateProps} />
                       <YAxis {...axisProps} />
                       <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                      <Area type={curveCardinal.tension(0.5) as any} dataKey="foregroundCount" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Foreground" />
-                      <Area type={curveCardinal.tension(0.5) as any} dataKey="backgroundCount" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Background" />
+                      <Area isAnimationActive={false} type={curveCardinal.tension(0.5) as any} dataKey="foregroundCount" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Foreground" />
+                      <Area isAnimationActive={false} type={curveCardinal.tension(0.5) as any} dataKey="backgroundCount" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Background" />
                     </ComposedChart>
                   )
                 ) : dataset === 'cost' ? (
@@ -370,7 +382,7 @@ export function SessionsPage() {
                       <XAxis dataKey="date" {...xAxisDateProps} />
                       <YAxis {...axisProps} tickFormatter={(v: number) => `$${v.toFixed(2)}`} />
                       <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v) => [fmtCurrency(Number(v)), 'Cost']} />
-                      <Bar dataKey="cost" fill={CHART_PALETTE[3]} radius={[2, 2, 0, 0]} name="Cost" />
+                      <Bar isAnimationActive={false} dataKey="cost" fill={CHART_PALETTE[3]} radius={[2, 2, 0, 0]} name="Cost" />
                     </BarChart>
                   ) : (
                     <ComposedChart data={data.byDay}>
@@ -378,7 +390,7 @@ export function SessionsPage() {
                       <XAxis dataKey="date" {...xAxisDateProps} />
                       <YAxis {...axisProps} tickFormatter={(v: number) => `$${v.toFixed(2)}`} />
                       <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v) => [fmtCurrency(Number(v)), 'Cost']} />
-                      <Area type={curveCardinal.tension(0.5) as any} dataKey="cost" stroke={CHART_PALETTE[3]} fill={CHART_PALETTE[3]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Cost" />
+                      <Area isAnimationActive={false} type={curveCardinal.tension(0.5) as any} dataKey="cost" stroke={CHART_PALETTE[3]} fill={CHART_PALETTE[3]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Cost" />
                     </ComposedChart>
                   )
                 ) : dataset === 'churn' ? (
@@ -388,8 +400,8 @@ export function SessionsPage() {
                       <XAxis dataKey="date" {...xAxisDateProps} />
                       <YAxis {...axisProps} />
                       <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
-                      <Bar dataKey="linesAdded" stackId="churn" fill={CHART_PALETTE[2]} radius={[0, 0, 0, 0]} name="Added" />
-                      <Bar dataKey="linesRemoved" stackId="churn" fill={CHART_PALETTE[4]} radius={[2, 2, 0, 0]} name="Removed" />
+                      <Bar isAnimationActive={false} dataKey="linesAdded" stackId="churn" fill={CHART_PALETTE[2]} radius={[0, 0, 0, 0]} name="Added" />
+                      <Bar isAnimationActive={false} dataKey="linesRemoved" stackId="churn" fill={CHART_PALETTE[4]} radius={[2, 2, 0, 0]} name="Removed" />
                     </BarChart>
                   ) : (
                     <ComposedChart data={data.byDay}>
@@ -397,8 +409,8 @@ export function SessionsPage() {
                       <XAxis dataKey="date" {...xAxisDateProps} />
                       <YAxis {...axisProps} />
                       <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
-                      <Area type={curveCardinal.tension(0.5) as any} dataKey="linesAdded" stackId="churn" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Added" />
-                      <Area type={curveCardinal.tension(0.5) as any} dataKey="linesRemoved" stackId="churn" stroke={CHART_PALETTE[4]} fill={CHART_PALETTE[4]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Removed" />
+                      <Area isAnimationActive={false} type={curveCardinal.tension(0.5) as any} dataKey="linesAdded" stackId="churn" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Added" />
+                      <Area isAnimationActive={false} type={curveCardinal.tension(0.5) as any} dataKey="linesRemoved" stackId="churn" stroke={CHART_PALETTE[4]} fill={CHART_PALETTE[4]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Removed" />
                     </ComposedChart>
                   )
                 ) : dataset === 'by-project' ? (
@@ -409,7 +421,7 @@ export function SessionsPage() {
                       <YAxis {...axisProps} />
                       <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
                       {topProjectNames.map((name, i) => (
-                        <Bar key={name} dataKey={name} name={fmtLegendLabel(name)} stackId="a" fill={chartColor(name, i)} radius={i === topProjectNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
+                        <Bar isAnimationActive={false} key={name} dataKey={name} name={fmtLegendLabel(name)} stackId="a" fill={chartColor(name, i)} radius={i === topProjectNames.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]} />
                       ))}
                     </BarChart>
                   ) : (
@@ -419,7 +431,7 @@ export function SessionsPage() {
                       <YAxis {...axisProps} />
                       <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
                       {topProjectNames.map((name, i) => (
-                        <Area key={name} type={curveCardinal.tension(0.5) as any} dataKey={name} name={fmtLegendLabel(name)} stackId="a" stroke={chartColor(name, i)} fill={chartColor(name, i)} fillOpacity={0.15} strokeWidth={2} dot={false} />
+                        <Area isAnimationActive={false} key={name} type={curveCardinal.tension(0.5) as any} dataKey={name} name={fmtLegendLabel(name)} stackId="a" stroke={chartColor(name, i)} fill={chartColor(name, i)} fillOpacity={0.15} strokeWidth={2} dot={false} />
                       ))}
                     </ComposedChart>
                   )
@@ -430,7 +442,7 @@ export function SessionsPage() {
                       <XAxis dataKey="date" {...xAxisDateProps} />
                       <YAxis {...axisProps} />
                       <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                      <Bar dataKey="commits" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Commits" />
+                      <Bar isAnimationActive={false} dataKey="commits" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Commits" />
                     </BarChart>
                   ) : (
                     <ComposedChart data={data.byDay}>
@@ -438,7 +450,7 @@ export function SessionsPage() {
                       <XAxis dataKey="date" {...xAxisDateProps} />
                       <YAxis {...axisProps} />
                       <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                      <Area type={curveCardinal.tension(0.5) as any} dataKey="commits" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Commits" />
+                      <Area isAnimationActive={false} type={curveCardinal.tension(0.5) as any} dataKey="commits" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Commits" />
                     </ComposedChart>
                   )
                 ) : chartType === 'bar' ? (
@@ -448,9 +460,9 @@ export function SessionsPage() {
                     <YAxis yAxisId="left" {...axisProps} domain={[0, maxMessages]} />
                     <YAxis yAxisId="right" orientation="right" {...axisProps} domain={[0, maxSessions]} />
                     <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                    <Bar yAxisId="left" dataKey="userMessages" stackId="msgs" fill={CHART_PALETTE[2]} radius={[0, 0, 0, 0]} name="User Msgs" />
-                    <Bar yAxisId="left" dataKey="assistantMessages" stackId="msgs" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Assistant Msgs" />
-                    <Bar yAxisId="right" dataKey="sessions" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Sessions" />
+                    <Bar isAnimationActive={false} yAxisId="left" dataKey="userMessages" stackId="msgs" fill={CHART_PALETTE[2]} radius={[0, 0, 0, 0]} name="User Msgs" />
+                    <Bar isAnimationActive={false} yAxisId="left" dataKey="assistantMessages" stackId="msgs" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Assistant Msgs" />
+                    <Bar isAnimationActive={false} yAxisId="right" dataKey="sessions" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Sessions" />
                   </ComposedChart>
                 ) : (
                   <ComposedChart data={data.byDay}>
@@ -459,9 +471,9 @@ export function SessionsPage() {
                     <YAxis yAxisId="left" {...axisProps} domain={[0, maxMessages]} />
                     <YAxis yAxisId="right" orientation="right" {...axisProps} domain={[0, maxSessions]} />
                     <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                    <Area yAxisId="left" type={curveCardinal.tension(0.5) as any} dataKey="userMessages" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.15} strokeWidth={2} dot={false} name="User Msgs" />
-                    <Area yAxisId="left" type={curveCardinal.tension(0.5) as any} dataKey="assistantMessages" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Assistant Msgs" />
-                    <Area yAxisId="right" type={curveCardinal.tension(0.5) as any} dataKey="sessions" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Sessions" />
+                    <Area isAnimationActive={false} yAxisId="left" type={curveCardinal.tension(0.5) as any} dataKey="userMessages" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.15} strokeWidth={2} dot={false} name="User Msgs" />
+                    <Area isAnimationActive={false} yAxisId="left" type={curveCardinal.tension(0.5) as any} dataKey="assistantMessages" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Assistant Msgs" />
+                    <Area isAnimationActive={false} yAxisId="right" type={curveCardinal.tension(0.5) as any} dataKey="sessions" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Sessions" />
                   </ComposedChart>
                 )}
               </ResponsiveContainer>
@@ -500,7 +512,7 @@ export function SessionsPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     {distChartType === 'donut' ? (
                       <PieChart>
-                        <Pie data={items} dataKey="sessions" nameKey="project" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                        <Pie isAnimationActive={false} data={items} dataKey="sessions" nameKey="project" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
                           {items.map((entry: any, i: number) => <Cell key={i} fill={entry.project === 'Other' ? CHART_OTHER : CHART_PALETTE[i % CHART_PALETTE.length]} />)}
                         </Pie>
                         <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
@@ -511,7 +523,7 @@ export function SessionsPage() {
                         <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
                         <YAxis type="category" dataKey="project" {...axisProps} width={80} tick={{ fontSize: 10 }} tickFormatter={(v: string) => fmtLegendLabel(v)} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
-                        <Bar dataKey="sessions" name="Sessions" radius={[0, 2, 2, 0]}>
+                        <Bar isAnimationActive={false} dataKey="sessions" name="Sessions" radius={[0, 2, 2, 0]}>
                           {items.map((entry: any, i: number) => <Cell key={i} fill={entry.project === 'Other' ? CHART_OTHER : CHART_PALETTE[i % CHART_PALETTE.length]} />)}
                         </Bar>
                       </BarChart>
@@ -529,7 +541,7 @@ export function SessionsPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     {distChartType === 'donut' ? (
                       <PieChart>
-                        <Pie data={items} dataKey="count" nameKey="subagentType" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                        <Pie isAnimationActive={false} data={items} dataKey="count" nameKey="subagentType" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
                           {items.map((entry: any, i: number) => <Cell key={i} fill={entry.subagentType === 'Other' ? CHART_OTHER : CHART_PALETTE[i % CHART_PALETTE.length]} />)}
                         </Pie>
                         <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
@@ -540,7 +552,7 @@ export function SessionsPage() {
                         <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
                         <YAxis type="category" dataKey="subagentType" {...axisProps} width={80} tick={{ fontSize: 10 }} tickFormatter={(v: string) => fmtLegendLabel(v)} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), fmtLegendLabel(String(n))]} />
-                        <Bar dataKey="count" name="Count" radius={[0, 2, 2, 0]}>
+                        <Bar isAnimationActive={false} dataKey="count" name="Count" radius={[0, 2, 2, 0]}>
                           {items.map((entry: any, i: number) => <Cell key={i} fill={entry.subagentType === 'Other' ? CHART_OTHER : CHART_PALETTE[i % CHART_PALETTE.length]} />)}
                         </Bar>
                       </BarChart>
@@ -558,7 +570,7 @@ export function SessionsPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     {distChartType === 'donut' ? (
                       <PieChart>
-                        <Pie data={items} dataKey="usd" nameKey="model" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                        <Pie isAnimationActive={false} data={items} dataKey="usd" nameKey="model" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
                           {items.map((entry: any, i: number) => <Cell key={i} fill={entry.model === 'Other' ? CHART_OTHER : CHART_PALETTE[i % CHART_PALETTE.length]} />)}
                         </Pie>
                         <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtCurrency(Number(v)), formatModelName(String(n))]} />
@@ -569,7 +581,7 @@ export function SessionsPage() {
                         <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtCurrency(Number(v))} />
                         <YAxis type="category" dataKey="model" {...axisProps} width={80} tick={{ fontSize: 10 }} tickFormatter={(v: string) => formatModelName(v)} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtCurrency(Number(v)), formatModelName(String(n))]} />
-                        <Bar dataKey="usd" name="Cost" radius={[0, 2, 2, 0]}>
+                        <Bar isAnimationActive={false} dataKey="usd" name="Cost" radius={[0, 2, 2, 0]}>
                           {items.map((entry: any, i: number) => <Cell key={i} fill={entry.model === 'Other' ? CHART_OTHER : CHART_PALETTE[i % CHART_PALETTE.length]} />)}
                         </Bar>
                       </BarChart>
@@ -596,8 +608,8 @@ export function SessionsPage() {
                       <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
                       <YAxis type="category" dataKey="sessionId" {...axisProps} width={60} tick={{ fontSize: 10 }} tickFormatter={(v: string) => v.slice(0, 8)} />
                       <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
-                      <Bar dataKey="linesAdded" stackId="a" fill={CHART_PALETTE[2]} name="Added" radius={[0, 0, 0, 0]} />
-                      <Bar dataKey="linesRemoved" stackId="a" fill={CHART_PALETTE[4]} name="Removed" radius={[0, 2, 2, 0]} />
+                      <Bar isAnimationActive={false} dataKey="linesAdded" stackId="a" fill={CHART_PALETTE[2]} name="Added" radius={[0, 0, 0, 0]} />
+                      <Bar isAnimationActive={false} dataKey="linesRemoved" stackId="a" fill={CHART_PALETTE[4]} name="Removed" radius={[0, 2, 2, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -620,7 +632,7 @@ export function SessionsPage() {
                       <XAxis type="number" {...axisProps} />
                       <YAxis type="category" dataKey="sessionId" {...axisProps} width={60} tick={{ fontSize: 10 }} tickFormatter={(v: string) => v.slice(0, 8)} />
                       <Tooltip contentStyle={tooltipStyle} formatter={(v) => [fmtNumber(Number(v)), 'Commits']} />
-                      <Bar dataKey="commits" fill={CHART_PALETTE[1]} name="Commits" radius={[0, 2, 2, 0]} />
+                      <Bar isAnimationActive={false} dataKey="commits" fill={CHART_PALETTE[1]} name="Commits" radius={[0, 2, 2, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -641,9 +653,10 @@ export function SessionsPage() {
       </div>
 
       <DataTable<SessionRow>
-        data={filteredSessions.slice(0, 50)}
+        data={filteredSessions}
         columns={sessionColumns}
         keyField="sessionId"
+        pageSize={50}
         onRowClick={(row) => navigate(`/observability/sessions/${encodeURIComponent(row.sessionId)}`)}
       />
 

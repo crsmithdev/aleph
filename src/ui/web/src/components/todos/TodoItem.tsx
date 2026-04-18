@@ -109,31 +109,41 @@ export function TodoItem({ todo }: TodoItemProps) {
         </Link>
       )}
 
-      {!todo.done && (
-        <div className="flex items-center gap-1 flex-shrink-0">
+      <div className="flex items-center gap-1 flex-shrink-0">
+        {todo.done ? (
           <button
-            onClick={() => promoteTodo.mutate(todo.id)}
-            className="p-1 rounded text-text-muted hover:text-accent hover:bg-accent/10 transition-colors"
-            title="Promote to goal"
+            onClick={() => updateTodo.mutate({ id: todo.id, done: false })}
+            className="p-1 rounded text-text-muted hover:text-warning hover:bg-warning/10 transition-colors"
+            title="Mark incomplete"
           >
-            <Icon name="arrow_upward" size="sm" />
+            <Icon name="undo" size="sm" />
           </button>
-          <button
-            onClick={() => updateTodo.mutate({ id: todo.id, done: true })}
-            className="p-1 rounded text-text-muted hover:text-success hover:bg-success/10 transition-colors"
-            title="Complete"
-          >
-            <Icon name="check" size="sm" />
-          </button>
-          <button
-            onClick={() => deleteTodo.mutate(todo.id)}
-            className="p-1 rounded text-text-muted hover:text-error hover:bg-error/10 transition-colors"
-            title="Delete"
-          >
-            <Icon name="close" size="sm" />
-          </button>
-        </div>
-      )}
+        ) : (
+          <>
+            <button
+              onClick={() => promoteTodo.mutate(todo.id)}
+              className="p-1 rounded text-text-muted hover:text-accent hover:bg-accent/10 transition-colors"
+              title="Promote to goal"
+            >
+              <Icon name="arrow_upward" size="sm" />
+            </button>
+            <button
+              onClick={() => updateTodo.mutate({ id: todo.id, done: true })}
+              className="p-1 rounded text-text-muted hover:text-success hover:bg-success/10 transition-colors"
+              title="Complete"
+            >
+              <Icon name="check" size="sm" />
+            </button>
+            <button
+              onClick={() => deleteTodo.mutate(todo.id)}
+              className="p-1 rounded text-text-muted hover:text-error hover:bg-error/10 transition-colors"
+              title="Delete"
+            >
+              <Icon name="close" size="sm" />
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { Icon } from '../../components/ui/Icon';
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { clsx } from 'clsx';
 import ReactMarkdown from 'react-markdown';
@@ -11,13 +11,18 @@ import {
   useResearchActivity, useCancelJob, useResearchJobs, useResearchStream,
   useResearchSteps, useUpdateThread, useDeleteResearchQuery, useUpdateQueryConfig,
   useResearchEnvCheck, useFetchThreadText, useRedoThread, useFetchFindingText,
-  useGenerateDocument,
+  useGenerateDocument, useResearchWorkers, useResearchDefaults,
+  useConcepts, useConceptLinks, useConceptDetail,
+  useSources, useRetrySource, useSkipSource,
   type ResearchFinding, type ResearchThread, type ResearchActivity,
   type ResearchJob, type StreamEvent, type ResearchStep,
+  type ConceptWithStats, type ConceptLink,
+  type Source, type SourceExtractionStatus,
 } from '../../api/research-hooks';
 import { Button } from '../../components/ui/Button';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
+import { ConfigForm, patchByPath, getByPath } from './config-schema';
 import cytoscape from 'cytoscape';
 // @ts-expect-error cytoscape-fcose has no bundled types
 import fcose from 'cytoscape-fcose';
@@ -75,14 +80,14 @@ function findSeedAncestor(thread: ResearchThread, all: ResearchThread[]): string
 function ConfBar({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex items-center gap-1">
-      <span className="text-xs text-text-muted">{label}</span>
+      <span className="text-sm text-text-muted">{label}</span>
       <div className="w-12 h-1 bg-bg-tertiary rounded-full overflow-hidden">
         <div
           className={clsx('h-full rounded-full', value > 0.7 ? 'bg-success' : value > 0.4 ? 'bg-warning' : 'bg-error')}
           style={{ width: `${value * 100}%` }}
         />
       </div>
-      <span className="text-xs text-text-muted">{(value * 100).toFixed(0)}%</span>
+      <span className="text-sm text-text-muted">{(value * 100).toFixed(0)}%</span>
     </div>
   );
 }
@@ -121,7 +126,7 @@ function StatusDot({ status, className }: { status: string; className?: string }
 function OriginBadge({ origin }: { origin: string }) {
   if (origin === 'follow_up') return null;
   return (
-    <span className={clsx('px-1.5 py-0.5 rounded text-xs font-medium shrink-0', originBadgeCls[origin] ?? 'bg-bg-tertiary text-text-muted')}>
+    <span className={clsx('px-1.5 py-0.5 rounded text-sm font-medium shrink-0', originBadgeCls[origin] ?? 'bg-bg-tertiary text-text-muted')}>
       {origin.replace(/_/g, ' ')}
     </span>
   );
@@ -203,22 +208,23 @@ function ThreadNavigator({
       {/* Header */}
       <div className="px-3 py-3 border-b border-border-primary space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-xs text-text-muted uppercase tracking-wide font-medium">Threads</span>
-          <span className="text-xs text-text-muted tabular-nums">{threads.length}</span>
+          <span className="text-sm text-text-muted uppercase tracking-wide font-medium">Threads</span>
+          <span className="text-sm text-text-muted tabular-nums">{threads.length}</span>
         </div>
         <input
           type="text"
+          aria-label="Filter threads"
           value={filter}
           onChange={e => setFilter(e.target.value)}
           placeholder="Filter threads..."
-          className="w-full bg-bg-primary border border-border-primary rounded px-2 py-1 text-xs text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent"
+          className="w-full bg-bg-primary border border-border-primary rounded px-2 py-1 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent"
         />
         <div className="flex gap-1">
           {(['hierarchical', 'flat'] as const).map(mode => (
             <button
               key={mode}
               onClick={() => setViewMode(mode)}
-              className={clsx('flex-1 px-2 py-1 rounded text-xs transition-colors',
+              className={clsx('flex-1 px-2 py-1 rounded text-sm transition-colors',
                 viewMode === mode
                   ? 'bg-accent/10 text-accent'
                   : 'text-text-muted hover:text-text-secondary'
@@ -232,7 +238,7 @@ function ThreadNavigator({
       <div className="flex-1 overflow-y-auto">
         {visibleFiltered.map(thread => {
           const fc = findingCounts.get(thread.id) ?? 0;
-          const display = thread.short_query ?? (thread.query.length > 60 ? thread.query.slice(0, 60) + '...' : thread.query);
+          const display = thread.short_query ?? thread.query;
           const isSelected = selectedThreadId === thread.id;
           const depth = viewMode === 'hierarchical' ? thread.depth : 0;
           const canExpand = viewMode === 'hierarchical' && hasChildren(thread.id);
@@ -266,9 +272,9 @@ function ThreadNavigator({
                 <span className="w-4 shrink-0" />
               )}
               <StatusDot status={thread.status} />
-              <span className="text-xs text-text-primary truncate flex-1">{display}</span>
+              <span className="text-sm text-text-primary truncate flex-1">{display}</span>
               {fc > 0 && (
-                <span className="px-1 py-0.5 bg-bg-tertiary text-text-muted text-xs rounded shrink-0">{fc}</span>
+                <span className="px-1 py-0.5 bg-bg-tertiary text-text-muted text-sm rounded shrink-0">{fc}</span>
               )}
             </div>
           );
@@ -280,10 +286,11 @@ function ThreadNavigator({
         <div className="flex gap-1.5">
           <input
             type="text"
+            aria-label="Inject question"
             value={newQuestion}
             onChange={e => setNewQuestion(e.target.value)}
             placeholder="Inject question..."
-            className="flex-1 bg-bg-primary border border-border-primary rounded px-2 py-1 text-xs text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent"
+            className="flex-1 bg-bg-primary border border-border-primary rounded px-2 py-1 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent"
           />
           <Button type="submit" variant="secondary" size="sm" loading={injectThread.isPending}>
             <Icon name="add" size="xs" />
@@ -384,7 +391,7 @@ function SectionMetaPanel({
   const citLabel = [...citationNums].sort((a, b) => a - b).join(', ');
 
   return (
-    <div className="my-3 rounded border border-border-primary/20 text-xs overflow-hidden">
+    <div className="my-3 rounded border border-border-primary/20 text-sm overflow-hidden">
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center gap-2 px-3 py-1.5 bg-bg-secondary/40 hover:bg-bg-tertiary/30 transition-colors text-left"
@@ -401,7 +408,7 @@ function SectionMetaPanel({
         <div className="px-3 py-2.5 space-y-3 bg-bg-primary/20 border-t border-border-primary/20">
           {uniqueSources.length > 0 && (
             <div>
-              <p className="text-text-disabled uppercase tracking-wide text-xs mb-1 font-medium">Sources</p>
+              <p className="text-text-disabled uppercase tracking-wide text-sm mb-1 font-medium">Sources</p>
               <div className="space-y-0.5">
                 {uniqueSources.map((src, i) => (
                   <a key={i} href={src.url} target="_blank" rel="noopener noreferrer"
@@ -421,7 +428,7 @@ function SectionMetaPanel({
           )}
           {questions.length > 0 && (
             <div>
-              <p className="text-text-disabled uppercase tracking-wide text-xs mb-1 font-medium">Questions</p>
+              <p className="text-text-disabled uppercase tracking-wide text-sm mb-1 font-medium">Questions</p>
               <ul className="space-y-0.5">
                 {questions.map((q, i) => (
                   <li key={i} className="text-text-muted italic leading-relaxed">{q}</li>
@@ -511,33 +518,47 @@ function DocumentView({
   }
 
   return (
-    <div className="flex gap-8">
-      {/* Main article */}
-      <div className="flex-1 min-w-0">
-        <div className="max-w-3xl mx-auto">
+    <div className="grid grid-cols-1 xl:grid-cols-[200px_minmax(0,1fr)_300px] gap-7">
+      {/* Left TOC rail */}
+      {tocEntries.length > 2 ? (
+        <aside className="hidden xl:block">
+          <div className="sticky top-4 space-y-0.5">
+            <h4 className="text-sm text-text-muted uppercase tracking-[0.08em] mb-2.5 font-medium">Contents</h4>
+            <ul className="list-none p-0 m-0">
+              {tocEntries.map((entry, idx) => (
+                <li key={idx}>
+                  <button
+                    onClick={() => scrollToHeading(entry.id)}
+                    className={clsx(
+                      'block w-full text-left py-1 text-sm hover:text-text-primary hover:bg-bg-tertiary/30 rounded truncate transition-colors',
+                      entry.level === 2 ? 'px-2 text-text-secondary' : 'pl-4 pr-2 text-text-muted text-sm',
+                    )}
+                  >
+                    {entry.title}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </aside>
+      ) : <div className="hidden xl:block" />}
+
+      {/* Center: article */}
+      <div className="min-w-0">
+        <div className="max-w-[720px] mx-auto">
           {/* Regenerate / Export controls */}
           <div className="flex items-center justify-end mb-6 gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={exportMarkdown}
-            >
+            <Button variant="ghost" size="sm" onClick={exportMarkdown}>
               <Icon name="download" size="xs" className="mr-1" />
               Export .md
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => generateDoc.mutate({ sessionId })}
-              loading={generateDoc.isPending}
-            >
+            <Button variant="ghost" size="sm" onClick={() => generateDoc.mutate({ sessionId })} loading={generateDoc.isPending}>
               <Icon name="refresh" size="xs" className="mr-1" />
               Regenerate
             </Button>
           </div>
 
-          {/* Rendered article — section-by-section so we can inject metadata panels */}
-          <article className="md-content article-view text-base text-text-primary leading-[1.85]">
+          <article className="md-content article-view text-base text-text-primary leading-[1.7]">
             {docSections.map((section, idx) => {
               const mdComponents = {
                 p: ({ children }: React.HTMLAttributes<HTMLParagraphElement>) => <p className="mb-4 text-text-secondary">{children}</p>,
@@ -592,130 +613,127 @@ function DocumentView({
               );
             })}
           </article>
-
-          {/* Bibliography */}
-          {findings.length > 0 && (
-            <ReferencesSection findings={findings} />
-          )}
         </div>
       </div>
 
-      {/* Sidebar TOC */}
-      {tocEntries.length > 2 && (
-        <div className="w-52 shrink-0 hidden xl:block">
-          <div className="sticky top-4 space-y-0.5">
-            <p className="text-xs text-text-muted uppercase tracking-wide mb-2 font-medium">Contents</p>
-            {tocEntries.map((entry, idx) => (
-              <button
-                key={idx}
-                onClick={() => scrollToHeading(entry.id)}
-                className={clsx(
-                  'block w-full text-left py-1 text-xs text-text-secondary hover:text-text-primary hover:bg-bg-tertiary/30 rounded truncate transition-colors',
-                  entry.level === 2 ? 'px-2' : 'px-4 text-text-muted'
-                )}
-              >
-                {entry.title}
-              </button>
-            ))}
-          </div>
+      {/* Right bibliography rail */}
+      <aside className="hidden xl:block">
+        <div className="sticky top-4 max-h-[calc(100vh-6rem)] overflow-y-auto pr-1">
+          <BibliographyRail findings={sortedFindings} sessionId={sessionId} />
         </div>
-      )}
+      </aside>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// References (bibliography-style, part of the article typographic system)
+// Bibliography rail (right side of Document view)
 // ---------------------------------------------------------------------------
 
 function domainFrom(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
 }
 
-function RefEntry({ finding, index }: { finding: ResearchFinding; index: number }) {
-  const [open, setOpen] = useState(false);
-  const sources = finding.source_url_meta?.length
-    ? finding.source_url_meta
-    : finding.source_urls.map(url => ({ url, title: '', snippet: '' }));
-  const domains = [...new Set(sources.map(s => domainFrom(s.url)))];
-
-  return (
-    <div id={`ref-${index}`} className="group">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full text-left py-2 flex items-start gap-3 transition-colors"
-      >
-        <span className="text-xs text-text-muted font-mono shrink-0 mt-0.5 w-5 text-right">{index}</span>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm text-text-secondary leading-relaxed group-hover:text-text-primary transition-colors">
-            {finding.summary}
-          </p>
-          <div className="flex items-center gap-2 mt-1 flex-wrap">
-            {domains.length > 0 && (
-              <span className="text-xs text-text-muted">
-                {domains.slice(0, 2).join(' · ')}{domains.length > 2 ? ` · +${domains.length - 2}` : ''}
-              </span>
-            )}
-            {domains.length > 0 && finding.tags.length > 0 && (
-              <span className="text-text-disabled">·</span>
-            )}
-            {finding.tags.map(tag => (
-              <span key={tag} className="text-xs text-text-muted">{tag}</span>
-            ))}
-            <span className="text-xs text-text-disabled ml-auto">
-              {(finding.confidence * 100).toFixed(0)}% conf
-              {finding.novelty > 0.3 && <>{' · '}{(finding.novelty * 100).toFixed(0)}% novel</>}
-            </span>
-          </div>
-        </div>
-      </button>
-
-      {open && (
-        <div className="ml-8 pb-3 space-y-2">
-          {sources.length > 0 && (
-            <div className="space-y-0.5">
-              {sources.map((src, i) => (
-                <a
-                  key={i}
-                  href={src.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block text-xs hover:underline truncate"
-                  title={src.url}
-                >
-                  <span className="text-text-muted">{domainFrom(src.url)}</span>
-                  {src.title && <span className="text-accent ml-1.5">{src.title}</span>}
-                  {!src.title && <span className="text-accent ml-1.5">{src.url}</span>}
-                </a>
-              ))}
-            </div>
-          )}
-
-          {finding.follow_ups.length > 0 && (
-            <p className="text-xs text-text-muted italic leading-relaxed">
-              See also: {finding.follow_ups.join('; ')}
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  );
+function extractionPillClass(status: SourceExtractionStatus): string {
+  switch (status) {
+    case 'extracted':
+      return 'bg-success/15 text-success border-success/30';
+    case 'failed':
+      return 'bg-error/15 text-error border-error/30';
+    case 'skipped':
+      return 'bg-bg-tertiary text-text-muted border-border-primary/30';
+    case 'pending':
+    case 'claimed':
+    default:
+      return 'bg-warning/15 text-warning border-warning/30';
+  }
 }
 
-function ReferencesSection({ findings }: { findings: ResearchFinding[] }) {
-  const sorted = useMemo(
-    () => [...findings].sort((a, b) => b.confidence - a.confidence),
-    [findings],
-  );
+function extractionPillLabel(status: SourceExtractionStatus): string {
+  if (status === 'claimed') return 'extracting';
+  return status;
+}
+
+function BibliographyRail({
+  findings,
+  sessionId,
+}: {
+  findings: ResearchFinding[];
+  sessionId: string;
+}) {
+  const { data: sourcesData } = useSources(sessionId);
+  const sourceByUrl = useMemo(() => {
+    const m = new Map<string, Source>();
+    for (const s of sourcesData?.items ?? []) m.set(s.url, s);
+    return m;
+  }, [sourcesData]);
+
+  const items = useMemo(() => {
+    return findings.map((f, i) => {
+      const urls = f.source_url_meta?.length
+        ? f.source_url_meta.map(s => s.url)
+        : f.source_urls;
+      const primaryUrl = urls[0];
+      const primarySource = primaryUrl ? sourceByUrl.get(primaryUrl) : undefined;
+      const domain = primaryUrl ? domainFrom(primaryUrl) : '';
+      const title = f.source_url_meta?.[0]?.title || f.summary;
+      return {
+        index: i + 1,
+        finding: f,
+        title,
+        href: primaryUrl,
+        domain,
+        status: primarySource?.extraction_status as SourceExtractionStatus | undefined,
+      };
+    });
+  }, [findings, sourceByUrl]);
 
   return (
-    <div className="mt-12">
-      <hr className="border-border-primary/30 mb-10" />
-      <h2 className="font-heading text-xl font-semibold text-text-primary mb-6 pb-2 border-b border-border-primary/30">
-        References
-      </h2>
-      <div className="space-y-0.5">
-        {sorted.map((f, i) => <RefEntry key={f.id} finding={f} index={i + 1} />)}
+    <div>
+      <h4 className="text-sm text-text-muted font-medium uppercase tracking-[0.08em] mb-2.5">
+        References &middot; {items.length}
+      </h4>
+      <div>
+        {items.map(({ index, finding, title, href, domain, status }) => (
+          <div
+            key={finding.id}
+            id={`ref-${index}`}
+            className="py-2.5 border-b border-border-primary/30 last:border-b-0"
+          >
+            <span className="text-accent font-mono text-sm mr-1.5">[{index}]</span>
+            {href ? (
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-text-primary text-sm leading-snug hover:underline"
+              >
+                {title}
+              </a>
+            ) : (
+              <span className="text-text-primary text-sm leading-snug">{title}</span>
+            )}
+            {(domain || finding.confidence > 0) && (
+              <div className="text-sm text-text-muted mt-0.5">
+                {domain}
+                {domain && <span className="mx-1">&middot;</span>}
+                <span>{(finding.confidence * 100).toFixed(0)}% conf</span>
+              </div>
+            )}
+            {status && (
+              <div className="mt-1">
+                <span
+                  className={clsx(
+                    'inline-flex items-center text-sm px-2 py-[1px] border rounded',
+                    extractionPillClass(status),
+                  )}
+                >
+                  {extractionPillLabel(status)}
+                </span>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -755,7 +773,7 @@ function ThreadLiveRow({
   const hasAnalysis = threadFindings.some(f => f.follow_up_analysis);
   const childQuerySet = new Set(childThreads.map(t => t.query.toLowerCase().trim()));
 
-  const displayText = thread.short_query ?? (thread.query.length > 100 ? thread.query.slice(0, 100) + '...' : thread.query);
+  const displayText = thread.short_query ?? thread.query;
   const threadFetch = thread.fetch_source_text;
 
   function handleFetchToggle() {
@@ -776,7 +794,7 @@ function ThreadLiveRow({
           <div className="flex items-center gap-1.5 mt-1 shrink-0">
             <StatusDot status={thread.status} />
             {workerLabel && (
-              <span className="text-xs font-mono text-accent/70">{workerLabel}</span>
+              <span className="text-sm font-mono text-accent/70">{workerLabel}</span>
             )}
           </div>
           <div className="flex-1 min-w-0">
@@ -786,16 +804,16 @@ function ThreadLiveRow({
               </span>
               <OriginBadge origin={thread.origin} />
               {thread.priority !== undefined && (
-                <span className="text-xs text-text-muted font-mono shrink-0">p:{thread.priority.toFixed(2)}</span>
+                <span className="text-sm text-text-muted font-mono shrink-0">p:{thread.priority.toFixed(2)}</span>
               )}
               {thread.status === 'exhausted' && threadFindings.length > 0 && (
-                <span className="text-xs text-text-muted shrink-0">{threadFindings.length} finding{threadFindings.length !== 1 ? 's' : ''}</span>
+                <span className="text-sm text-text-muted shrink-0">{threadFindings.length} finding{threadFindings.length !== 1 ? 's' : ''}</span>
               )}
               {thread.status === 'active' && (
-                <span className="text-xs text-success shrink-0">running...</span>
+                <span className="text-sm text-success shrink-0">running...</span>
               )}
               {threadFetch !== null && (
-                <span className={clsx('px-1 py-0.5 rounded text-xs shrink-0 font-mono',
+                <span className={clsx('px-1 py-0.5 rounded text-sm shrink-0 font-mono',
                   threadFetch ? 'bg-success/10 text-success' : 'bg-error/10 text-error/70'
                 )}>
                   {threadFetch ? <><Icon name="check" size="xs" className="text-green-400" /> full-text</> : <><Icon name="close" size="xs" className="text-red-400" /> full-text</>}
@@ -810,7 +828,7 @@ function ThreadLiveRow({
           <button
             title="Thread config"
             onClick={onToggleConfig}
-            className={clsx('p-1 rounded text-xs', showInlineConfig ? 'text-accent' : 'text-text-muted hover:text-text-primary')}
+            className={clsx('p-1 rounded text-sm', showInlineConfig ? 'text-accent' : 'text-text-muted hover:text-text-primary')}
           ><Icon name="tune" size="xs" /></button>
           <button
             title="Increase priority"
@@ -826,7 +844,7 @@ function ThreadLiveRow({
             <button
               title="Reject thread"
               onClick={() => updateThread.mutate({ id: thread.id, sessionId, status: 'pruned' })}
-              className="p-1 text-text-muted hover:text-red-400 rounded text-xs"
+              className="p-1 text-text-muted hover:text-red-400 rounded text-sm"
             ><Icon name="close" size="xs" /></button>
           )}
         </div>
@@ -835,7 +853,7 @@ function ThreadLiveRow({
       {/* Inline config panel */}
       {showInlineConfig && (
         <div className="ml-5 pl-3 border-l border-accent/30 py-2 mb-1 bg-bg-secondary/50 rounded-r-lg space-y-2">
-          <div className="flex items-center gap-4 text-xs text-text-muted">
+          <div className="flex items-center gap-4 text-sm text-text-muted">
             <span>Priority: <span className="text-text-primary font-mono">{thread.priority.toFixed(2)}</span></span>
             <span>Max depth: <span className="text-text-primary font-mono">{thread.max_depth}</span></span>
             <span>Depth: <span className="text-text-primary font-mono">{thread.depth}</span></span>
@@ -850,13 +868,13 @@ function ThreadLiveRow({
               onChange={e => updateThread.mutate({ id: thread.id, sessionId, priority: Number(e.target.value) })}
               className="w-32 accent-accent"
             />
-            <span className="text-xs text-text-muted font-mono w-8">{thread.priority.toFixed(2)}</span>
+            <span className="text-sm text-text-muted font-mono w-8">{thread.priority.toFixed(2)}</span>
           </div>
           <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-            <span className="text-xs text-text-muted">Fetch source text:</span>
+            <span className="text-sm text-text-muted">Fetch source text:</span>
             <button
               onClick={handleFetchToggle}
-              className={clsx('px-2 py-0.5 rounded text-xs border transition-colors',
+              className={clsx('px-2 py-0.5 rounded text-sm border transition-colors',
                 threadFetch === true ? 'bg-green-900/40 border-green-700/40 text-green-400'
                   : threadFetch === false ? 'bg-red-900/30 border-red-700/30 text-red-400/70'
                     : 'bg-bg-secondary border-border-primary text-text-muted/50'
@@ -868,18 +886,18 @@ function ThreadLiveRow({
               <button
                 onClick={() => redoThread.mutate({ sessionId, threadId: thread.id })}
                 disabled={redoThread.isPending}
-                className="px-1.5 py-0.5 text-text-muted hover:text-blue-400 rounded text-xs border border-border-primary hover:border-blue-700/40"
+                className="px-1.5 py-0.5 text-text-muted hover:text-blue-400 rounded text-sm border border-border-primary hover:border-blue-700/40"
               >redo</button>
             )}
             {isTerminal && (
               <button
                 onClick={() => redoThread.mutate({ sessionId, threadId: thread.id, fetch_source_text: true })}
                 disabled={redoThread.isPending}
-                className="px-1.5 py-0.5 text-text-muted hover:text-green-400 rounded text-xs border border-border-primary hover:border-green-700/40 font-mono"
+                className="px-1.5 py-0.5 text-text-muted hover:text-green-400 rounded text-sm border border-border-primary hover:border-green-700/40 font-mono"
               >redo+txt</button>
             )}
           </div>
-          <div className="text-xs text-text-muted/60 space-y-0.5">
+          <div className="text-sm text-text-muted/60 space-y-0.5">
             <p>ID: <span className="font-mono">{thread.id}</span></p>
             <p>Origin: {thread.origin} | Depth: {thread.depth} | Created: {new Date(thread.created_at).toLocaleTimeString()}</p>
             <p>Findings: {threadFindings.length} | Children: {childThreads.length}</p>
@@ -899,7 +917,7 @@ function ThreadLiveRow({
             <button
               title={threadFetch === true ? 'Full-text ON' : threadFetch === false ? 'Full-text OFF' : 'Full-text: session default'}
               onClick={handleFetchToggle}
-              className={clsx('px-1.5 py-0.5 rounded text-xs border transition-colors',
+              className={clsx('px-1.5 py-0.5 rounded text-sm border transition-colors',
                 threadFetch === true ? 'bg-green-900/40 border-green-700/40 text-green-400 hover:bg-green-900/60'
                   : threadFetch === false ? 'bg-red-900/30 border-red-700/30 text-red-400/70 hover:bg-red-900/50'
                     : 'bg-bg-secondary border-border-primary text-text-muted/50 hover:text-text-muted'
@@ -909,20 +927,20 @@ function ThreadLiveRow({
               <button
                 onClick={() => redoThread.mutate({ sessionId, threadId: thread.id })}
                 disabled={redoThread.isPending}
-                className="px-1.5 py-0.5 text-text-muted hover:text-blue-400 rounded text-xs border border-border-primary hover:border-blue-700/40"
+                className="px-1.5 py-0.5 text-text-muted hover:text-blue-400 rounded text-sm border border-border-primary hover:border-blue-700/40"
               >&#x21ba; redo</button>
             )}
             {isTerminal && (
               <button
                 onClick={() => redoThread.mutate({ sessionId, threadId: thread.id, fetch_source_text: true })}
                 disabled={redoThread.isPending}
-                className="px-1.5 py-0.5 text-text-muted hover:text-green-400 rounded text-xs border border-border-primary hover:border-green-700/40 font-mono"
+                className="px-1.5 py-0.5 text-text-muted hover:text-green-400 rounded text-sm border border-border-primary hover:border-green-700/40 font-mono"
               >&#x21ba; redo+txt</button>
             )}
           </div>
 
           {/* Thread metadata */}
-          <div className="flex items-center gap-3 py-0.5 text-xs text-text-secondary">
+          <div className="flex items-center gap-3 py-0.5 text-sm text-text-secondary">
             <span>created {new Date(thread.created_at).toLocaleTimeString()}</span>
             <span>depth {thread.depth}/{thread.max_depth}</span>
             {thread.id && <span className="font-mono">{thread.id}</span>}
@@ -930,7 +948,7 @@ function ThreadLiveRow({
 
           {/* Perturbation info */}
           {thread.origin === 'perturbation' && thread.perturbation_strategy && (
-            <div className="py-1 px-2 bg-orange-900/10 border border-orange-800/30 rounded text-xs space-y-0.5">
+            <div className="py-1 px-2 bg-orange-900/10 border border-orange-800/30 rounded text-sm space-y-0.5">
               <div className="flex items-center gap-1.5">
                 <span className="text-orange-400 font-medium">perturbation</span>
                 <span className="text-orange-300/70 font-mono">{thread.perturbation_strategy}</span>
@@ -951,39 +969,39 @@ function ThreadLiveRow({
           {/* Timeline: steps */}
           {timelineSteps.map((step, si) => (
             <div key={step.id} className="py-0.5 space-y-1">
-              <div className="flex items-center gap-2 text-xs text-text-muted">
+              <div className="flex items-center gap-2 text-sm text-text-muted">
                 <span className="text-blue-400/80 font-mono shrink-0">llm</span>
                 <span className="font-mono">{step.model}</span>
-                <span className="text-text-muted/70">{step.prompt_tokens + step.completion_tokens} tok</span>
+                <span className="text-text-muted/70">{step.prompt_tokens + step.completion_tokens}</span>
                 {step.cost_usd > 0 && <span className="text-text-muted/70">${step.cost_usd.toFixed(4)}</span>}
                 {step.duration_ms && <span className="text-text-muted/70">{(step.duration_ms / 1000).toFixed(1)}s</span>}
                 <span className="text-text-muted/40 ml-auto">{new Date(step.created_at).toLocaleTimeString()}</span>
               </div>
               {step.error && (
                 <div className="flex items-start gap-1.5 pl-4">
-                  <span className="text-red-400 text-xs shrink-0">error:</span>
-                  <span className="text-xs text-red-300 break-words">{step.error}</span>
+                  <span className="text-red-400 text-sm shrink-0">error:</span>
+                  <span className="text-sm text-red-300 break-words">{step.error}</span>
                 </div>
               )}
               {step.tool_calls.length === 0 && step.label && (
-                <span className="pl-4 text-xs text-text-muted/70 italic">{step.label}</span>
+                <span className="pl-4 text-sm text-text-muted/70 italic">{step.label}</span>
               )}
               {step.tool_calls.length === 0 && !step.label && !step.error && (
-                <span className="pl-4 text-xs text-text-muted/40 italic">no tool calls</span>
+                <span className="pl-4 text-sm text-text-muted/40 italic">no tool calls</span>
               )}
               {step.tool_calls.map((tc, ti) => (
                 <div key={`${si}-${ti}`} className="pl-4 space-y-0.5">
                   <div className="flex items-start gap-2">
-                    <span className="text-text-secondary/80 text-xs font-mono shrink-0">{tc.tool}</span>
+                    <span className="text-text-secondary/80 text-sm font-mono shrink-0">{tc.tool}</span>
                     {tc.input && (
                       <span className="text-sm text-text-primary break-words flex-1">
                         {tc.tool === 'web_search' && tc.input.query
                           ? <span className="text-text-primary">"{tc.input.query as string}"</span>
-                          : <span className="text-text-secondary/70 text-xs">{JSON.stringify(tc.input).slice(0, 120)}</span>}
+                          : <span className="text-text-secondary/70 text-sm">{JSON.stringify(tc.input).slice(0, 120)}</span>}
                       </span>
                     )}
                     {tc.error && (
-                      <span className="flex items-center gap-0.5 text-xs text-red-400 shrink-0" title={tc.error}><Icon name="close" size="xs" /> error</span>
+                      <span className="flex items-center gap-0.5 text-sm text-red-400 shrink-0" title={tc.error}><Icon name="close" size="xs" /> error</span>
                     )}
                   </div>
                   {tc.jina_fetches && tc.jina_fetches.length > 0 && (
@@ -993,14 +1011,14 @@ function ThreadLiveRow({
                         try { hostname = new URL(jf.url).hostname; } catch { /* keep url */ }
                         return (
                           <div key={ji} className="flex items-center gap-2">
-                            <span className={clsx('text-xs shrink-0', jf.ok ? 'text-green-400' : 'text-red-400')}>
+                            <span className={clsx('text-sm shrink-0', jf.ok ? 'text-green-400' : 'text-red-400')}>
                               <Icon name={jf.ok ? 'check' : 'close'} size="xs" />
                             </span>
                             <a href={jf.url} target="_blank" rel="noreferrer"
-                              className="text-xs text-accent hover:underline truncate max-w-[300px]">{hostname}</a>
+                              className="text-sm text-accent hover:underline truncate max-w-[300px]">{hostname}</a>
                             {jf.ok
-                              ? <span className="text-xs text-text-muted/60 shrink-0">{(jf.content_length / 1000).toFixed(1)}k</span>
-                              : <span className="text-xs text-red-400/70 shrink-0" title={jf.error ?? 'fetch failed'}>{jf.error ?? 'failed'}</span>
+                              ? <span className="text-sm text-text-muted/60 shrink-0">{(jf.content_length / 1000).toFixed(1)}k</span>
+                              : <span className="text-sm text-red-400/70 shrink-0" title={jf.error ?? 'fetch failed'}>{jf.error ?? 'failed'}</span>
                             }
                           </div>
                         );
@@ -1008,7 +1026,7 @@ function ThreadLiveRow({
                     </div>
                   )}
                   {tc.error && (
-                    <div className="pl-4 text-xs text-red-400/80 break-words">{tc.error}</div>
+                    <div className="pl-4 text-sm text-red-400/80 break-words">{tc.error}</div>
                   )}
                 </div>
               ))}
@@ -1022,22 +1040,22 @@ function ThreadLiveRow({
               <div className="flex-1 min-w-0">
                 <p className="text-base text-text-primary">{f.summary}</p>
                 <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                  <span className="text-xs text-text-muted" title="Confidence score">conf {(f.confidence * 100).toFixed(0)}%</span>
-                  <span className="text-xs text-text-muted" title="Novelty score">novel {(f.novelty * 100).toFixed(0)}%</span>
-                  <span className="text-xs text-text-muted" title="Actionability score">act {(f.actionability * 100).toFixed(0)}%</span>
-                  {f.source_urls.length > 0 && <span className="text-xs text-text-muted">{f.source_urls.length} src</span>}
+                  <span className="text-sm text-text-muted" title="Confidence score">conf {(f.confidence * 100).toFixed(0)}%</span>
+                  <span className="text-sm text-text-muted" title="Novelty score">novel {(f.novelty * 100).toFixed(0)}%</span>
+                  <span className="text-sm text-text-muted" title="Actionability score">act {(f.actionability * 100).toFixed(0)}%</span>
+                  {f.source_urls.length > 0 && <span className="text-sm text-text-muted">{f.source_urls.length} src</span>}
                   {f.source_texts.filter(t => t.length > 0).length > 0
-                    ? <span className="text-xs text-green-400/70">{f.source_texts.filter(t => t.length > 0).length} full-text</span>
+                    ? <span className="text-sm text-green-400/70">{f.source_texts.filter(t => t.length > 0).length} full-text</span>
                     : f.source_urls.length > 0 && (
                       <button
                         title="Fetch full-text for this finding's sources"
                         onClick={() => fetchFindingText.mutate({ sessionId, findingId: f.id })}
                         disabled={fetchFindingText.isPending}
-                        className="text-xs text-text-muted/50 hover:text-green-400 font-mono opacity-0 group-hover/finding:opacity-100 transition-opacity"
+                        className="text-sm text-text-muted/50 hover:text-green-400 font-mono opacity-0 group-hover/finding:opacity-100 transition-opacity"
                       >&#x2193;txt</button>
                     )
                   }
-                  {f.confidence < 0.4 && <span className="text-xs text-red-400">low confidence</span>}
+                  {f.confidence < 0.4 && <span className="text-sm text-red-400">low confidence</span>}
                 </div>
               </div>
             </div>
@@ -1047,42 +1065,44 @@ function ThreadLiveRow({
           {hasAnalysis && (
             <div className="mt-1.5 pt-1 border-t border-border-primary/30">
               <div className="flex items-center gap-2 mb-1">
-                <p className="text-xs text-text-muted uppercase tracking-wide">Follow-up analysis</p>
+                <p className="text-sm text-text-muted uppercase tracking-wide">Follow-up analysis</p>
                 {(threadFindings[0]?.follow_up_analysis?.retry_count ?? 0) > 0 && (
-                  <span className="text-xs text-text-muted/60">{threadFindings[0]?.follow_up_analysis?.retry_count} retries</span>
+                  <span className="text-sm text-text-muted/60">{threadFindings[0]?.follow_up_analysis?.retry_count} retries</span>
                 )}
-                <span className="text-xs text-text-muted/60">threshold: {((threadFindings[0]?.follow_up_analysis?.similarity_threshold ?? 0.75) * 100).toFixed(0)}%</span>
+                <span className="text-sm text-text-muted/60">threshold: {((threadFindings[0]?.follow_up_analysis?.similarity_threshold ?? 0.75) * 100).toFixed(0)}%</span>
               </div>
               {followUpCandidates.map((c, i) => {
                 const spawned = childQuerySet.has((c.text ?? '').toLowerCase().trim());
                 return (
                   <div key={i} className={clsx('py-0.5 px-1 rounded mb-0.5', c.accepted ? '' : 'opacity-50')}>
                     <div className="flex items-start gap-1.5">
-                      <span className={clsx('text-xs shrink-0 mt-0.5', c.accepted ? 'text-purple-400' : 'text-text-muted')}>
+                      <span className={clsx('text-sm shrink-0 mt-0.5', c.accepted ? 'text-purple-400' : 'text-text-muted')}>
                         {c.accepted ? (spawned ? <Icon name="arrow_forward" size="xs" /> : <span>&#xb7;</span>) : <Icon name="close" size="xs" />}
                       </span>
                       <div className="flex-1 min-w-0">
                         <span className={clsx('text-sm break-words', c.accepted ? (spawned ? 'text-text-secondary' : 'text-text-muted') : 'text-text-muted/50 line-through')}>{c.text}</span>
                         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                          <span className="text-xs text-text-muted/70" title="Quality score">quality:{(c.quality_score*100).toFixed(0)}%</span>
-                          <span className="text-xs text-text-muted/70" title="Rank score">rank:{(c.rank_score*100).toFixed(0)}%</span>
-                          <span className="text-xs text-text-muted/70" title="Distance from parent">dist:{(c.distance_from_parent*100).toFixed(0)}%</span>
-                          <span className={clsx('text-xs', c.jaccard_similarity > (threadFindings[0]?.follow_up_analysis?.similarity_threshold ?? 0.75) ? 'text-red-400' : 'text-text-muted/70')}
-                            title="Jaccard similarity">
-                            Jaccard:{(c.jaccard_similarity*100).toFixed(0)}%
-                          </span>
+                          <span className="text-sm text-text-muted/70" title="Quality score">quality:{(c.quality_score*100).toFixed(0)}%</span>
+                          <span className="text-sm text-text-muted/70" title="Rank score">rank:{(c.rank_score*100).toFixed(0)}%</span>
+                          <span className="text-sm text-text-muted/70" title="Distance from parent">dist:{(c.distance_from_parent*100).toFixed(0)}%</span>
+                          {c.dedup_similarity > 0 && (
+                            <span className={clsx('text-sm', c.dedup_similarity > (threadFindings[0]?.follow_up_analysis?.similarity_threshold ?? 0.75) ? 'text-red-400' : 'text-text-muted/70')}
+                              title="Max similarity vs previously-accepted candidates (deduplication score)">
+                              dedup:{(c.dedup_similarity*100).toFixed(0)}%
+                            </span>
+                          )}
                           {c.embedding_similarity !== null && c.embedding_similarity !== undefined && (
-                            <span className="text-xs text-text-muted/70" title="Embedding similarity">emb:{(c.embedding_similarity*100).toFixed(0)}%</span>
+                            <span className="text-sm text-text-muted/70" title="Embedding similarity">emb:{(c.embedding_similarity*100).toFixed(0)}%</span>
                           )}
                           {c.llm_similarity !== null && c.llm_similarity !== undefined && (
-                            <span className="text-xs text-text-muted/70" title="LLM similarity">llm:{(c.llm_similarity*100).toFixed(0)}%</span>
+                            <span className="text-sm text-text-muted/70" title="LLM similarity">llm:{(c.llm_similarity*100).toFixed(0)}%</span>
                           )}
                           {c.similarity_method !== 'jaccard' && (
-                            <span className="text-xs text-accent/70 font-mono">[{c.similarity_method}]</span>
+                            <span className="text-sm text-accent/70 font-mono">[{c.similarity_method}]</span>
                           )}
-                          {c.accepted && spawned && <span className="text-xs text-purple-400">spawned</span>}
+                          {c.accepted && spawned && <span className="text-sm text-purple-400">spawned</span>}
                           {!c.accepted && c.rejection_reason && (
-                            <span className="text-xs text-red-400/70 italic truncate max-w-[120px]" title={c.rejection_reason}>{c.rejection_reason}</span>
+                            <span className="text-sm text-red-400/70 italic truncate max-w-[120px]" title={c.rejection_reason}>{c.rejection_reason}</span>
                           )}
                         </div>
                       </div>
@@ -1096,14 +1116,14 @@ function ThreadLiveRow({
           {/* Fallback: old follow_ups */}
           {!hasAnalysis && threadFindings.some(f => (f.follow_ups ?? []).length > 0) && (
             <div className="mt-1.5 pt-1 border-t border-border-primary/30">
-              <p className="text-xs text-text-muted uppercase tracking-wide mb-0.5">Follow-ups</p>
+              <p className="text-sm text-text-muted uppercase tracking-wide mb-0.5">Follow-ups</p>
               {Array.from(new Set(threadFindings.flatMap(f => f.follow_ups ?? []))).map((q, i) => {
                 const spawned = childQuerySet.has(q.toLowerCase().trim());
                 return (
                   <div key={i} className="flex items-start gap-1.5 py-0.5">
-                    <span className="text-xs text-text-muted shrink-0 mt-0.5">{spawned ? '\u2192' : '\u00b7'}</span>
+                    <span className="text-sm text-text-muted shrink-0 mt-0.5">{spawned ? '\u2192' : '\u00b7'}</span>
                     <span className={clsx('text-sm break-words', spawned ? 'text-text-secondary' : 'text-text-muted')}>{q}</span>
-                    {spawned && <span className="text-xs text-purple-400 shrink-0 mt-0.5">spawned</span>}
+                    {spawned && <span className="text-sm text-purple-400 shrink-0 mt-0.5">spawned</span>}
                   </div>
                 );
               })}
@@ -1112,10 +1132,10 @@ function ThreadLiveRow({
 
           {/* Cross-nav links */}
           <div className="flex items-center gap-4 pt-1 border-t border-border-primary/20">
-            <button onClick={onViewInDocument} className="text-xs text-accent hover:underline">
+            <button onClick={onViewInDocument} className="text-sm text-accent hover:underline">
               View in document &rarr;
             </button>
-            <button onClick={onShowOnMap} className="text-xs text-accent hover:underline">
+            <button onClick={onShowOnMap} className="text-sm text-accent hover:underline">
               Show on map &rarr;
             </button>
           </div>
@@ -1124,6 +1144,7 @@ function ThreadLiveRow({
     </div>
   );
 }
+
 
 const liveStatusDot: Record<string, string> = {
   active: 'bg-success animate-pulse',
@@ -1135,6 +1156,16 @@ const liveStatusDot: Record<string, string> = {
   deferred: 'bg-text-muted/30',
 };
 
+const liveStatusBorder: Record<string, string> = {
+  active: 'border-l-success',
+  running: 'border-l-success',
+  queued: 'border-l-warning/70',
+  pending: 'border-l-warning/40',
+  exhausted: 'border-l-text-disabled',
+  pruned: 'border-l-error/60',
+  deferred: 'border-l-text-muted/30',
+};
+
 const liveOriginColor: Record<string, string> = {
   seed: 'bg-accent/15 text-accent',
   gap_analysis: 'bg-purple-500/15 text-purple-400',
@@ -1143,34 +1174,117 @@ const liveOriginColor: Record<string, string> = {
 };
 
 const THREAD_PALETTE = ['#c792ea', '#82aaff', '#c3e88d', '#89ddff', '#ffcb6b', '#f78c6c', '#f07178', '#b2ccd6'];
+const RENDER_WINDOW = 500; // max DOM nodes in the event stream list
 
-function formatEventDetail(ev: StreamEvent): { typeLabel: string; typeColor: string; detail: string } | null {
+type Chip = { text: string; color: string; meta?: boolean };
+
+function fmtTokens(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+}
+
+function stepChips(s: ResearchStep): Chip[] {
+  const chips: Chip[] = [];
+  const shortModel = s.model.includes('/') ? s.model.split('/').pop()! : s.model;
+  chips.push({ text: shortModel, color: 'text-text-muted', meta: true });
+  const tok = s.prompt_tokens + s.completion_tokens;
+  if (tok > 0) chips.push({ text: fmtTokens(tok), color: 'text-text-muted', meta: true });
+  if (s.cost_usd > 0) chips.push({ text: `$${s.cost_usd.toFixed(5)}`, color: 'text-text-muted', meta: true });
+  // Outcome chips from metadata
+  const m = s.metadata;
+  if (m) {
+    if (m.decision === 'gap_analysis') {
+      const hasGaps = m.has_gaps as boolean;
+      const gapCount = m.gap_count as number;
+      const gapMax = m.gap_max as number | undefined;
+      const gapText = hasGaps ? (gapMax != null ? `${gapCount}/${gapMax} gaps` : `${gapCount} gaps`) : 'no gaps';
+      chips.push({ text: gapText, color: hasGaps ? 'text-warning' : 'text-text-muted' });
+    } else if (m.decision === 'synthesis') {
+      chips.push({ text: `conf ${((m.confidence as number) * 100).toFixed(0)}%`, color: 'text-success' });
+      chips.push({ text: `nov ${((m.novelty as number) * 100).toFixed(0)}%`, color: 'text-blue-400' });
+    } else if (m.decision === 'dedup') {
+      const dup = m.is_duplicate as boolean;
+      chips.push({ text: dup ? 'duplicate' : 'unique', color: dup ? 'text-error' : 'text-success' });
+      chips.push({ text: `vs ${m.existing_count as number}`, color: 'text-text-muted' });
+    } else if (m.decision === 'follow_up_eval') {
+      chips.push({ text: `${m.accepted_count as number}✓`, color: 'text-success' });
+      chips.push({ text: `${m.rejected_count as number}✗`, color: 'text-error/70' });
+    } else if (m.decision === 'formulate_queries') {
+      chips.push({ text: `${(m.queries as string[]).length} queries`, color: 'text-blue-400' });
+    }
+  }
+  return chips;
+}
+
+function formatEventDetail(ev: StreamEvent & { threadDiff?: string }): { typeLabel: string; typeColor: string; detail: string; chips?: Chip[] } | null {
   if (ev.type === 'finding') {
+    const f = ev.payload;
+    const chips: Chip[] = [
+      { text: `conf ${(f.confidence * 100).toFixed(0)}%`, color: f.confidence >= 0.7 ? 'text-success' : f.confidence >= 0.4 ? 'text-warning' : 'text-error' },
+      { text: `nov ${(f.novelty * 100).toFixed(0)}%`, color: 'text-blue-400' },
+    ];
     return {
       typeLabel: 'finding',
       typeColor: 'text-success',
-      detail: ev.payload.content.slice(0, 120) + (ev.payload.content.length > 120 ? '…' : ''),
+      detail: (f.summary || f.content).slice(0, 100) + ((f.summary || f.content).length > 100 ? '…' : ''),
+      chips,
     };
   }
   if (ev.type === 'thread') {
     const t = ev.payload;
-    if (t.status === 'active') return { typeLabel: 'spawn', typeColor: 'text-warning', detail: `"${t.query.split('\n')[0].slice(0, 80)}"` };
-    if (t.status === 'queued') return { typeLabel: 'queued', typeColor: 'text-warning/70', detail: `"${t.query.split('\n')[0].slice(0, 80)}"` };
-    if (t.status === 'pruned') return { typeLabel: 'pruned', typeColor: 'text-error', detail: `thread terminated` };
-    if (t.status === 'exhausted') return { typeLabel: 'done', typeColor: 'text-text-muted', detail: `thread complete` };
+    const diff = ev.threadDiff;
+    const name = t.short_query ?? t.query;
+    // Non-status changes (titled, priority, backoff, retry)
+    if (diff && !diff.includes(' → ')) {
+      if (diff === 'titled') return { typeLabel: 'named', typeColor: 'text-text-muted/70', detail: name };
+      return { typeLabel: 'update', typeColor: 'text-text-muted', detail: `${name} · ${diff}` };
+    }
+    // Specific status transitions
+    if (diff === 'paused → active') return { typeLabel: 'resume', typeColor: 'text-success/80', detail: name };
+    const originTag = t.origin !== 'seed' ? ` [${t.origin.replace(/_/g, '·')} d${t.depth}]` : ` [d${t.depth}]`;
+    if (t.status === 'active') return { typeLabel: 'start', typeColor: 'text-warning', detail: `${name}${originTag}` };
+    if (t.status === 'queued') return { typeLabel: 'queue', typeColor: 'text-warning/70', detail: `${name}${originTag}` };
+    if (t.status === 'pruned') return { typeLabel: 'prune', typeColor: 'text-error', detail: name };
+    if (t.status === 'paused') return { typeLabel: 'pause', typeColor: 'text-warning/60', detail: name };
+    if (t.status === 'exhausted') return { typeLabel: 'done', typeColor: 'text-text-muted', detail: name };
+    if (t.status === 'deferred') return { typeLabel: 'defer', typeColor: 'text-text-muted', detail: `${name}${originTag}` };
+    if (diff) return { typeLabel: 'update', typeColor: 'text-text-muted', detail: `${name} · ${diff}` };
     return null;
   }
   if (ev.type === 'step') {
     const s = ev.payload;
     const tools = s.tool_calls ?? [];
-    if (tools.length === 0) return { typeLabel: 'step', typeColor: 'text-accent/70', detail: s.label ?? '…' };
+    const chips = stepChips(s);
+    // No tools — label-only step (e.g. gap analysis, synthesis, dedup)
+    if (tools.length === 0) {
+      const labelAliases: Record<string, string> = {
+        'synthesize finding': 'synthesis',
+        'synthesize findings': 'synthesis',
+        'evaluate follow-ups': 'followups',
+        'summarize thread': 'summarize',
+        'dedup check': 'dedup',
+        'gap analysis': 'gaps',
+        'formulate queries': 'formulate',
+      };
+      const labelColors: Record<string, string> = {
+        'gaps': 'text-orange-400',
+        'synthesis': 'text-purple-400',
+        'dedup': 'text-text-muted',
+        'followups': 'text-teal-400',
+        'summarize': 'text-text-muted',
+        'formulate': 'text-blue-400',
+      };
+      const rawLbl = s.label ?? 'step';
+      const lbl = labelAliases[rawLbl] ?? rawLbl;
+      const color = labelColors[lbl] ?? 'text-accent/70';
+      return { typeLabel: lbl, typeColor: color, detail: '', chips };
+    }
     const first = tools[0];
     const tool = first.tool ?? 'step';
-    const shortTool = tool.replace('search_web', 'search').replace('fetch_url', 'fetch');
+    const shortTool = tool.replace('web_search', 'search').replace('search_web', 'search').replace('fetch_url', 'fetch');
     let detail = '';
-    if (tool === 'search_web' || tool === 'search') {
+    if (tool === 'web_search' || tool === 'search_web' || tool === 'search') {
       const q = (first.input as Record<string, unknown>)?.query as string ?? '';
-      detail = q ? `query="${q.slice(0, 80)}"` : '';
+      detail = q ? `"${q.slice(0, 80)}"` : '';
     } else if (tool === 'fetch_url' || tool === 'fetch') {
       const urls = s.tool_calls.flatMap(c => c.jina_fetches ?? []).map(j => {
         try { return new URL(j.url).hostname; } catch { return j.url; }
@@ -1181,7 +1295,7 @@ function formatEventDetail(ev: StreamEvent): { typeLabel: string; typeColor: str
       detail = s.label ?? shortTool;
     }
     const typeColor = shortTool === 'search' ? 'text-blue-400' : shortTool === 'fetch' ? 'text-teal-400' : 'text-accent/80';
-    return { typeLabel: shortTool + (tools.length > 1 ? ` ×${tools.length}` : ''), typeColor, detail };
+    return { typeLabel: shortTool + (tools.length > 1 ? ` ×${tools.length}` : ''), typeColor, detail, chips };
   }
   return null;
 }
@@ -1210,7 +1324,35 @@ function LiveView({
   const redoThread = useRedoThread();
   const streamRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
-  const [filterFindings, setFilterFindings] = useState(false);
+  const [filterType, setFilterType] = useState<'all' | 'finding' | 'thread' | 'step' | 'search' | 'fetch' | 'error'>('all');
+  const [searchText, setSearchText] = useState('');
+  const [expandedFindingId, setExpandedFindingId] = useState<string | null>(null);
+  const [findingsSearch, setFindingsSearch] = useState('');
+  const [threadSearch, setThreadSearch] = useState('');
+  const [filterThreadId, setFilterThreadId] = useState<string | null>(null);
+  const [expandedEventKey, setExpandedEventKey] = useState<string | null>(null);
+  const [threadPanelWidth, setThreadPanelWidth] = useState(260);
+  const [findingsPanelWidth, setFindingsPanelWidth] = useState(380);
+
+  const startResizeThread = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = threadPanelWidth;
+    const onMove = (ev: MouseEvent) => setThreadPanelWidth(Math.max(180, Math.min(420, startW + ev.clientX - startX)));
+    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  const startResizeFindings = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = findingsPanelWidth;
+    const onMove = (ev: MouseEvent) => setFindingsPanelWidth(Math.max(260, Math.min(640, startW + ev.clientX - startX)));
+    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
 
   const stepsByThread = useMemo(() => {
     const map = new Map<string, ResearchStep[]>();
@@ -1243,6 +1385,19 @@ function LiveView({
 
   const ordered = useMemo(() => orderThreadsDepthFirst(threads), [threads]);
 
+  const filteredThreads = useMemo(() => {
+    if (!threadSearch.trim()) return ordered;
+    const q = threadSearch.trim().toLowerCase();
+    return ordered.filter(t => {
+      const hay = (t.short_query ?? t.query).toLowerCase();
+      let qi = 0;
+      for (let i = 0; i < hay.length && qi < q.length; i++) {
+        if (hay[i] === q[qi]) qi++;
+      }
+      return qi === q.length;
+    });
+  }, [ordered, threadSearch]);
+
   const threadColor = useMemo(() => {
     const map = new Map<string, string>();
     ordered.forEach((t, i) => map.set(t.id, THREAD_PALETTE[i % THREAD_PALETTE.length]));
@@ -1251,94 +1406,159 @@ function LiveView({
 
   const { highFindings, medFindings } = useMemo(() => {
     const sorted = [...findings].sort((a, b) => b.confidence - a.confidence);
+    const q = findingsSearch.trim().toLowerCase();
+    const filtered = q
+      ? sorted.filter(f => f.content.toLowerCase().includes(q) || f.summary.toLowerCase().includes(q) || f.tags.some(t => t.toLowerCase().includes(q)))
+      : sorted;
     return {
-      highFindings: sorted.filter(f => f.confidence >= 0.7),
-      medFindings: sorted.filter(f => f.confidence >= 0.4 && f.confidence < 0.7),
+      highFindings: filtered.filter(f => f.confidence >= 0.7),
+      medFindings: filtered.filter(f => f.confidence >= 0.4 && f.confidence < 0.7),
     };
-  }, [findings]);
+  }, [findings, findingsSearch]);
 
   const activeThreads = useMemo(() => threads.filter(t => t.status === 'active'), [threads]);
   const queuedThreads = useMemo(() => threads.filter(t => t.status === 'queued'), [threads]);
 
-  const streamEvents = useMemo(() => {
-    const evs = [...events].reverse();
-    return filterFindings ? evs.filter(e => e.type === 'finding') : evs;
-  }, [events, filterFindings]);
+  // Enrich thread events with a diff vs the previous event for the same thread.
+  // Thread updated_at bumps for: status changes, short_query set, priority changed, retry_after set.
+  type EnrichedEvent = StreamEvent & { threadDiff?: string };
 
-  useEffect(() => {
+  const streamEvents = useMemo(() => {
+    const prevState = new Map<string, ResearchThread>();
+    const enriched: EnrichedEvent[] = events.map(ev => {
+      if (ev.type !== 'thread') return ev;
+      const t = ev.payload;
+      const prev = prevState.get(t.id);
+      prevState.set(t.id, t);
+      if (!prev) return ev; // first event — show as normal spawn/queued/etc.
+      const changes: string[] = [];
+      if (prev.status !== t.status) changes.push(`${prev.status} → ${t.status}`);
+      if (prev.short_query !== t.short_query && t.short_query) changes.push(`titled`);
+      if (Math.abs((prev.priority ?? 0) - (t.priority ?? 0)) > 0.005)
+        changes.push(`priority ${prev.priority.toFixed(2)} → ${t.priority.toFixed(2)}`);
+      if (!prev.retry_after && t.retry_after) changes.push(`backoff`);
+      if (prev.retry_after && !t.retry_after && prev.status === t.status) changes.push(`retry`);
+      return { ...ev, threadDiff: changes.join(' · ') || null } as EnrichedEvent;
+    });
+
+    let evs = enriched.reverse();
+    if (filterType === 'finding') evs = evs.filter(e => e.type === 'finding');
+    else if (filterType === 'thread') evs = evs.filter(e => e.type === 'thread');
+    else if (filterType === 'step') evs = evs.filter(e => e.type === 'step');
+    else if (filterType === 'search') evs = evs.filter(e => e.type === 'step' && (e.payload.tool_calls ?? []).some(tc => tc.tool === 'web_search' || tc.tool === 'search_web' || tc.tool === 'search'));
+    else if (filterType === 'fetch') evs = evs.filter(e => e.type === 'step' && (e.payload.tool_calls ?? []).some(tc => tc.tool === 'fetch_url' || tc.tool === 'fetch'));
+    else if (filterType === 'error') evs = evs.filter(e => e.type === 'step' && !!(e.payload as ResearchStep).error);
+    if (filterThreadId) {
+      evs = evs.filter(e => {
+        if (e.type === 'finding') return (e.payload as ResearchFinding).thread_id === filterThreadId;
+        if (e.type === 'step') return e.payload.thread_id === filterThreadId;
+        if (e.type === 'thread') return e.payload.id === filterThreadId;
+        return true;
+      });
+    }
+    if (searchText.trim()) {
+      const q = searchText.trim().toLowerCase();
+      evs = evs.filter(e => {
+        const f = formatEventDetail(e);
+        if (!f) return false;
+        const haystack = [f.typeLabel, f.detail, ...(f.chips?.map(c => c.text) ?? [])].join(' ').toLowerCase();
+        // fuzzy: all query chars must appear in order
+        let qi = 0;
+        for (let i = 0; i < haystack.length && qi < q.length; i++) {
+          if (haystack[i] === q[qi]) qi++;
+        }
+        return qi === q.length;
+      });
+    }
+    return evs;
+  }, [events, filterType, filterThreadId, searchText]);
+
+  useLayoutEffect(() => {
     if (autoScroll && streamRef.current) {
       streamRef.current.scrollTop = streamRef.current.scrollHeight;
     }
   }, [streamEvents, autoScroll]);
 
   return (
-    <div
-      className="flex border border-border-primary rounded-lg overflow-hidden"
-      style={{ height: 'calc(100vh - 290px)', minHeight: '520px' }}
-    >
+    <div className="flex h-full overflow-hidden">
       {/* ── Pane 1: Thread controls (left) ── */}
-      <div className="w-52 shrink-0 flex flex-col border-r border-border-primary bg-bg-secondary overflow-hidden">
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-border-primary shrink-0">
-          <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary">Threads</span>
-          {isRunning && <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse ml-auto shrink-0" />}
-          <span className="text-xs text-text-disabled font-mono ml-auto">{threads.length}</span>
+      <div className="shrink-0 flex flex-col bg-bg-secondary overflow-hidden" style={{ width: threadPanelWidth }}>
+        <div className="flex flex-col border-b border-border-primary shrink-0">
+          <div className="flex items-center gap-2 px-3 py-2 h-[37px]">
+            {isRunning && <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shrink-0" />}
+            <span className="text-sm font-semibold uppercase tracking-wider text-text-secondary">Threads</span>
+            <span className="text-sm text-text-disabled font-mono ml-auto">{threads.length}</span>
+          </div>
+          <div className="px-3 pb-2">
+            <input
+              type="text"
+              value={threadSearch}
+              onChange={e => setThreadSearch(e.target.value)}
+              placeholder="search…"
+              className="w-full bg-bg-tertiary border border-border-primary rounded px-2 py-0.5 text-sm text-text-secondary placeholder:text-text-disabled focus:outline-none focus:border-accent/50"
+            />
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {ordered.map(thread => {
+          {filteredThreads.map(thread => {
             const isTerminal = thread.status === 'exhausted' || thread.status === 'pruned';
             const threadFindings = findingsByThread.get(thread.id) ?? [];
             const steps = stepsByThread.get(thread.id) ?? [];
-            const color = threadColor.get(thread.id) ?? '#8796b0';
             const progressPct = steps.length > 0 ? Math.min(100, (steps.length / 9) * 100) : 0;
             return (
               <div
                 key={thread.id}
-                className="px-3 py-2 border-b border-border-primary group hover:bg-bg-tertiary transition-colors"
-                style={{ borderLeft: `2px solid ${color}30` }}
+                role="button"
+                tabIndex={0}
+                aria-pressed={filterThreadId === thread.id}
+                onClick={() => setFilterThreadId(prev => prev === thread.id ? null : thread.id)}
+                onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setFilterThreadId(prev => prev === thread.id ? null : thread.id)}
+                className={clsx(
+                  'pl-3 pr-3 pt-1.5 pb-1.5 border-b border-border-primary border-l-4 group hover:bg-bg-tertiary transition-colors cursor-pointer focus:outline-none focus:ring-1 focus:ring-inset focus:ring-accent/50',
+                  liveStatusBorder[thread.status] ?? 'border-l-text-muted/30',
+                  filterThreadId === thread.id && 'bg-bg-tertiary/60'
+                )}
               >
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', liveStatusDot[thread.status] ?? 'bg-text-muted/40')} />
-                  <span className="text-xs font-medium text-text-primary truncate flex-1 leading-tight">
-                    {(thread.short_query ?? thread.query.split('\n')[0]).slice(0, 36)}
+                <div className="flex items-start gap-1.5 mb-1">
+                  <span className="text-sm font-medium text-text-primary line-clamp-2 flex-1 leading-snug">
+                    {thread.short_query ?? thread.query}
                   </span>
-                </div>
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <span className={clsx('text-[10px] px-1 py-0.5 rounded shrink-0', liveOriginColor[thread.origin] ?? 'bg-bg-tertiary text-text-muted')}>
-                    {thread.origin.replace(/_/g, ' ')}
-                  </span>
-                  <span className="text-[10px] font-mono text-text-disabled">p:{thread.priority.toFixed(2)}</span>
                   {threadFindings.length > 0 && (
-                    <span className="text-[10px] font-mono text-success ml-auto">{threadFindings.length}✦</span>
+                    <span className="text-sm font-mono text-success shrink-0 leading-5">{threadFindings.length}✦</span>
                   )}
                 </div>
                 {thread.status === 'active' && (
-                  <div className="h-0.5 bg-bg-tertiary rounded-full overflow-hidden mb-1.5">
+                  <div className="h-0.5 bg-bg-tertiary rounded-full overflow-hidden mb-1">
                     <div className="h-full bg-success rounded-full transition-all" style={{ width: `${progressPct}%` }} />
                   </div>
                 )}
-                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1">
+                  <span className={clsx('text-sm px-1 py-0.5 rounded shrink-0', liveOriginColor[thread.origin] ?? 'bg-bg-tertiary text-text-muted')}>
+                    {thread.origin.replace(/_/g, ' ')}
+                  </span>
+                  <span className="text-sm font-mono text-text-muted ml-auto">p:{thread.priority.toFixed(2)}</span>
                   <button
                     title="Increase priority"
-                    onClick={() => updateThread.mutate({ id: thread.id, sessionId, priority: Math.min(1.0, thread.priority + 0.1) })}
-                    className="p-0.5 text-text-disabled hover:text-text-secondary rounded"
+                    onClick={e => { e.stopPropagation(); updateThread.mutate({ id: thread.id, sessionId, priority: Math.min(1.0, thread.priority + 0.1) }); }}
+                    className="p-0.5 text-text-muted hover:text-text-primary rounded hover:bg-bg-primary/40"
                   ><Icon name="keyboard_arrow_up" size="xs" /></button>
                   <button
                     title="Decrease priority"
-                    onClick={() => updateThread.mutate({ id: thread.id, sessionId, priority: Math.max(0.0, thread.priority - 0.1) })}
-                    className="p-0.5 text-text-disabled hover:text-text-secondary rounded"
+                    onClick={e => { e.stopPropagation(); updateThread.mutate({ id: thread.id, sessionId, priority: Math.max(0.0, thread.priority - 0.1) }); }}
+                    className="p-0.5 text-text-muted hover:text-text-primary rounded hover:bg-bg-primary/40"
                   ><Icon name="keyboard_arrow_down" size="xs" /></button>
                   {isTerminal ? (
                     <button
                       title="Redo"
-                      onClick={() => redoThread.mutate({ sessionId, threadId: thread.id })}
+                      onClick={e => { e.stopPropagation(); redoThread.mutate({ sessionId, threadId: thread.id }); }}
                       disabled={redoThread.isPending}
-                      className="px-1 py-0.5 text-[10px] text-text-disabled hover:text-blue-400 rounded"
+                      className="px-1 py-0.5 text-sm text-text-secondary hover:text-blue-400 rounded hover:bg-bg-primary/40"
                     >↺</button>
                   ) : (
                     <button
                       title="Prune"
-                      onClick={() => updateThread.mutate({ id: thread.id, sessionId, status: 'pruned' })}
-                      className="p-0.5 text-text-disabled hover:text-error rounded ml-auto"
+                      onClick={e => { e.stopPropagation(); updateThread.mutate({ id: thread.id, sessionId, status: 'pruned' }); }}
+                      className="p-0.5 text-text-muted hover:text-error rounded hover:bg-bg-primary/40"
                     ><Icon name="close" size="xs" /></button>
                   )}
                 </div>
@@ -1349,7 +1569,7 @@ function LiveView({
         <div className="border-t border-border-primary px-3 py-2 shrink-0 space-y-1.5">
           <button
             onClick={onToggleSessionFetch}
-            className={clsx('w-full text-left px-2 py-1 rounded text-xs border transition-colors',
+            className={clsx('w-full text-left px-2 py-1 rounded text-sm border transition-colors',
               sessionFetchText
                 ? 'bg-green-900/30 border-green-700/30 text-green-400'
                 : 'bg-bg-tertiary border-border-primary text-text-muted hover:text-text-secondary'
@@ -1358,76 +1578,211 @@ function LiveView({
         </div>
       </div>
 
+      {/* Resize handle 1 */}
+      <div
+        className="w-1 shrink-0 cursor-col-resize bg-border-primary hover:bg-accent/40 transition-colors"
+        onMouseDown={startResizeThread}
+      />
       {/* ── Pane 2: Findings (center) ── */}
-      <div className="flex flex-col overflow-hidden border-r border-border-primary" style={{ width: '38%' }}>
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-border-primary bg-bg-secondary shrink-0">
-          <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary">Findings</span>
-          {findings.length > 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-success/10 border border-success/20 text-success">{findings.length}</span>
-          )}
+      <div className="flex flex-col overflow-hidden" style={{ width: findingsPanelWidth, minWidth: 0 }}>
+        <div className="flex flex-col border-b border-border-primary bg-bg-secondary shrink-0">
+          <div className="flex items-center gap-2 px-3 py-2 h-[37px]">
+            <span className="text-sm font-semibold uppercase tracking-wider text-text-secondary">Findings</span>
+            <span className="text-sm text-text-muted font-mono ml-auto">{findings.length}</span>
+          </div>
+          <div className="px-3 pb-2">
+            <input
+              type="text"
+              value={findingsSearch}
+              onChange={e => setFindingsSearch(e.target.value)}
+              placeholder="search…"
+              className="w-full bg-bg-tertiary border border-border-primary rounded px-2 py-0.5 text-sm text-text-secondary placeholder:text-text-disabled focus:outline-none focus:border-accent/50"
+            />
+          </div>
         </div>
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+        <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
           {findings.length === 0 && activeThreads.length === 0 ? (
-            <p className="text-xs text-text-muted text-center py-8">No findings yet.</p>
+            <p className="text-sm text-text-muted text-center py-8">No findings yet.</p>
           ) : (
             <>
               {highFindings.length > 0 && (
                 <>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-text-disabled">High confidence · {highFindings.length}</p>
-                  {highFindings.map(f => (
-                    <div key={f.id} className="bg-bg-secondary border border-border-primary rounded border-l-2 border-l-success px-3 py-2 space-y-1.5">
-                      <p className="text-xs text-text-primary leading-relaxed">{f.content.slice(0, 200)}{f.content.length > 200 ? '…' : ''}</p>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {f.source_urls[0] && (
-                          <span className="text-[10px] font-mono text-blue-400 bg-blue-400/8 border border-blue-400/15 px-1 py-0.5 rounded truncate max-w-28">
-                            {(() => { try { return new URL(f.source_urls[0]).hostname; } catch { return f.source_urls[0]; } })()}
-                          </span>
+                  <p className="text-sm text-text-muted uppercase tracking-wide">High confidence ({highFindings.length})</p>
+                  {highFindings.map(f => {
+                    const isExpanded = expandedFindingId === f.id;
+                    const srcMeta = f.source_url_meta?.length ? f.source_url_meta : f.source_urls.map(u => ({ url: u, title: '', snippet: '' }));
+                    const thread = threads.find(t => t.id === f.thread_id);
+                    const originLabel = !thread || thread.origin === 'seed' ? null
+                      : thread.origin === 'perturbation' && thread.perturbation_strategy ? thread.perturbation_strategy.replace(/_/g, '·')
+                      : thread.origin.replace(/_/g, '·');
+                    const originCls = thread?.origin === 'follow_up' ? 'text-blue-400'
+                      : thread?.origin === 'perturbation' ? 'text-orange-400'
+                      : thread?.origin === 'user_injected' ? 'text-yellow-400'
+                      : 'text-text-muted';
+                    return (
+                      <div key={f.id}
+                        role="button"
+                        tabIndex={0}
+                        aria-expanded={isExpanded}
+                        onClick={() => setExpandedFindingId(isExpanded ? null : f.id)}
+                        onKeyDown={e => e.key === 'Enter' || e.key === ' ' ? setExpandedFindingId(isExpanded ? null : f.id) : null}
+                        className="bg-bg-secondary border border-border-primary rounded border-l-2 border-l-success px-3 py-2 space-y-1.5 cursor-pointer hover:bg-bg-tertiary/30 transition-colors focus:outline-none focus:ring-1 focus:ring-accent/50"
+                      >
+                        <Md className={clsx('text-sm leading-relaxed', !isExpanded && 'line-clamp-4')}>
+                          {isExpanded ? f.content : f.content}
+                        </Md>
+                        {isExpanded && (
+                          <div className="space-y-2 pt-1.5 border-t border-border-primary/30">
+                            {srcMeta.length > 0 && (
+                              <div>
+                                <p className="text-sm text-text-muted uppercase tracking-wide mb-1">Sources</p>
+                                <ol className="list-decimal list-inside space-y-0.5">
+                                  {srcMeta.map((src, i) => {
+                                    let host = src.url;
+                                    try { host = new URL(src.url).hostname; } catch { /* keep */ }
+                                    return (
+                                      <li key={i} className="text-sm text-text-muted">
+                                        <a href={src.url} target="_blank" rel="noopener noreferrer"
+                                          onClick={e => e.stopPropagation()}
+                                          className="text-accent hover:underline">
+                                          {src.title || host}
+                                        </a>
+                                      </li>
+                                    );
+                                  })}
+                                </ol>
+                              </div>
+                            )}
+                            {f.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {f.tags.map(tag => (
+                                  <span key={tag} className="px-1 py-0.5 rounded bg-bg-tertiary text-sm text-text-muted border border-border-primary/50">{tag}</span>
+                                ))}
+                              </div>
+                            )}
+                            {thread && (
+                              <p className="text-sm text-text-muted italic truncate">{thread.short_query ?? thread.query}</p>
+                            )}
+                          </div>
                         )}
-                        <span className="text-[10px] font-mono text-text-disabled bg-bg-tertiary border border-border-primary px-1 py-0.5 rounded">
-                          {threads.find(t => t.id === f.thread_id)?.origin?.replace(/_/g, ' ') ?? '—'}
-                        </span>
-                        <span className="text-[10px] font-mono text-text-muted ml-auto">{(f.confidence * 100).toFixed(0)}%</span>
+                        {!isExpanded && (
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            {f.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1 flex-1 min-w-0 overflow-hidden">
+                                {f.tags.slice(0, 3).map(tag => (
+                                  <span key={tag} className="text-sm text-text-muted bg-bg-tertiary border border-border-primary/60 px-1 py-0.5 rounded whitespace-nowrap">{tag}</span>
+                                ))}
+                              </div>
+                            )}
+                            <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                              {originLabel && <span className={clsx('text-sm font-mono', originCls)}>{originLabel}</span>}
+                              <span className="text-sm font-mono text-text-secondary">{(f.confidence * 100).toFixed(0)}%</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </>
               )}
               {medFindings.length > 0 && (
                 <>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-text-disabled mt-3">Medium confidence · {medFindings.length}</p>
-                  {medFindings.map(f => (
-                    <div key={f.id} className="bg-bg-secondary border border-border-primary rounded border-l-2 border-l-blue-400/50 px-3 py-2 space-y-1.5">
-                      <p className="text-xs text-text-primary leading-relaxed">{f.content.slice(0, 180)}{f.content.length > 180 ? '…' : ''}</p>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {f.source_urls[0] && (
-                          <span className="text-[10px] font-mono text-blue-400 bg-blue-400/8 border border-blue-400/15 px-1 py-0.5 rounded truncate max-w-28">
-                            {(() => { try { return new URL(f.source_urls[0]).hostname; } catch { return f.source_urls[0]; } })()}
-                          </span>
+                  <p className="text-sm text-text-muted uppercase tracking-wide mt-3">Medium confidence ({medFindings.length})</p>
+                  {medFindings.map(f => {
+                    const isExpanded = expandedFindingId === f.id;
+                    const srcMeta = f.source_url_meta?.length ? f.source_url_meta : f.source_urls.map(u => ({ url: u, title: '', snippet: '' }));
+                    const thread = threads.find(t => t.id === f.thread_id);
+                    const originLabel = !thread || thread.origin === 'seed' ? null
+                      : thread.origin === 'perturbation' && thread.perturbation_strategy ? thread.perturbation_strategy.replace(/_/g, '·')
+                      : thread.origin.replace(/_/g, '·');
+                    const originCls = thread?.origin === 'follow_up' ? 'text-blue-400'
+                      : thread?.origin === 'perturbation' ? 'text-orange-400'
+                      : thread?.origin === 'user_injected' ? 'text-yellow-400'
+                      : 'text-text-muted';
+                    return (
+                      <div key={f.id}
+                        role="button"
+                        tabIndex={0}
+                        aria-expanded={isExpanded}
+                        onClick={() => setExpandedFindingId(isExpanded ? null : f.id)}
+                        onKeyDown={e => e.key === 'Enter' || e.key === ' ' ? setExpandedFindingId(isExpanded ? null : f.id) : null}
+                        className="bg-bg-secondary border border-border-primary rounded border-l-2 border-l-blue-400/50 px-3 py-2 space-y-1.5 cursor-pointer hover:bg-bg-tertiary/30 transition-colors focus:outline-none focus:ring-1 focus:ring-accent/50"
+                      >
+                        <Md className={clsx('text-sm leading-relaxed', !isExpanded && 'line-clamp-4')}>
+                          {f.content}
+                        </Md>
+                        {isExpanded && (
+                          <div className="space-y-2 pt-1.5 border-t border-border-primary/30">
+                            {srcMeta.length > 0 && (
+                              <div>
+                                <p className="text-sm text-text-muted uppercase tracking-wide mb-1">Sources</p>
+                                <ol className="list-decimal list-inside space-y-0.5">
+                                  {srcMeta.map((src, i) => {
+                                    let host = src.url;
+                                    try { host = new URL(src.url).hostname; } catch { /* keep */ }
+                                    return (
+                                      <li key={i} className="text-sm text-text-muted">
+                                        <a href={src.url} target="_blank" rel="noopener noreferrer"
+                                          onClick={e => e.stopPropagation()}
+                                          className="text-accent hover:underline">
+                                          {src.title || host}
+                                        </a>
+                                      </li>
+                                    );
+                                  })}
+                                </ol>
+                              </div>
+                            )}
+                            {f.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {f.tags.map(tag => (
+                                  <span key={tag} className="px-1 py-0.5 rounded bg-bg-tertiary text-sm text-text-muted border border-border-primary/50">{tag}</span>
+                                ))}
+                              </div>
+                            )}
+                            {thread && (
+                              <p className="text-sm text-text-muted italic truncate">{thread.short_query ?? thread.query}</p>
+                            )}
+                          </div>
                         )}
-                        <span className="text-[10px] font-mono text-text-muted ml-auto">{(f.confidence * 100).toFixed(0)}%</span>
+                        {!isExpanded && (
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            {f.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1 flex-1 min-w-0 overflow-hidden">
+                                {f.tags.slice(0, 3).map(tag => (
+                                  <span key={tag} className="text-sm text-text-muted bg-bg-tertiary border border-border-primary/60 px-1 py-0.5 rounded whitespace-nowrap">{tag}</span>
+                                ))}
+                              </div>
+                            )}
+                            <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                              {originLabel && <span className={clsx('text-sm font-mono', originCls)}>{originLabel}</span>}
+                              <span className="text-sm font-mono text-text-secondary">{(f.confidence * 100).toFixed(0)}%</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </>
               )}
-              {(activeThreads.length > 0 || queuedThreads.length > 0) && (
-                <div className="mt-3 border border-dashed border-border-primary rounded px-3 py-2 space-y-1.5">
-                  <div className="flex items-center gap-1.5">
-                    {activeThreads.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />}
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-text-disabled">Investigating</span>
-                  </div>
+              {activeThreads.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  <p className="text-sm font-semibold text-text-secondary">Investigating</p>
                   {activeThreads.map(t => (
-                    <div key={t.id} className="flex items-center gap-1.5 text-[11px] text-text-secondary">
+                    <div key={t.id} className="flex items-center gap-2 text-sm text-text-secondary">
                       <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shrink-0" />
-                      {(t.short_query ?? t.query.split('\n')[0]).slice(0, 60)}
+                      <span className="truncate">{t.short_query ?? t.query}</span>
                     </div>
                   ))}
-                  {queuedThreads.map(t => (
-                    <div key={t.id} className="flex items-center gap-1.5 text-[11px] text-text-muted">
+                  {queuedThreads.slice(0, 3).map(t => (
+                    <div key={t.id} className="flex items-center gap-2 text-sm text-text-muted">
                       <span className="w-1.5 h-1.5 rounded-full bg-warning/60 shrink-0" />
-                      {(t.short_query ?? t.query.split('\n')[0]).slice(0, 60)}
+                      <span className="truncate">{t.short_query ?? t.query}</span>
                     </div>
                   ))}
+                  {queuedThreads.length > 3 && (
+                    <p className="text-sm text-text-muted pl-3.5">+{queuedThreads.length - 3} queued</p>
+                  )}
                 </div>
               )}
             </>
@@ -1435,126 +1790,372 @@ function LiveView({
         </div>
       </div>
 
+      {/* Resize handle 2 */}
+      <div
+        className="w-1 shrink-0 cursor-col-resize bg-border-primary hover:bg-accent/40 transition-colors"
+        onMouseDown={startResizeFindings}
+      />
       {/* ── Pane 3: Live event stream (right) ── */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0 bg-bg-primary">
-        {/* Thread color chips */}
-        <div className="flex items-center gap-0 border-b border-border-primary bg-bg-secondary overflow-x-auto shrink-0">
-          {ordered.filter(t => t.status !== 'pruned' || findingsByThread.get(t.id)?.length).slice(0, 8).map(t => {
-            const color = threadColor.get(t.id) ?? '#8796b0';
-            const label = (t.short_query ?? t.query.split('\n')[0]).slice(0, 14);
-            return (
-              <div
-                key={t.id}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 border-r border-border-primary shrink-0"
-                style={{ background: `${color}08` }}
-              >
-                <div
-                  className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold font-mono shrink-0"
-                  style={{ background: `${color}20`, color, border: `1px solid ${color}35` }}
-                >
-                  {ordered.indexOf(t) < 26 ? String.fromCharCode(65 + ordered.indexOf(t)) : '#'}
-                </div>
-                <div>
-                  <div className="text-[10px] leading-tight truncate max-w-20" style={{ color }}>{label}</div>
-                  <div className="text-[9px] text-text-disabled font-mono">{t.status === 'active' ? 'active' : t.status === 'queued' ? 'queued' : t.status}</div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Filter bar */}
-        <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-primary bg-bg-secondary shrink-0">
-          <span className="text-[10px] uppercase tracking-wider text-text-disabled font-semibold mr-1">Show</span>
-          <button
-            onClick={() => setFilterFindings(f => !f)}
-            className={clsx('px-1.5 py-0.5 rounded text-[11px] border font-mono transition-colors',
-              filterFindings
-                ? 'border-warning/30 bg-warning/10 text-warning'
-                : 'border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary'
-            )}
-          >★ findings</button>
-          <button
-            onClick={() => setFilterFindings(false)}
-            className="px-1.5 py-0.5 rounded text-[11px] border border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary font-mono"
-          >all</button>
-          <div className="flex-1" />
-          <button
-            onClick={() => setAutoScroll(a => !a)}
-            className={clsx('px-1.5 py-0.5 rounded text-[11px] border transition-colors',
-              autoScroll
-                ? 'border-success/25 bg-success/8 text-success'
-                : 'border-border-primary bg-bg-tertiary text-text-muted'
-            )}
-          >↓ auto-scroll</button>
-        </div>
-
-        {/* Event stream */}
-        <div
-          ref={streamRef}
-          className="flex-1 overflow-y-auto py-1"
-          onScroll={e => {
-            const el = e.currentTarget;
-            const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
-            setAutoScroll(atBottom);
-          }}
-        >
-          {streamEvents.length === 0 && (
-            <p className="text-xs text-text-muted text-center py-8">Waiting for events…</p>
-          )}
-          {streamEvents.map((ev, i) => {
-            const formatted = formatEventDetail(ev);
-            if (!formatted) return null;
-            const threadId = ev.type === 'finding' ? ev.payload.thread_id
-              : ev.type === 'step' ? ev.payload.thread_id
-              : ev.type === 'thread' ? ev.payload.id
-              : null;
-            const color = threadId ? (threadColor.get(threadId) ?? '#8796b0') : '#8796b0';
-            const threadIdx = threadId ? ordered.findIndex(t => t.id === threadId) : -1;
-            const threadLetter = threadIdx >= 0 && threadIdx < 26 ? String.fromCharCode(65 + threadIdx) : '?';
-            const ts = ev.type === 'finding' ? ev.payload.created_at
-              : ev.type === 'step' ? ev.payload.created_at
-              : ev.type === 'thread' ? ev.payload.created_at
-              : null;
-            const timeStr = ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
-            const isFinding = ev.type === 'finding';
-            const isHighFinding = isFinding && (ev.payload as ResearchFinding).confidence >= 0.7;
-            return (
-              <div
-                key={i}
-                className={clsx(
-                  'grid items-baseline px-3 py-0.5 border-l-2 transition-colors hover:bg-bg-secondary/50',
-                  isFinding
-                    ? isHighFinding
-                      ? 'bg-warning/5 border-l-warning/40'
-                      : 'bg-success/4 border-l-success/25'
-                    : 'border-l-transparent'
-                )}
-                style={{ gridTemplateColumns: '52px 22px 80px 1fr', gap: '0' }}
-              >
-                <span className="text-[10px] text-text-disabled font-mono pr-2 truncate">{timeStr}</span>
-                <span className="pr-1 flex items-center">
+        <>
+          {/* Event log header */}
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border-primary bg-bg-secondary shrink-0 h-[37px]">
+            <span className="text-sm font-semibold uppercase tracking-wider text-text-secondary shrink-0">Event Log</span>
+            {filterThreadId && (() => {
+              const ft = threads.find(t => t.id === filterThreadId);
+              const ftColor = threadColor.get(filterThreadId) ?? '#8796b0';
+              return (
+                <div className="flex items-center gap-2 flex-1 overflow-hidden ml-2">
                   <div
-                    className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold font-mono"
-                    style={{ background: `${color}20`, color, border: `1px solid ${color}30` }}
-                  >{threadLetter}</div>
-                </span>
-                <span className={clsx('text-[11px] font-mono pr-2 truncate', formatted.typeColor)}>{formatted.typeLabel}</span>
-                <span className="text-[11px] text-text-muted truncate">
-                  {isHighFinding && <span className="text-warning mr-1">★</span>}
-                  {formatted.detail}
-                </span>
+                    className="text-sm px-1.5 py-0.5 rounded border truncate max-w-48"
+                    style={{ background: `${ftColor}15`, borderColor: `${ftColor}35`, color: ftColor }}
+                  >
+                    {ft ? (ft.short_query ?? ft.query) : filterThreadId.slice(0, 12)}
+                  </div>
+                  <button
+                    onClick={() => setFilterThreadId(null)}
+                    className="text-sm text-text-muted hover:text-text-primary px-1 py-0.5 rounded border border-border-primary shrink-0 transition-colors"
+                  >× clear</button>
+                </div>
+              );
+            })()}
+            <span className="text-sm text-text-muted font-mono ml-auto shrink-0">
+              {streamEvents.length !== events.length ? `${streamEvents.length} / ${events.length}` : events.length}
+            </span>
+            <button
+              title="Download activity log (.md)"
+              onClick={() => { const a = document.createElement('a'); a.href = `/api/research/queries/${sessionId}/export/log`; a.download = ''; a.click(); }}
+              className="p-1 rounded text-text-muted hover:text-text-secondary hover:bg-bg-tertiary transition-colors shrink-0"
+            ><Icon name="download" size="xs" /></button>
+          </div>
+
+          {/* Filter bar */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-primary bg-bg-secondary shrink-0">
+            <input
+              type="text"
+              value={searchText}
+              onChange={e => setSearchText(e.target.value)}
+              placeholder="search…"
+              className="flex-1 min-w-0 bg-bg-tertiary border border-border-primary rounded px-2 py-0.5 text-sm text-text-secondary placeholder:text-text-disabled focus:outline-none focus:border-accent/50"
+            />
+            <select
+              value={filterType}
+              onChange={e => setFilterType(e.target.value as typeof filterType)}
+              className="bg-bg-tertiary border border-border-primary rounded px-1.5 py-0.5 text-sm text-text-secondary focus:outline-none focus:border-accent/50 shrink-0"
+            >
+              <option value="all">all</option>
+              <option value="finding">findings</option>
+              <option value="thread">threads</option>
+              <option value="step">steps</option>
+              <option value="search">search</option>
+              <option value="fetch">fetch</option>
+              <option value="error">errors</option>
+            </select>
+            <button
+              onClick={() => { if (streamRef.current) streamRef.current.scrollTop = 0; }}
+              title="Scroll to first"
+              className="px-1.5 py-0.5 rounded text-sm border border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary transition-colors font-mono"
+            >▲</button>
+            <button
+              onClick={() => { if (streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight; }}
+              title="Scroll to last"
+              className="px-1.5 py-0.5 rounded text-sm border border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary transition-colors font-mono"
+            >▼</button>
+            <button
+              onClick={() => setAutoScroll(a => !a)}
+              className={clsx('px-1.5 py-0.5 rounded text-sm border transition-colors shrink-0',
+                autoScroll
+                  ? 'border-success/25 bg-success/8 text-success'
+                  : 'border-border-primary bg-bg-tertiary text-text-muted'
+              )}
+            >↓ auto</button>
+          </div>
+
+          {/* Event stream */}
+          <div
+            ref={streamRef}
+            className="flex-1 overflow-y-auto py-1"
+            onScroll={e => {
+              const el = e.currentTarget;
+              const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+              setAutoScroll(atBottom);
+            }}
+          >
+            {streamEvents.length === 0 && (
+              <p className="text-sm text-text-muted text-center py-8">Waiting for events…</p>
+            )}
+            {streamEvents.length > RENDER_WINDOW && (
+              <p className="text-sm text-text-muted text-center py-1.5 border-b border-border-primary/20">
+                {streamEvents.length - RENDER_WINDOW} older events not shown
+              </p>
+            )}
+            {streamEvents.slice(-RENDER_WINDOW).map(ev => {
+              const formatted = formatEventDetail(ev);
+              if (!formatted) return null;
+              const evKey = ev.type === 'thread'
+                ? `thread:${ev.payload.id}:${ev.payload.updated_at ?? ev.payload.created_at}`
+                : `${ev.type}:${(ev.payload as { id: string }).id}`;
+              const isExpanded = expandedEventKey === evKey;
+              const threadId = ev.type === 'finding' ? ev.payload.thread_id
+                : ev.type === 'step' ? ev.payload.thread_id
+                : ev.type === 'thread' ? ev.payload.id
+                : null;
+              const color = threadId ? (threadColor.get(threadId) ?? '#8796b0') : '#8796b0';
+              const thread = threadId ? ordered.find(t => t.id === threadId) ?? null : null;
+              const threadIdx = threadId ? ordered.findIndex(t => t.id === threadId) : -1;
+              const ts = ev.type === 'finding' ? ev.payload.created_at
+                : ev.type === 'step' ? ev.payload.created_at
+                : ev.type === 'thread' ? ev.payload.created_at
+                : null;
+              const timeStr = ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '';
+              const isFinding = ev.type === 'finding';
+              // For label-only steps with no detail, show abbreviated thread query
+              const isLabelOnlyStep = ev.type === 'step' && (ev.payload.tool_calls ?? []).length === 0;
+              const abbrevThreadQ = thread ? (thread.short_query ?? thread.query) : null;
+              const displayDetail = formatted.detail || (isLabelOnlyStep && abbrevThreadQ) || '';
+              const isHighFinding = isFinding && (ev.payload as ResearchFinding).confidence >= 0.7;
+              const isError = ev.type === 'step' && !!(ev.payload as ResearchStep).error;
+              return (
+                <div
+                  key={evKey}
+                  className={clsx(
+                    'border-b border-border-primary/20 transition-colors',
+                    isError ? 'bg-error/8'
+                      : isFinding
+                        ? isHighFinding ? 'bg-warning/5' : 'bg-success/4'
+                        : isExpanded ? 'bg-bg-secondary/60' : 'hover:bg-bg-secondary/40'
+                  )}
+                  style={{ borderLeft: `6px solid ${color}${isHighFinding ? 'cc' : '60'}` }}
+                >
+                  {/* Collapsed row */}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setExpandedEventKey(prev => prev === evKey ? null : evKey)}
+                    onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setExpandedEventKey(prev => prev === evKey ? null : evKey)}
+                    className="grid items-baseline px-3 py-1 cursor-pointer focus:outline-none"
+                    style={{ gridTemplateColumns: '72px 90px auto 1fr auto', gap: '0' }}
+                  >
+                    <span className="text-sm text-text-muted font-mono pr-1.5 overflow-hidden">{timeStr}</span>
+                    <span className={clsx('text-sm font-mono pr-2 shrink-0', formatted.typeColor)}>{formatted.typeLabel}</span>
+                    <span className="flex items-baseline gap-1.5 pr-2 shrink-0">
+                      {formatted.chips?.filter(c => !c.meta).map((chip, ci) => (
+                        <span key={ci} className={clsx('text-sm font-mono', chip.color)}>{chip.text}</span>
+                      ))}
+                    </span>
+                    <span className="text-sm min-w-0 truncate text-text-secondary pr-2">
+                      {displayDetail}
+                    </span>
+                    <span className="flex items-baseline gap-1.5 justify-end shrink-0">
+                      {formatted.chips?.filter(c => c.meta).map((chip, ci) => (
+                        <span key={ci} className={clsx('text-sm font-mono', chip.color)}>{chip.text}</span>
+                      ))}
+                    </span>
+                  </div>
+                  {/* Expanded content */}
+                  {isExpanded && (
+                    <div className="px-3 pb-2.5 pt-1 space-y-1.5 border-l-2 ml-[168px]" style={{ borderLeftColor: `${color}40` }}>
+                      {ev.type === 'step' && (() => {
+                        const s = ev.payload;
+                        return (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 text-sm text-text-muted flex-wrap">
+                              <span className="text-blue-400/80 font-mono">llm</span>
+                              <span className="font-mono">{s.model}</span>
+                              <span>{s.prompt_tokens}+{s.completion_tokens}</span>
+                              {s.cost_usd > 0 && <span>${s.cost_usd.toFixed(4)}</span>}
+                              {s.duration_ms > 0 && <span>{(s.duration_ms / 1000).toFixed(1)}s</span>}
+                            </div>
+                            {s.label && s.tool_calls.length > 0 && <p className="text-sm text-text-secondary font-mono">{s.label}</p>}
+                            {s.label === 'summarize thread' && thread && (
+                              <div className="text-sm space-y-0.5">
+                                <p className="text-text-secondary">Generates short conceptual title for thread</p>
+                                <p className="text-text-secondary truncate">query: {thread.short_query ?? thread.query}</p>
+                                {thread.short_query && <p className="text-text-primary">title: {thread.short_query}</p>}
+                              </div>
+                            )}
+                            {s.tool_calls.map((tc, ti) => (
+                              <div key={ti} className="space-y-0.5">
+                                <div className="flex items-start gap-2">
+                                  <span className="text-text-secondary text-sm font-mono shrink-0">
+                                    {tc.tool === 'web_search' ? 'search' : tc.tool}
+                                  </span>
+                                  {tc.input && (
+                                    <span className="text-sm text-text-primary break-words flex-1">
+                                      {(tc.tool === 'web_search' || tc.tool === 'search_web') && (tc.input as Record<string,unknown>).query
+                                        ? `"${(tc.input as Record<string,unknown>).query as string}"`
+                                        : <span className="text-text-secondary text-sm font-mono">{JSON.stringify(tc.input).slice(0, 160)}</span>}
+                                    </span>
+                                  )}
+                                </div>
+                                {tc.jina_fetches && tc.jina_fetches.length > 0 && (
+                                  <div className="pl-3 text-sm text-text-secondary">
+                                    {tc.jina_fetches.map((j, ji) => {
+                                      let host = j.url; try { host = new URL(j.url).hostname; } catch { /* keep */ }
+                                      return <span key={ji} className={clsx('mr-2', j.ok ? 'text-teal-400' : 'text-error')}>{host}</span>;
+                                    })}
+                                  </div>
+                                )}
+                                {tc.output && <p className="pl-3 text-sm text-text-secondary/70 break-words">{tc.output.slice(0, 300)}{tc.output.length > 300 ? '…' : ''}</p>}
+                              </div>
+                            ))}
+                            {s.metadata && (() => {
+                              const m = s.metadata;
+                              if (m.decision === 'gap_analysis') return (
+                                <div className="text-sm">
+                                  <span className={m.has_gaps ? 'text-warning' : 'text-text-secondary'}>
+                                    {m.has_gaps ? `${m.gap_count as number} gaps` : 'no gaps'}
+                                  </span>
+                                </div>
+                              );
+                              if (m.decision === 'synthesis') return (
+                                <div className="flex gap-3 text-sm font-mono">
+                                  <span className="text-success">conf {((m.confidence as number) * 100).toFixed(0)}%</span>
+                                  <span className="text-blue-400">novel {((m.novelty as number) * 100).toFixed(0)}%</span>
+                                  <span className="text-text-muted">act {((m.actionability as number) * 100).toFixed(0)}%</span>
+                                  {(m.tags as string[]).length > 0 && (
+                                    <span className="text-text-secondary">{(m.tags as string[]).join(', ')}</span>
+                                  )}
+                                </div>
+                              );
+                              if (m.decision === 'dedup') return (
+                                <div className="space-y-1 text-sm">
+                                  <p className={clsx((m.is_duplicate as boolean) ? 'text-error' : 'text-text-secondary')}>
+                                    {(m.is_duplicate as boolean) ? 'duplicate detected' : `unique · checked ${m.existing_count as number} findings`}
+                                  </p>
+                                  {(m.new_summary as string) && (
+                                    <p className="text-text-secondary italic">new: "{m.new_summary as string}"</p>
+                                  )}
+                                  {(m.compared_to as string[] | undefined)?.map((s, i) => (
+                                    <p key={i} className="pl-3 text-text-secondary/60 truncate">vs: "{s}"</p>
+                                  ))}
+                                </div>
+                              );
+                              if (m.decision === 'follow_up_eval') return (
+                                <div className="space-y-0.5 text-sm">
+                                  <p className="text-text-secondary">
+                                    {m.accepted_count as number} accepted · {m.rejected_count as number} rejected
+                                    {(m.retry_count as number) > 0 && ` · ${m.retry_count as number} retries`}
+                                    {(m.similarity_threshold as number) && ` · sim≥${(m.similarity_threshold as number).toFixed(2)}`}
+                                  </p>
+                                  {(m.candidates as Array<{text: string; accepted: boolean; reason: string|null; sim: number; rank: number}> | undefined)?.map((c, i) => (
+                                    <div key={i} className={clsx('pl-2 flex gap-2 items-baseline', c.accepted ? 'text-text-secondary' : 'text-text-muted/60')}>
+                                      <span className="shrink-0">{c.accepted ? '✓' : '✗'}</span>
+                                      <span className="truncate flex-1">"{c.text}"</span>
+                                      <span className="font-mono shrink-0 text-sm">sim {c.sim.toFixed(2)}</span>
+                                      {c.reason && <span className="text-error/70 shrink-0 text-sm truncate max-w-32">{c.reason}</span>}
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                              if (m.decision === 'formulate_queries') return (
+                                <div className="space-y-0.5 text-sm">
+                                  <p className="text-text-secondary">{(m.queries as string[]).length} queries formulated{(m.skipped_duplicates as number) > 0 && `, ${m.skipped_duplicates as number} skipped (already searched)`}</p>
+                                  {(m.queries as string[]).map((q, i) => (
+                                    <p key={i} className="pl-2 text-text-secondary/80 truncate">→ "{q}"</p>
+                                  ))}
+                                </div>
+                              );
+                              return null;
+                            })()}
+                            {s.error && (
+                              <div className="mt-1 p-2 rounded bg-error/8 border border-error/20">
+                                <p className="text-sm font-mono text-error break-words whitespace-pre-wrap">{s.error}</p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                      {ev.type === 'finding' && (() => {
+                        const f = ev.payload;
+                        const srcMeta = f.source_url_meta?.length ? f.source_url_meta : f.source_urls.map(u => ({ url: u, title: '', snippet: '' }));
+                        return (
+                          <div className="space-y-1.5">
+                            <div className="text-sm text-text-primary leading-relaxed prose prose-sm prose-invert max-w-none">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>{f.content}</ReactMarkdown>
+                            </div>
+                            <div className="flex items-center gap-3 text-sm font-mono flex-wrap">
+                              <span className={f.confidence >= 0.7 ? 'text-success' : f.confidence >= 0.4 ? 'text-warning' : 'text-error'}>
+                                conf {(f.confidence * 100).toFixed(0)}%
+                              </span>
+                              <span className="text-blue-400">novel {(f.novelty * 100).toFixed(0)}%</span>
+                              <span className="text-text-muted">act {(f.actionability * 100).toFixed(0)}%</span>
+                            </div>
+                            {srcMeta.length > 0 && (
+                              <div className="space-y-0.5">
+                                {srcMeta.map((src, si) => {
+                                  let host = src.url; try { host = new URL(src.url).hostname; } catch { /* keep */ }
+                                  return (
+                                    <a key={si} href={src.url} target="_blank" rel="noopener noreferrer"
+                                      onClick={e => e.stopPropagation()}
+                                      className="block text-sm text-accent hover:underline truncate">
+                                      {src.title || host}
+                                    </a>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            {f.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {f.tags.map(tag => (
+                                  <span key={tag} className="px-1 py-0.5 rounded bg-bg-tertiary text-sm text-text-muted">{tag}</span>
+                                ))}
+                              </div>
+                            )}
+                            {f.follow_up_analysis && (
+                              <div className="space-y-1 pt-1 border-t border-border-primary/30">
+                                <p className="text-sm font-semibold uppercase tracking-wider text-text-muted">
+                                  Follow-up candidates · threshold {(f.follow_up_analysis.similarity_threshold * 100).toFixed(0)}%
+                                  {f.follow_up_analysis.retry_count > 0 && ` · ${f.follow_up_analysis.retry_count} retries`}
+                                </p>
+                                {f.follow_up_analysis.candidates.map((c, ci) => (
+                                  <div key={ci} className="flex items-start gap-2">
+                                    <span className={clsx('text-sm font-mono shrink-0 mt-0.5', c.accepted ? 'text-success' : 'text-error')}>
+                                      {c.accepted ? '✓' : '✗'}
+                                    </span>
+                                    <span className={clsx('text-sm flex-1', c.accepted ? 'text-text-primary' : 'text-text-muted')}>{c.text}</span>
+                                    <span className="text-sm font-mono text-text-muted shrink-0">
+                                      q:{(c.quality_score * 100).toFixed(0)}% r:{(c.rank_score * 100).toFixed(0)}%
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                      {ev.type === 'thread' && (() => {
+                        const t = ev.payload;
+                        return (
+                          <div className="space-y-1 text-sm text-text-muted">
+                            <p className="text-text-secondary">{t.query}</p>
+                            <div className="flex items-center gap-3">
+                              <span>depth <span className="font-mono">{t.depth}/{t.max_depth}</span></span>
+                              <span>priority <span className="font-mono">{t.priority.toFixed(2)}</span></span>
+                              <span className={clsx('px-1 py-0.5 rounded text-sm', liveOriginColor[t.origin] ?? 'bg-bg-tertiary text-text-muted')}>
+                                {t.origin.replace(/_/g, ' ')}
+                              </span>
+                              {t.perturbation_strategy && (
+                                <span className="text-orange-400/70">{t.perturbation_strategy.replace(/_/g, ' ')}</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {isRunning && (
+              <div className="flex items-center gap-2 px-3 py-1.5 text-sm text-success font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                <span>running</span>
+                <span className="text-text-muted ml-2">{events.length} events · {findings.length} findings</span>
               </div>
-            );
-          })}
-          {isRunning && (
-            <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-success font-mono">
-              <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-              <span>running</span>
-              <span className="text-text-disabled ml-2">{events.length} events · {findings.length} findings</span>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        </>
       </div>
     </div>
   );
@@ -1789,12 +2390,12 @@ function MapView({
     <div className="space-y-4">
       {/* Controls */}
       <div className="flex items-center gap-3 flex-wrap">
-        <span className="text-xs text-text-muted">Depth:</span>
+        <span className="text-sm text-text-muted">Depth:</span>
         {(['all', '0-2', '3-5', '6+'] as const).map(d => (
           <button
             key={d}
             onClick={() => setDepthFilter(d)}
-            className={clsx('px-2 py-1 rounded text-xs border transition-colors',
+            className={clsx('px-2 py-1 rounded text-sm border transition-colors',
               depthFilter === d
                 ? 'bg-accent/10 border-accent/30 text-accent'
                 : 'bg-bg-secondary border-border-primary text-text-muted hover:text-text-secondary'
@@ -1803,11 +2404,11 @@ function MapView({
         ))}
         <label className="ml-4 flex items-center gap-1.5 cursor-pointer">
           <input type="checkbox" checked={hideExhausted} onChange={e => setHideExhausted(e.target.checked)} className="accent-accent" />
-          <span className="text-xs text-text-muted">Hide exhausted</span>
+          <span className="text-sm text-text-muted">Hide exhausted</span>
         </label>
         <button
           onClick={resetLayout}
-          className="ml-auto px-2 py-1 rounded text-xs border bg-bg-secondary border-border-primary text-text-muted hover:text-text-secondary transition-colors"
+          className="ml-auto px-2 py-1 rounded text-sm border bg-bg-secondary border-border-primary text-text-muted hover:text-text-secondary transition-colors"
         >Reset layout</button>
       </div>
 
@@ -1823,8 +2424,838 @@ function MapView({
 
 function EnvBadge({ set, label }: { set: boolean; label: string }) {
   return set
-    ? <span className="inline-flex items-center gap-1 text-xs font-medium text-success"><span className="w-1.5 h-1.5 rounded-full bg-success inline-block" />{label}</span>
-    : <span className="inline-flex items-center gap-1 text-xs font-medium text-error"><span className="w-1.5 h-1.5 rounded-full bg-error inline-block" />{label} not set</span>;
+    ? <span className="inline-flex items-center gap-1 text-sm font-medium text-success"><span className="w-1.5 h-1.5 rounded-full bg-success inline-block" />{label}</span>
+    : <span className="inline-flex items-center gap-1 text-sm font-medium text-error"><span className="w-1.5 h-1.5 rounded-full bg-error inline-block" />{label} not set</span>;
+}
+
+function formatFetched(iso: string | null | undefined): string {
+  if (!iso) return '-';
+  const secs = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (secs < 60) return `${secs}s ago`;
+  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+  if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
+  if (secs < 172800) return 'yesterday';
+  return `${Math.floor(secs / 86400)}d ago`;
+}
+
+function kbSize(n: number): string {
+  if (n < 1024) return `${n}b`;
+  return `${Math.round(n / 1024)}kB`;
+}
+
+function SourceExtractionPill({ src }: { src: Source }) {
+  const s = src.extraction_status;
+  const base = 'inline-flex items-center text-sm px-2 py-[1px] border rounded whitespace-nowrap';
+  if (s === 'extracted') {
+    const size = src.extracted_text ? ` · ${kbSize(src.extracted_text.length)}` : '';
+    return (
+      <span className={clsx(base, 'bg-success/15 text-success border-success/30')}>
+        extracted{size}
+      </span>
+    );
+  }
+  if (s === 'failed') {
+    const label = src.error ? `${src.error.slice(0, 12)} · retry` : 'failed · retry';
+    return (
+      <span className={clsx(base, 'bg-error/15 text-error border-error/30')}>
+        {label}
+      </span>
+    );
+  }
+  if (s === 'claimed') {
+    return (
+      <span className={clsx(base, 'bg-warning/15 text-warning border-warning/30')}>
+        extracting&hellip;
+      </span>
+    );
+  }
+  if (s === 'skipped') {
+    return (
+      <span className={clsx(base, 'bg-bg-tertiary text-text-muted border-border-primary/30')}>
+        snippet only
+      </span>
+    );
+  }
+  return (
+    <span className={clsx(base, 'bg-warning/15 text-warning border-warning/30')}>
+      pending
+    </span>
+  );
+}
+
+function SourcesView({ sessionId }: { sessionId: string }) {
+  const { data, isLoading } = useSources(sessionId);
+  const { data: findings } = useResearchFindings(sessionId);
+  const retry = useRetrySource();
+  const skip = useSkipSource();
+  const [busy, setBusy] = useState(false);
+
+  const findingsByUrl = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const f of findings ?? []) {
+      const urls = f.source_url_meta?.length ? f.source_url_meta.map(s => s.url) : f.source_urls;
+      for (const u of urls) m.set(u, (m.get(u) ?? 0) + 1);
+    }
+    return m;
+  }, [findings]);
+
+  if (isLoading) return <PageLoading />;
+  const items: Source[] = data?.items ?? [];
+  const counts = data?.counts ?? { pending: 0, extracted: 0, failed: 0, skipped: 0 };
+  const total = counts.pending + counts.extracted + counts.failed + counts.skipped;
+  const inProgress = items.filter(s => s.extraction_status === 'claimed').length;
+
+  async function retryAllFailed() {
+    setBusy(true);
+    try {
+      for (const s of items.filter(s => s.extraction_status === 'failed')) {
+        await retry.mutateAsync({ sourceId: s.id, sessionId });
+      }
+    } finally { setBusy(false); }
+  }
+
+  async function extractAllSnippetOnly() {
+    setBusy(true);
+    try {
+      for (const s of items.filter(s => s.extraction_status === 'skipped')) {
+        await retry.mutateAsync({ sourceId: s.id, sessionId });
+      }
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div>
+      {/* Stats + bulk-action header */}
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+        <div className="flex items-center gap-5 text-sm">
+          <span><span className="text-text-primary font-medium tabular-nums">{total}</span>{' '}<span className="text-text-muted">total</span></span>
+          <span><span className="text-success font-medium tabular-nums">{counts.extracted}</span>{' '}<span className="text-text-muted">extracted</span></span>
+          <span><span className="text-warning font-medium tabular-nums">{counts.skipped}</span>{' '}<span className="text-text-muted">snippet only</span></span>
+          <span><span className="text-info font-medium tabular-nums">{inProgress}</span>{' '}<span className="text-text-muted">in progress</span></span>
+          <span><span className="text-error font-medium tabular-nums">{counts.failed}</span>{' '}<span className="text-text-muted">failed</span></span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="secondary" onClick={extractAllSnippetOnly} disabled={busy || counts.skipped === 0}>
+            Extract all (snippet only)
+          </Button>
+          <Button size="sm" variant="secondary" onClick={retryAllFailed} disabled={busy || counts.failed === 0}>
+            Retry failed
+          </Button>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="border border-border-primary/40 rounded bg-bg-primary overflow-hidden">
+        <table className="w-full text-sm border-collapse">
+          <colgroup>
+            <col style={{ width: '40%' }} />
+            <col style={{ width: '14%' }} />
+            <col style={{ width: '22%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '10%' }} />
+            <col style={{ width: '6%' }} />
+          </colgroup>
+          <thead>
+            <tr className="border-b border-border-primary/40 text-text-muted text-left">
+              <th className="font-medium px-3 py-2">Source</th>
+              <th className="font-medium px-3 py-2">Extraction</th>
+              <th className="font-medium px-3 py-2">Concepts linked</th>
+              <th className="font-medium px-3 py-2 text-right">Findings</th>
+              <th className="font-medium px-3 py-2">Fetched</th>
+              <th className="font-medium px-3 py-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {items.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-3 py-8 text-center text-text-muted">
+                  No sources registered for this query yet.
+                </td>
+              </tr>
+            ) : items.map(src => {
+              const findingCount = findingsByUrl.get(src.url) ?? 0;
+              const canExtract = src.extraction_status === 'skipped' || src.extraction_status === 'failed';
+              const canSkip = src.extraction_status === 'pending' || src.extraction_status === 'claimed';
+              const action = canExtract ? 'extract' : canSkip ? 'skip' : 'open';
+              return (
+                <tr key={src.id} className="border-b border-border-primary/30 last:border-b-0 align-top">
+                  <td className="px-3 py-2.5">
+                    <div className="text-text-primary font-medium truncate" title={src.title || undefined}>
+                      {src.title || domainFrom(src.url)}
+                    </div>
+                    <div className="text-sm text-text-muted truncate" title={src.url}>
+                      {src.url.replace(/^https?:\/\//, '')}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <SourceExtractionPill src={src} />
+                  </td>
+                  <td className="px-3 py-2.5 text-text-muted">
+                    <span className="text-sm">&mdash;</span>
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-text-secondary">
+                    {findingCount}
+                  </td>
+                  <td className="px-3 py-2.5 text-sm text-text-muted">
+                    {formatFetched(src.fetched_at ?? src.updated_at)}
+                  </td>
+                  <td className="px-3 py-2.5 text-sm">
+                    {action === 'extract' && (
+                      <button
+                        onClick={() => retry.mutate({ sourceId: src.id, sessionId })}
+                        disabled={retry.isPending}
+                        className="text-accent hover:underline disabled:opacity-50"
+                      >
+                        extract
+                      </button>
+                    )}
+                    {action === 'skip' && (
+                      <button
+                        onClick={() => skip.mutate({ sourceId: src.id, sessionId })}
+                        disabled={skip.isPending}
+                        className="text-text-muted hover:text-text-secondary hover:underline disabled:opacity-50"
+                      >
+                        skip
+                      </button>
+                    )}
+                    {action === 'open' && (
+                      <a href={src.url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                        open
+                      </a>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+type KnowledgeFilter = 'all' | 'hub' | 'recent';
+
+function KnowledgeView({ sessionId }: { sessionId: string }) {
+  const { data: concepts, isLoading } = useConcepts(sessionId);
+  const { data: links } = useConceptLinks(sessionId);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { data: detail } = useConceptDetail(sessionId, selectedId);
+  const [filter, setFilter] = useState<KnowledgeFilter>('all');
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const cyRef = useRef<cytoscape.Core | null>(null);
+
+  const filteredConcepts = useMemo(() => {
+    if (!concepts) return [];
+    if (filter === 'hub') return concepts.filter(c => c.finding_count >= 3);
+    if (filter === 'recent') {
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+      return concepts.filter(c => new Date(c.updated_at).getTime() >= cutoff);
+    }
+    return concepts;
+  }, [concepts, filter]);
+
+  const elements = useMemo((): cytoscape.ElementDefinition[] => {
+    const nodes: cytoscape.ElementDefinition[] = filteredConcepts.map(c => ({
+      data: {
+        id: c.id,
+        label: c.canonical_name,
+        findingCount: c.finding_count,
+        sourceCount: c.source_count,
+      },
+    }));
+    const byId = new Set(filteredConcepts.map(c => c.id));
+    const edges: cytoscape.ElementDefinition[] = (links ?? [])
+      .filter(l => byId.has(l.from_concept_id) && byId.has(l.to_concept_id))
+      .map(l => ({
+        data: {
+          id: l.id,
+          source: l.from_concept_id,
+          target: l.to_concept_id,
+          label: l.relation,
+        },
+      }));
+    return [...nodes, ...edges];
+  }, [filteredConcepts, links]);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const cy = cytoscape({
+      container: containerRef.current,
+      elements,
+      style: [
+        {
+          selector: 'node',
+          style: {
+            'background-color': '#89b4fa',
+            'label': 'data(label)',
+            'color': '#1e1e2e',
+            'font-size': '14px',
+            'font-weight': 'bold',
+            'text-valign': 'center',
+            'text-halign': 'center',
+            'text-wrap': 'wrap',
+            'text-max-width': '140px',
+            'shape': 'round-rectangle',
+            'width': (ele: cytoscape.NodeSingular) => {
+              const lbl = ele.data('label') as string | undefined;
+              return Math.max(90, Math.min(180, (lbl?.length ?? 10) * 8));
+            },
+            'height': 40,
+            'padding': '8px',
+            'border-width': 1.5,
+            'border-color': '#313147',
+          } as cytoscape.Css.Node,
+        },
+        {
+          selector: 'node:selected',
+          style: {
+            'border-color': '#f9e2af',
+            'border-width': 3,
+          } as cytoscape.Css.Node,
+        },
+        {
+          selector: 'node.dimmed',
+          style: { 'opacity': 0.3 } as cytoscape.Css.Node,
+        },
+        {
+          selector: 'edge',
+          style: {
+            'line-color': '#45475a',
+            'curve-style': 'bezier',
+            'target-arrow-shape': 'triangle',
+            'target-arrow-color': '#45475a',
+            'arrow-scale': 0.9,
+            'width': 1.5,
+            'label': 'data(label)',
+            'font-size': '14px',
+            'color': '#a6adc8',
+            'text-background-color': '#1e1e2e',
+            'text-background-opacity': 0.8,
+            'text-background-padding': '2px',
+          } as cytoscape.Css.Edge,
+        },
+        {
+          selector: 'edge.highlighted',
+          style: {
+            'line-color': '#f9e2af',
+            'target-arrow-color': '#f9e2af',
+            'width': 2.5,
+          } as cytoscape.Css.Edge,
+        },
+      ],
+      layout: {
+        name: 'fcose',
+        animate: true,
+        animationDuration: 500,
+        nodeRepulsion: 8000,
+        idealEdgeLength: 110,
+        gravity: 0.25,
+        gravityRange: 3.8,
+        nodeSeparation: 90,
+      } as cytoscape.LayoutOptions,
+    });
+
+    cy.on('tap', 'node', (evt) => {
+      const id = evt.target.data('id') as string;
+      setSelectedId(id);
+    });
+
+    cy.on('mouseover', 'node', (evt) => {
+      const node = evt.target as cytoscape.NodeSingular;
+      cy.elements().not(node.connectedEdges()).not(node).addClass('dimmed');
+      node.connectedEdges().addClass('highlighted');
+    });
+
+    cy.on('mouseout', 'node', () => {
+      cy.elements().removeClass('dimmed highlighted');
+    });
+
+    cy.on('tap', (evt) => {
+      if (evt.target === cy) setSelectedId(null);
+    });
+
+    cyRef.current = cy;
+    return () => { cy.destroy(); cyRef.current = null; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    cy.json({ elements });
+    cy.layout({
+      name: 'fcose',
+      animate: true,
+      animationDuration: 350,
+      nodeRepulsion: 8000,
+      idealEdgeLength: 110,
+    } as cytoscape.LayoutOptions).run();
+  }, [elements]);
+
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy || !selectedId) return;
+    cy.$('node:selected').unselect();
+    cy.$id(selectedId).select();
+  }, [selectedId]);
+
+  if (isLoading) return <PageLoading />;
+  if (!concepts || concepts.length === 0) {
+    return (
+      <div className="p-8 text-sm text-text-muted">
+        No concepts have been extracted yet. Run the session for a few iterations — concepts are
+        extracted from each finding after synthesis.
+      </div>
+    );
+  }
+
+  const chips: Array<{ key: KnowledgeFilter; label: string; n: number }> = [
+    { key: 'all', label: 'All concepts', n: concepts.length },
+    { key: 'hub', label: '≥3 findings', n: concepts.filter(c => c.finding_count >= 3).length },
+    {
+      key: 'recent',
+      label: 'Updated 24h',
+      n: concepts.filter(c => new Date(c.updated_at).getTime() >= Date.now() - 86_400_000).length,
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-6 h-[calc(100vh-240px)]">
+      <div className="flex flex-col min-h-0">
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <div className="flex items-center gap-1.5">
+            {chips.map(c => (
+              <button
+                key={c.key}
+                onClick={() => setFilter(c.key)}
+                className={clsx(
+                  'px-2.5 py-[3px] text-sm rounded border transition-colors inline-flex items-center gap-1.5',
+                  filter === c.key
+                    ? 'border-accent/40 text-accent bg-accent/10'
+                    : 'border-border-primary/40 text-text-muted hover:text-text-secondary',
+                )}
+              >
+                {c.label}
+                <span className="text-sm tabular-nums opacity-70">{c.n}</span>
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Button size="sm" variant="ghost" onClick={() => cyRef.current?.fit(undefined, 30)}>Fit</Button>
+            <Button size="sm" variant="ghost"
+              onClick={() => cyRef.current?.layout({ name: 'fcose', animate: true, animationDuration: 500 } as cytoscape.LayoutOptions).run()}
+            >
+              Relayout
+            </Button>
+          </div>
+        </div>
+        <div ref={containerRef} className="flex-1 border border-border-primary/40 rounded bg-bg-secondary min-h-0" />
+      </div>
+      <aside className="flex flex-col gap-4 overflow-y-auto min-h-0">
+        {selectedId && detail ? (
+          <ConceptInspector
+            concept={detail}
+            allLinks={links ?? []}
+            allConcepts={concepts}
+            onSelect={setSelectedId}
+            onClose={() => setSelectedId(null)}
+          />
+        ) : (
+          <ConceptList concepts={filteredConcepts} selectedId={selectedId} onSelect={setSelectedId} />
+        )}
+      </aside>
+    </div>
+  );
+}
+
+function ConceptList({
+  concepts, selectedId, onSelect,
+}: {
+  concepts: ConceptWithStats[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="border border-border rounded bg-bg-secondary">
+      <div className="px-3 py-2 text-sm font-semibold border-b border-border">
+        {concepts.length} concepts
+      </div>
+      <ul className="divide-y divide-border">
+        {concepts.map(c => (
+          <li key={c.id}>
+            <button
+              onClick={() => onSelect(c.id)}
+              className={`w-full text-left px-3 py-2 hover:bg-bg-hover ${
+                selectedId === c.id ? 'bg-bg-hover' : ''
+              }`}
+            >
+              <div className="text-sm font-medium">{c.canonical_name}</div>
+              <div className="text-sm text-text-muted">
+                {c.finding_count} findings · {c.source_count} sources
+              </div>
+              {c.summary && (
+                <div className="text-sm text-text-muted mt-1 line-clamp-2">{c.summary}</div>
+              )}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ConceptInspector({
+  concept, allLinks, allConcepts, onSelect, onClose,
+}: {
+  concept: import('../../api/research-hooks').ConceptDetail;
+  allLinks: ConceptLink[];
+  allConcepts: ConceptWithStats[];
+  onSelect: (id: string) => void;
+  onClose: () => void;
+}) {
+  const related = useMemo(() => {
+    const byId = new Map(allConcepts.map(c => [c.id, c]));
+    const neighbors = new Set<string>();
+    for (const link of allLinks) {
+      if (link.from_concept_id === concept.id) neighbors.add(link.to_concept_id);
+      else if (link.to_concept_id === concept.id) neighbors.add(link.from_concept_id);
+    }
+    return Array.from(neighbors).map(id => byId.get(id)).filter((c): c is ConceptWithStats => !!c);
+  }, [allLinks, allConcepts, concept.id]);
+
+  return (
+    <div className="border border-border-primary/40 rounded bg-bg-secondary p-4 flex flex-col gap-4 text-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="text-lg font-semibold text-text-primary truncate">{concept.canonical_name}</h3>
+          {concept.aliases.length > 0 && (
+            <div className="text-sm text-text-muted mt-0.5 truncate" title={concept.aliases.join(', ')}>
+              aliases: {concept.aliases.join(' &middot; ')}
+            </div>
+          )}
+        </div>
+        <button
+          onClick={onClose}
+          className="text-text-muted hover:text-text-primary shrink-0 text-sm px-1"
+          title="Close inspector"
+        >
+          &times;
+        </button>
+      </div>
+
+      {/* Stat tiles */}
+      <div className="flex gap-5">
+        {[
+          { n: concept.finding_count, l: 'findings' },
+          { n: concept.sources.length, l: 'sources' },
+          { n: related.length, l: 'related' },
+        ].map(s => (
+          <div key={s.l} className="flex flex-col">
+            <span className="text-text-primary text-base font-semibold tabular-nums">{s.n}</span>
+            <span className="text-sm text-text-muted uppercase tracking-[0.05em] mt-0.5">{s.l}</span>
+          </div>
+        ))}
+      </div>
+
+      {concept.summary && (
+        <div>
+          <h5 className="text-sm text-text-muted font-medium uppercase tracking-[0.08em] mb-1.5">Summary</h5>
+          <p className="text-sm leading-snug text-text-secondary">{concept.summary}</p>
+        </div>
+      )}
+
+      {concept.key_facts.length > 0 && (
+        <div>
+          <h5 className="text-sm text-text-muted font-medium uppercase tracking-[0.08em] mb-1.5">Key facts</h5>
+          <ul className="list-disc pl-5 space-y-1 text-text-secondary leading-snug">
+            {concept.key_facts.map((f, i) => <li key={i}>{f}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {related.length > 0 && (
+        <div>
+          <h5 className="text-sm text-text-muted font-medium uppercase tracking-[0.08em] mb-1.5">Related concepts</h5>
+          <div className="flex flex-wrap gap-1.5">
+            {related.slice(0, 12).map(r => (
+              <button
+                key={r.id}
+                onClick={() => onSelect(r.id)}
+                className="text-sm px-2 py-[2px] rounded border border-border-primary/40 text-text-secondary hover:border-accent/40 hover:text-accent transition-colors"
+              >
+                {r.canonical_name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {concept.sources.length > 0 && (
+        <div>
+          <h5 className="text-sm text-text-muted font-medium uppercase tracking-[0.08em] mb-1.5">Sources</h5>
+          <ul className="space-y-1">
+            {concept.sources.slice(0, 8).map((s, i) => (
+              <li key={i}>
+                <a
+                  href={s.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-accent hover:underline truncate block"
+                  title={s.url}
+                >
+                  {s.title || domainFrom(s.url)}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="flex gap-1.5 pt-1 border-t border-border-primary/30">
+        <Button size="sm" variant="ghost" disabled title="Merge with another concept (coming soon)">Merge&hellip;</Button>
+        <Button size="sm" variant="ghost" disabled title="Rename concept (coming soon)">Rename</Button>
+      </div>
+    </div>
+  );
+}
+
+function SessionConfigView({
+  session, sessionId, onDelete,
+}: {
+  session: { id: string; config: Record<string, unknown> };
+  sessionId: string;
+  onDelete?: () => void;
+}) {
+  const updateConfig = useUpdateQueryConfig();
+  const { data: defaults, isLoading } = useResearchDefaults();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  if (isLoading || !defaults) return <PageLoading />;
+
+  const save = (path: string, value: unknown) => {
+    updateConfig.mutate({ id: sessionId, config: patchByPath(path, value) });
+  };
+
+  const resetField = (path: string) => {
+    const defaultValue = getByPath(defaults, path);
+    updateConfig.mutate({ id: sessionId, config: patchByPath(path, defaultValue) });
+  };
+
+  return (
+    <div className="space-y-6">
+      <ConfigForm
+        title="Session config"
+        subtitle="Per-query overrides. The dot marks a value that differs from the defaults; changes apply to the next iteration."
+        value={session.config}
+        baseline={defaults as unknown as Record<string, unknown>}
+        onSave={save}
+        onResetField={resetField}
+      />
+      {onDelete && (
+        <div className="border border-error/30 rounded p-4 bg-error/5">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-sm font-medium text-text-primary">Delete this query</div>
+              <div className="text-sm text-text-muted mt-0.5">
+                Removes the query, all threads, findings, and sources. This cannot be undone.
+              </div>
+            </div>
+            {confirmDelete ? (
+              <div className="flex gap-2">
+                <Button size="sm" variant="secondary" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+                <Button size="sm" variant="danger" onClick={onDelete}>Confirm delete</Button>
+              </div>
+            ) : (
+              <Button size="sm" variant="danger" onClick={() => setConfirmDelete(true)}>Delete query</Button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+type EventKind = 'search' | 'synth' | 'finding' | 'extract' | 'dedup';
+
+interface TimelineEvent {
+  id: string;
+  kind: EventKind;
+  ts: string;
+  threadId: string;
+  threadLabel: string;
+  detail: React.ReactNode;
+}
+
+function stepEventKind(step: ResearchStep): EventKind {
+  const tools = step.tool_calls ?? [];
+  const hasExtract = tools.some(t => (t.jina_fetches?.length ?? 0) > 0);
+  const hasSearch = tools.some(t => t.tool === 'web_search' || t.tool === 'tavily' || /search/i.test(t.tool));
+  if (hasExtract) return 'extract';
+  if (hasSearch) return 'search';
+  return 'synth';
+}
+
+function formatTime(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  } catch { return ''; }
+}
+
+function kindClass(kind: EventKind): string {
+  switch (kind) {
+    case 'search': return 'text-info';
+    case 'synth': return 'text-accent';
+    case 'finding': return 'text-success';
+    case 'extract': return 'text-info';
+    case 'dedup': return 'text-warning';
+  }
+}
+
+function EventsView({
+  steps, findings, threads, isRunning,
+}: {
+  steps: ResearchStep[];
+  findings: ResearchFinding[];
+  threads: ResearchThread[];
+  isRunning: boolean;
+}) {
+  const [filter, setFilter] = useState<'all' | EventKind>('all');
+
+  const threadShortId = useCallback((tid: string) => {
+    const idx = threads.findIndex(t => t.id === tid);
+    if (idx < 0) return tid.slice(0, 8);
+    return `thr-${String(idx + 1).padStart(2, '0')}`;
+  }, [threads]);
+
+  const timeline = useMemo<TimelineEvent[]>(() => {
+    const out: TimelineEvent[] = [];
+
+    for (const s of steps) {
+      const kind = stepEventKind(s);
+      let detail: React.ReactNode;
+      if (kind === 'search') {
+        const sq = s.tool_calls.find(t => t.input && typeof t.input.query === 'string');
+        const query = sq?.input?.query as string | undefined;
+        detail = (
+          <span>
+            {query ? <span className="text-text-primary">&ldquo;{query}&rdquo;</span> : <span className="text-text-muted">search</span>}
+            {' '}
+            <span className="text-text-muted">&middot; {s.model}</span>
+          </span>
+        );
+      } else if (kind === 'extract') {
+        const fetches = s.tool_calls.flatMap(t => t.jina_fetches ?? []);
+        const ok = fetches.filter(f => f.ok);
+        const bytes = ok.reduce((a, f) => a + (f.content_length ?? 0), 0);
+        detail = (
+          <span className="text-text-secondary">
+            {ok.length}/{fetches.length} fetched {bytes > 0 && <span className="text-text-muted">&middot; {kbSize(bytes)}</span>}
+            {fetches.filter(f => !f.ok).map((f, i) => (
+              <span key={i} className="text-error ml-2">{f.error?.slice(0, 40)}</span>
+            ))}
+          </span>
+        );
+      } else {
+        const cost = s.cost_usd > 0 ? `$${s.cost_usd.toFixed(3)}` : '';
+        detail = (
+          <span className="text-text-secondary">
+            {s.model} <span className="text-text-muted">&middot; in {s.prompt_tokens.toLocaleString()} &middot; out {s.completion_tokens.toLocaleString()}{cost && ` · ${cost}`}</span>
+          </span>
+        );
+      }
+      out.push({
+        id: `step-${s.id}`,
+        kind,
+        ts: s.created_at,
+        threadId: s.thread_id,
+        threadLabel: threadShortId(s.thread_id),
+        detail,
+      });
+    }
+
+    for (const f of findings) {
+      out.push({
+        id: `find-${f.id}`,
+        kind: 'finding',
+        ts: f.created_at,
+        threadId: f.thread_id,
+        threadLabel: threadShortId(f.thread_id),
+        detail: (
+          <span>
+            <span className="text-text-primary font-medium">{f.summary.slice(0, 140)}</span>
+            <span className="text-text-muted">
+              {' '}&middot; {(f.confidence * 100).toFixed(0)}% conf
+              {f.novelty > 0.3 && ` · ${(f.novelty * 100).toFixed(0)}% novel`}
+            </span>
+          </span>
+        ),
+      });
+    }
+
+    out.sort((a, b) => b.ts.localeCompare(a.ts));
+    return out;
+  }, [steps, findings, threadShortId]);
+
+  const filtered = filter === 'all' ? timeline : timeline.filter(e => e.kind === filter);
+
+  const chips: Array<{ key: 'all' | EventKind; label: string }> = [
+    { key: 'all', label: 'All' },
+    { key: 'search', label: 'Searches' },
+    { key: 'finding', label: 'Findings' },
+    { key: 'extract', label: 'Extraction' },
+    { key: 'synth', label: 'LLM calls' },
+  ];
+
+  return (
+    <div>
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+        <div className="text-sm text-text-muted">
+          Most recent first &middot; session-scoped
+          {isRunning && <> &middot; <span className="text-accent">auto-updates</span></>}
+        </div>
+        <div className="flex items-center gap-1.5">
+          {chips.map(c => (
+            <button
+              key={c.key}
+              onClick={() => setFilter(c.key)}
+              className={clsx(
+                'px-2 py-[3px] text-sm rounded border transition-colors',
+                filter === c.key
+                  ? 'border-accent/40 text-accent bg-accent/10'
+                  : 'border-border-primary/40 text-text-muted hover:text-text-secondary',
+              )}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="border border-border-primary/40 rounded bg-bg-secondary overflow-hidden">
+        {filtered.length === 0 ? (
+          <div className="text-sm text-text-muted py-8 text-center">No events in this filter.</div>
+        ) : filtered.slice(0, 200).map(e => (
+          <div
+            key={e.id}
+            className="grid grid-cols-[84px_96px_96px_minmax(0,1fr)] gap-3 items-center px-4 py-2 border-b border-border-primary/30 last:border-b-0 text-sm"
+          >
+            <div className="text-sm text-text-muted tabular-nums">{formatTime(e.ts)}</div>
+            <div className={clsx('text-sm font-medium', kindClass(e.kind))}>{e.kind}</div>
+            <div className="text-sm text-text-muted font-mono truncate">{e.threadLabel}</div>
+            <div className="min-w-0 truncate">{e.detail}</div>
+          </div>
+        ))}
+        {filtered.length > 200 && (
+          <div className="text-sm text-text-muted py-2 text-center border-t border-border-primary/30">
+            Showing 200 of {filtered.length} events
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function SettingsView({
@@ -1842,6 +3273,9 @@ function SettingsView({
   const gapAnalysis = (cfg.gap_analysis as Record<string, unknown>) ?? {};
   const followUpCfg = (cfg.follow_up as Record<string, unknown>) ?? {};
   const topicCoherence = (cfg.topic_coherence as Record<string, unknown>) ?? {};
+  const scheduleCfg = (cfg.schedule as Record<string, unknown>) ?? {};
+  const initWindows = (scheduleCfg.active_windows as Array<{ days: string[]; start: string; end: string }>) ?? [];
+  const initWindow = initWindows[0] ?? { days: ['mon', 'tue', 'wed', 'thu', 'fri'], start: '09:00', end: '17:00' };
 
   const [title, setTitle] = useState(session.title);
   const [provider, setProvider] = useState<string>((providers.primary as string) ?? 'anthropic');
@@ -1866,6 +3300,13 @@ function SettingsView({
   const [followUpMax, setFollowUpMax] = useState<number>((followUpCfg.max_count as number) ?? 5);
   const [seedSimilarityMin, setSeedSimilarityMin] = useState<number>((topicCoherence.seed_similarity_min as number) ?? 0.0);
   const [hopSimilarityMin, setHopSimilarityMin] = useState<number>((topicCoherence.hop_similarity_min as number) ?? 0.0);
+  const [burstIterations, setBurstIterations] = useState<number>((cfg.burst_iterations as number) ?? 10);
+  const [scheduleDays, setScheduleDays] = useState<string[]>(initWindow.days);
+  const [scheduleStart, setScheduleStart] = useState<string>(initWindow.start);
+  const [scheduleEnd, setScheduleEnd] = useState<string>(initWindow.end);
+  const [scheduleTimezone, setScheduleTimezone] = useState<string>(
+    (scheduleCfg.timezone as string) ?? Intl.DateTimeFormat().resolvedOptions().timeZone
+  );
   const [saved, setSaved] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
@@ -1895,6 +3336,12 @@ function SettingsView({
         hop_similarity_min: hopSimilarityMin,
       },
       gap_analysis: { enabled: gapEnabled, max_gap_searches: maxGapSearches },
+      burst_iterations: burstIterations,
+      schedule: {
+        ...scheduleCfg,
+        active_windows: [{ days: scheduleDays, start: scheduleStart, end: scheduleEnd }],
+        timezone: scheduleTimezone,
+      },
       providers: {
         primary: provider,
         ...(provider === 'openrouter' ? {
@@ -1913,7 +3360,7 @@ function SettingsView({
   }
 
   const inputCls = 'bg-bg-primary border border-border-primary rounded px-2 py-1.5 text-sm text-text-primary focus:outline-none focus:border-accent w-full';
-  const labelCls = 'block text-xs text-text-muted mb-1';
+  const labelCls = 'block text-sm text-text-muted mb-1';
 
   return (
     <form onSubmit={handleSave} className="space-y-6 max-w-lg">
@@ -1921,7 +3368,7 @@ function SettingsView({
       {envCheck && envCheck.errors.length > 0 && (
         <div className="rounded border border-red-500/50 bg-red-500/10 p-3 space-y-1">
           {envCheck.errors.map((e, i) => (
-            <p key={i} className="text-xs text-red-400 flex items-start gap-1.5 font-medium">
+            <p key={i} className="text-sm text-red-400 flex items-start gap-1.5 font-medium">
               <Icon name="close" size="xs" className="mt-0.5 shrink-0" />{e}
             </p>
           ))}
@@ -1930,7 +3377,7 @@ function SettingsView({
       {envCheck && envCheck.warnings.length > 0 && (
         <div className="rounded border border-yellow-500/30 bg-yellow-500/10 p-3 space-y-1">
           {envCheck.warnings.map((w, i) => (
-            <p key={i} className="text-xs text-yellow-400 flex items-start gap-1.5">
+            <p key={i} className="text-sm text-yellow-400 flex items-start gap-1.5">
               <span className="mt-0.5 shrink-0">&#x26a0;</span>{w}
             </p>
           ))}
@@ -1945,7 +3392,7 @@ function SettingsView({
 
       {/* Provider */}
       <div>
-        <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Provider</p>
+        <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Provider</p>
         <div className="flex gap-2 mb-4">
           {(['anthropic', 'openrouter', 'ollama'] as const).map(p => (
             <button key={p} type="button"
@@ -1964,7 +3411,7 @@ function SettingsView({
             <div className="mt-1.5">
               {envCheck
                 ? <EnvBadge set={envCheck.anthropic} label="ANTHROPIC_API_KEY" />
-                : <span className="text-xs text-text-muted/60">Uses ANTHROPIC_API_KEY env var</span>}
+                : <span className="text-sm text-text-muted/60">Uses ANTHROPIC_API_KEY env var</span>}
             </div>
           </div>
         )}
@@ -2004,7 +3451,7 @@ function SettingsView({
 
       {/* Search */}
       <div>
-        <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Search</p>
+        <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Search</p>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelCls} title="How many follow-up levels deep to explore. Each level spawns new threads from the previous level's findings.">Max thread depth</label>
@@ -2031,7 +3478,7 @@ function SettingsView({
 
       {/* Exploration */}
       <div>
-        <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Exploration</p>
+        <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Exploration</p>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelCls} title="Base probability that a completed thread spawns a serendipitous tangent using a random perturbation strategy. Decreases with depth.">Serendipity (0–1)</label>
@@ -2050,8 +3497,8 @@ function SettingsView({
 
       {/* Topic Coherence */}
       <div>
-        <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Topic Coherence</p>
-        <p className="text-xs text-text-muted mb-3">Jaccard similarity gates to prevent topic drift. 0 = disabled (allow any follow-up).</p>
+        <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Topic Coherence</p>
+        <p className="text-sm text-text-muted mb-3">Jaccard similarity gates to prevent topic drift. 0 = disabled (allow any follow-up).</p>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelCls} title="Minimum token overlap between each follow-up and the original seed query. Catches gradual drift away from the starting topic. Start with 0.05–0.10 to prune only extreme outliers.">Seed similarity floor</label>
@@ -2066,7 +3513,7 @@ function SettingsView({
 
       {/* Source text */}
       <div>
-        <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Source Text</p>
+        <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Source Text</p>
         <label className="flex items-start gap-2 cursor-pointer">
           <input type="checkbox" checked={fetchSourceText} onChange={e => setFetchSourceText(e.target.checked)}
             className="w-4 h-4 accent-accent mt-0.5" />
@@ -2075,20 +3522,20 @@ function SettingsView({
             <div className="mt-1 flex flex-col gap-1">
               {envCheck ? (
                 <>
-                  <span className="text-xs text-text-muted">Page extractor: {' '}
+                  <span className="text-sm text-text-muted">Page extractor: {' '}
                     <EnvBadge set={envCheck.jina} label={envCheck.jina ? 'Jina (active)' : 'JINA_API_KEY'} />
-                    {!envCheck.jina && <span className="text-xs text-red-400 ml-1 font-medium">-- will throw, no fallback</span>}
+                    {!envCheck.jina && <span className="text-sm text-red-400 ml-1 font-medium">-- will throw, no fallback</span>}
                   </span>
-                  <span className="text-xs text-text-muted">Search: {' '}
+                  <span className="text-sm text-text-muted">Search: {' '}
                     {envCheck.searchProvider === 'tavily' && <EnvBadge set={true} label="Tavily (active)" />}
                     {envCheck.searchProvider === 'brave' && <EnvBadge set={true} label="Brave (active)" />}
                     {envCheck.searchProvider === 'duckduckgo' && (
-                      <><EnvBadge set={false} label="TAVILY_API_KEY" /><span className="text-xs text-text-muted ml-1">-- falling back to DuckDuckGo</span></>
+                      <><EnvBadge set={false} label="TAVILY_API_KEY" /><span className="text-sm text-text-muted ml-1">-- falling back to DuckDuckGo</span></>
                     )}
                   </span>
                 </>
               ) : (
-                <span className="text-xs text-text-muted">requires JINA_API_KEY -- no fallback</span>
+                <span className="text-sm text-text-muted">requires JINA_API_KEY -- no fallback</span>
               )}
             </div>
           </div>
@@ -2097,13 +3544,13 @@ function SettingsView({
 
       {/* Gap analysis */}
       <div>
-        <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Gap Analysis</p>
+        <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Gap Analysis</p>
         <div className="space-y-3">
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={gapEnabled} onChange={e => setGapEnabled(e.target.checked)}
               className="w-4 h-4 accent-accent" />
             <span className="text-sm text-text-primary">Enabled</span>
-            <span className="text-xs text-text-muted">(runs a second LLM pass to find missing information)</span>
+            <span className="text-sm text-text-muted">(runs a second LLM pass to find missing information)</span>
           </label>
           {gapEnabled && (
             <div className="max-w-[160px]">
@@ -2114,9 +3561,49 @@ function SettingsView({
         </div>
       </div>
 
+      {/* Schedule */}
+      <div>
+        <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Schedule</p>
+        <div className="space-y-3">
+          <div className="max-w-[160px]">
+            <label className={labelCls}>Burst iterations</label>
+            <input type="number" min={1} max={999} value={burstIterations} onChange={e => setBurstIterations(Math.max(1, parseInt(e.target.value) || 10))} className={inputCls} />
+          </div>
+          <p className="text-sm text-text-muted">Window for scheduled mode — days and times when the engine is allowed to run.</p>
+          <div className="flex items-center gap-1 flex-wrap">
+            {(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const).map(day => (
+              <button
+                key={day} type="button"
+                onClick={() => setScheduleDays(prev =>
+                  prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
+                )}
+                className={clsx(
+                  'px-2 py-0.5 text-sm rounded-md font-medium transition-colors capitalize',
+                  scheduleDays.includes(day)
+                    ? 'bg-accent text-white'
+                    : 'text-text-muted hover:text-text-primary hover:bg-bg-tertiary border border-border-primary'
+                )}
+              >{day}</button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <input type="time" value={scheduleStart} onChange={e => setScheduleStart(e.target.value)}
+              className="bg-bg-primary border border-border-primary rounded px-2 py-1.5 text-sm text-text-primary focus:outline-none focus:border-accent" />
+            <span className="text-sm text-text-muted">—</span>
+            <input type="time" value={scheduleEnd} onChange={e => setScheduleEnd(e.target.value)}
+              className="bg-bg-primary border border-border-primary rounded px-2 py-1.5 text-sm text-text-primary focus:outline-none focus:border-accent" />
+          </div>
+          <div>
+            <label className={labelCls}>Timezone</label>
+            <input type="text" value={scheduleTimezone} onChange={e => setScheduleTimezone(e.target.value)}
+              className={inputCls} placeholder="e.g. America/Los_Angeles" />
+          </div>
+        </div>
+      </div>
+
       {/* Budget */}
       <div>
-        <p className="text-xs text-text-muted uppercase tracking-wide mb-3">Budget</p>
+        <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Budget</p>
         <div className="max-w-[160px]">
           <label className={labelCls}>Daily limit (USD)</label>
           <input type="number" min={0} step={0.5} value={budgetDaily} onChange={e => setBudgetDaily(Number(e.target.value))} className={inputCls} />
@@ -2125,14 +3612,14 @@ function SettingsView({
 
       <div className="flex items-center gap-3">
         <Button type="submit" loading={updateConfig.isPending}>Save</Button>
-        {saved && <span className="text-xs text-green-400">Saved</span>}
+        {saved && <span className="text-sm text-green-400">Saved</span>}
       </div>
 
       {/* Delete */}
       <div className="pt-4 border-t border-border-primary">
         {deleteConfirm ? (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-text-muted">Delete this query permanently?</span>
+            <span className="text-sm text-text-muted">Delete this query permanently?</span>
             <Button variant="ghost" size="sm" className="!bg-red-900/50 !text-red-300 hover:!bg-red-900/80"
               onClick={onDelete}>Confirm delete</Button>
             <Button variant="ghost" size="sm" onClick={() => setDeleteConfirm(false)}>Cancel</Button>
@@ -2163,16 +3650,18 @@ export function ResearchQueryDetailPage() {
   const { events } = useResearchStream(id!);
   const { data: envCheck } = useResearchEnvCheck();
   const { data: jobs = [] } = useResearchJobs(id!);
+  const { data: workers = [] } = useResearchWorkers();
   const updateQuery = useUpdateResearchQuery();
   const updateConfig = useUpdateQueryConfig();
   const runResearch = useRunResearch();
   const cancelJob = useCancelJob();
   const deleteQuery = useDeleteResearchQuery();
 
-  const [tab, setTab] = useState<'document' | 'live' | 'map' | 'settings'>('document');
+  const [tab, setTab] = useState<'document' | 'knowledge' | 'process' | 'sources' | 'events' | 'config'>('document');
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [runIterations, setRunIterations] = useState<string>('');
+
+  const scheduleCfg = (session?.config?.schedule) as Record<string, unknown> | undefined;
 
   const findingCounts = useMemo(() => {
     const map = new Map<string, number>();
@@ -2180,15 +3669,24 @@ export function ResearchQueryDetailPage() {
     return map;
   }, [findingsData]);
 
+  const { data: conceptsData } = useConcepts(id ?? '');
+  const conceptsCount = conceptsData?.length ?? 0;
+  const { data: sourcesData } = useSources(id ?? '');
+  const sourcesTotal = useMemo(() => {
+    const c = sourcesData?.counts;
+    if (!c) return 0;
+    return (c.pending ?? 0) + (c.extracted ?? 0) + (c.failed ?? 0) + (c.skipped ?? 0);
+  }, [sourcesData]);
+
   // Cross-navigation helpers
   const navigateToThread = useCallback((threadId: string) => {
     setSelectedThreadId(threadId);
-    setTab('live');
+    setTab('process');
   }, []);
 
   const navigateToMap = useCallback((threadId: string) => {
     setSelectedThreadId(threadId);
-    setTab('map');
+    setTab('process');
   }, []);
 
   const navigateToDocument = useCallback((threadId: string) => {
@@ -2205,52 +3703,65 @@ export function ResearchQueryDetailPage() {
   }
 
   const activeJobs = jobs.filter(j => j.status === 'running' || j.status === 'claimed');
+  const activeJob = activeJobs[0] ?? null;
+
+  const isEnabled = session.status === 'active';
+  const selectedMode = activeJob?.mode ?? (scheduleCfg?.mode as string) ?? 'background';
+
+  function cancelAll() { for (const j of activeJobs) cancelJob.mutate({ jobId: j.id }); }
+
+  function setRunMode(mode: 'burst' | 'background' | 'scheduled') {
+    updateConfig.mutate({ id: id!, config: { schedule: { ...(scheduleCfg as object), mode } } });
+  }
+
+  function handleToggleEnabled() {
+    if (isEnabled) {
+      updateQuery.mutate({ id: id!, status: 'paused' });
+      cancelAll();
+    } else {
+      updateQuery.mutate({ id: id!, status: 'active' });
+      if (selectedMode === 'burst') {
+        const iterations = (session!.config as Record<string, unknown>).burst_iterations as number ?? 10;
+        runResearch.mutate({ sessionId: id!, mode: 'burst', iterations });
+      } else if (selectedMode === 'background') {
+        runResearch.mutate({ sessionId: id!, mode: 'background' });
+      }
+      // scheduled: worker picks it up automatically when windows are active
+    }
+  }
 
   return (
     <div className="flex h-[calc(100vh-64px)]">
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Header bar */}
-        <div className="px-6 py-4 border-b border-border-primary bg-bg-primary shrink-0">
-          {/* Breadcrumb */}
-          <Link to="/research/queries" className="text-xs text-accent hover:underline">&larr; All queries</Link>
-
-          {/* Title + controls */}
-          <div className="flex items-center justify-between mt-2">
-            <div className="min-w-0">
-              <h1 className="font-heading text-2xl font-bold text-text-primary truncate">{session.title}</h1>
-              <p className="text-sm text-text-muted mt-0.5 truncate">{session.seed_query}</p>
+        <div className="border-b border-border-primary bg-bg-primary shrink-0">
+          {/* Title row — h-14 matches sidebar "Construct" header height */}
+          <div className="h-14 flex items-center justify-between px-6">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <Link to="/research" className="font-heading text-2xl font-bold text-text-muted hover:text-text-primary whitespace-nowrap shrink-0 leading-none">Research Sessions</Link>
+              <span className="font-heading text-2xl font-bold text-text-muted shrink-0 leading-none">&raquo;</span>
+              <h1 className="font-heading text-2xl font-bold text-text-primary truncate min-w-0 leading-none">{session.title}</h1>
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => { const a = document.createElement('a'); a.href = `/api/research/queries/${id}/export?format=md`; a.download = ''; a.click(); }}
-              >
-                <Icon name="download" size="xs" className="mr-1" />
-                .md
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => { const a = document.createElement('a'); a.href = `/api/research/queries/${id}/export?format=json`; a.download = ''; a.click(); }}
-              >
-                <Icon name="download" size="xs" className="mr-1" />
-                .json
-              </Button>
-              {(session.status === 'active' || session.status === 'paused') && (
-                <Button
-                  variant={session.status === 'active' ? 'secondary' : 'primary'}
-                  size="sm"
-                  loading={updateQuery.isPending}
-                  onClick={() => updateQuery.mutate({ id: id!, status: session.status === 'active' ? 'paused' : 'active' })}
-                >
-                  {session.status === 'active' ? 'Disable' : 'Enable'}
-                </Button>
-              )}
+              {/* Run mode controls */}
+              <div className="flex items-center gap-1">
+                {(['burst', 'background', 'scheduled'] as const).map(m => (
+                  <button key={m} onClick={() => setRunMode(m)}
+                    className={clsx('rounded-md px-2.5 py-1 text-sm font-medium transition-colors capitalize',
+                      selectedMode === m ? 'bg-accent text-white' : 'text-text-muted hover:text-text-primary hover:bg-bg-tertiary'
+                    )}
+                  >{m}</button>
+                ))}
+                <button onClick={handleToggleEnabled}
+                  className={clsx('rounded-md px-2.5 py-1 text-sm font-medium transition-colors ml-1',
+                    isEnabled ? 'bg-success/20 text-success hover:bg-success/30' : 'text-text-muted hover:text-text-primary hover:bg-bg-tertiary border border-border-primary'
+                  )}
+                >{isEnabled ? 'Enabled' : 'Enable'}</button>
+              </div>
               {deleteConfirm ? (
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-text-muted">Delete?</span>
+                  <span className="text-sm text-text-muted">Delete?</span>
                   <Button variant="ghost" size="sm" className="!bg-red-900/50 !text-red-300 hover:!bg-red-900/80"
                     loading={deleteQuery.isPending}
                     onClick={() => deleteQuery.mutate({ id: id! }, { onSuccess: () => { window.location.href = '/research/queries'; } })}
@@ -2264,25 +3775,29 @@ export function ResearchQueryDetailPage() {
             </div>
           </div>
 
+          {/* Secondary content */}
+          <div className="px-6 pb-0">
+            <p className="text-sm text-text-muted line-clamp-3 mb-2">{session.seed_query_short || session.seed_query}</p>
+
           {/* Env warnings */}
           {envCheck && (envCheck.errors.length > 0 || envCheck.warnings.length > 0 || envCheck.jina_balance !== null) && (
             <div className="flex flex-col gap-1.5 mt-3">
               {envCheck.errors.map((e, i) => (
                 <div key={i} className="rounded border border-red-500/50 bg-red-500/10 px-3 py-1.5 flex items-center gap-2">
                   <Icon name="close" size="xs" className="text-red-400 shrink-0" />
-                  <span className="text-xs text-red-400 font-medium">{e}</span>
+                  <span className="text-sm text-red-400 font-medium">{e}</span>
                 </div>
               ))}
               {envCheck.warnings.map((w, i) => (
                 <div key={i} className="rounded border border-yellow-500/30 bg-yellow-500/10 px-3 py-1.5 flex items-center gap-2">
-                  <span className="text-yellow-400 text-xs shrink-0">&#x26a0;</span>
-                  <span className="text-xs text-yellow-400">{w}</span>
+                  <span className="text-yellow-400 text-sm shrink-0">&#x26a0;</span>
+                  <span className="text-sm text-yellow-400">{w}</span>
                 </div>
               ))}
               {envCheck.jina_balance !== null && (
                 <div className="rounded border border-border-primary bg-bg-secondary px-3 py-1.5 flex items-center gap-2">
-                  <span className="text-xs text-text-muted">Jina balance:</span>
-                  <span className={`text-xs font-medium tabular-nums ${envCheck.jina_balance < 100_000 ? 'text-red-400' : envCheck.jina_balance < 1_000_000 ? 'text-yellow-400' : 'text-green-400'}`}>
+                  <span className="text-sm text-text-muted">Jina balance:</span>
+                  <span className={`text-sm font-medium tabular-nums ${envCheck.jina_balance < 100_000 ? 'text-red-400' : envCheck.jina_balance < 1_000_000 ? 'text-yellow-400' : 'text-green-400'}`}>
                     {envCheck.jina_balance.toLocaleString()} tokens
                   </span>
                 </div>
@@ -2299,62 +3814,43 @@ export function ResearchQueryDetailPage() {
               { label: 'Today', value: costs ? `$${costs.today_cost.toFixed(3)}` : '...' },
             ].map(stat => (
               <div key={stat.label} className="flex items-center gap-1.5">
-                <span className="text-xs text-text-muted">{stat.label}:</span>
+                <span className="text-sm text-text-muted">{stat.label}:</span>
                 <span className="text-sm font-semibold text-text-primary tabular-nums">{stat.value}</span>
               </div>
             ))}
-          </div>
-
-          {/* Run controls */}
-          <div className="flex items-center gap-2 mt-3">
-            <Button
-              size="sm"
-              loading={runResearch.isPending}
-              onClick={() => {
-                const iters = runIterations.trim() ? parseInt(runIterations, 10) : undefined;
-                runResearch.mutate({ sessionId: id!, iterations: iters });
-              }}
-            >Run</Button>
-            <input
-              type="number"
-              min={1}
-              value={runIterations}
-              onChange={e => setRunIterations(e.target.value)}
-              placeholder="N"
-              className="w-16 bg-bg-secondary border border-border-primary rounded px-2 py-1 text-xs text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:border-accent"
-              title="Number of iterations (blank = default)"
-            />
-            {activeJobs.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="!text-red-400 hover:!text-red-300"
-                onClick={() => { for (const j of activeJobs) cancelJob.mutate({ jobId: j.id }); }}
-              >Cancel</Button>
-            )}
-            {isRunning && (
-              <span className="flex items-center gap-1.5 ml-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                <span className="text-xs text-success">Running</span>
+            {workers.length > 0 && (
+              <span className="text-sm text-text-muted">
+                {workers.filter(w => w.status !== 'stopped').length} workers
               </span>
             )}
           </div>
 
           {/* Tab bar */}
-          <div className="flex gap-1 mt-3 -mb-[17px]">
+          <div className="flex gap-1 mt-3 -mb-px relative z-10">
             {([
-              { key: 'document' as const, label: `Document (${findingsData.length})` },
-              { key: 'live' as const, label: `Live (${threadsData.length})` },
-              { key: 'map' as const, label: `Map` },
-              { key: 'settings' as const, label: 'Settings' },
+              { key: 'document' as const, label: 'Document', count: undefined },
+              { key: 'knowledge' as const, label: 'Knowledge', count: conceptsCount },
+              { key: 'process' as const, label: 'Process', count: threadsData.length },
+              { key: 'sources' as const, label: 'Sources', count: sourcesTotal },
+              { key: 'events' as const, label: 'Events', count: undefined },
+              { key: 'config' as const, label: 'Config', count: undefined },
             ]).map(t => (
               <button key={t.key} onClick={() => setTab(t.key)}
-                className={clsx('px-3 py-2 text-sm font-medium border-b-2 transition-colors',
-                  tab === t.key ? 'border-accent text-accent' : 'border-transparent text-text-muted hover:text-text-secondary')}>
+                className={clsx('px-3 py-2 text-sm font-medium border-b-2 transition-colors inline-flex items-center gap-1.5',
+                  tab === t.key ? 'border-accent text-accent bg-bg-primary' : 'border-transparent text-text-muted hover:text-text-secondary')}>
                 {t.label}
+                {t.count !== undefined && t.count > 0 && (
+                  <span className={clsx(
+                    'text-sm tabular-nums px-1.5 py-[1px] rounded',
+                    tab === t.key ? 'bg-accent/10 text-accent' : 'bg-bg-tertiary text-text-muted',
+                  )}>
+                    {t.count}
+                  </span>
+                )}
               </button>
             ))}
           </div>
+          </div>{/* end secondary content */}
         </div>
 
         {/* Tab content */}
@@ -2370,33 +3866,25 @@ export function ResearchQueryDetailPage() {
               title={session?.title}
             />
           )}
-          {tab === 'live' && (
-            <LiveView
-              threads={threadsData}
+          {tab === 'process' && (
+            <p className="text-sm text-text-muted text-center py-12">Process view is being redesigned.</p>
+          )}
+          {tab === 'knowledge' && (
+            <KnowledgeView sessionId={id!} />
+          )}
+          {tab === 'sources' && (
+            <SourcesView sessionId={id!} />
+          )}
+          {tab === 'events' && (
+            <EventsView
+              steps={allSteps}
               findings={findingsData}
-              allSteps={allSteps}
-              events={events}
-              isRunning={isRunning}
-              sessionId={id!}
-              sessionFetchText={sessionFetchText}
-              onToggleSessionFetch={handleToggleSessionFetch}
-              activity={activity}
-              jobs={jobs}
-              selectedThreadId={selectedThreadId}
-              onSelectThread={setSelectedThreadId}
-              onNavigateToDocument={navigateToDocument}
-              onNavigateToMap={navigateToMap}
-            />
-          )}
-          {tab === 'map' && (
-            <MapView
               threads={threadsData}
-              findingCounts={findingCounts}
-              onNavigateToLive={navigateToThread}
+              isRunning={isRunning}
             />
           )}
-          {tab === 'settings' && (
-            <SettingsView
+          {tab === 'config' && (
+            <SessionConfigView
               session={session}
               sessionId={id!}
               onDelete={() => deleteQuery.mutate({ id: id! }, { onSuccess: () => { window.location.href = '/research/queries'; } })}

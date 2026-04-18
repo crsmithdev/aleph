@@ -1,4 +1,4 @@
-import type { LLMProvider, LLMResult, WebSearchResult } from '../engine.js';
+import type { LLMProvider, LLMResult, SearchOptions, WebSearchResult } from '../engine.js';
 import { fetchSearchResults } from './websearch.js';
 
 export interface OpenRouterConfig {
@@ -50,12 +50,15 @@ export class OpenRouterProvider implements LLMProvider {
     };
   }
 
-  async searchWeb(model: string, query: string): Promise<WebSearchResult> {
+  async searchWeb(model: string, query: string, options?: SearchOptions): Promise<WebSearchResult> {
+    const synthesisChars = options?.synthesisChars ?? 3000;
+    const displayChars = options?.displayChars ?? 200;
+
     const searchResults = await fetchSearchResults(query);
     const sourceUrls = searchResults.map(r => r.url);
 
     const context = searchResults.map(r =>
-      `### ${r.title}\nURL: ${r.url}\n\n${r.snippet.slice(0, 3000)}`
+      `### ${r.title}\nURL: ${r.url}\n\n${r.snippet.slice(0, synthesisChars)}`
     ).join('\n\n---\n\n');
 
     const searchMaxTokens = 4096;
@@ -73,7 +76,7 @@ export class OpenRouterProvider implements LLMProvider {
       text,
       sourceTexts: [],
       sourceUrls,
-      sourceUrlMeta: searchResults.map(r => ({ url: r.url, title: r.title, snippet: r.snippet.slice(0, 200) })),
+      sourceUrlMeta: searchResults.map(r => ({ url: r.url, title: r.title, snippet: r.snippet.slice(0, displayChars) })),
       promptTokens: response.usage?.prompt_tokens ?? 0,
       completionTokens: response.usage?.completion_tokens ?? 0,
       model: actualModelUsed,

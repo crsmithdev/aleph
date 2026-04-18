@@ -2,17 +2,10 @@ import { Icon } from '../../components/ui/Icon';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
-import { useResearchQueries, useCreateResearchQuery, useUpdateResearchQuery, useResearchStats, useRunAllResearch, useStopAllResearch, useClearResearchDB } from '../../api/research-hooks';
+import { useResearchQueries, useCreateResearchQuery, useUpdateResearchQuery, useRunAllResearch, useStopAllResearch, useClearResearchDB, useResearchDefaults } from '../../api/research-hooks';
 import { Button } from '../../components/ui/Button';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
-import { StatCard } from '../../components/data/StatCard';
-import { ObsControlBar } from '../../components/data/ObsControlBar';
-import { type TimeRange, type Granularity } from '../../components/data/TimeRangeSelector';
-import { ChartContainer } from '../../components/charts/ChartContainer';
-import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps, xAxisDateProps } from '../../components/charts/chartTheme';
-import { fmtCurrency, fmtNumber, fmtPct, granLabel } from '../../utils/format';
 
 type StatusFilter = 'all' | 'active' | 'paused' | 'completed';
 
@@ -38,26 +31,42 @@ const statusBadgeColors: Record<string, string> = {
 };
 
 export function ResearchQueriesPage() {
-  const [range, setRange] = useState<TimeRange>('30d');
-  const [granularity, setGranularity] = useState<Granularity>('day');
   const { data: sessions = [], isLoading, isError } = useResearchQueries();
-  const stats = useResearchStats(range, granularity);
   const createSession = useCreateResearchQuery();
   const updateSession = useUpdateResearchQuery();
   const runAll = useRunAllResearch();
   const stopAll = useStopAllResearch();
+  const { data: defaults } = useResearchDefaults();
   const [newOpen, setNewOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [depth, setDepth] = useState(5);
-  const [maxTotalThreads, setMaxTotalThreads] = useState<number>(() => Number(localStorage.getItem('research_default_max_total_threads') ?? '200'));
-  const [provider, setProvider] = useState<string>(() => localStorage.getItem('research_default_provider') ?? 'openrouter');
-  const [model, setModel] = useState<string>(() => localStorage.getItem('research_default_model') ?? 'deepseek/deepseek-chat');
-  const [minSearches, setMinSearches] = useState<number>(() => Number(localStorage.getItem('research_default_min_searches') ?? '2'));
-  const [gapAnalysis, setGapAnalysis] = useState<boolean>(() => localStorage.getItem('research_default_gap_analysis') !== 'false');
-  const [maxGapSearches, setMaxGapSearches] = useState<number>(() => Number(localStorage.getItem('research_default_max_gap_searches') ?? '2'));
+  const [depth, setDepth] = useState(3);
+  const [maxTotalThreads, setMaxTotalThreads] = useState<number>(150);
+  const [provider, setProvider] = useState<string>('openrouter');
+  const [model, setModel] = useState<string>('deepseek/deepseek-chat');
+  const [minSearches, setMinSearches] = useState<number>(2);
+  const [gapAnalysis, setGapAnalysis] = useState<boolean>(true);
+  const [maxGapSearches, setMaxGapSearches] = useState<number>(2);
   const clearDb = useClearResearchDB();
-  const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+
+  function seedFromDefaults() {
+    if (!defaults) return;
+    setDepth(defaults.max_thread_depth);
+    setMaxTotalThreads(defaults.max_total_threads);
+    setMinSearches(defaults.min_searches_per_thread);
+    setProvider(defaults.providers.primary);
+    setModel(defaults.model);
+    setGapAnalysis(defaults.gap_analysis.enabled);
+    setMaxGapSearches(defaults.gap_analysis.max_gap_searches);
+  }
+
+  function toggleNewOpen() {
+    if (!newOpen) {
+      seedFromDefaults();
+      setQuery('');
+    }
+    setNewOpen(!newOpen);
+  }
 
   const visibleSessions = sessions.filter(s => s.status !== 'archived');
   const filteredSessions = statusFilter === 'all'
@@ -67,12 +76,6 @@ export function ResearchQueriesPage() {
   function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!query.trim()) return;
-    localStorage.setItem('research_default_provider', provider);
-    if (model) localStorage.setItem('research_default_model', model);
-    localStorage.setItem('research_default_min_searches', String(minSearches));
-    localStorage.setItem('research_default_gap_analysis', String(gapAnalysis));
-    localStorage.setItem('research_default_max_gap_searches', String(maxGapSearches));
-    localStorage.setItem('research_default_max_total_threads', String(maxTotalThreads));
     createSession.mutate({
       seed_query: query.trim(),
       config: {
@@ -84,87 +87,37 @@ export function ResearchQueriesPage() {
         gap_analysis: { enabled: gapAnalysis, max_gap_searches: maxGapSearches },
       },
     }, {
-      onSuccess: () => { setQuery(''); setDepth(5); setNewOpen(false); },
+      onSuccess: () => { setQuery(''); setNewOpen(false); },
     });
   }
 
   return (
     <div className="flex flex-col gap-5">
-      <ObsControlBar
-        title={
-          <div className="flex items-center justify-between w-full">
-            <div>
-              <h1 className="font-heading text-2xl font-bold text-text-primary">Deep Research</h1>
-              <p className="text-sm text-text-muted mt-0.5">
-                {visibleSessions.length} quer{visibleSessions.length !== 1 ? 'ies' : 'y'}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => stopAll.mutate()}
-                loading={stopAll.isPending}
-                disabled={runAll.isPending}
-              >Stop All</Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => runAll.mutate()}
-                loading={runAll.isPending}
-                disabled={stopAll.isPending}
-              >Run All</Button>
-              <Button onClick={() => setNewOpen(!newOpen)}>+ New query</Button>
-            </div>
-          </div>
-        }
-        range={range}
-        onRangeChange={setRange}
-        granularity={granularity}
-        onGranularityChange={setGranularity}
-      />
-
-      {stats.data && (
-        <>
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <StatCard label="Queries" value={fmtNumber(stats.data.totalSessions)} accent="default" detailContent={<><span className="text-success font-medium">{stats.data.activeSessions}</span><span className="text-text-muted"> active</span></>} />
-            <StatCard label="Findings" value={fmtNumber(stats.data.totalFindings)} accent="success" />
-            <StatCard label="Total Cost" value={fmtCurrency(stats.data.totalCost)} />
-            <StatCard
-              label="Avg Confidence"
-              value={fmtPct(stats.data.avgConfidence)}
-              accent={stats.data.avgConfidence >= 70 ? 'success' : stats.data.avgConfidence >= 40 ? 'warning' : 'error'}
-              detailContent={<><span className="text-text-muted">novelty </span><span className="text-text-secondary font-medium">{fmtPct(stats.data.avgNovelty)}</span></>}
-            />
-          </div>
-
-          {stats.data.byDay.length > 0 && (
-            <ChartContainer title={granLabel(granularity, "Activity")} chartType={chartType} onChartTypeChange={setChartType}>
-              {chartType === 'bar' ? (
-                <BarChart data={stats.data.byDay}>
-                  <CartesianGrid {...gridProps} />
-                  <XAxis dataKey="date" {...xAxisDateProps} />
-                  <YAxis {...axisProps} />
-                  <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                  <Legend {...legendProps} />
-                  <Bar dataKey="findings" fill={CHART_PALETTE[0]} name="Findings" />
-                  <Bar dataKey="sessions" fill={CHART_PALETTE[1]} name="Sessions" />
-                </BarChart>
-              ) : (
-                <AreaChart data={stats.data.byDay}>
-                  <CartesianGrid {...gridProps} />
-                  <XAxis dataKey="date" {...xAxisDateProps} />
-                  <YAxis {...axisProps} />
-                  <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
-                  <Legend {...legendProps} />
-                  <Area type="monotone" dataKey="findings" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} name="Findings" />
-                  <Area type="monotone" dataKey="sessions" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} name="Sessions" />
-                </AreaChart>
-              )}
-            </ChartContainer>
-          )}
-        </>
-      )}
+      <div className="sticky top-0 z-10 h-14 bg-bg-primary flex items-center justify-between gap-2 mb-4">
+        <div>
+          <h1 className="font-heading text-2xl font-bold text-text-primary">Queries</h1>
+          <p className="text-sm text-text-muted mt-0.5">
+            {visibleSessions.length} quer{visibleSessions.length !== 1 ? 'ies' : 'y'}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => stopAll.mutate()}
+            loading={stopAll.isPending}
+            disabled={runAll.isPending}
+          >Pause All</Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => runAll.mutate()}
+            loading={runAll.isPending}
+            disabled={stopAll.isPending}
+          >Resume All</Button>
+          <Button size="sm" onClick={toggleNewOpen}>+ New query</Button>
+        </div>
+      </div>
 
       {newOpen && (
         <form onSubmit={handleCreate} className="bg-bg-secondary border border-border-primary rounded-lg p-4 flex gap-3 items-center">
@@ -176,7 +129,7 @@ export function ResearchQueriesPage() {
             className="flex-1 bg-bg-primary border border-border-primary rounded-md px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
             autoFocus
           />
-          <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0" title="Max follow-up depth. Lower = more focused, higher = broader exploration.">
+          <label className="flex items-center gap-1.5 text-sm text-text-muted shrink-0" title="Max follow-up depth. Lower = more focused, higher = broader exploration.">
             Depth
             <input
               type="number"
@@ -187,7 +140,7 @@ export function ResearchQueriesPage() {
               className="w-12 bg-bg-primary border border-border-primary rounded px-1.5 py-1 text-sm text-text-primary text-center focus:outline-none focus:border-accent"
             />
           </label>
-          <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0" title="Hard cap on total threads spawned. Prevents runaway branching. 0 = unlimited.">
+          <label className="flex items-center gap-1.5 text-sm text-text-muted shrink-0" title="Hard cap on total threads spawned. Prevents runaway branching. 0 = unlimited.">
             Max threads
             <input
               type="number"
@@ -199,7 +152,7 @@ export function ResearchQueriesPage() {
               className="w-16 bg-bg-primary border border-border-primary rounded px-1.5 py-1 text-sm text-text-primary text-center focus:outline-none focus:border-accent"
             />
           </label>
-          <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0">
+          <label className="flex items-center gap-1.5 text-sm text-text-muted shrink-0">
             Provider
             <select
               value={provider}
@@ -211,7 +164,7 @@ export function ResearchQueriesPage() {
               <option value="ollama">Local</option>
             </select>
           </label>
-          <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0">
+          <label className="flex items-center gap-1.5 text-sm text-text-muted shrink-0">
             Model
             <input
               type="text"
@@ -221,7 +174,7 @@ export function ResearchQueriesPage() {
               className="w-36 bg-bg-primary border border-border-primary rounded px-1.5 py-1 text-sm text-text-primary focus:outline-none focus:border-accent"
             />
           </label>
-          <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0">
+          <label className="flex items-center gap-1.5 text-sm text-text-muted shrink-0">
             Min searches
             <input
               type="number"
@@ -232,7 +185,7 @@ export function ResearchQueriesPage() {
               className="w-12 bg-bg-primary border border-border-primary rounded px-1.5 py-1 text-sm text-text-primary text-center focus:outline-none focus:border-accent"
             />
           </label>
-          <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0 cursor-pointer select-none">
+          <label className="flex items-center gap-1.5 text-sm text-text-muted shrink-0 cursor-pointer select-none">
             <input
               type="checkbox"
               checked={gapAnalysis}
@@ -242,7 +195,7 @@ export function ResearchQueriesPage() {
             Gaps
           </label>
           {gapAnalysis && (
-            <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0">
+            <label className="flex items-center gap-1.5 text-sm text-text-muted shrink-0">
               Gap size
               <input
                 type="number"
@@ -263,7 +216,7 @@ export function ResearchQueriesPage() {
               clearDb.mutate();
             }}
             disabled={clearDb.isPending}
-            className="px-3 py-1.5 text-xs rounded border border-dashed border-border-secondary text-text-muted hover:text-red-400 hover:border-red-400/50 hover:bg-red-500/5 transition-colors shrink-0"
+            className="px-3 py-1.5 text-sm rounded border border-dashed border-border-secondary text-text-muted hover:text-red-400 hover:border-red-400/50 hover:bg-red-500/5 transition-colors shrink-0"
           >{clearDb.isPending ? 'Wiping...' : 'Wipe all'}</button>
         </form>
       )}
@@ -276,7 +229,7 @@ export function ResearchQueriesPage() {
               key={f.value}
               onClick={() => setStatusFilter(f.value)}
               className={clsx(
-                'px-3 py-1.5 rounded text-xs font-medium transition-colors',
+                'px-3 py-1.5 rounded text-sm font-medium transition-colors',
                 statusFilter === f.value
                   ? 'bg-bg-tertiary text-text-primary'
                   : 'text-text-muted hover:text-text-secondary hover:bg-bg-secondary'
@@ -312,7 +265,7 @@ export function ResearchQueriesPage() {
                     {session.title || session.seed_query}
                   </h3>
                   <span className={clsx(
-                    'flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium shrink-0',
+                    'flex items-center gap-1.5 px-2 py-0.5 rounded text-sm font-medium shrink-0',
                     statusBadgeColors[session.status]
                   )}>
                     <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', statusDotColors[session.status])} />
@@ -321,21 +274,21 @@ export function ResearchQueriesPage() {
                 </div>
 
                 {/* Seed query */}
-                <p className="text-xs text-text-muted mb-3 truncate">{session.seed_query}</p>
+                <p className="text-sm text-text-muted mb-3 truncate">{session.seed_query_short || session.seed_query}</p>
 
                 {/* Summary preview */}
                 {session.summary ? (
-                  <p className="text-xs text-text-secondary leading-relaxed line-clamp-3 flex-1">
+                  <p className="text-sm text-text-secondary leading-relaxed line-clamp-3 flex-1">
                     {session.summary}
                   </p>
                 ) : (
-                  <p className="text-xs text-text-muted italic flex-1">No summary yet.</p>
+                  <p className="text-sm text-text-muted italic flex-1">No summary yet.</p>
                 )}
               </Link>
 
               {/* Footer */}
               <div className="px-4 pb-3 pt-2 border-t border-border-primary flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 text-xs text-text-muted">
+                <div className="flex items-center gap-3 text-sm text-text-muted">
                   <span>{new Date(session.created_at).toLocaleDateString()}</span>
                 </div>
                 <button

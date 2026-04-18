@@ -36,7 +36,7 @@ export function TokensCostPage() {
     <div className="space-y-6">
       <ObsControlBar title={<h1 className="font-heading text-2xl font-bold text-text-primary">Tokens</h1>} range={range} onRangeChange={setRange} granularity={granularity} onGranularityChange={setGranularity} />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 !mt-0">
         <StatCard label="Total Cost" value={fmtCurrency(cost.data.totalUsd)} accent="success" />
         <StatCard label="Avg / Day" value={fmtCurrency(avgDaily)} />
         <StatCard
@@ -56,9 +56,9 @@ export function TokensCostPage() {
             <YAxis {...axisProps} tickFormatter={fmtNumber} />
             <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
             <Legend {...legendProps} />
-            <Bar dataKey="input" stackId="tokens" fill={CHART_PALETTE[0]} name="Input" />
-            <Bar dataKey="output" stackId="tokens" fill={CHART_PALETTE[1]} name="Output" />
-            <Bar dataKey="cacheRead" stackId="tokens" fill={CHART_PALETTE[2]} name="Cache Read" />
+            <Bar isAnimationActive={false} dataKey="input" stackId="tokens" fill={CHART_PALETTE[0]} name="Input" />
+            <Bar isAnimationActive={false} dataKey="output" stackId="tokens" fill={CHART_PALETTE[1]} name="Output" />
+            <Bar isAnimationActive={false} dataKey="cacheRead" stackId="tokens" fill={CHART_PALETTE[2]} name="Cache Read" />
           </BarChart>
         ) : (
           <AreaChart data={tokens.data.byDay}>
@@ -67,9 +67,9 @@ export function TokensCostPage() {
             <YAxis {...axisProps} tickFormatter={fmtNumber} />
             <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
             <Legend {...legendProps} />
-            <Area type="monotone" dataKey="input" stackId="tokens" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} name="Input" />
-            <Area type="monotone" dataKey="output" stackId="tokens" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} name="Output" />
-            <Area type="monotone" dataKey="cacheRead" stackId="tokens" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.3} name="Cache Read" />
+            <Area isAnimationActive={false} type="monotone" dataKey="input" stackId="tokens" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.3} name="Input" />
+            <Area isAnimationActive={false} type="monotone" dataKey="output" stackId="tokens" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.3} name="Output" />
+            <Area isAnimationActive={false} type="monotone" dataKey="cacheRead" stackId="tokens" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.3} name="Cache Read" />
           </AreaChart>
         )}
       </ChartContainer>
@@ -81,7 +81,7 @@ export function TokensCostPage() {
             <XAxis dataKey="date" {...xAxisDateProps} />
             <YAxis {...axisProps} tickFormatter={(v: number) => `$${v.toFixed(2)}`} />
             <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(value) => [fmtCurrency(Number(value ?? 0)), 'Cost']} />
-            <Bar dataKey="usd" fill={CHART_PALETTE[3]} radius={[2, 2, 0, 0]} name="Cost" />
+            <Bar isAnimationActive={false} dataKey="usd" fill={CHART_PALETTE[3]} radius={[2, 2, 0, 0]} name="Cost" />
           </BarChart>
         ) : (
           <LineChart data={cost.data.byDay}>
@@ -89,7 +89,7 @@ export function TokensCostPage() {
             <XAxis dataKey="date" {...xAxisDateProps} />
             <YAxis {...axisProps} tickFormatter={(v: number) => `$${v.toFixed(2)}`} />
             <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(value) => [fmtCurrency(Number(value ?? 0)), 'Cost']} />
-            <Line type="monotone" dataKey="usd" stroke={CHART_PALETTE[3]} strokeWidth={2} dot={false} name="Cost" />
+            <Line isAnimationActive={false} type="monotone" dataKey="usd" stroke={CHART_PALETTE[3]} strokeWidth={2} dot={false} name="Cost" />
           </LineChart>
         )}
       </ChartContainer>
@@ -98,7 +98,7 @@ export function TokensCostPage() {
         <ChartContainer title="Cost by Model" raw>
           <div className="flex items-center gap-6">
             <PieChart width={160} height={160}>
-              <Pie data={cost.data.byModel} dataKey="usd" nameKey="model" cx="50%" cy="50%" innerRadius={45} outerRadius={70}>
+              <Pie isAnimationActive={false} data={cost.data.byModel} dataKey="usd" nameKey="model" cx="50%" cy="50%" innerRadius={45} outerRadius={70}>
                 {cost.data.byModel.map((entry, i) => <Cell key={i} fill={chartColor(entry.model, i)} />)}
               </Pie>
               <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtCurrency(Number(v)), formatModelName(String(n))]} />

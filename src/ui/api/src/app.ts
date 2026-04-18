@@ -17,6 +17,7 @@ import { summaryRoutes } from './routes/summary.js';
 import { webhookRoutes } from './routes/webhooks.js';
 import { observabilityRoutes } from './routes/observability.js';
 import { researchRoutes } from './routes/research.js';
+import { publicRoutes } from './routes/public.js';
 import { EventBus, HistoryService, applyDDL } from '@construct/goals';
 import { applyResearchDDL } from '@construct/research';
 import { webhooks } from './db/schema.js';
@@ -26,6 +27,7 @@ import { execSync } from 'child_process';
 import { claudePaths, dataPaths, getMemoryDbPath } from '@construct/data';
 import { createLogStream } from './logger.js';
 import { WorkerSupervisor } from './worker-supervisor.js';
+import { startResearchLogger } from './research-logger.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -119,12 +121,17 @@ export async function createApp(opts?: { dbUrl?: string; workerCount?: number; s
   const eventBus = new EventBus();
   app.decorate('eventBus', eventBus);
 
-  const workerCount = opts?.workerCount ?? parseInt(process.env.WORKER_COUNT || '1', 10);
+  const workerCount = opts?.workerCount ?? parseInt(process.env.WORKER_COUNT || '3', 10);
   const supervisor = new WorkerSupervisor(workerCount);
   app.decorate('supervisor', supervisor);
 
   const historyService = new HistoryService(db, eventBus);
   historyService.start();
+
+  // Start background research event logger (only in non-test environments)
+  if (opts?.dbUrl !== ':memory:') {
+    startResearchLogger(sqlite);
+  }
 
   await app.register(cors, {
     origin: (origin, cb) => {
@@ -237,12 +244,14 @@ export async function createApp(opts?: { dbUrl?: string; workerCount?: number; s
     });
   }, { prefix: '/api' });
 
+  await app.register(publicRoutes, { prefix: '/public' });
+
   if (!opts?.skipStatic) {
     const webDist = resolve(import.meta.dirname || '.', '../../web/dist');
     if (existsSync(webDist)) {
       await app.register(fastifyStatic, { root: webDist, prefix: '/' });
       app.setNotFoundHandler((req, reply) => {
-        if (!req.url.startsWith('/api')) {
+        if (!req.url.startsWith('/api') && !req.url.startsWith('/public')) {
           return reply.sendFile('index.html');
         }
         reply.status(404).send({ error: 'Not found' });

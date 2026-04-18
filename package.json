@@ -13,7 +13,7 @@
   "scripts": {
     "test": "bun test.ts",
     "validate": "jq . src/core/hooks/settings-hooks.json > /dev/null && jq . src/skills/skill-rules.json > /dev/null",
-    "dev": "cd src/ui && bun run start",
+    "dev": "fuser -k 3001/tcp 2>/dev/null; cd src/ui && bun run start",
     "ui:build": "cd src/ui && bun run build",
     "ui:e2e": "bun src/ui/e2e/goal-flow.test.ts",
     "ui:e2e:obs": "bun src/ui/e2e/observability-flow.test.ts"
@@ -22,6 +22,7 @@
   "devDependencies": {
     "@mozilla/readability": "^0.6.0",
     "linkedom": "^0.18.12",
-    "node-html-parser": "^7.1.0"
+    "node-html-parser": "^7.1.0",
+    "typescript": "^6.0.3"
   }
 }

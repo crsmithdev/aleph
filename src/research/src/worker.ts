@@ -4,6 +4,7 @@ import { applyResearchDDL } from './ddl.js';
 import { ResearchEngine, type LLMProvider } from './engine.js';
 import { OpenRouterProvider } from './providers/openrouter.js';
 import { Heartbeat, StepRateLimiter, isInActiveWindow, msUntilNextWindow } from './scheduler.js';
+import { drainPendingSources } from './extractor.js';
 import * as jobs from './services/jobs.js';
 import { countActiveJobsForSession, getQueuedThreadsForNewJobs, createThreadJobIfNone, reclaimDeadWorkerJobs } from './services/jobs.js';
 import * as sessions from './services/queries.js';
@@ -314,6 +315,35 @@ while (!shutdownRequested) {
 
     checkScheduledSessions();
     checkQueuedThreads();
+
+    // Drain the extraction queue (no-op when JINA key is missing; drainPendingSources
+    // throws inside fetchPageContent → per-source failExtraction will record the reason).
+    if (process.env.JINA_API_KEY) {
+      try {
+        const r = await drainPendingSources(sqlite, {
+          batchSize: 5,
+          concurrency: 3,
+          onExtracted: async (source) => {
+            // Re-run concept extraction for findings citing this URL with the
+            // newly-available full text as context. Build a per-session engine
+            // because concept extraction uses the session's configured model.
+            const session = sessions.getSession(sqlite, source.session_id);
+            if (!session) return;
+            try {
+              const engine = new ResearchEngine({ sqlite, provider: buildProvider(session) });
+              await engine.relinkConceptsForSource(source);
+            } catch (err) {
+              console.warn(`[worker] relink concepts failed for ${source.id}:`, err);
+            }
+          },
+        });
+        if (r.claimed > 0) {
+          console.log(`[worker] extraction drained ${r.claimed} (ok=${r.extracted}, fail=${r.failed}, skip=${r.skipped})`);
+        }
+      } catch (err) {
+        console.warn('[worker] extraction drain error:', err);
+      }
+    }
 
     const pending = jobs.findPendingJob(sqlite);
     if (!pending) {

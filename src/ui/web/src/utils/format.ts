@@ -68,6 +68,16 @@ export function stripMarkdown(text: string): string {
     .trim();
 }
 
+// Returns the context window size in tokens for a given model ID.
+// Defaults to 200_000 for unknown Claude models.
+export function modelContextWindow(model: string | undefined): number {
+  if (!model) return 200_000;
+  if (model.includes('haiku')) return 200_000;
+  if (model.includes('sonnet')) return 200_000;
+  if (model.includes('opus')) return 200_000;
+  return 200_000;
+}
+
 export function formatModelName(model: string): string {
   const bare = model.replace(/^claude-/, '');
   const m = /^(\w+)-(\d+)-(\d+)/.exec(bare);

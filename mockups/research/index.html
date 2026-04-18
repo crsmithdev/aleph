@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Research Mockups</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  body{padding:40px}
+  .nav-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--sp-3);margin-top:var(--sp-6);max-width:900px}
+  .nav-card{
+    display:block;padding:var(--sp-5);background:var(--bg-secondary);
+    border:1px solid var(--border);border-radius:10px;color:var(--text-primary);text-decoration:none;
+  }
+  .nav-card:hover{border-color:var(--accent);text-decoration:none}
+  .nav-card h3{margin:0 0 6px;font-size:var(--t-h3);font-weight:600}
+  .nav-card p{margin:0;color:var(--text-muted);font-size:var(--t-body);line-height:1.5}
+</style>
+</head>
+<body>
+  <h1 style="font-size:var(--t-h1);margin:0">Research — UI mockups</h1>
+  <p class="dim" style="margin-top:6px">Static HTML previews. Consistent theme, representative data. Pick structures and I'll build.</p>
+
+  <div class="nav-grid">
+    <a class="nav-card" href="queries.html">
+      <h3>Queries list →</h3>
+      <p>All research queries with status, budget, concept count, activity sparkline.</p>
+    </a>
+    <a class="nav-card" href="query-detail.html#doc">
+      <h3>Query detail — Document →</h3>
+      <p>Wikipedia-style document, TOC, inline citations, bibliography rail.</p>
+    </a>
+    <a class="nav-card" href="query-detail.html#knowledge">
+      <h3>Query detail — Knowledge graph →</h3>
+      <p>Concept graph (force-directed), concept inspector panel.</p>
+    </a>
+    <a class="nav-card" href="query-detail.html#process">
+      <h3>Query detail — Process tree →</h3>
+      <p>Thread tree (the existing view), annotated with concepts per thread.</p>
+    </a>
+    <a class="nav-card" href="query-detail.html#sources">
+      <h3>Query detail — Sources &amp; extraction →</h3>
+      <p>All sources with extraction status, concepts covered, re-run actions.</p>
+    </a>
+    <a class="nav-card" href="events.html">
+      <h3>Events / Workers →</h3>
+      <p>Live activity feed across sessions; per-worker status; step stream.</p>
+    </a>
+    <a class="nav-card" href="../research-config/index.html">
+      <h3>Config — Variant A →</h3>
+      <p>Defaults page: grouped cards, single scroll.</p>
+    </a>
+  </div>
+</body>
+</html>
