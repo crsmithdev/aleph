@@ -122,17 +122,6 @@ export const darkThemes: ThemeDef[] = [
     },
   },
   {
-    id: 'catppuccin-mocha', name: 'Catppuccin Mocha', mode: 'dark',
-    vars: {
-      '--bg-primary': '#1e1e2e', '--bg-secondary': '#181825', '--bg-tertiary': '#313244',
-      '--bg-hover': '#313244', '--bg-contrast': '#11111b',
-      '--text-primary': '#cdd6f4', '--text-secondary': '#a6adc8', '--text-muted': '#6c7086', '--text-disabled': '#45475a',
-      '--border': '#45475a', '--accent': '#cba6f7', '--success': '#a6e3a1', '--warning': '#f9e2af', '--error': '#f38ba8',
-      '--chart-1': '#cba6f7', '--chart-2': '#89b4fa', '--chart-3': '#a6e3a1', '--chart-4': '#f9e2af', '--chart-5': '#f38ba8', '--chart-6': '#94e2d5',
-      '--chart-grid': '#45475a', '--chart-text': '#6c7086', '--chart-tooltip-bg': '#181825', '--chart-tooltip-border': '#45475a',
-    },
-  },
-  {
     id: 'moonlight-ii', name: 'Moonlight II', mode: 'dark',
     vars: {
       '--bg-primary': '#222436', '--bg-secondary': '#1e2030', '--bg-tertiary': '#2f334d',
@@ -163,28 +152,6 @@ export const darkThemes: ThemeDef[] = [
       '--border': '#3a3f58', '--accent': '#c792ea', '--success': '#c3e88d', '--warning': '#ffcb6b', '--error': '#ff5370',
       '--chart-1': '#c792ea', '--chart-2': '#82aaff', '--chart-3': '#c3e88d', '--chart-4': '#ffcb6b', '--chart-5': '#ff5370', '--chart-6': '#89ddff',
       '--chart-grid': '#3a3f58', '--chart-text': '#5c6393', '--chart-tooltip-bg': '#242837', '--chart-tooltip-border': '#3a3f58',
-    },
-  },
-  {
-    id: 'material-ocean', name: 'Material Ocean', mode: 'dark',
-    vars: {
-      '--bg-primary': '#0f111a', '--bg-secondary': '#1a1c2c', '--bg-tertiary': '#232538',
-      '--bg-hover': '#232538', '--bg-contrast': '#090b12',
-      '--text-primary': '#a6accd', '--text-secondary': '#717cb4', '--text-muted': '#464b5d', '--text-disabled': '#343745',
-      '--border': '#1f2233', '--accent': '#c792ea', '--success': '#c3e88d', '--warning': '#ffcb6b', '--error': '#f07178',
-      '--chart-1': '#c792ea', '--chart-2': '#82aaff', '--chart-3': '#c3e88d', '--chart-4': '#ffcb6b', '--chart-5': '#f07178', '--chart-6': '#89ddff',
-      '--chart-grid': '#1f2233', '--chart-text': '#464b5d', '--chart-tooltip-bg': '#1a1c2c', '--chart-tooltip-border': '#1f2233',
-    },
-  },
-  {
-    id: 'dracula-soft', name: 'Dracula Soft', mode: 'dark',
-    vars: {
-      '--bg-primary': '#282a36', '--bg-secondary': '#21222c', '--bg-tertiary': '#343746',
-      '--bg-hover': '#343746', '--bg-contrast': '#191a21',
-      '--text-primary': '#e8e6cb', '--text-secondary': '#9e9bb5', '--text-muted': '#6f6d8a', '--text-disabled': '#4a4862',
-      '--border': '#44475a', '--accent': '#9580ff', '--success': '#8aff80', '--warning': '#ffff80', '--error': '#ff9580',
-      '--chart-1': '#9580ff', '--chart-2': '#80ffea', '--chart-3': '#8aff80', '--chart-4': '#ffff80', '--chart-5': '#ff9580', '--chart-6': '#ff80bf',
-      '--chart-grid': '#44475a', '--chart-text': '#6f6d8a', '--chart-tooltip-bg': '#21222c', '--chart-tooltip-border': '#44475a',
     },
   },
   {
@@ -240,17 +207,6 @@ export const darkThemes: ThemeDef[] = [
       '--border': '#334155', '--accent': '#60a5fa', '--success': '#4ade80', '--warning': '#fbbf24', '--error': '#f87171',
       '--chart-1': '#60a5fa', '--chart-2': '#f472b6', '--chart-3': '#4ade80', '--chart-4': '#fbbf24', '--chart-5': '#fb923c', '--chart-6': '#a78bfa',
       '--chart-grid': '#334155', '--chart-text': '#64748b', '--chart-tooltip-bg': '#1e293b', '--chart-tooltip-border': '#334155',
-    },
-  },
-  {
-    id: 'deep-violet', name: 'Deep Violet', mode: 'dark',
-    vars: {
-      '--bg-primary': '#13111c', '--bg-secondary': '#1a1726', '--bg-tertiary': '#241f34',
-      '--bg-hover': '#241f34', '--bg-contrast': '#0d0b14',
-      '--text-primary': '#ddd8ee', '--text-secondary': '#9b93b8', '--text-muted': '#6b6388', '--text-disabled': '#4a4360',
-      '--border': '#302a44', '--accent': '#a78bfa', '--success': '#86efac', '--warning': '#fde68a', '--error': '#fca5a5',
-      '--chart-1': '#a78bfa', '--chart-2': '#67e8f9', '--chart-3': '#86efac', '--chart-4': '#fde68a', '--chart-5': '#fca5a5', '--chart-6': '#f9a8d4',
-      '--chart-grid': '#302a44', '--chart-text': '#6b6388', '--chart-tooltip-bg': '#1a1726', '--chart-tooltip-border': '#302a44',
     },
   },
   {
@@ -334,17 +290,6 @@ export const lightThemes: ThemeDef[] = [
     },
   },
   {
-    id: 'ayu-light', name: 'Ayu Light', mode: 'light',
-    vars: {
-      '--bg-primary': '#fafafa', '--bg-secondary': '#f3f4f5', '--bg-tertiary': '#e8e9eb',
-      '--bg-hover': '#e8e9eb', '--bg-contrast': '#dddfe2',
-      '--text-primary': '#575f66', '--text-secondary': '#787b80', '--text-muted': '#a0a4a8', '--text-disabled': '#c8cacd',
-      '--border': '#d4d5d7', '--accent': '#ff9940', '--success': '#86b300', '--warning': '#f2ae49', '--error': '#f07171',
-      '--chart-1': '#ff9940', '--chart-2': '#399ee6', '--chart-3': '#86b300', '--chart-4': '#f2ae49', '--chart-5': '#f07171', '--chart-6': '#a37acc',
-      '--chart-grid': '#d8d9db', '--chart-text': '#a0a4a8', '--chart-tooltip-bg': '#ffffff', '--chart-tooltip-border': '#d4d5d7',
-    },
-  },
-  {
     id: 'bluloco-light', name: 'Bluloco Light', mode: 'light',
     vars: {
       '--bg-primary': '#f9f9f9', '--bg-secondary': '#f0f2f5', '--bg-tertiary': '#e4e7ed',
@@ -353,17 +298,6 @@ export const lightThemes: ThemeDef[] = [
       '--border': '#d4d5d6', '--accent': '#275fe4', '--success': '#23974a', '--warning': '#c4760d', '--error': '#d52753',
       '--chart-1': '#275fe4', '--chart-2': '#7c4dff', '--chart-3': '#23974a', '--chart-4': '#c4760d', '--chart-5': '#d52753', '--chart-6': '#0099e1',
       '--chart-grid': '#d8d9da', '--chart-text': '#9a9a9a', '--chart-tooltip-bg': '#ffffff', '--chart-tooltip-border': '#d4d5d6',
-    },
-  },
-  {
-    id: 'oh-lucy-light', name: 'Oh Lucy Light', mode: 'light',
-    vars: {
-      '--bg-primary': '#f3f2f0', '--bg-secondary': '#eae8e5', '--bg-tertiary': '#dfddd9',
-      '--bg-hover': '#dfddd9', '--bg-contrast': '#d4d2ce',
-      '--text-primary': '#3d3d3d', '--text-secondary': '#6b6b6b', '--text-muted': '#999999', '--text-disabled': '#c5c5c5',
-      '--border': '#d0cec9', '--accent': '#c55a77', '--success': '#50a57a', '--warning': '#c78c39', '--error': '#c55a55',
-      '--chart-1': '#c55a77', '--chart-2': '#5a7fc5', '--chart-3': '#50a57a', '--chart-4': '#c78c39', '--chart-5': '#c55a55', '--chart-6': '#8a6dba',
-      '--chart-grid': '#d4d2ce', '--chart-text': '#999999', '--chart-tooltip-bg': '#f3f2f0', '--chart-tooltip-border': '#d0cec9',
     },
   },
   {
@@ -389,17 +323,6 @@ export const lightThemes: ThemeDef[] = [
     },
   },
   {
-    id: 'moonlight-light', name: 'Moonlight Light', mode: 'light',
-    vars: {
-      '--bg-primary': '#f0f1f8', '--bg-secondary': '#e6e8f2', '--bg-tertiary': '#dcdee9',
-      '--bg-hover': '#dcdee9', '--bg-contrast': '#d0d2de',
-      '--text-primary': '#3e4058', '--text-secondary': '#6b6e8a', '--text-muted': '#9698b0', '--text-disabled': '#b8bace',
-      '--border': '#cccee0', '--accent': '#7c5dcf', '--success': '#5f9e3e', '--warning': '#c48a2b', '--error': '#c44e5a',
-      '--chart-1': '#7c5dcf', '--chart-2': '#5580cc', '--chart-3': '#5f9e3e', '--chart-4': '#c48a2b', '--chart-5': '#c44e5a', '--chart-6': '#4ba8c7',
-      '--chart-grid': '#cccee0', '--chart-text': '#9698b0', '--chart-tooltip-bg': '#f0f1f8', '--chart-tooltip-border': '#cccee0',
-    },
-  },
-  {
     id: 'dracula-soft-light', name: 'Dracula Soft Light', mode: 'light',
     vars: {
       '--bg-primary': '#f5f2f8', '--bg-secondary': '#ece8f2', '--bg-tertiary': '#e0dce9',
@@ -422,17 +345,6 @@ export const lightThemes: ThemeDef[] = [
     },
   },
   {
-    id: 'panda-light', name: 'Panda Light', mode: 'light',
-    vars: {
-      '--bg-primary': '#f0eff0', '--bg-secondary': '#e8e7e8', '--bg-tertiary': '#dddcdd',
-      '--bg-hover': '#dddcdd', '--bg-contrast': '#d1d0d1',
-      '--text-primary': '#3b3a3b', '--text-secondary': '#686768', '--text-muted': '#9a999a', '--text-disabled': '#c2c1c2',
-      '--border': '#cdcccd', '--accent': '#c05a8b', '--success': '#2aab9a', '--warning': '#c48e4a', '--error': '#c0404a',
-      '--chart-1': '#c05a8b', '--chart-2': '#3a82b8', '--chart-3': '#2aab9a', '--chart-4': '#c48e4a', '--chart-5': '#c0404a', '--chart-6': '#8a6aaa',
-      '--chart-grid': '#cdcccd', '--chart-text': '#9a999a', '--chart-tooltip-bg': '#f0eff0', '--chart-tooltip-border': '#cdcccd',
-    },
-  },
-  {
     id: 'github-light-default', name: 'GitHub Light Default', mode: 'light',
     vars: {
       '--bg-primary': '#f6f8fa', '--bg-secondary': '#ffffff', '--bg-tertiary': '#eaeef2',
@@ -441,17 +353,6 @@ export const lightThemes: ThemeDef[] = [
       '--border': '#d1d9e0', '--accent': '#0969da', '--success': '#1a7f37', '--warning': '#9a6700', '--error': '#d1242f',
       '--chart-1': '#0969da', '--chart-2': '#8250df', '--chart-3': '#1a7f37', '--chart-4': '#bf8700', '--chart-5': '#d1242f', '--chart-6': '#0550ae',
       '--chart-grid': '#d8dee4', '--chart-text': '#8c959f', '--chart-tooltip-bg': '#ffffff', '--chart-tooltip-border': '#d1d9e0',
-    },
-  },
-  {
-    id: 'material-ocean-light', name: 'Material Ocean Light', mode: 'light',
-    vars: {
-      '--bg-primary': '#eef0f6', '--bg-secondary': '#e4e7ef', '--bg-tertiary': '#d9dce6',
-      '--bg-hover': '#d9dce6', '--bg-contrast': '#cdd0db',
-      '--text-primary': '#3c4063', '--text-secondary': '#646a8a', '--text-muted': '#929ab5', '--text-disabled': '#b5bace',
-      '--border': '#c8cce0', '--accent': '#7c4dff', '--success': '#6a9e3c', '--warning': '#c4962b', '--error': '#c44e55',
-      '--chart-1': '#7c4dff', '--chart-2': '#5580cc', '--chart-3': '#6a9e3c', '--chart-4': '#c4962b', '--chart-5': '#c44e55', '--chart-6': '#4ba8c7',
-      '--chart-grid': '#c8cce0', '--chart-text': '#929ab5', '--chart-tooltip-bg': '#eef0f6', '--chart-tooltip-border': '#c8cce0',
     },
   },
   {
@@ -466,17 +367,6 @@ export const lightThemes: ThemeDef[] = [
     },
   },
   {
-    id: 'hackr-light', name: 'hackr Light', mode: 'light',
-    vars: {
-      '--bg-primary': '#f0f2f5', '--bg-secondary': '#e6e9ee', '--bg-tertiary': '#dcdfe5',
-      '--bg-hover': '#dcdfe5', '--bg-contrast': '#d0d3da',
-      '--text-primary': '#2b3038', '--text-secondary': '#5a616b', '--text-muted': '#8a909a', '--text-disabled': '#b5b9c0',
-      '--border': '#c9cdd4', '--accent': '#3870c4', '--success': '#2d8f3e', '--warning': '#a87a1c', '--error': '#c73e38',
-      '--chart-1': '#3870c4', '--chart-2': '#7a5ac7', '--chart-3': '#2d8f3e', '--chart-4': '#a87a1c', '--chart-5': '#c73e38', '--chart-6': '#3ba8b5',
-      '--chart-grid': '#c9cdd4', '--chart-text': '#8a909a', '--chart-tooltip-bg': '#f0f2f5', '--chart-tooltip-border': '#c9cdd4',
-    },
-  },
-  {
     id: 'one-candy-light', name: 'One Candy Light', mode: 'light',
     vars: {
       '--bg-primary': '#eff1f5', '--bg-secondary': '#e6e8ee', '--bg-tertiary': '#dcdee6',
@@ -488,50 +378,6 @@ export const lightThemes: ThemeDef[] = [
     },
   },
   {
-    id: 'primer', name: 'Primer', mode: 'light',
-    vars: {
-      '--bg-primary': '#f6f8fa', '--bg-secondary': '#ffffff', '--bg-tertiary': '#eaeef2',
-      '--bg-hover': '#eaeef2', '--bg-contrast': '#d1d9e0',
-      '--text-primary': '#1f2328', '--text-secondary': '#59636e', '--text-muted': '#818b98', '--text-disabled': '#afb8c1',
-      '--border': '#d1d9e0', '--accent': '#0969da', '--success': '#1f883d', '--warning': '#9a6700', '--error': '#cf222e',
-      '--chart-1': '#0969da', '--chart-2': '#bf3989', '--chart-3': '#1f883d', '--chart-4': '#9a6700', '--chart-5': '#cf222e', '--chart-6': '#8250df',
-      '--chart-grid': '#d8dee4', '--chart-text': '#818b98', '--chart-tooltip-bg': '#ffffff', '--chart-tooltip-border': '#d1d9e0',
-    },
-  },
-  {
-    id: 'cloud', name: 'Cloud', mode: 'light',
-    vars: {
-      '--bg-primary': '#f8fafc', '--bg-secondary': '#ffffff', '--bg-tertiary': '#f1f5f9',
-      '--bg-hover': '#f1f5f9', '--bg-contrast': '#e2e8f0',
-      '--text-primary': '#1e293b', '--text-secondary': '#64748b', '--text-muted': '#94a3b8', '--text-disabled': '#cbd5e1',
-      '--border': '#e2e8f0', '--accent': '#4f46e5', '--success': '#16a34a', '--warning': '#ca8a04', '--error': '#dc2626',
-      '--chart-1': '#4f46e5', '--chart-2': '#0891b2', '--chart-3': '#16a34a', '--chart-4': '#ca8a04', '--chart-5': '#dc2626', '--chart-6': '#9333ea',
-      '--chart-grid': '#e2e8f0', '--chart-text': '#94a3b8', '--chart-tooltip-bg': '#ffffff', '--chart-tooltip-border': '#e2e8f0',
-    },
-  },
-  {
-    id: 'sage', name: 'Sage', mode: 'light',
-    vars: {
-      '--bg-primary': '#f7f9f7', '--bg-secondary': '#ffffff', '--bg-tertiary': '#ecf0ec',
-      '--bg-hover': '#ecf0ec', '--bg-contrast': '#dce2dc',
-      '--text-primary': '#2d3830', '--text-secondary': '#5a6b5e', '--text-muted': '#8a9b8e', '--text-disabled': '#b8c4ba',
-      '--border': '#d0dcd2', '--accent': '#0d9488', '--success': '#15803d', '--warning': '#a16207', '--error': '#be123c',
-      '--chart-1': '#0d9488', '--chart-2': '#7c3aed', '--chart-3': '#15803d', '--chart-4': '#d97706', '--chart-5': '#dc2626', '--chart-6': '#2563eb',
-      '--chart-grid': '#d0dcd2', '--chart-text': '#8a9b8e', '--chart-tooltip-bg': '#ffffff', '--chart-tooltip-border': '#d0dcd2',
-    },
-  },
-  {
-    id: 'tangerine', name: 'Tangerine', mode: 'light',
-    vars: {
-      '--bg-primary': '#faf8f6', '--bg-secondary': '#ffffff', '--bg-tertiary': '#f0ece8',
-      '--bg-hover': '#f0ece8', '--bg-contrast': '#e2dcd5',
-      '--text-primary': '#33291f', '--text-secondary': '#6e5f50', '--text-muted': '#9e8f80', '--text-disabled': '#c4b8ac',
-      '--border': '#d6cdc2', '--accent': '#ea580c', '--success': '#16a34a', '--warning': '#b45309', '--error': '#dc2626',
-      '--chart-1': '#ea580c', '--chart-2': '#2563eb', '--chart-3': '#16a34a', '--chart-4': '#ca8a04', '--chart-5': '#dc2626', '--chart-6': '#9333ea',
-      '--chart-grid': '#d6cdc2', '--chart-text': '#9e8f80', '--chart-tooltip-bg': '#ffffff', '--chart-tooltip-border': '#d6cdc2',
-    },
-  },
-  {
     id: 'graphite', name: 'Graphite', mode: 'light',
     vars: {
       '--bg-primary': '#f1f3f5', '--bg-secondary': '#f8f9fa', '--bg-tertiary': '#e5e7eb',
@@ -540,17 +386,6 @@ export const lightThemes: ThemeDef[] = [
       '--border': '#d1d5db', '--accent': '#4b5563', '--success': '#16a34a', '--warning': '#ca8a04', '--error': '#dc2626',
       '--chart-1': '#4e79a7', '--chart-2': '#e15759', '--chart-3': '#59a14f', '--chart-4': '#f28e2c', '--chart-5': '#af7aa1', '--chart-6': '#76b7b2',
       '--chart-grid': '#d1d5db', '--chart-text': '#9ca3af', '--chart-tooltip-bg': '#f8f9fa', '--chart-tooltip-border': '#d1d5db',
-    },
-  },
-  {
-    id: 'azure', name: 'Azure', mode: 'light',
-    vars: {
-      '--bg-primary': '#f0f7ff', '--bg-secondary': '#ffffff', '--bg-tertiary': '#e0edf8',
-      '--bg-hover': '#e0edf8', '--bg-contrast': '#d0dfee',
-      '--text-primary': '#1a3050', '--text-secondary': '#4a6a8a', '--text-muted': '#7a9ab4', '--text-disabled': '#a8c0d4',
-      '--border': '#c4d8ea', '--accent': '#0284c7', '--success': '#16a34a', '--warning': '#ca8a04', '--error': '#dc2626',
-      '--chart-1': '#0284c7', '--chart-2': '#7c3aed', '--chart-3': '#16a34a', '--chart-4': '#d97706', '--chart-5': '#dc2626', '--chart-6': '#db2777',
-      '--chart-grid': '#c4d8ea', '--chart-text': '#7a9ab4', '--chart-tooltip-bg': '#ffffff', '--chart-tooltip-border': '#c4d8ea',
     },
   },
 ];
