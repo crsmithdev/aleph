@@ -2,10 +2,11 @@ import { Icon } from '../../components/ui/Icon';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { useResearchQueries, useCreateResearchQuery, useUpdateResearchQuery, useRunAllResearch, useStopAllResearch, useClearResearchDB, useResearchDefaults } from '../../api/research-hooks';
+import { useResearchQueries, useCreateResearchQuery, useUpdateResearchQuery, useRunAllResearch, useStopAllResearch, useClearResearchDB, useResearchDefaults, useResearchStats } from '../../api/research-hooks';
 import { Button } from '../../components/ui/Button';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
+import { fmtCurrency } from '../../utils/format';
 
 type StatusFilter = 'all' | 'active' | 'paused' | 'completed';
 
@@ -73,6 +74,16 @@ export function ResearchQueriesPage() {
     ? visibleSessions
     : visibleSessions.filter(s => s.status === statusFilter);
 
+  const { data: weekStats } = useResearchStats('7d', 'day');
+  const weekSpend = weekStats?.totalCost ?? 0;
+  const activeCount = visibleSessions.filter(s => s.status === 'active').length;
+  const statusCounts: Record<StatusFilter, number> = {
+    all: visibleSessions.length,
+    active: activeCount,
+    paused: visibleSessions.filter(s => s.status === 'paused').length,
+    completed: visibleSessions.filter(s => s.status === 'completed').length,
+  };
+
   function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!query.trim()) return;
@@ -98,6 +109,8 @@ export function ResearchQueriesPage() {
           <h1 className="font-heading text-2xl font-bold text-text-primary">Queries</h1>
           <p className="text-sm text-text-muted mt-0.5">
             {visibleSessions.length} quer{visibleSessions.length !== 1 ? 'ies' : 'y'}
+            {activeCount > 0 && <> &middot; <span className="text-success">{activeCount} active</span></>}
+            {weekSpend > 0 && <> &middot; {fmtCurrency(weekSpend)} spent &middot; 7d</>}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -224,20 +237,25 @@ export function ResearchQueriesPage() {
       {/* Status filter bar */}
       {!isLoading && !isError && visibleSessions.length > 0 && (
         <div className="flex items-center gap-1">
-          {STATUS_FILTERS.map(f => (
-            <button
-              key={f.value}
-              onClick={() => setStatusFilter(f.value)}
-              className={clsx(
-                'px-3 py-1.5 rounded text-sm font-medium transition-colors',
-                statusFilter === f.value
-                  ? 'bg-bg-tertiary text-text-primary'
-                  : 'text-text-muted hover:text-text-secondary hover:bg-bg-secondary'
-              )}
-            >
-              {f.label}
-            </button>
-          ))}
+          {STATUS_FILTERS.map(f => {
+            const active = statusFilter === f.value;
+            const count = statusCounts[f.value];
+            return (
+              <button
+                key={f.value}
+                onClick={() => setStatusFilter(f.value)}
+                className={clsx(
+                  'px-3 py-1.5 rounded text-sm font-medium transition-colors flex items-center gap-1.5',
+                  active
+                    ? 'bg-bg-tertiary text-text-primary'
+                    : 'text-text-muted hover:text-text-secondary hover:bg-bg-secondary'
+                )}
+              >
+                {f.label}
+                <span className={clsx('tabular-nums', active ? 'text-text-muted' : 'text-text-muted/60')}>{count}</span>
+              </button>
+            );
+          })}
         </div>
       )}
 
