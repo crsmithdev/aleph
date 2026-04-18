@@ -248,12 +248,12 @@ async function executeThreadJob(job: import('./types.js').ResearchJob): Promise<
   // Budget check before starting
   const costData = sessions.getQueryCost(sqlite, job.session_id);
   if (session.config.budget_daily_usd && costData.today_cost >= session.config.budget_daily_usd) {
-    sessions.updateQuery(sqlite, job.session_id, { status: 'paused' });
+    sessions.updateQuery(sqlite, job.session_id, { status: 'halted' });
     jobs.completeJob(sqlite, job.id, workerId);
     return;
   }
   if (session.config.budget_total_usd && costData.total_cost >= session.config.budget_total_usd) {
-    sessions.updateQuery(sqlite, job.session_id, { status: 'paused' });
+    sessions.updateQuery(sqlite, job.session_id, { status: 'halted' });
     jobs.completeJob(sqlite, job.id, workerId);
     return;
   }

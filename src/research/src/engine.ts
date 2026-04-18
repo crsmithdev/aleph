@@ -268,14 +268,14 @@ export class ResearchEngine {
         const currentSession = sessions.getQuery(this.sqlite, sessionId)!;
         if (currentSession.status !== 'active') break;
 
-        // Check budget
+        // Check budget — hard stop goes to 'halted' (distinct from user-initiated 'paused')
         const cost = sessions.getQueryCost(this.sqlite, sessionId);
         if (currentSession.config.budget_daily_usd && cost.today_cost >= currentSession.config.budget_daily_usd) {
-          sessions.updateQuery(this.sqlite, sessionId, { status: 'paused' });
+          sessions.updateQuery(this.sqlite, sessionId, { status: 'halted' });
           break;
         }
         if (currentSession.config.budget_total_usd && cost.total_cost >= currentSession.config.budget_total_usd) {
-          sessions.updateQuery(this.sqlite, sessionId, { status: 'paused' });
+          sessions.updateQuery(this.sqlite, sessionId, { status: 'halted' });
           break;
         }
 
@@ -363,6 +363,18 @@ export class ResearchEngine {
     // Final plan generation
     const finalSession = sessions.getQuery(this.sqlite, sessionId)!;
     await this.generatePlan(sessionId, finalSession.config);
+
+    // Exhaustion detection — if the session is still 'active' but has no
+    // queued or active threads left, mark it 'exhausted'. The loop has
+    // already tried a perturbation pass; anything less than 'active' means a
+    // budget halt / pause already ran and should not be overwritten.
+    if (finalSession.status === 'active' && !this.signal?.aborted) {
+      const remaining = threads.listThreads(this.sqlite, sessionId)
+        .filter(t => t.status === 'queued' || t.status === 'active');
+      if (remaining.length === 0) {
+        sessions.updateQuery(this.sqlite, sessionId, { status: 'exhausted' });
+      }
+    }
 
     return { iterations: iterationCount, findings: findingCount, cost: totalCost };
   }

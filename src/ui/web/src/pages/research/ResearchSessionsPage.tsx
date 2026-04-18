@@ -17,6 +17,8 @@ import { fmtCurrency, fmtNumber, fmtPct, shortDate, granLabel } from '../../util
 const statusColors: Record<string, string> = {
   active: 'bg-green-900/50 text-green-300',
   paused: 'bg-yellow-900/50 text-yellow-300',
+  exhausted: 'bg-bg-tertiary text-text-secondary',
+  halted: 'bg-red-900/50 text-red-300',
   completed: 'bg-blue-900/50 text-blue-300',
   archived: 'bg-bg-tertiary text-text-muted',
 };

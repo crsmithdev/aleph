@@ -8,18 +8,22 @@ import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { fmtCurrency, shortRelativeTime } from '../../utils/format';
 
-type StatusFilter = 'all' | 'active' | 'paused' | 'completed';
+type StatusFilter = 'all' | 'active' | 'paused' | 'exhausted' | 'halted' | 'completed';
 
 const STATUS_FILTERS: { label: string; value: StatusFilter }[] = [
   { label: 'All', value: 'all' },
   { label: 'Active', value: 'active' },
   { label: 'Paused', value: 'paused' },
+  { label: 'Exhausted', value: 'exhausted' },
+  { label: 'Halted', value: 'halted' },
   { label: 'Completed', value: 'completed' },
 ];
 
 const statusDotColors: Record<string, string> = {
   active: 'bg-green-400',
   paused: 'bg-yellow-400',
+  exhausted: 'bg-text-muted',
+  halted: 'bg-red-400',
   completed: 'bg-blue-400',
   archived: 'bg-text-muted',
 };
@@ -27,6 +31,8 @@ const statusDotColors: Record<string, string> = {
 const statusBadgeColors: Record<string, string> = {
   active: 'bg-green-900/50 text-green-300',
   paused: 'bg-yellow-900/50 text-yellow-300',
+  exhausted: 'bg-bg-tertiary text-text-secondary',
+  halted: 'bg-red-900/50 text-red-300',
   completed: 'bg-blue-900/50 text-blue-300',
   archived: 'bg-bg-tertiary text-text-muted',
 };
@@ -99,6 +105,8 @@ export function ResearchQueriesPage() {
     all: visibleSessions.length,
     active: activeCount,
     paused: visibleSessions.filter(s => s.status === 'paused').length,
+    exhausted: visibleSessions.filter(s => s.status === 'exhausted').length,
+    halted: visibleSessions.filter(s => s.status === 'halted').length,
     completed: visibleSessions.filter(s => s.status === 'completed').length,
   };
 
