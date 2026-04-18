@@ -265,6 +265,81 @@ export function getResearchStats(sqlite: Sqlite, range: string, granularity: str
   };
 }
 
+export interface ResearchSummary {
+  topConcepts: Array<{
+    name: string;
+    session_count: number;
+    finding_count: number;
+  }>;
+  extractionQueue: {
+    running: number;
+    pending: number;
+    failed: number;
+    total: number;
+  };
+  stepsPerHour: number;
+  recentConcepts: Array<{
+    name: string;
+    session_id: string;
+    session_title: string;
+    created_at: string;
+  }>;
+}
+
+export function getResearchSummary(sqlite: Sqlite): ResearchSummary {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 86400_000).toISOString();
+  const oneHourAgo = new Date(Date.now() - 3600_000).toISOString();
+
+  const topConceptRows = sqlite.prepare(`
+    SELECT
+      c.canonical_name AS name,
+      COUNT(DISTINCT c.session_id) AS session_count,
+      COUNT(fc.finding_id) AS finding_count
+    FROM research_concepts c
+    LEFT JOIN research_finding_concepts fc ON fc.concept_id = c.id
+    WHERE c.created_at >= ?
+    GROUP BY c.canonical_name
+    ORDER BY finding_count DESC, session_count DESC, c.canonical_name ASC
+    LIMIT 10
+  `).all(thirtyDaysAgo) as Array<{ name: string; session_count: number; finding_count: number }>;
+
+  const queueRows = sqlite.prepare(`
+    SELECT extraction_status, COUNT(*) AS n
+    FROM research_sources
+    GROUP BY extraction_status
+  `).all() as Array<{ extraction_status: string; n: number }>;
+  const queueByStatus: Record<string, number> = {};
+  for (const r of queueRows) queueByStatus[r.extraction_status] = r.n;
+  const running = queueByStatus.claimed ?? 0;
+  const pending = queueByStatus.pending ?? 0;
+  const failed = queueByStatus.failed ?? 0;
+  const extractionQueue = { running, pending, failed, total: running + pending + failed };
+
+  const stepsRow = sqlite.prepare(
+    'SELECT COUNT(*) AS n FROM research_steps WHERE created_at >= ?'
+  ).get(oneHourAgo) as { n: number };
+
+  const recentConceptRows = sqlite.prepare(`
+    SELECT c.canonical_name AS name, c.session_id, q.title AS session_title, c.created_at
+    FROM research_concepts c
+    LEFT JOIN research_queries q ON q.id = c.session_id
+    ORDER BY c.created_at DESC
+    LIMIT 10
+  `).all() as Array<{ name: string; session_id: string; session_title: string | null; created_at: string }>;
+
+  return {
+    topConcepts: topConceptRows,
+    extractionQueue,
+    stepsPerHour: stepsRow.n,
+    recentConcepts: recentConceptRows.map(r => ({
+      name: r.name,
+      session_id: r.session_id,
+      session_title: r.session_title ?? '',
+      created_at: r.created_at,
+    })),
+  };
+}
+
 function rangeToCutoff(range: string): string {
   const now = new Date();
   switch (range) {

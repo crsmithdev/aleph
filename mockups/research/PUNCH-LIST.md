@@ -8,6 +8,14 @@ Last updated: 2026-04-17 by Claude.
 
 ## Landed on `main`
 
+### Summary endpoint + UI cards (`services/queries.ts`, `ResearchQueriesPage.tsx`, `ResearchWorkersPage.tsx`)
+Branch: `feat/research-summary`.
+
+- **Backend:** new `GET /research/summary` → `{ topConcepts, extractionQueue, stepsPerHour, recentConcepts }`. Implementation in `getResearchSummary()` — four small SQL queries (top concepts joined through `research_finding_concepts`, extraction queue grouped by `extraction_status`, steps/hr windowed on `idx_rs_session_created`, recent concepts joined to `research_queries.title`). `extraction_status = 'claimed'` → UI-facing `running`.
+- **Queries page:** summary cards footer below the list — Top concepts this month (pill chips with finding_count), Extraction queue (total + running/queued/failed breakdown), Spend last 7 days (number + polyline sparkline from existing `/research/stats`). Only renders when there are visible queries; degrades gracefully with empty arrays.
+- **Workers page:** throughput strip expanded from 4 to 6 `StatCard`s — adds **Steps / hr** and **Extraction Backlog** (running + pending, with failed shown in the detail line).
+- **Hook:** `useResearchSummary()` refetches every 15s (matches other near-live dashboards).
+
 ### Queries page — per-row stats (`ResearchQueriesPage.tsx`, `services/queries.ts`)
 Branch: `feat/research-queries-stats`.
 
@@ -41,15 +49,10 @@ These are the drivers for the upcoming "research aggregates" endpoint work.
 
 ### For queries page (`queries.html`)
 - **Exhausted / Halted statuses** — schema change to `ResearchQuery.status`; not just UI.
-- **Summary cards footer** (3 cards in mockup):
-  - Top concepts this month (cross-session) — needs concept aggregation.
-  - Extraction queue counts (running / pending / failed) — needs cross-session sources aggregate.
-  - Spend last 7 days with sparkline — partially doable today (we have the number + `byDay`), but looks half-built as a lone card.
 
 ### For workers page (future "Activity" rename)
-- **Mini metrics**: Steps/hr, Extraction backlog — need cross-session steps + sources aggregates.
 - **Right-rail live event feed** cross-session — SSE stream is per-session only today (`/research/queries/:id/stream`). Needs a new multiplexed `/research/stream` endpoint.
-- **Right-rail extraction queue panel**, **recent concepts chips** — same cross-session aggregates as above.
+- **Right-rail recent-concepts chips** — data is available (`summary.recentConcepts`), just not yet placed on the workers page. Defer until the event rail lands so we can design the right rail as one unit.
 
 ### For query-detail `#doc` tab
 Typographic affordances in generated documents:
@@ -68,50 +71,24 @@ These require changes in the doc **generator** (what it emits as markdown/HTML),
 
 ---
 
-## Next — backend aggregates (design in progress)
+## Next — backend aggregates
 
-Endpoint #1 landed (see "Queries page — per-row stats" above). #2 and #3 still pending.
-
-### 2. New `GET /research/summary`
-
-Cross-session roll-up. Returns:
-
-```ts
-interface ResearchSummary {
-  topConcepts: Array<{
-    name: string;
-    session_count: number;    // how many sessions it appears in
-    finding_count: number;    // total findings linking to it
-  }>;                         // top 10 by finding_count, last 30 days
-  extractionQueue: {
-    running: number;
-    pending: number;
-    failed: number;
-    total: number;
-  };
-  stepsPerHour: number;       // count of steps in last 60 minutes
-  recentConcepts: Array<{     // last 10 newly-discovered concepts
-    name: string;
-    session_id: string;
-    session_title: string;
-    created_at: string;
-  }>;
-}
-```
+Endpoints #1 (`/research/queries` + stats) and #2 (`/research/summary`) have landed.
 
 ### 3. (Later) Cross-session SSE stream
 
-`GET /research/stream` — fanout of all per-session streams. Only needed when we actually add the live-event rail to the workers page. Defer until the first two endpoints ship and we decide to build the event rail.
+`GET /research/stream` — fanout of all per-session streams. Only needed when we actually add the live-event rail to the workers page. Defer until we decide to build the event rail.
 
 ---
 
 ## Open branches / in-flight
 
-- `feat/research-queries-stats` — ready for merge (per-row count triple + sparkline + `listQueriesWithStats`).
+None. `feat/research-queries-stats` and `feat/research-summary` both merged.
 
 Remote branches remain (not deleted per CLAUDE.md rule):
 - `feat/research-extraction` — merged, can be deleted by user.
 - `feat/queries-page-metadata` — merged, can be deleted by user.
+- `feat/research-queries-stats` — merged, can be deleted by user.
 - `docs/research-punch-list` — merged (commit `d7e9b1c`), local-only, can be deleted by user.
 
 ---
