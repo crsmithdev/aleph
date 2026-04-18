@@ -2,7 +2,7 @@
 
 Tracks what's landed, deferred, and next for the research UI, against the mockups in this directory (`queries.html`, `events.html`, `query-detail.html`, `common.css`).
 
-Last updated: 2026-04-17 by Claude.
+Last updated: 2026-04-18 by Claude.
 
 ---
 
@@ -38,29 +38,27 @@ Commit: `afcac07` (merged in `9e2528a`).
 - **Header subtitle** now shows `N queries · K active · $X spent · 7d` (conditional segments).
 - **Chip filters** show per-bucket counts inline (`All 14`, `Active 3`, etc.).
 
+### Cross-session SSE + workers-page live activity rail (`routes/research.ts`, `api/research-hooks.ts`, `ResearchWorkersPage.tsx`)
+Branch: `feat/research-stream-sse`.
+
+- **Backend:** new `GET /research/stream` — multiplexed SSE across all sessions. 500 ms polling cursor per client over findings/threads/steps/jobs/sessions; 15 s heartbeat comment. Cursors are initialised off current max-timestamps, so reconnects don't replay history.
+- **Hook:** `useCrossSessionStream(enabled, maxEvents)` → bounded in-memory ring of `StreamEvent`s; `StreamEvent` union extended with a `session` variant.
+- **Workers page:** adds an `ActivityRail` (right column on `xl:`) with recent-concepts chips on top and a live activity feed below (no pills; colored uppercase kind labels at the 14 px floor). Layout wraps in `xl:grid-cols-[minmax(0,1fr)_320px]`.
+
+### Exhausted / Halted session statuses (`types.ts`, `engine.ts`, `worker.ts`, queries/detail/sessions pages)
+Branch: `feat/research-statuses`.
+
+- **Schema + engine:** `ResearchQuery.status` union extended with `'exhausted' | 'halted'`. Budget transitions in `worker.ts` now write `halted` (not `paused`). `engine.runOnce()` flips an otherwise-active session to `exhausted` when it finishes with no queued/active threads remaining.
+- **UI:** queries-page status chip + dot palette updated (`halted` → red, `exhausted` → muted); session list/detail pages render the new badges; detail's Enable button now labelled **Resume** and shown for paused/halted/exhausted alike.
+
+### Doc-tab typography: concept-link, fact-box, pullquote (`ResearchQueryDetailPage.tsx`, `engine.ts`)
+Branch: `feat/research-doc-typography`.
+
+- **Renderer:** `DocumentView.cleanDoc` now rewrites `[[Concept Name]]` wiki-links into `[Name](#concept:slug)`. The `a` component detects the `#concept:` scheme and calls `onNavigateToConcept`, which the parent page wires to `setTab('knowledge')` + a `pendingConceptName` that `KnowledgeView` resolves on next render (by canonical name or alias, slug-matched). `blockquote` upgraded to the mockup's pullquote style (accent border, bg-secondary, rounded, italic). New `code` override renders ` ```facts ` fenced blocks as a `<dl>` fact-box with `Term = Value` rows; all other fenced blocks use the standard `<pre>`.
+- **Generator:** per-concept section prompt in `engine.ts` documents the three constructs and lists the sibling top-concept names so `[[wiki-links]]` only point at concepts the doc actually covers.
+
 ### Other recent landings (pre-this-branch)
 - Config tab layout fixes, MapView off on Process tab, SourcesView useMemo hoist, new-query form populates from server defaults, tighter thread/depth default caps, research-redesign mockup removed.
-
----
-
-## Deferred — needs new backend aggregates
-
-These are the drivers for the upcoming "research aggregates" endpoint work.
-
-### For queries page (`queries.html`)
-- **Exhausted / Halted statuses** — schema change to `ResearchQuery.status`; not just UI.
-
-### For workers page (future "Activity" rename)
-- **Right-rail live event feed** cross-session — SSE stream is per-session only today (`/research/queries/:id/stream`). Needs a new multiplexed `/research/stream` endpoint.
-- **Right-rail recent-concepts chips** — data is available (`summary.recentConcepts`), just not yet placed on the workers page. Defer until the event rail lands so we can design the right rail as one unit.
-
-### For query-detail `#doc` tab
-Typographic affordances in generated documents:
-- Inline `concept-link` (dotted-underline jump to Knowledge tab).
-- `fact-box` / `fact-row dt` table-of-facts block.
-- `pullquote` blockquote style.
-
-These require changes in the doc **generator** (what it emits as markdown/HTML), not just in the renderer. Out of scope for pure UI work.
 
 ---
 
@@ -71,19 +69,15 @@ These require changes in the doc **generator** (what it emits as markdown/HTML),
 
 ---
 
-## Next — backend aggregates
+## Next
 
-Endpoints #1 (`/research/queries` + stats) and #2 (`/research/summary`) have landed.
-
-### 3. (Later) Cross-session SSE stream
-
-`GET /research/stream` — fanout of all per-session streams. Only needed when we actually add the live-event rail to the workers page. Defer until we decide to build the event rail.
+All punch-list items landed. Further research-UI polish is open-ended; no queued work.
 
 ---
 
 ## Open branches / in-flight
 
-None. `feat/research-queries-stats` and `feat/research-summary` both merged.
+None. `feat/research-stream-sse`, `feat/research-statuses`, and `feat/research-doc-typography` all merged and their local branches deleted.
 
 Remote branches remain (not deleted per CLAUDE.md rule):
 - `feat/research-extraction` — merged, can be deleted by user.

@@ -414,3 +414,18 @@ Scoped as a follow-up. Not part of the config-surface work above.
 3. Mockups at `mockups/research/` and `mockups/research-config/` (Variant A only matters).
 4. Current branch: `fix/datatable-fill-columns` — create a new branch `feat/research-config-defaults` for Milestones A–E.
 5. Start with Milestone A (mock cleanup + 14px enforcement), then run the audit's Phase 1 checklist as acceptance criteria.
+
+---
+
+## 7. Final state — 2026-04-18
+
+All mockup-driven items are now on `main`. Summary of the last round of branches:
+
+- **Cross-session SSE (`feat/research-stream-sse`)** — new `GET /research/stream` (500 ms cursor-poll + 15 s heartbeat), `useCrossSessionStream` hook, and a right-rail `ActivityRail` on the workers page combining recent-concepts chips with a live cross-session event feed.
+- **Exhausted / Halted statuses (`feat/research-statuses`)** — `ResearchQuery.status` extended; engine auto-flips to `exhausted` when no queued/active threads remain, worker writes `halted` on budget cutoff (replacing the ambiguous `paused`). Queries list / session list / detail page render the new states; detail's enable button now reads **Resume** for paused/halted/exhausted.
+- **Doc-tab typography (`feat/research-doc-typography`)** — three markdown constructs the doc generator is now prompted to emit:
+  - `[[Concept Name]]` wiki-links → dotted-underline info-colored anchor that cross-navigates to the Knowledge tab with the matching concept selected (canonical-name or alias, slug-matched).
+  - ` ```facts ` fenced blocks → compact `<dl>` fact-box with `Term = Value [n]` rows; citation markers remain live.
+  - `> …` blockquotes → upgraded pullquote styling (accent border, bg-secondary, rounded, italic).
+
+See `mockups/research/PUNCH-LIST.md` for the branch-by-branch ledger.
