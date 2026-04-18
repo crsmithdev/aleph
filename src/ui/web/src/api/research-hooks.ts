@@ -133,6 +133,36 @@ export function useResearchStats(range: string, granularity: string) {
   });
 }
 
+// --- Summary (cross-session roll-up) ---
+export interface ResearchSummary {
+  topConcepts: Array<{
+    name: string;
+    session_count: number;
+    finding_count: number;
+  }>;
+  extractionQueue: {
+    running: number;
+    pending: number;
+    failed: number;
+    total: number;
+  };
+  stepsPerHour: number;
+  recentConcepts: Array<{
+    name: string;
+    session_id: string;
+    session_title: string;
+    created_at: string;
+  }>;
+}
+
+export function useResearchSummary() {
+  return useQuery({
+    queryKey: ['research-summary'],
+    queryFn: () => api.get<ResearchSummary>('/research/summary'),
+    refetchInterval: 15000,
+  });
+}
+
 // --- Workers (global) ---
 export interface WorkerStatus {
   id: number;

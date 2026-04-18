@@ -15,6 +15,7 @@ import {
   useAllJobs,
   useJobStats,
   useResearchStats,
+  useResearchSummary,
   useAddWorker,
   useRemoveWorker,
   useKillWorker,
@@ -563,6 +564,7 @@ export function ResearchWorkersPage() {
   const { data: allJobs = [] } = useAllJobs({ limit: 500 });
   const { data: stats } = useJobStats();
   const { data: throughput } = useResearchStats('7d', 'day');
+  const { data: summary } = useResearchSummary();
   const addWorker = useAddWorker();
   const removeWorker = useRemoveWorker();
   const killWorker = useKillWorker();
@@ -625,7 +627,7 @@ export function ResearchWorkersPage() {
       />
 
       {/* Throughput — today's output across all queries */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
         <StatCard
           label="Active Queries"
           value={fmtNumber(activeQueries)}
@@ -633,6 +635,11 @@ export function ResearchWorkersPage() {
           detailContent={
             <><span className="text-text-muted">of </span><span className="text-text-secondary font-medium">{queries.length}</span><span className="text-text-muted"> total</span></>
           }
+        />
+        <StatCard
+          label="Steps / hr"
+          value={fmtNumber(summary?.stepsPerHour ?? 0)}
+          accent={summary && summary.stepsPerHour > 0 ? 'success' : 'neutral'}
         />
         <StatCard
           label="Findings Today"
@@ -648,6 +655,16 @@ export function ResearchWorkersPage() {
           label="Total Cost · 7d"
           value={fmtCurrency(throughput?.totalCost ?? 0)}
           accent="neutral"
+        />
+        <StatCard
+          label="Extraction Backlog"
+          value={fmtNumber((summary?.extractionQueue.pending ?? 0) + (summary?.extractionQueue.running ?? 0))}
+          accent={summary && (summary.extractionQueue.pending + summary.extractionQueue.running) > 0 ? 'warning' : 'neutral'}
+          detailContent={summary ? (
+            <>
+              <span className="text-text-muted">{summary.extractionQueue.running} running · {summary.extractionQueue.failed} failed</span>
+            </>
+          ) : undefined}
         />
       </div>
 

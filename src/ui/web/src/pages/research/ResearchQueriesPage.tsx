@@ -2,7 +2,7 @@ import { Icon } from '../../components/ui/Icon';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { useResearchQueries, useCreateResearchQuery, useUpdateResearchQuery, useRunAllResearch, useStopAllResearch, useClearResearchDB, useResearchDefaults, useResearchStats } from '../../api/research-hooks';
+import { useResearchQueries, useCreateResearchQuery, useUpdateResearchQuery, useRunAllResearch, useStopAllResearch, useClearResearchDB, useResearchDefaults, useResearchStats, useResearchSummary } from '../../api/research-hooks';
 import { Button } from '../../components/ui/Button';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
@@ -93,6 +93,7 @@ export function ResearchQueriesPage() {
 
   const { data: weekStats } = useResearchStats('7d', 'day');
   const weekSpend = weekStats?.totalCost ?? 0;
+  const { data: summary } = useResearchSummary();
   const activeCount = visibleSessions.filter(s => s.status === 'active').length;
   const statusCounts: Record<StatusFilter, number> = {
     all: visibleSessions.length,
@@ -358,6 +359,76 @@ export function ResearchQueriesPage() {
           ))}
         </div>
       )}
+
+      {/* Summary cards footer */}
+      {!isLoading && !isError && visibleSessions.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+          {/* Top concepts this month */}
+          <div className="bg-bg-secondary border border-border-primary rounded-lg p-4">
+            <div className="text-sm text-text-muted font-medium tracking-wide">Top concepts this month</div>
+            {summary && summary.topConcepts.length > 0 ? (
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {summary.topConcepts.map(c => (
+                  <span
+                    key={c.name}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-bg-tertiary text-sm text-text-secondary"
+                    title={`${c.finding_count} finding${c.finding_count !== 1 ? 's' : ''} · ${c.session_count} session${c.session_count !== 1 ? 's' : ''}`}
+                  >
+                    {c.name}
+                    <span className="text-text-muted tabular-nums">{c.finding_count}</span>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-2.5 text-sm text-text-muted italic">No concepts yet.</div>
+            )}
+            <div className="mt-2.5 text-sm text-text-muted">Cross-session concept reuse, last 30 days.</div>
+          </div>
+
+          {/* Extraction queue */}
+          <div className="bg-bg-secondary border border-border-primary rounded-lg p-4">
+            <div className="text-sm text-text-muted font-medium tracking-wide">Extraction queue</div>
+            <div className="mt-2 font-heading text-2xl font-semibold text-text-primary tabular-nums">
+              {summary?.extractionQueue.total ?? 0}
+              <span className="ml-2 text-sm font-normal text-text-muted">pending</span>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-3 text-sm">
+              <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-green-400" />{summary?.extractionQueue.running ?? 0} running</span>
+              <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />{summary?.extractionQueue.pending ?? 0} queued</span>
+              <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-red-400" />{summary?.extractionQueue.failed ?? 0} failed</span>
+            </div>
+          </div>
+
+          {/* Spend last 7 days */}
+          <div className="bg-bg-secondary border border-border-primary rounded-lg p-4">
+            <div className="text-sm text-text-muted font-medium tracking-wide">Spend · last 7 days</div>
+            <div className="mt-2 font-heading text-2xl font-semibold text-text-primary tabular-nums">{fmtCurrency(weekSpend)}</div>
+            {weekStats?.byDay && weekStats.byDay.some(d => d.cost > 0) && (
+              <div className="mt-2">
+                <SpendSparkline byDay={weekStats.byDay.slice(-7)} />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function SpendSparkline({ byDay }: { byDay: Array<{ date: string; cost: number }> }) {
+  const values = byDay.map(d => d.cost);
+  const max = Math.max(...values, 0.0001);
+  const w = 200;
+  const h = 40;
+  const stepX = values.length > 1 ? w / (values.length - 1) : w;
+  const points = values
+    .map((v, i) => `${(i * stepX).toFixed(1)},${(h - (v / max) * (h - 4) - 2).toFixed(1)}`)
+    .join(' ');
+  return (
+    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden="true">
+      <title>Daily spend (7d)</title>
+      <polyline fill="none" stroke="#c678dd" strokeWidth={1.5} points={points} />
+      <line x1={0} y1={h - 1} x2={w} y2={h - 1} stroke="#3e4452" strokeWidth={1} />
+    </svg>
   );
 }
