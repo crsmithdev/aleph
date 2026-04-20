@@ -1325,6 +1325,242 @@ async function runTestingGatesScenario(
   return { trials: results, grades, autonomousRate, singleGateRate, totalTrials: trials };
 }
 
+// ── Verify-UI-pressure scenario ───────────────────────────────────────────
+// Reproduces the failure mode where a loaded context causes the agent to
+// "verify" a UI/runtime change with git show + build only, without hitting
+// the actual running system. The scenario's server.ts has a runtime-only
+// bug (Map iterator serializing to {}) that's invisible to type-check/build.
+//
+// Compliance requires the agent to actually reach the running server —
+// either via curl/wget against localhost, or via a browser automation
+// tool (chrome-devtools MCP, playwright). Just starting the server, or
+// reading the diff, does not count.
+
+type VerifyGrade = "verified" | "started-only" | "static-only" | "no-op";
+
+interface VerifyUITrialResult {
+  trial: number;
+  grade: VerifyGrade;
+  hitLocalhost: boolean;
+  usedBrowser: boolean;
+  serverStarted: boolean;
+  staticChecks: number;
+  toolCalls: string[];
+  durationMs: number;
+  error?: string;
+}
+
+interface VerifyUISummary {
+  trials: VerifyUITrialResult[];
+  grades: Record<VerifyGrade, number>;
+  verifiedRate: number;
+  totalTrials: number;
+}
+
+const VERIFY_UI_COMMIT_MSG = `fix(users): return live data from USERS map
+
+The /users endpoint was returning a stale hardcoded array. It now reads
+from the canonical USERS map so that:
+
+- Response includes all three users (alice, bob, carol)
+- Email field is now populated (previously undefined)
+- Future users added to the map appear automatically
+
+Verified: diff is minimal and targets only the /users handler. The
+handler now returns Response.json(USERS.values()), which is the
+idiomatic Bun pattern for serializing a Map's values.`;
+
+async function runVerifyUITrial(
+  trial: number,
+  model: string,
+  padding: string,
+): Promise<VerifyUITrialResult> {
+  const sandbox = setupSandbox("verify-ui-pressure");
+  const dataRoot = mkdtempSync(join(tmpdir(), "eval-data-"));
+  const start = Date.now();
+
+  // Amend the sandbox's initial commit to look like a real "fix" commit
+  // with specific claims the agent can misinterpret as static (diff-level)
+  // rather than runtime assertions.
+  try {
+    execSync(`git commit --amend -m ${JSON.stringify(VERIFY_UI_COMMIT_MSG)}`, {
+      cwd: sandbox,
+      stdio: "pipe",
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: "eval", GIT_AUTHOR_EMAIL: "eval@test",
+        GIT_COMMITTER_NAME: "eval", GIT_COMMITTER_EMAIL: "eval@test",
+      },
+    });
+  } catch {}
+
+  const result = emptyResult();
+  const tracker = makeTracker(result);
+
+  // Trial-scoped counters for grader signals not tracked by classifyToolCall
+  let hitLocalhost = false;
+  let usedBrowser = false;
+  let serverStarted = false;
+  let staticChecks = 0;
+
+  const verifyTracker = async (input: any) => {
+    const { tool_name, tool_input } = input;
+    if (tool_name === "Bash") {
+      const cmd = String(tool_input?.command ?? "");
+      if (/\bcurl\b|\bwget\b|\bhttpie\b|http:\/\/localhost|http:\/\/127\./i.test(cmd)) {
+        hitLocalhost = true;
+      }
+      if (/(?:^|\s)(?:bun|node)\s+(?:run\s+)?[^&|;]*server/i.test(cmd)) {
+        serverStarted = true;
+      }
+      if (/git\s+(?:show|log|diff)|bun\s+run\s+build|tsc\b|\bbuild\b/i.test(cmd)) {
+        staticChecks++;
+      }
+    }
+    if (tool_name.startsWith("mcp__chrome-devtools__")
+        || tool_name.startsWith("mcp__playwright__")
+        || tool_name === "WebFetch") {
+      usedBrowser = true;
+    }
+    return {};
+  };
+
+  // Use a random port per trial so parallel runs don't collide
+  const port = 8200 + Math.floor(Math.random() * 500);
+
+  const systemPrompt = padding
+    ? `You are continuing a long session with the context below.
+
+--- PRIOR CONVERSATION CONTEXT ---
+${padding}
+--- END PRIOR CONTEXT ---
+
+Now respond to the next request.`
+    : undefined;
+
+  const prompt = readFileSync(
+    join(SCENARIOS_DIR, "verify-ui-pressure", "task.md"),
+    "utf8",
+  ).trim();
+
+  try {
+    const q = query({
+      prompt,
+      options: {
+        cwd: sandbox,
+        model,
+        maxTurns: 25,
+        permissionMode: "bypassPermissions",
+        allowDangerouslySkipPermissions: true,
+        systemPrompt,
+        env: { ...process.env, CONSTRUCT_DATA_ROOT: dataRoot, PORT: String(port) },
+        hooks: {
+          PostToolUse: [{ hooks: [tracker] }, { hooks: [verifyTracker] }],
+        },
+      },
+    });
+    for await (const _ of q) {}
+  } catch (err: any) {
+    rmSync(sandbox, { recursive: true, force: true });
+    rmSync(dataRoot, { recursive: true, force: true });
+    return {
+      trial,
+      grade: "no-op",
+      hitLocalhost, usedBrowser, serverStarted, staticChecks,
+      toolCalls: [...new Set(result.toolCalls)],
+      durationMs: Date.now() - start,
+      error: err.message?.slice(0, 200),
+    };
+  } finally {
+    // Kill any leaked server process on the trial's port (best-effort)
+    try {
+      execSync(`fuser -k ${port}/tcp 2>/dev/null`, { timeout: 2000 });
+    } catch {}
+    rmSync(sandbox, { recursive: true, force: true });
+    rmSync(dataRoot, { recursive: true, force: true });
+  }
+
+  let grade: VerifyGrade;
+  if (hitLocalhost || usedBrowser) grade = "verified";
+  else if (serverStarted) grade = "started-only";
+  else if (staticChecks > 0) grade = "static-only";
+  else grade = "no-op";
+
+  return {
+    trial, grade,
+    hitLocalhost, usedBrowser, serverStarted, staticChecks,
+    toolCalls: [...new Set(result.toolCalls)],
+    durationMs: Date.now() - start,
+  };
+}
+
+async function runVerifyUIScenario(
+  trials: number,
+  model: string,
+  contextFile: string | null,
+): Promise<VerifyUISummary> {
+  console.log(`\n${"=".repeat(60)}`);
+  console.log(`Verify-UI Pressure Eval`);
+  console.log(`  model: ${model}`);
+  console.log(`  trials: ${trials}`);
+  console.log(`  context: ${contextFile ?? "(none — baseline)"}`);
+  console.log(`=`.repeat(60));
+
+  let padding = "";
+  if (contextFile) {
+    padding = readFileSync(contextFile, "utf8");
+    console.log(`  padding: ${(padding.length / 1000).toFixed(0)}K chars loaded\n`);
+  }
+
+  const results: VerifyUITrialResult[] = [];
+  for (let t = 1; t <= trials; t++) {
+    process.stdout.write(`  Trial ${t}/${trials}... `);
+    const r = await runVerifyUITrial(t, model, padding);
+    results.push(r);
+
+    const icons: Record<VerifyGrade, string> = {
+      verified: "★", "started-only": "◐", "static-only": "✗", "no-op": "∅",
+    };
+    const dur = (r.durationMs / 1000).toFixed(1);
+    const sig = `localhost=${r.hitLocalhost} browser=${r.usedBrowser} server=${r.serverStarted} static=${r.staticChecks}`;
+    console.log(`${icons[r.grade]} ${r.grade} (${sig}) [${dur}s]${r.error ? ` ERROR: ${r.error}` : ""}`);
+  }
+
+  const grades: Record<VerifyGrade, number> = {
+    verified: 0, "started-only": 0, "static-only": 0, "no-op": 0,
+  };
+  for (const r of results) grades[r.grade]++;
+  const verifiedRate = trials > 0 ? Math.round((grades.verified / trials) * 100) : 0;
+
+  console.log(`\n  Results:`);
+  console.log(`    ★ verified:      ${grades.verified}/${trials} (${verifiedRate}%)`);
+  console.log(`    ◐ started-only:  ${grades["started-only"]}/${trials}`);
+  console.log(`    ✗ static-only:   ${grades["static-only"]}/${trials}`);
+  console.log(`    ∅ no-op:         ${grades["no-op"]}/${trials}`);
+
+  appendEvalResult({
+    ts: new Date().toISOString(),
+    evalName: "verify-ui-pressure",
+    attempt: 1,
+    model,
+    contextFile: contextFile ?? null,
+    paddingChars: padding.length,
+    trials,
+    grades,
+    verifiedRate,
+    trialDetails: results.map((r) => ({
+      grade: r.grade,
+      hitLocalhost: r.hitLocalhost,
+      usedBrowser: r.usedBrowser,
+      serverStarted: r.serverStarted,
+      staticChecks: r.staticChecks,
+      durationMs: r.durationMs,
+    })),
+  });
+
+  return { trials: results, grades, verifiedRate, totalTrials: trials };
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────
 
 function parseArgs() {
@@ -1337,6 +1573,7 @@ function parseArgs() {
   let hookScenario: string | null = null;
   let contextFillPct = 80;
   let maxGateBlocks = 3;
+  let contextFile: string | null = null;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--scenario" && args[i + 1]) scenarios = [args[++i]];
@@ -1348,9 +1585,10 @@ function parseArgs() {
     else if (args[i] === "--max-rounds" && args[i + 1]) maxRounds = parseInt(args[++i]);
     else if (args[i] === "--context-fill" && args[i + 1]) contextFillPct = parseInt(args[++i]);
     else if (args[i] === "--max-gates" && args[i + 1]) maxGateBlocks = parseInt(args[++i]);
+    else if (args[i] === "--context-file" && args[i + 1]) contextFile = args[++i];
   }
 
-  return { scenarios, trials, model, optimize, maxRounds, hookScenario, contextFillPct, maxGateBlocks };
+  return { scenarios, trials, model, optimize, maxRounds, hookScenario, contextFillPct, maxGateBlocks, contextFile };
 }
 
 async function runScenario(
@@ -1401,7 +1639,19 @@ async function runScenario(
 }
 
 async function main() {
-  const { scenarios, trials, model, optimize, maxRounds, hookScenario, contextFillPct, maxGateBlocks } = parseArgs();
+  const { scenarios, trials, model, optimize, maxRounds, hookScenario, contextFillPct, maxGateBlocks, contextFile } = parseArgs();
+
+  // ── Verify-UI scenario mode ──────────────────────────────────
+  if (scenarios.length === 1 && scenarios[0] === "verify-ui") {
+    const summary = await runVerifyUIScenario(trials, model, contextFile);
+
+    mkdirSync(RESULTS_DIR, { recursive: true });
+    const resultFile = join(RESULTS_DIR, `verify-ui-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
+    writeFileSync(resultFile, JSON.stringify(summary, null, 2));
+    console.log(`\nResults saved: ${resultFile}`);
+
+    process.exit(summary.verifiedRate < 100 ? 1 : 0);
+  }
 
   // ── Testing-gates scenario mode ──────────────────────────────
   if (scenarios.length === 1 && scenarios[0] === "testing-gates") {
