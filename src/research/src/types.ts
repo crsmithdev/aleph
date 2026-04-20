@@ -9,8 +9,22 @@ export interface ResearchQuery {
   summary: string;
   document: string;
   user_notes: string;
+  intent: string | null;
+  output_shape: OutputShape | null;
   created_at: string;
   updated_at: string;
+}
+
+/** Shape the user wants the final answer to take — used by the leader to steer
+ *  pruning/spawning, and by the synthesizer to format the doc. */
+export type OutputShape = 'list_of_entities' | 'overview' | 'comparison' | 'timeline' | 'how_to';
+
+export interface SteeringNote {
+  id: string;
+  session_id: string;
+  text: string;
+  applied_at: string | null;
+  created_at: string;
 }
 
 /** @deprecated Use ResearchQuery */
@@ -62,6 +76,12 @@ export interface SessionConfig {
   gap_analysis: {
     enabled: boolean;
     max_gap_searches: number;
+    // 'per_finding' fires gap analysis after every finding (legacy, noisy).
+    // 'periodic' runs a lead review every `every_n_findings` completed findings (recommended).
+    // Optional so that `Partial<SessionConfig>` fixtures can omit them; code paths
+    // tolerate undefined and default to 'periodic' / 10.
+    mode?: 'per_finding' | 'periodic';
+    every_n_findings?: number;
   };
   llm_max_output_tokens: number;     // per-call LLM output ceiling
   snippet_synthesis_chars: number;   // chars per search result passed to synthesis
@@ -80,8 +100,8 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
   budget_daily_usd: 5.0,
   budget_total_usd: null,
   budget_alert_threshold: 0.80,
-  max_thread_depth: 3,
-  max_total_threads: 150,
+  max_thread_depth: 2,
+  max_total_threads: 60,
   p_serendipity: 0.15,
   max_perturbation_probability: 0.40,
   novelty_threshold: 0.3,
@@ -104,8 +124,8 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
     timezone: 'America/Los_Angeles',
   },
   follow_up: {
-    min_count: 2,
-    max_count: 4,
+    min_count: 1,
+    max_count: 2,
     max_retries: 3,
     similarity_threshold: 0.75,
   },
@@ -114,11 +134,13 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
     hop_similarity_min: 0.0,
   },
   burst_iterations: 10,
-  min_searches_per_thread: 2,
+  min_searches_per_thread: 1,
   fetch_source_text: false,
   gap_analysis: {
     enabled: true,
     max_gap_searches: 2,
+    mode: 'periodic',
+    every_n_findings: 10,
   },
   llm_max_output_tokens: 8192,
   snippet_synthesis_chars: 3000,
@@ -154,7 +176,7 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
   },
 };
 
-export type ThreadOrigin = 'seed' | 'follow_up' | 'perturbation' | 'user_injected' | 'monitor_alert' | 'verify';
+export type ThreadOrigin = 'seed' | 'follow_up' | 'perturbation' | 'user_injected' | 'monitor_alert' | 'verify' | 'gap_analysis' | 'lead_review';
 export type ThreadStatus = 'queued' | 'active' | 'paused' | 'exhausted' | 'pruned' | 'deferred';
 
 // All 21 perturbation strategies from spec §3.3
@@ -359,6 +381,7 @@ export interface PlanModification {
   payload: string;
   source: string;
   raw_input: string | null;
+  applied_at: string | null;
   created_at: string;
 }
 

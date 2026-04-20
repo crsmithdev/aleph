@@ -1,9 +1,14 @@
 import type { Sqlite } from '@construct/data';
 import { generateId } from './id.js';
+import { emitResearchEvent } from './events.js';
 import type { ResearchJob, JobStatus, JobMode } from '../types.js';
 
 function rowToJob(row: Record<string, unknown>): ResearchJob {
-  return row as ResearchJob;
+  return row as unknown as ResearchJob;
+}
+
+function emitJob(job: ResearchJob | null): void {
+  if (job) emitResearchEvent(job.session_id, 'job', job);
 }
 
 export function createJob(
@@ -18,12 +23,16 @@ export function createJob(
     VALUES (?, ?, ?, 'pending', ?, ?, ?, ?)
   `).run(id, params.session_id, params.thread_id ?? null, params.mode, params.max_iterations ?? null, now, now);
 
-  return getJob(sqlite, id)!;
+  const job = getJob(sqlite, id)!;
+  emitJob(job);
+  return job;
 }
 
 /** Atomically create a thread-level job only if no active job already exists for this thread.
  *  Uses INSERT...SELECT so the check and insert are a single atomic SQLite operation,
- *  preventing the race where multiple workers simultaneously create duplicate jobs. */
+ *  preventing the race where multiple workers simultaneously create duplicate jobs.
+ *  A UNIQUE partial index on (thread_id) WHERE status IN (pending, claimed, running)
+ *  is the hard invariant; this function returns null on conflict. */
 export function createThreadJobIfNone(
   sqlite: Sqlite,
   params: { session_id: string; thread_id: string }
@@ -31,17 +40,26 @@ export function createThreadJobIfNone(
   const id = generateId();
   const now = new Date().toISOString();
 
-  const result = sqlite.prepare(`
-    INSERT INTO research_jobs (id, session_id, thread_id, status, mode, max_iterations, created_at, updated_at)
-    SELECT ?, ?, ?, 'pending', 'burst', 1, ?, ?
-    WHERE NOT EXISTS (
-      SELECT 1 FROM research_jobs
-      WHERE thread_id = ? AND status IN ('pending', 'claimed', 'running')
-    )
-  `).run(id, params.session_id, params.thread_id, now, now, params.thread_id);
+  try {
+    const result = sqlite.prepare(`
+      INSERT INTO research_jobs (id, session_id, thread_id, status, mode, max_iterations, created_at, updated_at)
+      SELECT ?, ?, ?, 'pending', 'burst', 1, ?, ?
+      WHERE NOT EXISTS (
+        SELECT 1 FROM research_jobs
+        WHERE thread_id = ? AND status IN ('pending', 'claimed', 'running')
+      )
+    `).run(id, params.session_id, params.thread_id, now, now, params.thread_id);
 
-  if (result.changes === 0) return null;
-  return getJob(sqlite, id)!;
+    if (result.changes === 0) return null;
+    const job = getJob(sqlite, id)!;
+    emitJob(job);
+    return job;
+  } catch (err) {
+    // UNIQUE constraint violation on idx_rj_thread_active — another worker won the race
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('UNIQUE') || msg.includes('constraint')) return null;
+    throw err;
+  }
 }
 
 export function getJob(sqlite: Sqlite, id: string): ResearchJob | null {
@@ -79,39 +97,45 @@ export function claimJob(sqlite: Sqlite, jobId: string, workerId: string): Resea
   `).run(workerId, jobId);
 
   if (result.changes === 0) return null;
-  return getJob(sqlite, jobId);
+  const job = getJob(sqlite, jobId);
+  emitJob(job);
+  return job;
 }
 
 export function markRunning(sqlite: Sqlite, jobId: string, workerId: string): void {
-  sqlite.prepare(`
+  const res = sqlite.prepare(`
     UPDATE research_jobs
     SET status = 'running', started_at = datetime('now'), heartbeat_at = datetime('now'), updated_at = datetime('now')
     WHERE id = ? AND claimed_by = ?
   `).run(jobId, workerId);
+  if (res.changes > 0) emitJob(getJob(sqlite, jobId));
 }
 
 export function updateHeartbeat(sqlite: Sqlite, jobId: string, workerId: string, iterationsCompleted: number): void {
-  sqlite.prepare(`
+  const res = sqlite.prepare(`
     UPDATE research_jobs
     SET heartbeat_at = datetime('now'), iterations_completed = ?, updated_at = datetime('now')
     WHERE id = ? AND claimed_by = ?
   `).run(iterationsCompleted, jobId, workerId);
+  if (res.changes > 0) emitJob(getJob(sqlite, jobId));
 }
 
 export function completeJob(sqlite: Sqlite, jobId: string, workerId: string): void {
-  sqlite.prepare(`
+  const res = sqlite.prepare(`
     UPDATE research_jobs
     SET status = 'completed', completed_at = datetime('now'), updated_at = datetime('now')
     WHERE id = ? AND claimed_by = ?
   `).run(jobId, workerId);
+  if (res.changes > 0) emitJob(getJob(sqlite, jobId));
 }
 
 export function failJob(sqlite: Sqlite, jobId: string, workerId: string, error: string): void {
-  sqlite.prepare(`
+  const res = sqlite.prepare(`
     UPDATE research_jobs
     SET status = 'failed', error = ?, completed_at = datetime('now'), updated_at = datetime('now')
     WHERE id = ? AND claimed_by = ?
   `).run(error, jobId, workerId);
+  if (res.changes > 0) emitJob(getJob(sqlite, jobId));
 }
 
 export function cancelJob(sqlite: Sqlite, jobId: string): boolean {
@@ -120,17 +144,31 @@ export function cancelJob(sqlite: Sqlite, jobId: string): boolean {
     SET status = 'cancelled', updated_at = datetime('now')
     WHERE id = ? AND status IN ('pending', 'claimed', 'running')
   `).run(jobId);
+  if (result.changes > 0) emitJob(getJob(sqlite, jobId));
   return result.changes > 0;
 }
 
 export function reclaimStaleJobs(sqlite: Sqlite): number {
-  const result = sqlite.prepare(`
-    UPDATE research_jobs
-    SET status = 'pending', claimed_by = NULL, claimed_at = NULL, updated_at = datetime('now')
+  const stale = sqlite.prepare(`
+    SELECT id FROM research_jobs
     WHERE status IN ('claimed', 'running')
     AND heartbeat_at < datetime('now', '-120 seconds')
-  `).run();
-  return result.changes;
+  `).all() as Array<{ id: string }>;
+  if (stale.length === 0) return 0;
+
+  const update = sqlite.prepare(`
+    UPDATE research_jobs
+    SET status = 'pending', claimed_by = NULL, claimed_at = NULL, updated_at = datetime('now')
+    WHERE id = ? AND status IN ('claimed', 'running')
+  `);
+  let reclaimed = 0;
+  for (const { id } of stale) {
+    if (update.run(id).changes > 0) {
+      reclaimed++;
+      emitJob(getJob(sqlite, id));
+    }
+  }
+  return reclaimed;
 }
 
 /** Reclaim jobs claimed by worker PIDs that are no longer alive.
@@ -148,12 +186,12 @@ export function reclaimDeadWorkerJobs(sqlite: Sqlite): number {
     let alive = false;
     try { process.kill(pid, 0); alive = true; } catch { /* ESRCH = dead */ }
     if (!alive) {
-      sqlite.prepare(`
+      const res = sqlite.prepare(`
         UPDATE research_jobs
         SET status = 'pending', claimed_by = NULL, claimed_at = NULL, updated_at = datetime('now')
         WHERE id = ? AND status IN ('claimed', 'running')
       `).run(job.id);
-      reclaimed++;
+      if (res.changes > 0) { reclaimed++; emitJob(getJob(sqlite, job.id)); }
     }
   }
   return reclaimed;
@@ -167,12 +205,24 @@ export function listJobsForSession(sqlite: Sqlite, sessionId: string): ResearchJ
 }
 
 export function cancelAllJobs(sqlite: Sqlite): number {
-  const result = sqlite.prepare(`
+  const active = sqlite.prepare(
+    "SELECT id FROM research_jobs WHERE status IN ('pending', 'claimed', 'running')"
+  ).all() as Array<{ id: string }>;
+  if (active.length === 0) return 0;
+
+  const update = sqlite.prepare(`
     UPDATE research_jobs
     SET status = 'cancelled', updated_at = datetime('now')
-    WHERE status IN ('pending', 'claimed', 'running')
-  `).run();
-  return result.changes;
+    WHERE id = ? AND status IN ('pending', 'claimed', 'running')
+  `);
+  let cancelled = 0;
+  for (const { id } of active) {
+    if (update.run(id).changes > 0) {
+      cancelled++;
+      emitJob(getJob(sqlite, id));
+    }
+  }
+  return cancelled;
 }
 
 export function listAllJobs(sqlite: Sqlite, opts?: { limit?: number; offset?: number; status?: JobStatus }): ResearchJob[] {
@@ -208,13 +258,29 @@ export function getActiveJobForThread(sqlite: Sqlite, threadId: string): Researc
   return row ? rowToJob(row) : null;
 }
 
+/** Returns true if the session has an active session-level job (thread_id IS NULL).
+ *  Session-level runIterations already iterates over all queued threads internally,
+ *  so thread-level jobs must NOT be created in parallel — they would race. */
+export function hasActiveSessionLevelJob(sqlite: Sqlite, sessionId: string): boolean {
+  const row = sqlite.prepare(`
+    SELECT 1 FROM research_jobs
+    WHERE session_id = ? AND thread_id IS NULL
+    AND status IN ('pending', 'claimed', 'running')
+    LIMIT 1
+  `).get(sessionId);
+  return !!row;
+}
+
 /** Returns queued threads that have no active job, ordered by priority DESC.
- *  Used by checkQueuedThreads to find threads needing a new job. */
+ *  Used by checkQueuedThreads to find threads needing a new job.
+ *  Returns [] if the session has an active session-level job — runIterations handles
+ *  those threads itself, so creating thread-level jobs would cause concurrent runIteration. */
 export function getQueuedThreadsForNewJobs(
   sqlite: Sqlite,
   sessionId: string,
   limit: number
 ): Array<{ id: string; query: string; priority: number }> {
+  if (hasActiveSessionLevelJob(sqlite, sessionId)) return [];
   return sqlite.prepare(`
     SELECT t.id, t.query, t.priority
     FROM research_threads t

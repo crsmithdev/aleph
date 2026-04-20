@@ -51,13 +51,19 @@ const NO_FOLLOW_UPS_FINDING = JSON.stringify({
   follow_ups: [],
 });
 
-/** Build mock responses for one iteration per thread (no dedup on first iteration). */
+/** Build mock responses for one iteration per thread. Responses are cycled
+ *  by the MockProvider in call order, so all shapes must parse as JSON — a
+ *  text 'Short Title' picked up by a slot expecting JSON would crash that
+ *  slot under concurrency. Every response here is JSON.parse-safe and each
+ *  consumer tolerates a wrong-shape parse via fallback. */
 function makeIterationResponses(): string[] {
   return [
-    'Short Title',            // summarizeThreadAsync
-    JSON.stringify(['q1']),   // formulate queries
-    NO_FOLLOW_UPS_FINDING,    // synthesize
-    JSON.stringify([]),       // detectGaps → no gap threads
+    JSON.stringify('Short Title'),                       // summarizeThreadAsync
+    JSON.stringify(['q1']),                              // formulate queries
+    NO_FOLLOW_UPS_FINDING,                               // synthesize
+    'false',                                             // checkDuplicate
+    JSON.stringify([]),                                  // detectGaps
+    JSON.stringify({ concepts: [], relations: [] }),     // extractConceptsForFinding
   ];
 }
 

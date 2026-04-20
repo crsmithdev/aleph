@@ -1,6 +1,11 @@
 import type { Sqlite } from '@construct/data';
 import { generateId } from './id.js';
+import { emitResearchEvent } from './events.js';
 import type { Source, SourceExtractionStatus } from '../types.js';
+
+function emitSource(source: Source | null): void {
+  if (source) emitResearchEvent(source.session_id, 'source', source);
+}
 
 function rowToSource(row: Record<string, unknown>): Source {
   return {
@@ -53,13 +58,15 @@ export function registerSource(
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(id, sessionId, params.url, params.title ?? '', params.snippet ?? '', status, now, now);
 
-  return {
+  const source: Source = {
     id, session_id: sessionId, url: params.url,
     title: params.title ?? '', snippet: params.snippet ?? '',
     extraction_status: status,
     extracted_text: null, extracted_at: null, fetched_at: null, error: null,
     attempt_count: 0, created_at: now, updated_at: now,
   };
+  emitSource(source);
+  return source;
 }
 
 export function registerSources(
@@ -136,7 +143,9 @@ export function claimPendingSources(sqlite: Sqlite, batchSize: number, sessionId
     }
     return claimed;
   });
-  return claim(batchSize);
+  const result = claim(batchSize);
+  for (const s of result) emitSource(getSource(sqlite, s.id));
+  return result;
 }
 
 export function completeExtraction(sqlite: Sqlite, id: string, extractedText: string): void {
@@ -146,6 +155,7 @@ export function completeExtraction(sqlite: Sqlite, id: string, extractedText: st
        SET extraction_status = 'extracted', extracted_text = ?, extracted_at = ?, error = NULL, updated_at = ?
      WHERE id = ?`
   ).run(extractedText, now, now, id);
+  emitSource(getSource(sqlite, id));
 }
 
 export function failExtraction(sqlite: Sqlite, id: string, error: string): void {
@@ -155,6 +165,7 @@ export function failExtraction(sqlite: Sqlite, id: string, error: string): void 
        SET extraction_status = 'failed', error = ?, updated_at = ?
      WHERE id = ?`
   ).run(error.slice(0, 500), now, id);
+  emitSource(getSource(sqlite, id));
 }
 
 export function retrySource(sqlite: Sqlite, id: string): Source | null {
@@ -164,7 +175,9 @@ export function retrySource(sqlite: Sqlite, id: string): Source | null {
        SET extraction_status = 'pending', error = NULL, updated_at = ?
      WHERE id = ?`
   ).run(now, id);
-  return getSource(sqlite, id);
+  const src = getSource(sqlite, id);
+  emitSource(src);
+  return src;
 }
 
 export function skipSource(sqlite: Sqlite, id: string): Source | null {
@@ -174,7 +187,9 @@ export function skipSource(sqlite: Sqlite, id: string): Source | null {
        SET extraction_status = 'skipped', updated_at = ?
      WHERE id = ?`
   ).run(now, id);
-  return getSource(sqlite, id);
+  const src = getSource(sqlite, id);
+  emitSource(src);
+  return src;
 }
 
 /** Return the finding ids that cite this source url (within the source's session). */

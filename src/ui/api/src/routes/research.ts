@@ -6,7 +6,8 @@ import {
   listQueries, listQueriesWithStats, getQuery, createQuery, updateQuery, getQueryCost, getResearchStats, getResearchSummary,
   listThreads, getThread, updateThread, createThread,
   listFindings, getFinding, updateFinding, updateFindingSourceTexts, clearThreadFindings,
-  getLatestPlan, addPlanModification,
+  getLatestPlan, addPlanModification, listAllModifications,
+  createSteeringNote, listSteeringNotes,
   getStepCosts, listSteps,
   applyResearchDDL,
   DEFAULT_SESSION_CONFIG,
@@ -24,6 +25,9 @@ import {
   createMonitor, getMonitor, listMonitors, updateMonitor,
   listSnapshots, listAlerts, updateAlert,
   MonitorEngine,
+  // Metrics imports
+  computeJobMetrics, computeSourceHealth, computeThreadStateMetrics,
+  computeJobTrace, computeSessionCostTrajectory,
 } from '@construct/research';
 
 function sanitizeQuery(q: string): string {
@@ -187,10 +191,10 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     return query;
   });
 
-  app.post<{ Body: { title?: string; seed_query: string; config?: Record<string, unknown> } }>(
+  app.post<{ Body: { title?: string; seed_query: string; config?: Record<string, unknown>; intent?: string | null; output_shape?: string | null } }>(
     '/queries',
     async (req, reply) => {
-      const { seed_query: rawQuery, title, config } = req.body;
+      const { seed_query: rawQuery, title, config, intent, output_shape } = req.body;
       const seed_query = sanitizeQuery(rawQuery ?? '');
       if (!seed_query) return reply.status(400).send({ error: 'seed_query is required' });
       const seed_query_short = heuristicSeedQueryShort(seed_query);
@@ -202,6 +206,8 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
         config as Partial<typeof DEFAULT_SESSION_CONFIG>,
         seed_query_short,
         seed_query_super_short,
+        intent ? String(intent).trim().slice(0, 2000) || null : null,
+        output_shape as Parameters<typeof createQuery>[7],
       );
       // Create seed thread
       const seedThread = createThread(app.sqlite, {
@@ -300,16 +306,52 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
-  // === Export: thread activity log (.md) — session or single thread ===
-  app.get<{ Params: { id: string }; Querystring: { thread_id?: string } }>(
+  // === Export: thread activity log — session or single thread ===
+  // Formats:
+  //   default (no ?format)          → enhanced Markdown with IDs, ms timestamps,
+  //                                    step metadata, jobs, sources, config,
+  //                                    thread status history
+  //   ?format=ndjson                → raw NDJSON log file (finding/step/thread
+  //                                    events from research-logger) — the same
+  //                                    stream the backend tails, ideal for grep/jq
+  app.get<{ Params: { id: string }; Querystring: { thread_id?: string; format?: string } }>(
     '/queries/:id/export/log',
     async (req, reply) => {
       const { id } = req.params;
-      const { thread_id } = req.query;
+      const { thread_id, format } = req.query;
 
       const query = getQuery(app.sqlite, id);
       if (!query) return reply.status(404).send({ error: 'Query not found' });
 
+      const slug = (query.title ?? query.seed_query).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase().slice(0, 60);
+      const suffix = thread_id ? `-thread-${thread_id.slice(0, 8)}` : '';
+      const filename = `${slug}-log${suffix}-${id.slice(0, 8)}`;
+
+      // --- NDJSON format: stream the raw session log file ---
+      if (format === 'ndjson') {
+        const path = sessionLogPath(id);
+        if (!existsSync(path)) return reply.status(404).send({ error: 'No log file for this session' });
+        const raw = readFileSync(path, 'utf-8');
+        // If the caller wants a single thread, filter down
+        let body = raw;
+        if (thread_id) {
+          body = raw.split('\n').filter(line => {
+            if (!line) return false;
+            try {
+              const e = JSON.parse(line);
+              const p = e.payload as Record<string, unknown> | undefined;
+              if (!p) return false;
+              if (e.type === 'thread') return p.id === thread_id;
+              return p.thread_id === thread_id;
+            } catch { return false; }
+          }).join('\n') + '\n';
+        }
+        reply.header('Content-Type', 'application/x-ndjson; charset=utf-8');
+        reply.header('Content-Disposition', `attachment; filename="${filename}.ndjson"`);
+        return reply.send(body);
+      }
+
+      // --- Markdown format ---
       const allThreads = listThreads(app.sqlite, id);
       const threads = thread_id ? allThreads.filter(t => t.id === thread_id) : allThreads;
 
@@ -317,6 +359,20 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
 
       const findings = listFindings(app.sqlite, id);
       const steps = listSteps(app.sqlite, id);
+      const jobs = listJobsForSession(app.sqlite, id);
+      const sources = listSources(app.sqlite, id);
+
+      // Thread status history is reconstructed from the NDJSON log. The logger
+      // only samples every 3s so intermediate transitions may be missed — the
+      // markdown notes this so readers don't mistake gaps for correctness.
+      const logEvents = readSessionLog(id);
+      const threadHistory = new Map<string, Array<{ logged_at: string; status: string; updated_at: string }>>();
+      for (const ev of logEvents) {
+        if (ev.type !== 'thread') continue;
+        const p = ev.payload as { id: string; status: string; updated_at: string };
+        if (!threadHistory.has(p.id)) threadHistory.set(p.id, []);
+        threadHistory.get(p.id)!.push({ logged_at: ev.logged_at, status: p.status, updated_at: p.updated_at });
+      }
 
       const findingsByThread = new Map<string, typeof findings>();
       for (const f of findings) {
@@ -329,17 +385,105 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
         stepsByThread.get(s.thread_id)!.push(s);
       }
       const threadById = new Map(allThreads.map(t => [t.id, t]));
+      const findingById = new Map(findings.map(f => [f.id, f]));
 
-      const slug = (query.title ?? query.seed_query).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase().slice(0, 60);
-      const suffix = thread_id ? `-thread-${thread_id.slice(0, 8)}` : '';
-      const filename = `${slug}-log${suffix}-${id.slice(0, 8)}`;
+      // Millisecond-precision clock — two events 23ms apart are the smoking gun
+      // for concurrency races. The old HH:MM:SS format would collapse them.
+      //
+      // Accept two input shapes WITHOUT calling `new Date()` on naive strings
+      // (JS treats `YYYY-MM-DD HH:MM:SS` as local and timezone-shifts on ISO
+      // conversion — produced `01:37:31.000` for what the DB stored as `18:37`).
+      //   ISO with zone:  "2026-04-19T18:01:09.676Z" → "18:01:09.676"
+      //   SQLite naive:   "2026-04-19 18:37:31"       → "18:37:31"
+      function fmtTime(iso: string): string {
+        if (!iso) return iso;
+        // ISO-with-T-and-Z — extract the HH:MM:SS.mmm slice directly.
+        const tIdx = iso.indexOf('T');
+        if (tIdx !== -1) {
+          const rest = iso.slice(tIdx + 1);
+          const dotMs = rest.match(/^(\d{2}:\d{2}:\d{2})(\.\d{1,3})?/);
+          if (dotMs) return dotMs[1] + (dotMs[2] ?? '');
+        }
+        // SQLite naive datetime — "YYYY-MM-DD HH:MM:SS".
+        const spaceMatch = iso.match(/^\d{4}-\d{2}-\d{2}\s+(\d{2}:\d{2}:\d{2})/);
+        if (spaceMatch) return spaceMatch[1];
+        return iso;
+      }
+      function fmtJson(v: unknown, indent = 2): string {
+        try { return JSON.stringify(v, null, indent); } catch { return String(v); }
+      }
 
       const lines: string[] = [];
       lines.push(`# Activity Log: ${query.title}${thread_id ? ` — thread ${thread_id.slice(0, 8)}` : ''}`);
       lines.push('');
-      lines.push(`**Session:** ${id}`);
+      lines.push(`**Session:** \`${id}\``);
+      lines.push(`**Status:** ${query.status}`);
+      lines.push(`**Seed query:** ${query.seed_query}`);
       lines.push(`**Generated:** ${new Date().toISOString()}`);
       lines.push('');
+      lines.push(`**Counts:** ${allThreads.length} threads · ${findings.length} findings · ${steps.length} steps · ${jobs.length} jobs · ${sources.length} sources`);
+      lines.push('');
+      lines.push('> **Tip:** for machine-readable traces suitable for grep/jq, download `?format=ndjson` — it emits one event per line from the same stream this report was rendered from.');
+      lines.push('');
+
+      // --- Session config snapshot ---
+      if (!thread_id) {
+        lines.push('## Session Config');
+        lines.push('');
+        lines.push('```json');
+        lines.push(fmtJson(query.config));
+        lines.push('```');
+        lines.push('');
+      }
+
+      // --- Jobs section (session-level view only; per-thread view filters below) ---
+      const relevantJobs = thread_id
+        ? jobs.filter(j => j.thread_id === thread_id || j.thread_id === null)
+        : jobs;
+      if (relevantJobs.length > 0) {
+        lines.push('## Jobs');
+        lines.push('');
+        lines.push('| id | thread_id | mode | status | claimed_by | created | claimed | started | completed | iters | error |');
+        lines.push('|---|---|---|---|---|---|---|---|---|---|---|');
+        for (const j of relevantJobs) {
+          const row = [
+            `\`${j.id}\``,
+            j.thread_id ? `\`${j.thread_id}\`` : '*session*',
+            j.mode,
+            `**${j.status}**`,
+            j.claimed_by ?? '—',
+            fmtTime(j.created_at),
+            j.claimed_at ? fmtTime(j.claimed_at) : '—',
+            j.started_at ? fmtTime(j.started_at) : '—',
+            j.completed_at ? fmtTime(j.completed_at) : '—',
+            `${j.iterations_completed}${j.max_iterations ? `/${j.max_iterations}` : ''}`,
+            j.error ? `⚠ ${j.error.slice(0, 80)}` : '',
+          ];
+          lines.push(`| ${row.join(' | ')} |`);
+        }
+        lines.push('');
+      }
+
+      // --- Sources section (extraction health) ---
+      if (!thread_id && sources.length > 0) {
+        const byStatus = new Map<string, number>();
+        for (const s of sources) byStatus.set(s.extraction_status, (byStatus.get(s.extraction_status) ?? 0) + 1);
+        lines.push('## Sources');
+        lines.push('');
+        const summary = [...byStatus.entries()].map(([k, v]) => `${v} ${k}`).join(' · ');
+        lines.push(`**Total:** ${sources.length} · ${summary}`);
+        lines.push('');
+        const failed = sources.filter(s => s.extraction_status === 'failed');
+        if (failed.length > 0) {
+          lines.push('**Failed extractions:**');
+          lines.push('');
+          for (const s of failed.slice(0, 50)) {
+            lines.push(`- \`${s.id}\` ${s.url} — ${s.error ?? 'no error message'} (${s.attempt_count} attempts)`);
+          }
+          if (failed.length > 50) lines.push(`- … and ${failed.length - 50} more`);
+          lines.push('');
+        }
+      }
 
       // Sort depth-first for session log
       function buildOrder(parentId: string | null): (typeof allThreads)[0][] {
@@ -350,54 +494,92 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       }
       const ordered = thread_id ? threads : buildOrder(null);
 
+      lines.push('## Threads');
+      lines.push('');
+
       for (const t of ordered) {
         const tSteps = (stepsByThread.get(t.id) ?? []).sort((a, b) => a.created_at.localeCompare(b.created_at));
         const tFindings = findingsByThread.get(t.id) ?? [];
 
-        lines.push(`## Thread: ${t.short_query ?? t.query.slice(0, 80)}`);
+        lines.push(`### \`${t.id}\` — ${t.short_query ?? t.query.slice(0, 80)}`);
         lines.push('');
         lines.push(`> ${t.query}`);
         lines.push('');
 
         const parentThread = t.parent_thread_id ? threadById.get(t.parent_thread_id) : null;
+        const spawnedFromFinding = t.spawned_from_finding_id ? findingById.get(t.spawned_from_finding_id) : null;
         const meta: string[] = [
-          `depth ${t.depth}`,
+          `depth ${t.depth}/${t.max_depth}`,
           `origin: ${t.origin}`,
           `status: **${t.status}**`,
+          `priority: ${t.priority.toFixed(2)}`,
+          `node_type: ${t.node_type}`,
         ];
-        if (parentThread) meta.push(`parent: *${parentThread.short_query ?? parentThread.query.slice(0, 60)}*`);
+        if (parentThread) meta.push(`parent: \`${parentThread.id}\``);
+        if (spawnedFromFinding) meta.push(`spawned from finding \`${spawnedFromFinding.id}\``);
         if (t.perturbation_strategy) meta.push(`perturbation: ${t.perturbation_strategy}`);
+        if (t.seed_similarity != null) meta.push(`seed_sim: ${t.seed_similarity.toFixed(3)}`);
+        if (t.min_searches != null) meta.push(`min_searches: ${t.min_searches}`);
+        if (t.fetch_source_text === true) meta.push(`fetch_source_text: true`);
+        if (t.retry_after) meta.push(`retry_after: ${t.retry_after}`);
+        meta.push(`created: ${fmtTime(t.created_at)}`);
         lines.push(meta.join(' · '));
         lines.push('');
 
+        // Thread status history (from NDJSON log). Skip if only one state observed.
+        const history = threadHistory.get(t.id) ?? [];
+        if (history.length > 1) {
+          lines.push('**Status history** *(sampled — intermediate transitions may be missed; logger polls every 3s)*');
+          lines.push('');
+          lines.push('| observed_at | status | thread_updated_at |');
+          lines.push('|---|---|---|');
+          for (const h of history) {
+            lines.push(`| ${fmtTime(h.logged_at)} | ${h.status} | ${h.updated_at} |`);
+          }
+          lines.push('');
+        }
+
         if (tSteps.length > 0) {
-          lines.push('### Steps');
+          lines.push('**Steps**');
           lines.push('');
           for (const s of tSteps) {
-            const time = new Date(s.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+            const time = fmtTime(s.created_at);
             const tokStr = s.prompt_tokens != null ? ` · ${s.prompt_tokens}+${s.completion_tokens} tok` : '';
             const costStr = s.cost_usd > 0 ? ` · $${s.cost_usd.toFixed(4)}` : '';
             const durStr = s.duration_ms ? ` · ${s.duration_ms}ms` : '';
-            lines.push(`- \`${time}\` **${s.label ?? s.model ?? 'step'}** — ${s.model ?? ''}${tokStr}${costStr}${durStr}${s.error ? ` ⚠ ${s.error}` : ''}`);
+            const providerStr = s.provider ? ` · ${s.provider}` : '';
+            lines.push(`- \`${time}\` \`${s.id}\` **${s.label ?? s.model ?? 'step'}** — ${s.model ?? ''}${providerStr}${tokStr}${costStr}${durStr}${s.error ? ` ⚠ ${s.error}` : ''}`);
             if (s.tool_calls?.length) {
               for (const tc of s.tool_calls as Array<{ tool?: string; name?: string; input?: Record<string, unknown> }>) {
                 const toolName = tc.tool ?? tc.name ?? 'unknown';
-                const query = tc.input?.query as string | undefined;
-                const detail = query ? ` "${query}"` : '';
+                const q = tc.input?.query as string | undefined;
+                const detail = q ? ` "${q}"` : '';
                 lines.push(`  - \`${toolName}\`${detail}`);
               }
+            }
+            if (s.metadata && Object.keys(s.metadata).length > 0) {
+              lines.push('  <details><summary>metadata</summary>');
+              lines.push('');
+              lines.push('  ```json');
+              const metaJson = fmtJson(s.metadata).split('\n').map(l => '  ' + l).join('\n');
+              lines.push(metaJson);
+              lines.push('  ```');
+              lines.push('  </details>');
             }
           }
           lines.push('');
         }
 
         if (tFindings.length > 0) {
-          lines.push('### Findings');
+          lines.push('**Findings**');
           lines.push('');
           for (const f of tFindings) {
             const conf = `conf ${(f.confidence * 100).toFixed(0)}%`;
             const novel = `novelty ${(f.novelty * 100).toFixed(0)}%`;
-            lines.push(`#### ${f.summary ?? 'Finding'} [${conf}, ${novel}]`);
+            const act = `act ${(f.actionability * 100).toFixed(0)}%`;
+            lines.push(`#### \`${f.id}\` — ${f.summary ?? 'Finding'} [${conf}, ${novel}, ${act}]`);
+            lines.push('');
+            lines.push(`*created ${fmtTime(f.created_at)}*`);
             lines.push('');
             lines.push(f.content);
             lines.push('');
@@ -406,13 +588,22 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
               for (const u of f.source_urls) lines.push(`- ${u}`);
               lines.push('');
             }
-            if (f.tags?.length) lines.push(`*Tags: ${f.tags.join(', ')}*`);
+            if (f.tags?.length) { lines.push(`*Tags: ${f.tags.join(', ')}*`); lines.push(''); }
+            if (f.user_rating) { lines.push(`*User rating: ${f.user_rating}*`); lines.push(''); }
             if (f.follow_ups?.length) {
-              lines.push('');
               lines.push('**Follow-up questions spawned:**');
               for (const fu of f.follow_ups as string[]) lines.push(`- ${fu}`);
+              lines.push('');
             }
-            lines.push('');
+            if (f.follow_up_analysis) {
+              lines.push('<details><summary>follow_up_analysis</summary>');
+              lines.push('');
+              lines.push('```json');
+              lines.push(fmtJson(f.follow_up_analysis));
+              lines.push('```');
+              lines.push('</details>');
+              lines.push('');
+            }
           }
         }
 
@@ -647,6 +838,34 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
         source: 'ui',
       });
       return reply.status(201).send(mod);
+    }
+  );
+
+  // === Steering notes (active-leader input) ===
+  app.get<{ Params: { id: string } }>(
+    '/queries/:id/nudges',
+    async (req, reply) => {
+      const query = getQuery(app.sqlite, req.params.id);
+      if (!query) return reply.status(404).send({ error: 'Query not found' });
+      const notes = listSteeringNotes(app.sqlite, req.params.id);
+      const plan = getLatestPlan(app.sqlite, req.params.id);
+      const leadMods = plan
+        ? listAllModifications(app.sqlite, plan.id).filter(m => m.source === 'lead_review')
+        : [];
+      return { notes, lead_modifications: leadMods };
+    }
+  );
+
+  app.post<{ Params: { id: string }; Body: { text: string } }>(
+    '/queries/:id/nudges',
+    async (req, reply) => {
+      const text = (req.body?.text ?? '').trim();
+      if (!text) return reply.status(400).send({ error: 'text is required' });
+      if (text.length > 2000) return reply.status(400).send({ error: 'text too long (max 2000 chars)' });
+      const query = getQuery(app.sqlite, req.params.id);
+      if (!query) return reply.status(404).send({ error: 'Query not found' });
+      const note = createSteeringNote(app.sqlite, req.params.id, text);
+      return reply.status(201).send(note);
     }
   );
 
@@ -1221,13 +1440,109 @@ Write the full article in markdown.`;
   });
 
   // === Event log (pre-built, served for fast initial load) ===
-  app.get<{ Params: { id: string } }>(
+  //
+  // Query params:
+  //   ?since=<iso>     — only events with logged_at > since  (for tailing)
+  //   ?thread_id=<id>  — filter to a single thread
+  //   ?type=<t>        — filter to a single event type (thread|job|step|finding|source)
+  //   ?limit=<n>       — cap the returned list (default: no cap)
+  //
+  // The combination `?since=<last_logged_at>` is how tools should poll — it
+  // lets a caller replay missed events after reconnecting without refetching
+  // the whole log.
+  app.get<{
+    Params: { id: string };
+    Querystring: { since?: string; thread_id?: string; type?: string; limit?: string }
+  }>(
     '/queries/:id/events',
     async (req, reply) => {
       const query = getQuery(app.sqlite, req.params.id);
       if (!query) return reply.status(404).send({ error: 'Query not found' });
-      const events = readSessionLog(req.params.id);
-      return { events, log_path: existsSync(sessionLogPath(req.params.id)) ? sessionLogPath(req.params.id) : null };
+
+      const { since, thread_id, type, limit } = req.query;
+      let events = readSessionLog(req.params.id);
+
+      if (since) events = events.filter(e => e.logged_at > since);
+      if (type) events = events.filter(e => e.type === type);
+      if (thread_id) {
+        events = events.filter(e => {
+          const p = e.payload as Record<string, unknown> | undefined;
+          if (!p) return false;
+          if (e.type === 'thread') return p.id === thread_id;
+          return p.thread_id === thread_id;
+        });
+      }
+      if (limit) {
+        const n = Math.max(1, Math.min(10000, parseInt(limit, 10) || 500));
+        events = events.slice(-n);
+      }
+
+      return {
+        events,
+        count: events.length,
+        latest_logged_at: events.length > 0 ? events[events.length - 1].logged_at : null,
+        log_path: existsSync(sessionLogPath(req.params.id)) ? sessionLogPath(req.params.id) : null,
+      };
+    }
+  );
+
+  // === Metrics: jobs (lifecycle timing, per-worker throughput + cost) ===
+  app.get<{ Params: { id: string } }>(
+    '/queries/:id/metrics/jobs',
+    async (req, reply) => {
+      if (!getQuery(app.sqlite, req.params.id)) return reply.status(404).send({ error: 'Query not found' });
+      return computeJobMetrics(app.sqlite, { sessionId: req.params.id });
+    }
+  );
+
+  app.get('/metrics/jobs', async () => computeJobMetrics(app.sqlite));
+
+  // === Metrics: source extraction health ===
+  app.get<{ Params: { id: string }; Querystring: { limit?: string } }>(
+    '/queries/:id/metrics/sources',
+    async (req, reply) => {
+      if (!getQuery(app.sqlite, req.params.id)) return reply.status(404).send({ error: 'Query not found' });
+      const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
+      return computeSourceHealth(app.sqlite, { sessionId: req.params.id, limit });
+    }
+  );
+
+  app.get<{ Querystring: { limit?: string } }>(
+    '/metrics/sources',
+    async (req) => {
+      const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
+      return computeSourceHealth(app.sqlite, { limit });
+    }
+  );
+
+  // === Metrics: thread state-machine + stuck detection ===
+  app.get<{ Params: { id: string }; Querystring: { stuck_threshold_ms?: string } }>(
+    '/queries/:id/metrics/threads',
+    async (req, reply) => {
+      if (!getQuery(app.sqlite, req.params.id)) return reply.status(404).send({ error: 'Query not found' });
+      const stuckThresholdMs = req.query.stuck_threshold_ms
+        ? Math.max(1000, parseInt(req.query.stuck_threshold_ms, 10))
+        : undefined;
+      return computeThreadStateMetrics(app.sqlite, { sessionId: req.params.id, stuckThresholdMs });
+    }
+  );
+
+  // === Metrics: session cost trajectory (per-step cumulative) ===
+  app.get<{ Params: { id: string } }>(
+    '/queries/:id/metrics/cost-trajectory',
+    async (req, reply) => {
+      if (!getQuery(app.sqlite, req.params.id)) return reply.status(404).send({ error: 'Query not found' });
+      return computeSessionCostTrajectory(app.sqlite, req.params.id);
+    }
+  );
+
+  // === Job-level trace (claimed → started → steps → completed) ===
+  app.get<{ Params: { id: string } }>(
+    '/jobs/:id/trace',
+    async (req, reply) => {
+      const trace = computeJobTrace(app.sqlite, req.params.id);
+      if (!trace) return reply.status(404).send({ error: 'Job not found' });
+      return trace;
     }
   );
 

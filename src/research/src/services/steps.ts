@@ -1,5 +1,6 @@
 import type { Sqlite } from '@construct/data';
 import { generateId } from './id.js';
+import { emitResearchEvent } from './events.js';
 import type { ResearchStep, ToolCallRecord } from '../types.js';
 
 function rowToStep(row: Record<string, unknown>): ResearchStep {
@@ -55,7 +56,9 @@ export function createStep(
     now
   );
 
-  return getStep(sqlite, id)!;
+  const step = getStep(sqlite, id)!;
+  emitResearchEvent(step.session_id, 'step', step);
+  return step;
 }
 
 export function getStep(sqlite: Sqlite, id: string): ResearchStep | null {

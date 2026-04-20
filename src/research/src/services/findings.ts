@@ -1,5 +1,6 @@
 import type { Sqlite } from '@construct/data';
 import { generateId } from './id.js';
+import { emitResearchEvent } from './events.js';
 import type { ResearchFinding, FollowUpAnalysis } from '../types.js';
 
 function migrateFollowUpAnalysis(analysis: FollowUpAnalysis): FollowUpAnalysis {
@@ -74,7 +75,9 @@ export function createFinding(
     now
   );
 
-  return getFinding(sqlite, id)!;
+  const finding = getFinding(sqlite, id)!;
+  emitResearchEvent(finding.session_id, 'finding', finding);
+  return finding;
 }
 
 export function getFinding(sqlite: Sqlite, id: string): ResearchFinding | null {
@@ -125,7 +128,9 @@ export function updateFinding(
   values.push(id);
 
   sqlite.prepare(`UPDATE research_findings SET ${fields.join(', ')} WHERE id = ?`).run(...values);
-  return getFinding(sqlite, id);
+  const finding = getFinding(sqlite, id);
+  if (finding) emitResearchEvent(finding.session_id, 'finding', finding);
+  return finding;
 }
 
 export function getRecentFindings(sqlite: Sqlite, sessionId: string, count: number): ResearchFinding[] {

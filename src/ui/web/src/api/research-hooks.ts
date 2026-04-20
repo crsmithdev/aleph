@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 
@@ -13,6 +13,8 @@ export interface QueryStats {
   findings_by_day: number[]; // length 7, oldest → newest
 }
 
+export type OutputShape = 'list_of_entities' | 'overview' | 'comparison' | 'timeline' | 'how_to';
+
 export interface ResearchQuery {
   id: string;
   title: string;
@@ -24,9 +26,31 @@ export interface ResearchQuery {
   summary: string;
   document: string;
   user_notes: string;
+  intent: string | null;
+  output_shape: OutputShape | null;
   created_at: string;
   updated_at: string;
   stats?: QueryStats; // populated by GET /research/queries (list endpoint)
+}
+
+export interface SteeringNote {
+  id: string;
+  session_id: string;
+  text: string;
+  applied_at: string | null;
+  created_at: string;
+}
+
+export interface LeadModification {
+  id: string;
+  plan_id: string;
+  action: 'veto' | 'boost' | 'deprioritize' | 'inject' | 'note' | 'config_change';
+  target_item_rank: number | null;
+  target_thread_id: string | null;
+  payload: string;
+  source: string;
+  applied_at: string | null;
+  created_at: string;
 }
 
 /** @deprecated Use ResearchQuery */
@@ -392,7 +416,7 @@ export const useResearchSession = useResearchQuery;
 export function useCreateResearchQuery() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { seed_query: string; title?: string; config?: Record<string, unknown> }) =>
+    mutationFn: (data: { seed_query: string; title?: string; config?: Record<string, unknown>; intent?: string | null; output_shape?: OutputShape | null }) =>
       api.post<ResearchQuery>('/research/queries', data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['research-queries'] }),
   });
@@ -404,11 +428,31 @@ export const useCreateResearchSession = useCreateResearchQuery;
 export function useUpdateResearchQuery() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: string; status?: string; title?: string }) =>
+    mutationFn: ({ id, ...data }: { id: string; status?: string; title?: string; intent?: string | null; output_shape?: OutputShape | null }) =>
       api.patch<ResearchQuery>(`/research/queries/${id}`, data),
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ['research-queries'] });
       qc.invalidateQueries({ queryKey: ['research-queries', vars.id] });
+    },
+  });
+}
+
+export function useSteeringNotes(sessionId: string) {
+  return useQuery({
+    queryKey: ['research-nudges', sessionId],
+    queryFn: () => api.get<{ notes: SteeringNote[]; lead_modifications: LeadModification[] }>(`/research/queries/${sessionId}/nudges`),
+    enabled: !!sessionId,
+    refetchInterval: 5000,
+  });
+}
+
+export function useCreateSteeringNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sessionId, text }: { sessionId: string; text: string }) =>
+      api.post<SteeringNote>(`/research/queries/${sessionId}/nudges`, { text }),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['research-nudges', vars.sessionId] });
     },
   });
 }
@@ -853,17 +897,19 @@ export type StreamSessionEvent = {
   updated_at: string;
 };
 
-export type StreamEvent =
+export type StreamEvent = (
   | { type: 'finding'; payload: ResearchFinding }
   | { type: 'thread'; payload: ResearchThread }
   | { type: 'step'; payload: ResearchStep }
   | { type: 'job'; payload: ResearchJob }
-  | { type: 'session'; payload: StreamSessionEvent };
+  | { type: 'session'; payload: StreamSessionEvent }
+) & { _seq?: number };
 
 // Cross-session: single multiplexed stream for workers page / global activity rail.
 // Only accumulates into the `events` list — no query-cache writes.
 export function useCrossSessionStream(enabled = true, maxEvents = 200) {
   const [events, setEvents] = useState<StreamEvent[]>([]);
+  const seqRef = useRef(0);
 
   useEffect(() => {
     if (!enabled) return;
@@ -872,6 +918,7 @@ export function useCrossSessionStream(enabled = true, maxEvents = 200) {
     es.onmessage = (event: MessageEvent) => {
       try {
         const parsed: StreamEvent = JSON.parse(event.data);
+        parsed._seq = ++seqRef.current;
         setEvents(prev => [parsed, ...prev].slice(0, maxEvents));
       } catch { /* ignore parse errors */ }
     };
@@ -888,6 +935,7 @@ export function useCrossSessionStream(enabled = true, maxEvents = 200) {
 export function useResearchStream(sessionId: string, enabled = true) {
   const qc = useQueryClient();
   const [events, setEvents] = useState<StreamEvent[]>([]);
+  const seqRef = useRef(0);
 
   useEffect(() => {
     if (!sessionId || !enabled) return;
@@ -896,6 +944,7 @@ export function useResearchStream(sessionId: string, enabled = true) {
     es.onmessage = (event: MessageEvent) => {
       try {
         const parsed: StreamEvent = JSON.parse(event.data);
+        parsed._seq = ++seqRef.current;
 
         if (parsed.type === 'finding') {
           qc.setQueryData(
@@ -929,7 +978,23 @@ export function useResearchStream(sessionId: string, enabled = true) {
         }
 
         if (parsed.type !== 'job') {
-          setEvents(prev => [parsed, ...prev].slice(0, 1000));
+          setEvents(prev => {
+            // Dedup: server resends everything on reconnect (each connection has fresh cursors).
+            // Finding/step rows are immutable — match by payload.id.
+            // Thread rows mutate — match by (id, status, updated_at) so status transitions still emit.
+            if (parsed.type === 'finding' || parsed.type === 'step') {
+              const id = (parsed.payload as { id: string }).id;
+              if (prev.some(e => e.type === parsed.type && (e.payload as { id: string }).id === id)) return prev;
+            } else if (parsed.type === 'thread') {
+              const t = parsed.payload;
+              if (prev.some(e => {
+                if (e.type !== 'thread') return false;
+                const p = e.payload;
+                return p.id === t.id && p.status === t.status && p.updated_at === t.updated_at;
+              })) return prev;
+            }
+            return [parsed, ...prev].slice(0, 1000);
+          });
         }
       } catch { /* ignore parse errors */ }
     };
@@ -942,4 +1007,164 @@ export function useResearchStream(sessionId: string, enabled = true) {
   }, [sessionId, qc, enabled]);
 
   return { events };
+}
+
+// ---------------------------------------------------------------------------
+// Metrics — job lifecycle, source health, thread state, job traces, cost trajectory
+// ---------------------------------------------------------------------------
+
+export interface DurationStats {
+  p50: number;
+  p95: number;
+  avg: number;
+  max: number;
+  count: number;
+}
+
+export interface JobLifecycleMetrics {
+  total: number;
+  by_status: Record<string, number>;
+  queue_wait_ms: DurationStats | null;
+  claim_to_start_ms: DurationStats | null;
+  duration_ms: DurationStats | null;
+  total_ms: DurationStats | null;
+  by_worker: Array<{
+    worker_id: string;
+    total: number;
+    completed: number;
+    failed: number;
+    cancelled: number;
+    running: number;
+    avg_duration_ms: number | null;
+    cost_usd: number;
+    steps: number;
+  }>;
+  by_mode: Record<string, number>;
+}
+
+export interface SourceHealthMetrics {
+  total: number;
+  by_status: Record<string, number>;
+  failure_rate: number;
+  avg_attempts_on_failure: number | null;
+  top_failure_reasons: Array<{ reason: string; count: number; sample_url: string }>;
+  top_failing_domains: Array<{ domain: string; failed: number; total: number; rate: number }>;
+  recent_failures: Array<{ id: string; url: string; error: string | null; attempt_count: number; updated_at: string }>;
+}
+
+export interface ThreadStateMetrics {
+  by_status: Record<string, { count: number; time_in_state_ms: DurationStats | null }>;
+  stuck_threads: Array<{
+    id: string;
+    short_query: string | null;
+    query: string;
+    status: string;
+    updated_at: string;
+    stuck_for_ms: number;
+  }>;
+  transitions_observed: number;
+}
+
+export interface JobTracePhase {
+  name: 'created' | 'claimed' | 'started' | 'completed';
+  at: string;
+  offset_ms: number;
+}
+
+export interface JobTraceStep {
+  id: string;
+  thread_id: string;
+  label: string | null;
+  model: string;
+  provider: string | null;
+  prompt_tokens: number;
+  completion_tokens: number;
+  cost_usd: number;
+  duration_ms: number;
+  created_at: string;
+  offset_ms: number;
+  error: string | null;
+}
+
+export interface JobTrace {
+  job: ResearchJob;
+  thread: ResearchThread | null;
+  phases: JobTracePhase[];
+  steps: JobTraceStep[];
+  total_cost_usd: number;
+  total_tokens: number;
+  total_duration_ms: number | null;
+}
+
+export interface SessionCostTrajectory {
+  total_cost_usd: number;
+  total_tokens: number;
+  total_steps: number;
+  by_model: Array<{ model: string; cost: number; steps: number; tokens: number }>;
+  by_provider: Array<{ provider: string; cost: number; steps: number }>;
+  series: Array<{ at: string; cumulative_cost_usd: number; cumulative_tokens: number; step_id: string; model: string }>;
+}
+
+export function useJobMetrics(sessionId: string, opts?: { refetchInterval?: number }) {
+  return useQuery({
+    queryKey: ['research-metrics-jobs', sessionId],
+    queryFn: () => api.get<JobLifecycleMetrics>(`/research/queries/${sessionId}/metrics/jobs`),
+    enabled: !!sessionId,
+    refetchInterval: opts?.refetchInterval ?? 10_000,
+  });
+}
+
+export function useGlobalJobMetrics(opts?: { refetchInterval?: number }) {
+  return useQuery({
+    queryKey: ['research-metrics-jobs-global'],
+    queryFn: () => api.get<JobLifecycleMetrics>('/research/metrics/jobs'),
+    refetchInterval: opts?.refetchInterval ?? 30_000,
+  });
+}
+
+export function useSourceHealth(sessionId: string, opts?: { refetchInterval?: number; limit?: number }) {
+  return useQuery({
+    queryKey: ['research-metrics-sources', sessionId, opts?.limit ?? 25],
+    queryFn: () => api.get<SourceHealthMetrics>(
+      `/research/queries/${sessionId}/metrics/sources${opts?.limit ? `?limit=${opts.limit}` : ''}`
+    ),
+    enabled: !!sessionId,
+    refetchInterval: opts?.refetchInterval ?? 10_000,
+  });
+}
+
+export function useGlobalSourceHealth(opts?: { refetchInterval?: number }) {
+  return useQuery({
+    queryKey: ['research-metrics-sources-global'],
+    queryFn: () => api.get<SourceHealthMetrics>('/research/metrics/sources'),
+    refetchInterval: opts?.refetchInterval ?? 30_000,
+  });
+}
+
+export function useThreadStateMetrics(sessionId: string, opts?: { refetchInterval?: number; stuckThresholdMs?: number }) {
+  const qs = opts?.stuckThresholdMs ? `?stuck_threshold_ms=${opts.stuckThresholdMs}` : '';
+  return useQuery({
+    queryKey: ['research-metrics-threads', sessionId, opts?.stuckThresholdMs ?? 300000],
+    queryFn: () => api.get<ThreadStateMetrics>(`/research/queries/${sessionId}/metrics/threads${qs}`),
+    enabled: !!sessionId,
+    refetchInterval: opts?.refetchInterval ?? 5000,
+  });
+}
+
+export function useJobTrace(jobId: string | null, opts?: { refetchInterval?: number }) {
+  return useQuery({
+    queryKey: ['research-job-trace', jobId],
+    queryFn: () => api.get<JobTrace>(`/research/jobs/${jobId}/trace`),
+    enabled: !!jobId,
+    refetchInterval: opts?.refetchInterval,
+  });
+}
+
+export function useSessionCostTrajectory(sessionId: string, opts?: { refetchInterval?: number }) {
+  return useQuery({
+    queryKey: ['research-cost-trajectory', sessionId],
+    queryFn: () => api.get<SessionCostTrajectory>(`/research/queries/${sessionId}/metrics/cost-trajectory`),
+    enabled: !!sessionId,
+    refetchInterval: opts?.refetchInterval,
+  });
 }

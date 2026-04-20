@@ -8,6 +8,7 @@ export * from './services/threads.js';
 export * from './services/findings.js';
 export * from './services/steps.js';
 export * from './services/plans.js';
+export * from './services/steering.js';
 export * from './services/monitors.js';
 export * from './services/jobs.js';
 export {
@@ -22,6 +23,16 @@ export {
   completeExtraction, failExtraction, retrySource, skipSource,
   findingsCitingSource,
 } from './services/sources.js';
+export { onResearchEvent, emitResearchEvent, clearResearchListeners } from './services/events.js';
+export type { ResearchEvent, ResearchEventType } from './services/events.js';
+export {
+  computeJobMetrics, computeSourceHealth, computeThreadStateMetrics,
+  computeJobTrace, computeSessionCostTrajectory,
+} from './services/metrics.js';
+export type {
+  JobLifecycleMetrics, SourceHealthMetrics, ThreadStateMetrics,
+  JobTrace, JobTraceStep, JobTracePhase, SessionCostTrajectory,
+} from './services/metrics.js';
 export { MonitorEngine } from './monitor-engine.js';
 export type { MonitorEngineOptions } from './monitor-engine.js';
 export { OpenRouterProvider, getOpenRouterPricing } from './providers/openrouter.js';

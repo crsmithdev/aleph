@@ -1,5 +1,6 @@
 import type { Sqlite } from '@construct/data';
 import { generateId } from './id.js';
+import { emitResearchEvent } from './events.js';
 import type { ResearchThread, ThreadOrigin, ThreadStatus, PerturbationStrategy } from '../types.js';
 
 function rowToThread(row: Record<string, unknown>): ResearchThread {
@@ -7,6 +8,10 @@ function rowToThread(row: Record<string, unknown>): ResearchThread {
     ...row,
     fetch_source_text: row.fetch_source_text == null ? null : Boolean(row.fetch_source_text),
   } as unknown as ResearchThread;
+}
+
+function emitThread(thread: ResearchThread | null): void {
+  if (thread) emitResearchEvent(thread.session_id, 'thread', thread);
 }
 
 export function createThread(
@@ -58,7 +63,9 @@ export function createThread(
     now
   );
 
-  return getThread(sqlite, id)!;
+  const thread = getThread(sqlite, id)!;
+  emitThread(thread);
+  return thread;
 }
 
 export function getThread(sqlite: Sqlite, id: string): ResearchThread | null {
@@ -94,6 +101,23 @@ export function selectNextThread(sqlite: Sqlite, sessionId: string): ResearchThr
   return row ? rowToThread(row) : null;
 }
 
+/** Atomically claims a specific thread by id, flipping status queued → active.
+ *  Returns the claimed thread if the transition succeeded, or null if the thread
+ *  wasn't in 'queued' state (already active, exhausted, paused, pruned, etc.).
+ *  Use this in `runThread` so thread-level jobs don't race with `runIterations`
+ *  and cause duplicate runIteration invocations on the same thread. */
+export function tryClaimThread(sqlite: Sqlite, threadId: string): ResearchThread | null {
+  const result = sqlite.prepare(`
+    UPDATE research_threads
+    SET status = 'active', updated_at = datetime('now')
+    WHERE id = ? AND status = 'queued'
+  `).run(threadId);
+  if (result.changes === 0) return null;
+  const thread = getThread(sqlite, threadId);
+  emitThread(thread);
+  return thread;
+}
+
 /** Atomically selects the highest-priority queued thread and marks it active.
  *  Safe to call from concurrent async slots — only one caller will get each thread. */
 export function claimNextThread(sqlite: Sqlite, sessionId: string): ResearchThread | null {
@@ -115,7 +139,9 @@ export function claimNextThread(sqlite: Sqlite, sessionId: string): ResearchThre
   // Another slot claimed it first — try again
   if (result.changes === 0) return claimNextThread(sqlite, sessionId);
 
-  return getThread(sqlite, (row as { id: string }).id);
+  const thread = getThread(sqlite, (row as { id: string }).id);
+  emitThread(thread);
+  return thread;
 }
 
 export function updateThread(
@@ -144,7 +170,9 @@ export function updateThread(
   values.push(id);
 
   sqlite.prepare(`UPDATE research_threads SET ${fields.join(', ')} WHERE id = ?`).run(...values);
-  return getThread(sqlite, id);
+  const thread = getThread(sqlite, id);
+  emitThread(thread);
+  return thread;
 }
 
 export function countThreadsByOrigin(sqlite: Sqlite, sessionId: string): Record<string, number> {
@@ -169,17 +197,38 @@ export function countExhaustedThreads(sqlite: Sqlite, sessionId: string): number
 }
 
 /** Reset threads stuck in 'active' status with no corresponding active job back to 'queued'.
- *  Handles the case where a worker dies mid-execution leaving threads orphaned. */
+ *  Handles the case where a worker dies mid-execution leaving threads orphaned.
+ *
+ *  CRITICAL: session-level jobs (thread_id IS NULL) claim threads via claimNextThread
+ *  without creating a per-thread job. Those threads must NOT be treated as orphaned
+ *  while the session-level job is still running — otherwise we reset them to queued,
+ *  a redundant thread-level job gets created, and two workers run runIteration on the
+ *  same thread concurrently (→ duplicate searches, duplicate findings). */
 export function resetOrphanedActiveThreads(sqlite: Sqlite): number {
-  const result = sqlite.prepare(`
-    UPDATE research_threads
-    SET status = 'queued', updated_at = datetime('now')
+  const orphans = sqlite.prepare(`
+    SELECT id FROM research_threads
     WHERE status = 'active'
     AND id NOT IN (
       SELECT thread_id FROM research_jobs
       WHERE thread_id IS NOT NULL
       AND status IN ('pending', 'claimed', 'running')
     )
-  `).run();
-  return result.changes;
+    AND session_id NOT IN (
+      SELECT session_id FROM research_jobs
+      WHERE thread_id IS NULL
+      AND status IN ('pending', 'claimed', 'running')
+    )
+  `).all() as Array<{ id: string }>;
+  if (orphans.length === 0) return 0;
+
+  const update = sqlite.prepare(`
+    UPDATE research_threads
+    SET status = 'queued', updated_at = datetime('now')
+    WHERE id = ? AND status = 'active'
+  `);
+  let reset = 0;
+  for (const { id } of orphans) {
+    if (update.run(id).changes > 0) { reset++; emitThread(getThread(sqlite, id)); }
+  }
+  return reset;
 }

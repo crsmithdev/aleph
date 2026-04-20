@@ -13,6 +13,7 @@ import * as threads from './services/threads.js';
 import * as findings from './services/findings.js';
 import * as steps from './services/steps.js';
 import * as plans from './services/plans.js';
+import * as steering from './services/steering.js';
 import * as concepts from './services/concepts.js';
 import * as sources from './services/sources.js';
 
@@ -390,14 +391,20 @@ export class ResearchEngine {
       throw new Error(`Session ${sessionId} not found or not active`);
     }
 
-    const thread = threads.getThread(this.sqlite, threadId);
-    if (!thread) throw new Error(`Thread ${threadId} not found`);
+    const existing = threads.getThread(this.sqlite, threadId);
+    if (!existing) throw new Error(`Thread ${threadId} not found`);
+
+    // Atomically claim queued → active. If the thread is already being processed
+    // by another path (e.g. runIterations' slot loop) this returns null, and we
+    // bail out to avoid running runIteration twice on the same thread.
+    const thread = threads.tryClaimThread(this.sqlite, threadId);
+    if (!thread) {
+      console.log(`[engine] runThread skip ${threadId.slice(0, 8)}: not in queued state (status=${existing.status})`);
+      return { finding: null, cost: 0 };
+    }
 
     // Apply any pending plan modifications before running
     await this.applyPlanModifications(sessionId);
-
-    // Mark thread active so plan generation shows it as in-progress
-    threads.updateThread(this.sqlite, threadId, { status: 'active' });
 
     let result: { finding: ResearchFinding | null; cost: number };
     try {
@@ -470,6 +477,10 @@ export class ResearchEngine {
       await this.updateSummary(sessionId);
       await this.updateDocument(sessionId);
     }
+
+    // Periodic lead review — check coverage & spawn a small batch of targeted
+    // threads every N findings. Replaces per-finding gap-analysis by default.
+    await this.maybeRunLeadReview(sessionId, session.config);
 
     return result;
   }
@@ -576,24 +587,27 @@ export class ResearchEngine {
       console.warn(`[concepts] extraction failed for ${finding.id}:`, err);
     }
 
-    // Step 5b: Spawn verify thread for low-confidence findings (non-recursive)
+    // Step 5b: Spawn verify thread for low-confidence findings (non-recursive).
+    // Skip if the verify child would land at/past max_depth — dead inventory.
     if (synthesisResult.confidence < 0.4 && thread.origin !== 'verify') {
       const childDepth = thread.depth + 1;
-      const verifyQuery = `Verify: ${finding.summary}`;
-      const vThread = threads.createThread(this.sqlite, {
-        session_id: sessionId,
-        query: verifyQuery,
-        short_query: placeholderShortQuery(verifyQuery),
-        node_type: 'question',
-        origin: 'verify',
-        parent_thread_id: thread.id,
-        spawned_from_finding_id: finding.id,
-        priority: 0.8,
-        depth: childDepth,
-        max_depth: thread.max_depth,
-        status: childDepth >= thread.max_depth ? 'deferred' : 'queued',
-      });
-      this.summarizeThreadAsync(vThread.id, verifyQuery, sessionId, config);
+      if (childDepth < thread.max_depth) {
+        const verifyQuery = `Verify: ${finding.summary}`;
+        const vThread = threads.createThread(this.sqlite, {
+          session_id: sessionId,
+          query: verifyQuery,
+          short_query: placeholderShortQuery(verifyQuery),
+          node_type: 'question',
+          origin: 'verify',
+          parent_thread_id: thread.id,
+          spawned_from_finding_id: finding.id,
+          priority: 0.8,
+          depth: childDepth,
+          max_depth: thread.max_depth,
+          status: 'queued',
+        });
+        this.summarizeThreadAsync(vThread.id, verifyQuery, sessionId, config);
+      }
     }
 
     // Step 6: Spawn child threads from accepted follow-up questions (skip if covered).
@@ -637,7 +651,13 @@ export class ResearchEngine {
             break;
           }
           const childDepth = thread.depth + 1;
-          console.log(`[follow_up] childDepth=${childDepth} max_depth=${thread.max_depth} seed_sim=${seedSim.toFixed(3)} hop_sim=${hopSim.toFixed(3)} → ${childDepth >= thread.max_depth ? 'deferred' : 'queued'}`);
+          // Skip creation if this child would land at or past max_depth — it
+          // would only sit as 'deferred' inventory and never run.
+          if (childDepth >= thread.max_depth) {
+            console.log(`[follow_up] skip "${question.slice(0, 60)}" — would be deferred at depth ${childDepth} ≥ max_depth ${thread.max_depth}`);
+            continue;
+          }
+          console.log(`[follow_up] childDepth=${childDepth} max_depth=${thread.max_depth} seed_sim=${seedSim.toFixed(3)} hop_sim=${hopSim.toFixed(3)} → queued`);
           const fuThread = threads.createThread(this.sqlite, {
             session_id: sessionId,
             query: question,
@@ -650,33 +670,42 @@ export class ResearchEngine {
             depth: childDepth,
             max_depth: thread.max_depth,
             seed_similarity: seedSim,
-            status: childDepth >= thread.max_depth ? 'deferred' : 'queued',
+            status: 'queued',
           });
           this.summarizeThreadAsync(fuThread.id, question, sessionId, config);
         }
       }
     }
 
-    // Step 7: Spawn gap threads — identify knowledge gaps and queue them as high-priority threads.
-    // Runs after follow-ups so gap threads get a slight priority boost and don't compete with
-    // the current finding's follow-up questions for the same worker slots.
-    if (config.gap_analysis?.enabled) {
-      const gapQueries = await this.identifyGaps(thread, searchResults, synthesisResult, config);
-      for (const query of gapQueries) {
-        const gapThread = threads.createThread(this.sqlite, {
-          session_id: sessionId,
-          query,
-          short_query: placeholderShortQuery(query),
-          node_type: 'question',
-          origin: 'gap_analysis',
-          parent_thread_id: thread.id,
-          spawned_from_finding_id: finding.id,
-          priority: Math.min(1.0, (thread.priority ?? 0.5) + 0.15),
-          depth: thread.depth,       // same depth as parent — filling the same knowledge level
-          max_depth: thread.max_depth,
-          status: 'queued',
-        });
-        this.summarizeThreadAsync(gapThread.id, query, sessionId, config);
+    // Step 7: Per-finding gap analysis (legacy mode).
+    // Default is 'periodic' — see maybeRunLeadReview() called from runThread().
+    if (config.gap_analysis?.enabled && (config.gap_analysis.mode ?? 'periodic') === 'per_finding') {
+      const maxTotal = config.max_total_threads ?? 200;
+      const totalNow = threads.countAllThreads(this.sqlite, sessionId);
+      if (maxTotal > 0 && totalNow >= maxTotal) {
+        console.log(`[gap_analysis] skip all — total threads ${totalNow} >= max_total_threads ${maxTotal}`);
+      } else {
+        const gapQueries = await this.identifyGaps(thread, searchResults, synthesisResult, config);
+        for (const query of gapQueries) {
+          if (maxTotal > 0 && threads.countAllThreads(this.sqlite, sessionId) >= maxTotal) {
+            console.log(`[gap_analysis] skip remaining — hit max_total_threads ${maxTotal}`);
+            break;
+          }
+          const gapThread = threads.createThread(this.sqlite, {
+            session_id: sessionId,
+            query,
+            short_query: placeholderShortQuery(query),
+            node_type: 'question',
+            origin: 'gap_analysis',
+            parent_thread_id: thread.id,
+            spawned_from_finding_id: finding.id,
+            priority: Math.min(1.0, (thread.priority ?? 0.5) + 0.15),
+            depth: thread.depth,
+            max_depth: thread.max_depth,
+            status: 'queued',
+          });
+          this.summarizeThreadAsync(gapThread.id, query, sessionId, config);
+        }
       }
     }
 
@@ -838,6 +867,177 @@ Return ONLY a JSON array of search query strings. No other text.`,
     }));
 
     return results.filter((r): r is { query: string; results: string; sourceTexts: string[]; sourceUrls: string[]; sourceUrlMeta: Array<{ url: string; title: string; snippet: string }> } => r !== null);
+  }
+
+  /** Periodic lead review — orchestrator-style pass that looks at the session's
+   *  compressed corpus (summary + recent finding summaries + open threads) and
+   *  decides whether to spawn a small batch of targeted gap queries. Runs on a
+   *  cadence instead of per-finding to avoid combinatorial thread explosion. */
+  private async maybeRunLeadReview(sessionId: string, config: SessionConfig): Promise<void> {
+    if (!config.gap_analysis?.enabled) return;
+    if ((config.gap_analysis.mode ?? 'periodic') !== 'periodic') return;
+
+    const cadence = Math.max(1, config.gap_analysis.every_n_findings ?? 10);
+    const findingCount = findings.countFindings(this.sqlite, sessionId);
+    const unappliedNotes = steering.listUnappliedSteeringNotes(this.sqlite, sessionId);
+    const dueByCadence = findingCount > 0 && findingCount % cadence === 0;
+    // Also run early if the user just dropped a steering note — don't make them
+    // wait 10 findings for their nudge to land.
+    if (!dueByCadence && unappliedNotes.length === 0) return;
+
+    const maxTotal = config.max_total_threads ?? 200;
+    const totalNow = threads.countAllThreads(this.sqlite, sessionId);
+
+    const session = sessions.getQuery(this.sqlite, sessionId);
+    if (!session) return;
+
+    const recentFindings = findings.listFindings(this.sqlite, sessionId, { limit: 12 });
+    if (recentFindings.length === 0 && unappliedNotes.length === 0) return;
+
+    // Include both queued/active threads AND exhausted ones — the leader can
+    // prune any of them. Sort stable by created_at so thread_ids are referable.
+    const candidateThreads = threads.listThreads(this.sqlite, sessionId)
+      .filter(t => t.status === 'queued' || t.status === 'active' || t.status === 'exhausted')
+      .slice(0, 40);
+
+    const maxSpawn = Math.max(1, config.gap_analysis.max_gap_searches ?? 2);
+    const roomForSpawn = Math.max(0, maxTotal > 0 ? maxTotal - totalNow : maxSpawn);
+    const effectiveMaxSpawn = Math.min(maxSpawn, roomForSpawn);
+
+    const intentBlock = session.intent
+      ? `\nResearcher intent (WHAT THE USER WANTS THIS TO PRODUCE — weight this heavily):\n${session.intent}`
+      : '';
+    const shapeBlock = session.output_shape
+      ? `\nDesired output shape: ${session.output_shape} — prune threads that drift away from this shape.`
+      : '';
+    const notesBlock = unappliedNotes.length > 0
+      ? `\nNew steering notes from the user (unapplied — act on these NOW):\n${unappliedNotes.map(n => `- ${n.text}`).join('\n')}`
+      : '';
+
+    const prompt = `You are the lead researcher for this session. Your job is to keep the research on-track for what the user actually wants, not to chase every interesting tangent.
+
+Session seed: "${session.seed_query}"${intentBlock}${shapeBlock}${notesBlock}
+
+Recent findings (most recent first):
+${recentFindings.map((f, i) => `${i + 1}. ${f.summary}`).join('\n')}
+
+Open / recent threads (id → query, status). You may prune/boost/deprioritize any of these by id:
+${candidateThreads.map(t => `- ${t.id} [${t.status}]: ${t.query}`).join('\n')}
+
+Decide three things:
+1. Are any threads DRIFTING from the intent/shape? List their ids to prune. Be willing to prune — tangents waste budget.
+2. Are any threads CORE to the intent but low-priority? List their ids to boost.
+3. Are there specific gaps that would materially improve the final answer? Propose AT MOST ${effectiveMaxSpawn} new queries.
+
+Respond with JSON only:
+{
+  "reason": string,
+  "prune_thread_ids": string[],
+  "boost_thread_ids": string[],
+  "deprioritize_thread_ids": string[],
+  "gap_queries": string[]
+}
+
+Rules:
+- Only use thread ids that appear in the list above.
+- gap_queries: at most ${effectiveMaxSpawn} entries. Return [] if coverage is adequate.
+- If the user's intent is a practical/list-style request, favor pruning academic/historical tangents.`;
+
+    const result = await this.callLLM(
+      config.model, prompt, sessionId, null, config, 'lead review'
+    );
+
+    let pruneIds: string[] = [];
+    let boostIds: string[] = [];
+    let deprioritizeIds: string[] = [];
+    let gapQueries: string[] = [];
+    let reason = '';
+    try {
+      const parsed = JSON.parse(stripLLMFences(result.text));
+      if (Array.isArray(parsed.prune_thread_ids)) pruneIds = parsed.prune_thread_ids.filter((s: unknown) => typeof s === 'string');
+      if (Array.isArray(parsed.boost_thread_ids)) boostIds = parsed.boost_thread_ids.filter((s: unknown) => typeof s === 'string');
+      if (Array.isArray(parsed.deprioritize_thread_ids)) deprioritizeIds = parsed.deprioritize_thread_ids.filter((s: unknown) => typeof s === 'string');
+      if (Array.isArray(parsed.gap_queries)) gapQueries = parsed.gap_queries.slice(0, effectiveMaxSpawn);
+      if (typeof parsed.reason === 'string') reason = parsed.reason;
+    } catch {
+      return;
+    }
+
+    // Constrain plan-mod targets to threads we actually showed the model.
+    const validIds = new Set(candidateThreads.map(t => t.id));
+    pruneIds = pruneIds.filter(id => validIds.has(id));
+    boostIds = boostIds.filter(id => validIds.has(id));
+    deprioritizeIds = deprioritizeIds.filter(id => validIds.has(id));
+
+    // Record step metadata before side effects so the decision is visible even if later ops fail.
+    if (result.stepId) steps.updateStepMetadata(this.sqlite, result.stepId, {
+      decision: 'lead_review',
+      has_gaps: gapQueries.length > 0,
+      gap_count: gapQueries.length,
+      gap_max: effectiveMaxSpawn,
+      gap_queries: gapQueries,
+      prune_count: pruneIds.length,
+      boost_count: boostIds.length,
+      deprioritize_count: deprioritizeIds.length,
+      reason,
+    });
+
+    // Emit plan modifications. applyPlanModifications() runs on the next iteration
+    // boundary and handles status transitions; we use source 'lead_review' so UI
+    // can distinguish user-driven vs. leader-driven mods.
+    const latestPlan = plans.getLatestPlan(this.sqlite, sessionId);
+    if (latestPlan) {
+      for (const tid of pruneIds) {
+        plans.addPlanModification(this.sqlite, {
+          plan_id: latestPlan.id, action: 'veto',
+          target_thread_id: tid, source: 'lead_review', payload: reason.slice(0, 500),
+        });
+      }
+      for (const tid of boostIds) {
+        plans.addPlanModification(this.sqlite, {
+          plan_id: latestPlan.id, action: 'boost',
+          target_thread_id: tid, source: 'lead_review', payload: reason.slice(0, 500),
+        });
+      }
+      for (const tid of deprioritizeIds) {
+        plans.addPlanModification(this.sqlite, {
+          plan_id: latestPlan.id, action: 'deprioritize',
+          target_thread_id: tid, source: 'lead_review', payload: reason.slice(0, 500),
+        });
+      }
+    }
+
+    // Spawn gap queries.
+    if (gapQueries.length > 0) {
+      const existingQueries = new Set(
+        threads.listThreads(this.sqlite, sessionId).map(t => t.query.toLowerCase().trim())
+      );
+      for (const query of gapQueries) {
+        if (typeof query !== 'string' || query.trim().length < 10) continue;
+        if (existingQueries.has(query.toLowerCase().trim())) continue;
+        if (maxTotal > 0 && threads.countAllThreads(this.sqlite, sessionId) >= maxTotal) {
+          console.log(`[lead_review] skip remaining — hit max_total_threads ${maxTotal}`);
+          break;
+        }
+        const t = threads.createThread(this.sqlite, {
+          session_id: sessionId,
+          query,
+          short_query: placeholderShortQuery(query),
+          node_type: 'question',
+          origin: 'lead_review',
+          priority: 0.75,
+          depth: 0,
+          max_depth: config.max_thread_depth ?? 2,
+          status: 'queued',
+        });
+        this.summarizeThreadAsync(t.id, query, sessionId, config);
+      }
+    }
+
+    // Mark notes applied so the next tick doesn't re-fire on them.
+    if (unappliedNotes.length > 0) {
+      steering.markSteeringNotesApplied(this.sqlite, unappliedNotes.map(n => n.id));
+    }
   }
 
   private async identifyGaps(
@@ -1505,6 +1705,7 @@ Ordered from most to least important. Each rationale should explain relevance to
     if (!latestPlan) return;
 
     const mods = plans.getPendingModifications(this.sqlite, latestPlan.id);
+    const appliedIds: string[] = [];
     for (const mod of mods) {
       const targetThread = mod.target_thread_id
         ? threads.getThread(this.sqlite, mod.target_thread_id)
@@ -1512,7 +1713,7 @@ Ordered from most to least important. Each rationale should explain relevance to
           ? threads.getThread(this.sqlite, latestPlan.items.find(i => i.rank === mod.target_item_rank)!.thread_id)
           : null;
 
-      if (!targetThread) continue;
+      if (!targetThread) { appliedIds.push(mod.id); continue; }
 
       switch (mod.action) {
         case 'veto':
@@ -1537,9 +1738,11 @@ Ordered from most to least important. Each rationale should explain relevance to
           });
           break;
       }
+      appliedIds.push(mod.id);
     }
 
-    if (mods.length > 0) {
+    if (appliedIds.length > 0) {
+      plans.markModificationsApplied(this.sqlite, appliedIds);
       plans.updatePlanStatus(this.sqlite, latestPlan.id, 'modified');
     }
   }
@@ -1784,13 +1987,15 @@ Write only the section, starting with "## ${c.canonical_name}".`;
     topConcepts: ConceptSummary[],
     config: SessionConfig,
   ): Promise<string> {
+    const session = sessions.getQuery(this.sqlite, sessionId);
+    const intentLine = session?.intent ? `\nUser intent (shape the lead around this): ${session.intent}` : '';
     const bullets = topConcepts.slice(0, 10)
       .map(c => `- ${c.canonical_name}: ${c.summary || '(no summary)'}`)
       .join('\n');
 
     const result = await this.callLLM(
       config.model,
-      `Write a 2-3 paragraph lead section for an encyclopedia article about: "${seedQuery}"
+      `Write a 2-3 paragraph lead section for an encyclopedia article about: "${seedQuery}"${intentLine}
 
 The article's body covers these concepts (for orientation only — do not enumerate them):
 ${bullets}
@@ -1883,7 +2088,7 @@ Write the full article in markdown.`,
     model: string,
     prompt: string,
     sessionId: string,
-    threadId: string,
+    threadId: string | null,
     config: SessionConfig,
     label?: string
   ): Promise<LLMResult & { cost: number; stepId: string | null }> {

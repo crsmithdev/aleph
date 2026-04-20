@@ -7,6 +7,7 @@ import remarkGfm from 'remark-gfm';
 import {
   useResearchQuery, useResearchFindings, useResearchThreads,
   useResearchCosts, useUpdateResearchQuery, useRateFinding,
+  useSteeringNotes, useCreateSteeringNote,
   useInjectThread, useRunResearch, useResearchRunning,
   useResearchActivity, useCancelJob, useResearchJobs, useResearchStream,
   useResearchSteps, useUpdateThread, useDeleteResearchQuery, useUpdateQueryConfig,
@@ -23,6 +24,7 @@ import { Button } from '../../components/ui/Button';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { ConfigForm, patchByPath, getByPath } from './config-schema';
+import { TelemetryView } from './ResearchTelemetryView';
 import cytoscape from 'cytoscape';
 // @ts-expect-error cytoscape-fcose has no bundled types
 import fcose from 'cytoscape-fcose';
@@ -88,6 +90,114 @@ function ConfBar({ label, value }: { label: string; value: number }) {
         />
       </div>
       <span className="text-sm text-text-muted">{(value * 100).toFixed(0)}%</span>
+    </div>
+  );
+}
+
+/** Lead-researcher steering panel. Shows the user's intent, lets them add nudges,
+ *  and displays the last few lead-reviewer actions (pruned/boosted/new queries). */
+function LeaderPanel({ sessionId, intent, output_shape }: {
+  sessionId: string;
+  intent: string | null;
+  output_shape: string | null;
+}) {
+  const { data } = useSteeringNotes(sessionId);
+  const createNote = useCreateSteeringNote();
+  const [text, setText] = useState('');
+  const [open, setOpen] = useState(false);
+  const notes = data?.notes ?? [];
+  const mods = data?.lead_modifications ?? [];
+  const pendingCount = notes.filter(n => !n.applied_at).length;
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const t = text.trim();
+    if (!t) return;
+    createNote.mutate({ sessionId, text: t }, {
+      onSuccess: () => { setText(''); },
+    });
+  }
+
+  const shapeLabel = output_shape ? output_shape.replace(/_/g, ' ') : null;
+  const hasSteering = !!intent || !!shapeLabel || notes.length > 0 || mods.length > 0;
+
+  return (
+    <div className="mt-3 rounded-md border border-border-primary bg-bg-primary/40">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-3 py-1.5 text-sm text-text-muted hover:text-text-secondary"
+      >
+        <span className="flex items-center gap-2">
+          <span className="font-medium text-text-secondary">Lead researcher</span>
+          {shapeLabel && <span className="text-sm uppercase tracking-[0.06em] text-accent/80">{shapeLabel}</span>}
+          {pendingCount > 0 && (
+            <span className="px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-400 text-sm tabular-nums">
+              {pendingCount} pending nudge{pendingCount === 1 ? '' : 's'}
+            </span>
+          )}
+          {mods.length > 0 && (
+            <span className="px-1.5 py-0.5 rounded bg-accent/10 text-accent text-sm tabular-nums">
+              {mods.length} action{mods.length === 1 ? '' : 's'}
+            </span>
+          )}
+          {!hasSteering && <span className="text-sm text-text-muted/70 italic">no steering set</span>}
+        </span>
+        <span className="text-sm">{open ? '−' : '+'}</span>
+      </button>
+      {open && (
+        <div className="px-3 pb-3 border-t border-border-primary flex flex-col gap-2">
+          {intent && (
+            <div className="text-sm">
+              <span className="text-text-muted">Intent: </span>
+              <span className="text-text-primary">{intent}</span>
+            </div>
+          )}
+          <form onSubmit={submit} className="flex gap-2">
+            <input
+              type="text"
+              value={text}
+              onChange={e => setText(e.target.value)}
+              placeholder='Nudge the leader — e.g. "skip the history, focus on specific orgs"'
+              maxLength={2000}
+              className="flex-1 bg-bg-primary border border-border-primary rounded-md px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
+            />
+            <Button type="submit" size="sm" loading={createNote.isPending} disabled={!text.trim()}>
+              Nudge
+            </Button>
+          </form>
+          {notes.length > 0 && (
+            <div className="flex flex-col gap-1 mt-1">
+              <div className="text-sm text-text-muted uppercase tracking-[0.06em]">Notes</div>
+              {notes.slice().reverse().slice(0, 6).map(n => (
+                <div key={n.id} className="flex items-start gap-2 text-sm">
+                  <span className={clsx('mt-1 w-1.5 h-1.5 rounded-full shrink-0', n.applied_at ? 'bg-success/60' : 'bg-yellow-400')} />
+                  <span className="text-text-secondary flex-1">{n.text}</span>
+                  <span className="text-text-muted tabular-nums shrink-0">
+                    {n.applied_at ? 'applied' : 'pending'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          {mods.length > 0 && (
+            <div className="flex flex-col gap-1 mt-1">
+              <div className="text-sm text-text-muted uppercase tracking-[0.06em]">Recent leader actions</div>
+              {mods.slice().reverse().slice(0, 6).map(m => (
+                <div key={m.id} className="flex items-start gap-2 text-sm">
+                  <span className={clsx('px-1.5 py-0.5 rounded font-medium shrink-0',
+                    m.action === 'veto' ? 'bg-red-900/40 text-red-300'
+                      : m.action === 'boost' ? 'bg-green-900/40 text-green-300'
+                      : 'bg-yellow-900/40 text-yellow-300')}>
+                    {m.action}
+                  </span>
+                  <span className="text-text-secondary flex-1 truncate">{m.payload || '(no reason)'}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1887,10 +1997,15 @@ function LiveView({
               {streamEvents.length !== events.length ? `${streamEvents.length} / ${events.length}` : events.length}
             </span>
             <button
-              title="Download activity log (.md)"
+              title="Download activity log (.md) — human-readable report with jobs, steps, findings, status history"
               onClick={() => { const a = document.createElement('a'); a.href = `/api/research/queries/${sessionId}/export/log`; a.download = ''; a.click(); }}
               className="p-1 rounded text-text-muted hover:text-text-secondary hover:bg-bg-tertiary transition-colors shrink-0"
             ><Icon name="download" size="xs" /></button>
+            <button
+              title="Download raw event log (.ndjson) — one event per line, for grep/jq/debug"
+              onClick={() => { const a = document.createElement('a'); a.href = `/api/research/queries/${sessionId}/export/log?format=ndjson`; a.download = ''; a.click(); }}
+              className="p-1 rounded text-text-muted hover:text-text-secondary hover:bg-bg-tertiary transition-colors shrink-0 font-mono text-[10px] leading-none px-1.5"
+            >.nd</button>
           </div>
 
           {/* Filter bar */}
@@ -1956,9 +2071,11 @@ function LiveView({
             {streamEvents.slice(-RENDER_WINDOW).map(ev => {
               const formatted = formatEventDetail(ev);
               if (!formatted) return null;
-              const evKey = ev.type === 'thread'
-                ? `thread:${ev.payload.id}:${ev.payload.updated_at ?? ev.payload.created_at}`
-                : `${ev.type}:${(ev.payload as { id: string }).id}`;
+              const evKey = ev._seq !== undefined
+                ? `${ev.type}:${ev._seq}`
+                : ev.type === 'thread'
+                  ? `thread:${ev.payload.id}:${ev.payload.updated_at ?? ev.payload.created_at}`
+                  : `${ev.type}:${(ev.payload as { id: string }).id}`;
               const isExpanded = expandedEventKey === evKey;
               const threadId = ev.type === 'finding' ? ev.payload.thread_id
                 : ev.type === 'step' ? ev.payload.thread_id
@@ -2547,7 +2664,7 @@ function SourceExtractionPill({ src }: { src: Source }) {
   );
 }
 
-function SourcesView({ sessionId }: { sessionId: string }) {
+function SourcesView({ sessionId, onNavigateToTelemetry }: { sessionId: string; onNavigateToTelemetry?: () => void }) {
   const { data, isLoading } = useSources(sessionId);
   const { data: findings } = useResearchFindings(sessionId);
   const retry = useRetrySource();
@@ -2597,6 +2714,15 @@ function SourcesView({ sessionId }: { sessionId: string }) {
           <span><span className="text-warning font-medium tabular-nums">{counts.skipped}</span>{' '}<span className="text-text-muted">snippet only</span></span>
           <span><span className="text-info font-medium tabular-nums">{inProgress}</span>{' '}<span className="text-text-muted">in progress</span></span>
           <span><span className="text-error font-medium tabular-nums">{counts.failed}</span>{' '}<span className="text-text-muted">failed</span></span>
+          {onNavigateToTelemetry && counts.failed > 0 && (
+            <button
+              onClick={onNavigateToTelemetry}
+              className="text-sm text-text-muted hover:text-accent underline decoration-dotted"
+              title="See failure reasons and failing domains in Telemetry"
+            >
+              failure breakdown ↗
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="secondary" onClick={extractAllSnippetOnly} disabled={busy || counts.skipped === 0}>
@@ -2700,6 +2826,17 @@ function SourcesView({ sessionId }: { sessionId: string }) {
 
 type KnowledgeFilter = 'all' | 'hub' | 'recent';
 
+type KnowledgeViewMode = 'graph' | 'split';
+
+/** Level-of-detail tiers for the Knowledge view semantic-zoom slider.
+ *  Limit is computed as a fraction of the total so small sessions don't feel gated. */
+const KNOWLEDGE_LOD_TIERS: Array<{ level: 1 | 2 | 3 | 4; label: string; fraction: number | null; min: number }> = [
+  { level: 1, label: 'Overview', fraction: 0.12, min: 6 },
+  { level: 2, label: 'Clusters', fraction: 0.33, min: 14 },
+  { level: 3, label: 'Detail',   fraction: 0.66, min: 24 },
+  { level: 4, label: 'Full',     fraction: null, min: 0 },
+];
+
 function KnowledgeView({
   sessionId,
   pendingConceptName,
@@ -2711,9 +2848,12 @@ function KnowledgeView({
 }) {
   const { data: concepts, isLoading } = useConcepts(sessionId);
   const { data: links } = useConceptLinks(sessionId);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const { data: detail } = useConceptDetail(sessionId, selectedId);
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const { data: detail } = useConceptDetail(sessionId, focusId);
   const [filter, setFilter] = useState<KnowledgeFilter>('all');
+  const [viewMode, setViewMode] = useState<KnowledgeViewMode>('graph');
+  const [detailLevel, setDetailLevel] = useState<1 | 2 | 3 | 4>(2);
+  const [showGhosts, setShowGhosts] = useState(true);
 
   useEffect(() => {
     if (!pendingConceptName || !concepts || concepts.length === 0) return;
@@ -2721,7 +2861,7 @@ function KnowledgeView({
     const targetSlug = slugify(pendingConceptName);
     const match = concepts.find(c => slugify(c.canonical_name) === targetSlug)
       ?? concepts.find(c => c.aliases.some(a => slugify(a) === targetSlug));
-    if (match) setSelectedId(match.id);
+    if (match) setFocusId(match.id);
     onConsumePending?.();
   }, [pendingConceptName, concepts, onConsumePending]);
 
@@ -2738,8 +2878,33 @@ function KnowledgeView({
     return concepts;
   }, [concepts, filter]);
 
+  // Semantic-zoom: rank by finding_count and keep top-N for the current tier.
+  // Always keep the focused concept so the user can't "zoom away" from their own selection.
+  const visibleConcepts = useMemo(() => {
+    const tier = KNOWLEDGE_LOD_TIERS[detailLevel - 1];
+    const total = filteredConcepts.length;
+    if (tier.fraction == null) return filteredConcepts;
+    const limit = Math.max(tier.min, Math.ceil(total * tier.fraction));
+    if (limit >= total) return filteredConcepts;
+    const ranked = [...filteredConcepts].sort((a, b) => b.finding_count - a.finding_count);
+    const kept = new Set(ranked.slice(0, limit).map(c => c.id));
+    if (focusId) kept.add(focusId);
+    return filteredConcepts.filter(c => kept.has(c.id));
+  }, [filteredConcepts, detailLevel, focusId]);
+
+  // In split mode, the graph half only renders the focus + its 1-hop neighbourhood —
+  // the outline is the primary nav and the graph is the context pane.
   const elements = useMemo((): cytoscape.ElementDefinition[] => {
-    const nodes: cytoscape.ElementDefinition[] = filteredConcepts.map(c => ({
+    let displayConcepts = visibleConcepts;
+    if (viewMode === 'split' && focusId) {
+      const neighbourIds = new Set<string>([focusId]);
+      for (const l of links ?? []) {
+        if (l.from_concept_id === focusId) neighbourIds.add(l.to_concept_id);
+        if (l.to_concept_id === focusId) neighbourIds.add(l.from_concept_id);
+      }
+      displayConcepts = visibleConcepts.filter(c => neighbourIds.has(c.id));
+    }
+    const nodes: cytoscape.ElementDefinition[] = displayConcepts.map(c => ({
       data: {
         id: c.id,
         label: c.canonical_name,
@@ -2747,7 +2912,7 @@ function KnowledgeView({
         sourceCount: c.source_count,
       },
     }));
-    const byId = new Set(filteredConcepts.map(c => c.id));
+    const byId = new Set(displayConcepts.map(c => c.id));
     const edges: cytoscape.ElementDefinition[] = (links ?? [])
       .filter(l => byId.has(l.from_concept_id) && byId.has(l.to_concept_id))
       .map(l => ({
@@ -2759,7 +2924,7 @@ function KnowledgeView({
         },
       }));
     return [...nodes, ...edges];
-  }, [filteredConcepts, links]);
+  }, [visibleConcepts, links, viewMode, focusId]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -2791,15 +2956,23 @@ function KnowledgeView({
           } as cytoscape.Css.Node,
         },
         {
-          selector: 'node:selected',
+          selector: 'node.focused',
           style: {
             'border-color': '#f9e2af',
             'border-width': 3,
+            'background-color': '#f9e2af',
+          } as cytoscape.Css.Node,
+        },
+        {
+          selector: 'node.neighbor',
+          style: {
+            'border-color': '#f9e2af',
+            'border-width': 2,
           } as cytoscape.Css.Node,
         },
         {
           selector: 'node.dimmed',
-          style: { 'opacity': 0.3 } as cytoscape.Css.Node,
+          style: { 'opacity': 0.22 } as cytoscape.Css.Node,
         },
         {
           selector: 'edge',
@@ -2826,6 +2999,10 @@ function KnowledgeView({
             'width': 2.5,
           } as cytoscape.Css.Edge,
         },
+        {
+          selector: 'edge.dimmed',
+          style: { 'opacity': 0.15 } as cytoscape.Css.Edge,
+        },
       ],
       layout: {
         name: 'fcose',
@@ -2841,21 +3018,11 @@ function KnowledgeView({
 
     cy.on('tap', 'node', (evt) => {
       const id = evt.target.data('id') as string;
-      setSelectedId(id);
-    });
-
-    cy.on('mouseover', 'node', (evt) => {
-      const node = evt.target as cytoscape.NodeSingular;
-      cy.elements().not(node.connectedEdges()).not(node).addClass('dimmed');
-      node.connectedEdges().addClass('highlighted');
-    });
-
-    cy.on('mouseout', 'node', () => {
-      cy.elements().removeClass('dimmed highlighted');
+      setFocusId(prev => prev === id ? null : id);
     });
 
     cy.on('tap', (evt) => {
-      if (evt.target === cy) setSelectedId(null);
+      if (evt.target === cy) setFocusId(null);
     });
 
     cyRef.current = cy;
@@ -2876,12 +3043,27 @@ function KnowledgeView({
     } as cytoscape.LayoutOptions).run();
   }, [elements]);
 
+  // Spotlight: highlight focus + 1-hop, dim everything else. When `showGhosts`
+  // is off, nodes outside the neighbourhood are hidden rather than dimmed.
   useEffect(() => {
     const cy = cyRef.current;
-    if (!cy || !selectedId) return;
-    cy.$('node:selected').unselect();
-    cy.$id(selectedId).select();
-  }, [selectedId]);
+    if (!cy) return;
+    cy.elements().removeClass('focused neighbor dimmed highlighted');
+    cy.elements().style('display', 'element');
+    if (!focusId) return;
+    const focus = cy.$id(focusId);
+    if (focus.length === 0) return;
+    focus.addClass('focused');
+    const neighborhood = focus.closedNeighborhood();
+    neighborhood.edges().addClass('highlighted');
+    neighborhood.nodes().not(focus).addClass('neighbor');
+    const others = cy.elements().difference(neighborhood);
+    if (showGhosts) {
+      others.addClass('dimmed');
+    } else {
+      others.style('display', 'none');
+    }
+  }, [focusId, showGhosts, elements]);
 
   if (isLoading) return <PageLoading />;
   if (!concepts || concepts.length === 0) {
@@ -2903,10 +3085,12 @@ function KnowledgeView({
     },
   ];
 
+  const currentTier = KNOWLEDGE_LOD_TIERS[detailLevel - 1];
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-6 h-[calc(100vh-240px)]">
       <div className="flex flex-col min-h-0">
-        <div className="flex items-center justify-between gap-3 mb-2">
+        <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
           <div className="flex items-center gap-1.5">
             {chips.map(c => (
               <button
@@ -2924,7 +3108,52 @@ function KnowledgeView({
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-0.5 border border-border-primary/40 rounded p-0.5">
+              {(['graph', 'split'] as const).map(m => (
+                <button
+                  key={m}
+                  onClick={() => setViewMode(m)}
+                  className={clsx(
+                    'px-2.5 py-[3px] text-xs uppercase tracking-[0.08em] rounded transition-colors',
+                    viewMode === m
+                      ? 'bg-accent/10 text-accent'
+                      : 'text-text-muted hover:text-text-secondary',
+                  )}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+            {viewMode === 'graph' && focusId && (
+              <button
+                onClick={() => setShowGhosts(v => !v)}
+                className={clsx(
+                  'px-2.5 py-[3px] text-xs uppercase tracking-[0.08em] rounded border transition-colors',
+                  showGhosts
+                    ? 'border-border-primary/40 text-text-muted hover:text-text-secondary'
+                    : 'border-accent/40 text-accent bg-accent/10',
+                )}
+                title={showGhosts ? 'Hide non-neighbor nodes' : 'Show non-neighbor nodes (dimmed)'}
+              >
+                {showGhosts ? 'Spotlight' : 'Ghosts on'}
+              </button>
+            )}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono tracking-[0.14em] uppercase text-text-dim">Detail</span>
+              <input
+                type="range"
+                min={1}
+                max={4}
+                step={1}
+                value={detailLevel}
+                onChange={(e) => setDetailLevel(Number(e.target.value) as 1 | 2 | 3 | 4)}
+                className="accent-accent w-24"
+              />
+              <span className="text-[11px] font-mono text-text-muted tabular-nums min-w-[96px]">
+                {currentTier.label} · {visibleConcepts.length}/{filteredConcepts.length}
+              </span>
+            </div>
             <Button size="sm" variant="ghost" onClick={() => cyRef.current?.fit(undefined, 30)}>Fit</Button>
             <Button size="sm" variant="ghost"
               onClick={() => cyRef.current?.layout({ name: 'fcose', animate: true, animationDuration: 500 } as cytoscape.LayoutOptions).run()}
@@ -2933,21 +3162,86 @@ function KnowledgeView({
             </Button>
           </div>
         </div>
-        <div ref={containerRef} className="flex-1 border border-border-primary/40 rounded bg-bg-secondary min-h-0" />
+        <div className={clsx(
+          'flex-1 min-h-0 border border-border-primary/40 rounded bg-bg-secondary overflow-hidden',
+          viewMode === 'split' ? 'grid grid-cols-[260px_1fr]' : '',
+        )}>
+          {viewMode === 'split' && (
+            <ConceptOutline
+              concepts={visibleConcepts}
+              focusId={focusId}
+              onSelect={setFocusId}
+            />
+          )}
+          <div ref={containerRef} className={clsx('min-h-0', viewMode === 'split' && 'border-l border-border-primary/40')} />
+        </div>
       </div>
       <aside className="flex flex-col gap-4 overflow-y-auto min-h-0">
-        {selectedId && detail ? (
+        {focusId && detail ? (
           <ConceptInspector
             concept={detail}
             allLinks={links ?? []}
             allConcepts={concepts}
-            onSelect={setSelectedId}
-            onClose={() => setSelectedId(null)}
+            onSelect={setFocusId}
+            onClose={() => setFocusId(null)}
           />
         ) : (
-          <ConceptList concepts={filteredConcepts} selectedId={selectedId} onSelect={setSelectedId} />
+          <ConceptList concepts={visibleConcepts} selectedId={focusId} onSelect={setFocusId} />
         )}
       </aside>
+    </div>
+  );
+}
+
+/** Outline pane for split-view: concepts grouped by finding-count tier, each row
+ *  clickable to set the focus. Deliberately text-first — no icons, no decoration. */
+function ConceptOutline({
+  concepts, focusId, onSelect,
+}: {
+  concepts: ConceptWithStats[];
+  focusId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const groups = useMemo(() => {
+    const hubs: ConceptWithStats[] = [];
+    const frequent: ConceptWithStats[] = [];
+    const mentioned: ConceptWithStats[] = [];
+    for (const c of [...concepts].sort((a, b) => b.finding_count - a.finding_count)) {
+      if (c.finding_count >= 5) hubs.push(c);
+      else if (c.finding_count >= 2) frequent.push(c);
+      else mentioned.push(c);
+    }
+    return [
+      { key: 'hubs', label: 'Hubs · ≥5 findings', items: hubs },
+      { key: 'frequent', label: 'Frequent · 2–4', items: frequent },
+      { key: 'mentioned', label: 'Mentioned · 1', items: mentioned },
+    ];
+  }, [concepts]);
+
+  return (
+    <div className="overflow-y-auto text-sm">
+      {groups.map(g => g.items.length > 0 && (
+        <div key={g.key}>
+          <div className="px-3 pt-3 pb-1 text-[10px] font-mono tracking-[0.14em] uppercase text-text-dim">
+            {g.label}
+          </div>
+          {g.items.map(c => (
+            <button
+              key={c.id}
+              onClick={() => onSelect(c.id)}
+              className={clsx(
+                'w-full text-left px-3 py-[5px] flex items-center justify-between border-l-2 transition-colors',
+                focusId === c.id
+                  ? 'border-accent bg-accent/10 text-accent'
+                  : 'border-transparent text-text-secondary hover:bg-white/3 hover:text-text',
+              )}
+            >
+              <span className="truncate">{c.canonical_name}</span>
+              <span className="text-[11px] font-mono tabular-nums opacity-60 ml-2 shrink-0">{c.finding_count}</span>
+            </button>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }
@@ -3197,12 +3491,13 @@ function kindClass(kind: EventKind): string {
 }
 
 function EventsView({
-  steps, findings, threads, isRunning,
+  steps, findings, threads, isRunning, onNavigateToTelemetry,
 }: {
   steps: ResearchStep[];
   findings: ResearchFinding[];
   threads: ResearchThread[];
   isRunning: boolean;
+  onNavigateToTelemetry?: () => void;
 }) {
   const [filter, setFilter] = useState<'all' | EventKind>('all');
 
@@ -3297,6 +3592,18 @@ function EventsView({
         <div className="text-sm text-text-muted">
           Most recent first &middot; session-scoped
           {isRunning && <> &middot; <span className="text-accent">auto-updates</span></>}
+          {onNavigateToTelemetry && (
+            <>
+              {' '}&middot;{' '}
+              <button
+                onClick={onNavigateToTelemetry}
+                className="text-text-muted hover:text-accent underline decoration-dotted"
+                title="Filterable metadata view with p50/p95 job timings, failure reasons, stuck threads"
+              >
+                decision log / metrics ↗
+              </button>
+            </>
+          )}
         </div>
         <div className="flex items-center gap-1.5">
           {chips.map(c => (
@@ -3739,7 +4046,26 @@ export function ResearchQueryDetailPage() {
   const cancelJob = useCancelJob();
   const deleteQuery = useDeleteResearchQuery();
 
-  const [tab, setTab] = useState<'document' | 'knowledge' | 'process' | 'sources' | 'events' | 'config'>('document');
+  type Tab = 'document' | 'knowledge' | 'process' | 'sources' | 'events' | 'telemetry' | 'config';
+  const TAB_VALUES: readonly Tab[] = ['document','knowledge','process','sources','events','telemetry','config'];
+  // Honour `#tab=telemetry` etc. so cross-page links (Workers, EventsView) can
+  // deep-link into a specific tab. Listens for hashchange so in-page links that
+  // only mutate the hash also take effect without a full remount.
+  const tabFromHash = (): Tab | null => {
+    if (typeof window === 'undefined') return null;
+    const m = window.location.hash.match(/^#tab=([a-z]+)/);
+    const candidate = m?.[1] as Tab | undefined;
+    return candidate && TAB_VALUES.includes(candidate) ? candidate : null;
+  };
+  const [tab, setTab] = useState<Tab>(() => tabFromHash() ?? 'document');
+  useEffect(() => {
+    function onHashChange() {
+      const next = tabFromHash();
+      if (next) setTab(next);
+    }
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [pendingConceptName, setPendingConceptName] = useState<string | null>(null);
@@ -3875,6 +4201,12 @@ export function ResearchQueryDetailPage() {
           <div className="px-6 pb-0">
             <p className="text-sm text-text-muted line-clamp-3 mb-2">{session.seed_query_short || session.seed_query}</p>
 
+          <LeaderPanel
+            sessionId={id!}
+            intent={(session as unknown as { intent: string | null }).intent ?? null}
+            output_shape={(session as unknown as { output_shape: string | null }).output_shape ?? null}
+          />
+
           {/* Env warnings */}
           {envCheck && (envCheck.errors.length > 0 || envCheck.warnings.length > 0 || envCheck.jina_balance !== null) && (
             <div className="flex flex-col gap-1.5 mt-3">
@@ -3929,6 +4261,7 @@ export function ResearchQueryDetailPage() {
               { key: 'process' as const, label: 'Process', count: threadsData.length },
               { key: 'sources' as const, label: 'Sources', count: sourcesTotal },
               { key: 'events' as const, label: 'Events', count: undefined },
+              { key: 'telemetry' as const, label: 'Telemetry', count: undefined },
               { key: 'config' as const, label: 'Config', count: undefined },
             ]).map(t => (
               <button key={t.key} onClick={() => setTab(t.key)}
@@ -4017,7 +4350,7 @@ export function ResearchQueryDetailPage() {
             />
           )}
           {tab === 'sources' && (
-            <SourcesView sessionId={id!} />
+            <SourcesView sessionId={id!} onNavigateToTelemetry={() => setTab('telemetry')} />
           )}
           {tab === 'events' && (
             <EventsView
@@ -4025,7 +4358,11 @@ export function ResearchQueryDetailPage() {
               findings={findingsData}
               threads={threadsData}
               isRunning={isRunning}
+              onNavigateToTelemetry={() => setTab('telemetry')}
             />
+          )}
+          {tab === 'telemetry' && (
+            <TelemetryView sessionId={id!} onNavigateToThread={navigateToLive} />
           )}
           {tab === 'config' && (
             <SessionConfigView

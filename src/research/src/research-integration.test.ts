@@ -165,7 +165,7 @@ describe('execution loop resilience', () => {
     await engine.runIterations(session.id);
 
     const updated = sessions.getSession(sqlite, session.id);
-    expect(updated?.status).toBe('paused');
+    expect(updated?.status).toBe('halted');
   });
 
   test('garbage query: handles gracefully, no infinite loop', async () => {

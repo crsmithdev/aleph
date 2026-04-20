@@ -264,6 +264,10 @@ export function applyResearchDDL(sqlite: Sqlite): void {
   `);
 
   // Migrations
+  // Rename pre-refactor column: prompt → seed_query. Old dev/prod DBs predate
+  // the rename; new DBs created by CREATE TABLE above already have seed_query,
+  // so this only fires on legacy DBs.
+  try { sqlite.exec(`ALTER TABLE research_queries RENAME COLUMN prompt TO seed_query`); } catch { /* already renamed or column absent */ }
   try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN short_query TEXT`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN seed_query_short TEXT`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN seed_query_super_short TEXT`); } catch { /* exists */ }
@@ -278,9 +282,50 @@ export function applyResearchDDL(sqlite: Sqlite): void {
   try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN document TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_jobs ADD COLUMN thread_id TEXT`); } catch { /* exists */ }
   try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_rj_thread ON research_jobs(thread_id, status)`); } catch { /* exists */ }
+  // Enforce: at most one active job per thread. Belt-and-suspenders against the
+  // race where checkQueuedThreads on two workers both createThreadJobIfNone in
+  // the window after resetOrphanedActiveThreads flipped a thread back to queued.
+  // If existing rows violate the invariant, the index creation fails silently —
+  // in that case, cleanup_duplicate_active_thread_jobs runs first.
+  try {
+    sqlite.exec(`
+      DELETE FROM research_jobs
+      WHERE id IN (
+        SELECT id FROM (
+          SELECT id, ROW_NUMBER() OVER (PARTITION BY thread_id ORDER BY created_at ASC) AS rn
+          FROM research_jobs
+          WHERE thread_id IS NOT NULL
+          AND status IN ('pending', 'claimed', 'running')
+        ) WHERE rn > 1
+      )
+    `);
+  } catch { /* ignore */ }
+  try {
+    sqlite.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_rj_thread_active
+      ON research_jobs(thread_id)
+      WHERE thread_id IS NOT NULL AND status IN ('pending', 'claimed', 'running')
+    `);
+  } catch { /* exists or conflict */ }
   try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN retry_after TEXT`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN seed_similarity REAL`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_steps ADD COLUMN metadata TEXT`); } catch { /* exists */ }
+  // Active-leader steering: user-supplied intent + output shape, plus applied_at on plan
+  // mods so boost/deprioritize priority-deltas don't re-apply every engine loop.
+  try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN intent TEXT`); } catch { /* exists */ }
+  try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN output_shape TEXT`); } catch { /* exists */ }
+  try { sqlite.exec(`ALTER TABLE research_plan_modifications ADD COLUMN applied_at TEXT`); } catch { /* exists */ }
+
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS research_steering_notes (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
+      text TEXT NOT NULL,
+      applied_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_rsn_session ON research_steering_notes(session_id, created_at);
+  `);
 
   // Backfill cost_usd for steps stored before pricing was configured (idempotent — only touches cost_usd=0 rows)
   sqlite.exec(`

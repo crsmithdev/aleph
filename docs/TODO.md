@@ -46,3 +46,18 @@ In the research events log:
 - I still see occasional "formulate queries", what is writing / serving that?
 - I still see 'formulate queries', not 'formulate', displayed as an event type periodically
 - Make better use of the right side / more space on an ultrawide monitor.  move the model and cost into to the right side of the row (parts like "deepseek-chat-v3 469 $0.00001"), and move any numbers  / type-specific data in front of any question text, coloring appropriately.  
+
+# Devserver
+
+- Update how things are logged and displayed in the devserver.
+- Move towards structured logging, for easier use later.  Make sure there's always a file being appended to that has rich data in an easily ingestible form.
+- For the devserver console output, use structured logging but make the messages more like those produced by vite.  Use a simple output format optimized for reading quickly on-screen, and remove as much redundant / repetitive text as possible.
+- Unite the multiple formats found in output as of now:  The worker output, the api output, Vite messages, and anything else.  A good standard format for what's logged to console might be: <compact timestamp> [<event type / source> - <event data>.  So for example, api urls would look like this when logged:  07:31:00 [api]0 GET <URL> -> <response code> (<response time>), a worker might be <compact timestamp> [<event type / source> @ <worker id>] - <event data>, etc.
+- while there, look at some of the long strings of repeated calls made to the API, e.g. "07:27:50 GET /api/research/queries/pure-grove-river/concepts → 200 (1ms)" repeated dozens of times in a row
+
+# Goals
+
+-  Do a /design-audit and design-type review on every page in 'Life'.
+-  
+-  
+-  -  add support for attaching goals to other goals, similar to attaching todos, habits, etc.          

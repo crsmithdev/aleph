@@ -16,6 +16,8 @@ import {
   useJobStats,
   useResearchStats,
   useResearchSummary,
+  useGlobalJobMetrics,
+  useGlobalSourceHealth,
   useCrossSessionStream,
   useAddWorker,
   useRemoveWorker,
@@ -260,12 +262,21 @@ function WorkerCard({
 
       {currentJob ? (
         <div className="bg-bg-primary border border-border-primary rounded p-3 space-y-1">
-          <Link
-            to={`/research/${currentJob.session_id}`}
-            className="text-sm font-medium text-accent hover:underline truncate block"
-          >
-            {queryTitle ?? currentJob.session_id.slice(0, 12)}
-          </Link>
+          <div className="flex items-center justify-between gap-2">
+            <Link
+              to={`/research/${currentJob.session_id}`}
+              className="text-sm font-medium text-accent hover:underline truncate block min-w-0"
+            >
+              {queryTitle ?? currentJob.session_id.slice(0, 12)}
+            </Link>
+            <Link
+              to={`/research/${currentJob.session_id}#tab=telemetry`}
+              title="Open query telemetry"
+              className="text-xs text-text-muted hover:text-accent shrink-0"
+            >
+              telemetry ↗
+            </Link>
+          </div>
           <div className="flex items-center gap-3 flex-wrap text-sm text-text-muted">
             <StatusBadge status={currentJob.status} />
             {currentJob.thread_id
@@ -446,14 +457,24 @@ function InFlightJobsTable({ jobs, queryMap, onCancel, cancelPending }: {
       label: '',
       shrink: true,
       render: (row) => (
-        <button
-          onClick={(e) => { e.stopPropagation(); onCancel(row.id); }}
-          disabled={cancelPending}
-          title="Cancel job"
-          className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-red-400 hover:bg-red-900/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          ✕
-        </button>
+        <div className="flex items-center gap-1">
+          <Link
+            to={`/research/${row.session_id}#tab=telemetry`}
+            onClick={(e) => e.stopPropagation()}
+            title="Open query telemetry"
+            className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-accent hover:bg-accent/10 transition-colors"
+          >
+            ↗
+          </Link>
+          <button
+            onClick={(e) => { e.stopPropagation(); onCancel(row.id); }}
+            disabled={cancelPending}
+            title="Cancel job"
+            className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-red-400 hover:bg-red-900/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            ✕
+          </button>
+        </div>
       ),
     },
   ];
@@ -729,6 +750,8 @@ export function ResearchWorkersPage() {
   const { data: stats } = useJobStats();
   const { data: throughput } = useResearchStats('7d', 'day');
   const { data: summary } = useResearchSummary();
+  const { data: jobMetrics } = useGlobalJobMetrics();
+  const { data: sourceHealth } = useGlobalSourceHealth();
   const { events: liveEvents } = useCrossSessionStream();
   const addWorker = useAddWorker();
   const removeWorker = useRemoveWorker();
@@ -836,17 +859,35 @@ export function ResearchWorkersPage() {
         />
       </div>
 
-      {/* Job stats */}
+      {/* Job stats — upgraded to percentile view; per-session breakdowns live in each query's Telemetry tab */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
         <StatCard label="Workers" value={fmtNumber(runningWorkers.length)} accent="success" />
         <StatCard label="Running" value={fmtNumber(runningJobs.length)} accent="default" />
         <StatCard label="Pending" value={fmtNumber(pendingJobs.length)} accent={pendingJobs.length > 0 ? 'warning' : undefined} />
-        <StatCard label="Total Jobs" value={fmtNumber(stats?.total ?? 0)} />
-        <StatCard label="Avg Duration" value={stats?.avgDurationMs ? fmtMs(stats.avgDurationMs) : '—'} />
+        <StatCard
+          label="Queue Wait p50"
+          value={jobMetrics?.queue_wait_ms?.p50 != null ? fmtMs(jobMetrics.queue_wait_ms.p50) : '—'}
+          detailContent={jobMetrics?.queue_wait_ms ? (
+            <><span className="text-text-muted">p95 </span><span className="text-text-secondary">{fmtMs(jobMetrics.queue_wait_ms.p95)}</span></>
+          ) : undefined}
+        />
+        <StatCard
+          label="Run p50"
+          value={jobMetrics?.duration_ms?.p50 != null ? fmtMs(jobMetrics.duration_ms.p50) : '—'}
+          detailContent={jobMetrics?.duration_ms ? (
+            <><span className="text-text-muted">p95 </span><span className="text-text-secondary">{fmtMs(jobMetrics.duration_ms.p95)}</span></>
+          ) : undefined}
+        />
         <StatCard
           label="Success Rate"
           value={successRate != null ? fmtPct(successRate) : '—'}
           accent={successRate != null ? (successRate >= 90 ? 'success' : successRate >= 70 ? 'warning' : 'error') : undefined}
+          detailContent={sourceHealth && sourceHealth.total > 0 ? (
+            <><span className="text-text-muted">sources fail </span>
+              <span className={clsx('font-medium', sourceHealth.failure_rate > 0.25 ? 'text-danger' : sourceHealth.failure_rate > 0.1 ? 'text-warning' : 'text-text-secondary')}>
+                {(sourceHealth.failure_rate * 100).toFixed(0)}%
+              </span></>
+          ) : undefined}
         />
       </div>
 

@@ -139,7 +139,7 @@ describe('isCovered() boundary conditions', () => {
 // ========== Depth enforcement ==========
 
 describe('depth enforcement', () => {
-  test('follow-up threads at exactly max_depth are deferred, not queued', async () => {
+  test('follow-up children at exactly max_depth are skipped, not created as deferred inventory', async () => {
     const db = createTestDb();
     const config: Partial<SessionConfig> = {
       ...NO_DELAY,
@@ -152,18 +152,17 @@ describe('depth enforcement', () => {
     await engine.startSession('Test', 'depth test query', config);
     const session = queries.listQueries(db)[0];
 
-    // Seed thread: depth=0, max_depth=1
     const seedThread = threads.listThreads(db, session.id)[0];
     expect(seedThread.depth).toBe(0);
     expect(seedThread.max_depth).toBe(1);
 
     await engine.runIterations(session.id);
 
-    // All child threads should be 'deferred' (depth 1 >= max_depth 1), none 'queued'
+    // Engine skips follow-up creation entirely when childDepth >= max_depth
+    // (prior behavior created them as 'deferred' — see commit 39def68).
     const allThreads = threads.listThreads(db, session.id);
     const children = allThreads.filter(t => t.origin === 'follow_up');
-    expect(children.length).toBeGreaterThan(0); // children were created
-    expect(children.every(t => t.status === 'deferred')).toBe(true);
+    expect(children.length).toBe(0);
     expect(allThreads.filter(t => t.status === 'queued').length).toBe(0);
   });
 
@@ -276,7 +275,7 @@ describe('budget enforcement in engine', () => {
     `).run('pre-step', session.id, session.id);
 
     await engine.runIterations(session.id);
-    expect(queries.getQuery(db, session.id)!.status).toBe('paused');
+    expect(queries.getQuery(db, session.id)!.status).toBe('halted');
   });
 
   test('total budget exceeded: session paused', async () => {
@@ -300,7 +299,7 @@ describe('budget enforcement in engine', () => {
     `).run('pre-step', session.id, session.id);
 
     await engine.runIterations(session.id);
-    expect(queries.getQuery(db, session.id)!.status).toBe('paused');
+    expect(queries.getQuery(db, session.id)!.status).toBe('halted');
   });
 });
 
@@ -431,6 +430,119 @@ describe('concurrent slot safety', () => {
     expect(claimed1).not.toBeNull();
     expect(claimed2).not.toBeNull();
     expect(claimed1!.id).not.toBe(claimed2!.id);
+  });
+
+  test('tryClaimThread: only the first caller claims; later callers get null', () => {
+    const db = createTestDb();
+    const sessId = queries.createQuery(db, 'Test', 'q').id;
+    const t = threads.createThread(db, { session_id: sessId, query: 'q', origin: 'seed', priority: 0.9, depth: 0, max_depth: 5 });
+
+    const first = threads.tryClaimThread(db, t.id);
+    const second = threads.tryClaimThread(db, t.id);
+
+    expect(first).not.toBeNull();
+    expect(first!.status).toBe('active');
+    expect(second).toBeNull();
+  });
+
+  test('tryClaimThread: returns null when thread is already active (prevents concurrent runIteration)', () => {
+    const db = createTestDb();
+    const sessId = queries.createQuery(db, 'Test', 'q').id;
+    const t = threads.createThread(db, { session_id: sessId, query: 'q', origin: 'seed', priority: 0.9, depth: 0, max_depth: 5 });
+
+    // Simulate runIterations claiming the thread first.
+    threads.claimNextThread(db, sessId);
+
+    // Now a thread-level job invokes runThread → tryClaimThread should bail.
+    const blocked = threads.tryClaimThread(db, t.id);
+    expect(blocked).toBeNull();
+  });
+
+  test('resetOrphanedActiveThreads: does NOT reset threads claimed by an active session-level job', async () => {
+    // REGRESSION: session-level runIterations claims threads via claimNextThread
+    // WITHOUT creating a per-thread job. Before the fix, resetOrphanedActiveThreads
+    // saw "active thread, no job.thread_id match" and flipped it back to queued.
+    // checkQueuedThreads then created a redundant thread-level job → another worker
+    // ran runIteration concurrently → duplicate searches + duplicate findings.
+    const jobs = await import('./services/jobs');
+    const db = createTestDb();
+    const sessId = queries.createQuery(db, 'Test', 'q').id;
+    const t = threads.createThread(db, { session_id: sessId, query: 'q', origin: 'seed', priority: 0.9, depth: 0, max_depth: 5 });
+
+    // Simulate the session-level burst job being claimed and running.
+    const sessJob = jobs.createJob(db, { session_id: sessId, mode: 'burst' });
+    jobs.claimJob(db, sessJob.id, 'worker-1');
+    jobs.markRunning(db, sessJob.id, 'worker-1');
+
+    // runIterations' slot claims the thread internally.
+    threads.claimNextThread(db, sessId);
+    expect(threads.getThread(db, t.id)!.status).toBe('active');
+
+    // Another worker's cleanup pass MUST NOT reset this thread.
+    const resetCount = threads.resetOrphanedActiveThreads(db);
+    expect(resetCount).toBe(0);
+    expect(threads.getThread(db, t.id)!.status).toBe('active');
+  });
+
+  test('resetOrphanedActiveThreads: still resets threads with no job and no session-level job', () => {
+    const db = createTestDb();
+    const sessId = queries.createQuery(db, 'Test', 'q').id;
+    const t = threads.createThread(db, { session_id: sessId, query: 'q', origin: 'seed' });
+
+    // Manually flip to active with no job backing it (dead-worker simulation).
+    threads.claimNextThread(db, sessId);
+    expect(threads.getThread(db, t.id)!.status).toBe('active');
+
+    // No session-level job, no thread-level job → truly orphaned → reset.
+    const resetCount = threads.resetOrphanedActiveThreads(db);
+    expect(resetCount).toBe(1);
+    expect(threads.getThread(db, t.id)!.status).toBe('queued');
+  });
+
+  test('getQueuedThreadsForNewJobs: returns [] while a session-level job is active', async () => {
+    // REGRESSION: while runIterations is running the session internally, creating
+    // thread-level jobs via checkQueuedThreads causes two workers to race on the
+    // same thread. The fix: skip queued-thread job creation for sessions with an
+    // active session-level job.
+    const jobs = await import('./services/jobs');
+    const db = createTestDb();
+    const sessId = queries.createQuery(db, 'Test', 'q').id;
+    threads.createThread(db, { session_id: sessId, query: 'q', origin: 'seed' });
+
+    const sessJob = jobs.createJob(db, { session_id: sessId, mode: 'burst' });
+    jobs.claimJob(db, sessJob.id, 'worker-1');
+    jobs.markRunning(db, sessJob.id, 'worker-1');
+
+    expect(jobs.hasActiveSessionLevelJob(db, sessId)).toBe(true);
+    expect(jobs.getQueuedThreadsForNewJobs(db, sessId, 10)).toEqual([]);
+
+    // Once the session-level job completes, thread-level jobs may be created.
+    jobs.completeJob(db, sessJob.id, 'worker-1');
+    expect(jobs.hasActiveSessionLevelJob(db, sessId)).toBe(false);
+    expect(jobs.getQueuedThreadsForNewJobs(db, sessId, 10).length).toBe(1);
+  });
+
+  test('unique-index: at most one active thread-level job per thread', async () => {
+    const jobs = await import('./services/jobs');
+    const db = createTestDb();
+    const sessId = queries.createQuery(db, 'Test', 'q').id;
+    const t = threads.createThread(db, { session_id: sessId, query: 'q', origin: 'seed' });
+
+    const j1 = jobs.createThreadJobIfNone(db, { session_id: sessId, thread_id: t.id });
+    const j2 = jobs.createThreadJobIfNone(db, { session_id: sessId, thread_id: t.id });
+
+    expect(j1).not.toBeNull();
+    expect(j2).toBeNull();
+
+    // Direct INSERT bypassing the helper must also fail via the unique index.
+    let threwUnique = false;
+    try {
+      jobs.createJob(db, { session_id: sessId, thread_id: t.id, mode: 'burst' });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('UNIQUE') || msg.includes('constraint')) threwUnique = true;
+    }
+    expect(threwUnique).toBe(true);
   });
 });
 

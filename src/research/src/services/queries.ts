@@ -1,6 +1,6 @@
 import type { Sqlite } from '@construct/data';
 import { generateId } from './id.js';
-import type { ResearchQuery, SessionConfig } from '../types.js';
+import type { ResearchQuery, SessionConfig, OutputShape } from '../types.js';
 import { getDefaults } from './defaults.js';
 
 function rowToQuery(sqlite: Sqlite, row: Record<string, unknown>): ResearchQuery {
@@ -29,15 +29,22 @@ export function createQuery(
   config?: Partial<SessionConfig>,
   seedQueryShort?: string | null,
   seedQuerySuperShort?: string | null,
+  intent?: string | null,
+  outputShape?: OutputShape | null,
 ): ResearchQuery {
   const id = generateId();
   const mergedConfig = { ...getDefaults(sqlite), ...config };
   const now = new Date().toISOString();
 
   sqlite.prepare(`
-    INSERT INTO research_queries (id, title, seed_query, seed_query_short, seed_query_super_short, status, config, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?)
-  `).run(id, title, seedQuery, seedQueryShort ?? null, seedQuerySuperShort ?? null, JSON.stringify(mergedConfig), now, now);
+    INSERT INTO research_queries (id, title, seed_query, seed_query_short, seed_query_super_short, status, config, intent, output_shape, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
+  `).run(
+    id, title, seedQuery, seedQueryShort ?? null, seedQuerySuperShort ?? null,
+    JSON.stringify(mergedConfig),
+    intent ?? null, outputShape ?? null,
+    now, now,
+  );
 
   return getQuery(sqlite, id)!;
 }
@@ -149,7 +156,7 @@ export function listQueriesWithStats(sqlite: Sqlite, status?: string): ResearchQ
 export function updateQuery(
   sqlite: Sqlite,
   id: string,
-  updates: Partial<Pick<ResearchQuery, 'status' | 'summary' | 'document' | 'user_notes' | 'title' | 'seed_query_short' | 'seed_query_super_short'>> & { config?: Partial<SessionConfig> }
+  updates: Partial<Pick<ResearchQuery, 'status' | 'summary' | 'document' | 'user_notes' | 'title' | 'seed_query_short' | 'seed_query_super_short' | 'intent' | 'output_shape'>> & { config?: Partial<SessionConfig> }
 ): ResearchQuery | null {
   const fields: string[] = [];
   const values: unknown[] = [];
@@ -161,6 +168,8 @@ export function updateQuery(
   if (updates.title !== undefined) { fields.push('title = ?'); values.push(updates.title); }
   if (updates.seed_query_short !== undefined) { fields.push('seed_query_short = ?'); values.push(updates.seed_query_short); }
   if (updates.seed_query_super_short !== undefined) { fields.push('seed_query_super_short = ?'); values.push(updates.seed_query_super_short); }
+  if (updates.intent !== undefined) { fields.push('intent = ?'); values.push(updates.intent); }
+  if (updates.output_shape !== undefined) { fields.push('output_shape = ?'); values.push(updates.output_shape); }
   if (updates.config !== undefined) {
     const existing = getQuery(sqlite, id);
     if (existing) {
@@ -359,6 +368,7 @@ export function deleteQuery(sqlite: Sqlite, queryId: string): boolean {
   sqlite.prepare('DELETE FROM research_proposed_monitors WHERE session_id = ?').run(queryId);
   sqlite.prepare('DELETE FROM research_plan_modifications WHERE plan_id IN (SELECT id FROM research_plans WHERE session_id = ?)').run(queryId);
   sqlite.prepare('DELETE FROM research_plans WHERE session_id = ?').run(queryId);
+  sqlite.prepare('DELETE FROM research_steering_notes WHERE session_id = ?').run(queryId);
   sqlite.prepare('DELETE FROM research_steps WHERE session_id = ?').run(queryId);
   sqlite.prepare('DELETE FROM research_findings WHERE session_id = ?').run(queryId);
   sqlite.prepare('DELETE FROM research_threads WHERE session_id = ?').run(queryId);
