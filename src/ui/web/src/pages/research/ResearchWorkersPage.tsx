@@ -761,7 +761,7 @@ export function ResearchWorkersPage() {
   const stopAll = useStopAllResearch();
 
   const queryMap: Record<string, string> = Object.fromEntries(
-    queries.map((q) => [q.id, q.title || q.seed_query])
+    queries.map((q) => [q.id, q.title || q.prompt])
   );
 
   const runningJobs = allJobs.filter(j => j.status === 'running' || j.status === 'claimed');

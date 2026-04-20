@@ -28,6 +28,12 @@ import {
   // Metrics imports
   computeJobMetrics, computeSourceHealth, computeThreadStateMetrics,
   computeJobTrace, computeSessionCostTrajectory,
+  type PromptHints,
+  registerBuiltinHooks,
+  runHooks,
+  firstResult,
+  // Agent-hook records
+  listIterationChecks, listPostMortems,
 } from '@construct/research';
 
 function sanitizeQuery(q: string): string {
@@ -53,7 +59,7 @@ function summarizeQuery(query: string): string {
   return words.length > 8 ? words.slice(0, 8).join(' ') : t;
 }
 
-function heuristicSeedQueryShort(query: string): string {
+function heuristicPromptShort(query: string): string {
   const t = query.trim();
   // First sentence ending with punctuation
   const sentEnd = t.search(/[?!.]/);
@@ -62,7 +68,7 @@ function heuristicSeedQueryShort(query: string): string {
   return t.length <= 120 ? t : t.slice(0, 120) + '…';
 }
 
-function heuristicSeedQuerySuperShort(query: string): string {
+function heuristicPromptSuperShort(query: string): string {
   return summarizeQuery(query);
 }
 
@@ -73,7 +79,7 @@ function placeholderShortQuery(query: string): string {
   return t.slice(0, MAX) + '…';
 }
 
-async function generateSeedQueryShort(query: string): Promise<string | null> {
+async function generatePromptShort(query: string): Promise<string | null> {
   const openrouterKey = process.env.OPENROUTER_API_KEY;
   if (!openrouterKey) return null;
   try {
@@ -117,9 +123,9 @@ async function generateShortQuery(query: string): Promise<string | null> {
   return null;
 }
 
-async function generateQueryTitle(seedQuery: string): Promise<string> {
+async function generateQueryTitle(prompt: string): Promise<string> {
   const openrouterKey = process.env.OPENROUTER_API_KEY;
-  const heuristic = summarizeQuery(seedQuery);
+  const heuristic = summarizeQuery(prompt);
 
   if (!openrouterKey) return heuristic;
 
@@ -129,7 +135,7 @@ async function generateQueryTitle(seedQuery: string): Promise<string> {
       headers: { 'Authorization': `Bearer ${openrouterKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'deepseek/deepseek-chat',
-        messages: [{ role: 'user', content: `Give a short title (5-8 words) for this research query. Return ONLY the title, no quotes, no punctuation at end:\n\n${seedQuery}` }],
+        messages: [{ role: 'user', content: `Give a short title (5-8 words) for this research query. Return ONLY the title, no quotes, no punctuation at end:\n\n${prompt}` }],
         max_tokens: 30,
       }),
     });
@@ -146,6 +152,10 @@ async function generateQueryTitle(seedQuery: string): Promise<string> {
 export const researchRoutes: FastifyPluginAsync = async (app) => {
   // Ensure research tables exist
   applyResearchDDL(app.sqlite);
+
+  // Register agent hooks (pre_dispatch, iteration_check, post_mortem).
+  // Idempotent — no-op if already registered or if no API key is present.
+  registerBuiltinHooks();
 
   // === Reset (dev only — clears all research data) ===
   app.delete('/reset', async () => {
@@ -191,29 +201,53 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     return query;
   });
 
-  app.post<{ Body: { title?: string; seed_query: string; config?: Record<string, unknown>; intent?: string | null; output_shape?: string | null } }>(
+  app.post<{ Body: { title?: string; prompt: string; hints?: PromptHints; config?: Record<string, unknown>; intent?: string | null; output_shape?: string | null } }>(
     '/queries',
     async (req, reply) => {
-      const { seed_query: rawQuery, title, config, intent, output_shape } = req.body;
-      const seed_query = sanitizeQuery(rawQuery ?? '');
-      if (!seed_query) return reply.status(400).send({ error: 'seed_query is required' });
-      const seed_query_short = heuristicSeedQueryShort(seed_query);
-      const seed_query_super_short = heuristicSeedQuerySuperShort(seed_query);
+      const { prompt: rawPrompt, hints, title, config, intent, output_shape } = req.body;
+      const prompt = sanitizeQuery(rawPrompt ?? '');
+      if (!prompt) return reply.status(400).send({ error: 'prompt is required' });
+      const prompt_short = heuristicPromptShort(prompt);
+      const prompt_super_short = heuristicPromptSuperShort(prompt);
       const query = createQuery(
         app.sqlite,
-        title ?? summarizeQuery(seed_query),
-        seed_query,
+        title ?? summarizeQuery(prompt),
+        prompt,
         config as Partial<typeof DEFAULT_SESSION_CONFIG>,
-        seed_query_short,
-        seed_query_super_short,
+        prompt_short,
+        prompt_super_short,
+        hints ?? {},
         intent ? String(intent).trim().slice(0, 2000) || null : null,
-        output_shape as Parameters<typeof createQuery>[7],
+        output_shape as Parameters<typeof createQuery>[8],
       );
+
+      // pre_dispatch hook: give the interpreter a chance to plan before threads
+      // spawn. Best-effort — failures are logged but do not block query creation
+      // (handlers are captured by the registry and surfaced as status='error').
+      try {
+        const invocations = await runHooks('pre_dispatch', {
+          query_id: query.id,
+          prompt,
+          hints: hints ?? {},
+        });
+        const result = firstResult(invocations);
+        if (result?.interpretation) {
+          updateQuery(app.sqlite, query.id, { interpretation: result.interpretation });
+        }
+        for (const inv of invocations) {
+          if (inv.status === 'error' || inv.status === 'timeout') {
+            app.log.warn({ hook: 'pre_dispatch', label: inv.label, status: inv.status, error: inv.error }, 'pre_dispatch hook failed');
+          }
+        }
+      } catch (err) {
+        app.log.warn({ err }, 'pre_dispatch dispatch threw unexpectedly');
+      }
+
       // Create seed thread
       const seedThread = createThread(app.sqlite, {
         session_id: query.id,
-        query: seed_query,
-        short_query: placeholderShortQuery(seed_query),
+        query: prompt,
+        short_query: placeholderShortQuery(prompt),
         origin: 'seed',
         priority: 1.0,
         depth: 0,
@@ -221,25 +255,27 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
         status: query.config.max_thread_depth > 0 ? 'queued' : 'deferred',
       });
       // Fire async LLM summarization for the seed thread
-      generateShortQuery(seed_query).then(summary => {
+      generateShortQuery(prompt).then(summary => {
         if (summary) updateThread(app.sqlite, seedThread.id, { short_query: summary });
       }).catch(() => { /* ignore */ });
       // Fire async LLM title generation (don't await — return immediately)
-      generateQueryTitle(seed_query).then(llmTitle => {
+      generateQueryTitle(prompt).then(llmTitle => {
         if (llmTitle !== query.title) {
           updateQuery(app.sqlite, query.id, { title: llmTitle });
         }
       }).catch(() => { /* ignore */ });
       // Fire async LLM short/super-short generation for the query itself
-      generateSeedQueryShort(seed_query).then(short => {
-        if (short) updateQuery(app.sqlite, query.id, { seed_query_short: short });
+      generatePromptShort(prompt).then(short => {
+        if (short) updateQuery(app.sqlite, query.id, { prompt_short: short });
       }).catch(() => { /* ignore */ });
-      generateShortQuery(seed_query).then(superShort => {
-        if (superShort) updateQuery(app.sqlite, query.id, { seed_query_super_short: superShort });
+      generateShortQuery(prompt).then(superShort => {
+        if (superShort) updateQuery(app.sqlite, query.id, { prompt_super_short: superShort });
       }).catch(() => { /* ignore */ });
       // Auto-create a burst job so workers pick it up immediately
       createJob(app.sqlite, { session_id: query.id, mode: 'burst' });
-      return reply.status(201).send(query);
+      // Re-fetch so the response reflects any interpretation persisted by the hook.
+      const finalQuery = getQuery(app.sqlite, query.id) ?? query;
+      return reply.status(201).send(finalQuery);
     }
   );
 
@@ -269,7 +305,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       const query = getQuery(app.sqlite, id);
       if (!query) return reply.status(404).send({ error: 'Query not found' });
 
-      const slug = (query.title ?? query.seed_query).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase().slice(0, 60);
+      const slug = (query.title ?? query.prompt).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase().slice(0, 60);
       const filename = `${slug}-${id.slice(0, 8)}`;
 
       // Use pre-generated document if available
@@ -285,7 +321,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       const lines: string[] = [];
       lines.push(`# ${query.title}`);
       lines.push('');
-      lines.push(`*${query.seed_query}*`);
+      lines.push(`*${query.prompt}*`);
       lines.push('');
       if (findings.length === 0) {
         lines.push('*No findings yet.*');
@@ -323,7 +359,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       const query = getQuery(app.sqlite, id);
       if (!query) return reply.status(404).send({ error: 'Query not found' });
 
-      const slug = (query.title ?? query.seed_query).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase().slice(0, 60);
+      const slug = (query.title ?? query.prompt).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase().slice(0, 60);
       const suffix = thread_id ? `-thread-${thread_id.slice(0, 8)}` : '';
       const filename = `${slug}-log${suffix}-${id.slice(0, 8)}`;
 
@@ -418,7 +454,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       lines.push('');
       lines.push(`**Session:** \`${id}\``);
       lines.push(`**Status:** ${query.status}`);
-      lines.push(`**Seed query:** ${query.seed_query}`);
+      lines.push(`**Prompt:** ${query.prompt}`);
       lines.push(`**Generated:** ${new Date().toISOString()}`);
       lines.push('');
       lines.push(`**Counts:** ${allThreads.length} threads · ${findings.length} findings · ${steps.length} steps · ${jobs.length} jobs · ${sources.length} sources`);
@@ -915,7 +951,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
 
       const provider = new OpenRouterProvider({ apiKey: openrouterKey, models: allModels });
 
-      const prompt = `You are a skilled encyclopedia editor. Using the research findings below as source material, write a comprehensive, well-structured article about: "${query.seed_query}"
+      const prompt = `You are a skilled encyclopedia editor. Using the research findings below as source material, write a comprehensive, well-structured article about: "${query.prompt}"
 
 Write it like a Wikipedia article:
 - Start with a concise lead section (2-3 paragraphs) that summarizes the entire topic
@@ -1417,7 +1453,7 @@ Write the full article in markdown.`;
         }
 
         const newSessions = app.sqlite.prepare(
-          `SELECT id, title, seed_query, status, updated_at FROM research_queries WHERE updated_at > ? ORDER BY updated_at LIMIT 100`
+          `SELECT id, title, prompt, status, updated_at FROM research_queries WHERE updated_at > ? ORDER BY updated_at LIMIT 100`
         ).all(sessionCursor) as Record<string, unknown>[];
         for (const row of newSessions) {
           send('session', row);
@@ -1533,6 +1569,24 @@ Write the full article in markdown.`;
     async (req, reply) => {
       if (!getQuery(app.sqlite, req.params.id)) return reply.status(404).send({ error: 'Query not found' });
       return computeSessionCostTrajectory(app.sqlite, req.params.id);
+    }
+  );
+
+  // === Agent hooks: iteration checks (mid-run drift detection) ===
+  app.get<{ Params: { id: string } }>(
+    '/queries/:id/iteration-checks',
+    async (req, reply) => {
+      if (!getQuery(app.sqlite, req.params.id)) return reply.status(404).send({ error: 'Query not found' });
+      return listIterationChecks(app.sqlite, req.params.id);
+    }
+  );
+
+  // === Agent hooks: post-mortems (completion reviews) ===
+  app.get<{ Params: { id: string } }>(
+    '/queries/:id/post-mortems',
+    async (req, reply) => {
+      if (!getQuery(app.sqlite, req.params.id)) return reply.status(404).send({ error: 'Query not found' });
+      return listPostMortems(app.sqlite, req.params.id);
     }
   );
 

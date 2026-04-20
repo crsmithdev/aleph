@@ -34,7 +34,11 @@ export function applyResearchDDL(sqlite: Sqlite): void {
     CREATE TABLE IF NOT EXISTS research_queries (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
-      seed_query TEXT NOT NULL,
+      prompt TEXT NOT NULL,
+      prompt_short TEXT,
+      prompt_super_short TEXT,
+      prompt_hints TEXT NOT NULL DEFAULT '{}',
+      interpretation TEXT,
       status TEXT NOT NULL DEFAULT 'active',
       config TEXT NOT NULL DEFAULT '{}',
       summary TEXT NOT NULL DEFAULT '',
@@ -180,6 +184,34 @@ export function applyResearchDDL(sqlite: Sqlite): void {
     );
     CREATE INDEX IF NOT EXISTS idx_rpm_session ON research_proposed_monitors(session_id);
 
+    CREATE TABLE IF NOT EXISTS research_iteration_checks (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
+      job_id TEXT,
+      iterations_completed INTEGER NOT NULL,
+      verdict TEXT NOT NULL,
+      notes TEXT NOT NULL DEFAULT '',
+      correction TEXT,
+      applied_actions TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_ric_session ON research_iteration_checks(session_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_ric_job ON research_iteration_checks(job_id);
+
+    CREATE TABLE IF NOT EXISTS research_post_mortems (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
+      job_id TEXT,
+      verdict TEXT NOT NULL,
+      flags TEXT NOT NULL DEFAULT '[]',
+      notes TEXT NOT NULL DEFAULT '',
+      recommendations TEXT NOT NULL DEFAULT '[]',
+      metrics_snapshot TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_rpm2_session ON research_post_mortems(session_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_rpm2_job ON research_post_mortems(job_id);
+
     CREATE TABLE IF NOT EXISTS research_jobs (
       id TEXT PRIMARY KEY,
       session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
@@ -269,8 +301,13 @@ export function applyResearchDDL(sqlite: Sqlite): void {
   // so this only fires on legacy DBs.
   try { sqlite.exec(`ALTER TABLE research_queries RENAME COLUMN prompt TO seed_query`); } catch { /* already renamed or column absent */ }
   try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN short_query TEXT`); } catch { /* exists */ }
-  try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN seed_query_short TEXT`); } catch { /* exists */ }
-  try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN seed_query_super_short TEXT`); } catch { /* exists */ }
+  try { sqlite.exec(`ALTER TABLE research_queries RENAME COLUMN seed_query TO prompt`); } catch { /* already renamed or fresh DB */ }
+  try { sqlite.exec(`ALTER TABLE research_queries RENAME COLUMN seed_query_short TO prompt_short`); } catch { /* already renamed */ }
+  try { sqlite.exec(`ALTER TABLE research_queries RENAME COLUMN seed_query_super_short TO prompt_super_short`); } catch { /* already renamed */ }
+  try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN prompt_short TEXT`); } catch { /* exists */ }
+  try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN prompt_super_short TEXT`); } catch { /* exists */ }
+  try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN prompt_hints TEXT NOT NULL DEFAULT '{}'`); } catch { /* exists */ }
+  try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN interpretation TEXT`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_steps ADD COLUMN label TEXT`); } catch { /* exists */ }
   try { sqlite.exec("ALTER TABLE research_findings ADD COLUMN source_url_meta TEXT NOT NULL DEFAULT '[]'"); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_findings ADD COLUMN follow_up_analysis TEXT`); } catch { /* exists */ }

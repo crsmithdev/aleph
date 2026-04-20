@@ -43,7 +43,7 @@ describe('sessions CRUD', () => {
     const session = sessions.createSession(sqlite, 'Test', 'test query');
     expect(session.id).toBeTruthy();
     expect(session.title).toBe('Test');
-    expect(session.seed_query).toBe('test query');
+    expect(session.prompt).toBe('test query');
     expect(session.status).toBe('active');
     expect(session.config.budget_daily_usd).toBe(5.0);
   });

@@ -44,3 +44,12 @@ export * from './scheduler.js';
 export { fetchPageText, JS_RENDERED_FLAG } from './providers/websearch.js';
 export { drainPendingSources } from './extractor.js';
 export type { DrainOptions, DrainResult } from './extractor.js';
+export * from './hooks/index.js';
+export {
+  recordIterationCheck, getIterationCheck, listIterationChecks,
+} from './services/iteration-checks.js';
+export type { IterationCheckRecord, AppliedAction } from './services/iteration-checks.js';
+export {
+  recordPostMortem, getPostMortem, listPostMortems,
+} from './services/post-mortems.js';
+export type { PostMortemRecord } from './services/post-mortems.js';

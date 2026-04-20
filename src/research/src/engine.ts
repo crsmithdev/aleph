@@ -621,7 +621,7 @@ export class ResearchEngine {
         console.log(`[follow_up] skip all — total threads ${totalNow} >= max_total_threads ${maxTotal}`);
       } else {
         const session = sessions.getQuery(this.sqlite, sessionId)!;
-        const seedQuery = session.seed_query;
+        const seedQuery = session.prompt;
         const tc = config.topic_coherence;
         const existingQuerySet = new Set(
           threads.listThreads(this.sqlite, thread.session_id).map(t => t.query.toLowerCase().trim())
@@ -1515,9 +1515,9 @@ Respond with ONLY "true" if this is a duplicate or near-duplicate, "false" other
     const recentFindings = findings.getRecentFindings(this.sqlite, sessionId, 10);
     const context = recentFindings.length > 0
       ? recentFindings.map(f => f.summary).join('\n')
-      : session.seed_query;
+      : session.prompt;
 
-    const tangentQuery = await this.generatePerturbation(strategy, session.seed_query, context, config);
+    const tangentQuery = await this.generatePerturbation(strategy, session.prompt, context, config);
     if (!tangentQuery) return;
 
     // Find a parent — use the most recent active/exhausted thread with findings
@@ -1640,7 +1640,7 @@ Return ONLY the search query text, nothing else.`,
           config.model,
           `You are a research planner. Given what has been learned so far, re-rank these pending research threads by importance and explain why each matters.
 
-Research topic: "${session.seed_query}"
+Research topic: "${session.prompt}"
 
 What has been learned:
 ${session.summary}
@@ -1865,7 +1865,7 @@ Return JSON only, no preamble.`;
       session.config.model,
       `Summarize the current state of this research session in 2-3 paragraphs.
 
-Topic: "${session.seed_query}"
+Topic: "${session.prompt}"
 Total findings: ${findingCount}
 Thread breakdown: ${JSON.stringify(threadCounts)}
 
@@ -1927,7 +1927,7 @@ Write a concise, informative summary of what has been discovered so far, key the
         .map(other => other.canonical_name)
         .slice(0, 12);
 
-      const prompt = `You are writing one section of an encyclopedia article about "${session.seed_query}".
+      const prompt = `You are writing one section of an encyclopedia article about "${session.prompt}".
 
 This section is about: ${c.canonical_name}${c.aliases.length ? ` (aka ${c.aliases.slice(0, 3).join(', ')})` : ''}
 
@@ -1974,7 +1974,7 @@ Write only the section, starting with "## ${c.canonical_name}".`;
 
     if (sectionBodies.length === 0) return;
 
-    const lead = await this.generateLeadSection(sessionId, session.seed_query, topConcepts, session.config);
+    const lead = await this.generateLeadSection(sessionId, session.prompt, topConcepts, session.config);
     const referencesSection = buildReferencesSection(citationIndex, allFindings);
     const doc = [lead, ...sectionBodies, referencesSection].filter(Boolean).join('\n\n');
 
@@ -2035,7 +2035,7 @@ Write only the lead section in flowing prose. Do not include a heading — the l
 
     const result = await this.callLLM(
       session.config.model,
-      `You are a skilled encyclopedia editor. Using the research findings below as source material, write a comprehensive, well-structured article about: "${session.seed_query}"
+      `You are a skilled encyclopedia editor. Using the research findings below as source material, write a comprehensive, well-structured article about: "${session.prompt}"
 
 Write it like a Wikipedia article:
 - Start with a concise lead section (2-3 paragraphs) that summarizes the entire topic

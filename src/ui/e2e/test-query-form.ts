@@ -58,7 +58,7 @@ if (formVisible) {
     const r = await fetch('/api/research/queries');
     return r.json();
   });
-  console.log('queries after submit:', queries.length, queries.map((q: any) => q.seed_query));
+  console.log('queries after submit:', queries.length, queries.map((q: any) => q.prompt));
 }
 
 await browser.close();

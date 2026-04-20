@@ -7,7 +7,7 @@ The research API is available at the Construct API server (default http://localh
 
 ## Actions
 
-- **start <topic>**: POST /research/queries with seed_query. Optionally start running with POST /research/queries/:id/run.
+- **start <topic>**: POST /research/queries with prompt (optional hints). Optionally start running with POST /research/queries/:id/run.
 - **status [query-id]**: GET /research/queries (list) or GET /research/queries/:id (detail). Show title, status, finding count, cost.
 - **pause <id>**: PATCH /research/queries/:id with status: "paused".
 - **resume <id>**: PATCH /research/queries/:id with status: "active".

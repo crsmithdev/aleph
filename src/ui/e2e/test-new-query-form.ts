@@ -56,7 +56,7 @@ const queries = await page.evaluate(async () => {
   return r.json();
 });
 console.log('queries created:', queries.length);
-if (queries.length > 0) console.log('✓ query created:', queries[0].seed_query.substring(0, 50));
+if (queries.length > 0) console.log('✓ query created:', queries[0].prompt.substring(0, 50));
 else console.log('✗ no query created');
 
 if (jsErrors.length) console.log('JS errors:', jsErrors);

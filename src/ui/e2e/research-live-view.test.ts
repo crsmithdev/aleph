@@ -61,7 +61,7 @@ async function setup() {
   // Seed research query
   const queryId = 'test-query-live-view';
   sqlite.exec(`
-    INSERT INTO research_queries (id, title, seed_query, status, config)
+    INSERT INTO research_queries (id, title, prompt, status, config)
     VALUES (
       '${queryId}',
       'AI memory systems research',

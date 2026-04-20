@@ -2,7 +2,7 @@ import { Icon } from '../../components/ui/Icon';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { useResearchQueries, useCreateResearchQuery, useUpdateResearchQuery, useRunAllResearch, useStopAllResearch, useClearResearchDB, useResearchDefaults, useResearchStats, useResearchSummary, type OutputShape } from '../../api/research-hooks';
+import { useResearchQueries, useCreateResearchQuery, useUpdateResearchQuery, useRunAllResearch, useStopAllResearch, useClearResearchDB, useResearchDefaults, useResearchStats, useResearchSummary, type OutputShape, type PromptShape, type PromptDepth } from '../../api/research-hooks';
 import { Button } from '../../components/ui/Button';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
@@ -72,6 +72,8 @@ export function ResearchQueriesPage() {
   const [maxGapSearches, setMaxGapSearches] = useState<number>(2);
   const [intent, setIntent] = useState<string>('');
   const [outputShape, setOutputShape] = useState<OutputShape | ''>('');
+  const [hintShape, setHintShape] = useState<PromptShape | ''>('');
+  const [hintDepth, setHintDepth] = useState<PromptDepth | ''>('');
   const clearDb = useClearResearchDB();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
@@ -115,10 +117,14 @@ export function ResearchQueriesPage() {
   function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!query.trim()) return;
+    const hints: { shape?: PromptShape; depth?: PromptDepth } = {};
+    if (hintShape) hints.shape = hintShape;
+    if (hintDepth) hints.depth = hintDepth;
     createSession.mutate({
-      seed_query: query.trim(),
+      prompt: query.trim(),
       intent: intent.trim() || null,
       output_shape: outputShape || null,
+      hints: Object.keys(hints).length > 0 ? hints : undefined,
       config: {
         max_thread_depth: depth,
         max_total_threads: maxTotalThreads,
@@ -128,7 +134,7 @@ export function ResearchQueriesPage() {
         gap_analysis: { enabled: gapAnalysis, max_gap_searches: maxGapSearches },
       },
     }, {
-      onSuccess: () => { setQuery(''); setIntent(''); setOutputShape(''); setNewOpen(false); },
+      onSuccess: () => { setQuery(''); setIntent(''); setOutputShape(''); setHintShape(''); setHintDepth(''); setNewOpen(false); },
     });
   }
 
@@ -228,6 +234,34 @@ export function ResearchQueriesPage() {
               onChange={e => setMinSearches(Number(e.target.value))}
               className="w-12 bg-bg-primary border border-border-primary rounded px-1.5 py-1 text-sm text-text-primary text-center focus:outline-none focus:border-accent"
             />
+          </label>
+          <label className="flex items-center gap-1.5 text-sm text-text-muted shrink-0" title="Output shape hint — guides the interpreter. Leave blank to let the agent infer.">
+            Shape
+            <select
+              value={hintShape}
+              onChange={e => setHintShape(e.target.value as PromptShape | '')}
+              className="bg-bg-primary border border-border-primary rounded px-1.5 py-1 text-sm text-text-primary focus:outline-none focus:border-accent"
+            >
+              <option value="">auto</option>
+              <option value="answer">answer</option>
+              <option value="list">list</option>
+              <option value="table">table</option>
+              <option value="brief">brief</option>
+              <option value="dataset">dataset</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5 text-sm text-text-muted shrink-0" title="Research depth hint. shallow = quick lookup; deep = multi-step investigation.">
+            Effort
+            <select
+              value={hintDepth}
+              onChange={e => setHintDepth(e.target.value as PromptDepth | '')}
+              className="bg-bg-primary border border-border-primary rounded px-1.5 py-1 text-sm text-text-primary focus:outline-none focus:border-accent"
+            >
+              <option value="">auto</option>
+              <option value="shallow">shallow</option>
+              <option value="normal">normal</option>
+              <option value="deep">deep</option>
+            </select>
           </label>
           <label className="flex items-center gap-1.5 text-sm text-text-muted shrink-0 cursor-pointer select-none">
             <input
@@ -339,7 +373,7 @@ export function ResearchQueriesPage() {
                 {/* Header: status badge + title */}
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <h3 className="font-heading text-sm font-semibold text-text-primary leading-snug line-clamp-2 flex-1 min-w-0">
-                    {session.title || session.seed_query}
+                    {session.title || session.prompt}
                   </h3>
                   <span className={clsx(
                     'flex items-center gap-1.5 px-2 py-0.5 rounded text-sm font-medium shrink-0',
@@ -351,7 +385,7 @@ export function ResearchQueriesPage() {
                 </div>
 
                 {/* Seed query */}
-                <p className="text-sm text-text-muted mb-3 truncate">{session.seed_query_short || session.seed_query}</p>
+                <p className="text-sm text-text-muted mb-3 truncate">{session.prompt_short || session.prompt}</p>
 
                 {/* Summary preview */}
                 {session.summary ? (

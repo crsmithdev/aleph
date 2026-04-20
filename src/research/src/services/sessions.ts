@@ -23,7 +23,7 @@ function rowToSession(row: Record<string, unknown>): ResearchSession {
 export function createSession(
   sqlite: Sqlite,
   title: string,
-  seedQuery: string,
+  prompt: string,
   config?: Partial<SessionConfig>
 ): ResearchSession {
   const id = generateId();
@@ -31,9 +31,9 @@ export function createSession(
   const now = new Date().toISOString();
 
   sqlite.prepare(`
-    INSERT INTO research_queries (id, title, seed_query, status, config, created_at, updated_at)
+    INSERT INTO research_queries (id, title, prompt, status, config, created_at, updated_at)
     VALUES (?, ?, ?, 'active', ?, ?, ?)
-  `).run(id, title, seedQuery, JSON.stringify(mergedConfig), now, now);
+  `).run(id, title, prompt, JSON.stringify(mergedConfig), now, now);
 
   return getSession(sqlite, id)!;
 }

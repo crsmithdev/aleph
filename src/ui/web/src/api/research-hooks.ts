@@ -15,12 +15,102 @@ export interface QueryStats {
 
 export type OutputShape = 'list_of_entities' | 'overview' | 'comparison' | 'timeline' | 'how_to';
 
+export type PromptShape = 'answer' | 'list' | 'table' | 'brief' | 'dataset';
+export type PromptDepth = 'shallow' | 'normal' | 'deep';
+export type PromptAudience = 'self' | 'team' | 'external';
+export type PromptUrgency = 'fast' | 'thorough';
+
+export interface PromptHints {
+  shape?: PromptShape;
+  depth?: PromptDepth;
+  audience?: PromptAudience;
+  urgency?: PromptUrgency;
+}
+
+export interface InterpretedPrompt {
+  intent: string;
+  shape: PromptShape;
+  depth: PromptDepth;
+  scope: string;
+  dispatch_params?: Record<string, unknown>;
+}
+
+export interface IterationCorrection {
+  kill_threads?: string[];
+  narrow_sources?: string[];
+  scope_change?: string;
+}
+
+export interface AppliedAction {
+  action: 'kill_thread' | 'narrow_sources' | 'scope_change_proposed';
+  target?: string;
+  detail?: string;
+  ok: boolean;
+  error?: string;
+}
+
+export interface IterationCheckRecord {
+  id: string;
+  session_id: string;
+  job_id: string | null;
+  iterations_completed: number;
+  verdict: 'on_track' | 'drifting' | 'needs_correction';
+  notes: string;
+  correction: IterationCorrection | null;
+  applied_actions: AppliedAction[];
+  created_at: string;
+}
+
+export interface PostMortemRecord {
+  id: string;
+  session_id: string;
+  job_id: string | null;
+  verdict: 'pass' | 'flag';
+  flags: string[];
+  notes: string;
+  recommendations: string[];
+  metrics_snapshot: {
+    metrics?: {
+      findings: number;
+      threads_active: number;
+      threads_total: number;
+      cost_usd: number;
+      errors: number;
+      steps: number;
+      duration_ms: number;
+    };
+    thread_state?: { by_status: Record<string, number>; stuck_count: number; pruned_count: number };
+    source_health?: { failure_rate: number; total_attempts: number; top_failing_domains: Array<{ domain: string; count: number }> };
+  };
+  created_at: string;
+}
+
+export function useIterationChecks(sessionId: string) {
+  return useQuery({
+    queryKey: ['research-iteration-checks', sessionId],
+    queryFn: () => api.get<IterationCheckRecord[]>(`/research/queries/${sessionId}/iteration-checks`),
+    enabled: !!sessionId,
+    refetchInterval: 5000,
+  });
+}
+
+export function usePostMortems(sessionId: string) {
+  return useQuery({
+    queryKey: ['research-post-mortems', sessionId],
+    queryFn: () => api.get<PostMortemRecord[]>(`/research/queries/${sessionId}/post-mortems`),
+    enabled: !!sessionId,
+    refetchInterval: 10000,
+  });
+}
+
 export interface ResearchQuery {
   id: string;
   title: string;
-  seed_query: string;
-  seed_query_short: string | null;
-  seed_query_super_short: string | null;
+  prompt: string;
+  prompt_short: string | null;
+  prompt_super_short: string | null;
+  prompt_hints: PromptHints;
+  interpretation: InterpretedPrompt | null;
   status: 'active' | 'paused' | 'exhausted' | 'halted' | 'completed' | 'archived';
   config: Record<string, unknown>;
   summary: string;
@@ -416,7 +506,7 @@ export const useResearchSession = useResearchQuery;
 export function useCreateResearchQuery() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { seed_query: string; title?: string; config?: Record<string, unknown>; intent?: string | null; output_shape?: OutputShape | null }) =>
+    mutationFn: (data: { prompt: string; hints?: PromptHints; title?: string; config?: Record<string, unknown>; intent?: string | null; output_shape?: OutputShape | null }) =>
       api.post<ResearchQuery>('/research/queries', data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['research-queries'] }),
   });
@@ -892,7 +982,7 @@ export function useResearchJobs(sessionId: string) {
 export type StreamSessionEvent = {
   id: string;
   title: string;
-  seed_query: string;
+  prompt: string;
   status: string;
   updated_at: string;
 };

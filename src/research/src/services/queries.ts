@@ -1,6 +1,6 @@
 import type { Sqlite } from '@construct/data';
 import { generateId } from './id.js';
-import type { ResearchQuery, SessionConfig, OutputShape } from '../types.js';
+import type { ResearchQuery, SessionConfig, OutputShape, PromptHints, InterpretedPrompt } from '../types.js';
 import { getDefaults } from './defaults.js';
 
 function rowToQuery(sqlite: Sqlite, row: Record<string, unknown>): ResearchQuery {
@@ -19,16 +19,24 @@ function rowToQuery(sqlite: Sqlite, row: Record<string, unknown>): ResearchQuery
     topic_coherence: { ...defaults.topic_coherence, ...(stored.topic_coherence ?? {}) },
     gap_analysis: { ...defaults.gap_analysis, ...(stored.gap_analysis ?? {}) },
   };
-  return { ...row, config } as unknown as ResearchQuery;
+  let prompt_hints: PromptHints = {};
+  try { prompt_hints = JSON.parse((row.prompt_hints as string) ?? '{}') as PromptHints; } catch { /* malformed */ }
+  let interpretation: InterpretedPrompt | null = null;
+  const interpRaw = row.interpretation as string | null | undefined;
+  if (interpRaw) {
+    try { interpretation = JSON.parse(interpRaw) as InterpretedPrompt; } catch { /* malformed */ }
+  }
+  return { ...row, config, prompt_hints, interpretation } as unknown as ResearchQuery;
 }
 
 export function createQuery(
   sqlite: Sqlite,
   title: string,
-  seedQuery: string,
+  prompt: string,
   config?: Partial<SessionConfig>,
-  seedQueryShort?: string | null,
-  seedQuerySuperShort?: string | null,
+  promptShort?: string | null,
+  promptSuperShort?: string | null,
+  promptHints?: PromptHints,
   intent?: string | null,
   outputShape?: OutputShape | null,
 ): ResearchQuery {
@@ -37,10 +45,11 @@ export function createQuery(
   const now = new Date().toISOString();
 
   sqlite.prepare(`
-    INSERT INTO research_queries (id, title, seed_query, seed_query_short, seed_query_super_short, status, config, intent, output_shape, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
+    INSERT INTO research_queries (id, title, prompt, prompt_short, prompt_super_short, prompt_hints, status, config, intent, output_shape, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
   `).run(
-    id, title, seedQuery, seedQueryShort ?? null, seedQuerySuperShort ?? null,
+    id, title, prompt, promptShort ?? null, promptSuperShort ?? null,
+    JSON.stringify(promptHints ?? {}),
     JSON.stringify(mergedConfig),
     intent ?? null, outputShape ?? null,
     now, now,
@@ -156,7 +165,7 @@ export function listQueriesWithStats(sqlite: Sqlite, status?: string): ResearchQ
 export function updateQuery(
   sqlite: Sqlite,
   id: string,
-  updates: Partial<Pick<ResearchQuery, 'status' | 'summary' | 'document' | 'user_notes' | 'title' | 'seed_query_short' | 'seed_query_super_short' | 'intent' | 'output_shape'>> & { config?: Partial<SessionConfig> }
+  updates: Partial<Pick<ResearchQuery, 'status' | 'summary' | 'document' | 'user_notes' | 'title' | 'prompt_short' | 'prompt_super_short' | 'prompt_hints' | 'intent' | 'output_shape' | 'interpretation'>> & { config?: Partial<SessionConfig> }
 ): ResearchQuery | null {
   const fields: string[] = [];
   const values: unknown[] = [];
@@ -166,10 +175,12 @@ export function updateQuery(
   if (updates.document !== undefined) { fields.push('document = ?'); values.push(updates.document); }
   if (updates.user_notes !== undefined) { fields.push('user_notes = ?'); values.push(updates.user_notes); }
   if (updates.title !== undefined) { fields.push('title = ?'); values.push(updates.title); }
-  if (updates.seed_query_short !== undefined) { fields.push('seed_query_short = ?'); values.push(updates.seed_query_short); }
-  if (updates.seed_query_super_short !== undefined) { fields.push('seed_query_super_short = ?'); values.push(updates.seed_query_super_short); }
+  if (updates.prompt_short !== undefined) { fields.push('prompt_short = ?'); values.push(updates.prompt_short); }
+  if (updates.prompt_super_short !== undefined) { fields.push('prompt_super_short = ?'); values.push(updates.prompt_super_short); }
+  if (updates.prompt_hints !== undefined) { fields.push('prompt_hints = ?'); values.push(JSON.stringify(updates.prompt_hints)); }
   if (updates.intent !== undefined) { fields.push('intent = ?'); values.push(updates.intent); }
   if (updates.output_shape !== undefined) { fields.push('output_shape = ?'); values.push(updates.output_shape); }
+  if (updates.interpretation !== undefined) { fields.push('interpretation = ?'); values.push(updates.interpretation === null ? null : JSON.stringify(updates.interpretation)); }
   if (updates.config !== undefined) {
     const existing = getQuery(sqlite, id);
     if (existing) {

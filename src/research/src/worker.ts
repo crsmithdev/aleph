@@ -10,6 +10,12 @@ import { countActiveJobsForSession, getQueuedThreadsForNewJobs, createThreadJobI
 import * as sessions from './services/queries.js';
 import { resetOrphanedActiveThreads } from './services/threads.js';
 import { sessionsMissingConcepts } from './services/concepts.js';
+import { registerBuiltinHooks } from './hooks/builtin.js';
+import { runIterationCheck } from './hooks/iteration-check.js';
+import { runPostMortem } from './hooks/post-mortem.js';
+import { hasHooks } from './hooks/registry.js';
+
+const ITERATION_CHECK_INTERVAL = 5;
 
 const POLL_INTERVAL_MS = 5_000;
 const HEARTBEAT_INTERVAL_MS = 60_000;
@@ -70,6 +76,10 @@ function buildProvider(session: { config: { model?: string; providers?: { openro
 const { sqlite } = createDb();
 sqlite.exec('PRAGMA busy_timeout = 5000');
 applyResearchDDL(sqlite);
+// Register builtin agent hooks (iteration_check, post_mortem). Idempotent —
+// also registered by the API; workers run in separate processes so this line
+// is what makes the hooks fire here. Skip cleanly if no API key.
+registerBuiltinHooks();
 
 // On startup: reclaim jobs from dead worker PIDs (orphans from previous server runs)
 const deadReclaimed = reclaimDeadWorkerJobs(sqlite);
@@ -189,6 +199,7 @@ async function executeSessionJob(job: import('./types.js').ResearchJob): Promise
     ? (job.max_iterations ?? 5) - job.iterations_completed
     : Infinity;
 
+  const jobStartedMs = Date.now();
   try {
     const engine = new ResearchEngine({
       sqlite,
@@ -198,6 +209,16 @@ async function executeSessionJob(job: import('./types.js').ResearchJob): Promise
       onIteration: (i) => {
         iterationsCompleted = job.iterations_completed + i;
         rateLimiter.record();
+        // Every N iterations, fire the iteration_check hook in the background.
+        // Non-blocking: the engine continues the next iteration without waiting.
+        if (i > 0 && i % ITERATION_CHECK_INTERVAL === 0 && hasHooks('iteration_check')) {
+          runIterationCheck(
+            sqlite,
+            { id: session.id, prompt: session.prompt, prompt_hints: session.prompt_hints as Record<string, unknown> },
+            job.id,
+            iterationsCompleted,
+          ).catch(err => console.warn('[iteration_check] dispatch threw:', err));
+        }
       },
     });
 
@@ -214,6 +235,11 @@ async function executeSessionJob(job: import('./types.js').ResearchJob): Promise
     jobs.updateHeartbeat(sqlite, job.id, workerId, iterationsCompleted);
     jobs.completeJob(sqlite, job.id, workerId);
     console.log(`[worker] job ${job.id} completed (${iterationsCompleted} iterations)`);
+    // post_mortem hook: fire-and-forget. One call per completed session job.
+    if (hasHooks('post_mortem')) {
+      runPostMortem(sqlite, job.session_id, job.id, Date.now() - jobStartedMs)
+        .catch(err => console.warn('[post_mortem] dispatch threw:', err));
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg === 'This operation was aborted' || msg.includes('AbortError')) {
@@ -223,6 +249,11 @@ async function executeSessionJob(job: import('./types.js').ResearchJob): Promise
     } else {
       jobs.failJob(sqlite, job.id, workerId, msg);
       console.error(`[worker] job ${job.id} failed:`, msg);
+      // post_mortem also fires on failed jobs — a failure mode is a key signal.
+      if (hasHooks('post_mortem')) {
+        runPostMortem(sqlite, job.session_id, job.id, Date.now() - jobStartedMs)
+          .catch(err => console.warn('[post_mortem] dispatch threw:', err));
+      }
     }
   } finally {
     heartbeat.stop();

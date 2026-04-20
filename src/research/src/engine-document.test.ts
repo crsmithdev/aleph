@@ -121,7 +121,7 @@ describe('updateDocument', () => {
     expect(callCount).toBe(1);
   });
 
-  test('document contains seed_query in prompt context (mock sees prompts)', async () => {
+  test('document contains prompt in context (mock sees prompts)', async () => {
     for (let i = 0; i < 3; i++) seedFinding(db, sessionId, threadId, i);
 
     const seenPrompts: string[] = [];
@@ -192,7 +192,7 @@ describe('updateSummary', () => {
     expect(callCount).toBe(1);
   });
 
-  test('summary LLM prompt includes seed_query and finding summaries', async () => {
+  test('summary LLM prompt includes prompt and finding summaries', async () => {
     seedFinding(db, sessionId, threadId, 0);
 
     const seenPrompts: string[] = [];

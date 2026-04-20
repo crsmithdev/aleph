@@ -1,9 +1,11 @@
 export interface ResearchQuery {
   id: string;
   title: string;
-  seed_query: string;
-  seed_query_short: string | null;
-  seed_query_super_short: string | null;
+  prompt: string;
+  prompt_short: string | null;
+  prompt_super_short: string | null;
+  prompt_hints: PromptHints;
+  interpretation: InterpretedPrompt | null;
   status: 'active' | 'paused' | 'exhausted' | 'halted' | 'completed' | 'archived';
   config: SessionConfig;
   summary: string;
@@ -27,8 +29,28 @@ export interface SteeringNote {
   created_at: string;
 }
 
+export interface InterpretedPrompt {
+  intent: string;
+  shape: PromptShape;
+  depth: PromptDepth;
+  scope: string;
+  dispatch_params?: Record<string, unknown>;
+}
+
 /** @deprecated Use ResearchQuery */
 export type ResearchSession = ResearchQuery;
+
+export type PromptShape = 'answer' | 'list' | 'table' | 'brief' | 'dataset';
+export type PromptDepth = 'shallow' | 'normal' | 'deep';
+export type PromptAudience = 'self' | 'team' | 'external';
+export type PromptUrgency = 'fast' | 'thorough';
+
+export interface PromptHints {
+  shape?: PromptShape;
+  depth?: PromptDepth;
+  audience?: PromptAudience;
+  urgency?: PromptUrgency;
+}
 
 export interface SessionConfig {
   budget_daily_usd: number;

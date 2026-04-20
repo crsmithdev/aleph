@@ -44,7 +44,7 @@ const session = await engine.startSession(
 );
 
 console.log(`Session: ${session.id}`);
-console.log(`Query: "${session.seed_query}"\n`);
+console.log(`Query: "${session.prompt}"\n`);
 
 try {
   const result = await engine.runIterations(session.id);

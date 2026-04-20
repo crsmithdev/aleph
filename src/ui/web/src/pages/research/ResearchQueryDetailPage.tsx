@@ -25,6 +25,7 @@ import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { ConfigForm, patchByPath, getByPath } from './config-schema';
 import { TelemetryView } from './ResearchTelemetryView';
+import { ReviewsView } from './ResearchReviewsView';
 import cytoscape from 'cytoscape';
 // @ts-expect-error cytoscape-fcose has no bundled types
 import fcose from 'cytoscape-fcose';
@@ -4046,8 +4047,8 @@ export function ResearchQueryDetailPage() {
   const cancelJob = useCancelJob();
   const deleteQuery = useDeleteResearchQuery();
 
-  type Tab = 'document' | 'knowledge' | 'process' | 'sources' | 'events' | 'telemetry' | 'config';
-  const TAB_VALUES: readonly Tab[] = ['document','knowledge','process','sources','events','telemetry','config'];
+  type Tab = 'document' | 'knowledge' | 'process' | 'sources' | 'events' | 'telemetry' | 'reviews' | 'config';
+  const TAB_VALUES: readonly Tab[] = ['document','knowledge','process','sources','events','telemetry','reviews','config'];
   // Honour `#tab=telemetry` etc. so cross-page links (Workers, EventsView) can
   // deep-link into a specific tab. Listens for hashchange so in-page links that
   // only mutate the hash also take effect without a full remount.
@@ -4199,13 +4200,24 @@ export function ResearchQueryDetailPage() {
 
           {/* Secondary content */}
           <div className="px-6 pb-0">
-            <p className="text-sm text-text-muted line-clamp-3 mb-2">{session.seed_query_short || session.seed_query}</p>
+            <p className="text-sm text-text-muted line-clamp-3 mb-2">{session.prompt_short || session.prompt}</p>
 
-          <LeaderPanel
-            sessionId={id!}
-            intent={(session as unknown as { intent: string | null }).intent ?? null}
-            output_shape={(session as unknown as { output_shape: string | null }).output_shape ?? null}
-          />
+            <LeaderPanel
+              sessionId={id!}
+              intent={(session as unknown as { intent: string | null }).intent ?? null}
+              output_shape={(session as unknown as { output_shape: string | null }).output_shape ?? null}
+            />
+
+            {session.interpretation && (
+              <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                <span className="text-text-muted">Interpreted as</span>
+                <span className="text-text-secondary">{session.interpretation.intent}</span>
+                <span className="text-text-muted">&middot;</span>
+                <span className="px-1.5 py-0.5 rounded bg-bg-tertiary text-text-secondary tabular-nums">{session.interpretation.shape}</span>
+                <span className="px-1.5 py-0.5 rounded bg-bg-tertiary text-text-secondary tabular-nums">{session.interpretation.depth}</span>
+                <span className="text-text-muted">scope: {session.interpretation.scope}</span>
+              </div>
+            )}
 
           {/* Env warnings */}
           {envCheck && (envCheck.errors.length > 0 || envCheck.warnings.length > 0 || envCheck.jina_balance !== null) && (
@@ -4262,6 +4274,7 @@ export function ResearchQueryDetailPage() {
               { key: 'sources' as const, label: 'Sources', count: sourcesTotal },
               { key: 'events' as const, label: 'Events', count: undefined },
               { key: 'telemetry' as const, label: 'Telemetry', count: undefined },
+              { key: 'reviews' as const, label: 'Reviews', count: undefined },
               { key: 'config' as const, label: 'Config', count: undefined },
             ]).map(t => (
               <button key={t.key} onClick={() => setTab(t.key)}
@@ -4363,6 +4376,9 @@ export function ResearchQueryDetailPage() {
           )}
           {tab === 'telemetry' && (
             <TelemetryView sessionId={id!} onNavigateToThread={navigateToLive} />
+          )}
+          {tab === 'reviews' && (
+            <ReviewsView sessionId={id!} />
           )}
           {tab === 'config' && (
             <SessionConfigView

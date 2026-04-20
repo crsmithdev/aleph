@@ -31,7 +31,7 @@ function createTestDb(): Database {
 
 function insertSession(db: Database, id = 'sess-1', config = DEFAULT_SESSION_CONFIG) {
   db.prepare(`
-    INSERT INTO research_queries (id, title, seed_query, status, config, created_at, updated_at)
+    INSERT INTO research_queries (id, title, prompt, status, config, created_at, updated_at)
     VALUES (?, 'Test', 'test query', 'active', ?, datetime('now'), datetime('now'))
   `).run(id, JSON.stringify({ ...config, min_delay_between_steps_ms: 0 }));
   return id;

@@ -51,7 +51,7 @@ export function ResearchSessionsPage() {
     if (model) localStorage.setItem('research_default_model', model);
     localStorage.setItem('research_default_min_searches', String(minSearches));
     createSession.mutate({
-      seed_query: query.trim(),
+      prompt: query.trim(),
       config: {
         max_thread_depth: depth,
         min_searches_per_thread: minSearches,
@@ -246,7 +246,7 @@ export function ResearchSessionsPage() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
                     <h3 className="text-sm font-medium text-text-primary truncate">{session.title}</h3>
-                    <p className="text-sm text-text-muted mt-1 truncate">{session.seed_query_short || session.seed_query}</p>
+                    <p className="text-sm text-text-muted mt-1 truncate">{session.prompt_short || session.prompt}</p>
                   </div>
                   <span className={clsx('px-2 py-0.5 rounded text-sm font-medium ml-3', statusColors[session.status])}>
                     {session.status}
