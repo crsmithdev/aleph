@@ -14,6 +14,10 @@ describe('classifyError', () => {
     expect(classifyError('OpenRouter 402: insufficient credits')).toBe('credit_exhausted');
     expect(classifyError('OpenRouter 402: can only afford 3439 tokens')).toBe('credit_exhausted');
     expect(classifyError('OpenRouter 402: balance too low')).toBe('credit_exhausted');
+    // Real production body that triggered the original design work.
+    expect(classifyError(
+      'OpenRouter 402: {"error":{"message":"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3439"}}'
+    )).toBe('credit_exhausted');
   });
 
   test('402 without specific wording still → credit_exhausted', () => {

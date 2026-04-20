@@ -277,6 +277,32 @@ export function useResearchSummary() {
   });
 }
 
+// --- Error status (credit/rate/overload) ---
+export type ErrorKind = 'credit_exhausted' | 'rate_limit' | 'overload';
+
+export interface SessionErrorStatus {
+  session_id: string;
+  session_title: string;
+  error_kind: ErrorKind;
+  model: string;
+  count: number;
+  last_at: string;
+  last_message: string;
+}
+
+export interface ErrorStatusReport {
+  worst: ErrorKind | null;
+  sessions: SessionErrorStatus[];
+}
+
+export function useResearchErrorStatus() {
+  return useQuery({
+    queryKey: ['research-error-status'],
+    queryFn: () => api.get<ErrorStatusReport>('/research/error-status'),
+    refetchInterval: 15000,
+  });
+}
+
 // --- Workers (global) ---
 export interface WorkerStatus {
   id: number;

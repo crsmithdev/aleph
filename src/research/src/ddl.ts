@@ -98,10 +98,12 @@ export function applyResearchDDL(sqlite: Sqlite): void {
       tool_calls TEXT NOT NULL DEFAULT '[]',
       duration_ms INTEGER NOT NULL DEFAULT 0,
       error TEXT,
+      error_kind TEXT,
       metadata TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_rs_session_created ON research_steps(session_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_rs_session_error_kind ON research_steps(session_id, error_kind) WHERE error_kind IS NOT NULL;
 
     CREATE TABLE IF NOT EXISTS research_plans (
       id TEXT PRIMARY KEY,
@@ -348,6 +350,7 @@ export function applyResearchDDL(sqlite: Sqlite): void {
   try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN seed_similarity REAL`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_steps ADD COLUMN metadata TEXT`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_steps ADD COLUMN error_kind TEXT`); } catch { /* exists */ }
+  try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_rs_session_error_kind ON research_steps(session_id, error_kind) WHERE error_kind IS NOT NULL`); } catch { /* exists */ }
   // Active-leader steering: user-supplied intent + output shape, plus applied_at on plan
   // mods so boost/deprioritize priority-deltas don't re-apply every engine loop.
   try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN intent TEXT`); } catch { /* exists */ }

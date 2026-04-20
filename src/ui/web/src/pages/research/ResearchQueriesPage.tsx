@@ -2,7 +2,7 @@ import { Icon } from '../../components/ui/Icon';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { useResearchQueries, useCreateResearchQuery, useUpdateResearchQuery, useRunAllResearch, useStopAllResearch, useClearResearchDB, useResearchDefaults, useResearchStats, useResearchSummary, type OutputShape, type PromptShape, type PromptDepth } from '../../api/research-hooks';
+import { useResearchQueries, useCreateResearchQuery, useUpdateResearchQuery, useRunAllResearch, useStopAllResearch, useClearResearchDB, useResearchDefaults, useResearchStats, useResearchSummary, useResearchErrorStatus, type OutputShape, type PromptShape, type PromptDepth, type ErrorKind } from '../../api/research-hooks';
 import { Button } from '../../components/ui/Button';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
@@ -54,8 +54,34 @@ function Sparkline({ values, active }: { values: number[]; active: boolean }) {
   );
 }
 
+const ERROR_KIND_LABEL: Record<ErrorKind, string> = {
+  credit_exhausted: 'Credits exhausted',
+  rate_limit: 'Rate-limited',
+  overload: 'Provider overloaded',
+};
+
+const ERROR_KIND_ICON: Record<ErrorKind, string> = {
+  credit_exhausted: 'credit_card_off',
+  rate_limit: 'hourglass_top',
+  overload: 'hourglass_top',
+};
+
+const ERROR_KIND_BADGE: Record<ErrorKind, string> = {
+  credit_exhausted: 'bg-danger/15 text-danger',
+  rate_limit: 'bg-warning/15 text-warning',
+  overload: 'bg-warning/15 text-warning',
+};
+
 export function ResearchQueriesPage() {
   const { data: sessions = [], isLoading, isError } = useResearchQueries();
+  const { data: errorStatus } = useResearchErrorStatus();
+  const sessionErrorMap = new Map<string, ErrorKind>();
+  // Take the worst error kind per session (credit_exhausted > overload > rate_limit).
+  const severity: Record<ErrorKind, number> = { credit_exhausted: 3, overload: 2, rate_limit: 1 };
+  for (const s of errorStatus?.sessions ?? []) {
+    const prev = sessionErrorMap.get(s.session_id);
+    if (!prev || severity[s.error_kind] > severity[prev]) sessionErrorMap.set(s.session_id, s.error_kind);
+  }
   const createSession = useCreateResearchQuery();
   const updateSession = useUpdateResearchQuery();
   const runAll = useRunAllResearch();
@@ -375,13 +401,29 @@ export function ResearchQueriesPage() {
                   <h3 className="font-heading text-sm font-semibold text-text-primary leading-snug line-clamp-2 flex-1 min-w-0">
                     {session.title || session.prompt}
                   </h3>
-                  <span className={clsx(
-                    'flex items-center gap-1.5 px-2 py-0.5 rounded text-sm font-medium shrink-0',
-                    statusBadgeColors[session.status]
-                  )}>
-                    <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', statusDotColors[session.status])} />
-                    {session.status}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {sessionErrorMap.get(session.id) && (
+                      <span
+                        className={clsx(
+                          'flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium',
+                          ERROR_KIND_BADGE[sessionErrorMap.get(session.id)!],
+                        )}
+                        title={ERROR_KIND_LABEL[sessionErrorMap.get(session.id)!]}
+                      >
+                        <span className="material-symbols-outlined text-[14px] leading-none">
+                          {ERROR_KIND_ICON[sessionErrorMap.get(session.id)!]}
+                        </span>
+                        {ERROR_KIND_LABEL[sessionErrorMap.get(session.id)!]}
+                      </span>
+                    )}
+                    <span className={clsx(
+                      'flex items-center gap-1.5 px-2 py-0.5 rounded text-sm font-medium',
+                      statusBadgeColors[session.status]
+                    )}>
+                      <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', statusDotColors[session.status])} />
+                      {session.status}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Seed query */}

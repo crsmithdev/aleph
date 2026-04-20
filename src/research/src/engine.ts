@@ -914,6 +914,7 @@ Return ONLY a JSON array of search query strings. No other text.`,
           tool_calls: [{ tool: 'web_search', input: { query }, error: err.message }],
           duration_ms: Date.now() - startTime,
           error: err.message,
+          error_kind: classifyError(err.message),
         });
         return null;
       }

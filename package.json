@@ -16,7 +16,9 @@
     "dev": "fuser -k 3001/tcp 2>/dev/null; cd src/ui && bun run start",
     "ui:build": "cd src/ui && bun run build",
     "ui:e2e": "bun src/ui/e2e/goal-flow.test.ts",
-    "ui:e2e:obs": "bun src/ui/e2e/observability-flow.test.ts"
+    "ui:e2e:obs": "bun src/ui/e2e/observability-flow.test.ts",
+    "ui:smoke": "bun src/ui/e2e/ui-smoke.test.ts",
+    "ui:e2e:credit": "bun src/ui/e2e/credit-exhausted-ui.test.ts"
   },
   "dependencies": {},
   "devDependencies": {

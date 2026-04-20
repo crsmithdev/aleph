@@ -125,4 +125,7 @@ When working in a worktree (`.worktrees/<name>`), the main repo's dev server at 
 | Hook works | Pipe test input, check stdout | "Code looks correct" |
 | Backend logic works | `bun test.ts` passes | Running install.ts or starting a new server |
 | Frontend compiles | `bun run build` in `src/ui` passes | "TypeScript looks correct" |
-| Worktree changes work | `bun test.ts` + `bun run build` from worktree root; temporary port OK for HTTP testing if needed — kill it after | Testing against the 3001 server (which serves different code) |
+| UI changes work | `bun run ui:smoke` passes (loads every route in a real browser, asserts no render errors or 5xx) | `bun run build` alone — compilation does not catch runtime render errors |
+| Worktree changes work | `bun test.ts` + `bun run build` + `bun run ui:smoke` from worktree root | Testing against the 3001 server (which serves different code) |
+
+**UI "done" means the page actually loads.** For any change that touches `src/ui/**`, an API route consumed by the UI, or shared types, `bun run ui:smoke` is a required gate before claiming success. It builds the bundle, boots the API, and navigates every route in headless Chromium — catching runtime render errors, API 500s, and empty renders that `bun test.ts` and `bun run build` miss. If you cannot run it (no Chromium, sandbox restrictions), say so explicitly; do not claim success.

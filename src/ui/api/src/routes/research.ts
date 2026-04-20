@@ -27,7 +27,7 @@ import {
   MonitorEngine,
   // Metrics imports
   computeJobMetrics, computeSourceHealth, computeThreadStateMetrics,
-  computeJobTrace, computeSessionCostTrajectory,
+  computeJobTrace, computeSessionCostTrajectory, computeErrorStatus,
   type PromptHints,
   registerBuiltinHooks,
   runHooks,
@@ -1532,6 +1532,15 @@ Write the full article in markdown.`;
   );
 
   app.get('/metrics/jobs', async () => computeJobMetrics(app.sqlite));
+
+  // === Error status: credit/rate/overload across active sessions ===
+  app.get<{ Querystring: { lookback_minutes?: string } }>(
+    '/error-status',
+    async (req) => {
+      const lookback = req.query.lookback_minutes ? parseInt(req.query.lookback_minutes, 10) : 30;
+      return computeErrorStatus(app.sqlite, lookback);
+    }
+  );
 
   // === Metrics: source extraction health ===
   app.get<{ Params: { id: string }; Querystring: { limit?: string } }>(

@@ -519,6 +519,84 @@ export interface SessionCostTrajectory {
   series: Array<{ at: string; cumulative_cost_usd: number; cumulative_tokens: number; step_id: string; model: string }>;
 }
 
+// ---------------------------------------------------------------------------
+// Error status — for UI visibility of credit/rate/overload failures
+// ---------------------------------------------------------------------------
+
+export interface SessionErrorStatus {
+  session_id: string;
+  session_title: string;
+  error_kind: 'credit_exhausted' | 'rate_limit' | 'overload';
+  model: string;
+  count: number;
+  last_at: string;
+  last_message: string;
+}
+
+export interface ErrorStatusReport {
+  /** The most-severe class currently affecting any session, or null. */
+  worst: 'credit_exhausted' | 'rate_limit' | 'overload' | null;
+  /** One entry per (session, error_kind) pair within the lookback window. */
+  sessions: SessionErrorStatus[];
+}
+
+/**
+ * Sessions with transient provider errors recently. "Recent" = within
+ * `lookbackMinutes` (default 30). Only active/paused sessions are considered —
+ * errors on completed/exhausted sessions are history, not a current problem.
+ */
+export function computeErrorStatus(
+  sqlite: Sqlite,
+  lookbackMinutes: number = 30,
+): ErrorStatusReport {
+  const rows = sqlite.prepare(`
+    SELECT rs.session_id, rs.error_kind, rs.model,
+           COUNT(*) AS count, MAX(rs.created_at) AS last_at,
+           rq.title AS session_title
+    FROM research_steps rs
+    JOIN research_queries rq ON rq.id = rs.session_id
+    WHERE rs.error_kind IN ('credit_exhausted', 'rate_limit', 'overload')
+      AND rs.created_at > datetime('now', ?)
+      AND rq.status IN ('active', 'paused')
+    GROUP BY rs.session_id, rs.error_kind, rs.model
+    ORDER BY last_at DESC
+  `).all(`-${lookbackMinutes} minutes`) as Array<{
+    session_id: string;
+    error_kind: 'credit_exhausted' | 'rate_limit' | 'overload';
+    model: string;
+    count: number;
+    last_at: string;
+    session_title: string;
+  }>;
+
+  const sessions: SessionErrorStatus[] = [];
+  for (const r of rows) {
+    const lastRow = sqlite.prepare(
+      `SELECT error FROM research_steps
+       WHERE session_id = ? AND error_kind = ?
+       ORDER BY created_at DESC LIMIT 1`,
+    ).get(r.session_id, r.error_kind) as { error: string | null } | undefined;
+    sessions.push({
+      session_id: r.session_id,
+      session_title: r.session_title,
+      error_kind: r.error_kind,
+      model: r.model,
+      count: r.count,
+      last_at: r.last_at,
+      last_message: (lastRow?.error ?? '').slice(0, 400),
+    });
+  }
+
+  // Severity order: credit_exhausted > overload > rate_limit.
+  const severity = { credit_exhausted: 3, overload: 2, rate_limit: 1 } as const;
+  let worst: ErrorStatusReport['worst'] = null;
+  for (const s of sessions) {
+    if (!worst || severity[s.error_kind] > severity[worst]) worst = s.error_kind;
+  }
+
+  return { worst, sessions };
+}
+
 export function computeSessionCostTrajectory(sqlite: Sqlite, sessionId: string): SessionCostTrajectory {
   const steps = sqlite.prepare(
     'SELECT id, model, provider, cost_usd, prompt_tokens, completion_tokens, created_at FROM research_steps WHERE session_id = ? ORDER BY created_at ASC'

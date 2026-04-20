@@ -11,6 +11,8 @@ export * from './services/plans.js';
 export * from './services/steering.js';
 export * from './services/monitors.js';
 export * from './services/jobs.js';
+export { classifyError, isTransientError } from './engine.js';
+export type { ErrorKind } from './engine.js';
 export {
   upsertConcept, linkFindingToConcept, linkConcepts,
   getConcept, findConceptByName, listConcepts, listConceptLinks,
@@ -27,11 +29,12 @@ export { onResearchEvent, emitResearchEvent, clearResearchListeners } from './se
 export type { ResearchEvent, ResearchEventType } from './services/events.js';
 export {
   computeJobMetrics, computeSourceHealth, computeThreadStateMetrics,
-  computeJobTrace, computeSessionCostTrajectory,
+  computeJobTrace, computeSessionCostTrajectory, computeErrorStatus,
 } from './services/metrics.js';
 export type {
   JobLifecycleMetrics, SourceHealthMetrics, ThreadStateMetrics,
   JobTrace, JobTraceStep, JobTracePhase, SessionCostTrajectory,
+  SessionErrorStatus, ErrorStatusReport,
 } from './services/metrics.js';
 export { MonitorEngine } from './monitor-engine.js';
 export type { MonitorEngineOptions } from './monitor-engine.js';
