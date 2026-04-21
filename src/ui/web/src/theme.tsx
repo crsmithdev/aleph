@@ -82,6 +82,12 @@ interface ThemeContextValue {
   monoFontId: string;
   monoFont: FontDef;
   setMonoFontId: (id: string) => void;
+  trackingSans: number;
+  setTrackingSans: (v: number) => void;
+  trackingHeading: number;
+  setTrackingHeading: (v: number) => void;
+  trackingMono: number;
+  setTrackingMono: (v: number) => void;
 }
 
 const fallback = findTheme(DEFAULT_DARK)!;
@@ -102,6 +108,12 @@ const ThemeContext = createContext<ThemeContextValue>({
   monoFontId: DEFAULT_MONO_FONT,
   monoFont: fallbackMonoFont,
   setMonoFontId: () => {},
+  trackingSans: 0,
+  setTrackingSans: () => {},
+  trackingHeading: 0,
+  setTrackingHeading: () => {},
+  trackingMono: 0,
+  setTrackingMono: () => {},
 });
 
 function getInitialThemeId(): string {
@@ -158,11 +170,25 @@ function applyMonoFont(font: FontDef) {
   document.documentElement.style.setProperty('--font-mono', `${font.family}, ui-monospace, monospace`);
 }
 
+function getInitialTracking(key: string): number {
+  if (typeof window === 'undefined') return 0;
+  const stored = localStorage.getItem(key);
+  const n = stored == null ? NaN : parseFloat(stored);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function applyTracking(name: 'sans' | 'heading' | 'mono', value: number) {
+  document.documentElement.style.setProperty(`--tracking-${name}`, `${value}em`);
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [themeId, setThemeIdState] = useState(getInitialThemeId);
   const [fontId, setFontIdState] = useState(getInitialFontId);
   const [headingFontId, setHeadingFontIdState] = useState(getInitialHeadingFontId);
   const [monoFontId, setMonoFontIdState] = useState(getInitialMonoFontId);
+  const [trackingSans, setTrackingSansState] = useState(() => getInitialTracking('trackingSans'));
+  const [trackingHeading, setTrackingHeadingState] = useState(() => getInitialTracking('trackingHeading'));
+  const [trackingMono, setTrackingMonoState] = useState(() => getInitialTracking('trackingMono'));
   const theme = findTheme(themeId) ?? fallback;
   const font = findFont(fontId) ?? fallbackFont;
   const headingFont = findHeadingFont(headingFontId) ?? fallbackHeadingFont;
@@ -189,6 +215,21 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('monoFontId', monoFontId);
   }, [monoFontId, monoFont]);
 
+  useEffect(() => {
+    applyTracking('sans', trackingSans);
+    localStorage.setItem('trackingSans', String(trackingSans));
+  }, [trackingSans]);
+
+  useEffect(() => {
+    applyTracking('heading', trackingHeading);
+    localStorage.setItem('trackingHeading', String(trackingHeading));
+  }, [trackingHeading]);
+
+  useEffect(() => {
+    applyTracking('mono', trackingMono);
+    localStorage.setItem('trackingMono', String(trackingMono));
+  }, [trackingMono]);
+
   const setThemeId = (id: string) => {
     if (findTheme(id)) setThemeIdState(id);
   };
@@ -205,8 +246,21 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     if (findMonoFont(id)) setMonoFontIdState(id);
   };
 
+  const clampTracking = (v: number) => Math.max(-0.04, Math.min(0.12, v));
+  const setTrackingSans = (v: number) => setTrackingSansState(clampTracking(v));
+  const setTrackingHeading = (v: number) => setTrackingHeadingState(clampTracking(v));
+  const setTrackingMono = (v: number) => setTrackingMonoState(clampTracking(v));
+
   return (
-    <ThemeContext.Provider value={{ themeId, theme, setThemeId, fontId, font, setFontId, headingFontId, headingFont, setHeadingFontId, monoFontId, monoFont, setMonoFontId }}>
+    <ThemeContext.Provider value={{
+      themeId, theme, setThemeId,
+      fontId, font, setFontId,
+      headingFontId, headingFont, setHeadingFontId,
+      monoFontId, monoFont, setMonoFontId,
+      trackingSans, setTrackingSans,
+      trackingHeading, setTrackingHeading,
+      trackingMono, setTrackingMono,
+    }}>
       {children}
     </ThemeContext.Provider>
   );

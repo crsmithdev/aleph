@@ -76,11 +76,12 @@
 /* Noto Sans Mono has a larger x-height than Source Code Pro — scale it down slightly.
    In @layer base so explicit text-{size} utilities (utilities layer) can override it. */
 @layer base {
-  .font-mono { font-size: 0.9em; }
+  .font-mono { font-size: 0.9em; letter-spacing: var(--tracking-mono, 0); }
 }
 
 body {
   font-family: var(--font-sans);
+  letter-spacing: var(--tracking-sans, 0);
   background-color: var(--bg-primary);
   color: var(--text-primary);
   min-height: 100vh;
@@ -90,6 +91,7 @@ body {
 
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-heading);
+  letter-spacing: var(--tracking-heading, 0);
 }
 
 ::selection {

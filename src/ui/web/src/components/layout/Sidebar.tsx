@@ -237,6 +237,46 @@ function MonoFontSelect({ collapsed }: { collapsed?: boolean }) {
   return <FontPicker items={monoFonts} activeId={monoFontId} onSelect={setMonoFontId} icon="code" fallbackStack="ui-monospace, monospace" collapsed={collapsed} />;
 }
 
+function TrackingSlider({ icon, value, onChange, title }: {
+  icon: string;
+  value: number;
+  onChange: (v: number) => void;
+  title: string;
+}) {
+  return (
+    <div className="flex items-center gap-2.5 px-2.5 py-1 text-text-muted" title={title}>
+      <Icon name={icon} size="xs" />
+      <input
+        type="range"
+        min={-0.04}
+        max={0.12}
+        step={0.005}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        onDoubleClick={() => onChange(0)}
+        className="flex-1 min-w-0 h-1 accent-accent cursor-pointer"
+      />
+      <span className="shrink-0 w-8 text-right text-[10px] tabular-nums">{value.toFixed(3)}</span>
+    </div>
+  );
+}
+
+function TrackingControls({ collapsed }: { collapsed?: boolean }) {
+  const {
+    trackingSans, setTrackingSans,
+    trackingHeading, setTrackingHeading,
+    trackingMono, setTrackingMono,
+  } = useTheme();
+  if (collapsed) return null;
+  return (
+    <>
+      <TrackingSlider icon="text_fields" value={trackingSans} onChange={setTrackingSans} title="Body tracking (double-click to reset)" />
+      <TrackingSlider icon="title" value={trackingHeading} onChange={setTrackingHeading} title="Heading tracking (double-click to reset)" />
+      <TrackingSlider icon="code" value={trackingMono} onChange={setTrackingMono} title="Mono tracking (double-click to reset)" />
+    </>
+  );
+}
+
 function ThemeSelect({ collapsed }: { collapsed?: boolean }) {
   const { themeId, theme, setThemeId } = useTheme();
   const [open, setOpen] = useState(false);
@@ -427,6 +467,7 @@ export function Sidebar() {
         <FontSelect collapsed={collapsed} />
         <HeadingFontSelect collapsed={collapsed} />
         <MonoFontSelect collapsed={collapsed} />
+        <TrackingControls collapsed={collapsed} />
         <ThemeSelect collapsed={collapsed} />
       </div>
     </aside>
