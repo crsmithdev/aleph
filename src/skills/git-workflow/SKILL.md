@@ -83,6 +83,8 @@ pip install -r requirements.txt
 
 **Announce at start:** "I'm using the git-workflow skill to land this work."
 
+**Landing isn't done until the branch, worktree, and stale remote refs are gone.** Leaving them behind is the #1 cause of "is this merged or not?" confusion. Always run Step 5 after Options 1, 2, or 4.
+
 ### Step 1: Verify Tests
 
 ```bash
@@ -142,7 +144,9 @@ EOF
 )"
 ```
 
-Then: cleanup worktree (Step 5).
+**Do not cleanup yet** — the branch is still live until the PR merges. Report the PR URL.
+
+**When the PR is merged** (either in this session or a later one, once you confirm `gh pr view <number> --json state` shows `MERGED`): run Step 5 to delete the local branch, remove the worktree, and prune the stale `origin/<branch>` ref.
 
 #### Option 3: Keep As-Is
 
@@ -172,12 +176,38 @@ git branch -D <feature-branch>
 
 Then: cleanup worktree (Step 5).
 
-### Step 5: Cleanup Worktree (Options 1, 2, 4 only)
+### Step 5: Cleanup (Options 1, 2, 4)
+
+Run every applicable step — skipping any of these is how stragglers accumulate.
+
+**1. Delete the local branch** (if not already done in Step 4):
 
 ```bash
-git worktree list | grep <branch-name>   # check if worktree exists
+git branch -d <feature-branch>        # -d refuses if unmerged; use -D only after explicit confirmation
+```
+
+**2. Remove the worktree** (if one was created):
+
+```bash
+git worktree list | grep <branch-name>
 git worktree remove <worktree-path>
 ```
+
+**3. Prune stale remote-tracking refs** (after a remote branch was deleted, e.g. by PR merge):
+
+```bash
+git fetch --prune
+```
+
+**4. Verify nothing stale remains:**
+
+```bash
+git worktree list                     # should not contain <branch-name>
+git branch --merged main              # local branches already merged — candidates for deletion
+git branch -vv | grep ': gone'        # local branches whose upstream was deleted — safe to remove
+```
+
+If step 4 surfaces stragglers from earlier work, mention them to the user and offer to clean up.
 
 ---
 
