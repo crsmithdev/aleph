@@ -103,7 +103,10 @@ export function applyResearchDDL(sqlite: Sqlite): void {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_rs_session_created ON research_steps(session_id, created_at);
-    CREATE INDEX IF NOT EXISTS idx_rs_session_error_kind ON research_steps(session_id, error_kind) WHERE error_kind IS NOT NULL;
+    -- Note: idx_rs_session_error_kind is created in the ALTER TABLE migration section
+    -- below, AFTER the column is added. Creating it here fails on pre-existing DBs
+    -- where the table already exists without the column (CREATE TABLE IF NOT EXISTS
+    -- is a no-op there).
 
     CREATE TABLE IF NOT EXISTS research_plans (
       id TEXT PRIMARY KEY,
