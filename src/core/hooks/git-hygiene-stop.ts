@@ -68,10 +68,14 @@ const isDirty = status.length > 0;
 const unpushed = git(`git log origin/${branch}..HEAD --oneline 2>/dev/null`);
 const hasUnpushed = unpushed.length > 0 && !isMain; // don't nag about pushing main
 
-// Allow main when the last commit was a merge or squash (i.e. the /ship workflow landed here)
+// Allow main when the session ended in a legitimate post-land state:
+//  - a merge or squash commit (the /ship workflow landed here), OR
+//  - tree is clean and fully pushed (a fast-forward land leaves no merge commit, so fall back to the invariant).
 const lastCommitSubject = git("git log -1 --pretty=%s HEAD 2>/dev/null");
 const lastCommitParents = git("git log -1 --pretty=%P HEAD 2>/dev/null").split(/\s+/).filter(Boolean).length;
-const isPostShip = isMain && (lastCommitParents >= 2 || /^Merge\b/i.test(lastCommitSubject) || /\(squashed\)/i.test(lastCommitSubject));
+const isMergeOrSquash = lastCommitParents >= 2 || /^Merge\b/i.test(lastCommitSubject) || /\(squashed\)/i.test(lastCommitSubject);
+const isLandedClean = isMain && !isDirty && unpushed.length === 0;
+const isPostShip = isMain && (isMergeOrSquash || isLandedClean);
 
 trace(TAG, `branch=${branch} isMain=${isMain} dirty=${isDirty} unpushed=${hasUnpushed} madeEdits=${madeEdits} isPostShip=${isPostShip}`);
 
