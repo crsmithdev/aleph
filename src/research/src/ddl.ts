@@ -347,6 +347,7 @@ export function applyResearchDDL(sqlite: Sqlite): void {
   try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN retry_after TEXT`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN seed_similarity REAL`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_steps ADD COLUMN metadata TEXT`); } catch { /* exists */ }
+  try { sqlite.exec(`ALTER TABLE research_steps ADD COLUMN error_kind TEXT`); } catch { /* exists */ }
   // Active-leader steering: user-supplied intent + output shape, plus applied_at on plan
   // mods so boost/deprioritize priority-deltas don't re-apply every engine loop.
   try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN intent TEXT`); } catch { /* exists */ }

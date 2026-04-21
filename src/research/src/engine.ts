@@ -102,6 +102,60 @@ export function isCovered(threadFindings: ResearchFinding[]): boolean {
   return avgConf > 0.65 && avgNovelty < 0.3;
 }
 
+/** Structured classification of provider/upstream errors.
+ *  Drives telemetry (which kind of failure) and the isTransient gate (which
+ *  kinds back off vs. exhaust). 402 stays in the transient group because the
+ *  user tops up the balance and wants the thread to resume automatically. */
+export type ErrorKind =
+  | 'credit_exhausted'
+  | 'rate_limit'
+  | 'overload'
+  | 'model_disabled'
+  | 'transient_other'
+  | 'permanent'
+  | 'unknown';
+
+// Which kinds trigger exponential backoff (retry_after) vs. exhaust the thread.
+// Keep this aligned with the original isTransient string matcher: 402/429/529
+// and explicit rate-limit text. Network timeouts / 5xx wrappers classify as
+// `transient_other` for telemetry but exhaust (no backoff) — matches prior behavior.
+const TRANSIENT_KINDS: ReadonlySet<ErrorKind> = new Set([
+  'credit_exhausted', 'rate_limit', 'overload',
+]);
+
+export function classifyError(msg: string): ErrorKind {
+  const m = msg.toLowerCase();
+
+  if (m.includes('402') && /credit|afford|balance|insufficient/.test(m)) return 'credit_exhausted';
+  if (m.includes('402')) return 'credit_exhausted';
+
+  if (m.includes('429') || /rate[ _-]?limit/.test(m) || m.includes('too many requests')) return 'rate_limit';
+
+  if (m.includes('529') || m.includes('503') || m.includes('overload')) return 'overload';
+
+  if (m.includes('404') || /no endpoints|model.*(not found|unavailable|disabled|deprecated)|not a valid model/.test(m)) {
+    return 'model_disabled';
+  }
+
+  if (m.includes('timeout') || m.includes('timed out') || m.includes('etimedout')
+    || m.includes('econnreset') || m.includes('econnrefused')
+    || m.includes('aborterror') || m.includes('fetch failed')
+    || m.includes('502') || m.includes('504')) {
+    return 'transient_other';
+  }
+
+  if (m.includes('401') || m.includes('403') || m.includes('unauthorized') || m.includes('forbidden')
+    || m.includes('400') || m.includes('invalid_request')) {
+    return 'permanent';
+  }
+
+  return 'unknown';
+}
+
+export function isTransientError(kind: ErrorKind): boolean {
+  return TRANSIENT_KINDS.has(kind);
+}
+
 type TaskAction = 'broad_search' | 'targeted_lookup' | 'verification';
 
 export class AnthropicProvider implements LLMProvider {
@@ -310,6 +364,7 @@ export class ResearchEngine {
           const err = error instanceof Error ? error : new Error(String(error));
           this.onError?.(err, thread);
 
+          const kind = classifyError(err.message);
           steps.createStep(this.sqlite, {
             thread_id: thread.id,
             session_id: sessionId,
@@ -319,18 +374,17 @@ export class ResearchEngine {
             cost_usd: 0,
             duration_ms: 0,
             error: err.message,
+            error_kind: kind,
           });
 
-          const isTransient = (msg: string) =>
-            msg.includes('429') || msg.includes('402') || msg.includes('529') || msg.toLowerCase().includes('rate');
-          const isRateLimit = isTransient(err.message);
+          const isRateLimit = isTransientError(kind);
           const allSteps = steps.listSteps(this.sqlite, sessionId, { threadId: thread.id });
           const priorErrors = allSteps.filter(s => s.error).length;
 
           if (isRateLimit) {
             let rateLimitStreak = 0;
             for (const s of allSteps) {  // DESC order — newest first
-              if (s.error && isTransient(s.error)) { rateLimitStreak++; } else { break; }
+              if (s.error && isTransientError(classifyError(s.error))) { rateLimitStreak++; } else { break; }
             }
             const backoffMs = Math.min(30_000 * Math.pow(2, rateLimitStreak - 1), 600_000);
             const retryAfter = new Date(Date.now() + backoffMs).toISOString().replace('T', ' ').replace('Z', '');
@@ -420,6 +474,7 @@ export class ResearchEngine {
         throw err;
       }
 
+      const kind = classifyError(err.message);
       steps.createStep(this.sqlite, {
         thread_id: threadId,
         session_id: sessionId,
@@ -429,12 +484,10 @@ export class ResearchEngine {
         cost_usd: 0,
         duration_ms: 0,
         error: err.message,
+        error_kind: kind,
       });
 
-      const isTransient = (msg: string) =>
-        msg.includes('429') || msg.includes('402') || msg.includes('529') || msg.toLowerCase().includes('rate');
-
-      const isRateLimit = isTransient(err.message);
+      const isRateLimit = isTransientError(kind);
       const allSteps = steps.listSteps(this.sqlite, sessionId, { threadId });
       const priorErrors = allSteps.filter(s => s.error).length;
 
@@ -442,7 +495,7 @@ export class ResearchEngine {
       // allSteps is ORDER BY created_at DESC — iterate newest-first
       let rateLimitStreak = 0;
       for (const s of allSteps) {
-        if (s.error && isTransient(s.error)) {
+        if (s.error && isTransientError(classifyError(s.error))) {
           rateLimitStreak++;
         } else {
           break;

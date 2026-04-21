@@ -8,6 +8,7 @@ function rowToStep(row: Record<string, unknown>): ResearchStep {
     ...row,
     tool_calls: JSON.parse(row.tool_calls as string),
     label: row.label ?? null,
+    error_kind: row.error_kind ?? null,
     metadata: row.metadata ? JSON.parse(row.metadata as string) : null,
   } as unknown as ResearchStep;
 }
@@ -26,6 +27,7 @@ export function createStep(
     tool_calls?: ToolCallRecord[];
     duration_ms: number;
     error?: string | null;
+    error_kind?: string | null;
     label?: string | null;
     metadata?: Record<string, unknown> | null;
   }
@@ -36,8 +38,8 @@ export function createStep(
   sqlite.prepare(`
     INSERT INTO research_steps
       (id, thread_id, session_id, finding_id, model, provider,
-       prompt_tokens, completion_tokens, cost_usd, tool_calls, duration_ms, error, label, metadata, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       prompt_tokens, completion_tokens, cost_usd, tool_calls, duration_ms, error, error_kind, label, metadata, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     params.thread_id,
@@ -51,6 +53,7 @@ export function createStep(
     JSON.stringify(params.tool_calls ?? []),
     params.duration_ms,
     params.error ?? null,
+    params.error_kind ?? null,
     params.label ?? null,
     JSON.stringify(params.metadata ?? null),
     now

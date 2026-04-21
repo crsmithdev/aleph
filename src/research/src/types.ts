@@ -329,6 +329,7 @@ export interface ResearchStep {
   tool_calls: ToolCallRecord[];
   duration_ms: number;
   error: string | null;
+  error_kind: string | null;
   label: string | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
