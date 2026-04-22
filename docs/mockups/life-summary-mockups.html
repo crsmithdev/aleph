@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Life · Summary · Tri-period datacard mockups</title>
+<style>
+  :root {
+    --bg-0: #0e0f12;
+    --bg-1: #16181d;
+    --bg-2: #1d2027;
+    --bg-3: #252932;
+    --border-1: #2a2f39;
+    --border-2: #353b48;
+    --text-1: #e6e8ee;
+    --text-2: #b6bac6;
+    --text-3: #7d8492;
+    --accent: #6aa3ff;
+    --success: #34c98a;
+    --warning: #f0a93b;
+    --error: #ff6b6b;
+    --magenta: #c879ff;
+    --cyan: #4ddbe6;
+  }
+  * { box-sizing: border-box; }
+  html, body { background: var(--bg-0); color: var(--text-1); margin: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", Inter, system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.45;
+    padding: 32px;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 18px; margin: 32px 0 12px; color: var(--text-2); font-weight: 600; }
+  p.lede { color: var(--text-2); font-size: 15px; margin: 0 0 24px; max-width: 60ch; }
+
+  .grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 16px; }
+  @media (max-width: 980px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+
+  /* ---------- Variant A — stacked rows, today emphasized ---------- */
+  .card {
+    background: var(--bg-1);
+    border: 1px solid var(--border-1);
+    border-radius: 12px;
+    padding: 16px 18px;
+  }
+  .card .label {
+    font-size: 14px;
+    color: var(--text-3);
+    letter-spacing: 0.02em;
+    margin: 0 0 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .row { display: flex; align-items: baseline; justify-content: space-between; }
+  .row + .row { margin-top: 8px; }
+  .row .when { font-size: 14px; color: var(--text-3); }
+  .row .num { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+  .row.today .num { font-size: 32px; color: var(--text-1); }
+  .row.today .when { color: var(--text-2); font-weight: 600; }
+  .row.yesterday .num { font-size: 18px; color: var(--text-2); }
+  .row.lastweek .num { font-size: 16px; color: var(--text-3); }
+
+  /* color flavors */
+  .card.success .row.today .num { color: var(--success); }
+  .card.accent  .row.today .num { color: var(--accent); }
+  .card.warning .row.today .num { color: var(--warning); }
+  .card.magenta .row.today .num { color: var(--magenta); }
+
+  /* ---------- Variant B — segmented bars ---------- */
+  .barcard {
+    background: var(--bg-1);
+    border: 1px solid var(--border-1);
+    border-radius: 12px;
+    padding: 16px 18px;
+  }
+  .barcard .head {
+    display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px;
+  }
+  .barcard .label {
+    font-size: 14px; color: var(--text-3); font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.02em;
+  }
+  .barcard .total { font-size: 14px; color: var(--text-2); }
+  .bars { display: grid; grid-template-columns: 56px 1fr 36px; row-gap: 8px; align-items: center; }
+  .bars .when { font-size: 14px; color: var(--text-2); }
+  .bars .when.today { color: var(--text-1); font-weight: 600; }
+  .bars .num { font-size: 14px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text-2); }
+  .track {
+    height: 10px; background: var(--bg-3); border-radius: 6px; overflow: hidden;
+  }
+  .fill { height: 100%; border-radius: 6px; }
+  .barcard.success .fill.today    { background: var(--success); }
+  .barcard.success .fill.yesterday{ background: color-mix(in oklab, var(--success) 70%, var(--bg-3)); }
+  .barcard.success .fill.lastweek { background: color-mix(in oklab, var(--success) 40%, var(--bg-3)); }
+  .barcard.accent  .fill.today    { background: var(--accent); }
+  .barcard.accent  .fill.yesterday{ background: color-mix(in oklab, var(--accent) 70%, var(--bg-3)); }
+  .barcard.accent  .fill.lastweek { background: color-mix(in oklab, var(--accent) 40%, var(--bg-3)); }
+  .barcard.warning .fill.today    { background: var(--warning); }
+  .barcard.warning .fill.yesterday{ background: color-mix(in oklab, var(--warning) 70%, var(--bg-3)); }
+  .barcard.warning .fill.lastweek { background: color-mix(in oklab, var(--warning) 40%, var(--bg-3)); }
+  .barcard.magenta .fill.today    { background: var(--magenta); }
+  .barcard.magenta .fill.yesterday{ background: color-mix(in oklab, var(--magenta) 70%, var(--bg-3)); }
+  .barcard.magenta .fill.lastweek { background: color-mix(in oklab, var(--magenta) 40%, var(--bg-3)); }
+
+  /* ---------- Variant C — big number + sparkline ---------- */
+  .sparkcard {
+    background: var(--bg-1);
+    border: 1px solid var(--border-1);
+    border-radius: 12px;
+    padding: 16px 18px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 16px;
+    align-items: end;
+  }
+  .sparkcard .label {
+    font-size: 14px; color: var(--text-3); font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.02em; grid-column: 1 / -1;
+  }
+  .sparkcard .big {
+    font-size: 40px; font-weight: 700; line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .sparkcard .meta {
+    font-size: 14px; color: var(--text-2); margin-top: 6px;
+  }
+  .sparkcard .meta .ystr { color: var(--text-2); }
+  .sparkcard .meta .wstr { color: var(--text-3); margin-left: 10px; }
+  .sparkcard.success .big { color: var(--success); }
+  .sparkcard.accent  .big { color: var(--accent); }
+  .sparkcard.warning .big { color: var(--warning); }
+  .sparkcard.magenta .big { color: var(--magenta); }
+  .spark { width: 110px; height: 40px; }
+
+  /* ---------- Big action buttons ---------- */
+  .actions { display: flex; gap: 12px; flex-wrap: wrap; margin: 24px 0 0; }
+  .bigbtn {
+    flex: 1; min-width: 180px;
+    background: var(--bg-1); border: 1px solid var(--border-1);
+    border-radius: 12px; padding: 18px 20px; cursor: pointer;
+    display: flex; align-items: center; gap: 14px; color: var(--text-1);
+    font-size: 16px; font-weight: 600; text-align: left;
+    transition: border-color .15s, background .15s, transform .05s;
+  }
+  .bigbtn:hover { border-color: var(--border-2); background: var(--bg-2); }
+  .bigbtn:active { transform: translateY(1px); }
+  .bigbtn .glyph {
+    width: 36px; height: 36px; border-radius: 10px;
+    display: grid; place-items: center; font-size: 22px; line-height: 1;
+    background: var(--bg-3);
+  }
+  .bigbtn.goal    .glyph { color: var(--accent);  background: color-mix(in oklab, var(--accent) 18%, var(--bg-3)); }
+  .bigbtn.todo    .glyph { color: var(--success); background: color-mix(in oklab, var(--success) 18%, var(--bg-3)); }
+  .bigbtn.habit   .glyph { color: var(--magenta); background: color-mix(in oklab, var(--magenta) 18%, var(--bg-3)); }
+  .bigbtn .sub    { display: block; font-size: 14px; font-weight: 400; color: var(--text-3); margin-top: 2px; }
+
+  hr { border: none; border-top: 1px solid var(--border-1); margin: 36px 0; }
+  .note { color: var(--text-3); font-size: 14px; margin: 6px 0 18px; }
+</style>
+</head>
+<body>
+
+<h1>Life · Summary — concept mockups</h1>
+<p class="lede">
+  Three approaches for showing <strong>today / yesterday / last week</strong> in a single
+  data card without resorting to disabled tags or sub-14px text. Drop any of them in
+  isolation, or mix (e.g. variant&nbsp;A for counts and variant&nbsp;C for momentum).
+</p>
+
+<h2>Variant A — Stacked rows, today is hero</h2>
+<p class="note">
+  The number scale itself does the de-emphasis: today is 32px, yesterday 18px, last week 16px.
+  No opacity, no “disabled” token. Color tints today’s number per metric.
+</p>
+<div class="grid">
+  <div class="card accent">
+    <div class="label">Goals created</div>
+    <div class="row today">     <span class="when">Today</span>     <span class="num">3</span></div>
+    <div class="row yesterday"> <span class="when">Yesterday</span> <span class="num">1</span></div>
+    <div class="row lastweek">  <span class="when">Last 7d</span>   <span class="num">9</span></div>
+  </div>
+  <div class="card success">
+    <div class="label">Goals completed</div>
+    <div class="row today">     <span class="when">Today</span>     <span class="num">2</span></div>
+    <div class="row yesterday"> <span class="when">Yesterday</span> <span class="num">0</span></div>
+    <div class="row lastweek">  <span class="when">Last 7d</span>   <span class="num">5</span></div>
+  </div>
+  <div class="card success">
+    <div class="label">Todos done</div>
+    <div class="row today">     <span class="when">Today</span>     <span class="num">7</span></div>
+    <div class="row yesterday"> <span class="when">Yesterday</span> <span class="num">4</span></div>
+    <div class="row lastweek">  <span class="when">Last 7d</span>   <span class="num">28</span></div>
+  </div>
+  <div class="card magenta">
+    <div class="label">Habits hit</div>
+    <div class="row today">     <span class="when">Today</span>     <span class="num">4 / 5</span></div>
+    <div class="row yesterday"> <span class="when">Yesterday</span> <span class="num">5 / 5</span></div>
+    <div class="row lastweek">  <span class="when">Last 7d</span>   <span class="num">29 / 35</span></div>
+  </div>
+</div>
+
+<h2>Variant B — Segmented bars (proportional)</h2>
+<p class="note">
+  All three periods sit in the same card with a horizontal track each. Bar opacity
+  steps down (today full color, yesterday 70% mix, last week 40% mix) without using
+  CSS opacity on text. The number column stays at 14px so it’s always readable.
+</p>
+<div class="grid">
+  <div class="barcard accent">
+    <div class="head"><span class="label">Goals created</span><span class="total">total 9</span></div>
+    <div class="bars">
+      <span class="when today">Today</span>     <div class="track"><div class="fill today" style="width:33%"></div></div>     <span class="num">3</span>
+      <span class="when">Yesterday</span>       <div class="track"><div class="fill yesterday" style="width:11%"></div></div>  <span class="num">1</span>
+      <span class="when">Last 7d</span>         <div class="track"><div class="fill lastweek" style="width:100%"></div></div>  <span class="num">9</span>
+    </div>
+  </div>
+  <div class="barcard success">
+    <div class="head"><span class="label">Goals completed</span><span class="total">total 5</span></div>
+    <div class="bars">
+      <span class="when today">Today</span>     <div class="track"><div class="fill today" style="width:40%"></div></div>     <span class="num">2</span>
+      <span class="when">Yesterday</span>       <div class="track"><div class="fill yesterday" style="width:0%"></div></div>   <span class="num">0</span>
+      <span class="when">Last 7d</span>         <div class="track"><div class="fill lastweek" style="width:100%"></div></div>  <span class="num">5</span>
+    </div>
+  </div>
+  <div class="barcard success">
+    <div class="head"><span class="label">Todos done</span><span class="total">total 28</span></div>
+    <div class="bars">
+      <span class="when today">Today</span>     <div class="track"><div class="fill today" style="width:25%"></div></div>     <span class="num">7</span>
+      <span class="when">Yesterday</span>       <div class="track"><div class="fill yesterday" style="width:14%"></div></div>  <span class="num">4</span>
+      <span class="when">Last 7d</span>         <div class="track"><div class="fill lastweek" style="width:100%"></div></div>  <span class="num">28</span>
+    </div>
+  </div>
+  <div class="barcard magenta">
+    <div class="head"><span class="label">Habits hit rate</span><span class="total">83%</span></div>
+    <div class="bars">
+      <span class="when today">Today</span>     <div class="track"><div class="fill today" style="width:80%"></div></div>     <span class="num">4/5</span>
+      <span class="when">Yesterday</span>       <div class="track"><div class="fill yesterday" style="width:100%"></div></div> <span class="num">5/5</span>
+      <span class="when">Last 7d</span>         <div class="track"><div class="fill lastweek" style="width:83%"></div></div>   <span class="num">29/35</span>
+    </div>
+  </div>
+</div>
+
+<h2>Variant C — Hero number + inline sparkline</h2>
+<p class="note">
+  Today gets a single dominant number with yesterday and last-week summarized as
+  a 14px caption. The 7-day sparkline carries the trend so the card stays compact.
+</p>
+<div class="grid">
+  <div class="sparkcard accent">
+    <div class="label">Goals created</div>
+    <div>
+      <div class="big">3</div>
+      <div class="meta"><span class="ystr">yest 1</span><span class="wstr">7d 9</span></div>
+    </div>
+    <svg class="spark" viewBox="0 0 110 40" preserveAspectRatio="none">
+      <polyline fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"
+        points="0,32 18,28 36,30 54,18 72,22 90,12 110,6" style="color: var(--accent)"/>
+    </svg>
+  </div>
+  <div class="sparkcard success">
+    <div class="label">Goals completed</div>
+    <div>
+      <div class="big">2</div>
+      <div class="meta"><span class="ystr">yest 0</span><span class="wstr">7d 5</span></div>
+    </div>
+    <svg class="spark" viewBox="0 0 110 40" preserveAspectRatio="none">
+      <polyline fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"
+        points="0,34 18,30 36,30 54,32 72,30 90,32 110,18" style="color: var(--success)"/>
+    </svg>
+  </div>
+  <div class="sparkcard success">
+    <div class="label">Todos done</div>
+    <div>
+      <div class="big">7</div>
+      <div class="meta"><span class="ystr">yest 4</span><span class="wstr">7d 28</span></div>
+    </div>
+    <svg class="spark" viewBox="0 0 110 40" preserveAspectRatio="none">
+      <polyline fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"
+        points="0,28 18,22 36,26 54,18 72,12 90,18 110,8" style="color: var(--success)"/>
+    </svg>
+  </div>
+  <div class="sparkcard magenta">
+    <div class="label">Habits hit rate</div>
+    <div>
+      <div class="big">80%</div>
+      <div class="meta"><span class="ystr">yest 100%</span><span class="wstr">7d 83%</span></div>
+    </div>
+    <svg class="spark" viewBox="0 0 110 40" preserveAspectRatio="none">
+      <polyline fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"
+        points="0,12 18,10 36,16 54,8 72,6 90,4 110,12" style="color: var(--magenta)"/>
+    </svg>
+  </div>
+</div>
+
+<hr/>
+
+<h2>Big create-action buttons</h2>
+<p class="note">
+  Replaces the date-range chips at the top of the page. Sized so the glyph + label
+  read at arm’s length; sub-label gives the keyboard accelerator.
+</p>
+<div class="actions">
+  <button class="bigbtn goal">
+    <span class="glyph">+</span>
+    <span>New goal<span class="sub">G then N</span></span>
+  </button>
+  <button class="bigbtn todo">
+    <span class="glyph">✓</span>
+    <span>New todo<span class="sub">T then N</span></span>
+  </button>
+  <button class="bigbtn habit">
+    <span class="glyph">↻</span>
+    <span>New habit<span class="sub">H then N</span></span>
+  </button>
+</div>
+
+</body>
+</html>
