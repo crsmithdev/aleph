@@ -1646,9 +1646,36 @@ function LiveView({
   // Thread updated_at bumps for: status changes, short_query set, priority changed, retry_after set.
   type EnrichedEvent = StreamEvent & { threadDiff?: string };
 
+  // Merge the SSE stream with DB-backed steps + findings so rows that have
+  // aged out of the 1000-event SSE cache (long-running sessions) still appear.
+  // Events that only exist in the DB are synthesized as StreamEvents here.
+  const mergedEvents = useMemo<StreamEvent[]>(() => {
+    const stepIds = new Set<string>();
+    const findingIds = new Set<string>();
+    for (const e of events) {
+      if (e.type === 'step') stepIds.add(e.payload.id);
+      else if (e.type === 'finding') findingIds.add(e.payload.id);
+    }
+    const extra: StreamEvent[] = [];
+    for (const s of allSteps) {
+      if (!stepIds.has(s.id)) extra.push({ type: 'step', payload: s });
+    }
+    for (const f of findings) {
+      if (!findingIds.has(f.id)) extra.push({ type: 'finding', payload: f });
+    }
+    if (extra.length === 0) return events;
+    const tsOf = (e: StreamEvent): string => {
+      if (e.type === 'thread') return e.payload.updated_at ?? e.payload.created_at;
+      if (e.type === 'step' || e.type === 'finding') return e.payload.created_at;
+      return '';
+    };
+    // SSE cache is newest-first; keep that ordering for the combined list.
+    return [...events, ...extra].sort((a, b) => tsOf(b).localeCompare(tsOf(a)));
+  }, [events, allSteps, findings]);
+
   const streamEvents = useMemo(() => {
     const prevState = new Map<string, ResearchThread>();
-    const enriched: EnrichedEvent[] = events.map(ev => {
+    const enriched: EnrichedEvent[] = mergedEvents.map(ev => {
       if (ev.type !== 'thread') return ev;
       const t = ev.payload;
       const prev = prevState.get(t.id);
@@ -1694,7 +1721,7 @@ function LiveView({
       });
     }
     return evs;
-  }, [events, filterType, filterThreadId, searchText]);
+  }, [mergedEvents, filterType, filterThreadId, searchText]);
 
   useLayoutEffect(() => {
     if (autoScroll && streamRef.current) {
@@ -2043,7 +2070,7 @@ function LiveView({
               );
             })()}
             <span className="text-sm text-text-muted font-mono ml-auto shrink-0">
-              {streamEvents.length !== events.length ? `${streamEvents.length} / ${events.length}` : events.length}
+              {streamEvents.length !== mergedEvents.length ? `${streamEvents.length} / ${mergedEvents.length}` : mergedEvents.length}
             </span>
             <button
               title="Download activity log (.md) — human-readable report with jobs, steps, findings, status history"
@@ -3575,447 +3602,6 @@ function SessionConfigView({
   );
 }
 
-type EventKind = 'search' | 'synth' | 'finding' | 'extract' | 'dedup' | 'error';
-
-interface TimelineEvent {
-  id: string;
-  kind: EventKind;
-  /** Short label rendered in the kind column. For synth events this is the step's
-   *  human-readable label (e.g. "gap analysis") rather than the generic "synth". */
-  typeLabel: string;
-  ts: string;
-  threadId: string;
-  threadLabel: string;
-  summary: React.ReactNode;
-  /** Right-aligned metric (cost, novelty, extraction size — whatever is salient). */
-  metric: React.ReactNode;
-  /** Expanded view — full context for the event. */
-  details: React.ReactNode;
-  /** Original record for deep-links / copy. */
-  raw: ResearchStep | ResearchFinding;
-}
-
-/** Map engine-side callLLM labels to one-word kinds for the UI column, roughly
- *  matching the mockup's taxonomy. Anything we don't recognise falls through to
- *  'synth' so behaviour degrades gracefully. */
-const LABEL_TO_KIND: Record<string, EventKind> = {
-  'dedup check': 'dedup',
-  'extract concepts': 'extract',
-};
-
-function stepEventKind(step: ResearchStep): EventKind {
-  if (step.error) return 'error';
-  const meta = step.metadata as { decision?: string } | null;
-  if (meta?.decision === 'dedup') return 'dedup';
-  if (step.label && LABEL_TO_KIND[step.label]) return LABEL_TO_KIND[step.label];
-  const tools = step.tool_calls ?? [];
-  const hasExtract = tools.some(t => (t.jina_fetches?.length ?? 0) > 0);
-  const hasSearch = tools.some(t => t.tool === 'web_search' || t.tool === 'tavily' || /search/i.test(t.tool));
-  if (hasExtract) return 'extract';
-  if (hasSearch) return 'search';
-  return 'synth';
-}
-
-/** Short, readable label for the kind column. Synth rows use the step label so
- *  the user can tell "gap analysis" from "synthesize finding" at a glance —
- *  before, every LLM call just said "synth". */
-function stepTypeLabel(step: ResearchStep, kind: EventKind): string {
-  if (kind === 'error') return 'error';
-  if (kind === 'search') return 'search';
-  if (kind === 'extract') return 'extract';
-  if (kind === 'dedup') return 'dedup';
-  if (kind === 'finding') return 'finding';
-  // synth: prefer the label (e.g. 'gap analysis', 'synthesize finding')
-  return step.label ?? 'synth';
-}
-
-function formatTime(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  } catch { return ''; }
-}
-
-function kindClass(kind: EventKind): string {
-  switch (kind) {
-    case 'search': return 'text-info';
-    case 'synth': return 'text-accent';
-    case 'finding': return 'text-success';
-    case 'extract': return 'text-info';
-    case 'dedup': return 'text-warning';
-    case 'error': return 'text-error';
-  }
-}
-
-/** Hostname-only version of a URL — used to keep extract rows scannable. */
-function hostOf(url: string): string {
-  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
-}
-
-function formatCost(n: number): string {
-  return n >= 0.01 ? `$${n.toFixed(3)}` : `$${n.toFixed(4)}`;
-}
-
-/** Build the summary + right-aligned metric + expanded detail for a single step. */
-function buildStepEvent(s: ResearchStep, kind: EventKind): Pick<TimelineEvent, 'summary' | 'metric' | 'details'> {
-  const tools = s.tool_calls ?? [];
-  const meta = s.metadata as Record<string, unknown> | null;
-
-  if (kind === 'error') {
-    return {
-      summary: <span className="text-error">{s.error}</span>,
-      metric: s.error_kind ? <span className="text-error/80">{String(s.error_kind)}</span> : null,
-      details: (
-        <div className="space-y-1 text-sm text-text-secondary">
-          <div><span className="text-text-muted">model:</span> <span className="font-mono">{s.model}</span></div>
-          {s.error_kind && <div><span className="text-text-muted">kind:</span> {String(s.error_kind)}</div>}
-          <div className="whitespace-pre-wrap text-error">{s.error}</div>
-        </div>
-      ),
-    };
-  }
-
-  if (kind === 'search') {
-    const sq = tools.find(t => t.input && typeof t.input.query === 'string');
-    const query = sq?.input?.query as string | undefined;
-    const resultCount = tools.reduce((a, t) => {
-      const out = t.output as unknown;
-      if (typeof out === 'string') return a + (out.match(/^\d+\./gm)?.length ?? 0);
-      return a;
-    }, 0);
-    return {
-      summary: (
-        <span>
-          {query ? <strong className="text-text-primary font-medium">&ldquo;{query}&rdquo;</strong> : <span className="text-text-muted">search</span>}
-          {resultCount > 0 && <span className="text-text-muted"> &middot; {resultCount} results</span>}
-        </span>
-      ),
-      metric: s.cost_usd > 0 ? <span>{formatCost(s.cost_usd)}</span> : null,
-      details: (
-        <div className="space-y-2 text-sm">
-          <div className="text-text-muted">model: <span className="font-mono text-text-secondary">{s.model}</span> &middot; {fmtTokens(s.prompt_tokens + s.completion_tokens)} tok</div>
-          {tools.map((t, i) => (
-            <div key={i} className="border-l-2 border-border-primary/40 pl-3">
-              <div className="text-text-muted font-mono text-sm">{t.tool}</div>
-              {t.input && <div className="text-text-primary mt-0.5">{JSON.stringify(t.input)}</div>}
-              {typeof t.output === 'string' && t.output.length > 0 && (
-                <pre className="whitespace-pre-wrap text-text-secondary text-sm mt-1 max-h-64 overflow-y-auto">{t.output.slice(0, 2000)}{t.output.length > 2000 ? '…' : ''}</pre>
-              )}
-            </div>
-          ))}
-        </div>
-      ),
-    };
-  }
-
-  if (kind === 'extract') {
-    const fetches = tools.flatMap(t => t.jina_fetches ?? []);
-    const ok = fetches.filter(f => f.ok);
-    const failed = fetches.filter(f => !f.ok);
-    const bytes = ok.reduce((a, f) => a + (f.content_length ?? 0), 0);
-    const hosts = ok.slice(0, 3).map(f => hostOf(f.url));
-    return {
-      summary: (
-        <span className="text-text-secondary">
-          {hosts.length > 0 ? (
-            <>
-              <strong className="text-text-primary font-medium">{hosts.join(', ')}</strong>
-              {ok.length > hosts.length && <span className="text-text-muted"> +{ok.length - hosts.length}</span>}
-            </>
-          ) : (
-            <span className="text-text-muted">{fetches.length} URLs</span>
-          )}
-          {failed.length > 0 && <span className="text-error ml-2">{failed.length} failed</span>}
-        </span>
-      ),
-      metric: bytes > 0 ? <span>{kbSize(bytes)}</span> : null,
-      details: (
-        <div className="space-y-1 text-sm">
-          {fetches.map((f, i) => (
-            <div key={i} className="flex items-start gap-2">
-              <span className={clsx('font-mono shrink-0 w-10', f.ok ? 'text-success' : 'text-error')}>{f.ok ? 'ok' : 'fail'}</span>
-              <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-text-primary truncate hover:underline flex-1 min-w-0">{f.url}</a>
-              {f.ok
-                ? <span className="text-text-muted tabular-nums shrink-0">{kbSize(f.content_length ?? 0)}</span>
-                : <span className="text-error shrink-0 truncate max-w-64">{f.error}</span>
-              }
-            </div>
-          ))}
-        </div>
-      ),
-    };
-  }
-
-  if (kind === 'dedup') {
-    const isDup = meta?.is_duplicate === true;
-    const existing = meta?.existing_count as number | undefined;
-    return {
-      summary: (
-        <span>
-          <strong className={clsx('font-medium', isDup ? 'text-warning' : 'text-text-primary')}>
-            {isDup ? 'duplicate' : 'unique'}
-          </strong>
-          {typeof existing === 'number' && <span className="text-text-muted"> &middot; checked against {existing} existing</span>}
-        </span>
-      ),
-      metric: s.cost_usd > 0 ? <span>{formatCost(s.cost_usd)}</span> : null,
-      details: (
-        <div className="space-y-1 text-sm">
-          <div className="text-text-muted">model: <span className="font-mono text-text-secondary">{s.model}</span></div>
-          <pre className="whitespace-pre-wrap text-text-secondary text-sm">{JSON.stringify(meta, null, 2)}</pre>
-        </div>
-      ),
-    };
-  }
-
-  // synth fallback — use label for differentiation; show decision metadata when present
-  const labelText = s.label ?? 'synth';
-  let summaryInner: React.ReactNode;
-  if (meta?.decision === 'synthesis') {
-    const conf = (meta.confidence as number) ?? 0;
-    const nov = (meta.novelty as number) ?? 0;
-    summaryInner = (
-      <span>
-        <strong className="text-text-primary font-medium">{labelText}</strong>
-        <span className="text-text-muted"> &middot; conf {(conf * 100).toFixed(0)}% &middot; nov {(nov * 100).toFixed(0)}%</span>
-      </span>
-    );
-  } else if (meta?.decision === 'gap_analysis') {
-    const hasGaps = meta.has_gaps as boolean;
-    const count = meta.gap_count as number;
-    summaryInner = (
-      <span>
-        <strong className="text-text-primary font-medium">{labelText}</strong>
-        <span className="text-text-muted"> &middot; {hasGaps ? `${count} gaps identified` : 'no gaps'}</span>
-      </span>
-    );
-  } else if (meta?.decision === 'lead_review') {
-    const pruned = meta.prune_count as number;
-    const boosted = meta.boost_count as number;
-    const gaps = meta.gap_count as number;
-    summaryInner = (
-      <span>
-        <strong className="text-text-primary font-medium">{labelText}</strong>
-        <span className="text-text-muted"> &middot; pruned {pruned ?? 0} &middot; boosted {boosted ?? 0} &middot; {gaps ?? 0} gap queries</span>
-      </span>
-    );
-  } else if (meta?.decision === 'follow_up_eval') {
-    const acc = meta.accepted_count as number;
-    const rej = meta.rejected_count as number;
-    summaryInner = (
-      <span>
-        <strong className="text-text-primary font-medium">{labelText}</strong>
-        <span className="text-text-muted"> &middot; {acc ?? 0} accepted / {rej ?? 0} rejected</span>
-      </span>
-    );
-  } else {
-    summaryInner = (
-      <span>
-        <strong className="text-text-primary font-medium">{labelText}</strong>
-        <span className="text-text-muted"> &middot; {s.model} &middot; in {fmtTokens(s.prompt_tokens)} / out {fmtTokens(s.completion_tokens)}</span>
-      </span>
-    );
-  }
-  return {
-    summary: summaryInner,
-    metric: s.cost_usd > 0 ? <span>{formatCost(s.cost_usd)}</span> : null,
-    details: (
-      <div className="space-y-2 text-sm">
-        <div className="text-text-muted">
-          model: <span className="font-mono text-text-secondary">{s.model}</span>
-          {' '}&middot; duration: <span className="tabular-nums text-text-secondary">{s.duration_ms}ms</span>
-          {' '}&middot; prompt: <span className="tabular-nums text-text-secondary">{s.prompt_tokens.toLocaleString()}</span>
-          {' '}&middot; completion: <span className="tabular-nums text-text-secondary">{s.completion_tokens.toLocaleString()}</span>
-        </div>
-        {meta && (
-          <div>
-            <div className="text-text-muted text-sm uppercase tracking-[0.06em]">Decision</div>
-            <pre className="whitespace-pre-wrap text-text-secondary text-sm">{JSON.stringify(meta, null, 2)}</pre>
-          </div>
-        )}
-      </div>
-    ),
-  };
-}
-
-function EventsView({
-  steps, findings, threads, isRunning, onNavigateToTelemetry,
-}: {
-  steps: ResearchStep[];
-  findings: ResearchFinding[];
-  threads: ResearchThread[];
-  isRunning: boolean;
-  onNavigateToTelemetry?: () => void;
-}) {
-  const [filter, setFilter] = useState<'all' | EventKind>('all');
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-
-  const threadShortId = useCallback((tid: string) => {
-    const idx = threads.findIndex(t => t.id === tid);
-    if (idx < 0) return tid.slice(0, 8);
-    return `thr-${String(idx + 1).padStart(2, '0')}`;
-  }, [threads]);
-
-  const timeline = useMemo<TimelineEvent[]>(() => {
-    const out: TimelineEvent[] = [];
-
-    for (const s of steps) {
-      const kind = stepEventKind(s);
-      const built = buildStepEvent(s, kind);
-      out.push({
-        id: `step-${s.id}`,
-        kind,
-        typeLabel: stepTypeLabel(s, kind),
-        ts: s.created_at,
-        threadId: s.thread_id,
-        threadLabel: threadShortId(s.thread_id),
-        summary: built.summary,
-        metric: built.metric,
-        details: built.details,
-        raw: s,
-      });
-    }
-
-    for (const f of findings) {
-      out.push({
-        id: `find-${f.id}`,
-        kind: 'finding',
-        typeLabel: 'finding',
-        ts: f.created_at,
-        threadId: f.thread_id,
-        threadLabel: threadShortId(f.thread_id),
-        summary: (
-          <span>
-            <strong className="text-text-primary font-medium">{f.summary.slice(0, 160)}</strong>
-          </span>
-        ),
-        metric: (
-          <span className={clsx(f.confidence >= 0.7 ? 'text-success' : f.confidence >= 0.4 ? 'text-warning' : 'text-error')}>
-            {f.novelty > 0.3 ? `nov ${(f.novelty * 100).toFixed(0)}%` : `conf ${(f.confidence * 100).toFixed(0)}%`}
-          </span>
-        ),
-        details: (
-          <div className="space-y-2 text-sm">
-            <div className="text-text-muted">
-              confidence: <span className="text-text-secondary tabular-nums">{(f.confidence * 100).toFixed(0)}%</span>
-              {' '}&middot; novelty: <span className="text-text-secondary tabular-nums">{(f.novelty * 100).toFixed(0)}%</span>
-            </div>
-            <div className="text-text-primary whitespace-pre-wrap">{f.content}</div>
-            {f.source_urls.length > 0 && (
-              <div>
-                <div className="text-text-muted text-sm uppercase tracking-[0.06em]">Sources</div>
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {f.source_urls.map((url, i) => (
-                    <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                      className="text-sm text-accent hover:underline truncate max-w-[280px]">{hostOf(url)}</a>
-                  ))}
-                </div>
-              </div>
-            )}
-            {f.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {f.tags.map(t => (
-                  <span key={t} className="px-1.5 py-0.5 rounded bg-bg-tertiary text-text-muted text-sm">{t}</span>
-                ))}
-              </div>
-            )}
-          </div>
-        ),
-        raw: f,
-      });
-    }
-
-    out.sort((a, b) => b.ts.localeCompare(a.ts));
-    return out;
-  }, [steps, findings, threadShortId]);
-
-  const filtered = filter === 'all' ? timeline : timeline.filter(e => e.kind === filter);
-
-  const chips: Array<{ key: 'all' | EventKind; label: string }> = [
-    { key: 'all', label: 'All' },
-    { key: 'finding', label: 'Findings' },
-    { key: 'search', label: 'Searches' },
-    { key: 'synth', label: 'Synthesis' },
-    { key: 'extract', label: 'Extraction' },
-    { key: 'dedup', label: 'Dedup' },
-    { key: 'error', label: 'Errors' },
-  ];
-
-  return (
-    <div>
-      <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
-        <div className="text-sm text-text-muted">
-          Most recent first &middot; session-scoped &middot; click a row to expand
-          {isRunning && <> &middot; <span className="text-accent">auto-updates</span></>}
-          {onNavigateToTelemetry && (
-            <>
-              {' '}&middot;{' '}
-              <button
-                onClick={onNavigateToTelemetry}
-                className="text-text-muted hover:text-accent underline decoration-dotted"
-                title="Filterable metadata view with p50/p95 job timings, failure reasons, stuck threads"
-              >
-                decision log / metrics ↗
-              </button>
-            </>
-          )}
-        </div>
-        <div className="flex items-center gap-1.5">
-          {chips.map(c => (
-            <button
-              key={c.key}
-              onClick={() => setFilter(c.key)}
-              className={clsx(
-                'px-2 py-[3px] text-sm rounded border transition-colors',
-                filter === c.key
-                  ? 'border-accent/40 text-accent bg-accent/10'
-                  : 'border-border-primary/40 text-text-muted hover:text-text-secondary',
-              )}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="border border-border-primary/40 rounded bg-bg-secondary overflow-hidden">
-        {filtered.length === 0 ? (
-          <div className="text-sm text-text-muted py-8 text-center">No events in this filter.</div>
-        ) : filtered.slice(0, 200).map(e => {
-          const expanded = expandedId === e.id;
-          return (
-            <div key={e.id} className="border-b border-border-primary/30 last:border-b-0">
-              <button
-                type="button"
-                onClick={() => setExpandedId(prev => prev === e.id ? null : e.id)}
-                className={clsx(
-                  'w-full text-left grid grid-cols-[84px_112px_80px_minmax(0,1fr)_100px] gap-3 items-center px-4 py-2 text-sm transition-colors',
-                  expanded ? 'bg-bg-tertiary/40' : 'hover:bg-bg-tertiary/20',
-                )}
-              >
-                <div className="text-sm text-text-muted tabular-nums">{formatTime(e.ts)}</div>
-                <div className={clsx('text-sm font-medium uppercase tracking-[0.06em]', kindClass(e.kind))}>{e.typeLabel}</div>
-                <div className="text-sm text-text-muted font-mono truncate">{e.threadLabel}</div>
-                <div className="min-w-0 truncate text-text-secondary">{e.summary}</div>
-                <div className="text-sm text-text-muted font-mono tabular-nums text-right truncate">{e.metric}</div>
-              </button>
-              {expanded && (
-                <div className="px-4 py-3 bg-bg-primary/40 border-t border-border-primary/20">
-                  {e.details}
-                </div>
-              )}
-            </div>
-          );
-        })}
-        {filtered.length > 200 && (
-          <div className="text-sm text-text-muted py-2 text-center border-t border-border-primary/30">
-            Showing 200 of {filtered.length} events
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function SettingsView({
   session, sessionId, onDelete,
@@ -4416,10 +4002,10 @@ export function ResearchQueryDetailPage() {
   const cancelJob = useCancelJob();
   const deleteQuery = useDeleteResearchQuery();
 
-  type Tab = 'document' | 'knowledge' | 'process' | 'sources' | 'events' | 'telemetry' | 'reviews' | 'config';
-  const TAB_VALUES: readonly Tab[] = ['document','knowledge','process','sources','events','telemetry','reviews','config'];
-  // Honour `#tab=telemetry` etc. so cross-page links (Workers, EventsView) can
-  // deep-link into a specific tab. Listens for hashchange so in-page links that
+  type Tab = 'document' | 'knowledge' | 'process' | 'sources' | 'telemetry' | 'reviews' | 'config';
+  const TAB_VALUES: readonly Tab[] = ['document','knowledge','process','sources','telemetry','reviews','config'];
+  // Honour `#tab=telemetry` etc. so cross-page links can deep-link into a
+  // specific tab. Listens for hashchange so in-page links that
   // only mutate the hash also take effect without a full remount.
   const tabFromHash = (): Tab | null => {
     if (typeof window === 'undefined') return null;
@@ -4626,7 +4212,6 @@ export function ResearchQueryDetailPage() {
               { key: 'knowledge' as const, label: 'Knowledge', count: conceptsCount },
               { key: 'process' as const, label: 'Process', count: threadsData.length },
               { key: 'sources' as const, label: 'Sources', count: sourcesTotal },
-              { key: 'events' as const, label: 'Events', count: undefined },
               { key: 'telemetry' as const, label: 'Telemetry', count: undefined },
               { key: 'reviews' as const, label: 'Reviews', count: undefined },
               { key: 'config' as const, label: 'Config', count: undefined },
@@ -4718,15 +4303,6 @@ export function ResearchQueryDetailPage() {
           )}
           {tab === 'sources' && (
             <SourcesView sessionId={id!} onNavigateToTelemetry={() => setTab('telemetry')} />
-          )}
-          {tab === 'events' && (
-            <EventsView
-              steps={allSteps}
-              findings={findingsData}
-              threads={threadsData}
-              isRunning={isRunning}
-              onNavigateToTelemetry={() => setTab('telemetry')}
-            />
           )}
           {tab === 'telemetry' && (
             <TelemetryView sessionId={id!} onNavigateToThread={navigateToLive} />
