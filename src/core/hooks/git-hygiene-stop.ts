@@ -66,7 +66,7 @@ const isMain = branch === "main" || branch === "master";
 const status = git("git status --porcelain");
 const isDirty = status.length > 0;
 const unpushed = git(`git log origin/${branch}..HEAD --oneline 2>/dev/null`);
-const hasUnpushed = unpushed.length > 0 && !isMain; // don't nag about pushing main
+const hasUnpushed = unpushed.length > 0;
 
 // Allow main when the session ended in a legitimate post-land state:
 //  - a merge or squash commit (the /ship workflow landed here), OR
