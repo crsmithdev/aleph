@@ -117,7 +117,7 @@ function InlineAddRow({ placeholder, onSubmit, loading, linkSearch }: { placehol
           onKeyDown={(e) => { if (e.key === 'Escape') { setValue(''); setAddOpen(false); } }}
         />
         <Button type="submit" size="sm" loading={loading} disabled={!value.trim()}>Add</Button>
-        <button type="button" onClick={() => { setValue(''); setAddOpen(false); }} className="text-xs text-text-muted hover:text-text-secondary">Cancel</button>
+        <button type="button" onClick={() => { setValue(''); setAddOpen(false); }} className="text-sm text-text-muted hover:text-text-secondary">Cancel</button>
       </form>
     );
   }
@@ -126,7 +126,7 @@ function InlineAddRow({ placeholder, onSubmit, loading, linkSearch }: { placehol
     return (
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center gap-2">
-          <button onClick={() => setLinkOpen(false)} className="text-xs text-text-muted hover:text-text-secondary">Close</button>
+          <button onClick={() => setLinkOpen(false)} className="text-sm text-text-muted hover:text-text-secondary">Close</button>
         </div>
         {linkSearch}
       </div>
@@ -137,17 +137,17 @@ function InlineAddRow({ placeholder, onSubmit, loading, linkSearch }: { placehol
     <div className="flex items-center gap-2 py-0.5">
       <button
         onClick={() => setAddOpen(true)}
-        className="flex items-center gap-1 text-xs text-text-muted hover:text-text-secondary transition-colors"
+        className="flex items-center gap-1 text-sm text-text-muted hover:text-text-secondary transition-colors"
       >
         <span className="text-sm leading-none">+</span>
         {placeholder}
       </button>
       {linkSearch && (
         <>
-          <span className="text-border-primary text-xs">|</span>
+          <span className="text-border-primary text-sm">|</span>
           <button
             onClick={() => setLinkOpen(true)}
-            className="flex items-center gap-1 text-xs text-text-disabled hover:text-text-muted transition-colors"
+            className="flex items-center gap-1 text-sm text-text-muted hover:text-text-muted transition-colors"
           >
             <Icon name="open_in_new" size="xs" />
             Link existing
@@ -230,7 +230,7 @@ function GoalLinkRow({ linkableGoals, completedLinkableGoals, onLink }: { linkab
       <div className="flex items-center gap-2 py-0.5">
         <button
           onClick={() => setOpen(true)}
-          className="flex items-center gap-1 text-xs text-text-muted hover:text-text-secondary transition-colors"
+          className="flex items-center gap-1 text-sm text-text-muted hover:text-text-secondary transition-colors"
         >
           <Icon name="open_in_new" size="xs" />
           Link a goal
@@ -244,7 +244,7 @@ function GoalLinkRow({ linkableGoals, completedLinkableGoals, onLink }: { linkab
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center gap-2">
-        <button onClick={() => setOpen(false)} className="text-xs text-text-muted hover:text-text-secondary">Close</button>
+        <button onClick={() => setOpen(false)} className="text-sm text-text-muted hover:text-text-secondary">Close</button>
       </div>
       {hasAny ? (
         <LinkSearch
@@ -348,7 +348,7 @@ export function GoalDetailPage() {
               value={goal.priority}
               onChange={(e) => handleUpdate({ priority: e.target.value })}
               className={clsx(
-                'px-2 py-0.5 rounded text-xs font-medium border-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent appearance-none pr-5',
+                'px-2 py-1 rounded text-sm font-medium border-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent appearance-none pr-5',
                 priorityColors[goal.priority] ?? 'bg-bg-tertiary text-text-muted',
               )}
               style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M0 2l4 4 4-4' fill='%23888'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px center' }}
@@ -361,7 +361,7 @@ export function GoalDetailPage() {
               value={goal.state}
               onChange={(e) => handleUpdate({ state: e.target.value })}
               className={clsx(
-                'px-2 py-0.5 rounded text-xs font-medium capitalize border-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent appearance-none pr-5',
+                'px-2 py-1 rounded text-sm font-medium capitalize border-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent appearance-none pr-5',
                 stateColors[goal.state] ?? 'bg-bg-tertiary text-text-muted',
               )}
               style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M0 2l4 4 4-4' fill='%23888'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px center' }}
@@ -387,14 +387,14 @@ export function GoalDetailPage() {
         </Button>
         {confirmDelete ? (
           <div className="flex items-center gap-2 ml-2">
-            <span className="text-xs text-text-muted">Delete this goal?</span>
-            <button onClick={handleDeleteGoal} className="text-xs text-red-400 hover:text-red-300 font-medium">Confirm</button>
-            <button onClick={() => setConfirmDelete(false)} className="text-xs text-text-muted hover:text-text-secondary">Cancel</button>
+            <span className="text-sm text-text-muted">Delete this goal?</span>
+            <button onClick={handleDeleteGoal} className="text-sm text-red-400 hover:text-red-300 font-medium">Confirm</button>
+            <button onClick={() => setConfirmDelete(false)} className="text-sm text-text-muted hover:text-text-secondary">Cancel</button>
           </div>
         ) : (
           <button
             onClick={() => setConfirmDelete(true)}
-            className="text-xs text-red-400 hover:text-red-300 hover:bg-red-950/30 px-2 py-1 rounded transition-colors"
+            className="text-sm text-red-400 hover:text-red-300 hover:bg-red-950/30 px-2 py-1 rounded transition-colors"
           >
             Delete
           </button>
@@ -419,7 +419,7 @@ export function GoalDetailPage() {
             }}
           />
           <div className="flex justify-between items-center">
-            <span className="text-xs text-text-muted">Ctrl/Cmd+Enter to submit</span>
+            <span className="text-sm text-text-muted">Ctrl/Cmd+Enter to submit</span>
             <Button type="submit" size="sm" loading={createNote.isPending} disabled={!noteContent.trim()}>Add note</Button>
           </div>
         </form>
@@ -446,23 +446,23 @@ export function GoalDetailPage() {
           <div className="flex flex-col gap-1">
             {linkedTodos.map((todo) => (
               <div key={todo.id} className="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary border border-border-primary rounded group">
-                <span className={clsx('flex-1 text-sm', todo.done ? 'line-through text-text-disabled' : 'text-text-primary')}>
+                <span className={clsx('flex-1 text-sm', todo.done ? 'line-through text-text-muted' : 'text-text-primary')}>
                   {todo.title}
                 </span>
                 {todo.dueDate && (
-                  <span className={clsx('text-xs', todo.dueDate < new Date().toISOString().slice(0, 10) ? 'text-red-400' : 'text-text-disabled')}>
+                  <span className={clsx('text-sm', todo.dueDate < new Date().toISOString().slice(0, 10) ? 'text-red-400' : 'text-text-muted')}>
                     {new Date(todo.dueDate + 'T00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                   </span>
                 )}
                 <button
                   onClick={() => updateTodo.mutate({ id: todo.id, goalId: null })}
-                  className="text-xs text-text-muted hover:text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity px-1.5 py-0.5 rounded hover:bg-bg-tertiary"
+                  className="text-sm text-text-muted hover:text-text-secondary px-1.5 py-0.5 rounded hover:bg-bg-tertiary transition-colors"
                 >
                   Unlink
                 </button>
                 <button
                   onClick={() => deleteTodo.mutate(todo.id)}
-                  className="text-xs text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity px-1.5 py-0.5 rounded hover:bg-red-950/30"
+                  className="text-sm text-red-400 hover:text-red-300 px-1.5 py-0.5 rounded hover:bg-red-950/30 transition-colors"
                 >
                   Delete
                 </button>
@@ -492,16 +492,16 @@ export function GoalDetailPage() {
             {linkedHabits.map((habit) => (
               <div key={habit.id} className="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary border border-border-primary rounded group">
                 <span className="flex-1 text-sm text-text-primary">{habit.title}</span>
-                <span className="text-xs text-text-disabled">{habit.frequency}</span>
+                <span className="text-sm text-text-muted">{habit.frequency}</span>
                 <button
                   onClick={() => updateHabit.mutate({ id: habit.id, goalId: null })}
-                  className="text-xs text-text-muted hover:text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity px-1.5 py-0.5 rounded hover:bg-bg-tertiary"
+                  className="text-sm text-text-muted hover:text-text-secondary px-1.5 py-0.5 rounded hover:bg-bg-tertiary transition-colors"
                 >
                   Unlink
                 </button>
                 <button
                   onClick={() => deleteHabit.mutate(habit.id)}
-                  className="text-xs text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity px-1.5 py-0.5 rounded hover:bg-red-950/30"
+                  className="text-sm text-red-400 hover:text-red-300 px-1.5 py-0.5 rounded hover:bg-red-950/30 transition-colors"
                 >
                   Delete
                 </button>
@@ -517,7 +517,7 @@ export function GoalDetailPage() {
             <LinkSearch
               items={unlinkedHabits}
               onLink={(habit) => updateHabit.mutate({ id: habit.id, goalId: id })}
-              renderExtra={(habit) => <span className="text-text-disabled text-xs">{habit.frequency}</span>}
+              renderExtra={(habit) => <span className="text-text-muted text-sm">{habit.frequency}</span>}
             />
           ) : undefined}
         />
@@ -536,10 +536,10 @@ export function GoalDetailPage() {
                 >
                   {linked.title}
                 </Link>
-                <span className="text-xs text-text-disabled capitalize">{linked.state.replace(/_/g, ' ')}</span>
+                <span className="text-sm text-text-muted capitalize">{linked.state.replace(/_/g, ' ')}</span>
                 <button
                   onClick={() => unlinkGoal.mutate(linked.id)}
-                  className="text-xs text-text-muted hover:text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity px-1.5 py-0.5 rounded hover:bg-bg-tertiary"
+                  className="text-sm text-text-muted hover:text-text-secondary px-1.5 py-0.5 rounded hover:bg-bg-tertiary transition-colors"
                 >
                   Unlink
                 </button>

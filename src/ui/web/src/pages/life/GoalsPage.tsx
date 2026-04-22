@@ -53,7 +53,7 @@ export function GoalsPage() {
             <button
               onClick={() => setGroupBy(groupBy === 'none' ? 'category' : 'none')}
               className={clsx(
-                'px-2.5 py-1.5 rounded text-xs font-medium transition-colors',
+                'px-2.5 py-1.5 rounded text-sm font-medium transition-colors',
                 groupBy === 'category'
                   ? 'bg-accent-subtle text-accent border border-accent/40'
                   : 'text-text-muted hover:text-text-secondary border border-border-primary hover:border-border-secondary'

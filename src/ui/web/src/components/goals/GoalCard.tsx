@@ -58,7 +58,7 @@ export function GoalCard({ goal }: GoalCardProps) {
           >
             {goal.title}
           </span>
-          <span className="text-xs text-text-disabled flex-shrink-0">
+          <span className="text-sm text-text-muted flex-shrink-0">
             {formatDate(goal.updatedAt)}
           </span>
         </div>
@@ -70,7 +70,7 @@ export function GoalCard({ goal }: GoalCardProps) {
             <CategoryChip key={cat.id} name={cat.name} color={cat.color} />
           ))}
           {goal.archived && (
-            <span className="px-2 py-0.5 rounded text-xs font-medium bg-bg-tertiary text-text-muted">
+            <span className="px-2 py-0.5 rounded text-sm font-medium bg-bg-tertiary text-text-muted">
               archived
             </span>
           )}
@@ -82,7 +82,7 @@ export function GoalCard({ goal }: GoalCardProps) {
           if (goal.noteCount) parts.push(`${goal.noteCount} ${goal.noteCount === 1 ? 'note' : 'notes'}`);
           if (goal.habitCount) parts.push(`${goal.habitCount} ${goal.habitCount === 1 ? 'habit' : 'habits'}`);
           return parts.length > 0 ? (
-            <p className="mt-1.5 text-xs text-text-disabled">
+            <p className="mt-1.5 text-sm text-text-muted">
               {parts.join(' · ')}
             </p>
           ) : null;

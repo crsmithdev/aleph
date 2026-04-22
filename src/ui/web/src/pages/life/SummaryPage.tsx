@@ -34,9 +34,9 @@ interface PeriodSummaryProps {
 function SectionHeader({ label, count }: { label: string; count?: number }) {
   return (
     <div className="flex items-center gap-2 pt-3 pb-1">
-      <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">{label}</span>
+      <span className="text-sm font-semibold uppercase tracking-wider text-text-muted">{label}</span>
       {count !== undefined && (
-        <span className="text-xs text-text-disabled">({count})</span>
+        <span className="text-sm text-text-muted">({count})</span>
       )}
     </div>
   );
@@ -49,7 +49,7 @@ function BulletList({ items }: { items: ListItem[] }) {
     <ul className="space-y-0.5">
       {items.map((item, i) => (
         <li key={i} className="flex items-start gap-1.5 text-sm text-text-secondary">
-          <span className={clsx('mt-0.5 text-xs font-bold leading-none', item.kind === 'created' ? 'text-accent' : 'text-success')}>
+          <span className={clsx('mt-0.5 text-sm font-bold leading-none', item.kind === 'created' ? 'text-accent' : 'text-success')}>
             {item.kind === 'created' ? '+' : '✓'}
           </span>
           <span>{item.text}</span>
@@ -109,7 +109,7 @@ function PeriodSummary({ start, end, dateDisplay, data, isLoading, completedHabi
           onClick={handleCopy}
           disabled={isLoading}
           className={clsx(
-            'flex-shrink-0 px-3 py-1 text-xs rounded-md border transition-colors mt-0.5',
+            'flex-shrink-0 px-3 py-1 text-sm rounded-md border transition-colors mt-0.5',
             copied
               ? 'bg-success/10 border-success text-success'
               : 'bg-bg-tertiary border-border-primary text-text-secondary hover:text-text-primary hover:border-border-secondary'
@@ -120,7 +120,7 @@ function PeriodSummary({ start, end, dateDisplay, data, isLoading, completedHabi
       </div>
 
       {isLoading ? (
-        <div className="text-xs text-text-muted mt-4">Loading...</div>
+        <div className="text-sm text-text-muted mt-4">Loading...</div>
       ) : (
         <div className="divide-y divide-border-primary/50 mt-1">
           {/* Goals */}
@@ -293,7 +293,7 @@ export function SummaryPage() {
         {preset === 'custom' && (
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-2">
-              <label className="text-xs text-text-muted">From:</label>
+              <label className="text-sm text-text-muted">From:</label>
               <input
                 type="date"
                 value={customStart}
@@ -302,7 +302,7 @@ export function SummaryPage() {
               />
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-xs text-text-muted">To:</label>
+              <label className="text-sm text-text-muted">To:</label>
               <input
                 type="date"
                 value={customEnd}

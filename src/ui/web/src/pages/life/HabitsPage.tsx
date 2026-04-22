@@ -59,7 +59,7 @@ function StreakBadge({ streak }: { streak: number }) {
   if (streak === 0) return null;
   return (
     <span className={clsx(
-      'inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full',
+      'inline-flex items-center gap-1 text-sm font-medium px-2 py-0.5 rounded-full',
       streak >= 7 ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning'
     )}>
       {streak}d streak
@@ -133,19 +133,19 @@ function HabitRow({ habit }: { habit: Habit }) {
             {habit.title}
           </span>
         )}
-        <span className="text-xs px-1.5 py-0.5 rounded bg-bg-tertiary text-text-muted border border-border-primary">
+        <span className="text-sm px-2 py-0.5 rounded bg-bg-tertiary text-text-muted border border-border-primary">
           {frequencyLabel(habit.frequency)}
         </span>
         <StreakBadge streak={streak} />
       </div>
 
       {habit.missedLastPeriod && !checked && (
-        <span className="text-xs text-warning">missed</span>
+        <span className="text-sm text-warning">missed</span>
       )}
 
       <button
         onClick={() => deleteHabit.mutate(habit.id)}
-        className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-error text-lg leading-none transition-opacity flex-shrink-0"
+        className="text-text-muted hover:text-error text-xl leading-none transition-colors flex-shrink-0"
         title="Delete"
       >
         &times;
@@ -185,7 +185,7 @@ export function HabitsPage() {
               <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-2">
                 Inactive ({inactive.length})
               </h2>
-              <div className="space-y-2 opacity-60">
+              <div className="space-y-2">
                 {inactive.map((habit) => (
                   <HabitRow key={habit.id} habit={habit} />
                 ))}
