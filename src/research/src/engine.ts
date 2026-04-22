@@ -352,10 +352,19 @@ export class ResearchEngine {
           await this.maybePerturbate(sessionId, thread, currentSession.config);
           await this.generatePlan(sessionId, currentSession.config);
 
-          if (iterationCount % 5 === 0) {
+          // Regenerate every 3 iterations. Combined with updateDocument's
+          // threshold being lowered to >=1 finding, this surfaces a document
+          // inside the first few findings instead of making the user wait for 5
+          // (the old cadence) or 30+ (the old threshold+cadence interaction).
+          if (iterationCount % 3 === 0) {
             await this.updateSummary(sessionId);
             await this.updateDocument(sessionId);
           }
+
+          // Apply any pending steering nudges and run the periodic lead review.
+          // This path is reached by session (burst) jobs — the thread-job path
+          // runs the same call from runThread.
+          await this.maybeRunLeadReview(sessionId, currentSession.config);
 
           if (currentSession.config.min_delay_between_steps_ms > 0) {
             await new Promise(resolve => setTimeout(resolve, currentSession.config.min_delay_between_steps_ms));
@@ -524,9 +533,11 @@ export class ResearchEngine {
     await this.maybePerturbate(sessionId, thread, session.config);
     await this.generatePlan(sessionId, session.config);
 
-    // Periodic summary/document — every 5 exhausted threads, or on the first
+    // Periodic summary/document — keep it fresh on early threads, then every
+    // 3 exhausted threads. Cheap enough to regenerate frequently; avoids the
+    // "no document visible at 30+ findings" complaint.
     const exhausted = threads.countExhaustedThreads(this.sqlite, sessionId);
-    if (exhausted === 1 || exhausted % 5 === 0) {
+    if (exhausted <= 3 || exhausted % 3 === 0) {
       await this.updateSummary(sessionId);
       await this.updateDocument(sessionId);
     }
@@ -1945,7 +1956,7 @@ Write a concise, informative summary of what has been discovered so far, key the
   async updateDocument(sessionId: string): Promise<void> {
     const session = sessions.getQuery(this.sqlite, sessionId)!;
     const allFindings = findings.listFindings(this.sqlite, sessionId);
-    if (allFindings.length < 3) return;
+    if (allFindings.length < 1) return;
 
     const conceptStats = concepts.listConcepts(this.sqlite, sessionId);
 

@@ -66,15 +66,22 @@ describe('updateDocument', () => {
     threadId = thread.id;
   });
 
-  test('no-op when fewer than 3 findings — document stays empty', async () => {
-    seedFinding(db, sessionId, threadId, 1);
-    seedFinding(db, sessionId, threadId, 2);
-
+  test('no-op when no findings exist — document stays empty', async () => {
     const provider = new MockProvider().push('Should not be called');
     const engine = new ResearchEngine({ sqlite: db, provider });
     await engine.updateDocument(sessionId);
 
     expect(queries.getQuery(db, sessionId)!.document).toBe('');
+  });
+
+  test('writes article with just one finding — surfaces a doc early', async () => {
+    seedFinding(db, sessionId, threadId, 1);
+    const articleText = '# Early Article\n\nOne-finding draft.';
+    const provider = new MockProvider().push(articleText);
+    const engine = new ResearchEngine({ sqlite: db, provider });
+    await engine.updateDocument(sessionId);
+
+    expect(queries.getQuery(db, sessionId)!.document).toBe(articleText);
   });
 
   test('writes article text to session.document with 3+ findings', async () => {

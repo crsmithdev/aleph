@@ -792,6 +792,7 @@ export interface ResearchStep {
   tool_calls: Array<{ tool: string; input?: Record<string, unknown>; output?: string; error?: string; jina_fetches?: Array<{ url: string; ok: boolean; content_length: number; error?: string }> }>;
   duration_ms: number;
   error: string | null;
+  error_kind: string | null;
   label: string | null;
   metadata: Record<string, unknown> | null;
   created_at: string;

@@ -97,10 +97,11 @@ function ConfBar({ label, value }: { label: string; value: number }) {
 
 /** Lead-researcher steering panel. Shows the user's intent, lets them add nudges,
  *  and displays the last few lead-reviewer actions (pruned/boosted/new queries). */
-function LeaderPanel({ sessionId, intent, output_shape }: {
+function LeaderPanel({ sessionId, intent, output_shape, interpretation }: {
   sessionId: string;
   intent: string | null;
   output_shape: string | null;
+  interpretation: import('../../api/research-hooks').InterpretedPrompt | null;
 }) {
   const { data } = useSteeringNotes(sessionId);
   const createNote = useCreateSteeringNote();
@@ -119,7 +120,11 @@ function LeaderPanel({ sessionId, intent, output_shape }: {
     });
   }
 
-  const shapeLabel = output_shape ? output_shape.replace(/_/g, ' ') : null;
+  // Prefer the explicit output_shape the user set at creation; fall back to
+  // the interpreter's inferred shape when the user didn't specify one.
+  const shapeLabel = output_shape
+    ? output_shape.replace(/_/g, ' ')
+    : interpretation?.shape ?? null;
   const hasSteering = !!intent || !!shapeLabel || notes.length > 0 || mods.length > 0;
 
   return (
@@ -3027,7 +3032,19 @@ function KnowledgeView({
     });
 
     cyRef.current = cy;
-    return () => { cy.destroy(); cyRef.current = null; };
+
+    // The container's final size isn't always known when cytoscape initialises —
+    // it lives inside a flex column that gets its height from 100vh math. Without
+    // this, the first render is laid out against 0×0 bounds and the graph only
+    // appears once the user touches the view (Split toggle, Relayout, etc.).
+    // ResizeObserver catches both the initial sizing and any later layout shifts.
+    const observer = new ResizeObserver(() => {
+      cy.resize();
+      cy.fit(undefined, 30);
+    });
+    observer.observe(containerRef.current);
+
+    return () => { observer.disconnect(); cy.destroy(); cyRef.current = null; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -3041,6 +3058,11 @@ function KnowledgeView({
       animationDuration: 350,
       nodeRepulsion: 8000,
       idealEdgeLength: 110,
+      // fit:true makes the layout re-centre when elements change (important
+      // when the user flips filters or the tier slider while the viewport
+      // has already been panned/zoomed away).
+      fit: true,
+      padding: 30,
     } as cytoscape.LayoutOptions).run();
   }, [elements]);
 
@@ -3454,24 +3476,58 @@ function SessionConfigView({
   );
 }
 
-type EventKind = 'search' | 'synth' | 'finding' | 'extract' | 'dedup';
+type EventKind = 'search' | 'synth' | 'finding' | 'extract' | 'dedup' | 'error';
 
 interface TimelineEvent {
   id: string;
   kind: EventKind;
+  /** Short label rendered in the kind column. For synth events this is the step's
+   *  human-readable label (e.g. "gap analysis") rather than the generic "synth". */
+  typeLabel: string;
   ts: string;
   threadId: string;
   threadLabel: string;
-  detail: React.ReactNode;
+  summary: React.ReactNode;
+  /** Right-aligned metric (cost, novelty, extraction size — whatever is salient). */
+  metric: React.ReactNode;
+  /** Expanded view — full context for the event. */
+  details: React.ReactNode;
+  /** Original record for deep-links / copy. */
+  raw: ResearchStep | ResearchFinding;
 }
 
+/** Map engine-side callLLM labels to one-word kinds for the UI column, roughly
+ *  matching the mockup's taxonomy. Anything we don't recognise falls through to
+ *  'synth' so behaviour degrades gracefully. */
+const LABEL_TO_KIND: Record<string, EventKind> = {
+  'dedup check': 'dedup',
+  'extract concepts': 'extract',
+};
+
 function stepEventKind(step: ResearchStep): EventKind {
+  if (step.error) return 'error';
+  const meta = step.metadata as { decision?: string } | null;
+  if (meta?.decision === 'dedup') return 'dedup';
+  if (step.label && LABEL_TO_KIND[step.label]) return LABEL_TO_KIND[step.label];
   const tools = step.tool_calls ?? [];
   const hasExtract = tools.some(t => (t.jina_fetches?.length ?? 0) > 0);
   const hasSearch = tools.some(t => t.tool === 'web_search' || t.tool === 'tavily' || /search/i.test(t.tool));
   if (hasExtract) return 'extract';
   if (hasSearch) return 'search';
   return 'synth';
+}
+
+/** Short, readable label for the kind column. Synth rows use the step label so
+ *  the user can tell "gap analysis" from "synthesize finding" at a glance —
+ *  before, every LLM call just said "synth". */
+function stepTypeLabel(step: ResearchStep, kind: EventKind): string {
+  if (kind === 'error') return 'error';
+  if (kind === 'search') return 'search';
+  if (kind === 'extract') return 'extract';
+  if (kind === 'dedup') return 'dedup';
+  if (kind === 'finding') return 'finding';
+  // synth: prefer the label (e.g. 'gap analysis', 'synthesize finding')
+  return step.label ?? 'synth';
 }
 
 function formatTime(iso: string): string {
@@ -3488,7 +3544,199 @@ function kindClass(kind: EventKind): string {
     case 'finding': return 'text-success';
     case 'extract': return 'text-info';
     case 'dedup': return 'text-warning';
+    case 'error': return 'text-error';
   }
+}
+
+/** Hostname-only version of a URL — used to keep extract rows scannable. */
+function hostOf(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
+}
+
+function formatCost(n: number): string {
+  return n >= 0.01 ? `$${n.toFixed(3)}` : `$${n.toFixed(4)}`;
+}
+
+/** Build the summary + right-aligned metric + expanded detail for a single step. */
+function buildStepEvent(s: ResearchStep, kind: EventKind): Pick<TimelineEvent, 'summary' | 'metric' | 'details'> {
+  const tools = s.tool_calls ?? [];
+  const meta = s.metadata as Record<string, unknown> | null;
+
+  if (kind === 'error') {
+    return {
+      summary: <span className="text-error">{s.error}</span>,
+      metric: s.error_kind ? <span className="text-error/80">{String(s.error_kind)}</span> : null,
+      details: (
+        <div className="space-y-1 text-sm text-text-secondary">
+          <div><span className="text-text-muted">model:</span> <span className="font-mono">{s.model}</span></div>
+          {s.error_kind && <div><span className="text-text-muted">kind:</span> {String(s.error_kind)}</div>}
+          <div className="whitespace-pre-wrap text-error">{s.error}</div>
+        </div>
+      ),
+    };
+  }
+
+  if (kind === 'search') {
+    const sq = tools.find(t => t.input && typeof t.input.query === 'string');
+    const query = sq?.input?.query as string | undefined;
+    const resultCount = tools.reduce((a, t) => {
+      const out = t.output as unknown;
+      if (typeof out === 'string') return a + (out.match(/^\d+\./gm)?.length ?? 0);
+      return a;
+    }, 0);
+    return {
+      summary: (
+        <span>
+          {query ? <strong className="text-text-primary font-medium">&ldquo;{query}&rdquo;</strong> : <span className="text-text-muted">search</span>}
+          {resultCount > 0 && <span className="text-text-muted"> &middot; {resultCount} results</span>}
+        </span>
+      ),
+      metric: s.cost_usd > 0 ? <span>{formatCost(s.cost_usd)}</span> : null,
+      details: (
+        <div className="space-y-2 text-sm">
+          <div className="text-text-muted">model: <span className="font-mono text-text-secondary">{s.model}</span> &middot; {fmtTokens(s.prompt_tokens + s.completion_tokens)} tok</div>
+          {tools.map((t, i) => (
+            <div key={i} className="border-l-2 border-border-primary/40 pl-3">
+              <div className="text-text-muted font-mono text-sm">{t.tool}</div>
+              {t.input && <div className="text-text-primary mt-0.5">{JSON.stringify(t.input)}</div>}
+              {typeof t.output === 'string' && t.output.length > 0 && (
+                <pre className="whitespace-pre-wrap text-text-secondary text-sm mt-1 max-h-64 overflow-y-auto">{t.output.slice(0, 2000)}{t.output.length > 2000 ? '…' : ''}</pre>
+              )}
+            </div>
+          ))}
+        </div>
+      ),
+    };
+  }
+
+  if (kind === 'extract') {
+    const fetches = tools.flatMap(t => t.jina_fetches ?? []);
+    const ok = fetches.filter(f => f.ok);
+    const failed = fetches.filter(f => !f.ok);
+    const bytes = ok.reduce((a, f) => a + (f.content_length ?? 0), 0);
+    const hosts = ok.slice(0, 3).map(f => hostOf(f.url));
+    return {
+      summary: (
+        <span className="text-text-secondary">
+          {hosts.length > 0 ? (
+            <>
+              <strong className="text-text-primary font-medium">{hosts.join(', ')}</strong>
+              {ok.length > hosts.length && <span className="text-text-muted"> +{ok.length - hosts.length}</span>}
+            </>
+          ) : (
+            <span className="text-text-muted">{fetches.length} URLs</span>
+          )}
+          {failed.length > 0 && <span className="text-error ml-2">{failed.length} failed</span>}
+        </span>
+      ),
+      metric: bytes > 0 ? <span>{kbSize(bytes)}</span> : null,
+      details: (
+        <div className="space-y-1 text-sm">
+          {fetches.map((f, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <span className={clsx('font-mono shrink-0 w-10', f.ok ? 'text-success' : 'text-error')}>{f.ok ? 'ok' : 'fail'}</span>
+              <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-text-primary truncate hover:underline flex-1 min-w-0">{f.url}</a>
+              {f.ok
+                ? <span className="text-text-muted tabular-nums shrink-0">{kbSize(f.content_length ?? 0)}</span>
+                : <span className="text-error shrink-0 truncate max-w-64">{f.error}</span>
+              }
+            </div>
+          ))}
+        </div>
+      ),
+    };
+  }
+
+  if (kind === 'dedup') {
+    const isDup = meta?.is_duplicate === true;
+    const existing = meta?.existing_count as number | undefined;
+    return {
+      summary: (
+        <span>
+          <strong className={clsx('font-medium', isDup ? 'text-warning' : 'text-text-primary')}>
+            {isDup ? 'duplicate' : 'unique'}
+          </strong>
+          {typeof existing === 'number' && <span className="text-text-muted"> &middot; checked against {existing} existing</span>}
+        </span>
+      ),
+      metric: s.cost_usd > 0 ? <span>{formatCost(s.cost_usd)}</span> : null,
+      details: (
+        <div className="space-y-1 text-sm">
+          <div className="text-text-muted">model: <span className="font-mono text-text-secondary">{s.model}</span></div>
+          <pre className="whitespace-pre-wrap text-text-secondary text-sm">{JSON.stringify(meta, null, 2)}</pre>
+        </div>
+      ),
+    };
+  }
+
+  // synth fallback — use label for differentiation; show decision metadata when present
+  const labelText = s.label ?? 'synth';
+  let summaryInner: React.ReactNode;
+  if (meta?.decision === 'synthesis') {
+    const conf = (meta.confidence as number) ?? 0;
+    const nov = (meta.novelty as number) ?? 0;
+    summaryInner = (
+      <span>
+        <strong className="text-text-primary font-medium">{labelText}</strong>
+        <span className="text-text-muted"> &middot; conf {(conf * 100).toFixed(0)}% &middot; nov {(nov * 100).toFixed(0)}%</span>
+      </span>
+    );
+  } else if (meta?.decision === 'gap_analysis') {
+    const hasGaps = meta.has_gaps as boolean;
+    const count = meta.gap_count as number;
+    summaryInner = (
+      <span>
+        <strong className="text-text-primary font-medium">{labelText}</strong>
+        <span className="text-text-muted"> &middot; {hasGaps ? `${count} gaps identified` : 'no gaps'}</span>
+      </span>
+    );
+  } else if (meta?.decision === 'lead_review') {
+    const pruned = meta.prune_count as number;
+    const boosted = meta.boost_count as number;
+    const gaps = meta.gap_count as number;
+    summaryInner = (
+      <span>
+        <strong className="text-text-primary font-medium">{labelText}</strong>
+        <span className="text-text-muted"> &middot; pruned {pruned ?? 0} &middot; boosted {boosted ?? 0} &middot; {gaps ?? 0} gap queries</span>
+      </span>
+    );
+  } else if (meta?.decision === 'follow_up_eval') {
+    const acc = meta.accepted_count as number;
+    const rej = meta.rejected_count as number;
+    summaryInner = (
+      <span>
+        <strong className="text-text-primary font-medium">{labelText}</strong>
+        <span className="text-text-muted"> &middot; {acc ?? 0} accepted / {rej ?? 0} rejected</span>
+      </span>
+    );
+  } else {
+    summaryInner = (
+      <span>
+        <strong className="text-text-primary font-medium">{labelText}</strong>
+        <span className="text-text-muted"> &middot; {s.model} &middot; in {fmtTokens(s.prompt_tokens)} / out {fmtTokens(s.completion_tokens)}</span>
+      </span>
+    );
+  }
+  return {
+    summary: summaryInner,
+    metric: s.cost_usd > 0 ? <span>{formatCost(s.cost_usd)}</span> : null,
+    details: (
+      <div className="space-y-2 text-sm">
+        <div className="text-text-muted">
+          model: <span className="font-mono text-text-secondary">{s.model}</span>
+          {' '}&middot; duration: <span className="tabular-nums text-text-secondary">{s.duration_ms}ms</span>
+          {' '}&middot; prompt: <span className="tabular-nums text-text-secondary">{s.prompt_tokens.toLocaleString()}</span>
+          {' '}&middot; completion: <span className="tabular-nums text-text-secondary">{s.completion_tokens.toLocaleString()}</span>
+        </div>
+        {meta && (
+          <div>
+            <div className="text-text-muted text-sm uppercase tracking-[0.06em]">Decision</div>
+            <pre className="whitespace-pre-wrap text-text-secondary text-sm">{JSON.stringify(meta, null, 2)}</pre>
+          </div>
+        )}
+      </div>
+    ),
+  };
 }
 
 function EventsView({
@@ -3501,6 +3749,7 @@ function EventsView({
   onNavigateToTelemetry?: () => void;
 }) {
   const [filter, setFilter] = useState<'all' | EventKind>('all');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const threadShortId = useCallback((tid: string) => {
     const idx = threads.findIndex(t => t.id === tid);
@@ -3513,44 +3762,18 @@ function EventsView({
 
     for (const s of steps) {
       const kind = stepEventKind(s);
-      let detail: React.ReactNode;
-      if (kind === 'search') {
-        const sq = s.tool_calls.find(t => t.input && typeof t.input.query === 'string');
-        const query = sq?.input?.query as string | undefined;
-        detail = (
-          <span>
-            {query ? <span className="text-text-primary">&ldquo;{query}&rdquo;</span> : <span className="text-text-muted">search</span>}
-            {' '}
-            <span className="text-text-muted">&middot; {s.model}</span>
-          </span>
-        );
-      } else if (kind === 'extract') {
-        const fetches = s.tool_calls.flatMap(t => t.jina_fetches ?? []);
-        const ok = fetches.filter(f => f.ok);
-        const bytes = ok.reduce((a, f) => a + (f.content_length ?? 0), 0);
-        detail = (
-          <span className="text-text-secondary">
-            {ok.length}/{fetches.length} fetched {bytes > 0 && <span className="text-text-muted">&middot; {kbSize(bytes)}</span>}
-            {fetches.filter(f => !f.ok).map((f, i) => (
-              <span key={i} className="text-error ml-2">{f.error?.slice(0, 40)}</span>
-            ))}
-          </span>
-        );
-      } else {
-        const cost = s.cost_usd > 0 ? `$${s.cost_usd.toFixed(3)}` : '';
-        detail = (
-          <span className="text-text-secondary">
-            {s.model} <span className="text-text-muted">&middot; in {s.prompt_tokens.toLocaleString()} &middot; out {s.completion_tokens.toLocaleString()}{cost && ` · ${cost}`}</span>
-          </span>
-        );
-      }
+      const built = buildStepEvent(s, kind);
       out.push({
         id: `step-${s.id}`,
         kind,
+        typeLabel: stepTypeLabel(s, kind),
         ts: s.created_at,
         threadId: s.thread_id,
         threadLabel: threadShortId(s.thread_id),
-        detail,
+        summary: built.summary,
+        metric: built.metric,
+        details: built.details,
+        raw: s,
       });
     }
 
@@ -3558,18 +3781,48 @@ function EventsView({
       out.push({
         id: `find-${f.id}`,
         kind: 'finding',
+        typeLabel: 'finding',
         ts: f.created_at,
         threadId: f.thread_id,
         threadLabel: threadShortId(f.thread_id),
-        detail: (
+        summary: (
           <span>
-            <span className="text-text-primary font-medium">{f.summary.slice(0, 140)}</span>
-            <span className="text-text-muted">
-              {' '}&middot; {(f.confidence * 100).toFixed(0)}% conf
-              {f.novelty > 0.3 && ` · ${(f.novelty * 100).toFixed(0)}% novel`}
-            </span>
+            <strong className="text-text-primary font-medium">{f.summary.slice(0, 160)}</strong>
           </span>
         ),
+        metric: (
+          <span className={clsx(f.confidence >= 0.7 ? 'text-success' : f.confidence >= 0.4 ? 'text-warning' : 'text-error')}>
+            {f.novelty > 0.3 ? `nov ${(f.novelty * 100).toFixed(0)}%` : `conf ${(f.confidence * 100).toFixed(0)}%`}
+          </span>
+        ),
+        details: (
+          <div className="space-y-2 text-sm">
+            <div className="text-text-muted">
+              confidence: <span className="text-text-secondary tabular-nums">{(f.confidence * 100).toFixed(0)}%</span>
+              {' '}&middot; novelty: <span className="text-text-secondary tabular-nums">{(f.novelty * 100).toFixed(0)}%</span>
+            </div>
+            <div className="text-text-primary whitespace-pre-wrap">{f.content}</div>
+            {f.source_urls.length > 0 && (
+              <div>
+                <div className="text-text-muted text-sm uppercase tracking-[0.06em]">Sources</div>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {f.source_urls.map((url, i) => (
+                    <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                      className="text-sm text-accent hover:underline truncate max-w-[280px]">{hostOf(url)}</a>
+                  ))}
+                </div>
+              </div>
+            )}
+            {f.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {f.tags.map(t => (
+                  <span key={t} className="px-1.5 py-0.5 rounded bg-bg-tertiary text-text-muted text-sm">{t}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        ),
+        raw: f,
       });
     }
 
@@ -3581,17 +3834,19 @@ function EventsView({
 
   const chips: Array<{ key: 'all' | EventKind; label: string }> = [
     { key: 'all', label: 'All' },
-    { key: 'search', label: 'Searches' },
     { key: 'finding', label: 'Findings' },
+    { key: 'search', label: 'Searches' },
+    { key: 'synth', label: 'Synthesis' },
     { key: 'extract', label: 'Extraction' },
-    { key: 'synth', label: 'LLM calls' },
+    { key: 'dedup', label: 'Dedup' },
+    { key: 'error', label: 'Errors' },
   ];
 
   return (
     <div>
       <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
         <div className="text-sm text-text-muted">
-          Most recent first &middot; session-scoped
+          Most recent first &middot; session-scoped &middot; click a row to expand
           {isRunning && <> &middot; <span className="text-accent">auto-updates</span></>}
           {onNavigateToTelemetry && (
             <>
@@ -3627,17 +3882,32 @@ function EventsView({
       <div className="border border-border-primary/40 rounded bg-bg-secondary overflow-hidden">
         {filtered.length === 0 ? (
           <div className="text-sm text-text-muted py-8 text-center">No events in this filter.</div>
-        ) : filtered.slice(0, 200).map(e => (
-          <div
-            key={e.id}
-            className="grid grid-cols-[84px_96px_96px_minmax(0,1fr)] gap-3 items-center px-4 py-2 border-b border-border-primary/30 last:border-b-0 text-sm"
-          >
-            <div className="text-sm text-text-muted tabular-nums">{formatTime(e.ts)}</div>
-            <div className={clsx('text-sm font-medium', kindClass(e.kind))}>{e.kind}</div>
-            <div className="text-sm text-text-muted font-mono truncate">{e.threadLabel}</div>
-            <div className="min-w-0 truncate">{e.detail}</div>
-          </div>
-        ))}
+        ) : filtered.slice(0, 200).map(e => {
+          const expanded = expandedId === e.id;
+          return (
+            <div key={e.id} className="border-b border-border-primary/30 last:border-b-0">
+              <button
+                type="button"
+                onClick={() => setExpandedId(prev => prev === e.id ? null : e.id)}
+                className={clsx(
+                  'w-full text-left grid grid-cols-[84px_112px_80px_minmax(0,1fr)_100px] gap-3 items-center px-4 py-2 text-sm transition-colors',
+                  expanded ? 'bg-bg-tertiary/40' : 'hover:bg-bg-tertiary/20',
+                )}
+              >
+                <div className="text-sm text-text-muted tabular-nums">{formatTime(e.ts)}</div>
+                <div className={clsx('text-sm font-medium uppercase tracking-[0.06em]', kindClass(e.kind))}>{e.typeLabel}</div>
+                <div className="text-sm text-text-muted font-mono truncate">{e.threadLabel}</div>
+                <div className="min-w-0 truncate text-text-secondary">{e.summary}</div>
+                <div className="text-sm text-text-muted font-mono tabular-nums text-right truncate">{e.metric}</div>
+              </button>
+              {expanded && (
+                <div className="px-4 py-3 bg-bg-primary/40 border-t border-border-primary/20">
+                  {e.details}
+                </div>
+              )}
+            </div>
+          );
+        })}
         {filtered.length > 200 && (
           <div className="text-sm text-text-muted py-2 text-center border-t border-border-primary/30">
             Showing 200 of {filtered.length} events
@@ -4204,20 +4474,10 @@ export function ResearchQueryDetailPage() {
 
             <LeaderPanel
               sessionId={id!}
-              intent={(session as unknown as { intent: string | null }).intent ?? null}
+              intent={(session as unknown as { intent: string | null }).intent ?? session.interpretation?.intent ?? null}
               output_shape={(session as unknown as { output_shape: string | null }).output_shape ?? null}
+              interpretation={session.interpretation ?? null}
             />
-
-            {session.interpretation && (
-              <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                <span className="text-text-muted">Interpreted as</span>
-                <span className="text-text-secondary">{session.interpretation.intent}</span>
-                <span className="text-text-muted">&middot;</span>
-                <span className="px-1.5 py-0.5 rounded bg-bg-tertiary text-text-secondary tabular-nums">{session.interpretation.shape}</span>
-                <span className="px-1.5 py-0.5 rounded bg-bg-tertiary text-text-secondary tabular-nums">{session.interpretation.depth}</span>
-                <span className="text-text-muted">scope: {session.interpretation.scope}</span>
-              </div>
-            )}
 
           {/* Env warnings */}
           {envCheck && (envCheck.errors.length > 0 || envCheck.warnings.length > 0 || envCheck.jina_balance !== null) && (
