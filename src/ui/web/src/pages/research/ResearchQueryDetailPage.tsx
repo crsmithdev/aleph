@@ -1375,9 +1375,24 @@ function stepChips(s: ResearchStep): Chip[] {
       chips.push({ text: `${m.rejected_count as number}✗`, color: 'text-error/70' });
     } else if (m.decision === 'formulate_queries') {
       chips.push({ text: `${(m.queries as string[]).length} queries`, color: 'text-blue-400' });
+    } else if (m.decision === 'extract_concepts') {
+      const cc = m.concept_count as number ?? 0;
+      const rc = m.relation_count as number ?? 0;
+      chips.push({ text: `${cc}c`, color: 'text-purple-400' });
+      if (rc > 0) chips.push({ text: `${rc}r`, color: 'text-text-muted' });
+    } else if (m.decision === 'summarize_thread') {
+      if (!(m.accepted as boolean)) {
+        chips.push({ text: 'rejected', color: 'text-error/70' });
+      }
     }
   }
   return chips;
+}
+
+function firstSentence(s: string): string {
+  const trimmed = s.trim();
+  const m = trimmed.match(/^(.+?[.!?])(\s|$)/);
+  return (m ? m[1] : trimmed).slice(0, 160);
 }
 
 function formatEventDetail(ev: StreamEvent & { threadDiff?: string }): { typeLabel: string; typeColor: string; detail: string; chips?: Chip[] } | null {
@@ -1428,7 +1443,12 @@ function formatEventDetail(ev: StreamEvent & { threadDiff?: string }): { typeLab
         'summarize thread': 'summarize',
         'dedup check': 'dedup',
         'gap analysis': 'gaps',
-        'formulate queries': 'formulate',
+        'formulate': 'formulate',
+        'extract concepts': 'extract',
+        'lead review': 'lead review',
+        'generate plan': 'plan',
+        'generate lead section': 'lead section',
+        'generate document': 'document',
       };
       const labelColors: Record<string, string> = {
         'gaps': 'text-orange-400',
@@ -1437,11 +1457,48 @@ function formatEventDetail(ev: StreamEvent & { threadDiff?: string }): { typeLab
         'followups': 'text-teal-400',
         'summarize': 'text-text-muted',
         'formulate': 'text-blue-400',
+        'extract': 'text-purple-400',
+        'lead review': 'text-yellow-400',
+        'plan': 'text-yellow-400',
+        'lead section': 'text-accent/70',
+        'document': 'text-accent/70',
       };
       const rawLbl = s.label ?? 'step';
       const lbl = labelAliases[rawLbl] ?? rawLbl;
       const color = labelColors[lbl] ?? 'text-accent/70';
-      return { typeLabel: lbl, typeColor: color, detail: '', chips };
+      const m = s.metadata;
+      let detail = '';
+      if (m) {
+        if (m.decision === 'synthesis' && typeof m.summary === 'string' && m.summary) {
+          detail = firstSentence(m.summary);
+        } else if (m.decision === 'extract_concepts' && Array.isArray(m.concepts)) {
+          const names = (m.concepts as string[]).filter(n => typeof n === 'string');
+          detail = names.length > 0
+            ? names.slice(0, 4).join(', ') + (names.length > 4 ? ` +${names.length - 4}` : '')
+            : '';
+        } else if (m.decision === 'summarize_thread') {
+          if (typeof m.title === 'string' && m.title) detail = m.title;
+          else if (typeof m.raw_output === 'string') detail = m.raw_output;
+        } else if (m.decision === 'follow_up_eval' && Array.isArray(m.candidates)) {
+          const cands = m.candidates as Array<{ text: string; accepted: boolean; rank?: number; rank_score?: number }>;
+          const top = cands.find(c => c.accepted) ?? cands[0];
+          if (top && top.text) {
+            const score = typeof top.rank_score === 'number' ? ` ${(top.rank_score * 100).toFixed(0)}%` : '';
+            detail = `"${top.text.slice(0, 70)}${top.text.length > 70 ? '…' : ''}"${score}`;
+          }
+        } else if (m.decision === 'formulate_queries' && Array.isArray(m.queries) && m.queries.length > 0) {
+          const q = (m.queries as string[])[0];
+          if (q) detail = `"${q.slice(0, 80)}${q.length > 80 ? '…' : ''}"`;
+        } else if (m.decision === 'gap_analysis') {
+          if (Array.isArray(m.gap_queries) && (m.gap_queries as string[]).length > 0) {
+            const gq = (m.gap_queries as string[])[0];
+            detail = `"${gq.slice(0, 80)}${gq.length > 80 ? '…' : ''}"`;
+          }
+        } else if (m.decision === 'dedup' && typeof m.new_summary === 'string') {
+          detail = firstSentence(m.new_summary);
+        }
+      }
+      return { typeLabel: lbl, typeColor: color, detail, chips };
     }
     const first = tools[0];
     const tool = first.tool ?? 'step';
@@ -2228,6 +2285,62 @@ function LiveView({
                                   ))}
                                 </div>
                               );
+                              if (m.decision === 'extract_concepts') {
+                                const names = (m.concepts as string[] | undefined) ?? [];
+                                const rels = (m.relations as Array<{from: string; to: string; relation: string}> | undefined) ?? [];
+                                const fs = m.finding_summary as string | undefined;
+                                return (
+                                  <div className="space-y-1 text-sm">
+                                    <p className="text-text-secondary">
+                                      {m.concept_count as number} concepts{(m.relation_count as number) > 0 && `, ${m.relation_count as number} relations`} · from finding
+                                    </p>
+                                    {fs && <p className="pl-2 italic text-text-muted/80 truncate">"{fs}"</p>}
+                                    {names.length > 0 && (
+                                      <div className="flex flex-wrap gap-1 pl-2">
+                                        {names.map((n, i) => (
+                                          <span key={i} className="px-1 py-0.5 rounded bg-bg-tertiary text-sm text-purple-400/90 border border-border-primary/40">{n}</span>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {rels.length > 0 && (
+                                      <div className="space-y-0 pl-2">
+                                        {rels.map((r, i) => (
+                                          <p key={i} className="text-sm text-text-muted/80 truncate">
+                                            {r.from} <span className="text-text-muted/50">—{r.relation}→</span> {r.to}
+                                          </p>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              }
+                              if (m.decision === 'summarize_thread') {
+                                const title = m.title as string | null;
+                                const raw = m.raw_output as string | undefined;
+                                const q = m.query as string | undefined;
+                                const acc = m.accepted as boolean;
+                                return (
+                                  <div className="space-y-0.5 text-sm">
+                                    {q && <p className="text-text-muted truncate">query: <span className="text-text-secondary">{q}</span></p>}
+                                    {acc && title
+                                      ? <p className="text-text-primary">title: <span className="font-mono">{title}</span></p>
+                                      : <p className="text-error/80">rejected{raw && `: "${raw}"`}</p>}
+                                  </div>
+                                );
+                              }
+                              if (m.decision === 'synthesis') {
+                                const summary = m.summary as string | undefined;
+                                const preview = m.content_preview as string | undefined;
+                                if (!summary && !preview) return null;
+                                return (
+                                  <div className="space-y-0.5 text-sm">
+                                    {summary && <p className="text-text-primary">{summary}</p>}
+                                    {preview && preview !== summary && (
+                                      <p className="text-text-secondary/80 line-clamp-3">{preview}</p>
+                                    )}
+                                  </div>
+                                );
+                              }
                               return null;
                             })()}
                             {s.error && (

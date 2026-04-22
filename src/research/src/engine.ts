@@ -1208,7 +1208,9 @@ Return ONLY valid JSON. No markdown fences.`,
         confidence: parsed.confidence ?? 0.5,
         novelty: parsed.novelty ?? 0.5,
         actionability: parsed.actionability ?? 0.5,
-        tags: parsed.tags ?? []
+        tags: parsed.tags ?? [],
+        summary: parsed.summary ?? '',
+        content_preview: (parsed.content ?? '').slice(0, 400),
       });
       return {
         content: parsed.content ?? '',
@@ -1860,6 +1862,7 @@ Return JSON only, no preamble.`;
     if (!parsed) return;
 
     const nameToId = new Map<string, string>();
+    const conceptNames: string[] = [];
     for (const c of parsed.concepts) {
       if (!c.name || typeof c.name !== 'string') continue;
       const concept = concepts.upsertConcept(this.sqlite, sessionId, {
@@ -1870,8 +1873,11 @@ Return JSON only, no preamble.`;
       });
       concepts.linkFindingToConcept(this.sqlite, sessionId, finding.id, concept.id);
       nameToId.set(c.name.trim().toLowerCase(), concept.id);
+      conceptNames.push(c.name);
     }
 
+    let relationCount = 0;
+    const relationRecords: Array<{ from: string; to: string; relation: string }> = [];
     for (const r of parsed.relations) {
       if (!r.from || !r.to || !r.relation) continue;
       const fromId = nameToId.get(r.from.trim().toLowerCase())
@@ -1880,7 +1886,19 @@ Return JSON only, no preamble.`;
         ?? concepts.findConceptByName(this.sqlite, sessionId, r.to)?.id;
       if (!fromId || !toId) continue;
       concepts.linkConcepts(this.sqlite, sessionId, fromId, toId, r.relation, [finding.id]);
+      relationCount++;
+      relationRecords.push({ from: r.from, to: r.to, relation: r.relation });
     }
+
+    if (result.stepId) steps.updateStepMetadata(this.sqlite, result.stepId, {
+      decision: 'extract_concepts',
+      finding_id: finding.id,
+      finding_summary: (finding.summary || finding.content).slice(0, 200),
+      concepts: conceptNames,
+      concept_count: conceptNames.length,
+      relation_count: relationCount,
+      relations: relationRecords.slice(0, 12),
+    });
   }
 
   /** Extract concepts for findings that don't have any concept links yet.
@@ -2135,9 +2153,17 @@ Write the full article in markdown.`,
       'summarize thread'
     ).then(result => {
       const title = result.text.trim().replace(/^["']|["']$/g, '');
-      if (title && title.length <= 60) {
+      const accepted = title && title.length <= 60;
+      if (accepted) {
         threads.updateThread(this.sqlite, threadId, { short_query: title });
       }
+      if (result.stepId) steps.updateStepMetadata(this.sqlite, result.stepId, {
+        decision: 'summarize_thread',
+        title: accepted ? title : null,
+        raw_output: title,
+        query,
+        accepted,
+      });
     }).catch(() => { /* non-critical — placeholder remains */ });
   }
 
