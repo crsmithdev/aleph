@@ -363,8 +363,9 @@ export class ResearchEngine {
 
           // Apply any pending steering nudges and run the periodic lead review.
           // This path is reached by session (burst) jobs — the thread-job path
-          // runs the same call from runThread.
-          await this.maybeRunLeadReview(sessionId, currentSession.config);
+          // runs the same call from runThread. Attach to the just-completed
+          // thread so the resulting step is visible in observability.
+          await this.maybeRunLeadReview(sessionId, currentSession.config, thread.id);
 
           if (currentSession.config.min_delay_between_steps_ms > 0) {
             await new Promise(resolve => setTimeout(resolve, currentSession.config.min_delay_between_steps_ms));
@@ -544,7 +545,8 @@ export class ResearchEngine {
 
     // Periodic lead review — check coverage & spawn a small batch of targeted
     // threads every N findings. Replaces per-finding gap-analysis by default.
-    await this.maybeRunLeadReview(sessionId, session.config);
+    // Attach to the just-completed thread so the resulting step is visible.
+    await this.maybeRunLeadReview(sessionId, session.config, thread.id);
 
     return result;
   }
@@ -938,7 +940,7 @@ Return ONLY a JSON array of search query strings. No other text.`,
    *  compressed corpus (summary + recent finding summaries + open threads) and
    *  decides whether to spawn a small batch of targeted gap queries. Runs on a
    *  cadence instead of per-finding to avoid combinatorial thread explosion. */
-  private async maybeRunLeadReview(sessionId: string, config: SessionConfig): Promise<void> {
+  private async maybeRunLeadReview(sessionId: string, config: SessionConfig, attachThreadId: string | null = null): Promise<void> {
     if (!config.gap_analysis?.enabled) return;
     if ((config.gap_analysis.mode ?? 'periodic') !== 'periodic') return;
 
@@ -1003,7 +1005,7 @@ Rules:
 - If the user's intent is a practical/list-style request, favor pruning academic/historical tangents.`;
 
     const result = await this.callLLM(
-      config.model, prompt, sessionId, null, config, 'lead review'
+      config.model, prompt, sessionId, attachThreadId, config, 'lead review'
     );
 
     let pruneIds: string[] = [];
@@ -1018,7 +1020,14 @@ Rules:
       if (Array.isArray(parsed.deprioritize_thread_ids)) deprioritizeIds = parsed.deprioritize_thread_ids.filter((s: unknown) => typeof s === 'string');
       if (Array.isArray(parsed.gap_queries)) gapQueries = parsed.gap_queries.slice(0, effectiveMaxSpawn);
       if (typeof parsed.reason === 'string') reason = parsed.reason;
-    } catch {
+    } catch (err) {
+      console.warn(`[lead_review] JSON parse failed for session ${sessionId.slice(0, 8)} — notes stay unapplied for retry. raw[0:200]: ${result.text?.slice(0, 200)}`);
+      if (result.stepId) steps.updateStepMetadata(this.sqlite, result.stepId, {
+        decision: 'lead_review',
+        parse_error: err instanceof Error ? err.message : String(err),
+        raw_prefix: result.text?.slice(0, 500) ?? '',
+        unapplied_notes: unappliedNotes.length,
+      });
       return;
     }
 
@@ -1038,6 +1047,9 @@ Rules:
       prune_count: pruneIds.length,
       boost_count: boostIds.length,
       deprioritize_count: deprioritizeIds.length,
+      unapplied_notes: unappliedNotes.length,
+      finding_count: findingCount,
+      cadence,
       reason,
     });
 
