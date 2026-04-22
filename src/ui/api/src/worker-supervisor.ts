@@ -1,5 +1,6 @@
 import { spawn, spawnSync, type ChildProcess } from 'child_process';
 import { resolve } from 'path';
+import { readFileSync } from 'fs';
 
 const DEFAULT_WORKER_SCRIPT = resolve(import.meta.dirname, '../../../research/src/worker.ts');
 const SIGTERM_GRACE_MS = 30_000;
@@ -54,13 +55,26 @@ export class WorkerSupervisor {
     process.on('exit', () => this.stopSync());
   }
 
-  /** Kill orphaned worker processes from previous server runs (PPID=1, same script). */
+  /** Kill orphaned worker processes from previous server runs — any research/src/worker.ts
+   *  targeting the same DB as us. Cross-path match is intentional: a stale worker from a
+   *  deleted worktree/branch can keep claiming jobs on the same DB for days (PPID=1). */
   private killOrphans() {
     try {
-      const result = spawnSync('pgrep', ['-f', this.scriptPath], { encoding: 'utf-8' });
+      const ourDb = process.env.CONSTRUCT_DB_PATH ?? '';
+      const result = spawnSync('pgrep', ['-f', 'research/src/worker.ts'], { encoding: 'utf-8' });
       const pids = (result.stdout ?? '').trim().split('\n').map(Number).filter(p => p && p !== process.pid);
       for (const pid of pids) {
-        try { process.kill(pid, 'SIGKILL'); console.log(`[supervisor] killed orphaned worker pid=${pid}`); } catch { /* already gone */ }
+        // Only kill workers that target the same DB as this supervisor — don't stomp
+        // on a concurrently-running prod supervisor when we're the dev one (or vice versa).
+        let theirDb = '';
+        try {
+          const env = readFileSync(`/proc/${pid}/environ`, 'utf-8');
+          const m = env.split('\0').find(e => e.startsWith('CONSTRUCT_DB_PATH='));
+          theirDb = m ? m.slice('CONSTRUCT_DB_PATH='.length) : '';
+        } catch { /* proc gone or permission denied */ }
+        if (theirDb === ourDb) {
+          try { process.kill(pid, 'SIGKILL'); console.log(`[supervisor] killed orphaned worker pid=${pid} (db=${ourDb || 'default'})`); } catch { /* already gone */ }
+        }
       }
     } catch { /* pgrep not available */ }
   }
