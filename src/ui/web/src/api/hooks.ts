@@ -324,3 +324,19 @@ export function useGitStats(startDate: string, endDate: string) {
   });
 }
 
+export type TimeseriesPoint = {
+  date: string;
+  goalsCreated: number;
+  goalsCompleted: number;
+  todosCompleted: number;
+  habitsHit: number;
+};
+
+export function useTimeseries(startDate: string, endDate: string) {
+  return useQuery({
+    queryKey: ['summary', 'timeseries', startDate, endDate],
+    queryFn: () => api.get<TimeseriesPoint[]>(`/summary/timeseries?start=${startDate}&end=${endDate}&tz=${new Date().getTimezoneOffset()}`),
+    enabled: !!startDate && !!endDate,
+  });
+}
+

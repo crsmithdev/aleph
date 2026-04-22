@@ -1,9 +1,15 @@
 import { useState } from 'react';
-import { useSummary, useHabits, useGitStats } from '../../api/hooks';
-import { StatCard } from '../../components/data/StatCard';
+import { useNavigate } from 'react-router-dom';
+import { useSummary, useHabits, useGitStats, useTimeseries, useCreateGoal } from '../../api/hooks';
+import { MetricCard } from '../../components/data/MetricCard';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { PageHeader } from '../../components/layout/PageHeader';
+import { Modal } from '../../components/ui/Modal';
+import { GoalForm } from '../../components/goals/GoalForm';
+import { TodoQuickAdd } from '../../components/todos/TodoQuickAdd';
+import { HabitCreateForm } from '../../components/habits/HabitCreateForm';
+import { Icon } from '../../components/ui/Icon';
 import { clsx } from 'clsx';
 import { toDateStr, longDate } from '../../utils/format';
 
@@ -19,16 +25,6 @@ interface GitStats {
   commits: number;
   added: number;
   deleted: number;
-}
-
-interface PeriodSummaryProps {
-  start: string;
-  end: string;
-  dateDisplay: string;
-  data: PeriodSummaryData | undefined;
-  isLoading: boolean;
-  completedHabits: string[];
-  gitStats: GitStats | undefined;
 }
 
 function SectionHeader({ label, count }: { label: string; count?: number }) {
@@ -59,7 +55,19 @@ function BulletList({ items }: { items: ListItem[] }) {
   );
 }
 
-function PeriodSummary({ start, end, dateDisplay, data, isLoading, completedHabits, gitStats }: PeriodSummaryProps) {
+function TodayActivity({
+  dateDisplay,
+  data,
+  isLoading,
+  completedHabits,
+  gitStats,
+}: {
+  dateDisplay: string;
+  data: PeriodSummaryData | undefined;
+  isLoading: boolean;
+  completedHabits: string[];
+  gitStats: GitStats | undefined;
+}) {
   const [copied, setCopied] = useState(false);
 
   const createdGoals: ListItem[] = (data?.goalsCreated?.items ?? []).map((g) => ({ text: g.title, kind: 'created' }));
@@ -88,7 +96,7 @@ function PeriodSummary({ start, end, dateDisplay, data, isLoading, completedHabi
       lines.push('Habits:', ...habitItems.map((h) => `  ${h.kind === 'created' ? '+' : '✓'} ${h.text}`), '');
     }
     if (gitStats && gitStats.commits > 0) {
-      lines.push(`Construct: +${gitStats.added} LOC / -${gitStats.deleted} LOC · ${gitStats.commits} commit${gitStats.commits !== 1 ? 's' : ''}`);
+      lines.push(`Construct: +${gitStats.added} LOC / −${gitStats.deleted} LOC · ${gitStats.commits} commit${gitStats.commits !== 1 ? 's' : ''}`);
     }
     return lines.join('\n').trim();
   };
@@ -100,19 +108,26 @@ function PeriodSummary({ start, end, dateDisplay, data, isLoading, completedHabi
     });
   };
 
+  const isEmpty =
+    !isLoading &&
+    goalItems.length === 0 &&
+    createdTodos.length === 0 &&
+    completedTodoItems.length === 0 &&
+    habitItems.length === 0 &&
+    !(gitStats && gitStats.commits > 0);
+
   return (
     <div className="bg-bg-secondary border border-border-primary rounded-lg px-4 pt-3 pb-4">
-      {/* Header row */}
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-text-primary">Summary — {dateDisplay}</p>
+        <p className="text-sm font-semibold text-text-primary">Today — {dateDisplay}</p>
         <button
           onClick={handleCopy}
-          disabled={isLoading}
+          disabled={isLoading || isEmpty}
           className={clsx(
             'flex-shrink-0 px-3 py-1 text-sm rounded-md border transition-colors mt-0.5',
             copied
               ? 'bg-success/10 border-success text-success'
-              : 'bg-bg-tertiary border-border-primary text-text-secondary hover:text-text-primary hover:border-border-secondary'
+              : 'bg-bg-tertiary border-border-primary text-text-secondary hover:text-text-primary hover:border-border-secondary disabled:opacity-50 disabled:cursor-not-allowed'
           )}
         >
           {copied ? 'Copied!' : 'Copy'}
@@ -121,41 +136,34 @@ function PeriodSummary({ start, end, dateDisplay, data, isLoading, completedHabi
 
       {isLoading ? (
         <div className="text-sm text-text-muted mt-4">Loading...</div>
+      ) : isEmpty ? (
+        <p className="text-sm text-text-muted mt-3">Nothing logged yet today.</p>
       ) : (
         <div className="divide-y divide-border-primary/50 mt-1">
-          {/* Goals */}
           {goalItems.length > 0 && (
             <div className="pb-3">
               <SectionHeader label="Goals" count={goalItems.length} />
               <BulletList items={goalItems} />
             </div>
           )}
-
-          {/* Todos added */}
           {createdTodos.length > 0 && (
             <div className="pb-3">
               <SectionHeader label="Todos added" count={createdTodos.length} />
               <BulletList items={createdTodos} />
             </div>
           )}
-
-          {/* Todos finished */}
           {completedTodoItems.length > 0 && (
             <div className="pb-3">
               <SectionHeader label="Todos finished" count={completedTodoItems.length} />
               <BulletList items={completedTodoItems} />
             </div>
           )}
-
-          {/* Habits */}
           {habitItems.length > 0 && (
             <div className="pb-3">
               <SectionHeader label="Habits" count={habitItems.length} />
               <BulletList items={habitItems} />
             </div>
           )}
-
-          {/* Git stats */}
           {gitStats && gitStats.commits > 0 && (
             <div className="pt-3">
               <SectionHeader label="Construct" />
@@ -172,180 +180,151 @@ function PeriodSummary({ start, end, dateDisplay, data, isLoading, completedHabi
   );
 }
 
-type Preset = 'today' | 'yesterday' | 'this-week' | 'last-week' | 'custom';
-
-function getPresetRange(preset: Exclude<Preset, 'custom'>): { start: string; end: string } {
-  const now = new Date();
-  const day = now.getDay();
-
-  switch (preset) {
-    case 'today': {
-      return { start: toDateStr(now), end: toDateStr(now) };
-    }
-    case 'yesterday': {
-      const yesterday = new Date(now);
-      yesterday.setDate(now.getDate() - 1);
-      return { start: toDateStr(yesterday), end: toDateStr(yesterday) };
-    }
-    case 'this-week': {
-      const monday = new Date(now);
-      monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
-      monday.setHours(0, 0, 0, 0);
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-      return { start: toDateStr(monday), end: toDateStr(sunday) };
-    }
-    case 'last-week': {
-      const monday = new Date(now);
-      monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1) - 7);
-      monday.setHours(0, 0, 0, 0);
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-      return { start: toDateStr(monday), end: toDateStr(sunday) };
-    }
-  }
+function CreateButton({
+  glyph,
+  label,
+  accent,
+  onClick,
+}: {
+  glyph: string;
+  label: string;
+  accent: 'accent' | 'success' | 'magenta';
+  onClick: () => void;
+}) {
+  const accentClasses: Record<typeof accent, string> = {
+    accent: 'text-accent bg-accent/15',
+    success: 'text-success bg-success/15',
+    magenta: 'text-[#c879ff] bg-[#c879ff]/15',
+  };
+  return (
+    <button
+      onClick={onClick}
+      className="group flex-1 min-w-[180px] flex items-center gap-3 bg-bg-secondary border border-border-primary hover:border-border-secondary hover:bg-bg-tertiary rounded-xl px-4 py-3 transition-colors text-left"
+    >
+      <span className={clsx('w-9 h-9 rounded-lg flex items-center justify-center', accentClasses[accent])}>
+        <Icon name={glyph} size="md" />
+      </span>
+      <span className="text-base font-semibold text-text-primary">{label}</span>
+    </button>
+  );
 }
-
-function getPresetHeading(preset: Preset): string {
-  switch (preset) {
-    case 'today': return "Today's Summary";
-    case 'yesterday': return "Yesterday's Summary";
-    case 'this-week': return "This Week's Summary";
-    case 'last-week': return "Last Week's Summary";
-    case 'custom': return 'Period Summary';
-  }
-}
-
-interface SummaryBucket {
-  count: number;
-  items: Array<Record<string, unknown>>;
-}
-
-type SummaryData = {
-  range?: { start: string; end: string };
-  goalsCreated?: SummaryBucket;
-  goalsCompleted?: SummaryBucket;
-  goalsStateChanged?: SummaryBucket;
-  todosCompleted?: SummaryBucket;
-  notesAdded?: SummaryBucket;
-};
-
-const PRESETS: { label: string; value: Preset }[] = [
-  { label: 'Today', value: 'today' },
-  { label: 'Yesterday', value: 'yesterday' },
-  { label: 'This Week', value: 'this-week' },
-  { label: 'Last Week', value: 'last-week' },
-  { label: 'Custom', value: 'custom' },
-];
 
 export function SummaryPage() {
-  const [preset, setPreset] = useState<Preset>('today');
-  const defaultRange = getPresetRange('today');
-  const [customStart, setCustomStart] = useState(defaultRange.start);
-  const [customEnd, setCustomEnd] = useState(defaultRange.end);
+  const navigate = useNavigate();
+  const today = toDateStr(new Date());
+  const yesterdayDate = new Date();
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterday = toDateStr(yesterdayDate);
+  const sevenDaysAgoDate = new Date();
+  sevenDaysAgoDate.setDate(sevenDaysAgoDate.getDate() - 6);
+  const sevenDaysAgo = toDateStr(sevenDaysAgoDate);
 
-  const { start, end } =
-    preset === 'custom'
-      ? { start: customStart, end: customEnd }
-      : getPresetRange(preset as Exclude<Preset, 'custom'>);
+  const [openModal, setOpenModal] = useState<null | 'goal' | 'todo' | 'habit'>(null);
 
-  const { data: summary, isLoading, isError } = useSummary(start, end);
-  const data = summary as SummaryData | undefined;
-
+  const { data: timeseries, isLoading: tsLoading, isError: tsError } = useTimeseries(sevenDaysAgo, today);
+  const { data: summary, isLoading: summaryLoading } = useSummary(today, today);
+  const { data: gitStats } = useGitStats(today, today);
   const { data: habits } = useHabits();
   const completedHabits = (habits ?? []).filter((h) => h.completedThisPeriod).map((h) => h.title);
+  const createGoal = useCreateGoal();
 
-  const { data: gitStats } = useGitStats(start, end);
+  const series = timeseries ?? [];
+  const todayPoint = series.find((p) => p.date === today);
+  const yesterdayPoint = series.find((p) => p.date === yesterday);
+  const sumWeek = (key: 'goalsCreated' | 'goalsCompleted' | 'todosCompleted' | 'habitsHit') =>
+    series.reduce((acc, p) => acc + p[key], 0);
 
-  const dateDisplay =
-    start === end
-      ? longDate(start)
-      : `${longDate(start)} – ${longDate(end)}`;
+  const goalsCreatedSpark = series.map((p) => p.goalsCreated);
+  const goalsCompletedSpark = series.map((p) => p.goalsCompleted);
+  const todosDoneSpark = series.map((p) => p.todosCompleted);
+  const habitsHitSpark = series.map((p) => p.habitsHit);
 
-  const heading = getPresetHeading(preset);
+  const todayDisplay = longDate(today);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Summary"
-        actions={<span className="text-sm text-text-muted">{dateDisplay}</span>}
+        actions={<span className="text-sm text-text-muted">{todayDisplay}</span>}
       />
 
-      {/* Preset selector */}
-      <div className="space-y-3">
-        <div className="flex flex-wrap gap-2">
-          {PRESETS.map((p) => (
-            <button
-              key={p.value}
-              onClick={() => setPreset(p.value)}
-              className={clsx(
-                'px-3 py-1.5 text-sm rounded-lg border transition-colors',
-                preset === p.value
-                  ? 'bg-accent/15 border-accent text-accent font-medium'
-                  : 'bg-bg-secondary border-border-primary text-text-secondary hover:text-text-primary hover:border-border-secondary'
-              )}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-
-        {preset === 'custom' && (
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-text-muted">From:</label>
-              <input
-                type="date"
-                value={customStart}
-                onChange={(e) => setCustomStart(e.target.value)}
-                className="bg-bg-secondary border border-border-primary rounded px-2 py-1 text-sm text-text-secondary focus:outline-none focus:border-accent"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-text-muted">To:</label>
-              <input
-                type="date"
-                value={customEnd}
-                onChange={(e) => setCustomEnd(e.target.value)}
-                className="bg-bg-secondary border border-border-primary rounded px-2 py-1 text-sm text-text-secondary focus:outline-none focus:border-accent"
-              />
-            </div>
-          </div>
-        )}
+      <div className="flex gap-3 flex-wrap">
+        <CreateButton glyph="add" label="New goal" accent="accent" onClick={() => setOpenModal('goal')} />
+        <CreateButton glyph="check" label="New todo" accent="success" onClick={() => setOpenModal('todo')} />
+        <CreateButton glyph="autorenew" label="New habit" accent="magenta" onClick={() => setOpenModal('habit')} />
       </div>
 
-      {/* Results */}
-      {isLoading && <PageLoading />}
+      {tsError && <ErrorState message="Failed to load summary data." />}
 
-      {isError && <ErrorState message="Failed to load summary data." />}
-
-      {data && (
-        <div className="space-y-4">
-          {/* Stats grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <StatCard label="Goals Created" value={data.goalsCreated?.count ?? 0} />
-            <StatCard label="Goals Completed" value={data.goalsCompleted?.count ?? 0} accent="success" />
-            <StatCard label="Todos Completed" value={data.todosCompleted?.count ?? 0} />
-            <StatCard label="Notes Added" value={data.notesAdded?.count ?? 0} accent="warning" />
-          </div>
-
-          {(data.goalsStateChanged?.count ?? 0) > 0 && (
-            <div className="bg-bg-secondary border border-border-primary rounded-lg p-4 space-y-2">
-              <h2 className="text-sm font-semibold text-text-secondary">State Changes ({data.goalsStateChanged!.count})</h2>
-            </div>
-          )}
+      {tsLoading && !timeseries ? (
+        <PageLoading />
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <MetricCard
+            label="Goals created"
+            today={todayPoint?.goalsCreated ?? 0}
+            yesterday={yesterdayPoint?.goalsCreated ?? 0}
+            week={sumWeek('goalsCreated')}
+            spark={goalsCreatedSpark}
+            accent="accent"
+          />
+          <MetricCard
+            label="Goals completed"
+            today={todayPoint?.goalsCompleted ?? 0}
+            yesterday={yesterdayPoint?.goalsCompleted ?? 0}
+            week={sumWeek('goalsCompleted')}
+            spark={goalsCompletedSpark}
+            accent="success"
+          />
+          <MetricCard
+            label="Todos done"
+            today={todayPoint?.todosCompleted ?? 0}
+            yesterday={yesterdayPoint?.todosCompleted ?? 0}
+            week={sumWeek('todosCompleted')}
+            spark={todosDoneSpark}
+            accent="success"
+          />
+          <MetricCard
+            label="Habits hit"
+            today={todayPoint?.habitsHit ?? 0}
+            yesterday={yesterdayPoint?.habitsHit ?? 0}
+            week={sumWeek('habitsHit')}
+            spark={habitsHitSpark}
+            accent="magenta"
+          />
         </div>
       )}
 
-      <PeriodSummary
-        start={start}
-        end={end}
-        dateDisplay={dateDisplay}
-        data={data as PeriodSummaryData | undefined}
-        isLoading={isLoading}
+      <TodayActivity
+        dateDisplay={todayDisplay}
+        data={summary as PeriodSummaryData | undefined}
+        isLoading={summaryLoading}
         completedHabits={completedHabits}
         gitStats={gitStats}
       />
+
+      <Modal open={openModal === 'goal'} onClose={() => setOpenModal(null)} title="New goal">
+        <GoalForm
+          onSubmit={(data) =>
+            createGoal.mutate(data, {
+              onSuccess: (g) => {
+                setOpenModal(null);
+                navigate(`/goals/${g.id}`);
+              },
+            })
+          }
+          onCancel={() => setOpenModal(null)}
+          loading={createGoal.isPending}
+        />
+      </Modal>
+
+      <Modal open={openModal === 'todo'} onClose={() => setOpenModal(null)} title="New todo">
+        <TodoQuickAdd />
+      </Modal>
+
+      <Modal open={openModal === 'habit'} onClose={() => setOpenModal(null)} title="New habit">
+        <HabitCreateForm onCreated={() => setOpenModal(null)} />
+      </Modal>
     </div>
   );
 }

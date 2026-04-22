@@ -1,6 +1,6 @@
 import { and, gte, lte, sql, eq } from 'drizzle-orm';
 import type { Db } from '@construct/data';
-import { goals, todos, notes, historyLogs, habits } from '../schema.js';
+import { goals, todos, notes, historyLogs, habits, habitCompletions } from '../schema.js';
 
 export function getSummary(db: Db, start: string, end: string, tzOffsetMinutes?: number) {
   // Adjust query boundaries for timezone: timestamps are stored as UTC ISO strings,
@@ -98,4 +98,86 @@ export function getSummary(db: Db, start: string, end: string, tzOffsetMinutes?:
     habitsCreated: { count: habitsCreated.length, items: habitsCreated },
     notesAdded: { count: notesAdded.length, items: notesAdded },
   };
+}
+
+export type TimeseriesPoint = {
+  date: string;
+  goalsCreated: number;
+  goalsCompleted: number;
+  todosCompleted: number;
+  habitsHit: number;
+};
+
+export function getTimeseries(db: Db, start: string, end: string, tzOffsetMinutes?: number): TimeseriesPoint[] {
+  const offsetMs = (tzOffsetMinutes ?? 0) * 60 * 1000;
+  const startDate = new Date(`${start}T00:00:00.000Z`);
+  const endDate = new Date(`${end}T23:59:59.999Z`);
+  startDate.setTime(startDate.getTime() + offsetMs);
+  endDate.setTime(endDate.getTime() + offsetMs);
+  const startTs = startDate.toISOString();
+  const endTs = endDate.toISOString();
+
+  const localDateOf = (ts: string): string => {
+    const d = new Date(ts);
+    d.setTime(d.getTime() - offsetMs);
+    return d.toISOString().slice(0, 10);
+  };
+
+  const buckets = new Map<string, TimeseriesPoint>();
+  const cursor = new Date(`${start}T12:00:00.000Z`);
+  const endCursor = new Date(`${end}T12:00:00.000Z`);
+  while (cursor <= endCursor) {
+    const d = cursor.toISOString().slice(0, 10);
+    buckets.set(d, { date: d, goalsCreated: 0, goalsCompleted: 0, todosCompleted: 0, habitsHit: 0 });
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  const goalsCreatedRows = db
+    .select({ createdAt: goals.createdAt })
+    .from(goals)
+    .where(and(gte(goals.createdAt, startTs), lte(goals.createdAt, endTs)))
+    .all();
+  for (const r of goalsCreatedRows) {
+    const b = buckets.get(localDateOf(r.createdAt));
+    if (b) b.goalsCreated++;
+  }
+
+  const goalsCompletedRows = db
+    .select({ createdAt: historyLogs.createdAt })
+    .from(historyLogs)
+    .where(
+      and(
+        eq(historyLogs.eventType, 'state_change'),
+        gte(historyLogs.createdAt, startTs),
+        lte(historyLogs.createdAt, endTs),
+        sql`json_extract(${historyLogs.details}, '$.newState') = 'done'`
+      )
+    )
+    .all();
+  for (const r of goalsCompletedRows) {
+    const b = buckets.get(localDateOf(r.createdAt));
+    if (b) b.goalsCompleted++;
+  }
+
+  const todosDoneRows = db
+    .select({ updatedAt: todos.updatedAt })
+    .from(todos)
+    .where(and(eq(todos.done, true), gte(todos.updatedAt, startTs), lte(todos.updatedAt, endTs)))
+    .all();
+  for (const r of todosDoneRows) {
+    const b = buckets.get(localDateOf(r.updatedAt));
+    if (b) b.todosCompleted++;
+  }
+
+  const habitHitRows = db
+    .select({ completedAt: habitCompletions.completedAt })
+    .from(habitCompletions)
+    .where(and(gte(habitCompletions.completedAt, startTs), lte(habitCompletions.completedAt, endTs)))
+    .all();
+  for (const r of habitHitRows) {
+    const b = buckets.get(localDateOf(r.completedAt));
+    if (b) b.habitsHit++;
+  }
+
+  return Array.from(buckets.values());
 }
