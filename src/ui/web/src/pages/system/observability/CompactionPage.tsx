@@ -137,7 +137,7 @@ export function CompactionPage() {
   return (
     <div className="space-y-6">
       <ObsControlBar
-        title={<h1 className="font-heading text-2xl font-bold text-text-primary">Compaction</h1>}
+        title="Compaction"
         range={range}
         onRangeChange={setRange}
         granularity={granularity}

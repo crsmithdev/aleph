@@ -7,6 +7,7 @@ import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
+import { PageTitle, PageTitleLink, PageTitleSeparator } from '../../../components/layout/PageHeader';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtMs, fmtPct, fmtLegendLabel } from '../../../utils/format';
@@ -196,23 +197,18 @@ export function HookDetailPage() {
     <div className="space-y-6">
       <ObsControlBar
         title={
-          <div className="flex items-center gap-2">
-            <Link
-              to="/observability/hooks"
-              className="font-heading text-2xl font-bold text-text-muted hover:text-text-primary transition-colors leading-none"
-            >
-              Hooks
-            </Link>
-            <span className="font-heading text-2xl font-bold text-text-muted leading-none">&raquo;</span>
-            <h1 className="font-heading text-2xl font-bold text-text-primary leading-none">{hookName}</h1>
+          <>
+            <PageTitleLink to="/observability/hooks">Hooks</PageTitleLink>
+            <PageTitleSeparator />
+            <PageTitle>{hookName}</PageTitle>
             {data.event && (
-              <span className="rounded-md bg-bg-tertiary px-2 py-0.5 text-xs text-text-muted font-mono">{data.event}</span>
+              <span className="rounded-md bg-bg-tertiary px-2 py-0.5 text-xs text-text-muted font-mono shrink-0">{data.event}</span>
             )}
             <span className={clsx(
-              'inline-block h-2 w-2 rounded-full',
+              'inline-block h-2 w-2 rounded-full shrink-0',
               data.active ? 'bg-success' : 'bg-text-muted/30'
             )} title={data.active ? 'Active' : 'Removed'} />
-          </div>
+          </>
         }
         datasets={visibleDatasets}
         dataset={tsDataset}

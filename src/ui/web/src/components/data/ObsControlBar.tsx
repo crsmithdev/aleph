@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { clsx } from 'clsx';
 import { Icon } from '../ui/Icon';
+import { PageTitle } from '../layout/PageHeader';
 import { type Granularity, type TimeRange } from './TimeRangeSelector';
 
 const TIME_RANGE_PRESETS: { label: string; value: TimeRange }[] = [
@@ -25,7 +26,8 @@ const DISPLAY_MODES: { label: string; value: DatasetDisplayMode; short: string }
 ];
 
 export interface ObsControlBarProps {
-  title: React.ReactNode;
+  /** String renders via <PageTitle>; pass ReactNode for breadcrumbs or custom title JSX */
+  title: string | React.ReactNode;
   datasets?: { key: string; label: string }[];
   dataset?: string;
   onDatasetChange?: (d: string) => void;
@@ -88,7 +90,9 @@ export function ObsControlBar({
 
   return (
     <div className="sticky top-0 z-10 h-14 bg-bg-primary flex items-center gap-2 border-b border-border-primary">
-      <div className="flex-1 min-w-0">{title}</div>
+      <div className="flex-1 min-w-0 flex items-center gap-2">
+        {typeof title === 'string' ? <PageTitle>{title}</PageTitle> : title}
+      </div>
 
       {/* Left group: dataset | filters | options */}
       {(hasDataset || hasFilters || hasOptions) && (

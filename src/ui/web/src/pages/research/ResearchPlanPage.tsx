@@ -2,6 +2,7 @@ import { useParams, Link } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { useResearchPlan, useResearchSession, useModifyPlan } from '../../api/research-hooks';
 import { Button } from '../../components/ui/Button';
+import { PageHeader } from '../../components/layout/PageHeader';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
 
@@ -38,10 +39,10 @@ export function ResearchPlanPage() {
     <div className="flex flex-col gap-5">
       <div>
         <Link to={`/research/${id}`} className="text-sm text-accent hover:underline">&larr; Back to session</Link>
-        <h1 className="font-heading text-2xl font-bold text-text-primary mt-2">Research Plan</h1>
-        <p className="text-sm text-text-muted mt-0.5">
-          {session?.title} — {plan.items.length} upcoming items
-        </p>
+        <PageHeader
+          title="Research Plan"
+          subtitle={<>{session?.title} — {plan.items.length} upcoming items</>}
+        />
       </div>
 
       <div className="space-y-2">

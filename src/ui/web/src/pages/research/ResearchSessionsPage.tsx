@@ -9,6 +9,7 @@ import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { StatCard } from '../../components/data/StatCard';
 import { ObsControlBar } from '../../components/data/ObsControlBar';
+import { PageTitle } from '../../components/layout/PageHeader';
 import { type TimeRange, type Granularity } from '../../components/data/TimeRangeSelector';
 import { ChartContainer } from '../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps, xAxisDateProps } from '../../components/charts/chartTheme';
@@ -67,14 +68,12 @@ export function ResearchSessionsPage() {
     <div className="flex flex-col gap-5">
       <ObsControlBar
         title={
-          <div className="flex items-center justify-between w-full">
-            <div>
-              <h1 className="font-heading text-2xl font-bold text-text-primary">Deep Research</h1>
-              <p className="text-sm text-text-muted mt-0.5">
-                {visibleSessions.length} session{visibleSessions.length !== 1 ? 's' : ''}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
+          <>
+            <PageTitle>Deep Research</PageTitle>
+            <span className="text-sm text-text-muted shrink-0">
+              {visibleSessions.length} session{visibleSessions.length !== 1 ? 's' : ''}
+            </span>
+            <div className="flex items-center gap-2 shrink-0 ml-auto">
               <Button
                 variant="ghost"
                 size="sm"
@@ -91,7 +90,7 @@ export function ResearchSessionsPage() {
               >Run All</Button>
               <Button onClick={() => setNewOpen(!newOpen)}>+ New session</Button>
             </div>
-          </div>
+          </>
         }
         range={range}
         onRangeChange={setRange}

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { useResearchQueries, useCreateResearchQuery, useUpdateResearchQuery, useRunAllResearch, useStopAllResearch, useClearResearchDB, useResearchDefaults, useResearchStats, useResearchSummary, useResearchErrorStatus, type PromptShape, type PromptDepth, type ErrorKind } from '../../api/research-hooks';
 import { Button } from '../../components/ui/Button';
+import { PageHeader } from '../../components/layout/PageHeader';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { fmtCurrency, shortRelativeTime } from '../../utils/format';
@@ -162,32 +163,36 @@ export function ResearchQueriesPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="sticky top-0 z-10 h-14 bg-bg-primary flex items-center justify-between gap-2 mb-4">
-        <div>
-          <h1 className="font-heading text-2xl font-bold text-text-primary">Queries</h1>
-          <p className="text-sm text-text-muted mt-0.5">
-            {visibleSessions.length} quer{visibleSessions.length !== 1 ? 'ies' : 'y'}
-            {activeCount > 0 && <> &middot; <span className="text-success">{activeCount} active</span></>}
-            {weekSpend > 0 && <> &middot; {fmtCurrency(weekSpend)} spent &middot; 7d</>}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => stopAll.mutate()}
-            loading={stopAll.isPending}
-            disabled={runAll.isPending}
-          >Pause All</Button>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => runAll.mutate()}
-            loading={runAll.isPending}
-            disabled={stopAll.isPending}
-          >Resume All</Button>
-          <Button size="sm" onClick={toggleNewOpen}>+ New query</Button>
-        </div>
+      <div className="sticky top-0 z-10 bg-bg-primary mb-4">
+        <PageHeader
+          title="Queries"
+          subtitle={
+            <>
+              {visibleSessions.length} quer{visibleSessions.length !== 1 ? 'ies' : 'y'}
+              {activeCount > 0 && <> &middot; <span className="text-success">{activeCount} active</span></>}
+              {weekSpend > 0 && <> &middot; {fmtCurrency(weekSpend)} spent &middot; 7d</>}
+            </>
+          }
+          actions={
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => stopAll.mutate()}
+                loading={stopAll.isPending}
+                disabled={runAll.isPending}
+              >Pause All</Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => runAll.mutate()}
+                loading={runAll.isPending}
+                disabled={stopAll.isPending}
+              >Resume All</Button>
+              <Button size="sm" onClick={toggleNewOpen}>+ New query</Button>
+            </>
+          }
+        />
       </div>
 
       {newOpen && (

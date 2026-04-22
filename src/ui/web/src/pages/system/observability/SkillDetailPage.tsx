@@ -7,6 +7,7 @@ import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
+import { PageTitle, PageTitleLink, PageTitleSeparator } from '../../../components/layout/PageHeader';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, chartColor, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtPct, fmtProject, fmtLegendLabel } from '../../../utils/format';
@@ -175,24 +176,19 @@ export function SkillDetailPage() {
     <div className="space-y-6">
       <ObsControlBar
         title={
-          <div className="flex items-center gap-2">
-            <Link
-              to="/observability/skills"
-              className="font-heading text-2xl font-bold text-text-muted hover:text-text-primary transition-colors leading-none"
-            >
-              Skills
-            </Link>
-            <span className="font-heading text-2xl font-bold text-text-muted leading-none">&raquo;</span>
-            <h1 className="font-heading text-2xl font-bold text-text-primary leading-none">{displayName}</h1>
+          <>
+            <PageTitleLink to="/observability/skills">Skills</PageTitleLink>
+            <PageTitleSeparator />
+            <PageTitle>{displayName}</PageTitle>
             <span className={clsx(
-              'inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium uppercase tracking-wide',
+              'shrink-0 inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium uppercase tracking-wide',
               isCommand
                 ? 'bg-accent/10 text-accent border border-accent/20'
                 : 'bg-accent/5 text-accent/70 border border-accent/10',
             )}>
               {isCommand ? 'cmd' : 'skill'}
             </span>
-          </div>
+          </>
         }
         datasets={visibleDatasets}
         dataset={tsDataset}

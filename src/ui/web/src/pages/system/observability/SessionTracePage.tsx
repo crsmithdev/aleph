@@ -6,6 +6,7 @@ import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { QueryTiming } from '../../../components/data/QueryTiming';
+import { PageTitle, PageTitleLink, PageTitleSeparator } from '../../../components/layout/PageHeader';
 import { type TimeRange } from '../../../components/data/TimeRangeSelector';
 import { fmtNumber, fmtMs, fmtCurrency, dateTime, fmtDuration, fmtToolName, cleanMessage, formatModelName, fmtProject, modelContextWindow } from '../../../utils/format';
 import { clsx } from 'clsx';
@@ -1211,16 +1212,9 @@ export function SessionTracePage() {
 
       {/* Page header */}
       <div className="sticky top-0 z-10 h-14 bg-bg-primary border-b border-border-primary flex flex-wrap items-center gap-2">
-        <Link
-          to="/observability/sessions"
-          className="font-heading text-2xl font-bold text-text-muted hover:text-text-primary transition-colors leading-none"
-        >
-          Sessions
-        </Link>
-        <span className="font-heading text-2xl font-bold text-text-muted leading-none">&raquo;</span>
-        <h1 className="font-heading text-2xl font-bold text-text-primary leading-none">
-          <span className="font-mono text-accent">{sessionId.slice(0, 8)}</span>
-        </h1>
+        <PageTitleLink to="/observability/sessions">Sessions</PageTitleLink>
+        <PageTitleSeparator />
+        <PageTitle><span className="font-mono text-accent">{sessionId.slice(0, 8)}</span></PageTitle>
         {data.project && (
           <span className="rounded-md bg-bg-tertiary px-2 py-0.5 text-xs text-text-muted font-mono">
             {fmtProject(data.project)}

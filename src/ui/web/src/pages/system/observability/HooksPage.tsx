@@ -573,7 +573,7 @@ export function HooksPage() {
   return (
     <div className="space-y-6">
       <ObsControlBar
-        title={<h1 className="font-heading text-2xl font-bold text-text-primary">Hooks</h1>}
+        title="Hooks"
         datasets={HOOK_DATASETS}
         dataset={dataset}
         onDatasetChange={(d) => setDataset(d as HookDataset)}

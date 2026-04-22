@@ -306,7 +306,7 @@ export function SkillsPage() {
   return (
     <div className="space-y-6">
       <ObsControlBar
-        title={<h1 className="font-heading text-2xl font-bold text-text-primary">Skills</h1>}
+        title="Skills"
         range={range}
         onRangeChange={setRange}
         granularity={granularity}

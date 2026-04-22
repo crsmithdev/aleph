@@ -251,7 +251,7 @@ export function ToolsPage() {
   return (
     <div className="space-y-6">
       <ObsControlBar
-        title={<h1 className="font-heading text-2xl font-bold text-text-primary">Tools</h1>}
+        title="Tools"
         datasets={DATASETS}
         dataset={tsDataset}
         onDatasetChange={(d) => setTsDataset(d as Dataset)}

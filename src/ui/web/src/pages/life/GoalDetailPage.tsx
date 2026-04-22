@@ -26,6 +26,7 @@ import {
 } from '../../api/hooks';
 import { priorityColors, stateColors } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
+import { PageTitleLink, PageTitleSeparator } from '../../components/layout/PageHeader';
 import { CategoryManager } from '../../components/goals/CategoryManager';
 import { NoteEditor } from '../../components/notes/NoteEditor';
 import { HistoryTimeline } from '../../components/history/HistoryTimeline';
@@ -310,8 +311,8 @@ export function GoalDetailPage() {
     <div className="flex flex-col gap-6">
       {/* Goal header */}
       <div className="sticky top-0 z-10 h-14 bg-bg-primary border-b border-border-primary flex items-center gap-2">
-        <Link to="/goals" className="font-heading text-2xl font-bold text-text-muted hover:text-text-primary transition-colors leading-none whitespace-nowrap shrink-0">Goals</Link>
-        <span className="font-heading text-2xl font-bold text-text-muted leading-none shrink-0">&raquo;</span>
+        <PageTitleLink to="/goals">Goals</PageTitleLink>
+        <PageTitleSeparator />
         <div className="flex-1 min-w-0">
           <InlineEdit value={goal.title} onSave={(title) => handleUpdate({ title })} />
         </div>

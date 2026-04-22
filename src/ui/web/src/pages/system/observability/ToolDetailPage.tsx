@@ -7,6 +7,7 @@ import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
+import { PageTitle, PageTitleLink, PageTitleSeparator } from '../../../components/layout/PageHeader';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, chartColor, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { fmtNumber, fmtPct, fmtMs, fmtToolName, fmtProject, fmtLegendLabel } from '../../../utils/format';
@@ -360,16 +361,11 @@ export function ToolDetailPage() {
     <div className="space-y-6">
       <ObsControlBar
         title={
-          <div className="flex items-center gap-2">
-            <Link
-              to="/observability/tools"
-              className="font-heading text-2xl font-bold text-text-muted hover:text-text-primary transition-colors leading-none"
-            >
-              Tools
-            </Link>
-            <span className="font-heading text-2xl font-bold text-text-muted leading-none">&raquo;</span>
-            <h1 className="font-heading text-2xl font-bold text-text-primary leading-none">{fmtToolName(toolName!)}</h1>
-          </div>
+          <>
+            <PageTitleLink to="/observability/tools">Tools</PageTitleLink>
+            <PageTitleSeparator />
+            <PageTitle>{fmtToolName(toolName!)}</PageTitle>
+          </>
         }
         datasets={visibleDatasets}
         dataset={tsDataset}

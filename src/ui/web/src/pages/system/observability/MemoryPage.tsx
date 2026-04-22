@@ -8,6 +8,7 @@ import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { ObsControlBar } from '../../../components/data/ObsControlBar';
+import { PageTitle } from '../../../components/layout/PageHeader';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { fmtNumber, shortDate, shortRelativeTime, granLabel, fmtLegendLabel, fmtMs, dateTime } from '../../../utils/format';
 import { clsx } from 'clsx';
@@ -134,20 +135,20 @@ export function MemoryPage() {
     <div className="space-y-6">
       <ObsControlBar
         title={
-          <div className="flex items-center justify-between w-full">
-            <h1 className="font-heading text-2xl font-bold text-text-primary">Memory</h1>
+          <>
+            <PageTitle>Memory</PageTitle>
             <button
               onClick={() => snapshot.mutate()}
               disabled={snapshot.isPending}
               className={clsx(
-                'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                'shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
                 'bg-accent text-white hover:bg-accent-hover',
                 'disabled:opacity-50 disabled:cursor-not-allowed'
               )}
             >
               {snapshot.isPending ? 'Taking Snapshot...' : 'Take Snapshot'}
             </button>
-          </div>
+          </>
         }
         range={range}
         onRangeChange={setRange}

@@ -8,6 +8,7 @@ import {
   useObsSessionFiles,
 } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
+import { PageHeader } from '../../../components/layout/PageHeader';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
@@ -380,7 +381,7 @@ export function SignalsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="font-heading text-2xl font-bold text-text-primary">Signals</h1>
+      <PageHeader title="Signals" />
 
       <div className="flex gap-1 border-b border-border-primary">
         {TABS.map(({ key, label }) => (

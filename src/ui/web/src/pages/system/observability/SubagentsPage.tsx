@@ -136,7 +136,7 @@ export function SubagentsPage() {
   return (
     <div className="space-y-6">
       <ObsControlBar
-        title={<h1 className="font-heading text-2xl font-bold text-text-primary">Subagents</h1>}
+        title="Subagents"
         range={range}
         onRangeChange={setRange}
         granularity={granularity}

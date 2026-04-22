@@ -416,7 +416,7 @@ export function EventsPage() {
   return (
     <div className="space-y-6">
       <ObsControlBar
-        title={<h1 className="font-heading text-2xl font-bold text-text-primary">Events</h1>}
+        title="Events"
         range={range}
         onRangeChange={(r) => { setRange(r); setOffset(0); }}
         granularity={granularity}

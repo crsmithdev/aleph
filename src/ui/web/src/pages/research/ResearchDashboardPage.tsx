@@ -5,6 +5,7 @@ import { useResearchStats, useResearchQueries } from '../../api/research-hooks';
 import { Button } from '../../components/ui/Button';
 import { StatCard } from '../../components/data/StatCard';
 import { ObsControlBar } from '../../components/data/ObsControlBar';
+import { PageTitle } from '../../components/layout/PageHeader';
 import { type TimeRange, type Granularity } from '../../components/data/TimeRangeSelector';
 import { ChartContainer } from '../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps, xAxisDateProps } from '../../components/charts/chartTheme';
@@ -23,14 +24,14 @@ export function ResearchDashboardPage() {
     <div className="space-y-6">
       <ObsControlBar
         title={
-          <div className="flex items-center justify-between w-full">
-            <h1 className="font-heading text-2xl font-bold text-text-primary">Deep Research</h1>
-            <Link to="/research/queries">
+          <>
+            <PageTitle>Deep Research</PageTitle>
+            <Link to="/research/queries" className="shrink-0">
               <Button variant="secondary" size="sm">
                 {visibleQueries.length} quer{visibleQueries.length !== 1 ? 'ies' : 'y'} →
               </Button>
             </Link>
-          </div>
+          </>
         }
         range={range}
         onRangeChange={setRange}
