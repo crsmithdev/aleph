@@ -160,37 +160,55 @@ function InlineAddRow({ placeholder, onSubmit, loading, linkSearch }: { placehol
 
 function LinkSearch<T extends { id: string; title: string }>({
   items,
+  completedItems,
   onLink,
   renderExtra,
 }: {
   items: T[];
+  completedItems?: T[];
   onLink: (item: T) => void;
   renderExtra?: (item: T) => React.ReactNode;
 }) {
   const [filter, setFilter] = useState('');
+  const [includeCompleted, setIncludeCompleted] = useState(false);
 
-  const filtered = items.filter((item) =>
+  const pool = includeCompleted && completedItems ? [...items, ...completedItems] : items;
+  const filtered = pool.filter((item) =>
     item.title.toLowerCase().includes(filter.toLowerCase()),
   );
+  const showToggle = (completedItems?.length ?? 0) > 0;
 
   return (
     <>
-      <input
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-        placeholder="Search..."
-        autoFocus
-        className="w-full bg-bg-tertiary border border-border-secondary rounded px-2.5 py-1 text-xs text-text-primary placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-accent"
-      />
+      <div className="flex items-center gap-2">
+        <input
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Search..."
+          autoFocus
+          className="flex-1 bg-bg-tertiary border border-border-secondary rounded px-2.5 py-1 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-accent"
+        />
+        {showToggle && (
+          <label className="flex items-center gap-1.5 text-sm text-text-muted whitespace-nowrap cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={includeCompleted}
+              onChange={(e) => setIncludeCompleted(e.target.checked)}
+              className="accent-accent"
+            />
+            Include completed
+          </label>
+        )}
+      </div>
       <div className="overflow-y-auto max-h-[150px] flex flex-col gap-0.5">
         {filtered.length === 0 ? (
-          <p className="text-xs text-text-disabled py-1 px-2">No matches.</p>
+          <p className="text-sm text-text-muted py-1 px-2">No matches.</p>
         ) : (
           filtered.map((item) => (
             <button
               key={item.id}
               onClick={() => onLink(item)}
-              className="text-left text-xs text-text-secondary hover:text-text-primary px-2 py-1 rounded hover:bg-bg-tertiary transition-colors flex items-center justify-between"
+              className="text-left text-sm text-text-secondary hover:text-text-primary px-2 py-1 rounded hover:bg-bg-tertiary transition-colors flex items-center justify-between"
             >
               <span>{item.title}</span>
               {renderExtra?.(item)}
@@ -202,7 +220,9 @@ function LinkSearch<T extends { id: string; title: string }>({
   );
 }
 
-function GoalLinkRow({ linkableGoals, onLink }: { linkableGoals: { id: string; title: string; state: string }[]; onLink: (g: { id: string; title: string; state: string }) => void }) {
+type LinkableGoal = { id: string; title: string; state: string };
+
+function GoalLinkRow({ linkableGoals, completedLinkableGoals, onLink }: { linkableGoals: LinkableGoal[]; completedLinkableGoals: LinkableGoal[]; onLink: (g: LinkableGoal) => void }) {
   const [open, setOpen] = useState(false);
 
   if (!open) {
@@ -219,19 +239,22 @@ function GoalLinkRow({ linkableGoals, onLink }: { linkableGoals: { id: string; t
     );
   }
 
+  const hasAny = linkableGoals.length > 0 || completedLinkableGoals.length > 0;
+
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center gap-2">
         <button onClick={() => setOpen(false)} className="text-xs text-text-muted hover:text-text-secondary">Close</button>
       </div>
-      {linkableGoals.length > 0 ? (
+      {hasAny ? (
         <LinkSearch
           items={linkableGoals}
+          completedItems={completedLinkableGoals}
           onLink={(g) => { onLink(g); setOpen(false); }}
-          renderExtra={(g) => <span className="text-text-disabled text-xs capitalize">{g.state.replace(/_/g, ' ')}</span>}
+          renderExtra={(g) => <span className="text-text-muted text-sm capitalize">{g.state.replace(/_/g, ' ')}</span>}
         />
       ) : (
-        <p className="text-xs text-text-disabled py-1 px-2">No other goals to link.</p>
+        <p className="text-sm text-text-muted py-1 px-2">No other goals to link.</p>
       )}
     </div>
   );
@@ -300,12 +323,15 @@ export function GoalDetailPage() {
   const allTodos = [...(todosData?.active ?? []), ...(todosData?.completed ?? [])];
   const linkedTodos = allTodos.filter((t) => t.goalId === id);
   const unlinkedTodos = allTodos.filter((t) => !t.goalId && !t.done);
+  const completedUnlinkedTodos = allTodos.filter((t) => !t.goalId && t.done);
 
   const linkedHabits = habitsData.filter((h: Habit) => h.goalId === id);
   const unlinkedHabits = habitsData.filter((h: Habit) => !h.goalId);
 
   const linkedGoalIds = new Set((goal.linkedGoals ?? []).map((g) => g.id));
-  const linkableGoals = allGoals.filter((g) => g.id !== id && !linkedGoalIds.has(g.id));
+  const linkableGoalsAll = allGoals.filter((g) => g.id !== id && !linkedGoalIds.has(g.id));
+  const linkableGoals = linkableGoalsAll.filter((g) => g.state !== 'done' && g.state !== 'canceled');
+  const completedLinkableGoals = linkableGoalsAll.filter((g) => g.state === 'done' || g.state === 'canceled');
 
   return (
     <div className="flex flex-col gap-6">
@@ -448,9 +474,10 @@ export function GoalDetailPage() {
           placeholder="Add todo"
           onSubmit={(title) => createTodo.mutate({ title, goalId: id })}
           loading={createTodo.isPending}
-          linkSearch={unlinkedTodos.length > 0 ? (
+          linkSearch={unlinkedTodos.length + completedUnlinkedTodos.length > 0 ? (
             <LinkSearch
               items={unlinkedTodos}
+              completedItems={completedUnlinkedTodos}
               onLink={(todo) => updateTodo.mutate({ id: todo.id, goalId: id })}
             />
           ) : undefined}
@@ -520,7 +547,7 @@ export function GoalDetailPage() {
             ))}
           </div>
         )}
-        <GoalLinkRow linkableGoals={linkableGoals} onLink={(g) => linkGoal.mutate(g.id)} />
+        <GoalLinkRow linkableGoals={linkableGoals} completedLinkableGoals={completedLinkableGoals} onLink={(g) => linkGoal.mutate(g.id)} />
       </section>
 
       {/* History section */}
