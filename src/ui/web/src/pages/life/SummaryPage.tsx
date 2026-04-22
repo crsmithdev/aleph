@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useSummary, useHabits, useGitStats, useTimeseries, useCreateGoal } from '../../api/hooks';
 import { MetricCard } from '../../components/data/MetricCard';
+import { ChartContainer } from '../../components/charts/ChartContainer';
+import { tooltipStyle, gridProps, axisProps, xAxisDateProps, legendProps, labelFormatter } from '../../components/charts/chartTheme';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { PageHeader } from '../../components/layout/PageHeader';
@@ -215,13 +218,13 @@ export function SummaryPage() {
   const yesterdayDate = new Date();
   yesterdayDate.setDate(yesterdayDate.getDate() - 1);
   const yesterday = toDateStr(yesterdayDate);
-  const sevenDaysAgoDate = new Date();
-  sevenDaysAgoDate.setDate(sevenDaysAgoDate.getDate() - 6);
-  const sevenDaysAgo = toDateStr(sevenDaysAgoDate);
+  const thirtyDaysAgoDate = new Date();
+  thirtyDaysAgoDate.setDate(thirtyDaysAgoDate.getDate() - 29);
+  const thirtyDaysAgo = toDateStr(thirtyDaysAgoDate);
 
   const [openModal, setOpenModal] = useState<null | 'goal' | 'todo' | 'habit'>(null);
 
-  const { data: timeseries, isLoading: tsLoading, isError: tsError } = useTimeseries(sevenDaysAgo, today);
+  const { data: timeseries, isLoading: tsLoading, isError: tsError } = useTimeseries(thirtyDaysAgo, today);
   const { data: summary, isLoading: summaryLoading } = useSummary(today, today);
   const { data: gitStats } = useGitStats(today, today);
   const { data: habits } = useHabits();
@@ -229,15 +232,20 @@ export function SummaryPage() {
   const createGoal = useCreateGoal();
 
   const series = timeseries ?? [];
+  const last7 = series.slice(-7);
   const todayPoint = series.find((p) => p.date === today);
   const yesterdayPoint = series.find((p) => p.date === yesterday);
   const sumWeek = (key: 'goalsCreated' | 'goalsCompleted' | 'todosCompleted' | 'habitsHit') =>
-    series.reduce((acc, p) => acc + p[key], 0);
+    last7.reduce((acc, p) => acc + p[key], 0);
 
-  const goalsCreatedSpark = series.map((p) => p.goalsCreated);
-  const goalsCompletedSpark = series.map((p) => p.goalsCompleted);
-  const todosDoneSpark = series.map((p) => p.todosCompleted);
-  const habitsHitSpark = series.map((p) => p.habitsHit);
+  const goalsCreatedSpark = last7.map((p) => p.goalsCreated);
+  const goalsCompletedSpark = last7.map((p) => p.goalsCompleted);
+  const todosDoneSpark = last7.map((p) => p.todosCompleted);
+  const habitsHitSpark = last7.map((p) => p.habitsHit);
+
+  const hasChartData = series.some(
+    (p) => p.goalsCompleted + p.todosCompleted + p.habitsHit > 0,
+  );
 
   const todayDisplay = longDate(today);
 
@@ -293,6 +301,29 @@ export function SummaryPage() {
             accent="magenta"
           />
         </div>
+      )}
+
+      {!tsLoading && series.length > 0 && (
+        <ChartContainer title="Last 30 days" height={220}>
+          {hasChartData ? (
+            <BarChart data={series} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="date" {...xAxisDateProps} />
+              <YAxis {...axisProps} allowDecimals={false} />
+              <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} cursor={{ fill: 'var(--bg-tertiary)' }} />
+              <Legend {...legendProps} />
+              <Bar isAnimationActive={false} stackId="work" dataKey="goalsCompleted" fill="var(--success)" name="Goals" radius={[0, 0, 0, 0]} />
+              <Bar isAnimationActive={false} stackId="work" dataKey="todosCompleted" fill="var(--accent)" name="Todos" />
+              <Bar isAnimationActive={false} stackId="work" dataKey="habitsHit" fill="#c879ff" name="Habits" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <div className="h-full flex items-center justify-center text-sm text-text-muted">
+                No completed work in the last 30 days yet.
+              </div>
+            </ResponsiveContainer>
+          )}
+        </ChartContainer>
       )}
 
       <TodayActivity
