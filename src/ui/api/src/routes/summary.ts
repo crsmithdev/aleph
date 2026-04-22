@@ -13,9 +13,12 @@ function findRepoRoot(): string | null {
   return null;
 }
 
-function getGitStats(start: string, end: string) {
+type TopCommit = { sha: string; subject: string; added: number; deleted: number };
+type GitStats = { commits: number; added: number; deleted: number; topCommits: TopCommit[] };
+
+function getGitStats(start: string, end: string): GitStats {
   const repoDir = findRepoRoot();
-  if (!repoDir) return { commits: 0, added: 0, deleted: 0 };
+  if (!repoDir) return { commits: 0, added: 0, deleted: 0, topCommits: [] };
   try {
     const since = `${start} 00:00:00`;
     const until = `${end} 23:59:59`;
@@ -23,19 +26,40 @@ function getGitStats(start: string, end: string) {
     const commits = parseInt(
       execSync(`git -C "${repoDir}" rev-list --count ${logArgs} HEAD`, { encoding: 'utf-8', timeout: 5000 }).trim()
     );
-    const numstat = execSync(
-      `git -C "${repoDir}" log --numstat --format="" ${logArgs}`,
+
+    const out = execSync(
+      `git -C "${repoDir}" log --numstat --format="==COMMIT==%H%x09%s" ${logArgs}`,
       { encoding: 'utf-8', timeout: 5000 }
     );
+
     let added = 0, deleted = 0;
-    for (const line of numstat.trim().split('\n')) {
-      const parts = line.trim().split('\t');
-      const a = parseInt(parts[0]), d = parseInt(parts[1]);
-      if (!isNaN(a) && !isNaN(d)) { added += a; deleted += d; }
+    const perCommit: TopCommit[] = [];
+    let current: TopCommit | null = null;
+    for (const line of out.split('\n')) {
+      if (line.startsWith('==COMMIT==')) {
+        if (current) perCommit.push(current);
+        const [sha, ...subjParts] = line.slice('==COMMIT=='.length).split('\t');
+        current = { sha: sha.slice(0, 7), subject: subjParts.join('\t'), added: 0, deleted: 0 };
+        continue;
+      }
+      const parts = line.split('\t');
+      if (parts.length < 2) continue;
+      const a = parseInt(parts[0]);
+      const d = parseInt(parts[1]);
+      if (isNaN(a) || isNaN(d)) continue;
+      added += a;
+      deleted += d;
+      if (current) { current.added += a; current.deleted += d; }
     }
-    return { commits, added, deleted };
+    if (current) perCommit.push(current);
+
+    const topCommits = perCommit
+      .sort((x, y) => (y.added + y.deleted) - (x.added + x.deleted))
+      .slice(0, 5);
+
+    return { commits, added, deleted, topCommits };
   } catch {
-    return { commits: 0, added: 0, deleted: 0 };
+    return { commits: 0, added: 0, deleted: 0, topCommits: [] };
   }
 }
 

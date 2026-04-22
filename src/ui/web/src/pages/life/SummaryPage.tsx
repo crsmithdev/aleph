@@ -28,6 +28,7 @@ interface GitStats {
   commits: number;
   added: number;
   deleted: number;
+  topCommits?: Array<{ sha: string; subject: string; added: number; deleted: number }>;
 }
 
 function SectionHeader({ label, count }: { label: string; count?: number }) {
@@ -58,14 +59,20 @@ function BulletList({ items }: { items: ListItem[] }) {
   );
 }
 
-function TodayActivity({
+type Emphasis = 'hero' | 'normal' | 'muted';
+
+function PeriodActivity({
+  periodLabel,
   dateDisplay,
+  emphasis,
   data,
   isLoading,
   completedHabits,
   gitStats,
 }: {
+  periodLabel: string;
   dateDisplay: string;
+  emphasis: Emphasis;
   data: PeriodSummaryData | undefined;
   isLoading: boolean;
   completedHabits: string[];
@@ -84,8 +91,10 @@ function TodayActivity({
   const followedHabits: ListItem[] = completedHabits.map((h) => ({ text: h, kind: 'completed' }));
   const habitItems = [...createdHabits, ...followedHabits];
 
+  const topCommits = gitStats?.topCommits ?? [];
+
   const buildCopyText = () => {
-    const lines: string[] = [`Summary — ${dateDisplay}`, ''];
+    const lines: string[] = [`${periodLabel} — ${dateDisplay}`, ''];
     if (goalItems.length > 0) {
       lines.push('Goals:', ...goalItems.map((g) => `  ${g.kind === 'created' ? '+' : '✓'} ${g.text}`), '');
     }
@@ -100,6 +109,9 @@ function TodayActivity({
     }
     if (gitStats && gitStats.commits > 0) {
       lines.push(`Construct: +${gitStats.added} LOC / −${gitStats.deleted} LOC · ${gitStats.commits} commit${gitStats.commits !== 1 ? 's' : ''}`);
+      if (topCommits.length > 0) {
+        lines.push(...topCommits.map((c) => `  · ${c.sha} ${c.subject} (+${c.added}/−${c.deleted})`));
+      }
     }
     return lines.join('\n').trim();
   };
@@ -119,10 +131,27 @@ function TodayActivity({
     habitItems.length === 0 &&
     !(gitStats && gitStats.commits > 0);
 
+  const cardClass = clsx(
+    'rounded-lg px-4 pt-3 pb-4',
+    emphasis === 'hero'   && 'bg-bg-secondary border-2 border-accent/40',
+    emphasis === 'normal' && 'bg-bg-secondary border border-border-primary',
+    emphasis === 'muted'  && 'bg-bg-secondary/60 border border-border-primary',
+  );
+
+  const titleClass = clsx(
+    'font-semibold',
+    emphasis === 'hero'   && 'text-base text-text-primary',
+    emphasis === 'normal' && 'text-sm text-text-primary',
+    emphasis === 'muted'  && 'text-sm text-text-secondary',
+  );
+
   return (
-    <div className="bg-bg-secondary border border-border-primary rounded-lg px-4 pt-3 pb-4">
+    <div className={cardClass}>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-text-primary">Today — {dateDisplay}</p>
+        <p className={titleClass}>
+          <span>{periodLabel}</span>
+          <span className="text-text-muted font-normal"> — {dateDisplay}</span>
+        </p>
         <button
           onClick={handleCopy}
           disabled={isLoading || isEmpty}
@@ -140,7 +169,7 @@ function TodayActivity({
       {isLoading ? (
         <div className="text-sm text-text-muted mt-4">Loading...</div>
       ) : isEmpty ? (
-        <p className="text-sm text-text-muted mt-3">Nothing logged yet today.</p>
+        <p className="text-sm text-text-muted mt-3">Nothing logged.</p>
       ) : (
         <div className="divide-y divide-border-primary/50 mt-1">
           {goalItems.length > 0 && (
@@ -175,6 +204,19 @@ function TodayActivity({
                 <span className="whitespace-nowrap"><span className="text-error font-mono">−{gitStats.deleted}</span><span className="text-text-muted"> LOC</span></span>
                 <span className="whitespace-nowrap"><span className="text-accent font-mono">{gitStats.commits}</span><span className="text-text-secondary"> commit{gitStats.commits !== 1 ? 's' : ''}</span></span>
               </div>
+              {topCommits.length > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {topCommits.map((c) => (
+                    <li key={c.sha} className="flex items-baseline gap-2 text-sm">
+                      <span className="font-mono text-text-muted shrink-0">{c.sha}</span>
+                      <span className="text-text-secondary truncate flex-1 min-w-0">{c.subject}</span>
+                      <span className="font-mono text-text-muted shrink-0 whitespace-nowrap">
+                        <span className="text-success">+{c.added}</span> / <span className="text-error">−{c.deleted}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
         </div>
@@ -224,9 +266,17 @@ export function SummaryPage() {
 
   const [openModal, setOpenModal] = useState<null | 'goal' | 'todo' | 'habit'>(null);
 
+  const sevenDaysAgoDate = new Date();
+  sevenDaysAgoDate.setDate(sevenDaysAgoDate.getDate() - 6);
+  const sevenDaysAgo = toDateStr(sevenDaysAgoDate);
+
   const { data: timeseries, isLoading: tsLoading, isError: tsError } = useTimeseries(thirtyDaysAgo, today);
-  const { data: summary, isLoading: summaryLoading } = useSummary(today, today);
-  const { data: gitStats } = useGitStats(today, today);
+  const { data: todaySummary, isLoading: todayLoading } = useSummary(today, today);
+  const { data: yesterdaySummary, isLoading: yesterdayLoading } = useSummary(yesterday, yesterday);
+  const { data: weekSummary, isLoading: weekLoading } = useSummary(sevenDaysAgo, today);
+  const { data: todayGit } = useGitStats(today, today);
+  const { data: yesterdayGit } = useGitStats(yesterday, yesterday);
+  const { data: weekGit } = useGitStats(sevenDaysAgo, today);
   const { data: habits } = useHabits();
   const completedHabits = (habits ?? []).filter((h) => h.completedThisPeriod).map((h) => h.title);
   const createGoal = useCreateGoal();
@@ -326,13 +376,35 @@ export function SummaryPage() {
         </ChartContainer>
       )}
 
-      <TodayActivity
-        dateDisplay={todayDisplay}
-        data={summary as PeriodSummaryData | undefined}
-        isLoading={summaryLoading}
-        completedHabits={completedHabits}
-        gitStats={gitStats}
-      />
+      <div className="space-y-4">
+        <PeriodActivity
+          periodLabel="Today"
+          dateDisplay={todayDisplay}
+          emphasis="hero"
+          data={todaySummary as PeriodSummaryData | undefined}
+          isLoading={todayLoading}
+          completedHabits={completedHabits}
+          gitStats={todayGit}
+        />
+        <PeriodActivity
+          periodLabel="Yesterday"
+          dateDisplay={longDate(yesterday)}
+          emphasis="normal"
+          data={yesterdaySummary as PeriodSummaryData | undefined}
+          isLoading={yesterdayLoading}
+          completedHabits={[]}
+          gitStats={yesterdayGit}
+        />
+        <PeriodActivity
+          periodLabel="Last 7 days"
+          dateDisplay={`${longDate(sevenDaysAgo)} – ${longDate(today)}`}
+          emphasis="muted"
+          data={weekSummary as PeriodSummaryData | undefined}
+          isLoading={weekLoading}
+          completedHabits={[]}
+          gitStats={weekGit}
+        />
+      </div>
 
       <Modal open={openModal === 'goal'} onClose={() => setOpenModal(null)} title="New goal">
         <GoalForm

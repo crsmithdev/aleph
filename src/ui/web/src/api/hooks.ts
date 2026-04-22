@@ -316,10 +316,13 @@ export function useSummary(startDate: string, endDate: string) {
   });
 }
 
+export type TopCommit = { sha: string; subject: string; added: number; deleted: number };
+export type GitStats = { commits: number; added: number; deleted: number; topCommits: TopCommit[] };
+
 export function useGitStats(startDate: string, endDate: string) {
   return useQuery({
     queryKey: ['summary', 'git', startDate, endDate],
-    queryFn: () => api.get<{ commits: number; added: number; deleted: number }>(`/summary/git?start=${startDate}&end=${endDate}`),
+    queryFn: () => api.get<GitStats>(`/summary/git?start=${startDate}&end=${endDate}`),
     enabled: !!startDate && !!endDate,
   });
 }
