@@ -75,11 +75,6 @@ function buildUserContent(payload: import('./types.js').HookPayload<'post_mortem
     .map(([k, v]) => `  ${k}: ${v}`);
   const hintBlock = hintLines.length > 0 ? `\nHints:\n${hintLines.join('\n')}` : '';
 
-  const interp = payload.interpretation;
-  const interpBlock = interp ? `\nInterpretation at dispatch:
-  intent: ${interp.intent}
-  shape: ${interp.shape}, depth: ${interp.depth}, scope: ${interp.scope}` : '';
-
   const m = payload.metrics;
   const durMin = (m.duration_ms / 60_000).toFixed(1);
   const metricsBlock = `\nFinal metrics:
@@ -110,7 +105,7 @@ function buildUserContent(payload: import('./types.js').HookPayload<'post_mortem
     ? `\nFinal summary:\n${payload.final_summary.slice(0, 1500)}`
     : '';
 
-  return `Original prompt:\n${payload.prompt}${hintBlock}${interpBlock}${metricsBlock}${threadBlock}${sourceBlock}${findingBlock}${summaryBlock}`;
+  return `Original prompt:\n${payload.prompt}${hintBlock}${metricsBlock}${threadBlock}${sourceBlock}${findingBlock}${summaryBlock}`;
 }
 
 function parseResponse(raw: string): HookResult<'post_mortem'> | null {
@@ -181,7 +176,6 @@ export function buildPostMortemPayload(
     job_id: jobId,
     prompt: session.prompt,
     hints: session.prompt_hints,
-    interpretation: session.interpretation,
     final_summary: session.summary,
     metrics: {
       findings,

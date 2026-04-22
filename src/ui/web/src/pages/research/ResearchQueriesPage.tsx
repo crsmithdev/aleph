@@ -2,7 +2,7 @@ import { Icon } from '../../components/ui/Icon';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { useResearchQueries, useCreateResearchQuery, useUpdateResearchQuery, useRunAllResearch, useStopAllResearch, useClearResearchDB, useResearchDefaults, useResearchStats, useResearchSummary, useResearchErrorStatus, type OutputShape, type PromptShape, type PromptDepth, type ErrorKind } from '../../api/research-hooks';
+import { useResearchQueries, useCreateResearchQuery, useUpdateResearchQuery, useRunAllResearch, useStopAllResearch, useClearResearchDB, useResearchDefaults, useResearchStats, useResearchSummary, useResearchErrorStatus, type PromptShape, type PromptDepth, type ErrorKind } from '../../api/research-hooks';
 import { Button } from '../../components/ui/Button';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
@@ -96,8 +96,6 @@ export function ResearchQueriesPage() {
   const [minSearches, setMinSearches] = useState<number>(2);
   const [gapAnalysis, setGapAnalysis] = useState<boolean>(true);
   const [maxGapSearches, setMaxGapSearches] = useState<number>(2);
-  const [intent, setIntent] = useState<string>('');
-  const [outputShape, setOutputShape] = useState<OutputShape | ''>('');
   const [hintShape, setHintShape] = useState<PromptShape | ''>('');
   const [hintDepth, setHintDepth] = useState<PromptDepth | ''>('');
   const clearDb = useClearResearchDB();
@@ -148,8 +146,6 @@ export function ResearchQueriesPage() {
     if (hintDepth) hints.depth = hintDepth;
     createSession.mutate({
       prompt: query.trim(),
-      intent: intent.trim() || null,
-      output_shape: outputShape || null,
       hints: Object.keys(hints).length > 0 ? hints : undefined,
       config: {
         max_thread_depth: depth,
@@ -160,7 +156,7 @@ export function ResearchQueriesPage() {
         gap_analysis: { enabled: gapAnalysis, max_gap_searches: maxGapSearches },
       },
     }, {
-      onSuccess: () => { setQuery(''); setIntent(''); setOutputShape(''); setHintShape(''); setHintDepth(''); setNewOpen(false); },
+      onSuccess: () => { setQuery(''); setHintShape(''); setHintDepth(''); setNewOpen(false); },
     });
   }
 
@@ -322,33 +318,6 @@ export function ResearchQueriesPage() {
             disabled={clearDb.isPending}
             className="px-3 py-1.5 text-sm rounded border border-dashed border-border-secondary text-text-muted hover:text-red-400 hover:border-red-400/50 hover:bg-red-500/5 transition-colors shrink-0"
           >{clearDb.isPending ? 'Wiping...' : 'Wipe all'}</button>
-          </div>
-          <div className="flex gap-3 items-center">
-            <label className="flex-1 flex flex-col gap-1 text-sm text-text-muted">
-              <span>Intent (optional) — what kind of answer do you want? e.g. "a list of Berkeley orgs taking volunteers this quarter"</span>
-              <input
-                type="text"
-                value={intent}
-                onChange={e => setIntent(e.target.value)}
-                placeholder="Optional steering brief — lead researcher uses this to prune tangents"
-                className="w-full bg-bg-primary border border-border-primary rounded-md px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm text-text-muted shrink-0">
-              <span>Shape</span>
-              <select
-                value={outputShape}
-                onChange={e => setOutputShape((e.target.value || '') as OutputShape | '')}
-                className="bg-bg-primary border border-border-primary rounded-md px-2 py-1.5 text-sm text-text-primary focus:outline-none focus:border-accent"
-              >
-                <option value="">Default (overview)</option>
-                <option value="list_of_entities">List of entities</option>
-                <option value="overview">Overview</option>
-                <option value="comparison">Comparison</option>
-                <option value="timeline">Timeline</option>
-                <option value="how_to">How-to</option>
-              </select>
-            </label>
           </div>
         </form>
       )}

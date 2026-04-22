@@ -13,8 +13,6 @@ export interface QueryStats {
   findings_by_day: number[]; // length 7, oldest → newest
 }
 
-export type OutputShape = 'list_of_entities' | 'overview' | 'comparison' | 'timeline' | 'how_to';
-
 export type PromptShape = 'answer' | 'list' | 'table' | 'brief' | 'dataset';
 export type PromptDepth = 'shallow' | 'normal' | 'deep';
 export type PromptAudience = 'self' | 'team' | 'external';
@@ -25,14 +23,6 @@ export interface PromptHints {
   depth?: PromptDepth;
   audience?: PromptAudience;
   urgency?: PromptUrgency;
-}
-
-export interface InterpretedPrompt {
-  intent: string;
-  shape: PromptShape;
-  depth: PromptDepth;
-  scope: string;
-  dispatch_params?: Record<string, unknown>;
 }
 
 export interface IterationCorrection {
@@ -110,14 +100,11 @@ export interface ResearchQuery {
   prompt_short: string | null;
   prompt_super_short: string | null;
   prompt_hints: PromptHints;
-  interpretation: InterpretedPrompt | null;
   status: 'active' | 'paused' | 'exhausted' | 'halted' | 'completed' | 'archived';
   config: Record<string, unknown>;
   summary: string;
   document: string;
   user_notes: string;
-  intent: string | null;
-  output_shape: OutputShape | null;
   created_at: string;
   updated_at: string;
   stats?: QueryStats; // populated by GET /research/queries (list endpoint)
@@ -532,7 +519,7 @@ export const useResearchSession = useResearchQuery;
 export function useCreateResearchQuery() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { prompt: string; hints?: PromptHints; title?: string; config?: Record<string, unknown>; intent?: string | null; output_shape?: OutputShape | null }) =>
+    mutationFn: (data: { prompt: string; hints?: PromptHints; title?: string; config?: Record<string, unknown> }) =>
       api.post<ResearchQuery>('/research/queries', data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['research-queries'] }),
   });
@@ -544,7 +531,7 @@ export const useCreateResearchSession = useCreateResearchQuery;
 export function useUpdateResearchQuery() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: string; status?: string; title?: string; intent?: string | null; output_shape?: OutputShape | null }) =>
+    mutationFn: ({ id, ...data }: { id: string; status?: string; title?: string }) =>
       api.patch<ResearchQuery>(`/research/queries/${id}`, data),
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ['research-queries'] });

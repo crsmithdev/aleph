@@ -95,14 +95,11 @@ function ConfBar({ label, value }: { label: string; value: number }) {
   );
 }
 
-/** Lead-researcher steering panel. Shows the user's intent, lets them add nudges,
- *  and displays the last few lead-reviewer actions (pruned/boosted/new queries). */
-function LeaderPanel({ sessionId, intent, output_shape, interpretation }: {
-  sessionId: string;
-  intent: string | null;
-  output_shape: string | null;
-  interpretation: import('../../api/research-hooks').InterpretedPrompt | null;
-}) {
+/** Lead-researcher steering panel. Lets the user drop in-flight nudges and
+ *  shows the most recent lead-reviewer actions (pruned/boosted/new queries).
+ *  All steering now travels through the prompt itself and these ad-hoc nudges —
+ *  separate intent/shape fields are gone. */
+function LeaderPanel({ sessionId }: { sessionId: string }) {
   const { data } = useSteeringNotes(sessionId);
   const createNote = useCreateSteeringNote();
   const [text, setText] = useState('');
@@ -120,12 +117,7 @@ function LeaderPanel({ sessionId, intent, output_shape, interpretation }: {
     });
   }
 
-  // Prefer the explicit output_shape the user set at creation; fall back to
-  // the interpreter's inferred shape when the user didn't specify one.
-  const shapeLabel = output_shape
-    ? output_shape.replace(/_/g, ' ')
-    : interpretation?.shape ?? null;
-  const hasSteering = !!intent || !!shapeLabel || notes.length > 0 || mods.length > 0;
+  const hasActivity = notes.length > 0 || mods.length > 0;
 
   return (
     <div className="mt-3 rounded-md border border-border-primary bg-bg-primary/40">
@@ -136,7 +128,6 @@ function LeaderPanel({ sessionId, intent, output_shape, interpretation }: {
       >
         <span className="flex items-center gap-2">
           <span className="font-medium text-text-secondary">Lead researcher</span>
-          {shapeLabel && <span className="text-sm uppercase tracking-[0.06em] text-accent/80">{shapeLabel}</span>}
           {pendingCount > 0 && (
             <span className="px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-400 text-sm tabular-nums">
               {pendingCount} pending nudge{pendingCount === 1 ? '' : 's'}
@@ -147,18 +138,12 @@ function LeaderPanel({ sessionId, intent, output_shape, interpretation }: {
               {mods.length} action{mods.length === 1 ? '' : 's'}
             </span>
           )}
-          {!hasSteering && <span className="text-sm text-text-muted/70 italic">no steering set</span>}
+          {!hasActivity && <span className="text-sm text-text-muted/70 italic">no nudges yet</span>}
         </span>
         <span className="text-sm">{open ? '−' : '+'}</span>
       </button>
       {open && (
         <div className="px-3 pb-3 border-t border-border-primary flex flex-col gap-2">
-          {intent && (
-            <div className="text-sm">
-              <span className="text-text-muted">Intent: </span>
-              <span className="text-text-primary">{intent}</span>
-            </div>
-          )}
           <form onSubmit={submit} className="flex gap-2">
             <input
               type="text"
@@ -4472,12 +4457,7 @@ export function ResearchQueryDetailPage() {
           <div className="px-6 pb-0">
             <p className="text-sm text-text-muted line-clamp-3 mb-2">{session.prompt_short || session.prompt}</p>
 
-            <LeaderPanel
-              sessionId={id!}
-              intent={(session as unknown as { intent: string | null }).intent ?? session.interpretation?.intent ?? null}
-              output_shape={(session as unknown as { output_shape: string | null }).output_shape ?? null}
-              interpretation={session.interpretation ?? null}
-            />
+            <LeaderPanel sessionId={id!} />
 
           {/* Env warnings */}
           {envCheck && (envCheck.errors.length > 0 || envCheck.warnings.length > 0 || envCheck.jina_balance !== null) && (

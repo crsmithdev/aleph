@@ -1,8 +1,6 @@
 export * from './types.js';
 export { registerHook, clearHooks, hasHooks, runHooks, firstResult } from './registry.js';
 export type { HookInvocation } from './registry.js';
-export { createPreDispatchHandler } from './pre-dispatch.js';
-export type { PreDispatchHandlerOptions } from './pre-dispatch.js';
 export {
   createIterationCheckHandler,
   buildIterationCheckPayload,

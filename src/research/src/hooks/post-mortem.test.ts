@@ -29,7 +29,6 @@ const BASE_PAYLOAD = {
   job_id: 'j1',
   prompt: 'x',
   hints: {},
-  interpretation: null,
   final_summary: 'summary',
   metrics: { findings: 10, threads_active: 0, threads_total: 5, cost_usd: 0.25, errors: 3, steps: 40, duration_ms: 180_000 },
   thread_state: { by_status: { exhausted: 5 }, stuck_count: 0, pruned_count: 0 },
@@ -96,10 +95,10 @@ describe('post_mortem handler', () => {
     expect(result?.recommendations).toEqual([]);
   });
 
-  test('user content includes interpretation when present', async () => {
-    let seenBody: string | null = null;
+  test('user content includes the original prompt and hints', async () => {
+    const bodies: string[] = [];
     const captureFetch: typeof fetch = (async (_url: string, init?: RequestInit) => {
-      seenBody = init?.body as string;
+      bodies.push(init?.body as string);
       return {
         ok: true, status: 200, statusText: 'OK',
         json: async () => llmReply(JSON.stringify({
@@ -111,13 +110,14 @@ describe('post_mortem handler', () => {
     const handler = createPostMortemHandler({ apiKey: 'test', fetchImpl: captureFetch });
     await handler({
       ...BASE_PAYLOAD,
-      interpretation: { intent: 'X', shape: 'answer', depth: 'deep', scope: 'Y' },
+      prompt: 'Find solid-state batteries shipping in 2026',
+      hints: { depth: 'deep' },
     });
 
-    const parsed = JSON.parse(seenBody!) as { messages: Array<{ content: string }> };
+    const parsed = JSON.parse(bodies[0]) as { messages: Array<{ content: string }> };
     const userMsg = parsed.messages[1].content;
-    expect(userMsg).toContain('Interpretation');
-    expect(userMsg).toContain('intent: X');
+    expect(userMsg).toContain('Find solid-state batteries shipping in 2026');
+    expect(userMsg).toContain('depth: deep');
   });
 });
 

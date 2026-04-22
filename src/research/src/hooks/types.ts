@@ -1,14 +1,9 @@
-import type { PromptHints, InterpretedPrompt } from '../types.js';
+import type { PromptHints } from '../types.js';
 
 // Payload and result shapes for each hook event. A new event adds two entries
 // here (payload + result) and the registry picks up the type automatically.
 
 export interface HookPayloadMap {
-  pre_dispatch: {
-    query_id: string;
-    prompt: string;
-    hints: PromptHints;
-  };
   iteration_check: {
     query_id: string;
     prompt: string;
@@ -23,7 +18,6 @@ export interface HookPayloadMap {
     job_id: string | null;
     prompt: string;
     hints: PromptHints;
-    interpretation: InterpretedPrompt | null;
     final_summary: string;
     metrics: PostMortemMetrics;
     thread_state: PostMortemThreadState;
@@ -45,11 +39,6 @@ export interface PostMortemSourceHealth {
 }
 
 export interface HookResultMap {
-  pre_dispatch: {
-    interpretation?: InterpretedPrompt;
-    clarifying_question?: string;
-    notes?: string;
-  };
   iteration_check: {
     verdict: 'on_track' | 'drifting' | 'needs_correction';
     notes: string;

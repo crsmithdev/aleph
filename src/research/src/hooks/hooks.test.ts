@@ -2,127 +2,96 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { registerHook, clearHooks, runHooks, firstResult, hasHooks } from './registry.js';
 import type { HookHandler, HookPayload, HookResult } from './types.js';
 
+// Uses iteration_check as the vehicle for exercising registry mechanics
+// (timeouts, error capture, multiple handlers). The shape of the hook doesn't
+// matter for these tests — what matters is that the registry dispatches and
+// isolates handler failures correctly.
+const basePayload: HookPayload<'iteration_check'> = {
+  query_id: 'q1',
+  prompt: 'how do LLMs work',
+  hints: {},
+  iterations_completed: 1,
+  metrics: { findings: 0, threads_active: 1, threads_total: 1, cost_usd: 0, errors: 0, steps: 1 },
+  recent_thread_queries: [],
+  recent_finding_summaries: [],
+};
+
 describe('hook registry', () => {
   beforeEach(() => { clearHooks(); });
 
   test('runHooks returns [] when no handlers registered', async () => {
-    const invocations = await runHooks('pre_dispatch', {
-      query_id: 'q1', prompt: 'test', hints: {},
-    });
+    const invocations = await runHooks('iteration_check', basePayload);
     expect(invocations).toEqual([]);
-    expect(hasHooks('pre_dispatch')).toBe(false);
+    expect(hasHooks('iteration_check')).toBe(false);
   });
 
   test('registered handler receives payload and returns result', async () => {
-    let seenPayload: HookPayload<'pre_dispatch'> | null = null;
-    const handler: HookHandler<'pre_dispatch'> = async (payload) => {
-      seenPayload = payload;
-      return {
-        interpretation: {
-          intent: 'research the topic',
-          shape: 'answer',
-          depth: 'normal',
-          scope: 'broad',
-        },
-      };
+    const seen: HookPayload<'iteration_check'>[] = [];
+    const handler: HookHandler<'iteration_check'> = async (payload) => {
+      seen.push(payload);
+      return { verdict: 'on_track', notes: 'ok' };
     };
-    registerHook('pre_dispatch', handler, { label: 'test' });
-    expect(hasHooks('pre_dispatch')).toBe(true);
+    registerHook('iteration_check', handler, { label: 'test' });
+    expect(hasHooks('iteration_check')).toBe(true);
 
-    const invocations = await runHooks('pre_dispatch', {
-      query_id: 'q1', prompt: 'how do LLMs work', hints: { depth: 'deep' },
-    });
+    const invocations = await runHooks('iteration_check', basePayload);
 
-    expect(seenPayload).toEqual({
-      query_id: 'q1', prompt: 'how do LLMs work', hints: { depth: 'deep' },
-    });
+    expect(seen[0]?.query_id).toBe('q1');
     expect(invocations.length).toBe(1);
     expect(invocations[0].status).toBe('ok');
     expect(invocations[0].label).toBe('test');
-    expect(invocations[0].result?.interpretation?.intent).toBe('research the topic');
+    expect((invocations[0].result as HookResult<'iteration_check'>)?.verdict).toBe('on_track');
   });
 
   test('handler returning null is reported as empty', async () => {
-    registerHook('pre_dispatch', async () => null, { label: 'nullish' });
-    const invocations = await runHooks('pre_dispatch', {
-      query_id: 'q1', prompt: 'x', hints: {},
-    });
+    registerHook('iteration_check', async () => null, { label: 'nullish' });
+    const invocations = await runHooks('iteration_check', basePayload);
     expect(invocations.length).toBe(1);
     expect(invocations[0].status).toBe('empty');
     expect(invocations[0].result).toBeUndefined();
   });
 
   test('handler error is captured, not thrown', async () => {
-    registerHook('pre_dispatch', async () => { throw new Error('boom'); }, { label: 'broken' });
-    const invocations = await runHooks('pre_dispatch', {
-      query_id: 'q1', prompt: 'x', hints: {},
-    });
+    registerHook('iteration_check', async () => { throw new Error('boom'); }, { label: 'broken' });
+    const invocations = await runHooks('iteration_check', basePayload);
     expect(invocations.length).toBe(1);
     expect(invocations[0].status).toBe('error');
     expect(invocations[0].error).toBe('boom');
   });
 
   test('handler timeout is enforced', async () => {
-    registerHook('pre_dispatch', async () => {
+    registerHook('iteration_check', async () => {
       await new Promise(r => setTimeout(r, 500));
-      return { interpretation: { intent: 'slow', shape: 'answer', depth: 'normal', scope: 'x' } };
+      return { verdict: 'on_track', notes: 'slow' };
     }, { label: 'slow', timeoutMs: 50 });
 
-    const invocations = await runHooks('pre_dispatch', {
-      query_id: 'q1', prompt: 'x', hints: {},
-    });
+    const invocations = await runHooks('iteration_check', basePayload);
     expect(invocations[0].status).toBe('timeout');
     expect(invocations[0].error).toMatch(/timeout/);
   });
 
   test('multiple handlers all run; one failing does not cancel others', async () => {
-    registerHook('pre_dispatch', async () => { throw new Error('first broke'); }, { label: 'a' });
-    registerHook('pre_dispatch', async () => ({
-      interpretation: { intent: 'recovered', shape: 'answer', depth: 'normal', scope: 'x' },
+    registerHook('iteration_check', async () => { throw new Error('first broke'); }, { label: 'a' });
+    registerHook('iteration_check', async () => ({
+      verdict: 'on_track', notes: 'recovered',
     }), { label: 'b' });
 
-    const invocations = await runHooks('pre_dispatch', {
-      query_id: 'q1', prompt: 'x', hints: {},
-    });
+    const invocations = await runHooks('iteration_check', basePayload);
     expect(invocations.length).toBe(2);
     expect(invocations[0].status).toBe('error');
     expect(invocations[1].status).toBe('ok');
-    expect(firstResult(invocations)?.interpretation?.intent).toBe('recovered');
+    expect((firstResult(invocations) as HookResult<'iteration_check'>)?.notes).toBe('recovered');
   });
 
   test('clearHooks removes registrations for one event only', async () => {
-    registerHook('pre_dispatch', async () => ({}), { label: 'pd' });
+    registerHook('iteration_check', async () => ({ verdict: 'on_track', notes: '' }), { label: 'ic' });
     registerHook('post_mortem', async () => ({
       verdict: 'pass', flags: [], notes: '', recommendations: [],
     }), { label: 'pm' });
 
-    clearHooks('pre_dispatch');
-    expect(hasHooks('pre_dispatch')).toBe(false);
+    clearHooks('iteration_check');
+    expect(hasHooks('iteration_check')).toBe(false);
     expect(hasHooks('post_mortem')).toBe(true);
-  });
-
-  test('iteration_check payload is typed correctly', async () => {
-    let seen: HookPayload<'iteration_check'> | null = null;
-    registerHook('iteration_check', async (p) => {
-      seen = p;
-      return { verdict: 'on_track', notes: 'looks fine' };
-    }, { label: 'ic' });
-
-    const invocations = await runHooks('iteration_check', {
-      query_id: 'q1',
-      prompt: 'x',
-      hints: {},
-      iterations_completed: 3,
-      metrics: { findings: 5, threads_active: 2, threads_total: 4, cost_usd: 0.012, errors: 0, steps: 10 },
-      recent_thread_queries: [],
-      recent_finding_summaries: [],
-    });
-
-    expect(seen?.iterations_completed).toBe(3);
-    expect(seen?.metrics.findings).toBe(5);
-    expect(invocations[0].status).toBe('ok');
-    const r = invocations[0].result as HookResult<'iteration_check'>;
-    expect(r.verdict).toBe('on_track');
   });
 
   test('post_mortem result carries flags and recommendations', async () => {
@@ -138,7 +107,6 @@ describe('hook registry', () => {
       job_id: 'j1',
       prompt: 'x',
       hints: {},
-      interpretation: null,
       final_summary: 'summary',
       metrics: { findings: 10, threads_active: 0, threads_total: 5, cost_usd: 0.25, errors: 3, steps: 40, duration_ms: 180_000 },
       thread_state: { by_status: { exhausted: 5 }, stuck_count: 0, pruned_count: 0 },

@@ -1,12 +1,9 @@
 import { registerHook, hasHooks } from './registry.js';
-import { createPreDispatchHandler, type PreDispatchHandlerOptions } from './pre-dispatch.js';
 import { createIterationCheckHandler, type IterationCheckHandlerOptions } from './iteration-check.js';
 import { createPostMortemHandler, type PostMortemHandlerOptions } from './post-mortem.js';
 
 export interface BuiltinHookOptions {
   apiKey?: string;
-  preDispatchModel?: string;
-  preDispatchTimeoutMs?: number;
   iterationCheckModel?: string;
   iterationCheckTimeoutMs?: number;
   postMortemModel?: string;
@@ -24,18 +21,6 @@ export interface BuiltinHookOptions {
 // handles no-op events gracefully.
 export function registerBuiltinHooks(opts: BuiltinHookOptions = {}): void {
   const apiKey = opts.apiKey ?? process.env.OPENROUTER_API_KEY ?? '';
-
-  if (apiKey && (!hasHooks('pre_dispatch') || opts.force)) {
-    const handlerOpts: PreDispatchHandlerOptions = {
-      apiKey,
-      model: opts.preDispatchModel,
-      fetchImpl: opts.fetchImpl,
-    };
-    registerHook('pre_dispatch', createPreDispatchHandler(handlerOpts), {
-      label: 'builtin-pre-dispatch',
-      timeoutMs: opts.preDispatchTimeoutMs ?? 30_000,
-    });
-  }
 
   if (apiKey && (!hasHooks('iteration_check') || opts.force)) {
     const handlerOpts: IterationCheckHandlerOptions = {

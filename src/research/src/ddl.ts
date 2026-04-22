@@ -38,7 +38,6 @@ export function applyResearchDDL(sqlite: Sqlite): void {
       prompt_short TEXT,
       prompt_super_short TEXT,
       prompt_hints TEXT NOT NULL DEFAULT '{}',
-      interpretation TEXT,
       status TEXT NOT NULL DEFAULT 'active',
       config TEXT NOT NULL DEFAULT '{}',
       summary TEXT NOT NULL DEFAULT '',
@@ -312,7 +311,6 @@ export function applyResearchDDL(sqlite: Sqlite): void {
   try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN prompt_short TEXT`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN prompt_super_short TEXT`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN prompt_hints TEXT NOT NULL DEFAULT '{}'`); } catch { /* exists */ }
-  try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN interpretation TEXT`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_steps ADD COLUMN label TEXT`); } catch { /* exists */ }
   try { sqlite.exec("ALTER TABLE research_findings ADD COLUMN source_url_meta TEXT NOT NULL DEFAULT '[]'"); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_findings ADD COLUMN follow_up_analysis TEXT`); } catch { /* exists */ }
@@ -354,10 +352,7 @@ export function applyResearchDDL(sqlite: Sqlite): void {
   try { sqlite.exec(`ALTER TABLE research_steps ADD COLUMN metadata TEXT`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_steps ADD COLUMN error_kind TEXT`); } catch { /* exists */ }
   try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_rs_session_error_kind ON research_steps(session_id, error_kind) WHERE error_kind IS NOT NULL`); } catch { /* exists */ }
-  // Active-leader steering: user-supplied intent + output shape, plus applied_at on plan
-  // mods so boost/deprioritize priority-deltas don't re-apply every engine loop.
-  try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN intent TEXT`); } catch { /* exists */ }
-  try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN output_shape TEXT`); } catch { /* exists */ }
+  // applied_at on plan mods so boost/deprioritize priority-deltas don't re-apply every engine loop.
   try { sqlite.exec(`ALTER TABLE research_plan_modifications ADD COLUMN applied_at TEXT`); } catch { /* exists */ }
 
   sqlite.exec(`

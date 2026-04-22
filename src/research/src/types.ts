@@ -5,21 +5,14 @@ export interface ResearchQuery {
   prompt_short: string | null;
   prompt_super_short: string | null;
   prompt_hints: PromptHints;
-  interpretation: InterpretedPrompt | null;
   status: 'active' | 'paused' | 'exhausted' | 'halted' | 'completed' | 'archived';
   config: SessionConfig;
   summary: string;
   document: string;
   user_notes: string;
-  intent: string | null;
-  output_shape: OutputShape | null;
   created_at: string;
   updated_at: string;
 }
-
-/** Shape the user wants the final answer to take — used by the leader to steer
- *  pruning/spawning, and by the synthesizer to format the doc. */
-export type OutputShape = 'list_of_entities' | 'overview' | 'comparison' | 'timeline' | 'how_to';
 
 export interface SteeringNote {
   id: string;
@@ -27,14 +20,6 @@ export interface SteeringNote {
   text: string;
   applied_at: string | null;
   created_at: string;
-}
-
-export interface InterpretedPrompt {
-  intent: string;
-  shape: PromptShape;
-  depth: PromptDepth;
-  scope: string;
-  dispatch_params?: Record<string, unknown>;
 }
 
 /** @deprecated Use ResearchQuery */

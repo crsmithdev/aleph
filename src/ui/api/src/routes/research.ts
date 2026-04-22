@@ -30,8 +30,6 @@ import {
   computeJobTrace, computeSessionCostTrajectory, computeErrorStatus,
   type PromptHints,
   registerBuiltinHooks,
-  runHooks,
-  firstResult,
   // Agent-hook records
   listIterationChecks, listPostMortems,
 } from '@construct/research';
@@ -153,7 +151,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
   // Ensure research tables exist
   applyResearchDDL(app.sqlite);
 
-  // Register agent hooks (pre_dispatch, iteration_check, post_mortem).
+  // Register agent hooks (iteration_check, post_mortem).
   // Idempotent — no-op if already registered or if no API key is present.
   registerBuiltinHooks();
 
@@ -201,10 +199,10 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     return query;
   });
 
-  app.post<{ Body: { title?: string; prompt: string; hints?: PromptHints; config?: Record<string, unknown>; intent?: string | null; output_shape?: string | null } }>(
+  app.post<{ Body: { title?: string; prompt: string; hints?: PromptHints; config?: Record<string, unknown> } }>(
     '/queries',
     async (req, reply) => {
-      const { prompt: rawPrompt, hints, title, config, intent, output_shape } = req.body;
+      const { prompt: rawPrompt, hints, title, config } = req.body;
       const prompt = sanitizeQuery(rawPrompt ?? '');
       if (!prompt) return reply.status(400).send({ error: 'prompt is required' });
       const prompt_short = heuristicPromptShort(prompt);
@@ -217,31 +215,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
         prompt_short,
         prompt_super_short,
         hints ?? {},
-        intent ? String(intent).trim().slice(0, 2000) || null : null,
-        output_shape as Parameters<typeof createQuery>[8],
       );
-
-      // pre_dispatch hook: give the interpreter a chance to plan before threads
-      // spawn. Best-effort — failures are logged but do not block query creation
-      // (handlers are captured by the registry and surfaced as status='error').
-      try {
-        const invocations = await runHooks('pre_dispatch', {
-          query_id: query.id,
-          prompt,
-          hints: hints ?? {},
-        });
-        const result = firstResult(invocations);
-        if (result?.interpretation) {
-          updateQuery(app.sqlite, query.id, { interpretation: result.interpretation });
-        }
-        for (const inv of invocations) {
-          if (inv.status === 'error' || inv.status === 'timeout') {
-            app.log.warn({ hook: 'pre_dispatch', label: inv.label, status: inv.status, error: inv.error }, 'pre_dispatch hook failed');
-          }
-        }
-      } catch (err) {
-        app.log.warn({ err }, 'pre_dispatch dispatch threw unexpectedly');
-      }
 
       // Create seed thread
       const seedThread = createThread(app.sqlite, {
@@ -273,9 +247,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       }).catch(() => { /* ignore */ });
       // Auto-create a burst job so workers pick it up immediately
       createJob(app.sqlite, { session_id: query.id, mode: 'burst' });
-      // Re-fetch so the response reflects any interpretation persisted by the hook.
-      const finalQuery = getQuery(app.sqlite, query.id) ?? query;
-      return reply.status(201).send(finalQuery);
+      return reply.status(201).send(query);
     }
   );
 

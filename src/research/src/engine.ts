@@ -969,19 +969,13 @@ Return ONLY a JSON array of search query strings. No other text.`,
     const roomForSpawn = Math.max(0, maxTotal > 0 ? maxTotal - totalNow : maxSpawn);
     const effectiveMaxSpawn = Math.min(maxSpawn, roomForSpawn);
 
-    const intentBlock = session.intent
-      ? `\nResearcher intent (WHAT THE USER WANTS THIS TO PRODUCE — weight this heavily):\n${session.intent}`
-      : '';
-    const shapeBlock = session.output_shape
-      ? `\nDesired output shape: ${session.output_shape} — prune threads that drift away from this shape.`
-      : '';
     const notesBlock = unappliedNotes.length > 0
       ? `\nNew steering notes from the user (unapplied — act on these NOW):\n${unappliedNotes.map(n => `- ${n.text}`).join('\n')}`
       : '';
 
     const prompt = `You are the lead researcher for this session. Your job is to keep the research on-track for what the user actually wants, not to chase every interesting tangent.
 
-Session seed: "${session.seed_query}"${intentBlock}${shapeBlock}${notesBlock}
+Session prompt: "${session.prompt}"${notesBlock}
 
 Recent findings (most recent first):
 ${recentFindings.map((f, i) => `${i + 1}. ${f.summary}`).join('\n')}
@@ -2052,15 +2046,13 @@ Write only the section, starting with "## ${c.canonical_name}".`;
     topConcepts: ConceptSummary[],
     config: SessionConfig,
   ): Promise<string> {
-    const session = sessions.getQuery(this.sqlite, sessionId);
-    const intentLine = session?.intent ? `\nUser intent (shape the lead around this): ${session.intent}` : '';
     const bullets = topConcepts.slice(0, 10)
       .map(c => `- ${c.canonical_name}: ${c.summary || '(no summary)'}`)
       .join('\n');
 
     const result = await this.callLLM(
       config.model,
-      `Write a 2-3 paragraph lead section for an encyclopedia article about: "${seedQuery}"${intentLine}
+      `Write a 2-3 paragraph lead section for an encyclopedia article about: "${seedQuery}"
 
 The article's body covers these concepts (for orientation only — do not enumerate them):
 ${bullets}
