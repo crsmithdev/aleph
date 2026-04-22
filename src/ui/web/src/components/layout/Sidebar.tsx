@@ -400,7 +400,7 @@ export function Sidebar() {
       {/* Header */}
       <div className="flex h-14 items-center justify-between border-b border-border-primary px-3">
         {!collapsed && (
-          <NavLink to="/" className="font-heading text-2xl leading-none font-bold text-text-primary">
+          <NavLink to="/" className="font-heading text-2xl leading-tight font-bold text-text-primary">
             Construct
           </NavLink>
         )}
