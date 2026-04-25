@@ -593,29 +593,42 @@ function DocumentView({
 
   const hasFindings = findings.length >= 3;
 
-  // Strip markdown code fences; rewrite [[Concept]] wiki-links into concept: anchors.
+  // Strip markdown code fences; normalize GFM-footnote [^N] → [N]; rewrite
+  // [[Concept]] wiki-links into concept: anchors. Footnote normalization runs
+  // before anything else because some generations mix [N] and [^N] forms and
+  // we want a single downstream representation.
   const cleanDoc = useMemo(() => {
     if (!document) return '';
     const stripped = document.replace(/^```(?:markdown)?\s*\n?/i, '').replace(/\n?```\s*$/, '');
-    return stripped.replace(/\[\[([^\[\]\n]+?)\]\]/g, (_m, name: string) => {
+    const footnotesNormalized = stripped.replace(/\[\^(\d+)\]/g, '[$1]');
+    return footnotesNormalized.replace(/\[\[([^\[\]\n]+?)\]\]/g, (_m, name: string) => {
       const trimmed = name.trim();
       return `[${trimmed}](#concept:${conceptSlug(trimmed)})`;
     });
   }, [document]);
 
-  function exportMarkdown() {
-    if (!cleanDoc) return;
-    const blob = new Blob([cleanDoc], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = window.document.createElement('a');
-    a.href = url;
-    a.download = `${(title || sessionId).replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
+  // Parse document into sections for per-section metadata + TOC.
+  const allSections = useMemo(() => parseDocumentSections(cleanDoc), [cleanDoc]);
 
-  // Parse document into sections for per-section metadata + TOC
-  const docSections = useMemo(() => parseDocumentSections(cleanDoc), [cleanDoc]);
+  // Compute used citations from body sections (everything except "## References").
+  const bodySections = useMemo(
+    () => allSections.filter(s => s.headingTitle.trim().toLowerCase() !== 'references'),
+    [allSections],
+  );
+  const usedCitations = useMemo(() => {
+    const s = new Set<number>();
+    for (const sec of bodySections) for (const n of sec.citationNums) s.add(n);
+    return s;
+  }, [bodySections]);
+
+  // Drop the auto-generated "## References" section ONLY when the body has
+  // real inline citations — the rail then owns the references. If the body
+  // has no [N] markers, the doc's own References section is the only place
+  // the reader sees sources, so leave it intact.
+  const docSections = useMemo(
+    () => (usedCitations.size > 0 ? bodySections : allSections),
+    [allSections, bodySections, usedCitations],
+  );
 
   // Sorted findings for citation index lookup (1-based)
   const sortedFindings = useMemo(
@@ -630,9 +643,65 @@ function DocumentView({
     [docSections],
   );
 
+  // Back-link each citation number to the sections that cite it.
+  const sectionsByCitation = useMemo(() => {
+    const m = new Map<number, Array<{ id: string; title: string }>>();
+    for (const sec of bodySections) {
+      if (sec.headingLevel < 2) continue;
+      for (const n of sec.citationNums) {
+        const list = m.get(n) ?? [];
+        if (!list.some(e => e.id === sec.headingId)) {
+          list.push({ id: sec.headingId, title: sec.headingTitle });
+        }
+        m.set(n, list);
+      }
+    }
+    return m;
+  }, [bodySections]);
+
   function scrollToHeading(id: string) {
     const el = window.document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // Rebuild a slim References section from only-used citations, so the
+  // downloaded .md no longer carries the full 500-entry tail. The citation
+  // index is URL-based — same ordering the backend uses — so numbers match
+  // the [N] markers in the prose.
+  function exportMarkdown() {
+    if (!cleanDoc) return;
+    const bodyOnly = docSections
+      .map(s => {
+        const heading = s.headingLevel >= 2 ? `${'#'.repeat(s.headingLevel)} ${s.headingTitle}\n` : '';
+        return heading + (s.content ?? '');
+      })
+      .join('\n')
+      .trim();
+
+    const urlByNumber = new Map<number, { url: string; title: string }>();
+    let next = 1;
+    for (const f of findings) {
+      const metaByUrl = new Map((f.source_url_meta ?? []).map(m => [m.url, m] as const));
+      for (const url of f.source_urls) {
+        if ([...urlByNumber.values()].some(v => v.url === url)) continue;
+        urlByNumber.set(next++, { url, title: metaByUrl.get(url)?.title || f.summary || url });
+      }
+    }
+
+    const refLines: string[] = [];
+    [...usedCitations].sort((a, b) => a - b).forEach(n => {
+      const entry = urlByNumber.get(n);
+      if (!entry) return;
+      refLines.push(`${n}. [${entry.title}](${entry.url})`);
+    });
+    const refsSection = refLines.length ? `\n\n## References\n\n${refLines.join('\n')}\n` : '';
+    const blob = new Blob([bodyOnly + refsSection], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = window.document.createElement('a');
+    a.href = url;
+    a.download = `${(title || sessionId).replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   if (!hasFindings) {
@@ -653,8 +722,13 @@ function DocumentView({
     );
   }
 
+  const showRail = usedCitations.size > 0;
+  const gridCols = showRail
+    ? 'xl:grid-cols-[200px_minmax(0,1fr)_300px]'
+    : 'xl:grid-cols-[200px_minmax(0,1fr)]';
+
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[200px_minmax(0,1fr)_300px] gap-7">
+    <div className={clsx('grid grid-cols-1 gap-7', gridCols)}>
       {/* Left TOC rail */}
       {tocEntries.length > 2 ? (
         <aside className="hidden xl:block">
@@ -782,12 +856,19 @@ function DocumentView({
         </div>
       </div>
 
-      {/* Right bibliography rail */}
-      <aside className="hidden xl:block">
-        <div className="sticky top-4 max-h-[calc(100vh-6rem)] overflow-y-auto pr-1">
-          <BibliographyRail findings={sortedFindings} sessionId={sessionId} />
-        </div>
-      </aside>
+      {/* Right bibliography rail — only when the body has citations to link */}
+      {showRail && (
+        <aside className="hidden xl:block">
+          <div className="sticky top-4 max-h-[calc(100vh-6rem)] overflow-y-auto pr-1">
+            <BibliographyRail
+              findings={findings}
+              sessionId={sessionId}
+              usedCitations={usedCitations}
+              sectionsByCitation={sectionsByCitation}
+            />
+          </div>
+        </aside>
+      )}
     </div>
   );
 }
@@ -823,9 +904,13 @@ function extractionPillLabel(status: SourceExtractionStatus): string {
 function BibliographyRail({
   findings,
   sessionId,
+  usedCitations,
+  sectionsByCitation,
 }: {
   findings: ResearchFinding[];
   sessionId: string;
+  usedCitations: Set<number>;
+  sectionsByCitation: Map<number, Array<{ id: string; title: string }>>;
 }) {
   const { data: sourcesData } = useSources(sessionId);
   const sourceByUrl = useMemo(() => {
@@ -834,25 +919,61 @@ function BibliographyRail({
     return m;
   }, [sourcesData]);
 
+  // Build URL → citation number index in the same order the backend uses
+  // (iterate findings in incoming order, assign incrementing numbers to each
+  // new URL). The backend's buildCitationIndex walks findings the same way,
+  // so the numbers line up with the [N] markers in the document.
   const items = useMemo(() => {
-    return findings.map((f, i) => {
-      const urls = f.source_url_meta?.length
-        ? f.source_url_meta.map(s => s.url)
-        : f.source_urls;
-      const primaryUrl = urls[0];
-      const primarySource = primaryUrl ? sourceByUrl.get(primaryUrl) : undefined;
-      const domain = primaryUrl ? domainFrom(primaryUrl) : '';
-      const title = f.source_url_meta?.[0]?.title || f.summary;
-      return {
-        index: i + 1,
-        finding: f,
+    const urlToNumber = new Map<string, number>();
+    const titleForUrl = new Map<string, string>();
+    const findingForUrl = new Map<string, ResearchFinding>();
+    let next = 1;
+    for (const f of findings) {
+      const metaByUrl = new Map((f.source_url_meta ?? []).map(m => [m.url, m] as const));
+      for (const url of f.source_urls) {
+        if (urlToNumber.has(url)) continue;
+        urlToNumber.set(url, next++);
+        titleForUrl.set(url, metaByUrl.get(url)?.title || f.summary || url);
+        findingForUrl.set(url, f);
+      }
+    }
+
+    const rows: Array<{
+      index: number;
+      url: string;
+      title: string;
+      href: string;
+      domain: string;
+      confidence: number;
+      status?: SourceExtractionStatus;
+      sections: Array<{ id: string; title: string }>;
+      key: string;
+    }> = [];
+    for (const [url, index] of urlToNumber.entries()) {
+      if (!usedCitations.has(index)) continue;
+      const title = titleForUrl.get(url) ?? url;
+      const src = sourceByUrl.get(url);
+      const f = findingForUrl.get(url);
+      rows.push({
+        index,
+        url,
         title,
-        href: primaryUrl,
-        domain,
-        status: primarySource?.extraction_status as SourceExtractionStatus | undefined,
-      };
-    });
-  }, [findings, sourceByUrl]);
+        href: url,
+        domain: domainFrom(url),
+        confidence: f?.confidence ?? 0,
+        status: src?.extraction_status as SourceExtractionStatus | undefined,
+        sections: sectionsByCitation.get(index) ?? [],
+        key: `${index}-${url}`,
+      });
+    }
+    rows.sort((a, b) => a.index - b.index);
+    return rows;
+  }, [findings, sourceByUrl, usedCitations, sectionsByCitation]);
+
+  function scrollToSection(id: string) {
+    const el = window.document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 
   return (
     <div>
@@ -860,9 +981,9 @@ function BibliographyRail({
         References &middot; {items.length}
       </h4>
       <div>
-        {items.map(({ index, finding, title, href, domain, status }) => (
+        {items.map(({ key, index, title, href, domain, confidence, status, sections }) => (
           <div
-            key={finding.id}
+            key={key}
             id={`ref-${index}`}
             className="py-2.5 border-b border-border-primary/30 last:border-b-0"
           >
@@ -879,11 +1000,25 @@ function BibliographyRail({
             ) : (
               <span className="text-text-primary text-sm leading-snug">{title}</span>
             )}
-            {(domain || finding.confidence > 0) && (
+            {(domain || confidence > 0) && (
               <div className="text-sm text-text-muted mt-0.5">
                 {domain}
                 {domain && <span className="mx-1">&middot;</span>}
-                <span>{(finding.confidence * 100).toFixed(0)}% conf</span>
+                <span>{(confidence * 100).toFixed(0)}% conf</span>
+              </div>
+            )}
+            {sections.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {sections.map(s => (
+                  <button
+                    key={s.id}
+                    onClick={() => scrollToSection(s.id)}
+                    className="text-sm text-info hover:underline"
+                    title={`Cited in "${s.title}"`}
+                  >
+                    ↑ {s.title}
+                  </button>
+                ))}
               </div>
             )}
             {status && (
@@ -1545,33 +1680,16 @@ function LiveView({
 }) {
   const updateThread = useUpdateThread();
   const redoThread = useRedoThread();
-  const streamRef = useRef<HTMLDivElement>(null);
-  const [autoScroll, setAutoScroll] = useState(true);
-  const [filterType, setFilterType] = useState<'all' | 'finding' | 'thread' | 'step' | 'search' | 'fetch' | 'error'>('all');
-  const [searchText, setSearchText] = useState('');
   const [expandedFindingId, setExpandedFindingId] = useState<string | null>(null);
   const [findingsSearch, setFindingsSearch] = useState('');
   const [threadSearch, setThreadSearch] = useState('');
-  const [filterThreadId, setFilterThreadId] = useState<string | null>(null);
-  const [expandedEventKey, setExpandedEventKey] = useState<string | null>(null);
   const [threadPanelWidth, setThreadPanelWidth] = useState(260);
-  const [findingsPanelWidth, setFindingsPanelWidth] = useState(380);
 
   const startResizeThread = (e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
     const startW = threadPanelWidth;
     const onMove = (ev: MouseEvent) => setThreadPanelWidth(Math.max(180, Math.min(420, startW + ev.clientX - startX)));
-    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-  };
-
-  const startResizeFindings = (e: React.MouseEvent) => {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startW = findingsPanelWidth;
-    const onMove = (ev: MouseEvent) => setFindingsPanelWidth(Math.max(260, Math.min(640, startW + ev.clientX - startX)));
     const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
@@ -1642,93 +1760,6 @@ function LiveView({
   const activeThreads = useMemo(() => threads.filter(t => t.status === 'active'), [threads]);
   const queuedThreads = useMemo(() => threads.filter(t => t.status === 'queued'), [threads]);
 
-  // Enrich thread events with a diff vs the previous event for the same thread.
-  // Thread updated_at bumps for: status changes, short_query set, priority changed, retry_after set.
-  type EnrichedEvent = StreamEvent & { threadDiff?: string };
-
-  // Merge the SSE stream with DB-backed steps + findings so rows that have
-  // aged out of the 1000-event SSE cache (long-running sessions) still appear.
-  // Events that only exist in the DB are synthesized as StreamEvents here.
-  const mergedEvents = useMemo<StreamEvent[]>(() => {
-    const stepIds = new Set<string>();
-    const findingIds = new Set<string>();
-    for (const e of events) {
-      if (e.type === 'step') stepIds.add(e.payload.id);
-      else if (e.type === 'finding') findingIds.add(e.payload.id);
-    }
-    const extra: StreamEvent[] = [];
-    for (const s of allSteps) {
-      if (!stepIds.has(s.id)) extra.push({ type: 'step', payload: s });
-    }
-    for (const f of findings) {
-      if (!findingIds.has(f.id)) extra.push({ type: 'finding', payload: f });
-    }
-    if (extra.length === 0) return events;
-    const tsOf = (e: StreamEvent): string => {
-      if (e.type === 'thread') return e.payload.updated_at ?? e.payload.created_at;
-      if (e.type === 'step' || e.type === 'finding') return e.payload.created_at;
-      return '';
-    };
-    // SSE cache is newest-first; keep that ordering for the combined list.
-    return [...events, ...extra].sort((a, b) => tsOf(b).localeCompare(tsOf(a)));
-  }, [events, allSteps, findings]);
-
-  const streamEvents = useMemo(() => {
-    const prevState = new Map<string, ResearchThread>();
-    const enriched: EnrichedEvent[] = mergedEvents.map(ev => {
-      if (ev.type !== 'thread') return ev;
-      const t = ev.payload;
-      const prev = prevState.get(t.id);
-      prevState.set(t.id, t);
-      if (!prev) return ev; // first event — show as normal spawn/queued/etc.
-      const changes: string[] = [];
-      if (prev.status !== t.status) changes.push(`${prev.status} → ${t.status}`);
-      if (prev.short_query !== t.short_query && t.short_query) changes.push(`titled`);
-      if (Math.abs((prev.priority ?? 0) - (t.priority ?? 0)) > 0.005)
-        changes.push(`priority ${prev.priority.toFixed(2)} → ${t.priority.toFixed(2)}`);
-      if (!prev.retry_after && t.retry_after) changes.push(`backoff`);
-      if (prev.retry_after && !t.retry_after && prev.status === t.status) changes.push(`retry`);
-      return { ...ev, threadDiff: changes.join(' · ') || null } as EnrichedEvent;
-    });
-
-    let evs = enriched.reverse();
-    if (filterType === 'finding') evs = evs.filter(e => e.type === 'finding');
-    else if (filterType === 'thread') evs = evs.filter(e => e.type === 'thread');
-    else if (filterType === 'step') evs = evs.filter(e => e.type === 'step');
-    else if (filterType === 'search') evs = evs.filter(e => e.type === 'step' && (e.payload.tool_calls ?? []).some(tc => tc.tool === 'web_search' || tc.tool === 'search_web' || tc.tool === 'search'));
-    else if (filterType === 'fetch') evs = evs.filter(e => e.type === 'step' && (e.payload.tool_calls ?? []).some(tc => tc.tool === 'fetch_url' || tc.tool === 'fetch'));
-    else if (filterType === 'error') evs = evs.filter(e => e.type === 'step' && !!(e.payload as ResearchStep).error);
-    if (filterThreadId) {
-      evs = evs.filter(e => {
-        if (e.type === 'finding') return (e.payload as ResearchFinding).thread_id === filterThreadId;
-        if (e.type === 'step') return e.payload.thread_id === filterThreadId;
-        if (e.type === 'thread') return e.payload.id === filterThreadId;
-        return true;
-      });
-    }
-    if (searchText.trim()) {
-      const q = searchText.trim().toLowerCase();
-      evs = evs.filter(e => {
-        const f = formatEventDetail(e);
-        if (!f) return false;
-        const haystack = [f.typeLabel, f.detail, ...(f.chips?.map(c => c.text) ?? [])].join(' ').toLowerCase();
-        // fuzzy: all query chars must appear in order
-        let qi = 0;
-        for (let i = 0; i < haystack.length && qi < q.length; i++) {
-          if (haystack[i] === q[qi]) qi++;
-        }
-        return qi === q.length;
-      });
-    }
-    return evs;
-  }, [mergedEvents, filterType, filterThreadId, searchText]);
-
-  useLayoutEffect(() => {
-    if (autoScroll && streamRef.current) {
-      streamRef.current.scrollTop = streamRef.current.scrollHeight;
-    }
-  }, [streamEvents, autoScroll]);
-
   return (
     <div className="flex h-full overflow-hidden">
       {/* ── Pane 1: Thread controls (left) ── */}
@@ -1758,15 +1789,9 @@ function LiveView({
             return (
               <div
                 key={thread.id}
-                role="button"
-                tabIndex={0}
-                aria-pressed={filterThreadId === thread.id}
-                onClick={() => setFilterThreadId(prev => prev === thread.id ? null : thread.id)}
-                onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setFilterThreadId(prev => prev === thread.id ? null : thread.id)}
                 className={clsx(
-                  'pl-3 pr-3 pt-1.5 pb-1.5 border-b border-border-primary border-l-4 group hover:bg-bg-tertiary transition-colors cursor-pointer focus:outline-none focus:ring-1 focus:ring-inset focus:ring-accent/50',
-                  liveStatusBorder[thread.status] ?? 'border-l-text-muted/30',
-                  filterThreadId === thread.id && 'bg-bg-tertiary/60'
+                  'pl-3 pr-3 pt-1.5 pb-1.5 border-b border-border-primary border-l-4 group hover:bg-bg-tertiary transition-colors',
+                  liveStatusBorder[thread.status] ?? 'border-l-text-muted/30'
                 )}
               >
                 <div className="flex items-start gap-1.5 mb-1">
@@ -1833,8 +1858,8 @@ function LiveView({
         className="w-1 shrink-0 cursor-col-resize bg-border-primary hover:bg-accent/40 transition-colors"
         onMouseDown={startResizeThread}
       />
-      {/* ── Pane 2: Findings (center) ── */}
-      <div className="flex flex-col overflow-hidden" style={{ width: findingsPanelWidth, minWidth: 0 }}>
+      {/* ── Pane 2: Findings (right) ── */}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <div className="flex flex-col border-b border-border-primary bg-bg-secondary shrink-0">
           <div className="flex items-center gap-2 px-3 py-2 h-[37px]">
             <span className="text-sm font-semibold uppercase tracking-wider text-text-secondary">Findings</span>
@@ -2040,435 +2065,551 @@ function LiveView({
         </div>
       </div>
 
-      {/* Resize handle 2 */}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Events Tab — Unified event log (SSE + DB-backed steps/findings)
+// ---------------------------------------------------------------------------
+
+function EventsView({
+  sessionId, threads, findings, allSteps, events, isRunning,
+}: {
+  sessionId: string;
+  threads: ResearchThread[];
+  findings: ResearchFinding[];
+  allSteps: ResearchStep[];
+  events: StreamEvent[];
+  isRunning: boolean;
+}) {
+  const streamRef = useRef<HTMLDivElement>(null);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [filterType, setFilterType] = useState<'all' | 'finding' | 'thread' | 'step' | 'search' | 'fetch' | 'error'>('all');
+  const [searchText, setSearchText] = useState('');
+  const [filterThreadId, setFilterThreadId] = useState<string | null>(null);
+  const [expandedEventKey, setExpandedEventKey] = useState<string | null>(null);
+
+  const ordered = useMemo(() => orderThreadsDepthFirst(threads), [threads]);
+
+  const threadColor = useMemo(() => {
+    const map = new Map<string, string>();
+    ordered.forEach((t, i) => map.set(t.id, THREAD_PALETTE[i % THREAD_PALETTE.length]));
+    return map;
+  }, [ordered]);
+
+  type EnrichedEvent = StreamEvent & { threadDiff?: string };
+
+  // Merge the SSE stream with DB-backed steps + findings so rows that have
+  // aged out of the 1000-event SSE cache (long-running sessions) still appear.
+  const mergedEvents = useMemo<StreamEvent[]>(() => {
+    const stepIds = new Set<string>();
+    const findingIds = new Set<string>();
+    for (const e of events) {
+      if (e.type === 'step') stepIds.add(e.payload.id);
+      else if (e.type === 'finding') findingIds.add(e.payload.id);
+    }
+    const extra: StreamEvent[] = [];
+    for (const s of allSteps) {
+      if (!stepIds.has(s.id)) extra.push({ type: 'step', payload: s });
+    }
+    for (const f of findings) {
+      if (!findingIds.has(f.id)) extra.push({ type: 'finding', payload: f });
+    }
+    if (extra.length === 0) return events;
+    const tsOf = (e: StreamEvent): string => {
+      if (e.type === 'thread') return e.payload.updated_at ?? e.payload.created_at;
+      if (e.type === 'step' || e.type === 'finding') return e.payload.created_at;
+      return '';
+    };
+    return [...events, ...extra].sort((a, b) => tsOf(b).localeCompare(tsOf(a)));
+  }, [events, allSteps, findings]);
+
+  const streamEvents = useMemo(() => {
+    const prevState = new Map<string, ResearchThread>();
+    const enriched: EnrichedEvent[] = mergedEvents.map(ev => {
+      if (ev.type !== 'thread') return ev;
+      const t = ev.payload;
+      const prev = prevState.get(t.id);
+      prevState.set(t.id, t);
+      if (!prev) return ev;
+      const changes: string[] = [];
+      if (prev.status !== t.status) changes.push(`${prev.status} → ${t.status}`);
+      if (prev.short_query !== t.short_query && t.short_query) changes.push(`titled`);
+      if (Math.abs((prev.priority ?? 0) - (t.priority ?? 0)) > 0.005)
+        changes.push(`priority ${prev.priority.toFixed(2)} → ${t.priority.toFixed(2)}`);
+      if (!prev.retry_after && t.retry_after) changes.push(`backoff`);
+      if (prev.retry_after && !t.retry_after && prev.status === t.status) changes.push(`retry`);
+      return { ...ev, threadDiff: changes.join(' · ') || null } as EnrichedEvent;
+    });
+
+    let evs = enriched.reverse();
+    if (filterType === 'finding') evs = evs.filter(e => e.type === 'finding');
+    else if (filterType === 'thread') evs = evs.filter(e => e.type === 'thread');
+    else if (filterType === 'step') evs = evs.filter(e => e.type === 'step');
+    else if (filterType === 'search') evs = evs.filter(e => e.type === 'step' && (e.payload.tool_calls ?? []).some(tc => tc.tool === 'web_search' || tc.tool === 'search_web' || tc.tool === 'search'));
+    else if (filterType === 'fetch') evs = evs.filter(e => e.type === 'step' && (e.payload.tool_calls ?? []).some(tc => tc.tool === 'fetch_url' || tc.tool === 'fetch'));
+    else if (filterType === 'error') evs = evs.filter(e => e.type === 'step' && !!(e.payload as ResearchStep).error);
+    if (filterThreadId) {
+      evs = evs.filter(e => {
+        if (e.type === 'finding') return (e.payload as ResearchFinding).thread_id === filterThreadId;
+        if (e.type === 'step') return e.payload.thread_id === filterThreadId;
+        if (e.type === 'thread') return e.payload.id === filterThreadId;
+        return true;
+      });
+    }
+    if (searchText.trim()) {
+      const q = searchText.trim().toLowerCase();
+      evs = evs.filter(e => {
+        const f = formatEventDetail(e);
+        if (!f) return false;
+        const haystack = [f.typeLabel, f.detail, ...(f.chips?.map(c => c.text) ?? [])].join(' ').toLowerCase();
+        let qi = 0;
+        for (let i = 0; i < haystack.length && qi < q.length; i++) {
+          if (haystack[i] === q[qi]) qi++;
+        }
+        return qi === q.length;
+      });
+    }
+    return evs;
+  }, [mergedEvents, filterType, filterThreadId, searchText]);
+
+  useLayoutEffect(() => {
+    if (autoScroll && streamRef.current) {
+      streamRef.current.scrollTop = streamRef.current.scrollHeight;
+    }
+  }, [streamEvents, autoScroll]);
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden bg-bg-primary">
+      {/* Event log header */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border-primary bg-bg-secondary shrink-0 h-[37px]">
+        <span className="text-sm font-semibold uppercase tracking-wider text-text-secondary shrink-0">Event Log</span>
+        {filterThreadId && (() => {
+          const ft = threads.find(t => t.id === filterThreadId);
+          const ftColor = threadColor.get(filterThreadId) ?? '#8796b0';
+          return (
+            <div className="flex items-center gap-2 flex-1 overflow-hidden ml-2">
+              <div
+                className="text-sm px-1.5 py-0.5 rounded border truncate max-w-48"
+                style={{ background: `${ftColor}15`, borderColor: `${ftColor}35`, color: ftColor }}
+              >
+                {ft ? (ft.short_query ?? ft.query) : filterThreadId.slice(0, 12)}
+              </div>
+              <button
+                onClick={() => setFilterThreadId(null)}
+                className="text-sm text-text-muted hover:text-text-primary px-1 py-0.5 rounded border border-border-primary shrink-0 transition-colors"
+              >× clear</button>
+            </div>
+          );
+        })()}
+        <span className="text-sm text-text-muted font-mono ml-auto shrink-0">
+          {streamEvents.length !== mergedEvents.length ? `${streamEvents.length} / ${mergedEvents.length}` : mergedEvents.length}
+        </span>
+        <button
+          title="Download activity log (.md) — human-readable report with jobs, steps, findings, status history"
+          onClick={() => { const a = document.createElement('a'); a.href = `/api/research/queries/${sessionId}/export/log`; a.download = ''; a.click(); }}
+          className="p-1 rounded text-text-muted hover:text-text-secondary hover:bg-bg-tertiary transition-colors shrink-0"
+        ><Icon name="download" size="xs" /></button>
+        <button
+          title="Download raw event log (.ndjson) — one event per line, for grep/jq/debug"
+          onClick={() => { const a = document.createElement('a'); a.href = `/api/research/queries/${sessionId}/export/log?format=ndjson`; a.download = ''; a.click(); }}
+          className="p-1 rounded text-text-muted hover:text-text-secondary hover:bg-bg-tertiary transition-colors shrink-0 font-mono text-[10px] leading-none px-1.5"
+        >.nd</button>
+      </div>
+
+      {/* Filter bar */}
+      <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-primary bg-bg-secondary shrink-0">
+        <input
+          type="text"
+          value={searchText}
+          onChange={e => setSearchText(e.target.value)}
+          placeholder="search…"
+          className="flex-1 min-w-0 bg-bg-tertiary border border-border-primary rounded px-2 py-0.5 text-sm text-text-secondary placeholder:text-text-disabled focus:outline-none focus:border-accent/50"
+        />
+        <select
+          value={filterThreadId ?? ''}
+          onChange={e => setFilterThreadId(e.target.value || null)}
+          className="bg-bg-tertiary border border-border-primary rounded px-1.5 py-0.5 text-sm text-text-secondary focus:outline-none focus:border-accent/50 shrink-0 max-w-40"
+          title="Filter by thread"
+        >
+          <option value="">all threads</option>
+          {ordered.map(t => (
+            <option key={t.id} value={t.id}>{t.short_query ?? t.query.slice(0, 40)}</option>
+          ))}
+        </select>
+        <select
+          value={filterType}
+          onChange={e => setFilterType(e.target.value as typeof filterType)}
+          className="bg-bg-tertiary border border-border-primary rounded px-1.5 py-0.5 text-sm text-text-secondary focus:outline-none focus:border-accent/50 shrink-0"
+        >
+          <option value="all">all</option>
+          <option value="finding">findings</option>
+          <option value="thread">threads</option>
+          <option value="step">steps</option>
+          <option value="search">search</option>
+          <option value="fetch">fetch</option>
+          <option value="error">errors</option>
+        </select>
+        <button
+          onClick={() => { if (streamRef.current) streamRef.current.scrollTop = 0; }}
+          title="Scroll to first"
+          className="px-1.5 py-0.5 rounded text-sm border border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary transition-colors font-mono"
+        >▲</button>
+        <button
+          onClick={() => { if (streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight; }}
+          title="Scroll to last"
+          className="px-1.5 py-0.5 rounded text-sm border border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary transition-colors font-mono"
+        >▼</button>
+        <button
+          onClick={() => setAutoScroll(a => !a)}
+          className={clsx('px-1.5 py-0.5 rounded text-sm border transition-colors shrink-0',
+            autoScroll
+              ? 'border-success/25 bg-success/8 text-success'
+              : 'border-border-primary bg-bg-tertiary text-text-muted'
+          )}
+        >↓ auto</button>
+      </div>
+
+      {/* Event stream */}
       <div
-        className="w-1 shrink-0 cursor-col-resize bg-border-primary hover:bg-accent/40 transition-colors"
-        onMouseDown={startResizeFindings}
-      />
-      {/* ── Pane 3: Live event stream (right) ── */}
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0 bg-bg-primary">
-        <>
-          {/* Event log header */}
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-border-primary bg-bg-secondary shrink-0 h-[37px]">
-            <span className="text-sm font-semibold uppercase tracking-wider text-text-secondary shrink-0">Event Log</span>
-            {filterThreadId && (() => {
-              const ft = threads.find(t => t.id === filterThreadId);
-              const ftColor = threadColor.get(filterThreadId) ?? '#8796b0';
-              return (
-                <div className="flex items-center gap-2 flex-1 overflow-hidden ml-2">
-                  <div
-                    className="text-sm px-1.5 py-0.5 rounded border truncate max-w-48"
-                    style={{ background: `${ftColor}15`, borderColor: `${ftColor}35`, color: ftColor }}
-                  >
-                    {ft ? (ft.short_query ?? ft.query) : filterThreadId.slice(0, 12)}
-                  </div>
-                  <button
-                    onClick={() => setFilterThreadId(null)}
-                    className="text-sm text-text-muted hover:text-text-primary px-1 py-0.5 rounded border border-border-primary shrink-0 transition-colors"
-                  >× clear</button>
-                </div>
-              );
-            })()}
-            <span className="text-sm text-text-muted font-mono ml-auto shrink-0">
-              {streamEvents.length !== mergedEvents.length ? `${streamEvents.length} / ${mergedEvents.length}` : mergedEvents.length}
-            </span>
-            <button
-              title="Download activity log (.md) — human-readable report with jobs, steps, findings, status history"
-              onClick={() => { const a = document.createElement('a'); a.href = `/api/research/queries/${sessionId}/export/log`; a.download = ''; a.click(); }}
-              className="p-1 rounded text-text-muted hover:text-text-secondary hover:bg-bg-tertiary transition-colors shrink-0"
-            ><Icon name="download" size="xs" /></button>
-            <button
-              title="Download raw event log (.ndjson) — one event per line, for grep/jq/debug"
-              onClick={() => { const a = document.createElement('a'); a.href = `/api/research/queries/${sessionId}/export/log?format=ndjson`; a.download = ''; a.click(); }}
-              className="p-1 rounded text-text-muted hover:text-text-secondary hover:bg-bg-tertiary transition-colors shrink-0 font-mono text-[10px] leading-none px-1.5"
-            >.nd</button>
-          </div>
-
-          {/* Filter bar */}
-          <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-primary bg-bg-secondary shrink-0">
-            <input
-              type="text"
-              value={searchText}
-              onChange={e => setSearchText(e.target.value)}
-              placeholder="search…"
-              className="flex-1 min-w-0 bg-bg-tertiary border border-border-primary rounded px-2 py-0.5 text-sm text-text-secondary placeholder:text-text-disabled focus:outline-none focus:border-accent/50"
-            />
-            <select
-              value={filterType}
-              onChange={e => setFilterType(e.target.value as typeof filterType)}
-              className="bg-bg-tertiary border border-border-primary rounded px-1.5 py-0.5 text-sm text-text-secondary focus:outline-none focus:border-accent/50 shrink-0"
-            >
-              <option value="all">all</option>
-              <option value="finding">findings</option>
-              <option value="thread">threads</option>
-              <option value="step">steps</option>
-              <option value="search">search</option>
-              <option value="fetch">fetch</option>
-              <option value="error">errors</option>
-            </select>
-            <button
-              onClick={() => { if (streamRef.current) streamRef.current.scrollTop = 0; }}
-              title="Scroll to first"
-              className="px-1.5 py-0.5 rounded text-sm border border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary transition-colors font-mono"
-            >▲</button>
-            <button
-              onClick={() => { if (streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight; }}
-              title="Scroll to last"
-              className="px-1.5 py-0.5 rounded text-sm border border-border-primary bg-bg-tertiary text-text-muted hover:text-text-secondary transition-colors font-mono"
-            >▼</button>
-            <button
-              onClick={() => setAutoScroll(a => !a)}
-              className={clsx('px-1.5 py-0.5 rounded text-sm border transition-colors shrink-0',
-                autoScroll
-                  ? 'border-success/25 bg-success/8 text-success'
-                  : 'border-border-primary bg-bg-tertiary text-text-muted'
+        ref={streamRef}
+        className="flex-1 overflow-y-auto py-1"
+        onScroll={e => {
+          const el = e.currentTarget;
+          const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+          setAutoScroll(atBottom);
+        }}
+      >
+        {streamEvents.length === 0 && (
+          <p className="text-sm text-text-muted text-center py-8">Waiting for events…</p>
+        )}
+        {streamEvents.length > RENDER_WINDOW && (
+          <p className="text-sm text-text-muted text-center py-1.5 border-b border-border-primary/20">
+            {streamEvents.length - RENDER_WINDOW} older events not shown
+          </p>
+        )}
+        {streamEvents.slice(-RENDER_WINDOW).map(ev => {
+          const formatted = formatEventDetail(ev);
+          if (!formatted) return null;
+          const evKey = ev._seq !== undefined
+            ? `${ev.type}:${ev._seq}`
+            : ev.type === 'thread'
+              ? `thread:${ev.payload.id}:${ev.payload.updated_at ?? ev.payload.created_at}`
+              : `${ev.type}:${(ev.payload as { id: string }).id}`;
+          const isExpanded = expandedEventKey === evKey;
+          const threadId = ev.type === 'finding' ? ev.payload.thread_id
+            : ev.type === 'step' ? ev.payload.thread_id
+            : ev.type === 'thread' ? ev.payload.id
+            : null;
+          const color = threadId ? (threadColor.get(threadId) ?? '#8796b0') : '#8796b0';
+          const thread = threadId ? ordered.find(t => t.id === threadId) ?? null : null;
+          const ts = ev.type === 'finding' ? ev.payload.created_at
+            : ev.type === 'step' ? ev.payload.created_at
+            : ev.type === 'thread' ? ev.payload.created_at
+            : null;
+          const timeStr = ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '';
+          const isFinding = ev.type === 'finding';
+          const isLabelOnlyStep = ev.type === 'step' && (ev.payload.tool_calls ?? []).length === 0;
+          const abbrevThreadQ = thread ? (thread.short_query ?? thread.query) : null;
+          const displayDetail = formatted.detail || (isLabelOnlyStep && abbrevThreadQ) || '';
+          const isHighFinding = isFinding && (ev.payload as ResearchFinding).confidence >= 0.7;
+          const isError = ev.type === 'step' && !!(ev.payload as ResearchStep).error;
+          return (
+            <div
+              key={evKey}
+              className={clsx(
+                'border-b border-border-primary/20 transition-colors',
+                isError ? 'bg-error/8'
+                  : isFinding
+                    ? isHighFinding ? 'bg-warning/5' : 'bg-success/4'
+                    : isExpanded ? 'bg-bg-secondary/60' : 'hover:bg-bg-secondary/40'
               )}
-            >↓ auto</button>
-          </div>
-
-          {/* Event stream */}
-          <div
-            ref={streamRef}
-            className="flex-1 overflow-y-auto py-1"
-            onScroll={e => {
-              const el = e.currentTarget;
-              const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
-              setAutoScroll(atBottom);
-            }}
-          >
-            {streamEvents.length === 0 && (
-              <p className="text-sm text-text-muted text-center py-8">Waiting for events…</p>
-            )}
-            {streamEvents.length > RENDER_WINDOW && (
-              <p className="text-sm text-text-muted text-center py-1.5 border-b border-border-primary/20">
-                {streamEvents.length - RENDER_WINDOW} older events not shown
-              </p>
-            )}
-            {streamEvents.slice(-RENDER_WINDOW).map(ev => {
-              const formatted = formatEventDetail(ev);
-              if (!formatted) return null;
-              const evKey = ev._seq !== undefined
-                ? `${ev.type}:${ev._seq}`
-                : ev.type === 'thread'
-                  ? `thread:${ev.payload.id}:${ev.payload.updated_at ?? ev.payload.created_at}`
-                  : `${ev.type}:${(ev.payload as { id: string }).id}`;
-              const isExpanded = expandedEventKey === evKey;
-              const threadId = ev.type === 'finding' ? ev.payload.thread_id
-                : ev.type === 'step' ? ev.payload.thread_id
-                : ev.type === 'thread' ? ev.payload.id
-                : null;
-              const color = threadId ? (threadColor.get(threadId) ?? '#8796b0') : '#8796b0';
-              const thread = threadId ? ordered.find(t => t.id === threadId) ?? null : null;
-              const threadIdx = threadId ? ordered.findIndex(t => t.id === threadId) : -1;
-              const ts = ev.type === 'finding' ? ev.payload.created_at
-                : ev.type === 'step' ? ev.payload.created_at
-                : ev.type === 'thread' ? ev.payload.created_at
-                : null;
-              const timeStr = ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '';
-              const isFinding = ev.type === 'finding';
-              // For label-only steps with no detail, show abbreviated thread query
-              const isLabelOnlyStep = ev.type === 'step' && (ev.payload.tool_calls ?? []).length === 0;
-              const abbrevThreadQ = thread ? (thread.short_query ?? thread.query) : null;
-              const displayDetail = formatted.detail || (isLabelOnlyStep && abbrevThreadQ) || '';
-              const isHighFinding = isFinding && (ev.payload as ResearchFinding).confidence >= 0.7;
-              const isError = ev.type === 'step' && !!(ev.payload as ResearchStep).error;
-              return (
-                <div
-                  key={evKey}
-                  className={clsx(
-                    'border-b border-border-primary/20 transition-colors',
-                    isError ? 'bg-error/8'
-                      : isFinding
-                        ? isHighFinding ? 'bg-warning/5' : 'bg-success/4'
-                        : isExpanded ? 'bg-bg-secondary/60' : 'hover:bg-bg-secondary/40'
-                  )}
-                  style={{ borderLeft: `6px solid ${color}${isHighFinding ? 'cc' : '60'}` }}
-                >
-                  {/* Collapsed row */}
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setExpandedEventKey(prev => prev === evKey ? null : evKey)}
-                    onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setExpandedEventKey(prev => prev === evKey ? null : evKey)}
-                    className="grid items-baseline px-3 py-1 cursor-pointer focus:outline-none"
-                    style={{ gridTemplateColumns: '72px 90px auto 1fr auto', gap: '0' }}
-                  >
-                    <span className="text-sm text-text-muted font-mono pr-1.5 overflow-hidden">{timeStr}</span>
-                    <span className={clsx('text-sm font-mono pr-2 shrink-0', formatted.typeColor)}>{formatted.typeLabel}</span>
-                    <span className="flex items-baseline gap-1.5 pr-2 shrink-0">
-                      {formatted.chips?.filter(c => !c.meta).map((chip, ci) => (
-                        <span key={ci} className={clsx('text-sm font-mono', chip.color)}>{chip.text}</span>
-                      ))}
-                    </span>
-                    <span className="text-sm min-w-0 truncate text-text-secondary pr-2">
-                      {displayDetail}
-                    </span>
-                    <span className="flex items-baseline gap-1.5 justify-end shrink-0">
-                      {formatted.chips?.filter(c => c.meta).map((chip, ci) => (
-                        <span key={ci} className={clsx('text-sm font-mono', chip.color)}>{chip.text}</span>
-                      ))}
-                    </span>
-                  </div>
-                  {/* Expanded content */}
-                  {isExpanded && (
-                    <div className="px-3 pb-2.5 pt-1 space-y-1.5 border-l-2 ml-[168px]" style={{ borderLeftColor: `${color}40` }}>
-                      {ev.type === 'step' && (() => {
-                        const s = ev.payload;
-                        return (
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2 text-sm text-text-muted flex-wrap">
-                              <span className="text-blue-400/80 font-mono">llm</span>
-                              <span className="font-mono">{s.model}</span>
-                              <span>{s.prompt_tokens}+{s.completion_tokens}</span>
-                              {s.cost_usd > 0 && <span>${s.cost_usd.toFixed(4)}</span>}
-                              {s.duration_ms > 0 && <span>{(s.duration_ms / 1000).toFixed(1)}s</span>}
-                            </div>
-                            {s.label && s.tool_calls.length > 0 && <p className="text-sm text-text-secondary font-mono">{s.label}</p>}
-                            {s.label === 'summarize thread' && thread && (
-                              <div className="text-sm space-y-0.5">
-                                <p className="text-text-secondary">Generates short conceptual title for thread</p>
-                                <p className="text-text-secondary truncate">query: {thread.short_query ?? thread.query}</p>
-                                {thread.short_query && <p className="text-text-primary">title: {thread.short_query}</p>}
-                              </div>
-                            )}
-                            {s.tool_calls.map((tc, ti) => (
-                              <div key={ti} className="space-y-0.5">
-                                <div className="flex items-start gap-2">
-                                  <span className="text-text-secondary text-sm font-mono shrink-0">
-                                    {tc.tool === 'web_search' ? 'search' : tc.tool}
-                                  </span>
-                                  {tc.input && (
-                                    <span className="text-sm text-text-primary break-words flex-1">
-                                      {(tc.tool === 'web_search' || tc.tool === 'search_web') && (tc.input as Record<string,unknown>).query
-                                        ? `"${(tc.input as Record<string,unknown>).query as string}"`
-                                        : <span className="text-text-secondary text-sm font-mono">{JSON.stringify(tc.input).slice(0, 160)}</span>}
-                                    </span>
-                                  )}
-                                </div>
-                                {tc.jina_fetches && tc.jina_fetches.length > 0 && (
-                                  <div className="pl-3 text-sm text-text-secondary">
-                                    {tc.jina_fetches.map((j, ji) => {
-                                      let host = j.url; try { host = new URL(j.url).hostname; } catch { /* keep */ }
-                                      return <span key={ji} className={clsx('mr-2', j.ok ? 'text-teal-400' : 'text-error')}>{host}</span>;
-                                    })}
-                                  </div>
-                                )}
-                                {tc.output && <p className="pl-3 text-sm text-text-secondary/70 break-words">{tc.output.slice(0, 300)}{tc.output.length > 300 ? '…' : ''}</p>}
-                              </div>
-                            ))}
-                            {s.metadata && (() => {
-                              const m = s.metadata;
-                              if (m.decision === 'gap_analysis') return (
-                                <div className="text-sm">
-                                  <span className={m.has_gaps ? 'text-warning' : 'text-text-secondary'}>
-                                    {m.has_gaps ? `${m.gap_count as number} gaps` : 'no gaps'}
-                                  </span>
-                                </div>
-                              );
-                              if (m.decision === 'synthesis') return (
-                                <div className="flex gap-3 text-sm font-mono">
-                                  <span className="text-success">conf {((m.confidence as number) * 100).toFixed(0)}%</span>
-                                  <span className="text-blue-400">novel {((m.novelty as number) * 100).toFixed(0)}%</span>
-                                  <span className="text-text-muted">act {((m.actionability as number) * 100).toFixed(0)}%</span>
-                                  {(m.tags as string[]).length > 0 && (
-                                    <span className="text-text-secondary">{(m.tags as string[]).join(', ')}</span>
-                                  )}
-                                </div>
-                              );
-                              if (m.decision === 'dedup') return (
-                                <div className="space-y-1 text-sm">
-                                  <p className={clsx((m.is_duplicate as boolean) ? 'text-error' : 'text-text-secondary')}>
-                                    {(m.is_duplicate as boolean) ? 'duplicate detected' : `unique · checked ${m.existing_count as number} findings`}
-                                  </p>
-                                  {(m.new_summary as string) && (
-                                    <p className="text-text-secondary italic">new: "{m.new_summary as string}"</p>
-                                  )}
-                                  {(m.compared_to as string[] | undefined)?.map((s, i) => (
-                                    <p key={i} className="pl-3 text-text-secondary/60 truncate">vs: "{s}"</p>
-                                  ))}
-                                </div>
-                              );
-                              if (m.decision === 'follow_up_eval') return (
-                                <div className="space-y-0.5 text-sm">
-                                  <p className="text-text-secondary">
-                                    {m.accepted_count as number} accepted · {m.rejected_count as number} rejected
-                                    {(m.retry_count as number) > 0 && ` · ${m.retry_count as number} retries`}
-                                    {(m.similarity_threshold as number) && ` · sim≥${(m.similarity_threshold as number).toFixed(2)}`}
-                                  </p>
-                                  {(m.candidates as Array<{text: string; accepted: boolean; reason: string|null; sim: number; rank: number}> | undefined)?.map((c, i) => (
-                                    <div key={i} className={clsx('pl-2 flex gap-2 items-baseline', c.accepted ? 'text-text-secondary' : 'text-text-muted/60')}>
-                                      <span className="shrink-0">{c.accepted ? '✓' : '✗'}</span>
-                                      <span className="truncate flex-1">"{c.text}"</span>
-                                      <span className="font-mono shrink-0 text-sm">sim {c.sim.toFixed(2)}</span>
-                                      {c.reason && <span className="text-error/70 shrink-0 text-sm truncate max-w-32">{c.reason}</span>}
-                                    </div>
-                                  ))}
-                                </div>
-                              );
-                              if (m.decision === 'formulate_queries') return (
-                                <div className="space-y-0.5 text-sm">
-                                  <p className="text-text-secondary">{(m.queries as string[]).length} queries formulated{(m.skipped_duplicates as number) > 0 && `, ${m.skipped_duplicates as number} skipped (already searched)`}</p>
-                                  {(m.queries as string[]).map((q, i) => (
-                                    <p key={i} className="pl-2 text-text-secondary/80 truncate">→ "{q}"</p>
-                                  ))}
-                                </div>
-                              );
-                              if (m.decision === 'extract_concepts') {
-                                const names = (m.concepts as string[] | undefined) ?? [];
-                                const rels = (m.relations as Array<{from: string; to: string; relation: string}> | undefined) ?? [];
-                                const fs = m.finding_summary as string | undefined;
-                                return (
-                                  <div className="space-y-1 text-sm">
-                                    <p className="text-text-secondary">
-                                      {m.concept_count as number} concepts{(m.relation_count as number) > 0 && `, ${m.relation_count as number} relations`} · from finding
-                                    </p>
-                                    {fs && <p className="pl-2 italic text-text-muted/80 truncate">"{fs}"</p>}
-                                    {names.length > 0 && (
-                                      <div className="flex flex-wrap gap-1 pl-2">
-                                        {names.map((n, i) => (
-                                          <span key={i} className="px-1 py-0.5 rounded bg-bg-tertiary text-sm text-purple-400/90 border border-border-primary/40">{n}</span>
-                                        ))}
-                                      </div>
-                                    )}
-                                    {rels.length > 0 && (
-                                      <div className="space-y-0 pl-2">
-                                        {rels.map((r, i) => (
-                                          <p key={i} className="text-sm text-text-muted/80 truncate">
-                                            {r.from} <span className="text-text-muted/50">—{r.relation}→</span> {r.to}
-                                          </p>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              }
-                              if (m.decision === 'summarize_thread') {
-                                const title = m.title as string | null;
-                                const raw = m.raw_output as string | undefined;
-                                const q = m.query as string | undefined;
-                                const acc = m.accepted as boolean;
-                                return (
-                                  <div className="space-y-0.5 text-sm">
-                                    {q && <p className="text-text-muted truncate">query: <span className="text-text-secondary">{q}</span></p>}
-                                    {acc && title
-                                      ? <p className="text-text-primary">title: <span className="font-mono">{title}</span></p>
-                                      : <p className="text-error/80">rejected{raw && `: "${raw}"`}</p>}
-                                  </div>
-                                );
-                              }
-                              if (m.decision === 'synthesis') {
-                                const summary = m.summary as string | undefined;
-                                const preview = m.content_preview as string | undefined;
-                                if (!summary && !preview) return null;
-                                return (
-                                  <div className="space-y-0.5 text-sm">
-                                    {summary && <p className="text-text-primary">{summary}</p>}
-                                    {preview && preview !== summary && (
-                                      <p className="text-text-secondary/80 line-clamp-3">{preview}</p>
-                                    )}
-                                  </div>
-                                );
-                              }
-                              return null;
-                            })()}
-                            {s.error && (
-                              <div className="mt-1 p-2 rounded bg-error/8 border border-error/20">
-                                <p className="text-sm font-mono text-error break-words whitespace-pre-wrap">{s.error}</p>
-                              </div>
-                            )}
+              style={{ borderLeft: `6px solid ${color}${isHighFinding ? 'cc' : '60'}` }}
+            >
+              {/* Collapsed row */}
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => setExpandedEventKey(prev => prev === evKey ? null : evKey)}
+                onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setExpandedEventKey(prev => prev === evKey ? null : evKey)}
+                className="grid items-baseline px-3 py-1 cursor-pointer focus:outline-none"
+                style={{ gridTemplateColumns: '72px 90px auto 1fr auto', gap: '0' }}
+              >
+                <span className="text-sm text-text-muted font-mono pr-1.5 overflow-hidden">{timeStr}</span>
+                <span className={clsx('text-sm font-mono pr-2 shrink-0', formatted.typeColor)}>{formatted.typeLabel}</span>
+                <span className="flex items-baseline gap-1.5 pr-2 shrink-0">
+                  {formatted.chips?.filter(c => !c.meta).map((chip, ci) => (
+                    <span key={ci} className={clsx('text-sm font-mono', chip.color)}>{chip.text}</span>
+                  ))}
+                </span>
+                <span className="text-sm min-w-0 truncate text-text-secondary pr-2">
+                  {displayDetail}
+                </span>
+                <span className="flex items-baseline gap-1.5 justify-end shrink-0">
+                  {formatted.chips?.filter(c => c.meta).map((chip, ci) => (
+                    <span key={ci} className={clsx('text-sm font-mono', chip.color)}>{chip.text}</span>
+                  ))}
+                </span>
+              </div>
+              {/* Expanded content */}
+              {isExpanded && (
+                <div className="px-3 pb-2.5 pt-1 space-y-1.5 border-l-2 ml-[168px]" style={{ borderLeftColor: `${color}40` }}>
+                  {ev.type === 'step' && (() => {
+                    const s = ev.payload;
+                    return (
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-sm text-text-muted flex-wrap">
+                          <span className="text-blue-400/80 font-mono">llm</span>
+                          <span className="font-mono">{s.model}</span>
+                          <span>{s.prompt_tokens}+{s.completion_tokens}</span>
+                          {s.cost_usd > 0 && <span>${s.cost_usd.toFixed(4)}</span>}
+                          {s.duration_ms > 0 && <span>{(s.duration_ms / 1000).toFixed(1)}s</span>}
+                        </div>
+                        {s.label && s.tool_calls.length > 0 && <p className="text-sm text-text-secondary font-mono">{s.label}</p>}
+                        {s.label === 'summarize thread' && thread && (
+                          <div className="text-sm space-y-0.5">
+                            <p className="text-text-secondary">Generates short conceptual title for thread</p>
+                            <p className="text-text-secondary truncate">query: {thread.short_query ?? thread.query}</p>
+                            {thread.short_query && <p className="text-text-primary">title: {thread.short_query}</p>}
                           </div>
-                        );
-                      })()}
-                      {ev.type === 'finding' && (() => {
-                        const f = ev.payload;
-                        const srcMeta = f.source_url_meta?.length ? f.source_url_meta : f.source_urls.map(u => ({ url: u, title: '', snippet: '' }));
-                        return (
-                          <div className="space-y-1.5">
-                            <div className="text-sm text-text-primary leading-relaxed prose prose-sm prose-invert max-w-none">
-                              <ReactMarkdown remarkPlugins={[remarkGfm]}>{f.content}</ReactMarkdown>
-                            </div>
-                            <div className="flex items-center gap-3 text-sm font-mono flex-wrap">
-                              <span className={f.confidence >= 0.7 ? 'text-success' : f.confidence >= 0.4 ? 'text-warning' : 'text-error'}>
-                                conf {(f.confidence * 100).toFixed(0)}%
+                        )}
+                        {s.tool_calls.map((tc, ti) => (
+                          <div key={ti} className="space-y-0.5">
+                            <div className="flex items-start gap-2">
+                              <span className="text-text-secondary text-sm font-mono shrink-0">
+                                {tc.tool === 'web_search' ? 'search' : tc.tool}
                               </span>
-                              <span className="text-blue-400">novel {(f.novelty * 100).toFixed(0)}%</span>
-                              <span className="text-text-muted">act {(f.actionability * 100).toFixed(0)}%</span>
+                              {tc.input && (
+                                <span className="text-sm text-text-primary break-words flex-1">
+                                  {(tc.tool === 'web_search' || tc.tool === 'search_web') && (tc.input as Record<string,unknown>).query
+                                    ? `"${(tc.input as Record<string,unknown>).query as string}"`
+                                    : <span className="text-text-secondary text-sm font-mono">{JSON.stringify(tc.input).slice(0, 160)}</span>}
+                                </span>
+                              )}
                             </div>
-                            {srcMeta.length > 0 && (
-                              <div className="space-y-0.5">
-                                {srcMeta.map((src, si) => {
-                                  let host = src.url; try { host = new URL(src.url).hostname; } catch { /* keep */ }
-                                  return (
-                                    <a key={si} href={src.url} target="_blank" rel="noopener noreferrer"
-                                      onClick={e => e.stopPropagation()}
-                                      className="block text-sm text-accent hover:underline truncate">
-                                      {src.title || host}
-                                    </a>
-                                  );
+                            {tc.jina_fetches && tc.jina_fetches.length > 0 && (
+                              <div className="pl-3 text-sm text-text-secondary">
+                                {tc.jina_fetches.map((j, ji) => {
+                                  let host = j.url; try { host = new URL(j.url).hostname; } catch { /* keep */ }
+                                  return <span key={ji} className={clsx('mr-2', j.ok ? 'text-teal-400' : 'text-error')}>{host}</span>;
                                 })}
                               </div>
                             )}
-                            {f.tags.length > 0 && (
-                              <div className="flex flex-wrap gap-1">
-                                {f.tags.map(tag => (
-                                  <span key={tag} className="px-1 py-0.5 rounded bg-bg-tertiary text-sm text-text-muted">{tag}</span>
-                                ))}
-                              </div>
-                            )}
-                            {f.follow_up_analysis && (
-                              <div className="space-y-1 pt-1 border-t border-border-primary/30">
-                                <p className="text-sm font-semibold uppercase tracking-wider text-text-muted">
-                                  Follow-up candidates · threshold {(f.follow_up_analysis.similarity_threshold * 100).toFixed(0)}%
-                                  {f.follow_up_analysis.retry_count > 0 && ` · ${f.follow_up_analysis.retry_count} retries`}
-                                </p>
-                                {f.follow_up_analysis.candidates.map((c, ci) => (
-                                  <div key={ci} className="flex items-start gap-2">
-                                    <span className={clsx('text-sm font-mono shrink-0 mt-0.5', c.accepted ? 'text-success' : 'text-error')}>
-                                      {c.accepted ? '✓' : '✗'}
-                                    </span>
-                                    <span className={clsx('text-sm flex-1', c.accepted ? 'text-text-primary' : 'text-text-muted')}>{c.text}</span>
-                                    <span className="text-sm font-mono text-text-muted shrink-0">
-                                      q:{(c.quality_score * 100).toFixed(0)}% r:{(c.rank_score * 100).toFixed(0)}%
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
+                            {tc.output && <p className="pl-3 text-sm text-text-secondary/70 break-words">{tc.output.slice(0, 300)}{tc.output.length > 300 ? '…' : ''}</p>}
                           </div>
-                        );
-                      })()}
-                      {ev.type === 'thread' && (() => {
-                        const t = ev.payload;
-                        return (
-                          <div className="space-y-1 text-sm text-text-muted">
-                            <p className="text-text-secondary">{t.query}</p>
-                            <div className="flex items-center gap-3">
-                              <span>depth <span className="font-mono">{t.depth}/{t.max_depth}</span></span>
-                              <span>priority <span className="font-mono">{t.priority.toFixed(2)}</span></span>
-                              <span className={clsx('px-1 py-0.5 rounded text-sm', liveOriginColor[t.origin] ?? 'bg-bg-tertiary text-text-muted')}>
-                                {t.origin.replace(/_/g, ' ')}
+                        ))}
+                        {s.metadata && (() => {
+                          const m = s.metadata;
+                          if (m.decision === 'gap_analysis') return (
+                            <div className="text-sm">
+                              <span className={m.has_gaps ? 'text-warning' : 'text-text-secondary'}>
+                                {m.has_gaps ? `${m.gap_count as number} gaps` : 'no gaps'}
                               </span>
-                              {t.perturbation_strategy && (
-                                <span className="text-orange-400/70">{t.perturbation_strategy.replace(/_/g, ' ')}</span>
+                            </div>
+                          );
+                          if (m.decision === 'synthesis') return (
+                            <div className="flex gap-3 text-sm font-mono">
+                              <span className="text-success">conf {((m.confidence as number) * 100).toFixed(0)}%</span>
+                              <span className="text-blue-400">novel {((m.novelty as number) * 100).toFixed(0)}%</span>
+                              <span className="text-text-muted">act {((m.actionability as number) * 100).toFixed(0)}%</span>
+                              {(m.tags as string[]).length > 0 && (
+                                <span className="text-text-secondary">{(m.tags as string[]).join(', ')}</span>
                               )}
                             </div>
+                          );
+                          if (m.decision === 'dedup') return (
+                            <div className="space-y-1 text-sm">
+                              <p className={clsx((m.is_duplicate as boolean) ? 'text-error' : 'text-text-secondary')}>
+                                {(m.is_duplicate as boolean) ? 'duplicate detected' : `unique · checked ${m.existing_count as number} findings`}
+                              </p>
+                              {(m.new_summary as string) && (
+                                <p className="text-text-secondary italic">new: "{m.new_summary as string}"</p>
+                              )}
+                              {(m.compared_to as string[] | undefined)?.map((s, i) => (
+                                <p key={i} className="pl-3 text-text-secondary/60 truncate">vs: "{s}"</p>
+                              ))}
+                            </div>
+                          );
+                          if (m.decision === 'follow_up_eval') return (
+                            <div className="space-y-0.5 text-sm">
+                              <p className="text-text-secondary">
+                                {m.accepted_count as number} accepted · {m.rejected_count as number} rejected
+                                {(m.retry_count as number) > 0 && ` · ${m.retry_count as number} retries`}
+                                {(m.similarity_threshold as number) && ` · sim≥${(m.similarity_threshold as number).toFixed(2)}`}
+                              </p>
+                              {(m.candidates as Array<{text: string; accepted: boolean; reason: string|null; sim: number; rank: number}> | undefined)?.map((c, i) => (
+                                <div key={i} className={clsx('pl-2 flex gap-2 items-baseline', c.accepted ? 'text-text-secondary' : 'text-text-muted/60')}>
+                                  <span className="shrink-0">{c.accepted ? '✓' : '✗'}</span>
+                                  <span className="truncate flex-1">"{c.text}"</span>
+                                  <span className="font-mono shrink-0 text-sm">sim {c.sim.toFixed(2)}</span>
+                                  {c.reason && <span className="text-error/70 shrink-0 text-sm truncate max-w-32">{c.reason}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          );
+                          if (m.decision === 'formulate_queries') return (
+                            <div className="space-y-0.5 text-sm">
+                              <p className="text-text-secondary">{(m.queries as string[]).length} queries formulated{(m.skipped_duplicates as number) > 0 && `, ${m.skipped_duplicates as number} skipped (already searched)`}</p>
+                              {(m.queries as string[]).map((q, i) => (
+                                <p key={i} className="pl-2 text-text-secondary/80 truncate">→ "{q}"</p>
+                              ))}
+                            </div>
+                          );
+                          if (m.decision === 'extract_concepts') {
+                            const names = (m.concepts as string[] | undefined) ?? [];
+                            const rels = (m.relations as Array<{from: string; to: string; relation: string}> | undefined) ?? [];
+                            const fs = m.finding_summary as string | undefined;
+                            return (
+                              <div className="space-y-1 text-sm">
+                                <p className="text-text-secondary">
+                                  {m.concept_count as number} concepts{(m.relation_count as number) > 0 && `, ${m.relation_count as number} relations`} · from finding
+                                </p>
+                                {fs && <p className="pl-2 italic text-text-muted/80 truncate">"{fs}"</p>}
+                                {names.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 pl-2">
+                                    {names.map((n, i) => (
+                                      <span key={i} className="px-1 py-0.5 rounded bg-bg-tertiary text-sm text-purple-400/90 border border-border-primary/40">{n}</span>
+                                    ))}
+                                  </div>
+                                )}
+                                {rels.length > 0 && (
+                                  <div className="space-y-0 pl-2">
+                                    {rels.map((r, i) => (
+                                      <p key={i} className="text-sm text-text-muted/80 truncate">
+                                        {r.from} <span className="text-text-muted/50">—{r.relation}→</span> {r.to}
+                                      </p>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }
+                          if (m.decision === 'summarize_thread') {
+                            const title = m.title as string | null;
+                            const raw = m.raw_output as string | undefined;
+                            const q = m.query as string | undefined;
+                            const acc = m.accepted as boolean;
+                            return (
+                              <div className="space-y-0.5 text-sm">
+                                {q && <p className="text-text-muted truncate">query: <span className="text-text-secondary">{q}</span></p>}
+                                {acc && title
+                                  ? <p className="text-text-primary">title: <span className="font-mono">{title}</span></p>
+                                  : <p className="text-error/80">rejected{raw && `: "${raw}"`}</p>}
+                              </div>
+                            );
+                          }
+                          if (m.decision === 'synthesis') {
+                            const summary = m.summary as string | undefined;
+                            const preview = m.content_preview as string | undefined;
+                            if (!summary && !preview) return null;
+                            return (
+                              <div className="space-y-0.5 text-sm">
+                                {summary && <p className="text-text-primary">{summary}</p>}
+                                {preview && preview !== summary && (
+                                  <p className="text-text-secondary/80 line-clamp-3">{preview}</p>
+                                )}
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+                        {s.error && (
+                          <div className="mt-1 p-2 rounded bg-error/8 border border-error/20">
+                            <p className="text-sm font-mono text-error break-words whitespace-pre-wrap">{s.error}</p>
                           </div>
-                        );
-                      })()}
-                    </div>
-                  )}
+                        )}
+                      </div>
+                    );
+                  })()}
+                  {ev.type === 'finding' && (() => {
+                    const f = ev.payload;
+                    const srcMeta = f.source_url_meta?.length ? f.source_url_meta : f.source_urls.map(u => ({ url: u, title: '', snippet: '' }));
+                    return (
+                      <div className="space-y-1.5">
+                        <div className="text-sm text-text-primary leading-relaxed prose prose-sm prose-invert max-w-none">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{f.content}</ReactMarkdown>
+                        </div>
+                        <div className="flex items-center gap-3 text-sm font-mono flex-wrap">
+                          <span className={f.confidence >= 0.7 ? 'text-success' : f.confidence >= 0.4 ? 'text-warning' : 'text-error'}>
+                            conf {(f.confidence * 100).toFixed(0)}%
+                          </span>
+                          <span className="text-blue-400">novel {(f.novelty * 100).toFixed(0)}%</span>
+                          <span className="text-text-muted">act {(f.actionability * 100).toFixed(0)}%</span>
+                        </div>
+                        {srcMeta.length > 0 && (
+                          <div className="space-y-0.5">
+                            {srcMeta.map((src, si) => {
+                              let host = src.url; try { host = new URL(src.url).hostname; } catch { /* keep */ }
+                              return (
+                                <a key={si} href={src.url} target="_blank" rel="noopener noreferrer"
+                                  onClick={e => e.stopPropagation()}
+                                  className="block text-sm text-accent hover:underline truncate">
+                                  {src.title || host}
+                                </a>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {f.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {f.tags.map(tag => (
+                              <span key={tag} className="px-1 py-0.5 rounded bg-bg-tertiary text-sm text-text-muted">{tag}</span>
+                            ))}
+                          </div>
+                        )}
+                        {f.follow_up_analysis && (
+                          <div className="space-y-1 pt-1 border-t border-border-primary/30">
+                            <p className="text-sm font-semibold uppercase tracking-wider text-text-muted">
+                              Follow-up candidates · threshold {(f.follow_up_analysis.similarity_threshold * 100).toFixed(0)}%
+                              {f.follow_up_analysis.retry_count > 0 && ` · ${f.follow_up_analysis.retry_count} retries`}
+                            </p>
+                            {f.follow_up_analysis.candidates.map((c, ci) => (
+                              <div key={ci} className="flex items-start gap-2">
+                                <span className={clsx('text-sm font-mono shrink-0 mt-0.5', c.accepted ? 'text-success' : 'text-error')}>
+                                  {c.accepted ? '✓' : '✗'}
+                                </span>
+                                <span className={clsx('text-sm flex-1', c.accepted ? 'text-text-primary' : 'text-text-muted')}>{c.text}</span>
+                                <span className="text-sm font-mono text-text-muted shrink-0">
+                                  q:{(c.quality_score * 100).toFixed(0)}% r:{(c.rank_score * 100).toFixed(0)}%
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  {ev.type === 'thread' && (() => {
+                    const t = ev.payload;
+                    return (
+                      <div className="space-y-1 text-sm text-text-muted">
+                        <p className="text-text-secondary">{t.query}</p>
+                        <div className="flex items-center gap-3">
+                          <span>depth <span className="font-mono">{t.depth}/{t.max_depth}</span></span>
+                          <span>priority <span className="font-mono">{t.priority.toFixed(2)}</span></span>
+                          <span className={clsx('px-1 py-0.5 rounded text-sm', liveOriginColor[t.origin] ?? 'bg-bg-tertiary text-text-muted')}>
+                            {t.origin.replace(/_/g, ' ')}
+                          </span>
+                          {t.perturbation_strategy && (
+                            <span className="text-orange-400/70">{t.perturbation_strategy.replace(/_/g, ' ')}</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
-              );
-            })}
-            {isRunning && (
-              <div className="flex items-center gap-2 px-3 py-1.5 text-sm text-success font-mono">
-                <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                <span>running</span>
-                <span className="text-text-muted ml-2">{events.length} events · {findings.length} findings</span>
-              </div>
-            )}
+              )}
+            </div>
+          );
+        })}
+        {isRunning && (
+          <div className="flex items-center gap-2 px-3 py-1.5 text-sm text-success font-mono">
+            <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+            <span>running</span>
+            <span className="text-text-muted ml-2">{events.length} events · {findings.length} findings</span>
           </div>
-        </>
+        )}
       </div>
     </div>
   );
@@ -4002,8 +4143,8 @@ export function ResearchQueryDetailPage() {
   const cancelJob = useCancelJob();
   const deleteQuery = useDeleteResearchQuery();
 
-  type Tab = 'document' | 'knowledge' | 'process' | 'sources' | 'telemetry' | 'reviews' | 'config';
-  const TAB_VALUES: readonly Tab[] = ['document','knowledge','process','sources','telemetry','reviews','config'];
+  type Tab = 'document' | 'knowledge' | 'process' | 'sources' | 'events' | 'telemetry' | 'reviews' | 'config';
+  const TAB_VALUES: readonly Tab[] = ['document','knowledge','process','sources','events','telemetry','reviews','config'];
   // Honour `#tab=telemetry` etc. so cross-page links can deep-link into a
   // specific tab. Listens for hashchange so in-page links that
   // only mutate the hash also take effect without a full remount.
@@ -4198,11 +4339,15 @@ export function ResearchQueryDetailPage() {
                 <span className="text-sm font-semibold text-text-primary tabular-nums">{stat.value}</span>
               </div>
             ))}
-            {workers.length > 0 && (
-              <span className="text-sm text-text-muted">
-                {workers.filter(w => w.status !== 'stopped').length} workers
-              </span>
-            )}
+            {(() => {
+              const busy = workers.filter(w => w.currentJob).length;
+              if (busy === 0) return null;
+              return (
+                <span className="text-sm text-text-muted">
+                  {busy} {busy === 1 ? 'worker' : 'workers'}
+                </span>
+              );
+            })()}
           </div>
 
           {/* Tab bar */}
@@ -4212,6 +4357,7 @@ export function ResearchQueryDetailPage() {
               { key: 'knowledge' as const, label: 'Knowledge', count: conceptsCount },
               { key: 'process' as const, label: 'Process', count: threadsData.length },
               { key: 'sources' as const, label: 'Sources', count: sourcesTotal },
+              { key: 'events' as const, label: 'Events', count: undefined },
               { key: 'telemetry' as const, label: 'Telemetry', count: undefined },
               { key: 'reviews' as const, label: 'Reviews', count: undefined },
               { key: 'config' as const, label: 'Config', count: undefined },
@@ -4303,6 +4449,16 @@ export function ResearchQueryDetailPage() {
           )}
           {tab === 'sources' && (
             <SourcesView sessionId={id!} onNavigateToTelemetry={() => setTab('telemetry')} />
+          )}
+          {tab === 'events' && (
+            <EventsView
+              sessionId={id!}
+              threads={threadsData}
+              findings={findingsData}
+              allSteps={allSteps}
+              events={events}
+              isRunning={isRunning}
+            />
           )}
           {tab === 'telemetry' && (
             <TelemetryView sessionId={id!} onNavigateToThread={navigateToLive} />

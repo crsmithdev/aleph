@@ -941,16 +941,22 @@ Return ONLY a JSON array of search query strings. No other text.`,
    *  decides whether to spawn a small batch of targeted gap queries. Runs on a
    *  cadence instead of per-finding to avoid combinatorial thread explosion. */
   private async maybeRunLeadReview(sessionId: string, config: SessionConfig, attachThreadId: string | null = null): Promise<void> {
-    if (!config.gap_analysis?.enabled) return;
-    if ((config.gap_analysis.mode ?? 'periodic') !== 'periodic') return;
+    const log = (msg: string) => {
+      try { require('fs').appendFileSync('/tmp/leader-debug.log', `${new Date().toISOString()} ${msg}\n`); } catch {}
+    };
+    log(`entered: session=${sessionId.slice(0,8)} enabled=${config.gap_analysis?.enabled} mode=${config.gap_analysis?.mode ?? 'periodic'} attach=${attachThreadId?.slice(0,8)}`);
+    if (!config.gap_analysis?.enabled) { log('skip: not enabled'); return; }
+    if ((config.gap_analysis.mode ?? 'periodic') !== 'periodic') { log('skip: mode not periodic'); return; }
 
     const cadence = Math.max(1, config.gap_analysis.every_n_findings ?? 10);
     const findingCount = findings.countFindings(this.sqlite, sessionId);
     const unappliedNotes = steering.listUnappliedSteeringNotes(this.sqlite, sessionId);
     const dueByCadence = findingCount > 0 && findingCount % cadence === 0;
+    log(`cadence=${cadence} findings=${findingCount} unapplied=${unappliedNotes.length} dueByCadence=${dueByCadence}`);
     // Also run early if the user just dropped a steering note — don't make them
     // wait 10 findings for their nudge to land.
-    if (!dueByCadence && unappliedNotes.length === 0) return;
+    if (!dueByCadence && unappliedNotes.length === 0) { log('skip: not due and no notes'); return; }
+    log(`proceeding to LLM call (attachThreadId=${attachThreadId?.slice(0,8)})`);
 
     const maxTotal = config.max_total_threads ?? 200;
     const totalNow = threads.countAllThreads(this.sqlite, sessionId);
@@ -2007,9 +2013,14 @@ Write a concise, informative summary of what has been discovered so far, key the
 
       const material = conceptFindings.map(f => f.content).join('\n\n---\n\n');
       const conceptSources = concepts.getSourcesForConcept(this.sqlite, c.id);
-      const citationLines = conceptSources
-        .map(s => `[${citationIndex.get(s.url)}] ${s.title} — ${s.url}`)
-        .filter(line => !line.startsWith('[undefined]'));
+      const citationNumbers: number[] = [];
+      const citationLines: string[] = [];
+      for (const s of conceptSources) {
+        const n = citationIndex.get(s.url);
+        if (n === undefined) continue;
+        citationNumbers.push(n);
+        citationLines.push(`[${n}] ${s.title} — ${s.url}`);
+      }
 
       const relatedConceptNames = topConcepts
         .filter(other => other.id !== c.id)
@@ -2022,9 +2033,10 @@ This section is about: ${c.canonical_name}${c.aliases.length ? ` (aka ${c.aliase
 
 Write the section as flowing prose:
 - Start with "## ${c.canonical_name}" as the heading. Do not repeat the heading.
-- Do NOT include a lead section or references section — those are composed elsewhere.
+- Do NOT include a lead section or references section — those are composed elsewhere. Absolutely no "## References" heading.
 - Write 2–4 paragraphs. Use ### subsections only if the finding material genuinely covers multiple aspects.
-- Cite sources using the numeric markers already assigned below, e.g. "[3]" — do not renumber.
+- REQUIRED: Every factual claim must end with an inline citation marker like [3] (square brackets, bare integer). Use only the numbers from the "Citations available" list below — never invent new numbers, never renumber. Aim for at least one [N] per paragraph.
+  Example sentence: "Berkeley Youth Alternatives runs a flagship mentorship program for local teens [4]."
 - Do not add confidence scores, tags, or research-process artifacts.
 - Encyclopedic tone: neutral, informative, specific.
 
@@ -2055,7 +2067,8 @@ Write only the section, starting with "## ${c.canonical_name}".`;
           session.config,
           `generate section: ${c.canonical_name}`,
         );
-        sectionBodies.push(result.text.trim());
+        const normalized = ensureSectionCitations(result.text.trim(), citationNumbers);
+        sectionBodies.push(normalized);
       } catch (err) {
         console.warn(`[doc] section failed for "${c.canonical_name}":`, err);
       }
@@ -2064,8 +2077,9 @@ Write only the section, starting with "## ${c.canonical_name}".`;
     if (sectionBodies.length === 0) return;
 
     const lead = await this.generateLeadSection(sessionId, session.prompt, topConcepts, session.config);
-    const referencesSection = buildReferencesSection(citationIndex, allFindings);
-    const doc = [lead, ...sectionBodies, referencesSection].filter(Boolean).join('\n\n');
+    const bodyText = [lead, ...sectionBodies].filter(Boolean).join('\n\n');
+    const referencesSection = buildReferencesSection(citationIndex, allFindings, bodyText);
+    const doc = [bodyText, referencesSection].filter(Boolean).join('\n\n');
 
     sessions.updateQuery(this.sqlite, sessionId, { document: doc });
   }
@@ -2258,8 +2272,37 @@ function buildCitationIndex(allFindings: ResearchFinding[]): Map<string, number>
   return idx;
 }
 
-function buildReferencesSection(citationIndex: Map<string, number>, allFindings: ResearchFinding[]): string {
+/** Post-process a generated section:
+ *  - Strip any "## References" block the model injected despite being told not to.
+ *  - Normalize GFM-footnote [^N] → [N].
+ *  - If the section has no [N] citations at all, append a citation cluster using
+ *    the section's available numbers so the bibliography can link something.
+ */
+function ensureSectionCitations(text: string, available: number[]): string {
+  let out = text.replace(/\n+##\s+References\b[\s\S]*$/i, '').trimEnd();
+  out = out.replace(/\[\^(\d+)\]/g, '[$1]');
+  const hasCitation = /\[\d+\](?!\()/.test(out);
+  if (!hasCitation && available.length > 0) {
+    const cluster = available.slice(0, 5).map(n => `[${n}]`).join(' ');
+    out = `${out}\n\n${cluster}`;
+  }
+  return out;
+}
+
+function buildReferencesSection(
+  citationIndex: Map<string, number>,
+  allFindings: ResearchFinding[],
+  bodyText: string,
+): string {
   if (citationIndex.size === 0) return '';
+
+  // Only include references the body actually cites. Accept both [N] and
+  // GFM-footnote [^N] forms — the generator occasionally emits the latter.
+  const used = new Set<number>();
+  for (const m of bodyText.matchAll(/\[\^?(\d+)\](?!\()/g)) {
+    used.add(parseInt(m[1], 10));
+  }
+  if (used.size === 0) return '';
 
   const titleByUrl = new Map<string, string>();
   for (const f of allFindings) {
@@ -2269,9 +2312,11 @@ function buildReferencesSection(citationIndex: Map<string, number>, allFindings:
   }
 
   const lines = [...citationIndex.entries()]
+    .filter(([, n]) => used.has(n))
     .sort((a, b) => a[1] - b[1])
     .map(([url, n]) => `${n}. [${titleByUrl.get(url) ?? url}](${url})`);
 
+  if (lines.length === 0) return '';
   return `## References\n\n${lines.join('\n')}`;
 }
 

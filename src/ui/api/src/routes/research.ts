@@ -21,6 +21,7 @@ import {
   type SessionConfig,
   deleteQuery,
   OpenRouterProvider,
+  ResearchEngine,
   // Monitor imports
   createMonitor, getMonitor, listMonitors, updateMonitor,
   listSnapshots, listAlerts, updateAlert,
@@ -886,8 +887,6 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       if (!query) return reply.status(404).send({ error: 'Query not found' });
 
       const allQueryFindings = listFindings(app.sqlite, queryId);
-      const allQueryThreads = listThreads(app.sqlite, queryId);
-
       if (allQueryFindings.length < 1) {
         return reply.status(400).send({ error: 'No findings to generate an article from' });
       }
@@ -895,71 +894,25 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       const openrouterKey = process.env.OPENROUTER_API_KEY;
       if (!openrouterKey) return reply.status(400).send({ error: 'OpenRouter API key required' });
 
-      // Build source material
-      const threadMap = new Map(allQueryThreads.map(t => [t.id, t]));
-      const material = allQueryFindings.map(f => {
-        const thread = threadMap.get(f.thread_id);
-        return `[Section: ${thread?.short_query ?? thread?.query ?? 'unknown'}]\n${f.content}`;
-      }).join('\n\n---\n\n');
-
-      // Collect sources
-      const allUrls = new Map<string, { url: string; title: string }>();
-      for (const f of allQueryFindings) {
-        for (const url of f.source_urls) {
-          if (!allUrls.has(url)) {
-            const meta = (f.source_url_meta as Array<{ url: string; title: string }>)?.find(m => m.url === url);
-            allUrls.set(url, { url, title: meta?.title ?? url });
-          }
-        }
-      }
-
       const cfg = query.config as any;
       const primaryModel: string = cfg?.model || 'deepseek/deepseek-chat';
       const poolModels: string[] = cfg?.providers?.openrouter_models ?? [];
-      // Use all available models (primary first if not already in pool, then pool) for rotation
       const allModels = poolModels.includes(primaryModel)
         ? poolModels
         : [primaryModel, ...poolModels];
 
       const provider = new OpenRouterProvider({ apiKey: openrouterKey, models: allModels });
+      const engine = new ResearchEngine({ sqlite: app.sqlite, provider });
 
-      const prompt = `You are a skilled encyclopedia editor. Using the research findings below as source material, write a comprehensive, well-structured article about: "${query.prompt}"
-
-Write it like a Wikipedia article:
-- Start with a concise lead section (2-3 paragraphs) that summarizes the entire topic
-- Organize the body into logical sections with short heading titles (1-5 words each, ## level)
-- Use subsections (### level) where appropriate
-- Write in flowing, connected prose — not bullet points or lists
-- Weave findings together into a coherent narrative; don't just list them sequentially
-- Use transitional phrases between paragraphs and sections
-- Where sources are relevant, cite them using numbered references like [1], [2] etc.
-- End with a "## References" section listing all cited sources as numbered items
-- Do NOT include confidence scores, tags, metadata, or any research-process artifacts
-- The tone should be encyclopedic: neutral, informative, authoritative
-
-Source material (${allQueryFindings.length} findings):
-
-${material}
-
-Available sources for citation:
-${Array.from(allUrls.values()).map((s, i) => `[${i + 1}] ${s.title} — ${s.url}`).join('\n')}
-
-Write the full article in markdown.`;
-
-      let result: { text: string };
       try {
-        result = await provider.complete(allModels[0], prompt, 4096);
+        await engine.updateDocument(queryId);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        return reply.status(502).send({ error: `LLM call failed: ${msg}` });
+        return reply.status(502).send({ error: `document generation failed: ${msg}` });
       }
 
-      let doc = result.text.trim();
-      // Strip markdown code fences if the LLM wrapped the output
-      doc = doc.replace(/^```(?:markdown)?\s*\n?/i, '').replace(/\n?```\s*$/, '');
-
-      updateQuery(app.sqlite, queryId, { document: doc });
-      return reply.send({ document: doc });
+      const updated = getQuery(app.sqlite, queryId);
+      return reply.send({ document: updated?.document ?? '' });
     }
   );
 
