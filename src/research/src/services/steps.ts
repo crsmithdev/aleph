@@ -70,9 +70,16 @@ export function getStep(sqlite: Sqlite, id: string): ResearchStep | null {
   return row ? rowToStep(row) : null;
 }
 
-export function updateStepMetadata(sqlite: Sqlite, stepId: string, metadata: Record<string, unknown>): void {
+/** Merges new fields into the step's existing metadata. Replaces only the
+ *  specified keys; leaves anything else (e.g. input_excerpt/output_excerpt
+ *  written by TrackedLLM) intact. Use this when a caller wants to layer a
+ *  decision-block on top of the auto-captured content. */
+export function updateStepMetadata(sqlite: Sqlite, stepId: string, patch: Record<string, unknown>): void {
+  const row = sqlite.prepare('SELECT metadata FROM research_steps WHERE id = ?').get(stepId) as { metadata: string | null } | undefined;
+  const existing = row?.metadata ? JSON.parse(row.metadata) as Record<string, unknown> : {};
+  const merged = { ...existing, ...patch };
   sqlite.prepare('UPDATE research_steps SET metadata = ? WHERE id = ?')
-    .run(JSON.stringify(metadata), stepId);
+    .run(JSON.stringify(merged), stepId);
 }
 
 export function getLatestStepByLabel(sqlite: Sqlite, threadId: string, label: string): ResearchStep | null {

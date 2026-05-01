@@ -197,8 +197,12 @@ async function executeSessionJob(job: import('./types.js').ResearchJob): Promise
     }
   }
 
+  // Burst session-jobs are now a one-shot KICKOFF: run the seed thread, spawn
+  // follow-ups, and exit. The dispatcher (checkQueuedThreads) then fans those
+  // follow-ups out as thread-jobs across all worker processes. This stops a
+  // single session-job from monopolizing one worker while the rest sit idle.
   const maxIterations = job.mode === 'burst'
-    ? (job.max_iterations ?? 5) - job.iterations_completed
+    ? Math.max(1, (job.max_iterations ?? 1) - job.iterations_completed)
     : Infinity;
 
   const jobStartedMs = Date.now();

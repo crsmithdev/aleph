@@ -46,6 +46,15 @@ export class TrackedLLM {
     const startTime = Date.now();
     const result = await this.provider.complete(model, prompt, maxTokens, opts?.systemPrompt);
     const cost = calculateCost(result.model, result.promptTokens, result.completionTokens);
+    // Capture short excerpts of the prompt + completion so the events log can
+    // show what the call did, not just that it happened. 1.5KB ceiling on each
+    // — enough to render meaningfully, not enough to bloat the steps table.
+    const baseMetadata = ctx.metadata ?? {};
+    const metadata = {
+      ...baseMetadata,
+      input_excerpt: excerpt(prompt),
+      output_excerpt: excerpt(result.text),
+    };
     const step = steps.createStep(this.sqlite, {
       thread_id: ctx.thread_id ?? null,
       session_id: ctx.session_id,
@@ -56,8 +65,14 @@ export class TrackedLLM {
       cost_usd: cost,
       duration_ms: Date.now() - startTime,
       label: ctx.label,
-      metadata: ctx.metadata ?? null,
+      metadata,
     });
     return { ...result, cost, stepId: step.id };
   }
+}
+
+const EXCERPT_MAX = 1500;
+function excerpt(s: string): string {
+  if (s.length <= EXCERPT_MAX) return s;
+  return s.slice(0, EXCERPT_MAX) + '…';
 }

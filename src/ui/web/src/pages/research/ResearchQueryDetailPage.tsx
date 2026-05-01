@@ -1530,6 +1530,25 @@ function stepChips(s: ResearchStep): Chip[] {
       if (!(m.accepted as boolean)) {
         chips.push({ text: 'rejected', color: 'text-error/70' });
       }
+    } else if (m.decision === 'pick_role') {
+      // Session-scope: agent role selection. Surface the picked role as a chip.
+      const roleLabel = typeof m.role_label === 'string' ? m.role_label : null;
+      if (roleLabel) chips.push({ text: roleLabel, color: 'text-purple-400' });
+    }
+  }
+  // Generic fallback for utility LLM calls that don't set a decision but DO
+  // capture an output excerpt (pick role, restate prompt, short title, query
+  // title — anything that goes through TrackedLLM). Show a short outcome chip
+  // so the row isn't visually empty.
+  if (!m?.decision || m.decision === 'pick_role') {
+    const out = m && typeof m.output_excerpt === 'string' ? m.output_excerpt : null;
+    if (out && out.trim()) {
+      const trimmed = out.trim().replace(/\s+/g, ' ');
+      const display = trimmed.length > 60 ? trimmed.slice(0, 60) + '…' : trimmed;
+      // Don't double up if pick_role already pushed the role label chip.
+      if (m?.decision !== 'pick_role') {
+        chips.push({ text: display, color: 'text-text-secondary' });
+      }
     }
   }
   return chips;
@@ -2525,6 +2544,38 @@ function EventsView({
                             );
                           }
                           return null;
+                        })()}
+                        {/* Generic input/output excerpt rendering for steps that
+                            don't have a decision-specific block (TrackedLLM
+                            captures these for every call). Skips steps where a
+                            decision-block already rendered, to avoid duplication. */}
+                        {(() => {
+                          const m = s.metadata;
+                          if (!m) return null;
+                          const hasDecisionBlock = m.decision === 'gap_analysis' || m.decision === 'synthesis'
+                            || m.decision === 'dedup' || m.decision === 'follow_up_eval'
+                            || m.decision === 'formulate_queries' || m.decision === 'extract_concepts'
+                            || m.decision === 'summarize_thread';
+                          if (hasDecisionBlock) return null;
+                          const input = typeof m.input_excerpt === 'string' ? m.input_excerpt : null;
+                          const output = typeof m.output_excerpt === 'string' ? m.output_excerpt : null;
+                          if (!input && !output) return null;
+                          return (
+                            <div className="space-y-1 text-sm mt-1">
+                              {input && (
+                                <div className="space-y-0.5">
+                                  <p className="text-text-muted text-sm font-mono">prompt</p>
+                                  <p className="text-text-secondary whitespace-pre-wrap break-words">{input}</p>
+                                </div>
+                              )}
+                              {output && (
+                                <div className="space-y-0.5">
+                                  <p className="text-text-muted text-sm font-mono">result</p>
+                                  <p className="text-text-primary whitespace-pre-wrap break-words">{output}</p>
+                                </div>
+                              )}
+                            </div>
+                          );
                         })()}
                         {s.error && (
                           <div className="mt-1 p-2 rounded bg-error/8 border border-error/20">

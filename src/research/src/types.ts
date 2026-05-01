@@ -131,7 +131,10 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
   diminishing_returns_window: 20,
   min_delay_between_steps_ms: 8000,
   max_steps_per_hour: 30,
-  max_concurrent_threads: 3,
+  // Capped at the worker pool size (default 8). Burst session-jobs only run
+  // the seed thread; everything else fans out as thread-jobs that workers
+  // claim in parallel, so this is the real per-session parallelism cap.
+  max_concurrent_threads: 8,
   // DeepSeek v3.2 — non-reasoning chat model. Output cost is half of v3
   // ($0.378 vs $0.77), input slightly higher ($0.252 vs $0.20). Net win
   // because output dominates our token mix. v4 family is reasoning-only
