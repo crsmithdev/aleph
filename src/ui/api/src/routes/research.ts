@@ -34,6 +34,7 @@ import {
   // Agent-hook records
   listIterationChecks, listPostMortems,
   pickAgentRole,
+  TrackedLLM,
 } from '@construct/research';
 
 function sanitizeQuery(q: string): string {
@@ -79,73 +80,50 @@ function placeholderShortQuery(query: string): string {
   return t.slice(0, MAX) + '…';
 }
 
-async function generatePromptShort(query: string): Promise<string | null> {
-  const openrouterKey = process.env.OPENROUTER_API_KEY;
-  if (!openrouterKey) return null;
+// Helpers for the small one-shot LLM calls fired at session creation. They go
+// through TrackedLLM so each call records a research_steps row + emits a step
+// SSE event automatically — no separate "log it too" step at the call site.
+
+async function generatePromptShort(llm: TrackedLLM, sessionId: string, model: string, query: string): Promise<string | null> {
   try {
-    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${openrouterKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'deepseek/deepseek-chat',
-        messages: [{ role: 'user', content: `Restate this research question as a single clear sentence. Return ONLY the sentence, no quotes:\n\n${query}` }],
-        max_tokens: 60,
-      }),
-    });
-    if (resp.ok) {
-      const data = await resp.json() as { choices: Array<{ message: { content: string } }> };
-      const result = data.choices[0]?.message?.content?.trim().replace(/^["']|["']$/g, '');
-      if (result && result.length <= 200) return result;
-    }
+    const result = await llm.complete(
+      { session_id: sessionId, thread_id: null, label: 'restate prompt' },
+      model,
+      `Restate this research question as a single clear sentence. Return ONLY the sentence, no quotes:\n\n${query}`,
+      60,
+    );
+    const out = result.text.trim().replace(/^["']|["']$/g, '');
+    if (out && out.length <= 200) return out;
   } catch { /* fall through */ }
   return null;
 }
 
-async function generateShortQuery(query: string): Promise<string | null> {
-  const openrouterKey = process.env.OPENROUTER_API_KEY;
-  if (!openrouterKey) return null;
+async function generateShortQuery(llm: TrackedLLM, sessionId: string, model: string, query: string): Promise<string | null> {
   try {
-    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${openrouterKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'deepseek/deepseek-chat',
-        messages: [{ role: 'user', content: `Give a short conceptual section title (1-5 words) for this research topic. Like a Wikipedia section heading — a noun phrase, not a question. No quotes, no punctuation. Return ONLY the title:\n\n${query}` }],
-        max_tokens: 20,
-      }),
-    });
-    if (resp.ok) {
-      const data = await resp.json() as { choices: Array<{ message: { content: string } }> };
-      const summary = data.choices[0]?.message?.content?.trim().replace(/^["']|["']$/g, '');
-      if (summary && summary.length <= 60) return summary;
-    }
+    const result = await llm.complete(
+      { session_id: sessionId, thread_id: null, label: 'short title' },
+      model,
+      `Give a short conceptual section title (1-5 words) for this research topic. Like a Wikipedia section heading — a noun phrase, not a question. No quotes, no punctuation. Return ONLY the title:\n\n${query}`,
+      20,
+    );
+    const out = result.text.trim().replace(/^["']|["']$/g, '');
+    if (out && out.length <= 60) return out;
   } catch { /* fall through */ }
   return null;
 }
 
-async function generateQueryTitle(prompt: string): Promise<string> {
-  const openrouterKey = process.env.OPENROUTER_API_KEY;
+async function generateQueryTitle(llm: TrackedLLM, sessionId: string, model: string, prompt: string): Promise<string> {
   const heuristic = summarizeQuery(prompt);
-
-  if (!openrouterKey) return heuristic;
-
   try {
-    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${openrouterKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'deepseek/deepseek-chat',
-        messages: [{ role: 'user', content: `Give a short title (5-8 words) for this research query. Return ONLY the title, no quotes, no punctuation at end:\n\n${prompt}` }],
-        max_tokens: 30,
-      }),
-    });
-    if (resp.ok) {
-      const data = await resp.json() as { choices: Array<{ message: { content: string } }> };
-      const title = data.choices[0]?.message?.content?.trim();
-      if (title) return title;
-    }
+    const result = await llm.complete(
+      { session_id: sessionId, thread_id: null, label: 'query title' },
+      model,
+      `Give a short title (5-8 words) for this research query. Return ONLY the title, no quotes, no punctuation at end:\n\n${prompt}`,
+      30,
+    );
+    const title = result.text.trim();
+    if (title) return title;
   } catch { /* fall through to heuristic */ }
-
   return heuristic;
 }
 
@@ -260,45 +238,53 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
         max_depth: query.config.max_thread_depth,
         status: query.config.max_thread_depth > 0 ? 'queued' : 'deferred',
       });
-      // Fire async LLM summarization for the seed thread
-      generateShortQuery(prompt).then(summary => {
-        if (summary) updateThread(app.sqlite, seedThread.id, { short_query: summary });
-      }).catch(() => { /* ignore */ });
-      // Fire async LLM title generation (don't await — return immediately)
-      generateQueryTitle(prompt).then(llmTitle => {
-        if (llmTitle !== query.title) {
-          updateQuery(app.sqlite, query.id, { title: llmTitle });
-        }
-      }).catch(() => { /* ignore */ });
-      // Fire async LLM short/super-short generation for the query itself
-      generatePromptShort(prompt).then(short => {
-        if (short) updateQuery(app.sqlite, query.id, { prompt_short: short });
-      }).catch(() => { /* ignore */ });
-      generateShortQuery(prompt).then(superShort => {
-        if (superShort) updateQuery(app.sqlite, query.id, { prompt_super_short: superShort });
-      }).catch(() => { /* ignore */ });
+      // Build a tracked LLM ONCE for the session-creation fan-out. Every
+      // .complete() through it auto-records a research_steps row + emits a
+      // step SSE event, so the title/role/short-query calls show up in the
+      // events log without per-call wiring.
+      const openrouterKey = process.env.OPENROUTER_API_KEY;
+      const utilityModel = query.config.model_fast ?? query.config.model;
+      const llm = openrouterKey
+        ? new TrackedLLM(
+            new OpenRouterProvider({ apiKey: openrouterKey, models: [utilityModel] }),
+            app.sqlite,
+          )
+        : null;
 
-      // Role priming (GPT-Researcher style): if enabled and not already set,
-      // pick a domain agent role asynchronously and patch the config so
-      // downstream LLM calls inherit a system-prompt floor.
-      if (query.config.role_priming_enabled && !query.config.role_prompt && process.env.OPENROUTER_API_KEY) {
-        (async () => {
-          try {
-            const provider = new OpenRouterProvider({
-              apiKey: process.env.OPENROUTER_API_KEY!,
-              models: [query.config.model],
-            });
-            const role = await pickAgentRole(provider, query.config.model, prompt);
-            if (role) {
-              updateQuery(app.sqlite, query.id, {
-                config: { role_label: role.label, role_prompt: role.prompt },
-              });
-              console.log(`[research] picked agent role for ${query.id}: ${role.label}`);
-            }
-          } catch (err) {
-            console.warn(`[research] pickAgentRole failed for ${query.id}:`, err);
+      if (llm) {
+        // Fire-and-forget: each call auto-logs as a step.
+        generateShortQuery(llm, query.id, utilityModel, prompt).then(summary => {
+          if (summary) updateThread(app.sqlite, seedThread.id, { short_query: summary });
+        }).catch(() => { /* ignore */ });
+        generateQueryTitle(llm, query.id, utilityModel, prompt).then(llmTitle => {
+          if (llmTitle !== query.title) {
+            updateQuery(app.sqlite, query.id, { title: llmTitle });
           }
-        })();
+        }).catch(() => { /* ignore */ });
+        generatePromptShort(llm, query.id, utilityModel, prompt).then(short => {
+          if (short) updateQuery(app.sqlite, query.id, { prompt_short: short });
+        }).catch(() => { /* ignore */ });
+        generateShortQuery(llm, query.id, utilityModel, prompt).then(superShort => {
+          if (superShort) updateQuery(app.sqlite, query.id, { prompt_super_short: superShort });
+        }).catch(() => { /* ignore */ });
+
+        // Role priming (GPT-Researcher style): pick a domain agent role and
+        // patch the config so downstream LLM calls inherit a system-prompt floor.
+        if (query.config.role_priming_enabled && !query.config.role_prompt) {
+          (async () => {
+            try {
+              const role = await pickAgentRole(llm, query.id, query.config.model, prompt);
+              if (role) {
+                updateQuery(app.sqlite, query.id, {
+                  config: { role_label: role.label, role_prompt: role.prompt },
+                });
+                console.log(`[research] picked agent role for ${query.id}: ${role.label}`);
+              }
+            } catch (err) {
+              console.warn(`[research] pickAgentRole failed for ${query.id}:`, err);
+            }
+          })();
+        }
       }
 
       // Auto-create a burst job so workers pick it up immediately
@@ -473,6 +459,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       }
       const stepsByThread = new Map<string, typeof steps>();
       for (const s of steps) {
+        if (s.thread_id === null) continue; // session-scope steps don't belong to any thread
         if (!stepsByThread.has(s.thread_id)) stepsByThread.set(s.thread_id, []);
         stepsByThread.get(s.thread_id)!.push(s);
       }
@@ -750,10 +737,20 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
         priority: priority ?? 0.8,
         max_depth,
       });
-      // Fire async LLM summarization
-      generateShortQuery(query).then(summary => {
-        if (summary) updateThread(app.sqlite, thread.id, { short_query: summary });
-      }).catch(() => { /* ignore */ });
+      // Fire async LLM summarization. Goes through TrackedLLM so the call shows
+      // up in the events log automatically.
+      const session = getQuery(app.sqlite, req.params.id);
+      const openrouterKey = process.env.OPENROUTER_API_KEY;
+      if (session && openrouterKey) {
+        const utilityModel = session.config.model_fast ?? session.config.model;
+        const llm = new TrackedLLM(
+          new OpenRouterProvider({ apiKey: openrouterKey, models: [utilityModel] }),
+          app.sqlite,
+        );
+        generateShortQuery(llm, req.params.id, utilityModel, query).then(summary => {
+          if (summary) updateThread(app.sqlite, thread.id, { short_query: summary });
+        }).catch(() => { /* ignore */ });
+      }
       return reply.status(201).send(thread);
     }
   );

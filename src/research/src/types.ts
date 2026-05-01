@@ -327,7 +327,8 @@ export interface Source {
 
 export interface ResearchStep {
   id: string;
-  thread_id: string;
+  /** Null for session-scope steps (role pick, title gen, hooks) — they have no thread. */
+  thread_id: string | null;
   session_id: string;
   finding_id: string | null;
   model: string;

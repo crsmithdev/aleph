@@ -12,6 +12,7 @@ import * as sessions from './services/queries.js';
 import * as threads from './services/threads.js';
 import * as findings from './services/findings.js';
 import * as steps from './services/steps.js';
+import { TrackedLLM, type CallContext } from './services/llm.js';
 import * as plans from './services/plans.js';
 import * as steering from './services/steering.js';
 import * as concepts from './services/concepts.js';
@@ -72,9 +73,13 @@ export function classify(s: string): 'question' | 'topic' {
  *  auto_agent_instructions. Returns the role label + a system-prompt body
  *  used as a "voice floor" on answer-shaping LLM calls (synthesis, document,
  *  follow-up framing). Returns null on parse/network failure — callers should
- *  treat that as "no role priming" and proceed unchanged. */
+ *  treat that as "no role priming" and proceed unchanged.
+ *
+ *  Records a session-scope step (label='pick role') automatically via the
+ *  TrackedLLM wrapper, so the call is visible in the events log. */
 export async function pickAgentRole(
-  provider: LLMProvider,
+  llm: TrackedLLM,
+  sessionId: string,
   model: string,
   query: string,
 ): Promise<{ label: string; prompt: string } | null> {
@@ -88,7 +93,12 @@ Return ONLY a JSON object on a single line, no prose, no code fences:
 {"label": "...", "prompt": "You are a ... You ..."}`;
 
   try {
-    const result = await provider.complete(model, instruction, 256);
+    const result = await llm.complete(
+      { session_id: sessionId, thread_id: null, label: 'pick role' },
+      model,
+      instruction,
+      256,
+    );
     const stripped = stripLLMFences(result.text).trim();
     const start = stripped.indexOf('{');
     const end = stripped.lastIndexOf('}');
@@ -98,6 +108,9 @@ Return ONLY a JSON object on a single line, no prose, no code fences:
     const label = obj.label.trim().slice(0, 60);
     const prompt = obj.prompt.trim().slice(0, 800);
     if (!label || !prompt) return null;
+    // Attach the picked role to the step's metadata so the events log shows
+    // what was decided (label is the headline, prompt is on expansion).
+    steps.updateStepMetadata(llm.sqlite, result.stepId, { decision: 'pick_role', role_label: label, role_prompt: prompt });
     return { label, prompt };
   } catch {
     return null;
@@ -125,7 +138,7 @@ function placeholderShortQuery(query: string): string {
   return t.slice(0, MAX) + '…';
 }
 
-function calculateCost(model: string, promptTokens: number, completionTokens: number): number {
+export function calculateCost(model: string, promptTokens: number, completionTokens: number): number {
   // Provider responses sometimes carry dated SKU suffixes (e.g.
   // "deepseek/deepseek-v3.2-20251201"). Strip a trailing "-YYYYMMDD" so the
   // pricing table doesn't need to track every dated re-release.
@@ -320,6 +333,7 @@ export class AnthropicProvider implements LLMProvider {
 export class ResearchEngine {
   private sqlite: Sqlite;
   private provider: LLMProvider;
+  private tracked: TrackedLLM;
   private maxIterations: number;
   private onIteration?: EngineOptions['onIteration'];
   private onError?: EngineOptions['onError'];
@@ -329,6 +343,7 @@ export class ResearchEngine {
   constructor(opts: EngineOptions) {
     this.sqlite = opts.sqlite;
     this.provider = opts.provider ?? new AnthropicProvider(opts.apiKey!);
+    this.tracked = new TrackedLLM(this.provider, this.sqlite);
     this.maxIterations = opts.maxIterations ?? Infinity;
     this.onIteration = opts.onIteration;
     this.onError = opts.onError;
@@ -2292,7 +2307,6 @@ Write the full article in markdown.`,
     label?: string,
     opts?: { bypassRole?: boolean; systemPromptOverride?: string | null; fast?: boolean }
   ): Promise<LLMResult & { cost: number; stepId: string | null }> {
-    const startTime = Date.now();
     // Layering rule: callers can opt out (perturbation, judges, structural extractors)
     // or override (pickAgentRole uses its own system prompt).
     let systemPrompt: string | null | undefined;
@@ -2307,26 +2321,22 @@ Write the full article in markdown.`,
     // Falls back to the requested model if model_fast is unset, so callers
     // never need to branch on its presence.
     const effectiveModel = opts?.fast && config.model_fast ? config.model_fast : model;
-    const result = await this.provider.complete(effectiveModel, prompt, config.llm_max_output_tokens, systemPrompt);
-
-    const cost = calculateCost(result.model, result.promptTokens, result.completionTokens);
-
-    let stepId: string | null = null;
-    if (sessionId && threadId) {
-      const step = steps.createStep(this.sqlite, {
-        thread_id: threadId,
-        session_id: sessionId,
-        model: result.model,
-        prompt_tokens: result.promptTokens,
-        completion_tokens: result.completionTokens,
-        cost_usd: cost,
-        label: label ?? null,
-        duration_ms: Date.now() - startTime,
-      });
-      stepId = step.id;
+    if (!sessionId) {
+      // No session context: rare path used by ad-hoc utility calls. Fall back
+      // to raw provider — no step recorded (nothing to attach it to).
+      const result = await this.provider.complete(effectiveModel, prompt, config.llm_max_output_tokens, systemPrompt);
+      const cost = calculateCost(result.model, result.promptTokens, result.completionTokens);
+      return { ...result, cost, stepId: null };
     }
-
-    return { ...result, cost, stepId };
+    const ctx: CallContext = {
+      session_id: sessionId,
+      // Some callers pass an empty string for session-scope work (updateSummary,
+      // updateDocument, generateLeadSection); coerce to null so the FK is happy.
+      thread_id: threadId || null,
+      label: label ?? 'llm',
+    };
+    const out = await this.tracked.complete(ctx, effectiveModel, prompt, config.llm_max_output_tokens, { systemPrompt });
+    return { ...out, stepId: out.stepId };
   }
 
   /** After a source is extracted, re-run concept extraction for each finding that

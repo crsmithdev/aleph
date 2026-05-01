@@ -1709,6 +1709,7 @@ function LiveView({
     const map = new Map<string, ResearchStep[]>();
     const seen = new Set<string>();
     for (const s of allSteps) {
+      if (s.thread_id === null) continue; // session-scope steps don't bucket under a thread
       const arr = map.get(s.thread_id) ?? [];
       arr.push(s);
       map.set(s.thread_id, arr);
@@ -1717,6 +1718,7 @@ function LiveView({
     for (const e of events) {
       if (e.type !== 'step') continue;
       if (seen.has(e.payload.id)) continue;
+      if (e.payload.thread_id === null) continue;
       const arr = map.get(e.payload.thread_id) ?? [];
       arr.push(e.payload);
       map.set(e.payload.thread_id, arr);

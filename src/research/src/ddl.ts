@@ -86,7 +86,9 @@ export function applyResearchDDL(sqlite: Sqlite): void {
 
     CREATE TABLE IF NOT EXISTS research_steps (
       id TEXT PRIMARY KEY,
-      thread_id TEXT NOT NULL REFERENCES research_threads(id) ON DELETE CASCADE,
+      -- thread_id is nullable so session-scope LLM calls (role pick, title gen,
+      -- hooks running outside any thread) can record a step automatically.
+      thread_id TEXT REFERENCES research_threads(id) ON DELETE CASCADE,
       session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
       finding_id TEXT REFERENCES research_findings(id) ON DELETE SET NULL,
       model TEXT NOT NULL,
@@ -352,6 +354,54 @@ export function applyResearchDDL(sqlite: Sqlite): void {
   try { sqlite.exec(`ALTER TABLE research_steps ADD COLUMN metadata TEXT`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_steps ADD COLUMN error_kind TEXT`); } catch { /* exists */ }
   try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_rs_session_error_kind ON research_steps(session_id, error_kind) WHERE error_kind IS NOT NULL`); } catch { /* exists */ }
+
+  // Rebuild research_steps to make thread_id nullable. Session-scope LLM calls
+  // (role pick, title generation, post-mortem/iteration-check hooks) have no
+  // thread, so they previously bypassed step recording entirely. SQLite has no
+  // ALTER COLUMN, so we use the standard new-table → copy → rename dance, but
+  // only when the existing column is still NOT NULL.
+  try {
+    const cols = sqlite.prepare("PRAGMA table_info(research_steps)").all() as Array<{ name: string; notnull: number }>;
+    const threadIdCol = cols.find(c => c.name === 'thread_id');
+    if (threadIdCol && threadIdCol.notnull === 1) {
+      sqlite.exec(`
+        CREATE TABLE research_steps_new (
+          id TEXT PRIMARY KEY,
+          thread_id TEXT REFERENCES research_threads(id) ON DELETE CASCADE,
+          session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
+          finding_id TEXT REFERENCES research_findings(id) ON DELETE SET NULL,
+          model TEXT NOT NULL,
+          provider TEXT NOT NULL DEFAULT 'openrouter',
+          prompt_tokens INTEGER NOT NULL DEFAULT 0,
+          completion_tokens INTEGER NOT NULL DEFAULT 0,
+          cost_usd REAL NOT NULL DEFAULT 0,
+          tool_calls TEXT NOT NULL DEFAULT '[]',
+          duration_ms INTEGER NOT NULL DEFAULT 0,
+          error TEXT,
+          error_kind TEXT,
+          label TEXT,
+          metadata TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        INSERT INTO research_steps_new (
+          id, thread_id, session_id, finding_id, model, provider,
+          prompt_tokens, completion_tokens, cost_usd, tool_calls, duration_ms,
+          error, error_kind, label, metadata, created_at
+        ) SELECT
+          id, thread_id, session_id, finding_id, model, provider,
+          prompt_tokens, completion_tokens, cost_usd, tool_calls, duration_ms,
+          error, error_kind, label, metadata, created_at
+        FROM research_steps;
+        DROP TABLE research_steps;
+        ALTER TABLE research_steps_new RENAME TO research_steps;
+        CREATE INDEX IF NOT EXISTS idx_rs_session_created ON research_steps(session_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_rs_session_error_kind ON research_steps(session_id, error_kind) WHERE error_kind IS NOT NULL;
+      `);
+      console.log('[ddl] migrated research_steps.thread_id to nullable');
+    }
+  } catch (err) {
+    console.warn('[ddl] research_steps.thread_id nullable migration skipped:', err);
+  }
   // applied_at on plan mods so boost/deprioritize priority-deltas don't re-apply every engine loop.
   try { sqlite.exec(`ALTER TABLE research_plan_modifications ADD COLUMN applied_at TEXT`); } catch { /* exists */ }
 

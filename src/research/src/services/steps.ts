@@ -16,7 +16,8 @@ function rowToStep(row: Record<string, unknown>): ResearchStep {
 export function createStep(
   sqlite: Sqlite,
   params: {
-    thread_id: string;
+    /** Null for session-scope LLM calls that don't belong to a thread. */
+    thread_id: string | null;
     session_id: string;
     finding_id?: string | null;
     model: string;

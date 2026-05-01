@@ -1,6 +1,8 @@
 export { applyResearchDDL } from './ddl.js';
 export * from './types.js';
 export { ResearchEngine, AnthropicProvider, pickAgentRole } from './engine.js';
+export { TrackedLLM } from './services/llm.js';
+export type { CallContext } from './services/llm.js';
 export type { EngineOptions, LLMProvider, LLMResult, WebSearchResult } from './engine.js';
 export * from './services/queries.js';
 export { getDefaults, updateDefaults, resetDefaults } from './services/defaults.js';
