@@ -121,7 +121,9 @@ export async function createApp(opts?: { dbUrl?: string; workerCount?: number; s
   const eventBus = new EventBus();
   app.decorate('eventBus', eventBus);
 
-  const workerCount = opts?.workerCount ?? parseInt(process.env.WORKER_COUNT || '3', 10);
+  // Default 8 workers — 24-core machines have plenty of headroom; the
+  // real ceiling is provider rate-limit, not CPU. Override via WORKER_COUNT.
+  const workerCount = opts?.workerCount ?? parseInt(process.env.WORKER_COUNT || '8', 10);
   const supervisor = new WorkerSupervisor(workerCount);
   app.decorate('supervisor', supervisor);
 

@@ -17,7 +17,9 @@ import { hasHooks } from './hooks/registry.js';
 
 const ITERATION_CHECK_INTERVAL = 5;
 
-const POLL_INTERVAL_MS = 5_000;
+// Poll cadence for picking up newly-queued jobs. Dropped from 5s → 1s
+// to reduce thread-claim latency; cost is one cheap SELECT/sec/worker.
+const POLL_INTERVAL_MS = 1_000;
 const HEARTBEAT_INTERVAL_MS = 60_000;
 
 const workerId = `worker-${process.pid}-${Date.now()}`;
@@ -430,8 +432,8 @@ while (!shutdownRequested) {
     if (process.env.JINA_API_KEY) {
       try {
         const r = await drainPendingSources(sqlite, {
-          batchSize: 5,
-          concurrency: 3,
+          batchSize: 10,
+          concurrency: 8,
           onExtracted: async (source) => {
             // Re-run concept extraction for findings citing this URL with the
             // newly-available full text as context. Build a per-session engine

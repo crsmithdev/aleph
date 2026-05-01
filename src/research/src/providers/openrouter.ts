@@ -10,12 +10,17 @@ export interface OpenRouterConfig {
 
 const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 
-// OpenRouter model metadata: pricing per 1M tokens + context window size
+// OpenRouter model metadata: pricing per 1M tokens + context window size.
+// Pricing refreshed May 2026; mirror types.ts MODEL_PRICING.
 const OPENROUTER_MODELS: Record<string, { input: number; output: number; contextWindow: number }> = {
-  'deepseek/deepseek-chat':                          { input: 0.14, output: 0.28, contextWindow: 32768 },
+  'deepseek/deepseek-chat':                          { input: 0.32, output: 0.89, contextWindow: 163840 },
   'deepseek/deepseek-r1-0528':                       { input: 0.50, output: 2.19, contextWindow: 65536 },
   'google/gemini-2.0-flash-001':                     { input: 0.10, output: 0.40, contextWindow: 1048576 },
-  'meta-llama/llama-3.3-70b-instruct':               { input: 0.39, output: 0.39, contextWindow: 131072 },
+  'google/gemini-2.5-flash':                         { input: 0.30, output: 2.50, contextWindow: 1048576 },
+  'openai/gpt-5-nano':                               { input: 0.05, output: 0.40, contextWindow: 400000 },
+  'openai/gpt-4.1-mini':                             { input: 0.40, output: 1.60, contextWindow: 1048576 },
+  'meta-llama/llama-3.3-70b-instruct':               { input: 0.10, output: 0.32, contextWindow: 131072 },
+  'anthropic/claude-haiku-4.5':                      { input: 1.00, output: 5.00, contextWindow: 200000 },
   'qwen/qwen-2.5-72b-instruct':                      { input: 0.13, output: 0.40, contextWindow: 131072 },
   'mistralai/mixtral-8x7b-instruct':                 { input: 0.24, output: 0.24, contextWindow: 32768  },
   // Free tier models (no credit cost, subject to rate limits — use rotation)

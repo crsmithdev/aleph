@@ -1509,6 +1509,16 @@ function stepChips(s: ResearchStep): Chip[] {
     } else if (m.decision === 'follow_up_eval') {
       chips.push({ text: `${m.accepted_count as number}✓`, color: 'text-success' });
       chips.push({ text: `${m.rejected_count as number}✗`, color: 'text-error/70' });
+      // Surface which similarity method resolved each candidate so the events
+      // view shows when the cheap jaccard pre-filter saved an LLM judge call.
+      const mc = m.method_counts as Record<string, number> | undefined;
+      if (mc) {
+        const parts: string[] = [];
+        if (mc.jaccard) parts.push(`${mc.jaccard}j`);
+        if (mc.embedding) parts.push(`${mc.embedding}e`);
+        if (mc.llm) parts.push(`${mc.llm}L`);
+        if (parts.length) chips.push({ text: parts.join('·'), color: 'text-text-muted' });
+      }
     } else if (m.decision === 'formulate_queries') {
       chips.push({ text: `${(m.queries as string[]).length} queries`, color: 'text-blue-400' });
     } else if (m.decision === 'extract_concepts') {

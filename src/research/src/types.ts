@@ -57,6 +57,10 @@ export interface SessionConfig {
     hop_similarity_min: number;   // 0 = disabled; min jaccard similarity to parent thread query
   };
   model: string;
+  /** Cheap, fast model for short utility calls (YES/NO judges, dedup, thread
+   *  titles, perturbation query gen). Defaults to model when null. Step rows
+   *  record the actual model used so the events view shows fast vs primary. */
+  model_fast?: string | null;
   providers: {
     primary: 'openrouter';
     openrouter_models: string[];
@@ -129,6 +133,7 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
   max_steps_per_hour: 30,
   max_concurrent_threads: 3,
   model: 'deepseek/deepseek-chat',
+  model_fast: 'google/gemini-2.0-flash-001',
   providers: {
     primary: 'openrouter',
     openrouter_models: [
@@ -500,10 +505,22 @@ export interface ResearchJob {
 }
 
 // Cost calculation constants (per 1M tokens)
+// Per-1M-token pricing in USD. Keep aligned with provider catalogs; stale
+// entries silently undercount cost telemetry. Consulted: openrouter.ai/pricing
+// + costgoat.com/pricing/openrouter (May 2026).
 export const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  // Anthropic direct
   'claude-sonnet-4-6': { input: 3.0, output: 15.0 },
   'claude-haiku-4-5': { input: 0.80, output: 4.0 },
   'claude-opus-4-6': { input: 15.0, output: 75.0 },
-  'deepseek/deepseek-chat': { input: 0.27, output: 1.10 },
-  'deepseek/deepseek-chat-v3': { input: 0.27, output: 1.10 },
+  // DeepSeek (current default for reasoning-grade synthesis)
+  'deepseek/deepseek-chat': { input: 0.32, output: 0.89 },
+  'deepseek/deepseek-chat-v3': { input: 0.32, output: 0.89 },
+  // Cheap fast models for judges/dedup/titles
+  'google/gemini-2.0-flash-001': { input: 0.10, output: 0.40 },
+  'google/gemini-2.5-flash': { input: 0.30, output: 2.50 },
+  'openai/gpt-5-nano': { input: 0.05, output: 0.40 },
+  'openai/gpt-4.1-mini': { input: 0.40, output: 1.60 },
+  'meta-llama/llama-3.3-70b-instruct': { input: 0.10, output: 0.32 },
+  'anthropic/claude-haiku-4.5': { input: 1.00, output: 5.00 },
 };

@@ -131,6 +131,25 @@ function calculateCost(model: string, promptTokens: number, completionTokens: nu
   return (promptTokens * pricing.input + completionTokens * pricing.output) / 1_000_000;
 }
 
+/** Run async map with bounded concurrency. Order of `results` matches input. */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (true) {
+      const i = cursor++;
+      if (i >= items.length) return;
+      results[i] = await fn(items[i], i);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 export function isCovered(threadFindings: ResearchFinding[]): boolean {
   if (threadFindings.length < 3) return false;
   const avgConf = threadFindings.reduce((s, f) => s + f.confidence, 0) / threadFindings.length;
@@ -422,6 +441,7 @@ export class ResearchEngine {
             duration_ms: 0,
             error: err.message,
             error_kind: kind,
+            label: 'iteration error',
           });
 
           const isRateLimit = isTransientError(kind);
@@ -532,6 +552,7 @@ export class ResearchEngine {
         duration_ms: 0,
         error: err.message,
         error_kind: kind,
+        label: 'thread error',
       });
 
       const isRateLimit = isTransientError(kind);
@@ -616,6 +637,7 @@ export class ResearchEngine {
         cost_usd: 0,
         duration_ms: Date.now() - startTime,
         error: 'No search results returned',
+        label: 'empty search',
       });
       return { finding: null, cost: 0 };
     }
@@ -635,23 +657,33 @@ export class ResearchEngine {
       thread, searchResults, synthesisResult, config
     );
     const lastFollowUpStep = steps.getLatestStepByLabel(this.sqlite, thread.id, 'evaluate follow-ups');
-    if (lastFollowUpStep) steps.updateStepMetadata(this.sqlite, lastFollowUpStep.id, {
-      decision: 'follow_up_eval',
-      accepted_count: followUpQuestions.length,
-      rejected_count: followUpAnalysis.candidates.filter((c: { accepted: boolean }) => !c.accepted).length,
-      retry_count: followUpAnalysis.retry_count,
-      similarity_threshold: followUpAnalysis.similarity_threshold,
-      candidates: followUpAnalysis.candidates.map((c: {
-        text: string; accepted: boolean; rejection_reason: string | null;
-        dedup_similarity: number; rank_score: number;
-      }) => ({
-        text: c.text.slice(0, 120),
-        accepted: c.accepted,
-        reason: c.rejection_reason,
-        sim: Math.round(c.dedup_similarity * 100) / 100,
-        rank: Math.round(c.rank_score * 100) / 100,
-      })),
-    });
+    if (lastFollowUpStep) {
+      // Roll up which similarity methods resolved each pair so the events view
+      // can show the jaccard / embedding / llm split.
+      const methodCounts: Record<string, number> = { jaccard: 0, embedding: 0, llm: 0 };
+      for (const c of followUpAnalysis.candidates) {
+        methodCounts[c.similarity_method] = (methodCounts[c.similarity_method] ?? 0) + 1;
+      }
+      steps.updateStepMetadata(this.sqlite, lastFollowUpStep.id, {
+        decision: 'follow_up_eval',
+        accepted_count: followUpQuestions.length,
+        rejected_count: followUpAnalysis.candidates.filter((c: { accepted: boolean }) => !c.accepted).length,
+        retry_count: followUpAnalysis.retry_count,
+        similarity_threshold: followUpAnalysis.similarity_threshold,
+        method_counts: methodCounts,
+        candidates: followUpAnalysis.candidates.map((c: {
+          text: string; accepted: boolean; rejection_reason: string | null;
+          dedup_similarity: number; rank_score: number; similarity_method: string;
+        }) => ({
+          text: c.text.slice(0, 120),
+          accepted: c.accepted,
+          reason: c.rejection_reason,
+          sim: Math.round(c.dedup_similarity * 100) / 100,
+          rank: Math.round(c.rank_score * 100) / 100,
+          method: c.similarity_method,
+        })),
+      });
+    }
 
     // Step 5: Store finding
     const finding = findings.createFinding(this.sqlite, {
@@ -681,14 +713,12 @@ export class ResearchEngine {
       }
     }
 
-    // Step 5b: Extract concepts from the finding and link them to this finding.
-    // Fire-and-forget is tempting, but doing it inline keeps the knowledge graph
-    // consistent with the document generator's next run.
-    try {
-      await this.extractConceptsForFinding(finding, thread, config);
-    } catch (err) {
+    // Step 5b: Extract concepts from the finding — non-blocking. The doc
+    // generator runs every 3 iterations and tolerates lag; backfillConcepts
+    // catches anything missed. Awaiting here was 24% of total LLM time.
+    this.extractConceptsForFinding(finding, thread, config).catch(err => {
       console.warn(`[concepts] extraction failed for ${finding.id}:`, err);
-    }
+    });
 
     // Step 5b: Spawn verify thread for low-confidence findings (non-recursive).
     // Skip if the verify child would land at/past max_depth — dead inventory.
@@ -929,6 +959,7 @@ Return ONLY a JSON array of search query strings. No other text.`,
           cost_usd: cost,
           tool_calls: [{ tool: 'web_search', input: { query }, output: result.text.slice(0, 2000), jina_fetches: result.jinaFetches }],
           duration_ms: Date.now() - startTime,
+          label: 'web search',
         });
 
         if (!result.text.trim()) return null;
@@ -965,6 +996,7 @@ Return ONLY a JSON array of search query strings. No other text.`,
           duration_ms: Date.now() - startTime,
           error: err.message,
           error_kind: classifyError(err.message),
+          label: 'web search (failed)',
         });
         return null;
       }
@@ -1367,11 +1399,11 @@ Return ONLY valid JSON. No markdown fences.`,
       const result = await this.callLLM(
         config.model,
         `Are these two research questions semantically equivalent or asking about the same thing?\nQ1: ${a}\nQ2: ${b}\nReply with only: YES or NO`,
-        '',
-        '',
+        thread.session_id,
+        thread.id,
         config,
-        undefined,
-        { bypassRole: true },
+        'dedup judge',
+        { bypassRole: true, fast: true },
       );
       return result.text.trim().toUpperCase().startsWith('YES') ? 1.0 : 0.0;
     };
@@ -1458,6 +1490,9 @@ Return ONLY valid JSON. No markdown fences.`,
           embeddingSim = result.embedding;
           llmSim = result.llm;
         }
+        // Short-circuit: once we know it's decisively above threshold, no
+        // need to scan the rest. Saves O(N) jaccards (and any LLM judges they'd trigger).
+        if (maxSimilarity >= threshold + 0.10) break;
       }
 
       const accepted = maxSimilarity < threshold;
@@ -1578,7 +1613,7 @@ Respond with ONLY "true" if this is a duplicate or near-duplicate, "false" other
       threadId,
       config,
       'dedup check',
-      { bypassRole: true },
+      { bypassRole: true, fast: true },
     );
 
     const isDuplicate = result.text.trim().toLowerCase() === 'true';
@@ -1701,8 +1736,8 @@ Return ONLY the search query text, nothing else.`,
       '',
       '',
       config,
-      undefined,
-      { bypassRole: true },
+      'perturbation query',
+      { bypassRole: true, fast: true },
     );
 
     const query = result.text.replace(/^["']|["']$/g, '').trim();
@@ -1974,20 +2009,21 @@ Return JSON only, no preamble.`;
     const missing = concepts.findingsMissingConcepts(this.sqlite, sessionId, batchSize);
     if (missing.length === 0) return 0;
 
+    // Parallel batch — concept extraction has no inter-finding dependency.
     let processed = 0;
-    for (const { id } of missing) {
-      if (this.signal?.aborted) break;
+    await mapWithConcurrency(missing, 8, async ({ id }) => {
+      if (this.signal?.aborted) return;
       const finding = findings.getFinding(this.sqlite, id);
-      if (!finding) continue;
+      if (!finding) return;
       const thread = threads.getThread(this.sqlite, finding.thread_id);
-      if (!thread) continue;
+      if (!thread) return;
       try {
         await this.extractConceptsForFinding(finding, thread, session.config);
         processed++;
       } catch (err) {
         console.warn(`[concepts] backfill failed for ${id}:`, err);
       }
-    }
+    });
     return processed;
   }
 
@@ -2047,12 +2083,18 @@ Write a concise, informative summary of what has been discovered so far, key the
     const citationIndex = buildCitationIndex(allFindings);
 
     const findingMap = new Map(allFindings.map(f => [f.id, f]));
-    const sectionBodies: string[] = [];
 
-    for (const c of topConcepts) {
+    // Lead section is independent of body sections — fire it in parallel
+    // with the per-concept fan-out. Await both at the end.
+    const leadPromise = this.generateLeadSection(sessionId, session.prompt, topConcepts, session.config);
+
+    // Parallel per-concept section generation with bounded concurrency.
+    // Sequential awaits were the dominant cost in updateDocument runs:
+    // ~260s for 10 concepts → ~50s with limit=6.
+    const sectionResults = await mapWithConcurrency(topConcepts, 6, async (c) => {
       const findingIds = concepts.listFindingsForConcept(this.sqlite, c.id);
       const conceptFindings = findingIds.map(id => findingMap.get(id)).filter((f): f is ResearchFinding => !!f);
-      if (conceptFindings.length === 0) continue;
+      if (conceptFindings.length === 0) return null;
 
       const material = conceptFindings.map(f => f.content).join('\n\n---\n\n');
       const conceptSources = concepts.getSourcesForConcept(this.sqlite, c.id);
@@ -2110,16 +2152,17 @@ Write only the section, starting with "## ${c.canonical_name}".`;
           session.config,
           `generate section: ${c.canonical_name}`,
         );
-        const normalized = ensureSectionCitations(result.text.trim(), citationNumbers);
-        sectionBodies.push(normalized);
+        return ensureSectionCitations(result.text.trim(), citationNumbers);
       } catch (err) {
         console.warn(`[doc] section failed for "${c.canonical_name}":`, err);
+        return null;
       }
-    }
+    });
 
+    const sectionBodies = sectionResults.filter((s): s is string => s !== null);
     if (sectionBodies.length === 0) return;
 
-    const lead = await this.generateLeadSection(sessionId, session.prompt, topConcepts, session.config);
+    const lead = await leadPromise;
     const bodyText = [lead, ...sectionBodies].filter(Boolean).join('\n\n');
     const referencesSection = buildReferencesSection(citationIndex, allFindings, bodyText);
     const doc = [bodyText, referencesSection].filter(Boolean).join('\n\n');
@@ -2220,7 +2263,7 @@ Write the full article in markdown.`,
       threadId,
       config,
       'summarize thread',
-      { bypassRole: true },
+      { bypassRole: true, fast: true },
     ).then(result => {
       const title = result.text.trim().replace(/^["']|["']$/g, '');
       const accepted = title && title.length <= 60;
@@ -2244,7 +2287,7 @@ Write the full article in markdown.`,
     threadId: string | null,
     config: SessionConfig,
     label?: string,
-    opts?: { bypassRole?: boolean; systemPromptOverride?: string | null }
+    opts?: { bypassRole?: boolean; systemPromptOverride?: string | null; fast?: boolean }
   ): Promise<LLMResult & { cost: number; stepId: string | null }> {
     const startTime = Date.now();
     // Layering rule: callers can opt out (perturbation, judges, structural extractors)
@@ -2257,7 +2300,11 @@ Write the full article in markdown.`,
     } else {
       systemPrompt = config.role_prompt ?? null;
     }
-    const result = await this.provider.complete(model, prompt, config.llm_max_output_tokens, systemPrompt);
+    // opts.fast routes to the cheap/fast utility model (config.model_fast).
+    // Falls back to the requested model if model_fast is unset, so callers
+    // never need to branch on its presence.
+    const effectiveModel = opts?.fast && config.model_fast ? config.model_fast : model;
+    const result = await this.provider.complete(effectiveModel, prompt, config.llm_max_output_tokens, systemPrompt);
 
     const cost = calculateCost(result.model, result.promptTokens, result.completionTokens);
 
