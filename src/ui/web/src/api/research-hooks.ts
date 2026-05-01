@@ -519,7 +519,7 @@ export const useResearchSession = useResearchQuery;
 export function useCreateResearchQuery() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { prompt: string; hints?: PromptHints; title?: string; config?: Record<string, unknown> }) =>
+    mutationFn: (data: { prompt: string; hints?: PromptHints; title?: string; mode?: 'live' | 'deep'; config?: Record<string, unknown> }) =>
       api.post<ResearchQuery>('/research/queries', data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['research-queries'] }),
   });
@@ -536,6 +536,20 @@ export function useUpdateResearchQuery() {
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ['research-queries'] });
       qc.invalidateQueries({ queryKey: ['research-queries', vars.id] });
+    },
+  });
+}
+
+/** Promote a paused/live session to long-lived. Clears the wall-clock cap,
+ *  widens limits back toward defaults, flips status to 'active'. */
+export function usePromoteResearchQuery() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.post<ResearchQuery>(`/research/queries/${id}/promote`, {}),
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: ['research-queries'] });
+      qc.invalidateQueries({ queryKey: ['research-queries', id] });
     },
   });
 }
@@ -1007,6 +1021,7 @@ export type StreamEvent = (
   | { type: 'step'; payload: ResearchStep }
   | { type: 'job'; payload: ResearchJob }
   | { type: 'session'; payload: StreamSessionEvent }
+  | { type: 'query'; payload: ResearchQuery }
 ) & { _seq?: number };
 
 // Cross-session: single multiplexed stream for workers page / global activity rail.
@@ -1079,6 +1094,8 @@ export function useResearchStream(sessionId: string, enabled = true) {
               return [...old, parsed.payload];
             }
           );
+        } else if (parsed.type === 'query') {
+          qc.setQueryData(['research-queries', sessionId], parsed.payload);
         }
 
         if (parsed.type !== 'job') {

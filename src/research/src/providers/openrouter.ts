@@ -36,12 +36,15 @@ export class OpenRouterProvider implements LLMProvider {
     this.config = config;
   }
 
-  async complete(model: string, prompt: string, maxTokens: number): Promise<LLMResult> {
+  async complete(model: string, prompt: string, maxTokens: number, systemPrompt?: string | null): Promise<LLMResult> {
     const contextWindow = OPENROUTER_MODELS[model]?.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
-    const truncatedPrompt = truncateToTokens(prompt, contextWindow - maxTokens - 200);
-    const response = await this.fetchWithRetry(model, [
-      { role: 'user', content: truncatedPrompt },
-    ], maxTokens);
+    // Reserve a small slice of the budget for the system prompt so we don't blow context.
+    const sysOverhead = systemPrompt ? Math.ceil(systemPrompt.length / 4) + 50 : 0;
+    const truncatedPrompt = truncateToTokens(prompt, contextWindow - maxTokens - 200 - sysOverhead);
+    const messages: Array<{ role: string; content: string }> = [];
+    if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
+    messages.push({ role: 'user', content: truncatedPrompt });
+    const response = await this.fetchWithRetry(model, messages, maxTokens);
     return {
       text: response.choices[0]?.message?.content ?? '',
       promptTokens: response.usage?.prompt_tokens ?? 0,

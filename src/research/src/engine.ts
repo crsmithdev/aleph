@@ -23,7 +23,7 @@ export interface SearchOptions {
 }
 
 export interface LLMProvider {
-  complete(model: string, prompt: string, maxTokens: number): Promise<LLMResult>;
+  complete(model: string, prompt: string, maxTokens: number, systemPrompt?: string | null): Promise<LLMResult>;
   searchWeb(model: string, query: string, options?: SearchOptions): Promise<WebSearchResult>;
   embed?(text: string): Promise<number[]>;
 }
@@ -66,6 +66,42 @@ export function classify(s: string): 'question' | 'topic' {
   if (/\b(what|how|why|when|where|who|which)\b/i.test(t)) return 'question';
   if (/^(is|are|does|do|can|should|will|would|has|have|was|were)\b/i.test(t)) return 'question';
   return 'topic';
+}
+
+/** Pick a domain agent role for the query — modeled on GPT-Researcher's
+ *  auto_agent_instructions. Returns the role label + a system-prompt body
+ *  used as a "voice floor" on answer-shaping LLM calls (synthesis, document,
+ *  follow-up framing). Returns null on parse/network failure — callers should
+ *  treat that as "no role priming" and proceed unchanged. */
+export async function pickAgentRole(
+  provider: LLMProvider,
+  model: string,
+  query: string,
+): Promise<{ label: string; prompt: string } | null> {
+  const instruction = `You are picking a domain expert agent for a research task.
+
+Research task: "${query}"
+
+Choose a single role — a 1–4 word title (e.g. "Finance Analyst", "Travel Researcher", "Climate Policy Researcher") — and write a one-sentence system prompt describing how that expert approaches research: their tone, the kinds of sources they prefer, what they emphasize.
+
+Return ONLY a JSON object on a single line, no prose, no code fences:
+{"label": "...", "prompt": "You are a ... You ..."}`;
+
+  try {
+    const result = await provider.complete(model, instruction, 256);
+    const stripped = stripLLMFences(result.text).trim();
+    const start = stripped.indexOf('{');
+    const end = stripped.lastIndexOf('}');
+    if (start < 0 || end <= start) return null;
+    const obj = JSON.parse(stripped.slice(start, end + 1)) as { label?: unknown; prompt?: unknown };
+    if (typeof obj.label !== 'string' || typeof obj.prompt !== 'string') return null;
+    const label = obj.label.trim().slice(0, 60);
+    const prompt = obj.prompt.trim().slice(0, 800);
+    if (!label || !prompt) return null;
+    return { label, prompt };
+  } catch {
+    return null;
+  }
 }
 
 function stripLLMFences(text: string): string {
@@ -165,13 +201,14 @@ export class AnthropicProvider implements LLMProvider {
     this.client = new Anthropic({ apiKey });
   }
 
-  async complete(model: string, prompt: string, maxTokens: number): Promise<LLMResult> {
+  async complete(model: string, prompt: string, maxTokens: number, systemPrompt?: string | null): Promise<LLMResult> {
     let response: Anthropic.Message;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         response = await this.client.messages.create({
           model,
           max_tokens: maxTokens,
+          ...(systemPrompt ? { system: systemPrompt } : {}),
           messages: [{ role: 'user', content: prompt }],
         });
         break;
@@ -1332,7 +1369,9 @@ Return ONLY valid JSON. No markdown fences.`,
         `Are these two research questions semantically equivalent or asking about the same thing?\nQ1: ${a}\nQ2: ${b}\nReply with only: YES or NO`,
         '',
         '',
-        config
+        config,
+        undefined,
+        { bypassRole: true },
       );
       return result.text.trim().toUpperCase().startsWith('YES') ? 1.0 : 0.0;
     };
@@ -1538,7 +1577,8 @@ Respond with ONLY "true" if this is a duplicate or near-duplicate, "false" other
       sessionId,
       threadId,
       config,
-      'dedup check'
+      'dedup check',
+      { bypassRole: true },
     );
 
     const isDuplicate = result.text.trim().toLowerCase() === 'true';
@@ -1660,7 +1700,9 @@ Generate ONE specific search query that shifts the temporal frame — either loo
 Return ONLY the search query text, nothing else.`,
       '',
       '',
-      config
+      config,
+      undefined,
+      { bypassRole: true },
     );
 
     const query = result.text.replace(/^["']|["']$/g, '').trim();
@@ -1874,6 +1916,7 @@ Return JSON only, no preamble.`;
       thread.id,
       config,
       'extract concepts',
+      { bypassRole: true },
     );
 
     const parsed = parseConceptExtraction(result.text);
@@ -2176,7 +2219,8 @@ Write the full article in markdown.`,
       sessionId,
       threadId,
       config,
-      'summarize thread'
+      'summarize thread',
+      { bypassRole: true },
     ).then(result => {
       const title = result.text.trim().replace(/^["']|["']$/g, '');
       const accepted = title && title.length <= 60;
@@ -2199,10 +2243,21 @@ Write the full article in markdown.`,
     sessionId: string,
     threadId: string | null,
     config: SessionConfig,
-    label?: string
+    label?: string,
+    opts?: { bypassRole?: boolean; systemPromptOverride?: string | null }
   ): Promise<LLMResult & { cost: number; stepId: string | null }> {
     const startTime = Date.now();
-    const result = await this.provider.complete(model, prompt, config.llm_max_output_tokens);
+    // Layering rule: callers can opt out (perturbation, judges, structural extractors)
+    // or override (pickAgentRole uses its own system prompt).
+    let systemPrompt: string | null | undefined;
+    if (opts?.systemPromptOverride !== undefined) {
+      systemPrompt = opts.systemPromptOverride;
+    } else if (opts?.bypassRole) {
+      systemPrompt = null;
+    } else {
+      systemPrompt = config.role_prompt ?? null;
+    }
+    const result = await this.provider.complete(model, prompt, config.llm_max_output_tokens, systemPrompt);
 
     const cost = calculateCost(result.model, result.promptTokens, result.completionTokens);
 

@@ -6,7 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
   useResearchQuery, useResearchFindings, useResearchThreads,
-  useResearchCosts, useUpdateResearchQuery, useRateFinding,
+  useResearchCosts, useUpdateResearchQuery, usePromoteResearchQuery, useRateFinding,
   useSteeringNotes, useCreateSteeringNote,
   useInjectThread, useRunResearch, useResearchRunning,
   useResearchActivity, useCancelJob, useResearchJobs, useResearchStream,
@@ -4120,6 +4120,71 @@ function SettingsView({
 }
 
 // ---------------------------------------------------------------------------
+// Live mode banner — surfaces role priming + wall-clock countdown +
+// promote-to-long-lived button. Only renders when at least one of those is
+// relevant (role assigned, duration cap set, or session paused after live run).
+// ---------------------------------------------------------------------------
+
+function LiveModeBanner({ session }: { session: { id: string; status: string; created_at: string; config: Record<string, unknown> } }) {
+  const promote = usePromoteResearchQuery();
+  const schedule = (session.config.schedule ?? {}) as { max_session_duration_minutes?: number | null };
+  const cap = schedule.max_session_duration_minutes;
+  const roleLabel = (session.config.role_label as string | null | undefined) ?? null;
+  const isPaused = session.status === 'paused';
+
+  // Re-render every second while a wall-clock cap is active so the countdown
+  // ticks. Cheap — only when this banner is visible.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (cap == null || isPaused) return;
+    const t = setInterval(() => setTick(n => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [cap, isPaused]);
+
+  if (!cap && !roleLabel && !isPaused) return null;
+
+  let countdownNode: React.ReactNode = null;
+  if (cap != null && !isPaused) {
+    const elapsedMs = Date.now() - new Date(session.created_at).getTime();
+    const remainMs = Math.max(0, cap * 60_000 - elapsedMs);
+    const remainMin = Math.floor(remainMs / 60_000);
+    const remainSec = Math.floor((remainMs % 60_000) / 1000);
+    countdownNode = (
+      <span className="font-mono tabular-nums text-accent">
+        {remainMin}:{remainSec.toString().padStart(2, '0')} left
+      </span>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-3 rounded border border-accent/30 bg-accent/5 px-3 py-2 mb-2 text-sm">
+      <span className="font-medium text-accent">Live</span>
+      {roleLabel && (
+        <span className="text-text-muted">
+          Role: <span className="text-text-primary">{roleLabel}</span>
+        </span>
+      )}
+      {cap != null && (
+        <span className="text-text-muted">
+          Cap: <span className="text-text-primary">{cap}m</span>
+        </span>
+      )}
+      {countdownNode}
+      {isPaused && (
+        <>
+          <span className="text-warning">Paused — best-effort report ready</span>
+          <Button
+            size="sm"
+            onClick={() => promote.mutate(session.id)}
+            loading={promote.isPending}
+          >Promote to long-lived</Button>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 
@@ -4297,6 +4362,8 @@ export function ResearchQueryDetailPage() {
           {/* Secondary content */}
           <div className="px-6 pb-0">
             <p className="text-sm text-text-muted line-clamp-3 mb-2">{session.prompt_short || session.prompt}</p>
+
+            <LiveModeBanner session={session} />
 
             <LeaderPanel sessionId={id!} />
 

@@ -33,6 +33,7 @@ import {
   registerBuiltinHooks,
   // Agent-hook records
   listIterationChecks, listPostMortems,
+  pickAgentRole,
 } from '@construct/research';
 
 function sanitizeQuery(q: string): string {
@@ -200,19 +201,49 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     return query;
   });
 
-  app.post<{ Body: { title?: string; prompt: string; hints?: PromptHints; config?: Record<string, unknown> } }>(
+  // Live mode preset — tight caps so a 5–10 min run produces a coherent
+  // best-effort report. Promotion (POST /queries/:id/promote) lifts these.
+  const LIVE_PRESET: Partial<SessionConfig> = {
+    max_total_threads: 8,
+    max_thread_depth: 1,
+    follow_up: { min_count: 2, max_count: 3, max_retries: 1, similarity_threshold: 0.75 },
+    gap_analysis: { enabled: false, max_gap_searches: 0, mode: 'periodic', every_n_findings: 999 },
+    role_priming_enabled: true,
+    schedule: {
+      mode: 'background',
+      active_windows: [],
+      timezone: 'America/Los_Angeles',
+      max_session_duration_minutes: 7,
+    },
+    on_duration_expiry: 'pause',
+  };
+
+  app.post<{ Body: { title?: string; prompt: string; hints?: PromptHints; mode?: 'live' | 'deep'; config?: Record<string, unknown> } }>(
     '/queries',
     async (req, reply) => {
-      const { prompt: rawPrompt, hints, title, config } = req.body;
+      const { prompt: rawPrompt, hints, title, config, mode } = req.body;
       const prompt = sanitizeQuery(rawPrompt ?? '');
       if (!prompt) return reply.status(400).send({ error: 'prompt is required' });
       const prompt_short = heuristicPromptShort(prompt);
       const prompt_super_short = heuristicPromptSuperShort(prompt);
+
+      // Merge live preset under any caller-provided config.
+      const callerConfig = (config ?? {}) as Partial<SessionConfig>;
+      const baseConfig: Partial<SessionConfig> = mode === 'live'
+        ? {
+            ...LIVE_PRESET,
+            ...callerConfig,
+            schedule: { ...LIVE_PRESET.schedule!, ...(callerConfig.schedule ?? {}) },
+            follow_up: { ...LIVE_PRESET.follow_up!, ...(callerConfig.follow_up ?? {}) },
+            gap_analysis: { ...LIVE_PRESET.gap_analysis!, ...(callerConfig.gap_analysis ?? {}) },
+          }
+        : callerConfig;
+
       const query = createQuery(
         app.sqlite,
         title ?? summarizeQuery(prompt),
         prompt,
-        config as Partial<typeof DEFAULT_SESSION_CONFIG>,
+        baseConfig,
         prompt_short,
         prompt_super_short,
         hints ?? {},
@@ -246,9 +277,61 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       generateShortQuery(prompt).then(superShort => {
         if (superShort) updateQuery(app.sqlite, query.id, { prompt_super_short: superShort });
       }).catch(() => { /* ignore */ });
+
+      // Role priming (GPT-Researcher style): if enabled and not already set,
+      // pick a domain agent role asynchronously and patch the config so
+      // downstream LLM calls inherit a system-prompt floor.
+      if (query.config.role_priming_enabled && !query.config.role_prompt && process.env.OPENROUTER_API_KEY) {
+        (async () => {
+          try {
+            const provider = new OpenRouterProvider({
+              apiKey: process.env.OPENROUTER_API_KEY!,
+              models: [query.config.model],
+            });
+            const role = await pickAgentRole(provider, query.config.model, prompt);
+            if (role) {
+              updateQuery(app.sqlite, query.id, {
+                config: { role_label: role.label, role_prompt: role.prompt },
+              });
+              console.log(`[research] picked agent role for ${query.id}: ${role.label}`);
+            }
+          } catch (err) {
+            console.warn(`[research] pickAgentRole failed for ${query.id}:`, err);
+          }
+        })();
+      }
+
       // Auto-create a burst job so workers pick it up immediately
       createJob(app.sqlite, { session_id: query.id, mode: 'burst' });
       return reply.status(201).send(query);
+    }
+  );
+
+  // Promote a paused/live session to long-lived: clears the wall-clock cap,
+  // widens limits back toward defaults, and flips status to 'active' so
+  // workers resume on the next poll. Idempotent.
+  app.post<{ Params: { id: string } }>(
+    '/queries/:id/promote',
+    async (req, reply) => {
+      const query = getQuery(app.sqlite, req.params.id);
+      if (!query) return reply.status(404).send({ error: 'Query not found' });
+
+      const updated = updateQuery(app.sqlite, req.params.id, {
+        status: 'active',
+        config: {
+          max_total_threads: Math.max(query.config.max_total_threads, DEFAULT_SESSION_CONFIG.max_total_threads),
+          max_thread_depth: Math.max(query.config.max_thread_depth, DEFAULT_SESSION_CONFIG.max_thread_depth),
+          gap_analysis: { ...query.config.gap_analysis, enabled: true, max_gap_searches: 2 },
+          schedule: { ...query.config.schedule, max_session_duration_minutes: null },
+          on_duration_expiry: 'pause',
+        },
+      });
+      // Ensure a job exists so workers actually pick it up.
+      const active = getActiveJobForSession(app.sqlite, req.params.id);
+      if (!active) {
+        createJob(app.sqlite, { session_id: req.params.id, mode: 'background' });
+      }
+      return updated;
     }
   );
 
@@ -1257,10 +1340,24 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       const sentThreadState = new Map<string, string>();
       const sentSteps = new Set<string>();
       const sentJobs = new Map<string, string>();
+      let lastQueryState = '';
 
       const poll = () => {
         if (closed) return;
         try {
+          // Query-level state: status, role label, document, summary length.
+          // Used by live mode to surface 'paused' + final document immediately.
+          const q = getQuery(app.sqlite, queryId);
+          if (q) {
+            const docLen = q.document?.length ?? 0;
+            const sumLen = q.summary?.length ?? 0;
+            const state = `${q.status}:${q.config.role_label ?? ''}:${docLen}:${sumLen}:${q.updated_at}`;
+            if (state !== lastQueryState) {
+              lastQueryState = state;
+              send('query', q);
+            }
+          }
+
           const findings = listFindings(app.sqlite, queryId);
           for (const f of findings) {
             if (!sentFindings.has(f.id)) {

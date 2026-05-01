@@ -69,7 +69,17 @@ export interface SessionConfig {
       end: string;
     }>;
     timezone: string;
+    /** Live mode wall-clock cap. Null = no cap. Measured from query.created_at. */
+    max_session_duration_minutes?: number | null;
   };
+  /** What to do when max_session_duration_minutes elapses. Default 'pause' (promotable). */
+  on_duration_expiry?: 'pause' | 'complete';
+  /** Auto-pick a domain agent role at session creation (GPT-Researcher style). */
+  role_priming_enabled?: boolean;
+  /** Human-readable role label (e.g. "Finance Analyst"). Set by pickAgentRole or caller. */
+  role_label?: string | null;
+  /** System-prompt body threaded through answer-voice LLM calls. */
+  role_prompt?: string | null;
   perturbation: PerturbationConfig;
   follow_up: {
     min_count: number;        // default 2
@@ -129,7 +139,12 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
     mode: 'background',
     active_windows: [],
     timezone: 'America/Los_Angeles',
+    max_session_duration_minutes: null,
   },
+  on_duration_expiry: 'pause',
+  role_priming_enabled: false,
+  role_label: null,
+  role_prompt: null,
   follow_up: {
     min_count: 1,
     max_count: 2,

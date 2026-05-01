@@ -1,6 +1,6 @@
 export { applyResearchDDL } from './ddl.js';
 export * from './types.js';
-export { ResearchEngine, AnthropicProvider } from './engine.js';
+export { ResearchEngine, AnthropicProvider, pickAgentRole } from './engine.js';
 export type { EngineOptions, LLMProvider, LLMResult, WebSearchResult } from './engine.js';
 export * from './services/queries.js';
 export { getDefaults, updateDefaults, resetDefaults } from './services/defaults.js';

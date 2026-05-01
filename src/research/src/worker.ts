@@ -200,6 +200,7 @@ async function executeSessionJob(job: import('./types.js').ResearchJob): Promise
     : Infinity;
 
   const jobStartedMs = Date.now();
+  let durationCheck: ReturnType<typeof setInterval> | null = null;
   try {
     const engine = new ResearchEngine({
       sqlite,
@@ -221,6 +222,36 @@ async function executeSessionJob(job: import('./types.js').ResearchJob): Promise
         }
       },
     });
+
+    // Live mode wall-clock cap: when set, write a best-effort document snapshot
+    // and pause/complete the session before aborting. Reads cap/expiry policy
+    // from session config; null cap = today's behavior (no wall clock).
+    let durationFired = false;
+    durationCheck = setInterval(() => {
+      if (durationFired) return;
+      const cap = session.config.schedule.max_session_duration_minutes;
+      if (cap == null) return;
+      const elapsedMin = (Date.now() - new Date(session.created_at).getTime()) / 60_000;
+      if (elapsedMin < cap) return;
+      durationFired = true;
+      console.log(`[worker] live-mode wall clock expired (${cap.toFixed(1)}m, elapsed ${elapsedMin.toFixed(1)}m) for session ${job.session_id}`);
+      // Snapshot + status flip run in the background — we don't want to block
+      // the interval. Errors are logged but don't fail the job.
+      (async () => {
+        try {
+          await engine.updateDocument(job.session_id);
+        } catch (err) {
+          console.warn(`[worker] snapshot updateDocument failed for ${job.session_id}:`, err);
+        }
+        const finalStatus = session.config.on_duration_expiry === 'complete' ? 'completed' : 'paused';
+        try {
+          sessions.updateQuery(sqlite, job.session_id, { status: finalStatus });
+        } catch (err) {
+          console.warn(`[worker] status flip failed for ${job.session_id}:`, err);
+        }
+        controller.abort();
+      })();
+    }, 5_000);
 
     // Rate limit check before starting
     if (!rateLimiter.canProceed()) {
@@ -259,6 +290,7 @@ async function executeSessionJob(job: import('./types.js').ResearchJob): Promise
     heartbeat.stop();
     clearInterval(shutdownCheck);
     clearInterval(cancelCheck);
+    if (durationCheck) clearInterval(durationCheck);
   }
 }
 
@@ -310,6 +342,32 @@ async function executeThreadJob(job: import('./types.js').ResearchJob): Promise<
     signal: controller.signal,
   });
 
+  // Live mode wall-clock cap (mirrors executeSessionJob).
+  let durationFired = false;
+  const durationCheck = setInterval(() => {
+    if (durationFired) return;
+    const cap = session.config.schedule.max_session_duration_minutes;
+    if (cap == null) return;
+    const elapsedMin = (Date.now() - new Date(session.created_at).getTime()) / 60_000;
+    if (elapsedMin < cap) return;
+    durationFired = true;
+    console.log(`[worker] live-mode wall clock expired (${cap.toFixed(1)}m, elapsed ${elapsedMin.toFixed(1)}m) for session ${job.session_id}`);
+    (async () => {
+      try {
+        await engine.updateDocument(job.session_id);
+      } catch (err) {
+        console.warn(`[worker] snapshot updateDocument failed for ${job.session_id}:`, err);
+      }
+      const finalStatus = session.config.on_duration_expiry === 'complete' ? 'completed' : 'paused';
+      try {
+        sessions.updateQuery(sqlite, job.session_id, { status: finalStatus });
+      } catch (err) {
+        console.warn(`[worker] status flip failed for ${job.session_id}:`, err);
+      }
+      controller.abort();
+    })();
+  }, 5_000);
+
   try {
     await engine.runThread(job.session_id, job.thread_id);
     jobs.completeJob(sqlite, job.id, workerId);
@@ -326,6 +384,7 @@ async function executeThreadJob(job: import('./types.js').ResearchJob): Promise<
     heartbeat.stop();
     clearInterval(shutdownCheck);
     clearInterval(cancelCheck);
+    clearInterval(durationCheck);
   }
 }
 

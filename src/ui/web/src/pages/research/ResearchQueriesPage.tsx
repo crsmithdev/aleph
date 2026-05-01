@@ -99,6 +99,8 @@ export function ResearchQueriesPage() {
   const [maxGapSearches, setMaxGapSearches] = useState<number>(2);
   const [hintShape, setHintShape] = useState<PromptShape | ''>('');
   const [hintDepth, setHintDepth] = useState<PromptDepth | ''>('');
+  const [liveMode, setLiveMode] = useState<boolean>(false);
+  const [liveDurationMin, setLiveDurationMin] = useState<number>(7);
   const clearDb = useClearResearchDB();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
@@ -145,18 +147,33 @@ export function ResearchQueriesPage() {
     const hints: { shape?: PromptShape; depth?: PromptDepth } = {};
     if (hintShape) hints.shape = hintShape;
     if (hintDepth) hints.depth = hintDepth;
-    createSession.mutate({
-      prompt: query.trim(),
-      hints: Object.keys(hints).length > 0 ? hints : undefined,
-      config: {
-        max_thread_depth: depth,
-        max_total_threads: maxTotalThreads,
-        min_searches_per_thread: minSearches,
-        model: model || 'deepseek/deepseek-chat',
-        providers: { primary: provider as 'anthropic' | 'openrouter' | 'ollama' },
-        gap_analysis: { enabled: gapAnalysis, max_gap_searches: maxGapSearches },
-      },
-    }, {
+    // Live mode: server applies LIVE_PRESET; we still pass model/provider and the
+    // requested wall-clock duration. Other tuning knobs are intentionally skipped
+    // so the preset wins.
+    const body = liveMode
+      ? {
+          prompt: query.trim(),
+          hints: Object.keys(hints).length > 0 ? hints : undefined,
+          mode: 'live' as const,
+          config: {
+            model: model || 'deepseek/deepseek-chat',
+            providers: { primary: provider as 'anthropic' | 'openrouter' | 'ollama' },
+            schedule: { max_session_duration_minutes: liveDurationMin },
+          } as Record<string, unknown>,
+        }
+      : {
+          prompt: query.trim(),
+          hints: Object.keys(hints).length > 0 ? hints : undefined,
+          config: {
+            max_thread_depth: depth,
+            max_total_threads: maxTotalThreads,
+            min_searches_per_thread: minSearches,
+            model: model || 'deepseek/deepseek-chat',
+            providers: { primary: provider as 'anthropic' | 'openrouter' | 'ollama' },
+            gap_analysis: { enabled: gapAnalysis, max_gap_searches: maxGapSearches },
+          },
+        };
+    createSession.mutate(body, {
       onSuccess: () => { setQuery(''); setHintShape(''); setHintDepth(''); setNewOpen(false); },
     });
   }
@@ -206,7 +223,29 @@ export function ResearchQueriesPage() {
             className="flex-1 bg-bg-primary border border-border-primary rounded-md px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
             autoFocus
           />
-          <label className="flex items-center gap-1.5 text-sm text-text-muted shrink-0" title="Max follow-up depth. Lower = more focused, higher = broader exploration.">
+          <label className="flex items-center gap-1.5 text-sm shrink-0 cursor-pointer select-none" title="Live mode: tight caps, picks a domain agent role, runs for the given minutes, then pauses with a best-effort report. Promote to long-lived from the detail page.">
+            <input
+              type="checkbox"
+              checked={liveMode}
+              onChange={e => setLiveMode(e.target.checked)}
+              className="w-3.5 h-3.5 accent-accent"
+            />
+            <span className={liveMode ? 'text-accent font-medium' : 'text-text-muted'}>Live</span>
+          </label>
+          {liveMode && (
+            <label className="flex items-center gap-1.5 text-sm text-text-muted shrink-0" title="Wall-clock cap in minutes. When elapsed, the session pauses with a best-effort report.">
+              Minutes
+              <input
+                type="number"
+                min={1}
+                max={60}
+                value={liveDurationMin}
+                onChange={e => setLiveDurationMin(Number(e.target.value))}
+                className="w-12 bg-bg-primary border border-border-primary rounded px-1.5 py-1 text-sm text-text-primary text-center focus:outline-none focus:border-accent"
+              />
+            </label>
+          )}
+          <label className={`flex items-center gap-1.5 text-sm shrink-0 ${liveMode ? 'opacity-40 pointer-events-none' : 'text-text-muted'}`} title={liveMode ? 'Disabled in live mode (preset overrides)' : 'Max follow-up depth. Lower = more focused, higher = broader exploration.'}>
             Depth
             <input
               type="number"
