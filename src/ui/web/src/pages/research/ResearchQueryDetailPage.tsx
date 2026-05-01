@@ -1500,32 +1500,32 @@ function stepChips(s: ResearchStep): Chip[] {
       const gapText = hasGaps ? (gapMax != null ? `${gapCount}/${gapMax} gaps` : `${gapCount} gaps`) : 'no gaps';
       chips.push({ text: gapText, color: hasGaps ? 'text-warning' : 'text-text-muted' });
     } else if (m.decision === 'synthesis') {
-      chips.push({ text: `conf ${((m.confidence as number) * 100).toFixed(0)}%`, color: 'text-success' });
-      chips.push({ text: `nov ${((m.novelty as number) * 100).toFixed(0)}%`, color: 'text-blue-400' });
+      chips.push({ text: `confidence ${((m.confidence as number) * 100).toFixed(0)}%`, color: 'text-success' });
+      chips.push({ text: `novelty ${((m.novelty as number) * 100).toFixed(0)}%`, color: 'text-blue-400' });
     } else if (m.decision === 'dedup') {
       const dup = m.is_duplicate as boolean;
       chips.push({ text: dup ? 'duplicate' : 'unique', color: dup ? 'text-error' : 'text-success' });
-      chips.push({ text: `vs ${m.existing_count as number}`, color: 'text-text-muted' });
+      chips.push({ text: `vs ${m.existing_count as number} existing`, color: 'text-text-muted' });
     } else if (m.decision === 'follow_up_eval') {
-      chips.push({ text: `${m.accepted_count as number}✓`, color: 'text-success' });
-      chips.push({ text: `${m.rejected_count as number}✗`, color: 'text-error/70' });
+      chips.push({ text: `${m.accepted_count as number} accepted`, color: 'text-success' });
+      chips.push({ text: `${m.rejected_count as number} rejected`, color: 'text-error/70' });
       // Surface which similarity method resolved each candidate so the events
       // view shows when the cheap jaccard pre-filter saved an LLM judge call.
       const mc = m.method_counts as Record<string, number> | undefined;
       if (mc) {
         const parts: string[] = [];
-        if (mc.jaccard) parts.push(`${mc.jaccard}j`);
-        if (mc.embedding) parts.push(`${mc.embedding}e`);
-        if (mc.llm) parts.push(`${mc.llm}L`);
-        if (parts.length) chips.push({ text: parts.join('·'), color: 'text-text-muted' });
+        if (mc.jaccard) parts.push(`${mc.jaccard} jaccard`);
+        if (mc.embedding) parts.push(`${mc.embedding} embedding`);
+        if (mc.llm) parts.push(`${mc.llm} llm`);
+        if (parts.length) chips.push({ text: parts.join(' · '), color: 'text-text-muted' });
       }
     } else if (m.decision === 'formulate_queries') {
       chips.push({ text: `${(m.queries as string[]).length} queries`, color: 'text-blue-400' });
     } else if (m.decision === 'extract_concepts') {
       const cc = m.concept_count as number ?? 0;
       const rc = m.relation_count as number ?? 0;
-      chips.push({ text: `${cc}c`, color: 'text-purple-400' });
-      if (rc > 0) chips.push({ text: `${rc}r`, color: 'text-text-muted' });
+      chips.push({ text: `${cc} concepts`, color: 'text-purple-400' });
+      if (rc > 0) chips.push({ text: `${rc} relations`, color: 'text-text-muted' });
     } else if (m.decision === 'summarize_thread') {
       if (!(m.accepted as boolean)) {
         chips.push({ text: 'rejected', color: 'text-error/70' });
@@ -1545,8 +1545,8 @@ function formatEventDetail(ev: StreamEvent & { threadDiff?: string }): { typeLab
   if (ev.type === 'finding') {
     const f = ev.payload;
     const chips: Chip[] = [
-      { text: `conf ${(f.confidence * 100).toFixed(0)}%`, color: f.confidence >= 0.7 ? 'text-success' : f.confidence >= 0.4 ? 'text-warning' : 'text-error' },
-      { text: `nov ${(f.novelty * 100).toFixed(0)}%`, color: 'text-blue-400' },
+      { text: `confidence ${(f.confidence * 100).toFixed(0)}%`, color: f.confidence >= 0.7 ? 'text-success' : f.confidence >= 0.4 ? 'text-warning' : 'text-error' },
+      { text: `novelty ${(f.novelty * 100).toFixed(0)}%`, color: 'text-blue-400' },
     ];
     return {
       typeLabel: 'finding',
@@ -2316,7 +2316,7 @@ function EventsView({
           const thread = threadId ? ordered.find(t => t.id === threadId) ?? null : null;
           const ts = ev.type === 'finding' ? ev.payload.created_at
             : ev.type === 'step' ? ev.payload.created_at
-            : ev.type === 'thread' ? ev.payload.created_at
+            : ev.type === 'thread' ? (ev.payload.updated_at ?? ev.payload.created_at)
             : null;
           const timeStr = ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '';
           const isFinding = ev.type === 'finding';
