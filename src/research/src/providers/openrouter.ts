@@ -8,7 +8,9 @@ export interface OpenRouterConfig {
   siteName?: string;
 }
 
-const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
+// Override via OPENROUTER_BASE_URL (used by integration tests pointing at a
+// fake server). Falls through to the real endpoint in production.
+const OPENROUTER_BASE = process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1';
 
 // OpenRouter model metadata: pricing per 1M tokens + context window size.
 // Pricing refreshed May 2026; mirror types.ts MODEL_PRICING.

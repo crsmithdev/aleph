@@ -27,7 +27,9 @@ export async function fetchSearchResults(query: string): Promise<SearchResult[]>
 }
 
 async function tavilySearch(query: string, apiKey: string): Promise<SearchResult[]> {
-  const res = await fetch('https://api.tavily.com/search', {
+  // Override via TAVILY_BASE_URL for integration tests.
+  const base = process.env.TAVILY_BASE_URL ?? 'https://api.tavily.com';
+  const res = await fetch(`${base}/search`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
