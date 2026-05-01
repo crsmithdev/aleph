@@ -33,7 +33,11 @@ function migrateDefaults(sqlite: Sqlite, storedJson: string): void {
   // (previous_default, new_default) tuples — only migrate if stored still matches previous.
   const scalarMigrations: Array<[keyof SessionConfig, unknown, unknown]> = [
     ['max_total_threads', 150, DEFAULT_SESSION_CONFIG.max_total_threads],
+    // Depth bumps: 3 → previous default, 2 → too-shallow earlier default.
+    // We migrate both to the current default so an old install picks up the
+    // wider tree without losing customizations.
     ['max_thread_depth', 3, DEFAULT_SESSION_CONFIG.max_thread_depth],
+    ['max_thread_depth', 2, DEFAULT_SESSION_CONFIG.max_thread_depth],
     ['min_searches_per_thread', 2, DEFAULT_SESSION_CONFIG.min_searches_per_thread],
     // Bump per-session thread parallelism so workers actually fan out — burst
     // session-jobs are now kickoff-only and follow-ups go through thread-jobs,

@@ -121,7 +121,13 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
   budget_daily_usd: 5.0,
   budget_total_usd: null,
   budget_alert_threshold: 0.80,
-  max_thread_depth: 2,
+  // Depth 0 = seed, depth 1 = children, depth 2 = grandchildren, ... .
+  // Children at depth N can only spawn if N+1 < max_thread_depth (engine gate
+  // at engine.ts:807). So max_thread_depth=2 caps the tree at 2 levels and
+  // typically yields 2-4 threads — too narrow to fill an 8-worker pool. 3
+  // gives ~7 threads (1 seed + 2 children + 4 grandchildren) on a typical
+  // branching factor, which saturates the pool for most queries.
+  max_thread_depth: 3,
   max_total_threads: 60,
   p_serendipity: 0.15,
   max_perturbation_probability: 0.40,
