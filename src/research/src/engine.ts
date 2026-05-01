@@ -126,7 +126,10 @@ function placeholderShortQuery(query: string): string {
 }
 
 function calculateCost(model: string, promptTokens: number, completionTokens: number): number {
-  const pricing = MODEL_PRICING[model];
+  // Provider responses sometimes carry dated SKU suffixes (e.g.
+  // "deepseek/deepseek-v3.2-20251201"). Strip a trailing "-YYYYMMDD" so the
+  // pricing table doesn't need to track every dated re-release.
+  const pricing = MODEL_PRICING[model] ?? MODEL_PRICING[model.replace(/-\d{8}$/, '')];
   if (!pricing) return 0; // local/unknown models are free
   return (promptTokens * pricing.input + completionTokens * pricing.output) / 1_000_000;
 }

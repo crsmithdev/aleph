@@ -132,12 +132,16 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
   min_delay_between_steps_ms: 8000,
   max_steps_per_hour: 30,
   max_concurrent_threads: 3,
-  model: 'deepseek/deepseek-chat',
+  // DeepSeek v3.2 — non-reasoning chat model. Output cost is half of v3
+  // ($0.378 vs $0.77), input slightly higher ($0.252 vs $0.20). Net win
+  // because output dominates our token mix. v4 family is reasoning-only
+  // and adds a hidden reasoning-token tax — not safe as a drop-in.
+  model: 'deepseek/deepseek-v3.2',
   model_fast: 'google/gemini-2.0-flash-001',
   providers: {
     primary: 'openrouter',
     openrouter_models: [
-      'deepseek/deepseek-chat',
+      'deepseek/deepseek-v3.2',
     ],
   },
   schedule: {
@@ -513,9 +517,13 @@ export const MODEL_PRICING: Record<string, { input: number; output: number }> = 
   'claude-sonnet-4-6': { input: 3.0, output: 15.0 },
   'claude-haiku-4-5': { input: 0.80, output: 4.0 },
   'claude-opus-4-6': { input: 15.0, output: 75.0 },
-  // DeepSeek (current default for reasoning-grade synthesis)
-  'deepseek/deepseek-chat': { input: 0.32, output: 0.89 },
-  'deepseek/deepseek-chat-v3': { input: 0.32, output: 0.89 },
+  // DeepSeek
+  'deepseek/deepseek-v4-flash': { input: 0.14, output: 0.28 },
+  'deepseek/deepseek-v4-pro': { input: 0.435, output: 0.87 },
+  'deepseek/deepseek-v3.2': { input: 0.252, output: 0.378 },
+  'deepseek/deepseek-chat': { input: 0.20, output: 0.77 },
+  'deepseek/deepseek-chat-v3': { input: 0.20, output: 0.77 },
+  'deepseek/deepseek-chat-v3-0324': { input: 0.20, output: 0.77 },
   // Cheap fast models for judges/dedup/titles
   'google/gemini-2.0-flash-001': { input: 0.10, output: 0.40 },
   'google/gemini-2.5-flash': { input: 0.30, output: 2.50 },

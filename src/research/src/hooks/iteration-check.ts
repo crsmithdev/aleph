@@ -10,7 +10,7 @@ export interface IterationCheckHandlerOptions {
   fetchImpl?: typeof fetch;
 }
 
-const DEFAULT_MODEL = 'deepseek/deepseek-chat';
+const DEFAULT_MODEL = 'deepseek/deepseek-v3.2';
 const VERDICTS = ['on_track', 'drifting', 'needs_correction'] as const;
 type Verdict = typeof VERDICTS[number];
 

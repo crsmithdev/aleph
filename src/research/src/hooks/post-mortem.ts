@@ -11,7 +11,7 @@ export interface PostMortemHandlerOptions {
   fetchImpl?: typeof fetch;
 }
 
-const DEFAULT_MODEL = 'deepseek/deepseek-chat';
+const DEFAULT_MODEL = 'deepseek/deepseek-v3.2';
 const VERDICTS = ['pass', 'flag'] as const;
 type Verdict = typeof VERDICTS[number];
 

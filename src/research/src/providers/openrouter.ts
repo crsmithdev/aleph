@@ -13,7 +13,11 @@ const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 // OpenRouter model metadata: pricing per 1M tokens + context window size.
 // Pricing refreshed May 2026; mirror types.ts MODEL_PRICING.
 const OPENROUTER_MODELS: Record<string, { input: number; output: number; contextWindow: number }> = {
-  'deepseek/deepseek-chat':                          { input: 0.32, output: 0.89, contextWindow: 163840 },
+  'deepseek/deepseek-v4-flash':                      { input: 0.14, output: 0.28, contextWindow: 1048576 },
+  'deepseek/deepseek-v4-pro':                        { input: 0.435, output: 0.87, contextWindow: 1048576 },
+  'deepseek/deepseek-v3.2':                          { input: 0.252, output: 0.378, contextWindow: 131072 },
+  'deepseek/deepseek-chat':                          { input: 0.20, output: 0.77, contextWindow: 163840 },
+  'deepseek/deepseek-chat-v3-0324':                  { input: 0.20, output: 0.77, contextWindow: 163840 },
   'deepseek/deepseek-r1-0528':                       { input: 0.50, output: 2.19, contextWindow: 65536 },
   'google/gemini-2.0-flash-001':                     { input: 0.10, output: 0.40, contextWindow: 1048576 },
   'google/gemini-2.5-flash':                         { input: 0.30, output: 2.50, contextWindow: 1048576 },

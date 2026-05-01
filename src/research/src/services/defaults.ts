@@ -35,11 +35,30 @@ function migrateDefaults(sqlite: Sqlite, storedJson: string): void {
     ['max_total_threads', 150, DEFAULT_SESSION_CONFIG.max_total_threads],
     ['max_thread_depth', 3, DEFAULT_SESSION_CONFIG.max_thread_depth],
     ['min_searches_per_thread', 2, DEFAULT_SESSION_CONFIG.min_searches_per_thread],
+    // Bump primary model: deepseek-chat → deepseek-v3.2 (50% cheaper output,
+    // sparse attention, same prompt behavior). Only migrate if stored is the
+    // previous default, so user-customized models stay put.
+    ['model', 'deepseek/deepseek-chat', DEFAULT_SESSION_CONFIG.model],
   ];
 
   let changed = false;
   for (const [key, prev, next] of scalarMigrations) {
     if (stored[key as string] === prev) { (stored as Record<string, unknown>)[key as string] = next; changed = true; }
+  }
+
+  // Migrate openrouter_models default array if it still matches the prior default.
+  const providers = stored.providers as { openrouter_models?: string[] } | undefined;
+  if (providers && Array.isArray(providers.openrouter_models)
+      && providers.openrouter_models.length === 1
+      && providers.openrouter_models[0] === 'deepseek/deepseek-chat') {
+    providers.openrouter_models = [...DEFAULT_SESSION_CONFIG.providers.openrouter_models];
+    changed = true;
+  }
+
+  // Backfill model_fast for installs that predate the field.
+  if (stored.model_fast === undefined) {
+    stored.model_fast = DEFAULT_SESSION_CONFIG.model_fast;
+    changed = true;
   }
 
   const fu = (stored.follow_up ?? {}) as Record<string, unknown>;

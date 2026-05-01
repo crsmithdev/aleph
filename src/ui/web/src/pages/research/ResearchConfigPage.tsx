@@ -115,10 +115,14 @@ function KeyField({
 // Known good models to show when there's no history yet
 const SUGGESTED_MODELS: Record<string, string[]> = {
   openrouter: [
-    'deepseek/deepseek-r1-0528:free',
+    'deepseek/deepseek-v3.2',
     'deepseek/deepseek-chat',
-    'meta-llama/llama-3.3-70b-instruct:free',
     'google/gemini-2.0-flash-001',
+    'google/gemini-2.5-flash',
+    'meta-llama/llama-3.3-70b-instruct',
+    'openai/gpt-4.1-mini',
+    'anthropic/claude-haiku-4.5',
+    'deepseek/deepseek-r1-0528:free',
   ],
   anthropic: [
     'claude-sonnet-4-6',
