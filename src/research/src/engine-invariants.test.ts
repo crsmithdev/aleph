@@ -499,11 +499,16 @@ describe('concurrent slot safety', () => {
     expect(threads.getThread(db, t.id)!.status).toBe('queued');
   });
 
-  test('getQueuedThreadsForNewJobs: returns [] while a session-level job is active', async () => {
-    // REGRESSION: while runIterations is running the session internally, creating
-    // thread-level jobs via checkQueuedThreads causes two workers to race on the
-    // same thread. The fix: skip queued-thread job creation for sessions with an
-    // active session-level job.
+  test('getQueuedThreadsForNewJobs: fans out queued threads even when a session-level job is active', async () => {
+    // Earlier this guard returned [] while a session-level job was running, on the
+    // theory that runIterations claiming threads internally would race with
+    // thread-level jobs claiming the same threads externally. In practice both
+    // paths use the same atomic queued→active UPDATE (claimNextThread /
+    // tryClaimThread in services/threads.ts), so the loser of any race simply
+    // bails out — no double-run. Suppressing fan-out left N-1 worker processes
+    // idle whenever a burst session-job was running. We now allow the dispatcher
+    // to fan out across workers; resetOrphanedActiveThreads still excludes
+    // threads owned by an active session-level job, so the orphan path is safe.
     const jobs = await import('./services/jobs');
     const db = createTestDb();
     const sessId = queries.createQuery(db, 'Test', 'q').id;
@@ -513,12 +518,9 @@ describe('concurrent slot safety', () => {
     jobs.claimJob(db, sessJob.id, 'worker-1');
     jobs.markRunning(db, sessJob.id, 'worker-1');
 
-    expect(jobs.hasActiveSessionLevelJob(db, sessId)).toBe(true);
-    expect(jobs.getQueuedThreadsForNewJobs(db, sessId, 10)).toEqual([]);
+    expect(jobs.getQueuedThreadsForNewJobs(db, sessId, 10).length).toBe(1);
 
-    // Once the session-level job completes, thread-level jobs may be created.
     jobs.completeJob(db, sessJob.id, 'worker-1');
-    expect(jobs.hasActiveSessionLevelJob(db, sessId)).toBe(false);
     expect(jobs.getQueuedThreadsForNewJobs(db, sessId, 10).length).toBe(1);
   });
 

@@ -258,29 +258,20 @@ export function getActiveJobForThread(sqlite: Sqlite, threadId: string): Researc
   return row ? rowToJob(row) : null;
 }
 
-/** Returns true if the session has an active session-level job (thread_id IS NULL).
- *  Session-level runIterations already iterates over all queued threads internally,
- *  so thread-level jobs must NOT be created in parallel — they would race. */
-export function hasActiveSessionLevelJob(sqlite: Sqlite, sessionId: string): boolean {
-  const row = sqlite.prepare(`
-    SELECT 1 FROM research_jobs
-    WHERE session_id = ? AND thread_id IS NULL
-    AND status IN ('pending', 'claimed', 'running')
-    LIMIT 1
-  `).get(sessionId);
-  return !!row;
-}
-
 /** Returns queued threads that have no active job, ordered by priority DESC.
- *  Used by checkQueuedThreads to find threads needing a new job.
- *  Returns [] if the session has an active session-level job — runIterations handles
- *  those threads itself, so creating thread-level jobs would cause concurrent runIteration. */
+ *  Used by checkQueuedThreads to find threads needing a new job. Safe to call
+ *  while a session-level job is running: both runIterations.claimNextThread and
+ *  runThread.tryClaimThread use the same atomic queued→active transition, so a
+ *  thread-job racing against the session job's slot loop will never double-claim
+ *  (the loser of the UPDATE just bails out). resetOrphanedActiveThreads already
+ *  exempts threads owned by an active session-level job, so the orphan path is
+ *  also safe. Without this fan-out, only one worker process runs per session,
+ *  leaving the rest idle. */
 export function getQueuedThreadsForNewJobs(
   sqlite: Sqlite,
   sessionId: string,
   limit: number
 ): Array<{ id: string; query: string; priority: number }> {
-  if (hasActiveSessionLevelJob(sqlite, sessionId)) return [];
   return sqlite.prepare(`
     SELECT t.id, t.query, t.priority
     FROM research_threads t
