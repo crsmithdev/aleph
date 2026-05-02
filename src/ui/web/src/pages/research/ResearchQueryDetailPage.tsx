@@ -4653,7 +4653,7 @@ export function ResearchQueryDetailPage() {
             <TelemetryView sessionId={id!} onNavigateToThread={navigateToLive} />
           )}
           {tab === 'reviews' && (
-            <ReviewsView sessionId={id!} />
+            <ReviewsView sessionId={id!} query={session} />
           )}
           {tab === 'config' && (
             <SessionConfigView

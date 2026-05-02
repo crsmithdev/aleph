@@ -23,14 +23,19 @@ Return ONLY JSON matching this schema:
   "verdict": "pass" | "flag",
   "flags": ["short_tag_1", ...],   // e.g. "thread_skew", "high_error_rate", "low_finding_yield", "runaway_cost", "off_topic_drift"
   "notes": "1-3 sentences summarizing what you observed",
-  "recommendations": ["short actionable suggestion 1", ...]  // omit the key or use [] if verdict is pass
+  "recommendations": ["concrete actionable suggestion 1", ...]  // omit the key or use [] if verdict is pass
 }
 
 Rules:
 - "pass" when the run looks roughly proportionate to the ask and telemetry shows no obvious anomalies.
 - "flag" when something is off — e.g. one thread dominates work, source failure rate is high, almost no findings despite many steps, cost seems disproportionate to depth, etc.
 - Keep flags short and tagged — downstream UI filters on them.
-- Recommendations should be actionable on a future run (tune a parameter, rewrite the prompt, adjust source mix). Omit empty filler.
+- Recommendations must be concrete and self-contained — include specific examples, not just descriptions of what to change:
+  - If suggesting prompt refinement: show a rewritten version, e.g. "Rewrite prompt as: 'What are the top 5 peer-reviewed findings on X from 2020-2024, with source credibility ratings?' — adds specificity and date scope."
+  - If suggesting a config change: name the exact parameter and value, e.g. "Set novelty_threshold: 0.5 (currently 0.3) to reduce redundant findings — the current low threshold is accepting near-duplicate content."
+  - If suggesting source changes: show the alternative, e.g. "Add 'google/gemini-2.5-flash' to openrouter_models alongside the current model to reduce single-provider failure rate."
+  - If suggesting scope changes: be precise, e.g. "Reduce max_thread_depth from 3 to 2 and max_total_threads from 60 to 20 — at current cost/finding ratio, deeper branching isn't yielding new information."
+- Omit vague filler. Each recommendation should be ready to act on without further research.
 - Be calibrated: don't flag every run. If it looks normal, say pass.`;
 
 export function createPostMortemHandler(opts: PostMortemHandlerOptions): HookHandler<'post_mortem'> {
