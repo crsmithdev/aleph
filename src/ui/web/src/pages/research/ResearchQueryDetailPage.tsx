@@ -1601,36 +1601,64 @@ function formatEventDetail(ev: StreamEvent & { threadDiff?: string }): { typeLab
     const chips = stepChips(s);
     // No tools — label-only step (e.g. gap analysis, synthesis, dedup)
     if (tools.length === 0) {
+      // Label aliases collapse every multi-word DB label to a single token for
+      // the events log. Anything not aliased here will likely overflow the
+      // narrow type column and wrap onto a second line.
       const labelAliases: Record<string, string> = {
         'synthesize finding': 'synthesis',
         'synthesize findings': 'synthesis',
         'evaluate follow-ups': 'followups',
-        'summarize thread': 'summarize',
+        'summarize thread': 'thrtitle',
         'dedup check': 'dedup',
+        'dedup judge': 'dedup',
         'gap analysis': 'gaps',
         'formulate': 'formulate',
-        'extract concepts': 'extract',
-        'lead review': 'lead review',
+        'extract concepts': 'concepts',
+        'lead review': 'review',
         'generate plan': 'plan',
-        'generate lead section': 'lead section',
+        'generate lead section': 'lead',
         'generate document': 'document',
+        'update summary': 'summary',
+        'web search': 'search',
+        'web search (failed)': 'search✗',
+        'empty search': 'empty',
+        'iteration error': 'error',
+        'thread error': 'error',
+        'pick role': 'role',
+        'query title': 'title',
+        'short title': 'heading',
+        'restate prompt': 'restate',
+        'perturbation query': 'perturb',
       };
       const labelColors: Record<string, string> = {
         'gaps': 'text-orange-400',
         'synthesis': 'text-purple-400',
         'dedup': 'text-text-muted',
         'followups': 'text-teal-400',
-        'summarize': 'text-text-muted',
+        'thrtitle': 'text-text-muted',
+        'summary': 'text-text-muted',
         'formulate': 'text-blue-400',
-        'extract': 'text-purple-400',
-        'lead review': 'text-yellow-400',
+        'concepts': 'text-purple-400',
+        'review': 'text-yellow-400',
         'plan': 'text-yellow-400',
-        'lead section': 'text-accent/70',
+        'lead': 'text-accent/70',
         'document': 'text-accent/70',
+        'search': 'text-blue-400',
+        'search✗': 'text-error',
+        'empty': 'text-text-muted',
+        'error': 'text-error',
+        'role': 'text-purple-400',
+        'title': 'text-text-muted',
+        'heading': 'text-text-muted',
+        'restate': 'text-text-muted',
+        'perturb': 'text-orange-400',
       };
       const rawLbl = s.label ?? 'step';
-      const lbl = labelAliases[rawLbl] ?? rawLbl;
-      const color = labelColors[lbl] ?? 'text-accent/70';
+      // 'generate section: <name>' steps carry the section name in the label
+      // itself; collapse the prefix and let the detail field show the name.
+      const isGenSection = rawLbl.startsWith('generate section:');
+      const lbl = isGenSection ? 'section' : (labelAliases[rawLbl] ?? rawLbl);
+      const color = isGenSection ? 'text-accent/70' : (labelColors[lbl] ?? 'text-accent/70');
       const m = s.metadata;
       let detail = '';
       if (m) {
@@ -1661,6 +1689,21 @@ function formatEventDetail(ev: StreamEvent & { threadDiff?: string }): { typeLab
           }
         } else if (m.decision === 'dedup' && typeof m.new_summary === 'string') {
           detail = firstSentence(m.new_summary);
+        } else if (m.decision === 'pick_role' && typeof m.role_label === 'string') {
+          detail = m.role_label as string;
+        }
+      }
+      // Fallback: utility steps that don't set a decision (restate / title /
+      // heading / generate section / lead / etc.) — surface the captured
+      // output_excerpt so the collapsed row isn't empty. This is what makes
+      // 'restate', 'title', 'heading', 'role' rows actually show their result.
+      if (!detail && m && typeof m.output_excerpt === 'string' && m.output_excerpt.trim()) {
+        const trimmed = m.output_excerpt.trim().replace(/\s+/g, ' ');
+        // 'generate section: X' — prefer the section name (already in label) over the body.
+        if (isGenSection) {
+          detail = rawLbl.replace(/^generate section:\s*/, '');
+        } else {
+          detail = firstSentence(trimmed);
         }
       }
       return { typeLabel: lbl, typeColor: color, detail, chips };
