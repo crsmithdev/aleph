@@ -156,7 +156,7 @@ export function generatePerturbationPrompt(
       return `${base}How is this topic approached in ${region}? Generate ONE specific search query exploring this topic from that geographic/cultural perspective.`;
     })(),
 
-    temporal_shift: `${base}Generate ONE specific search query that shifts the temporal frame — either how this was understood 20-50 years ago, or projecting forward 10-20 years.`,
+    temporal_shift: `${base}Generate ONE specific search query that shifts the temporal frame backwards — how this topic was understood, framed, or practiced 20-50 years ago. Look for historical precedents, earlier theories, or contemporaneous debates from that era. Do not speculate about the future; ground the query in primary or secondary sources from the past.`,
 
     scale_shift: `${base}What happens if you make this 10x bigger, 10x smaller, 10x cheaper, or 10x more expensive? Generate ONE specific search query exploring an extreme scale shift.`,
 

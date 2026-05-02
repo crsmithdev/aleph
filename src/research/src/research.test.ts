@@ -180,9 +180,20 @@ describe('findings CRUD', () => {
     expect(f.confidence).toBe(0.9); // perturbation is not capped, only speculation is
   });
 
-  test('temporal_shift perturbation finding is kind=speculation and confidence is capped', () => {
-    const pertThread = threads.createThread(sqlite, { session_id: sessionId, query: 'futurist', origin: 'perturbation', perturbation_strategy: 'temporal_shift' });
-    const f = findings.createFinding(sqlite, { thread_id: pertThread.id, session_id: sessionId, content: 'forward-looking content', summary: 's', confidence: 0.9 });
+  test('temporal_shift perturbation with backward-looking text is kind=perturbation', () => {
+    // The temporal_shift prompt is constrained to backwards-only as of B5.
+    // Findings that follow that constraint are not speculation.
+    const pertThread = threads.createThread(sqlite, { session_id: sessionId, query: 'historical context', origin: 'perturbation', perturbation_strategy: 'temporal_shift' });
+    const f = findings.createFinding(sqlite, { thread_id: pertThread.id, session_id: sessionId, content: 'In 1985 the field was understood through the lens of...', summary: 'historical', confidence: 0.9 });
+    expect(f.kind).toBe('perturbation');
+    expect(f.confidence).toBe(0.9);
+  });
+
+  test('temporal_shift drift into forward text is caught by the regex', () => {
+    // If the LLM ignores the backwards-only constraint and produces
+    // forward-looking text anyway, the speculation regex still flags it.
+    const pertThread = threads.createThread(sqlite, { session_id: sessionId, query: 'historical', origin: 'perturbation', perturbation_strategy: 'temporal_shift' });
+    const f = findings.createFinding(sqlite, { thread_id: pertThread.id, session_id: sessionId, content: 'By 2040 the field will be transformed', summary: 's', confidence: 0.9 });
     expect(f.kind).toBe('speculation');
     expect(f.confidence).toBe(0.5);
   });
@@ -200,8 +211,7 @@ describe('findings CRUD', () => {
   });
 
   test('speculation with confidence below cap is not lowered', () => {
-    const pertThread = threads.createThread(sqlite, { session_id: sessionId, query: 'futurist', origin: 'perturbation', perturbation_strategy: 'temporal_shift' });
-    const f = findings.createFinding(sqlite, { thread_id: pertThread.id, session_id: sessionId, content: 'x', summary: 's', confidence: 0.3 });
+    const f = findings.createFinding(sqlite, { thread_id: threadId, session_id: sessionId, content: 'projected to grow', summary: 's', confidence: 0.3 });
     expect(f.kind).toBe('speculation');
     expect(f.confidence).toBe(0.3);
   });

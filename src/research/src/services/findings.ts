@@ -15,17 +15,21 @@ export const SPECULATION_CONFIDENCE_CAP = 0.5;
 
 /** Classify a finding's kind based on its parent thread and content. Pure
  *  function — no DB access. The caller is expected to look up the thread
- *  once and pass the relevant fields plus the synthesized text. */
+ *  once and pass the relevant fields plus the synthesized text.
+ *
+ *  Speculation is detected from *text*, not from strategy name: if the
+ *  finding contains forward-looking phrases (dates ≥2030 or verbs like
+ *  "will evolve", "projected to"), it's classified as speculation
+ *  regardless of which thread produced it. The `temporal_shift`
+ *  perturbation prompt is now constrained to backwards-only, so
+ *  legitimate historical findings from it are not speculation; if the
+ *  LLM disregards that constraint and produces forward-looking text
+ *  anyway, the regex catches it. */
 export function classifyFindingKind(args: {
   thread: Pick<ResearchThread, 'origin' | 'perturbation_strategy'> | null;
   text: string;
 }): FindingKind {
   const { thread, text } = args;
-  // temporal_shift perturbations are speculation by construction (the prompt
-  // explicitly invites forward-looking content). Same for any finding whose
-  // text matches forward-date or forward-verb patterns regardless of origin
-  // (a normal thread that drifted into prediction is still speculation).
-  if (thread?.perturbation_strategy === 'temporal_shift') return 'speculation';
   if (FORWARD_DATE_RE.test(text) || FORWARD_VERB_RE.test(text)) return 'speculation';
   if (thread?.origin === 'perturbation') return 'perturbation';
   return 'normal';

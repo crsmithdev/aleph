@@ -1817,7 +1817,7 @@ Generate ONE specific search query to find stories of failure, post-mortems, or 
 And these recent findings:
 ${context}
 
-Generate ONE specific search query that shifts the temporal frame — either looking at how this topic was understood 20-50 years ago, or projecting forward to how it might change in the next 10-20 years. Be specific.`,
+Generate ONE specific search query that shifts the temporal frame backwards — how this topic was understood, framed, or practiced 20-50 years ago. Look for historical precedents, earlier theories, or contemporaneous debates from that era. Do not speculate about the future; ground the query in primary or secondary sources from the past. Be specific.`,
     };
 
     const result = await this.callLLM(
