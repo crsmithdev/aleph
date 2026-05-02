@@ -325,6 +325,11 @@ export function applyResearchDDL(sqlite: Sqlite): void {
   // Question-shape analysis (survey/timeline/list/dynamics/comparison/lookup/audit).
   // Nullable: detector populates async after creation; old rows stay NULL until re-detected.
   try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN question_shape TEXT`); } catch { /* exists */ }
+  // Finding kind: 'normal' | 'perturbation' | 'speculation'. Default 'normal'
+  // so old rows have a defined value. Classifier in services/findings.ts
+  // upgrades to 'perturbation' or 'speculation' based on parent thread origin
+  // and forward-looking text patterns; speculation also caps confidence.
+  try { sqlite.exec(`ALTER TABLE research_findings ADD COLUMN kind TEXT NOT NULL DEFAULT 'normal'`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_jobs ADD COLUMN thread_id TEXT`); } catch { /* exists */ }
   try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_rj_thread ON research_jobs(thread_id, status)`); } catch { /* exists */ }
   // Enforce: at most one active job per thread. Belt-and-suspenders against the

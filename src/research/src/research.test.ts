@@ -166,6 +166,51 @@ describe('findings CRUD', () => {
     findings.createFinding(sqlite, { thread_id: threadId, session_id: sessionId, content: 'b', summary: 's2' });
     expect(findings.countFindings(sqlite, sessionId)).toBe(2);
   });
+
+  test('finding from seed thread is kind=normal', () => {
+    const f = findings.createFinding(sqlite, { thread_id: threadId, session_id: sessionId, content: 'a', summary: 's', confidence: 0.9 });
+    expect(f.kind).toBe('normal');
+    expect(f.confidence).toBe(0.9);
+  });
+
+  test('finding from perturbation thread is kind=perturbation', () => {
+    const pertThread = threads.createThread(sqlite, { session_id: sessionId, query: 'tangent', origin: 'perturbation', perturbation_strategy: 'analogical' });
+    const f = findings.createFinding(sqlite, { thread_id: pertThread.id, session_id: sessionId, content: 'analogous case', summary: 'an analog', confidence: 0.9 });
+    expect(f.kind).toBe('perturbation');
+    expect(f.confidence).toBe(0.9); // perturbation is not capped, only speculation is
+  });
+
+  test('temporal_shift perturbation finding is kind=speculation and confidence is capped', () => {
+    const pertThread = threads.createThread(sqlite, { session_id: sessionId, query: 'futurist', origin: 'perturbation', perturbation_strategy: 'temporal_shift' });
+    const f = findings.createFinding(sqlite, { thread_id: pertThread.id, session_id: sessionId, content: 'forward-looking content', summary: 's', confidence: 0.9 });
+    expect(f.kind).toBe('speculation');
+    expect(f.confidence).toBe(0.5);
+  });
+
+  test('forward-date text triggers kind=speculation even on a normal thread', () => {
+    const f = findings.createFinding(sqlite, { thread_id: threadId, session_id: sessionId, content: 'By 2040 the industry will evolve', summary: 'forecast', confidence: 0.85 });
+    expect(f.kind).toBe('speculation');
+    expect(f.confidence).toBe(0.5);
+  });
+
+  test('forward-verb text triggers kind=speculation', () => {
+    const f = findings.createFinding(sqlite, { thread_id: threadId, session_id: sessionId, content: 'projected to grow substantially', summary: 's', confidence: 0.8 });
+    expect(f.kind).toBe('speculation');
+    expect(f.confidence).toBe(0.5);
+  });
+
+  test('speculation with confidence below cap is not lowered', () => {
+    const pertThread = threads.createThread(sqlite, { session_id: sessionId, query: 'futurist', origin: 'perturbation', perturbation_strategy: 'temporal_shift' });
+    const f = findings.createFinding(sqlite, { thread_id: pertThread.id, session_id: sessionId, content: 'x', summary: 's', confidence: 0.3 });
+    expect(f.kind).toBe('speculation');
+    expect(f.confidence).toBe(0.3);
+  });
+
+  test('explicit kind override bypasses classifier', () => {
+    const f = findings.createFinding(sqlite, { thread_id: threadId, session_id: sessionId, content: 'By 2040 X', summary: 's', confidence: 0.95, kind: 'normal' });
+    expect(f.kind).toBe('normal');
+    expect(f.confidence).toBe(0.95); // no cap because kind=normal
+  });
 });
 
 describe('steps and cost tracking', () => {

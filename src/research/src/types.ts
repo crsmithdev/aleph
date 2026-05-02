@@ -314,6 +314,16 @@ export interface ResearchThread {
   updated_at: string;
 }
 
+/** Kind of finding. Drives summary inclusion and confidence policy.
+ *  - `normal`: standard finding from a seed/follow-up/canon-slot/gap thread.
+ *  - `perturbation`: derived from a perturbation thread; included as
+ *    "adjacent perspective" rather than primary evidence.
+ *  - `speculation`: forward-looking or futurist content (e.g. from
+ *    `temporal_shift` perturbations or text matching forward-date
+ *    patterns); confidence is capped to ensure such material can't
+ *    masquerade as fact. */
+export type FindingKind = 'normal' | 'perturbation' | 'speculation';
+
 export interface ResearchFinding {
   id: string;
   thread_id: string;
@@ -328,6 +338,8 @@ export interface ResearchFinding {
   confidence: number;
   novelty: number;
   actionability: number;
+  /** Classified at finding creation. See `FindingKind`. */
+  kind: FindingKind;
   user_rating: 'promising' | 'not_useful' | 'critical' | null;
   follow_ups: string[];
   follow_up_analysis?: FollowUpAnalysis;
