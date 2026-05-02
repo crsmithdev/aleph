@@ -47,6 +47,10 @@ function migrateDefaults(sqlite: Sqlite, storedJson: string): void {
     // sparse attention, same prompt behavior). Only migrate if stored is the
     // previous default, so user-customized models stay put.
     ['model', 'deepseek/deepseek-chat', DEFAULT_SESSION_CONFIG.model],
+    // Role priming default flipped false → true (every session now picks a
+    // domain agent role). The UI never exposed a toggle, so any stored false
+    // is the prior code default, not a user choice — safe to migrate.
+    ['role_priming_enabled', false, DEFAULT_SESSION_CONFIG.role_priming_enabled],
   ];
 
   let changed = false;

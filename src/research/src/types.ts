@@ -160,7 +160,11 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
     max_session_duration_minutes: null,
   },
   on_duration_expiry: 'pause',
-  role_priming_enabled: false,
+  // On by default: pickAgentRole runs once at session creation and threads
+  // a domain-expert system prompt through every answer-voice LLM call
+  // (lead/synth/extract). Cost is one cheap model call. Disable per-query
+  // via config.role_priming_enabled=false if you want raw default voice.
+  role_priming_enabled: true,
   role_label: null,
   role_prompt: null,
   follow_up: {
