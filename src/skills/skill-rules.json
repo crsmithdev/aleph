@@ -79,6 +79,10 @@
     {
       "skill": "config-audit",
       "keywords": ["audit hooks", "hook audit", "audit my hooks", "check hooks", "are my hooks", "hook outputs", "dead hooks", "unused hooks", "audit skills", "skill audit", "audit my skills", "check skills", "audit config", "config audit", "audit my config", "audit agents", "agent audit", "audit my agents", "audit setup", "audit agent", "audit claude.md", "check agent config", "go through the hooks", "go through the skills", "unused skills", "/(audit|check|review).{0,15}(hook|skill|config|agent|setup)/", "/unused.{0,10}(hook|skill)/", "/(hook|skill).{0,10}(unused|dead|broken|working)/"]
+    },
+    {
+      "skill": "conform",
+      "keywords": ["conform", "make the others", "make the other", "apply this pattern", "apply the pattern", "align with", "match the way", "match this pattern", "fix drift", "standardize", "make them consistent", "make consistent", "same pattern", "same shape", "apply to all", "propagate this", "/(make|fix|align).{0,30}(consistent|match|same|like)/", "/(other|all).{0,15}(pages|tables|routes|providers|files).{0,30}(match|like|same|consistent)/"]
     }
   ]
 }
