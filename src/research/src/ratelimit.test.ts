@@ -261,7 +261,7 @@ describe('getQueuedThreadsForNewJobs: retry_after filtering', () => {
 
   test('thread with active job is excluded regardless of retry_after', () => {
     insertThread(db, sessionId, 'thread-d', 'queued', null);
-    const job = jobs.createJob(db, { session_id: sessionId, thread_id: 'thread-d', mode: 'burst' });
+    const job = jobs.createJob(db, { session_id: sessionId, thread_id: 'thread-d', mode: 'priority' });
     jobs.claimJob(db, job.id, 'worker-1');
     const result = jobs.getQueuedThreadsForNewJobs(db, sessionId, 10);
     expect(result.map(t => t.id)).not.toContain('thread-d');

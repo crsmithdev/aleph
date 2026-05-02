@@ -470,7 +470,7 @@ describe('concurrent slot safety', () => {
     const t = threads.createThread(db, { session_id: sessId, query: 'q', origin: 'seed', priority: 0.9, depth: 0, max_depth: 5 });
 
     // Simulate the session-level burst job being claimed and running.
-    const sessJob = jobs.createJob(db, { session_id: sessId, mode: 'burst' });
+    const sessJob = jobs.createJob(db, { session_id: sessId, mode: 'priority' });
     jobs.claimJob(db, sessJob.id, 'worker-1');
     jobs.markRunning(db, sessJob.id, 'worker-1');
 
@@ -514,7 +514,7 @@ describe('concurrent slot safety', () => {
     const sessId = queries.createQuery(db, 'Test', 'q').id;
     threads.createThread(db, { session_id: sessId, query: 'q', origin: 'seed' });
 
-    const sessJob = jobs.createJob(db, { session_id: sessId, mode: 'burst' });
+    const sessJob = jobs.createJob(db, { session_id: sessId, mode: 'priority' });
     jobs.claimJob(db, sessJob.id, 'worker-1');
     jobs.markRunning(db, sessJob.id, 'worker-1');
 
@@ -539,7 +539,7 @@ describe('concurrent slot safety', () => {
     // Direct INSERT bypassing the helper must also fail via the unique index.
     let threwUnique = false;
     try {
-      jobs.createJob(db, { session_id: sessId, thread_id: t.id, mode: 'burst' });
+      jobs.createJob(db, { session_id: sessId, thread_id: t.id, mode: 'priority' });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('UNIQUE') || msg.includes('constraint')) threwUnique = true;

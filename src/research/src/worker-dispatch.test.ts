@@ -262,7 +262,7 @@ describe('thread dispatch orchestration', () => {
     const t2 = insertThread(db, sessId, 'thread-2', 'queued');
 
     // Fill the one slot
-    const j1 = jobs.createJob(db, { session_id: sessId, thread_id: t1, mode: 'burst' });
+    const j1 = jobs.createJob(db, { session_id: sessId, thread_id: t1, mode: 'priority' });
     jobs.claimJob(db, j1.id, 'worker-1');
     jobs.completeJob(db, j1.id, 'worker-1');
 
@@ -283,7 +283,7 @@ describe('job cancellation via DB', () => {
 
   test('cancelled job is no longer visible as active', () => {
     const sessId = insertSession(db, 'sess-1');
-    const job = jobs.createJob(db, { session_id: sessId, mode: 'burst' });
+    const job = jobs.createJob(db, { session_id: sessId, mode: 'priority' });
     jobs.claimJob(db, job.id, 'worker-1');
     jobs.cancelJob(db, job.id);
     expect(jobs.getActiveJobForSession(db, sessId)).toBeNull();
@@ -291,7 +291,7 @@ describe('job cancellation via DB', () => {
 
   test('getActiveJobForSession returns null after cancellation', () => {
     const sessId = insertSession(db, 'sess-1');
-    const job = jobs.createJob(db, { session_id: sessId, mode: 'burst' });
+    const job = jobs.createJob(db, { session_id: sessId, mode: 'priority' });
     expect(jobs.getActiveJobForSession(db, sessId)).not.toBeNull();
     jobs.cancelJob(db, job.id);
     expect(jobs.getActiveJobForSession(db, sessId)).toBeNull();
@@ -325,7 +325,7 @@ describe('stale reclaim + orphan reset interaction', () => {
   test('stale job reclaim makes thread re-dispatchable', () => {
     const sessId = insertSession(db, 'sess-1');
     const tid = insertThread(db, sessId, 'thread-1', 'active');
-    const job = jobs.createJob(db, { session_id: sessId, thread_id: tid, mode: 'burst' });
+    const job = jobs.createJob(db, { session_id: sessId, thread_id: tid, mode: 'priority' });
     jobs.claimJob(db, job.id, 'worker-1');
     jobs.markRunning(db, job.id, 'worker-1');
 
