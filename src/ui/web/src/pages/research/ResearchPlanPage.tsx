@@ -16,7 +16,8 @@ const originColors: Record<string, string> = {
 export function ResearchPlanPage() {
   const { id } = useParams<{ id: string }>();
   const { data: session } = useResearchSession(id!);
-  const { data: plan, isLoading, isError } = useResearchPlan(id!);
+  const { data: planEnvelope, isLoading, isError } = useResearchPlan(id!);
+  const plan = planEnvelope?.plan ?? null;
   const modifyPlan = useModifyPlan();
 
   if (isLoading) return <PageLoading />;

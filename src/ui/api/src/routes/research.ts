@@ -813,15 +813,22 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
   );
 
   // === Findings ===
-  app.get<{ Params: { id: string }; Querystring: { thread_id?: string; limit?: string; sort?: string } }>(
+  app.get<{ Params: { id: string }; Querystring: { thread_id?: string; limit?: string; sort?: string; envelope?: string } }>(
     '/queries/:id/findings',
     async (req) => {
-      const { thread_id, limit, sort } = req.query;
-      return listFindings(app.sqlite, req.params.id, {
+      const { thread_id, limit, sort, envelope } = req.query;
+      const items = listFindings(app.sqlite, req.params.id, {
         threadId: thread_id,
         limit: limit ? parseInt(limit) : undefined,
         sort: sort as 'created_at' | 'novelty' | 'confidence' | undefined,
       });
+      // Default response is the bare array (back-compat). Pass ?envelope=1 to
+      // get { total, items } — useful for clients that need the count without
+      // a second round-trip and for symmetry with single-resource endpoints.
+      if (envelope === '1' || envelope === 'true') {
+        return { total: items.length, items };
+      }
+      return items;
     }
   );
 
@@ -908,9 +915,11 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Params: { id: string } }>(
     '/queries/:id/plan',
     async (req, reply) => {
+      const query = getQuery(app.sqlite, req.params.id);
+      if (!query) return reply.status(404).send({ error: 'Query not found' });
       const plan = getLatestPlan(app.sqlite, req.params.id);
-      if (!plan) return reply.status(404).send({ error: 'No plan found' });
-      return plan;
+      if (!plan) return reply.status(200).send({ plan: null, status: 'pending' });
+      return { plan, status: 'ready' };
     }
   );
 
@@ -918,7 +927,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     '/queries/:id/plan/modify',
     async (req, reply) => {
       const plan = getLatestPlan(app.sqlite, req.params.id);
-      if (!plan) return reply.status(404).send({ error: 'No plan found' });
+      if (!plan) return reply.status(409).send({ error: 'Plan not yet generated; cannot modify', status: 'pending' });
       const mod = addPlanModification(app.sqlite, {
         plan_id: plan.id,
         action: req.body.action as any,
@@ -1017,7 +1026,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
 
       const existing = getActiveJobForSession(app.sqlite, queryId);
       if (existing) {
-        return reply.status(409).send({ error: 'Query already has an active job', job_id: existing.id });
+        return reply.status(200).send({ status: 'already_running', job_id: existing.id, session_id: queryId });
       }
 
       const mode = (req.body.mode ?? 'burst') as 'burst' | 'background' | 'scheduled';

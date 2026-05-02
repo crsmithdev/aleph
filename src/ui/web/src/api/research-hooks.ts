@@ -813,10 +813,15 @@ export function useResearchSteps(sessionId: string, threadId?: string, opts?: { 
 }
 
 // --- Plan ---
+export interface ResearchPlanEnvelope {
+  plan: ResearchPlan | null;
+  status: 'pending' | 'ready';
+}
+
 export function useResearchPlan(sessionId: string) {
   return useQuery({
     queryKey: ['research-plan', sessionId],
-    queryFn: () => api.get<ResearchPlan>(`/research/queries/${sessionId}/plan`),
+    queryFn: () => api.get<ResearchPlanEnvelope>(`/research/queries/${sessionId}/plan`),
     enabled: !!sessionId,
     retry: false,
   });
