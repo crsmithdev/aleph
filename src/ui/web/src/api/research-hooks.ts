@@ -94,6 +94,21 @@ export function usePostMortems(sessionId: string) {
   });
 }
 
+export type QuestionShape =
+  | 'survey' | 'timeline' | 'list' | 'dynamics'
+  | 'comparison' | 'lookup' | 'audit';
+
+export interface ShapeLens {
+  shape: QuestionShape;
+  criterion: string;
+}
+
+export interface ShapeAnalysis {
+  shapes: QuestionShape[];
+  lenses: ShapeLens[];
+  confidence: number;
+}
+
 export interface ResearchQuery {
   id: string;
   title: string;
@@ -101,6 +116,7 @@ export interface ResearchQuery {
   prompt_short: string | null;
   prompt_super_short: string | null;
   prompt_hints: PromptHints;
+  question_shape: ShapeAnalysis | null;
   status: 'active' | 'paused' | 'exhausted' | 'halted' | 'completed' | 'archived';
   config: Record<string, unknown>;
   summary: string;
@@ -532,7 +548,7 @@ export const useCreateResearchSession = useCreateResearchQuery;
 export function useUpdateResearchQuery() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: string; status?: string; title?: string }) =>
+    mutationFn: ({ id, ...data }: { id: string; status?: string; title?: string; question_shape?: ShapeAnalysis | null }) =>
       api.patch<ResearchQuery>(`/research/queries/${id}`, data),
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ['research-queries'] });

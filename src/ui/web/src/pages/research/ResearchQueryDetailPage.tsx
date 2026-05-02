@@ -28,6 +28,7 @@ import { ConfigForm, patchByPath, getByPath } from './config-schema';
 import { TelemetryView } from './ResearchTelemetryView';
 import { ReviewsView } from './ResearchReviewsView';
 import { FlagChip } from '../../components/research/FlagChip';
+import { QuestionShapeBar } from '../../components/research/QuestionShapeBar';
 import cytoscape from 'cytoscape';
 // @ts-expect-error cytoscape-fcose has no bundled types
 import fcose from 'cytoscape-fcose';
@@ -3455,6 +3456,10 @@ export function ResearchQueryDetailPage() {
           {/* Secondary content */}
           <div className="px-6 pb-0">
             <p className="text-sm text-text-muted line-clamp-3 mb-2">{session.prompt_short || session.prompt}</p>
+
+            <div className="mb-2">
+              <QuestionShapeBar session={session} />
+            </div>
 
             <LiveModeBanner session={session} />
 
