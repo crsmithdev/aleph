@@ -5,6 +5,8 @@ import {
   type IterationCheckRecord,
   type PostMortemRecord,
 } from '../../api/research-hooks';
+import { humanizeFlag } from '../../components/research/FlagChip';
+import { shortRelativeTime } from '../../utils/format';
 
 interface Props { sessionId: string }
 
@@ -33,11 +35,15 @@ export function ReviewsView({ sessionId }: Props) {
     <div className="p-6 flex flex-col gap-6 max-w-4xl">
       {mortems.length > 0 && (
         <section>
-          <h2 className="text-sm font-medium text-text-secondary uppercase tracking-wider mb-3">
+          <h2 className="text-sm font-medium text-text-secondary uppercase tracking-wider mb-1">
             Post-mortems ({mortems.length})
           </h2>
+          <p className="text-sm text-text-muted mb-3">
+            One snapshot per session burst-job. Numbers reflect the run as of that
+            timestamp — later activity isn't re-evaluated until the next job finishes.
+          </p>
           <div className="flex flex-col gap-3">
-            {mortems.map(m => <PostMortemCard key={m.id} record={m} />)}
+            {mortems.map((m, i) => <PostMortemCard key={m.id} record={m} latest={i === 0} />)}
           </div>
         </section>
       )}
@@ -65,18 +71,27 @@ function VerdictBadge({ kind, label }: { kind: 'ok' | 'warn' | 'error' | 'neutra
   return <span className={clsx('px-2 py-0.5 rounded text-sm font-medium border tabular-nums', cls)}>{label}</span>;
 }
 
-function PostMortemCard({ record }: { record: PostMortemRecord }) {
-  const kind = record.verdict === 'pass' ? 'ok' : 'warn';
+function PostMortemCard({ record, latest }: { record: PostMortemRecord; latest: boolean }) {
   const m = record.metrics_snapshot.metrics;
   const sh = record.metrics_snapshot.source_health;
+  // When flags exist they convey the verdict — the separate "flag" badge is
+  // redundant. Show only "pass" verdict explicitly, since that has no flags.
+  const isPass = record.verdict === 'pass';
+  const fullTime = new Date(record.created_at).toLocaleString();
   return (
     <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <VerdictBadge kind={kind} label={record.verdict} />
-          {record.flags.map(f => <VerdictBadge key={f} kind="warn" label={f} />)}
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {isPass
+            ? <VerdictBadge kind="ok" label="pass" />
+            : record.flags.map(f => <VerdictBadge key={f} kind="warn" label={humanizeFlag(f)} />)}
+          {latest && <span className="text-sm text-text-muted">latest</span>}
+          {!latest && <span className="text-sm text-text-muted">earlier snapshot</span>}
         </div>
-        <span className="text-sm text-text-muted font-mono">{record.created_at}</span>
+        <span className="text-sm text-text-muted shrink-0" title={fullTime}>
+          {shortRelativeTime(record.created_at)}
+          {record.job_id && <span className="ml-2 font-mono">job {record.job_id.slice(0, 8)}</span>}
+        </span>
       </div>
       <p className="text-sm text-text-secondary mb-3">{record.notes}</p>
       {record.recommendations.length > 0 && (
@@ -112,7 +127,7 @@ function IterationCheckCard({ record }: { record: IterationCheckRecord }) {
     <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <VerdictBadge kind={kind} label={record.verdict.replace('_', ' ')} />
+          <VerdictBadge kind={kind} label={record.verdict.replace(/_/g, ' ')} />
           <span className="text-sm text-text-muted">iter {record.iterations_completed}</span>
         </div>
         <span className="text-sm text-text-muted font-mono">{record.created_at}</span>

@@ -79,10 +79,12 @@ export interface QueryStats {
   cost: number;
   last_step_at: string | null;
   findings_by_day: number[]; // length 7, oldest → newest; today is last
+  /** Most recent post-mortem snapshot, if any. Null when no post-mortem has run yet. */
+  latest_post_mortem: { verdict: 'pass' | 'flag'; flags: string[]; created_at: string } | null;
 }
 
 function emptyStats(): QueryStats {
-  return { findings: 0, concepts: 0, sources: 0, threads: 0, cost: 0, last_step_at: null, findings_by_day: [0, 0, 0, 0, 0, 0, 0] };
+  return { findings: 0, concepts: 0, sources: 0, threads: 0, cost: 0, last_step_at: null, findings_by_day: [0, 0, 0, 0, 0, 0, 0], latest_post_mortem: null };
 }
 
 /**
@@ -141,6 +143,30 @@ export function computeQueryStats(sqlite: Sqlite, ids: string[]): Map<string, Qu
     if (idx === undefined) continue;
     const s = map.get(r.session_id);
     if (s) s.findings_by_day[idx] = r.n;
+  }
+
+  // Latest post-mortem per session — picks the row with max(created_at) per session.
+  const pmRows = sqlite.prepare(
+    `SELECT pm.session_id, pm.verdict, pm.flags, pm.created_at
+     FROM research_post_mortems pm
+     JOIN (
+       SELECT session_id, MAX(created_at) AS max_at
+       FROM research_post_mortems
+       WHERE session_id IN (${placeholders})
+       GROUP BY session_id
+     ) latest
+       ON pm.session_id = latest.session_id AND pm.created_at = latest.max_at`
+  ).all(...ids) as { session_id: string; verdict: string; flags: string; created_at: string }[];
+  for (const r of pmRows) {
+    const s = map.get(r.session_id);
+    if (!s) continue;
+    let flags: string[] = [];
+    try { flags = JSON.parse(r.flags ?? '[]'); } catch { /* malformed — leave empty */ }
+    s.latest_post_mortem = {
+      verdict: r.verdict === 'flag' ? 'flag' : 'pass',
+      flags,
+      created_at: r.created_at,
+    };
   }
 
   return map;

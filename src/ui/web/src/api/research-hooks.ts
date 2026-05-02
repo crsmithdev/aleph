@@ -11,6 +11,7 @@ export interface QueryStats {
   cost: number;
   last_step_at: string | null;
   findings_by_day: number[]; // length 7, oldest → newest
+  latest_post_mortem: { verdict: 'pass' | 'flag'; flags: string[]; created_at: string } | null;
 }
 
 export type PromptShape = 'answer' | 'list' | 'table' | 'brief' | 'dataset';

@@ -7,7 +7,7 @@ import remarkGfm from 'remark-gfm';
 import {
   useResearchQuery, useResearchFindings, useResearchThreads,
   useResearchCosts, useUpdateResearchQuery, usePromoteResearchQuery, useRateFinding,
-  useSteeringNotes, useCreateSteeringNote,
+  useSteeringNotes, useCreateSteeringNote, usePostMortems,
   useInjectThread, useRunResearch, useResearchRunning,
   useResearchActivity, useCancelJob, useResearchJobs, useResearchStream,
   useResearchSteps, useUpdateThread, useDeleteResearchQuery, useUpdateQueryConfig,
@@ -27,6 +27,7 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { ConfigForm, patchByPath, getByPath } from './config-schema';
 import { TelemetryView } from './ResearchTelemetryView';
 import { ReviewsView } from './ResearchReviewsView';
+import { FlagChip } from '../../components/research/FlagChip';
 import cytoscape from 'cytoscape';
 // @ts-expect-error cytoscape-fcose has no bundled types
 import fcose from 'cytoscape-fcose';
@@ -4313,6 +4314,9 @@ export function ResearchQueryDetailPage() {
   const { data: envCheck } = useResearchEnvCheck();
   const { data: jobs = [] } = useResearchJobs(id!);
   const { data: workers = [] } = useResearchWorkers();
+  const { data: postMortems = [] } = usePostMortems(id!);
+  // listPostMortems returns DESC by created_at, so [0] is the latest snapshot.
+  const latestPostMortem = postMortems[0];
   const updateQuery = useUpdateResearchQuery();
   const updateConfig = useUpdateQueryConfig();
   const runResearch = useRunResearch();
@@ -4437,6 +4441,13 @@ export function ResearchQueryDetailPage() {
               <PageTitleLink to="/research">Research Sessions</PageTitleLink>
               <PageTitleSeparator />
               <PageTitle>{session.title}</PageTitle>
+              {latestPostMortem && latestPostMortem.verdict === 'flag' && latestPostMortem.flags.length > 0 && (
+                <FlagChip
+                  flags={latestPostMortem.flags}
+                  createdAt={latestPostMortem.created_at}
+                  onClick={() => setTab('reviews')}
+                />
+              )}
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-4">
               {/* Run mode controls */}

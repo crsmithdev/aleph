@@ -8,6 +8,7 @@ import { PageHeader } from '../../components/layout/PageHeader';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { fmtCurrency, shortRelativeTime } from '../../utils/format';
+import { FlagChip } from '../../components/research/FlagChip';
 
 type StatusFilter = 'all' | 'active' | 'paused' | 'exhausted' | 'halted' | 'completed';
 
@@ -415,6 +416,12 @@ export function ResearchQueriesPage() {
                     {session.title || session.prompt}
                   </h3>
                   <div className="flex items-center gap-1.5 shrink-0">
+                    {session.stats?.latest_post_mortem?.verdict === 'flag' && session.stats.latest_post_mortem.flags.length > 0 && (
+                      <FlagChip
+                        flags={session.stats.latest_post_mortem.flags}
+                        createdAt={session.stats.latest_post_mortem.created_at}
+                      />
+                    )}
                     {sessionErrorMap.get(session.id) && (
                       <span
                         className={clsx(
