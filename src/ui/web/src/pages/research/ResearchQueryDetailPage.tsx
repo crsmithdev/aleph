@@ -4405,11 +4405,11 @@ export function ResearchQueryDetailPage() {
   const activeJob = activeJobs[0] ?? null;
 
   const isEnabled = session.status === 'active';
-  const selectedMode = activeJob?.mode ?? (scheduleCfg?.mode as string) ?? 'background';
+  const selectedMode = activeJob?.mode ?? (scheduleCfg?.mode as string) ?? 'default';
 
   function cancelAll() { for (const j of activeJobs) cancelJob.mutate({ jobId: j.id }); }
 
-  function setRunMode(mode: 'burst' | 'background' | 'scheduled') {
+  function setRunMode(mode: 'priority' | 'default' | 'scheduled') {
     updateConfig.mutate({ id: id!, config: { schedule: { ...(scheduleCfg as object), mode } } });
   }
 
@@ -4419,11 +4419,11 @@ export function ResearchQueryDetailPage() {
       cancelAll();
     } else {
       updateQuery.mutate({ id: id!, status: 'active' });
-      if (selectedMode === 'burst') {
+      if (selectedMode === 'priority') {
         const iterations = (session!.config as Record<string, unknown>).burst_iterations as number ?? 10;
-        runResearch.mutate({ sessionId: id!, mode: 'burst', iterations });
-      } else if (selectedMode === 'background') {
-        runResearch.mutate({ sessionId: id!, mode: 'background' });
+        runResearch.mutate({ sessionId: id!, mode: 'priority', iterations });
+      } else if (selectedMode === 'default') {
+        runResearch.mutate({ sessionId: id!, mode: 'default' });
       }
       // scheduled: worker picks it up automatically when windows are active
     }
@@ -4452,7 +4452,7 @@ export function ResearchQueryDetailPage() {
             <div className="flex items-center gap-2 shrink-0 ml-4">
               {/* Run mode controls */}
               <div className="flex items-center gap-1">
-                {(['burst', 'background', 'scheduled'] as const).map(m => (
+                {(['priority', 'default', 'scheduled'] as const).map(m => (
                   <button key={m} onClick={() => setRunMode(m)}
                     className={clsx('rounded-md px-2.5 py-1 text-sm font-medium transition-colors capitalize',
                       selectedMode === m ? 'bg-accent text-white' : 'text-text-muted hover:text-text-primary hover:bg-bg-tertiary'

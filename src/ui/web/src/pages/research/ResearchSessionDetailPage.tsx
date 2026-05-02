@@ -1191,7 +1191,7 @@ function WorkersTab({ sessionId }: { sessionId: string }) {
         <div className="flex items-center justify-between mb-2">
           <p className="text-sm text-text-muted uppercase tracking-wide">Workers ({workers.length})</p>
           <button
-            onClick={() => runResearch.mutate({ sessionId, mode: 'background' })}
+            onClick={() => runResearch.mutate({ sessionId, mode: 'default' })}
             className="text-sm text-accent hover:underline"
             disabled={runResearch.isPending}
           >+ Spawn worker</button>

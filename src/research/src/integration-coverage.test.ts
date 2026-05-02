@@ -233,7 +233,7 @@ describe('worker fanout: dispatcher and session-job coexist', () => {
     threads.createThread(db, { session_id: session.id, query: 'q3', origin: 'follow_up' });
 
     // Active session-level job (the burst kickoff)
-    const sessJob = jobs.createJob(db, { session_id: session.id, mode: 'burst' });
+    const sessJob = jobs.createJob(db, { session_id: session.id, mode: 'priority' });
     jobs.claimJob(db, sessJob.id, 'worker-1');
     jobs.markRunning(db, sessJob.id, 'worker-1');
 
@@ -276,7 +276,7 @@ describe('live mode pause + promote', () => {
   test('updateQuery clears max_session_duration_minutes and flips status to active', () => {
     const db = createTestDb();
     const session = queries.createQuery(db, 'Live', 'topic', {
-      schedule: { mode: 'background', active_windows: [], timezone: 'UTC', max_session_duration_minutes: 5 },
+      schedule: { mode: 'default', active_windows: [], timezone: 'UTC', max_session_duration_minutes: 5 },
       on_duration_expiry: 'pause',
     });
     expect(session.config.schedule.max_session_duration_minutes).toBe(5);

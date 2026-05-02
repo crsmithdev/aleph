@@ -195,8 +195,8 @@ describe('findPendingJob ordering', () => {
     threads.createThread(db, { session_id: s1, query: 'q', origin: 'seed', priority: 0.2, depth: 0, max_depth: 5 });
     threads.createThread(db, { session_id: s2, query: 'q', origin: 'seed', priority: 0.8, depth: 0, max_depth: 5 });
 
-    jobs.createJob(db, { session_id: s1, mode: 'burst' });
-    jobs.createJob(db, { session_id: s2, mode: 'burst' });
+    jobs.createJob(db, { session_id: s1, mode: 'priority' });
+    jobs.createJob(db, { session_id: s2, mode: 'priority' });
 
     const pending = jobs.findPendingJob(db)!;
     expect(pending.session_id).toBe(s2);
@@ -210,7 +210,7 @@ describe('findPendingJob ordering', () => {
   test('ignores claimed/running/completed jobs', () => {
     const db = createTestDb();
     const sessId = queries.createQuery(db, 'S', 'q').id;
-    const job = jobs.createJob(db, { session_id: sessId, mode: 'burst' });
+    const job = jobs.createJob(db, { session_id: sessId, mode: 'priority' });
     jobs.claimJob(db, job.id, 'worker-1');
     expect(jobs.findPendingJob(db)).toBeNull();
   });

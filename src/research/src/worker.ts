@@ -231,7 +231,7 @@ async function executeSessionJob(job: import('./types.js').ResearchJob): Promise
     }
   }
 
-  // burst jobs run for their configured iteration cap; all others run until exhausted.
+  // priority jobs run for their configured iteration cap; all others run until exhausted.
   const maxIterations = job.max_iterations ?? Infinity;
 
   const jobStartedMs = Date.now();

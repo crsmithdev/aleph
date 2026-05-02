@@ -223,7 +223,7 @@ export function applyResearchDDL(sqlite: Sqlite): void {
       session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
       thread_id TEXT REFERENCES research_threads(id) ON DELETE SET NULL,
       status TEXT NOT NULL DEFAULT 'pending',
-      mode TEXT NOT NULL DEFAULT 'burst',
+      mode TEXT NOT NULL DEFAULT 'priority',
       max_iterations INTEGER,
       iterations_completed INTEGER NOT NULL DEFAULT 0,
       claimed_by TEXT,
@@ -404,6 +404,14 @@ export function applyResearchDDL(sqlite: Sqlite): void {
   }
   // applied_at on plan mods so boost/deprioritize priority-deltas don't re-apply every engine loop.
   try { sqlite.exec(`ALTER TABLE research_plan_modifications ADD COLUMN applied_at TEXT`); } catch { /* exists */ }
+  // Rename job modes: burst → priority, background → default
+  try { sqlite.exec(`UPDATE research_jobs SET mode = 'priority' WHERE mode = 'burst'`); } catch { /* ignore */ }
+  try { sqlite.exec(`UPDATE research_jobs SET mode = 'default' WHERE mode = 'background'`); } catch { /* ignore */ }
+  // Rename session schedule mode: burst → priority, background → default
+  try {
+    sqlite.exec(`UPDATE research_queries SET config = json_patch(config, json_object('schedule', json_patch(json_extract(config, '$.schedule'), json_object('mode', 'priority')))) WHERE json_extract(config, '$.schedule.mode') = 'burst'`);
+    sqlite.exec(`UPDATE research_queries SET config = json_patch(config, json_object('schedule', json_patch(json_extract(config, '$.schedule'), json_object('mode', 'default')))) WHERE json_extract(config, '$.schedule.mode') = 'background'`);
+  } catch { /* ignore */ }
 
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS research_steering_notes (

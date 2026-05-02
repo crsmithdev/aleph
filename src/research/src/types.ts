@@ -66,7 +66,7 @@ export interface SessionConfig {
     openrouter_models: string[];
   };
   schedule: {
-    mode: 'background' | 'scheduled' | 'burst';
+    mode: 'default' | 'scheduled' | 'priority';
     active_windows: Array<{
       days: string[];
       start: string;
@@ -154,7 +154,7 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
     ],
   },
   schedule: {
-    mode: 'background',
+    mode: 'default',
     active_windows: [],
     timezone: 'America/Los_Angeles',
     max_session_duration_minutes: null,
@@ -502,7 +502,7 @@ export interface ProposedMonitor {
 // === Job Types ===
 
 export type JobStatus = 'pending' | 'claimed' | 'running' | 'completed' | 'failed' | 'cancelled';
-export type JobMode = 'burst' | 'background' | 'scheduled';
+export type JobMode = 'priority' | 'default' | 'scheduled';
 
 export interface ResearchJob {
   id: string;

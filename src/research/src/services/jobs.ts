@@ -43,7 +43,7 @@ export function createThreadJobIfNone(
   try {
     const result = sqlite.prepare(`
       INSERT INTO research_jobs (id, session_id, thread_id, status, mode, max_iterations, created_at, updated_at)
-      SELECT ?, ?, ?, 'pending', 'burst', 1, ?, ?
+      SELECT ?, ?, ?, 'pending', 'priority', 1, ?, ?
       WHERE NOT EXISTS (
         SELECT 1 FROM research_jobs
         WHERE thread_id = ? AND status IN ('pending', 'claimed', 'running')

@@ -189,7 +189,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     gap_analysis: { enabled: false, max_gap_searches: 0, mode: 'periodic', every_n_findings: 999 },
     role_priming_enabled: true,
     schedule: {
-      mode: 'background',
+      mode: 'default',
       active_windows: [],
       timezone: 'America/Los_Angeles',
       max_session_duration_minutes: 7,
@@ -289,7 +289,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       }
 
       // Auto-create a burst job so workers pick it up immediately
-      createJob(app.sqlite, { session_id: query.id, mode: 'burst', max_iterations: 1 });
+      createJob(app.sqlite, { session_id: query.id, mode: 'priority', max_iterations: 1 });
       return reply.status(201).send(query);
     }
   );
@@ -316,7 +316,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       // Ensure a job exists so workers actually pick it up.
       const active = getActiveJobForSession(app.sqlite, req.params.id);
       if (!active) {
-        createJob(app.sqlite, { session_id: req.params.id, mode: 'background' });
+        createJob(app.sqlite, { session_id: req.params.id, mode: 'default' });
       }
       return updated;
     }
@@ -1029,11 +1029,11 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(200).send({ status: 'already_running', job_id: existing.id, session_id: queryId });
       }
 
-      const mode = (req.body.mode ?? 'burst') as 'burst' | 'background' | 'scheduled';
+      const mode = (req.body.mode ?? 'priority') as 'priority' | 'default' | 'scheduled';
       const job = createJob(app.sqlite, {
         session_id: queryId,
         mode,
-        max_iterations: mode === 'burst' ? (req.body.iterations ?? 5) : undefined,
+        max_iterations: mode === 'priority' ? (req.body.iterations ?? 5) : undefined,
       });
 
       return reply.status(201).send({ status: 'queued', job_id: job.id, session_id: queryId });
@@ -1309,7 +1309,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     for (const query of allQueries) {
       const existing = getActiveJobForSession(app.sqlite, query.id);
       if (!existing) {
-        const job = createJob(app.sqlite, { session_id: query.id, mode: 'background' });
+        const job = createJob(app.sqlite, { session_id: query.id, mode: 'default' });
         created.push(job.id);
       }
     }
