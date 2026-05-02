@@ -96,6 +96,14 @@ export interface SessionConfig {
     seed_similarity_min: number;  // 0 = disabled; min jaccard similarity to original seed query
     hop_similarity_min: number;   // 0 = disabled; min jaccard similarity to parent thread query
   };
+  /** Floor on jaccard similarity between a perturbation's generated query
+   *  and the seed prompt. Tuned much looser than topic_coherence (which
+   *  applies to follow-ups) so creative angles still pass — the goal is
+   *  to catch pure-tangent drift, not constrain creativity. A perturbation
+   *  whose query falls below the floor is regenerated once; if the second
+   *  attempt also fails, the perturbation is cancelled and a step is
+   *  recorded (decision='perturbation_rejected'). 0 disables the check. */
+  perturbation_coherence_floor: number;
   model: string;
   /** Cheap, fast model for short utility calls (YES/NO judges, dedup, thread
    *  titles, perturbation query gen). Defaults to model when null. Step rows
@@ -217,6 +225,7 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
     seed_similarity_min: 0.0,
     hop_similarity_min: 0.0,
   },
+  perturbation_coherence_floor: 0.05,
   burst_iterations: 10,
   min_searches_per_thread: 1,
   fetch_source_text: false,

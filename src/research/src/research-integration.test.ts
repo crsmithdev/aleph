@@ -199,7 +199,9 @@ describe('perturbation correctness', () => {
     });
 
     const session = await engine.startSession('Test', 'sourdough baking', {
-      p_serendipity: 1.0, ...NO_DELAY,
+      p_serendipity: 1.0,
+      perturbation_coherence_floor: 0, // test perturbation creation, not the floor
+      ...NO_DELAY,
     });
     await engine.runIterations(session.id);
 
@@ -248,7 +250,9 @@ describe('perturbation correctness', () => {
       });
 
       const session = await engine.startSession(`S${i}`, 'urban farming', {
-        p_serendipity: 1.0, ...NO_DELAY,
+        p_serendipity: 1.0,
+        perturbation_coherence_floor: 0, // test strategy diversity, not the floor
+        ...NO_DELAY,
       });
       await engine.runIterations(session.id);
 
@@ -262,6 +266,81 @@ describe('perturbation correctness', () => {
     // Should use multiple strategies over 8 runs
     const unique = new Set(usedStrategies);
     expect(unique.size).toBeGreaterThanOrEqual(2);
+  });
+
+  test('coherence floor rejects pure-tangent perturbations and records a step', async () => {
+    const sqlite = createTestDb();
+    const provider = new MockProvider();
+    provider.addComplete(JSON.stringify(['test query'])); // formulate
+    provider.addSearch('Search results');
+    provider.addComplete(standardFinding()); // synthesize
+    // Two off-topic perturbation candidates — no token overlap with seed,
+    // jaccard = 0, well below any non-zero floor. Engine retries once then rejects.
+    provider.addComplete('quantum chromodynamics confinement asymptotic freedom');
+    provider.addComplete('elephant migration patterns Serengeti dry season');
+
+    const engine = new ResearchEngine({
+      sqlite, provider, maxIterations: 1,
+    });
+
+    const session = await engine.startSession('Test', 'sourdough baking', {
+      p_serendipity: 1.0,
+      perturbation_coherence_floor: 0.5, // strict floor for the test
+      ...NO_DELAY,
+    });
+    await engine.runIterations(session.id);
+
+    // No perturbation thread should have been created — both candidates rejected.
+    const allThreads = threads.listThreads(sqlite, session.id);
+    const pertThreads = allThreads.filter(t => t.origin === 'perturbation');
+    expect(pertThreads.length).toBe(0);
+
+    // A perturbation_rejected step must be recorded — visible in the Events tab.
+    const allSteps = steps.listSteps(sqlite, session.id);
+    const rejected = allSteps.filter(s => {
+      const meta = s.metadata as Record<string, unknown> | null;
+      return meta?.decision === 'perturbation_rejected';
+    });
+    expect(rejected.length).toBe(1);
+    const meta = rejected[0].metadata as Record<string, unknown>;
+    expect(meta.reason).toBe('below coherence floor');
+    expect(typeof meta.similarity).toBe('number');
+    expect(meta.similarity as number).toBeLessThan(0.5);
+    expect(meta.floor).toBe(0.5);
+    expect(meta.strategy).toBeTruthy();
+  });
+
+  test('coherence floor disabled (0) lets all perturbations through', async () => {
+    const sqlite = createTestDb();
+    const provider = new MockProvider();
+    provider.addComplete(JSON.stringify(['test query'])); // formulate
+    provider.addSearch('Search results');
+    provider.addComplete(standardFinding()); // synthesize
+    provider.addComplete('quantum chromodynamics confinement'); // off-topic perturbation
+
+    const engine = new ResearchEngine({
+      sqlite, provider, maxIterations: 1,
+    });
+
+    const session = await engine.startSession('Test', 'sourdough baking', {
+      p_serendipity: 1.0,
+      perturbation_coherence_floor: 0, // disabled
+      ...NO_DELAY,
+    });
+    await engine.runIterations(session.id);
+
+    // Off-topic perturbation should have been kept since the floor is off.
+    const pertThreads = threads.listThreads(sqlite, session.id)
+      .filter(t => t.origin === 'perturbation');
+    expect(pertThreads.length).toBeGreaterThanOrEqual(1);
+
+    // No rejection step should be recorded.
+    const allSteps = steps.listSteps(sqlite, session.id);
+    const rejected = allSteps.filter(s => {
+      const meta = s.metadata as Record<string, unknown> | null;
+      return meta?.decision === 'perturbation_rejected';
+    });
+    expect(rejected.length).toBe(0);
   });
 });
 

@@ -1763,8 +1763,55 @@ Respond with ONLY "true" if this is a duplicate or near-duplicate, "false" other
       ? recentFindings.map(f => f.summary).join('\n')
       : session.prompt;
 
-    const tangentQuery = await this.generatePerturbation(strategy, session.prompt, context, config);
+    let tangentQuery = await this.generatePerturbation(strategy, session.prompt, context, config);
     if (!tangentQuery) return;
+
+    // Coherence floor: tangent must retain *some* connection to the seed.
+    // Tuned loose so creative angles still pass; the goal is catching
+    // pure-tangent drift (e.g. a "By 2040..." finding from a non-temporal
+    // strategy that wandered too far). Regenerate once, then reject.
+    const floor = config.perturbation_coherence_floor ?? 0;
+    if (floor > 0) {
+      let sim = jaccardSimilarity(tangentQuery, session.prompt);
+      if (sim < floor) {
+        const retry = await this.generatePerturbation(strategy, session.prompt, context, config);
+        if (retry && retry !== tangentQuery) {
+          const retrySim = jaccardSimilarity(retry, session.prompt);
+          if (retrySim >= floor) {
+            tangentQuery = retry;
+            sim = retrySim;
+          } else {
+            sim = retrySim;
+          }
+        }
+        if (sim < floor) {
+          // Both attempts off-topic — record the rejection and bail. Visible
+          // in the Events tab so the user knows we wanted to perturb but
+          // the candidate query was too tangential.
+          steps.createStep(this.sqlite, {
+            thread_id: null,
+            session_id: sessionId,
+            model: config.model_fast ?? config.model,
+            prompt_tokens: 0,
+            completion_tokens: 0,
+            cost_usd: 0,
+            duration_ms: 0,
+            label: 'perturbation rejected',
+            metadata: {
+              decision: 'perturbation_rejected',
+              strategy,
+              attempted_query: tangentQuery,
+              retry_query: retry ?? null,
+              similarity: sim,
+              floor,
+              reason: 'below coherence floor',
+            },
+          });
+          console.log(`[perturbation] rejected — strategy=${strategy} sim=${sim.toFixed(3)} < floor=${floor}`);
+          return;
+        }
+      }
+    }
 
     // Find a parent — use the most recent active/exhausted thread with findings
     const allThreads = threads.listThreads(this.sqlite, sessionId);
