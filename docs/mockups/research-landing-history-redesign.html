@@ -99,6 +99,20 @@
   .chip.info    { color: var(--info);    background: var(--info-soft);    border-color: rgba(130,170,255,0.32); }
   .chip.accent  { color: var(--accent);  background: var(--accent-soft);  border-color: rgba(199,146,234,0.32); }
 
+  /* Shape chip — matches QuestionShapeBar.tsx active state */
+  .shape-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font: 500 13px/1 var(--font-sans); letter-spacing: 0.01em;
+    padding: 4px 9px; border-radius: 4px;
+    background: var(--accent-soft); color: var(--accent);
+    border: 1px solid rgba(199,146,234,0.32);
+    text-transform: capitalize;
+  }
+  .shape-chip.suggested {
+    background: var(--bg-tertiary); color: var(--text-muted);
+    border: 1px dashed var(--border-strong);
+  }
+
   .seg {
     display: inline-flex; gap: 0;
     background: var(--bg-secondary); border: 1px solid var(--border);
@@ -138,12 +152,12 @@
   .panel-head .right { margin-left: auto; }
   .panel-body { padding: 14px 18px; }
 
-  /* Compose box */
+  /* Compose box — outer shell */
   .compose {
     background: linear-gradient(180deg, rgba(199,146,234,0.08), var(--bg-secondary) 60%);
     border: 1px solid var(--accent-strong);
     border-radius: 12px;
-    padding: 24px 26px;
+    padding: 24px 26px 18px;
   }
   .compose .title { font: 600 18px/1.3 var(--font-heading); margin: 0 0 14px; color: var(--text-primary); }
   .compose textarea {
@@ -153,30 +167,71 @@
     font: 15px/1.55 var(--font-sans); resize: vertical;
   }
   .compose textarea::placeholder { color: var(--text-muted); }
-  .compose .controls {
-    display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap;
+
+  /* Inferred panel — under the textarea */
+  .inferred {
+    margin-top: 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
   }
-  .compose .opt {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 6px 10px; border: 1px solid var(--border); border-radius: 5px;
-    background: var(--bg-secondary); color: var(--text-secondary); font-size: 12px;
+  .inferred .row-line {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    min-height: 42px;
   }
-  .compose .opt .k { color: var(--text-muted); font-family: var(--font-mono); font-size: 11px; }
+  .inferred .row-line:last-child { border-bottom: 0; }
+  .inferred .row-line .lbl {
+    font: 500 11px/1 var(--font-mono); letter-spacing: 0.1em;
+    color: var(--text-muted); text-transform: uppercase;
+    flex: 0 0 76px;
+  }
+  .inferred .row-line .val { color: var(--text-primary); flex: 1; min-width: 0; }
+  .inferred .row-line .right { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+  .inferred .row-line .conf {
+    font: 500 11px/1 var(--font-mono); color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .inferred .row-line a.edit {
+    color: var(--text-muted); font-size: 12px; text-decoration: none;
+  }
+  .inferred .row-line a.edit:hover { color: var(--accent); text-decoration: underline; }
+
+  .inferred .pre {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-muted); font-size: 12px;
+  }
+  .inferred .pre .pulse-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+    animation: shapePulse 1.4s ease-in-out infinite;
+  }
+  @keyframes shapePulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* Compose action row — bottom of card */
+  .compose .actions {
+    display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap;
+  }
   .compose .submit {
     background: var(--accent); color: #1a1c2c; border: 0;
-    padding: 9px 18px; font: 600 13px/1 var(--font-sans);
-    border-radius: 6px; letter-spacing: 0.02em; margin-left: auto;
+    padding: 9px 20px; font: 600 13px/1 var(--font-sans);
+    border-radius: 6px; letter-spacing: 0.02em;
   }
-  .compose .hint { color: var(--text-muted); font-size: 12px; margin-top: 8px; }
+  .compose .hint { color: var(--text-muted); font-size: 12px; }
   .compose .templates {
-    display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px;
+    display: flex; gap: 8px; flex-wrap: wrap;
   }
   .compose .templates .t {
     font-size: 12px; padding: 5px 10px; border: 1px dashed var(--border-strong);
     border-radius: 5px; color: var(--text-secondary); background: rgba(255,255,255,0.01);
+    text-transform: capitalize;
   }
 
-  /* Active job row (compact) */
+  /* Active job row */
   .job-row {
     display: grid; gap: 10px; align-items: center;
     grid-template-columns: 8px 1fr auto auto auto auto;
@@ -199,22 +254,14 @@
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 
   /* Spark / chart bits */
-  .spark { width: 100%; height: 56px; }
-  .axis-min  { fill: var(--text-muted); font: 500 10px/1 var(--font-mono); }
-
-  /* Sparkbar */
-  .sparkbars { display: flex; gap: 2px; align-items: flex-end; height: 36px; }
-  .sparkbars .b { width: 8px; background: var(--accent); border-radius: 1px; opacity: 0.85; }
-  .sparkbars .b.dim { background: var(--text-disabled); opacity: 0.55; }
+  .spark { width: 100%; height: 80px; }
 
   /* Stack-bar (compositional bars used for status breakdown) */
   .stackbar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--bg-tertiary); }
   .stackbar .seg-fill { height: 100%; }
   .stackbar .ok    { background: var(--success); }
   .stackbar .warn  { background: var(--warning); }
-  .stackbar .info  { background: var(--info); }
   .stackbar .err   { background: var(--error); }
-  .stackbar .gray  { background: var(--text-disabled); }
 
   /* Table */
   table.t { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -231,41 +278,23 @@
   table.t .title-cell .t1 { color: var(--text-primary); font-weight: 500; }
   table.t .title-cell .t2 { color: var(--text-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  /* Filter rail (history page) */
+  /* Filter rail */
   .filter-rail { width: 240px; padding: 16px 0; flex-shrink: 0; }
   .filter-rail .group { padding: 0 16px 18px; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
   .filter-rail .group:last-child { border-bottom: 0; }
   .filter-rail .label { font: 500 11px/1 var(--font-mono); letter-spacing: 0.1em; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; }
   .filter-rail .opt {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 5px 8px; border-radius: 4px; color: var(--text-secondary); font-size: 13px; cursor: default;
+    padding: 5px 8px; border-radius: 4px; color: var(--text-secondary); font-size: 13px;
   }
   .filter-rail .opt:hover { background: var(--bg-tertiary); color: var(--text-primary); }
   .filter-rail .opt.on { background: var(--bg-tertiary); color: var(--text-primary); }
   .filter-rail .opt .ct { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
 
-  /* Range bars (history sub-spark) */
-  .conf-bar { display: inline-block; width: 38px; height: 5px; background: var(--bg-tertiary); border-radius: 2px; vertical-align: middle; }
-  .conf-bar > i { display: block; height: 100%; background: var(--success); border-radius: 2px; }
-
-  /* Treemap-ish legend cells */
-  .topic-cell {
-    display: flex; flex-direction: column; gap: 2px;
-    padding: 10px 12px; border-radius: 6px;
-    background: linear-gradient(135deg, rgba(199,146,234,0.10), rgba(130,170,255,0.05));
-    border: 1px solid var(--border);
-  }
-  .topic-cell .name { font-weight: 500; color: var(--text-primary); font-size: 13px; }
-  .topic-cell .num { font-family: var(--font-mono); color: var(--text-muted); font-size: 11px; }
-
   /* Layout helpers */
   .grid-4 { display: grid; gap: 14px; grid-template-columns: repeat(4, minmax(0,1fr)); }
-  .grid-3 { display: grid; gap: 14px; grid-template-columns: repeat(3, minmax(0,1fr)); }
   .grid-2 { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
-  .grid-2-3 { display: grid; gap: 18px; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
-  .grid-3-1 { display: grid; gap: 18px; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
   .stack { display: flex; flex-direction: column; gap: 16px; }
-  .stack-sm { display: flex; flex-direction: column; gap: 10px; }
 
   .takeaway {
     margin-top: 16px; padding: 12px 14px;
@@ -277,7 +306,6 @@
   hr.gap { border: 0; border-top: 1px solid var(--border); margin: 18px 0; }
   .footer-note { color: var(--text-muted); font-size: 12px; margin-top: 8px; }
 
-  /* Dot indicator */
   .dot-i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; vertical-align: middle; margin-right: 6px; }
   .dot-i.ok { background: var(--success); }
   .dot-i.warn { background: var(--warning); }
@@ -285,46 +313,30 @@
   .dot-i.info { background: var(--info); }
   .dot-i.gray { background: var(--text-disabled); }
   .dot-i.accent { background: var(--accent); }
-
-  /* Heatmap (calendar) */
-  .heatmap { display: grid; grid-template-columns: repeat(30, 1fr); gap: 2px; }
-  .heatmap .cell { aspect-ratio: 1; border-radius: 2px; background: var(--bg-tertiary); }
-  .heatmap .cell.l1 { background: rgba(199,146,234,0.15); }
-  .heatmap .cell.l2 { background: rgba(199,146,234,0.30); }
-  .heatmap .cell.l3 { background: rgba(199,146,234,0.55); }
-  .heatmap .cell.l4 { background: rgba(199,146,234,0.85); }
-
-  .leaderboard-row {
-    display: grid; gap: 10px; align-items: center;
-    grid-template-columns: 1fr 60px 80px;
-    padding: 6px 0; font-size: 13px;
-  }
-  .leaderboard-row .bar { height: 6px; background: var(--bg-tertiary); border-radius: 3px; overflow: hidden; }
-  .leaderboard-row .bar > i { display: block; height: 100%; background: var(--accent); }
 </style>
 </head>
 <body>
 
 <div class="page">
   <p class="eyebrow">Research · navigation</p>
-  <h1>Re-thinking the Research landing page &amp; queries page</h1>
+  <h1>Research landing page &amp; History page</h1>
   <p class="lede">
-    The landing page becomes the <em>command center</em>: a prominent compose box, a few signals about the system,
-    and just enough live context (active runs, recent finishers) that you don't need a separate dashboard to know
-    what's going on. The queries page becomes <em>history</em>: a real archive with rich filters, comparison-friendly
-    columns, and the basic stats you'd expect from a job ledger.
+    Selected directions: hero-compose landing (was Variant 1) and the rich-archive history page (was Variant 4).
+    Updated to reflect the new question-shape inference flow — the compose box now shows the detected shape,
+    completeness criteria, and other inferred metadata under the input, with an Edit affordance for override.
   </p>
 
-  <!-- ───────────────────────── VARIANT 1 — Landing: Hero compose ───────────────────────── -->
+  <!-- ───────────────────────── LANDING ───────────────────────── -->
   <section class="variant">
     <div class="variant-head">
-      <span class="pill-label">Landing · 1</span>
-      <h3>Hero compose with at-a-glance signals</h3>
+      <span class="pill-label">Landing</span>
+      <h3>Hero compose with shape inference under the input</h3>
     </div>
     <p class="desc">
-      A big, friendly compose box dominates above the fold. Below it: a 4-up KPI strip and the only two live
-      surfaces worth peeking at — running now and just-finished. The deep dive (charts, history) is one click
-      away in the secondary nav.
+      Compose box dominates above the fold. While you type, a quiet "Detecting…" line shows; once the prompt is
+      entered, the detector populates a small inferred-metadata block with shape chips (using the same chip
+      treatment as <code>QuestionShapeBar</code>), completeness criteria, suggested run config, and topic
+      cluster — all overridable. The KPI strip and live panels follow.
     </p>
 
     <div class="frame">
@@ -346,23 +358,67 @@
         <!-- Compose hero -->
         <div class="compose">
           <h2 class="title">What do you want to investigate?</h2>
-          <textarea placeholder="A timeline of how Detroit techno crossed the Atlantic — labels, DJs, pivotal venues 1986–94…"></textarea>
-          <div class="templates">
-            <span class="muted xs mono" style="align-self: center;">START FROM:</span>
-            <span class="t">Timeline of an event</span>
-            <span class="t">Compare two technologies</span>
-            <span class="t">Survey a research field</span>
-            <span class="t">Reverse-engineer a decision</span>
+
+          <textarea>A timeline of how Detroit techno crossed the Atlantic — labels, DJs, pivotal venues 1986–94. Compare the Berlin and Frankfurt feedback loops; ignore later commercial trance.</textarea>
+
+          <!-- Inferred-metadata panel: appears once detection runs (~1-2s after typing) -->
+          <div class="inferred">
+            <div class="row-line">
+              <span class="lbl">Shape</span>
+              <span class="val">
+                <span class="shape-chip" title="Chronological events&#10;&#10;Period bounded 1986–94, mentions sequenced label/DJ/venue events">timeline</span>
+                <span class="shape-chip" title="Axes with parity per side&#10;&#10;Berlin vs Frankfurt feedback loops compared">comparison</span>
+                <span class="shape-chip suggested" title="Add this shape">+ list</span>
+              </span>
+              <span class="right">
+                <span class="conf" title="Detector confidence (0–1)">conf 0.84</span>
+                <a class="edit" href="#">edit</a>
+              </span>
+            </div>
+
+            <div class="row-line">
+              <span class="lbl">Lenses</span>
+              <span class="val muted small">
+                <span style="color: var(--text-secondary);"><em>timeline</em>:</span> period 1986–94, 5–9 inflection events with date+actor·
+                <span style="color: var(--text-secondary);"><em>comparison</em>:</span> Berlin axis · Frankfurt axis, parity required
+              </span>
+              <span class="right"><a class="edit" href="#">edit lenses</a></span>
+            </div>
+
+            <div class="row-line">
+              <span class="lbl">Topic</span>
+              <span class="val">
+                <span style="color: var(--accent);">Music history &amp; subcultures</span>
+                <span class="muted small" style="margin-left: 8px;">cluster · 9 prior runs · last "Origins of acid house" (yesterday)</span>
+              </span>
+              <span class="right"><a class="edit" href="#">change</a></span>
+            </div>
+
+            <div class="row-line">
+              <span class="lbl">Run plan</span>
+              <span class="val small">
+                <span class="muted">model</span> <span class="mono" style="color: var(--text-secondary);">sonnet-4-6</span>
+                <span class="muted" style="margin-left: 12px;">budget</span> <span class="mono" style="color: var(--text-secondary);">$1.50</span>
+                <span class="muted" style="margin-left: 12px;">depth</span> <span class="mono" style="color: var(--text-secondary);">5 hops</span>
+                <span class="muted" style="margin-left: 12px;">role</span> <span class="mono" style="color: var(--text-secondary);">music historian</span>
+                <span class="muted small" style="margin-left: 12px;">— typical for timeline + comparison</span>
+              </span>
+              <span class="right"><a class="edit" href="#">tune</a></span>
+            </div>
           </div>
-          <div class="controls">
-            <span class="opt"><span class="k">model</span> sonnet-4-6</span>
-            <span class="opt"><span class="k">budget</span> $1.50</span>
-            <span class="opt"><span class="k">depth</span> 5</span>
-            <span class="opt"><span class="k">role</span> auto-detect</span>
-            <span class="opt"><span class="k">advanced…</span></span>
+
+          <div class="actions">
             <button class="submit">Start research →</button>
+            <span class="hint">↵ to start · ⌘↵ to start &amp; open detail</span>
+            <span class="templates" style="margin-left: auto;">
+              <span class="muted xs mono" style="align-self: center;">START FROM:</span>
+              <span class="t">timeline</span>
+              <span class="t">comparison</span>
+              <span class="t">survey</span>
+              <span class="t">dynamics</span>
+              <span class="t">audit</span>
+            </span>
           </div>
-          <p class="hint">↵ to start · ⌘↵ to start &amp; open detail · last run cost <span class="mono">$0.84</span> over 26 minutes</p>
         </div>
 
         <!-- KPI strip (system-level) -->
@@ -402,7 +458,7 @@
                 <span class="stripe"></span>
                 <div>
                   <div class="title">Emergence of EDM as a pop genre · 1985–95</div>
-                  <div class="meta-line">started 26m ago · 412 steps · 147 findings</div>
+                  <div class="meta-line">timeline · 26m ago · 412 steps · 147 findings</div>
                 </div>
                 <span class="stat"><span class="num">26</span>m</span>
                 <span class="stat"><span class="num">$0.84</span></span>
@@ -413,7 +469,7 @@
                 <span class="stripe"></span>
                 <div>
                   <div class="title">How does GPT-Researcher generate sub-questions internally?</div>
-                  <div class="meta-line">started 4m ago · 38 steps · 9 findings</div>
+                  <div class="meta-line">audit · 4m ago · 38 steps · 9 findings</div>
                 </div>
                 <span class="stat"><span class="num">4</span>m</span>
                 <span class="stat"><span class="num">$0.07</span></span>
@@ -434,7 +490,7 @@
                 <span class="stripe"></span>
                 <div>
                   <div class="title">Best practices for Anthropic prompt caching at scale</div>
-                  <div class="meta-line">finished 2h ago · 28m · post-mortem: pass</div>
+                  <div class="meta-line">survey · finished 2h ago · 28m · post-mortem: pass</div>
                 </div>
                 <span class="stat"><span class="num">214</span> findings</span>
                 <span class="stat"><span class="num">$1.42</span></span>
@@ -444,7 +500,7 @@
                 <span class="stripe"></span>
                 <div>
                   <div class="title">Compare DuckDB vs ClickHouse for embedded analytics</div>
-                  <div class="meta-line">finished 6h ago · 19m · post-mortem: flag</div>
+                  <div class="meta-line">comparison · finished 6h ago · 19m · post-mortem: flag</div>
                 </div>
                 <span class="stat"><span class="num">86</span> findings</span>
                 <span class="stat"><span class="num">$0.61</span></span>
@@ -454,7 +510,7 @@
                 <span class="stripe"></span>
                 <div>
                   <div class="title">Survey of B-format ambisonic encoders for live audio</div>
-                  <div class="meta-line">halted 9h ago · budget cap reached</div>
+                  <div class="meta-line">survey · halted 9h ago · budget cap reached</div>
                 </div>
                 <span class="stat"><span class="num">42</span> findings</span>
                 <span class="stat"><span class="num">$1.50</span></span>
@@ -472,7 +528,7 @@
             <span class="right"><span class="seg"><button class="on">30d</button><button>7d</button><button>24h</button></span></span>
           </div>
           <div class="panel-body">
-            <svg class="spark" viewBox="0 0 800 80" preserveAspectRatio="none" style="height: 80px;">
+            <svg class="spark" viewBox="0 0 800 80" preserveAspectRatio="none">
               <defs>
                 <linearGradient id="g1" x1="0" x2="0" y1="0" y2="1">
                   <stop offset="0%" stop-color="#c3e88d" stop-opacity="0.55"/>
@@ -494,348 +550,16 @@
     </div>
 
     <div class="takeaway">
-      <strong>What this trades.</strong> Compose-first: 80% of visits to the research page end with you starting
-      a new run — the page should make that obvious. KPI strip + two live panels + a single sparkline cover
-      "what's the system doing" without becoming a full dashboard. Cost: less analytical depth than the current
-      page; charts move to the History page.
+      <strong>Inferred-metadata block</strong> uses the same shape-chip vocabulary (survey · timeline · list · dynamics · comparison · lookup · audit) and Edit affordance as the existing
+      <code>QuestionShapeBar</code> on the detail page — so the override UI is the same on both surfaces.
+      Pre-detection: a quiet "Detecting question shape…" line. Post-detection: chips with criterion tooltips,
+      detector confidence, and three more inferred rows (lenses · topic · run plan), each individually
+      overridable. Templates at the bottom map to the same shape vocabulary so users can prime detection rather
+      than fight it.
     </div>
   </section>
 
-  <!-- ───────────────────────── VARIANT 2 — Landing: Mission control ───────────────────────── -->
-  <section class="variant">
-    <div class="variant-head">
-      <span class="pill-label">Landing · 2</span>
-      <h3>Mission control — split compose / live ops</h3>
-    </div>
-    <p class="desc">
-      Compose box on the left, live operations rail on the right. The left side is where you act; the right side
-      is where you watch. Below the fold: data cards (today, 7d, 30d) and a topic leaderboard so you can see what
-      kinds of questions you've been asking lately.
-    </p>
-
-    <div class="frame">
-      <div class="frame-bar">
-        <div class="nav">
-          <span class="item on">Research</span>
-          <span class="item">History <span class="muted small mono" style="margin-left: 4px;">86</span></span>
-          <span class="item">Monitors</span>
-          <span class="item">Workers</span>
-          <span class="item">Config</span>
-        </div>
-        <div class="right">
-          <span class="chip ok"><span class="dot-i ok"></span>2 running</span>
-          <span class="chip warn"><span class="dot-i warn"></span>1 stuck</span>
-          <span class="mono">$3.42 today · $32.18 / 30d</span>
-        </div>
-      </div>
-
-      <div class="frame-body stack">
-        <!-- Top: compose + live ops side by side -->
-        <div class="grid-2-3">
-          <div class="compose">
-            <h2 class="title">New research</h2>
-            <textarea placeholder="What's the question? Be specific — e.g. 'Compare GPT-Researcher and Storm for sub-question generation; what does each pipeline do at iteration 0?'"></textarea>
-            <div class="templates">
-              <span class="t">Timeline</span>
-              <span class="t">Comparison</span>
-              <span class="t">Survey</span>
-              <span class="t">Decision rationale</span>
-              <span class="t">Reverse-engineer</span>
-              <span class="t">From a recent finding…</span>
-            </div>
-            <div class="controls">
-              <span class="opt"><span class="k">model</span> sonnet-4-6</span>
-              <span class="opt"><span class="k">budget</span> $1.50</span>
-              <span class="opt"><span class="k">depth</span> 5</span>
-              <span class="opt"><span class="k">role</span> auto</span>
-              <button class="submit">Start research →</button>
-            </div>
-            <p class="hint">⌘↵ to start &amp; jump to detail · last run finished 2h ago — <a class="mono" style="color: var(--accent);">re-run "DuckDB vs ClickHouse" with budget +50%</a></p>
-          </div>
-
-          <!-- Live ops -->
-          <div class="panel">
-            <div class="panel-head">
-              <h4>Live ops</h4>
-              <span class="chip ok small"><span class="dot-i ok"></span>healthy</span>
-              <span class="right muted small">12s ago</span>
-            </div>
-            <div class="panel-body stack-sm">
-              <!-- Running -->
-              <div>
-                <div class="row" style="margin-bottom: 8px;"><span class="muted small mono" style="letter-spacing: 0.1em; text-transform: uppercase;">Running</span><span class="muted small">2 of 4 worker slots</span></div>
-                <div class="job-row active" style="padding-left: 0; padding-right: 0;">
-                  <span class="stripe"></span>
-                  <div>
-                    <div class="title">EDM emergence 1985–95</div>
-                    <div class="meta-line">26m · 412 steps · 147 findings</div>
-                  </div>
-                  <span class="pulse"><span class="dot"></span>iter 25</span>
-                </div>
-                <div class="job-row active" style="padding-left: 0; padding-right: 0;">
-                  <span class="stripe"></span>
-                  <div>
-                    <div class="title">GPT-Researcher sub-question generation</div>
-                    <div class="meta-line">4m · 38 steps · 9 findings</div>
-                  </div>
-                  <span class="pulse"><span class="dot"></span>iter 3</span>
-                </div>
-              </div>
-
-              <hr class="gap" style="margin: 4px 0;">
-
-              <!-- Queue -->
-              <div>
-                <div class="row" style="margin-bottom: 6px;"><span class="muted small mono" style="letter-spacing: 0.1em; text-transform: uppercase;">Queued · 0</span><span class="muted small">no backlog</span></div>
-                <p class="muted small" style="margin: 0;">Workers idle and ready to pick up the next job.</p>
-              </div>
-
-              <hr class="gap" style="margin: 4px 0;">
-
-              <!-- System pulse -->
-              <div>
-                <div class="row" style="margin-bottom: 8px;"><span class="muted small mono" style="letter-spacing: 0.1em; text-transform: uppercase;">System</span></div>
-                <div class="grid-2" style="gap: 8px;">
-                  <div class="row small"><span class="muted">Source failure</span><span class="num mono">11.2%</span></div>
-                  <div class="row small"><span class="muted">Avg latency p50</span><span class="num mono">820ms</span></div>
-                  <div class="row small"><span class="muted">Jina balance</span><span class="num mono ok" style="color: var(--success);">3.4M</span></div>
-                  <div class="row small"><span class="muted">OpenRouter</span><span class="num mono ok" style="color: var(--success);">$84.20</span></div>
-                </div>
-                <div class="row small" style="margin-top: 8px;"><span class="muted">Stuck threads</span><span class="chip warn xs">2 ≥ 5m</span></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- KPI cards: tri-period -->
-        <div class="grid-3">
-          <!-- Findings card with periods -->
-          <div class="panel">
-            <div class="panel-head"><h4>Findings produced</h4><span class="sub">today / 7d / 30d</span></div>
-            <div class="panel-body stack-sm">
-              <div class="row"><span class="muted small">today</span><span style="font: 600 28px/1 var(--font-sans); color: var(--success); font-variant-numeric: tabular-nums;">312</span></div>
-              <div class="row"><span class="muted small">7 days</span><span style="font: 500 18px/1 var(--font-sans); font-variant-numeric: tabular-nums;">1,418</span></div>
-              <div class="row"><span class="muted small">30 days</span><span style="font: 500 16px/1 var(--font-sans); color: var(--text-secondary); font-variant-numeric: tabular-nums;">2,148</span></div>
-              <div class="sparkbars" style="margin-top: 4px;">
-                <div class="b dim" style="height: 32%;"></div><div class="b dim" style="height: 28%;"></div><div class="b dim" style="height: 38%;"></div><div class="b dim" style="height: 22%;"></div>
-                <div class="b dim" style="height: 42%;"></div><div class="b dim" style="height: 30%;"></div><div class="b dim" style="height: 50%;"></div><div class="b" style="height: 44%;"></div>
-                <div class="b" style="height: 36%;"></div><div class="b" style="height: 58%;"></div><div class="b" style="height: 48%;"></div><div class="b" style="height: 64%;"></div>
-                <div class="b" style="height: 70%;"></div><div class="b" style="height: 78%;"></div><div class="b" style="height: 92%;"></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Cost card -->
-          <div class="panel">
-            <div class="panel-head"><h4>Spend</h4><span class="sub">today / 7d / 30d</span></div>
-            <div class="panel-body stack-sm">
-              <div class="row"><span class="muted small">today</span><span style="font: 600 28px/1 var(--font-sans); color: var(--accent); font-variant-numeric: tabular-nums;">$3.42</span></div>
-              <div class="row"><span class="muted small">7 days</span><span style="font: 500 18px/1 var(--font-sans); font-variant-numeric: tabular-nums;">$11.86</span></div>
-              <div class="row"><span class="muted small">30 days</span><span style="font: 500 16px/1 var(--font-sans); color: var(--text-secondary); font-variant-numeric: tabular-nums;">$32.18</span></div>
-              <div class="row small" style="margin-top: 6px;"><span class="muted">avg / run</span><span class="num mono">$0.85</span></div>
-              <div class="row small"><span class="muted">avg / finding</span><span class="num mono">$0.015</span></div>
-            </div>
-          </div>
-
-          <!-- Quality card -->
-          <div class="panel">
-            <div class="panel-head"><h4>Quality</h4><span class="sub">post-mortem verdicts · 30d</span></div>
-            <div class="panel-body stack-sm">
-              <div class="row"><span class="muted small">pass rate</span><span style="font: 600 28px/1 var(--font-sans); color: var(--success); font-variant-numeric: tabular-nums;">71%</span></div>
-              <div>
-                <div class="stackbar"><i class="seg-fill ok" style="width: 71%;"></i><i class="seg-fill warn" style="width: 21%;"></i><i class="seg-fill err" style="width: 8%;"></i></div>
-                <div class="row small muted" style="margin-top: 6px;">
-                  <span><span class="dot-i ok"></span>27 pass</span>
-                  <span><span class="dot-i warn"></span>8 flag</span>
-                  <span><span class="dot-i err"></span>3 halt</span>
-                </div>
-              </div>
-              <div class="row small" style="margin-top: 4px;"><span class="muted">avg confidence</span><span class="num mono">0.78</span></div>
-              <div class="row small"><span class="muted">avg novelty</span><span class="num mono">0.62</span></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Topic leaderboard + Activity heatmap -->
-        <div class="grid-2-3">
-          <div class="panel">
-            <div class="panel-head">
-              <h4>What you've researched</h4>
-              <span class="sub">last 30 days · concept clusters</span>
-            </div>
-            <div class="panel-body stack-sm">
-              <div class="leaderboard-row">
-                <span><span class="dot-i accent"></span>AI engineering &amp; LLM tooling</span>
-                <span class="bar"><i style="width: 100%;"></i></span>
-                <span class="muted small mono" style="text-align:right;">14 runs · 612 ✦</span>
-              </div>
-              <div class="leaderboard-row">
-                <span><span class="dot-i info"></span>Music history &amp; subcultures</span>
-                <span class="bar"><i style="width: 78%;"></i></span>
-                <span class="muted small mono" style="text-align:right;">9 runs · 488 ✦</span>
-              </div>
-              <div class="leaderboard-row">
-                <span><span class="dot-i ok"></span>Database engines &amp; analytics</span>
-                <span class="bar"><i style="width: 56%;"></i></span>
-                <span class="muted small mono" style="text-align:right;">6 runs · 312 ✦</span>
-              </div>
-              <div class="leaderboard-row">
-                <span><span class="dot-i warn"></span>Audio &amp; signal processing</span>
-                <span class="bar"><i style="width: 38%;"></i></span>
-                <span class="muted small mono" style="text-align:right;">5 runs · 246 ✦</span>
-              </div>
-              <div class="leaderboard-row">
-                <span><span class="dot-i" style="background: var(--orange);"></span>Personal infra &amp; agents</span>
-                <span class="bar"><i style="width: 28%;"></i></span>
-                <span class="muted small mono" style="text-align:right;">4 runs · 192 ✦</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head"><h4>Activity</h4><span class="sub">runs per day · last 30</span></div>
-            <div class="panel-body">
-              <div class="heatmap">
-                <span class="cell"></span><span class="cell l1"></span><span class="cell"></span><span class="cell l2"></span><span class="cell l1"></span><span class="cell l3"></span><span class="cell l2"></span><span class="cell"></span><span class="cell"></span><span class="cell l1"></span>
-                <span class="cell l3"></span><span class="cell l4"></span><span class="cell l2"></span><span class="cell"></span><span class="cell l1"></span><span class="cell l2"></span><span class="cell l1"></span><span class="cell"></span><span class="cell l3"></span><span class="cell l4"></span>
-                <span class="cell l2"></span><span class="cell l3"></span><span class="cell"></span><span class="cell l1"></span><span class="cell l2"></span><span class="cell l3"></span><span class="cell l4"></span><span class="cell l4"></span><span class="cell l3"></span><span class="cell l4"></span>
-              </div>
-              <div class="row small muted" style="margin-top: 8px;">
-                <span>less</span>
-                <span style="display: inline-flex; gap: 2px; align-items: center;">
-                  <span class="cell" style="width: 10px; height: 10px; border-radius: 2px; background: var(--bg-tertiary); display: inline-block;"></span>
-                  <span class="cell l1" style="width: 10px; height: 10px; border-radius: 2px; display: inline-block;"></span>
-                  <span class="cell l2" style="width: 10px; height: 10px; border-radius: 2px; display: inline-block;"></span>
-                  <span class="cell l3" style="width: 10px; height: 10px; border-radius: 2px; display: inline-block;"></span>
-                  <span class="cell l4" style="width: 10px; height: 10px; border-radius: 2px; display: inline-block;"></span>
-                </span>
-                <span>more</span>
-              </div>
-              <hr class="gap">
-              <div class="row small"><span class="muted">avg / day</span><span class="num mono">1.27</span></div>
-              <div class="row small"><span class="muted">longest streak</span><span class="num mono">8 days</span></div>
-              <div class="row small"><span class="muted">peak day</span><span class="num mono">Apr 24 · 5 runs</span></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="takeaway">
-      <strong>What this trades.</strong> Most-information-per-square-inch landing. Live ops gets a permanent
-      home so you don't have to dig for "is anything stuck?". The topic leaderboard is the new feature — surfaces
-      what you've been digging into so the page tells you something about you, not just the system. Cost:
-      denser; needs real data to feel good (sparse heatmap on day 1).
-    </div>
-  </section>
-
-  <!-- ───────────────────────── VARIANT 3 — Landing: Conversation prompt ───────────────────────── -->
-  <section class="variant">
-    <div class="variant-head">
-      <span class="pill-label">Landing · 3</span>
-      <h3>Conversation-style prompt — minimal, focused</h3>
-    </div>
-    <p class="desc">
-      Even more aggressive: the page is mostly empty space. A single centered prompt — like a chat opener — and
-      one quiet row of system signals at the bottom. Active runs show as a tiny pinned ribbon above the prompt
-      so they're visible but never crowd the action.
-    </p>
-
-    <div class="frame">
-      <div class="frame-bar">
-        <div class="nav">
-          <span class="item on">Research</span>
-          <span class="item">History</span>
-          <span class="item">Monitors</span>
-          <span class="item">Workers</span>
-          <span class="item">Config</span>
-        </div>
-        <div class="right">
-          <span class="muted small mono">38 runs · 30d · $32.18</span>
-        </div>
-      </div>
-
-      <div class="frame-body" style="padding: 56px 24px 36px;">
-
-        <!-- Active ribbon -->
-        <div style="max-width: 720px; margin: 0 auto 36px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;">
-          <div style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 999px; font-size: 12px;">
-            <span class="pulse"><span class="dot"></span></span>
-            <span style="color: var(--text-secondary);">EDM emergence 1985–95</span>
-            <span class="muted mono">· 26m · 147 ✦ · $0.84</span>
-          </div>
-          <div style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 999px; font-size: 12px;">
-            <span class="pulse"><span class="dot"></span></span>
-            <span style="color: var(--text-secondary);">GPT-Researcher sub-questions</span>
-            <span class="muted mono">· 4m · 9 ✦ · $0.07</span>
-          </div>
-        </div>
-
-        <!-- Centered prompt -->
-        <div style="max-width: 720px; margin: 0 auto;">
-          <h2 style="font: 600 28px/1.3 var(--font-heading); text-align: center; margin: 0 0 28px; color: var(--text-primary); letter-spacing: -0.005em;">
-            What do you want to know?
-          </h2>
-
-          <div style="position: relative;">
-            <textarea
-              style="width: 100%; min-height: 144px; background: var(--bg-secondary); border: 1px solid var(--border-strong); color: var(--text-primary); padding: 18px 20px 56px; border-radius: 14px; font: 16px/1.6 var(--font-sans); resize: none; box-shadow: 0 8px 24px -12px rgba(0,0,0,0.4);"
-              placeholder="Ask anything. Be as specific as you can — the more constraint, the better the run.">A timeline of how Detroit techno crossed the Atlantic — labels, DJs, pivotal venues 1986–94. Focus on the Berlin and Frankfurt feedback loops; ignore later commercial trance.</textarea>
-            <div style="position: absolute; bottom: 12px; left: 16px; display: flex; gap: 8px; align-items: center;">
-              <span style="font: 500 11px/1 var(--font-mono); color: var(--text-muted); padding: 5px 8px; background: var(--bg-primary); border-radius: 4px; border: 1px solid var(--border);">sonnet-4-6</span>
-              <span style="font: 500 11px/1 var(--font-mono); color: var(--text-muted); padding: 5px 8px; background: var(--bg-primary); border-radius: 4px; border: 1px solid var(--border);">$1.50</span>
-              <span style="font: 500 11px/1 var(--font-mono); color: var(--text-muted); padding: 5px 8px; background: var(--bg-primary); border-radius: 4px; border: 1px solid var(--border);">depth 5</span>
-              <span style="color: var(--text-muted); font-size: 12px;">·</span>
-              <span style="color: var(--text-muted); font-size: 12px;">edit defaults…</span>
-            </div>
-            <button style="position: absolute; bottom: 12px; right: 12px; background: var(--accent); color: #1a1c2c; border: 0; padding: 9px 18px; font: 600 13px/1 var(--font-sans); border-radius: 6px;">Start →</button>
-          </div>
-
-          <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; justify-content: center;">
-            <span class="t" style="font-size: 12px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-secondary); background: var(--bg-secondary);">Timeline of an event</span>
-            <span class="t" style="font-size: 12px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-secondary); background: var(--bg-secondary);">Compare two technologies</span>
-            <span class="t" style="font-size: 12px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-secondary); background: var(--bg-secondary);">Survey a research field</span>
-            <span class="t" style="font-size: 12px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-secondary); background: var(--bg-secondary);">Reverse-engineer a decision</span>
-            <span class="t" style="font-size: 12px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-secondary); background: var(--bg-secondary);">From recent finding…</span>
-          </div>
-        </div>
-
-        <!-- Bottom signals row -->
-        <div style="max-width: 980px; margin: 80px auto 0;">
-          <div class="grid-4" style="gap: 18px;">
-            <div style="text-align: center;">
-              <div style="font: 600 26px/1 var(--font-sans); color: var(--text-primary); font-variant-numeric: tabular-nums;">38</div>
-              <div class="muted small mono" style="margin-top: 6px; letter-spacing: 0.1em; text-transform: uppercase;">runs · 30d</div>
-            </div>
-            <div style="text-align: center;">
-              <div style="font: 600 26px/1 var(--font-sans); color: var(--success); font-variant-numeric: tabular-nums;">2,148</div>
-              <div class="muted small mono" style="margin-top: 6px; letter-spacing: 0.1em; text-transform: uppercase;">findings · 30d</div>
-            </div>
-            <div style="text-align: center;">
-              <div style="font: 600 26px/1 var(--font-sans); color: var(--accent); font-variant-numeric: tabular-nums;">$32.18</div>
-              <div class="muted small mono" style="margin-top: 6px; letter-spacing: 0.1em; text-transform: uppercase;">spend · 30d</div>
-            </div>
-            <div style="text-align: center;">
-              <div style="font: 600 26px/1 var(--font-sans); color: var(--text-primary); font-variant-numeric: tabular-nums;">71%</div>
-              <div class="muted small mono" style="margin-top: 6px; letter-spacing: 0.1em; text-transform: uppercase;">pass rate</div>
-            </div>
-          </div>
-          <p style="text-align: center; margin: 22px 0 0;" class="muted small">
-            Want detail? <a style="color: var(--accent);">Open history →</a> · Watching for something specific? <a style="color: var(--accent);">Set up a monitor →</a>
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <div class="takeaway">
-      <strong>What this trades.</strong> Maximum focus, like opening a fresh notebook. Active runs are visible
-      but quiet (ribbon pills) so they don't compete with the prompt. KPIs are at the bottom, where you'd glance
-      after a successful run, not before. Cost: feels sparse if you came here to <em>see</em> data; explicitly
-      pushes that work to History.
-    </div>
-  </section>
-
-  <!-- ───────────────────────── VARIANT 4 — History (Queries renamed) ───────────────────────── -->
+  <!-- ───────────────────────── HISTORY ───────────────────────── -->
   <section class="variant">
     <div class="variant-head">
       <span class="pill-label">History</span>
@@ -843,9 +567,9 @@
     </div>
     <p class="desc">
       Renamed and re-scoped. Top: a small archive-summary strip (totals over selected range). Left: rich filter
-      rail (status, date range, cost band, topic, verdict). Center: a sortable table you can scan like a ledger,
-      with sparklines, verdict chips, and inline cost/finding/duration bars. Click a row to open the same detail
-      page that exists today.
+      rail (status, shape, topic cluster, verdict, cost band, date). Center: a sortable ledger you can scan,
+      with the inferred shape inline, sparklines, verdict chips, and inline cost/finding/duration columns. Click
+      a row to open the same detail page that exists today.
     </p>
 
     <div class="frame">
@@ -919,6 +643,16 @@
             <div class="opt"><span><span class="dot-i err"></span>Halted</span><span class="ct">3</span></div>
           </div>
           <div class="group">
+            <div class="label">Shape</div>
+            <div class="opt"><span>Survey</span><span class="ct">10</span></div>
+            <div class="opt"><span>Timeline</span><span class="ct">9</span></div>
+            <div class="opt"><span>Comparison</span><span class="ct">7</span></div>
+            <div class="opt"><span>Dynamics</span><span class="ct">5</span></div>
+            <div class="opt"><span>List</span><span class="ct">4</span></div>
+            <div class="opt"><span>Audit</span><span class="ct">2</span></div>
+            <div class="opt"><span>Lookup</span><span class="ct">1</span></div>
+          </div>
+          <div class="group">
             <div class="label">Verdict</div>
             <div class="opt"><span><span class="dot-i ok"></span>Pass</span><span class="ct">27</span></div>
             <div class="opt"><span><span class="dot-i warn"></span>Flag</span><span class="ct">8</span></div>
@@ -939,12 +673,6 @@
             <div class="opt"><span>$1.00 – $2.00</span><span class="ct">6</span></div>
             <div class="opt"><span>over $2.00</span><span class="ct">2</span></div>
           </div>
-          <div class="group">
-            <div class="label">Started</div>
-            <div class="opt"><span>last 24h</span><span class="ct">5</span></div>
-            <div class="opt"><span>last 7 days</span><span class="ct">14</span></div>
-            <div class="opt on"><span>last 30 days</span><span class="ct">38</span></div>
-          </div>
         </aside>
 
         <div style="flex: 1; min-width: 0;">
@@ -961,7 +689,7 @@
               <button>verdict</button>
             </span>
             <span style="margin-left: auto; display: flex; gap: 8px;">
-              <span class="chip small">Group by topic</span>
+              <span class="chip small">Group by shape</span>
               <span class="chip small">Compare 2 →</span>
               <span class="chip small">Export CSV</span>
             </span>
@@ -972,6 +700,7 @@
             <thead>
               <tr>
                 <th>Query</th>
+                <th>Shape</th>
                 <th>Started</th>
                 <th>Status</th>
                 <th class="num">Findings</th>
@@ -986,113 +715,124 @@
                 <td>
                   <div class="title-cell">
                     <span class="t1">Emergence of EDM as a pop genre · 1985–95</span>
-                    <span class="t2">timeline · seed: "give me an overview and timeline of the emergence of EDM…"</span>
+                    <span class="t2">seed: "give me an overview and timeline of the emergence of EDM…"</span>
                   </div>
                 </td>
+                <td><span class="shape-chip" style="font-size: 11px;">timeline</span></td>
                 <td><span class="muted small mono">26m ago</span></td>
                 <td><span class="chip ok"><span class="dot-i ok"></span>active</span></td>
                 <td class="num"><span style="color: var(--success);">147</span></td>
                 <td class="num">$0.84</td>
                 <td class="num">26.4m</td>
                 <td><span class="chip ok small">on track · iter 25</span></td>
-                <td><svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#c3e88d" stroke-width="1.4" points="0,22 8,20 16,18 24,16 32,14 40,12 48,10 56,8 64,7 72,5 80,4 88,3 96,2 100,2"/></svg></td>
+                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#c3e88d" stroke-width="1.4" points="0,22 8,20 16,18 24,16 32,14 40,12 48,10 56,8 64,7 72,5 80,4 88,3 96,2 100,2"/></svg></td>
               </tr>
               <tr class="row">
                 <td>
                   <div class="title-cell">
                     <span class="t1">How GPT-Researcher generates sub-questions internally</span>
-                    <span class="t2">reverse-engineer · prompts, planner, agent.py implementation</span>
+                    <span class="t2">prompts, planner, agent.py implementation</span>
                   </div>
                 </td>
+                <td><span class="shape-chip" style="font-size: 11px;">audit</span></td>
                 <td><span class="muted small mono">4m ago</span></td>
                 <td><span class="chip ok"><span class="dot-i ok"></span>active</span></td>
                 <td class="num"><span style="color: var(--success);">9</span></td>
                 <td class="num">$0.07</td>
                 <td class="num">4.1m</td>
                 <td><span class="chip info small">priming · iter 3</span></td>
-                <td><svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#82aaff" stroke-width="1.4" points="0,22 16,21 32,20 48,18 64,15 80,12 96,9 100,8"/></svg></td>
+                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#82aaff" stroke-width="1.4" points="0,22 16,21 32,20 48,18 64,15 80,12 96,9 100,8"/></svg></td>
               </tr>
               <tr class="row">
                 <td>
                   <div class="title-cell">
                     <span class="t1">Best practices for Anthropic prompt caching at scale</span>
-                    <span class="t2">survey · structured outputs, cache hits, multi-turn agents</span>
+                    <span class="t2">structured outputs, cache hits, multi-turn agents</span>
                   </div>
                 </td>
+                <td><span class="shape-chip" style="font-size: 11px;">survey</span></td>
                 <td><span class="muted small mono">2h ago</span></td>
                 <td><span class="chip small"><span class="dot-i gray"></span>exhausted</span></td>
                 <td class="num">214</td>
                 <td class="num">$1.42</td>
                 <td class="num">28.0m</td>
                 <td><span class="chip ok small">pass</span></td>
-                <td><svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 12,18 24,14 36,9 48,6 60,4 72,3 84,3 96,3 100,3"/></svg></td>
+                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 12,18 24,14 36,9 48,6 60,4 72,3 84,3 96,3 100,3"/></svg></td>
               </tr>
               <tr class="row">
                 <td>
                   <div class="title-cell">
                     <span class="t1">Compare DuckDB vs ClickHouse for embedded analytics</span>
-                    <span class="t2">comparison · single-node, OLAP, ergonomics, column store</span>
+                    <span class="t2">single-node, OLAP, ergonomics, column store</span>
                   </div>
                 </td>
+                <td><span class="shape-chip" style="font-size: 11px;">comparison</span></td>
                 <td><span class="muted small mono">6h ago</span></td>
                 <td><span class="chip small"><span class="dot-i gray"></span>exhausted</span></td>
                 <td class="num">86</td>
                 <td class="num">$0.61</td>
                 <td class="num">19.2m</td>
                 <td><span class="chip warn small">flag · low yield</span></td>
-                <td><svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#ffcb6b" stroke-width="1.2" points="0,22 12,20 24,17 36,15 48,14 60,13 72,13 84,12 96,12 100,12"/></svg></td>
+                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#ffcb6b" stroke-width="1.2" points="0,22 12,20 24,17 36,15 48,14 60,13 72,13 84,12 96,12 100,12"/></svg></td>
               </tr>
               <tr class="row">
                 <td>
                   <div class="title-cell">
                     <span class="t1">Survey of B-format ambisonic encoders for live audio</span>
-                    <span class="t2">survey · spatial audio, livestream pipelines, latency budgets</span>
+                    <span class="t2">spatial audio, livestream pipelines, latency budgets</span>
                   </div>
                 </td>
+                <td><span class="shape-chip" style="font-size: 11px;">survey</span></td>
                 <td><span class="muted small mono">9h ago</span></td>
                 <td><span class="chip err small"><span class="dot-i err"></span>halted</span></td>
                 <td class="num">42</td>
                 <td class="num">$1.50</td>
                 <td class="num">42.0m</td>
                 <td><span class="chip err small">halt · budget cap</span></td>
-                <td><svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#f07178" stroke-width="1.2" points="0,22 12,20 24,17 36,16 48,15 60,15 72,14 84,14 96,14 100,14"/></svg></td>
+                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#f07178" stroke-width="1.2" points="0,22 12,20 24,17 36,16 48,15 60,15 72,14 84,14 96,14 100,14"/></svg></td>
               </tr>
               <tr class="row">
                 <td>
                   <div class="title-cell">
                     <span class="t1">Origins of acid house · Chicago 1985–87</span>
-                    <span class="t2">timeline · TR-303, Phuture, Trax records, Knuckles lineage</span>
+                    <span class="t2">TR-303, Phuture, Trax records, Knuckles lineage</span>
                   </div>
                 </td>
+                <td><span class="shape-chip" style="font-size: 11px;">timeline</span></td>
                 <td><span class="muted small mono">yesterday 16:22</span></td>
                 <td><span class="chip small"><span class="dot-i gray"></span>exhausted</span></td>
                 <td class="num">98</td>
                 <td class="num">$0.74</td>
                 <td class="num">22.6m</td>
                 <td><span class="chip ok small">pass</span></td>
-                <td><svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 14,17 28,12 42,8 56,5 70,4 84,3 98,3 100,3"/></svg></td>
+                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 14,17 28,12 42,8 56,5 70,4 84,3 98,3 100,3"/></svg></td>
               </tr>
               <tr class="row">
                 <td>
                   <div class="title-cell">
                     <span class="t1">When to mock the database vs hit a real one</span>
-                    <span class="t2">decision rationale · integration tests, migrations, fixtures</span>
+                    <span class="t2">integration tests, migrations, fixtures</span>
                   </div>
                 </td>
+                <td><span class="shape-chip" style="font-size: 11px;">dynamics</span></td>
                 <td><span class="muted small mono">2 days ago</span></td>
                 <td><span class="chip small"><span class="dot-i info"></span>completed</span></td>
                 <td class="num">61</td>
                 <td class="num">$0.42</td>
                 <td class="num">14.3m</td>
                 <td><span class="chip ok small">pass</span></td>
-                <td><svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 16,18 32,12 48,8 64,6 80,5 96,5 100,5"/></svg></td>
+                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 16,18 32,12 48,8 64,6 80,5 96,5 100,5"/></svg></td>
               </tr>
               <tr class="row">
                 <td>
                   <div class="title-cell">
                     <span class="t1">Berlin techno scene 1989–1994 · venues, labels, transmissions</span>
-                    <span class="t2">timeline · Tresor, UR, Mayday, Hard Wax</span>
+                    <span class="t2">Tresor, UR, Mayday, Hard Wax</span>
                   </div>
+                </td>
+                <td>
+                  <span class="shape-chip" style="font-size: 11px;">timeline</span>
+                  <span class="shape-chip" style="font-size: 11px;">list</span>
                 </td>
                 <td><span class="muted small mono">3 days ago</span></td>
                 <td><span class="chip small"><span class="dot-i gray"></span>exhausted</span></td>
@@ -1100,37 +840,39 @@
                 <td class="num">$1.18</td>
                 <td class="num">31.4m</td>
                 <td><span class="chip warn small">flag · stuck threads</span></td>
-                <td><svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#ffcb6b" stroke-width="1.2" points="0,22 12,18 24,14 36,11 48,9 60,8 72,8 84,8 96,8 100,8"/></svg></td>
+                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#ffcb6b" stroke-width="1.2" points="0,22 12,18 24,14 36,11 48,9 60,8 72,8 84,8 96,8 100,8"/></svg></td>
               </tr>
               <tr class="row">
                 <td>
                   <div class="title-cell">
                     <span class="t1">Survey of Claude Code hooks ecosystem</span>
-                    <span class="t2">survey · settings.json, lifecycle events, common patterns</span>
+                    <span class="t2">settings.json, lifecycle events, common patterns</span>
                   </div>
                 </td>
+                <td><span class="shape-chip" style="font-size: 11px;">survey</span></td>
                 <td><span class="muted small mono">4 days ago</span></td>
                 <td><span class="chip small"><span class="dot-i info"></span>completed</span></td>
                 <td class="num">73</td>
                 <td class="num">$0.38</td>
                 <td class="num">12.8m</td>
                 <td><span class="chip ok small">pass</span></td>
-                <td><svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 18,15 36,9 54,5 72,3 90,2 100,2"/></svg></td>
+                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 18,15 36,9 54,5 72,3 90,2 100,2"/></svg></td>
               </tr>
               <tr class="row">
                 <td>
                   <div class="title-cell">
                     <span class="t1">Reverse-engineer Storm's outline-driven research loop</span>
-                    <span class="t2">reverse-engineer · prompts, retrieval, write phase, eval harness</span>
+                    <span class="t2">prompts, retrieval, write phase, eval harness</span>
                   </div>
                 </td>
+                <td><span class="shape-chip" style="font-size: 11px;">audit</span></td>
                 <td><span class="muted small mono">5 days ago</span></td>
                 <td><span class="chip small"><span class="dot-i info"></span>completed</span></td>
                 <td class="num">112</td>
                 <td class="num">$0.69</td>
                 <td class="num">18.1m</td>
                 <td><span class="chip ok small">pass</span></td>
-                <td><svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 14,17 28,11 42,7 56,5 70,4 84,3 98,3 100,3"/></svg></td>
+                <td><svg viewBox="0 0 100 24" preserveAspectRatio="none" style="width: 100px; height: 24px;"><polyline fill="none" stroke="#c3e88d" stroke-width="1.2" points="0,22 14,17 28,11 42,7 56,5 70,4 84,3 98,3 100,3"/></svg></td>
               </tr>
             </tbody>
           </table>
@@ -1152,11 +894,11 @@
     </div>
 
     <div class="takeaway">
-      <strong>What this trades.</strong> A real archive: filterable by status, verdict, topic cluster, cost
-      band, date. Sortable by every column you'd want to compare on. Each row carries enough info to skip
-      opening the detail page (status, verdict, cost, sparkline). Net new: topic-cluster filter and the
-      "Compare 2" affordance for diffing two runs. Cost: more chrome than the current list — but that's the
-      point of moving it out of the landing page.
+      Net-new vs the current Queries page: <strong>Shape</strong> column + filter (using the inferred values
+      from the new shape detector), summary strip, topic-cluster filter, sortable on every numeric column, and
+      a "Compare 2" affordance for diffing two runs side-by-side. "Group by shape" gives an alternate view
+      where rows cluster under <em>Timeline</em>, <em>Survey</em>, <em>Comparison</em>, etc. — useful for "how
+      do my surveys compare to my timelines on cost?".
     </div>
   </section>
 
