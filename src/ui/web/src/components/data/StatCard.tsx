@@ -1,8 +1,16 @@
 import { clsx } from 'clsx';
 import type { ReactNode } from 'react';
 
+function spaceSlashes(s: string): string {
+  return s.replace(/\s*\/\s*/g, ' / ');
+}
+
+function spaceIfString(value: string | number | ReactNode): string | number | ReactNode {
+  return typeof value === 'string' ? spaceSlashes(value) : value;
+}
+
 function highlightNumbers(text: string): ReactNode[] {
-  return text.split(/(\d[\d,.]*[KMBsmh%$]?)/g).map((part, i) =>
+  return spaceSlashes(text).split(/(\d[\d,.]*[KMBsmh%$]?)/g).map((part, i) =>
     /^\d/.test(part)
       ? <span key={i} className="text-text-secondary font-medium">{part}</span>
       : <span key={i}>{part}</span>
@@ -44,13 +52,13 @@ export function StatCard({
   return (
     <div className={clsx('bg-bg-secondary rounded-lg', compact ? 'p-3' : 'p-4', className)}>
       <div className="font-sans text-xs uppercase tracking-wide text-text-secondary mb-1">{label}</div>
-      <div className={clsx('font-heading font-semibold tracking-tight whitespace-nowrap flex items-baseline gap-2', compact ? 'text-3xl' : 'text-5xl', accentColors[accent ?? 'default'])}>
-        <span>{value}</span>
+      <div className={clsx('font-heading font-semibold whitespace-nowrap flex items-baseline gap-2', compact ? 'text-3xl' : 'text-5xl', accentColors[accent ?? 'default'])}>
+        <span>{spaceIfString(value)}</span>
         {valueLabel && <span className="font-sans text-sm font-normal text-text-muted">{valueLabel}</span>}
       </div>
       {secondary && (
-        <div className={clsx('font-heading font-semibold tracking-tight whitespace-nowrap flex items-baseline gap-2 mt-0.5 leading-tight', accentColors[secondary.accent ?? 'neutral'])} style={{ fontSize: 18 }}>
-          <span>{secondary.value}</span>
+        <div className={clsx('font-heading font-semibold whitespace-nowrap flex items-baseline gap-2 mt-0.5 leading-tight', accentColors[secondary.accent ?? 'neutral'])} style={{ fontSize: 18 }}>
+          <span>{spaceIfString(secondary.value)}</span>
           {secondary.label && <span className="font-sans text-sm font-normal text-text-muted">{secondary.label}</span>}
         </div>
       )}
