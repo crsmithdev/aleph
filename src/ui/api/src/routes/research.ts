@@ -37,6 +37,7 @@ import {
   pickAgentRole,
   detectQuestionShape,
   enumerateCanon,
+  getStrategyStats,
   TrackedLLM,
 } from '@construct/research';
 
@@ -1682,6 +1683,18 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       if (!getQuery(app.sqlite, req.params.id)) return reply.status(404).send({ error: 'Query not found' });
       return listIterationChecks(app.sqlite, req.params.id);
+    }
+  );
+
+  // === Per-strategy perturbation outcomes (B2 fruitfulness + B3 triggers) ===
+  // Powers the Telemetry tab's strategy outcomes table: attempts, successes,
+  // avg novelty/confidence, and the fruitfulness multiplier the selector is
+  // currently applying. Empty when no perturbation has fired yet.
+  app.get<{ Params: { id: string } }>(
+    '/queries/:id/perturbation-stats',
+    async (req, reply) => {
+      if (!getQuery(app.sqlite, req.params.id)) return reply.status(404).send({ error: 'Query not found' });
+      return getStrategyStats(app.sqlite, req.params.id);
     }
   );
 

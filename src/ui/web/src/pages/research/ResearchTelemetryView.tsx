@@ -18,6 +18,7 @@ import {
   useThreadStateMetrics,
   useSessionCostTrajectory,
   useResearchSteps,
+  usePerturbationStats,
   type DurationStats,
   type ResearchStep,
 } from '../../api/research-hooks';
@@ -531,6 +532,69 @@ function DecisionRow({ step, highlightKey }: { step: ResearchStep; highlightKey:
 
 // ---------------------------------------------------------------------------
 
+/** Per-strategy perturbation outcomes. Surfaces the fruitfulness multiplier
+ *  the engine's selector is currently applying so the user can answer "which
+ *  strategies are working for me on this kind of question?" Empty until a
+ *  perturbation has fired in this session. */
+function PerturbationStrategiesPanel({ sessionId }: { sessionId: string }) {
+  const { data, isLoading, isError } = usePerturbationStats(sessionId);
+  if (isLoading) return <Panel title="Perturbation strategies"><div className="text-text-muted italic">Loading…</div></Panel>;
+  if (isError) return <Panel title="Perturbation strategies"><div className="text-text-muted italic">Failed to load strategy outcomes.</div></Panel>;
+  if (!data || data.length === 0) {
+    return (
+      <Panel title="Perturbation strategies" subtitle="Outcome history per strategy — populates after the first perturbation fires.">
+        <div className="text-text-muted italic">No perturbations have fired yet.</div>
+      </Panel>
+    );
+  }
+
+  const totalAttempts = data.reduce((s, r) => s + r.attempts, 0);
+  const totalSuccesses = data.reduce((s, r) => s + r.successes, 0);
+
+  return (
+    <Panel
+      title="Perturbation strategies"
+      subtitle={`${data.length} strategies tried · ${totalAttempts} attempts · ${totalSuccesses} produced findings`}
+    >
+      <div className="overflow-x-auto rounded-md border border-border-primary">
+        <table className="w-full text-sm">
+          <thead className="bg-bg-secondary">
+            <tr>
+              <th className="px-3 py-2 text-left font-medium text-text-muted">strategy</th>
+              <th className="px-3 py-2 text-right font-medium text-text-muted">attempts</th>
+              <th className="px-3 py-2 text-right font-medium text-text-muted">findings</th>
+              <th className="px-3 py-2 text-right font-medium text-text-muted">avg novelty</th>
+              <th className="px-3 py-2 text-right font-medium text-text-muted">avg confidence</th>
+              <th className="px-3 py-2 text-right font-medium text-text-muted" title="Multiplier applied to this strategy's selection weight (0.7–1.3); higher = engine more likely to pick it next.">fruitfulness</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map(r => {
+              // Color the fruitfulness column so it's easy to scan: above 1.0
+              // is a positive signal, below is a negative one. Neutral (~1.0)
+              // stays muted.
+              const f = r.fruitfulness;
+              const fColor = f >= 1.05 ? 'text-success' : f <= 0.95 ? 'text-warning' : 'text-text-muted';
+              return (
+                <tr key={r.strategy} className="border-t border-border-primary tabular-nums">
+                  <td className="px-3 py-2 font-mono text-xs">{r.strategy}</td>
+                  <td className="px-3 py-2 text-right">{r.attempts}</td>
+                  <td className="px-3 py-2 text-right">{r.successes > 0 ? <span className="text-success">{r.successes}</span> : '—'}</td>
+                  <td className="px-3 py-2 text-right">{r.successes > 0 ? `${(r.avg_novelty * 100).toFixed(0)}%` : '—'}</td>
+                  <td className="px-3 py-2 text-right">{r.successes > 0 ? `${(r.avg_confidence * 100).toFixed(0)}%` : '—'}</td>
+                  <td className={`px-3 py-2 text-right font-medium ${fColor}`}>{f.toFixed(2)}×</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
 export function TelemetryView({ sessionId, onNavigateToThread }: { sessionId: string; onNavigateToThread?: (id: string) => void }) {
   return (
     <div className="pb-10">
@@ -538,6 +602,7 @@ export function TelemetryView({ sessionId, onNavigateToThread }: { sessionId: st
       <SourceHealthPanel sessionId={sessionId} />
       <ThreadStatePanel sessionId={sessionId} onNavigateToThread={onNavigateToThread} />
       <CostTrajectoryPanel sessionId={sessionId} />
+      <PerturbationStrategiesPanel sessionId={sessionId} />
       <DecisionLogPanel sessionId={sessionId} />
     </div>
   );

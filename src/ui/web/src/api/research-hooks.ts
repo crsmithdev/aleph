@@ -1313,6 +1313,27 @@ export function useThreadStateMetrics(sessionId: string, opts?: { refetchInterva
   });
 }
 
+export interface PerturbationStrategyStat {
+  strategy: string;
+  attempts: number;
+  successes: number;
+  avg_novelty: number;
+  avg_confidence: number;
+  fruitfulness: number;
+}
+
+/** Per-strategy perturbation outcomes for the Telemetry tab. Returns one row
+ *  per strategy that has been attempted in this session; empty array when no
+ *  perturbations have fired yet. */
+export function usePerturbationStats(sessionId: string, opts?: { refetchInterval?: number }) {
+  return useQuery({
+    queryKey: ['research-perturbation-stats', sessionId],
+    queryFn: () => api.get<PerturbationStrategyStat[]>(`/research/queries/${sessionId}/perturbation-stats`),
+    enabled: !!sessionId,
+    refetchInterval: opts?.refetchInterval ?? 5000,
+  });
+}
+
 export function useJobTrace(jobId: string | null, opts?: { refetchInterval?: number }) {
   return useQuery({
     queryKey: ['research-job-trace', jobId],
