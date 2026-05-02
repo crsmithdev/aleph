@@ -5,6 +5,7 @@ import type {
   ResearchQuery, ResearchThread, ResearchFinding,
   ResearchPlanItem, PerturbationStrategy, SessionConfig, ToolCallRecord,
   FollowUpCandidate, FollowUpAnalysis,
+  QuestionShape, ShapeAnalysis,
 } from './types.js';
 import { MODEL_PRICING } from './types.js';
 import { jaccardSimilarity, computeSimilarity } from './similarity.js';
@@ -112,6 +113,79 @@ Return ONLY a JSON object on a single line, no prose, no code fences:
     // what was decided (label is the headline, prompt is on expansion).
     steps.updateStepMetadata(llm.sqlite, result.stepId, { decision: 'pick_role', role_label: label, role_prompt: prompt });
     return { label, prompt };
+  } catch {
+    return null;
+  }
+}
+
+/** Classify a research prompt's structural shape. Mirrors `pickAgentRole`:
+ *  one-shot LLM call at session creation, fire-and-forget, returns null on
+ *  parse/network failure. The planner uses this to choose strategies
+ *  (canon-first for survey/list/timeline; parity for comparison; etc.).
+ *
+ *  A prompt may have multiple shapes when mixed (e.g. "history of X and key
+ *  artists" → timeline + list). Each detected shape gets a one-sentence
+ *  completeness criterion the planner can check against.
+ *
+ *  Records a session-scope step (label='detect shape') automatically via
+ *  the TrackedLLM wrapper. */
+const VALID_SHAPES: ReadonlySet<QuestionShape> = new Set([
+  'survey', 'timeline', 'list', 'dynamics', 'comparison', 'lookup', 'audit',
+]);
+
+export async function detectQuestionShape(
+  llm: TrackedLLM,
+  sessionId: string,
+  model: string,
+  query: string,
+): Promise<ShapeAnalysis | null> {
+  const instruction = `You are classifying the structural shape of a research question. Identify which of these shapes apply to the prompt:
+
+- survey: "overview of X", "what is X", "introduce me to" — wants breadth + canonical examples
+- timeline: "history of X", "evolution of", "how X emerged" — wants chronological events
+- list: "key X", "examples of", "top N" — wants enumerated items with completeness
+- dynamics: "how does X work", "why did X happen", "mechanics of" — wants causal narrative
+- comparison: "X vs Y", "tradeoffs between" — wants axes with parity per side
+- lookup: a single-fact query — one answer + source
+- audit: "is X complete/true", "verify that X" — wants checklist + verification
+
+A prompt may have multiple shapes when mixed (e.g. "history of EDM and key artists" → timeline + list). For each detected shape, write a one-sentence completeness criterion describing what "covered" looks like; be specific about counts/coverage where appropriate (e.g. "list at least 10 key artists with breakthrough tracks", "events for each year 1990–1999").
+
+Return ONLY a JSON object on a single line, no prose, no code fences:
+{"shapes": ["..."], "lenses": [{"shape": "...", "criterion": "..."}], "confidence": 0.0-1.0}
+
+Prompt: "${query.replace(/"/g, '\\"')}"`;
+
+  try {
+    const result = await llm.complete(
+      { session_id: sessionId, thread_id: null, label: 'detect shape' },
+      model,
+      instruction,
+      400,
+    );
+    const stripped = stripLLMFences(result.text).trim();
+    const start = stripped.indexOf('{');
+    const end = stripped.lastIndexOf('}');
+    if (start < 0 || end <= start) return null;
+    const obj = JSON.parse(stripped.slice(start, end + 1)) as {
+      shapes?: unknown; lenses?: unknown; confidence?: unknown;
+    };
+    if (!Array.isArray(obj.shapes) || !Array.isArray(obj.lenses)) return null;
+    const shapes = obj.shapes
+      .filter((s): s is QuestionShape => typeof s === 'string' && VALID_SHAPES.has(s as QuestionShape));
+    if (shapes.length === 0) return null;
+    const lenses = obj.lenses
+      .filter((l): l is { shape: QuestionShape; criterion: string } =>
+        typeof l === 'object' && l !== null
+        && typeof (l as { shape?: unknown }).shape === 'string'
+        && VALID_SHAPES.has((l as { shape: string }).shape as QuestionShape)
+        && typeof (l as { criterion?: unknown }).criterion === 'string')
+      .map(l => ({ shape: l.shape, criterion: l.criterion.trim().slice(0, 400) }));
+    const confidence = typeof obj.confidence === 'number' && obj.confidence >= 0 && obj.confidence <= 1
+      ? obj.confidence : 0.5;
+    const analysis: ShapeAnalysis = { shapes, lenses, confidence };
+    steps.updateStepMetadata(llm.sqlite, result.stepId, { decision: 'detect_shape', shapes, confidence });
+    return analysis;
   } catch {
     return null;
   }

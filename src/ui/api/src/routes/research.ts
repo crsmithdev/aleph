@@ -35,6 +35,7 @@ import {
   // Agent-hook records
   listIterationChecks, listPostMortems, runPostMortem,
   pickAgentRole,
+  detectQuestionShape,
   TrackedLLM,
 } from '@construct/research';
 
@@ -283,6 +284,25 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
               }
             } catch (err) {
               console.warn(`[research] pickAgentRole failed for ${query.id}:`, err);
+            }
+          })();
+        }
+
+        // Question-shape detection: classify the prompt into one or more
+        // structural shapes (survey/timeline/list/dynamics/comparison/
+        // lookup/audit) so downstream planning can pick the right strategy.
+        // Fire-and-forget; failure leaves question_shape NULL and the
+        // planner falls back to its current generic behavior.
+        if (!query.question_shape) {
+          (async () => {
+            try {
+              const shape = await detectQuestionShape(llm, query.id, utilityModel, prompt);
+              if (shape) {
+                updateQuery(app.sqlite, query.id, { question_shape: shape });
+                console.log(`[research] detected shape for ${query.id}: ${shape.shapes.join('+')} (${shape.confidence.toFixed(2)})`);
+              }
+            } catch (err) {
+              console.warn(`[research] detectQuestionShape failed for ${query.id}:`, err);
             }
           })();
         }
