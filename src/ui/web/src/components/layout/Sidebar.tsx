@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { Icon } from '../ui/Icon';
-import { useTheme, fonts, headingFonts, monoFonts, type FontDef } from '../../theme';
+import { useTheme } from '../../theme';
 import { darkThemes, lightThemes, allThemes } from '../../themes';
 
 interface NavChild {
@@ -129,151 +129,6 @@ function SidebarLink({ to, label, icon, depth = 0, collapsed = false, disabled =
       {icon && <Icon name={icon} size={depth > 0 ? 'xs' : 'sm'} />}
       {!collapsed && <span className="truncate">{label}</span>}
     </NavLink>
-  );
-}
-
-function FontPicker({ items, activeId, onSelect, icon, fallbackStack, collapsed }: {
-  items: FontDef[];
-  activeId: string;
-  onSelect: (id: string) => void;
-  icon: string;
-  fallbackStack: string;
-  collapsed?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const listRef = useRef<HTMLDivElement>(null);
-  const active = items.find((f) => f.id === activeId) ?? items[0];
-
-  const cycle = (direction: 1 | -1) => {
-    const idx = items.findIndex((f) => f.id === activeId);
-    const next = (idx + direction + items.length) % items.length;
-    onSelect(items[next].id);
-  };
-
-  useEffect(() => {
-    if (open && listRef.current) {
-      const el = listRef.current.querySelector(`[data-font-id="${activeId}"]`) as HTMLElement | null;
-      if (el) el.scrollIntoView({ block: 'center' });
-    }
-  }, [open, activeId]);
-
-  if (collapsed) {
-    return (
-      <button
-        className="flex items-center justify-center w-full rounded-md px-2 py-1.5 text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors"
-        title={active.name}
-        onClick={() => cycle(1)}
-      >
-        <Icon name={icon} size="sm" />
-      </button>
-    );
-  }
-
-  return (
-    <div className="relative">
-      <div className="flex items-center">
-        <button
-          onClick={() => setOpen(!open)}
-          className={clsx(
-            'flex items-center gap-2.5 flex-1 min-w-0 rounded-md pl-2.5 pr-2 py-1.5 text-base font-sans transition-colors',
-            'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
-          )}
-        >
-          <Icon name={icon} size="sm" />
-          <span className="truncate">{active.name}</span>
-        </button>
-        <button
-          onClick={() => cycle(-1)}
-          className="shrink-0 p-1 rounded text-text-muted hover:text-text-primary hover:bg-bg-tertiary transition-colors"
-          title="Previous"
-        >
-          <Icon name="chevron_left" size="xs" />
-        </button>
-        <button
-          onClick={() => cycle(1)}
-          className="shrink-0 p-1 rounded text-text-muted hover:text-text-primary hover:bg-bg-tertiary transition-colors"
-          title="Next"
-        >
-          <Icon name="chevron_right" size="xs" />
-        </button>
-      </div>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div ref={listRef} className="absolute bottom-full left-0 mb-1 w-56 max-h-80 overflow-y-auto z-50 rounded-lg border border-border-primary bg-bg-secondary shadow-lg">
-            {items.map((f) => (
-              <button
-                key={f.id}
-                data-font-id={f.id}
-                onClick={() => { onSelect(f.id); setOpen(false); }}
-                className={clsx(
-                  'flex items-center w-full px-2 py-1.5 text-sm transition-colors',
-                  f.id === activeId ? 'text-accent bg-bg-tertiary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'
-                )}
-                style={{ fontFamily: `${f.family}, ${fallbackStack}` }}
-              >
-                {f.name}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function FontSelect({ collapsed }: { collapsed?: boolean }) {
-  const { fontId, setFontId } = useTheme();
-  return <FontPicker items={fonts} activeId={fontId} onSelect={setFontId} icon="text_fields" fallbackStack="system-ui, sans-serif" collapsed={collapsed} />;
-}
-
-function HeadingFontSelect({ collapsed }: { collapsed?: boolean }) {
-  const { headingFontId, setHeadingFontId } = useTheme();
-  return <FontPicker items={headingFonts} activeId={headingFontId} onSelect={setHeadingFontId} icon="title" fallbackStack="system-ui, sans-serif" collapsed={collapsed} />;
-}
-
-function MonoFontSelect({ collapsed }: { collapsed?: boolean }) {
-  const { monoFontId, setMonoFontId } = useTheme();
-  return <FontPicker items={monoFonts} activeId={monoFontId} onSelect={setMonoFontId} icon="code" fallbackStack="ui-monospace, monospace" collapsed={collapsed} />;
-}
-
-function TrackingSlider({ icon, value, onChange, title }: {
-  icon: string;
-  value: number;
-  onChange: (v: number) => void;
-  title: string;
-}) {
-  return (
-    <div className="flex items-center gap-2.5 px-2.5 py-1 text-text-muted" title={title}>
-      <Icon name={icon} size="xs" />
-      <input
-        type="range"
-        min={-0.04}
-        max={0.12}
-        step={0.005}
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        onDoubleClick={() => onChange(0)}
-        className="flex-1 min-w-0 h-1 accent-accent cursor-pointer"
-      />
-      <span className="shrink-0 w-8 text-right text-[10px] tabular-nums">{value.toFixed(3)}</span>
-    </div>
-  );
-}
-
-function TrackingControls({ collapsed }: { collapsed?: boolean }) {
-  const {
-    trackingSans, setTrackingSans,
-    trackingHeading, setTrackingHeading,
-    trackingMono, setTrackingMono,
-  } = useTheme();
-  if (collapsed) return null;
-  return (
-    <>
-      <TrackingSlider icon="text_fields" value={trackingSans} onChange={setTrackingSans} title="Body tracking (double-click to reset)" />
-      <TrackingSlider icon="title" value={trackingHeading} onChange={setTrackingHeading} title="Heading tracking (double-click to reset)" />
-      <TrackingSlider icon="code" value={trackingMono} onChange={setTrackingMono} title="Mono tracking (double-click to reset)" />
-    </>
   );
 }
 
@@ -464,10 +319,6 @@ export function Sidebar() {
       {/* Footer */}
       <div className="border-t border-border-primary px-2 py-2 space-y-0.5">
         <SidebarLink to={settingsItem.to} label={settingsItem.label} icon={settingsItem.icon} collapsed={collapsed} />
-        <FontSelect collapsed={collapsed} />
-        <HeadingFontSelect collapsed={collapsed} />
-        <MonoFontSelect collapsed={collapsed} />
-        <TrackingControls collapsed={collapsed} />
         <ThemeSelect collapsed={collapsed} />
       </div>
     </aside>
