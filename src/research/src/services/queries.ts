@@ -1,6 +1,6 @@
 import type { Sqlite } from '@construct/data';
 import { generateId } from './id.js';
-import type { ResearchQuery, SessionConfig, PromptHints } from '../types.js';
+import type { ResearchQuery, SessionConfig, PromptHints, ShapeAnalysis } from '../types.js';
 import { getDefaults } from './defaults.js';
 
 function rowToQuery(sqlite: Sqlite, row: Record<string, unknown>): ResearchQuery {
@@ -21,7 +21,12 @@ function rowToQuery(sqlite: Sqlite, row: Record<string, unknown>): ResearchQuery
   };
   let prompt_hints: PromptHints = {};
   try { prompt_hints = JSON.parse((row.prompt_hints as string) ?? '{}') as PromptHints; } catch { /* malformed */ }
-  return { ...row, config, prompt_hints } as unknown as ResearchQuery;
+  let question_shape: ShapeAnalysis | null = null;
+  if (row.question_shape != null) {
+    try { question_shape = JSON.parse(row.question_shape as string) as ShapeAnalysis; }
+    catch { /* malformed: leave null */ }
+  }
+  return { ...row, config, prompt_hints, question_shape } as unknown as ResearchQuery;
 }
 
 export function createQuery(
@@ -183,7 +188,7 @@ export function listQueriesWithStats(sqlite: Sqlite, status?: string): ResearchQ
 export function updateQuery(
   sqlite: Sqlite,
   id: string,
-  updates: Partial<Pick<ResearchQuery, 'status' | 'summary' | 'document' | 'user_notes' | 'title' | 'prompt_short' | 'prompt_super_short' | 'prompt_hints'>> & { config?: Partial<SessionConfig> }
+  updates: Partial<Pick<ResearchQuery, 'status' | 'summary' | 'document' | 'user_notes' | 'title' | 'prompt_short' | 'prompt_super_short' | 'prompt_hints' | 'question_shape'>> & { config?: Partial<SessionConfig> }
 ): ResearchQuery | null {
   const fields: string[] = [];
   const values: unknown[] = [];
@@ -196,6 +201,10 @@ export function updateQuery(
   if (updates.prompt_short !== undefined) { fields.push('prompt_short = ?'); values.push(updates.prompt_short); }
   if (updates.prompt_super_short !== undefined) { fields.push('prompt_super_short = ?'); values.push(updates.prompt_super_short); }
   if (updates.prompt_hints !== undefined) { fields.push('prompt_hints = ?'); values.push(JSON.stringify(updates.prompt_hints)); }
+  if (updates.question_shape !== undefined) {
+    fields.push('question_shape = ?');
+    values.push(updates.question_shape === null ? null : JSON.stringify(updates.question_shape));
+  }
   if (updates.config !== undefined) {
     const existing = getQuery(sqlite, id);
     if (existing) {

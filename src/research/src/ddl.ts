@@ -322,6 +322,9 @@ export function applyResearchDDL(sqlite: Sqlite): void {
   try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN min_searches INTEGER`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN fetch_source_text INTEGER`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN document TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
+  // Question-shape analysis (survey/timeline/list/dynamics/comparison/lookup/audit).
+  // Nullable: detector populates async after creation; old rows stay NULL until re-detected.
+  try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN question_shape TEXT`); } catch { /* exists */ }
   try { sqlite.exec(`ALTER TABLE research_jobs ADD COLUMN thread_id TEXT`); } catch { /* exists */ }
   try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_rj_thread ON research_jobs(thread_id, status)`); } catch { /* exists */ }
   // Enforce: at most one active job per thread. Belt-and-suspenders against the

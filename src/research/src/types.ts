@@ -5,6 +5,14 @@ export interface ResearchQuery {
   prompt_short: string | null;
   prompt_super_short: string | null;
   prompt_hints: PromptHints;
+  /** Detected structural shape of the question (survey, timeline, list,
+   *  dynamics, comparison, lookup, audit). Null until the shape detector
+   *  has run; an empty `shapes` array means detection ran but found
+   *  nothing recognizable (rare). Multiple shapes when the prompt is
+   *  mixed (e.g. survey + timeline + list). Each shape has a paired
+   *  completeness criterion used by the planner to decide when its lens
+   *  is satisfied. */
+  question_shape: ShapeAnalysis | null;
   status: 'active' | 'paused' | 'exhausted' | 'halted' | 'completed' | 'archived';
   config: SessionConfig;
   summary: string;
@@ -35,6 +43,38 @@ export interface PromptHints {
   depth?: PromptDepth;
   audience?: PromptAudience;
   urgency?: PromptUrgency;
+}
+
+/** Structural classification of a research question. Drives planner
+ *  strategy: e.g. `survey`/`timeline`/`list` benefit from a canonical
+ *  artifacts pass before depth-first exploration; `lookup` is one fact;
+ *  `comparison` needs parity per side. Distinct from `PromptShape`,
+ *  which describes desired output formatting. */
+export type QuestionShape =
+  | 'survey'      // "overview of X", "what is X" — wants breadth + canon
+  | 'timeline'    // "history of X", "evolution of X" — wants chronological
+  | 'list'        // "key X", "examples of X" — wants enumerated items
+  | 'dynamics'    // "how does X work", "why did X happen" — wants causal narrative
+  | 'comparison'  // "X vs Y", "tradeoffs" — wants axes + parity
+  | 'lookup'      // "what was the X of Y" — wants single fact + source
+  | 'audit';      // "is X complete", "is X true" — wants checklist + verification
+
+export interface ShapeLens {
+  shape: QuestionShape;
+  /** Free-text completeness criterion the planner uses to decide whether
+   *  this lens is satisfied. E.g. "list at least 10 key artists with
+   *  their breakthrough tracks", "events for each year 1990–1999". */
+  criterion: string;
+}
+
+export interface ShapeAnalysis {
+  /** Detected shapes for the prompt. Multiple if mixed. */
+  shapes: QuestionShape[];
+  /** Per-shape completeness criteria. One lens per detected shape. */
+  lenses: ShapeLens[];
+  /** Detector confidence 0–1. The planner can fall back to a default
+   *  strategy ('survey') when confidence is below ~0.5. */
+  confidence: number;
 }
 
 export interface SessionConfig {
