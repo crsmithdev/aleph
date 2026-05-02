@@ -242,37 +242,80 @@ Return ONLY a JSON array on a single line, no prose, no code fences:
 Shape hint: ${shapeHint}
 Prompt: "${prompt.replace(/"/g, '\\"')}"`;
 
+  // Nothing may fail silently (commandment #1) — every reject path writes
+  // a reason onto the step's metadata so the failure shows up in the
+  // Events tab AND in dev-server logs. Returns null on failure so the
+  // caller's "spawn canon-slot threads" branch is skipped cleanly.
+  let result;
   try {
-    const result = await llm.complete(
+    result = await llm.complete(
       { session_id: sessionId, thread_id: null, label: 'enumerate canon' },
       model,
       instruction,
       2000,
     );
-    const stripped = stripLLMFences(result.text).trim();
-    const start = stripped.indexOf('[');
-    const end = stripped.lastIndexOf(']');
-    if (start < 0 || end <= start) return null;
-    const arr = JSON.parse(stripped.slice(start, end + 1));
-    if (!Array.isArray(arr)) return null;
-    const items: CanonItem[] = arr
-      .filter((x): x is { item: string; context: string } =>
-        typeof x === 'object' && x !== null
-        && typeof (x as { item?: unknown }).item === 'string'
-        && typeof (x as { context?: unknown }).context === 'string'
-        && (x as { item: string }).item.trim().length > 0)
-      .map(x => ({ item: x.item.trim().slice(0, 200), context: x.context.trim().slice(0, 400) }));
-    if (items.length === 0) return null;
-    steps.updateStepMetadata(llm.sqlite, result.stepId, {
-      decision: 'enumerate_canon',
-      items,
-      shape_hint: shapeHint,
-      target_count: items.length,
-    });
-    return items;
-  } catch {
+  } catch (err) {
+    console.warn(`[enumerate canon] LLM call threw for ${sessionId}:`, err);
     return null;
   }
+
+  const stripped = stripLLMFences(result.text).trim();
+  const start = stripped.indexOf('[');
+  const end = stripped.lastIndexOf(']');
+
+  const recordFailure = (reason: string, extra?: Record<string, unknown>) => {
+    console.warn(`[enumerate canon] failed for ${sessionId}: ${reason}`, extra ?? '');
+    steps.updateStepMetadata(llm.sqlite, result!.stepId, {
+      decision: 'enumerate_canon_failed',
+      reason,
+      shape_hint: shapeHint,
+      ...(extra ?? {}),
+    });
+  };
+
+  if (start < 0 || end <= start) {
+    recordFailure('no JSON array brackets found in response');
+    return null;
+  }
+
+  const slice = stripped.slice(start, end + 1);
+  let arr: unknown;
+  try {
+    arr = JSON.parse(slice);
+  } catch (err) {
+    recordFailure('JSON.parse threw', {
+      parse_error: err instanceof Error ? err.message : String(err),
+      // Surface the slice that failed so we can diagnose without re-running.
+      // 1KB cap keeps the row from bloating.
+      slice_excerpt: slice.length > 1024 ? slice.slice(0, 1024) + '…' : slice,
+    });
+    return null;
+  }
+  if (!Array.isArray(arr)) {
+    recordFailure('parsed JSON is not an array', { type: typeof arr });
+    return null;
+  }
+
+  const rawCount = arr.length;
+  const items: CanonItem[] = arr
+    .filter((x): x is { item: string; context: string } =>
+      typeof x === 'object' && x !== null
+      && typeof (x as { item?: unknown }).item === 'string'
+      && typeof (x as { context?: unknown }).context === 'string'
+      && (x as { item: string }).item.trim().length > 0)
+    .map(x => ({ item: x.item.trim().slice(0, 200), context: x.context.trim().slice(0, 400) }));
+  if (items.length === 0) {
+    recordFailure('no items survived shape validation', { raw_count: rawCount });
+    return null;
+  }
+
+  steps.updateStepMetadata(llm.sqlite, result.stepId, {
+    decision: 'enumerate_canon',
+    items,
+    shape_hint: shapeHint,
+    target_count: items.length,
+  });
+  return items;
 }
 
 function stripLLMFences(text: string): string {
