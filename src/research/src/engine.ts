@@ -3,7 +3,7 @@ import { fetchPageText, JS_RENDERED_FLAG } from './providers/websearch.js';
 import type { Sqlite } from '@construct/data';
 import type {
   ResearchQuery, ResearchThread, ResearchFinding,
-  ResearchPlanItem, PerturbationStrategy, SessionConfig, ToolCallRecord,
+  ResearchPlanItem, PerturbationStrategy, PerturbationTrigger, SessionConfig, ToolCallRecord,
   FollowUpCandidate, FollowUpAnalysis,
   QuestionShape, ShapeAnalysis,
 } from './types.js';
@@ -20,7 +20,7 @@ import * as concepts from './services/concepts.js';
 import * as sources from './services/sources.js';
 import * as perturbationState from './services/perturbation-state.js';
 import {
-  selectStrategy,
+  selectStrategyWithDetails,
   generatePerturbationPrompt,
 } from './perturbation.js';
 
@@ -62,6 +62,16 @@ export interface EngineOptions {
   onError?: (error: Error, thread: ResearchThread | null) => void;
   signal?: AbortSignal;
 }
+
+// Cap on evidence-driven perturbations within a recent-finding window. Keeps
+// reactive triggers from devouring the perturbation budget when the engine
+// is in a stuck/clustered state — probabilistic firing can still happen but
+// the dice roll has the same odds as before, so creativity injection isn't
+// pinched. Tuned conservatively: at most 2 reactive perturbations per 10
+// findings, after which evidence triggers write a rate-limit step instead
+// of spawning.
+const EVIDENCE_TRIGGER_RATE_LIMIT_WINDOW = 10;
+const EVIDENCE_TRIGGER_RATE_LIMIT_MAX = 2;
 
 export function classify(s: string): 'question' | 'topic' {
   const t = s.trim();
@@ -1852,19 +1862,161 @@ Respond with ONLY "true" if this is a duplicate or near-duplicate, "false" other
     thread: ResearchThread,
     config: SessionConfig
   ): Promise<void> {
+    // Evidence-driven triggers fire FIRST. If any signal in the session state
+    // says we should perturb (regardless of dice), force one — but rate-limit
+    // so reactive triggers don't burn the entire perturbation budget. Falls
+    // through to probabilistic firing when no evidence trigger fires; the
+    // dice roll preserves baseline creativity injection.
+    const evidenceTrigger = this.detectEvidenceTrigger(sessionId, config);
+    if (evidenceTrigger) {
+      const recentCount = this.recentPerturbationCount(sessionId);
+      if (recentCount >= EVIDENCE_TRIGGER_RATE_LIMIT_MAX) {
+        steps.createStep(this.sqlite, {
+          thread_id: null,
+          session_id: sessionId,
+          model: 'system',
+          provider: 'system',
+          prompt_tokens: 0,
+          completion_tokens: 0,
+          cost_usd: 0,
+          duration_ms: 0,
+          label: 'perturbation rate-limited',
+          metadata: {
+            decision: 'perturbation_rate_limited',
+            trigger: evidenceTrigger.trigger,
+            reason: 'recent perturbation count exceeds rate limit',
+            recent_perturbations: recentCount,
+            window: EVIDENCE_TRIGGER_RATE_LIMIT_WINDOW,
+          },
+        });
+        return;
+      }
+      await this.spawnPerturbationThreads(sessionId, config, true, evidenceTrigger.trigger, evidenceTrigger.signal);
+      return;
+    }
+
     // Depth-scaled probability: decreases at depth so shallow threads explore more freely
     // than deep threads that have already wandered from the seed.
     const depthFactor = config.max_thread_depth > 0 ? 1 - (thread.depth / config.max_thread_depth) * 0.5 : 1;
     const p = config.p_serendipity * depthFactor;
     if (Math.random() > p) return;
 
-    await this.spawnPerturbationThreads(sessionId, config, false);
+    await this.spawnPerturbationThreads(sessionId, config, false, 'probabilistic');
+  }
+
+  /** Inspects the session state for an evidence-based reason to perturb.
+   *  Returns the first trigger that fires (in priority order: stuck_novelty,
+   *  cluster, coverage_met) along with the signal values for visibility, or
+   *  null when no trigger applies. Pure read — no side effects. Public so
+   *  tests can drive it without orchestrating a full engine iteration. */
+  detectEvidenceTrigger(
+    sessionId: string,
+    config: SessionConfig
+  ): { trigger: PerturbationTrigger; signal: Record<string, unknown> } | null {
+    // Stuck-novelty: rolling-avg novelty over the last `diminishing_returns_window`
+    // findings is below `diminishing_returns_threshold`. Catches the case where
+    // findings have stopped saying anything new.
+    const window = config.diminishing_returns_window ?? 0;
+    const noveltyThreshold = config.diminishing_returns_threshold ?? 0;
+    if (window > 0 && noveltyThreshold > 0) {
+      const recent = findings.getRecentFindings(this.sqlite, sessionId, window);
+      if (recent.length >= window) {
+        const avgNovelty = recent.reduce((s, f) => s + f.novelty, 0) / recent.length;
+        if (avgNovelty < noveltyThreshold) {
+          return {
+            trigger: 'stuck_novelty',
+            signal: { rolling_avg_novelty: avgNovelty, threshold: noveltyThreshold, window },
+          };
+        }
+      }
+    }
+
+    // Cluster: last N findings share a dominant tag (>50% of their tag votes).
+    // Uses forced_diversity_threshold from PerturbationConfig as the window
+    // size — same knob the dormant in-memory tracker used. Bias toward
+    // strategies that diverge from the cluster is left to the selector;
+    // we just signal "force a perturbation".
+    const clusterWindow = config.perturbation?.forced_diversity_threshold ?? 0;
+    if (clusterWindow > 0) {
+      const recent = findings.getRecentFindings(this.sqlite, sessionId, clusterWindow);
+      if (recent.length >= clusterWindow) {
+        const tagCounts = new Map<string, number>();
+        let totalTags = 0;
+        for (const f of recent) {
+          for (const tag of f.tags) {
+            tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+            totalTags++;
+          }
+        }
+        if (totalTags > 0) {
+          let dominantTag = '';
+          let dominantCount = 0;
+          for (const [tag, count] of tagCounts) {
+            if (count > dominantCount) { dominantTag = tag; dominantCount = count; }
+          }
+          const ratio = dominantCount / totalTags;
+          if (ratio > 0.5) {
+            return {
+              trigger: 'cluster',
+              signal: { dominant_tag: dominantTag, dominant_ratio: ratio },
+            };
+          }
+        }
+      }
+    }
+
+    // Coverage-met: canon-slot coverage criterion is satisfied. Spawned
+    // perturbations after coverage gives the run a creative-angle pass before
+    // converging. Skip if no canon slots exist (non-survey shape).
+    const canonSlots = threads.listThreads(this.sqlite, sessionId)
+      .filter(t => t.origin === 'canon_slot');
+    if (canonSlots.length > 0) {
+      const covered = canonSlots.filter(t =>
+        findings.countFindings(this.sqlite, sessionId, { thread_id: t.id }) > 0
+      ).length;
+      if (covered === canonSlots.length) {
+        // Only fire once per session — check if a coverage_met perturbation
+        // step already exists. Otherwise we'd retrigger after every finding
+        // once coverage is hit.
+        const existing = this.sqlite.prepare(
+          `SELECT 1 FROM research_steps WHERE session_id = ? AND label = 'select perturbation'
+           AND metadata LIKE '%"trigger":"coverage_met"%' LIMIT 1`
+        ).get(sessionId);
+        if (!existing) {
+          return {
+            trigger: 'coverage_met',
+            signal: { canon_covered: covered, canon_total: canonSlots.length },
+          };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /** Counts perturbation threads spawned since the oldest of the last
+   *  EVIDENCE_TRIGGER_RATE_LIMIT_WINDOW findings. Used to bound reactive
+   *  triggers so they don't burn the perturbation budget — probabilistic
+   *  firing isn't subject to this cap. Returns 0 when there are no findings
+   *  yet (rate limit is only meaningful after the first findings land).
+   *  Public so tests can verify the rate-limit math directly. */
+  recentPerturbationCount(sessionId: string): number {
+    const window = EVIDENCE_TRIGGER_RATE_LIMIT_WINDOW;
+    const recent = findings.getRecentFindings(this.sqlite, sessionId, window);
+    if (recent.length === 0) return 0;
+    const oldestTime = recent[recent.length - 1].created_at;
+    return (this.sqlite.prepare(
+      `SELECT COUNT(*) as c FROM research_threads
+       WHERE session_id = ? AND origin = 'perturbation' AND created_at >= ?`
+    ).get(sessionId, oldestTime) as { c: number }).c;
   }
 
   private async spawnPerturbationThreads(
     sessionId: string,
     config: SessionConfig,
-    forced: boolean
+    forced: boolean,
+    trigger: PerturbationTrigger = 'probabilistic',
+    signal?: Record<string, unknown>
   ): Promise<void> {
     // Respect total thread cap
     const maxTotal = config.max_total_threads ?? 200;
@@ -1874,12 +2026,36 @@ Respond with ONLY "true" if this is a duplicate or near-duplicate, "false" other
     }
 
     // Load persistent state (counters survive engine restarts) and pick a
-    // strategy via perturbation.ts/selectStrategy — same selector that's
-    // covered by phase2.test.ts. Fruitfulness boosts strategies whose past
-    // perturbation findings had high novelty/confidence (recordOutcome
-    // increments successes; selectStrategy reads the success rate).
+    // strategy via perturbation.ts/selectStrategyWithDetails — same selector
+    // logic that's covered by phase2.test.ts, but the WithDetails variant
+    // returns the candidate weights and cooldown set so the engine can write
+    // them into a select_perturbation step (visible in the Events tab).
     const pState = perturbationState.loadPerturbationState(this.sqlite, sessionId, config.perturbation);
-    const strategy = selectStrategy(config.perturbation, pState);
+    const selection = selectStrategyWithDetails(config.perturbation, pState);
+    const strategy = selection.strategy;
+
+    // Audit step BEFORE we generate the query. This lands even if the
+    // tangent fails generation or rejection downstream — the user still
+    // sees the strategy choice and what drove it.
+    steps.createStep(this.sqlite, {
+      thread_id: null,
+      session_id: sessionId,
+      model: 'system',
+      provider: 'system',
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      cost_usd: 0,
+      duration_ms: 0,
+      label: 'select perturbation',
+      metadata: {
+        decision: 'select_perturbation',
+        strategy,
+        trigger,
+        candidates: selection.candidates,
+        cooldown_excluded: selection.cooldown_excluded,
+        ...(signal ? { signal } : {}),
+      },
+    });
 
     // Get context for perturbation
     const session = sessions.getQuery(this.sqlite, sessionId)!;
@@ -1925,6 +2101,7 @@ Respond with ONLY "true" if this is a duplicate or near-duplicate, "false" other
             metadata: {
               decision: 'perturbation_rejected',
               strategy,
+              trigger,
               attempted_query: tangentQuery,
               retry_query: retry ?? null,
               similarity: sim,

@@ -461,6 +461,19 @@ export type StepMetadata =
   | { decision: 'follow_up_eval'; accepted_count: number; rejected_count: number; retry_count: number }
   | { decision: 'enumerate_canon'; items: Array<{ item: string; context: string }>; shape_hint: string; target_count: number }
   | { decision: 'coverage_check'; slots: Array<{ thread_id: string; item: string; finding_count: number; covered: boolean }>; covered_count: number; total_count: number }
+  | { decision: 'select_perturbation'; strategy: PerturbationStrategy; trigger: PerturbationTrigger; candidates: Array<{ strategy: PerturbationStrategy; weight: number }>; cooldown_excluded: PerturbationStrategy[]; signal?: { rolling_avg_novelty?: number; threshold?: number; window?: number; dominant_tag?: string; dominant_ratio?: number; canon_covered?: number; canon_total?: number } }
+  | { decision: 'perturbation_rate_limited'; trigger: PerturbationTrigger; reason: string; recent_perturbations: number; window: number }
+
+/** What caused a perturbation to fire. `probabilistic` is the default
+ *  per-iteration dice roll (random with depth-scaled probability). The other
+ *  three are evidence-driven triggers added in B3:
+ *  - `stuck_novelty`: rolling-avg novelty over the last N findings dropped
+ *    below the diminishing-returns threshold.
+ *  - `cluster`: the last N findings share a dominant tag/concept above the
+ *    forced-diversity threshold.
+ *  - `coverage_met`: canon-slot coverage criterion is satisfied and the run
+ *    still has budget for creative angles. */
+export type PerturbationTrigger = 'probabilistic' | 'stuck_novelty' | 'cluster' | 'coverage_met'
 
 export interface ResearchPlan {
   id: string;

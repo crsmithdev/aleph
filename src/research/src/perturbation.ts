@@ -67,8 +67,26 @@ export function selectStrategy(
   config: PerturbationConfig,
   state: PerturbationState
 ): PerturbationStrategy {
+  return selectStrategyWithDetails(config, state).strategy;
+}
+
+/** Returns the chosen strategy plus the inputs that drove the choice
+ *  (candidates with their final weights, plus which strategies were excluded
+ *  by cooldown). The engine writes these into a `select_perturbation` step
+ *  so the user can audit each decision in the Events tab. */
+export interface StrategySelection {
+  strategy: PerturbationStrategy;
+  candidates: Array<{ strategy: PerturbationStrategy; weight: number }>;
+  cooldown_excluded: PerturbationStrategy[];
+}
+
+export function selectStrategyWithDetails(
+  config: PerturbationConfig,
+  state: PerturbationState
+): StrategySelection {
   // Filter out recently used strategies (cooldown)
   const cooldownSet = new Set(state.recentStrategies.slice(-config.strategy_cooldown));
+  const cooldown_excluded = Array.from(cooldownSet);
 
   // Phase awareness: early iterations favor breadth, late favor depth
   const earlyPhase = state.iterationCount < 20;
@@ -98,7 +116,8 @@ export function selectStrategy(
 
   // If no candidates (all on cooldown), use any strategy
   if (candidates.length === 0) {
-    return ALL_STRATEGIES[Math.floor(Math.random() * ALL_STRATEGIES.length)];
+    const fallback = ALL_STRATEGIES[Math.floor(Math.random() * ALL_STRATEGIES.length)];
+    return { strategy: fallback, candidates: [], cooldown_excluded };
   }
 
   // Weighted random selection
@@ -106,10 +125,10 @@ export function selectStrategy(
   let rand = Math.random() * totalWeight;
   for (const candidate of candidates) {
     rand -= candidate.weight;
-    if (rand <= 0) return candidate.strategy;
+    if (rand <= 0) return { strategy: candidate.strategy, candidates, cooldown_excluded };
   }
 
-  return candidates[candidates.length - 1].strategy;
+  return { strategy: candidates[candidates.length - 1].strategy, candidates, cooldown_excluded };
 }
 
 export function recordStrategyUse(state: PerturbationState, strategy: PerturbationStrategy): void {

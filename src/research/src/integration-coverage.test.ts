@@ -523,3 +523,186 @@ describe('canon coverage check', () => {
     expect(coverageSteps.length).toBe(0);
   });
 });
+
+// ===========================================================================
+// 8. Evidence-driven perturbation triggers (B3)
+// ===========================================================================
+
+const TRIGGER_TEST_CONFIG = {
+  diminishing_returns_threshold: 0.3,
+  diminishing_returns_window: 5,
+  perturbation: {
+    depth_scaling: false,
+    chain_length: 1,
+    strategy_cooldown: 3,
+    forced_diversity_threshold: 5,
+    strategy_weights: {},
+  },
+} as const;
+
+function makeFinding(db: Database, sessionId: string, threadId: string, novelty: number, tags: string[]) {
+  return findings.createFinding(db, {
+    thread_id: threadId, session_id: sessionId,
+    content: 'c', summary: 's', source_urls: [], source_texts: [],
+    source_quality: 0.5, tags, confidence: 0.7, novelty, actionability: 0.5,
+    follow_ups: [],
+  });
+}
+
+describe('evidence-driven perturbation triggers', () => {
+  test('stuck_novelty: rolling avg below threshold returns trigger', () => {
+    const db = createTestDb();
+    const session = queries.createQuery(db, 'X', 'topic');
+    const seed = threads.createThread(db, {
+      session_id: session.id, query: 'topic', origin: 'seed', depth: 0,
+    });
+    for (let i = 0; i < 5; i++) makeFinding(db, session.id, seed.id, 0.1, [`tag${i}`]);
+
+    const engine = new ResearchEngine({
+      sqlite: db, provider: new RecordingProvider(), maxIterations: 0,
+    });
+    const result = engine.detectEvidenceTrigger(session.id, TRIGGER_TEST_CONFIG as any);
+    expect(result?.trigger).toBe('stuck_novelty');
+    expect(result?.signal.rolling_avg_novelty).toBe(0.1);
+    expect(result?.signal.threshold).toBe(0.3);
+    expect(result?.signal.window).toBe(5);
+  });
+
+  test('stuck_novelty: avg above threshold does NOT trigger', () => {
+    const db = createTestDb();
+    const session = queries.createQuery(db, 'X', 'topic');
+    const seed = threads.createThread(db, {
+      session_id: session.id, query: 'topic', origin: 'seed', depth: 0,
+    });
+    // High novelty + diverse tags so neither stuck_novelty nor cluster fires.
+    for (let i = 0; i < 5; i++) makeFinding(db, session.id, seed.id, 0.7, [`unique-${i}-a`, `unique-${i}-b`]);
+
+    const engine = new ResearchEngine({
+      sqlite: db, provider: new RecordingProvider(), maxIterations: 0,
+    });
+    expect(engine.detectEvidenceTrigger(session.id, TRIGGER_TEST_CONFIG as any)).toBeNull();
+  });
+
+  test('stuck_novelty: insufficient findings (< window) does NOT trigger', () => {
+    const db = createTestDb();
+    const session = queries.createQuery(db, 'X', 'topic');
+    const seed = threads.createThread(db, {
+      session_id: session.id, query: 'topic', origin: 'seed', depth: 0,
+    });
+    for (let i = 0; i < 3; i++) makeFinding(db, session.id, seed.id, 0.05, [`t${i}`]);
+
+    const engine = new ResearchEngine({
+      sqlite: db, provider: new RecordingProvider(), maxIterations: 0,
+    });
+    expect(engine.detectEvidenceTrigger(session.id, TRIGGER_TEST_CONFIG as any)).toBeNull();
+  });
+
+  test('cluster: dominant tag > 50% returns cluster trigger', () => {
+    const db = createTestDb();
+    const session = queries.createQuery(db, 'X', 'topic');
+    const seed = threads.createThread(db, {
+      session_id: session.id, query: 'topic', origin: 'seed', depth: 0,
+    });
+    // High novelty (so stuck_novelty doesn't fire first); single shared tag.
+    for (let i = 0; i < 5; i++) makeFinding(db, session.id, seed.id, 0.7, ['chart-mechanics']);
+
+    const engine = new ResearchEngine({
+      sqlite: db, provider: new RecordingProvider(), maxIterations: 0,
+    });
+    const result = engine.detectEvidenceTrigger(session.id, TRIGGER_TEST_CONFIG as any);
+    expect(result?.trigger).toBe('cluster');
+    expect(result?.signal.dominant_tag).toBe('chart-mechanics');
+    expect(result?.signal.dominant_ratio).toBe(1);
+  });
+
+  test('cluster: diverse tags do NOT trigger cluster', () => {
+    const db = createTestDb();
+    const session = queries.createQuery(db, 'X', 'topic');
+    const seed = threads.createThread(db, {
+      session_id: session.id, query: 'topic', origin: 'seed', depth: 0,
+    });
+    makeFinding(db, session.id, seed.id, 0.7, ['a', 'b']);
+    makeFinding(db, session.id, seed.id, 0.7, ['c', 'd']);
+    makeFinding(db, session.id, seed.id, 0.7, ['e', 'f']);
+    makeFinding(db, session.id, seed.id, 0.7, ['g', 'h']);
+    makeFinding(db, session.id, seed.id, 0.7, ['i', 'j']);
+
+    const engine = new ResearchEngine({
+      sqlite: db, provider: new RecordingProvider(), maxIterations: 0,
+    });
+    expect(engine.detectEvidenceTrigger(session.id, TRIGGER_TEST_CONFIG as any)).toBeNull();
+  });
+
+  test('coverage_met: all canon slots covered returns trigger', () => {
+    const db = createTestDb();
+    const session = queries.createQuery(db, 'X', 'topic');
+    const seed = threads.createThread(db, {
+      session_id: session.id, query: 'topic', origin: 'seed', depth: 0,
+    });
+    const slot1 = threads.createThread(db, {
+      session_id: session.id, query: 'item 1', origin: 'canon_slot',
+      parent_thread_id: seed.id, depth: 1,
+    });
+    const slot2 = threads.createThread(db, {
+      session_id: session.id, query: 'item 2', origin: 'canon_slot',
+      parent_thread_id: seed.id, depth: 1,
+    });
+    // Distinct tags + high novelty so other triggers don't fire first.
+    makeFinding(db, session.id, slot1.id, 0.7, ['t1', 'u1']);
+    makeFinding(db, session.id, slot2.id, 0.7, ['t2', 'u2']);
+
+    const engine = new ResearchEngine({
+      sqlite: db, provider: new RecordingProvider(), maxIterations: 0,
+    });
+    const result = engine.detectEvidenceTrigger(session.id, TRIGGER_TEST_CONFIG as any);
+    expect(result?.trigger).toBe('coverage_met');
+    expect(result?.signal.canon_covered).toBe(2);
+    expect(result?.signal.canon_total).toBe(2);
+  });
+
+  test('coverage_met: partial coverage does NOT trigger', () => {
+    const db = createTestDb();
+    const session = queries.createQuery(db, 'X', 'topic');
+    const seed = threads.createThread(db, {
+      session_id: session.id, query: 'topic', origin: 'seed', depth: 0,
+    });
+    const slot1 = threads.createThread(db, {
+      session_id: session.id, query: 'item 1', origin: 'canon_slot',
+      parent_thread_id: seed.id, depth: 1,
+    });
+    threads.createThread(db, {
+      session_id: session.id, query: 'item 2', origin: 'canon_slot',
+      parent_thread_id: seed.id, depth: 1,
+    });
+    makeFinding(db, session.id, slot1.id, 0.7, ['t1', 'u1']);
+
+    const engine = new ResearchEngine({
+      sqlite: db, provider: new RecordingProvider(), maxIterations: 0,
+    });
+    expect(engine.detectEvidenceTrigger(session.id, TRIGGER_TEST_CONFIG as any)).toBeNull();
+  });
+
+  test('rate limit: recentPerturbationCount counts perturbations against the window', () => {
+    const db = createTestDb();
+    const session = queries.createQuery(db, 'X', 'topic');
+    const seed = threads.createThread(db, {
+      session_id: session.id, query: 'topic', origin: 'seed', depth: 0,
+    });
+    // 12 findings (> window of 10).
+    for (let i = 0; i < 12; i++) makeFinding(db, session.id, seed.id, 0.5, []);
+    // 2 perturbation threads created after — both fall within the window.
+    threads.createThread(db, {
+      session_id: session.id, query: 'pert1', origin: 'perturbation',
+      perturbation_strategy: 'analogical', parent_thread_id: seed.id, depth: 1,
+    });
+    threads.createThread(db, {
+      session_id: session.id, query: 'pert2', origin: 'perturbation',
+      perturbation_strategy: 'contrarian', parent_thread_id: seed.id, depth: 1,
+    });
+
+    const engine = new ResearchEngine({
+      sqlite: db, provider: new RecordingProvider(), maxIterations: 0,
+    });
+    expect(engine.recentPerturbationCount(session.id)).toBe(2);
+  });
+});
