@@ -1601,57 +1601,59 @@ function formatEventDetail(ev: StreamEvent & { threadDiff?: string }): { typeLab
     const chips = stepChips(s);
     // No tools — label-only step (e.g. gap analysis, synthesis, dedup)
     if (tools.length === 0) {
-      // Label aliases collapse every multi-word DB label to a single token for
-      // the events log. Anything not aliased here will likely overflow the
-      // narrow type column and wrap onto a second line.
+      // Display labels — collapsed single-word OR hyphenated two-word for
+      // clarity. Hyphens keep them as one unbreakable token so the type
+      // column never wraps. The column is sized to fit the longest entry
+      // ('restate-prompt', 'update-summary' = 14 chars) — see grid below.
       const labelAliases: Record<string, string> = {
         'synthesize finding': 'synthesis',
         'synthesize findings': 'synthesis',
-        'evaluate follow-ups': 'followups',
-        'summarize thread': 'thrtitle',
+        'evaluate follow-ups': 'follow-ups',
+        'summarize thread': 'thread-title',
         'dedup check': 'dedup',
         'dedup judge': 'dedup',
-        'gap analysis': 'gaps',
+        'gap analysis': 'gap-analysis',
         'formulate': 'formulate',
         'extract concepts': 'concepts',
-        'lead review': 'review',
+        'lead review': 'lead-review',
         'generate plan': 'plan',
-        'generate lead section': 'lead',
+        'generate lead section': 'lead-section',
         'generate document': 'document',
-        'update summary': 'summary',
-        'web search': 'search',
-        'web search (failed)': 'search✗',
-        'empty search': 'empty',
-        'iteration error': 'error',
-        'thread error': 'error',
-        'pick role': 'role',
-        'query title': 'title',
-        'short title': 'heading',
-        'restate prompt': 'restate',
-        'perturbation query': 'perturb',
+        'update summary': 'update-summary',
+        'web search': 'web-search',
+        'web search (failed)': 'search-fail',
+        'empty search': 'empty-search',
+        'iteration error': 'iter-error',
+        'thread error': 'thread-error',
+        'pick role': 'role-pick',
+        'query title': 'query-title',
+        'short title': 'short-title',
+        'restate prompt': 'restate-prompt',
+        'perturbation query': 'perturb-query',
       };
       const labelColors: Record<string, string> = {
-        'gaps': 'text-orange-400',
+        'gap-analysis': 'text-orange-400',
         'synthesis': 'text-purple-400',
         'dedup': 'text-text-muted',
-        'followups': 'text-teal-400',
-        'thrtitle': 'text-text-muted',
-        'summary': 'text-text-muted',
+        'follow-ups': 'text-teal-400',
+        'thread-title': 'text-text-muted',
+        'update-summary': 'text-text-muted',
         'formulate': 'text-blue-400',
         'concepts': 'text-purple-400',
-        'review': 'text-yellow-400',
+        'lead-review': 'text-yellow-400',
         'plan': 'text-yellow-400',
-        'lead': 'text-accent/70',
+        'lead-section': 'text-accent/70',
         'document': 'text-accent/70',
-        'search': 'text-blue-400',
-        'search✗': 'text-error',
-        'empty': 'text-text-muted',
-        'error': 'text-error',
-        'role': 'text-purple-400',
-        'title': 'text-text-muted',
-        'heading': 'text-text-muted',
-        'restate': 'text-text-muted',
-        'perturb': 'text-orange-400',
+        'web-search': 'text-blue-400',
+        'search-fail': 'text-error',
+        'empty-search': 'text-text-muted',
+        'iter-error': 'text-error',
+        'thread-error': 'text-error',
+        'role-pick': 'text-purple-400',
+        'query-title': 'text-text-muted',
+        'short-title': 'text-text-muted',
+        'restate-prompt': 'text-text-muted',
+        'perturb-query': 'text-orange-400',
       };
       const rawLbl = s.label ?? 'step';
       // 'generate section: <name>' steps carry the section name in the label
@@ -2408,7 +2410,10 @@ function EventsView({
                 onClick={() => setExpandedEventKey(prev => prev === evKey ? null : evKey)}
                 onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setExpandedEventKey(prev => prev === evKey ? null : evKey)}
                 className="grid items-baseline px-3 py-1 cursor-pointer focus:outline-none"
-                style={{ gridTemplateColumns: '72px 90px auto 1fr auto', gap: '0' }}
+                // 130px label column fits the longest hyphenated alias
+                // ('restate-prompt', 'update-summary' = 14 chars × ~9px in mono)
+                // with a few px of breathing room.
+                style={{ gridTemplateColumns: '72px 130px auto 1fr auto', gap: '0' }}
               >
                 <span className="text-sm text-text-muted font-mono pr-1.5 overflow-hidden">{timeStr}</span>
                 <span className={clsx('text-sm font-mono pr-2 shrink-0', formatted.typeColor)}>{formatted.typeLabel}</span>
@@ -2426,9 +2431,9 @@ function EventsView({
                   ))}
                 </span>
               </div>
-              {/* Expanded content */}
+              {/* Expanded content. ml offset = padding-left (12) + time col (72) + label col (130) ≈ 208 */}
               {isExpanded && (
-                <div className="px-3 pb-2.5 pt-1 space-y-1.5 border-l-2 ml-[168px]" style={{ borderLeftColor: `${color}40` }}>
+                <div className="px-3 pb-2.5 pt-1 space-y-1.5 border-l-2 ml-[208px]" style={{ borderLeftColor: `${color}40` }}>
                   {ev.type === 'step' && (() => {
                     const s = ev.payload;
                     return (
