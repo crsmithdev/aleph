@@ -903,6 +903,20 @@ export function useGenerateDocument() {
   });
 }
 
+// --- Manual post-mortem re-review ---
+export function useRunPostMortem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sessionId }: { sessionId: string }) =>
+      api.post<PostMortemRecord | null>(`/research/queries/${sessionId}/post-mortem`, {}),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['research-post-mortems', vars.sessionId] });
+      // Refresh listing card chips that read latest_post_mortem from QueryStats.
+      qc.invalidateQueries({ queryKey: ['research-queries'] });
+    },
+  });
+}
+
 // --- Delete query ---
 export function useDeleteResearchQuery() {
   const qc = useQueryClient();

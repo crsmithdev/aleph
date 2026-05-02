@@ -2,17 +2,21 @@ import { clsx } from 'clsx';
 import {
   useIterationChecks,
   usePostMortems,
+  useRunPostMortem,
   type IterationCheckRecord,
   type PostMortemRecord,
 } from '../../api/research-hooks';
 import { humanizeFlag } from '../../components/research/FlagChip';
 import { shortRelativeTime } from '../../utils/format';
+import { Button } from '../../components/ui/Button';
 
 interface Props { sessionId: string }
 
 export function ReviewsView({ sessionId }: Props) {
   const { data: checks = [], isLoading: checksLoading } = useIterationChecks(sessionId);
   const { data: mortems = [], isLoading: mortemsLoading } = usePostMortems(sessionId);
+  const runPostMortem = useRunPostMortem();
+  const error = runPostMortem.error instanceof Error ? runPostMortem.error.message : null;
 
   if (checksLoading || mortemsLoading) {
     return <div className="p-6 text-sm text-text-muted">Loading reviews…</div>;
@@ -25,8 +29,16 @@ export function ReviewsView({ sessionId }: Props) {
         <p>Reviews appear here as the run progresses:</p>
         <ul className="list-disc pl-5 mt-2 space-y-1">
           <li><span className="text-text-secondary">Iteration checks</span> fire every 5 iterations — they spot-check drift against the original prompt and can auto-prune off-topic threads.</li>
-          <li><span className="text-text-secondary">Post-mortems</span> fire once per completed job — they flag anomalies like low finding yield, thread skew, or runaway cost.</li>
+          <li><span className="text-text-secondary">Post-mortems</span> fire once per completed burst-job — they flag anomalies like low finding yield, thread skew, or runaway cost.</li>
         </ul>
+        <div className="mt-4">
+          <Button size="sm"
+            loading={runPostMortem.isPending}
+            onClick={() => runPostMortem.mutate({ sessionId })}>
+            Run review now
+          </Button>
+          {error && <p className="text-sm text-error mt-2">{error}</p>}
+        </div>
       </div>
     );
   }
@@ -35,13 +47,22 @@ export function ReviewsView({ sessionId }: Props) {
     <div className="p-6 flex flex-col gap-6 max-w-4xl">
       {mortems.length > 0 && (
         <section>
-          <h2 className="text-sm font-medium text-text-secondary uppercase tracking-wider mb-1">
-            Post-mortems ({mortems.length})
-          </h2>
+          <div className="flex items-center justify-between mb-1 gap-3">
+            <h2 className="text-sm font-medium text-text-secondary uppercase tracking-wider">
+              Post-mortems ({mortems.length})
+            </h2>
+            <Button size="sm" variant="ghost"
+              loading={runPostMortem.isPending}
+              onClick={() => runPostMortem.mutate({ sessionId })}>
+              Re-run review
+            </Button>
+          </div>
           <p className="text-sm text-text-muted mb-3">
             One snapshot per session burst-job. Numbers reflect the run as of that
-            timestamp — later activity isn't re-evaluated until the next job finishes.
+            timestamp — later activity isn't re-evaluated until the next job finishes
+            or you re-run the review manually.
           </p>
+          {error && <p className="text-sm text-error mb-2">{error}</p>}
           <div className="flex flex-col gap-3">
             {mortems.map((m, i) => <PostMortemCard key={m.id} record={m} latest={i === 0} />)}
           </div>

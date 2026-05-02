@@ -31,8 +31,9 @@ import {
   computeJobTrace, computeSessionCostTrajectory, computeErrorStatus,
   type PromptHints,
   registerBuiltinHooks,
+  hasHooks,
   // Agent-hook records
-  listIterationChecks, listPostMortems,
+  listIterationChecks, listPostMortems, runPostMortem,
   pickAgentRole,
   TrackedLLM,
 } from '@construct/research';
@@ -1615,6 +1616,26 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       if (!getQuery(app.sqlite, req.params.id)) return reply.status(404).send({ error: 'Query not found' });
       return listPostMortems(app.sqlite, req.params.id);
+    }
+  );
+
+  // Manual re-review: forces a fresh post-mortem against current session state.
+  // Mirrors the document-regenerate pattern. job_id is null because there's no
+  // job boundary; duration_ms is the wall-clock since session creation.
+  app.post<{ Params: { id: string } }>(
+    '/queries/:id/post-mortem',
+    async (req, reply) => {
+      const query = getQuery(app.sqlite, req.params.id);
+      if (!query) return reply.status(404).send({ error: 'Query not found' });
+      if (!hasHooks('post_mortem')) {
+        return reply.status(503).send({ error: 'post_mortem hook not registered (missing OPENROUTER_API_KEY?)' });
+      }
+      const durationMs = Date.now() - new Date(query.created_at).getTime();
+      await runPostMortem(app.sqlite, req.params.id, null, durationMs);
+      const records = listPostMortems(app.sqlite, req.params.id);
+      // listPostMortems returns DESC, so [0] is the freshly-recorded one (or
+      // the latest existing one if the run produced no result, which is rare).
+      return reply.send(records[0] ?? null);
     }
   );
 
