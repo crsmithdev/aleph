@@ -136,26 +136,6 @@ export interface ResearchQuery {
   stats?: QueryStats; // populated by GET /research/queries (list endpoint)
 }
 
-export interface SteeringNote {
-  id: string;
-  session_id: string;
-  text: string;
-  applied_at: string | null;
-  created_at: string;
-}
-
-export interface LeadModification {
-  id: string;
-  plan_id: string;
-  action: 'veto' | 'boost' | 'deprioritize' | 'inject' | 'note' | 'config_change';
-  target_item_rank: number | null;
-  target_thread_id: string | null;
-  payload: string;
-  source: string;
-  applied_at: string | null;
-  created_at: string;
-}
-
 /** @deprecated Use ResearchQuery */
 export type ResearchSession = ResearchQuery;
 
@@ -637,26 +617,6 @@ export function usePromoteResearchQuery() {
     onSuccess: (_, id) => {
       qc.invalidateQueries({ queryKey: ['research-queries'] });
       qc.invalidateQueries({ queryKey: ['research-queries', id] });
-    },
-  });
-}
-
-export function useSteeringNotes(sessionId: string) {
-  return useQuery({
-    queryKey: ['research-nudges', sessionId],
-    queryFn: () => api.get<{ notes: SteeringNote[]; lead_modifications: LeadModification[] }>(`/research/queries/${sessionId}/nudges`),
-    enabled: !!sessionId,
-    refetchInterval: 5000,
-  });
-}
-
-export function useCreateSteeringNote() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ sessionId, text }: { sessionId: string; text: string }) =>
-      api.post<SteeringNote>(`/research/queries/${sessionId}/nudges`, { text }),
-    onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: ['research-nudges', vars.sessionId] });
     },
   });
 }

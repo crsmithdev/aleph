@@ -27,14 +27,6 @@ export interface ResearchQuery {
   updated_at: string;
 }
 
-export interface SteeringNote {
-  id: string;
-  session_id: string;
-  text: string;
-  applied_at: string | null;
-  created_at: string;
-}
-
 /** @deprecated Use ResearchQuery */
 export type ResearchSession = ResearchQuery;
 

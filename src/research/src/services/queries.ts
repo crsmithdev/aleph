@@ -482,7 +482,6 @@ export function deleteQuery(sqlite: Sqlite, queryId: string): boolean {
   sqlite.prepare('DELETE FROM research_proposed_monitors WHERE session_id = ?').run(queryId);
   sqlite.prepare('DELETE FROM research_plan_modifications WHERE plan_id IN (SELECT id FROM research_plans WHERE session_id = ?)').run(queryId);
   sqlite.prepare('DELETE FROM research_plans WHERE session_id = ?').run(queryId);
-  sqlite.prepare('DELETE FROM research_steering_notes WHERE session_id = ?').run(queryId);
   sqlite.prepare('DELETE FROM research_steps WHERE session_id = ?').run(queryId);
   sqlite.prepare('DELETE FROM research_findings WHERE session_id = ?').run(queryId);
   sqlite.prepare('DELETE FROM research_threads WHERE session_id = ?').run(queryId);

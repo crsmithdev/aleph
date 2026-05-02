@@ -15,7 +15,6 @@ export * from './services/threads.js';
 export * from './services/findings.js';
 export * from './services/steps.js';
 export * from './services/plans.js';
-export * from './services/steering.js';
 export * from './services/monitors.js';
 export * from './services/jobs.js';
 export { classifyError, isTransientError } from './engine.js';

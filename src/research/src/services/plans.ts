@@ -89,12 +89,6 @@ export function markModificationsApplied(sqlite: Sqlite, ids: string[]): void {
   ).run(...ids);
 }
 
-export function listAllModifications(sqlite: Sqlite, planId: string): PlanModification[] {
-  return (sqlite.prepare(
-    'SELECT * FROM research_plan_modifications WHERE plan_id = ? ORDER BY created_at ASC'
-  ).all(planId) as Record<string, unknown>[]).map(rowToMod);
-}
-
 export function updatePlanStatus(sqlite: Sqlite, id: string, status: ResearchPlan['status']): void {
   sqlite.prepare('UPDATE research_plans SET status = ? WHERE id = ?').run(status, id);
 }

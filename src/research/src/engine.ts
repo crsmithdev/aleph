@@ -16,7 +16,6 @@ import * as findings from './services/findings.js';
 import * as steps from './services/steps.js';
 import { TrackedLLM, type CallContext } from './services/llm.js';
 import * as plans from './services/plans.js';
-import * as steering from './services/steering.js';
 import * as concepts from './services/concepts.js';
 import * as sources from './services/sources.js';
 import * as perturbationState from './services/perturbation-state.js';
@@ -693,10 +692,11 @@ export class ResearchEngine {
             await this.updateDocument(sessionId);
           }
 
-          // Apply any pending steering nudges and run the periodic lead review.
-          // This path is reached by session (burst) jobs — the thread-job path
-          // runs the same call from runThread. Attach to the just-completed
-          // thread so the resulting step is visible in observability.
+          // Periodic review pass — the selected role re-reads the session
+          // and decides what to keep, prune, or extend. Runs from session
+          // (burst) jobs here and from runThread on the per-thread path.
+          // Attach to the just-completed thread so the step is visible in
+          // observability.
           await this.maybeRunLeadReview(sessionId, currentSession.config, thread.id);
 
           if (currentSession.config.min_delay_between_steps_ms > 0) {
@@ -1338,27 +1338,18 @@ Return ONLY a JSON array of search query strings. No other text.`,
     return results.filter((r): r is { query: string; results: string; sourceTexts: string[]; sourceUrls: string[]; sourceUrlMeta: Array<{ url: string; title: string; snippet: string }> } => r !== null);
   }
 
-  /** Periodic lead review — orchestrator-style pass that looks at the session's
+  /** Periodic review pass — the session's selected role re-reads the
    *  compressed corpus (summary + recent finding summaries + open threads) and
-   *  decides whether to spawn a small batch of targeted gap queries. Runs on a
-   *  cadence instead of per-finding to avoid combinatorial thread explosion. */
+   *  decides what to prune/boost/extend. Runs on a cadence instead of
+   *  per-finding to avoid combinatorial thread explosion. The role identity
+   *  arrives via callLLM's system-prompt layer (config.role_prompt). */
   private async maybeRunLeadReview(sessionId: string, config: SessionConfig, attachThreadId: string | null = null): Promise<void> {
-    const log = (msg: string) => {
-      try { require('fs').appendFileSync('/tmp/leader-debug.log', `${new Date().toISOString()} ${msg}\n`); } catch {}
-    };
-    log(`entered: session=${sessionId.slice(0,8)} enabled=${config.gap_analysis?.enabled} mode=${config.gap_analysis?.mode ?? 'periodic'} attach=${attachThreadId?.slice(0,8)}`);
-    if (!config.gap_analysis?.enabled) { log('skip: not enabled'); return; }
-    if ((config.gap_analysis.mode ?? 'periodic') !== 'periodic') { log('skip: mode not periodic'); return; }
+    if (!config.gap_analysis?.enabled) return;
+    if ((config.gap_analysis.mode ?? 'periodic') !== 'periodic') return;
 
     const cadence = Math.max(1, config.gap_analysis.every_n_findings ?? 10);
     const findingCount = findings.countFindings(this.sqlite, sessionId);
-    const unappliedNotes = steering.listUnappliedSteeringNotes(this.sqlite, sessionId);
-    const dueByCadence = findingCount > 0 && findingCount % cadence === 0;
-    log(`cadence=${cadence} findings=${findingCount} unapplied=${unappliedNotes.length} dueByCadence=${dueByCadence}`);
-    // Also run early if the user just dropped a steering note — don't make them
-    // wait 10 findings for their nudge to land.
-    if (!dueByCadence && unappliedNotes.length === 0) { log('skip: not due and no notes'); return; }
-    log(`proceeding to LLM call (attachThreadId=${attachThreadId?.slice(0,8)})`);
+    if (!(findingCount > 0 && findingCount % cadence === 0)) return;
 
     const maxTotal = config.max_total_threads ?? 200;
     const totalNow = threads.countAllThreads(this.sqlite, sessionId);
@@ -1367,10 +1358,10 @@ Return ONLY a JSON array of search query strings. No other text.`,
     if (!session) return;
 
     const recentFindings = findings.listFindings(this.sqlite, sessionId, { limit: 12 });
-    if (recentFindings.length === 0 && unappliedNotes.length === 0) return;
+    if (recentFindings.length === 0) return;
 
-    // Include both queued/active threads AND exhausted ones — the leader can
-    // prune any of them. Sort stable by created_at so thread_ids are referable.
+    // Include queued/active AND exhausted threads — the reviewer can prune any
+    // of them. Stable order so thread_ids stay referable across the prompt.
     const candidateThreads = threads.listThreads(this.sqlite, sessionId)
       .filter(t => t.status === 'queued' || t.status === 'active' || t.status === 'exhausted')
       .slice(0, 40);
@@ -1379,13 +1370,9 @@ Return ONLY a JSON array of search query strings. No other text.`,
     const roomForSpawn = Math.max(0, maxTotal > 0 ? maxTotal - totalNow : maxSpawn);
     const effectiveMaxSpawn = Math.min(maxSpawn, roomForSpawn);
 
-    const notesBlock = unappliedNotes.length > 0
-      ? `\nNew steering notes from the user (unapplied — act on these NOW):\n${unappliedNotes.map(n => `- ${n.text}`).join('\n')}`
-      : '';
+    const prompt = `Step back from this session and review the work in progress. Keep the research on-track for what the user actually wants — don't chase every interesting tangent.
 
-    const prompt = `You are the lead researcher for this session. Your job is to keep the research on-track for what the user actually wants, not to chase every interesting tangent.
-
-Session prompt: "${session.prompt}"${notesBlock}
+Session prompt: "${session.prompt}"
 
 Recent findings (most recent first):
 ${recentFindings.map((f, i) => `${i + 1}. ${f.summary}`).join('\n')}
@@ -1429,12 +1416,11 @@ Rules:
       if (Array.isArray(parsed.gap_queries)) gapQueries = parsed.gap_queries.slice(0, effectiveMaxSpawn);
       if (typeof parsed.reason === 'string') reason = parsed.reason;
     } catch (err) {
-      console.warn(`[lead_review] JSON parse failed for session ${sessionId.slice(0, 8)} — notes stay unapplied for retry. raw[0:200]: ${result.text?.slice(0, 200)}`);
+      console.warn(`[lead_review] JSON parse failed for session ${sessionId.slice(0, 8)}. raw[0:200]: ${result.text?.slice(0, 200)}`);
       if (result.stepId) steps.updateStepMetadata(this.sqlite, result.stepId, {
         decision: 'lead_review',
         parse_error: err instanceof Error ? err.message : String(err),
         raw_prefix: result.text?.slice(0, 500) ?? '',
-        unapplied_notes: unappliedNotes.length,
       });
       return;
     }
@@ -1445,7 +1431,6 @@ Rules:
     boostIds = boostIds.filter(id => validIds.has(id));
     deprioritizeIds = deprioritizeIds.filter(id => validIds.has(id));
 
-    // Record step metadata before side effects so the decision is visible even if later ops fail.
     if (result.stepId) steps.updateStepMetadata(this.sqlite, result.stepId, {
       decision: 'lead_review',
       has_gaps: gapQueries.length > 0,
@@ -1455,7 +1440,6 @@ Rules:
       prune_count: pruneIds.length,
       boost_count: boostIds.length,
       deprioritize_count: deprioritizeIds.length,
-      unapplied_notes: unappliedNotes.length,
       finding_count: findingCount,
       cadence,
       reason,
@@ -1511,11 +1495,6 @@ Rules:
         });
         this.summarizeThreadAsync(t.id, query, sessionId, config);
       }
-    }
-
-    // Mark notes applied so the next tick doesn't re-fire on them.
-    if (unappliedNotes.length > 0) {
-      steering.markSteeringNotesApplied(this.sqlite, unappliedNotes.map(n => n.id));
     }
   }
 

@@ -441,16 +441,8 @@ export function applyResearchDDL(sqlite: Sqlite): void {
     sqlite.exec(`UPDATE research_queries SET config = json_patch(config, json_object('schedule', json_patch(json_extract(config, '$.schedule'), json_object('mode', 'default')))) WHERE json_extract(config, '$.schedule.mode') = 'background'`);
   } catch { /* ignore */ }
 
-  sqlite.exec(`
-    CREATE TABLE IF NOT EXISTS research_steering_notes (
-      id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
-      text TEXT NOT NULL,
-      applied_at TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_rsn_session ON research_steering_notes(session_id, created_at);
-  `);
+  // Mid-flight nudges are gone; drop the table on existing DBs. New DBs never create it.
+  sqlite.exec(`DROP TABLE IF EXISTS research_steering_notes;`);
 
   // Backfill cost_usd for steps stored before pricing was configured (idempotent — only touches cost_usd=0 rows)
   sqlite.exec(`

@@ -7,7 +7,7 @@ import remarkGfm from 'remark-gfm';
 import {
   useResearchQuery, useResearchFindings, useResearchThreads,
   useResearchCosts, useUpdateResearchQuery, usePromoteResearchQuery, useRateFinding,
-  useSteeringNotes, useCreateSteeringNote, usePostMortems,
+  usePostMortems,
   useRunResearch, useResearchRunning,
   useResearchActivity, useCancelJob, useResearchJobs, useResearchStream,
   useResearchSteps, useUpdateThread, useDeleteResearchQuery, useUpdateQueryConfig,
@@ -75,104 +75,6 @@ export function findSeedAncestor(thread: ResearchThread, all: ResearchThread[]):
 // ---------------------------------------------------------------------------
 // Shared sub-components
 // ---------------------------------------------------------------------------
-
-/** Lead-researcher steering panel. Lets the user drop in-flight nudges and
- *  shows the most recent lead-reviewer actions (pruned/boosted/new queries).
- *  All steering now travels through the prompt itself and these ad-hoc nudges —
- *  separate intent/shape fields are gone. */
-function LeaderPanel({ sessionId }: { sessionId: string }) {
-  const { data } = useSteeringNotes(sessionId);
-  const createNote = useCreateSteeringNote();
-  const [text, setText] = useState('');
-  const [open, setOpen] = useState(false);
-  const notes = data?.notes ?? [];
-  const mods = data?.lead_modifications ?? [];
-  const pendingCount = notes.filter(n => !n.applied_at).length;
-
-  function submit(e: React.SyntheticEvent) {
-    e.preventDefault();
-    const t = text.trim();
-    if (!t) return;
-    createNote.mutate({ sessionId, text: t }, {
-      onSuccess: () => { setText(''); },
-    });
-  }
-
-  const hasActivity = notes.length > 0 || mods.length > 0;
-
-  return (
-    <div className="mt-3 rounded-md border border-border-primary bg-bg-primary/40">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-3 py-1.5 text-sm text-text-muted hover:text-text-secondary"
-      >
-        <span className="flex items-center gap-2">
-          <span className="font-medium text-text-secondary">Lead researcher</span>
-          {pendingCount > 0 && (
-            <span className="px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-400 text-sm tabular-nums">
-              {pendingCount} pending nudge{pendingCount === 1 ? '' : 's'}
-            </span>
-          )}
-          {mods.length > 0 && (
-            <span className="px-1.5 py-0.5 rounded bg-accent/10 text-accent text-sm tabular-nums">
-              {mods.length} action{mods.length === 1 ? '' : 's'}
-            </span>
-          )}
-          {!hasActivity && <span className="text-sm text-text-muted/70 italic">no nudges yet</span>}
-        </span>
-        <span className="text-sm">{open ? '−' : '+'}</span>
-      </button>
-      {open && (
-        <div className="px-3 pb-3 border-t border-border-primary flex flex-col gap-2">
-          <form onSubmit={submit} className="flex gap-2">
-            <input
-              type="text"
-              value={text}
-              onChange={e => setText(e.target.value)}
-              placeholder='Nudge the leader — e.g. "skip the history, focus on specific orgs"'
-              maxLength={2000}
-              className="flex-1 bg-bg-primary border border-border-primary rounded-md px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
-            />
-            <Button type="submit" size="sm" loading={createNote.isPending} disabled={!text.trim()}>
-              Nudge
-            </Button>
-          </form>
-          {notes.length > 0 && (
-            <div className="flex flex-col gap-1 mt-1">
-              <div className="text-sm text-text-muted uppercase tracking-[0.06em]">Notes</div>
-              {notes.slice().reverse().slice(0, 6).map(n => (
-                <div key={n.id} className="flex items-start gap-2 text-sm">
-                  <span className={clsx('mt-1 w-1.5 h-1.5 rounded-full shrink-0', n.applied_at ? 'bg-success/60' : 'bg-yellow-400')} />
-                  <span className="text-text-secondary flex-1">{n.text}</span>
-                  <span className="text-text-muted tabular-nums shrink-0">
-                    {n.applied_at ? 'applied' : 'pending'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-          {mods.length > 0 && (
-            <div className="flex flex-col gap-1 mt-1">
-              <div className="text-sm text-text-muted uppercase tracking-[0.06em]">Recent leader actions</div>
-              {mods.slice().reverse().slice(0, 6).map(m => (
-                <div key={m.id} className="flex items-start gap-2 text-sm">
-                  <span className={clsx('px-1.5 py-0.5 rounded font-medium shrink-0',
-                    m.action === 'veto' ? 'bg-red-900/40 text-red-300'
-                      : m.action === 'boost' ? 'bg-green-900/40 text-green-300'
-                      : 'bg-yellow-900/40 text-yellow-300')}>
-                    {m.action}
-                  </span>
-                  <span className="text-text-secondary flex-1 truncate">{m.payload || '(no reason)'}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function Md({ children, className }: { children: string; className?: string }) {
   if (!children || typeof children !== 'string') return null;
@@ -2616,8 +2518,6 @@ export function ResearchQueryDetailPage() {
             </div>
 
             <LiveModeBanner session={session} />
-
-            <LeaderPanel sessionId={id!} />
 
           {/* Env warnings */}
           {envCheck && (envCheck.errors.length > 0 || envCheck.warnings.length > 0 || envCheck.jina_balance !== null) && (

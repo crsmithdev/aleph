@@ -6,8 +6,7 @@ import {
   listQueries, listQueriesWithStats, getQuery, createQuery, updateQuery, getQueryCost, getResearchStats, getResearchSummary,
   listThreads, getThread, updateThread, createThread,
   listFindings, getFinding, updateFinding, updateFindingSourceTexts, clearThreadFindings,
-  getLatestPlan, addPlanModification, listAllModifications,
-  createSteeringNote, listSteeringNotes,
+  getLatestPlan, addPlanModification,
   getStepCosts, listSteps,
   applyResearchDDL,
   DEFAULT_SESSION_CONFIG,
@@ -1044,34 +1043,6 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
         source: 'ui',
       });
       return reply.status(201).send(mod);
-    }
-  );
-
-  // === Steering notes (active-leader input) ===
-  app.get<{ Params: { id: string } }>(
-    '/queries/:id/nudges',
-    async (req, reply) => {
-      const query = getQuery(app.sqlite, req.params.id);
-      if (!query) return reply.status(404).send({ error: 'Query not found' });
-      const notes = listSteeringNotes(app.sqlite, req.params.id);
-      const plan = getLatestPlan(app.sqlite, req.params.id);
-      const leadMods = plan
-        ? listAllModifications(app.sqlite, plan.id).filter(m => m.source === 'lead_review')
-        : [];
-      return { notes, lead_modifications: leadMods };
-    }
-  );
-
-  app.post<{ Params: { id: string }; Body: { text: string } }>(
-    '/queries/:id/nudges',
-    async (req, reply) => {
-      const text = (req.body?.text ?? '').trim();
-      if (!text) return reply.status(400).send({ error: 'text is required' });
-      if (text.length > 2000) return reply.status(400).send({ error: 'text too long (max 2000 chars)' });
-      const query = getQuery(app.sqlite, req.params.id);
-      if (!query) return reply.status(404).send({ error: 'Query not found' });
-      const note = createSteeringNote(app.sqlite, req.params.id, text);
-      return reply.status(201).send(note);
     }
   );
 
