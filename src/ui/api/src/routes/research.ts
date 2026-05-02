@@ -289,7 +289,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       }
 
       // Auto-create a burst job so workers pick it up immediately
-      createJob(app.sqlite, { session_id: query.id, mode: 'burst' });
+      createJob(app.sqlite, { session_id: query.id, mode: 'burst', max_iterations: 1 });
       return reply.status(201).send(query);
     }
   );

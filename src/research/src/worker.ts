@@ -141,6 +141,42 @@ function checkQueuedThreads(): void {
   }
 }
 
+type SessionRow = NonNullable<ReturnType<typeof sessions.getSession>>;
+
+/** Watch for wall-clock cap expiry. Aborts the controller and flips session
+ *  status when max_session_duration_minutes elapses since session creation. */
+function startDurationWatcher(
+  engine: ResearchEngine,
+  session: SessionRow,
+  controller: AbortController,
+  jobSessionId: string,
+): ReturnType<typeof setInterval> {
+  let fired = false;
+  return setInterval(() => {
+    if (fired) return;
+    const cap = session.config.schedule.max_session_duration_minutes;
+    if (cap == null) return;
+    const elapsedMin = (Date.now() - new Date(session.created_at).getTime()) / 60_000;
+    if (elapsedMin < cap) return;
+    fired = true;
+    console.log(`[worker] wall clock expired (${cap.toFixed(1)}m, elapsed ${elapsedMin.toFixed(1)}m) for session ${jobSessionId}`);
+    (async () => {
+      try {
+        await engine.updateDocument(jobSessionId);
+      } catch (err) {
+        console.warn(`[worker] snapshot updateDocument failed for ${jobSessionId}:`, err);
+      }
+      const finalStatus = session.config.on_duration_expiry === 'complete' ? 'completed' : 'paused';
+      try {
+        sessions.updateQuery(sqlite, jobSessionId, { status: finalStatus });
+      } catch (err) {
+        console.warn(`[worker] status flip failed for ${jobSessionId}:`, err);
+      }
+      controller.abort();
+    })();
+  }, 5_000);
+}
+
 async function executeSessionJob(job: import('./types.js').ResearchJob): Promise<void> {
   jobs.markRunning(sqlite, job.id, workerId);
   console.log(`[worker] executing job ${job.id} (session=${job.session_id}, mode=${job.mode})`);
@@ -149,8 +185,6 @@ async function executeSessionJob(job: import('./types.js').ResearchJob): Promise
   const shutdownCheck = setInterval(() => {
     if (shutdownRequested) controller.abort();
   }, 1_000);
-
-  // Also abort if job is cancelled in DB
   const cancelCheck = setInterval(() => {
     const current = jobs.getJob(sqlite, job.id);
     if (current?.status === 'cancelled') controller.abort();
@@ -197,13 +231,8 @@ async function executeSessionJob(job: import('./types.js').ResearchJob): Promise
     }
   }
 
-  // Burst session-jobs are now a one-shot KICKOFF: run the seed thread, spawn
-  // follow-ups, and exit. The dispatcher (checkQueuedThreads) then fans those
-  // follow-ups out as thread-jobs across all worker processes. This stops a
-  // single session-job from monopolizing one worker while the rest sit idle.
-  const maxIterations = job.mode === 'burst'
-    ? Math.max(1, (job.max_iterations ?? 1) - job.iterations_completed)
-    : Infinity;
+  // burst jobs run for their configured iteration cap; all others run until exhausted.
+  const maxIterations = job.max_iterations ?? Infinity;
 
   const jobStartedMs = Date.now();
   let durationCheck: ReturnType<typeof setInterval> | null = null;
@@ -216,8 +245,6 @@ async function executeSessionJob(job: import('./types.js').ResearchJob): Promise
       onIteration: (i) => {
         iterationsCompleted = job.iterations_completed + i;
         rateLimiter.record();
-        // Every N iterations, fire the iteration_check hook in the background.
-        // Non-blocking: the engine continues the next iteration without waiting.
         if (i > 0 && i % ITERATION_CHECK_INTERVAL === 0 && hasHooks('iteration_check')) {
           runIterationCheck(
             sqlite,
@@ -229,37 +256,8 @@ async function executeSessionJob(job: import('./types.js').ResearchJob): Promise
       },
     });
 
-    // Live mode wall-clock cap: when set, write a best-effort document snapshot
-    // and pause/complete the session before aborting. Reads cap/expiry policy
-    // from session config; null cap = today's behavior (no wall clock).
-    let durationFired = false;
-    durationCheck = setInterval(() => {
-      if (durationFired) return;
-      const cap = session.config.schedule.max_session_duration_minutes;
-      if (cap == null) return;
-      const elapsedMin = (Date.now() - new Date(session.created_at).getTime()) / 60_000;
-      if (elapsedMin < cap) return;
-      durationFired = true;
-      console.log(`[worker] live-mode wall clock expired (${cap.toFixed(1)}m, elapsed ${elapsedMin.toFixed(1)}m) for session ${job.session_id}`);
-      // Snapshot + status flip run in the background — we don't want to block
-      // the interval. Errors are logged but don't fail the job.
-      (async () => {
-        try {
-          await engine.updateDocument(job.session_id);
-        } catch (err) {
-          console.warn(`[worker] snapshot updateDocument failed for ${job.session_id}:`, err);
-        }
-        const finalStatus = session.config.on_duration_expiry === 'complete' ? 'completed' : 'paused';
-        try {
-          sessions.updateQuery(sqlite, job.session_id, { status: finalStatus });
-        } catch (err) {
-          console.warn(`[worker] status flip failed for ${job.session_id}:`, err);
-        }
-        controller.abort();
-      })();
-    }, 5_000);
+    durationCheck = startDurationWatcher(engine, session, controller, job.session_id);
 
-    // Rate limit check before starting
     if (!rateLimiter.canProceed()) {
       const waitMs = rateLimiter.msUntilNextSlot();
       console.log(`[worker] rate limited, waiting ${Math.round(waitMs / 1000)}s`);
@@ -268,11 +266,9 @@ async function executeSessionJob(job: import('./types.js').ResearchJob): Promise
 
     await engine.runIterations(job.session_id);
 
-    // Update final iteration count
     jobs.updateHeartbeat(sqlite, job.id, workerId, iterationsCompleted);
     jobs.completeJob(sqlite, job.id, workerId);
     console.log(`[worker] job ${job.id} completed (${iterationsCompleted} iterations)`);
-    // post_mortem hook: fire-and-forget. One call per completed session job.
     if (hasHooks('post_mortem')) {
       runPostMortem(sqlite, job.session_id, job.id, Date.now() - jobStartedMs)
         .catch(err => console.warn('[post_mortem] dispatch threw:', err));
@@ -280,13 +276,11 @@ async function executeSessionJob(job: import('./types.js').ResearchJob): Promise
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg === 'This operation was aborted' || msg.includes('AbortError')) {
-      // Graceful shutdown or cancellation — don't mark as failed
       jobs.updateHeartbeat(sqlite, job.id, workerId, iterationsCompleted);
       console.log(`[worker] job ${job.id} aborted (${iterationsCompleted} iterations completed)`);
     } else {
       jobs.failJob(sqlite, job.id, workerId, msg);
       console.error(`[worker] job ${job.id} failed:`, msg);
-      // post_mortem also fires on failed jobs — a failure mode is a key signal.
       if (hasHooks('post_mortem')) {
         runPostMortem(sqlite, job.session_id, job.id, Date.now() - jobStartedMs)
           .catch(err => console.warn('[post_mortem] dispatch threw:', err));
@@ -348,31 +342,7 @@ async function executeThreadJob(job: import('./types.js').ResearchJob): Promise<
     signal: controller.signal,
   });
 
-  // Live mode wall-clock cap (mirrors executeSessionJob).
-  let durationFired = false;
-  const durationCheck = setInterval(() => {
-    if (durationFired) return;
-    const cap = session.config.schedule.max_session_duration_minutes;
-    if (cap == null) return;
-    const elapsedMin = (Date.now() - new Date(session.created_at).getTime()) / 60_000;
-    if (elapsedMin < cap) return;
-    durationFired = true;
-    console.log(`[worker] live-mode wall clock expired (${cap.toFixed(1)}m, elapsed ${elapsedMin.toFixed(1)}m) for session ${job.session_id}`);
-    (async () => {
-      try {
-        await engine.updateDocument(job.session_id);
-      } catch (err) {
-        console.warn(`[worker] snapshot updateDocument failed for ${job.session_id}:`, err);
-      }
-      const finalStatus = session.config.on_duration_expiry === 'complete' ? 'completed' : 'paused';
-      try {
-        sessions.updateQuery(sqlite, job.session_id, { status: finalStatus });
-      } catch (err) {
-        console.warn(`[worker] status flip failed for ${job.session_id}:`, err);
-      }
-      controller.abort();
-    })();
-  }, 5_000);
+  const durationCheck = startDurationWatcher(engine, session, controller, job.session_id);
 
   try {
     await engine.runThread(job.session_id, job.thread_id);
