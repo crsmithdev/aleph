@@ -5,7 +5,7 @@ import { fmtBytes } from '../../utils/format';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { clsx } from 'clsx';
 import { useTheme } from '../../theme';
-import { darkThemes, lightThemes } from '../../themes';
+import { darkThemes, lightThemes, type ThemeDef } from '../../themes';
 
 // --- Types ---
 
@@ -57,7 +57,7 @@ type SystemInfo = {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-bg-secondary border border-border-primary rounded-lg overflow-hidden">
+    <div className="bg-bg-secondary border border-border-primary rounded-lg">
       <div className="px-4 py-3 border-b border-border-primary">
         <h2 className="text-lg font-semibold text-text-primary">{title}</h2>
       </div>
@@ -239,65 +239,77 @@ function BackupSection() {
 
 // --- Theme Section ---
 
+function ThemeSwatch({ vars, size = 'md' }: { vars: Record<string, string>; size?: 'md' | 'lg' }) {
+  const stops = [
+    vars['--bg-primary'],
+    vars['--accent'],
+    vars['--chart-2'],
+    vars['--chart-3'],
+    vars['--chart-5'],
+  ];
+  return (
+    <span
+      className={clsx(
+        'inline-flex shrink-0 rounded-md border border-border-primary overflow-hidden',
+        size === 'lg' ? 'h-7 w-20' : 'h-5 w-14'
+      )}
+      aria-hidden
+    >
+      {stops.map((c, i) => (
+        <span key={i} className="h-full" style={{ flex: 1, background: c }} />
+      ))}
+    </span>
+  );
+}
+
+function ThemeOption({ t, active, onSelect }: { t: ThemeDef; active: boolean; onSelect: () => void }) {
+  return (
+    <button
+      onClick={onSelect}
+      className={clsx(
+        'flex items-center gap-3 w-full px-3 py-2 text-sm transition-colors',
+        active ? 'text-accent bg-bg-tertiary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'
+      )}
+    >
+      <ThemeSwatch vars={t.vars} size="lg" />
+      <span className="flex-1 text-left truncate">{t.name}</span>
+      {active && <Icon name="check" size="sm" />}
+    </button>
+  );
+}
+
 function ThemeSection() {
   const { themeId, theme, setThemeId } = useTheme();
   const [open, setOpen] = useState(false);
 
   return (
     <Section title="Theme">
-      <div className="relative w-full max-w-xs">
+      <div className="relative w-full max-w-sm">
         <button
           onClick={() => setOpen(!open)}
           className={clsx(
             'flex items-center justify-between w-full rounded-lg border border-border-primary',
-            'bg-bg-tertiary px-3 py-1.5 text-sm text-text-primary'
+            'bg-bg-tertiary px-3 py-2 text-sm text-text-primary hover:bg-bg-hover transition-colors'
           )}
         >
-          <span className="flex items-center gap-2">
-            <Icon name={theme.mode === 'dark' ? 'dark_mode' : 'light_mode'} size="sm" />
-            {theme.name}
+          <span className="flex items-center gap-3 min-w-0">
+            <ThemeSwatch vars={theme.vars} size="lg" />
+            <span className="truncate">{theme.name}</span>
+            <span className="text-xs text-text-muted shrink-0">{theme.mode === 'dark' ? 'Dark' : 'Light'}</span>
           </span>
-          <Icon name="expand_more" size="sm" className="text-text-muted" />
+          <Icon name="expand_more" size="sm" className="text-text-muted shrink-0" />
         </button>
         {open && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-            <div className="absolute top-full left-0 mt-1 w-full max-h-80 overflow-y-auto z-50 rounded-lg border border-border-primary bg-bg-secondary shadow-lg">
-              <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted">Dark</div>
+            <div className="absolute top-full left-0 mt-1 w-full max-h-96 overflow-y-auto z-50 rounded-lg border border-border-primary bg-bg-secondary shadow-md py-1">
+              <div className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-text-muted">Dark</div>
               {darkThemes.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => { setThemeId(t.id); setOpen(false); }}
-                  className={clsx(
-                    'flex items-center w-full px-3 py-1.5 text-sm transition-colors',
-                    t.id === themeId ? 'text-accent bg-bg-tertiary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'
-                  )}
-                >
-                  <span className="flex shrink-0 mr-2 rounded-sm overflow-hidden h-2.5" style={{ width: 20 }}>
-                    {[t.vars['--accent'], t.vars['--chart-2'], t.vars['--chart-3'], t.vars['--chart-5']].map((c, i) => (
-                      <span key={i} className="h-full" style={{ flex: 1, background: c }} />
-                    ))}
-                  </span>
-                  {t.name}
-                </button>
+                <ThemeOption key={t.id} t={t} active={t.id === themeId} onSelect={() => { setThemeId(t.id); setOpen(false); }} />
               ))}
-              <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted border-t border-border-primary mt-1 pt-1.5">Light</div>
+              <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-text-muted border-t border-border-primary mt-1">Light</div>
               {lightThemes.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => { setThemeId(t.id); setOpen(false); }}
-                  className={clsx(
-                    'flex items-center w-full px-3 py-1.5 text-sm transition-colors',
-                    t.id === themeId ? 'text-accent bg-bg-tertiary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'
-                  )}
-                >
-                  <span className="flex shrink-0 mr-2 rounded-sm overflow-hidden h-2.5" style={{ width: 20 }}>
-                    {[t.vars['--accent'], t.vars['--chart-2'], t.vars['--chart-3'], t.vars['--chart-5']].map((c, i) => (
-                      <span key={i} className="h-full" style={{ flex: 1, background: c }} />
-                    ))}
-                  </span>
-                  {t.name}
-                </button>
+                <ThemeOption key={t.id} t={t} active={t.id === themeId} onSelect={() => { setThemeId(t.id); setOpen(false); }} />
               ))}
             </div>
           </>
