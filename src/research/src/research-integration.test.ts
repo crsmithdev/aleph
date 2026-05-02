@@ -12,6 +12,7 @@ import * as threads from './services/threads';
 import * as findings from './services/findings';
 import * as steps from './services/steps';
 import * as plans from './services/plans';
+import { ALL_STRATEGIES } from './perturbation';
 
 function createTestDb(): Database {
   const sqlite = new Database(':memory:');
@@ -210,7 +211,9 @@ describe('perturbation correctness', () => {
     expect(pertThreads.length).toBeGreaterThanOrEqual(1);
     for (const pt of pertThreads) {
       expect(pt.perturbation_strategy).toBeTruthy();
-      expect(['analogical', 'contrarian', 'failure_post_mortem', 'temporal_shift']).toContain(pt.perturbation_strategy);
+      // Engine now selects from all 21 strategies via perturbation.ts/selectStrategy
+      // (was 4: analogical/contrarian/failure_post_mortem/temporal_shift).
+      expect(ALL_STRATEGIES).toContain(pt.perturbation_strategy);
     }
   });
 
@@ -308,6 +311,50 @@ describe('perturbation correctness', () => {
     expect(meta.similarity as number).toBeLessThan(0.5);
     expect(meta.floor).toBe(0.5);
     expect(meta.strategy).toBeTruthy();
+  });
+
+  test('perturbation finding records strategy outcome to research_perturbation_state', async () => {
+    const sqlite = createTestDb();
+    const provider = new MockProvider();
+    // Iteration 1 — seed thread (formulate, search, synthesize)
+    provider.addComplete(JSON.stringify(['test query']));
+    provider.addSearch('Search results');
+    provider.addComplete(standardFinding());
+    // Perturbation: an on-topic tangent (overlaps "sourdough") so the
+    // coherence floor lets it through, then formulate/search/synthesize
+    // for the perturbation thread itself.
+    provider.addComplete('How does sourdough fermentation evolve in different climates?');
+    provider.addComplete(JSON.stringify(['sourdough climate query']));
+    provider.addSearch('Climate fermentation results');
+    provider.addComplete(standardFinding({ confidence: 0.7, novelty: 0.6 }));
+
+    const engine = new ResearchEngine({
+      sqlite, provider, maxIterations: 2,
+    });
+
+    const session = await engine.startSession('Test', 'sourdough baking', {
+      p_serendipity: 1.0,
+      ...NO_DELAY,
+    });
+    await engine.runIterations(session.id);
+
+    // The perturbation thread's finding should have written a
+    // research_perturbation_state row with successes ≥ 1.
+    const rows = sqlite.prepare(
+      'SELECT strategy, attempts, successes, novelty_sum, confidence_sum FROM research_perturbation_state WHERE session_id = ?'
+    ).all(session.id) as Array<{ strategy: string; attempts: number; successes: number; novelty_sum: number; confidence_sum: number }>;
+
+    // At least one strategy was attempted and produced an outcome.
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    const totalAttempts = rows.reduce((s, r) => s + r.attempts, 0);
+    const totalSuccesses = rows.reduce((s, r) => s + r.successes, 0);
+    expect(totalAttempts).toBeGreaterThanOrEqual(1);
+    expect(totalSuccesses).toBeGreaterThanOrEqual(1);
+    // Outcome sums must have non-zero values when a finding emerged.
+    const totalNovelty = rows.reduce((s, r) => s + r.novelty_sum, 0);
+    const totalConfidence = rows.reduce((s, r) => s + r.confidence_sum, 0);
+    expect(totalNovelty).toBeGreaterThan(0);
+    expect(totalConfidence).toBeGreaterThan(0);
   });
 
   test('coherence floor disabled (0) lets all perturbations through', async () => {

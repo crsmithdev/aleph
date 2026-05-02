@@ -18,6 +18,11 @@ import * as plans from './services/plans.js';
 import * as steering from './services/steering.js';
 import * as concepts from './services/concepts.js';
 import * as sources from './services/sources.js';
+import * as perturbationState from './services/perturbation-state.js';
+import {
+  selectStrategy,
+  generatePerturbationPrompt,
+} from './perturbation.js';
 
 export interface SearchOptions {
   synthesisChars: number;
@@ -57,10 +62,6 @@ export interface EngineOptions {
   onError?: (error: Error, thread: ResearchThread | null) => void;
   signal?: AbortSignal;
 }
-
-const PERTURBATION_STRATEGIES: PerturbationStrategy[] = [
-  'analogical', 'contrarian', 'failure_post_mortem', 'temporal_shift',
-];
 
 export function classify(s: string): 'question' | 'topic' {
   const t = s.trim();
@@ -412,7 +413,6 @@ export class ResearchEngine {
   private onIteration?: EngineOptions['onIteration'];
   private onError?: EngineOptions['onError'];
   private signal?: AbortSignal;
-  private recentPerturbationStrategies: PerturbationStrategy[] = [];
 
   constructor(opts: EngineOptions) {
     this.sqlite = opts.sqlite;
@@ -794,6 +794,19 @@ export class ResearchEngine {
       follow_ups: followUpQuestions,
       follow_up_analysis: followUpAnalysis,
     });
+
+    // Record perturbation outcome: a finding emerged from a perturbation
+    // thread. Updates research_perturbation_state so future selectStrategy
+    // calls can boost strategies that produced novel/confident findings.
+    if (thread.origin === 'perturbation' && thread.perturbation_strategy) {
+      perturbationState.recordOutcome(
+        this.sqlite,
+        sessionId,
+        thread.perturbation_strategy,
+        finding.novelty,
+        finding.confidence,
+      );
+    }
 
     // Step 5a: Register source URLs in the extraction queue so the worker
     // can fetch full text independently of the synthesis path.
@@ -1743,18 +1756,13 @@ Respond with ONLY "true" if this is a duplicate or near-duplicate, "false" other
       return;
     }
 
-    // Pick a strategy not recently used (cooldown)
-    const available = PERTURBATION_STRATEGIES.filter(
-      s => !this.recentPerturbationStrategies.includes(s)
-    );
-    const strategy = available.length > 0
-      ? available[Math.floor(Math.random() * available.length)]
-      : PERTURBATION_STRATEGIES[Math.floor(Math.random() * PERTURBATION_STRATEGIES.length)];
-
-    this.recentPerturbationStrategies.push(strategy);
-    if (this.recentPerturbationStrategies.length > 3) {
-      this.recentPerturbationStrategies.shift();
-    }
+    // Load persistent state (counters survive engine restarts) and pick a
+    // strategy via perturbation.ts/selectStrategy — same selector that's
+    // covered by phase2.test.ts. Fruitfulness boosts strategies whose past
+    // perturbation findings had high novelty/confidence (recordOutcome
+    // increments successes; selectStrategy reads the success rate).
+    const pState = perturbationState.loadPerturbationState(this.sqlite, sessionId, config.perturbation);
+    const strategy = selectStrategy(config.perturbation, pState);
 
     // Get context for perturbation
     const session = sessions.getQuery(this.sqlite, sessionId)!;
@@ -1819,6 +1827,11 @@ Respond with ONLY "true" if this is a duplicate or near-duplicate, "false" other
 
     const pertDepth = (parentThread?.depth ?? 0) + 1;
     console.log(`[perturbation] pertDepth=${pertDepth} max_thread_depth=${config.max_thread_depth} gate=${pertDepth >= config.max_thread_depth} → ${pertDepth >= config.max_thread_depth ? 'deferred' : 'queued'}`);
+
+    // Persist attempt before spawning the thread. recordOutcome (called when
+    // a finding emerges) reads the row to compute fruitfulness.
+    perturbationState.recordAttempt(this.sqlite, sessionId, strategy);
+
     const pertThread = threads.createThread(this.sqlite, {
       session_id: sessionId,
       query: tangentQuery,
@@ -1841,37 +1854,15 @@ Respond with ONLY "true" if this is a duplicate or near-duplicate, "false" other
     context: string,
     config: SessionConfig
   ): Promise<string | null> {
-    const prompts: Record<PerturbationStrategy, string> = {
-      analogical: `Given this research topic: "${seedQuery}"
-And these recent findings:
-${context}
-
-Think of a completely different field or domain that has solved a similar problem or faced analogous challenges. Generate ONE specific search query to explore that analogy. The query should be self-contained and searchable.`,
-
-      contrarian: `Given this research topic: "${seedQuery}"
-And these recent findings:
-${context}
-
-Generate ONE specific search query that explores the strongest counterargument, opposing viewpoint, or reason why the premise might be wrong. Be specific — not just "criticism of X" but a concrete contrarian angle.`,
-
-      failure_post_mortem: `Given this research topic: "${seedQuery}"
-And these recent findings:
-${context}
-
-Generate ONE specific search query to find stories of failure, post-mortems, or things that went wrong related to this topic. Look for specific incidents, case studies, or cautionary tales.`,
-
-      temporal_shift: `Given this research topic: "${seedQuery}"
-And these recent findings:
-${context}
-
-Generate ONE specific search query that shifts the temporal frame backwards — how this topic was understood, framed, or practiced 20-50 years ago. Look for historical precedents, earlier theories, or contemporaneous debates from that era. Do not speculate about the future; ground the query in primary or secondary sources from the past. Be specific.`,
-    };
+    // Single source of truth for prompts: perturbation.ts/generatePerturbationPrompt
+    // covers all 21 strategies and includes the backwards-only temporal_shift
+    // constraint. The engine previously had its own 4-strategy dictionary that
+    // only ever fired analogical/contrarian/failure_post_mortem/temporal_shift.
+    const prompt = generatePerturbationPrompt(strategy, seedQuery, context);
 
     const result = await this.callLLM(
       config.model,
-      `${prompts[strategy]}
-
-Return ONLY the search query text, nothing else.`,
+      prompt,
       '',
       '',
       config,

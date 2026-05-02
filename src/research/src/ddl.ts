@@ -299,6 +299,23 @@ export function applyResearchDDL(sqlite: Sqlite): void {
     );
     CREATE INDEX IF NOT EXISTS idx_rsrc_session_status ON research_sources(session_id, extraction_status);
     CREATE INDEX IF NOT EXISTS idx_rsrc_status ON research_sources(extraction_status, created_at);
+
+    -- Per-session perturbation strategy outcomes. Drives fruitfulness boosting
+    -- in selectStrategy (perturbation.ts) — strategies that have produced
+    -- novel/confident findings get weighted higher. Counters survive engine
+    -- restarts and worker handoffs (previously the in-memory PerturbationState
+    -- vanished on restart, so the boost never accumulated).
+    CREATE TABLE IF NOT EXISTS research_perturbation_state (
+      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
+      strategy TEXT NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      successes INTEGER NOT NULL DEFAULT 0,
+      novelty_sum REAL NOT NULL DEFAULT 0,
+      confidence_sum REAL NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (session_id, strategy)
+    );
+    CREATE INDEX IF NOT EXISTS idx_rps_session ON research_perturbation_state(session_id);
   `);
 
   // Migrations
