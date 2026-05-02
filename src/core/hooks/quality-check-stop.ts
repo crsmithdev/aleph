@@ -34,7 +34,7 @@ if (!transcriptPath || !existsSync(transcriptPath)) { process.exit(0); }
 
 // --- File classifiers ---
 const isUIFile = (p: string) => /\.(tsx|jsx|css|scss)$/.test(p) || /\/(components|pages|app|web)\//.test(p);
-const isDocFile = (p: string) => /\.(md|txt)$/i.test(p) || /\b(CLAUDE|README|INSTALL)\b/i.test(p.split("/").pop() ?? "");
+const isDocFile = (p: string) => /(^|\/)docs\//.test(p) || /\.(md|txt)$/i.test(p) || /\b(CLAUDE|README|INSTALL)\b/i.test(p.split("/").pop() ?? "");
 const isConfigFile = (p: string) => {
   const name = p.split("/").pop() ?? "";
   if (/^tsconfig.*\.json$/.test(name) || /^package.*\.json$/.test(name)) return false;
