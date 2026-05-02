@@ -183,6 +183,11 @@ export interface ResearchFinding {
   novelty: number;
   actionability: number;
   user_rating: string | null;
+  /** Classification of how this finding contributes to the answer:
+   *  - 'normal': standard finding from a seed/follow-up/canon-slot/gap thread.
+   *  - 'perturbation': from a perturbation thread (adjacent perspective).
+   *  - 'speculation': forward-looking content; confidence capped at 0.5. */
+  kind: 'normal' | 'perturbation' | 'speculation';
   follow_ups: string[];
   follow_up_analysis?: {
     candidates: Array<{

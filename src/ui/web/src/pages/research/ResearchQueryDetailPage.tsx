@@ -901,6 +901,43 @@ function stepChips(s: ResearchStep): Chip[] {
       // Session-scope: agent role selection. Surface the picked role as a chip.
       const roleLabel = typeof m.role_label === 'string' ? m.role_label : null;
       if (roleLabel) chips.push({ text: roleLabel, color: 'text-purple-400' });
+    } else if (m.decision === 'enumerate_canon') {
+      // Canon-first planning: show how many canonical items were enumerated
+      // and a snippet of the shape that triggered the enumeration.
+      const target = m.target_count as number ?? 0;
+      const hint = typeof m.shape_hint === 'string' ? m.shape_hint.split(' (')[0] : '';
+      chips.push({ text: `${target} canon items`, color: 'text-purple-400' });
+      if (hint) chips.push({ text: hint, color: 'text-text-muted' });
+    } else if (m.decision === 'coverage_check') {
+      const covered = m.covered_count as number ?? 0;
+      const total = m.total_count as number ?? 0;
+      const allCovered = total > 0 && covered === total;
+      chips.push({
+        text: `canon ${covered}/${total}`,
+        color: allCovered ? 'text-success' : covered > 0 ? 'text-warning' : 'text-text-muted',
+      });
+    } else if (m.decision === 'select_perturbation') {
+      const strategy = typeof m.strategy === 'string' ? m.strategy : 'unknown';
+      const trigger = typeof m.trigger === 'string' ? m.trigger : 'probabilistic';
+      chips.push({ text: strategy, color: 'text-blue-400' });
+      // Highlight evidence-driven triggers — they're the interesting case.
+      // Probabilistic stays muted because that's the default behavior.
+      const triggerColor = trigger === 'probabilistic' ? 'text-text-muted' : 'text-warning';
+      chips.push({ text: trigger.replace(/_/g, ' '), color: triggerColor });
+    } else if (m.decision === 'perturbation_rejected') {
+      const sim = typeof m.similarity === 'number' ? m.similarity : null;
+      const floor = typeof m.floor === 'number' ? m.floor : null;
+      chips.push({ text: 'rejected', color: 'text-error/70' });
+      if (sim != null && floor != null) {
+        chips.push({ text: `sim ${sim.toFixed(2)} < ${floor.toFixed(2)}`, color: 'text-text-muted' });
+      }
+    } else if (m.decision === 'perturbation_rate_limited') {
+      const trigger = typeof m.trigger === 'string' ? m.trigger : '';
+      const recent = m.recent_perturbations as number ?? 0;
+      const window = m.window as number ?? 0;
+      chips.push({ text: 'rate-limited', color: 'text-warning' });
+      if (trigger) chips.push({ text: trigger.replace(/_/g, ' '), color: 'text-text-muted' });
+      if (window) chips.push({ text: `${recent}/${window}`, color: 'text-text-muted' });
     }
   }
   // Generic fallback for utility LLM calls that don't set a decision but DO
@@ -2003,6 +2040,18 @@ function EventsView({
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>{f.content}</ReactMarkdown>
                         </div>
                         <div className="flex items-center gap-3 text-sm font-mono flex-wrap">
+                          {f.kind === 'perturbation' && (
+                            <span
+                              className="px-1.5 py-0.5 rounded bg-orange-400/15 text-orange-300 text-xs"
+                              title="Perturbation: an adjacent perspective from a creativity-injection thread"
+                            >perturbation</span>
+                          )}
+                          {f.kind === 'speculation' && (
+                            <span
+                              className="px-1.5 py-0.5 rounded bg-yellow-400/15 text-yellow-300 text-xs"
+                              title="Speculation: forward-looking content; confidence capped at 0.5"
+                            >speculation</span>
+                          )}
                           <span className={f.confidence >= 0.7 ? 'text-success' : f.confidence >= 0.4 ? 'text-warning' : 'text-error'}>
                             conf {(f.confidence * 100).toFixed(0)}%
                           </span>
