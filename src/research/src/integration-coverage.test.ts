@@ -13,7 +13,7 @@
 import { Database } from 'bun:sqlite';
 import { describe, test, expect } from 'bun:test';
 import { applyResearchDDL } from './ddl';
-import { ResearchEngine, pickAgentRole } from './engine';
+import { ResearchEngine, pickAgentRole, enumerateCanon } from './engine';
 import type { LLMProvider, LLMResult, WebSearchResult } from './engine';
 import { TrackedLLM } from './services/llm';
 import * as queries from './services/queries';
@@ -383,5 +383,143 @@ describe('role priming: system prompt threading', () => {
 
     const nullSystem = provider.completeCalls.filter(c => c.systemPrompt === null || c.systemPrompt === undefined);
     expect(nullSystem.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// ===========================================================================
+// 6. enumerateCanon: parses canon items and records a decision step
+// ===========================================================================
+
+describe('enumerateCanon', () => {
+  test('returns items and writes enumerate_canon decision step on valid response', async () => {
+    const db = createTestDb();
+    const session = queries.createQuery(db, 'EDM history', 'overview of EDM in the 1990s');
+    const provider = new RecordingProvider().pushComplete(JSON.stringify([
+      { item: "Moby — Play (1999)", context: "breakout commercial mainstream success" },
+      { item: "Underworld — Born Slippy", context: "Trainspotting soundtrack defined late-90s rave" },
+      { item: "Daft Punk — Homework (1997)", context: "filter house template" },
+    ]));
+    const llm = new TrackedLLM(provider, db);
+
+    const items = await enumerateCanon(llm, session.id, 'mock-model', session.prompt, 'survey+timeline');
+
+    expect(items).not.toBeNull();
+    expect(items!.length).toBe(3);
+    expect(items![0].item).toContain('Moby');
+    expect(items![0].context).toContain('mainstream');
+
+    // Step recorded with decision metadata.
+    const allSteps = steps.listSteps(db, session.id);
+    const enumStep = allSteps.find(s => {
+      const md = s.metadata as Record<string, unknown> | null;
+      return md?.decision === 'enumerate_canon';
+    });
+    expect(enumStep).toBeDefined();
+    const md = enumStep!.metadata as Record<string, unknown>;
+    expect(md.target_count).toBe(3);
+    expect(md.shape_hint).toBe('survey+timeline');
+  });
+
+  test('returns null on malformed JSON', async () => {
+    const db = createTestDb();
+    const session = queries.createQuery(db, 'X', 'something');
+    const provider = new RecordingProvider().pushComplete('this is not json at all');
+    const llm = new TrackedLLM(provider, db);
+
+    const items = await enumerateCanon(llm, session.id, 'mock-model', session.prompt, 'survey');
+    expect(items).toBeNull();
+  });
+
+  test('returns null when no items pass validation', async () => {
+    const db = createTestDb();
+    const session = queries.createQuery(db, 'X', 'something');
+    const provider = new RecordingProvider().pushComplete(JSON.stringify([
+      { item: '', context: 'empty item filtered out' },
+      { wrongShape: true },
+    ]));
+    const llm = new TrackedLLM(provider, db);
+
+    const items = await enumerateCanon(llm, session.id, 'mock-model', session.prompt, 'survey');
+    expect(items).toBeNull();
+  });
+});
+
+// ===========================================================================
+// 7. Coverage check: per-canon-slot finding counts written as decision step
+// ===========================================================================
+
+describe('canon coverage check', () => {
+  test('writes coverage_check step counting findings per canon-slot thread', () => {
+    const db = createTestDb();
+    const session = queries.createQuery(db, 'EDM', 'overview of EDM');
+    const seed = threads.createThread(db, {
+      session_id: session.id, query: 'overview of EDM', origin: 'seed', depth: 0,
+    });
+    // Three canon-slot threads. The first two get a finding; the third stays
+    // empty so coverage is partial.
+    const slotCovered1 = threads.createThread(db, {
+      session_id: session.id, query: 'Moby — Play', origin: 'canon_slot',
+      parent_thread_id: seed.id, depth: 1,
+    });
+    const slotCovered2 = threads.createThread(db, {
+      session_id: session.id, query: 'Underworld — Born Slippy', origin: 'canon_slot',
+      parent_thread_id: seed.id, depth: 1,
+    });
+    const slotEmpty = threads.createThread(db, {
+      session_id: session.id, query: 'Daft Punk — Homework', origin: 'canon_slot',
+      parent_thread_id: seed.id, depth: 1,
+    });
+    findings.createFinding(db, {
+      thread_id: slotCovered1.id, session_id: session.id,
+      content: 'F1', summary: 's1', source_urls: [], source_texts: [],
+      source_quality: 0.5, tags: [], confidence: 0.8, novelty: 0.6, actionability: 0.5,
+      follow_ups: [],
+    });
+    findings.createFinding(db, {
+      thread_id: slotCovered2.id, session_id: session.id,
+      content: 'F2', summary: 's2', source_urls: [], source_texts: [],
+      source_quality: 0.5, tags: [], confidence: 0.8, novelty: 0.6, actionability: 0.5,
+      follow_ups: [],
+    });
+
+    // Direct call — runCoverageCheck is pure SQL+step write, no engine flow
+    // needed. Avoids the integration-test fragility of priming all the LLM
+    // responses runIterations expects.
+    const engine = new ResearchEngine({
+      sqlite: db, provider: new RecordingProvider(), maxIterations: 0,
+    });
+    engine.runCoverageCheck(session.id, seed.id);
+
+    const coverageSteps = steps.listSteps(db, session.id).filter(s => {
+      const md = s.metadata as Record<string, unknown> | null;
+      return md?.decision === 'coverage_check';
+    });
+    expect(coverageSteps.length).toBe(1);
+    const md = coverageSteps[0].metadata as Record<string, unknown>;
+    expect(md.total_count).toBe(3);
+    // Exactly two of the three slots are covered (have findings).
+    expect(md.covered_count).toBe(2);
+    const slots = md.slots as Array<{ thread_id: string; finding_count: number; covered: boolean }>;
+    const empty = slots.find(s => s.thread_id === slotEmpty.id);
+    expect(empty?.covered).toBe(false);
+    expect(empty?.finding_count).toBe(0);
+  });
+
+  test('skips coverage check when there are no canon-slot threads', () => {
+    const db = createTestDb();
+    const session = queries.createQuery(db, 'X', 'topic');
+    const seed = threads.createThread(db, {
+      session_id: session.id, query: 'topic', origin: 'seed', depth: 0,
+    });
+    const engine = new ResearchEngine({
+      sqlite: db, provider: new RecordingProvider(), maxIterations: 0,
+    });
+    engine.runCoverageCheck(session.id, seed.id);
+
+    const coverageSteps = steps.listSteps(db, session.id).filter(s => {
+      const md = s.metadata as Record<string, unknown> | null;
+      return md?.decision === 'coverage_check';
+    });
+    expect(coverageSteps.length).toBe(0);
   });
 });

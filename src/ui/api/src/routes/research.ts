@@ -36,6 +36,7 @@ import {
   listIterationChecks, listPostMortems, runPostMortem,
   pickAgentRole,
   detectQuestionShape,
+  enumerateCanon,
   TrackedLLM,
 } from '@construct/research';
 
@@ -293,6 +294,13 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
         // lookup/audit) so downstream planning can pick the right strategy.
         // Fire-and-forget; failure leaves question_shape NULL and the
         // planner falls back to its current generic behavior.
+        //
+        // After shape lands, if the prompt is survey/list/timeline-shaped
+        // with confidence ≥ 0.5, enumerate canonical artifacts/people/events
+        // and spawn one canon-slot thread per item so the engine's depth-first
+        // crawl is forced to cover the canon before converging. This addresses
+        // the dogfooded EDM failure mode (planner went deep on chart mechanics,
+        // missed Moby's Play / Underworld / Daft Punk).
         if (!query.question_shape) {
           (async () => {
             try {
@@ -300,6 +308,44 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
               if (shape) {
                 updateQuery(app.sqlite, query.id, { question_shape: shape });
                 console.log(`[research] detected shape for ${query.id}: ${shape.shapes.join('+')} (${shape.confidence.toFixed(2)})`);
+
+                const CANON_SHAPES = new Set(['survey', 'list', 'timeline']);
+                const triggers = shape.shapes.filter(s => CANON_SHAPES.has(s));
+                if (triggers.length > 0 && shape.confidence >= 0.5) {
+                  try {
+                    const lensCriterion = shape.lenses
+                      .filter(l => CANON_SHAPES.has(l.shape))
+                      .map(l => `${l.shape}: ${l.criterion}`)
+                      .join(' | ');
+                    const shapeHint = `${triggers.join('+')} (${lensCriterion || 'no specific criterion'})`;
+                    const items = await enumerateCanon(llm, query.id, utilityModel, prompt, shapeHint);
+                    if (items && items.length > 0) {
+                      // Spawn one canon-slot thread per item. Each is a sibling
+                      // of the seed (depth 1, parent = seed) so the worker pool
+                      // can pick them up in parallel. Priority is 0.85 — below
+                      // seed (1.0) so the seed's lead thread runs first, but
+                      // above default follow-ups so canon coverage isn't
+                      // starved.
+                      for (const it of items) {
+                        const slotQuery = `${it.item} — ${it.context}`;
+                        createThread(app.sqlite, {
+                          session_id: query.id,
+                          query: slotQuery,
+                          short_query: placeholderShortQuery(it.item),
+                          origin: 'canon_slot',
+                          parent_thread_id: seedThread.id,
+                          priority: 0.85,
+                          depth: 1,
+                          max_depth: query.config.max_thread_depth,
+                          status: query.config.max_thread_depth > 1 ? 'queued' : 'deferred',
+                        });
+                      }
+                      console.log(`[research] enumerated ${items.length} canon items for ${query.id}`);
+                    }
+                  } catch (err) {
+                    console.warn(`[research] enumerateCanon failed for ${query.id}:`, err);
+                  }
+                }
               }
             } catch (err) {
               console.warn(`[research] detectQuestionShape failed for ${query.id}:`, err);

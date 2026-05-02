@@ -210,7 +210,13 @@ export function clearThreadFindings(sqlite: Sqlite, threadId: string): void {
   sqlite.prepare('DELETE FROM research_findings WHERE thread_id = ?').run(threadId);
 }
 
-export function countFindings(sqlite: Sqlite, sessionId: string): number {
+export function countFindings(sqlite: Sqlite, sessionId: string, opts?: { thread_id?: string }): number {
+  if (opts?.thread_id) {
+    const row = sqlite.prepare(
+      'SELECT COUNT(*) as count FROM research_findings WHERE session_id = ? AND thread_id = ?'
+    ).get(sessionId, opts.thread_id) as { count: number };
+    return row.count;
+  }
   const row = sqlite.prepare(
     'SELECT COUNT(*) as count FROM research_findings WHERE session_id = ?'
   ).get(sessionId) as { count: number };

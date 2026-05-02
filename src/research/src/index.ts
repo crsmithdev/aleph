@@ -1,6 +1,7 @@
 export { applyResearchDDL } from './ddl.js';
 export * from './types.js';
-export { ResearchEngine, AnthropicProvider, pickAgentRole, detectQuestionShape } from './engine.js';
+export { ResearchEngine, AnthropicProvider, pickAgentRole, detectQuestionShape, enumerateCanon } from './engine.js';
+export type { CanonItem } from './engine.js';
 export { TrackedLLM } from './services/llm.js';
 export type { CallContext } from './services/llm.js';
 export type { EngineOptions, LLMProvider, LLMResult, WebSearchResult } from './engine.js';

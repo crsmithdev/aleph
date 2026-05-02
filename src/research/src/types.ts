@@ -269,7 +269,7 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
   },
 };
 
-export type ThreadOrigin = 'seed' | 'follow_up' | 'perturbation' | 'user_injected' | 'monitor_alert' | 'verify' | 'gap_analysis' | 'lead_review';
+export type ThreadOrigin = 'seed' | 'follow_up' | 'perturbation' | 'user_injected' | 'monitor_alert' | 'verify' | 'gap_analysis' | 'lead_review' | 'canon_slot';
 export type ThreadStatus = 'queued' | 'active' | 'paused' | 'exhausted' | 'pruned' | 'deferred';
 
 // All 21 perturbation strategies from spec §3.3
@@ -459,6 +459,8 @@ export type StepMetadata =
   | { decision: 'synthesis'; confidence: number; novelty: number; actionability: number; tags: string[] }
   | { decision: 'dedup'; is_duplicate: boolean; existing_count: number }
   | { decision: 'follow_up_eval'; accepted_count: number; rejected_count: number; retry_count: number }
+  | { decision: 'enumerate_canon'; items: Array<{ item: string; context: string }>; shape_hint: string; target_count: number }
+  | { decision: 'coverage_check'; slots: Array<{ thread_id: string; item: string; finding_count: number; covered: boolean }>; covered_count: number; total_count: number }
 
 export interface ResearchPlan {
   id: string;

@@ -192,6 +192,79 @@ Prompt: "${query.replace(/"/g, '\\"')}"`;
   }
 }
 
+/** Enumerate canonical artifacts/people/events for a survey/list/timeline
+ *  prompt. Mirrors `pickAgentRole` / `detectQuestionShape`: one-shot LLM call,
+ *  fire-and-forget, returns null on parse failure.
+ *
+ *  Returned items become canon-slot threads (one per item) so the engine's
+ *  default depth-first crawl is forced to cover the canon before converging.
+ *  This addresses the dogfooded EDM failure mode — survey questions where
+ *  the planner went deep on chart mechanics and missed Moby's Play,
+ *  Underworld's Born Slippy, Daft Punk's Homework.
+ *
+ *  Records a session-scope step (label='enumerate canon') with the items
+ *  list and target count in metadata, so the Events tab shows the choice. */
+export interface CanonItem {
+  item: string;
+  context: string;
+}
+
+export async function enumerateCanon(
+  llm: TrackedLLM,
+  sessionId: string,
+  model: string,
+  prompt: string,
+  shapeHint: string,
+): Promise<CanonItem[] | null> {
+  const instruction = `You are listing the canonical artifacts/people/events/eras a research prompt is known for. The downstream system will spawn one research thread per item to ensure the canon is covered before converging.
+
+Constraints:
+- Return 10–15 items. Fewer if the topic is genuinely narrow; more (up to 20) if it's broad.
+- Each item must be a SPECIFIC name (e.g. "Moby — Play (1999)", "Daft Punk — Homework", "Detroit techno scene 1985–1995"), not a generic category.
+- Items should span the full breadth of what an expert would consider canon for this prompt.
+- For timelines: pick inflection points across the full date range.
+- For lists/surveys: pick the most-referenced/most-influential examples first.
+- Each item gets a one-sentence context explaining WHY it's canon (so downstream threads can scope correctly).
+
+Return ONLY a JSON array on a single line, no prose, no code fences:
+[{"item": "...", "context": "..."}]
+
+Shape hint: ${shapeHint}
+Prompt: "${prompt.replace(/"/g, '\\"')}"`;
+
+  try {
+    const result = await llm.complete(
+      { session_id: sessionId, thread_id: null, label: 'enumerate canon' },
+      model,
+      instruction,
+      2000,
+    );
+    const stripped = stripLLMFences(result.text).trim();
+    const start = stripped.indexOf('[');
+    const end = stripped.lastIndexOf(']');
+    if (start < 0 || end <= start) return null;
+    const arr = JSON.parse(stripped.slice(start, end + 1));
+    if (!Array.isArray(arr)) return null;
+    const items: CanonItem[] = arr
+      .filter((x): x is { item: string; context: string } =>
+        typeof x === 'object' && x !== null
+        && typeof (x as { item?: unknown }).item === 'string'
+        && typeof (x as { context?: unknown }).context === 'string'
+        && (x as { item: string }).item.trim().length > 0)
+      .map(x => ({ item: x.item.trim().slice(0, 200), context: x.context.trim().slice(0, 400) }));
+    if (items.length === 0) return null;
+    steps.updateStepMetadata(llm.sqlite, result.stepId, {
+      decision: 'enumerate_canon',
+      items,
+      shape_hint: shapeHint,
+      target_count: items.length,
+    });
+    return items;
+  } catch {
+    return null;
+  }
+}
+
 function stripLLMFences(text: string): string {
   // Remove <think> blocks first
   const noThink = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
@@ -698,7 +771,51 @@ export class ResearchEngine {
     // Attach to the just-completed thread so the resulting step is visible.
     await this.maybeRunLeadReview(sessionId, session.config, thread.id);
 
+    // Canon coverage check — count findings per canon-slot thread so the
+    // user can see which slots have evidence and which are still empty.
+    // Visible in the Events tab as a decision='coverage_check' step.
+    this.runCoverageCheck(sessionId, thread.id);
+
     return result;
+  }
+
+  /** Counts findings per canon-slot thread and writes a coverage_check step.
+   *  Cheap: pure SQL aggregate, no LLM call. Runs after every finding so the
+   *  UI can render up-to-date coverage indicators. Public so tests can call
+   *  it without driving a full engine iteration. */
+  runCoverageCheck(sessionId: string, attachThreadId: string | null): void {
+    const slotThreads = threads.listThreads(this.sqlite, sessionId)
+      .filter(t => t.origin === 'canon_slot');
+    if (slotThreads.length === 0) return;
+
+    const slots = slotThreads.map(t => {
+      const count = findings.countFindings(this.sqlite, sessionId, { thread_id: t.id });
+      return {
+        thread_id: t.id,
+        item: t.short_query ?? t.query.slice(0, 80),
+        finding_count: count,
+        covered: count > 0,
+      };
+    });
+    const coveredCount = slots.filter(s => s.covered).length;
+
+    steps.createStep(this.sqlite, {
+      thread_id: attachThreadId,
+      session_id: sessionId,
+      model: 'system',
+      provider: 'system',
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      cost_usd: 0,
+      duration_ms: 0,
+      label: 'canon coverage',
+      metadata: {
+        decision: 'coverage_check',
+        slots,
+        covered_count: coveredCount,
+        total_count: slots.length,
+      },
+    });
   }
 
   private async runIteration(
