@@ -1,0 +1,897 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Research — Combined Inspect tab (events · telemetry · reviews)</title>
+<style>
+  /* Material Palenight palette — same vars the app uses in dark mode */
+  :root {
+    --bg-primary: #292d3e;
+    --bg-secondary: #2f3347;
+    --bg-tertiary: #34394f;
+    --bg-contrast: #232637;
+    --text-primary: #babed8;
+    --text-secondary: #8796b0;
+    --text-muted: #676e95;
+    --text-disabled: #4b5168;
+    --border: #383c50;
+    --border-strong: #4b5168;
+    --accent: #c792ea;
+    --accent-soft: rgba(199, 146, 234, 0.16);
+    --success: #c3e88d;
+    --success-soft: rgba(195, 232, 141, 0.16);
+    --warning: #ffcb6b;
+    --warning-soft: rgba(255, 203, 107, 0.16);
+    --error: #f07178;
+    --error-soft: rgba(240, 113, 120, 0.16);
+    --info: #82aaff;
+    --info-soft: rgba(130, 170, 255, 0.16);
+
+    --font-sans: 'Noto Sans', -apple-system, system-ui, sans-serif;
+    --font-mono: 'Noto Sans Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
+    --font-heading: 'Merriweather', Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font: 14px/1.45 var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 1480px; margin: 0 auto; padding: 56px 32px 120px; }
+  .lede { color: var(--text-secondary); max-width: 70ch; margin: 0 0 8px; }
+  .eyebrow {
+    font: 500 11px/1 var(--font-mono);
+    letter-spacing: 0.16em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin: 0 0 12px;
+  }
+  h1 { font: 600 32px/1.2 var(--font-heading); margin: 0 0 14px; letter-spacing: -0.005em; }
+  h2.section { font: 600 22px/1.3 var(--font-heading); margin: 0 0 4px; }
+  .section-meta { color: var(--text-muted); font: 13px/1.4 var(--font-sans); margin-bottom: 20px; }
+  .variant { margin-top: 56px; }
+  .variant-head {
+    display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--border); padding-bottom: 14px; margin-bottom: 22px;
+  }
+  .pill-label {
+    font: 600 11px/1 var(--font-mono);
+    letter-spacing: 0.12em; text-transform: uppercase;
+    background: var(--accent-soft); color: var(--accent);
+    padding: 5px 9px; border-radius: 4px; border: 1px solid var(--border);
+  }
+  .variant h3 { font: 600 17px/1.3 var(--font-heading); margin: 0; }
+  .variant .desc { color: var(--text-secondary); font-size: 13px; margin-top: 6px; }
+
+  /* ── Mock window chrome ── */
+  .frame {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 12px 40px -12px rgba(0,0,0,0.5);
+  }
+  .frame-tabs {
+    display: flex; align-items: stretch; gap: 0;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    padding: 0 12px;
+    height: 38px;
+  }
+  .frame-tab {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 0 14px; font-size: 13px; color: var(--text-muted);
+    border-bottom: 2px solid transparent; cursor: default;
+    height: 100%;
+  }
+  .frame-tab.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--bg-primary); }
+  .frame-tab .count {
+    font: 10px/1 var(--font-mono); color: var(--text-muted);
+    background: var(--bg-tertiary); border-radius: 3px;
+    padding: 2px 5px;
+  }
+  .frame-tab.active .count { background: var(--accent-soft); color: var(--accent); }
+
+  /* ── Common atoms ── */
+  .panel { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; }
+  .panel-head {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 12px 14px 10px; border-bottom: 1px solid var(--border);
+  }
+  .panel-head h4 { font: 600 14px/1 var(--font-sans); margin: 0; color: var(--text-primary); letter-spacing: 0.01em; }
+  .panel-head .sub { color: var(--text-muted); font-size: 12px; }
+  .panel-body { padding: 12px 14px; }
+
+  .kpi {
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    border-radius: 6px; padding: 12px 14px; min-width: 0;
+  }
+  .kpi .label { font: 500 11px/1 var(--font-mono); letter-spacing: 0.1em; color: var(--text-muted); text-transform: uppercase; }
+  .kpi .val { font: 600 24px/1.1 var(--font-sans); font-variant-numeric: tabular-nums; margin-top: 8px; }
+  .kpi .sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .kpi.success .val { color: var(--success); }
+  .kpi.warn .val    { color: var(--warning); }
+  .kpi.error .val   { color: var(--error); }
+  .kpi.accent .val  { color: var(--accent); }
+  .kpi.info .val    { color: var(--info); }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font: 500 11px/1 var(--font-mono); letter-spacing: 0.04em;
+    padding: 4px 7px; border-radius: 3px; border: 1px solid var(--border);
+    background: var(--bg-tertiary); color: var(--text-secondary);
+  }
+  .chip.ok    { color: var(--success); background: var(--success-soft); border-color: rgba(195,232,141,0.32); }
+  .chip.warn  { color: var(--warning); background: var(--warning-soft); border-color: rgba(255,203,107,0.32); }
+  .chip.err   { color: var(--error);   background: var(--error-soft);   border-color: rgba(240,113,120,0.32); }
+  .chip.info  { color: var(--info);    background: var(--info-soft);    border-color: rgba(130,170,255,0.32); }
+  .chip.accent{ color: var(--accent);  background: var(--accent-soft);  border-color: rgba(199,146,234,0.32); }
+
+  .row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .row.tight { padding: 4px 0; }
+  .row .num { font-variant-numeric: tabular-nums; }
+  .muted { color: var(--text-muted); }
+  .mono  { font-family: var(--font-mono); }
+  .small { font-size: 12px; }
+  .xs    { font-size: 11px; }
+
+  /* Segmented control */
+  .seg {
+    display: inline-flex; gap: 0;
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    border-radius: 6px; padding: 3px;
+  }
+  .seg button {
+    background: transparent; border: 0; color: var(--text-muted);
+    padding: 6px 12px; font: 500 12px/1 var(--font-sans);
+    border-radius: 4px; cursor: default; letter-spacing: 0.02em;
+  }
+  .seg button.on { background: var(--bg-tertiary); color: var(--text-primary); }
+  .seg button .ct { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin-left: 6px; }
+  .seg button.on .ct { color: var(--accent); }
+
+  /* Event log row */
+  .log {
+    border-top: 1px solid var(--border);
+  }
+  .log-row {
+    display: grid;
+    grid-template-columns: 60px 64px 18px 1fr auto;
+    align-items: center; gap: 10px;
+    padding: 6px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .log-row .ts   { font: 500 11px/1 var(--font-mono); color: var(--text-muted); }
+  .log-row .kind { font: 500 10px/1 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
+  .log-row .dot  { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); }
+  .log-row.finding .dot { background: var(--success); }
+  .log-row.thread .dot  { background: var(--accent); }
+  .log-row.step .dot    { background: var(--info); }
+  .log-row.error .dot   { background: var(--error); }
+  .log-row.search .dot  { background: var(--warning); }
+  .log-row .body { color: var(--text-primary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .log-row .meta { color: var(--text-muted); font-family: var(--font-mono); font-size: 11px; white-space: nowrap; }
+
+  /* Tables */
+  table.t { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.t th, table.t td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+  table.t th {
+    font: 500 11px/1 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-muted); background: var(--bg-tertiary); position: sticky; top: 0;
+  }
+  table.t td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* Sparkline */
+  .spark {
+    height: 60px; width: 100%;
+    background: linear-gradient(180deg, transparent 0%, rgba(199,146,234,0.06) 100%);
+  }
+
+  /* Verdict card */
+  .verdict {
+    display: flex; gap: 14px; align-items: flex-start;
+    padding: 14px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg-secondary);
+  }
+  .verdict.warn { border-color: rgba(255,203,107,0.35); background: linear-gradient(180deg, rgba(255,203,107,0.05), var(--bg-secondary)); }
+  .verdict.ok   { border-color: rgba(195,232,141,0.30); }
+  .verdict .badge {
+    flex: 0 0 auto; width: 36px; height: 36px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font: 600 13px/1 var(--font-sans); letter-spacing: 0.04em;
+    background: var(--success-soft); color: var(--success);
+  }
+  .verdict.warn .badge { background: var(--warning-soft); color: var(--warning); }
+  .verdict h5 { margin: 0 0 6px; font: 600 14px/1.3 var(--font-sans); color: var(--text-primary); }
+  .verdict p  { margin: 0 0 8px; color: var(--text-secondary); font-size: 13px; line-height: 1.55; }
+  .verdict ul { margin: 4px 0 0 0; padding-left: 18px; color: var(--text-secondary); font-size: 13px; }
+  .verdict ul li { margin-bottom: 2px; }
+
+  /* Variant A — single dashboard */
+  .v-a-grid {
+    display: grid; gap: 14px;
+    grid-template-columns: 1.4fr 1fr;
+  }
+  .kpi-strip { display: grid; gap: 10px; grid-template-columns: repeat(6, minmax(0,1fr)); margin-bottom: 14px; }
+  .v-a-left  { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .v-a-right { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+  .panel-grid-2 { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
+
+  /* Variant B — sub-tabs (minimal) */
+  .v-b-toolbar {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+    background: var(--bg-secondary);
+  }
+  .v-b-summary {
+    display: grid; gap: 10px; grid-template-columns: repeat(6, minmax(0,1fr));
+    padding: 14px; border-bottom: 1px solid var(--border);
+  }
+  .v-b-summary .kpi.compact { padding: 8px 10px; }
+  .v-b-summary .kpi.compact .val { font-size: 18px; margin-top: 4px; }
+  .v-b-body { padding: 18px; }
+
+  /* Variant C — split (timeline left + canvas right) */
+  .v-c {
+    display: grid; gap: 0;
+    grid-template-columns: 320px 1fr;
+    height: 720px;
+  }
+  .v-c-rail {
+    border-right: 1px solid var(--border);
+    background: var(--bg-secondary);
+    display: flex; flex-direction: column; min-width: 0;
+  }
+  .v-c-rail-head {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .v-c-rail .log { overflow: auto; flex: 1; }
+  .v-c-rail .log-row { grid-template-columns: 50px 14px 1fr; padding: 5px 12px; font-size: 12px; }
+  .v-c-rail .log-row .meta, .v-c-rail .log-row .kind { display: none; }
+
+  .v-c-main { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+  .v-c-toolbar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 14px; border-bottom: 1px solid var(--border);
+    background: var(--bg-secondary);
+  }
+  .v-c-canvas { padding: 18px; overflow: auto; flex: 1; }
+
+  /* Notes block */
+  .takeaway {
+    margin-top: 16px; padding: 12px 14px;
+    background: var(--bg-secondary); border: 1px dashed var(--border-strong);
+    border-radius: 6px; color: var(--text-secondary); font-size: 13px;
+  }
+  .takeaway strong { color: var(--text-primary); font-weight: 600; }
+
+  /* Field labels */
+  .field-label { font: 500 11px/1 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; }
+  .recs { margin: 8px 0 0 0; padding-left: 18px; color: var(--text-secondary); font-size: 13px; }
+  .recs li { margin-bottom: 3px; }
+
+  hr.gap { border: 0; border-top: 1px solid var(--border); margin: 18px 0; }
+
+  /* Decision row */
+  .decision {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 12px; border-bottom: 1px solid var(--border);
+    font-size: 13px; min-width: 0;
+  }
+  .decision .ts { font: 500 11px/1 var(--font-mono); color: var(--text-muted); flex: 0 0 88px; }
+  .decision .label { color: var(--text-primary); font-weight: 500; flex: 0 0 130px; }
+  .decision .keys { display: flex; gap: 4px; flex-wrap: wrap; min-width: 0; }
+  .decision .keys .k {
+    font: 500 11px/1 var(--font-mono);
+    background: var(--bg-tertiary); color: var(--text-secondary);
+    padding: 3px 6px; border-radius: 3px;
+  }
+
+  .footer-note { color: var(--text-muted); font-size: 12px; margin-top: 8px; }
+  .duration-pill {
+    background: var(--bg-tertiary); border: 1px solid var(--border);
+    border-radius: 5px; padding: 10px;
+  }
+  .duration-pill .lbl { font: 500 10px/1 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
+  .duration-pill .stack { margin-top: 8px; display: flex; flex-direction: column; gap: 2px; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .duration-pill .stack .row { padding: 0; }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <p class="eyebrow">Research · query detail</p>
+  <h1>Combine Events, Telemetry &amp; Reviews into one tab</h1>
+  <p class="lede">
+    Three observability views currently live in three sub-tabs. They overlap heavily — a post-mortem already
+    references metrics; the event log already lists steps and errors that show up in telemetry. These three mockups
+    propose three different ways to merge them into a single tab without dropping any of the existing surface area.
+  </p>
+
+  <!-- ───────────────────────── VARIANT A ───────────────────────── -->
+  <section class="variant">
+    <div class="variant-head">
+      <span class="pill-label">Variant A</span>
+      <h3>Activity dashboard — one canonical scroll</h3>
+    </div>
+    <p class="desc">
+      Top KPI strip, latest verdict surfaced inline, then telemetry panels and the event log laid out as a
+      two-column dashboard. Everything visible without sub-tabs; the event log gets a sticky right column so
+      it stays in view while you scroll the panels on the left.
+    </p>
+
+    <div class="frame">
+      <div class="frame-tabs">
+        <div class="frame-tab">Document</div>
+        <div class="frame-tab">Knowledge <span class="count">14</span></div>
+        <div class="frame-tab">Process <span class="count">22</span></div>
+        <div class="frame-tab">Sources <span class="count">88</span></div>
+        <div class="frame-tab active">Activity <span class="count">⦿</span></div>
+        <div class="frame-tab">Config</div>
+      </div>
+
+      <div style="padding: 16px 18px;">
+        <!-- KPI strip -->
+        <div class="kpi-strip">
+          <div class="kpi success">
+            <div class="label">Findings</div>
+            <div class="val">147</div>
+            <div class="sub">+12 in last 5m</div>
+          </div>
+          <div class="kpi info">
+            <div class="label">Steps</div>
+            <div class="val">412</div>
+            <div class="sub">8 active · 22 threads</div>
+          </div>
+          <div class="kpi warn">
+            <div class="label">Source failure</div>
+            <div class="val">12.4%</div>
+            <div class="sub">11 of 88 attempts</div>
+          </div>
+          <div class="kpi error">
+            <div class="label">Errors</div>
+            <div class="val">7</div>
+            <div class="sub">1.7% of steps</div>
+          </div>
+          <div class="kpi accent">
+            <div class="label">Cost</div>
+            <div class="val">$0.84</div>
+            <div class="sub">26m · 318k tokens</div>
+          </div>
+          <div class="kpi">
+            <div class="label">Stuck</div>
+            <div class="val">2</div>
+            <div class="sub">≥ 5m in fetching</div>
+          </div>
+        </div>
+
+        <div class="v-a-grid">
+          <!-- LEFT column -->
+          <div class="v-a-left">
+            <!-- Latest verdict -->
+            <div class="verdict warn">
+              <div class="badge">!</div>
+              <div style="flex: 1; min-width: 0;">
+                <h5>Post-mortem · flagged · low finding yield, source failure</h5>
+                <p>
+                  Yield is 0.36 findings per step (target 0.55+). Three of the top fetched domains are returning
+                  Cloudflare challenges; recommend tightening domain allow-list and re-running the gap-analysis
+                  pass before another burst.
+                </p>
+                <ul>
+                  <li>Drop or de-prioritize <span class="mono">substack.com</span> (8/9 failed)</li>
+                  <li>Re-prime role <span class="mono">music_historian</span> on threads at depth ≥ 3</li>
+                  <li>Lower <span class="mono">novelty_threshold</span> from 0.72 → 0.65 for next burst</li>
+                </ul>
+                <div class="row" style="margin-top:10px;">
+                  <span class="muted small">3 minutes ago · job <span class="mono">3a91…</span></span>
+                  <span style="display: flex; gap: 6px;">
+                    <span class="chip">Re-run review</span>
+                    <span class="chip">Export</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Iteration check -->
+            <div class="panel">
+              <div class="panel-head">
+                <h4>Iteration checks</h4>
+                <span class="sub">3 checks · last at iter 25</span>
+                <span style="margin-left:auto;" class="chip ok">on track</span>
+              </div>
+              <div style="padding: 0;">
+                <div style="padding: 10px 14px; border-bottom: 1px solid var(--border);">
+                  <div class="row">
+                    <span><span class="chip ok">on track</span> <span class="muted small">iter 25 · job <span class="mono">3a91…</span></span></span>
+                    <span class="muted xs mono">14:22:03</span>
+                  </div>
+                  <p class="small" style="color: var(--text-secondary); margin: 6px 0 0;">
+                    Sub-questions are still anchored to the seed; no drift detected. Two threads near-duplicate of
+                    <span class="mono">t-89a4</span> were auto-pruned.
+                  </p>
+                </div>
+                <div style="padding: 10px 14px;">
+                  <div class="row">
+                    <span><span class="chip warn">drifting</span> <span class="muted small">iter 20</span></span>
+                    <span class="muted xs mono">14:11:47</span>
+                  </div>
+                  <p class="small" style="color: var(--text-secondary); margin: 6px 0 0;">
+                    Three threads touched copyright law unrelated to the seed. Auto-pruned <span class="mono">t-22f1, t-9c7e, t-bb02</span>.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Telemetry panels grid -->
+            <div class="panel">
+              <div class="panel-head">
+                <h4>Job lifecycle</h4>
+                <span class="sub">22 jobs · 18 completed · 3 running · 1 failed</span>
+              </div>
+              <div class="panel-body">
+                <div style="display: grid; gap: 8px; grid-template-columns: repeat(4, 1fr);">
+                  <div class="duration-pill">
+                    <div class="lbl">Queue wait</div>
+                    <div class="stack">
+                      <div class="row"><span class="muted">p50</span><span>120ms</span></div>
+                      <div class="row"><span class="muted">p95</span><span>2.1s</span></div>
+                      <div class="row"><span class="muted">max</span><span>8.4s</span></div>
+                    </div>
+                  </div>
+                  <div class="duration-pill">
+                    <div class="lbl">Supervisor lag</div>
+                    <div class="stack">
+                      <div class="row"><span class="muted">p50</span><span>40ms</span></div>
+                      <div class="row"><span class="muted">p95</span><span>180ms</span></div>
+                      <div class="row"><span class="muted">max</span><span>0.6s</span></div>
+                    </div>
+                  </div>
+                  <div class="duration-pill">
+                    <div class="lbl">Run duration</div>
+                    <div class="stack">
+                      <div class="row"><span class="muted">p50</span><span>34s</span></div>
+                      <div class="row"><span class="muted">p95</span><span>2.8m</span></div>
+                      <div class="row"><span class="muted">max</span><span>4.2m</span></div>
+                    </div>
+                  </div>
+                  <div class="duration-pill">
+                    <div class="lbl">End-to-end</div>
+                    <div class="stack">
+                      <div class="row"><span class="muted">p50</span><span>40s</span></div>
+                      <div class="row"><span class="muted">p95</span><span>3.0m</span></div>
+                      <div class="row"><span class="muted">max</span><span>4.6m</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel-grid-2">
+              <div class="panel">
+                <div class="panel-head"><h4>Source extraction</h4><span class="sub">88 sources</span></div>
+                <div class="panel-body">
+                  <div style="display: flex; gap: 18px; align-items: baseline;">
+                    <div>
+                      <div class="field-label">Failure rate</div>
+                      <div style="font: 600 26px/1.1 var(--font-sans); color: var(--warning); font-variant-numeric: tabular-nums;">12.4%</div>
+                    </div>
+                    <div style="flex:1; min-width: 0;">
+                      <div class="field-label">Top failing domains</div>
+                      <div class="row tight"><span class="mono small">substack.com</span><span class="num small"><span style="color: var(--error);">8</span> / 9 (89%)</span></div>
+                      <div class="row tight"><span class="mono small">x.com</span><span class="num small"><span style="color: var(--error);">3</span> / 4 (75%)</span></div>
+                      <div class="row tight"><span class="mono small">medium.com</span><span class="num small"><span style="color: var(--warning);">2</span> / 6 (33%)</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="panel">
+                <div class="panel-head"><h4>Cost trajectory</h4><span class="sub">412 steps · $0.84 · 318k tokens</span></div>
+                <div class="panel-body">
+                  <svg class="spark" viewBox="0 0 600 60" preserveAspectRatio="none">
+                    <polyline fill="none" stroke="var(--accent)" stroke-width="1.5"
+                      points="0,58 30,57 60,55 90,53 120,49 150,45 180,42 210,38 240,36 270,30 300,28 330,24 360,22 390,18 420,15 450,12 480,9 510,7 540,5 570,3 600,2"/>
+                  </svg>
+                  <div class="row small muted" style="margin-top: 4px; font-variant-numeric: tabular-nums;"><span>$0.00</span><span>$0.84</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-head"><h4>Thread state</h4><span class="sub">22 transitions · stuck threshold 5m</span></div>
+              <div class="panel-body">
+                <div style="display: grid; gap: 8px; grid-template-columns: repeat(6, 1fr);">
+                  <div><div class="field-label">active</div><div class="num" style="font: 600 18px/1; color: var(--success);">8</div></div>
+                  <div><div class="field-label">queued</div><div class="num" style="font: 600 18px/1; color: var(--warning);">3</div></div>
+                  <div><div class="field-label">exhausted</div><div class="num" style="font: 600 18px/1;">9</div></div>
+                  <div><div class="field-label">pruned</div><div class="num" style="font: 600 18px/1; color: var(--text-muted);">2</div></div>
+                  <div><div class="field-label">deferred</div><div class="num" style="font: 600 18px/1;">0</div></div>
+                  <div><div class="field-label">stuck</div><div class="num" style="font: 600 18px/1; color: var(--error);">2</div></div>
+                </div>
+                <hr class="gap">
+                <div class="field-label">Stuck (≥ 5m in fetching)</div>
+                <div style="margin-top: 6px;">
+                  <div class="row tight"><span class="small">Berlin techno scene 1989-1994 <span class="mono muted xs">t-9a3b</span></span><span class="small mono" style="color: var(--warning);">7m 12s</span></div>
+                  <div class="row tight"><span class="small">Detroit techno transmissions to UK rave <span class="mono muted xs">t-c4f1</span></span><span class="small mono" style="color: var(--warning);">5m 48s</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-head">
+                <h4>Decisions</h4>
+                <span class="sub">37 steps with metadata</span>
+                <span style="margin-left:auto;" class="seg">
+                  <button class="on">all <span class="ct">37</span></button>
+                  <button>dedup <span class="ct">14</span></button>
+                  <button>follow-up <span class="ct">12</span></button>
+                  <button>perturbation <span class="ct">8</span></button>
+                </span>
+              </div>
+              <div>
+                <div class="decision">
+                  <span class="ts">14:22:14.802</span>
+                  <span class="label">accept_followup</span>
+                  <span class="keys"><span class="k">accepted</span><span class="k">novelty</span><span class="k">depth</span></span>
+                </div>
+                <div class="decision">
+                  <span class="ts">14:22:09.341</span>
+                  <span class="label">dedup_reject</span>
+                  <span class="keys"><span class="k">similarity=0.92</span><span class="k">competitor=t-89a4</span></span>
+                </div>
+                <div class="decision">
+                  <span class="ts">14:21:55.110</span>
+                  <span class="label">perturb_choice</span>
+                  <span class="keys"><span class="k">strategy=role_swap</span><span class="k">role=archivist</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT column — sticky event log -->
+          <div class="v-a-right">
+            <div class="panel" style="position: sticky; top: 16px; max-height: 1080px; display: flex; flex-direction: column; min-height: 0;">
+              <div class="panel-head" style="flex-wrap: wrap; gap: 8px;">
+                <h4>Event log</h4>
+                <span class="sub">live</span>
+                <span style="margin-left: auto;" class="seg">
+                  <button class="on">all</button>
+                  <button>findings</button>
+                  <button>steps</button>
+                  <button>errors</button>
+                </span>
+              </div>
+              <div class="log" style="overflow: auto; flex: 1; min-height: 0;">
+                <div class="log-row finding"><span class="ts">14:22:14</span><span class="kind">finding</span><span class="dot"></span><span class="body">Goa trance crystallized at parties on Anjuna Beach (1991-93)</span><span class="meta">conf 0.84 · t-c4f1</span></div>
+                <div class="log-row step"><span class="ts">14:22:11</span><span class="kind">step</span><span class="dot"></span><span class="body">web_search "early goa trance Anjuna 1991"</span><span class="meta">3 hits</span></div>
+                <div class="log-row finding"><span class="ts">14:22:09</span><span class="kind">finding</span><span class="dot"></span><span class="body">Energy-flash compilation (1990) marks pirate-radio bridge to mainland Europe</span><span class="meta">conf 0.71 · t-89a4</span></div>
+                <div class="log-row thread"><span class="ts">14:22:03</span><span class="kind">thread</span><span class="dot"></span><span class="body">spawn → "UK hardcore continuum: 1992 jungle precursors"</span><span class="meta">depth 4 · t-77c0</span></div>
+                <div class="log-row error"><span class="ts">14:21:58</span><span class="kind">error</span><span class="dot"></span><span class="body">fetch_url substack.com/p/dance-1991 — 403 challenge</span><span class="meta">attempt 3</span></div>
+                <div class="log-row search"><span class="ts">14:21:52</span><span class="kind">search</span><span class="dot"></span><span class="body">web_search "Sven Väth Omen Frankfurt"</span><span class="meta">5 hits</span></div>
+                <div class="log-row step"><span class="ts">14:21:48</span><span class="kind">step</span><span class="dot"></span><span class="body">fetch_url residentadvisor.net/features/3344</span><span class="meta">extracted</span></div>
+                <div class="log-row finding"><span class="ts">14:21:44</span><span class="kind">finding</span><span class="dot"></span><span class="body">Tresor catalog #001 (X-101, 1991) tightens Detroit-Berlin axis</span><span class="meta">conf 0.79</span></div>
+                <div class="log-row thread"><span class="ts">14:21:39</span><span class="kind">thread</span><span class="dot"></span><span class="body">priority 0.45 → 0.62 (gap-analysis re-rank)</span><span class="meta">t-3300</span></div>
+                <div class="log-row step"><span class="ts">14:21:30</span><span class="kind">step</span><span class="dot"></span><span class="body">extract → "Energy Flash" Reynolds, S. (Soft Skull, 1998)</span><span class="meta">cited</span></div>
+                <div class="log-row error"><span class="ts">14:21:18</span><span class="kind">error</span><span class="dot"></span><span class="body">fetch_url x.com/status/13… — bot challenge</span><span class="meta">attempt 2</span></div>
+                <div class="log-row finding"><span class="ts">14:21:12</span><span class="kind">finding</span><span class="dot"></span><span class="body">Mayday (1991) was the first 4-figure indoor rave in Germany</span><span class="meta">conf 0.91</span></div>
+                <div class="log-row search"><span class="ts">14:21:05</span><span class="kind">search</span><span class="dot"></span><span class="body">web_search "Frankfurt techno 1990 Dorian Gray"</span><span class="meta">7 hits</span></div>
+                <div class="log-row step"><span class="ts">14:20:58</span><span class="kind">step</span><span class="dot"></span><span class="body">dedup → similarity 0.92 vs t-89a4, rejected</span><span class="meta">novelty 0.08</span></div>
+                <div class="log-row finding"><span class="ts">14:20:51</span><span class="kind">finding</span><span class="dot"></span><span class="body">Sven Väth's Omen club (1988-1998) seeded the German trance scene</span><span class="meta">conf 0.86</span></div>
+                <div class="log-row thread"><span class="ts">14:20:42</span><span class="kind">thread</span><span class="dot"></span><span class="body">exhausted ← active (no novel sub-questions left)</span><span class="meta">t-220a</span></div>
+                <div class="log-row step"><span class="ts">14:20:30</span><span class="kind">step</span><span class="dot"></span><span class="body">followup → "Italian dream-house 1990-91"</span><span class="meta">novelty 0.71</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="takeaway">
+      <strong>What this trades.</strong> Single-scroll dashboard. No nesting — every signal is one scroll away.
+      Reviews and the latest verdict get visual primacy because they're what you usually open the tab for. The
+      event log stays sticky on the right so you can scan signals while reading panels. Cost: dense, can feel
+      busy with no findings yet.
+    </div>
+  </section>
+
+  <!-- ───────────────────────── VARIANT B ───────────────────────── -->
+  <section class="variant">
+    <div class="variant-head">
+      <span class="pill-label">Variant B</span>
+      <h3>Sub-tabbed Inspect — minimal change, summary always on</h3>
+    </div>
+    <p class="desc">
+      Lowest-risk consolidation: keep the three views as inline sub-tabs under one outer "Inspect" tab. A small
+      always-on summary strip pulls the verdict and key counters above the sub-tabs so you don't have to switch
+      tabs just to see whether anything's wrong.
+    </p>
+
+    <div class="frame">
+      <div class="frame-tabs">
+        <div class="frame-tab">Document</div>
+        <div class="frame-tab">Knowledge <span class="count">14</span></div>
+        <div class="frame-tab">Process <span class="count">22</span></div>
+        <div class="frame-tab">Sources <span class="count">88</span></div>
+        <div class="frame-tab active">Inspect <span class="count">⦿</span></div>
+        <div class="frame-tab">Config</div>
+      </div>
+
+      <!-- Always-on summary strip -->
+      <div class="v-b-summary">
+        <div class="kpi compact warn">
+          <div class="label">Verdict</div>
+          <div class="val" style="font-size: 14px;">flag · low yield</div>
+          <div class="sub">3m ago</div>
+        </div>
+        <div class="kpi compact success"><div class="label">Findings</div><div class="val">147</div></div>
+        <div class="kpi compact info"><div class="label">Steps</div><div class="val">412</div></div>
+        <div class="kpi compact warn"><div class="label">Src fail</div><div class="val">12.4%</div></div>
+        <div class="kpi compact accent"><div class="label">Cost</div><div class="val">$0.84</div></div>
+        <div class="kpi compact"><div class="label">Stuck</div><div class="val" style="color: var(--error);">2</div></div>
+      </div>
+
+      <!-- Inner toolbar -->
+      <div class="v-b-toolbar">
+        <span class="seg">
+          <button>Reviews <span class="ct">4</span></button>
+          <button class="on">Telemetry</button>
+          <button>Events <span class="ct">live</span></button>
+          <button>Decisions <span class="ct">37</span></button>
+        </span>
+        <span class="muted small" style="margin-left: auto;">last refresh 2s ago</span>
+      </div>
+
+      <div class="v-b-body">
+        <!-- Telemetry pane (active) -->
+        <h2 class="section">Job lifecycle</h2>
+        <div class="section-meta">22 jobs · 18 completed · 3 running · 1 failed</div>
+        <div style="display: grid; gap: 10px; grid-template-columns: repeat(4, 1fr); margin-bottom: 22px;">
+          <div class="duration-pill">
+            <div class="lbl">Queue wait</div>
+            <div class="stack">
+              <div class="row"><span class="muted">p50</span><span>120ms</span></div>
+              <div class="row"><span class="muted">p95</span><span>2.1s</span></div>
+              <div class="row"><span class="muted">max</span><span>8.4s</span></div>
+              <div class="row" style="border-top: 1px solid var(--border); padding-top: 4px; margin-top: 4px;"><span class="muted">avg</span><span>620ms · n=22</span></div>
+            </div>
+          </div>
+          <div class="duration-pill">
+            <div class="lbl">Supervisor lag</div>
+            <div class="stack">
+              <div class="row"><span class="muted">p50</span><span>40ms</span></div>
+              <div class="row"><span class="muted">p95</span><span>180ms</span></div>
+              <div class="row"><span class="muted">max</span><span>0.6s</span></div>
+              <div class="row" style="border-top: 1px solid var(--border); padding-top: 4px; margin-top: 4px;"><span class="muted">avg</span><span>74ms · n=22</span></div>
+            </div>
+          </div>
+          <div class="duration-pill">
+            <div class="lbl">Run duration</div>
+            <div class="stack">
+              <div class="row"><span class="muted">p50</span><span>34s</span></div>
+              <div class="row"><span class="muted">p95</span><span>2.8m</span></div>
+              <div class="row"><span class="muted">max</span><span>4.2m</span></div>
+              <div class="row" style="border-top: 1px solid var(--border); padding-top: 4px; margin-top: 4px;"><span class="muted">avg</span><span>1.2m · n=22</span></div>
+            </div>
+          </div>
+          <div class="duration-pill">
+            <div class="lbl">End-to-end</div>
+            <div class="stack">
+              <div class="row"><span class="muted">p50</span><span>40s</span></div>
+              <div class="row"><span class="muted">p95</span><span>3.0m</span></div>
+              <div class="row"><span class="muted">max</span><span>4.6m</span></div>
+              <div class="row" style="border-top: 1px solid var(--border); padding-top: 4px; margin-top: 4px;"><span class="muted">avg</span><span>1.3m · n=22</span></div>
+            </div>
+          </div>
+        </div>
+
+        <h2 class="section">Per-worker</h2>
+        <div class="section-meta">3 workers active</div>
+        <div class="panel" style="overflow: hidden;">
+          <table class="t">
+            <thead><tr>
+              <th>worker</th>
+              <th class="num">total</th>
+              <th class="num">completed</th>
+              <th class="num">failed</th>
+              <th class="num">running</th>
+              <th class="num">avg dur</th>
+              <th class="num">steps</th>
+              <th class="num">cost</th>
+            </tr></thead>
+            <tbody>
+              <tr><td class="mono small">w-c4f1</td><td class="num">9</td><td class="num" style="color: var(--success);">7</td><td class="num">—</td><td class="num" style="color: var(--accent);">2</td><td class="num">1.4m</td><td class="num">158</td><td class="num">$0.31</td></tr>
+              <tr><td class="mono small">w-89a4</td><td class="num">8</td><td class="num" style="color: var(--success);">7</td><td class="num" style="color: var(--error);">1</td><td class="num">—</td><td class="num">1.1m</td><td class="num">142</td><td class="num">$0.28</td></tr>
+              <tr><td class="mono small">w-220a</td><td class="num">5</td><td class="num" style="color: var(--success);">4</td><td class="num">—</td><td class="num" style="color: var(--accent);">1</td><td class="num">1.0m</td><td class="num">112</td><td class="num">$0.25</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <hr class="gap">
+
+        <div style="display: grid; gap: 18px; grid-template-columns: 1fr 1fr;">
+          <div>
+            <h2 class="section">Source extraction health</h2>
+            <div class="section-meta">88 sources · 12.4% failure</div>
+            <div style="display: grid; gap: 8px; grid-template-columns: 1fr 1fr;">
+              <div class="kpi"><div class="label">Avg attempts on failure</div><div class="val">2.4</div></div>
+              <div class="kpi success"><div class="label">Extracted</div><div class="val">71</div></div>
+            </div>
+          </div>
+          <div>
+            <h2 class="section">Cost trajectory</h2>
+            <div class="section-meta">412 steps · 318k tokens · $0.84</div>
+            <div class="panel" style="padding: 10px 12px;">
+              <svg class="spark" viewBox="0 0 600 60" preserveAspectRatio="none">
+                <polyline fill="none" stroke="var(--accent)" stroke-width="1.5"
+                  points="0,58 60,55 120,49 180,42 240,36 300,28 360,22 420,15 480,9 540,5 600,2"/>
+              </svg>
+              <div class="row small muted" style="margin-top: 4px; font-variant-numeric: tabular-nums;"><span>$0.00</span><span>$0.84</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="takeaway">
+      <strong>What this trades.</strong> Cheapest migration — keeps the existing three pages, just nests them.
+      The summary strip ensures the verdict is never hidden behind a tab click. Cost: still requires a click to
+      switch between the event stream and the metrics; users who skim three things now skim three sub-tabs.
+    </div>
+  </section>
+
+  <!-- ───────────────────────── VARIANT C ───────────────────────── -->
+  <section class="variant">
+    <div class="variant-head">
+      <span class="pill-label">Variant C</span>
+      <h3>Split workspace — timeline rail + canvas</h3>
+    </div>
+    <p class="desc">
+      Live event log lives in a permanent left rail (compressed); the right side is a canvas with a segmented
+      switcher between Overview, Reviews, Telemetry and Decisions. Reading any panel keeps the live stream in
+      peripheral vision — useful while a session is still running.
+    </p>
+
+    <div class="frame">
+      <div class="frame-tabs">
+        <div class="frame-tab">Document</div>
+        <div class="frame-tab">Knowledge <span class="count">14</span></div>
+        <div class="frame-tab">Process <span class="count">22</span></div>
+        <div class="frame-tab">Sources <span class="count">88</span></div>
+        <div class="frame-tab active">Activity <span class="count">⦿</span></div>
+        <div class="frame-tab">Config</div>
+      </div>
+
+      <div class="v-c">
+        <!-- Left rail: live stream -->
+        <div class="v-c-rail">
+          <div class="v-c-rail-head">
+            <strong style="font-size: 13px;">Live stream</strong>
+            <span class="chip ok small" style="font-size: 10px;">running</span>
+            <span class="muted xs mono" style="margin-left: auto;">412</span>
+          </div>
+          <div style="padding: 8px 12px; border-bottom: 1px solid var(--border); display: flex; gap: 6px; flex-wrap: wrap;">
+            <span class="chip accent xs">all</span>
+            <span class="chip xs">findings</span>
+            <span class="chip xs">errors</span>
+          </div>
+          <div class="log">
+            <div class="log-row finding"><span class="ts">14:22:14</span><span class="dot"></span><span class="body">Goa trance · Anjuna Beach 91-93</span></div>
+            <div class="log-row step"><span class="ts">14:22:11</span><span class="dot"></span><span class="body">search "early goa trance Anjuna"</span></div>
+            <div class="log-row finding"><span class="ts">14:22:09</span><span class="dot"></span><span class="body">Energy-flash compilation 1990</span></div>
+            <div class="log-row thread"><span class="ts">14:22:03</span><span class="dot"></span><span class="body">spawn UK hardcore depth 4</span></div>
+            <div class="log-row error"><span class="ts">14:21:58</span><span class="dot"></span><span class="body">fetch substack.com 403</span></div>
+            <div class="log-row search"><span class="ts">14:21:52</span><span class="dot"></span><span class="body">search "Sven Väth Omen"</span></div>
+            <div class="log-row step"><span class="ts">14:21:48</span><span class="dot"></span><span class="body">extract residentadvisor</span></div>
+            <div class="log-row finding"><span class="ts">14:21:44</span><span class="dot"></span><span class="body">Tresor #001 (X-101, 1991)</span></div>
+            <div class="log-row thread"><span class="ts">14:21:39</span><span class="dot"></span><span class="body">priority 0.45 → 0.62</span></div>
+            <div class="log-row step"><span class="ts">14:21:30</span><span class="dot"></span><span class="body">extract Reynolds (1998)</span></div>
+            <div class="log-row error"><span class="ts">14:21:18</span><span class="dot"></span><span class="body">fetch x.com bot challenge</span></div>
+            <div class="log-row finding"><span class="ts">14:21:12</span><span class="dot"></span><span class="body">Mayday 1991 first indoor rave</span></div>
+            <div class="log-row search"><span class="ts">14:21:05</span><span class="dot"></span><span class="body">search "Frankfurt Dorian Gray"</span></div>
+            <div class="log-row step"><span class="ts">14:20:58</span><span class="dot"></span><span class="body">dedup t-89a4 sim 0.92</span></div>
+            <div class="log-row finding"><span class="ts">14:20:51</span><span class="dot"></span><span class="body">Sven Väth's Omen 88-98</span></div>
+            <div class="log-row thread"><span class="ts">14:20:42</span><span class="dot"></span><span class="body">t-220a exhausted</span></div>
+            <div class="log-row step"><span class="ts">14:20:30</span><span class="dot"></span><span class="body">followup Italian dream-house</span></div>
+            <div class="log-row finding"><span class="ts">14:20:22</span><span class="dot"></span><span class="body">Belgian new-beat → techno bridge</span></div>
+            <div class="log-row error"><span class="ts">14:20:15</span><span class="dot"></span><span class="body">fetch medium.com timeout</span></div>
+            <div class="log-row thread"><span class="ts">14:20:08</span><span class="dot"></span><span class="body">spawn Italodisco lineage</span></div>
+          </div>
+        </div>
+
+        <!-- Right canvas -->
+        <div class="v-c-main">
+          <div class="v-c-toolbar">
+            <span class="seg">
+              <button>Overview</button>
+              <button class="on">Reviews <span class="ct">4</span></button>
+              <button>Telemetry</button>
+              <button>Decisions <span class="ct">37</span></button>
+            </span>
+            <span class="muted small" style="margin-left: auto;">job <span class="mono">3a91b…</span></span>
+          </div>
+          <div class="v-c-canvas">
+            <h2 class="section">Reviews</h2>
+            <div class="section-meta">1 post-mortem · 3 iteration checks · burst job <span class="mono">3a91b…</span></div>
+
+            <div class="verdict warn" style="margin-bottom: 14px;">
+              <div class="badge">!</div>
+              <div style="flex: 1; min-width: 0;">
+                <h5>Post-mortem · flagged · low_finding_yield · source_failure</h5>
+                <p>
+                  Yield is 0.36 findings per step (target 0.55+). Three of the top fetched domains are returning
+                  Cloudflare challenges; recommend tightening domain allow-list and re-running gap analysis before
+                  the next burst.
+                </p>
+                <div class="field-label" style="margin-top: 8px;">Recommendations</div>
+                <ul class="recs">
+                  <li>Drop or de-prioritize <span class="mono">substack.com</span> (8/9 failed)</li>
+                  <li>Re-prime role <span class="mono">music_historian</span> on threads at depth ≥ 3</li>
+                  <li>Lower <span class="mono">novelty_threshold</span> from 0.72 → 0.65 for next burst</li>
+                </ul>
+                <div class="row" style="margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border);">
+                  <span class="muted small">findings <span class="mono num">147</span> · steps <span class="mono num">412</span> · errors <span class="mono num">7</span> · cost <span class="mono num">$0.84</span> · 26.4m</span>
+                  <span class="muted xs mono" title="2026-05-02 14:22:03">3 min ago</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-head"><h4>Iteration checks</h4><span class="sub">3 checks · last at iter 25</span></div>
+              <div>
+                <div style="padding: 12px 14px; border-bottom: 1px solid var(--border);">
+                  <div class="row">
+                    <span><span class="chip ok">on track</span> <span class="muted small">iter 25</span></span>
+                    <span class="muted xs mono">14:22:03</span>
+                  </div>
+                  <p class="small" style="color: var(--text-secondary); margin: 8px 0 0;">
+                    Sub-questions are still anchored to the seed; no drift detected. Two threads near-duplicate of
+                    <span class="mono">t-89a4</span> auto-pruned.
+                  </p>
+                </div>
+                <div style="padding: 12px 14px; border-bottom: 1px solid var(--border);">
+                  <div class="row">
+                    <span><span class="chip warn">drifting</span> <span class="muted small">iter 20</span></span>
+                    <span class="muted xs mono">14:11:47</span>
+                  </div>
+                  <p class="small" style="color: var(--text-secondary); margin: 8px 0 0;">
+                    Three threads touched copyright law unrelated to the seed. Auto-pruned <span class="mono">t-22f1, t-9c7e, t-bb02</span>.
+                  </p>
+                </div>
+                <div style="padding: 12px 14px;">
+                  <div class="row">
+                    <span><span class="chip ok">on track</span> <span class="muted small">iter 15</span></span>
+                    <span class="muted xs mono">14:00:11</span>
+                  </div>
+                  <p class="small" style="color: var(--text-secondary); margin: 8px 0 0;">
+                    All seed threads still showing novelty &gt; 0.30. No actions taken.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="takeaway">
+      <strong>What this trades.</strong> Best for live runs — the stream is always visible, so reviews and
+      telemetry feel like analysis layered onto a running narrative. Sub-tabs still gate the deep panels, but
+      they switch fast because the rail never goes away. Cost: stream rail is noise once a run is finished.
+    </div>
+  </section>
+
+  <hr class="gap">
+  <p class="footer-note">
+    Mockups follow the Material Palenight palette and the app's Noto Sans / Merriweather / Noto Sans Mono stack.
+    Counts and dates are illustrative.
+  </p>
+</div>
+</body>
+</html>
