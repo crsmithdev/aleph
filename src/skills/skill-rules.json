@@ -49,6 +49,18 @@
       "keywords": ["document this", "write documentation", "create docs", "update the docs", "write a readme", "docs review", "update docs", "full docs review", "document the architecture"]
     },
     {
+      "skill": "docs-author-v2",
+      "keywords": ["docs-v2", "use docs-author-v2", "docs author v2", "/v2 docs/"]
+    },
+    {
+      "skill": "docs-audit",
+      "keywords": ["docs audit", "audit docs", "audit the docs", "doc audit", "documentation audit", "/(audit|review|check).{0,15}(docs|documentation)/"]
+    },
+    {
+      "skill": "docs-conform",
+      "keywords": ["docs-conform", "make the docs match", "align the docs", "same readme structure", "match the readme", "/(readmes|docs|guides).{0,30}(match|like|same|consistent)/"]
+    },
+    {
       "skill": "docs-optimize",
       "keywords": ["optimize docs", "optimize documentation", "c7score", "llms.txt", "docs for ai", "docs for llm"]
     },
