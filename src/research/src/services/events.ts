@@ -14,7 +14,7 @@
  * mutations that happen outside the services (direct SQL, migrations, tests)
  * but the push stream is the authoritative source.
  */
-export type ResearchEventType = 'thread' | 'job' | 'step' | 'finding' | 'source';
+export type ResearchEventType = 'thread' | 'job' | 'step' | 'finding' | 'source' | 'concept' | 'concept_link' | 'query';
 
 export interface ResearchEvent {
   session_id: string;

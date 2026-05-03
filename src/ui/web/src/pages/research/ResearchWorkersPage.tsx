@@ -661,15 +661,19 @@ function describeEvent(ev: StreamEvent, queryMap: Record<string, string>): {
       at: j.updated_at,
     };
   }
-  const s = ev.payload;
-  return {
-    kind: 'session',
-    title: s.status,
-    detail: s.title,
-    sessionId: s.id,
-    sessionTitle: s.title,
-    at: s.updated_at,
-  };
+  if (ev.type === 'session') {
+    const s = ev.payload;
+    return {
+      kind: 'session',
+      title: s.status,
+      detail: s.title,
+      sessionId: s.id,
+      sessionTitle: s.title,
+      at: s.updated_at,
+    };
+  }
+  // concept / concept_link / source / query — not surfaced in the activity rail
+  return { kind: ev.type, title: ev.type, detail: null, sessionId: null, sessionTitle: null, at: '' };
 }
 
 function ActivityRail({

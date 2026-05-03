@@ -1,5 +1,6 @@
 import type { Sqlite } from '@construct/data';
 import { generateId } from './id.js';
+import { emitResearchEvent } from './events.js';
 import type { ResearchQuery, SessionConfig, PromptHints, ShapeAnalysis, TopicClusterAnalysis } from '../types.js';
 import { getDefaults } from './defaults.js';
 
@@ -234,7 +235,9 @@ export function updateQuery(
   values.push(id);
 
   sqlite.prepare(`UPDATE research_queries SET ${fields.join(', ')} WHERE id = ?`).run(...values);
-  return getQuery(sqlite, id);
+  const updated = getQuery(sqlite, id);
+  if (updated) emitResearchEvent(id, 'query', updated);
+  return updated;
 }
 
 /** @deprecated Use updateQuery */

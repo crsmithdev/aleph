@@ -43,6 +43,7 @@ import {
   QUESTION_SHAPES,
   TOPIC_CLUSTERS,
   type TopicCluster,
+  onResearchEvent,
 } from '@construct/research';
 import type { QuestionShape } from '@construct/research';
 
@@ -1399,7 +1400,13 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     return { status: 'stopped', jobs_cancelled: cancelled };
   });
 
-  // === SSE Stream ===
+  // === SSE Stream (push-driven) ===
+  //
+  // Subscribes to `onResearchEvent` and forwards every mutation for this
+  // session to the client. Initial state is fetched by the UI via react-query
+  // before subscribing, so this stream only carries deltas.
+  //
+  // Events forwarded: query, finding, thread, step, job, source, concept, concept_link.
   app.get<{ Params: { id: string } }>(
     '/queries/:id/stream',
     async (req, reply) => {
@@ -1415,90 +1422,39 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
       reply.raw.flushHeaders();
 
       let closed = false;
-      req.raw.on('close', () => { closed = true; });
-
       const send = (type: string, payload: unknown) => {
         if (!closed) reply.raw.write(`data: ${JSON.stringify({ type, payload })}\n\n`);
       };
 
-      const sentFindings = new Set<string>();
-      const sentThreadState = new Map<string, string>();
-      const sentSteps = new Set<string>();
-      const sentJobs = new Map<string, string>();
-      let lastQueryState = '';
+      // Send the current query snapshot once on connect so the UI gets
+      // status/role/document/summary immediately without an extra GET.
+      try {
+        const q = getQuery(app.sqlite, queryId);
+        if (q) send('query', q);
+      } catch { /* non-fatal */ }
 
-      const poll = () => {
-        if (closed) return;
-        try {
-          // Query-level state: status, role label, document, summary length.
-          // Used by live mode to surface 'paused' + final document immediately.
-          const q = getQuery(app.sqlite, queryId);
-          if (q) {
-            const docLen = q.document?.length ?? 0;
-            const sumLen = q.summary?.length ?? 0;
-            const state = `${q.status}:${q.config.role_label ?? ''}:${docLen}:${sumLen}:${q.updated_at}`;
-            if (state !== lastQueryState) {
-              lastQueryState = state;
-              send('query', q);
-            }
-          }
+      const unsubscribe = onResearchEvent((event) => {
+        if (event.session_id !== queryId) return;
+        send(event.type, event.payload);
+      });
 
-          const findings = listFindings(app.sqlite, queryId);
-          for (const f of findings) {
-            if (!sentFindings.has(f.id)) {
-              sentFindings.add(f.id);
-              send('finding', f);
-            }
-          }
-
-          const threads = listThreads(app.sqlite, queryId);
-          for (const t of threads) {
-            const state = `${t.status}:${t.updated_at}`;
-            if (sentThreadState.get(t.id) !== state) {
-              sentThreadState.set(t.id, state);
-              send('thread', t);
-            }
-          }
-
-          const steps = listSteps(app.sqlite, queryId, { limit: 1000 });
-          for (const s of steps) {
-            if (!sentSteps.has(s.id)) {
-              sentSteps.add(s.id);
-              send('step', s);
-            }
-          }
-
-          const jobs = listJobsForSession(app.sqlite, queryId);
-          for (const j of jobs) {
-            const state = `${j.status}:${j.updated_at}`;
-            if (sentJobs.get(j.id) !== state) {
-              sentJobs.set(j.id, state);
-              send('job', j);
-            }
-          }
-        } catch {
-          // ignore SQLite errors during polling
-        }
-      };
-
-      const pollInterval = setInterval(poll, 500);
       const heartbeatInterval = setInterval(() => {
         if (!closed) reply.raw.write(': heartbeat\n\n');
       }, 15_000);
 
       await new Promise<void>(resolve => req.raw.on('close', resolve));
-      clearInterval(pollInterval);
+      closed = true;
+      unsubscribe();
       clearInterval(heartbeatInterval);
       if (!reply.raw.writableEnded) reply.raw.end();
     }
   );
 
-  // === Cross-session SSE stream ===
+  // === Cross-session SSE stream (push-driven) ===
   //
-  // Fans out finding/thread/step/job events across every session. Poll cadence
-  // matches the per-session stream (500ms) and each client holds its own
-  // cursors keyed by created_at / updated_at so reconnects don't redeliver
-  // history already sent.
+  // Forwards every research event across every session. Only deltas — initial
+  // state is fetched by the UI on mount. The 'session' event is mapped from
+  // 'query' events for legacy listeners that key on session-level updates.
   app.get('/stream', async (req, reply) => {
     reply.hijack();
     reply.raw.writeHead(200, {
@@ -1510,74 +1466,24 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     reply.raw.flushHeaders();
 
     let closed = false;
-    req.raw.on('close', () => { closed = true; });
-
     const send = (type: string, payload: unknown) => {
       if (!closed) reply.raw.write(`data: ${JSON.stringify({ type, payload })}\n\n`);
     };
 
-    // Start at "now" — deliver only new activity after connect, not history.
-    const startedAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
-    let findingCursor = startedAt;
-    let threadCursor = startedAt;
-    let stepCursor = startedAt;
-    let jobCursor = startedAt;
-    let sessionCursor = startedAt;
+    const unsubscribe = onResearchEvent((event) => {
+      send(event.type, event.payload);
+      // Legacy: cross-session consumers also expect a 'session' event when
+      // a query updates. Mirror it without an extra emit at the call site.
+      if (event.type === 'query') send('session', event.payload);
+    });
 
-    const poll = () => {
-      if (closed) return;
-      try {
-        const newFindings = app.sqlite.prepare(
-          `SELECT * FROM research_findings WHERE created_at > ? ORDER BY created_at LIMIT 100`
-        ).all(findingCursor) as Record<string, unknown>[];
-        for (const row of newFindings) {
-          send('finding', row);
-          findingCursor = String(row.created_at);
-        }
-
-        const newThreads = app.sqlite.prepare(
-          `SELECT * FROM research_threads WHERE updated_at > ? ORDER BY updated_at LIMIT 100`
-        ).all(threadCursor) as Record<string, unknown>[];
-        for (const row of newThreads) {
-          send('thread', row);
-          threadCursor = String(row.updated_at);
-        }
-
-        const newSteps = app.sqlite.prepare(
-          `SELECT * FROM research_steps WHERE created_at > ? ORDER BY created_at LIMIT 100`
-        ).all(stepCursor) as Record<string, unknown>[];
-        for (const row of newSteps) {
-          send('step', row);
-          stepCursor = String(row.created_at);
-        }
-
-        const newJobs = app.sqlite.prepare(
-          `SELECT * FROM research_jobs WHERE updated_at > ? ORDER BY updated_at LIMIT 100`
-        ).all(jobCursor) as Record<string, unknown>[];
-        for (const row of newJobs) {
-          send('job', row);
-          jobCursor = String(row.updated_at);
-        }
-
-        const newSessions = app.sqlite.prepare(
-          `SELECT id, title, prompt, status, updated_at FROM research_queries WHERE updated_at > ? ORDER BY updated_at LIMIT 100`
-        ).all(sessionCursor) as Record<string, unknown>[];
-        for (const row of newSessions) {
-          send('session', row);
-          sessionCursor = String(row.updated_at);
-        }
-      } catch {
-        // ignore SQLite errors during polling
-      }
-    };
-
-    const pollInterval = setInterval(poll, 500);
     const heartbeatInterval = setInterval(() => {
       if (!closed) reply.raw.write(': heartbeat\n\n');
     }, 15_000);
 
     await new Promise<void>(resolve => req.raw.on('close', resolve));
-    clearInterval(pollInterval);
+    closed = true;
+    unsubscribe();
     clearInterval(heartbeatInterval);
     if (!reply.raw.writableEnded) reply.raw.end();
   });

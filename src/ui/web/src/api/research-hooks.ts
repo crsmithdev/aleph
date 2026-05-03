@@ -682,7 +682,7 @@ export function useConcepts(sessionId: string) {
     queryKey: ['research-concepts', sessionId],
     queryFn: () => api.get<ConceptWithStats[]>(`/research/queries/${sessionId}/concepts`),
     enabled: !!sessionId,
-    refetchInterval: 15_000,
+    // Live updates flow via useResearchStream (SSE 'concept' event).
   });
 }
 
@@ -691,7 +691,7 @@ export function useConceptLinks(sessionId: string) {
     queryKey: ['research-concept-links', sessionId],
     queryFn: () => api.get<ConceptLink[]>(`/research/queries/${sessionId}/concept-links`),
     enabled: !!sessionId,
-    refetchInterval: 15_000,
+    // Live updates flow via useResearchStream (SSE 'concept_link' event).
   });
 }
 
@@ -734,7 +734,9 @@ export function useSources(sessionId: string, status?: SourceExtractionStatus | 
     queryKey: ['research-sources', sessionId, status ?? 'all'],
     queryFn: () => api.get<SourcesResponse>(`/research/queries/${sessionId}/sources${q}`),
     enabled: !!sessionId,
-    refetchInterval: 10_000,
+    // Live updates flow via useResearchStream (SSE 'source' event), but only
+    // patches the 'all' cache key; status-filtered consumers still benefit from
+    // initial fetch + cache invalidation on retry/skip mutations.
   });
 }
 
@@ -1068,7 +1070,7 @@ export function useResearchJobs(sessionId: string) {
     queryKey: ['research-jobs', sessionId],
     queryFn: () => api.get<ResearchJob[]>(`/research/queries/${sessionId}/jobs`),
     enabled: !!sessionId,
-    refetchInterval: 5000,
+    // Live updates flow via useResearchStream (SSE 'job' event).
   });
 }
 
@@ -1088,6 +1090,9 @@ export type StreamEvent = (
   | { type: 'job'; payload: ResearchJob }
   | { type: 'session'; payload: StreamSessionEvent }
   | { type: 'query'; payload: ResearchQuery }
+  | { type: 'concept'; payload: ConceptWithStats }
+  | { type: 'concept_link'; payload: ConceptLink }
+  | { type: 'source'; payload: Source }
 ) & { _seq?: number };
 
 // Cross-session: single multiplexed stream for workers page / global activity rail.
@@ -1162,6 +1167,44 @@ export function useResearchStream(sessionId: string, enabled = true) {
           );
         } else if (parsed.type === 'query') {
           qc.setQueryData(['research-queries', sessionId], parsed.payload);
+        } else if (parsed.type === 'concept') {
+          qc.setQueryData(
+            ['research-concepts', sessionId],
+            (old: ConceptWithStats[] | undefined) => {
+              if (!old) return [parsed.payload as ConceptWithStats];
+              const next = parsed.payload as ConceptWithStats;
+              const idx = old.findIndex(c => c.id === next.id);
+              if (idx >= 0) { const n = [...old]; n[idx] = { ...old[idx], ...next }; return n; }
+              return [next, ...old];
+            }
+          );
+        } else if (parsed.type === 'concept_link') {
+          qc.setQueryData(
+            ['research-concept-links', sessionId],
+            (old: ConceptLink[] | undefined) => {
+              if (!old) return [parsed.payload as ConceptLink];
+              const next = parsed.payload as ConceptLink;
+              const idx = old.findIndex(l => l.id === next.id);
+              if (idx >= 0) { const n = [...old]; n[idx] = next; return n; }
+              return [...old, next];
+            }
+          );
+        } else if (parsed.type === 'source') {
+          qc.setQueryData(
+            ['research-sources', sessionId, 'all'],
+            (old: SourcesResponse | undefined) => {
+              const next = parsed.payload;
+              const items = old?.items ?? [];
+              const idx = items.findIndex(s => s.id === next.id);
+              const updatedItems = idx >= 0
+                ? items.map((s, i) => i === idx ? next : s)
+                : [next, ...items];
+              return {
+                items: updatedItems,
+                counts: old?.counts ?? { pending: 0, extracted: 0, failed: 0, skipped: 0 },
+              };
+            }
+          );
         }
 
         if (parsed.type !== 'job') {

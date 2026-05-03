@@ -1,5 +1,6 @@
 import type { Sqlite } from '@construct/data';
 import { generateId } from './id.js';
+import { emitResearchEvent } from './events.js';
 import type { Concept, ConceptLink, ConceptWithStats } from '../types.js';
 
 function rowToConcept(row: Record<string, unknown>): Concept {
@@ -85,7 +86,9 @@ export function upsertConcept(
       'UPDATE research_concepts SET aliases = ?, summary = ?, key_facts = ?, updated_at = ? WHERE id = ?'
     ).run(JSON.stringify(mergedAliases), newSummary, JSON.stringify(mergedFacts), now, cur.id);
 
-    return { ...cur, aliases: mergedAliases, summary: newSummary, key_facts: mergedFacts, updated_at: now };
+    const updated = { ...cur, aliases: mergedAliases, summary: newSummary, key_facts: mergedFacts, updated_at: now };
+    emitResearchEvent(sessionId, 'concept', updated);
+    return updated;
   }
 
   const id = generateId();
@@ -94,11 +97,13 @@ export function upsertConcept(
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(id, sessionId, canon, JSON.stringify(aliases), summary, JSON.stringify(keyFacts), now, now);
 
-  return {
+  const inserted: Concept = {
     id, session_id: sessionId, canonical_name: canon,
     aliases, summary, key_facts: keyFacts,
     created_at: now, updated_at: now,
   };
+  emitResearchEvent(sessionId, 'concept', inserted);
+  return inserted;
 }
 
 export function linkFindingToConcept(sqlite: Sqlite, sessionId: string, findingId: string, conceptId: string): void {
@@ -128,13 +133,22 @@ export function linkConcepts(
     const merged = Array.from(new Set([...cur, ...evidenceFindingIds]));
     sqlite.prepare('UPDATE research_concept_links SET evidence_finding_ids = ? WHERE id = ?')
       .run(JSON.stringify(merged), existing.id);
+    emitResearchEvent(sessionId, 'concept_link', {
+      id: existing.id, session_id: sessionId, from_concept_id: fromId, to_concept_id: toId,
+      relation: rel, evidence_finding_ids: merged,
+    });
     return;
   }
 
+  const linkId = generateId();
   sqlite.prepare(
     `INSERT INTO research_concept_links (id, session_id, from_concept_id, to_concept_id, relation, evidence_finding_ids)
      VALUES (?, ?, ?, ?, ?, ?)`
-  ).run(generateId(), sessionId, fromId, toId, rel, JSON.stringify(evidenceFindingIds));
+  ).run(linkId, sessionId, fromId, toId, rel, JSON.stringify(evidenceFindingIds));
+  emitResearchEvent(sessionId, 'concept_link', {
+    id: linkId, session_id: sessionId, from_concept_id: fromId, to_concept_id: toId,
+    relation: rel, evidence_finding_ids: evidenceFindingIds,
+  });
 }
 
 export function getConcept(sqlite: Sqlite, id: string): Concept | null {
