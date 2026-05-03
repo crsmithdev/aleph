@@ -2,6 +2,7 @@ import { Database } from 'bun:sqlite';
 import { describe, test, expect, beforeEach, mock } from 'bun:test';
 import { applyResearchDDL } from './ddl';
 import * as sessions from './services/sessions';
+import * as queries from './services/queries';
 import * as threads from './services/threads';
 import * as findings from './services/findings';
 import * as steps from './services/steps';
@@ -1097,5 +1098,93 @@ describe('evaluateFollowUps retry', () => {
     expect(f.follow_up_analysis!.candidates).toBeDefined();
     expect(Array.isArray(f.follow_up_analysis!.candidates)).toBe(true);
     expect(typeof f.follow_up_analysis!.similarity_threshold).toBe('number');
+  });
+});
+
+// ========== getResearchStats verdict aggregation ==========
+
+describe('getResearchStats verdict aggregation', () => {
+  let sqlite: Database;
+  beforeEach(() => { sqlite = createTestDb(); });
+
+  function makeSession(title: string, status: string): string {
+    const s = sessions.createSession(sqlite, title, `prompt for ${title}`);
+    sessions.updateSession(sqlite, s.id, { status: status as any });
+    return s.id;
+  }
+
+  function recordPM(sessionId: string, verdict: 'pass' | 'flag', createdAt?: string): void {
+    const id = `pm-${Math.random().toString(36).slice(2, 10)}`;
+    if (createdAt) {
+      sqlite.prepare(`
+        INSERT INTO research_post_mortems (id, session_id, verdict, flags, notes, recommendations, metrics_snapshot, created_at)
+        VALUES (?, ?, ?, '[]', '', '[]', '{}', ?)
+      `).run(id, sessionId, verdict, createdAt);
+    } else {
+      sqlite.prepare(`
+        INSERT INTO research_post_mortems (id, session_id, verdict, flags, notes, recommendations, metrics_snapshot)
+        VALUES (?, ?, ?, '[]', '', '[]', '{}')
+      `).run(id, sessionId, verdict);
+    }
+  }
+
+  test('returns zero rates with no finished sessions', () => {
+    // active session — not finished
+    makeSession('active', 'active');
+    const stats = queries.getResearchStats(sqlite, 'all', 'day');
+    expect(stats.passRate).toBe(0);
+    expect(stats.flagRate).toBe(0);
+    expect(stats.haltRate).toBe(0);
+    expect(stats.byVerdict).toEqual([]);
+  });
+
+  test('aggregates pass/flag/halt across mixed finished sessions', () => {
+    // 2 pass, 1 flag, 1 halt, 1 completed-without-pm, 1 active (excluded)
+    const passA = makeSession('passA', 'completed');
+    const passB = makeSession('passB', 'exhausted');
+    const flagged = makeSession('flag', 'completed');
+    const halted = makeSession('halt', 'halted');
+    makeSession('no-pm', 'completed'); // finished but no PM — denominator only
+    makeSession('still-running', 'active'); // excluded
+
+    recordPM(passA, 'pass');
+    recordPM(passB, 'pass');
+    recordPM(flagged, 'flag');
+    // halted session also has a flag PM — halt must take priority
+    recordPM(halted, 'flag');
+
+    const stats = queries.getResearchStats(sqlite, 'all', 'day');
+
+    // 5 finished sessions in the denominator
+    expect(stats.passRate).toBeCloseTo(2 / 5, 5);
+    expect(stats.flagRate).toBeCloseTo(1 / 5, 5);
+    expect(stats.haltRate).toBeCloseTo(1 / 5, 5);
+    // sum ≤ 1 (one finished session has no PM)
+    expect(stats.passRate + stats.flagRate + stats.haltRate).toBeCloseTo(4 / 5, 5);
+  });
+
+  test('uses latest post-mortem when a session has multiple', () => {
+    const sid = makeSession('multi', 'completed');
+    recordPM(sid, 'flag', '2024-01-01T00:00:00.000Z');
+    recordPM(sid, 'pass', '2024-06-01T00:00:00.000Z'); // latest
+    const stats = queries.getResearchStats(sqlite, 'all', 'day');
+    expect(stats.passRate).toBe(1);
+    expect(stats.flagRate).toBe(0);
+  });
+
+  test('byVerdict buckets by created_at date', () => {
+    // Two sessions on different days. Override created_at directly to control bucketing.
+    const a = makeSession('a', 'completed');
+    const b = makeSession('b', 'halted');
+    sqlite.prepare("UPDATE research_queries SET created_at = '2024-03-01T10:00:00.000Z' WHERE id = ?").run(a);
+    sqlite.prepare("UPDATE research_queries SET created_at = '2024-03-02T10:00:00.000Z' WHERE id = ?").run(b);
+    recordPM(a, 'pass');
+
+    const stats = queries.getResearchStats(sqlite, 'all', 'day');
+    expect(stats.byVerdict.length).toBe(2);
+    const day1 = stats.byVerdict.find(d => d.date === '2024-03-01');
+    const day2 = stats.byVerdict.find(d => d.date === '2024-03-02');
+    expect(day1).toEqual({ date: '2024-03-01', pass: 1, flag: 0, halt: 0 });
+    expect(day2).toEqual({ date: '2024-03-02', pass: 0, flag: 0, halt: 1 });
   });
 });

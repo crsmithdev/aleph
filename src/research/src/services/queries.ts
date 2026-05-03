@@ -248,7 +248,18 @@ export interface ResearchStats {
   totalCost: number;
   avgConfidence: number;
   avgNovelty: number;
+  /**
+   * Verdict aggregation across "finished" sessions (status in completed/exhausted/halted).
+   * Halted takes priority — a halted session that also has a flag post-mortem counts only as halted.
+   * Rates are 0..1 fractions; passRate + flagRate + haltRate ≤ 1 (sessions without a post-mortem
+   * and not halted are excluded from the numerators but counted in the denominator).
+   * All three are 0 when there are no finished sessions in range.
+   */
+  passRate: number;
+  flagRate: number;
+  haltRate: number;
   byDay: Array<{ date: string; sessions: number; findings: number; cost: number }>;
+  byVerdict: Array<{ date: string; pass: number; flag: number; halt: number }>;
 }
 
 export function getResearchStats(sqlite: Sqlite, range: string, granularity: string): ResearchStats {
@@ -306,6 +317,61 @@ export function getResearchStats(sqlite: Sqlite, range: string, granularity: str
 
   const byDay = [...dayMap.values()].sort((a, b) => a.date.localeCompare(b.date));
 
+  // Verdict aggregation across finished sessions.
+  // Finished = status in (completed, exhausted, halted) and created within the range.
+  // For each finished session: classify as halt > pass/flag (latest post-mortem) > none.
+  const finishedRows = sqlite.prepare(`
+    SELECT q.id AS session_id,
+           q.status AS status,
+           q.created_at AS created_at,
+           (
+             SELECT pm.verdict FROM research_post_mortems pm
+             WHERE pm.session_id = q.id
+             ORDER BY pm.created_at DESC LIMIT 1
+           ) AS latest_verdict
+    FROM research_queries q
+    WHERE q.created_at >= ?
+      AND q.status IN ('completed', 'exhausted', 'halted')
+  `).all(cutoff) as Array<{ session_id: string; status: string; created_at: string; latest_verdict: string | null }>;
+
+  const totalFinished = finishedRows.length;
+  let passCount = 0;
+  let flagCount = 0;
+  let haltCount = 0;
+
+  // Per-day verdict bucket keyed by the same date function used above.
+  const verdictDayMap = new Map<string, { date: string; pass: number; flag: number; halt: number }>();
+  const bucketDate = (createdAt: string): string =>
+    granularity === 'hour'
+      ? createdAt.slice(0, 13) // 'YYYY-MM-DDTHH'
+      : createdAt.slice(0, 10); // 'YYYY-MM-DD'
+
+  for (const row of finishedRows) {
+    const date = bucketDate(row.created_at);
+    let bucket = verdictDayMap.get(date);
+    if (!bucket) {
+      bucket = { date, pass: 0, flag: 0, halt: 0 };
+      verdictDayMap.set(date, bucket);
+    }
+    if (row.status === 'halted') {
+      haltCount++;
+      bucket.halt++;
+    } else if (row.latest_verdict === 'pass') {
+      passCount++;
+      bucket.pass++;
+    } else if (row.latest_verdict === 'flag') {
+      flagCount++;
+      bucket.flag++;
+    }
+    // else: finished without a post-mortem — counts toward denominator only.
+  }
+
+  const passRate = totalFinished > 0 ? passCount / totalFinished : 0;
+  const flagRate = totalFinished > 0 ? flagCount / totalFinished : 0;
+  const haltRate = totalFinished > 0 ? haltCount / totalFinished : 0;
+
+  const byVerdict = [...verdictDayMap.values()].sort((a, b) => a.date.localeCompare(b.date));
+
   return {
     totalSessions: sessions.total,
     activeSessions: sessions.active,
@@ -314,7 +380,11 @@ export function getResearchStats(sqlite: Sqlite, range: string, granularity: str
     totalCost: cost.total,
     avgConfidence: (findings.avg_confidence ?? 0) * 100,
     avgNovelty: (findings.avg_novelty ?? 0) * 100,
+    passRate,
+    flagRate,
+    haltRate,
     byDay,
+    byVerdict,
   };
 }
 

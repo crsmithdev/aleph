@@ -245,7 +245,12 @@ export interface ResearchStatsData {
   totalCost: number;
   avgConfidence: number;
   avgNovelty: number;
+  /** Pass-rate fraction (0..1) across finished sessions. See server type for rules. */
+  passRate: number;
+  flagRate: number;
+  haltRate: number;
   byDay: Array<{ date: string; sessions: number; findings: number; cost: number }>;
+  byVerdict: Array<{ date: string; pass: number; flag: number; halt: number }>;
 }
 
 export function useResearchStats(range: string, granularity: string) {
