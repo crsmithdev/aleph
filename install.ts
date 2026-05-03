@@ -302,11 +302,11 @@ try {
     // Write a workspace root package.json at construct/ (not synced from src)
     await writeFile(join(constructDst, "package.json"), JSON.stringify({
       private: true,
-      workspaces: ["data", "eval", "goals", "research", "telemetry", "ui", "ui/api", "ui/web"],
+      workspaces: ["data", "eval", "goals", "logger", "research", "telemetry", "ui", "ui/api", "ui/web"],
     }, null, 2) + "\n");
     // Remove stale node_modules so bun installs fresh
     for (const rel of ["node_modules", "ui/node_modules", "ui/api/node_modules", "ui/web/node_modules",
-                        "data/node_modules", "eval/node_modules", "goals/node_modules", "research/node_modules", "telemetry/node_modules"]) {
+                        "data/node_modules", "eval/node_modules", "goals/node_modules", "logger/node_modules", "research/node_modules", "telemetry/node_modules"]) {
       await rm(join(constructDst, rel), { recursive: true, force: true });
     }
     await Bun.$`cd ${constructDst} && bun install`.quiet().nothrow();

@@ -12,6 +12,7 @@
     "@construct/data": "workspace:*",
     "@construct/eval": "workspace:*",
     "@construct/goals": "workspace:*",
+    "@construct/logger": "workspace:*",
     "@construct/research": "workspace:*",
     "@construct/telemetry": "workspace:*",
     "yaml": "^2.8.3",

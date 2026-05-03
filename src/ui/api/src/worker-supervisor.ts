@@ -1,7 +1,7 @@
 import { spawn, spawnSync, type ChildProcess } from 'child_process';
 import { resolve } from 'path';
 import { readFileSync } from 'fs';
-import { log } from './logger.js';
+import { log, ingestChildLine } from './logger.js';
 
 const DEFAULT_WORKER_SCRIPT = resolve(import.meta.dirname, '../../../research/src/worker.ts');
 const SIGTERM_GRACE_MS = 30_000;
@@ -125,7 +125,10 @@ export class WorkerSupervisor {
     const args = ['run', '--no-cache', this.scriptPath];
     const proc = spawn(process.execPath, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: process.env,
+      // CONSTRUCT_LOG_JSON=1 makes the child's `log()` calls emit NDJSON to
+      // stdout instead of formatted-text. We re-ingest those records below
+      // and re-emit through our own log() with worker_id attached.
+      env: { ...process.env, CONSTRUCT_LOG_JSON: '1' },
     });
 
     w.process = proc;
@@ -134,12 +137,7 @@ export class WorkerSupervisor {
 
     const forwardLines = (level: 'info' | 'error') => (d: Buffer) => {
       for (const raw of d.toString().split('\n')) {
-        const line = raw.replace(/\r$/, '').trim();
-        if (!line) continue;
-        // Worker prefixes its own messages with "[worker]" / "[engine]" / etc — strip the
-        // bracketed tag so we don't render `[worker @ 0] [worker] ...` double-tagged.
-        const stripped = line.replace(/^\[[^\]]+\]\s*/, '');
-        log({ source: 'worker', level, worker_id: w.id, msg: stripped });
+        ingestChildLine(w.id, raw, level);
       }
     };
     proc.stdout?.on('data', forwardLines('info'));

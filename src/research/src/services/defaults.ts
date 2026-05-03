@@ -1,4 +1,5 @@
 import type { Sqlite } from '@construct/data';
+import { log } from '@construct/logger';
 import type { SessionConfig } from '../types.js';
 import { DEFAULT_SESSION_CONFIG } from '../types.js';
 
@@ -84,7 +85,7 @@ function migrateDefaults(sqlite: Sqlite, storedJson: string): void {
   if (changed) {
     sqlite.prepare("UPDATE research_defaults SET config = ?, updated_at = datetime('now') WHERE id = 1")
       .run(JSON.stringify(stored));
-    console.log('[research_defaults] migrated to new code defaults');
+    log({ source: 'research_defaults', msg: 'migrated to new code defaults' });
   }
 }
 

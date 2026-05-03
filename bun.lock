@@ -44,12 +44,20 @@
         "typescript": "^5.7.3",
       },
     },
+    "src/logger": {
+      "name": "@construct/logger",
+      "version": "0.1.0",
+      "devDependencies": {
+        "typescript": "^5.7.3",
+      },
+    },
     "src/research": {
       "name": "@construct/research",
       "version": "0.1.0",
       "dependencies": {
         "@anthropic-ai/sdk": "^0.52.0",
         "@construct/data": "file:../data",
+        "@construct/logger": "file:../logger",
         "@mozilla/readability": "^0.6.0",
         "linkedom": "^0.18.12",
         "nanoid": "^5.1.2",
@@ -91,6 +99,7 @@
         "@construct/data": "workspace:*",
         "@construct/eval": "workspace:*",
         "@construct/goals": "workspace:*",
+        "@construct/logger": "workspace:*",
         "@construct/research": "workspace:*",
         "@construct/telemetry": "workspace:*",
         "@fastify/cors": "^11.0.0",
@@ -194,6 +203,8 @@
     "@construct/eval": ["@construct/eval@workspace:src/eval"],
 
     "@construct/goals": ["@construct/goals@workspace:src/goals"],
+
+    "@construct/logger": ["@construct/logger@workspace:src/logger"],
 
     "@construct/research": ["@construct/research@workspace:src/research"],
 
@@ -1105,6 +1116,8 @@
 
     "@construct/goals/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
+    "@construct/logger/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+
     "@construct/research/@construct/data": ["@construct/data@file:src/data", { "dependencies": { "drizzle-orm": "^0.39.3" }, "devDependencies": { "typescript": "^5.7.3" } }],
 
     "@construct/research/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
@@ -1112,6 +1125,8 @@
     "@construct/telemetry/@construct/data": ["@construct/data@file:src/data", { "dependencies": { "drizzle-orm": "^0.39.3" }, "devDependencies": { "typescript": "^5.7.3" } }],
 
     "@construct/telemetry/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+
+    "@construct/ui-api/@construct/data": ["@construct/data@file:src/data", { "dependencies": { "drizzle-orm": "^0.39.3" }, "devDependencies": { "typescript": "^5.7.3" } }],
 
     "@construct/ui-api/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
