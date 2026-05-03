@@ -13,8 +13,7 @@
  *   - Thread state compacted from a 6-tile grid to one stackbar plus counts;
  *     the stuck-thread list keeps full size — that's the actionable bit.
  */
-import React, { useMemo } from 'react';
-import { clsx } from 'clsx';
+import { useMemo } from 'react';
 import {
   type ResearchQuery,
   useResearchFindings, useResearchThreads, useResearchSteps, useResearchStream,
@@ -31,6 +30,7 @@ import {
 } from './ResearchTelemetryView';
 import { PostMortemCard, IterationCheckCard } from './ResearchReviewsView';
 import { Button } from '../../components/ui/Button';
+import { StatCard } from '../../components/data/StatCard';
 
 interface Props {
   session: ResearchQuery;
@@ -51,30 +51,17 @@ function fmtMin(ms: number | undefined | null): string {
   return `${(ms / 60_000).toFixed(1)}m`;
 }
 
-function Kpi({
-  label, value, sub, tone = 'default',
-}: {
-  label: string;
-  value: React.ReactNode;
-  sub?: React.ReactNode;
-  tone?: 'default' | 'success' | 'info' | 'warn' | 'error' | 'accent';
-}) {
-  const valColor = {
-    default: 'text-text-primary',
-    success: 'text-success',
-    info: 'text-info',
-    warn: 'text-warning',
-    error: 'text-error',
-    accent: 'text-accent',
-  }[tone];
-  return (
-    <div className="rounded-md border border-border-primary bg-bg-secondary px-3.5 py-3 min-w-0">
-      <div className="font-mono text-[11px] uppercase tracking-[0.1em] text-text-muted">{label}</div>
-      <div className={clsx('font-semibold text-2xl mt-2 tabular-nums', valColor)}>{value}</div>
-      {sub && <div className="text-xs text-text-muted mt-1 tabular-nums truncate">{sub}</div>}
-    </div>
-  );
-}
+// Activity KPIs use StatCard with `compact`. 'info'/'accent' map to 'default'
+// (text-accent) and 'warn' maps to 'warning' to fit StatCard's accent set.
+type KpiTone = 'default' | 'success' | 'info' | 'warn' | 'error' | 'accent';
+const TONE_TO_ACCENT: Record<KpiTone, 'default' | 'neutral' | 'success' | 'warning' | 'error'> = {
+  default: 'neutral',
+  success: 'success',
+  info: 'default',
+  warn: 'warning',
+  error: 'error',
+  accent: 'default',
+};
 
 export function ResearchActivityView({ session, sessionId, onNavigateToThread }: Props) {
   const { data: findings = [] } = useResearchFindings(sessionId);
@@ -128,49 +115,55 @@ export function ResearchActivityView({ session, sessionId, onNavigateToThread }:
   return (
     <div className="pb-12">
       {/* KPI strip */}
-      <div className="grid gap-2.5 mb-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
-        <Kpi
+      <div className="grid gap-4 mb-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+        <StatCard
           label="Findings"
           value={kpis.findings}
-          tone="success"
-          sub={isRunning ? 'live' : undefined}
+          accent={TONE_TO_ACCENT.success}
+          compact
+          detail={isRunning ? 'live' : undefined}
         />
-        <Kpi
+        <StatCard
           label="Steps"
           value={kpis.steps}
-          tone="info"
-          sub={`${kpis.activeThreadCount} active · ${kpis.threadCount} threads`}
+          accent={TONE_TO_ACCENT.info}
+          compact
+          detail={`${kpis.activeThreadCount} active · ${kpis.threadCount} threads`}
         />
-        <Kpi
+        <StatCard
           label="Source failure"
           value={`${kpis.sourceFailurePct.toFixed(1)}%`}
-          tone={kpis.sourceFailurePct > 25 ? 'error' : kpis.sourceFailurePct > 10 ? 'warn' : 'default'}
-          sub={kpis.sourceTotal > 0 ? `${kpis.sourceFailedCount} of ${kpis.sourceTotal} attempts` : 'no attempts yet'}
+          accent={TONE_TO_ACCENT[kpis.sourceFailurePct > 25 ? 'error' : kpis.sourceFailurePct > 10 ? 'warn' : 'default']}
+          compact
+          detail={kpis.sourceTotal > 0 ? `${kpis.sourceFailedCount} of ${kpis.sourceTotal} attempts` : 'no attempts yet'}
         />
-        <Kpi
+        <StatCard
           label="Errors"
           value={kpis.errorSteps}
-          tone={kpis.errorSteps > 0 ? 'error' : 'default'}
-          sub={kpis.steps > 0 ? `${kpis.errorPct.toFixed(1)}% of steps` : '—'}
+          accent={TONE_TO_ACCENT[kpis.errorSteps > 0 ? 'error' : 'default']}
+          compact
+          detail={kpis.steps > 0 ? `${kpis.errorPct.toFixed(1)}% of steps` : '—'}
         />
-        <Kpi
+        <StatCard
           label="Cost"
           value={fmtUsd(kpis.cost)}
-          tone="accent"
-          sub={kpis.tokens > 0 ? `${fmtMin(kpis.durationMs)} · ${(kpis.tokens / 1000).toFixed(0)}k tokens` : undefined}
+          accent={TONE_TO_ACCENT.accent}
+          compact
+          detail={kpis.tokens > 0 ? `${fmtMin(kpis.durationMs)} · ${(kpis.tokens / 1000).toFixed(0)}k tokens` : undefined}
         />
-        <Kpi
+        <StatCard
           label="Stuck"
           value={kpis.stuckCount}
-          tone={kpis.stuckCount > 0 ? 'warn' : 'default'}
-          sub={kpis.stuckCount > 0 ? '≥ 5m in same state' : 'no stuck threads'}
+          accent={TONE_TO_ACCENT[kpis.stuckCount > 0 ? 'warn' : 'default']}
+          compact
+          detail={kpis.stuckCount > 0 ? '≥ 5m in same state' : 'no stuck threads'}
         />
       </div>
 
       {/* Two-column dashboard */}
-      <div className="grid gap-3.5 lg:grid-cols-[1.4fr_1fr]">
+      <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         {/* LEFT column */}
-        <div className="flex flex-col gap-3.5 min-w-0">
+        <div className="flex flex-col gap-4 min-w-0">
           {/* Latest verdict — flagged or pass */}
           {latestPostMortem ? (
             <div>
@@ -185,9 +178,9 @@ export function ResearchActivityView({ session, sessionId, onNavigateToThread }:
               {reviewError && <p className="text-sm text-error mt-2">{reviewError}</p>}
             </div>
           ) : (
-            <div className="rounded-md border border-border-primary bg-bg-secondary p-4">
-              <div className="flex items-center justify-between mb-1">
-                <h4 className="text-sm font-semibold text-text-primary">Post-mortem</h4>
+            <div className="rounded-lg border border-border-primary bg-bg-secondary p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-heading text-lg font-medium text-text-secondary">Post-mortem</h3>
                 <Button
                   size="sm"
                   loading={runPostMortem.isPending}
@@ -202,20 +195,20 @@ export function ResearchActivityView({ session, sessionId, onNavigateToThread }:
           )}
 
           {/* Iteration checks */}
-          <div className="rounded-md border border-border-primary bg-bg-secondary">
-            <div className="flex items-baseline gap-3 px-3.5 py-2.5 border-b border-border-primary">
-              <h4 className="text-sm font-semibold text-text-primary">Iteration checks</h4>
+          <div className="rounded-lg border border-border-primary bg-bg-secondary">
+            <div className="flex items-baseline gap-3 px-4 py-3 border-b border-border-primary">
+              <h3 className="font-heading text-lg font-medium text-text-secondary">Iteration checks</h3>
               {iterationChecks.length > 0 && (
                 <span className="text-xs text-text-muted">{iterationChecks.length} check{iterationChecks.length === 1 ? '' : 's'}</span>
               )}
             </div>
             {iterationChecks.length === 0 && (
-              <div className="p-3.5 text-sm text-text-muted">
+              <div className="p-4 text-sm text-text-muted">
                 Iteration checks fire every 5 iterations. They spot-check drift and can auto-prune off-topic threads.
               </div>
             )}
             {iterationChecks.length > 0 && (
-              <div className="p-3.5 flex flex-col gap-2">
+              <div className="p-4 flex flex-col gap-2">
                 {iterationChecks.slice(0, 3).map(c => (
                   <IterationCheckCard key={c.id} record={c} query={session} />
                 ))}
@@ -241,7 +234,7 @@ export function ResearchActivityView({ session, sessionId, onNavigateToThread }:
 
         {/* RIGHT column: sticky event log */}
         <div className="min-w-0">
-          <div className="lg:sticky lg:top-2 rounded-md border border-border-primary overflow-hidden flex flex-col" style={{ height: 'min(86vh, 1080px)' }}>
+          <div className="lg:sticky lg:top-2 rounded-lg border border-border-primary overflow-hidden flex flex-col" style={{ height: 'min(86vh, 1080px)' }}>
             <ResearchEventsList
               sessionId={sessionId}
               threads={threads}

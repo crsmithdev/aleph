@@ -144,7 +144,7 @@ function ErrorDisplay({ error }: { error: string }) {
       >
         {copied ? '✓ Copied' : 'Copy'}
       </button>
-      <pre className="text-red-300 bg-red-900/20 rounded p-2 pr-16 font-mono text-sm whitespace-pre-wrap break-all overflow-auto max-h-48 leading-relaxed">
+      <pre className="text-error bg-error/15 border border-error/30 rounded p-2 pr-16 font-mono text-sm whitespace-pre-wrap break-all overflow-auto max-h-48 leading-relaxed">
         {formatted}
       </pre>
     </div>
@@ -312,22 +312,25 @@ function WorkerCountControl({
   addPending: boolean;
   removePending: boolean;
 }) {
+  // Sized to match <Button size="sm"> (px-2.5 py-1 text-xs) so the stepper
+  // sits flush with the Pause/Resume button next to it in the page header.
+  const stepBtn = 'px-2.5 py-1 text-xs font-mono text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors disabled:opacity-30 disabled:cursor-not-allowed';
   return (
-    <div className="flex items-center gap-1.5 border border-border-primary rounded-lg bg-bg-secondary">
+    <div className="inline-flex items-center border border-border-primary rounded-sm bg-bg-secondary overflow-hidden">
       <button
         onClick={onRemove}
         disabled={removePending || count === 0}
-        className="px-2.5 py-1.5 text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded-l-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-lg leading-none font-mono"
+        className={stepBtn}
       >
         −
       </button>
-      <span className="px-2 py-1.5 text-sm font-mono text-text-primary tabular-nums min-w-[2.5rem] text-center">
+      <span className="px-2 py-1 text-xs font-mono text-text-primary tabular-nums min-w-[2rem] text-center border-x border-border-primary">
         {count}
       </span>
       <button
         onClick={onAdd}
         disabled={addPending}
-        className="px-2.5 py-1.5 text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded-r-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-lg leading-none font-mono"
+        className={stepBtn}
       >
         +
       </button>
@@ -682,7 +685,7 @@ function ActivityRail({
     <aside className="flex flex-col gap-4 text-sm">
       {recentConcepts.length > 0 && (
         <div>
-          <p className="text-sm text-text-muted uppercase tracking-wide mb-2">Recent concepts</p>
+          <h3 className="font-heading text-lg font-medium text-text-secondary mb-2">Recent concepts</h3>
           <div className="flex flex-wrap gap-1.5">
             {recentConcepts.slice(0, 12).map((c, i) => (
               <Link
@@ -699,10 +702,10 @@ function ActivityRail({
       )}
 
       <div>
-        <p className="text-sm text-text-muted uppercase tracking-wide mb-2">
+        <h3 className="font-heading text-lg font-medium text-text-secondary mb-2 flex items-baseline gap-2">
           Activity
-          {events.length > 0 && <span className="normal-case ml-2 text-text-muted">live</span>}
-        </p>
+          {events.length > 0 && <span className="text-xs font-sans font-normal text-text-muted">live</span>}
+        </h3>
         <div className="bg-bg-secondary border border-border-primary rounded-lg overflow-hidden">
           {events.length === 0 ? (
             <p className="p-3 text-text-muted">Waiting for activity…</p>
@@ -894,7 +897,7 @@ export function ResearchWorkersPage() {
       {/* Worker cards */}
       {workers.length > 0 && (
         <div>
-          <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Workers</p>
+          <h3 className="font-heading text-lg font-medium text-text-secondary mb-3">Workers</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {workers.map((w) => (
               <WorkerCard
@@ -912,11 +915,11 @@ export function ResearchWorkersPage() {
 
       {/* In-flight jobs — running + queued */}
       <div>
-        <p className="text-sm text-text-muted uppercase tracking-wide mb-3">
+        <h3 className="font-heading text-lg font-medium text-text-secondary mb-3 flex items-baseline gap-2">
           In Flight
-          {runningJobs.length > 0 && <span className="normal-case ml-2 text-success">{runningJobs.length} running</span>}
-          {pendingJobs.length > 0 && <span className="normal-case ml-2 text-warning">{pendingJobs.length} queued</span>}
-        </p>
+          {runningJobs.length > 0 && <span className="text-xs font-sans font-normal text-success">{runningJobs.length} running</span>}
+          {pendingJobs.length > 0 && <span className="text-xs font-sans font-normal text-warning">{pendingJobs.length} queued</span>}
+        </h3>
         <div className="bg-bg-secondary border border-border-primary rounded-lg overflow-hidden">
           <InFlightJobsTable
             jobs={inFlightJobs}
@@ -930,14 +933,14 @@ export function ResearchWorkersPage() {
       {/* Performance charts */}
       {stats && stats.byDay.length > 0 && (
         <div>
-          <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Performance</p>
+          <h3 className="font-heading text-lg font-medium text-text-secondary mb-3">Performance</h3>
           <PerformanceCharts byDay={stats.byDay} />
         </div>
       )}
 
       {/* Job history */}
       <div>
-        <p className="text-sm text-text-muted uppercase tracking-wide mb-3">Job History</p>
+        <h3 className="font-heading text-lg font-medium text-text-secondary mb-3">Job History</h3>
         <div className="bg-bg-secondary border border-border-primary rounded-lg overflow-hidden">
           <JobHistoryTable
             jobs={historyJobs}

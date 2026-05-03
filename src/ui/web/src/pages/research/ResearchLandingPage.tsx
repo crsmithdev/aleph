@@ -6,6 +6,7 @@ import {
   type ResearchQuery,
 } from '../../api/research-hooks';
 import { ComposeBox } from '../../components/research/ComposeBox';
+import { StatCard } from '../../components/data/StatCard';
 import { fmtCurrency, fmtNumber, shortRelativeTime } from '../../utils/format';
 
 const TERMINAL_STATUSES = new Set<ResearchQuery['status']>([
@@ -47,32 +48,35 @@ export function ResearchLandingPage() {
       <ComposeBox />
 
       {/* KPI strip — system-level, 30 days */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <KpiCard label="Runs · 30 days" value={kpiRuns} accent="accent" />
-        <KpiCard
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="Runs · 30 days" value={kpiRuns} accent="default" compact />
+        <StatCard
           label="Findings · 30 days"
           value={kpiFindings}
           accent="success"
-          sub={
+          compact
+          detail={
             stats && stats.totalSessions > 0
               ? `avg ${(stats.totalFindings / stats.totalSessions).toFixed(1)} / run`
               : undefined
           }
         />
-        <KpiCard
+        <StatCard
           label="Spend · 30 days"
           value={kpiSpend}
-          sub={
+          accent="neutral"
+          compact
+          detail={
             stats && stats.totalSessions > 0
               ? `${fmtCurrency(stats.totalCost / stats.totalSessions)} / run`
               : undefined
           }
         />
-        <KpiCard label="Active right now" value={kpiActive} accent="info" />
+        <StatCard label="Active right now" value={kpiActive} accent="default" compact />
       </div>
 
       {/* Two columns: Running now + Just finished */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Panel
           title="Running now"
           subtitle={running.length === 0 ? 'nothing running' : 'live · auto-refresh'}
@@ -123,39 +127,6 @@ export function ResearchLandingPage() {
   );
 }
 
-function KpiCard({
-  label,
-  value,
-  accent,
-  sub,
-}: {
-  label: string;
-  value: string;
-  accent?: 'accent' | 'success' | 'info' | 'warning' | 'error';
-  sub?: string;
-}) {
-  const valColor =
-    accent === 'accent' ? 'text-accent'
-    : accent === 'success' ? 'text-success'
-    : accent === 'info' ? 'text-info'
-    : accent === 'warning' ? 'text-warning'
-    : accent === 'error' ? 'text-error'
-    : 'text-text-primary';
-  return (
-    <div className="bg-bg-secondary border border-border-primary rounded-lg p-4">
-      <div className="font-mono text-[11px] uppercase tracking-wider text-text-muted">
-        {label}
-      </div>
-      <div className={clsx('font-semibold text-3xl mt-2.5 tabular-nums leading-none', valColor)}>
-        {value}
-      </div>
-      {sub && (
-        <div className="text-xs text-text-muted mt-1.5 tabular-nums">{sub}</div>
-      )}
-    </div>
-  );
-}
-
 function Panel({
   title,
   subtitle,
@@ -168,9 +139,9 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-bg-secondary border border-border-primary rounded-lg">
-      <div className="flex items-baseline gap-2.5 px-4 pt-3.5 pb-3 border-b border-border-primary">
-        <h4 className="font-sans font-semibold text-sm text-text-primary">{title}</h4>
+    <div className="rounded-lg border border-border-primary bg-bg-secondary">
+      <div className="flex items-baseline gap-3 px-4 pt-3 pb-3 border-b border-border-primary">
+        <h3 className="font-heading text-lg font-medium text-text-secondary">{title}</h3>
         {subtitle && <span className="text-xs text-text-muted">{subtitle}</span>}
         {right && <span className="ml-auto">{right}</span>}
       </div>

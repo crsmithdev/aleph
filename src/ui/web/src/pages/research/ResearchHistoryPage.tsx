@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { clsx } from 'clsx';
 import {
   useResearchQueries,
@@ -11,6 +11,8 @@ import {
 import { PageHeader } from '../../components/layout/PageHeader';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
+import { Button } from '../../components/ui/Button';
+import { DataTable, type Column } from '../../components/data/DataTable';
 import { fmtCurrency, fmtDuration, shortRelativeTime } from '../../utils/format';
 import {
   HistoryFilterRail,
@@ -21,6 +23,12 @@ import {
   type CostBand,
 } from '../../components/research/HistoryFilterRail';
 import { HistorySummaryStrip } from '../../components/research/HistorySummaryStrip';
+
+// Segmented-control tokens — match ObsControlBar's SEG_BTN/SEG_ACTIVE so the
+// History toolbar reads as the same control family as the observability pages.
+const SEG_BTN = 'px-2 py-0.5 text-sm rounded transition-colors whitespace-nowrap';
+const SEG_ACTIVE = 'bg-bg-secondary text-text-primary shadow-sm';
+const SEG_INACTIVE = 'text-text-muted hover:text-text-primary';
 
 type Range = '24h' | '7d' | '30d' | '90d' | 'all';
 const RANGE_OPTIONS: Range[] = ['24h', '7d', '30d', '90d', 'all'];
@@ -60,6 +68,7 @@ const STATUS_BADGE: Record<string, string> = {
 };
 
 export function ResearchHistoryPage() {
+  const navigate = useNavigate();
   const [range, setRange] = useState<Range>('30d');
   const [filters, setFilters] = useState<HistoryFilters>(initialFilters);
   const [sortKey, setSortKey] = useState<SortKey>('started');
@@ -67,6 +76,8 @@ export function ResearchHistoryPage() {
 
   const { data: queries = [], isLoading, isError } = useResearchQueries();
   const { data: stats } = useResearchStats(range, 'day');
+
+  const handleRowClick = (q: ResearchQuery) => navigate(`/research/${q.id}`);
 
   const visibleQueries = useMemo(
     () => queries.filter(q => q.status !== 'archived'),
@@ -155,9 +166,9 @@ export function ResearchHistoryPage() {
                     : 'No queries match the current filters.'}
                 </div>
               ) : groupByShape ? (
-                <GroupedTable rows={sorted} />
+                <GroupedTable rows={sorted} onRowClick={handleRowClick} />
               ) : (
-                <HistoryTable rows={sorted} />
+                <HistoryTable rows={sorted} onRowClick={handleRowClick} />
               )}
             </div>
           </div>
@@ -175,18 +186,13 @@ function RangeSelector({ value, onChange }: { value: Range; onChange: (r: Range)
   return (
     <div className="flex items-center gap-2">
       <span className="text-xs text-text-muted">range</span>
-      <div className="inline-flex gap-0 bg-bg-secondary border border-border-primary rounded-md p-0.5">
+      <div className="inline-flex items-center gap-0.5 rounded border border-border-primary bg-bg-tertiary p-0.5">
         {RANGE_OPTIONS.map(r => (
           <button
             key={r}
             type="button"
             onClick={() => onChange(r)}
-            className={clsx(
-              'px-3 py-1 text-xs rounded transition-colors',
-              value === r
-                ? 'bg-bg-tertiary text-text-primary'
-                : 'text-text-muted hover:text-text-secondary',
-            )}
+            className={clsx(SEG_BTN, value === r ? SEG_ACTIVE : SEG_INACTIVE)}
           >
             {r}
           </button>
@@ -215,51 +221,32 @@ function Toolbar({ resultCount, sortKey, onSortKey, groupByShape, onGroupByShape
       <span className="text-xs text-text-muted">{resultCount} result{resultCount === 1 ? '' : 's'}</span>
       <span className="text-text-muted">·</span>
       <span className="text-xs text-text-muted">sorted by</span>
-      <div className="inline-flex gap-0 bg-bg-secondary border border-border-primary rounded-md p-0.5">
+      <div className="inline-flex items-center gap-0.5 rounded border border-border-primary bg-bg-tertiary p-0.5">
         {SORT_OPTIONS.map(o => (
           <button
             key={o.value}
             type="button"
             onClick={() => onSortKey(o.value)}
-            className={clsx(
-              'px-2.5 py-1 text-xs rounded transition-colors',
-              sortKey === o.value
-                ? 'bg-bg-tertiary text-text-primary'
-                : 'text-text-muted hover:text-text-secondary',
-            )}
+            className={clsx(SEG_BTN, sortKey === o.value ? SEG_ACTIVE : SEG_INACTIVE)}
           >
             {o.label}
           </button>
         ))}
       </div>
-      <div className="ml-auto flex gap-2">
-        <button
-          type="button"
+      <div className="ml-auto flex items-center gap-2">
+        <Button
+          size="sm"
+          variant={groupByShape ? 'primary' : 'secondary'}
           onClick={onGroupByShape}
-          className={clsx(
-            'inline-flex items-center px-2.5 py-1 rounded text-xs font-mono border transition-colors',
-            groupByShape
-              ? 'bg-accent/15 text-accent border-accent/40'
-              : 'bg-bg-tertiary text-text-secondary border-border-primary hover:text-text-primary',
-          )}
         >
           Group by shape
-        </button>
-        <button
-          type="button"
-          disabled
-          title="Coming soon"
-          className="inline-flex items-center px-2.5 py-1 rounded text-xs font-mono border bg-bg-tertiary text-text-muted border-border-primary opacity-50 cursor-not-allowed"
-        >
+        </Button>
+        <Button size="sm" variant="secondary" disabled title="Coming soon">
           Compare 2 →
-        </button>
-        <button
-          type="button"
-          onClick={onExportCsv}
-          className="inline-flex items-center px-2.5 py-1 rounded text-xs font-mono border bg-bg-tertiary text-text-secondary border-border-primary hover:text-text-primary transition-colors"
-        >
+        </Button>
+        <Button size="sm" variant="secondary" onClick={onExportCsv}>
           Export CSV
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -269,33 +256,107 @@ function Toolbar({ resultCount, sortKey, onSortKey, groupByShape, onGroupByShape
 // Table
 // ---------------------------------------------------------------------------
 
-function HistoryTable({ rows }: { rows: ResearchQuery[] }) {
+function buildHistoryColumns(): Column<ResearchQuery>[] {
+  return [
+    {
+      key: 'title',
+      label: 'Query',
+      width: '34%',
+      render: (q) => (
+        <div className="min-w-0">
+          <div className="text-text-primary font-medium truncate">{q.title || q.prompt_short || q.prompt}</div>
+          <div className="text-text-muted text-xs truncate">{q.prompt_short || q.prompt}</div>
+        </div>
+      ),
+    },
+    {
+      key: 'shape',
+      label: 'Shape',
+      shrink: true,
+      render: (q) => <ShapeChips shapes={q.question_shape?.shapes ?? []} />,
+    },
+    {
+      key: 'started',
+      label: 'Started',
+      shrink: true,
+      render: (q) => <span className="text-text-muted text-xs font-mono whitespace-nowrap">{shortRelativeTime(q.created_at)}</span>,
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      shrink: true,
+      render: (q) => (
+        <span className={clsx(
+          'inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium',
+          STATUS_BADGE[q.status] ?? 'bg-bg-tertiary text-text-secondary',
+        )}>
+          <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', STATUS_DOT[q.status] ?? 'bg-text-muted')} />
+          {q.status}
+        </span>
+      ),
+    },
+    {
+      key: 'findings',
+      label: 'Findings',
+      align: 'right',
+      shrink: true,
+      render: (q) => {
+        const findings = q.stats?.findings ?? 0;
+        return <span className={clsx('font-mono tabular-nums', findings > 0 ? 'text-success' : 'text-text-muted')}>{findings}</span>;
+      },
+    },
+    {
+      key: 'cost',
+      label: 'Cost',
+      align: 'right',
+      shrink: true,
+      render: (q) => <span className="font-mono tabular-nums text-text-secondary">{fmtCurrency(q.stats?.cost ?? 0)}</span>,
+    },
+    {
+      key: 'duration',
+      label: 'Duration',
+      align: 'right',
+      shrink: true,
+      render: (q) => {
+        const ms = computeDurationMs(q);
+        return ms != null
+          ? <span className="font-mono tabular-nums text-text-secondary">{fmtDuration(ms)}</span>
+          : <span className="text-text-muted">—</span>;
+      },
+    },
+    {
+      key: 'verdict',
+      label: 'Verdict',
+      shrink: true,
+      render: (q) => <VerdictChip verdict={deriveVerdict(q)} />,
+    },
+    {
+      key: 'activity',
+      label: 'Activity',
+      shrink: true,
+      render: (q) => {
+        const sparkValues = q.stats?.findings_by_day ?? [];
+        return sparkValues.some(v => v > 0)
+          ? <Sparkline values={sparkValues} active={q.status === 'active'} />
+          : <span className="text-text-muted text-xs">—</span>;
+      },
+    },
+  ];
+}
+
+function HistoryTable({ rows, onRowClick }: { rows: ResearchQuery[]; onRowClick: (q: ResearchQuery) => void }) {
   return (
-    <table className="w-full text-sm border-collapse">
-      <thead>
-        <tr>
-          {(['Query', 'Shape', 'Started', 'Status', 'Findings', 'Cost', 'Duration', 'Verdict', 'Activity'] as const).map((h, i) => (
-            <th
-              key={h}
-              className={clsx(
-                'px-3 py-2.5 font-mono text-xs uppercase tracking-wider text-text-muted bg-bg-secondary border-b border-border-primary',
-                ['Findings', 'Cost', 'Duration'].includes(h) ? 'text-right' : 'text-left',
-                i === 0 && 'pl-4',
-              )}
-            >
-              {h}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map(q => <Row key={q.id} q={q} />)}
-      </tbody>
-    </table>
+    <DataTable<ResearchQuery>
+      data={rows}
+      columns={buildHistoryColumns()}
+      keyField="id"
+      onRowClick={onRowClick}
+      emptyMessage="No queries match the current filters."
+    />
   );
 }
 
-function GroupedTable({ rows }: { rows: ResearchQuery[] }) {
+function GroupedTable({ rows, onRowClick }: { rows: ResearchQuery[]; onRowClick: (q: ResearchQuery) => void }) {
   // A query can match multiple shapes; render under each. Queries with no
   // detected shapes go under a synthetic "Unclassified" group so they stay
   // visible.
@@ -317,75 +378,26 @@ function GroupedTable({ rows }: { rows: ResearchQuery[] }) {
   }
 
   const ordered = Array.from(groups.entries()).sort((a, b) => b[1].length - a[1].length);
+  const columns = buildHistoryColumns();
 
   return (
     <div>
       {ordered.map(([shape, items]) => (
         <div key={shape}>
-          <div className="px-4 py-2 bg-bg-tertiary border-b border-border-primary text-xs font-mono uppercase tracking-wider text-text-secondary flex items-center gap-2">
+          <div className="px-4 py-2 bg-bg-tertiary border-y border-border-primary text-xs font-sans uppercase tracking-widest text-text-secondary flex items-center gap-2">
             {shape}
             <span className="text-text-muted">({items.length})</span>
           </div>
-          <table className="w-full text-sm border-collapse">
-            <tbody>
-              {items.map(q => <Row key={`${shape}-${q.id}`} q={q} />)}
-            </tbody>
-          </table>
+          <DataTable<ResearchQuery>
+            data={items}
+            columns={columns}
+            keyField="id"
+            onRowClick={onRowClick}
+            rowKeyFn={(q) => `${shape}-${q.id}`}
+          />
         </div>
       ))}
     </div>
-  );
-}
-
-function Row({ q }: { q: ResearchQuery }) {
-  const findings = q.stats?.findings ?? 0;
-  const cost = q.stats?.cost ?? 0;
-  const durationMs = computeDurationMs(q);
-  const verdict = deriveVerdict(q);
-  const startedDisplay = shortRelativeTime(q.created_at);
-  const sparkValues = q.stats?.findings_by_day ?? [];
-
-  return (
-    <tr className="hover:bg-bg-tertiary transition-colors border-b border-border-primary">
-      <td className="px-4 py-2.5 align-top max-w-[1px] w-[34%]">
-        <Link to={`/research/${q.id}`} className="block min-w-0">
-          <div className="text-text-primary font-medium truncate">{q.title || q.prompt_short || q.prompt}</div>
-          <div className="text-text-muted text-xs truncate">{q.prompt_short || q.prompt}</div>
-        </Link>
-      </td>
-      <td className="px-3 py-2.5 align-top">
-        <ShapeChips shapes={q.question_shape?.shapes ?? []} />
-      </td>
-      <td className="px-3 py-2.5 align-top">
-        <span className="text-text-muted text-xs font-mono whitespace-nowrap">{startedDisplay}</span>
-      </td>
-      <td className="px-3 py-2.5 align-top">
-        <span className={clsx(
-          'inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium',
-          STATUS_BADGE[q.status] ?? 'bg-bg-tertiary text-text-secondary',
-        )}>
-          <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', STATUS_DOT[q.status] ?? 'bg-text-muted')} />
-          {q.status}
-        </span>
-      </td>
-      <td className="px-3 py-2.5 align-top text-right tabular-nums">
-        <span className={findings > 0 ? 'text-success' : 'text-text-muted'}>{findings}</span>
-      </td>
-      <td className="px-3 py-2.5 align-top text-right tabular-nums text-text-secondary">{fmtCurrency(cost)}</td>
-      <td className="px-3 py-2.5 align-top text-right tabular-nums text-text-secondary">
-        {durationMs != null ? fmtDuration(durationMs) : <span className="text-text-muted">—</span>}
-      </td>
-      <td className="px-3 py-2.5 align-top">
-        <VerdictChip verdict={verdict} />
-      </td>
-      <td className="px-3 py-2.5 align-top">
-        {sparkValues.some(v => v > 0) ? (
-          <Sparkline values={sparkValues} active={q.status === 'active'} />
-        ) : (
-          <span className="text-text-muted text-xs">—</span>
-        )}
-      </td>
-    </tr>
   );
 }
 
