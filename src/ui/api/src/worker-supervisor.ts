@@ -1,6 +1,7 @@
 import { spawn, spawnSync, type ChildProcess } from 'child_process';
 import { resolve } from 'path';
 import { readFileSync } from 'fs';
+import { log } from './logger.js';
 
 const DEFAULT_WORKER_SCRIPT = resolve(import.meta.dirname, '../../../research/src/worker.ts');
 const SIGTERM_GRACE_MS = 30_000;
@@ -73,7 +74,10 @@ export class WorkerSupervisor {
           theirDb = m ? m.slice('CONSTRUCT_DB_PATH='.length) : '';
         } catch { /* proc gone or permission denied */ }
         if (theirDb === ourDb) {
-          try { process.kill(pid, 'SIGKILL'); console.log(`[supervisor] killed orphaned worker pid=${pid} (db=${ourDb || 'default'})`); } catch { /* already gone */ }
+          try {
+            process.kill(pid, 'SIGKILL');
+            log({ source: 'supervisor', msg: `killed orphaned worker (pid=${pid}, db=${ourDb || 'default'})`, pid });
+          } catch { /* already gone */ }
         }
       }
     } catch { /* pgrep not available */ }
@@ -128,8 +132,18 @@ export class WorkerSupervisor {
     w.pid = proc.pid ?? null;
     w.status = 'running';
 
-    proc.stdout?.on('data', (d: Buffer) => process.stdout.write(`[worker-${w.id}] ${d}`));
-    proc.stderr?.on('data', (d: Buffer) => process.stderr.write(`[worker-${w.id}] ${d}`));
+    const forwardLines = (level: 'info' | 'error') => (d: Buffer) => {
+      for (const raw of d.toString().split('\n')) {
+        const line = raw.replace(/\r$/, '').trim();
+        if (!line) continue;
+        // Worker prefixes its own messages with "[worker]" / "[engine]" / etc — strip the
+        // bracketed tag so we don't render `[worker @ 0] [worker] ...` double-tagged.
+        const stripped = line.replace(/^\[[^\]]+\]\s*/, '');
+        log({ source: 'worker', level, worker_id: w.id, msg: stripped });
+      }
+    };
+    proc.stdout?.on('data', forwardLines('info'));
+    proc.stderr?.on('data', forwardLines('error'));
 
     proc.on('exit', (code, signal) => {
       w.status = 'stopped';
@@ -139,23 +153,23 @@ export class WorkerSupervisor {
       if (this.stopping) return;
 
       const uptime = Date.now() - (w.startedAt ?? Date.now());
-      console.log(`[supervisor] worker ${w.id} exited (code=${code}, signal=${signal}, uptime=${Math.round(uptime / 1000)}s)`);
+      log({ source: 'supervisor', worker_id: w.id, msg: `exited (code=${code}, signal=${signal}, uptime=${Math.round(uptime / 1000)}s)` });
 
       // Don't restart on clean exit or our own SIGTERM
       if (code === 0 || signal === 'SIGTERM') return;
 
       w.restarts++;
       if (w.restarts > this.maxRestarts_) {
-        console.error(`[supervisor] worker ${w.id} exceeded ${this.maxRestarts_} restarts — giving up`);
+        log({ source: 'supervisor', level: 'error', worker_id: w.id, msg: `exceeded ${this.maxRestarts_} restarts — giving up` });
         return;
       }
 
       const backoff = Math.min(this.baseBackoffMs_ * 2 ** (w.restarts - 1), MAX_BACKOFF_MS);
-      console.log(`[supervisor] worker ${w.id} restarting in ${backoff}ms (restart #${w.restarts})`);
+      log({ source: 'supervisor', worker_id: w.id, msg: `restarting in ${backoff}ms (restart #${w.restarts})` });
       this.spawn(w, backoff);
     });
 
-    console.log(`[supervisor] worker ${w.id} started (pid=${proc.pid})`);
+    log({ source: 'supervisor', worker_id: w.id, msg: `started (pid=${proc.pid})`, pid: proc.pid ?? undefined });
   }
 
   async stop() {
@@ -164,9 +178,9 @@ export class WorkerSupervisor {
     for (const w of this.workers) {
       if (w.backoffTimer) clearTimeout(w.backoffTimer);
     }
-    console.log('[supervisor] stopping all workers...');
+    log({ source: 'supervisor', msg: 'stopping all workers...' });
     await Promise.all(this.workers.map(w => this.stopWorker(w)));
-    console.log('[supervisor] all workers stopped');
+    log({ source: 'supervisor', msg: 'all workers stopped' });
   }
 
   private stopWorker(w: ManagedWorker): Promise<void> {
@@ -177,7 +191,7 @@ export class WorkerSupervisor {
 
       const forceKill = setTimeout(() => {
         if (w.process && !w.process.killed) {
-          console.warn(`[supervisor] worker ${w.id} did not stop after ${this.gracePeriodMs / 1000}s — force killing`);
+          log({ source: 'supervisor', level: 'warn', worker_id: w.id, msg: `did not stop after ${this.gracePeriodMs / 1000}s — force killing` });
           w.process.kill('SIGKILL');
         }
       }, this.gracePeriodMs);

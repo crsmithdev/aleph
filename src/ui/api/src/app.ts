@@ -21,13 +21,12 @@ import { publicRoutes } from './routes/public.js';
 import { EventBus, HistoryService, applyDDL } from '@construct/goals';
 import { applyResearchDDL } from '@construct/research';
 import { webhooks } from './db/schema.js';
-import { existsSync, readFileSync, statSync, lstatSync, readlinkSync } from 'fs';
+import { existsSync } from 'fs';
 import { resolve } from 'path';
-import { execSync } from 'child_process';
-import { claudePaths, dataPaths, getMemoryDbPath } from '@construct/data';
-import { createLogStream } from './logger.js';
+import { createLogStream, log } from './logger.js';
 import { WorkerSupervisor } from './worker-supervisor.js';
 import { startResearchLogger } from './research-logger.js';
+import { getSystemInfo } from './system-info.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -68,35 +67,6 @@ function applyWebhookDDL(sqlite: SqliteDb) {
   `);
 }
 
-function git(cmd: string, cwd?: string): string {
-  try {
-    return execSync(`git ${cmd}`, { cwd, encoding: 'utf-8', timeout: 5000 }).trim();
-  } catch { return ''; }
-}
-
-function liveGitInfo(repoDir: string): Record<string, string> {
-  const short = git('rev-parse --short HEAD', repoDir);
-  if (!short) return {};
-
-  // One call for hash, refs/branch info, subject, date
-  const logLine = git('log -1 --format=%H%n%D%n%s%n%ci', repoDir);
-  const [revision, refs, last_commit, last_commit_date] = logLine.split('\n');
-
-  // Extract branch from refs string (e.g. "HEAD -> main, origin/main")
-  const branchMatch = refs?.match(/HEAD -> ([^,]+)/);
-  const branch = branchMatch ? branchMatch[1] : git('rev-parse --abbrev-ref HEAD', repoDir);
-
-  const dirty = String(git('status --porcelain', repoDir).length > 0);
-  const commit_count = git('rev-list --count HEAD', repoDir);
-
-  const latestTag = git('describe --tags --abbrev=0 HEAD', repoDir);
-  const commits_since_tag = latestTag
-    ? git(`rev-list --count ${latestTag}..HEAD`, repoDir)
-    : 'n/a';
-
-  return { revision, short, dirty, branch, commit_count, commits_since_tag, last_commit, last_commit_date };
-}
-
 export async function createApp(opts?: { dbUrl?: string; workerCount?: number; skipStatic?: boolean }) {
   const customLogging = opts?.dbUrl !== ':memory:';
   const app = Fastify({
@@ -106,10 +76,15 @@ export async function createApp(opts?: { dbUrl?: string; workerCount?: number; s
 
   if (customLogging) {
     app.addHook('onResponse', (req, reply, done) => {
-      const ms = reply.elapsedTime < 1000
-        ? `${Math.round(reply.elapsedTime)}ms`
-        : `${(reply.elapsedTime / 1000).toFixed(1)}s`;
-      req.log.info(`${req.method} ${req.url} → ${reply.statusCode} (${ms})`);
+      log({
+        source: 'api',
+        level: reply.statusCode >= 500 ? 'error' : reply.statusCode >= 400 ? 'warn' : 'info',
+        msg: `${req.method} ${req.url} → ${reply.statusCode}`,
+        method: req.method,
+        url: req.url,
+        status: reply.statusCode,
+        duration_ms: Math.round(reply.elapsedTime * 100) / 100,
+      });
       done();
     });
   }
@@ -169,80 +144,8 @@ export async function createApp(opts?: { dbUrl?: string; workerCount?: number; s
     await api.register(observabilityRoutes, { prefix: '/observability' });
     await api.register(researchRoutes, { prefix: '/research' });
 
-    function pathWithSymlink(p: string): string {
-      try { const s = lstatSync(p); if (s.isSymbolicLink()) return `${p} → ${readlinkSync(p)}`; } catch { /* ignore */ }
-      return p;
-    }
-
     api.get('/system/info', async function () {
-      // Parse manifest: INI-like file with [section] headers and key = value pairs
-      let manifest: Record<string, Record<string, string>> = {};
-      try {
-        const content = readFileSync(claudePaths.manifest, 'utf-8');
-        let current = '';
-        for (const line of content.split('\n')) {
-          if (line.startsWith('#') || !line.trim()) continue;
-          const sectionMatch = line.match(/^\[(.+)]$/);
-          if (sectionMatch) { current = sectionMatch[1]; manifest[current] = {}; continue; }
-          const kvMatch = line.match(/^(\S+) = (.*)$/);
-          if (kvMatch && current) manifest[current][kvMatch[1]] = kvMatch[2];
-        }
-      } catch { manifest = {}; }
-
-      const hasManifest = Object.keys(manifest).length > 0;
-
-      // Detect repo dir for live git info when no manifest
-      const repoDir = manifest.paths?.repo ?? (() => {
-        const candidate = resolve(import.meta.dirname || '.', '../../../..');
-        return existsSync(resolve(candidate, '.git')) ? candidate : undefined;
-      })();
-
-      const liveGit = !hasManifest && repoDir ? liveGitInfo(repoDir) : {};
-      const g = hasManifest ? manifest.git ?? {} : liveGit;
-
-      const runtimeDbPath = app.sqlite.filename;
-      const dbSize = (() => {
-        try { return statSync(runtimeDbPath).size; } catch { return 0; }
-      })();
-
-      return {
-        git: {
-          revision: g.revision ?? 'unknown',
-          short: g.short ?? 'unknown',
-          dirty: g.dirty === 'true',
-          branch: g.branch ?? 'unknown',
-          commitCount: g.commit_count ?? 'unknown',
-          commitsSinceTag: g.commits_since_tag ?? 'n/a',
-          lastCommit: g.last_commit ?? 'unknown',
-          lastCommitDate: g.last_commit_date ?? 'unknown',
-        },
-        paths: {
-          repo: repoDir ?? 'unknown',
-          claudeRoot: manifest.paths?.claude_root ?? claudePaths.root,
-          dataRoot: manifest.paths?.data_root ?? dataPaths.root,
-          construct: pathWithSymlink(manifest.paths?.construct ?? claudePaths.construct),
-          commands: pathWithSymlink(manifest.paths?.commands ?? claudePaths.commands),
-          skills: pathWithSymlink(manifest.paths?.skills ?? claudePaths.skills),
-          db: runtimeDbPath,
-          memoryDb: (manifest.paths?.memory_db) ?? getMemoryDbPath(),
-          sessions: (manifest.paths?.sessions) ?? dataPaths.sessions,
-          telemetry: claudePaths.projects,
-          signals: dataPaths.signals,
-          ratings: (manifest.paths?.ratings) ?? dataPaths.ratings,
-          backups: (manifest.paths?.backups) ?? dataPaths.backups,
-        },
-        install: {
-          timestamp: manifest.install?.timestamp ?? 'unknown',
-          bunVersion: manifest.install?.bun_version ?? Bun.version,
-          platform: manifest.install?.platform ?? process.platform,
-          arch: manifest.install?.arch ?? process.arch,
-        },
-        runtime: {
-          nodeEnv: process.env.NODE_ENV || 'development',
-          port: config.port,
-          dbSizeBytes: dbSize,
-        },
-      };
+      return getSystemInfo(app.sqlite.filename);
     });
   }, { prefix: '/api' });
 
