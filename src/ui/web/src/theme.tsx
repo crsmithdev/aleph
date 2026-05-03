@@ -32,6 +32,7 @@ function applyTheme(theme: ThemeDef) {
     el.style.setProperty(key, value);
   }
   el.setAttribute('data-theme', theme.mode);
+  el.style.colorScheme = theme.mode;
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
