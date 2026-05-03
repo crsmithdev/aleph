@@ -1,5 +1,5 @@
 import { Icon } from '../../components/ui/Icon';
-import React, { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 import ReactMarkdown from 'react-markdown';
@@ -26,6 +26,7 @@ import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { ConfigForm, patchByPath, getByPath } from './config-schema';
 import { ResearchActivityView } from './ResearchActivityView';
+import { ResearchGraphView } from './ResearchGraphView';
 import { FlagChip } from '../../components/research/FlagChip';
 import { QuestionShapeBar } from '../../components/research/QuestionShapeBar';
 import cytoscape from 'cytoscape';
@@ -41,7 +42,7 @@ void (useRateFinding as unknown);
 // Helpers
 // ---------------------------------------------------------------------------
 
-function orderThreadsDepthFirst(threads: ResearchThread[]): ResearchThread[] {
+export function orderThreadsDepthFirst(threads: ResearchThread[]): ResearchThread[] {
   const byParent = new Map<string | null, ResearchThread[]>();
   for (const t of threads) {
     const key = t.parent_thread_id ?? null;
@@ -58,7 +59,7 @@ function orderThreadsDepthFirst(threads: ResearchThread[]): ResearchThread[] {
 }
 
 /** Returns the seed (depth=0) ancestor id for a thread, or null if it is one. */
-function findSeedAncestor(thread: ResearchThread, all: ResearchThread[]): string | null {
+export function findSeedAncestor(thread: ResearchThread, all: ResearchThread[]): string | null {
   if (thread.depth === 0) return thread.id;
   const byId = new Map(all.map(t => [t.id, t]));
   let cur: ResearchThread = thread;
@@ -656,7 +657,7 @@ function DocumentView({
 // Bibliography rail (right side of Document view)
 // ---------------------------------------------------------------------------
 
-function domainFrom(url: string): string {
+export function domainFrom(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
 }
 
@@ -841,7 +842,7 @@ const liveOriginColor: Record<string, string> = {
 };
 
 
-function LiveView({
+export function LiveView({
   threads, findings, allSteps, events, isRunning, sessionId, sessionFetchText,
   onToggleSessionFetch,
 }: {
@@ -1261,7 +1262,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 const DEFAULT_NODE_COLOR = '#89b4fa';
 
-function MapView({
+export function MapView({
   threads, findingCounts, onNavigateToLive,
 }: {
   threads: ResearchThread[];
@@ -1738,7 +1739,7 @@ const KNOWLEDGE_LOD_TIERS: Array<{ level: 1 | 2 | 3 | 4; label: string; fraction
   { level: 4, label: 'Full',     fraction: null, min: 0 },
 ];
 
-function KnowledgeView({
+export function KnowledgeView({
   sessionId,
   pendingConceptName,
   onConsumePending,
@@ -2461,8 +2462,8 @@ export function ResearchQueryDetailPage() {
   const cancelJob = useCancelJob();
   const deleteQuery = useDeleteResearchQuery();
 
-  type Tab = 'document' | 'knowledge' | 'process' | 'sources' | 'activity' | 'config';
-  const TAB_VALUES: readonly Tab[] = ['document','knowledge','process','sources','activity','config'];
+  type Tab = 'document' | 'graph' | 'sources' | 'activity' | 'config';
+  const TAB_VALUES: readonly Tab[] = ['document','graph','sources','activity','config'];
   // Honour `#tab=telemetry` etc. so cross-page links can deep-link into a
   // specific tab. Listens for hashchange so in-page links that
   // only mutate the hash also take effect without a full remount.
@@ -2484,11 +2485,10 @@ export function ResearchQueryDetailPage() {
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [pendingConceptName, setPendingConceptName] = useState<string | null>(null);
-  const [processView, setProcessView] = useState<'live' | 'map'>('live');
 
   const navigateToConcept = useCallback((name: string) => {
     setPendingConceptName(name);
-    setTab('knowledge');
+    setTab('graph');
   }, []);
 
   const findingCounts = useMemo(() => {
@@ -2509,16 +2509,9 @@ export function ResearchQueryDetailPage() {
   }, [sourcesData]);
 
   // Cross-navigation helpers
-  const navigateToMap = useCallback((threadId: string) => {
+  const navigateToGraph = useCallback((threadId: string) => {
     setSelectedThreadId(threadId);
-    setProcessView('map');
-    setTab('process');
-  }, []);
-
-  const navigateToLive = useCallback((threadId: string) => {
-    setSelectedThreadId(threadId);
-    setProcessView('live');
-    setTab('process');
+    setTab('graph');
   }, []);
 
   const navigateToDocument = useCallback((threadId: string) => {
@@ -2680,8 +2673,7 @@ export function ResearchQueryDetailPage() {
           <div className="flex gap-1 mt-3 -mb-px relative z-10">
             {([
               { key: 'document' as const, label: 'Document', count: undefined },
-              { key: 'knowledge' as const, label: 'Knowledge', count: conceptsCount },
-              { key: 'process' as const, label: 'Process', count: threadsData.length },
+              { key: 'graph' as const, label: 'Graph', count: conceptsCount + threadsData.length },
               { key: 'sources' as const, label: 'Sources', count: sourcesTotal },
               { key: 'activity' as const, label: 'Activity', count: undefined },
               { key: 'config' as const, label: 'Config', count: undefined },
@@ -2716,64 +2708,31 @@ export function ResearchQueryDetailPage() {
               title={session?.title}
             />
           )}
-          {tab === 'process' && (
-            <div className="flex flex-col h-full">
-              <div className="flex items-center gap-1 mb-3 shrink-0">
-                {(['live', 'map'] as const).map(v => (
-                  <button
-                    key={v}
-                    onClick={() => setProcessView(v)}
-                    className={clsx(
-                      'px-3 py-1 rounded text-sm uppercase tracking-[0.06em] transition-colors',
-                      processView === v
-                        ? 'bg-accent/10 text-accent'
-                        : 'text-text-muted hover:text-text-secondary'
-                    )}
-                  >
-                    {v}
-                  </button>
-                ))}
-              </div>
-              <div className="flex-1 min-h-0">
-                {processView === 'live' ? (
-                  <LiveView
-                    threads={threadsData}
-                    findings={findingsData}
-                    allSteps={allSteps}
-                    events={events}
-                    isRunning={isRunning}
-                    sessionId={id!}
-                    sessionFetchText={sessionFetchText}
-                    onToggleSessionFetch={handleToggleSessionFetch}
-                    activity={activity}
-                    jobs={jobs}
-                    selectedThreadId={selectedThreadId}
-                    onSelectThread={setSelectedThreadId}
-                    onNavigateToDocument={navigateToDocument}
-                    onNavigateToMap={navigateToMap}
-                  />
-                ) : (
-                  <MapView
-                    threads={threadsData}
-                    findingCounts={findingCounts}
-                    onNavigateToLive={navigateToLive}
-                  />
-                )}
-              </div>
-            </div>
-          )}
-          {tab === 'knowledge' && (
-            <KnowledgeView
+          {tab === 'graph' && (
+            <ResearchGraphView
               sessionId={id!}
+              threads={threadsData}
+              findings={findingsData}
+              findingCounts={findingCounts}
+              allSteps={allSteps}
+              events={events}
+              isRunning={isRunning}
+              sessionFetchText={sessionFetchText}
+              onToggleSessionFetch={handleToggleSessionFetch}
+              activity={activity}
+              jobs={jobs}
+              selectedThreadId={selectedThreadId}
+              onSelectThread={setSelectedThreadId}
+              onNavigateToDocument={navigateToDocument}
               pendingConceptName={pendingConceptName}
-              onConsumePending={() => setPendingConceptName(null)}
+              onConsumePendingConcept={() => setPendingConceptName(null)}
             />
           )}
           {tab === 'sources' && (
             <SourcesView sessionId={id!} onNavigateToTelemetry={() => setTab('activity')} />
           )}
           {tab === 'activity' && (
-            <ResearchActivityView session={session} sessionId={id!} onNavigateToThread={navigateToLive} />
+            <ResearchActivityView session={session} sessionId={id!} onNavigateToThread={navigateToGraph} />
           )}
           {tab === 'config' && (
             <SessionConfigView
