@@ -4,8 +4,8 @@
 **Date:** 2026-05-02
 **Mockups (truth):**
 - `docs/mockups/research-landing-history-redesign.html` — Landing + History
-- `docs/mockups/research-inspect-merge.html` — Activity tab (events+telemetry+reviews) — **trim to Variant A pending**
-- `docs/mockups/research-knowledge-process-merge.html` — Graph tab (knowledge+process) — **trim to Variant E pending**
+- `docs/mockups/research-inspect-merge.html` — Activity tab (events+telemetry+reviews) — **Variant A only, refinements applied** ✓
+- `docs/mockups/research-knowledge-process-merge.html` — Graph tab (knowledge+process) — **Variant E only, ultrawide-tuned** ✓
 
 This document is the single source of truth for the implementation. It consolidates four mockup-driven redesigns into a parallelizable rollout, names the skills each stream uses, and captures non-negotiable preservation rules from prior conversation.
 
@@ -33,9 +33,9 @@ This document is the single source of truth for the implementation. It consolida
 | **0.5** Embed event-fidelity preservation note inside Variant A's "What this trades" block | implementer cannot miss it |
 | **0.6** Trim `research-knowledge-process-merge.html` to Variant E only | drop variants D and F |
 | **0.7** Re-layout Variant E for ultrawide (≥ 2560px), tree pane ~320px, inspector ~360px, center pane absorbs the rest. Default state shows tree expanded one level + center graph pre-rendered with focus on seed thread | useful at first paint |
-| **0.8** Decide topic-cluster data source — see § 7 | unblocks Stream 1A |
+| **0.8** Decide topic-cluster data source — see § 7 | **decided: Option 1 (LLM call at session creation)** ✓ |
 
-Phase 0 is one PR (`docs/redesign-pre-work`). Estimated < 1 hour.
+Phase 0 is one PR (`docs/phase-0-trim`). Tasks 0.1–0.7 + 0.8 all complete; Stream 1A is unblocked.
 
 ---
 
@@ -207,15 +207,15 @@ Streams 2C and 2D additionally require the **event-fidelity gate** (§ 4 Stream 
 
 ---
 
-## 7. Open question — topic-cluster data source
+## 7. Topic-cluster data source — DECIDED
 
-Three options, choose one before Stream 1A starts:
+**Decision (2026-05-02):** Option 1 — LLM call at session creation.
 
-1. **LLM call at session creation** (recommended). Same shape as the existing question-shape detector. Output: one cluster from a fixed enum (`AI / LLM tooling`, `Music history`, `Databases`, `Audio & DSP`, `Personal infra`, `Misc`). Cheap, deterministic enough, easy to regenerate.
-2. **K-means / nearest-cluster over embeddings.** Embed each new seed prompt; compare to centroids learned from prior sessions. More principled but needs a training step and re-balancing as the corpus grows.
-3. **User-tagged.** Add a free-text `topic` field on session creation; aggregate by exact match. Loses the "system tells you about you" UX.
+- Mirrors the existing question-shape detector exactly (one extra fire-and-forget call, persisted to a new column on the query row).
+- Output enum starts at: `AI / LLM tooling`, `Music history`, `Databases`, `Audio & DSP`, `Personal infra`, `Misc`. Add buckets in config as the corpus grows; no retraining needed.
+- Stream 1A is now unblocked.
 
-**Recommendation:** Option 1. Reasons: matches the architecture already in place for shape detection, deterministic enough for a single-user system, lets the cluster enum evolve with config rather than ML retraining.
+(Options 2 and 3 — K-means over embeddings, user-tagged — rejected. Option 2 needed a training pass and centroid rebalancing for too little gain in a single-user system; option 3 lost the "system tells you about you" UX that motivates the topic row in the first place.)
 
 ---
 
