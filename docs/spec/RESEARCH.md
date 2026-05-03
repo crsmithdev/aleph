@@ -432,9 +432,13 @@ Poll interval: 500ms server-side.
 
 ## UI Pages
 
-### Research Sessions (`/research`)
+### Research Landing (`/research`)
 
-List view of all research sessions. Shows: title, seed query, status badge, thread count, finding count, total cost, last updated. Status filter tabs (all, active, paused, completed). "New Session" button opens creation form (seed query, optional title, optional config overrides). Each row links to the session detail page.
+Hero compose box with inferred-metadata panel. The compose box submits the prompt as soon as the user hits "Start research"; the new query is created server-side and shape/topic detection runs fire-and-forget. The inferred panel below the textarea then populates four rows — Shape, Lenses, Topic, Run plan — each with an inline edit affordance. Below the compose box: 30-day KPI strip (runs, findings, spend, active), running runs, just-finished runs.
+
+### Research History (`/research/history`)
+
+Rich archive of past runs with summary strip, filter rail (status · verdict · cost band · started window · search), and ledger table sorted by started/cost/findings/duration/verdict. The legacy `/research/queries` URL permanently redirects to `/research/history`.
 
 ### Research Session Detail (`/research/:id`)
 
@@ -445,17 +449,18 @@ Multi-tab interface for a single session.
 | Tab | Content |
 |---|---|
 | Document | Findings list sorted by recency or novelty/confidence, each with source URLs, quality scores, tags, thumbs up/down rating |
-| Timeline | Live event feed of steps, thread state changes, job events via SSE stream |
-| Graph | ReactFlow DAG showing thread hierarchy (seed → follow-ups → gaps → perturbations) with status-coded nodes |
+| Graph | Three-pane view (tree · canvas · inspector) merging the prior Knowledge and Process tabs. Canvas hosts the force-directed concept and thread graphs (Cytoscape + fcose); inspector reflects current selection. Below 1600px the inspector pane collapses |
+| Sources | Source registry table with extraction status counts and per-source detail |
+| Activity | Merged events + telemetry + reviews dashboard (merged from the prior Events / Telemetry / Reviews tabs). Live event feed on the right; lifecycle, thread state, source health panels on the left; latest verdict surfaced at top |
 | Config | Editable session config — model, provider, schedule, budget, perturbation weights |
 
 **Controls:**
-- Run (burst: 5 iterations) / Run All / Stop All buttons
+- Run (priority: 5 iterations) / Run All / Stop All buttons
 - Session status toggle (active/paused/completed)
 - "Inject Thread" — adds a user-specified query as a new thread
 - Thread filtering in graph view by status
 
-**Live updates:** The SSE stream (`/api/research/sessions/:id/stream`) drives real-time updates in the Document and Timeline tabs without polling.
+**Live updates:** The SSE stream (`/api/research/sessions/:id/stream`) drives real-time updates in the Document and Activity tabs without polling.
 
 **Cost display:** Per-session cost summary from `/api/research/sessions/:id/costs`.
 

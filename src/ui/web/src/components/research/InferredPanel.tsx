@@ -36,16 +36,29 @@ interface InferredPanelProps {
   shape: ShapeAnalysis | null;
   topic: TopicClusterAnalysis | null;
   runPlan: RunPlan | null;
-  /** Optional callback for the shape-row Edit affordance. Other rows show
-   *  the link but it's a no-op until edit wiring lands. */
   onEditShape?: () => void;
+  onEditLenses?: () => void;
+  onEditTopic?: () => void;
+  onEditRunPlan?: () => void;
+}
+
+function EditButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-text-muted hover:text-accent text-xs hover:underline shrink-0"
+    >
+      edit
+    </button>
+  );
 }
 
 /** Four-row inferred-metadata block under the compose textarea. Mirrors
  *  the QuestionShapeBar chip vocabulary so the override UI is the same on
  *  both surfaces. Pre-detection state is a quiet "Detecting…" line so the
  *  block doesn't flash empty rows. */
-export function InferredPanel({ shape, topic, runPlan, onEditShape }: InferredPanelProps) {
+export function InferredPanel({ shape, topic, runPlan, onEditShape, onEditLenses, onEditTopic, onEditRunPlan }: InferredPanelProps) {
   // Pre-detection: shape detector hasn't run yet. Don't render the four-row
   // block — the planner needs the shape before topic/runPlan are useful.
   if (!shape) {
@@ -84,15 +97,7 @@ export function InferredPanel({ shape, topic, runPlan, onEditShape }: InferredPa
               conf {shape.confidence.toFixed(2)}
             </span>
           )}
-          {onEditShape && (
-            <button
-              type="button"
-              onClick={onEditShape}
-              className="text-text-muted hover:text-accent text-xs hover:underline"
-            >
-              edit
-            </button>
-          )}
+          {onEditShape && <EditButton onClick={onEditShape} />}
         </span>
       </div>
 
@@ -112,6 +117,7 @@ export function InferredPanel({ shape, topic, runPlan, onEditShape }: InferredPa
             ))
           )}
         </span>
+        {onEditLenses && shape.lenses.length > 0 && <EditButton onClick={onEditLenses} />}
       </div>
 
       {/* Topic row */}
@@ -131,6 +137,7 @@ export function InferredPanel({ shape, topic, runPlan, onEditShape }: InferredPa
             <span className="text-text-muted italic">classifying…</span>
           )}
         </span>
+        {onEditTopic && topic && <EditButton onClick={onEditTopic} />}
       </div>
 
       {/* Run plan row */}
@@ -152,6 +159,7 @@ export function InferredPanel({ shape, topic, runPlan, onEditShape }: InferredPa
             <span className="text-text-muted italic">computing…</span>
           )}
         </span>
+        {onEditRunPlan && runPlan && <EditButton onClick={onEditRunPlan} />}
       </div>
     </div>
   );

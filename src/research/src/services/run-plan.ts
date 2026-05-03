@@ -1,18 +1,5 @@
-import type { QuestionShape } from '../types.js';
+import type { QuestionShape, TopicCluster } from '../types.js';
 import { DEFAULT_SESSION_CONFIG } from '../types.js';
-
-/** Coarse topic clustering used by the run-plan suggester. Stream 1A
- *  introduces the canonical type and a `topic_cluster` column on the query
- *  row; we redeclare the same string-literal union here so this file
- *  compiles independently of that stream. The two declarations are
- *  identical and will reconcile when 1A lands. */
-export type TopicCluster =
-  | 'AI / LLM tooling'
-  | 'Music history'
-  | 'Databases'
-  | 'Audio & DSP'
-  | 'Personal infra'
-  | 'Misc';
 
 /** Subset of `SessionConfig` the suggester nudges. The compose box on the
  *  research landing page applies these as the defaults the user sees

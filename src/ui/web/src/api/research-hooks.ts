@@ -511,6 +511,15 @@ export type TopicCluster =
   | 'Personal infra'
   | 'Misc';
 
+export const TOPIC_CLUSTERS: readonly TopicCluster[] = [
+  'AI / LLM tooling',
+  'Music history',
+  'Databases',
+  'Audio & DSP',
+  'Personal infra',
+  'Misc',
+] as const;
+
 export interface RunPlan {
   model_fast: string;
   budget_total_usd: number;
@@ -577,6 +586,10 @@ export function useResearchQuery(id: string) {
     queryKey: ['research-queries', id],
     queryFn: () => api.get<ResearchQuery>(`/research/queries/${id}`),
     enabled: !!id,
+    // Server-side detectors (question_shape, topic_cluster) and title rewrites
+    // run fire-and-forget after createQuery resolves. Without polling the
+    // landing-page InferredPanel sits on "Detecting…" forever.
+    refetchInterval: 5000,
   });
 }
 
@@ -598,7 +611,14 @@ export const useCreateResearchSession = useCreateResearchQuery;
 export function useUpdateResearchQuery() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: string; status?: string; title?: string; question_shape?: ShapeAnalysis | null }) =>
+    mutationFn: ({ id, ...data }: {
+      id: string;
+      status?: string;
+      title?: string;
+      question_shape?: ShapeAnalysis | null;
+      topic_cluster?: TopicClusterAnalysis | null;
+      config?: Record<string, unknown>;
+    }) =>
       api.patch<ResearchQuery>(`/research/queries/${id}`, data),
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ['research-queries'] });

@@ -55,7 +55,9 @@ src/ui/
 | `/goals`, `/goals/:id` | GoalsPage, GoalDetailPage |
 | `/todos` | TodosPage |
 | `/habits` | HabitsPage |
-| `/research` | ResearchQueriesPage |
+| `/research` | ResearchLandingPage |
+| `/research/history` | ResearchHistoryPage |
+| `/research/queries` | redirect → `/research/history` |
 | `/research/:id` | ResearchQueryDetailPage |
 | `/research/:id/plan` | ResearchPlanPage |
 | `/research/workers` | ResearchWorkersPage |

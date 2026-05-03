@@ -19,7 +19,6 @@ import {
   type StatusValue,
   type VerdictValue,
   type CostBand,
-  type StartedFilter,
 } from '../../components/research/HistoryFilterRail';
 import { HistorySummaryStrip } from '../../components/research/HistorySummaryStrip';
 
