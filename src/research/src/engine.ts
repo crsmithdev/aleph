@@ -1583,7 +1583,6 @@ ${resultsText}
 Produce a JSON object with these fields:
 - content: string (1-3 paragraphs of synthesized insight — not just summarizing, but connecting and interpreting)
 - summary: string (one clear sentence)
-- source_urls: string[] (URLs from the search results)
 - source_quality: number 0-1 (how reliable/authoritative are these sources?)
 - tags: string[] (3-5 topic tags)
 - confidence: number 0-1 (how confident are you in this finding?)
@@ -1600,8 +1599,8 @@ Return ONLY valid JSON. No markdown fences.`,
     try {
       const text = stripLLMFences(result.text);
       const parsed = JSON.parse(text);
-      // Collect all sourceUrlMeta from search results
       const allMeta = searchResults.flatMap(r => r.sourceUrlMeta ?? []);
+      const dedupedUrls = [...new Set(searchResults.flatMap(r => r.sourceUrls ?? []))];
       if (result.stepId) steps.updateStepMetadata(this.sqlite, result.stepId, {
         decision: 'synthesis',
         confidence: parsed.confidence ?? 0.5,
@@ -1614,7 +1613,7 @@ Return ONLY valid JSON. No markdown fences.`,
       return {
         content: parsed.content ?? '',
         summary: parsed.summary ?? '',
-        sourceUrls: parsed.source_urls ?? [],
+        sourceUrls: dedupedUrls,
         sourceTexts: [],
         sourceUrlMeta: allMeta,
         sourceQuality: parsed.source_quality ?? 0.5,
