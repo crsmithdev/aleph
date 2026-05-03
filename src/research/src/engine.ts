@@ -6,6 +6,7 @@ import type {
   ResearchPlanItem, PerturbationStrategy, PerturbationTrigger, SessionConfig, ToolCallRecord,
   FollowUpCandidate, FollowUpAnalysis,
   QuestionShape, ShapeAnalysis,
+  TopicCluster, TopicClusterAnalysis,
 } from './types.js';
 import { MODEL_PRICING } from './types.js';
 import { jaccardSimilarity, computeSimilarity } from './similarity.js';
@@ -196,6 +197,63 @@ Prompt: "${query.replace(/"/g, '\\"')}"`;
       ? obj.confidence : 0.5;
     const analysis: ShapeAnalysis = { shapes, lenses, confidence };
     steps.updateStepMetadata(llm.sqlite, result.stepId, { decision: 'detect_shape', shapes, confidence });
+    return analysis;
+  } catch {
+    return null;
+  }
+}
+
+/** Classify a research prompt into a coarse topic cluster. Mirrors
+ *  `detectQuestionShape`: one-shot LLM call at session creation,
+ *  fire-and-forget, returns null on parse/network failure. The cluster
+ *  drives downstream UI grouping / analytics — distinct from
+ *  `QuestionShape`, which is structural rather than subject-matter.
+ *
+ *  Records a session-scope step (label='detect topic cluster') automatically
+ *  via the TrackedLLM wrapper. */
+const VALID_CLUSTERS: ReadonlySet<TopicCluster> = new Set([
+  'AI / LLM tooling', 'Music history', 'Databases', 'Audio & DSP', 'Personal infra', 'Misc',
+]);
+
+export async function detectTopicCluster(
+  llm: TrackedLLM,
+  sessionId: string,
+  model: string,
+  query: string,
+): Promise<TopicClusterAnalysis | null> {
+  const instruction = `You are classifying a research prompt into one of a fixed set of topic clusters. Pick the single closest match. If nothing fits, pick "Misc".
+
+Clusters:
+- "AI / LLM tooling": LLMs, prompt engineering, agent frameworks, model evals, AI APIs/SDKs, AI dev tooling
+- "Music history": musical genres, eras, scenes, artists, albums, the historical/cultural arc of music
+- "Databases": SQL/NoSQL engines, query languages, schema design, indexing, replication, OLTP/OLAP
+- "Audio & DSP": digital signal processing, audio plugins, synthesis, mixing/mastering, audio file formats, acoustics
+- "Personal infra": homelab, self-hosting, dotfiles, personal automation, Linux config, networking for home use
+- "Misc": anything that doesn't clearly fit one of the above
+
+Return ONLY a JSON object on a single line, no prose, no code fences:
+{"cluster": "...", "confidence": 0.0-1.0}
+
+Prompt: "${query.replace(/"/g, '\\"')}"`;
+
+  try {
+    const result = await llm.complete(
+      { session_id: sessionId, thread_id: null, label: 'detect topic cluster' },
+      model,
+      instruction,
+      120,
+    );
+    const stripped = stripLLMFences(result.text).trim();
+    const start = stripped.indexOf('{');
+    const end = stripped.lastIndexOf('}');
+    if (start < 0 || end <= start) return null;
+    const obj = JSON.parse(stripped.slice(start, end + 1)) as { cluster?: unknown; confidence?: unknown };
+    if (typeof obj.cluster !== 'string' || !VALID_CLUSTERS.has(obj.cluster as TopicCluster)) return null;
+    const cluster = obj.cluster as TopicCluster;
+    const confidence = typeof obj.confidence === 'number' && obj.confidence >= 0 && obj.confidence <= 1
+      ? obj.confidence : 0.5;
+    const analysis: TopicClusterAnalysis = { cluster, confidence };
+    steps.updateStepMetadata(llm.sqlite, result.stepId, { decision: 'detect_topic_cluster', cluster, confidence });
     return analysis;
   } catch {
     return null;

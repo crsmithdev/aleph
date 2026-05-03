@@ -13,7 +13,7 @@
 import { Database } from 'bun:sqlite';
 import { describe, test, expect } from 'bun:test';
 import { applyResearchDDL } from './ddl';
-import { ResearchEngine, pickAgentRole, enumerateCanon } from './engine';
+import { ResearchEngine, pickAgentRole, enumerateCanon, detectTopicCluster } from './engine';
 import type { LLMProvider, LLMResult, WebSearchResult } from './engine';
 import { TrackedLLM } from './services/llm';
 import * as queries from './services/queries';
@@ -704,5 +704,103 @@ describe('evidence-driven perturbation triggers', () => {
       sqlite: db, provider: new RecordingProvider(), maxIterations: 0,
     });
     expect(engine.recentPerturbationCount(session.id)).toBe(2);
+  });
+});
+
+// ===========================================================================
+// 6. Topic-cluster classifier
+// ===========================================================================
+
+describe('detectTopicCluster: classifies prompts into the fixed enum', () => {
+  test('parses a valid {cluster, confidence} response and records a step', async () => {
+    const db = createTestDb();
+    const session = queries.createQuery(db, 'Test', 'how do LLMs use prompt caching?');
+    const provider = new RecordingProvider().pushComplete(
+      JSON.stringify({ cluster: 'AI / LLM tooling', confidence: 0.92 })
+    );
+    const llm = new TrackedLLM(provider, db);
+
+    const result = await detectTopicCluster(llm, session.id, 'mock-model', 'how do LLMs use prompt caching?');
+
+    expect(result?.cluster).toBe('AI / LLM tooling');
+    expect(result?.confidence).toBe(0.92);
+
+    const allSteps = steps.listSteps(db, session.id);
+    expect(allSteps.length).toBe(1);
+    expect(allSteps[0].label).toBe('detect topic cluster');
+    expect(allSteps[0].thread_id).toBeNull();
+    const md = allSteps[0].metadata as Record<string, unknown>;
+    expect(md.decision).toBe('detect_topic_cluster');
+    expect(md.cluster).toBe('AI / LLM tooling');
+    expect(md.confidence).toBe(0.92);
+  });
+
+  test('persists topic_cluster on the query row via updateQuery and reads back through getQuery', async () => {
+    const db = createTestDb();
+    const session = queries.createQuery(db, 'Test', 'history of detroit techno');
+    const provider = new RecordingProvider().pushComplete(
+      JSON.stringify({ cluster: 'Music history', confidence: 0.88 })
+    );
+    const llm = new TrackedLLM(provider, db);
+
+    const result = await detectTopicCluster(llm, session.id, 'mock-model', 'history of detroit techno');
+    expect(result).not.toBeNull();
+    queries.updateQuery(db, session.id, { topic_cluster: result! });
+
+    const fetched = queries.getQuery(db, session.id)!;
+    expect(fetched.topic_cluster).not.toBeNull();
+    expect(fetched.topic_cluster!.cluster).toBe('Music history');
+    expect(fetched.topic_cluster!.confidence).toBe(0.88);
+  });
+
+  test('rejects clusters not in the fixed enum (returns null)', async () => {
+    const db = createTestDb();
+    const session = queries.createQuery(db, 'Test', 'something');
+    const provider = new RecordingProvider().pushComplete(
+      JSON.stringify({ cluster: 'Cooking', confidence: 0.9 })
+    );
+    const llm = new TrackedLLM(provider, db);
+
+    const result = await detectTopicCluster(llm, session.id, 'mock-model', 'something');
+    expect(result).toBeNull();
+  });
+
+  test('returns null on malformed JSON without throwing', async () => {
+    const db = createTestDb();
+    const session = queries.createQuery(db, 'Test', 'x');
+    const provider = new RecordingProvider().pushComplete('not json at all');
+    const llm = new TrackedLLM(provider, db);
+
+    const result = await detectTopicCluster(llm, session.id, 'mock-model', 'x');
+    expect(result).toBeNull();
+  });
+
+  test('defaults confidence to 0.5 when missing or out of range', async () => {
+    const db = createTestDb();
+    const session = queries.createQuery(db, 'Test', 'sql index types');
+    const provider = new RecordingProvider().pushComplete(
+      JSON.stringify({ cluster: 'Databases' })
+    );
+    const llm = new TrackedLLM(provider, db);
+
+    const result = await detectTopicCluster(llm, session.id, 'mock-model', 'sql index types');
+    expect(result?.cluster).toBe('Databases');
+    expect(result?.confidence).toBe(0.5);
+  });
+
+  test('returns null when the LLM call throws (no step recorded)', async () => {
+    const db = createTestDb();
+    const session = queries.createQuery(db, 'Test', 'x');
+    const provider: LLMProvider = {
+      async complete() { throw new Error('429'); },
+      async searchWeb(model) {
+        return { text: '', sourceUrls: [], sourceTexts: [], promptTokens: 0, completionTokens: 0, model };
+      },
+    };
+    const llm = new TrackedLLM(provider, db);
+
+    const result = await detectTopicCluster(llm, session.id, 'mock-model', 'x');
+    expect(result).toBeNull();
+    expect(steps.listSteps(db, session.id).length).toBe(0);
   });
 });

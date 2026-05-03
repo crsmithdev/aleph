@@ -1,6 +1,6 @@
 export { applyResearchDDL } from './ddl.js';
 export * from './types.js';
-export { ResearchEngine, AnthropicProvider, pickAgentRole, detectQuestionShape, enumerateCanon } from './engine.js';
+export { ResearchEngine, AnthropicProvider, pickAgentRole, detectQuestionShape, detectTopicCluster, enumerateCanon } from './engine.js';
 export type { CanonItem } from './engine.js';
 export { getStrategyStats } from './services/perturbation-state.js';
 export type { PerturbationStrategyStat } from './services/perturbation-state.js';

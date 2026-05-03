@@ -342,6 +342,9 @@ export function applyResearchDDL(sqlite: Sqlite): void {
   // Question-shape analysis (survey/timeline/list/dynamics/comparison/lookup/audit).
   // Nullable: detector populates async after creation; old rows stay NULL until re-detected.
   try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN question_shape TEXT`); } catch { /* exists */ }
+  // Topic-cluster classification (AI / LLM tooling | Music history | Databases | Audio & DSP | Personal infra | Misc).
+  // JSON-serialized {cluster, confidence}. Nullable: classifier populates async after creation.
+  try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN topic_cluster TEXT`); } catch { /* exists */ }
   // Finding kind: 'normal' | 'perturbation' | 'speculation'. Default 'normal'
   // so old rows have a defined value. Classifier in services/findings.ts
   // upgrades to 'perturbation' or 'speculation' based on parent thread origin

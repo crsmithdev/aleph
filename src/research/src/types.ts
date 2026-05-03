@@ -13,6 +13,11 @@ export interface ResearchQuery {
    *  completeness criterion used by the planner to decide when its lens
    *  is satisfied. */
   question_shape: ShapeAnalysis | null;
+  /** Coarse topic-cluster label (one of a fixed enum). Null until the
+   *  classifier has run; persisted with confidence so the UI can show
+   *  low-confidence assignments as muted. Distinct from `question_shape`
+   *  (structural) — this is subject-matter. */
+  topic_cluster: TopicClusterAnalysis | null;
   status: 'active' | 'paused' | 'exhausted' | 'halted' | 'completed' | 'archived';
   config: SessionConfig;
   summary: string;
@@ -74,6 +79,25 @@ export interface ShapeAnalysis {
   lenses: ShapeLens[];
   /** Detector confidence 0–1. The planner can fall back to a default
    *  strategy ('survey') when confidence is below ~0.5. */
+  confidence: number;
+}
+
+/** Coarse subject-matter cluster for a research prompt. Locked enum so
+ *  downstream UI/analytics can group consistently; `'Misc'` is the catch-all
+ *  for prompts that don't fit any cluster. Distinct from `QuestionShape`,
+ *  which describes the structure of the question rather than its topic. */
+export type TopicCluster =
+  | 'AI / LLM tooling'
+  | 'Music history'
+  | 'Databases'
+  | 'Audio & DSP'
+  | 'Personal infra'
+  | 'Misc';
+
+export interface TopicClusterAnalysis {
+  cluster: TopicCluster;
+  /** Classifier confidence 0–1. The UI may render low-confidence
+   *  assignments as muted. */
   confidence: number;
 }
 

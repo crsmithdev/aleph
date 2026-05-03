@@ -36,6 +36,7 @@ import {
   listIterationChecks, listPostMortems, runPostMortem,
   pickAgentRole,
   detectQuestionShape,
+  detectTopicCluster,
   enumerateCanon,
   getStrategyStats,
   TrackedLLM,
@@ -302,6 +303,24 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
         // crawl is forced to cover the canon before converging. This addresses
         // the dogfooded EDM failure mode (planner went deep on chart mechanics,
         // missed Moby's Play / Underworld / Daft Punk).
+        // Topic-cluster classification: coarse subject-matter label
+        // (AI / LLM tooling | Music history | Databases | Audio & DSP |
+        // Personal infra | Misc) for downstream UI grouping. Fire-and-forget;
+        // failure leaves topic_cluster NULL.
+        if (!query.topic_cluster) {
+          (async () => {
+            try {
+              const cluster = await detectTopicCluster(llm, query.id, utilityModel, prompt);
+              if (cluster) {
+                updateQuery(app.sqlite, query.id, { topic_cluster: cluster });
+                console.log(`[research] detected topic cluster for ${query.id}: ${cluster.cluster} (${cluster.confidence.toFixed(2)})`);
+              }
+            } catch (err) {
+              console.warn(`[research] detectTopicCluster failed for ${query.id}:`, err);
+            }
+          })();
+        }
+
         if (!query.question_shape) {
           (async () => {
             try {

@@ -1,6 +1,6 @@
 import type { Sqlite } from '@construct/data';
 import { generateId } from './id.js';
-import type { ResearchQuery, SessionConfig, PromptHints, ShapeAnalysis } from '../types.js';
+import type { ResearchQuery, SessionConfig, PromptHints, ShapeAnalysis, TopicClusterAnalysis } from '../types.js';
 import { getDefaults } from './defaults.js';
 
 function rowToQuery(sqlite: Sqlite, row: Record<string, unknown>): ResearchQuery {
@@ -26,7 +26,12 @@ function rowToQuery(sqlite: Sqlite, row: Record<string, unknown>): ResearchQuery
     try { question_shape = JSON.parse(row.question_shape as string) as ShapeAnalysis; }
     catch { /* malformed: leave null */ }
   }
-  return { ...row, config, prompt_hints, question_shape } as unknown as ResearchQuery;
+  let topic_cluster: TopicClusterAnalysis | null = null;
+  if (row.topic_cluster != null) {
+    try { topic_cluster = JSON.parse(row.topic_cluster as string) as TopicClusterAnalysis; }
+    catch { /* malformed: leave null */ }
+  }
+  return { ...row, config, prompt_hints, question_shape, topic_cluster } as unknown as ResearchQuery;
 }
 
 export function createQuery(
@@ -188,7 +193,7 @@ export function listQueriesWithStats(sqlite: Sqlite, status?: string): ResearchQ
 export function updateQuery(
   sqlite: Sqlite,
   id: string,
-  updates: Partial<Pick<ResearchQuery, 'status' | 'summary' | 'document' | 'user_notes' | 'title' | 'prompt_short' | 'prompt_super_short' | 'prompt_hints' | 'question_shape'>> & { config?: Partial<SessionConfig> }
+  updates: Partial<Pick<ResearchQuery, 'status' | 'summary' | 'document' | 'user_notes' | 'title' | 'prompt_short' | 'prompt_super_short' | 'prompt_hints' | 'question_shape' | 'topic_cluster'>> & { config?: Partial<SessionConfig> }
 ): ResearchQuery | null {
   const fields: string[] = [];
   const values: unknown[] = [];
@@ -204,6 +209,10 @@ export function updateQuery(
   if (updates.question_shape !== undefined) {
     fields.push('question_shape = ?');
     values.push(updates.question_shape === null ? null : JSON.stringify(updates.question_shape));
+  }
+  if (updates.topic_cluster !== undefined) {
+    fields.push('topic_cluster = ?');
+    values.push(updates.topic_cluster === null ? null : JSON.stringify(updates.topic_cluster));
   }
   if (updates.config !== undefined) {
     const existing = getQuery(sqlite, id);
