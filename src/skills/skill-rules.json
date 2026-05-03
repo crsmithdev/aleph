@@ -1,10 +1,6 @@
 {
   "rules": [
     {
-      "skill": "research",
-      "keywords": ["investigate", "deep research", "research how", "research why", "research what", "do some research", "look into", "dig into", "/research\\b.{0,20}\\b(how|why|what|whether)/"]
-    },
-    {
       "skill": "search",
       "keywords": ["search for", "look up", "find out", "what is", "how does", "compare", "search online", "web search", "find examples", "examine", "look for", "check online", "/\\bonline\\b/"]
     },
@@ -87,6 +83,10 @@
     {
       "skill": "design-conform",
       "keywords": ["design-conform", "conform", "make the pages match", "make the others", "align the layouts", "same loading state", "same empty state", "match the table headers", "make the components consistent", "same shape", "apply to all", "/(pages|tables|layouts|components|cards|forms).{0,30}(match|like|same|consistent)/", "/(make|fix|align).{0,30}(consistent|match|same|like)/"]
+    },
+    {
+      "skill": "dogfood",
+      "keywords": ["dogfood", "try this as a user", "use it like a user", "use it like a real user", "pretend you don't know the internals", "how does this feel to use", "/dogfood\\s+\\S+/"]
     }
   ]
 }

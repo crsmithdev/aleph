@@ -13,26 +13,7 @@
 - **Audio recording** — record voice notes directly into a note, with speech-to-text
 - **Callouts / admonitions** — colored info/warning/tip blocks
 
-## Note Types (Zettelkasten)
-- **Fleeting notes** — quick captures, disposable, inbox items
-- **Literature notes** — takeaways from a single source (book, video, article, podcast)
-- **Permanent notes** — refined single-idea notes, written in your own words, the core of the knowledge base
-- **Index notes** — top-level entry points that link to clusters of related permanent notes
-- **Keyword notes** — tag-like notes that collect all notes related to a theme
-- **Maps of Content (MOC)** — curated overview notes linking related ideas into a navigable structure
-- **Hub notes** — broader topic hubs connecting multiple MOCs or index notes
-
-## Contact & Relationship Management
-- **Contact profiles** — name, photo, employer, job title, social links, addresses, phone, email, automatically from data
-- **Contact groups / tags / labels** — arbitrary categorization, smart groups by filter, automatically
-- **Contact enrichment** — auto-pull data from LinkedIn, social media, public web (job changes, company info)Z
-- **Interaction timeline** — chronological log of every touchpoint per contact (calls, emails, meetings, texts)
-- **Multi-source import** — Gmail, LinkedIn, CSV, vCard, social platforms, phone contacts
-- **Per-contact tracking** — notes, debts, gifts given/received/wishlisted, expenses, activity log
-- **Relationship intelligence** — health scores based on interaction frequency/recency/sentiment, neglected contact alerts, "Y just changed jobs" insights
-
-- **Link aliases** — display different text for a link than the target note's titleA
-- **Atomic note principle** — one idea per note, enforced by convention
+- **Link aliases** — display different text for a link than the target note's title
 - **Mind maps** — visual branching thought maps derived from the knowledge graph
 
 ## Organization & Structure
@@ -47,14 +28,13 @@
 - **Note aliases** — multiple names for the same note
 
 ## Search & Query
-- **Unified search** — full-text, fuzzy, regex, and semantic (meaning-based) search across all notes, contacts, and memories in one interface
+- **Unified search** — full-text, fuzzy, regex, and semantic (meaning-based) search across all notes and memories in one interface
 - **Search operators** — filter by tag, path, property, date, block type
 - **Saved searches / smart folders** — persistent queries that auto-update
 - **Dataview / query language** — programmatic queries over note metadata
 - **Bookmark searches** — save a search query as a bookmarked item
 
 ## Reminders & Automation
-- **Contact reminders** — cadence-based (weekly/monthly/quarterly), date-based (birthdays, anniversaries), or one-time follow-ups
 - **Scheduled automations** — trigger actions on time or event (e.g., "email X every first Monday")
 
 ## Task & Goal Management
@@ -73,7 +53,7 @@
 
 ## Import / Export & Interoperability
 - **Plain text files** — notes stored as `.md` files on disk, fully portable
-- **Import from** — CSV, Gmail, LinkedIn
+- **Import from** — CSV, Gmail
 - **Export to** — PDF, HTML, DOCX, EPUB
 - **Open format** — no vendor lock-in, files readable by any text editor
 - **Web clipper** — browser extension to save web pages / selections as notes

@@ -1,30 +1,26 @@
 #!/usr/bin/env bun
 /**
- * PreCompact hook: transcript backup + compaction notes.
+ * PreCompact hook: compaction notes.
  *
- * Fires before Claude compacts context. Two jobs:
+ * Fires before Claude compacts context. Parses the last ~120 lines of the
+ * transcript and extracts a structured working-state snapshot written to
+ * signals/compaction-notes.json. context-restore-start.ts injects these notes
+ * at the start of the next session if the file is less than 12 hours old,
+ * bridging context across compaction boundaries.
  *
- * 1. Backup: copies the full transcript JSONL so no information is permanently
- *    lost during compression.
- *
- * 2. Compaction notes: parses the last ~100 lines of the transcript and extracts
- *    a structured working-state snapshot written to signals/compaction-notes.json.
- *    context-restore-start.ts injects these notes at the start of the next session if the
- *    file is less than 12 hours old, bridging context across compaction boundaries.
- *
- *    Extracted fields:
- *      - recentPrompts: last 2 user prompts (truncated)
- *      - workingFiles:  unique files from recent Edit/Write calls
- *      - recentErrors:  last 3 error messages from tool_results
- *      - lastAssistantSnippet: last 300 chars of last assistant text block
+ * Extracted fields:
+ *   - recentPrompts: last 2 user prompts (truncated)
+ *   - workingFiles:  unique files from recent Edit/Write calls
+ *   - recentErrors:  last 3 error messages from tool_results
+ *   - lastAssistantSnippet: last 300 chars of last assistant text block
  *
  * Never blocks (always exit 0). All failures are swallowed with trace logging.
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
-import { join, basename, dirname } from "path";
+import { readFileSync, writeFileSync, mkdirSync } from "fs";
+import { dirname } from "path";
 import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
-import { claudePaths, dataPaths } from "../../data/src/paths.ts";
+import { dataPaths } from "../../data/src/paths.ts";
 
 const TAG = "context-backup-precompact";
 let input: any;
@@ -35,26 +31,11 @@ reportHook(TAG, "PreCompact", input.session_id);
 const transcriptPath = input.transcript_path;
 if (!transcriptPath) { trace(TAG, "no transcript path"); process.exit(0); }
 
-// --- Job 1: transcript backup ---
-const backupDir = join(claudePaths.root, "transcript-backups");
-if (!existsSync(backupDir)) mkdirSync(backupDir, { recursive: true });
-
-const sessionName = basename(transcriptPath, ".jsonl");
-const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-const backupPath = join(backupDir, `${sessionName}_${timestamp}.jsonl`);
-
-let transcriptContent: Buffer | null = null;
+let transcriptContent: Buffer;
 try {
   transcriptContent = readFileSync(transcriptPath);
-  writeFileSync(backupPath, transcriptContent);
-  trace(TAG, `backed up to ${backupPath} (${transcriptContent.length} bytes)`);
 } catch (e) {
-  trace(TAG, `backup failed: ${(e as Error).message}`);
-}
-
-// --- Job 2: compaction notes extraction ---
-if (!transcriptContent) {
-  trace(TAG, "no transcript content, skipping compaction notes");
+  trace(TAG, `read transcript failed: ${(e as Error).message}`);
   process.exit(0);
 }
 

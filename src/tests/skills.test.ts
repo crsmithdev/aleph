@@ -18,8 +18,6 @@ function skillTest(prompt: string): { skills: string[]; depth: string } {
   return { skills, depth };
 }
 
-check(r, "skill: 'investigate redis' → research", skillTest("investigate how redis handles eviction policies").skills.includes("research"));
-
 // isolate-changes and land-changes are always injected for non-question code requests
 const CODE_DEFAULTS = ["isolate-changes", "land-changes"];
 const addDarkSkills = skillTest("add dark mode to the settings page").skills;
@@ -57,8 +55,8 @@ check(r, "depth: 'read the file' → QUICK", skillTest("read the API response ha
 
 console.log("\n--- skill extensions ---");
 
-const resOut = runHook(te, "core/hooks/routing-classify-submit.ts", JSON.stringify({ prompt: "investigate how redis handles eviction policies" })).stdout;
-check(r, "extension: research has no project extension", !resOut.includes("Project skill extensions"));
+const resOut = runHook(te, "core/hooks/routing-classify-submit.ts", JSON.stringify({ prompt: "search online for ssl pinning patterns" })).stdout;
+check(r, "extension: search has no project extension", !resOut.includes("Project skill extensions"));
 
 cleanupTestEnv(te);
 printAndExit(r);

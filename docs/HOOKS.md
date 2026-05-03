@@ -24,7 +24,7 @@ They are registered in `src/core/hooks/settings-hooks.json` and installed to `~/
 | PreToolUse | security-scan-bash | `src/core/hooks/security-scan-bash.ts` | `Bash` | 5000ms | Open | stderr advisory only → Claude | `hook-events.jsonl` — base fields only |
 | PostToolUse | quality-format-edit | `src/core/hooks/quality-format-edit.ts` | `Edit\|Write` | 10000ms | Open | modifies files in place → consumed by Claude and subsequent tools naturally | `hook-events.jsonl` — base fields only |
 | PostToolUse | quality-typecheck-edit | `src/core/hooks/quality-typecheck-edit.ts` | `Edit\|Write` | 15000ms | Open | stderr type errors → Claude (advisory) | `hook-events.jsonl` — base fields only |
-| PreCompact | context-backup-precompact | `src/core/hooks/context-backup-precompact.ts` | — | 5000ms | Open | writes `signals/compaction-notes.json` → `context-restore-start` (context bridge); writes `transcript-backups/` → **nothing reads these** | `hook-events.jsonl` — base fields only |
+| PreCompact | context-backup-precompact | `src/core/hooks/context-backup-precompact.ts` | — | 5000ms | Open | writes `signals/compaction-notes.json` → `context-restore-start` (context bridge) | `hook-events.jsonl` — base fields only |
 
 **Base fields** logged by every hook via `reportHook()`: `{ts, hook, event, sessionId}`. All entries land in `~/.construct/signals/hook-events.jsonl` and are visible in the observability UI Hooks page (aggregated by hook name and event type).
 
@@ -57,7 +57,7 @@ They are registered in `src/core/hooks/settings-hooks.json` and installed to `~/
 
 **context-monitor-stop** fires on Stop. Reads token usage and warns at 80% context, critical alert at 90%. Auto-detects 1M extended context.
 
-**context-backup-precompact** fires on PreCompact. Two jobs: (1) copies the transcript JSONL to `~/.claude/transcript-backups/` before compaction; (2) parses the last ~120 transcript lines and writes a working-state snapshot to `~/.construct/signals/compaction-notes.json` (recent prompts, working files, errors, last assistant snippet). `context-restore-start` injects these notes at next session start if the file is less than 12 hours old, bridging context across compaction boundaries.
+**context-backup-precompact** fires on PreCompact. Parses the last ~120 transcript lines and writes a working-state snapshot to `~/.construct/signals/compaction-notes.json` (recent prompts, working files, errors, last assistant snippet). `context-restore-start` injects these notes at next session start if the file is less than 12 hours old, bridging context across compaction boundaries.
 
 **context-suggest-edit** fires on PreToolUse (Edit/Write). Suggests context compaction when appropriate. Advisory only.
 

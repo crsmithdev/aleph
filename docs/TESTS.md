@@ -21,7 +21,6 @@
 | notify | Notify hook tests |
 | install preservation | Installer sentinel file preservation across upgrades |
 | identity files | Identity files exist, are non-empty, and install correctly |
-| quality-stop-check-e2e | Verification gate (`quality-stop-check-e2e.ts`): blocks edits without e2e evidence, detects playwright/cypress/cli-execution/chrome-devtools, requires artifacts, deduplicates files, handles malformed JSON, tool-result user messages don't split turns, known gaps (Bash writes, Agent edits) |
 | directive signals | Directive writing: architectural prompts get `full`, quick prompts skip, questions get `full` only |
 
 ## Telemetry unit tests (`src/telemetry/__tests__/`)

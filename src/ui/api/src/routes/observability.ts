@@ -396,7 +396,7 @@ const HOOK_METADATA: Record<string, HookMeta> = {
   },
   'git-require-edit': {
     blocking: true,
-    gate: 'commit-nudge',
+    gate: 'git-require-edit',
     markerFile: 'git-require-edit-{sessionId}',
     description: 'Groups dirty files by directory; warns at 3 groups, blocks at 5',
   },

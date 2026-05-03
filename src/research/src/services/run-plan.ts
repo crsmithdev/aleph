@@ -1,10 +1,10 @@
 import type { QuestionShape, TopicCluster } from '../types.js';
 import { DEFAULT_SESSION_CONFIG } from '../types.js';
 
-/** Subset of `SessionConfig` the suggester nudges. The compose box on the
- *  research landing page applies these as the defaults the user sees
- *  before they hit submit; if they accept, the values get merged into the
- *  query's `SessionConfig` at create time. */
+/** Subset of `SessionConfig` the suggester proposes as defaults. The compose
+ *  box on the research landing page applies these as the defaults the user
+ *  sees before they hit submit; if they accept, the values get merged into
+ *  the query's `SessionConfig` at create time. */
 export interface RunPlan {
   model_fast: string;
   budget_total_usd: number;

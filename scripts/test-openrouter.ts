@@ -1,9 +1,9 @@
 import { Database } from 'bun:sqlite';
-import { applyResearchDDL } from './src/ddl.js';
-import { ResearchEngine } from './src/engine.js';
-import { OpenRouterProvider } from './src/providers/openrouter.js';
-import * as sessions from './src/services/sessions.js';
-import * as findings from './src/services/findings.js';
+import { applyResearchDDL } from '../src/research/src/ddl.js';
+import { ResearchEngine } from '../src/research/src/engine.js';
+import { OpenRouterProvider } from '../src/research/src/providers/openrouter.js';
+import * as sessions from '../src/research/src/services/sessions.js';
+import * as findings from '../src/research/src/services/findings.js';
 
 const apiKey = await Bun.file(Bun.env.HOME + '/.openrouter_key').text().then(s => s.trim());
 
