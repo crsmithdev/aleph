@@ -12,7 +12,7 @@ import { SummaryPage } from './pages/life/SummaryPage';
 
 // Research pages
 import { ResearchLandingPage } from './pages/research/ResearchLandingPage';
-import { ResearchQueriesPage } from './pages/research/ResearchQueriesPage';
+import { ResearchHistoryPage } from './pages/research/ResearchHistoryPage';
 import { ResearchQueryDetailPage } from './pages/research/ResearchQueryDetailPage';
 import { ResearchPlanPage } from './pages/research/ResearchPlanPage';
 import { ResearchWorkersPage } from './pages/research/ResearchWorkersPage';
@@ -65,7 +65,9 @@ export function App() {
 
               {/* Research */}
               <Route path="/research" element={<ResearchLandingPage />} />
-              <Route path="/research/queries" element={<ResearchQueriesPage />} />
+              <Route path="/research/history" element={<ResearchHistoryPage />} />
+              {/* Permanent redirect for old bookmarks: /research/queries → /research/history */}
+              <Route path="/research/queries" element={<Navigate to="/research/history" replace />} />
               <Route path="/research/:id" element={<ResearchQueryDetailPage />} />
               <Route path="/research/:id/plan" element={<ResearchPlanPage />} />
               <Route path="/research/workers" element={<ResearchWorkersPage />} />

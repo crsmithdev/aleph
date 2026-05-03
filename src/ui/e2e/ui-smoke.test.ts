@@ -44,7 +44,8 @@ const ROUTES: Array<{ path: string; needsData?: boolean }> = [
   { path: '/todos' },
   { path: '/habits' },
   { path: '/research' },
-  { path: '/research/queries' },
+  { path: '/research/history' },
+  { path: '/research/queries' }, // legacy → redirects to /research/history
   { path: '/research/workers' },
   { path: '/research/config' },
   { path: '/observability' },
