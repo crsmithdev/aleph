@@ -1138,29 +1138,30 @@ describe('getResearchStats verdict aggregation', () => {
     expect(stats.byVerdict).toEqual([]);
   });
 
-  test('aggregates pass/flag/halt across mixed finished sessions', () => {
-    // 2 pass, 1 flag, 1 halt, 1 completed-without-pm, 1 active (excluded)
+  test('aggregates pass/flag/halt across judged sessions regardless of status', () => {
+    // 2 pass, 1 flag, 1 halt, 1 active-with-flag-PM (judged), 1 no-PM (excluded)
     const passA = makeSession('passA', 'completed');
     const passB = makeSession('passB', 'exhausted');
     const flagged = makeSession('flag', 'completed');
     const halted = makeSession('halt', 'halted');
-    makeSession('no-pm', 'completed'); // finished but no PM — denominator only
-    makeSession('still-running', 'active'); // excluded
+    const activeFlagged = makeSession('active-flagged', 'active'); // active but already judged
+    makeSession('no-pm', 'completed'); // no verdict — excluded from denominator
 
     recordPM(passA, 'pass');
     recordPM(passB, 'pass');
     recordPM(flagged, 'flag');
     // halted session also has a flag PM — halt must take priority
     recordPM(halted, 'flag');
+    recordPM(activeFlagged, 'flag');
 
     const stats = queries.getResearchStats(sqlite, 'all', 'day');
 
-    // 5 finished sessions in the denominator
+    // 5 judged sessions in the denominator (no-pm excluded)
     expect(stats.passRate).toBeCloseTo(2 / 5, 5);
-    expect(stats.flagRate).toBeCloseTo(1 / 5, 5);
+    expect(stats.flagRate).toBeCloseTo(2 / 5, 5);
     expect(stats.haltRate).toBeCloseTo(1 / 5, 5);
-    // sum ≤ 1 (one finished session has no PM)
-    expect(stats.passRate + stats.flagRate + stats.haltRate).toBeCloseTo(4 / 5, 5);
+    // every judged session is classified — sum = 1
+    expect(stats.passRate + stats.flagRate + stats.haltRate).toBeCloseTo(1, 5);
   });
 
   test('uses latest post-mortem when a session has multiple', () => {

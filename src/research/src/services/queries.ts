@@ -327,10 +327,13 @@ export function getResearchStats(sqlite: Sqlite, range: string, granularity: str
 
   const byDay = [...dayMap.values()].sort((a, b) => a.date.localeCompare(b.date));
 
-  // Verdict aggregation across finished sessions.
-  // Finished = status in (completed, exhausted, halted) and created within the range.
-  // For each finished session: classify as halt > pass/flag (latest post-mortem) > none.
-  const finishedRows = sqlite.prepare(`
+  // Verdict aggregation across judged sessions — any session that has reached
+  // a verdict (post-mortem written) or has halt status counts, regardless of
+  // operational status. An active session that already has a flag PM is still
+  // judged; excluding it would let the rate disagree with the verdict pills the
+  // user sees in History (Pass / Flag / Halt counts).
+  // Classification priority: halt > pass/flag (latest post-mortem).
+  const verdictedRows = sqlite.prepare(`
     SELECT q.id AS session_id,
            q.status AS status,
            q.created_at AS created_at,
@@ -341,10 +344,13 @@ export function getResearchStats(sqlite: Sqlite, range: string, granularity: str
            ) AS latest_verdict
     FROM research_queries q
     WHERE q.created_at >= ?
-      AND q.status IN ('completed', 'exhausted', 'halted')
+      AND (
+        q.status = 'halted'
+        OR EXISTS (SELECT 1 FROM research_post_mortems pm WHERE pm.session_id = q.id)
+      )
   `).all(cutoff) as Array<{ session_id: string; status: string; created_at: string; latest_verdict: string | null }>;
 
-  const totalFinished = finishedRows.length;
+  const totalVerdicted = verdictedRows.length;
   let passCount = 0;
   let flagCount = 0;
   let haltCount = 0;
@@ -356,7 +362,7 @@ export function getResearchStats(sqlite: Sqlite, range: string, granularity: str
       ? createdAt.slice(0, 13) // 'YYYY-MM-DDTHH'
       : createdAt.slice(0, 10); // 'YYYY-MM-DD'
 
-  for (const row of finishedRows) {
+  for (const row of verdictedRows) {
     const date = bucketDate(row.created_at);
     let bucket = verdictDayMap.get(date);
     if (!bucket) {
@@ -373,12 +379,11 @@ export function getResearchStats(sqlite: Sqlite, range: string, granularity: str
       flagCount++;
       bucket.flag++;
     }
-    // else: finished without a post-mortem — counts toward denominator only.
   }
 
-  const passRate = totalFinished > 0 ? passCount / totalFinished : 0;
-  const flagRate = totalFinished > 0 ? flagCount / totalFinished : 0;
-  const haltRate = totalFinished > 0 ? haltCount / totalFinished : 0;
+  const passRate = totalVerdicted > 0 ? passCount / totalVerdicted : 0;
+  const flagRate = totalVerdicted > 0 ? flagCount / totalVerdicted : 0;
+  const haltRate = totalVerdicted > 0 ? haltCount / totalVerdicted : 0;
 
   const byVerdict = [...verdictDayMap.values()].sort((a, b) => a.date.localeCompare(b.date));
 
