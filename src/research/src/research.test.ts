@@ -1189,3 +1189,53 @@ describe('getResearchStats verdict aggregation', () => {
     expect(day2).toEqual({ date: '2024-03-02', pass: 0, flag: 0, halt: 1 });
   });
 });
+
+describe('pauseStaleActiveSessions', () => {
+  let sqlite: Database;
+  beforeEach(() => { sqlite = createTestDb(); });
+
+  function makeActiveSession(title: string, createdAtIso?: string): string {
+    const s = sessions.createSession(sqlite, title, `prompt for ${title}`);
+    if (createdAtIso) {
+      sqlite.prepare('UPDATE research_queries SET created_at = ? WHERE id = ?').run(createdAtIso, s.id);
+    }
+    return s.id;
+  }
+
+  function recordStep(sessionId: string, createdAtIso: string): void {
+    sqlite.prepare(`
+      INSERT INTO research_steps (id, session_id, thread_id, model, provider, cost_usd, duration_ms, prompt_tokens, completion_tokens, tool_calls, error, created_at)
+      VALUES (?, ?, NULL, 'm', 'p', 0, 0, 0, 0, '[]', NULL, ?)
+    `).run(`step-${Math.random().toString(36).slice(2, 10)}`, sessionId, createdAtIso);
+  }
+
+  test('pauses active sessions with no recent step and no in-flight job', () => {
+    const long_ago = '2020-01-01T00:00:00.000Z';
+    const fresh = makeActiveSession('fresh');
+    const stale = makeActiveSession('stale', long_ago);
+    recordStep(fresh, new Date().toISOString());
+
+    const paused = queries.pauseStaleActiveSessions(sqlite, 30 * 60 * 1000);
+    expect(paused).toBe(1);
+    expect(queries.getQuery(sqlite, stale)?.status).toBe('paused');
+    expect(queries.getQuery(sqlite, fresh)?.status).toBe('active');
+  });
+
+  test('does not pause sessions with active jobs even when last step is old', () => {
+    const long_ago = '2020-01-01T00:00:00.000Z';
+    const stale = makeActiveSession('stale-with-job', long_ago);
+    sqlite.prepare(`
+      INSERT INTO research_jobs (id, session_id, thread_id, status, mode, max_iterations, iterations_completed, claimed_by, claimed_at, started_at, completed_at, error, created_at, updated_at, heartbeat_at)
+      VALUES ('job1', ?, NULL, 'running', 'priority', 1, 0, 'w1', datetime('now'), datetime('now'), NULL, NULL, datetime('now'), datetime('now'), datetime('now'))
+    `).run(stale);
+
+    const paused = queries.pauseStaleActiveSessions(sqlite, 30 * 60 * 1000);
+    expect(paused).toBe(0);
+    expect(queries.getQuery(sqlite, stale)?.status).toBe('active');
+  });
+
+  test('returns 0 with no zombies', () => {
+    makeActiveSession('a');
+    expect(queries.pauseStaleActiveSessions(sqlite, 30 * 60 * 1000)).toBe(0);
+  });
+});

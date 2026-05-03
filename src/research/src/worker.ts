@@ -380,6 +380,9 @@ while (!shutdownRequested) {
     const orphaned = resetOrphanedActiveThreads(sqlite);
     if (orphaned > 0) console.log(`[worker] reset ${orphaned} orphaned active thread(s) to queued`);
 
+    const zombies = sessions.pauseStaleActiveSessions(sqlite);
+    if (zombies > 0) console.log(`[worker] paused ${zombies} stale active session(s) (no step in 30m)`);
+
     checkScheduledSessions();
     checkQueuedThreads();
 

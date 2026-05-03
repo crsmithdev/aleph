@@ -198,6 +198,53 @@ export function getQueryWithStats(sqlite: Sqlite, id: string): ResearchQueryWith
   return { ...query, stats: stats.get(id) ?? emptyStats() };
 }
 
+/**
+ * Auto-pause "zombie" active sessions — status='active' but no step has run
+ * for `staleMs` and no job is currently in flight. The dashboard's
+ * "ACTIVE RIGHT NOW" counter included these, misleading the user.
+ *
+ * Returns the number of sessions paused. Emits a query event for each so
+ * subscribed UIs update without a refetch.
+ *
+ * Skips sessions with an active job (pending/claimed/running) — those are
+ * legitimately working, just slow between steps.
+ */
+export function pauseStaleActiveSessions(sqlite: Sqlite, staleMs: number = 30 * 60 * 1000): number {
+  const cutoff = new Date(Date.now() - staleMs).toISOString();
+  const stale = sqlite.prepare(`
+    SELECT q.id
+    FROM research_queries q
+    LEFT JOIN (
+      SELECT session_id, MAX(created_at) AS last_step_at
+      FROM research_steps
+      GROUP BY session_id
+    ) s ON s.session_id = q.id
+    WHERE q.status = 'active'
+      AND q.id NOT IN (
+        SELECT session_id FROM research_jobs
+        WHERE status IN ('pending', 'claimed', 'running')
+      )
+      AND COALESCE(s.last_step_at, q.created_at) < ?
+  `).all(cutoff) as Array<{ id: string }>;
+  if (stale.length === 0) return 0;
+
+  const update = sqlite.prepare(`
+    UPDATE research_queries
+    SET status = 'paused', updated_at = datetime('now')
+    WHERE id = ? AND status = 'active'
+  `);
+  let paused = 0;
+  for (const row of stale) {
+    const result = update.run(row.id);
+    if (result.changes > 0) {
+      paused++;
+      const updated = getQuery(sqlite, row.id);
+      if (updated) emitResearchEvent(row.id, 'query', updated);
+    }
+  }
+  return paused;
+}
+
 export function updateQuery(
   sqlite: Sqlite,
   id: string,
