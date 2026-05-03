@@ -1,12 +1,14 @@
 /**
  * TelemetryView — per-session observability panels surfaced from the metrics API.
  *
- * Panels:
- *   - Job lifecycle (queue wait / claim-to-start / duration percentiles)
- *   - Per-worker throughput and cost
- *   - Source extraction health (failure rate, reasons, domains)
- *   - Thread state-machine timings + stuck-thread list
- *   - Session cost trajectory (per-step cumulative cost)
+ * Panel exports:
+ *   - JobLifecyclePanel — stat-table + per-worker breakdown (used by old standalone view)
+ *   - JobLifecycleCompactPanel — single 4×4 table per the Activity-tab mockup
+ *   - SourceHealthPanel — failure-rate cards + top failing domains + recent failures
+ *   - ThreadStatePanel — 6-tile per-status grid (legacy)
+ *   - ThreadStateCompactPanel — stackbar + one-line counts + stuck list (Activity tab)
+ *   - DecisionLogPanel — filterable list of steps with metadata
+ *   - PerturbationStrategiesPanel — per-strategy outcomes
  *
  * Each panel fetches via a dedicated hook so they refetch independently.
  */
@@ -16,7 +18,6 @@ import {
   useJobMetrics,
   useSourceHealth,
   useThreadStateMetrics,
-  useSessionCostTrajectory,
   useResearchSteps,
   usePerturbationStats,
   type DurationStats,
@@ -71,7 +72,7 @@ function Panel({ title, children, subtitle }: { title: string; subtitle?: string
 
 // ---------------------------------------------------------------------------
 
-function JobLifecyclePanel({ sessionId }: { sessionId: string }) {
+export function JobLifecyclePanel({ sessionId }: { sessionId: string }) {
   const { data, isLoading, isError } = useJobMetrics(sessionId);
   if (isLoading) return <Panel title="Job lifecycle"><div className="text-text-muted italic">Loading…</div></Panel>;
   if (isError || !data) return <Panel title="Job lifecycle"><div className="text-text-muted italic">Failed to load metrics.</div></Panel>;
@@ -128,9 +129,83 @@ function JobLifecyclePanel({ sessionId }: { sessionId: string }) {
   );
 }
 
+/** Compact 4×4 lifecycle table per the Activity-tab mockup. One row per stage,
+ *  columns are p50/p95/max/avg/n. Per-worker breakdown collapses to one
+ *  semi-colon-separated line under the table. */
+export function JobLifecycleCompactPanel({ sessionId }: { sessionId: string }) {
+  const { data, isLoading, isError } = useJobMetrics(sessionId);
+
+  const headerSub = data && data.total > 0
+    ? `${data.total} jobs · ${Object.entries(data.by_status).filter(([, n]) => n > 0).map(([s, n]) => `${n} ${s}`).join(' · ')}`
+    : undefined;
+
+  return (
+    <div className="rounded-md border border-border-primary bg-bg-secondary">
+      <div className="flex items-baseline gap-3 px-3.5 py-2.5 border-b border-border-primary">
+        <h4 className="text-sm font-semibold text-text-primary">Job lifecycle</h4>
+        {headerSub && <span className="text-xs text-text-muted">{headerSub}</span>}
+      </div>
+      {isLoading && <div className="p-3.5 text-sm text-text-muted italic">Loading…</div>}
+      {!isLoading && (isError || !data) && <div className="p-3.5 text-sm text-text-muted italic">Failed to load metrics.</div>}
+      {!isLoading && data && data.total === 0 && <div className="p-3.5 text-sm text-text-muted italic">No jobs recorded yet.</div>}
+      {!isLoading && data && data.total > 0 && (() => {
+        const rows: Array<{ label: string; sub: string; stats: DurationStats | null }> = [
+          { label: 'queue wait', sub: 'created → claimed', stats: data.queue_wait_ms },
+          { label: 'supervisor lag', sub: 'claimed → started', stats: data.claim_to_start_ms },
+          { label: 'run duration', sub: 'started → completed', stats: data.duration_ms },
+          { label: 'end-to-end', sub: '', stats: data.total_ms },
+        ];
+        return (
+          <>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-bg-tertiary text-text-muted">
+                  <th className="text-left font-mono text-xs uppercase tracking-wider px-3 py-1.5">Stage</th>
+                  <th className="text-right font-mono text-xs uppercase tracking-wider px-3 py-1.5">p50</th>
+                  <th className="text-right font-mono text-xs uppercase tracking-wider px-3 py-1.5">p95</th>
+                  <th className="text-right font-mono text-xs uppercase tracking-wider px-3 py-1.5">max</th>
+                  <th className="text-right font-mono text-xs uppercase tracking-wider px-3 py-1.5">avg</th>
+                  <th className="text-right font-mono text-xs uppercase tracking-wider px-3 py-1.5">n</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.label} className="border-t border-border-primary tabular-nums">
+                    <td className="px-3 py-1.5 font-medium text-text-primary">
+                      {r.label}{r.sub && <span className="text-text-muted text-xs ml-1.5">{r.sub}</span>}
+                    </td>
+                    <td className="px-3 py-1.5 text-right">{r.stats ? formatMs(r.stats.p50) : '—'}</td>
+                    <td className="px-3 py-1.5 text-right">{r.stats ? formatMs(r.stats.p95) : '—'}</td>
+                    <td className="px-3 py-1.5 text-right">{r.stats ? formatMs(r.stats.max) : '—'}</td>
+                    <td className="px-3 py-1.5 text-right">{r.stats ? formatMs(r.stats.avg) : '—'}</td>
+                    <td className="px-3 py-1.5 text-right text-text-muted">{r.stats ? r.stats.count : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {data.by_worker.length > 0 && (
+              <div className="border-t border-border-primary px-3.5 py-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                <span className="text-text-muted">By worker:</span>
+                {data.by_worker.map(w => (
+                  <span key={w.worker_id} className="text-text-secondary tabular-nums">
+                    <span className="font-mono">{w.worker_id}</span>{' '}
+                    {w.total} · <span className="text-success">{w.completed}✓</span>
+                    {w.failed > 0 && <> · <span className="text-error">{w.failed}✗</span></>}
+                    {' '}· {formatMs(w.avg_duration_ms)} avg · {formatUsd(w.cost_usd)}
+                  </span>
+                ))}
+              </div>
+            )}
+          </>
+        );
+      })()}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 
-function SourceHealthPanel({ sessionId }: { sessionId: string }) {
+export function SourceHealthPanel({ sessionId, compact = false }: { sessionId: string; compact?: boolean }) {
   const { data, isLoading, isError } = useSourceHealth(sessionId);
   if (isLoading) return <Panel title="Source extraction health"><div className="text-text-muted italic">Loading…</div></Panel>;
   if (isError || !data) return <Panel title="Source extraction health"><div className="text-text-muted italic">Failed to load metrics.</div></Panel>;
@@ -138,6 +213,41 @@ function SourceHealthPanel({ sessionId }: { sessionId: string }) {
 
   const rate = (data.failure_rate * 100).toFixed(1);
   const rateColor = data.failure_rate > 0.25 ? 'text-danger' : data.failure_rate > 0.1 ? 'text-warning' : 'text-success';
+
+  // Compact two-column variant for the Activity tab.
+  if (compact) {
+    return (
+      <div className="rounded-md border border-border-primary bg-bg-secondary">
+        <div className="flex items-baseline gap-3 px-3.5 py-2.5 border-b border-border-primary">
+          <h4 className="text-sm font-semibold text-text-primary">Source extraction</h4>
+          <span className="text-xs text-text-muted">{data.total} sources · {rate}% failure</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3.5">
+          <div>
+            <div className="flex justify-between mb-2">
+              <span className="text-xs text-text-muted">Failure rate</span>
+              <span className={clsx('font-semibold tabular-nums text-xl', rateColor)}>{rate}%</span>
+            </div>
+            <div className="flex justify-between text-sm py-0.5"><span className="text-text-muted">Avg attempts on failure</span><span className="tabular-nums">{data.avg_attempts_on_failure != null ? data.avg_attempts_on_failure.toFixed(1) : '—'}</span></div>
+            <div className="flex justify-between text-sm py-0.5"><span className="text-text-muted">Extracted</span><span className="tabular-nums text-success">{data.by_status.extracted ?? 0}</span></div>
+            <div className="flex justify-between text-sm py-0.5"><span className="text-text-muted">Failed</span><span className="tabular-nums text-danger">{data.by_status.failed ?? 0}</span></div>
+          </div>
+          <div>
+            <div className="text-xs uppercase tracking-wider font-mono text-text-muted mb-2">Top failing domains</div>
+            {data.top_failing_domains.length === 0 && <div className="text-sm text-text-muted italic">none</div>}
+            {data.top_failing_domains.map(d => (
+              <div key={d.domain} className="flex justify-between text-sm py-0.5">
+                <span className="font-mono truncate">{d.domain}</span>
+                <span className="tabular-nums shrink-0 ml-2">
+                  <span className={d.rate > 0.5 ? 'text-error' : 'text-warning'}>{d.failed}</span> / {d.total} ({(d.rate * 100).toFixed(0)}%)
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Panel
@@ -237,7 +347,7 @@ function SourceHealthPanel({ sessionId }: { sessionId: string }) {
 
 // ---------------------------------------------------------------------------
 
-function ThreadStatePanel({ sessionId, onNavigateToThread }: { sessionId: string; onNavigateToThread?: (id: string) => void }) {
+export function ThreadStatePanel({ sessionId, onNavigateToThread }: { sessionId: string; onNavigateToThread?: (id: string) => void }) {
   const { data, isLoading, isError } = useThreadStateMetrics(sessionId, { stuckThresholdMs: 5 * 60_000 });
   if (isLoading) return <Panel title="Thread state"><div className="text-text-muted italic">Loading…</div></Panel>;
   if (isError || !data) return <Panel title="Thread state"><div className="text-text-muted italic">Failed to load metrics.</div></Panel>;
@@ -264,158 +374,141 @@ function ThreadStatePanel({ sessionId, onNavigateToThread }: { sessionId: string
         ))}
       </div>
 
-      {data.stuck_threads.length > 0 && (
-        <div>
-          <div className="text-sm font-medium text-text-secondary mb-2">
-            <span className="text-warning">⚠</span> Stuck threads ({data.stuck_threads.length})
-          </div>
-          <div className="rounded-md border border-border-primary overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-bg-secondary">
-                <tr>
-                  <th className="px-3 py-2 text-left font-medium text-text-muted">thread</th>
-                  <th className="px-3 py-2 text-left font-medium text-text-muted">status</th>
-                  <th className="px-3 py-2 text-right font-medium text-text-muted">stuck for</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.stuck_threads.map(t => (
-                  <tr key={t.id} className="border-t border-border-primary">
-                    <td className="px-3 py-2">
-                      {onNavigateToThread ? (
-                        <button
-                          onClick={() => onNavigateToThread(t.id)}
-                          className="text-left hover:underline text-accent truncate block max-w-[420px]"
-                        >
-                          {t.short_query ?? t.query.slice(0, 80)}
-                        </button>
-                      ) : (
-                        <span className="truncate block max-w-[420px]">{t.short_query ?? t.query.slice(0, 80)}</span>
-                      )}
-                      <span className="text-xs text-text-muted font-mono">{t.id.slice(0, 8)}</span>
-                    </td>
-                    <td className="px-3 py-2">{t.status}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-warning">{formatMs(t.stuck_for_ms)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      {data.stuck_threads.length > 0 && <StuckThreadsTable stuck={data.stuck_threads} onNavigateToThread={onNavigateToThread} />}
     </Panel>
   );
 }
 
-// ---------------------------------------------------------------------------
+function StuckThreadsTable({
+  stuck, onNavigateToThread,
+}: {
+  stuck: Array<{ id: string; query: string; short_query: string | null; status: string; stuck_for_ms: number }>;
+  onNavigateToThread?: (id: string) => void;
+}) {
+  return (
+    <div>
+      <div className="text-sm font-medium text-text-secondary mb-2">
+        <span className="text-warning">⚠</span> Stuck threads ({stuck.length})
+      </div>
+      <div className="rounded-md border border-border-primary overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-bg-secondary">
+            <tr>
+              <th className="px-3 py-2 text-left font-medium text-text-muted">thread</th>
+              <th className="px-3 py-2 text-left font-medium text-text-muted">status</th>
+              <th className="px-3 py-2 text-right font-medium text-text-muted">stuck for</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stuck.map(t => (
+              <tr key={t.id} className="border-t border-border-primary">
+                <td className="px-3 py-2">
+                  {onNavigateToThread ? (
+                    <button
+                      onClick={() => onNavigateToThread(t.id)}
+                      className="text-left hover:underline text-accent truncate block max-w-[420px]"
+                    >
+                      {t.short_query ?? t.query.slice(0, 80)}
+                    </button>
+                  ) : (
+                    <span className="truncate block max-w-[420px]">{t.short_query ?? t.query.slice(0, 80)}</span>
+                  )}
+                  <span className="text-xs text-text-muted font-mono">{t.id.slice(0, 8)}</span>
+                </td>
+                <td className="px-3 py-2">{t.status}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-warning">{formatMs(t.stuck_for_ms)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
-function CostTrajectoryPanel({ sessionId }: { sessionId: string }) {
-  const { data, isLoading, isError } = useSessionCostTrajectory(sessionId);
+/** Compact thread-state panel: stackbar + one-line counts + full-size stuck list.
+ *  Replaces the 6-tile grid for the Activity tab. */
+export function ThreadStateCompactPanel({ sessionId, onNavigateToThread }: { sessionId: string; onNavigateToThread?: (id: string) => void }) {
+  const { data, isLoading, isError } = useThreadStateMetrics(sessionId, { stuckThresholdMs: 5 * 60_000 });
 
-  // Simple inline sparkline — no dep, no axes. 100 samples max.
-  const sparkline = useMemo(() => {
-    if (!data || data.series.length === 0) return null;
-    const samples = data.series.length > 100
-      ? data.series.filter((_, i) => i % Math.ceil(data.series.length / 100) === 0)
-      : data.series;
-    const max = samples[samples.length - 1].cumulative_cost_usd || 1;
-    const w = 600, h = 80;
-    const pts = samples.map((s, i) => {
-      const x = (i / Math.max(1, samples.length - 1)) * w;
-      const y = h - (s.cumulative_cost_usd / max) * h;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(' ');
-    return { pts, w, h, max };
-  }, [data]);
+  if (isLoading) {
+    return <CompactPanel title="Thread state"><div className="text-sm text-text-muted italic">Loading…</div></CompactPanel>;
+  }
+  if (isError || !data) {
+    return <CompactPanel title="Thread state"><div className="text-sm text-text-muted italic">Failed to load metrics.</div></CompactPanel>;
+  }
 
-  if (isLoading) return <Panel title="Cost trajectory"><div className="text-text-muted italic">Loading…</div></Panel>;
-  if (isError || !data) return <Panel title="Cost trajectory"><div className="text-text-muted italic">Failed to load.</div></Panel>;
-  if (data.total_steps === 0) return <Panel title="Cost trajectory"><div className="text-text-muted italic">No steps recorded yet.</div></Panel>;
+  const total = data.transitions_observed;
+  const counts = {
+    active: data.by_status.active?.count ?? 0,
+    queued: data.by_status.queued?.count ?? 0,
+    exhausted: data.by_status.exhausted?.count ?? 0,
+    pruned: data.by_status.pruned?.count ?? 0,
+    deferred: data.by_status.deferred?.count ?? 0,
+  };
+  const stuckCount = data.stuck_threads.length;
+  const denom = Math.max(1, counts.active + counts.queued + counts.exhausted + counts.pruned + counts.deferred);
+  const pct = (n: number) => `${(n / denom) * 100}%`;
 
   return (
-    <Panel
-      title="Cost trajectory"
-      subtitle={`${data.total_steps} steps · ${data.total_tokens.toLocaleString()} tokens · ${formatUsd(data.total_cost_usd)}`}
-    >
-      {sparkline && (
-        <div className="rounded-md border border-border-primary bg-bg-secondary p-3 mb-4">
-          <svg width="100%" viewBox={`0 0 ${sparkline.w} ${sparkline.h}`} preserveAspectRatio="none" className="h-24">
-            <polyline points={sparkline.pts} fill="none" stroke="currentColor" className="text-accent" strokeWidth="1.5" />
-          </svg>
-          <div className="flex justify-between text-xs text-text-muted tabular-nums mt-1">
-            <span>$0</span><span>{formatUsd(sparkline.max)}</span>
-          </div>
+    <CompactPanel title="Thread state" subtitle={`${total} threads · stuck threshold 5m`}>
+      <div className="flex h-2 rounded overflow-hidden bg-bg-tertiary mb-2">
+        <span style={{ width: pct(counts.active) }} className="bg-success" />
+        <span style={{ width: pct(counts.queued) }} className="bg-warning" />
+        <span style={{ width: pct(counts.exhausted) }} className="bg-text-disabled" />
+        <span style={{ width: pct(counts.pruned) }} className="bg-error" />
+        <span style={{ width: pct(counts.deferred) }} className="bg-text-muted/40" />
+      </div>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm tabular-nums">
+        <span><span className="inline-block w-1.5 h-1.5 rounded-full bg-success mr-1.5 align-middle" /><strong>{counts.active}</strong> <span className="text-text-muted">active</span></span>
+        <span className="text-text-muted">·</span>
+        <span><span className="inline-block w-1.5 h-1.5 rounded-full bg-warning mr-1.5 align-middle" /><strong>{counts.queued}</strong> <span className="text-text-muted">queued</span></span>
+        <span className="text-text-muted">·</span>
+        <span><span className="inline-block w-1.5 h-1.5 rounded-full bg-text-disabled mr-1.5 align-middle" /><strong>{counts.exhausted}</strong> <span className="text-text-muted">exhausted</span></span>
+        <span className="text-text-muted">·</span>
+        <span><span className="inline-block w-1.5 h-1.5 rounded-full bg-error mr-1.5 align-middle" /><strong>{counts.pruned}</strong> <span className="text-text-muted">pruned</span></span>
+        <span className="text-text-muted">·</span>
+        <span><strong>{counts.deferred}</strong> <span className="text-text-muted">deferred</span></span>
+        {stuckCount > 0 && (
+          <span className="ml-auto text-warning">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-warning mr-1.5 align-middle" />{stuckCount} stuck
+          </span>
+        )}
+      </div>
+      {data.stuck_threads.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-border-primary">
+          <StuckThreadsTable stuck={data.stuck_threads} onNavigateToThread={onNavigateToThread} />
         </div>
       )}
+    </CompactPanel>
+  );
+}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <div className="text-sm font-medium text-text-secondary mb-2">By model</div>
-          <div className="rounded-md border border-border-primary overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-bg-secondary">
-                <tr>
-                  <th className="px-3 py-1.5 text-left font-medium text-text-muted">model</th>
-                  <th className="px-3 py-1.5 text-right font-medium text-text-muted">steps</th>
-                  <th className="px-3 py-1.5 text-right font-medium text-text-muted">tokens</th>
-                  <th className="px-3 py-1.5 text-right font-medium text-text-muted">cost</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.by_model.map(m => (
-                  <tr key={m.model} className="border-t border-border-primary tabular-nums">
-                    <td className="px-3 py-1.5 font-mono text-xs truncate max-w-[260px]" title={m.model}>{m.model}</td>
-                    <td className="px-3 py-1.5 text-right">{m.steps}</td>
-                    <td className="px-3 py-1.5 text-right">{m.tokens.toLocaleString()}</td>
-                    <td className="px-3 py-1.5 text-right">{formatUsd(m.cost)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div>
-          <div className="text-sm font-medium text-text-secondary mb-2">By provider</div>
-          <div className="rounded-md border border-border-primary overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-bg-secondary">
-                <tr>
-                  <th className="px-3 py-1.5 text-left font-medium text-text-muted">provider</th>
-                  <th className="px-3 py-1.5 text-right font-medium text-text-muted">steps</th>
-                  <th className="px-3 py-1.5 text-right font-medium text-text-muted">cost</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.by_provider.map(p => (
-                  <tr key={p.provider} className="border-t border-border-primary tabular-nums">
-                    <td className="px-3 py-1.5 font-mono text-xs">{p.provider}</td>
-                    <td className="px-3 py-1.5 text-right">{p.steps}</td>
-                    <td className="px-3 py-1.5 text-right">{formatUsd(p.cost)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+/** Lightweight panel container used by the compact Activity-tab variants. */
+function CompactPanel({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-md border border-border-primary bg-bg-secondary">
+      <div className="flex items-baseline gap-3 px-3.5 py-2.5 border-b border-border-primary">
+        <h4 className="text-sm font-semibold text-text-primary">{title}</h4>
+        {subtitle && <span className="text-xs text-text-muted">{subtitle}</span>}
       </div>
-    </Panel>
+      <div className="p-3.5">{children}</div>
+    </div>
   );
 }
 
 // ---------------------------------------------------------------------------
 
-function DecisionLogPanel({ sessionId }: { sessionId: string }) {
+export function DecisionLogPanel({ sessionId }: { sessionId: string }) {
   const { data: steps, isLoading } = useResearchSteps(sessionId);
   const [keyFilter, setKeyFilter] = useState<string>('__all__');
   const [labelFilter, setLabelFilter] = useState<string>('__all__');
 
-  // Steps with non-empty metadata — those are the decisions worth surfacing.
   const withMeta = useMemo(() => {
     if (!steps) return [];
     return steps.filter(s => s.metadata && Object.keys(s.metadata).length > 0);
   }, [steps]);
 
-  // All metadata keys and labels, for the filter dropdowns.
   const { allKeys, allLabels } = useMemo(() => {
     const keys = new Set<string>();
     const labels = new Set<string>();
@@ -532,11 +625,8 @@ function DecisionRow({ step, highlightKey }: { step: ResearchStep; highlightKey:
 
 // ---------------------------------------------------------------------------
 
-/** Per-strategy perturbation outcomes. Surfaces the fruitfulness multiplier
- *  the engine's selector is currently applying so the user can answer "which
- *  strategies are working for me on this kind of question?" Empty until a
- *  perturbation has fired in this session. */
-function PerturbationStrategiesPanel({ sessionId }: { sessionId: string }) {
+/** Per-strategy perturbation outcomes. */
+export function PerturbationStrategiesPanel({ sessionId }: { sessionId: string }) {
   const { data, isLoading, isError } = usePerturbationStats(sessionId);
   if (isLoading) return <Panel title="Perturbation strategies"><div className="text-text-muted italic">Loading…</div></Panel>;
   if (isError) return <Panel title="Perturbation strategies"><div className="text-text-muted italic">Failed to load strategy outcomes.</div></Panel>;
@@ -570,9 +660,6 @@ function PerturbationStrategiesPanel({ sessionId }: { sessionId: string }) {
           </thead>
           <tbody>
             {data.map(r => {
-              // Color the fruitfulness column so it's easy to scan: above 1.0
-              // is a positive signal, below is a negative one. Neutral (~1.0)
-              // stays muted.
               const f = r.fruitfulness;
               const fColor = f >= 1.05 ? 'text-success' : f <= 0.95 ? 'text-warning' : 'text-text-muted';
               return (
@@ -595,13 +682,14 @@ function PerturbationStrategiesPanel({ sessionId }: { sessionId: string }) {
 
 // ---------------------------------------------------------------------------
 
+/** Original whole-tab view — still rendered by anyone who imports `TelemetryView`.
+ *  Now built from the same exported subcomponents the Activity tab composes. */
 export function TelemetryView({ sessionId, onNavigateToThread }: { sessionId: string; onNavigateToThread?: (id: string) => void }) {
   return (
     <div className="pb-10">
       <JobLifecyclePanel sessionId={sessionId} />
       <SourceHealthPanel sessionId={sessionId} />
       <ThreadStatePanel sessionId={sessionId} onNavigateToThread={onNavigateToThread} />
-      <CostTrajectoryPanel sessionId={sessionId} />
       <PerturbationStrategiesPanel sessionId={sessionId} />
       <DecisionLogPanel sessionId={sessionId} />
     </div>

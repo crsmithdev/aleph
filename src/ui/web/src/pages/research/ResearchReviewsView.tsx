@@ -83,7 +83,7 @@ export function ReviewsView({ sessionId, query }: Props) {
   );
 }
 
-function VerdictBadge({ kind, label }: { kind: 'ok' | 'warn' | 'error' | 'neutral'; label: string }) {
+export function VerdictBadge({ kind, label }: { kind: 'ok' | 'warn' | 'error' | 'neutral'; label: string }) {
   const cls = {
     ok: 'bg-green-900/40 text-green-300 border-green-500/30',
     warn: 'bg-yellow-900/40 text-yellow-300 border-yellow-500/30',
@@ -284,7 +284,7 @@ function buildIterationCheckExport(record: IterationCheckRecord, query?: Researc
   return sections.join('\n');
 }
 
-function PostMortemCard({ record, latest, query }: { record: PostMortemRecord; latest: boolean; query?: ResearchQuery }) {
+export function PostMortemCard({ record, latest, query }: { record: PostMortemRecord; latest: boolean; query?: ResearchQuery }) {
   const m = record.metrics_snapshot.metrics;
   const sh = record.metrics_snapshot.source_health;
   const isPass = record.verdict === 'pass';
@@ -333,7 +333,7 @@ function PostMortemCard({ record, latest, query }: { record: PostMortemRecord; l
   );
 }
 
-function IterationCheckCard({ record, query }: { record: IterationCheckRecord; query?: ResearchQuery }) {
+export function IterationCheckCard({ record, query }: { record: IterationCheckRecord; query?: ResearchQuery }) {
   const kind = record.verdict === 'on_track' ? 'ok' : record.verdict === 'drifting' ? 'warn' : 'error';
   const killed = record.applied_actions.filter(a => a.action === 'kill_thread' && a.ok);
   const proposed = record.applied_actions.filter(a => a.action !== 'kill_thread' || !a.ok);
