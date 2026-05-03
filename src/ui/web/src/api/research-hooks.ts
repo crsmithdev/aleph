@@ -488,6 +488,37 @@ export interface ResearchDefaults {
   snippet_display_chars: number;
 }
 
+// --- Run-plan suggester (deterministic shape × topic lookup) ---
+export type TopicCluster =
+  | 'AI / LLM tooling'
+  | 'Music history'
+  | 'Databases'
+  | 'Audio & DSP'
+  | 'Personal infra'
+  | 'Misc';
+
+export interface RunPlan {
+  model_fast: string;
+  budget_total_usd: number;
+  max_thread_depth: number;
+  role_label: string;
+}
+
+/** Fetches the suggested run plan for a (shape × topic) pair. Pure server-side
+ *  lookup — no LLM call — so the result is cheap and stable; safe to refetch
+ *  on every change to the compose-box selection. */
+export function useSuggestedRunPlan(shape: QuestionShape | null, topic: TopicCluster | null) {
+  const params = new URLSearchParams();
+  if (shape) params.set('shape', shape);
+  if (topic) params.set('topic', topic);
+  const qs = params.toString();
+  return useQuery({
+    queryKey: ['research-suggest-plan', shape, topic],
+    queryFn: () => api.get<RunPlan>(`/research/suggest-plan${qs ? `?${qs}` : ''}`),
+    staleTime: 60_000,
+  });
+}
+
 export function useResearchDefaults() {
   return useQuery({
     queryKey: ['research-defaults'],

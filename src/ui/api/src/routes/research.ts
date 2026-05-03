@@ -40,7 +40,12 @@ import {
   enumerateCanon,
   getStrategyStats,
   TrackedLLM,
+  suggestRunPlan,
+  QUESTION_SHAPES,
+  TOPIC_CLUSTERS,
+  type TopicCluster,
 } from '@construct/research';
+import type { QuestionShape } from '@construct/research';
 
 function sanitizeQuery(q: string): string {
   let t = q.trim().replace(/\s+/g, ' ');
@@ -171,6 +176,22 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.get('/summary', async () => getResearchSummary(app.sqlite));
+
+  // Run-plan suggester: deterministic (shape × topic) → RunPlan lookup, no LLM.
+  // API choice (a): standalone GET so the landing-page compose box can preview
+  // suggested defaults before submit, without first creating a query.
+  app.get<{ Querystring: { shape?: string; topic?: string } }>(
+    '/suggest-plan',
+    async (req) => {
+      const rawShape = req.query.shape;
+      const rawTopic = req.query.topic;
+      const shape = rawShape && (QUESTION_SHAPES as readonly string[]).includes(rawShape)
+        ? (rawShape as QuestionShape) : null;
+      const topic = rawTopic && (TOPIC_CLUSTERS as readonly string[]).includes(rawTopic)
+        ? (rawTopic as TopicCluster) : null;
+      return suggestRunPlan(shape, topic);
+    }
+  );
 
   // === Queries ===
   app.get('/queries', async (req) => {
