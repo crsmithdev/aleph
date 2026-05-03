@@ -11,7 +11,7 @@ import { HabitsPage } from './pages/life/HabitsPage';
 import { SummaryPage } from './pages/life/SummaryPage';
 
 // Research pages
-import { ResearchDashboardPage } from './pages/research/ResearchDashboardPage';
+import { ResearchLandingPage } from './pages/research/ResearchLandingPage';
 import { ResearchQueriesPage } from './pages/research/ResearchQueriesPage';
 import { ResearchQueryDetailPage } from './pages/research/ResearchQueryDetailPage';
 import { ResearchPlanPage } from './pages/research/ResearchPlanPage';
@@ -64,7 +64,7 @@ export function App() {
               <Route path="/habits" element={<HabitsPage />} />
 
               {/* Research */}
-              <Route path="/research" element={<ResearchDashboardPage />} />
+              <Route path="/research" element={<ResearchLandingPage />} />
               <Route path="/research/queries" element={<ResearchQueriesPage />} />
               <Route path="/research/:id" element={<ResearchQueryDetailPage />} />
               <Route path="/research/:id/plan" element={<ResearchPlanPage />} />

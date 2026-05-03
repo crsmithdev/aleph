@@ -109,6 +109,14 @@ export interface ShapeAnalysis {
   confidence: number;
 }
 
+/** Coarse subject-matter cluster paired with classifier confidence. The
+ *  enum mirrors `TopicCluster` in `src/research/src/types.ts` — keep in
+ *  sync. Distinct from `ShapeAnalysis` (structural). */
+export interface TopicClusterAnalysis {
+  cluster: TopicCluster;
+  confidence: number;
+}
+
 export interface ResearchQuery {
   id: string;
   title: string;
@@ -117,6 +125,7 @@ export interface ResearchQuery {
   prompt_super_short: string | null;
   prompt_hints: PromptHints;
   question_shape: ShapeAnalysis | null;
+  topic_cluster: TopicClusterAnalysis | null;
   status: 'active' | 'paused' | 'exhausted' | 'halted' | 'completed' | 'archived';
   config: Record<string, unknown>;
   summary: string;
