@@ -1831,11 +1831,8 @@ export function KnowledgeView({
 
     cyRef.current = cy;
 
-    // The container's final size isn't always known when cytoscape initialises —
-    // it lives inside a flex column that gets its height from 100vh math. Without
-    // this, the first render is laid out against 0×0 bounds and the graph only
-    // appears once the user touches the view (Split toggle, Relayout, etc.).
-    // ResizeObserver catches both the initial sizing and any later layout shifts.
+    // Re-fit on container resize so the graph stays centred when the parent
+    // panel changes size (lens toggle in ResearchGraphView, window resize, etc).
     const observer = new ResizeObserver(() => {
       cy.resize();
       cy.fit(undefined, 30);
@@ -1984,8 +1981,8 @@ export function KnowledgeView({
           </div>
         </div>
         <div className={clsx(
-          'flex-1 min-h-0 border border-border-primary/40 rounded bg-bg-secondary overflow-hidden',
-          viewMode === 'split' ? 'grid grid-cols-[260px_1fr]' : '',
+          'flex-1 min-h-0 border border-border-primary/40 rounded bg-bg-secondary overflow-hidden grid',
+          viewMode === 'split' ? 'grid-cols-[260px_1fr]' : 'grid-cols-1',
         )}>
           {viewMode === 'split' && (
             <ConceptOutline
@@ -1994,7 +1991,7 @@ export function KnowledgeView({
               onSelect={setFocusId}
             />
           )}
-          <div ref={containerRef} className={clsx('min-h-0', viewMode === 'split' && 'border-l border-border-primary/40')} />
+          <div ref={containerRef} className={clsx('min-h-0 min-w-0', viewMode === 'split' && 'border-l border-border-primary/40')} />
         </div>
       </div>
       <aside className="flex flex-col gap-4 overflow-y-auto min-h-0">
