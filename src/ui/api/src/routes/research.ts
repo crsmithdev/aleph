@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { readSessionLog, sessionLogPath } from '../research-logger.js';
 import { resolve, dirname } from 'path';
 import {
-  listQueries, listQueriesWithStats, getQuery, createQuery, updateQuery, getQueryCost, getResearchStats, getResearchSummary,
+  listQueries, listQueriesWithStats, getQuery, getQueryWithStats, createQuery, updateQuery, getQueryCost, getResearchStats, getResearchSummary,
   listThreads, getThread, updateThread, createThread,
   listFindings, getFinding, updateFinding, updateFindingSourceTexts, clearThreadFindings,
   getLatestPlan, addPlanModification,
@@ -200,7 +200,7 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get<{ Params: { id: string } }>('/queries/:id', async (req, reply) => {
-    const query = getQuery(app.sqlite, req.params.id);
+    const query = getQueryWithStats(app.sqlite, req.params.id);
     if (!query) return reply.status(404).send({ error: 'Query not found' });
     return query;
   });

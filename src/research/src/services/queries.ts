@@ -191,6 +191,13 @@ export function listQueriesWithStats(sqlite: Sqlite, status?: string): ResearchQ
   return queries.map(q => ({ ...q, stats: stats.get(q.id) ?? emptyStats() }));
 }
 
+export function getQueryWithStats(sqlite: Sqlite, id: string): ResearchQueryWithStats | null {
+  const query = getQuery(sqlite, id);
+  if (!query) return null;
+  const stats = computeQueryStats(sqlite, [id]);
+  return { ...query, stats: stats.get(id) ?? emptyStats() };
+}
+
 export function updateQuery(
   sqlite: Sqlite,
   id: string,
