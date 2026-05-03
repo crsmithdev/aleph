@@ -447,6 +447,35 @@ export const researchRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
+  // JSON document view — sibling of /export/document (which returns a .md
+  // attachment). Returns null when synthesis hasn't produced a document yet
+  // so callers can distinguish "no doc yet" from "query not found".
+  app.get<{ Params: { id: string } }>(
+    '/queries/:id/document',
+    async (req, reply) => {
+      const query = getQuery(app.sqlite, req.params.id);
+      if (!query) return reply.status(404).send({ error: 'Query not found' });
+      const document = (query.document as string | undefined) ?? null;
+      return { id: query.id, document, has_document: !!document };
+    }
+  );
+
+  // Semantic lifecycle actions. All wrap updateQuery(status) and return the
+  // updated query. POST so the action shows up in REST conventions; PATCH
+  // /queries/:id with { status } still works for callers that prefer it.
+  function lifecycleAction(targetStatus: 'active' | 'paused' | 'halted'): (
+    req: { params: { id: string } }, reply: { status: (n: number) => { send: (b: unknown) => unknown } }
+  ) => Promise<unknown> {
+    return async (req, reply) => {
+      const updated = updateQuery(app.sqlite, req.params.id, { status: targetStatus });
+      if (!updated) return reply.status(404).send({ error: 'Query not found' });
+      return updated;
+    };
+  }
+  app.post<{ Params: { id: string } }>('/queries/:id/pause', lifecycleAction('paused'));
+  app.post<{ Params: { id: string } }>('/queries/:id/resume', lifecycleAction('active'));
+  app.post<{ Params: { id: string } }>('/queries/:id/halt', lifecycleAction('halted'));
+
   // === Export: document (.md) ===
   app.get<{ Params: { id: string } }>(
     '/queries/:id/export/document',
