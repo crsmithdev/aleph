@@ -908,6 +908,12 @@ function stepChips(s: ResearchStep): Chip[] {
       const hint = typeof m.shape_hint === 'string' ? m.shape_hint.split(' (')[0] : '';
       chips.push({ text: `${target} canon items`, color: 'text-purple-400' });
       if (hint) chips.push({ text: hint, color: 'text-text-muted' });
+    } else if (m.decision === 'enumerate_canon_failed') {
+      // Canon enumeration tried but bailed (parse failure, no items, etc.).
+      // Surface the failure as a chip so it doesn't look like a no-op step.
+      chips.push({ text: 'canon failed', color: 'text-error/70' });
+      const reason = typeof m.reason === 'string' ? m.reason : '';
+      if (reason) chips.push({ text: reason.slice(0, 40), color: 'text-text-muted' });
     } else if (m.decision === 'coverage_check') {
       const covered = m.covered_count as number ?? 0;
       const total = m.total_count as number ?? 0;
@@ -1989,6 +1995,174 @@ function EventsView({
                               </div>
                             );
                           }
+                          if (m.decision === 'enumerate_canon') {
+                            const items = (m.items as Array<{ item: string; context: string }> | undefined) ?? [];
+                            const hint = typeof m.shape_hint === 'string' ? m.shape_hint : '';
+                            return (
+                              <div className="space-y-1 text-sm">
+                                <p className="text-text-secondary">
+                                  enumerated {items.length} canonical item{items.length === 1 ? '' : 's'}
+                                  {hint && <> · shape: <span className="font-mono text-text-muted">{hint}</span></>}
+                                </p>
+                                <div className="space-y-0.5 pl-2">
+                                  {items.map((it, i) => (
+                                    <div key={i} className="flex gap-2 items-baseline">
+                                      <span className="text-purple-400/90 shrink-0">{it.item}</span>
+                                      {it.context && <span className="text-text-muted/80 truncate">— {it.context}</span>}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          }
+                          if (m.decision === 'enumerate_canon_failed') {
+                            const reason = typeof m.reason === 'string' ? m.reason : 'unknown';
+                            const parseErr = typeof m.parse_error === 'string' ? m.parse_error : null;
+                            const slice = typeof m.slice_excerpt === 'string' ? m.slice_excerpt : null;
+                            const rawCount = typeof m.raw_count === 'number' ? m.raw_count : null;
+                            const hint = typeof m.shape_hint === 'string' ? m.shape_hint : '';
+                            return (
+                              <div className="space-y-1 text-sm">
+                                <p className="text-error/90">canon enumeration failed: <span className="text-text-secondary">{reason}</span></p>
+                                {hint && <p className="text-text-muted">shape: <span className="font-mono">{hint}</span></p>}
+                                {rawCount != null && <p className="text-text-muted">raw items returned: {rawCount}</p>}
+                                {parseErr && (
+                                  <div>
+                                    <p className="text-text-muted text-sm font-mono">parse error</p>
+                                    <p className="text-error/80 font-mono whitespace-pre-wrap break-words">{parseErr}</p>
+                                  </div>
+                                )}
+                                {slice && (
+                                  <div>
+                                    <p className="text-text-muted text-sm font-mono">response excerpt</p>
+                                    <p className="text-text-secondary/80 font-mono whitespace-pre-wrap break-words">{slice}</p>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }
+                          if (m.decision === 'coverage_check') {
+                            const slots = (m.slots as Array<{ thread_id: string; item: string; finding_count: number; covered: boolean }> | undefined) ?? [];
+                            const covered = m.covered_count as number ?? 0;
+                            const total = m.total_count as number ?? 0;
+                            const allCovered = total > 0 && covered === total;
+                            return (
+                              <div className="space-y-1 text-sm">
+                                <p className={allCovered ? 'text-success' : covered > 0 ? 'text-warning' : 'text-text-muted'}>
+                                  canon coverage: {covered}/{total} slots have findings
+                                </p>
+                                <div className="space-y-0.5 pl-2">
+                                  {slots.map((slot, i) => (
+                                    <div key={i} className={clsx('flex gap-2 items-baseline', slot.covered ? 'text-text-secondary' : 'text-text-muted/60')}>
+                                      <span className="shrink-0">{slot.covered ? '✓' : '○'}</span>
+                                      <span className="truncate flex-1">{slot.item}</span>
+                                      <span className="font-mono shrink-0 text-sm text-text-muted">{slot.finding_count} finding{slot.finding_count === 1 ? '' : 's'}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          }
+                          if (m.decision === 'select_perturbation') {
+                            const strategy = typeof m.strategy === 'string' ? m.strategy : 'unknown';
+                            const trigger = typeof m.trigger === 'string' ? m.trigger : 'probabilistic';
+                            const candidates = (m.candidates as Array<{ strategy: string; weight: number }> | undefined) ?? [];
+                            const cooldown = (m.cooldown_excluded as string[] | undefined) ?? [];
+                            const signal = m.signal as Record<string, unknown> | undefined;
+                            const sortedCands = [...candidates].sort((a, b) => b.weight - a.weight);
+                            const fmtNum = (v: unknown) => typeof v === 'number' ? v.toFixed(2) : String(v ?? '');
+                            return (
+                              <div className="space-y-1 text-sm">
+                                <p className="text-text-secondary">
+                                  selected <span className="text-blue-400 font-mono">{strategy}</span>
+                                  {' '}via <span className={trigger === 'probabilistic' ? 'text-text-muted' : 'text-warning'}>{trigger.replace(/_/g, ' ')}</span> trigger
+                                </p>
+                                {signal && Object.keys(signal).length > 0 && (
+                                  <div className="pl-2 flex flex-wrap gap-x-3 gap-y-0.5 text-text-muted">
+                                    {signal.rolling_avg_novelty != null && <span>avg novelty {fmtNum(signal.rolling_avg_novelty)}</span>}
+                                    {signal.threshold != null && <span>threshold {fmtNum(signal.threshold)}</span>}
+                                    {signal.window != null && <span>window {String(signal.window)}</span>}
+                                    {typeof signal.dominant_tag === 'string' && signal.dominant_tag && <span>dominant tag <span className="font-mono text-text-secondary">{signal.dominant_tag}</span></span>}
+                                    {signal.dominant_ratio != null && <span>ratio {fmtNum(signal.dominant_ratio)}</span>}
+                                    {signal.canon_covered != null && signal.canon_total != null && (
+                                      <span>canon {String(signal.canon_covered)}/{String(signal.canon_total)}</span>
+                                    )}
+                                  </div>
+                                )}
+                                {sortedCands.length > 0 && (
+                                  <div className="space-y-0.5 pl-2">
+                                    <p className="text-text-muted text-sm font-mono">candidates (weight)</p>
+                                    {sortedCands.map((c, i) => (
+                                      <div key={i} className={clsx('flex gap-2 items-baseline', c.strategy === strategy ? 'text-text-primary' : 'text-text-muted/80')}>
+                                        <span className="shrink-0">{c.strategy === strategy ? '→' : ' '}</span>
+                                        <span className="font-mono flex-1 truncate">{c.strategy}</span>
+                                        <span className="font-mono shrink-0 text-sm">{c.weight.toFixed(2)}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                {cooldown.length > 0 && (
+                                  <div className="pl-2">
+                                    <p className="text-text-muted text-sm font-mono">cooldown excluded</p>
+                                    <p className="text-text-muted/70 font-mono pl-2">{cooldown.join(', ')}</p>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }
+                          if (m.decision === 'perturbation_rejected') {
+                            const strategy = typeof m.strategy === 'string' ? m.strategy : 'unknown';
+                            const trigger = typeof m.trigger === 'string' ? m.trigger : '';
+                            const attempted = typeof m.attempted_query === 'string' ? m.attempted_query : '';
+                            const retry = typeof m.retry_query === 'string' ? m.retry_query : null;
+                            const sim = typeof m.similarity === 'number' ? m.similarity : null;
+                            const floor = typeof m.floor === 'number' ? m.floor : null;
+                            const reason = typeof m.reason === 'string' ? m.reason : '';
+                            return (
+                              <div className="space-y-1 text-sm">
+                                <p className="text-error/90">
+                                  rejected <span className="font-mono text-blue-400/80">{strategy}</span>
+                                  {trigger && <> ({trigger.replace(/_/g, ' ')})</>}
+                                  {reason && <span className="text-text-secondary"> — {reason}</span>}
+                                </p>
+                                {sim != null && floor != null && (
+                                  <p className="text-text-muted font-mono">
+                                    similarity {sim.toFixed(3)} &lt; floor {floor.toFixed(3)}
+                                  </p>
+                                )}
+                                {attempted && (
+                                  <div>
+                                    <p className="text-text-muted text-sm font-mono">attempted query</p>
+                                    <p className="text-text-secondary pl-2 italic">"{attempted}"</p>
+                                  </div>
+                                )}
+                                {retry && (
+                                  <div>
+                                    <p className="text-text-muted text-sm font-mono">retry query</p>
+                                    <p className="text-text-secondary pl-2 italic">"{retry}"</p>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }
+                          if (m.decision === 'perturbation_rate_limited') {
+                            const trigger = typeof m.trigger === 'string' ? m.trigger : '';
+                            const reason = typeof m.reason === 'string' ? m.reason : '';
+                            const recent = m.recent_perturbations as number ?? 0;
+                            const window = m.window as number ?? 0;
+                            return (
+                              <div className="space-y-0.5 text-sm">
+                                <p className="text-warning">
+                                  rate-limited
+                                  {trigger && <> — <span className="font-mono">{trigger.replace(/_/g, ' ')}</span> trigger</>}
+                                </p>
+                                <p className="text-text-muted">
+                                  {recent} perturbation{recent === 1 ? '' : 's'} in the last {window} step{window === 1 ? '' : 's'}
+                                </p>
+                                {reason && <p className="text-text-secondary italic">{reason}</p>}
+                              </div>
+                            );
+                          }
                           return null;
                         })()}
                         {/* Generic input/output excerpt rendering for steps that
@@ -2001,7 +2175,10 @@ function EventsView({
                           const hasDecisionBlock = m.decision === 'gap_analysis' || m.decision === 'synthesis'
                             || m.decision === 'dedup' || m.decision === 'follow_up_eval'
                             || m.decision === 'formulate_queries' || m.decision === 'extract_concepts'
-                            || m.decision === 'summarize_thread';
+                            || m.decision === 'summarize_thread' || m.decision === 'enumerate_canon'
+                            || m.decision === 'enumerate_canon_failed' || m.decision === 'coverage_check'
+                            || m.decision === 'select_perturbation' || m.decision === 'perturbation_rejected'
+                            || m.decision === 'perturbation_rate_limited';
                           if (hasDecisionBlock) return null;
                           const input = typeof m.input_excerpt === 'string' ? m.input_excerpt : null;
                           const output = typeof m.output_excerpt === 'string' ? m.output_excerpt : null;
