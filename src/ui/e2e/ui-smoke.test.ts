@@ -1,6 +1,20 @@
 #!/usr/bin/env bun
 /**
- * UI route smoke test: every route loads and renders without errors.
+ * UI route smoke test: every route loads and renders its page-specific
+ * marker without errors.
+ *
+ * The route list is imported from `src/ui/web/src/routes.tsx` — the same
+ * module App.tsx renders from. By construction the smoke list cannot drift
+ * from the routes the app actually serves.
+ *
+ * For each route with `smoke` metadata:
+ *   - waits for `<main data-testid="page-X">` (page rendered, not just chrome)
+ *   - asserts <h1> matches `heading` regex if specified
+ *   - fails on any /api/ 4xx or 5xx received during initial mount
+ *   - fails on uncaught errors or console.error (with a small ignore list)
+ *
+ * Routes without `smoke` (redirects, dynamic detail pages) are listed for
+ * source-of-truth purposes but skipped here.
  *
  * This is the final gate before claiming a UI change "done". Catches what
  * `bun test.ts` and `bun run build` cannot: runtime render errors, API
@@ -35,34 +49,7 @@ if (!existsSync(distDir) || process.env.REBUILD === '1') {
 
 const { chromium } = await import('playwright');
 const { createApp } = await import('../api/src/app.js');
-
-// All routes from App.tsx. Dynamic segments use safe placeholders.
-// Keep in sync with src/ui/web/src/App.tsx.
-const ROUTES: Array<{ path: string; needsData?: boolean }> = [
-  { path: '/summary' },
-  { path: '/goals' },
-  { path: '/todos' },
-  { path: '/habits' },
-  { path: '/research' },
-  { path: '/research/history' },
-  { path: '/research/queries' }, // legacy → redirects to /research/history
-  { path: '/research/workers' },
-  { path: '/research/config' },
-  { path: '/observability' },
-  { path: '/observability/tools' },
-  { path: '/observability/hooks' },
-  { path: '/observability/skills' },
-  { path: '/observability/tokens' },
-  { path: '/observability/subagents' },
-  { path: '/observability/sessions' },
-  { path: '/observability/evals' },
-  { path: '/observability/compaction' },
-  { path: '/observability/events' },
-  { path: '/observability/memory' },
-  { path: '/observability/signals' },
-  { path: '/observability/db' },
-  { path: '/settings' },
-];
+const { ROUTE_META } = await import('../web/src/routes-meta.js');
 
 // Patterns in console.error we ignore — third-party noise we can't fix.
 const IGNORED_CONSOLE_PATTERNS = [
@@ -93,11 +80,16 @@ async function teardown() {
 
 type Failure = { path: string; reasons: string[] };
 
-async function smokeRoute(port: number, path: string): Promise<Failure | null> {
+async function smokeRoute(
+  port: number,
+  path: string,
+  testid: string,
+  heading: RegExp | undefined,
+): Promise<Failure | null> {
   const page = await browser!.newPage();
   const consoleErrors: string[] = [];
   const pageErrors: string[] = [];
-  const failed5xx: string[] = [];
+  const apiFailures: string[] = [];
 
   page.on('console', msg => {
     if (msg.type() !== 'error') return;
@@ -107,32 +99,31 @@ async function smokeRoute(port: number, path: string): Promise<Failure | null> {
   });
   page.on('pageerror', err => pageErrors.push(err.message));
   page.on('response', resp => {
-    if (resp.status() >= 500 && resp.url().includes('/api/')) {
-      failed5xx.push(`${resp.status()} ${resp.url()}`);
+    const status = resp.status();
+    if (status >= 400 && resp.url().includes('/api/')) {
+      apiFailures.push(`${status} ${resp.url()}`);
     }
   });
 
   const reasons: string[] = [];
   try {
     await page.goto(`http://127.0.0.1:${port}${path}`, { timeout: 30_000, waitUntil: 'domcontentloaded' });
-    await page.waitForSelector('main', { timeout: 15_000 });
-    // Give React one cycle to render or throw.
-    await page.waitForFunction(
-      () => {
-        const main = document.querySelector('main');
-        if (!main) return false;
-        // Main has rendered children beyond the route wrapper.
-        return main.textContent !== null && main.textContent.trim().length > 0;
-      },
-      { timeout: 10_000 },
-    ).catch(() => { reasons.push('main element is empty after 10s (likely a render error)'); });
+    // Page-specific marker — absence means THIS page didn't mount.
+    await page.waitForSelector(`main[data-testid="${testid}"]`, { timeout: 15_000 });
+
+    if (heading) {
+      const h1Text = await page.locator('main h1').first().textContent({ timeout: 5_000 }).catch(() => null);
+      if (!h1Text || !heading.test(h1Text.trim())) {
+        reasons.push(`h1 ${h1Text === null ? 'not found' : `"${h1Text.trim()}"`} did not match ${heading}`);
+      }
+    }
   } catch (err: any) {
     reasons.push(`navigation: ${err.message ?? err}`);
   }
 
   if (pageErrors.length) reasons.push(`${pageErrors.length} uncaught error(s): ${pageErrors.slice(0, 3).join('; ')}`);
   if (consoleErrors.length) reasons.push(`${consoleErrors.length} console.error: ${consoleErrors.slice(0, 3).join('; ')}`);
-  if (failed5xx.length) reasons.push(`api 5xx: ${failed5xx.slice(0, 3).join('; ')}`);
+  if (apiFailures.length) reasons.push(`api 4xx/5xx: ${apiFailures.slice(0, 3).join('; ')}`);
 
   await page.close();
   return reasons.length ? { path, reasons } : null;
@@ -140,19 +131,23 @@ async function smokeRoute(port: number, path: string): Promise<Failure | null> {
 
 console.log('[smoke] UI route smoke test\n');
 
+const smokeable = ROUTE_META.filter(r => r.smoke);
+const skipped = ROUTE_META.filter(r => !r.smoke);
+console.log(`[smoke] ${smokeable.length} routes to smoke, ${skipped.length} skipped (redirects/dynamic)\n`);
+
 let exitCode = 0;
 try {
   const port = await setup();
   const failures: Failure[] = [];
   let passed = 0;
-  for (const r of ROUTES) {
-    const f = await smokeRoute(port, r.path);
+  for (const r of smokeable) {
+    const f = await smokeRoute(port, r.path, r.smoke!.testid, r.smoke!.heading);
     if (f) {
       failures.push(f);
-      console.log(`  \u2717 ${r.path}`);
+      console.log(`  ✗ ${r.path}`);
       for (const reason of f.reasons) console.log(`      ${reason}`);
     } else {
-      console.log(`  \u2713 ${r.path}`);
+      console.log(`  ✓ ${r.path}`);
       passed++;
     }
   }
