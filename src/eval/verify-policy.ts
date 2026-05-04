@@ -12,11 +12,16 @@
  *         [verify-surface]  <what was exercised: UI button, API endpoint, hook stdin, etc.>
  *         [verify-behavior] <what passing proves about the change>
  *
- *       AND a passing summary — either a numbered "N pass(ed)" with zero
- *       failures, or a generic "all <tests|routes|checks|...> pass(ed)"
- *       phrase (no count needed); OR
  *   (b) the user explicitly said `skip verify[ication]` in the most recent
  *       user message.
+ *
+ * The hook deliberately does NOT scan tool output for "N pass / M fail" or
+ * any other test-runner shape. Pattern-matching can't tell whether a test
+ * actually ran or actually exercised the change — only whether the text
+ * looks like a test summary. The three markers are the audit trail: the
+ * agent commits to *what it tested*, *how*, and *what passing proves*. If
+ * the agent fabricates them, that's lying, and no regex can catch lying.
+ * Code review is the only real defense against that, and it always was.
  *
  * Anything else blocks. There is no "advisory" outcome — the gate either
  * passes silently or blocks with an actionable reason.
@@ -55,67 +60,26 @@ const VERIFY_TYPE_RE     = /\[verify-type]\s*([^\n]+)/i;
 const VERIFY_SURFACE_RE  = /\[verify-surface]\s*([^\n]+)/i;
 const VERIFY_BEHAVIOR_RE = /\[verify-behavior]\s*([^\n]+)/i;
 
-// Numbered test-summary line — "N pass(ed)" and "M fail(ed|ures)" must
-// appear within ~40 chars of each other. That's tight enough to catch all
-// real runner summaries (bun:test's "3 pass\n0 fail", repo harness's
-// "30 passed, 0 failed", custom "24 passed, 0 failed (3.4s, batch=6)")
-// while excluding stray "151 failures" or "0 fail" mentions in unrelated
-// log output. Without pairing the fail count was matching false positives
-// constantly.
-const PAIR_PASS_FAIL_RE = /(\d+)\s+pass(?:ed)?\b[\s\S]{0,40}?\b(\d+)\s+fail(?:ed|ures?)?\b/i;
-const PAIR_FAIL_PASS_RE = /(\d+)\s+fail(?:ed|ures?)?\b[\s\S]{0,40}?\b(\d+)\s+pass(?:ed)?\b/i;
-// "N pass(ed)" with no nearby fail mention — used as evidence when a runner
-// only prints passes (no failures section).
-const PASS_ONLY_RE = /\b(\d+)\s+pass(?:ed)?\b/i;
-// Generic "all <test-noun> pass(ed)" — for runners whose summary line does
-// not include a count. Requires a test-noun (`tests/smoke/routes/checks/
-// specs/cases`) between "all" and "pass" to avoid matching prose like
-// "I would all but pass on this".
-const ALL_PASS_RE = /\ball\b[^\n]{0,30}?\b(?:tests?|smoke|routes?|checks?|specs?|cases?)\b[^\n]{0,30}?\bpass(?:ed)?\b/i;
-
-function readSummaryCounts(text: string): { passCount: number; failCount: number } {
-  const pf = text.match(PAIR_PASS_FAIL_RE);
-  if (pf) return { passCount: Number(pf[1]), failCount: Number(pf[2]) };
-  const fp = text.match(PAIR_FAIL_PASS_RE);
-  if (fp) return { passCount: Number(fp[2]), failCount: Number(fp[1]) };
-  const p = text.match(PASS_ONLY_RE);
-  return { passCount: p ? Number(p[1]) : 0, failCount: 0 };
-}
-
 export interface MarkerStatus {
   /** Each verify-* marker is required; null means "not present in output". */
   type: string | null;
   surface: string | null;
   behavior: string | null;
-  /** From numbered "N pass(ed)" summaries. 0 if absent. */
-  passCount: number;
-  /** From numbered "N fail(ed|ures)" summaries. 0 if absent or zero. */
-  failCount: number;
-  /** True if the output contained a generic "all <tests|...> pass(ed)" phrase. */
-  hasAllPass: boolean;
 }
 
 export function scanMarkers(text: string): MarkerStatus {
   const t = text.match(VERIFY_TYPE_RE);
   const s = text.match(VERIFY_SURFACE_RE);
   const b = text.match(VERIFY_BEHAVIOR_RE);
-  const counts = readSummaryCounts(text);
   return {
     type:     t ? t[1].trim() : null,
     surface:  s ? s[1].trim() : null,
     behavior: b ? b[1].trim() : null,
-    passCount: counts.passCount,
-    failCount: counts.failCount,
-    hasAllPass: ALL_PASS_RE.test(text),
   };
 }
 
 export function hasAllVerifyMarkers(m: MarkerStatus): boolean {
   return !!(m.type && m.surface && m.behavior);
-}
-
-export function hasPassEvidence(m: MarkerStatus): boolean {
-  return m.failCount === 0 && (m.passCount > 0 || m.hasAllPass);
 }
 
 // ---------------------------------------------------------------------------
@@ -226,13 +190,12 @@ export interface DecisionContext {
 
 const BLOCK_REASON =
   "Code change with no verification trace.\n" +
-  "Run a test that exercises this change. In its output, declare three things:\n" +
+  "Run something that exercises this change. In its output, declare three things:\n" +
   "  console.log('[verify-type] <what test or command was run, e.g. \"bun run ui:smoke\">');\n" +
   "  console.log('[verify-surface] <what was exercised, e.g. \"24 routes via routes-meta\">');\n" +
   "  console.log('[verify-behavior] <what passing proves, e.g. \"each page mounts with its own testid\">');\n" +
-  "Then run it. The hook also needs a passing test summary in the same turn —\n" +
-  "a numbered line (e.g. '3 pass, 0 fail' or '24 passed, 0 failed') OR a generic\n" +
-  "phrase like 'all 24 smoke routes passed' (no count required).\n" +
+  "All three are required. They become the audit trail; reviewers judge whether\n" +
+  "the test was about the right thing.\n" +
   "\n" +
   "If verification is genuinely not appropriate (paid endpoint, non-code change, etc.)," +
   " reply with \"skip verify\" and I will accept it once.";
@@ -252,7 +215,7 @@ export function decide(ctx: DecisionContext): Decision {
   }
 
   const markers = scanMarkers(ctx.toolResultText);
-  if (hasAllVerifyMarkers(markers) && hasPassEvidence(markers)) {
+  if (hasAllVerifyMarkers(markers)) {
     return { kind: "pass", reason: `verified: ${markers.behavior}` };
   }
 
@@ -260,16 +223,11 @@ export function decide(ctx: DecisionContext): Decision {
     return { kind: "pass", reason: "user-affirmed skip" };
   }
 
-  // Tailor the reason if the user *tried* to verify but missed a piece —
-  // surface exactly which marker(s) are missing or whether tests failed.
-  const partial: string[] = [];
+  // Tailor the reason if the user *tried* to verify but missed a piece.
   const missing = missingMarkerList(markers);
-  if (missing.length > 0 && missing.length < 3) partial.push(`missing markers: ${missing.join(", ")}`);
-  if (markers.failCount > 0) partial.push(`${markers.failCount} test failure(s) in output`);
-  if (hasAllVerifyMarkers(markers) && !hasPassEvidence(markers)) {
-    partial.push("no passing test summary detected");
-  }
-  const reason = partial.length ? `${BLOCK_REASON}\n\nDetected: ${partial.join("; ")}.` : BLOCK_REASON;
+  const reason = (missing.length > 0 && missing.length < 3)
+    ? `${BLOCK_REASON}\n\nDetected: missing markers: ${missing.join(", ")}.`
+    : BLOCK_REASON;
 
   return { kind: "block", reason };
 }
