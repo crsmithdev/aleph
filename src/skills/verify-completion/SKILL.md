@@ -5,167 +5,103 @@ description: Use when about to claim work is complete, fixed, or passing, before
 
 # Verification Before Completion
 
-## Overview
+## Iron Law
 
-Claiming work is complete without verification is dishonesty, not efficiency.
+**No completion claims without fresh verification evidence in this turn.**
 
-**Core principle:** Evidence before claims, always.
+Run the check. Read the output. Then claim the result.
 
-**Violating the letter of this rule is violating the spirit of this rule.**
+## How the gate works (mechanical, not optional)
 
-## The Iron Law
+The Stop hook (`src/core/hooks/quality-check-stop.ts`) enforces this. The full
+contract lives in `src/eval/verify-policy.ts` and runs on every turn:
 
-```
-NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION EVIDENCE
-```
-
-If you haven't run the verification command in this message, you cannot claim it passes.
-
-## The Gate Function
-
-```
-BEFORE claiming any status or expressing satisfaction:
-
-1. IDENTIFY: What command proves this claim?
-2. RUN: Execute the FULL command (fresh, complete)
-3. READ: Full output, check exit code, count failures
-4. VERIFY: Does output confirm the claim?
-   - If NO: State actual status with evidence
-   - If YES: State claim WITH evidence
-5. ONLY THEN: Make the claim
-
-Skip any step = lying, not verifying
-```
-
-## Common Failures
-
-| Claim | Requires | Not Sufficient |
-|-------|----------|----------------|
-| Tests pass | Test command output: 0 failures | Previous run, "should pass" |
-| Linter clean | Linter output: 0 errors | Partial check, extrapolation |
-| Build succeeds | Build command: exit 0 | Linter passing, logs look good |
-| Bug fixed | Test original symptom: passes | Code changed, assumed fixed |
-| Regression test works | Red-green cycle verified | Test passes once |
-| Agent completed | VCS diff shows changes | Agent reports "success" |
-| Requirements met | Line-by-line checklist | Tests passing |
-
-## Red Flags - STOP
-
-- Using "should", "probably", "seems to"
-- Expressing satisfaction before verification ("Great!", "Perfect!", "Done!", etc.)
-- About to commit/push/PR without verification
-- Trusting agent success reports
-- Relying on partial verification
-- Thinking "just this once"
-- Tired and wanting work over
-- **ANY wording implying success without having run verification**
-
-## Rationalization Prevention
-
-| Excuse | Reality |
-|--------|---------|
-| "Should work now" | RUN the verification |
-| "I'm confident" | Confidence ≠ evidence |
-| "Just this once" | No exceptions |
-| "Linter passed" | Linter ≠ compiler |
-| "Agent said success" | Verify independently |
-| "I'm tired" | Exhaustion ≠ excuse |
-| "Partial check is enough" | Partial proves nothing |
-| "Different words so rule doesn't apply" | Spirit over letter |
-| "Pre-existing failure" | No such thing |
-| "I'll skip the test" | Escapes responsibility |
-
-## Key Patterns
-
-**Unit Tests:**
-```
-✅ [Run test command] [See: 34/34 pass] "All tests pass"
-❌ "Should pass now" / "Looks correct"
-```
-
-**Regression tests (TDD Red-Green):**
-```
-✅ Write → Run (pass) → Revert fix → Run (MUST FAIL) → Restore → Run (pass)
-❌ "I've written a regression test" (without red-green verification)
-```
-
-**Build:**
-```
-✅ [Run build] [See: exit 0] "Build passes"
-❌ "Linter passed" (linter doesn't check compilation)
-```
-
-**Requirements:**
-```
-✅ Re-read plan → Create checklist → Verify each → Report gaps or completion
-❌ "Tests pass, phase complete"
-```
-
-**Agent delegation:**
-```
-✅ Agent reports success → Check VCS diff → Verify changes → Report actual state
-❌ Trust agent report
-```
-
-## Why This Matters
-
-From 24 failure memories:
-- your human partner said "I don't believe you" - trust broken
-- Undefined functions shipped - would crash
-- Missing requirements shipped - incomplete features
-- Time wasted on false completion → redirect → rework
-- Violates: "Honesty is a core value. If you lie, you'll be replaced."
-
-## Verification Phases
-
-For comprehensive verification, run these phases in order. Stop on any FAIL.
-
-| Phase | Command | Gate |
+| Class | What you edited | What's needed to pass |
 |---|---|---|
-| **Build** | `bun run build` / `npm run build` | Exit 0 |
-| **Type** | `tsc --noEmit` / `pyright .` | 0 errors |
-| **Lint** | `npm run lint` / `ruff check .` | 0 errors |
-| **Test** | `bun test` / `npm test -- --coverage` | 0 failures, ≥80% coverage |
-| **Security** | `git diff HEAD --cached` grep for secrets | 0 findings |
-| **E2E + Artifact** | Run the system, interact, produce screenshot/output | Evidence exists |
+| **SKIP** | every edited file is docs-only (`*.md`, `*.txt`, anything under `docs/`) | nothing — passes silently |
+| **REQUIRED** | anything else (code, config, settings, hooks, JSON that ships) | a `[verify-what]` marker AND a passing test summary in this turn's tool output, **OR** an explicit user grant |
 
-Security scan (add to any git-commit verification):
-```bash
-git diff --cached | grep -E 'sk-[a-zA-Z0-9]{20,}|api_key\s*=|password\s*=|console\.log\('
+If REQUIRED is unsatisfied the hook returns `decision: block` and the harness
+refuses to end the turn. There is no advisory level, no file-count threshold,
+no UI-vs-server distinction, no "fine to skip if dev server unavailable."
+
+## What satisfies REQUIRED
+
+Run a test that exercises the change you made. The test prints a one-line
+intent declaration before its first assertion:
+
+```ts
+test('research graph canvas has size on first paint after Graph tab click', async () => {
+  console.log('[verify-what] research graph canvas non-zero size on first paint');
+  await page.goto('/research/sure-falls-trail');
+  await page.click('button:has-text("Graph")');
+  const box = await page.locator('canvas').first().boundingBox();
+  expect(box?.width).toBeGreaterThan(200);
+  expect(box?.height).toBeGreaterThan(200);
+});
 ```
 
-**Output format:**
-```
-VERIFICATION REPORT
-Build:     PASS
-Types:     PASS
-Lint:      PASS (3 warnings)
-Tests:     PASS (47/47, 84% coverage)
-Security:  PASS
-E2E:       PASS [artifact: screenshot.png]
-Overall:   READY
-```
+Run it (`bun test path/to/that.test.ts`). The hook reads the turn's tool
+output and looks for two things, both required:
 
-## When To Apply
+1. A `[verify-what] <description>` line — your declaration of *what this test
+   exercises*. The hook records the description in telemetry; the user reads
+   it later and judges whether the test was about the right thing.
+2. A passing test summary line — `N pass` with no `M fail` (where `M > 0`).
 
-**ALWAYS before:**
-- ANY variation of success/completion claims
-- ANY expression of satisfaction
-- ANY positive statement about work state
-- Committing, PR creation, task completion
-- Moving to next task
-- Delegating to agents
+The marker is a literal `console.log` — there's no library to import, no
+harness to set up. It's a convention the hook scans for, nothing more.
 
-**Rule applies to:**
-- Exact phrases
-- Paraphrases and synonyms
-- Implications of success
-- ANY communication suggesting completion/correctness
+## What does NOT satisfy REQUIRED
 
-## The Bottom Line
+- `bun test` of unrelated tests with no `[verify-what]` line.
+- `bun run build` (compilation isn't testing).
+- `bun run ui:smoke` alone (it's smoke; smoke catches "did the bundle boot",
+  it never proves your specific change works).
+- `curl http://localhost:3001/...` against the route (proves the page
+  returned bytes, not that your change produces the expected output).
+- Starting the dev server and walking away.
+- Saving a screenshot.
 
-**No shortcuts for verification.**
+The hook does not detect any of these as evidence. Only `[verify-what]` +
+passing test summary, or an explicit user grant, will pass.
 
-Run the command. Read the output. THEN claim the result.
+## Specificity is on you
 
-This is non-negotiable.
+The hook can prove you ran *a* test that emits the right markers. It can NOT
+judge whether the test exercises the actual behavior you changed. That part
+is up to you, enforced by code review.
+
+When you write the `[verify-what]` description, write what the test actually
+covers. If a button-press flow changed and your test only loads the page,
+that's lying — both to the hook and to the user reading the description.
+
+## The skip path — only the user can authorise
+
+If verification is genuinely inappropriate (a paid endpoint that costs money
+to call, a non-code change misclassified as REQUIRED, etc.), ask in chat:
+
+> "I'd like to skip verification because <reason>. OK?"
+
+If the user replies with `skip verify` (or `skip verification`), the hook
+accepts the skip *once*. Claude cannot author this phrase on its own behalf
+— it has to come from a user message.
+
+## Common failure modes that this gate catches
+
+| Claim | What you'd need to satisfy the gate |
+|---|---|
+| "Build passes" | Doesn't satisfy. Run a test that exercises the change. |
+| "ui:smoke passed all routes" | Doesn't satisfy. Run a change-specific test. |
+| "I curl'd the endpoint and got 200" | Doesn't satisfy for a UI change. For an API-only change, run a test that asserts on the response body. |
+| "All existing tests still pass" | Doesn't satisfy. Existing tests cover existing behavior; the change needs a new or extended test. |
+| "I checked it manually in the browser" | Doesn't satisfy. The hook can't see manual checks. Encode the check as a test. |
+
+## Why this is non-negotiable
+
+Claiming work complete without verification is dishonesty, not efficiency.
+Trust is broken when claims and evidence diverge. The hook removes the
+opportunity to drift — either you exercised the change and it's recorded in
+this turn's transcript, or the gate blocks.
+
+Run the command. Read the output. Then claim the result.

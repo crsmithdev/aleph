@@ -1,8 +1,8 @@
-name: verification-gate-advises-quick-backend
-description: "QUICK-depth single backend file edit with no verification should get advisory"
+name: verification-gate-blocks-quick-backend
+description: "Single backend-file edit with no verification should now block (no advisory tier)"
 hook: quality-stop-check-e2e
 event: Stop
-expect: advisory
+expect: block
 
 setup:
   depth: quick
@@ -13,6 +13,6 @@ setup:
 
 success:
   - type: hook_decision
-    expected: advisory
+    expected: block
 
 trials: 3

@@ -1113,11 +1113,19 @@
 
     "@construct/eval/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
+    "@construct/goals/@construct/data": ["@construct/data@file:src/data", { "dependencies": { "drizzle-orm": "^0.39.3" }, "devDependencies": { "typescript": "^5.7.3" } }],
+
     "@construct/goals/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@construct/logger/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
+    "@construct/research/@construct/data": ["@construct/data@file:src/data", { "dependencies": { "drizzle-orm": "^0.39.3" }, "devDependencies": { "typescript": "^5.7.3" } }],
+
+    "@construct/research/@construct/logger": ["@construct/logger@file:src/logger", { "devDependencies": { "@types/bun": "^1.3.11", "typescript": "^5.7.3" } }],
+
     "@construct/research/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+
+    "@construct/telemetry/@construct/data": ["@construct/data@file:src/data", { "dependencies": { "drizzle-orm": "^0.39.3" }, "devDependencies": { "typescript": "^5.7.3" } }],
 
     "@construct/telemetry/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
