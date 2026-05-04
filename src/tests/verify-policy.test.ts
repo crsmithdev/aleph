@@ -90,9 +90,23 @@ console.log("--- scanMarkers ---");
     !m.hasAllPass);
 }
 {
-  const m = scanMarkers("3 failures in run");
-  check(r, "scanMarkers: reads 'N failures' as failCount",
-    m.failCount === 3);
+  // Stray "N failures" in unrelated prose must NOT be treated as a test
+  // summary — that was the cause of false-positive blocks (e.g. "151
+  // failures in stack trace" matching the old single-regex scanner).
+  const m = scanMarkers("the system processed 151 failures during the migration window last week");
+  check(r, "scanMarkers: stray 'N failures' (no pass nearby) is NOT counted as failCount",
+    m.failCount === 0);
+}
+{
+  const m = scanMarkers("vitest output:  Tests  1 failed | 2 passed (3)");
+  check(r, "scanMarkers: 'fail' before 'pass' on same line still parses both counts",
+    m.failCount === 1 && m.passCount === 2);
+}
+{
+  // Pairing window: pass and fail must be within ~40 chars of each other.
+  const m = scanMarkers("3 pass\n" + "x".repeat(80) + "\n0 fail");
+  check(r, "scanMarkers: pass and fail too far apart → unpaired, fail not counted",
+    m.failCount === 0 && m.passCount === 3);
 }
 {
   const m = scanMarkers("[verify-type] x\n[verify-surface] y\n[verify-behavior] z\n2 pass\n1 fail");
