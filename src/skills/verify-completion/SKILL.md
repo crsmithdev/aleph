@@ -19,7 +19,7 @@ contract lives in `src/eval/verify-policy.ts` and runs on every turn:
 | Class | What you edited | What's needed to pass |
 |---|---|---|
 | **SKIP** | every edited file is docs-only (`*.md`, `*.txt`, anything under `docs/`) | nothing — passes silently |
-| **REQUIRED** | anything else (code, config, settings, hooks, JSON that ships) | a `[verify-what]` marker AND a passing test summary in this turn's tool output, **OR** an explicit user grant |
+| **REQUIRED** | anything else (code, config, settings, hooks, JSON that ships) | three structured markers AND a passing test summary in this turn's tool output, **OR** an explicit user grant |
 
 If REQUIRED is unsatisfied the hook returns `decision: block` and the harness
 refuses to end the turn. There is no advisory level, no file-count threshold,
@@ -27,54 +27,55 @@ no UI-vs-server distinction, no "fine to skip if dev server unavailable."
 
 ## What satisfies REQUIRED
 
-Run a test that exercises the change you made. The test prints a one-line
-intent declaration before its first assertion:
+Run a test (or any command that exercises the change) and emit three lines
+that describe what you did and what passing means:
 
 ```ts
-test('research graph canvas has size on first paint after Graph tab click', async () => {
-  console.log('[verify-what] research graph canvas non-zero size on first paint');
-  await page.goto('/research/sure-falls-trail');
-  await page.click('button:has-text("Graph")');
-  const box = await page.locator('canvas').first().boundingBox();
-  expect(box?.width).toBeGreaterThan(200);
-  expect(box?.height).toBeGreaterThan(200);
-});
+console.log('[verify-type] bun test src/tests/foo.test.ts');
+console.log('[verify-surface] foo() with negative inputs and the API error path');
+console.log('[verify-behavior] negative inputs return the documented error shape, not a throw');
 ```
 
-Run it (`bun test path/to/that.test.ts`). The hook reads the turn's tool
-output and looks for two things, both required:
+Then run it. The hook reads the turn's tool output and looks for **all four**
+of these:
 
-1. A `[verify-what] <description>` line — your declaration of *what this test
-   exercises*. The hook records the description in telemetry; the user reads
-   it later and judges whether the test was about the right thing.
-2. A passing test summary line — `N pass` with no `M fail` (where `M > 0`).
+1. `[verify-type] <…>` — the literal command or test that ran. The audit log
+   later asks "what did you actually run?"; this answers it.
+2. `[verify-surface] <…>` — what was exercised. UI button, API endpoint, hook
+   stdin, function input. Answers "what did the test poke at?"
+3. `[verify-behavior] <…>` — what passing this test proves about the change.
+   Not "the test passed" — the *meaning* of the pass. This is the field a
+   reviewer reads to judge whether the test was about the right thing.
+4. A passing summary, in either form:
+   - **Numbered:** `3 pass, 0 fail` / `30 passed, 0 failed` / `24 passed, 0 failed (3.4s)` —
+     any `\d+ pass(ed)?` with zero failures.
+   - **Generic:** `all 24 smoke routes passed` / `all tests pass` / `all checks pass` —
+     when your test runner doesn't print a count, an "all <test-noun> pass(ed)"
+     phrase counts as full-pass evidence.
 
-The marker is a literal `console.log` — there's no library to import, no
-harness to set up. It's a convention the hook scans for, nothing more.
+The markers are literal `console.log` lines — no library, no harness setup.
+A convention the hook scans for, nothing more.
 
 ## What does NOT satisfy REQUIRED
 
-- `bun test` of unrelated tests with no `[verify-what]` line.
+- `bun test` of unrelated tests with no verify-* markers.
 - `bun run build` (compilation isn't testing).
-- `bun run ui:smoke` alone (it's smoke; smoke catches "did the bundle boot",
-  it never proves your specific change works).
+- `bun run ui:smoke` *alone, with no markers* — even though it's a real test,
+  the gate still wants you to declare type/surface/behavior so the audit log
+  records intent. Add the three lines via `echo` or in the script's output.
 - `curl http://localhost:3001/...` against the route (proves the page
   returned bytes, not that your change produces the expected output).
 - Starting the dev server and walking away.
 - Saving a screenshot.
 
-The hook does not detect any of these as evidence. Only `[verify-what]` +
-passing test summary, or an explicit user grant, will pass.
-
 ## Specificity is on you
 
-The hook can prove you ran *a* test that emits the right markers. It can NOT
-judge whether the test exercises the actual behavior you changed. That part
-is up to you, enforced by code review.
-
-When you write the `[verify-what]` description, write what the test actually
-covers. If a button-press flow changed and your test only loads the page,
-that's lying — both to the hook and to the user reading the description.
+The hook can prove you ran *a* test that emits the markers. It can NOT judge
+whether the test exercises the actual behavior you changed. That part is on
+you, enforced by code review. When you write `[verify-behavior]`, write what
+the test actually covers. If a button-press flow changed and your test only
+loads the page, that's lying — both to the hook and to the user reading the
+description.
 
 ## The skip path — only the user can authorise
 
@@ -92,7 +93,7 @@ accepts the skip *once*. Claude cannot author this phrase on its own behalf
 | Claim | What you'd need to satisfy the gate |
 |---|---|
 | "Build passes" | Doesn't satisfy. Run a test that exercises the change. |
-| "ui:smoke passed all routes" | Doesn't satisfy. Run a change-specific test. |
+| "ui:smoke passed all routes" | Add the three markers (or have the test runner print them). |
 | "I curl'd the endpoint and got 200" | Doesn't satisfy for a UI change. For an API-only change, run a test that asserts on the response body. |
 | "All existing tests still pass" | Doesn't satisfy. Existing tests cover existing behavior; the change needs a new or extended test. |
 | "I checked it manually in the browser" | Doesn't satisfy. The hook can't see manual checks. Encode the check as a test. |

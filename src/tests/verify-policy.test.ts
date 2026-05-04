@@ -4,6 +4,8 @@ import {
   classifyChange,
   decide,
   extractTurn,
+  hasAllVerifyMarkers,
+  hasPassEvidence,
   isDocOnly,
   mostRecentUserText,
   scanMarkers,
@@ -11,7 +13,9 @@ import {
   userAffirmedSkip,
 } from "../eval/verify-policy.ts";
 
-console.log("[verify-what] verify-policy classifier, marker scanner, affirmation detector, and decide() all behave per the contract documented in src/eval/verify-policy.ts");
+console.log("[verify-type] bun src/tests/verify-policy.test.ts");
+console.log("[verify-surface] verify-policy pure functions: classifyChange, scanMarkers, decide, transcript helpers");
+console.log("[verify-behavior] policy honors the structured-marker contract documented in src/eval/verify-policy.ts and rejects malformed input");
 
 const r = createResults();
 
@@ -45,9 +49,15 @@ check(r, "config alone → required",
 // ── scanMarkers ──────────────────────────────────────────────────────────────
 console.log("--- scanMarkers ---");
 {
-  const m = scanMarkers("[verify-what] research graph canvas non-zero size on first paint");
-  check(r, "scanMarkers: captures verify-what description",
-    m.hasWhat && m.whatText === "research graph canvas non-zero size on first paint");
+  const m = scanMarkers(
+    "[verify-type] bun run ui:smoke\n" +
+    "[verify-surface] 24 routes via routes-meta\n" +
+    "[verify-behavior] each page mounts with its own testid\n",
+  );
+  check(r, "scanMarkers: captures all three structured markers",
+    m.type === "bun run ui:smoke"
+      && m.surface === "24 routes via routes-meta"
+      && m.behavior === "each page mounts with its own testid");
 }
 {
   const m = scanMarkers("foo\n3 pass\n0 fail\nbar");
@@ -60,14 +70,51 @@ console.log("--- scanMarkers ---");
     m.passCount === 30 && m.failCount === 0);
 }
 {
-  const m = scanMarkers("[verify-what] x\n2 pass\n1 fail");
+  const m = scanMarkers("24 passed, 0 failed (3.4s, batch=6)");
+  check(r, "scanMarkers: reads custom smoke summary with trailing parens",
+    m.passCount === 24 && m.failCount === 0);
+}
+{
+  const m = scanMarkers("smoke complete: all 24 smoke routes passed");
+  check(r, "scanMarkers: hasAllPass set for 'all <noun> pass(ed)' phrase",
+    m.hasAllPass && m.passCount === 0);
+}
+{
+  const m = scanMarkers("smoke complete: all routes pass cleanly");
+  check(r, "scanMarkers: hasAllPass set without count",
+    m.hasAllPass);
+}
+{
+  const m = scanMarkers("I would all but pass on this one");
+  check(r, "scanMarkers: prose 'all ... pass' without test-noun does NOT match",
+    !m.hasAllPass);
+}
+{
+  const m = scanMarkers("3 failures in run");
+  check(r, "scanMarkers: reads 'N failures' as failCount",
+    m.failCount === 3);
+}
+{
+  const m = scanMarkers("[verify-type] x\n[verify-surface] y\n[verify-behavior] z\n2 pass\n1 fail");
   check(r, "scanMarkers: non-zero failures are caught", m.failCount === 1);
 }
 {
   const m = scanMarkers("");
-  check(r, "scanMarkers: empty output → all zeros",
-    !m.hasWhat && m.passCount === 0 && m.failCount === 0);
+  check(r, "scanMarkers: empty output → all nulls/zeros",
+    !m.type && !m.surface && !m.behavior && m.passCount === 0 && m.failCount === 0 && !m.hasAllPass);
 }
+
+// ── hasAllVerifyMarkers / hasPassEvidence ────────────────────────────────────
+console.log("--- helper predicates ---");
+check(r, "hasAllVerifyMarkers: requires all three",
+  hasAllVerifyMarkers({ type: "a", surface: "b", behavior: "c", passCount: 0, failCount: 0, hasAllPass: false })
+    && !hasAllVerifyMarkers({ type: "a", surface: "b", behavior: null, passCount: 0, failCount: 0, hasAllPass: false }));
+check(r, "hasPassEvidence: numbered passes + 0 fail",
+  hasPassEvidence({ type: null, surface: null, behavior: null, passCount: 5, failCount: 0, hasAllPass: false }));
+check(r, "hasPassEvidence: hasAllPass alone is enough",
+  hasPassEvidence({ type: null, surface: null, behavior: null, passCount: 0, failCount: 0, hasAllPass: true }));
+check(r, "hasPassEvidence: any failures → false",
+  !hasPassEvidence({ type: null, surface: null, behavior: null, passCount: 5, failCount: 1, hasAllPass: false }));
 
 // ── userAffirmedSkip ─────────────────────────────────────────────────────────
 console.log("--- userAffirmedSkip ---");
@@ -91,19 +138,47 @@ console.log("--- decide ---");
 {
   const d = decide({
     editedFiles: ["src/foo.ts"],
-    toolResultText: "[verify-what] foo returns expected shape\n3 pass\n0 fail\n",
+    toolResultText:
+      "[verify-type] bun test src/tests/foo.test.ts\n" +
+      "[verify-surface] foo() with edge inputs\n" +
+      "[verify-behavior] returns expected shape on negative numbers\n" +
+      "3 pass\n0 fail\n",
     mostRecentUserText: "fix the foo bug",
   });
-  check(r, "code + verify-what + pass summary → pass",
-    d.kind === "pass" && d.reason.includes("foo returns expected shape"));
+  check(r, "code + all three markers + pass summary → pass",
+    d.kind === "pass" && d.reason.includes("returns expected shape"));
 }
 {
   const d = decide({
     editedFiles: ["src/foo.ts"],
-    toolResultText: "[verify-what] foo\n2 pass\n1 fail",
+    toolResultText:
+      "[verify-type] bun run ui:smoke\n" +
+      "[verify-surface] all routes\n" +
+      "[verify-behavior] each route mounts cleanly\n" +
+      "all 24 smoke routes passed",
+    mostRecentUserText: "fix smoke",
+  });
+  check(r, "code + all markers + 'all <noun> pass' phrase → pass (no count needed)",
+    d.kind === "pass");
+}
+{
+  const d = decide({
+    editedFiles: ["src/foo.ts"],
+    toolResultText:
+      "[verify-type] x\n[verify-surface] y\n[verify-behavior] z\n2 pass\n1 fail",
     mostRecentUserText: "fix foo",
   });
-  check(r, "marker present but tests failed → block", d.kind === "block");
+  check(r, "all markers but tests failed → block",
+    d.kind === "block" && d.reason.includes("1 test failure"));
+}
+{
+  const d = decide({
+    editedFiles: ["src/foo.ts"],
+    toolResultText: "[verify-type] x\n[verify-surface] y\n3 pass\n0 fail",
+    mostRecentUserText: "fix foo",
+  });
+  check(r, "missing one marker → block, names the missing marker",
+    d.kind === "block" && d.reason.includes("[verify-behavior]"));
 }
 {
   const d = decide({
@@ -111,7 +186,8 @@ console.log("--- decide ---");
     toolResultText: "ran some other tests\n5 pass\n0 fail",
     mostRecentUserText: "fix foo",
   });
-  check(r, "pass summary but no verify-what → block", d.kind === "block");
+  check(r, "pass summary but no markers at all → block (no detected: line, just generic reason)",
+    d.kind === "block" && !d.reason.includes("Detected:"));
 }
 {
   const d = decide({
@@ -130,8 +206,19 @@ console.log("--- decide ---");
   });
   check(r, "code change with no verification → block, with actionable hint",
     d.kind === "block"
-      && d.reason.includes("[verify-what]")
+      && d.reason.includes("[verify-type]")
+      && d.reason.includes("[verify-surface]")
+      && d.reason.includes("[verify-behavior]")
       && d.reason.includes("skip verify"));
+}
+{
+  const d = decide({
+    editedFiles: ["src/foo.ts"],
+    toolResultText: "[verify-what] old format\n3 pass\n0 fail",
+    mostRecentUserText: "fix foo",
+  });
+  check(r, "OLD [verify-what] marker is no longer accepted",
+    d.kind === "block");
 }
 
 // ── transcript helpers ───────────────────────────────────────────────────────
@@ -153,7 +240,11 @@ const lines = jsonl(
     { type: "tool_use", name: "Bash", input: { command: "bun test src/tests/a.test.ts" } },
   ] } },
   { type: "user", message: { content: [
-    { type: "tool_result", content: "[verify-what] a behaves correctly\n2 pass\n0 fail" },
+    { type: "tool_result", content:
+      "[verify-type] bun test src/tests/a.test.ts\n" +
+      "[verify-surface] a() return value\n" +
+      "[verify-behavior] a behaves correctly on edge input\n" +
+      "2 pass\n0 fail" },
   ] } },
 );
 
@@ -167,7 +258,7 @@ check(r, "mostRecentUserText returns that prompt's text",
   check(r, "extractTurn pulls current-turn edits",
     t.editedFiles.length === 1 && t.editedFiles[0] === "src/a.ts");
   check(r, "extractTurn pulls current-turn tool output",
-    t.toolResultText.includes("[verify-what] a behaves correctly")
+    t.toolResultText.includes("[verify-behavior] a behaves correctly")
       && t.toolResultText.includes("2 pass"));
   check(r, "extractTurn excludes prior-turn artifacts",
     !t.editedFiles.includes("old.ts")
@@ -183,13 +274,13 @@ check(r, "mostRecentUserText returns that prompt's text",
     { type: "user", message: { content: [
       { type: "tool_result", content: [
         { type: "text", text: "line 1" },
-        { type: "text", text: "[verify-what] x\n1 pass\n0 fail" },
+        { type: "text", text: "[verify-type] bun test foo\n[verify-surface] foo()\n[verify-behavior] returns 42\n1 pass\n0 fail" },
       ] },
     ] } },
   );
   const t = extractTurn(arrLines, turnStartIndex(arrLines));
   check(r, "extractTurn handles array-shaped tool_result content",
-    t.toolResultText.includes("line 1") && t.toolResultText.includes("[verify-what] x"));
+    t.toolResultText.includes("line 1") && t.toolResultText.includes("[verify-type] bun test foo"));
 }
 
 {
