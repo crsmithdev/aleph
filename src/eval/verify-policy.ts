@@ -55,15 +55,32 @@ const VERIFY_TYPE_RE     = /\[verify-type]\s*([^\n]+)/i;
 const VERIFY_SURFACE_RE  = /\[verify-surface]\s*([^\n]+)/i;
 const VERIFY_BEHAVIOR_RE = /\[verify-behavior]\s*([^\n]+)/i;
 
-// Numbered formats — bun:test's "3 pass" / "0 fail" and the repo harness's
-// "30 passed, 0 failed". Trailing -ed is optional.
-const PASS_COUNT_RE = /\b(\d+)\s+pass(?:ed)?\b/i;
-const FAIL_COUNT_RE = /\b(\d+)\s+fail(?:ed|ures?)?\b/i;
+// Numbered test-summary line — "N pass(ed)" and "M fail(ed|ures)" must
+// appear within ~40 chars of each other. That's tight enough to catch all
+// real runner summaries (bun:test's "3 pass\n0 fail", repo harness's
+// "30 passed, 0 failed", custom "24 passed, 0 failed (3.4s, batch=6)")
+// while excluding stray "151 failures" or "0 fail" mentions in unrelated
+// log output. Without pairing the fail count was matching false positives
+// constantly.
+const PAIR_PASS_FAIL_RE = /(\d+)\s+pass(?:ed)?\b[\s\S]{0,40}?\b(\d+)\s+fail(?:ed|ures?)?\b/i;
+const PAIR_FAIL_PASS_RE = /(\d+)\s+fail(?:ed|ures?)?\b[\s\S]{0,40}?\b(\d+)\s+pass(?:ed)?\b/i;
+// "N pass(ed)" with no nearby fail mention — used as evidence when a runner
+// only prints passes (no failures section).
+const PASS_ONLY_RE = /\b(\d+)\s+pass(?:ed)?\b/i;
 // Generic "all <test-noun> pass(ed)" — for runners whose summary line does
 // not include a count. Requires a test-noun (`tests/smoke/routes/checks/
 // specs/cases`) between "all" and "pass" to avoid matching prose like
 // "I would all but pass on this".
 const ALL_PASS_RE = /\ball\b[^\n]{0,30}?\b(?:tests?|smoke|routes?|checks?|specs?|cases?)\b[^\n]{0,30}?\bpass(?:ed)?\b/i;
+
+function readSummaryCounts(text: string): { passCount: number; failCount: number } {
+  const pf = text.match(PAIR_PASS_FAIL_RE);
+  if (pf) return { passCount: Number(pf[1]), failCount: Number(pf[2]) };
+  const fp = text.match(PAIR_FAIL_PASS_RE);
+  if (fp) return { passCount: Number(fp[2]), failCount: Number(fp[1]) };
+  const p = text.match(PASS_ONLY_RE);
+  return { passCount: p ? Number(p[1]) : 0, failCount: 0 };
+}
 
 export interface MarkerStatus {
   /** Each verify-* marker is required; null means "not present in output". */
@@ -82,14 +99,13 @@ export function scanMarkers(text: string): MarkerStatus {
   const t = text.match(VERIFY_TYPE_RE);
   const s = text.match(VERIFY_SURFACE_RE);
   const b = text.match(VERIFY_BEHAVIOR_RE);
-  const p = text.match(PASS_COUNT_RE);
-  const f = text.match(FAIL_COUNT_RE);
+  const counts = readSummaryCounts(text);
   return {
     type:     t ? t[1].trim() : null,
     surface:  s ? s[1].trim() : null,
     behavior: b ? b[1].trim() : null,
-    passCount: p ? Number(p[1]) : 0,
-    failCount: f ? Number(f[1]) : 0,
+    passCount: counts.passCount,
+    failCount: counts.failCount,
     hasAllPass: ALL_PASS_RE.test(text),
   };
 }
