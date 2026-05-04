@@ -239,7 +239,7 @@ function CreateButton({
   const accentClasses: Record<typeof accent, string> = {
     accent: 'text-accent bg-accent/15',
     success: 'text-success bg-success/15',
-    magenta: 'text-[#c879ff] bg-[#c879ff]/15',
+    magenta: 'text-magenta bg-magenta/15',
   };
   return (
     <button
@@ -364,7 +364,7 @@ export function SummaryPage() {
               <Legend {...legendProps} />
               <Bar isAnimationActive={false} stackId="work" dataKey="goalsCompleted" fill="var(--success)" name="Goals" radius={[0, 0, 0, 0]} />
               <Bar isAnimationActive={false} stackId="work" dataKey="todosCompleted" fill="var(--accent)" name="Todos" />
-              <Bar isAnimationActive={false} stackId="work" dataKey="habitsHit" fill="#c879ff" name="Habits" radius={[3, 3, 0, 0]} />
+              <Bar isAnimationActive={false} stackId="work" dataKey="habitsHit" fill="var(--magenta)" name="Habits" radius={[3, 3, 0, 0]} />
             </BarChart>
           ) : (
             <ResponsiveContainer width="100%" height="100%">

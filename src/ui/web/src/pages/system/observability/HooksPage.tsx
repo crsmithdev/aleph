@@ -102,9 +102,9 @@ function GatingSection({ gating }: { gating: Record<string, HookGatingStat> }) {
                 <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtNumber(Number(v))} />
                 <YAxis type="category" dataKey="name" {...axisProps} width={110} tick={{ fontSize: 10 }} />
                 <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
-                <Bar isAnimationActive={false} dataKey="blocks" name="Blocks" stackId="a" fill="var(--color-error, #ef4444)" radius={[0, 0, 0, 0]} />
-                <Bar isAnimationActive={false} dataKey="advisories" name="Advisories" stackId="a" fill="var(--color-warning, #f59e0b)" radius={[0, 0, 0, 0]} />
-                <Bar isAnimationActive={false} dataKey="passes" name="Passes" stackId="a" fill="var(--color-success, #22c55e)" radius={[0, 2, 2, 0]} />
+                <Bar isAnimationActive={false} dataKey="blocks" name="Blocks" stackId="a" fill="var(--c-error)" radius={[0, 0, 0, 0]} />
+                <Bar isAnimationActive={false} dataKey="advisories" name="Advisories" stackId="a" fill="var(--c-warning)" radius={[0, 0, 0, 0]} />
+                <Bar isAnimationActive={false} dataKey="passes" name="Passes" stackId="a" fill="var(--c-success)" radius={[0, 2, 2, 0]} />
               </BarChart>
         </ChartContainer>
       )}
@@ -464,16 +464,15 @@ export function HooksPage() {
 
   const activeFilterCount = (showMissing ? 1 : 0) + (showUnused ? 1 : 0);
 
-  const GROUP_COLORS: Record<string, string> = {
-    Quality: 'bg-blue-500/15 text-blue-400',
-    Memory: 'bg-purple-500/15 text-purple-400',
-    Git: 'bg-orange-500/15 text-orange-400',
-    Context: 'bg-cyan-500/15 text-cyan-400',
-    Routing: 'bg-green-500/15 text-green-400',
-    Signals: 'bg-yellow-500/15 text-yellow-400',
-    Isolation: 'bg-red-500/15 text-red-400',
-    Security: 'bg-rose-500/15 text-rose-400',
-  };
+  // Group chips use chart palette tokens so they re-theme with the rest of the app
+  // (light/dark + 30+ presets). Names hash to a palette slot; collisions are fine —
+  // groups in the same row are visually distinguishable by label, not color alone.
+  const GROUP_PALETTE = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)', 'var(--chart-6)'];
+  function groupColor(name: string): string {
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    return GROUP_PALETTE[h % GROUP_PALETTE.length];
+  }
 
   const columns: Column<HookRow>[] = [
     {
@@ -485,7 +484,10 @@ export function HooksPage() {
         <div className="space-y-0.5">
           <div className="flex items-center gap-2">
             {row.group && (
-              <span className={clsx('text-[10px] font-medium px-1.5 py-0.5 rounded uppercase tracking-wide shrink-0', GROUP_COLORS[row.group] ?? 'bg-bg-tertiary text-text-muted')}>
+              <span
+                className="text-[10px] font-medium px-1.5 py-0.5 rounded uppercase tracking-wide shrink-0"
+                style={{ background: `color-mix(in srgb, ${groupColor(row.group)} 15%, transparent)`, color: groupColor(row.group) }}
+              >
                 {row.group}
               </span>
             )}

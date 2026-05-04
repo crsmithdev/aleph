@@ -7,14 +7,14 @@ const heroColor: Record<MetricAccent, string> = {
   accent: 'text-accent',
   success: 'text-success',
   warning: 'text-warning',
-  magenta: 'text-[#c879ff]',
+  magenta: 'text-magenta',
 };
 
 const strokeColor: Record<MetricAccent, string> = {
-  accent: '#6aa3ff',
-  success: '#34c98a',
-  warning: '#f0a93b',
-  magenta: '#c879ff',
+  accent: 'var(--accent)',
+  success: 'var(--success)',
+  warning: 'var(--warning)',
+  magenta: 'var(--magenta)',
 };
 
 function Sparkline({ values, color }: { values: number[]; color: string }) {

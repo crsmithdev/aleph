@@ -51,7 +51,7 @@ export function StatCard({
 
   return (
     <div className={clsx('bg-bg-secondary rounded-lg', compact ? 'p-3' : 'p-4', className)}>
-      <div className="font-sans text-xs uppercase tracking-wide text-text-secondary mb-1">{label}</div>
+      <div className="font-mono text-xs uppercase tracking-wider text-text-muted mb-1">{label}</div>
       <div className={clsx('font-heading font-semibold whitespace-nowrap flex items-baseline gap-2', compact ? 'text-3xl' : 'text-5xl', accentColors[accent ?? 'default'])}>
         <span>{spaceIfString(value)}</span>
         {valueLabel && <span className="font-sans text-sm font-normal text-text-muted">{valueLabel}</span>}

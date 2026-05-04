@@ -72,9 +72,7 @@ export function GoalsPage() {
         </div>
       )}
 
-      <div className="bg-bg-secondary border border-border-primary rounded-lg px-4 py-3">
-        <GoalFilters filters={filters} onChange={setFilters} categories={categories} />
-      </div>
+      <GoalFilters filters={filters} onChange={setFilters} categories={categories} />
 
       {isLoading ? (
         <PageLoading />

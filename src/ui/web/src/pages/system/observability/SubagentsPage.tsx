@@ -6,7 +6,7 @@ import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
-import { ObsControlBar } from '../../../components/data/ObsControlBar';
+import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
 import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps, xAxisDateProps } from '../../../components/charts/chartTheme';
@@ -104,8 +104,8 @@ export function SubagentsPage() {
       align: 'right',
       width: '60px',
       render: (row) => row.runInBackground
-        ? <span className="text-xs px-1.5 py-0.5 rounded bg-accent/20 text-accent">bg</span>
-        : <span className="text-xs text-text-tertiary">fg</span>,
+        ? <span className="text-xs px-1.5 py-0.5 rounded bg-accent/15 text-accent">bg</span>
+        : <span className="text-xs text-text-disabled">fg</span>,
     },
     {
       key: 'isError',
@@ -113,8 +113,8 @@ export function SubagentsPage() {
       align: 'right',
       width: '80px',
       render: (row) => row.isError
-        ? <span className="text-xs px-1.5 py-0.5 rounded bg-error/20 text-error">error</span>
-        : <span className="text-xs px-1.5 py-0.5 rounded bg-success/20 text-success">ok</span>,
+        ? <span className="text-xs px-1.5 py-0.5 rounded bg-error/15 text-error">error</span>
+        : <span className="text-xs px-1.5 py-0.5 rounded bg-success/15 text-success">ok</span>,
     },
     {
       key: 'subagentSessionId',
@@ -128,7 +128,7 @@ export function SubagentsPage() {
         >
           {row.subagentSessionId.slice(0, 8)}
         </Link>
-      ) : <span className="text-text-tertiary text-sm">—</span>,
+      ) : <span className="text-text-disabled text-sm">—</span>,
     },
   ];
 
@@ -142,17 +142,11 @@ export function SubagentsPage() {
         granularity={granularity}
         onGranularityChange={setGranularity}
         filters={
-          <button
-            className={clsx(
-              'px-2.5 py-0.5 text-xs rounded border transition-colors',
-              bgOnly
-                ? 'bg-accent/20 border-accent text-accent'
-                : 'bg-bg-secondary border-border-primary text-text-muted hover:text-text-secondary hover:bg-bg-tertiary',
-            )}
-            onClick={() => setBgOnly(!bgOnly)}
-          >
-            Background only
-          </button>
+          <FilterToggle
+            label="Background only"
+            active={bgOnly}
+            onToggle={() => setBgOnly(!bgOnly)}
+          />
         }
         activeFilterCount={bgOnly ? 1 : 0}
       />

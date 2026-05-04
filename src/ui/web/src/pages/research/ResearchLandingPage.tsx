@@ -167,9 +167,9 @@ function JobRow({ query, pulse }: { query: ResearchQuery; pulse?: boolean }) {
     <Link
       to={`/research/${query.id}`}
       className="grid items-center gap-2.5 px-3.5 py-2.5 border-b border-border-primary last:border-b-0 text-sm hover:bg-bg-tertiary"
-      style={{ gridTemplateColumns: '4px 1fr auto auto auto' }}
+      style={{ gridTemplateColumns: '3px 1fr auto auto auto' }}
     >
-      <span className={clsx('w-1 h-7 rounded-sm shrink-0', stripe)} />
+      <span className={clsx('w-[3px] h-7 rounded-sm shrink-0', stripe)} />
       <div className="min-w-0">
         <div className="font-medium text-text-primary truncate">
           {query.title || query.prompt_short || query.prompt}

@@ -66,6 +66,7 @@
   --color-links: var(--c-links);
   --color-agent: var(--c-agent);
   --color-agent-border: var(--c-agent-border);
+  --color-magenta: var(--magenta);
 }
 
 /* Base theme vars (--bg-primary, --accent, --border, etc.) are set by JS in theme.tsx.
@@ -74,6 +75,8 @@
   --bg-buttons:      var(--bg-secondary);
   --border-primary:  var(--border);
   --border-secondary: var(--text-disabled);
+  /* Magenta — the one personality color, reserved for habits per the design system */
+  --magenta:         #c879ff;
   --c-accent:        var(--accent);
   --c-accent-hover:  color-mix(in srgb, var(--accent), var(--text-primary) 20%);
   --c-accent-muted:  color-mix(in srgb, var(--accent), var(--bg-primary) 50%);

@@ -34,13 +34,13 @@ import { fmtNumber, fmtMs, fmtPct, fmtCurrency } from '../../utils/format';
 // --- Helpers ---
 
 const statusColors: Record<string, string> = {
-  pending: 'bg-yellow-900/50 text-yellow-300',
-  claimed: 'bg-yellow-900/50 text-yellow-300',
-  running: 'bg-green-900/50 text-green-300',
-  idle: 'bg-blue-900/50 text-blue-300',
-  completed: 'bg-blue-900/50 text-blue-300',
-  failed: 'bg-red-900/50 text-red-300',
-  rate_limit: 'bg-orange-900/50 text-orange-300',
+  pending: 'bg-warning/15 text-warning',
+  claimed: 'bg-warning/15 text-warning',
+  running: 'bg-success/15 text-success',
+  idle: 'bg-accent/15 text-accent',
+  completed: 'bg-accent/15 text-accent',
+  failed: 'bg-error/15 text-error',
+  rate_limit: 'bg-warning/15 text-warning',
   cancelled: 'bg-bg-tertiary text-text-muted',
 };
 
@@ -68,12 +68,12 @@ function JobStatusBadge({ job }: { job: ResearchJob }) {
 }
 
 const workerDotColors: Record<string, string> = {
-  starting: 'bg-yellow-400',
-  running: 'bg-green-400',
-  idle: 'bg-blue-400',
-  stopping: 'bg-orange-400',
+  starting: 'bg-warning',
+  running: 'bg-success',
+  idle: 'bg-accent',
+  stopping: 'bg-warning',
   stopped: 'bg-bg-tertiary',
-  backoff: 'bg-red-400',
+  backoff: 'bg-error',
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -210,7 +210,7 @@ function JobDetail({ job, queryMap }: { job: ResearchJob; queryMap: Record<strin
         )}
         {job.error && (
           <div>
-            <p className="text-sm text-red-400 uppercase tracking-wider mb-0.5">Error</p>
+            <p className="text-sm text-error uppercase tracking-wider mb-0.5">Error</p>
             <ErrorDisplay error={job.error} />
           </div>
         )}
@@ -257,7 +257,7 @@ function WorkerCard({
       <div className="flex items-center gap-4 text-sm text-text-muted">
         <span>PID {worker.pid ?? '—'}</span>
         <span>Up {fmtUptime(worker.uptimeMs)}</span>
-        {worker.restarts > 0 && <span className="text-yellow-400">{worker.restarts} restarts</span>}
+        {worker.restarts > 0 && <span className="text-warning">{worker.restarts} restarts</span>}
       </div>
 
       {currentJob ? (
@@ -473,7 +473,7 @@ function InFlightJobsTable({ jobs, queryMap, onCancel, cancelPending }: {
             onClick={(e) => { e.stopPropagation(); onCancel(row.id); }}
             disabled={cancelPending}
             title="Cancel job"
-            className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-red-400 hover:bg-red-900/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-error hover:bg-error/15 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
             ✕
           </button>
@@ -891,7 +891,7 @@ export function ResearchWorkersPage() {
           accent={successRate != null ? (successRate >= 90 ? 'success' : successRate >= 70 ? 'warning' : 'error') : undefined}
           detailContent={sourceHealth && sourceHealth.total > 0 ? (
             <><span className="text-text-muted">sources fail </span>
-              <span className={clsx('font-medium', sourceHealth.failure_rate > 0.25 ? 'text-danger' : sourceHealth.failure_rate > 0.1 ? 'text-warning' : 'text-text-secondary')}>
+              <span className={clsx('font-medium', sourceHealth.failure_rate > 0.25 ? 'text-error' : sourceHealth.failure_rate > 0.1 ? 'text-warning' : 'text-text-secondary')}>
                 {(sourceHealth.failure_rate * 100).toFixed(0)}%
               </span></>
           ) : undefined}
