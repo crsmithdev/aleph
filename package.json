@@ -18,7 +18,9 @@
     "ui:build": "cd src/ui && bun run build",
     "ui:e2e": "bun src/ui/e2e/goal-flow.test.ts",
     "ui:e2e:obs": "bun src/ui/e2e/observability-flow.test.ts",
-    "ui:smoke": "bun src/ui/e2e/ui-smoke.test.ts",
+    "ui:smoke": "bun src/ui/e2e/server-boot.test.ts && bun src/ui/e2e/ui-smoke.test.ts",
+    "ui:smoke:boot": "bun src/ui/e2e/server-boot.test.ts",
+    "ui:smoke:routes": "bun src/ui/e2e/ui-smoke.test.ts",
     "ui:e2e:credit": "bun src/ui/e2e/credit-exhausted-ui.test.ts",
     "ui:e2e:research": "bun src/ui/e2e/research-full-pipeline.test.ts"
   },
