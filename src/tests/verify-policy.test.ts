@@ -4,17 +4,21 @@ import {
   classifyChange,
   decide,
   extractTurn,
-  hasAllVerifyMarkers,
   isDocOnly,
+  missingRequiredFields,
   mostRecentUserText,
-  scanMarkers,
+  scanVerifyBlock,
   turnStartIndex,
   userAffirmedSkip,
 } from "../eval/verify-policy.ts";
 
-console.log("[verify-type] bun src/tests/verify-policy.test.ts");
-console.log("[verify-surface] verify-policy pure functions: classifyChange, scanMarkers, decide, transcript helpers");
-console.log("[verify-behavior] policy honors the structured-marker contract documented in src/eval/verify-policy.ts and rejects malformed input");
+console.log("[verify]");
+console.log("type: unit");
+console.log("scope: src/eval/verify-policy.ts, src/tests/verify-policy.test.ts");
+console.log("input: in-process function calls with synthetic transcript / tool-output strings");
+console.log("output: return values from classifyChange, scanVerifyBlock, missingRequiredFields, decide, transcript helpers");
+console.log("method: pin every documented contract of verify-policy with a check(); failure-mode is bad regex or wrong required-key list breaking one or more checks");
+console.log("[/verify]");
 
 const r = createResults();
 
@@ -45,38 +49,76 @@ check(r, "any code mixed in → required",
 check(r, "config alone → required",
   classifyChange(["settings.json"]) === "required");
 
-// ── scanMarkers ──────────────────────────────────────────────────────────────
-console.log("--- scanMarkers ---");
-{
-  const m = scanMarkers(
-    "[verify-type] bun run ui:smoke\n" +
-    "[verify-surface] 24 routes via routes-meta\n" +
-    "[verify-behavior] each page mounts with its own testid\n",
-  );
-  check(r, "scanMarkers: captures all three structured markers",
-    m.type === "bun run ui:smoke"
-      && m.surface === "24 routes via routes-meta"
-      && m.behavior === "each page mounts with its own testid");
-}
-{
-  const m = scanMarkers("");
-  check(r, "scanMarkers: empty output → all nulls",
-    !m.type && !m.surface && !m.behavior);
-}
-{
-  const m = scanMarkers("only [verify-type] X here");
-  check(r, "scanMarkers: partial output → only present markers populated",
-    m.type === "X here" && !m.surface && !m.behavior);
-}
+// ── scanVerifyBlock ──────────────────────────────────────────────────────────
+console.log("--- scanVerifyBlock ---");
 
-// ── hasAllVerifyMarkers ──────────────────────────────────────────────────────
-console.log("--- hasAllVerifyMarkers ---");
-check(r, "all three present → true",
-  hasAllVerifyMarkers({ type: "a", surface: "b", behavior: "c" }));
-check(r, "any one missing → false",
-  !hasAllVerifyMarkers({ type: "a", surface: "b", behavior: null })
-    && !hasAllVerifyMarkers({ type: null, surface: "b", behavior: "c" })
-    && !hasAllVerifyMarkers({ type: "a", surface: null, behavior: "c" }));
+const FULL_BLOCK = [
+  "[verify]",
+  "type: e2e",
+  "scope: src/ui/web/src/routes-meta.ts",
+  "input: playwright nav to /research/__smoke_none__",
+  "output: DOM query for [data-testid=\"error-state\"]",
+  "method: bogus-id detail page renders the not-found ErrorState",
+  "[/verify]",
+].join("\n");
+
+{
+  const b = scanVerifyBlock(FULL_BLOCK);
+  check(r, "scanVerifyBlock: parses all five required keys",
+    b !== null
+      && b.fields.type === "e2e"
+      && b.fields.scope === "src/ui/web/src/routes-meta.ts"
+      && b.fields.input === "playwright nav to /research/__smoke_none__"
+      && b.fields.output === 'DOM query for [data-testid="error-state"]'
+      && b.fields.method === "bogus-id detail page renders the not-found ErrorState");
+}
+{
+  const b = scanVerifyBlock(FULL_BLOCK);
+  check(r, "scanVerifyBlock: missingRequiredFields returns [] when all present",
+    missingRequiredFields(b).length === 0);
+}
+{
+  const b = scanVerifyBlock("");
+  check(r, "scanVerifyBlock: empty input → null",
+    b === null && missingRequiredFields(b).length === 5);
+}
+{
+  const b = scanVerifyBlock("[verify]\ntype: unit\nscope: foo.ts\n[/verify]");
+  check(r, "scanVerifyBlock: missingRequiredFields names exactly the absent keys",
+    b !== null
+      && missingRequiredFields(b).join(",") === "input,output,method");
+}
+{
+  const block = [
+    "[verify]",
+    "type: integration",
+    "scope: src/foo.ts",
+    "input: function call",
+    "output: return value",
+    "method: round-trip works",
+    "gaps: did not exercise concurrent-call path",
+    "assertions: result.ok === true; result.value matches schema",
+    "failure-mode: if foo() throws on null, the test catches via expect(...).not.toThrow()",
+    "[/verify]",
+  ].join("\n");
+  const b = scanVerifyBlock(block);
+  check(r, "scanVerifyBlock: optional keys (gaps, assertions, failure-mode) recorded",
+    b !== null
+      && b.fields.gaps === "did not exercise concurrent-call path"
+      && b.fields.assertions === "result.ok === true; result.value matches schema"
+      && b.fields["failure-mode"]?.startsWith("if foo() throws"));
+}
+{
+  const noisy = "blah blah\nrunning tests...\n" + FULL_BLOCK + "\nmore noise\n151 failures elsewhere";
+  const b = scanVerifyBlock(noisy);
+  check(r, "scanVerifyBlock: extracts block from surrounding noise (incl. stray 'failures' prose)",
+    b !== null && b.fields.type === "e2e");
+}
+{
+  const b = scanVerifyBlock("[verify]\ntype: e2e\nscope:\ninput: x\noutput: y\nmethod: z\n[/verify]");
+  check(r, "scanVerifyBlock: empty value counts as missing key",
+    missingRequiredFields(b).includes("scope"));
+}
 
 // ── userAffirmedSkip ─────────────────────────────────────────────────────────
 console.log("--- userAffirmedSkip ---");
@@ -100,48 +142,42 @@ console.log("--- decide ---");
 {
   const d = decide({
     editedFiles: ["src/foo.ts"],
-    toolResultText:
-      "[verify-type] bun test src/tests/foo.test.ts\n" +
-      "[verify-surface] foo() with edge inputs\n" +
-      "[verify-behavior] returns expected shape on negative numbers\n",
-    mostRecentUserText: "fix the foo bug",
+    toolResultText: FULL_BLOCK,
+    mostRecentUserText: "fix foo",
   });
-  check(r, "code + all three markers → pass (no test summary required)",
-    d.kind === "pass" && d.reason.includes("returns expected shape"));
+  check(r, "code + complete [verify] block → pass",
+    d.kind === "pass" && d.reason.includes("ErrorState"));
 }
 {
-  // The whole point of this redesign: the policy does not look for fail
-  // counts in tool output, so prose mentioning failures cannot block when
-  // the markers are present.
   const d = decide({
     editedFiles: ["src/foo.ts"],
-    toolResultText:
-      "[verify-type] bun test\n" +
-      "[verify-surface] foo()\n" +
-      "[verify-behavior] foo() handles edge case\n" +
-      "...the system processed 151 failures during the migration window last week",
+    toolResultText: FULL_BLOCK + "\n151 failures elsewhere in unrelated log",
     mostRecentUserText: "fix",
   });
-  check(r, "stray 'N failures' prose with all three markers → pass (no false-positive block)",
+  check(r, "stray 'N failures' prose alongside complete block → still pass",
     d.kind === "pass");
 }
 {
+  const partial = "[verify]\ntype: unit\nscope: foo.ts\n[/verify]";
   const d = decide({
     editedFiles: ["src/foo.ts"],
-    toolResultText: "[verify-type] x\n[verify-surface] y",
-    mostRecentUserText: "fix foo",
+    toolResultText: partial,
+    mostRecentUserText: "fix",
   });
-  check(r, "missing one marker → block, names the missing marker",
-    d.kind === "block" && d.reason.includes("[verify-behavior]"));
+  check(r, "partial block → block, names every missing key",
+    d.kind === "block"
+      && d.reason.includes("input")
+      && d.reason.includes("output")
+      && d.reason.includes("method"));
 }
 {
   const d = decide({
     editedFiles: ["src/foo.ts"],
-    toolResultText: "ran some tests; 5 pass, 0 fail, looked good",
-    mostRecentUserText: "fix foo",
+    toolResultText: "ran some tests; all good",
+    mostRecentUserText: "fix",
   });
-  check(r, "test summary alone (no markers) → block",
-    d.kind === "block");
+  check(r, "no [verify] block at all → block",
+    d.kind === "block" && d.reason.includes("no [verify] block"));
 }
 {
   const d = decide({
@@ -153,25 +189,13 @@ console.log("--- decide ---");
     d.kind === "pass" && d.reason.includes("user-affirmed"));
 }
 {
-  const d = decide({
-    editedFiles: ["src/ui/web/src/pages/Foo.tsx"],
-    toolResultText: "bun run build\nclean.",
-    mostRecentUserText: "fix the foo page",
-  });
-  check(r, "code change with no verification → block, with actionable hint",
-    d.kind === "block"
-      && d.reason.includes("[verify-type]")
-      && d.reason.includes("[verify-surface]")
-      && d.reason.includes("[verify-behavior]")
-      && d.reason.includes("skip verify"));
-}
-{
+  const old = "[verify-type] x\n[verify-surface] y\n[verify-behavior] z";
   const d = decide({
     editedFiles: ["src/foo.ts"],
-    toolResultText: "[verify-what] old format — no longer accepted",
-    mostRecentUserText: "fix foo",
+    toolResultText: old,
+    mostRecentUserText: "fix",
   });
-  check(r, "OLD [verify-what] marker is not accepted",
+  check(r, "OLD [verify-X] markers without [verify] block → block",
     d.kind === "block");
 }
 
@@ -194,10 +218,7 @@ const lines = jsonl(
     { type: "tool_use", name: "Bash", input: { command: "bun test src/tests/a.test.ts" } },
   ] } },
   { type: "user", message: { content: [
-    { type: "tool_result", content:
-      "[verify-type] bun test src/tests/a.test.ts\n" +
-      "[verify-surface] a() return value\n" +
-      "[verify-behavior] a behaves correctly on edge input" },
+    { type: "tool_result", content: FULL_BLOCK },
   ] } },
 );
 
@@ -210,8 +231,10 @@ check(r, "mostRecentUserText returns that prompt's text",
   const t = extractTurn(lines, turnStartIndex(lines));
   check(r, "extractTurn pulls current-turn edits",
     t.editedFiles.length === 1 && t.editedFiles[0] === "src/a.ts");
-  check(r, "extractTurn pulls current-turn tool output",
-    t.toolResultText.includes("[verify-behavior] a behaves correctly"));
+  check(r, "extractTurn pulls current-turn tool output (verify block intact)",
+    t.toolResultText.includes("[verify]")
+      && t.toolResultText.includes("[/verify]")
+      && t.toolResultText.includes("bogus-id detail page renders"));
   check(r, "extractTurn excludes prior-turn artifacts",
     !t.editedFiles.includes("old.ts")
       && !t.toolResultText.includes("old result"));
@@ -226,13 +249,13 @@ check(r, "mostRecentUserText returns that prompt's text",
     { type: "user", message: { content: [
       { type: "tool_result", content: [
         { type: "text", text: "line 1" },
-        { type: "text", text: "[verify-type] bun test foo\n[verify-surface] foo()\n[verify-behavior] returns 42" },
+        { type: "text", text: FULL_BLOCK },
       ] },
     ] } },
   );
   const t = extractTurn(arrLines, turnStartIndex(arrLines));
   check(r, "extractTurn handles array-shaped tool_result content",
-    t.toolResultText.includes("line 1") && t.toolResultText.includes("[verify-type] bun test foo"));
+    t.toolResultText.includes("line 1") && t.toolResultText.includes("[verify]"));
 }
 
 {

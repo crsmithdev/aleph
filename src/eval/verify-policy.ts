@@ -6,22 +6,28 @@
  *   - REQUIRED : code, config, or any non-doc edit
  *
  * REQUIRED passes if either:
- *   (a) the current turn's tool output contains all three structured markers
+ *   (a) the current turn's tool output contains a structured `[verify]` block
  *
- *         [verify-type]     <command/test that ran>
- *         [verify-surface]  <what was exercised: UI button, API endpoint, hook stdin, etc.>
- *         [verify-behavior] <what passing proves about the change>
+ *         [verify]
+ *         type:    <unit | integration | e2e | smoke | manual | custom-script>
+ *         scope:   <files / modules touched by the test>
+ *         input:   <how data went in: playwright URL, API call, function args>
+ *         output:  <what was inspected for the result: response body, DOM, exit code>
+ *         method:  <what the test does, and why that proves the change works>
+ *         [/verify]
  *
+ *       All five keys are required. The optional keys `gaps`, `assertions`,
+ *       and `failure-mode` are recognised and recorded if present.
  *   (b) the user explicitly said `skip verify[ication]` in the most recent
  *       user message.
  *
  * The hook deliberately does NOT scan tool output for "N pass / M fail" or
  * any other test-runner shape. Pattern-matching can't tell whether a test
  * actually ran or actually exercised the change — only whether the text
- * looks like a test summary. The three markers are the audit trail: the
- * agent commits to *what it tested*, *how*, and *what passing proves*. If
- * the agent fabricates them, that's lying, and no regex can catch lying.
- * Code review is the only real defense against that, and it always was.
+ * looks like a test summary. The structured block IS the audit trail: the
+ * agent commits to a falsifiable claim about the validation. Reviewers and
+ * code review judge whether the claim is adequate. Every validation is
+ * inadequate until those five fields prove otherwise.
  *
  * Anything else blocks. There is no "advisory" outcome — the gate either
  * passes silently or blocks with an actionable reason.
@@ -53,33 +59,39 @@ export function classifyChange(editedFiles: string[]): ChangeClass {
 }
 
 // ---------------------------------------------------------------------------
-// Marker scanning
+// Verify-block scanning
 // ---------------------------------------------------------------------------
 
-const VERIFY_TYPE_RE     = /\[verify-type]\s*([^\n]+)/i;
-const VERIFY_SURFACE_RE  = /\[verify-surface]\s*([^\n]+)/i;
-const VERIFY_BEHAVIOR_RE = /\[verify-behavior]\s*([^\n]+)/i;
+const VERIFY_BLOCK_RE = /\[verify]\s*\n([\s\S]*?)\n\s*\[\/verify]/i;
+const KV_RE = /^\s*([a-z][-a-z]*)\s*:\s*(.+?)\s*$/i;
 
-export interface MarkerStatus {
-  /** Each verify-* marker is required; null means "not present in output". */
-  type: string | null;
-  surface: string | null;
-  behavior: string | null;
+/** Required keys — every one must be present and non-empty. */
+export const REQUIRED_KEYS = ["type", "scope", "input", "output", "method"] as const;
+/** Optional keys — recognised and recorded but not required. */
+export const OPTIONAL_KEYS = ["gaps", "assertions", "failure-mode"] as const;
+
+export interface VerifyBlock {
+  /** Lowercased key → trimmed value. */
+  fields: Record<string, string>;
 }
 
-export function scanMarkers(text: string): MarkerStatus {
-  const t = text.match(VERIFY_TYPE_RE);
-  const s = text.match(VERIFY_SURFACE_RE);
-  const b = text.match(VERIFY_BEHAVIOR_RE);
-  return {
-    type:     t ? t[1].trim() : null,
-    surface:  s ? s[1].trim() : null,
-    behavior: b ? b[1].trim() : null,
-  };
+export function scanVerifyBlock(text: string): VerifyBlock | null {
+  const m = text.match(VERIFY_BLOCK_RE);
+  if (!m) return null;
+  const fields: Record<string, string> = {};
+  for (const line of m[1].split("\n")) {
+    const kv = line.match(KV_RE);
+    if (!kv) continue;
+    const key = kv[1].toLowerCase();
+    const value = kv[2].trim();
+    if (value) fields[key] = value;
+  }
+  return { fields };
 }
 
-export function hasAllVerifyMarkers(m: MarkerStatus): boolean {
-  return !!(m.type && m.surface && m.behavior);
+export function missingRequiredFields(block: VerifyBlock | null): string[] {
+  if (!block) return REQUIRED_KEYS.slice();
+  return REQUIRED_KEYS.filter(k => !block.fields[k]);
 }
 
 // ---------------------------------------------------------------------------
@@ -190,23 +202,24 @@ export interface DecisionContext {
 
 const BLOCK_REASON =
   "Code change with no verification trace.\n" +
-  "Run something that exercises this change. In its output, declare three things:\n" +
-  "  console.log('[verify-type] <what test or command was run, e.g. \"bun run ui:smoke\">');\n" +
-  "  console.log('[verify-surface] <what was exercised, e.g. \"24 routes via routes-meta\">');\n" +
-  "  console.log('[verify-behavior] <what passing proves, e.g. \"each page mounts with its own testid\">');\n" +
-  "All three are required. They become the audit trail; reviewers judge whether\n" +
-  "the test was about the right thing.\n" +
+  "Run something that exercises this change. In its output, emit a [verify] block:\n" +
+  "\n" +
+  "  [verify]\n" +
+  "  type: e2e\n" +
+  "  scope: src/ui/web/src/routes-meta.ts, src/ui/e2e/ui-smoke.test.ts\n" +
+  "  input: playwright nav to /research/__smoke_none__\n" +
+  "  output: DOM query for [data-testid=\"error-state\"]\n" +
+  "  method: bogus-id detail page should render the not-found ErrorState; the smoke fails if any 4xx leaks past the allowedApi404 list\n" +
+  "  [/verify]\n" +
+  "\n" +
+  "All five keys (type, scope, input, output, method) are required. Optional\n" +
+  "keys gaps, assertions, failure-mode are recognised and recorded.\n" +
+  "\n" +
+  "Every validation is inadequate until those fields prove otherwise. Reviewers\n" +
+  "judge the claim; the gate just makes you commit to one.\n" +
   "\n" +
   "If verification is genuinely not appropriate (paid endpoint, non-code change, etc.)," +
   " reply with \"skip verify\" and I will accept it once.";
-
-function missingMarkerList(m: MarkerStatus): string[] {
-  const missing: string[] = [];
-  if (!m.type) missing.push("[verify-type]");
-  if (!m.surface) missing.push("[verify-surface]");
-  if (!m.behavior) missing.push("[verify-behavior]");
-  return missing;
-}
 
 export function decide(ctx: DecisionContext): Decision {
   const klass = classifyChange(ctx.editedFiles);
@@ -214,20 +227,18 @@ export function decide(ctx: DecisionContext): Decision {
     return { kind: "pass", reason: "skip: docs-only or no edits" };
   }
 
-  const markers = scanMarkers(ctx.toolResultText);
-  if (hasAllVerifyMarkers(markers)) {
-    return { kind: "pass", reason: `verified: ${markers.behavior}` };
+  const block = scanVerifyBlock(ctx.toolResultText);
+  const missing = missingRequiredFields(block);
+  if (missing.length === 0) {
+    return { kind: "pass", reason: `verified: ${block!.fields.method}` };
   }
 
   if (userAffirmedSkip(ctx.mostRecentUserText)) {
     return { kind: "pass", reason: "user-affirmed skip" };
   }
 
-  // Tailor the reason if the user *tried* to verify but missed a piece.
-  const missing = missingMarkerList(markers);
-  const reason = (missing.length > 0 && missing.length < 3)
-    ? `${BLOCK_REASON}\n\nDetected: missing markers: ${missing.join(", ")}.`
-    : BLOCK_REASON;
-
-  return { kind: "block", reason };
+  const detail = block === null
+    ? "no [verify] block found"
+    : `[verify] block missing required keys: ${missing.join(", ")}`;
+  return { kind: "block", reason: `${BLOCK_REASON}\n\nDetected: ${detail}.` };
 }
