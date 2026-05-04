@@ -5,10 +5,10 @@
  * Two outcomes:
  *   - SKIP    : every edited file is docs-only (markdown/text or under docs/) — pass silently
  *   - REQUIRED: any code/config edit — must show all three structured markers
- *               ([verify-type], [verify-surface], [verify-behavior]) AND a passing
- *               summary (numbered or "all <noun> pass(ed)") in this turn's tool output,
- *               OR have an explicit user grant via `skip verify[ication]` in the most
- *               recent user message
+ *               ([verify-type], [verify-surface], [verify-behavior]) in this turn's
+ *               tool output, OR have an explicit user grant via `skip verify[ication]`
+ *               in the most recent user message. The hook deliberately does NOT scan
+ *               for "N pass / M fail" patterns — see verify-policy.ts for why.
  *
  * All classification, scanning, and decision logic lives in `src/eval/verify-policy.ts`
  * so the same rules can be reused (and tested) outside the hook.
