@@ -135,23 +135,36 @@ const smokeable = ROUTE_META.filter(r => r.smoke);
 const skipped = ROUTE_META.filter(r => !r.smoke);
 console.log(`[smoke] ${smokeable.length} routes to smoke, ${skipped.length} skipped (redirects/dynamic)\n`);
 
+// Routes run in parallel batches. Each Playwright page already has its own
+// context, so cookies / storage / console handlers don't bleed between them.
+// Batch size keeps memory bounded — 6 chrome tabs in flight is comfortable.
+const BATCH_SIZE = parseInt(process.env.SMOKE_CONCURRENCY ?? '6', 10);
+
 let exitCode = 0;
 try {
   const port = await setup();
   const failures: Failure[] = [];
   let passed = 0;
-  for (const r of smokeable) {
-    const f = await smokeRoute(port, r.path, r.smoke!.testid, r.smoke!.heading);
-    if (f) {
-      failures.push(f);
-      console.log(`  ✗ ${r.path}`);
-      for (const reason of f.reasons) console.log(`      ${reason}`);
-    } else {
-      console.log(`  ✓ ${r.path}`);
-      passed++;
+  const t0 = Date.now();
+  for (let i = 0; i < smokeable.length; i += BATCH_SIZE) {
+    const batch = smokeable.slice(i, i + BATCH_SIZE);
+    const results = await Promise.all(batch.map(async r => ({
+      path: r.path,
+      failure: await smokeRoute(port, r.path, r.smoke!.testid, r.smoke!.heading),
+    })));
+    for (const { path, failure } of results) {
+      if (failure) {
+        failures.push(failure);
+        console.log(`  ✗ ${path}`);
+        for (const reason of failure.reasons) console.log(`      ${reason}`);
+      } else {
+        console.log(`  ✓ ${path}`);
+        passed++;
+      }
     }
   }
-  console.log(`\n${passed} passed, ${failures.length} failed`);
+  const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+  console.log(`\n${passed} passed, ${failures.length} failed (${elapsed}s, batch=${BATCH_SIZE})`);
   exitCode = failures.length > 0 ? 1 : 0;
 } catch (err) {
   console.error('[smoke] FATAL:', err);
