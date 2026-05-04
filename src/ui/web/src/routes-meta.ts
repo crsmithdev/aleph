@@ -12,6 +12,22 @@ export type SmokeMeta = {
   testid: string;
   /** If set, smoke asserts an <h1> matching this regex exists. */
   heading?: RegExp;
+  /**
+   * Concrete URL to navigate to in smoke. Required for routes with `:`
+   * params; the route table keeps the React Router pattern (`/research/:id`)
+   * while smoke uses the bogus-id form here (`/research/__smoke_none__`).
+   */
+  pathFor?: string;
+  /**
+   * For bogus-id detail-page smokes, list URL patterns whose 404 responses
+   * are expected and should NOT fail the smoke. Other 4xx/5xx still fail.
+   */
+  allowedApi404?: RegExp[];
+  /**
+   * If true, smoke asserts `[data-testid="error-state"]` is visible after
+   * mount — the page rendered its not-found UI cleanly instead of crashing.
+   */
+  expectErrorState?: boolean;
 };
 
 export type RouteMeta = {
@@ -36,7 +52,15 @@ export const ROUTE_META: readonly RouteMeta[] = [
   // Research
   { path: '/research', smoke: { testid: 'page-research-landing' } },
   { path: '/research/history', smoke: { testid: 'page-research-history' } },
-  { path: '/research/:id' },
+  {
+    path: '/research/:id',
+    smoke: {
+      testid: 'page-research-detail',
+      pathFor: '/research/__smoke_none__',
+      allowedApi404: [/\/api\/research\/queries\/__smoke_none__(\?|$|\/)/],
+      expectErrorState: true,
+    },
+  },
   { path: '/research/:id/plan' },
   { path: '/research/workers', smoke: { testid: 'page-research-workers', heading: /^Workers$/ } },
   { path: '/research/config', smoke: { testid: 'page-research-config', heading: /^Research Config$/ } },
@@ -44,7 +68,13 @@ export const ROUTE_META: readonly RouteMeta[] = [
   // Observability
   { path: '/observability', smoke: { testid: 'page-observability-overview' } },
   { path: '/observability/tools', smoke: { testid: 'page-observability-tools' } },
-  { path: '/observability/tools/:name' },
+  {
+    path: '/observability/tools/:name',
+    smoke: {
+      testid: 'page-observability-tool-detail',
+      pathFor: '/observability/tools/__smoke_none__',
+    },
+  },
   { path: '/observability/hooks', smoke: { testid: 'page-observability-hooks' } },
   { path: '/observability/hooks/:name' },
   { path: '/observability/skills', smoke: { testid: 'page-observability-skills' } },

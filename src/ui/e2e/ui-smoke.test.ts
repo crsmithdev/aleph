@@ -80,12 +80,14 @@ async function teardown() {
 
 type Failure = { path: string; reasons: string[] };
 
-async function smokeRoute(
-  port: number,
-  path: string,
-  testid: string,
-  heading: RegExp | undefined,
-): Promise<Failure | null> {
+type SmokeOpts = {
+  testid: string;
+  heading?: RegExp;
+  allowedApi404?: RegExp[];
+  expectErrorState?: boolean;
+};
+
+async function smokeRoute(port: number, path: string, opts: SmokeOpts): Promise<Failure | null> {
   const page = await browser!.newPage();
   const consoleErrors: string[] = [];
   const pageErrors: string[] = [];
@@ -95,26 +97,33 @@ async function smokeRoute(
     if (msg.type() !== 'error') return;
     const text = msg.text();
     if (IGNORED_CONSOLE_PATTERNS.some(re => re.test(text))) return;
+    // Browser logs "Failed to load resource ... 404" for every fetch 404 —
+    // dedupe those against the allowedApi404 allowlist by URL.
+    const url = msg.location().url;
+    if (url && /\/api\//.test(url) && opts.allowedApi404?.some(re => re.test(url))) return;
     consoleErrors.push(text);
   });
   page.on('pageerror', err => pageErrors.push(err.message));
   page.on('response', resp => {
     const status = resp.status();
-    if (status >= 400 && resp.url().includes('/api/')) {
-      apiFailures.push(`${status} ${resp.url()}`);
-    }
+    if (status < 400 || !resp.url().includes('/api/')) return;
+    if (status === 404 && opts.allowedApi404?.some(re => re.test(resp.url()))) return;
+    apiFailures.push(`${status} ${resp.url()}`);
   });
 
   const reasons: string[] = [];
   try {
     await page.goto(`http://127.0.0.1:${port}${path}`, { timeout: 30_000, waitUntil: 'domcontentloaded' });
     // Page-specific marker — absence means THIS page didn't mount.
-    await page.waitForSelector(`main[data-testid="${testid}"]`, { timeout: 15_000 });
+    await page.waitForSelector(`main[data-testid="${opts.testid}"]`, { timeout: 15_000 });
 
-    if (heading) {
+    if (opts.expectErrorState) {
+      await page.waitForSelector('[data-testid="error-state"]', { timeout: 10_000 })
+        .catch(() => { reasons.push('expected ErrorState (data-testid="error-state") not visible'); });
+    } else if (opts.heading) {
       const h1Text = await page.locator('main h1').first().textContent({ timeout: 5_000 }).catch(() => null);
-      if (!h1Text || !heading.test(h1Text.trim())) {
-        reasons.push(`h1 ${h1Text === null ? 'not found' : `"${h1Text.trim()}"`} did not match ${heading}`);
+      if (!h1Text || !opts.heading.test(h1Text.trim())) {
+        reasons.push(`h1 ${h1Text === null ? 'not found' : `"${h1Text.trim()}"`} did not match ${opts.heading}`);
       }
     }
   } catch (err: any) {
@@ -148,10 +157,13 @@ try {
   const t0 = Date.now();
   for (let i = 0; i < smokeable.length; i += BATCH_SIZE) {
     const batch = smokeable.slice(i, i + BATCH_SIZE);
-    const results = await Promise.all(batch.map(async r => ({
-      path: r.path,
-      failure: await smokeRoute(port, r.path, r.smoke!.testid, r.smoke!.heading),
-    })));
+    const results = await Promise.all(batch.map(async r => {
+      const url = r.smoke!.pathFor ?? r.path;
+      return {
+        path: url,
+        failure: await smokeRoute(port, url, r.smoke!),
+      };
+    }));
     for (const { path, failure } of results) {
       if (failure) {
         failures.push(failure);
