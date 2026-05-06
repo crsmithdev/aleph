@@ -7,6 +7,11 @@ export interface HookDecision {
   decision: "block" | "advisory" | "pass";
   tier?: number;
   detail?: string;
+  /** Arbitrary structured payload merged into the JSONL entry. Use for
+   *  per-hook context the offline analyst will want to grep — e.g. the
+   *  verify-gate dumps the parsed [verify] block fields here so quality
+   *  audits can run against the log. */
+  meta?: Record<string, unknown>;
 }
 
 export function reportHook(hook: string, event: string, sessionId?: string, decision?: HookDecision): void {
@@ -17,6 +22,7 @@ export function reportHook(hook: string, event: string, sessionId?: string, deci
       entry.decision = decision.decision;
       if (decision.tier !== undefined) entry.tier = decision.tier;
       if (decision.detail) entry.detail = decision.detail;
+      if (decision.meta) Object.assign(entry, decision.meta);
     }
     appendFileSync(dataPaths.hookEvents, JSON.stringify(entry) + "\n");
   } catch (e) {

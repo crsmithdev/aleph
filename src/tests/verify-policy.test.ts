@@ -7,17 +7,18 @@ import {
   isDocOnly,
   missingRequiredFields,
   mostRecentUserText,
+  REQUIRED_KEYS,
   scanVerifyBlock,
   turnStartIndex,
   userAffirmedSkip,
 } from "../eval/verify-policy.ts";
 
 console.log("[verify]");
-console.log("type: unit");
-console.log("scope: src/eval/verify-policy.ts, src/tests/verify-policy.test.ts");
-console.log("input: in-process function calls with synthetic transcript / tool-output strings");
-console.log("output: return values from classifyChange, scanVerifyBlock, missingRequiredFields, decide, transcript helpers");
-console.log("method: pin every documented contract of verify-policy with a check(); failure-mode is bad regex or wrong required-key list breaking one or more checks");
+console.log("scope: src/eval/verify-policy.ts:78-95 (REQUIRED_KEYS, scanVerifyBlock, missingRequiredFields), src/tests/verify-policy.test.ts (this file), src/hook-report.ts:6-16 (HookDecision.meta)");
+console.log("method: invoke each exported pure function in verify-policy with synthetic strings and JSONL transcript fixtures; assert return values via check(); REQUIRED_KEYS is the new five-tuple (scope, method, assertions, failure-mode, gaps), no [verify-X] / type / input / output legacy");
+console.log("assertions: full block parses each required key; missing-key block surfaces exactly the absent keys; partial / empty / noisy inputs handled; old [verify-X] tags rejected; old type/input/output keys are NOT in REQUIRED_KEYS; full block in synthetic transcript drives decide() to pass");
+console.log("failure-mode: regression in VERIFY_BLOCK_RE / KV_RE → 'parses all five' check fails; regression in REQUIRED_KEYS list → 'names exactly the absent keys' check names the wrong set; if scope/method/assertions/failure-mode/gaps drop out of the required tuple, the 'missing names exactly' check breaks; old-tag regression rejection inverts");
+console.log("gaps: does not exercise the live Stop-hook stdin/exit-code path through quality-check-stop.ts; does not cover the new hook-report meta payload (covered by code review and runtime telemetry inspection); content-quality of `gaps` / `failure-mode` / `scope` answers is not (and cannot be) checked here — that's a code-review responsibility per the policy's design");
 console.log("[/verify]");
 
 const r = createResults();
@@ -49,16 +50,25 @@ check(r, "any code mixed in → required",
 check(r, "config alone → required",
   classifyChange(["settings.json"]) === "required");
 
+// ── REQUIRED_KEYS shape ──────────────────────────────────────────────────────
+console.log("--- REQUIRED_KEYS ---");
+check(r, "required keys are exactly the five-tuple in canonical order",
+  REQUIRED_KEYS.join(",") === "scope,method,assertions,failure-mode,gaps");
+check(r, "old keys (type, input, output) are no longer required",
+  !(REQUIRED_KEYS as readonly string[]).includes("type")
+    && !(REQUIRED_KEYS as readonly string[]).includes("input")
+    && !(REQUIRED_KEYS as readonly string[]).includes("output"));
+
 // ── scanVerifyBlock ──────────────────────────────────────────────────────────
 console.log("--- scanVerifyBlock ---");
 
 const FULL_BLOCK = [
   "[verify]",
-  "type: e2e",
-  "scope: src/ui/web/src/routes-meta.ts",
-  "input: playwright nav to /research/__smoke_none__",
-  "output: DOM query for [data-testid=\"error-state\"]",
-  "method: bogus-id detail page renders the not-found ErrorState",
+  "scope: src/ui/web/src/routes-meta.ts:30-44, src/ui/e2e/ui-smoke.test.ts:140-152",
+  "method: playwright nav to /research/__smoke_none__, wait for [data-testid=\"page-research-detail\"], then [data-testid=\"error-state\"]",
+  "assertions: page testid renders within 15s; error-state visible; no /api/ 4xx outside allowedApi404 list",
+  "failure-mode: missing testid on Layout → first selector times out; missing data-testid on ErrorState → second selector times out",
+  "gaps: only the 404/empty path is covered, not populated detail rendering",
   "[/verify]",
 ].join("\n");
 
@@ -66,11 +76,11 @@ const FULL_BLOCK = [
   const b = scanVerifyBlock(FULL_BLOCK);
   check(r, "scanVerifyBlock: parses all five required keys",
     b !== null
-      && b.fields.type === "e2e"
-      && b.fields.scope === "src/ui/web/src/routes-meta.ts"
-      && b.fields.input === "playwright nav to /research/__smoke_none__"
-      && b.fields.output === 'DOM query for [data-testid="error-state"]'
-      && b.fields.method === "bogus-id detail page renders the not-found ErrorState");
+      && b.fields.scope.startsWith("src/ui/web/src/routes-meta.ts:30-44")
+      && b.fields.method.startsWith("playwright nav")
+      && b.fields.assertions.startsWith("page testid renders")
+      && b.fields["failure-mode"].includes("first selector times out")
+      && b.fields.gaps.startsWith("only the 404"));
 }
 {
   const b = scanVerifyBlock(FULL_BLOCK);
@@ -83,39 +93,19 @@ const FULL_BLOCK = [
     b === null && missingRequiredFields(b).length === 5);
 }
 {
-  const b = scanVerifyBlock("[verify]\ntype: unit\nscope: foo.ts\n[/verify]");
+  const b = scanVerifyBlock("[verify]\nscope: foo.ts:1-10\nmethod: ran a thing\n[/verify]");
   check(r, "scanVerifyBlock: missingRequiredFields names exactly the absent keys",
     b !== null
-      && missingRequiredFields(b).join(",") === "input,output,method");
-}
-{
-  const block = [
-    "[verify]",
-    "type: integration",
-    "scope: src/foo.ts",
-    "input: function call",
-    "output: return value",
-    "method: round-trip works",
-    "gaps: did not exercise concurrent-call path",
-    "assertions: result.ok === true; result.value matches schema",
-    "failure-mode: if foo() throws on null, the test catches via expect(...).not.toThrow()",
-    "[/verify]",
-  ].join("\n");
-  const b = scanVerifyBlock(block);
-  check(r, "scanVerifyBlock: optional keys (gaps, assertions, failure-mode) recorded",
-    b !== null
-      && b.fields.gaps === "did not exercise concurrent-call path"
-      && b.fields.assertions === "result.ok === true; result.value matches schema"
-      && b.fields["failure-mode"]?.startsWith("if foo() throws"));
+      && missingRequiredFields(b).join(",") === "assertions,failure-mode,gaps");
 }
 {
   const noisy = "blah blah\nrunning tests...\n" + FULL_BLOCK + "\nmore noise\n151 failures elsewhere";
   const b = scanVerifyBlock(noisy);
-  check(r, "scanVerifyBlock: extracts block from surrounding noise (incl. stray 'failures' prose)",
-    b !== null && b.fields.type === "e2e");
+  check(r, "scanVerifyBlock: extracts block from surrounding noise",
+    b !== null && b.fields.scope.startsWith("src/ui/web/src/routes-meta.ts"));
 }
 {
-  const b = scanVerifyBlock("[verify]\ntype: e2e\nscope:\ninput: x\noutput: y\nmethod: z\n[/verify]");
+  const b = scanVerifyBlock("[verify]\nscope:\nmethod: x\nassertions: y\nfailure-mode: z\ngaps: w\n[/verify]");
   check(r, "scanVerifyBlock: empty value counts as missing key",
     missingRequiredFields(b).includes("scope"));
 }
@@ -146,7 +136,7 @@ console.log("--- decide ---");
     mostRecentUserText: "fix foo",
   });
   check(r, "code + complete [verify] block → pass",
-    d.kind === "pass" && d.reason.includes("ErrorState"));
+    d.kind === "pass" && d.reason.includes("playwright nav"));
 }
 {
   const d = decide({
@@ -158,17 +148,17 @@ console.log("--- decide ---");
     d.kind === "pass");
 }
 {
-  const partial = "[verify]\ntype: unit\nscope: foo.ts\n[/verify]";
+  const partial = "[verify]\nscope: foo.ts:1-10\nmethod: ran a thing\n[/verify]";
   const d = decide({
     editedFiles: ["src/foo.ts"],
     toolResultText: partial,
     mostRecentUserText: "fix",
   });
-  check(r, "partial block → block, names every missing key",
+  check(r, "partial block → block, names assertions/failure-mode/gaps as missing",
     d.kind === "block"
-      && d.reason.includes("input")
-      && d.reason.includes("output")
-      && d.reason.includes("method"));
+      && d.reason.includes("assertions")
+      && d.reason.includes("failure-mode")
+      && d.reason.includes("gaps"));
 }
 {
   const d = decide({
@@ -187,6 +177,25 @@ console.log("--- decide ---");
   });
   check(r, "no verification but user said 'skip verify' → pass",
     d.kind === "pass" && d.reason.includes("user-affirmed"));
+}
+{
+  // Old type/input/output keys must NOT cause a pass even if every old key is present.
+  const oldShape = [
+    "[verify]",
+    "type: e2e",
+    "scope: foo.ts",
+    "input: a",
+    "output: b",
+    "method: c",
+    "[/verify]",
+  ].join("\n");
+  const d = decide({
+    editedFiles: ["src/foo.ts"],
+    toolResultText: oldShape,
+    mostRecentUserText: "fix",
+  });
+  check(r, "old required-key list (type/input/output) does NOT pass anymore",
+    d.kind === "block" && d.reason.includes("assertions"));
 }
 {
   const old = "[verify-type] x\n[verify-surface] y\n[verify-behavior] z";
@@ -234,7 +243,7 @@ check(r, "mostRecentUserText returns that prompt's text",
   check(r, "extractTurn pulls current-turn tool output (verify block intact)",
     t.toolResultText.includes("[verify]")
       && t.toolResultText.includes("[/verify]")
-      && t.toolResultText.includes("bogus-id detail page renders"));
+      && t.toolResultText.includes("playwright nav"));
   check(r, "extractTurn excludes prior-turn artifacts",
     !t.editedFiles.includes("old.ts")
       && !t.toolResultText.includes("old result"));
