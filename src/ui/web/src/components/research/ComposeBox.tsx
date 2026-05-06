@@ -28,6 +28,38 @@ const TEMPLATES: { label: string; prompt: string }[] = [
   { label: 'audit', prompt: 'Is ' },
 ];
 
+// Rotated on every page load (not on every render — see useState init below).
+const PLACEHOLDER_SAMPLES = [
+  // Software engineering
+  'How did Git win out over Mercurial and Bazaar — what was the inflection point?',
+  'Compare React Server Components, the Next.js App Router, and Remix loaders — same problem, different bets',
+  'Audit: is monorepo tooling (Turborepo, Nx, Bazel) actually faster, or just better at hiding builds?',
+  'Timeline of how SQLite ate the embedded-database world — Berkeley DB to today',
+  'Why did REST beat SOAP, and what is GraphQL actually replacing?',
+  // AI
+  'Overview of post-training techniques in 2024–25 — RLHF, DPO, PRO, and what stuck',
+  'How do mixture-of-experts models actually route tokens, and where does the routing break?',
+  'Compare retrieval strategies for code-aware LLMs: BM25, embeddings, AST chunking, hybrid',
+  'Timeline of agent frameworks — AutoGPT, BabyAGI, LangGraph, OpenAI Agents SDK',
+  'Audit: are "reasoning" models actually reasoning, or just spending more tokens?',
+  // Internet
+  'How did the protocol war between IPv4 and IPv6 stall — and who is still funding the migration?',
+  'Timeline of the open-web decline: RSS, the Twitter API, the Reddit API, the Stack Exchange dumps',
+  'Compare the architectures of Cloudflare, Fastly, and AWS CloudFront edge networks',
+  'Survey of how email authentication actually works in 2026 — SPF, DKIM, DMARC, BIMI',
+  'How does BGP still hold the internet together when one bad route can take it down?',
+  // EDM
+  'Timeline of how Detroit techno crossed the Atlantic — labels, DJs, pivotal venues 1986–94',
+  'Compare the Berlin and Frankfurt feedback loops in early-90s techno',
+  'Survey of jungle’s transition into drum and bass — Metalheadz vs Reinforced vs Moving Shadow',
+  'How did Daft Punk reshape French house, and who actually came before Homework?',
+  'Audit: is microhouse a coherent genre, or a 2002 marketing label that stuck?',
+];
+
+function pickPlaceholder(): string {
+  return PLACEHOLDER_SAMPLES[Math.floor(Math.random() * PLACEHOLDER_SAMPLES.length)];
+}
+
 /** Hero compose box on the research landing page. Submits the prompt
  *  immediately, then polls the new query until shape + topic detection
  *  populate. Shape detection happens fire-and-forget on the server at
@@ -38,6 +70,8 @@ export function ComposeBox() {
   const [createdId, setCreatedId] = useState<string | null>(null);
   type EditingMode = null | 'shape' | 'lenses' | 'topic' | 'run-plan';
   const [editing, setEditing] = useState<EditingMode>(null);
+  // Frozen on mount so the placeholder doesn't shuffle on every keystroke.
+  const [placeholder] = useState(pickPlaceholder);
   const navigate = useNavigate();
   const createQuery = useCreateResearchQuery();
   const updateQuery = useUpdateResearchQuery();
@@ -103,16 +137,12 @@ export function ComposeBox() {
         'bg-gradient-to-b from-accent/[0.08] to-bg-secondary',
       )}
     >
-      <h2 className="font-heading text-lg font-semibold text-text-primary mb-3">
-        What do you want to investigate?
-      </h2>
-
       <form onSubmit={e => handleSubmit(e, false)}>
         <textarea
           value={prompt}
           onChange={e => setPrompt(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="A timeline of how Detroit techno crossed the Atlantic — labels, DJs, pivotal venues 1986–94. Compare the Berlin and Frankfurt feedback loops…"
+          placeholder={placeholder}
           className="w-full min-h-[120px] bg-bg-primary border border-border-primary rounded-lg px-4 py-3.5 text-base text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent resize-y leading-relaxed"
           disabled={createQuery.isPending || createdId !== null}
         />
@@ -172,19 +202,31 @@ export function ComposeBox() {
         <div className="flex items-center gap-3 mt-3.5 flex-wrap">
           {createdId === null ? (
             <>
-              <button
-                type="submit"
-                className="bg-accent text-bg-primary border-0 px-5 py-2 text-sm font-semibold rounded-md hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!prompt.trim() || createQuery.isPending}
-              >
-                {createQuery.isPending ? 'Starting…' : 'Start research →'}
-              </button>
+              <span className="inline-flex rounded-md overflow-hidden">
+                <button
+                  type="submit"
+                  className="bg-accent text-bg-primary border-0 pl-5 pr-4 py-2 text-sm font-semibold hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={!prompt.trim() || createQuery.isPending}
+                >
+                  {createQuery.isPending ? 'Starting…' : 'Start research →'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSubmit(undefined, true)}
+                  className="bg-accent text-bg-primary border-0 border-l border-bg-primary/20 px-2 py-2 text-sm font-semibold hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={!prompt.trim() || createQuery.isPending}
+                  title="Start and open detail"
+                  aria-label="Start research and open detail"
+                >
+                  »
+                </button>
+              </span>
               <span className="text-xs text-text-muted">
-                ↵ to start · ⌘↵ to start &amp; open detail
+                ↵ start · Ctrl/⌘↵ start &amp; open detail
               </span>
               <span className="ml-auto flex items-center gap-2 flex-wrap">
                 <span className="font-mono text-[11px] uppercase tracking-wider text-text-muted self-center">
-                  Start from:
+                  Shape:
                 </span>
                 {TEMPLATES.map(t => (
                   <button
