@@ -9,25 +9,23 @@
  *   (a) the current turn's tool output contains a structured `[verify]` block
  *
  *         [verify]
- *         type:    <unit | integration | e2e | smoke | manual | custom-script>
- *         scope:   <files / modules touched by the test>
- *         input:   <how data went in: playwright URL, API call, function args>
- *         output:  <what was inspected for the result: response body, DOM, exit code>
- *         method:  <what the test does, and why that proves the change works>
+ *         scope:        <specific lines/files touched by the test, full paths>
+ *         method:       <what was done — procedure, inputs, outputs>
+ *         assertions:   <what state or output was specifically checked>
+ *         failure-mode: <if the change were broken, how would this catch it?>
+ *         gaps:         <honest limits of this check>
  *         [/verify]
  *
- *       All five keys are required. The optional keys `gaps`, `assertions`,
- *       and `failure-mode` are recognised and recorded if present.
+ *       All five keys are required and must be non-empty.
  *   (b) the user explicitly said `skip verify[ication]` in the most recent
  *       user message.
  *
- * The hook deliberately does NOT scan tool output for "N pass / M fail" or
- * any other test-runner shape. Pattern-matching can't tell whether a test
- * actually ran or actually exercised the change — only whether the text
- * looks like a test summary. The structured block IS the audit trail: the
- * agent commits to a falsifiable claim about the validation. Reviewers and
- * code review judge whether the claim is adequate. Every validation is
- * inadequate until those five fields prove otherwise.
+ * Design choice: the gate is shape-only — present + non-empty per field.
+ * Quality of the answer (specific scope, sharp failure-mode, real gaps) is
+ * a code-review responsibility, not a regex's. Every block decision and the
+ * full field values are written to the hook-events JSONL so quality
+ * analysis (lazy answers, hallucinated paths, etc.) can run offline against
+ * the log instead of via escalating heuristics in the hot path.
  *
  * Anything else blocks. There is no "advisory" outcome — the gate either
  * passes silently or blocks with an actionable reason.
@@ -66,9 +64,11 @@ const VERIFY_BLOCK_RE = /\[verify]\s*\n([\s\S]*?)\n\s*\[\/verify]/i;
 const KV_RE = /^\s*([a-z][-a-z]*)\s*:\s*(.+?)\s*$/i;
 
 /** Required keys — every one must be present and non-empty. */
-export const REQUIRED_KEYS = ["type", "scope", "input", "output", "method"] as const;
-/** Optional keys — recognised and recorded but not required. */
-export const OPTIONAL_KEYS = ["gaps", "assertions", "failure-mode"] as const;
+export const REQUIRED_KEYS = ["scope", "method", "assertions", "failure-mode", "gaps"] as const;
+/** Recognised keys (required + any future optional). The hook records every
+ *  key in REQUIRED_KEYS to telemetry so quality analysis (lazy answers,
+ *  short failure-modes, etc.) can run offline against the JSONL log. */
+export const RECOGNISED_KEYS = REQUIRED_KEYS;
 
 export interface VerifyBlock {
   /** Lowercased key → trimmed value. */
@@ -202,21 +202,20 @@ export interface DecisionContext {
 
 const BLOCK_REASON =
   "Code change with no verification trace.\n" +
-  "Run something that exercises this change. In its output, emit a [verify] block:\n" +
+  "Run something that exercises this change, then emit a [verify] block:\n" +
   "\n" +
   "  [verify]\n" +
-  "  type: e2e\n" +
-  "  scope: src/ui/web/src/routes-meta.ts, src/ui/e2e/ui-smoke.test.ts\n" +
-  "  input: playwright nav to /research/__smoke_none__\n" +
-  "  output: DOM query for [data-testid=\"error-state\"]\n" +
-  "  method: bogus-id detail page should render the not-found ErrorState; the smoke fails if any 4xx leaks past the allowedApi404 list\n" +
+  "  scope: src/ui/web/src/routes-meta.ts:30-44, src/ui/e2e/ui-smoke.test.ts:140-152\n" +
+  "  method: playwright navigates to /research/__smoke_none__ in headless chromium, waits 15s for [data-testid=\"page-research-detail\"] on <main>, then for [data-testid=\"error-state\"]; collects all /api/* responses and console errors during initial mount\n" +
+  "  assertions: <main data-testid=\"page-research-detail\"> renders within 15s; [data-testid=\"error-state\"] becomes visible; no /api/ 4xx/5xx outside the allowedApi404 list; no uncaught pageerror; no non-ignored console.error\n" +
+  "  failure-mode: if Layout's matchPath sort regressed, no per-page testid renders → first selector times out at 15s; if ErrorState dropped its testid, the second selector times out; if the allowedApi404 list missed a URL, that 404 appears in the apiFailures list and the route fails\n" +
+  "  gaps: only exercises the bogus-id 404 path on /research/:id, not the populated/data-loaded path; ToolDetailPage's /observability/tools/:name returns 200-with-empty-data so this also doesn't cover the API's true 404 contract for tool detail\n" +
   "  [/verify]\n" +
   "\n" +
-  "All five keys (type, scope, input, output, method) are required. Optional\n" +
-  "keys gaps, assertions, failure-mode are recognised and recorded.\n" +
-  "\n" +
-  "Every validation is inadequate until those fields prove otherwise. Reviewers\n" +
-  "judge the claim; the gate just makes you commit to one.\n" +
+  "All five keys are required and must be non-empty. The gate is shape-only —\n" +
+  "humans (and code review) judge whether your answers are honest and specific.\n" +
+  "Especially `failure-mode`: if you can't articulate which assertion would\n" +
+  "catch a broken change, the test isn't really verifying it.\n" +
   "\n" +
   "If verification is genuinely not appropriate (paid endpoint, non-code change, etc.)," +
   " reply with \"skip verify\" and I will accept it once.";

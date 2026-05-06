@@ -5,10 +5,11 @@
  * Two outcomes:
  *   - SKIP    : every edited file is docs-only (markdown/text or under docs/) — pass silently
  *   - REQUIRED: any code/config edit — must show a complete `[verify]` block
- *               (type, scope, input, output, method) in this turn's tool output,
- *               OR have an explicit user grant via `skip verify[ication]` in the
- *               most recent user message. The hook deliberately does NOT scan for
- *               "N pass / M fail" patterns — see verify-policy.ts for why.
+ *               (scope, method, assertions, failure-mode, gaps) in this turn's
+ *               tool output, OR have an explicit user grant via `skip verify[ication]`
+ *               in the most recent user message. The hook is shape-only; quality of
+ *               the answers is reviewed offline against the JSONL telemetry, where
+ *               every field's value is recorded.
  *
  * All classification, scanning, and decision logic lives in `src/eval/verify-policy.ts`
  * so the same rules can be reused (and tested) outside the hook.
@@ -23,9 +24,18 @@ import {
   classifyChange,
   decide,
   extractTurn,
+  missingRequiredFields,
   mostRecentUserText,
+  REQUIRED_KEYS,
+  scanVerifyBlock,
   turnStartIndex,
 } from "../../eval/verify-policy.ts";
+
+/** Truncate long free-text values so the JSONL line stays grep-friendly. */
+function clip(s: string | undefined, n = 500): string | undefined {
+  if (!s) return s;
+  return s.length > n ? s.slice(0, n) + "…" : s;
+}
 
 const TAG = "quality-check-stop";
 
@@ -65,10 +75,25 @@ const fileDisplay = [...new Set(turn.editedFiles)]
 
 trace(TAG, `${decision.kind} class=${klass} files=${turn.editedFiles.length} (${fileDisplay})`);
 
+// Log the parsed [verify] block (truncated per field) so offline analysis
+// can spot lazy answers, hallucinated paths, weak failure-modes, etc.
+// Empty/missing fields are recorded as null so the JSONL is regular shape.
+const block = klass === "required" ? scanVerifyBlock(turn.toolResultText) : null;
+const verifyMeta: Record<string, unknown> = {};
+if (klass === "required") {
+  verifyMeta.editedFiles = [...new Set(turn.editedFiles)].slice(0, 16);
+  verifyMeta.verifyPresent = block !== null;
+  verifyMeta.verifyMissing = missingRequiredFields(block);
+  verifyMeta.verify = block
+    ? Object.fromEntries(REQUIRED_KEYS.map(k => [k, clip(block.fields[k]) ?? null]))
+    : null;
+}
+
 reportHook(TAG, "Stop", input.session_id, {
   decision: decision.kind,
   tier,
   detail: `class=${klass} reason="${decision.reason.split("\n")[0]}"`,
+  meta: Object.keys(verifyMeta).length > 0 ? verifyMeta : undefined,
 });
 
 if (decision.kind === "block") {
