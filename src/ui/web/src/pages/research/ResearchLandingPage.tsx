@@ -1,12 +1,25 @@
+import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
 import {
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis,
+  CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer,
+} from 'recharts';
+import {
   useResearchQueries,
   useResearchStats,
+  useAllJobs,
   type ResearchQuery,
 } from '../../api/research-hooks';
 import { ComposeBox } from '../../components/research/ComposeBox';
 import { StatCard } from '../../components/data/StatCard';
+import { ObsControlBar } from '../../components/data/ObsControlBar';
+import { type TimeRange, type Granularity } from '../../components/data/TimeRangeSelector';
+import { ChartContainer } from '../../components/charts/ChartContainer';
+import {
+  tooltipStyle, gridProps, axisProps, CHART_PALETTE,
+  legendProps, labelFormatter, xAxisDateProps,
+} from '../../components/charts/chartTheme';
 import { fmtCurrency, fmtNumber, shortRelativeTime } from '../../utils/format';
 
 const TERMINAL_STATUSES = new Set<ResearchQuery['status']>([
@@ -22,36 +35,74 @@ const STRIPE_BY_STATUS: Record<ResearchQuery['status'], string> = {
   archived: 'bg-text-disabled',
 };
 
+// Visual order for the status donut — keep stable so colors don't reshuffle
+// as the underlying mix changes.
+const STATUS_ORDER: ResearchQuery['status'][] = [
+  'active', 'paused', 'completed', 'exhausted', 'halted', 'archived',
+];
+
 export function ResearchLandingPage() {
+  const [range, setRange] = useState<TimeRange>('30d');
+  const [granularity, setGranularity] = useState<Granularity>('day');
+
   const { data: queries = [] } = useResearchQueries();
-  const { data: stats } = useResearchStats('30d', 'day');
+  const { data: stats } = useResearchStats(range, granularity);
+  const { data: pendingJobs = [] } = useAllJobs({ status: 'pending', limit: 50 });
 
   const visible = queries.filter(q => q.status !== 'archived');
   const running = visible.filter(q => q.status === 'active');
 
-  // Just-finished: terminal status in the last 24h, sorted newest-first.
+  // "Queued": queries with at least one pending job, that aren't already running.
+  const pendingByQueryId = useMemo(() => {
+    const set = new Set<string>();
+    for (const j of pendingJobs) set.add(j.session_id);
+    return set;
+  }, [pendingJobs]);
+  const queued = visible.filter(q => pendingByQueryId.has(q.id) && q.status !== 'active');
+  const inFlight = [...running, ...queued];
+
+  // Recent: terminal status in the last 24h, sorted newest-first.
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-  const justFinished = visible
+  const recent = visible
     .filter(q => TERMINAL_STATUSES.has(q.status) && new Date(q.updated_at).getTime() >= cutoff)
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
     .slice(0, 3);
 
-  // KPI strip values from stats (30d). When stats hasn't loaded yet, render
-  // dashes so the page doesn't flash zeros (which would be misleading).
+  // KPI strip values from stats. When stats hasn't loaded yet, render dashes
+  // so the page doesn't flash zeros (which would be misleading).
   const kpiRuns = stats ? fmtNumber(stats.totalSessions) : '—';
   const kpiFindings = stats ? fmtNumber(stats.totalFindings) : '—';
   const kpiSpend = stats ? fmtCurrency(stats.totalCost) : '—';
   const kpiActive = String(running.length);
 
+  // Status mix for the donut — counts every visible query (any age), since the
+  // status mix is a *now* picture, not a windowed one.
+  const statusMix = useMemo(() => {
+    const counts: Partial<Record<ResearchQuery['status'], number>> = {};
+    for (const q of visible) counts[q.status] = (counts[q.status] ?? 0) + 1;
+    return STATUS_ORDER
+      .map(s => ({ status: s, count: counts[s] ?? 0 }))
+      .filter(r => r.count > 0);
+  }, [visible]);
+  const statusMixTotal = statusMix.reduce((s, r) => s + r.count, 0);
+
   return (
     <div className="flex flex-col gap-6">
       <ComposeBox />
 
-      {/* KPI strip — system-level, 30 days */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Runs · 30 days" value={kpiRuns} accent="default" compact />
+      <ObsControlBar
+        title="Research"
+        range={range}
+        onRangeChange={setRange}
+        granularity={granularity}
+        onGranularityChange={setGranularity}
+      />
+
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 !mt-0">
+        <StatCard label={`Runs · ${range}`} value={kpiRuns} accent="default" compact />
         <StatCard
-          label="Findings · 30 days"
+          label={`Findings · ${range}`}
           value={kpiFindings}
           accent="success"
           compact
@@ -62,7 +113,7 @@ export function ResearchLandingPage() {
           }
         />
         <StatCard
-          label="Spend · 30 days"
+          label={`Spend · ${range}`}
           value={kpiSpend}
           accent="neutral"
           compact
@@ -75,26 +126,37 @@ export function ResearchLandingPage() {
         <StatCard label="Active right now" value={kpiActive} accent="default" compact />
       </div>
 
-      {/* Two columns: Running now + Just finished */}
+      {/* Two columns: In flight + Recent */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Panel
-          title="Running now"
-          subtitle={running.length === 0 ? 'nothing running' : 'live · auto-refresh'}
+          title="In flight"
+          subtitle={
+            inFlight.length === 0
+              ? 'nothing running or queued'
+              : `${running.length} running · ${queued.length} queued`
+          }
           right={
             <Link to="/research/queries" className="text-text-muted hover:text-accent text-sm">
               view all →
             </Link>
           }
         >
-          {running.length === 0 ? (
+          {inFlight.length === 0 ? (
             <EmptyRow>No runs in flight. Submit a prompt above to start one.</EmptyRow>
           ) : (
-            running.map(q => <JobRow key={q.id} query={q} pulse />)
+            inFlight.map(q => (
+              <JobRow
+                key={q.id}
+                query={q}
+                pulse={q.status === 'active'}
+                queued={pendingByQueryId.has(q.id) && q.status !== 'active'}
+              />
+            ))
           )}
         </Panel>
 
         <Panel
-          title="Just finished"
+          title="Recent"
           subtitle="last 24h"
           right={
             <Link to="/research/queries" className="text-text-muted hover:text-accent text-sm">
@@ -102,27 +164,132 @@ export function ResearchLandingPage() {
             </Link>
           }
         >
-          {justFinished.length === 0 ? (
+          {recent.length === 0 ? (
             <EmptyRow>Nothing finished in the last 24 hours.</EmptyRow>
           ) : (
-            justFinished.map(q => <JobRow key={q.id} query={q} />)
+            recent.map(q => <JobRow key={q.id} query={q} />)
           )}
         </Panel>
       </div>
 
-      {/* 30d activity sparkline */}
-      <Panel
-        title="Activity · last 30 days"
-        subtitle="findings (filled) · runs (line)"
-      >
+      {/* Activity over selected range — stacked area: findings + runs */}
+      <ChartContainer title={`Activity · ${range}`}>
         {stats && stats.byDay.length > 0 ? (
-          <ActivitySparkline byDay={stats.byDay} />
+          <AreaChart data={stats.byDay}>
+            <CartesianGrid {...gridProps} />
+            <XAxis dataKey="date" {...xAxisDateProps} />
+            <YAxis {...axisProps} />
+            <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
+            <Legend {...legendProps} />
+            <Area
+              isAnimationActive={false}
+              type="monotone"
+              dataKey="findings"
+              stackId="activity"
+              stroke={CHART_PALETTE[0]}
+              fill={CHART_PALETTE[0]}
+              fillOpacity={0.3}
+              name="Findings"
+            />
+            <Area
+              isAnimationActive={false}
+              type="monotone"
+              dataKey="sessions"
+              stackId="activity"
+              stroke={CHART_PALETTE[1]}
+              fill={CHART_PALETTE[1]}
+              fillOpacity={0.3}
+              name="Runs"
+            />
+          </AreaChart>
         ) : (
-          <div className="h-20 flex items-center justify-center text-text-muted text-sm">
-            No activity in the last 30 days.
+          <div className="h-full flex items-center justify-center text-text-muted text-sm">
+            No activity in the selected range.
           </div>
         )}
-      </Panel>
+      </ChartContainer>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Verdict over time — stacked bar */}
+        <ChartContainer title={`Verdicts · ${range}`}>
+          {stats && stats.byVerdict.length > 0 ? (
+            <BarChart data={stats.byVerdict}>
+              <CartesianGrid {...gridProps} />
+              <XAxis dataKey="date" {...xAxisDateProps} />
+              <YAxis {...axisProps} allowDecimals={false} />
+              <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
+              <Legend {...legendProps} />
+              <Bar isAnimationActive={false} dataKey="pass" stackId="v" fill="var(--success)" name="Pass" />
+              <Bar isAnimationActive={false} dataKey="flag" stackId="v" fill="var(--warning)" name="Flag" />
+              <Bar isAnimationActive={false} dataKey="halt" stackId="v" fill="var(--error)" name="Halt" />
+            </BarChart>
+          ) : (
+            <div className="h-full flex items-center justify-center text-text-muted text-sm">
+              No verdicts in the selected range.
+            </div>
+          )}
+        </ChartContainer>
+
+        {/* Status mix — donut (now-picture, not windowed) */}
+        <ChartContainer title="Status mix · all queries" raw>
+          {statusMix.length === 0 ? (
+            <div className="h-[180px] flex items-center justify-center text-text-muted text-sm">
+              No queries yet.
+            </div>
+          ) : (
+            <div className="flex gap-3 h-[180px]">
+              <div className="flex-1 min-w-0 flex items-center">
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie
+                      isAnimationActive={false}
+                      data={statusMix}
+                      dataKey="count"
+                      nameKey="status"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius="42%"
+                      outerRadius="90%"
+                    >
+                      {statusMix.map((entry, i) => (
+                        <Cell key={entry.status} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={tooltipStyle}
+                      formatter={(v, n) => [String(v), String(n)]}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex flex-col gap-1.5 justify-center shrink-0 w-32">
+                {statusMix.map((row, i) => (
+                  <div key={row.status} className="flex items-center gap-1.5 text-xs min-w-0">
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }}
+                    />
+                    <span className="font-mono text-text-secondary capitalize truncate flex-1">
+                      {row.status}
+                    </span>
+                    <span className="text-text-muted font-mono shrink-0 w-6 text-right tabular-nums">
+                      {row.count}
+                    </span>
+                  </div>
+                ))}
+                {statusMixTotal > 0 && (
+                  <div className="flex items-center gap-1.5 text-xs min-w-0 pt-1.5 mt-0.5 border-t border-border-primary">
+                    <span className="font-mono text-text-muted flex-1">total</span>
+                    <span className="text-text-secondary font-mono shrink-0 w-6 text-right tabular-nums">
+                      {statusMixTotal}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </ChartContainer>
+      </div>
     </div>
   );
 }
@@ -156,7 +323,7 @@ function EmptyRow({ children }: { children: React.ReactNode }) {
   );
 }
 
-function JobRow({ query, pulse }: { query: ResearchQuery; pulse?: boolean }) {
+function JobRow({ query, pulse, queued }: { query: ResearchQuery; pulse?: boolean; queued?: boolean }) {
   const stripe = STRIPE_BY_STATUS[query.status];
   const shape = query.question_shape?.shapes[0] ?? null;
   const topic = query.topic_cluster?.cluster ?? null;
@@ -198,6 +365,10 @@ function JobRow({ query, pulse }: { query: ResearchQuery; pulse?: boolean }) {
           />
           {query.status}
         </span>
+      ) : queued ? (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-warning/15 text-warning">
+          queued
+        </span>
       ) : verdict ? (
         <span
           className={clsx(
@@ -212,80 +383,4 @@ function JobRow({ query, pulse }: { query: ResearchQuery; pulse?: boolean }) {
       )}
     </Link>
   );
-}
-
-interface DayPoint { date: string; sessions: number; findings: number; cost: number }
-
-/** SVG sparkline matching the mockup: filled area for findings, dotted
- *  accent line for runs. Intentionally lightweight — no recharts overhead
- *  for a 30-point series. */
-function ActivitySparkline({ byDay }: { byDay: DayPoint[] }) {
-  const W = 800;
-  const H = 80;
-  if (byDay.length < 2) {
-    return (
-      <div className="px-4 py-4 h-20 flex items-center justify-center text-text-muted text-sm">
-        Not enough data yet.
-      </div>
-    );
-  }
-
-  const maxFindings = Math.max(...byDay.map(d => d.findings), 1);
-  const maxRuns = Math.max(...byDay.map(d => d.sessions), 1);
-  const stepX = W / (byDay.length - 1);
-
-  const findingsPts = byDay.map((d, i) => {
-    const x = i * stepX;
-    const y = H - 4 - (d.findings / maxFindings) * (H - 12);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-  const runsPts = byDay.map((d, i) => {
-    const x = i * stepX;
-    const y = H - 4 - (d.sessions / maxRuns) * (H - 18);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-
-  const fillPath = `M ${findingsPts.join(' L ')} L ${W} ${H} L 0 ${H} Z`;
-
-  return (
-    <div className="px-4 py-4">
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        preserveAspectRatio="none"
-        className="w-full h-20 block"
-      >
-        <defs>
-          <linearGradient id="findings-gradient" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="var(--success)" stopOpacity="0.55" />
-            <stop offset="100%" stopColor="var(--success)" stopOpacity="0.05" />
-          </linearGradient>
-        </defs>
-        <path d={fillPath} fill="url(#findings-gradient)" />
-        <polyline
-          fill="none"
-          stroke="var(--success)"
-          strokeWidth="1.4"
-          points={findingsPts.join(' ')}
-        />
-        <polyline
-          fill="none"
-          stroke="var(--accent)"
-          strokeWidth="1.2"
-          strokeDasharray="2 2"
-          points={runsPts.join(' ')}
-        />
-      </svg>
-      <div className="flex justify-between text-xs text-text-muted mt-1.5 tabular-nums">
-        <span>{formatShortDate(byDay[0].date)}</span>
-        <span>{formatShortDate(byDay[Math.floor(byDay.length / 2)].date)}</span>
-        <span>{formatShortDate(byDay[byDay.length - 1].date)} (today)</span>
-      </div>
-    </div>
-  );
-}
-
-function formatShortDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
