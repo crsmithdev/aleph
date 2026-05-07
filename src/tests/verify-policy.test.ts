@@ -7,6 +7,7 @@ import {
   isDocOnly,
   missingRequiredFields,
   mostRecentUserText,
+  RECOGNISED_KEYS,
   REQUIRED_KEYS,
   scanVerifyBlock,
   turnStartIndex,
@@ -14,11 +15,9 @@ import {
 } from "../eval/verify-policy.ts";
 
 console.log("[verify]");
-console.log("scope: src/eval/verify-policy.ts:78-95 (REQUIRED_KEYS, scanVerifyBlock, missingRequiredFields), src/tests/verify-policy.test.ts (this file), src/hook-report.ts:6-16 (HookDecision.meta)");
-console.log("method: invoke each exported pure function in verify-policy with synthetic strings and JSONL transcript fixtures; assert return values via check(); REQUIRED_KEYS is the new five-tuple (scope, method, assertions, failure-mode, gaps), no [verify-X] / type / input / output legacy");
-console.log("assertions: full block parses each required key; missing-key block surfaces exactly the absent keys; partial / empty / noisy inputs handled; old [verify-X] tags rejected; old type/input/output keys are NOT in REQUIRED_KEYS; full block in synthetic transcript drives decide() to pass");
-console.log("failure-mode: regression in VERIFY_BLOCK_RE / KV_RE → 'parses all five' check fails; regression in REQUIRED_KEYS list → 'names exactly the absent keys' check names the wrong set; if scope/method/assertions/failure-mode/gaps drop out of the required tuple, the 'missing names exactly' check breaks; old-tag regression rejection inverts");
-console.log("gaps: does not exercise the live Stop-hook stdin/exit-code path through quality-check-stop.ts; does not cover the new hook-report meta payload (covered by code review and runtime telemetry inspection); content-quality of `gaps` / `failure-mode` / `scope` answers is not (and cannot be) checked here — that's a code-review responsibility per the policy's design");
+console.log("scope: src/eval/verify-policy.ts (REQUIRED_KEYS, RECOGNISED_KEYS, scanVerifyBlock, missingRequiredFields, decide), src/tests/verify-policy.test.ts (this file)");
+console.log("method: invoke each exported pure function with synthetic strings and JSONL transcript fixtures; assert return values via check()");
+console.log("assertions: REQUIRED_KEYS is exactly (scope, method, assertions); RECOGNISED_KEYS still captures failure-mode/gaps; partial block missing one of the three required keys blocks; partial block with only the three required keys passes; full five-key block still passes and parses every recognised key");
 console.log("[/verify]");
 
 const r = createResults();
@@ -50,14 +49,19 @@ check(r, "any code mixed in → required",
 check(r, "config alone → required",
   classifyChange(["settings.json"]) === "required");
 
-// ── REQUIRED_KEYS shape ──────────────────────────────────────────────────────
-console.log("--- REQUIRED_KEYS ---");
-check(r, "required keys are exactly the five-tuple in canonical order",
-  REQUIRED_KEYS.join(",") === "scope,method,assertions,failure-mode,gaps");
-check(r, "old keys (type, input, output) are no longer required",
-  !(REQUIRED_KEYS as readonly string[]).includes("type")
-    && !(REQUIRED_KEYS as readonly string[]).includes("input")
-    && !(REQUIRED_KEYS as readonly string[]).includes("output"));
+// ── REQUIRED_KEYS / RECOGNISED_KEYS shape ────────────────────────────────────
+console.log("--- REQUIRED_KEYS / RECOGNISED_KEYS ---");
+check(r, "required keys are exactly (scope, method, assertions)",
+  REQUIRED_KEYS.join(",") === "scope,method,assertions");
+check(r, "failure-mode and gaps are no longer required",
+  !(REQUIRED_KEYS as readonly string[]).includes("failure-mode")
+    && !(REQUIRED_KEYS as readonly string[]).includes("gaps"));
+check(r, "RECOGNISED_KEYS still includes failure-mode and gaps for telemetry capture",
+  RECOGNISED_KEYS.join(",") === "scope,method,assertions,failure-mode,gaps");
+check(r, "old keys (type, input, output) are not recognised",
+  !(RECOGNISED_KEYS as readonly string[]).includes("type")
+    && !(RECOGNISED_KEYS as readonly string[]).includes("input")
+    && !(RECOGNISED_KEYS as readonly string[]).includes("output"));
 
 // ── scanVerifyBlock ──────────────────────────────────────────────────────────
 console.log("--- scanVerifyBlock ---");
@@ -74,7 +78,7 @@ const FULL_BLOCK = [
 
 {
   const b = scanVerifyBlock(FULL_BLOCK);
-  check(r, "scanVerifyBlock: parses all five required keys",
+  check(r, "scanVerifyBlock: parses every recognised key (required + optional)",
     b !== null
       && b.fields.scope.startsWith("src/ui/web/src/routes-meta.ts:30-44")
       && b.fields.method.startsWith("playwright nav")
@@ -84,19 +88,24 @@ const FULL_BLOCK = [
 }
 {
   const b = scanVerifyBlock(FULL_BLOCK);
-  check(r, "scanVerifyBlock: missingRequiredFields returns [] when all present",
+  check(r, "scanVerifyBlock: missingRequiredFields returns [] when all required present",
     missingRequiredFields(b).length === 0);
 }
 {
   const b = scanVerifyBlock("");
-  check(r, "scanVerifyBlock: empty input → null",
-    b === null && missingRequiredFields(b).length === 5);
+  check(r, "scanVerifyBlock: empty input → null, missing list is the three-tuple",
+    b === null && missingRequiredFields(b).length === 3);
 }
 {
   const b = scanVerifyBlock("[verify]\nscope: foo.ts:1-10\nmethod: ran a thing\n[/verify]");
-  check(r, "scanVerifyBlock: missingRequiredFields names exactly the absent keys",
-    b !== null
-      && missingRequiredFields(b).join(",") === "assertions,failure-mode,gaps");
+  check(r, "scanVerifyBlock: missing only `assertions` when scope+method present",
+    b !== null && missingRequiredFields(b).join(",") === "assertions");
+}
+{
+  // Trimmed three-key block is now sufficient.
+  const b = scanVerifyBlock("[verify]\nscope: foo.ts:1-10\nmethod: ran a thing\nassertions: exit code 0\n[/verify]");
+  check(r, "scanVerifyBlock: three required keys → no missing fields",
+    b !== null && missingRequiredFields(b).length === 0);
 }
 {
   const noisy = "blah blah\nrunning tests...\n" + FULL_BLOCK + "\nmore noise\n151 failures elsewhere";
@@ -105,7 +114,7 @@ const FULL_BLOCK = [
     b !== null && b.fields.scope.startsWith("src/ui/web/src/routes-meta.ts"));
 }
 {
-  const b = scanVerifyBlock("[verify]\nscope:\nmethod: x\nassertions: y\nfailure-mode: z\ngaps: w\n[/verify]");
+  const b = scanVerifyBlock("[verify]\nscope:\nmethod: x\nassertions: y\n[/verify]");
   check(r, "scanVerifyBlock: empty value counts as missing key",
     missingRequiredFields(b).includes("scope"));
 }
@@ -154,11 +163,19 @@ console.log("--- decide ---");
     toolResultText: partial,
     mostRecentUserText: "fix",
   });
-  check(r, "partial block → block, names assertions/failure-mode/gaps as missing",
-    d.kind === "block"
-      && d.reason.includes("assertions")
-      && d.reason.includes("failure-mode")
-      && d.reason.includes("gaps"));
+  check(r, "partial block missing `assertions` → block, names it as missing",
+    d.kind === "block" && d.reason.includes("assertions"));
+}
+{
+  // Three required keys is now enough — failure-mode/gaps are optional.
+  const trimmed = "[verify]\nscope: foo.ts:1-10\nmethod: ran a thing\nassertions: exit 0\n[/verify]";
+  const d = decide({
+    editedFiles: ["src/foo.ts"],
+    toolResultText: trimmed,
+    mostRecentUserText: "fix",
+  });
+  check(r, "trimmed three-key block → pass (failure-mode/gaps not required)",
+    d.kind === "pass");
 }
 {
   const d = decide({
