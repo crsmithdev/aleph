@@ -4,12 +4,12 @@
  *
  * Two outcomes:
  *   - SKIP    : every edited file is docs-only (markdown/text or under docs/) — pass silently
- *   - REQUIRED: any code/config edit — must show a complete `[verify]` block
- *               (scope, method, assertions, failure-mode, gaps) in this turn's
- *               tool output, OR have an explicit user grant via `skip verify[ication]`
- *               in the most recent user message. The hook is shape-only; quality of
- *               the answers is reviewed offline against the JSONL telemetry, where
- *               every field's value is recorded.
+ *   - REQUIRED: any code/config edit — must show a `[verify]` block with the
+ *               three required keys (scope, method, assertions) non-empty,
+ *               OR have an explicit user grant via `skip verify[ication]`
+ *               in the most recent user message. The hook is shape-only;
+ *               quality of the answers is reviewed offline against the
+ *               JSONL telemetry, where every recognised field is recorded.
  *
  * All classification, scanning, and decision logic lives in `src/eval/verify-policy.ts`
  * so the same rules can be reused (and tested) outside the hook.
@@ -26,7 +26,7 @@ import {
   extractTurn,
   missingRequiredFields,
   mostRecentUserText,
-  REQUIRED_KEYS,
+  RECOGNISED_KEYS,
   scanVerifyBlock,
   turnStartIndex,
 } from "../../eval/verify-policy.ts";
@@ -85,7 +85,7 @@ if (klass === "required") {
   verifyMeta.verifyPresent = block !== null;
   verifyMeta.verifyMissing = missingRequiredFields(block);
   verifyMeta.verify = block
-    ? Object.fromEntries(REQUIRED_KEYS.map(k => [k, clip(block.fields[k]) ?? null]))
+    ? Object.fromEntries(RECOGNISED_KEYS.map(k => [k, clip(block.fields[k]) ?? null]))
     : null;
 }
 
