@@ -2,15 +2,21 @@
 /**
  * Memory consolidator — background script, spawned by memory-consolidate-stop.ts
  *
- * Reads preference + error_resolution memories from the last 60 days,
- * synthesizes behavioral patterns via `claude -p` (no external API key needed),
- * writes ~/.construct/signals/learned-rules.md, stores a summary memory,
- * and updates consolidation-state.json.
+ * Pulls preference + error_resolution memories from the last 60 days, joins
+ * them with feedback.jsonl signals (positive vs negative sentiment with
+ * prior-turn context), distills into 5–10 polarity-labelled rules, writes
+ * ~/.construct/signals/learned-rules.md, stores a summary memory, and updates
+ * consolidation-state.json.
+ *
+ * Synthesis path:
+ *   - If OPENROUTER_API_KEY set → call CONSTRUCT_SYNTH_MODEL (default
+ *     google/gemini-2.0-flash-001) for semantic distillation.
+ *   - Otherwise → frequency-based Jaccard clustering, partitioned by polarity.
  *
  * Designed to run fire-and-forget after session end. All errors are handled
  * gracefully — the existing rules file is never corrupted.
  */
-import { existsSync, readFileSync, writeFileSync, mkdirSync, appendFileSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { resolve, dirname } from "path";
 import { Database } from "bun:sqlite";
 import { trace } from "../trace.ts";
@@ -22,8 +28,6 @@ const TAG = "consolidator";
 reportHook(TAG, "ConsolidationRun", "background");
 trace(TAG, "consolidator starting");
 
-// --- helpers ---
-
 function updateState(data: { lastRun: string; lastMemoryCount: number }) {
   try {
     mkdirSync(dirname(dataPaths.consolidationState), { recursive: true });
@@ -33,7 +37,7 @@ function updateState(data: { lastRun: string; lastMemoryCount: number }) {
   }
 }
 
-// --- 1. Query DB ---
+// --- 1. Query memory DB ---
 
 const memDbPath = externalPaths.memoryDb;
 if (!existsSync(memDbPath)) {
@@ -45,17 +49,18 @@ if (!existsSync(memDbPath)) {
 const DAYS_60 = 60 * 24 * 60 * 60;
 const cutoffSecs = (Date.now() / 1000) - DAYS_60;
 
-let memories: Array<{ content: string; tags: string; memory_type: string }> = [];
+interface MemRow { content: string; tags: string; memory_type: string; }
+let memories: MemRow[] = [];
 try {
   const db = new Database(memDbPath, { readonly: true });
-  memories = db.query<{ content: string; tags: string; memory_type: string }, [number]>(`
+  memories = db.query<MemRow, [number]>(`
     SELECT content, tags, memory_type FROM memories
     WHERE deleted_at IS NULL
       AND (tags LIKE '%preference%' OR tags LIKE '%error_resolution%')
       AND tags LIKE '%auto_extract%'
       AND created_at > ?
     ORDER BY updated_at DESC
-    LIMIT 50
+    LIMIT 80
   `).all(cutoffSecs);
   db.close();
 } catch (e) {
@@ -66,17 +71,7 @@ try {
 
 trace(TAG, `found ${memories.length} qualifying memories`);
 
-if (memories.length < 3) {
-  trace(TAG, "insufficient memories for synthesis, skip");
-  reportHook(TAG, "ConsolidationRun", "background", {
-    decision: "advisory",
-    detail: "skip: insufficient memories",
-  });
-  updateState({ lastRun: new Date().toISOString(), lastMemoryCount: memories.length });
-  process.exit(0);
-}
-
-// --- 2. Read tool signals (last 7 days) ---
+// --- 2. Tool-signal context (re-edits) ---
 
 let toolSignalContext = "";
 try {
@@ -100,18 +95,141 @@ try {
       toolSignalContext = `\nFiles requiring repeated edits across sessions: ${frequent.join(", ")}`;
     }
   }
-} catch (e) {
-  trace(TAG, `tool signals read failed: ${(e as Error).message}`);
+} catch (e) { trace(TAG, `tool signals read failed: ${(e as Error).message}`); }
+
+// --- 3. Feedback signals (last 60 days, polarity-labelled) ---
+
+interface FeedbackEntry {
+  polarity: "positive" | "negative";
+  trigger: string;
+  prompt: string;
+  prior_text?: string;
+  prior_tools?: string[];
+  prior_files?: string[];
+}
+const feedback: FeedbackEntry[] = [];
+try {
+  if (existsSync(dataPaths.feedback)) {
+    const cutoffISO = new Date(Date.now() - 60 * 86400000).toISOString();
+    const lines = readFileSync(dataPaths.feedback, "utf8").trim().split("\n").filter(Boolean);
+    for (const line of lines) {
+      try {
+        const sig = JSON.parse(line);
+        if (sig.timestamp >= cutoffISO && (sig.polarity === "positive" || sig.polarity === "negative")) {
+          feedback.push(sig);
+        }
+      } catch { /* skip malformed */ }
+    }
+  }
+} catch (e) { trace(TAG, `feedback read failed: ${(e as Error).message}`); }
+
+trace(TAG, `loaded ${feedback.length} feedback entries (60d)`);
+
+// Need *some* signal to consolidate
+if (memories.length + feedback.length < 3) {
+  trace(TAG, "insufficient signal for synthesis, skip");
+  reportHook(TAG, "ConsolidationRun", "background", {
+    decision: "advisory",
+    detail: `skip: ${memories.length} memories, ${feedback.length} feedback`,
+  });
+  updateState({ lastRun: new Date().toISOString(), lastMemoryCount: memories.length });
+  process.exit(0);
 }
 
-// --- 3. Deduplicate and surface patterns (no external synthesis) ---
-//
-// `claude --print` is not usable from a spawned background process (billing mode
-// difference). Instead, we do simple frequency-based deduplication: extract keywords
-// from each memory, group memories that share a dominant keyword, and surface the
-// most-recent representative from each cluster as a "rule". The raw memory text is
-// used directly — no rephrasing needed since the corrections were already captured
-// in natural language by extract.ts.
+// Partition memories by polarity (validated tag → keep, otherwise → avoid)
+const validatedMems = memories.filter(m => m.tags.includes("validated"));
+const avoidMems = memories.filter(m => !m.tags.includes("validated"));
+
+// --- 4. Synthesis ---
+
+interface Rule { rule: string; polarity: "avoid" | "validated"; frequency: number; }
+
+function fmtFeedback(f: FeedbackEntry): string {
+  const what = (f.prior_tools ?? []).join("+") || "approach";
+  const where = (f.prior_files ?? []).length ? " on " + (f.prior_files ?? []).join(",") : "";
+  const why = (f.prior_text ?? "").slice(0, 120);
+  const prefix = f.polarity === "positive"
+    ? `User affirmed "${f.trigger}" after`
+    : `User pushed back "${f.prompt.slice(0, 80)}" after`;
+  return `${prefix} ${what}${where}${why ? ": " + why : ""}`;
+}
+
+async function llmSynthesize(): Promise<Rule[] | null> {
+  const apiKey = Bun.env.OPENROUTER_API_KEY;
+  if (!apiKey) return null;
+  const model = Bun.env.CONSTRUCT_SYNTH_MODEL ?? "google/gemini-2.0-flash-001";
+
+  const negObs = [
+    ...avoidMems.map(m => m.content),
+    ...feedback.filter(f => f.polarity === "negative").map(fmtFeedback),
+  ].slice(0, 60);
+
+  const posObs = [
+    ...validatedMems.map(m => m.content),
+    ...feedback.filter(f => f.polarity === "positive").map(fmtFeedback),
+  ].slice(0, 60);
+
+  if (negObs.length + posObs.length < 3) return null;
+
+  const userMsg = [
+    "Distill the following observations from a developer's interactions with an AI coding assistant into 5-10 short, actionable behavioral rules.",
+    "",
+    "AVOID — corrections, pushback, things the user did NOT want:",
+    ...negObs.map(s => `- ${s}`),
+    "",
+    "VALIDATED — approaches the user explicitly affirmed:",
+    ...posObs.map(s => `- ${s}`),
+    toolSignalContext,
+    "",
+    "Each rule must:",
+    "- be specific (mention concrete tools, files, or approaches when present)",
+    "- be one sentence under 130 characters",
+    "- drop one-off observations unlikely to recur",
+    "",
+    `Reply with JSON only: {"rules": [{"text": "...", "polarity": "avoid" | "validated", "frequency": <int>}]}`,
+  ].join("\n");
+
+  try {
+    const abort = new AbortController();
+    const t = setTimeout(() => abort.abort(), 30_000);
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      signal: abort.signal,
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: "You distill developer interaction patterns into concise behavioral rules. Reply with valid JSON only." },
+          { role: "user", content: userMsg },
+        ],
+        max_tokens: 1500,
+        response_format: { type: "json_object" },
+      }),
+    });
+    clearTimeout(t);
+    if (!res.ok) { trace(TAG, `synth http ${res.status}`); return null; }
+    const data = await res.json() as any;
+    const text = data?.choices?.[0]?.message?.content;
+    if (!text) return null;
+    const parsed = JSON.parse(text);
+    const raw = Array.isArray(parsed?.rules) ? parsed.rules : [];
+    const rules: Rule[] = raw
+      .filter((r: any) => typeof r?.text === "string" && r.text.length > 10)
+      .map((r: any) => ({
+        rule: String(r.text).trim().slice(0, 200),
+        polarity: r.polarity === "validated" ? "validated" : "avoid",
+        frequency: Math.max(1, Number(r.frequency) || 1),
+      }))
+      .slice(0, 10);
+    trace(TAG, `llm synth: ${rules.length} rules from ${negObs.length}+${posObs.length} observations`);
+    return rules.length ? rules : null;
+  } catch (e) {
+    trace(TAG, `llm synth failed: ${(e as Error).message}`);
+    return null;
+  }
+}
+
+// --- 4b. Jaccard fallback (no API key) — cluster within each polarity ---
 
 function tokenize(text: string): Set<string> {
   return new Set(
@@ -122,71 +240,68 @@ function tokenize(text: string): Set<string> {
   );
 }
 
-function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
-  const intersection = [...a].filter(x => b.has(x)).length;
+function jaccard(a: Set<string>, b: Set<string>): number {
+  const inter = [...a].filter(x => b.has(x)).length;
   const union = new Set([...a, ...b]).size;
-  return union === 0 ? 0 : intersection / union;
+  return union === 0 ? 0 : inter / union;
 }
 
-// Cluster memories by similarity (Jaccard ≥ 0.25 → same cluster)
-const clusters: Array<Array<typeof memories[0]>> = [];
-const tokenized = memories.map(m => ({ mem: m, tokens: tokenize(m.content) }));
-
-for (const item of tokenized) {
-  let placed = false;
-  for (const cluster of clusters) {
-    const rep = tokenize(cluster[0].content);
-    if (jaccardSimilarity(item.tokens, rep) >= 0.25) {
-      cluster.push(item.mem);
-      placed = true;
-      break;
-    }
-  }
-  if (!placed) clusters.push([item.mem]);
-}
-
-// Surface the most-recent memory from each cluster as a rule
-// Clusters of size 1 are single observations — include up to 8 regardless
-// (each was already filtered to be a preference/error, so all are relevant)
 function extractRuleText(content: string): string {
-  // Strip known prefixes, then find the first meaningful sentence or line
   const stripped = content
-    .replace(/^(Error:|Re-edit friction:|User correction:)\s*/i, "")
-    .replace(/#+\s+\S[^\n]*/g, "") // strip markdown headings anywhere in line
-    .replace(/\s{2,}/g, " "); // collapse whitespace
-
-  // Try to find first good sentence (ends with period, 20-150 chars)
+    .replace(/^(Error:|Re-edit friction:|User correction:|Validated approach[^:]*:)\s*/i, "")
+    .replace(/#+\s+\S[^\n]*/g, "")
+    .replace(/\s{2,}/g, " ");
   for (const segment of stripped.split(/[.\n]+/)) {
     const clean = segment.trim().replace(/\s+/g, " ");
-    if (clean.length >= 20 && clean.length <= 150) {
-      return clean;
-    }
+    if (clean.length >= 20 && clean.length <= 150) return clean;
   }
-  // Fallback: first 150 chars
   return stripped.replace(/\s+/g, " ").trim().slice(0, 150);
 }
 
-const rules = clusters
-  .sort((a, b) => b.length - a.length) // largest clusters first
-  .slice(0, 8)
-  .map(cluster => ({
-    rule: extractRuleText(cluster[0].content),
-    frequency: cluster.length,
-  }))
-  .filter(r => r.rule.length > 10);
+function jaccardCluster(rows: MemRow[], polarity: "avoid" | "validated", limit: number): Rule[] {
+  if (rows.length === 0) return [];
+  const clusters: MemRow[][] = [];
+  for (const row of rows) {
+    const tokens = tokenize(row.content);
+    let placed = false;
+    for (const cluster of clusters) {
+      if (jaccard(tokens, tokenize(cluster[0].content)) >= 0.25) {
+        cluster.push(row); placed = true; break;
+      }
+    }
+    if (!placed) clusters.push([row]);
+  }
+  return clusters
+    .sort((a, b) => b.length - a.length)
+    .slice(0, limit)
+    .map(c => ({ rule: extractRuleText(c[0].content), polarity, frequency: c.length }))
+    .filter(r => r.rule.length > 10);
+}
 
-trace(TAG, `clustered into ${rules.length} rules from ${clusters.length} clusters`);
+// --- 5. Run synthesis ---
 
-// --- 4. Write learned-rules.md ---
+let rules: Rule[] = (await llmSynthesize()) ?? [];
+let synthesizer: "llm" | "jaccard" = "llm";
+if (rules.length === 0) {
+  synthesizer = "jaccard";
+  rules = [
+    ...jaccardCluster(avoidMems, "avoid", 6),
+    ...jaccardCluster(validatedMems, "validated", 4),
+  ];
+  trace(TAG, `jaccard fallback: ${rules.length} rules (${avoidMems.length} avoid, ${validatedMems.length} validated)`);
+}
+
+// --- 6. Write learned-rules.md ---
 
 if (rules.length > 0) {
+  const tag = (p: string) => p === "validated" ? "[keep]" : "[avoid]";
   const content = [
     `# Learned Rules`,
-    `_Auto-generated ${new Date().toISOString().slice(0, 10)} from ${memories.length} memories_`,
+    `_Auto-generated ${new Date().toISOString().slice(0, 10)} from ${memories.length} memories + ${feedback.length} feedback (${synthesizer})_`,
     "",
     ...rules.map(r => r.frequency > 1
-      ? `- ${r.rule} _(${r.frequency}x observed)_`
-      : `- ${r.rule}`),
+      ? `- ${tag(r.polarity)} ${r.rule} _(${r.frequency}x)_`
+      : `- ${tag(r.polarity)} ${r.rule}`),
     "",
   ].join("\n");
   try {
@@ -198,7 +313,7 @@ if (rules.length > 0) {
   }
 }
 
-// --- 5. Store summary memory via memory-writer.py ---
+// --- 7. Store summary memory via memory-writer.py ---
 
 const VENV_PYTHON = Bun.env.MEMORY_VENV_PYTHON ?? resolve(
   Bun.env.HOME ?? "/tmp",
@@ -207,8 +322,8 @@ const VENV_PYTHON = Bun.env.MEMORY_VENV_PYTHON ?? resolve(
 const writerScript = resolve(dirname(Bun.main), "memory-writer.py");
 
 const summaryContent = rules.length > 0
-  ? `Consolidated ${memories.length} memories into ${rules.length} behavioral rules: ${rules.map(r => r.rule).join("; ")}`
-  : `Consolidation ran on ${memories.length} memories — no clear recurring patterns found`;
+  ? `Consolidated ${memories.length}m+${feedback.length}f → ${rules.length} rules (${synthesizer}): ${rules.map(r => r.rule).join("; ")}`
+  : `Consolidation ran on ${memories.length} memories — no recurring patterns found`;
 
 if (existsSync(VENV_PYTHON) && existsSync(writerScript)) {
   try {
@@ -231,13 +346,13 @@ if (existsSync(VENV_PYTHON) && existsSync(writerScript)) {
   trace(TAG, "memory-writer not available, skipping summary memory");
 }
 
-// --- 6. Update state ---
+// --- 8. Update state ---
 
 updateState({ lastRun: new Date().toISOString(), lastMemoryCount: memories.length });
 
 reportHook(TAG, "ConsolidationRun", "background", {
   decision: "pass",
-  detail: `${rules.length} rules from ${memories.length} memories`,
+  detail: `${rules.length} rules from ${memories.length}m+${feedback.length}f via ${synthesizer}`,
 });
 
 trace(TAG, "consolidator done");

@@ -22,6 +22,7 @@ export const dataPaths = {
   sessions: resolve(DATA_ROOT, "sessions"),
   signals: resolve(DATA_ROOT, "signals"),
   ratings: resolve(DATA_ROOT, "signals", "ratings.jsonl"),
+  feedback: resolve(DATA_ROOT, "signals", "feedback.jsonl"),
   directives: resolve(DATA_ROOT, "signals", "directives.jsonl"),
   hookEvents: resolve(DATA_ROOT, "signals", "hook-events.jsonl"),
   compactionNotes: resolve(DATA_ROOT, "signals", "compaction-notes.json"),

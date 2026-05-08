@@ -30,6 +30,15 @@
         "hooks": [
           {
             "type": "command",
+            "command": "bun src/memory/hooks/feedback-capture-submit.ts 2>/dev/null",
+            "timeout": 2000
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
             "command": "bun src/core/hooks/routing-classify-submit.ts 2>/dev/null",
             "timeout": 3000
           }

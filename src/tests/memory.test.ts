@@ -15,6 +15,9 @@ mkdirSync(sessionsDir, { recursive: true });
 const ratingsFile = resolve(te.tmpBase, "ratings.jsonl");
 te.env.RATINGS_FILE = ratingsFile;
 
+const feedbackFile = resolve(te.tmpBase, "feedback.jsonl");
+te.env.FEEDBACK_FILE = feedbackFile;
+
 // ── Session start ────────────────────────────────────────────────────────────
 
 console.log("--- context-restore-start ---");
@@ -119,6 +122,79 @@ const lowResult = ratingTest("2");
 check(r, "rating: low rating warns", lowResult.rating === 2 && lowResult.output.includes("Low rating"));
 
 runAndCheck(te, r, "memory/hooks/rating-capture-submit.ts", "malformed", "not json");
+
+// ── Feedback (sentiment) capture ─────────────────────────────────────────────
+
+console.log("\n--- feedback-capture ---");
+
+function feedbackTest(prompt: string, transcriptPath?: string): { entry: any | null; output: string } {
+  let linesBefore = 0;
+  try { linesBefore = readFileSync(feedbackFile, "utf-8").trim().split("\n").filter(Boolean).length; } catch {}
+  const payload: any = { prompt, session_id: "fb-test" };
+  if (transcriptPath) payload.transcript_path = transcriptPath;
+  const { stdout } = runHook(te, "memory/hooks/feedback-capture-submit.ts", JSON.stringify(payload));
+  let linesAfter = 0;
+  try { linesAfter = readFileSync(feedbackFile, "utf-8").trim().split("\n").filter(Boolean).length; } catch {}
+  if (linesAfter > linesBefore) {
+    const last = readFileSync(feedbackFile, "utf-8").trim().split("\n").pop()!;
+    return { entry: JSON.parse(last), output: stdout };
+  }
+  return { entry: null, output: stdout };
+}
+
+// Positive — high-confidence words
+check(r, "feedback: 'great' → positive", feedbackTest("great").entry?.polarity === "positive");
+check(r, "feedback: 'perfect, now do X' → positive", feedbackTest("perfect, now do X").entry?.polarity === "positive");
+check(r, "feedback: 'thanks!' → positive", feedbackTest("thanks!").entry?.polarity === "positive");
+check(r, "feedback: 'exactly' → positive", feedbackTest("exactly").entry?.polarity === "positive");
+check(r, "feedback: 'looks good' → positive", feedbackTest("looks good").entry?.polarity === "positive");
+
+// Positive — standalone-only words
+check(r, "feedback: standalone 'yes' → positive", feedbackTest("yes").entry?.polarity === "positive");
+check(r, "feedback: standalone 'good' → positive", feedbackTest("good").entry?.polarity === "positive");
+check(r, "feedback: 'yes the file is at /src/foo' → no match (not standalone)",
+  feedbackTest("yes the file is at /src/foo").entry === null);
+check(r, "feedback: 'good question, but...' → no match",
+  feedbackTest("good question, but does this work?").entry === null);
+
+// Negative — reuses CORRECTION_RE
+check(r, "feedback: 'no, do it differently' → negative",
+  feedbackTest("no, do it differently").entry?.polarity === "negative");
+check(r, "feedback: \"don't mock the database\" → negative",
+  feedbackTest("don't mock the database").entry?.polarity === "negative");
+check(r, "feedback: 'actually, use postgres' → negative",
+  feedbackTest("actually, use postgres").entry?.polarity === "negative");
+
+// No-match cases
+check(r, "feedback: random prompt → no match", feedbackTest("write a test for foo").entry === null);
+check(r, "feedback: 'great work on this is what I want to discuss' → still positive (leads with great)",
+  feedbackTest("great work on this is what I want to discuss").entry?.polarity === "positive");
+check(r, "feedback: short non-feedback → no match", feedbackTest("hi").entry === null);
+
+// Trigger word captured
+const triggerEntry = feedbackTest("Perfect, ship it").entry;
+check(r, "feedback: trigger word lowercased", triggerEntry?.trigger === "perfect");
+
+// Prior-turn context populated when transcript provided
+{
+  const tFile = writeTranscript(te, "fb-prior", [
+    userMsg("fix the auth bug"),
+    assistantMsg("Refactored auth.ts to use cookie sessions", [
+      { name: "Edit", input: { file_path: "/src/auth.ts" } },
+      { name: "Bash", input: { command: "bun test auth" } },
+    ]),
+  ]);
+  const e = feedbackTest("great, ship it", tFile).entry;
+  check(r, "feedback: prior_tools captured from transcript",
+    Array.isArray(e?.prior_tools) && e.prior_tools.includes("Edit") && e.prior_tools.includes("Bash"));
+  check(r, "feedback: prior_files captured from transcript",
+    Array.isArray(e?.prior_files) && e.prior_files.some((f: string) => f.includes("auth.ts")));
+  check(r, "feedback: prior_text excerpted from transcript",
+    typeof e?.prior_text === "string" && e.prior_text.includes("auth"));
+  try { unlinkSync(tFile); } catch {}
+}
+
+runAndCheck(te, r, "memory/hooks/feedback-capture-submit.ts", "malformed", "not json");
 
 // ── Session summary ──────────────────────────────────────────────────────────
 

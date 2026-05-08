@@ -12,6 +12,13 @@ export interface ExtractedMemory {
 
 export const CORRECTION_RE = /^(no[,.\s]|don'?t\b|stop\b|not that\b|instead\b|actually[,\s]|wait[,\s]|undo\b|revert\b|wrong\b)/i;
 
+// Positive feedback at start of prompt. Two tiers to manage false-positive risk:
+//   tier 1 — high-confidence words that can lead a longer message ("great, now do X")
+//   tier 2 — short words that only count when they are the entire prompt ("yes")
+export const POSITIVE_FEEDBACK_RE =
+  /^(great|perfect|exactly|excellent|awesome|brilliant|nice work|love it|looks good|that'?s (?:right|it|perfect|exactly|great)|works (?:great|perfectly|well)|thanks(?:[,!.\s]|$))\b/i;
+export const POSITIVE_STANDALONE_RE = /^(yes|yep|good|nice|cool|sweet|ok|okay|works|thanks)[!.]?$/i;
+
 export function deriveIntentOutcome(t: TranscriptSummary): { intent: string; outcome: string } {
   const intent = t.firstUserText || "unknown task";
   const outcome = t.userTexts.length > 1 ? t.userTexts[t.userTexts.length - 1] : intent;
