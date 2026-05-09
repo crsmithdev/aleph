@@ -7,7 +7,7 @@
  * `categorizeEvent` routes each fixture into the right filter bucket.
  *
  * If any of these tests breaks the merged Activity view has lost event
- * fidelity — see docs/mockups/research-inspect-merge.html § implementation gate.
+ * fidelity — see docs/mockups/research-activity.html § implementation gate.
  */
 import {
   formatEventDetail,

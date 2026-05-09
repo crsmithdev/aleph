@@ -1,7 +1,7 @@
 /**
  * ResearchGraphView — merged Knowledge + Process tab.
  *
- * Layout follows docs/mockups/research-knowledge-process-merge.html (Variant E):
+ * Layout follows docs/mockups/research-graph.html (Variant E):
  *   - Left (320px): hierarchy tree — seed threads, child threads, concepts
  *   - Center (flex): canvas — switches between three lenses:
  *       * Concepts · graph  (the force-directed concept graph from KnowledgeView)

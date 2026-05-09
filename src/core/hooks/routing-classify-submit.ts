@@ -135,12 +135,12 @@ if (directives.length > 0) {
 // direct pointer to the relevant spec/AGENTS.md rather than requiring navigation.
 // At most one reference per prompt (first match wins).
 const domainRefs: Array<{ pattern: RegExp; doc: string; desc: string }> = [
-  { pattern: /\b(research.session|research.worker|seed.query|research.thread|research.finding|research.job|monitor.cycle|perturbat)\b/i, doc: "docs/spec/RESEARCH.md", desc: "engine loop, data model, API, thread lifecycle" },
-  { pattern: /\b(telemetry|aggregat\w+|jsonl.pars|session.trace|token.cost|pricing.model)\b/i, doc: "docs/spec/TELEMETRY.md", desc: "parser, aggregator, pricing, API endpoints" },
-  { pattern: /\b(eval.scenario|eval.harness|hook.verification|sandbox.isolation|ab.runner)\b/i, doc: "docs/spec/EVAL.md", desc: "harness, sandbox, scenarios, A/B runner" },
+  { pattern: /\b(research.session|research.worker|seed.query|research.thread|research.finding|research.job|monitor.cycle|perturbat)\b/i, doc: "docs/specs/RESEARCH.md", desc: "engine loop, data model, API, thread lifecycle" },
+  { pattern: /\b(telemetry|aggregat\w+|jsonl.pars|session.trace|token.cost|pricing.model)\b/i, doc: "docs/specs/TELEMETRY.md", desc: "parser, aggregator, pricing, API endpoints" },
+  { pattern: /\b(eval.scenario|eval.harness|hook.verification|sandbox.isolation|ab.runner)\b/i, doc: "docs/specs/EVAL.md", desc: "harness, sandbox, scenarios, A/B runner" },
   { pattern: /\b(api.route|fastify.route|react.page|react.component|ui.hook|vite.config)\b/i, doc: "src/ui/AGENTS.md", desc: "API routes, React pages, conventions" },
-  { pattern: /\b(hook.script|settings.hooks|pretooluse.hook|posttooluse.hook|precompact.hook)\b/i, doc: "docs/HOOKS.md", desc: "events, scripts, fail modes, registration" },
-  { pattern: /\b(skill.rules|skill.routing|keyword.trigger|skill.playbook)\b/i, doc: "docs/SKILLS.md", desc: "routing config, keyword triggers, slash commands" },
+  { pattern: /\b(hook.script|settings.hooks|pretooluse.hook|posttooluse.hook|precompact.hook)\b/i, doc: "docs/specs/HOOKS.md", desc: "events, scripts, fail modes, registration" },
+  { pattern: /\b(skill.rules|skill.routing|keyword.trigger|skill.playbook)\b/i, doc: "docs/specs/SKILLS.md", desc: "routing config, keyword triggers, slash commands" },
 ];
 
 for (const { pattern, doc, desc } of domainRefs) {

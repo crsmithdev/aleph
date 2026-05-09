@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Research — Graph tab (knowledge + process merged, ultrawide)</title>
+<style>
+  /* Material Palenight palette — same vars the app uses in dark mode */
+  :root {
+    --bg-primary: #292d3e;
+    --bg-secondary: #2f3347;
+    --bg-tertiary: #34394f;
+    --bg-contrast: #232637;
+    --text-primary: #babed8;
+    --text-secondary: #8796b0;
+    --text-muted: #676e95;
+    --text-disabled: #4b5168;
+    --border: #383c50;
+    --border-strong: #4b5168;
+    --accent: #c792ea;
+    --accent-soft: rgba(199, 146, 234, 0.16);
+    --success: #c3e88d;
+    --success-soft: rgba(195, 232, 141, 0.16);
+    --warning: #ffcb6b;
+    --warning-soft: rgba(255, 203, 107, 0.16);
+    --error: #f07178;
+    --error-soft: rgba(240, 113, 120, 0.16);
+    --info: #82aaff;
+    --info-soft: rgba(130, 170, 255, 0.16);
+    --thread: #82aaff;
+    --concept: #c792ea;
+
+    --font-sans: 'Noto Sans', -apple-system, system-ui, sans-serif;
+    --font-mono: 'Noto Sans Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
+    --font-heading: 'Merriweather', Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font: 14px/1.45 var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Wider page wrapper for ultrawide preview */
+  .page { max-width: 2400px; margin: 0 auto; padding: 56px 32px 120px; }
+  .lede { color: var(--text-secondary); max-width: 80ch; margin: 0 0 8px; }
+  .eyebrow { font: 500 11px/1 var(--font-mono); letter-spacing: 0.16em; color: var(--text-muted); text-transform: uppercase; margin: 0 0 12px; }
+  h1 { font: 600 32px/1.2 var(--font-heading); margin: 0 0 14px; letter-spacing: -0.005em; }
+  .variant { margin-top: 56px; }
+  .variant-head {
+    display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--border); padding-bottom: 14px; margin-bottom: 22px;
+  }
+  .pill-label {
+    font: 600 11px/1 var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase;
+    background: var(--accent-soft); color: var(--accent);
+    padding: 5px 9px; border-radius: 4px; border: 1px solid var(--border);
+  }
+  .variant h3 { font: 600 17px/1.3 var(--font-heading); margin: 0; }
+
+  /* Mock window chrome */
+  .frame {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 12px 40px -12px rgba(0,0,0,0.5);
+  }
+  .frame-tabs {
+    display: flex; align-items: stretch; gap: 0;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    padding: 0 12px;
+    height: 38px;
+  }
+  .frame-tab {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 0 14px; font-size: 13px; color: var(--text-muted);
+    border-bottom: 2px solid transparent;
+    height: 100%;
+  }
+  .frame-tab.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--bg-primary); }
+  .frame-tab .count {
+    font: 10px/1 var(--font-mono); color: var(--text-muted);
+    background: var(--bg-tertiary); border-radius: 3px;
+    padding: 2px 5px;
+  }
+  .frame-tab.active .count { background: var(--accent-soft); color: var(--accent); }
+
+  /* Atoms */
+  .seg {
+    display: inline-flex; gap: 0;
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    border-radius: 6px; padding: 3px;
+  }
+  .seg button {
+    background: transparent; border: 0; color: var(--text-muted);
+    padding: 6px 12px; font: 500 12px/1 var(--font-sans);
+    border-radius: 4px; letter-spacing: 0.02em;
+  }
+  .seg button.on { background: var(--bg-tertiary); color: var(--text-primary); }
+  .seg button .ct { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin-left: 6px; }
+  .seg button.on .ct { color: var(--accent); }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font: 500 11px/1 var(--font-mono); letter-spacing: 0.04em;
+    padding: 4px 7px; border-radius: 3px; border: 1px solid var(--border);
+    background: var(--bg-tertiary); color: var(--text-secondary);
+  }
+  .chip.thread  { color: var(--thread); background: var(--info-soft); border-color: rgba(130,170,255,0.32); }
+  .chip.concept { color: var(--concept); background: var(--accent-soft); border-color: rgba(199,146,234,0.32); }
+
+  .row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .muted { color: var(--text-muted); }
+  .mono  { font-family: var(--font-mono); }
+  .small { font-size: 12px; }
+  .xs    { font-size: 11px; }
+
+  /* Toolbar */
+  .toolbar {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+    background: var(--bg-secondary);
+  }
+
+  /* ── Three-pane workspace, ultrawide-tuned (≥ 1600px → 3 panes; < 1600px → inspector collapses) ── */
+  .v-e {
+    display: grid; gap: 0;
+    grid-template-columns: 320px minmax(0, 1fr) 360px;
+    height: 880px;
+  }
+
+  /* Left: tree rail */
+  .tree-rail { background: var(--bg-secondary); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-width: 0; }
+  .tree-rail header {
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+    display: flex; gap: 8px; align-items: center;
+  }
+  .tree-search { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .tree-search input {
+    width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border);
+    color: var(--text-secondary); font-size: 12px; padding: 5px 8px; border-radius: 3px;
+  }
+  .tree { padding: 6px 0; overflow: auto; flex: 1; }
+  .tree-row {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 14px; font-size: 13px; color: var(--text-secondary);
+  }
+  .tree-row:hover { background: var(--bg-tertiary); }
+  .tree-row.on { background: var(--bg-tertiary); color: var(--text-primary); }
+  .tree-row .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tree-row .ct { font: 500 11px/1 var(--font-mono); color: var(--text-muted); }
+  .tree-row .twist { color: var(--text-muted); font-size: 10px; width: 10px; text-align: center; }
+  .tree-row .border-l {
+    width: 3px; height: 14px; border-radius: 2px; background: var(--text-disabled); flex: 0 0 auto;
+  }
+  .tree-row .border-l.active    { background: var(--success); }
+  .tree-row .border-l.queued    { background: var(--warning); }
+  .tree-row .border-l.exhausted { background: var(--text-disabled); }
+  .tree-row.depth-1 { padding-left: 30px; }
+  .tree-row.depth-2 { padding-left: 46px; }
+  .tree-row.depth-3 { padding-left: 62px; }
+  .tree-row.concept-row { padding-left: 30px; color: var(--accent); font-style: italic; }
+  .tree-row.concept-row .ct { color: var(--accent); opacity: 0.7; }
+
+  /* Center: canvas (graph) */
+  .canvas-wrap { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+  .graph {
+    flex: 1; min-height: 0; position: relative;
+    background:
+      radial-gradient(circle at 20% 30%, rgba(130,170,255,0.05), transparent 50%),
+      radial-gradient(circle at 80% 70%, rgba(199,146,234,0.05), transparent 50%),
+      var(--bg-primary);
+  }
+  .graph svg { width: 100%; height: 100%; display: block; }
+  .legend {
+    display: inline-flex; gap: 12px; padding: 6px 10px;
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    border-radius: 6px; font-size: 12px;
+  }
+  .legend .k { display: inline-flex; align-items: center; gap: 5px; color: var(--text-secondary); }
+  .legend .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .legend .dot.thread    { background: var(--thread); }
+  .legend .dot.concept   { background: var(--concept); }
+  .legend .dot.exhausted { background: var(--text-disabled); }
+  .legend .dot.active    { background: var(--success); }
+
+  /* Right: inspector */
+  .detail-rail { background: var(--bg-secondary); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .detail-rail header { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  .detail-rail header h4 { margin: 0 0 4px; font: 600 14px/1.3 var(--font-sans); color: var(--text-primary); }
+  .detail-rail header .meta { font-size: 12px; color: var(--text-muted); }
+  .detail-section { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  .detail-section.flex1 { flex: 1; min-height: 0; overflow-y: auto; }
+  .detail-section .lbl { font: 500 11px/1 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; }
+  .finding-row { padding: 8px 0; border-top: 1px solid var(--border); }
+  .finding-row:first-child { border-top: 0; padding-top: 0; }
+  .finding-row .summary { color: var(--text-primary); font-size: 13px; line-height: 1.5; }
+  .finding-row .meta { font: 500 11px/1 var(--font-mono); color: var(--text-muted); margin-top: 6px; display: flex; gap: 10px; }
+  .conf-bar { display: inline-block; width: 36px; height: 4px; background: var(--bg-tertiary); border-radius: 2px; vertical-align: middle; }
+  .conf-bar > i { display: block; height: 100%; background: var(--success); border-radius: 2px; }
+
+  .tag-bar { display: flex; flex-wrap: wrap; gap: 4px; }
+  .tag-bar .tag {
+    font: 500 10px/1 var(--font-mono);
+    padding: 4px 6px; border-radius: 3px;
+    background: var(--bg-tertiary); color: var(--text-secondary);
+    border: 1px solid var(--border);
+  }
+
+  .impl-note {
+    margin-top: 16px; padding: 14px 16px;
+    background: linear-gradient(180deg, rgba(199,146,234,0.06), rgba(199,146,234,0.02) 100%);
+    border: 1px solid rgba(199,146,234,0.35);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    color: var(--text-secondary); font-size: 13px; line-height: 1.55;
+  }
+  .impl-note .head {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    font: 600 12px/1 var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--accent);
+  }
+  .impl-note ul { margin: 6px 0 0; padding-left: 18px; }
+  .impl-note ul li { margin-bottom: 3px; }
+  .impl-note code {
+    font-family: var(--font-mono); font-size: 12px;
+    background: var(--bg-tertiary); padding: 1px 5px; border-radius: 3px;
+    color: var(--text-primary);
+  }
+  .impl-note strong { color: var(--text-primary); }
+
+  .takeaway {
+    margin-top: 16px; padding: 12px 14px;
+    background: var(--bg-secondary); border: 1px dashed var(--border-strong);
+    border-radius: 6px; color: var(--text-secondary); font-size: 13px;
+  }
+  .takeaway strong { color: var(--text-primary); font-weight: 600; }
+
+  hr.gap { border: 0; border-top: 1px solid var(--border); margin: 18px 0; }
+  .footer-note { color: var(--text-muted); font-size: 12px; margin-top: 8px; }
+
+  /* On smaller screens collapse the inspector to a drawer feel */
+  @media (max-width: 1600px) {
+    .v-e { grid-template-columns: 280px minmax(0, 1fr) 0; height: 760px; }
+    .detail-rail { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <p class="eyebrow">Research · query detail</p>
+  <h1>Graph tab — merged knowledge + process (three-pane, ultrawide)</h1>
+  <p class="lede">
+    Threads (process) and concepts (knowledge) are different views of the same underlying graph: threads spawn
+    findings, findings compose concepts, concepts link back to threads. This tab merges them into a single
+    three-pane workspace tuned for ultrawide displays — tree on the left, canvas in the middle, inspector on the
+    right. The default state is fully populated on first paint: tree expanded one level from every seed, canvas
+    pre-rendered with the seed thread focused, inspector showing the seed thread's findings.
+  </p>
+
+  <section class="variant">
+    <div class="variant-head">
+      <span class="pill-label">Graph · E</span>
+      <h3>Three-pane workspace — tree · canvas · inspector</h3>
+    </div>
+
+    <div class="frame">
+      <div class="frame-tabs">
+        <div class="frame-tab">Document</div>
+        <div class="frame-tab active">Graph <span class="count">86</span></div>
+        <div class="frame-tab">Sources <span class="count">88</span></div>
+        <div class="frame-tab">Activity <span class="count">⦿</span></div>
+        <div class="frame-tab">Config</div>
+      </div>
+
+      <div class="v-e">
+        <!-- LEFT: tree rail (auto-expanded one level on first paint) -->
+        <div class="tree-rail">
+          <header>
+            <strong style="font-size: 13px;">Hierarchy</strong>
+            <span class="chip thread xs">22 threads</span>
+            <span class="chip concept xs">14 concepts</span>
+          </header>
+          <div class="tree-search">
+            <input type="text" placeholder="filter…">
+          </div>
+          <div class="tree">
+            <div class="tree-row depth-0"><span class="twist">▾</span><span class="border-l active"></span><span class="label">Seed: EDM origins 1985–95</span><span class="ct">26</span></div>
+            <div class="tree-row depth-1"><span class="twist">▾</span><span class="border-l active"></span><span class="label">Detroit techno transmissions to UK 88-89</span><span class="ct">9</span></div>
+            <div class="tree-row depth-2 concept-row"><span class="twist">·</span><span class="label">◇ TR-303</span><span class="ct">7</span></div>
+            <div class="tree-row depth-2 concept-row"><span class="twist">·</span><span class="label">◇ pirate radio</span><span class="ct">5</span></div>
+            <div class="tree-row depth-2"><span class="twist">▸</span><span class="border-l exhausted"></span><span class="label">Knuckles → Brewster lineage</span><span class="ct">3</span></div>
+            <div class="tree-row depth-1"><span class="twist">▾</span><span class="border-l active"></span><span class="label">Frankfurt techno 89-92</span><span class="ct">11</span></div>
+            <div class="tree-row depth-2 on"><span class="twist">·</span><span class="border-l active"></span><span class="label">Sven Väth's Omen club</span><span class="ct">5</span></div>
+            <div class="tree-row depth-3 concept-row"><span class="twist">·</span><span class="label">◇ acid house ★</span><span class="ct">9</span></div>
+            <div class="tree-row depth-2"><span class="twist">▸</span><span class="border-l queued"></span><span class="label">Mayday rave culture (queued)</span><span class="ct">0</span></div>
+            <div class="tree-row depth-1"><span class="twist">▾</span><span class="border-l active"></span><span class="label">UK hardcore continuum 91-94</span><span class="ct">8</span></div>
+            <div class="tree-row depth-2 concept-row"><span class="twist">·</span><span class="label">◇ jungle precursors</span><span class="ct">4</span></div>
+            <div class="tree-row depth-2"><span class="twist">▸</span><span class="border-l exhausted"></span><span class="label">Energy Flash compilation</span><span class="ct">2</span></div>
+            <div class="tree-row depth-1"><span class="twist">▾</span><span class="border-l exhausted"></span><span class="label">Ibiza balearic crossover 87-88</span><span class="ct">6</span></div>
+            <div class="tree-row depth-2 concept-row"><span class="twist">·</span><span class="label">◇ second summer of love</span><span class="ct">3</span></div>
+            <div class="tree-row depth-1"><span class="twist">▸</span><span class="border-l exhausted"></span><span class="label">Goa trance crystallization 91-93</span><span class="ct">4</span></div>
+            <div class="tree-row depth-1"><span class="twist">▸</span><span class="border-l queued"></span><span class="label">Italodisco lineage (queued)</span><span class="ct">0</span></div>
+            <div class="tree-row depth-1"><span class="twist">▸</span><span class="border-l exhausted"></span><span class="label">Belgian new-beat → techno bridge</span><span class="ct">3</span></div>
+          </div>
+        </div>
+
+        <!-- CENTER: canvas (pre-rendered, seed-focused) -->
+        <div class="canvas-wrap">
+          <div class="toolbar">
+            <span class="seg">
+              <button>Threads · map</button>
+              <button class="on">Concepts · graph</button>
+              <button>Live · stream</button>
+              <button>Outline</button>
+            </span>
+            <span class="legend">
+              <span class="k"><span class="dot concept"></span> concept</span>
+              <span class="k"><span class="dot thread"></span> thread</span>
+              <span class="k"><span class="dot active"></span> active</span>
+              <span class="k"><span class="dot exhausted"></span> exhausted</span>
+            </span>
+            <span class="muted small" style="margin-left: auto;">selected → <span class="mono">acid house</span></span>
+          </div>
+          <div class="graph">
+            <svg viewBox="0 0 1400 760" preserveAspectRatio="xMidYMid meet">
+              <g stroke="#45475a" stroke-width="1.2" fill="none" opacity="0.85">
+                <line x1="700" y1="380" x2="380" y2="200"/>
+                <line x1="700" y1="380" x2="980" y2="220"/>
+                <line x1="700" y1="380" x2="1100" y2="430"/>
+                <line x1="700" y1="380" x2="380" y2="540"/>
+                <line x1="700" y1="380" x2="1020" y2="600"/>
+                <line x1="380" y1="200" x2="380" y2="540"/>
+                <line x1="980" y1="220" x2="1100" y2="430"/>
+              </g>
+              <g fill="#a6adc8" font-size="11" font-family="Noto Sans Mono">
+                <text x="540" y="290">used by</text>
+                <text x="800" y="295">contemporary</text>
+                <text x="900" y="410">spawned in</text>
+                <text x="540" y="470">UK importer</text>
+                <text x="850" y="500">→ derived</text>
+              </g>
+              <g font-family="Noto Sans, system-ui" font-size="14" fill="#0f111a">
+                <rect x="624" y="356" width="156" height="48" rx="9" fill="#f9e2af" stroke="#f9e2af" stroke-width="3"/>
+                <text x="702" y="386" text-anchor="middle" font-weight="700">acid house [9]</text>
+
+                <rect x="320" y="178" width="130" height="44" rx="9" fill="#c792ea" stroke="#383c50"/>
+                <text x="385" y="206" text-anchor="middle" font-weight="600">TR-303 [7]</text>
+
+                <rect x="900" y="194" width="160" height="44" rx="9" fill="#c792ea" stroke="#383c50"/>
+                <text x="980" y="222" text-anchor="middle" font-weight="600">techno → trance</text>
+
+                <rect x="1020" y="404" width="160" height="44" rx="9" fill="#c792ea" stroke="#383c50"/>
+                <text x="1100" y="432" text-anchor="middle" font-weight="600">pirate radio [5]</text>
+
+                <rect x="300" y="516" width="160" height="44" rx="9" fill="#c792ea" stroke="#383c50"/>
+                <text x="380" y="544" text-anchor="middle" font-weight="600">2nd summer of love</text>
+
+                <rect x="940" y="576" width="160" height="44" rx="9" fill="#c792ea" stroke="#383c50"/>
+                <text x="1020" y="604" text-anchor="middle" font-weight="600">drum machines</text>
+              </g>
+            </svg>
+          </div>
+        </div>
+
+        <!-- RIGHT: inspector (full size on ultrawide) -->
+        <div class="detail-rail">
+          <header>
+            <h4>◇ acid house</h4>
+            <div class="meta">9 findings · 6 sources · first seen iter 6</div>
+            <div class="tag-bar" style="margin-top: 8px;">
+              <span class="tag">aliases: acid, acid-house</span>
+              <span class="tag">hub</span>
+            </div>
+          </header>
+          <div class="detail-section">
+            <div class="lbl">Source threads (3)</div>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <div class="row small"><span class="chip thread xs">t-89a4</span><span style="flex:1; color: var(--text-secondary);">Detroit techno transmissions</span><span class="muted mono xs">3</span></div>
+              <div class="row small"><span class="chip thread xs">t-220a</span><span style="flex:1; color: var(--text-secondary);">Sven Väth's Omen club</span><span class="muted mono xs">4</span></div>
+              <div class="row small"><span class="chip thread xs">t-3300</span><span style="flex:1; color: var(--text-secondary);">Roland 303 misuse Chicago</span><span class="muted mono xs">2</span></div>
+            </div>
+          </div>
+          <div class="detail-section">
+            <div class="lbl">Linked concepts (3)</div>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <div class="row small"><span class="chip concept xs">TR-303</span><span style="flex:1; color: var(--text-secondary);"><em>used by</em></span></div>
+              <div class="row small"><span class="chip concept xs">drum machines</span><span style="flex:1; color: var(--text-secondary);"><em>kind of</em></span></div>
+              <div class="row small"><span class="chip concept xs">techno → trance</span><span style="flex:1; color: var(--text-secondary);"><em>contemporary with</em></span></div>
+            </div>
+          </div>
+          <div class="detail-section flex1">
+            <div class="lbl">Findings (9)</div>
+            <div class="finding-row">
+              <div class="summary">DJ Pierre's Phuture "Acid Tracks" (1987) is widely cited as origin point — a misuse of the TR-303's resonance.</div>
+              <div class="meta"><span><span class="conf-bar"><i style="width: 92%;"></i></span> 0.92</span><span>residentadvisor</span><span>iter 6</span></div>
+            </div>
+            <div class="finding-row">
+              <div class="summary">UK summer of love 1988: acid house sweeps from warehouses to mainstream, framed via Boy's Own zine.</div>
+              <div class="meta"><span><span class="conf-bar"><i style="width: 86%;"></i></span> 0.86</span><span>BBC Radio 4</span><span>iter 8</span></div>
+            </div>
+            <div class="finding-row">
+              <div class="summary">Frankfurt's Sven Väth pivoted from new-beat to acid in 89; Omen residency made the Atlantic crossing official.</div>
+              <div class="meta"><span><span class="conf-bar"><i style="width: 79%;"></i></span> 0.79</span><span>Faces Mag</span><span>iter 11</span></div>
+            </div>
+            <div class="finding-row">
+              <div class="summary">Tracks were initially distributed on white-label vinyl; pirate-radio play (Kiss FM) created the demand pump.</div>
+              <div class="meta"><span><span class="conf-bar"><i style="width: 71%;"></i></span> 0.71</span><span>Reynolds 98</span><span>iter 13</span></div>
+            </div>
+            <div class="finding-row">
+              <div class="summary">Chicago → London → Detroit feedback loop closed by 1989 with imports of Trax and Transmat catalog.</div>
+              <div class="meta"><span><span class="conf-bar"><i style="width: 68%;"></i></span> 0.68</span><span>Wax Poetics</span><span>iter 14</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── DEFAULT-STATE GATE — implementation note inlined so the gate cannot be missed -->
+    <div class="impl-note">
+      <div class="head">★ Implementation gate · default state must be useful at first paint</div>
+      <p>
+        On a fresh open of the Graph tab, the user must see something useful <strong>without clicking, expanding,
+        or resizing anything</strong>. Past iterations of the knowledge view have shipped with empty graphs that
+        required user action before any data appeared — that's the regression this gate prevents.
+      </p>
+      <ul>
+        <li><strong>Tree (left):</strong> auto-expand to depth 1 from every seed thread on mount. Concept children appear under their parent thread.</li>
+        <li><strong>Canvas (center):</strong> pick the lens with data — <code>Concepts · graph</code> when concepts exist, otherwise <code>Threads · map</code>. Pre-render with the seed thread focused; never start with a blank or "click to load" state.</li>
+        <li><strong>Inspector (right):</strong> when nothing is selected, show the seed thread's top findings (still useful, never blank).</li>
+        <li><strong>Ultrawide ≥ 1600px:</strong> all three panes visible simultaneously, sized 320px / flex / 360px.</li>
+        <li><strong>Below 1600px:</strong> inspector collapses to a right-side drawer that opens on selection.</li>
+        <li><strong>Verification.</strong> <code>bun run ui:smoke</code> on a fixture session asserts: tree has visible depth-1 rows, canvas has rendered &gt; 0 nodes, inspector shows non-empty content — all without simulating a click.</li>
+      </ul>
+      <p style="margin-top: 10px;">See <code>docs/plans/research-ui-rollout.md</code> § 4 Stream 2D for the full spec.</p>
+    </div>
+
+    <div class="takeaway">
+      <strong>Ultrawide layout.</strong> Page wrapper is widened to 2400px so the mockup reflects what the tab will
+      look like on a real ultrawide. Three columns are 320px / flex / 360px. The center pane absorbs whatever's left
+      — on a 2560px viewport that's ~1880px of canvas, plenty of room for the cytoscape graph to breathe. Below
+      1600px the inspector hides via media query (drawer-style on click).
+    </div>
+  </section>
+
+  <hr class="gap">
+  <p class="footer-note">
+    Mockup follows the Material Palenight palette and the app's Noto Sans / Merriweather / Noto Sans Mono stack.
+    Counts and dates are illustrative.
+  </p>
+</div>
+</body>
+</html>

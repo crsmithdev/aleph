@@ -14,20 +14,20 @@
 
 ## Hooks and Skills
 
-- [docs/HOOKS.md](docs/HOOKS.md): All 14 registered hooks — events (SessionStart, UserPromptSubmit, Stop, PreToolUse, PostToolUse, PreCompact), script paths, timeouts, fail-closed vs fail-open, behavior detail per hook
-- [docs/SKILLS.md](docs/SKILLS.md): 19 keyword-triggered skill playbooks, always-active skills, slash commands (global and project-local), routing via skill-rules.json
+- [docs/specs/HOOKS.md](docs/specs/HOOKS.md): All 14 registered hooks — events (SessionStart, UserPromptSubmit, Stop, PreToolUse, PostToolUse, PreCompact), script paths, timeouts, fail-closed vs fail-open, behavior detail per hook
+- [docs/specs/SKILLS.md](docs/specs/SKILLS.md): 19 keyword-triggered skill playbooks, always-active skills, slash commands (global and project-local), routing via skill-rules.json
 - [docs/AGENTS.md](docs/AGENTS.md): Agent definitions in src/agents/ — code-debugger, code-reviewer, design-reviewer, docs-optimizer, docs-reviewer, skill-creator; when to use each vs skills
 
 ## Specifications
 
-- [docs/spec/CONSTRUCT.md](docs/spec/CONSTRUCT.md): Session lifecycle, depth classification, verification gate, rating capture, quality hooks, TypeScript gate, SQL guard, context monitoring, statusline, notifications, skills/commands table, UI pages (Life, Observability, Research, Settings), installer steps, path resolution, identity layer, full hook registration table
-- [docs/spec/TELEMETRY.md](docs/spec/TELEMETRY.md): JSONL parsing pipeline (Claude CLI → parser → aggregator → API → UI), SessionEntry type, all aggregate output types, pricing model, memory snapshots, all /api/observability/* endpoints
-- [docs/spec/RESEARCH.md](docs/spec/RESEARCH.md): Research engine iteration loop, data model (sessions, threads, findings, steps, plans, jobs, monitors), perturbation strategies, provider selection (Anthropic/OpenRouter/Ollama), scheduling modes, worker supervisor, all /api/research/* endpoints including SSE stream
-- [docs/spec/EVAL.md](docs/spec/EVAL.md): Eval harness sandbox, Agent SDK runner, real hook delegation, tool classification, assertion model, all 8 scenarios (broken-math, todo-app, todo-feature, commit-sequence, e2e-basic, hook-verification-advisory/gate/pass), A/B runner
+- [docs/specs/SPEC.md](docs/specs/SPEC.md): Session lifecycle, depth classification, verification gate, rating capture, quality hooks, TypeScript gate, SQL guard, context monitoring, statusline, notifications, skills/commands table, UI pages (Life, Observability, Research, Settings), installer steps, path resolution, identity layer, full hook registration table
+- [docs/specs/TELEMETRY.md](docs/specs/TELEMETRY.md): JSONL parsing pipeline (Claude CLI → parser → aggregator → API → UI), SessionEntry type, all aggregate output types, pricing model, memory snapshots, all /api/observability/* endpoints
+- [docs/specs/RESEARCH.md](docs/specs/RESEARCH.md): Research engine iteration loop, data model (sessions, threads, findings, steps, plans, jobs, monitors), perturbation strategies, provider selection (Anthropic/OpenRouter/Ollama), scheduling modes, worker supervisor, all /api/research/* endpoints including SSE stream
+- [docs/specs/EVAL.md](docs/specs/EVAL.md): Eval harness sandbox, Agent SDK runner, real hook delegation, tool classification, assertion model, all 8 scenarios (broken-math, todo-app, todo-feature, commit-sequence, e2e-basic, hook-verification-advisory/gate/pass), A/B runner
 
 ## Tests
 
-- [docs/TESTS.md](docs/TESTS.md): Complete test listing — hook tests, telemetry unit tests, API tests, browser e2e tests (Playwright), behavioral evals (Agent SDK), coverage gaps
+- [docs/specs/TESTS.md](docs/specs/TESTS.md): Complete test listing — hook tests, telemetry unit tests, API tests, browser e2e tests (Playwright), behavioral evals (Agent SDK), coverage gaps
 
 ## Source Reference
 
@@ -38,7 +38,3 @@
 - `install.ts`: Installer — 14 steps from backup to service restart
 - `test.ts`: Test runner — scans src/tests/, requires 90%+ pass
 
-## Optional
-
-- [docs/TODO.md](docs/TODO.md): Known gaps and planned work
-- [docs/IDEAS.md](docs/IDEAS.md): Future feature ideas

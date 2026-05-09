@@ -1,7 +1,7 @@
 /**
  * ResearchActivityView — merged Events + Telemetry + Reviews tab.
  *
- * Layout follows docs/mockups/research-inspect-merge.html (Variant A):
+ * Layout follows docs/mockups/research-activity.html (Variant A):
  *   - Top: 6-card KPI strip (Findings · Steps · Source failure · Errors · Cost · Stuck)
  *   - Left column: latest verdict, iteration checks, job lifecycle table,
  *     source extraction, thread state stackbar, decisions

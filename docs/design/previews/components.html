@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en" data-theme-id="material-palenight">
+<head>
+<meta charset="utf-8" />
+<title>Construct — Components</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="stylesheet" href="../tokens/colors_and_type.css" />
+<style>
+  body { padding: 48px; max-width: 1280px; margin: 0 auto; }
+  .doc-title { font-family: var(--font-heading); font-size: 40px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 4px; }
+  .doc-sub { color: var(--text-muted); margin: 0 0 48px; font-size: 14px; }
+  .section { margin-bottom: 56px; }
+  .section-eyebrow { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.1em; font-size: 11px; color: var(--text-muted); margin-bottom: 12px; }
+  .section-title { font-size: 24px; font-weight: 600; margin: 0 0 4px; }
+  .section-blurb { color: var(--text-secondary); font-size: 14px; margin: 0 0 24px; max-width: 60ch; line-height: 1.6; }
+
+  .panel { background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 8px; padding: 24px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .row + .row { margin-top: 16px; }
+  .row-label { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); width: 100px; flex-shrink: 0; }
+
+  /* ======================================================== Buttons */
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; font-size: 13px; font-weight: 600; font-family: var(--font-sans); border-radius: 4px; border: 1px solid transparent; cursor: pointer; transition: all 0.12s; line-height: 1; }
+  .btn .material-symbols-outlined { font-size: 16px; }
+  .btn-primary { background: var(--accent); color: var(--bg-primary); border-color: var(--accent); }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); border-color: var(--border-primary); }
+  .btn-secondary:hover { border-color: var(--border-secondary); }
+  .btn-ghost { background: transparent; color: var(--text-secondary); }
+  .btn-ghost:hover { color: var(--text-primary); background: var(--bg-tertiary); }
+  .btn-danger { background: var(--error-muted); color: var(--error); border-color: rgba(239, 91, 91, 0.3); }
+  .btn-disabled { background: var(--bg-tertiary); color: var(--text-disabled); border-color: var(--border-primary); cursor: not-allowed; }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .btn-lg { padding: 10px 18px; font-size: 14px; }
+
+  /* ======================================================== Badges */
+  .badge { display: inline-flex; align-items: center; padding: 2px 8px; font-size: 12px; font-weight: 500; border-radius: 4px; }
+  .badge-low { background: var(--bg-tertiary); color: var(--text-muted); }
+  .badge-medium { background: var(--accent-muted); color: var(--accent); }
+  .badge-high { background: var(--warning-muted); color: var(--warning); }
+  .badge-critical { background: var(--error-muted); color: var(--error); }
+
+  .badge-state { text-transform: capitalize; }
+  .badge-actionable { background: var(--success-muted); color: var(--success); }
+  .badge-scheduled { background: var(--accent-muted); color: var(--accent); }
+  .badge-waiting { background: var(--warning-muted); color: var(--warning); }
+  .badge-done { background: var(--success-muted); color: var(--success); }
+  .badge-canceled { background: var(--bg-tertiary); color: var(--text-muted); text-decoration: line-through; }
+  .badge-not_started { background: var(--bg-tertiary); color: var(--text-muted); }
+
+  /* ======================================================== Chips & shape pills */
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; font-size: 12px; border-radius: 3px; border: 1px solid; font-weight: 500; }
+  .shape-pill { display: inline-flex; align-items: center; padding: 2px 8px; font-size: 12px; font-weight: 500; border-radius: 4px; border: 1px solid var(--accent-muted); background: var(--accent-muted); color: var(--accent); text-transform: capitalize; }
+  .shape-pill.muted { background: var(--bg-tertiary); border-color: var(--border-primary); color: var(--text-muted); }
+
+  /* ======================================================== Inputs */
+  .input { background: var(--bg-primary); border: 1px solid var(--border-primary); border-radius: 4px; padding: 6px 10px; font-size: 13px; color: var(--text-primary); font-family: var(--font-sans); width: 100%; box-sizing: border-box; }
+  .input:focus { outline: none; border-color: var(--accent); }
+  .input::placeholder { color: var(--text-muted); }
+  .input-mono { font-family: var(--font-mono); }
+  .textarea { min-height: 96px; resize: vertical; line-height: 1.5; padding: 10px 12px; }
+  .field-label { font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; }
+  .field-row { display: flex; flex-direction: column; gap: 4px; }
+  .field-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+
+  /* ======================================================== Toggle / radio segments */
+  .seg { display: inline-flex; align-items: center; gap: 2px; background: var(--bg-tertiary); border: 1px solid var(--border-primary); border-radius: 4px; padding: 2px; }
+  .seg button { background: none; border: none; padding: 4px 12px; font-size: 12px; color: var(--text-muted); border-radius: 3px; cursor: pointer; font-family: var(--font-sans); }
+  .seg button.active { background: var(--bg-secondary); color: var(--text-primary); box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+
+  .checkbox { width: 16px; height: 16px; border: 2px solid var(--border-secondary); border-radius: 2px; display: inline-grid; place-items: center; background: var(--bg-primary); }
+  .checkbox.checked { background: var(--success); border-color: var(--success); color: white; }
+  .checkbox.checked::after { content: ""; width: 8px; height: 4px; border-left: 2px solid white; border-bottom: 2px solid white; transform: rotate(-45deg) translate(1px, -1px); }
+
+  .radio-circle { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border-secondary); display: inline-grid; place-items: center; flex-shrink: 0; }
+  .radio-circle.checked { border-color: var(--success); background: var(--success); }
+  .radio-circle.checked::after { content: "✓"; color: white; font-size: 11px; font-weight: 700; line-height: 1; }
+
+  /* ======================================================== Cards */
+  .card { background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 8px; padding: 16px; }
+  .card-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 8px; cursor: pointer; }
+  .card-row:hover { border-color: var(--border-secondary); }
+  .card-row .grow { flex: 1; min-width: 0; }
+  .row-title { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+  .row-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+  .row-sub { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+
+  /* ======================================================== Status stripe */
+  .stripe-row { display: flex; gap: 0; background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 8px; overflow: hidden; }
+  .stripe { width: 3px; flex-shrink: 0; }
+  .stripe.active { background: var(--success); }
+  .stripe.paused { background: var(--warning); }
+  .stripe.completed { background: var(--info); }
+  .stripe.halted { background: var(--error); }
+  .stripe.exhausted { background: var(--text-disabled); }
+  .stripe-content { padding: 12px 16px; flex: 1; }
+
+  /* ======================================================== Modal mock */
+  .modal { background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 8px; max-width: 480px; }
+  .modal-header { padding: 16px; border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between; align-items: center; }
+  .modal-title { font-size: 16px; font-weight: 600; }
+  .modal-close { color: var(--text-muted); cursor: pointer; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 4px; }
+  .modal-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .modal-footer { padding: 12px 16px; border-top: 1px solid var(--border-primary); display: flex; justify-content: flex-end; gap: 8px; }
+
+  /* ======================================================== Compose box */
+  .compose { border: 1px solid rgba(106, 163, 255, 0.3); border-radius: 12px; padding: 20px 24px 16px; background: linear-gradient(180deg, rgba(106, 163, 255, 0.08), var(--bg-secondary)); }
+  .compose-h { font-size: 16px; font-weight: 600; margin: 0 0 12px; }
+  .compose-foot { display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+  .compose-hint { font-size: 11px; color: var(--text-muted); }
+  .templates { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+  .template-pill { font-size: 11px; padding: 3px 10px; border: 1px dashed var(--border-secondary); border-radius: 4px; color: var(--text-secondary); text-transform: capitalize; cursor: pointer; }
+  .template-pill:hover { color: var(--text-primary); border-color: var(--accent); }
+
+  /* ======================================================== Tabs */
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border-primary); }
+  .tab { padding: 10px 16px; font-size: 13px; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.active { color: var(--text-primary); border-bottom-color: var(--accent); }
+  .tab:hover:not(.active) { color: var(--text-secondary); }
+</style>
+</head>
+<body>
+  <h1 class="doc-title">Components</h1>
+  <p class="doc-sub">Buttons, badges, chips, inputs, cards, and the smaller pieces of UI furniture.</p>
+
+  <!-- ============================================================ BUTTONS -->
+  <section class="section">
+    <div class="section-eyebrow">01 · Buttons</div>
+    <h2 class="section-title">Action vocabulary</h2>
+    <p class="section-blurb">Primary for the one important action per screen. Secondary for everything else. Ghost for low-emphasis links inside dense rows. Danger only for destructive verbs (halt, delete, archive).</p>
+    <div class="panel">
+      <div class="row">
+        <span class="row-label">Primary</span>
+        <button class="btn btn-primary">Start research <span class="material-symbols-outlined">arrow_forward</span></button>
+        <button class="btn btn-primary"><span class="material-symbols-outlined">add</span>New goal</button>
+        <button class="btn btn-primary btn-sm">Save</button>
+        <button class="btn btn-primary btn-lg">Open detail →</button>
+      </div>
+      <div class="row">
+        <span class="row-label">Secondary</span>
+        <button class="btn btn-secondary">Cancel</button>
+        <button class="btn btn-secondary"><span class="material-symbols-outlined">content_copy</span>Copy</button>
+        <button class="btn btn-secondary btn-sm">Edit</button>
+      </div>
+      <div class="row">
+        <span class="row-label">Ghost</span>
+        <button class="btn btn-ghost">view all →</button>
+        <button class="btn btn-ghost"><span class="material-symbols-outlined">add</span>New query</button>
+        <button class="btn btn-ghost">Skip</button>
+      </div>
+      <div class="row">
+        <span class="row-label">Danger</span>
+        <button class="btn btn-danger"><span class="material-symbols-outlined">stop</span>Halt run</button>
+        <button class="btn btn-danger">Archive</button>
+      </div>
+      <div class="row">
+        <span class="row-label">Disabled</span>
+        <button class="btn btn-disabled">Starting…</button>
+        <button class="btn btn-disabled">Submit</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ BADGES -->
+  <section class="section">
+    <div class="section-eyebrow">02 · Badges & chips</div>
+    <h2 class="section-title">Named state, named priority</h2>
+    <p class="section-blurb">Status is named directly: <span class="font-mono">active</span>, <span class="font-mono">paused</span>, <span class="font-mono">done</span>. Lowercase. No icons replacing words. Priority and state badges share visual weight; categories are slightly lighter.</p>
+    <div class="panel">
+      <div class="row">
+        <span class="row-label">Priority</span>
+        <span class="badge badge-low">low</span>
+        <span class="badge badge-medium">medium</span>
+        <span class="badge badge-high">high</span>
+        <span class="badge badge-critical">critical</span>
+      </div>
+      <div class="row">
+        <span class="row-label">Goal state</span>
+        <span class="badge badge-state badge-not_started">not started</span>
+        <span class="badge badge-state badge-actionable">actionable</span>
+        <span class="badge badge-state badge-scheduled">scheduled</span>
+        <span class="badge badge-state badge-waiting">waiting</span>
+        <span class="badge badge-state badge-done">done</span>
+        <span class="badge badge-state badge-canceled">canceled</span>
+      </div>
+      <div class="row">
+        <span class="row-label">Run status</span>
+        <span class="badge badge-actionable">active</span>
+        <span class="badge badge-waiting">paused</span>
+        <span class="badge" style="background: var(--bg-tertiary); color: var(--text-muted);">exhausted</span>
+        <span class="badge badge-critical">halted</span>
+        <span class="badge" style="background: var(--info-muted); color: var(--info);">completed</span>
+        <span class="badge" style="background: var(--bg-tertiary); color: var(--text-muted);">archived</span>
+      </div>
+      <div class="row">
+        <span class="row-label">Category</span>
+        <span class="chip" style="border-color: rgba(106, 163, 255, 0.3); background: rgba(106, 163, 255, 0.08); color: var(--accent);">work</span>
+        <span class="chip" style="border-color: rgba(200, 121, 255, 0.3); background: rgba(200, 121, 255, 0.08); color: var(--magenta);">health</span>
+        <span class="chip" style="border-color: rgba(52, 201, 138, 0.3); background: rgba(52, 201, 138, 0.08); color: var(--success);">learning</span>
+        <span class="chip" style="border-color: rgba(240, 169, 59, 0.3); background: rgba(240, 169, 59, 0.08); color: var(--warning);">home</span>
+      </div>
+      <div class="row">
+        <span class="row-label">Question shape</span>
+        <span class="shape-pill">timeline</span>
+        <span class="shape-pill">comparison</span>
+        <span class="shape-pill">survey</span>
+        <span class="shape-pill muted">audit</span>
+        <span class="shape-pill muted">lookup</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ INPUTS -->
+  <section class="section">
+    <div class="section-eyebrow">03 · Inputs & forms</div>
+    <h2 class="section-title">Quiet fields, mono labels</h2>
+    <p class="section-blurb">Field labels in mono caps signal "system field." Placeholders carry an example, not just a verb. Multiline inputs lean tall — research prompts can run several lines.</p>
+    <div class="panel">
+      <div class="field-grid">
+        <div class="field-row">
+          <label class="field-label">Goal title</label>
+          <input class="input" value="Migrate observability to OTLP" />
+        </div>
+        <div class="field-row">
+          <label class="field-label">Priority</label>
+          <div class="seg">
+            <button>low</button>
+            <button class="active">medium</button>
+            <button>high</button>
+            <button>critical</button>
+          </div>
+        </div>
+        <div class="field-row">
+          <label class="field-label">Budget USD</label>
+          <input class="input input-mono" value="2.50" />
+        </div>
+        <div class="field-row">
+          <label class="field-label">Model</label>
+          <input class="input input-mono" value="claude-haiku-4-5" />
+        </div>
+      </div>
+      <div class="field-row" style="margin-top: 16px;">
+        <label class="field-label">Prompt</label>
+        <textarea class="input textarea" placeholder="A timeline of how Detroit techno crossed the Atlantic — labels, DJs, pivotal venues 1986–94. Compare the Berlin and Frankfurt feedback loops…"></textarea>
+      </div>
+      <div class="row" style="margin-top: 16px;">
+        <span class="row-label">Checkbox</span>
+        <label style="display: inline-flex; align-items: center; gap: 8px; font-size: 13px;"><span class="checkbox checked"></span> Include archived</label>
+        <label style="display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary);"><span class="checkbox"></span> Group by category</label>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ CARDS -->
+  <section class="section">
+    <div class="section-eyebrow">04 · Cards & rows</div>
+    <h2 class="section-title">Goal row, run row, list row</h2>
+    <p class="section-blurb">Most lists in Construct are rows of this shape: a small interactive element on the left (checkbox, status stripe), the title and metadata in the center, a timestamp on the right. Hover lifts the border, never the elevation.</p>
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div class="card-row">
+        <span class="radio-circle"></span>
+        <div class="grow">
+          <div class="row-title">Migrate observability to OTLP</div>
+          <div class="row-meta">
+            <span class="badge badge-medium">medium</span>
+            <span class="badge badge-actionable">actionable</span>
+            <span class="chip" style="border-color: rgba(106, 163, 255, 0.3); background: rgba(106, 163, 255, 0.08); color: var(--accent);">work</span>
+          </div>
+          <div class="row-sub">3 todos · 2 notes · 1 habit</div>
+        </div>
+        <div style="font-size: 12px; color: var(--text-muted);">Mar 14</div>
+      </div>
+      <div class="card-row">
+        <span class="radio-circle checked"></span>
+        <div class="grow">
+          <div class="row-title" style="color: var(--text-muted); text-decoration: line-through;">Read "Designing Data-Intensive Applications" ch. 5</div>
+          <div class="row-meta">
+            <span class="badge badge-low">low</span>
+            <span class="badge badge-done">done</span>
+            <span class="chip" style="border-color: rgba(52, 201, 138, 0.3); background: rgba(52, 201, 138, 0.08); color: var(--success);">learning</span>
+          </div>
+        </div>
+        <div style="font-size: 12px; color: var(--text-muted);">2 days ago</div>
+      </div>
+      <div class="stripe-row">
+        <div class="stripe active"></div>
+        <div class="stripe-content">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+            <div>
+              <div class="row-title">Detroit techno → Berlin/Frankfurt feedback 1986–94</div>
+              <div class="row-meta">
+                <span class="shape-pill">timeline</span>
+                <span class="shape-pill">comparison</span>
+                <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);">music · culture</span>
+              </div>
+            </div>
+            <div style="text-align: right; font-size: 12px;">
+              <div style="color: var(--success);">● active</div>
+              <div style="color: var(--text-muted); margin-top: 4px; font-family: var(--font-mono);">142 findings · $1.18</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="stripe-row">
+        <div class="stripe completed"></div>
+        <div class="stripe-content">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+            <div>
+              <div class="row-title">Compare actor-model frameworks for low-latency RPC</div>
+              <div class="row-meta">
+                <span class="shape-pill">comparison</span>
+                <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);">software</span>
+              </div>
+            </div>
+            <div style="text-align: right; font-size: 12px;">
+              <div style="color: var(--info);">● completed</div>
+              <div style="color: var(--text-muted); margin-top: 4px; font-family: var(--font-mono);">38m · $0.42</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="stripe-row">
+        <div class="stripe halted"></div>
+        <div class="stripe-content">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+            <div>
+              <div class="row-title">Survey of vector DB vendors with on-prem licensing</div>
+              <div class="row-meta">
+                <span class="shape-pill">survey</span>
+                <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);">software · enterprise</span>
+              </div>
+            </div>
+            <div style="text-align: right; font-size: 12px;">
+              <div style="color: var(--error);">● halted</div>
+              <div style="color: var(--text-muted); margin-top: 4px; font-family: var(--font-mono);">budget exceeded · $2.51</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ COMPOSE -->
+  <section class="section">
+    <div class="section-eyebrow">05 · Compose box</div>
+    <h2 class="section-title">The hero input</h2>
+    <p class="section-blurb">The research landing has one job: capture an investigation. The compose box uses a soft accent gradient to claim primary attention. Templates are dashed-border pills — a quiet reminder, not a billboard.</p>
+    <div class="compose">
+      <h3 class="compose-h">What do you want to investigate?</h3>
+      <textarea class="input textarea" placeholder="A timeline of how Detroit techno crossed the Atlantic — labels, DJs, pivotal venues 1986–94. Compare the Berlin and Frankfurt feedback loops…"></textarea>
+      <div class="compose-foot">
+        <button class="btn btn-primary">Start research <span class="material-symbols-outlined">arrow_forward</span></button>
+        <span class="compose-hint">↵ to start · ⌘↵ to start &amp; open detail</span>
+        <span class="templates">
+          <span style="font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); align-self: center;">Start from:</span>
+          <span class="template-pill">timeline</span>
+          <span class="template-pill">comparison</span>
+          <span class="template-pill">survey</span>
+          <span class="template-pill">dynamics</span>
+          <span class="template-pill">audit</span>
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ TABS -->
+  <section class="section">
+    <div class="section-eyebrow">06 · Tabs & modal</div>
+    <h2 class="section-title">Navigation chrome</h2>
+    <p class="section-blurb">Tabs use a 2px accent underline — the same accent reappears throughout the system. Modals are simple <code style="font-family: var(--font-mono);">&lt;dialog&gt;</code> elements: header, body, footer; no arrival animation, no backdrop blur.</p>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start;">
+      <div class="panel">
+        <div class="tabs">
+          <div class="tab active">Findings <span style="color: var(--text-muted); font-family: var(--font-mono); font-size: 11px;">142</span></div>
+          <div class="tab">Plan</div>
+          <div class="tab">Workers</div>
+          <div class="tab">Trace</div>
+          <div class="tab">Config</div>
+        </div>
+        <div style="padding: 24px 0; color: var(--text-muted); font-size: 13px;">Tab content area · 14px body, generous line height when prose-heavy.</div>
+      </div>
+      <div class="modal">
+        <div class="modal-header">
+          <div class="modal-title">New goal</div>
+          <div class="modal-close">×</div>
+        </div>
+        <div class="modal-body">
+          <div class="field-row">
+            <label class="field-label">Title</label>
+            <input class="input" placeholder="What needs doing?" />
+          </div>
+          <div class="field-row">
+            <label class="field-label">Priority</label>
+            <div class="seg"><button>low</button><button class="active">medium</button><button>high</button><button>critical</button></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost">Cancel</button>
+          <button class="btn btn-primary">Create</button>
+        </div>
+      </div>
+    </div>
+  </section>
+<script src="../tokens/theme-picker.js"></script>
+</body>
+</html>

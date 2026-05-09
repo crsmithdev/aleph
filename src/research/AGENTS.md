@@ -76,5 +76,5 @@ The service file `src/services/sessions.ts` still uses `research_sessions` in it
 - Always generate IDs via `src/services/id.ts` — never inline `crypto.randomUUID()`
 - Budget checks happen in `engine.ts` before each iteration — never skip them
 - Dedup uses Jaccard similarity via `similarity.ts` — the threshold comes from session config's `follow_up.similarity_threshold`
-- When modifying the engine iteration loop, update `docs/spec/RESEARCH.md` to match
+- When modifying the engine iteration loop, update `docs/specs/RESEARCH.md` to match
 - Workers run as child processes spawned by `WorkerSupervisor` in `src/ui/api/src/worker-supervisor.ts`
