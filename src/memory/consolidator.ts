@@ -22,6 +22,16 @@ import { Database } from "bun:sqlite";
 import { trace } from "../trace.ts";
 import { reportHook } from "../hook-report.ts";
 import { dataPaths, externalPaths } from "../data/src/paths.ts";
+import {
+  ruleFingerprint, similarity, effectivenessScore,
+  type EffectivenessTable, type EffectivenessRow,
+} from "./rule-fingerprint.ts";
+
+// Effectiveness thresholds
+const PERSISTENT_THRESHOLD = 0.5;   // effectiveness below → flag with [!!]
+const PERSISTENT_MIN_INJECTIONS = 3;
+const INTERNALIZED_THRESHOLD = 0.95; // effectiveness above → drop from synthesis
+const INTERNALIZED_MIN_INJECTIONS = 8;
 
 const TAG = "consolidator";
 
@@ -125,6 +135,96 @@ try {
 
 trace(TAG, `loaded ${feedback.length} feedback entries (60d)`);
 
+// --- 3b. Score effectiveness of previously-injected rules ---
+// Read injection log + previous effectiveness state, then attribute new
+// feedback to past rules by token similarity. Update counts incrementally.
+//
+// Persistent issues (low effectiveness, many recurrences) bubble to the top
+// of the next learned-rules.md with a [!!] marker. Internalized rules
+// (high effectiveness, many injections) are dropped from synthesis input.
+
+interface SimpleFeedback { polarity: "positive" | "negative"; text: string; timestamp: string; session_id: string; }
+interface Injection { timestamp: string; session_id: string; rule_hash: string; rule_text: string; polarity: "avoid" | "validated"; }
+
+let effState: { lastProcessed: string; table: EffectivenessTable } = {
+  lastProcessed: new Date(0).toISOString(),
+  table: {},
+};
+try {
+  if (existsSync(dataPaths.ruleEffectiveness)) {
+    effState = JSON.parse(readFileSync(dataPaths.ruleEffectiveness, "utf8"));
+    if (!effState.table) effState.table = {};
+    if (!effState.lastProcessed) effState.lastProcessed = new Date(0).toISOString();
+  }
+} catch (e) { trace(TAG, `eff state read failed: ${(e as Error).message}`); }
+
+const injections: Injection[] = [];
+try {
+  if (existsSync(dataPaths.ruleInjections)) {
+    const lines = readFileSync(dataPaths.ruleInjections, "utf8").trim().split("\n").filter(Boolean);
+    for (const line of lines) {
+      try {
+        const r = JSON.parse(line);
+        if (r.timestamp > effState.lastProcessed) injections.push(r);
+      } catch { /* skip */ }
+    }
+  }
+} catch (e) { trace(TAG, `injections read failed: ${(e as Error).message}`); }
+
+// Build feedback index by session for quick lookup
+const fbBySession: Record<string, SimpleFeedback[]> = {};
+for (const f of feedback) {
+  // The full feedback row from §3 was typed FeedbackEntry; reuse a flatter shape
+  const sid = (f as any).session_id ?? "unknown";
+  const ts = (f as any).timestamp ?? "";
+  if (!fbBySession[sid]) fbBySession[sid] = [];
+  fbBySession[sid].push({
+    polarity: f.polarity,
+    text: [(f as any).prompt, (f as any).prior_text].filter(Boolean).join(" "),
+    timestamp: ts,
+    session_id: sid,
+  });
+}
+
+const SIM_THRESHOLD = 0.4;
+const now = new Date().toISOString();
+
+for (const inj of injections) {
+  const row: EffectivenessRow = effState.table[inj.rule_hash] ?? {
+    text: inj.rule_text,
+    polarity: inj.polarity,
+    first_seen: inj.timestamp,
+    last_seen: inj.timestamp,
+    injections: 0,
+    recurrences: 0,
+    reaffirmations: 0,
+  };
+  row.injections += 1;
+  row.last_seen = inj.timestamp > row.last_seen ? inj.timestamp : row.last_seen;
+
+  const sessFb = fbBySession[inj.session_id] ?? [];
+  for (const fb of sessFb) {
+    if (fb.timestamp <= inj.timestamp) continue; // feedback must come after injection
+    if (!fb.text) continue;
+    const sim = similarity(inj.rule_text, fb.text);
+    if (sim < SIM_THRESHOLD) continue;
+    if (fb.polarity === "negative" && row.polarity === "avoid") row.recurrences += 1;
+    else if (fb.polarity === "positive" && row.polarity === "validated") row.reaffirmations += 1;
+  }
+
+  effState.table[inj.rule_hash] = row;
+}
+
+effState.lastProcessed = now;
+
+// Garbage-collect rules unseen for >90 days
+const ninetyDaysAgo = new Date(Date.now() - 90 * 86400000).toISOString();
+for (const [hash, row] of Object.entries(effState.table)) {
+  if (row.last_seen < ninetyDaysAgo) delete effState.table[hash];
+}
+
+trace(TAG, `effectiveness: ${injections.length} new injections, ${Object.keys(effState.table).length} tracked rules`);
+
 // Need *some* signal to consolidate
 if (memories.length + feedback.length < 3) {
   trace(TAG, "insufficient signal for synthesis, skip");
@@ -138,7 +238,27 @@ if (memories.length + feedback.length < 3) {
 
 // Partition memories by polarity (validated tag → keep, otherwise → avoid)
 const validatedMems = memories.filter(m => m.tags.includes("validated"));
-const avoidMems = memories.filter(m => !m.tags.includes("validated"));
+let avoidMems = memories.filter(m => !m.tags.includes("validated"));
+
+// Drop memories that map to already-internalized rules — re-deriving them adds noise
+const internalizedRules = Object.values(effState.table).filter(row => {
+  const score = effectivenessScore(row);
+  return score !== null && score >= INTERNALIZED_THRESHOLD && row.injections >= INTERNALIZED_MIN_INJECTIONS;
+});
+if (internalizedRules.length > 0) {
+  const before = avoidMems.length;
+  avoidMems = avoidMems.filter(m => !internalizedRules.some(r => similarity(r.text, m.content) >= 0.4));
+  trace(TAG, `dropped ${before - avoidMems.length} memories matching ${internalizedRules.length} internalized rules`);
+}
+
+// Persistent issues — rules with low effectiveness despite multiple injections
+const persistentRules = Object.values(effState.table)
+  .filter(row => {
+    const score = effectivenessScore(row);
+    return score !== null && score < PERSISTENT_THRESHOLD && row.injections >= PERSISTENT_MIN_INJECTIONS;
+  })
+  .sort((a, b) => (effectivenessScore(a) ?? 1) - (effectivenessScore(b) ?? 1))
+  .slice(0, 5);
 
 // --- 4. Synthesis ---
 
@@ -171,6 +291,14 @@ async function llmSynthesize(): Promise<Rule[] | null> {
 
   if (negObs.length + posObs.length < 3) return null;
 
+  const persistentBlock = persistentRules.length > 0
+    ? [
+        "",
+        "PERSISTENT ISSUES — these rules were already learned, but the user keeps hitting them. Restate in fresh, sharper language so they land:",
+        ...persistentRules.map(r => `- "${r.text}" (${r.recurrences} recurrences in ${r.injections} injections)`),
+      ].join("\n")
+    : "";
+
   const userMsg = [
     "Distill the following observations from a developer's interactions with an AI coding assistant into 5-10 short, actionable behavioral rules.",
     "",
@@ -180,6 +308,7 @@ async function llmSynthesize(): Promise<Rule[] | null> {
     "VALIDATED — approaches the user explicitly affirmed:",
     ...posObs.map(s => `- ${s}`),
     toolSignalContext,
+    persistentBlock,
     "",
     "Each rule must:",
     "- be specific (mention concrete tools, files, or approaches when present)",
@@ -291,27 +420,65 @@ if (rules.length === 0) {
   trace(TAG, `jaccard fallback: ${rules.length} rules (${avoidMems.length} avoid, ${validatedMems.length} validated)`);
 }
 
+// --- 5b. Mark persistent issues + sort by effectiveness ---
+// Each rule gets its fingerprint resolved against effState. Rules that match
+// a persistent fingerprint get [!!] and bubble to the top. Internalized
+// matches are dropped — they were filtered from synthesis input but the model
+// may have re-derived them anyway.
+
+interface ScoredRule extends Rule { persistent: boolean; effHash: string; }
+const scored: ScoredRule[] = [];
+for (const r of rules) {
+  const hash = ruleFingerprint(r.rule);
+  const exact = effState.table[hash];
+  let persistent = false;
+  if (exact) {
+    const s = effectivenessScore(exact);
+    if (s !== null && s >= INTERNALIZED_THRESHOLD && exact.injections >= INTERNALIZED_MIN_INJECTIONS) continue;
+    if (s !== null && s < PERSISTENT_THRESHOLD && exact.injections >= PERSISTENT_MIN_INJECTIONS) persistent = true;
+  } else {
+    // No exact fingerprint — check fuzzy match against persistent rules
+    const fuzzy = persistentRules.find(p => similarity(p.text, r.rule) >= 0.5);
+    if (fuzzy) persistent = true;
+  }
+  scored.push({ ...r, persistent, effHash: hash });
+}
+
+scored.sort((a, b) => {
+  // persistent avoid > regular avoid > validated
+  const rank = (s: ScoredRule) => (s.persistent ? 0 : (s.polarity === "avoid" ? 1 : 2));
+  return rank(a) - rank(b);
+});
+
 // --- 6. Write learned-rules.md ---
 
-if (rules.length > 0) {
+if (scored.length > 0) {
   const tag = (p: string) => p === "validated" ? "[keep]" : "[avoid]";
   const content = [
     `# Learned Rules`,
     `_Auto-generated ${new Date().toISOString().slice(0, 10)} from ${memories.length} memories + ${feedback.length} feedback (${synthesizer})_`,
     "",
-    ...rules.map(r => r.frequency > 1
-      ? `- ${tag(r.polarity)} ${r.rule} _(${r.frequency}x)_`
-      : `- ${tag(r.polarity)} ${r.rule}`),
+    ...scored.map(r => {
+      const prefix = r.persistent ? "[!!] " : "";
+      const suffix = r.frequency > 1 ? ` _(${r.frequency}x)_` : "";
+      return `- ${prefix}${tag(r.polarity)} ${r.rule}${suffix}`;
+    }),
     "",
   ].join("\n");
   try {
     mkdirSync(dirname(dataPaths.learnedRules), { recursive: true });
     writeFileSync(dataPaths.learnedRules, content);
-    trace(TAG, `wrote ${rules.length} rules to learned-rules.md`);
+    trace(TAG, `wrote ${scored.length} rules to learned-rules.md (${scored.filter(r => r.persistent).length} persistent)`);
   } catch (e) {
     trace(TAG, `rules write failed: ${(e as Error).message}`);
   }
 }
+
+// --- 6b. Persist effectiveness state ---
+try {
+  mkdirSync(dirname(dataPaths.ruleEffectiveness), { recursive: true });
+  writeFileSync(dataPaths.ruleEffectiveness, JSON.stringify(effState, null, 2));
+} catch (e) { trace(TAG, `eff state write failed: ${(e as Error).message}`); }
 
 // --- 7. Store summary memory via memory-writer.py ---
 
@@ -321,8 +488,8 @@ const VENV_PYTHON = Bun.env.MEMORY_VENV_PYTHON ?? resolve(
 );
 const writerScript = resolve(dirname(Bun.main), "memory-writer.py");
 
-const summaryContent = rules.length > 0
-  ? `Consolidated ${memories.length}m+${feedback.length}f → ${rules.length} rules (${synthesizer}): ${rules.map(r => r.rule).join("; ")}`
+const summaryContent = scored.length > 0
+  ? `Consolidated ${memories.length}m+${feedback.length}f → ${scored.length} rules (${synthesizer}, ${scored.filter(r => r.persistent).length} persistent): ${scored.map(r => r.rule).join("; ")}`
   : `Consolidation ran on ${memories.length} memories — no recurring patterns found`;
 
 if (existsSync(VENV_PYTHON) && existsSync(writerScript)) {
@@ -352,7 +519,7 @@ updateState({ lastRun: new Date().toISOString(), lastMemoryCount: memories.lengt
 
 reportHook(TAG, "ConsolidationRun", "background", {
   decision: "pass",
-  detail: `${rules.length} rules from ${memories.length}m+${feedback.length}f via ${synthesizer}`,
+  detail: `${scored.length} rules from ${memories.length}m+${feedback.length}f via ${synthesizer}`,
 });
 
 trace(TAG, "consolidator done");

@@ -29,6 +29,8 @@ export const dataPaths = {
   toolSignals: resolve(DATA_ROOT, "signals", "tool-signals.jsonl"),
   consolidationState: resolve(DATA_ROOT, "signals", "consolidation-state.json"),
   learnedRules: resolve(DATA_ROOT, "signals", "learned-rules.md"),
+  ruleInjections: resolve(DATA_ROOT, "signals", "rule-injections.jsonl"),
+  ruleEffectiveness: resolve(DATA_ROOT, "signals", "rule-effectiveness.json"),
 };
 
 // Default matches memory-writer.py's default so reads and writes use the same DB.

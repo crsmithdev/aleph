@@ -72,6 +72,74 @@ function extractCorrections(t: TranscriptSummary): ExtractedMemory[] {
   return results.slice(0, 3);
 }
 
+/**
+ * Pure augmentation pass: turn raw signal files into memories.
+ * Inputs are JSONL text contents — caller does the I/O.
+ */
+export function augmentWithSignals(
+  base: ExtractedMemory[],
+  toolSignalsText: string,
+  feedbackText: string,
+  sessionId: string,
+): ExtractedMemory[] {
+  const out = [...base];
+
+  interface Fb { polarity: "positive" | "negative"; trigger: string; prompt: string; prior_text?: string; prior_tools?: string[]; prior_files?: string[]; }
+  const sessFb: Fb[] = [];
+  for (const line of feedbackText.trim().split("\n")) {
+    if (!line) continue;
+    try {
+      const sig = JSON.parse(line);
+      if (sig.session_id === sessionId) sessFb.push(sig);
+    } catch { /* skip */ }
+  }
+
+  // Re-edit signals — correlate with negative feedback on the same file
+  for (const line of toolSignalsText.trim().split("\n")) {
+    if (!line) continue;
+    let sig: any;
+    try { sig = JSON.parse(line); } catch { continue; }
+    if (sig.sessionId !== sessionId || sig.type !== "re-edit") continue;
+    const matched = sessFb.find(fb =>
+      fb.polarity === "negative" &&
+      Array.isArray(fb.prior_files) &&
+      fb.prior_files.some(f => f === sig.file || f.endsWith(sig.file) || sig.file.endsWith(f))
+    );
+    if (matched) {
+      const reaction = (matched.prior_text ?? "").slice(0, 100);
+      out.push({
+        content: `Approach friction on ${sig.file}: ${sig.count}+ edits, user pushed back "${matched.prompt.slice(0, 100)}"${reaction ? ` reacting to: ${reaction}` : ""}`,
+        tags: "preference,auto_extract,approach_friction",
+        memory_type: "observation",
+      });
+    } else {
+      out.push({
+        content: `Re-edit observation: ${sig.file} edited ${sig.count}+ times this session.`,
+        tags: "preference,auto_extract",
+        memory_type: "observation",
+      });
+    }
+  }
+
+  // Positive feedback → validated-approach memories (capped at 3)
+  let added = 0;
+  for (const sig of sessFb) {
+    if (sig.polarity !== "positive") continue;
+    if (!sig.prior_tools?.length && !sig.prior_text) continue;
+    const what = sig.prior_tools?.length ? sig.prior_tools.join("+") : "approach";
+    const where = sig.prior_files?.length ? ` on ${sig.prior_files.join(", ")}` : "";
+    const why = sig.prior_text ? `: ${String(sig.prior_text).slice(0, 150)}` : "";
+    out.push({
+      content: `Validated approach (user said "${sig.trigger}"): ${what}${where}${why}`,
+      tags: "preference,auto_extract,validated",
+      memory_type: "observation",
+    });
+    if (++added >= 3) break;
+  }
+
+  return out;
+}
+
 function extractErrorResolutions(t: TranscriptSummary): ExtractedMemory[] {
   const results: ExtractedMemory[] = [];
 

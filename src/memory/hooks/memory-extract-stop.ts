@@ -20,7 +20,7 @@ import { trace } from "../../trace.ts";
 import { reportHook } from "../../hook-report.ts";
 import { dataPaths } from "../../data/src/paths.ts";
 import { parseTranscript } from "../parse-transcript.ts";
-import { extractMemories, hasMemoryStore } from "../extract.ts";
+import { extractMemories, hasMemoryStore, augmentWithSignals } from "../extract.ts";
 
 const TAG = "memory-extract-stop";
 const VENV_PYTHON = Bun.env.MEMORY_VENV_PYTHON ?? resolve(
@@ -47,49 +47,16 @@ if (hasMemoryStore(transcript)) {
   process.exit(0);
 }
 
-const memories = extractMemories(transcript);
-trace(TAG, `extracted ${memories.length} memories`);
+const baseMemories = extractMemories(transcript);
+let toolSignalsText = "";
+let feedbackText = "";
+try { if (existsSync(dataPaths.toolSignals)) toolSignalsText = readFileSync(dataPaths.toolSignals, "utf8"); }
+catch (e) { trace(TAG, `tool signals read failed: ${(e as Error).message}`); }
+try { if (existsSync(dataPaths.feedback)) feedbackText = readFileSync(dataPaths.feedback, "utf8"); }
+catch (e) { trace(TAG, `feedback read failed: ${(e as Error).message}`); }
 
-// Augment with re-edit signals from this session
-if (existsSync(dataPaths.toolSignals)) {
-  try {
-    const lines = readFileSync(dataPaths.toolSignals, "utf8").trim().split("\n").filter(Boolean);
-    for (const line of lines) {
-      const sig = JSON.parse(line);
-      if (sig.sessionId !== input.session_id || sig.type !== "re-edit") continue;
-      memories.push({
-        content: `Re-edit friction: ${sig.file} required ${sig.count}+ edits in one session — approach needed multiple corrections.`,
-        tags: "preference,auto_extract",
-        memory_type: "observation",
-      });
-    }
-  } catch (e) { trace(TAG, `tool signals read failed: ${(e as Error).message}`); }
-}
-
-// Augment with positive-feedback signals from this session.
-// Each "great"/"perfect"/"thanks" gets stamped with the prior assistant turn
-// (tools, files, text excerpt) at capture time — convert that into a
-// "validated approach" memory so consolidation has an explicit positive corpus.
-if (existsSync(dataPaths.feedback)) {
-  try {
-    const lines = readFileSync(dataPaths.feedback, "utf8").trim().split("\n").filter(Boolean);
-    let added = 0;
-    for (const line of lines) {
-      const sig = JSON.parse(line);
-      if (sig.session_id !== input.session_id || sig.polarity !== "positive") continue;
-      if (!sig.prior_tools?.length && !sig.prior_text) continue;
-      const what = sig.prior_tools?.length ? sig.prior_tools.join("+") : "approach";
-      const where = sig.prior_files?.length ? ` on ${sig.prior_files.join(", ")}` : "";
-      const why = sig.prior_text ? `: ${String(sig.prior_text).slice(0, 150)}` : "";
-      memories.push({
-        content: `Validated approach (user said "${sig.trigger}"): ${what}${where}${why}`,
-        tags: "preference,auto_extract,validated",
-        memory_type: "observation",
-      });
-      if (++added >= 3) break;
-    }
-  } catch (e) { trace(TAG, `feedback signals read failed: ${(e as Error).message}`); }
-}
+const memories = augmentWithSignals(baseMemories, toolSignalsText, feedbackText, input.session_id ?? "unknown");
+trace(TAG, `extracted ${baseMemories.length} base + augmented to ${memories.length}`);
 
 if (memories.length === 0) { process.exit(0); }
 
