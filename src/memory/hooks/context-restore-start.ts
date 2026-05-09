@@ -22,7 +22,8 @@
  *
  * Never blocks (always exit 0). All failures are swallowed with trace logging.
  */
-import { existsSync, readFileSync, readdirSync, writeFileSync, statSync } from "fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync, statSync, appendFileSync } from "fs";
+import { ruleFingerprint, parseRuleLine } from "../rule-fingerprint.ts";
 import { resolve, dirname } from "path";
 import { execSync } from "child_process";
 import { Database } from "bun:sqlite";
@@ -188,17 +189,53 @@ try {
 }
 
 // Learned rules injection (auto-consolidated behavioral patterns)
+// Each rule that lands in the briefing is logged to rule-injections.jsonl so
+// the consolidator can later score effectiveness (recurrence vs. injection).
 try {
   if (existsSync(dataPaths.learnedRules)) {
     const stat = statSync(dataPaths.learnedRules);
     if (Date.now() - stat.mtimeMs < 30 * 24 * 60 * 60 * 1000) {
-      const ruleLines = readFileSync(dataPaths.learnedRules, "utf8")
-        .split("\n").filter(l => l.startsWith("- ")).join("\n").slice(0, 600);
+      const allRuleLines = readFileSync(dataPaths.learnedRules, "utf8")
+        .split("\n").filter(l => l.startsWith("- "));
+
+      // Build the truncated block, but track per-line so we know which rules
+      // actually fit in the 600-char budget (truncated lines don't count as injected).
+      const BUDGET = 600;
+      const injectedLines: string[] = [];
+      let used = 0;
+      for (const line of allRuleLines) {
+        const cost = line.length + 1; // +1 for newline
+        if (used + cost > BUDGET) break;
+        injectedLines.push(line);
+        used += cost;
+      }
+      const ruleLines = injectedLines.join("\n");
+
       if (ruleLines) {
         out.push("\n=== Learned Behavioral Rules ===");
         out.push(ruleLines);
         out.push("=========================");
-        trace(TAG, `injected learned-rules (${ruleLines.length} chars)`);
+        trace(TAG, `injected learned-rules (${ruleLines.length} chars, ${injectedLines.length} rules)`);
+
+        // Log each fully-injected rule with a stable fingerprint
+        const sessionId = input?.session_id ?? "unknown";
+        const ts = new Date().toISOString();
+        const records: string[] = [];
+        for (const line of injectedLines) {
+          const parsed = parseRuleLine(line);
+          if (!parsed) continue;
+          records.push(JSON.stringify({
+            timestamp: ts,
+            session_id: sessionId,
+            rule_hash: ruleFingerprint(parsed.text),
+            rule_text: parsed.text.slice(0, 200),
+            polarity: parsed.polarity ?? "avoid",
+          }));
+        }
+        if (records.length > 0) {
+          try { appendFileSync(dataPaths.ruleInjections, records.join("\n") + "\n"); }
+          catch (e) { trace(TAG, `injection log write failed: ${(e as Error).message}`); }
+        }
       }
     }
   }
