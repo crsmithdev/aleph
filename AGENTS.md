@@ -70,8 +70,8 @@ Never claim done without running tests against the actual running system.
 
 | Module | Read first |
 |---|---|
-| Hooks | `src/core/hooks/settings-hooks.json`, `src/trace.ts`, `docs/HOOKS.md` |
-| Skills | `src/skills/skill-rules.json`, `docs/SKILLS.md` |
+| Hooks | `src/core/hooks/settings-hooks.json`, `src/trace.ts`, `docs/specs/HOOKS.md` |
+| Skills | `src/skills/skill-rules.json`, `docs/specs/SKILLS.md` |
 | UI API | `src/ui/api/src/app.ts` (route registrations) |
 | UI Web | `src/ui/web/src/App.tsx` (router), `src/ui/web/src/pages/` |
 | Telemetry | `src/telemetry/src/adapter.ts`, `src/telemetry/src/reducers.ts` |

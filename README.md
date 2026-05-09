@@ -80,7 +80,7 @@ test.ts             test runner
 | PostToolUse (Edit/Write) | `src/core/hooks/quality-post-typecheck.ts` | core | TypeScript type-check on save |
 | PreCompact | `src/core/hooks/context-precompact-backup.ts` | core | Transcript backup before compaction |
 
-Full hook detail: [docs/HOOKS.md](docs/HOOKS.md)
+Full hook detail: [docs/specs/HOOKS.md](docs/specs/HOOKS.md)
 
 ---
 
@@ -104,7 +104,7 @@ Full hook detail: [docs/HOOKS.md](docs/HOOKS.md)
 | `/link` | Symlink `~/.claude/construct` to `src/` for live dev |
 | `/wipe` | Wipe all research data |
 
-Full skills and commands: [docs/SKILLS.md](docs/SKILLS.md)
+Full skills and commands: [docs/specs/SKILLS.md](docs/specs/SKILLS.md)
 
 ---
 
@@ -227,11 +227,12 @@ Place in `.env` at repo root; sourced automatically on dev start.
 | Document | Contents |
 |---|---|
 | [INSTALL.md](INSTALL.md) | Installation, upgrade, verification |
-| [docs/HOOKS.md](docs/HOOKS.md) | Hook scripts, events, behavior |
-| [docs/SKILLS.md](docs/SKILLS.md) | Skills, commands, routing |
+| [docs/specs/SPEC.md](docs/specs/SPEC.md) | Core + UI behavioral spec |
+| [docs/specs/HOOKS.md](docs/specs/HOOKS.md) | Hook scripts, events, behavior |
+| [docs/specs/SKILLS.md](docs/specs/SKILLS.md) | Skills, commands, routing |
+| [docs/specs/TESTS.md](docs/specs/TESTS.md) | Test suite listing |
+| [docs/specs/TELEMETRY.md](docs/specs/TELEMETRY.md) | Telemetry spec |
+| [docs/specs/RESEARCH.md](docs/specs/RESEARCH.md) | Research module spec |
+| [docs/specs/EVAL.md](docs/specs/EVAL.md) | Eval harness spec |
 | [docs/AGENTS.md](docs/AGENTS.md) | Agent definitions |
-| [docs/TESTS.md](docs/TESTS.md) | Test suite listing |
-| [docs/spec/CONSTRUCT.md](docs/spec/CONSTRUCT.md) | Core + UI behavioral spec |
-| [docs/spec/TELEMETRY.md](docs/spec/TELEMETRY.md) | Telemetry spec |
-| [docs/spec/RESEARCH.md](docs/spec/RESEARCH.md) | Research module spec |
-| [docs/spec/EVAL.md](docs/spec/EVAL.md) | Eval harness spec |
+| [docs/design/](docs/design/) | Design system tokens, kits, previews |

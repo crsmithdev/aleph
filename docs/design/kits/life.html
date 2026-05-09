@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="en" data-theme-id="material-palenight">
+<head>
+<meta charset="utf-8" />
+<title>Construct — Life kit</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="stylesheet" href="../tokens/colors_and_type.css" />
+<style>
+  body { padding: 48px 32px; max-width: 1280px; margin: 0 auto; }
+  .doc-title { font-family: var(--font-heading); font-size: 40px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 4px; }
+  .doc-sub { color: var(--text-muted); margin: 0 0 36px; font-size: 14px; max-width: 60ch; line-height: 1.6; }
+
+  /* App shell */
+  .shell { display: grid; grid-template-columns: 220px 1fr; background: var(--bg-primary); border-radius: 12px; overflow: hidden; border: 1px solid var(--border-primary); margin-bottom: 32px; }
+  .sidebar { background: var(--bg-secondary); border-right: 1px solid var(--border-primary); padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 16px; margin-bottom: 8px; border-bottom: 1px solid var(--border-primary); }
+  .brand .mark { width: 28px; height: 28px; border-radius: 6px; background: var(--bg-tertiary); display: grid; place-items: center; font-family: var(--font-heading); font-weight: 900; color: var(--accent); font-size: 14px; }
+  .brand .name { font-family: var(--font-heading); font-size: 15px; font-weight: 700; }
+  .nav-group { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); padding: 12px 8px 4px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 6px 8px; font-size: 13px; color: var(--text-secondary); border-radius: 4px; cursor: pointer; }
+  .nav-item.active { background: var(--accent-muted); color: var(--accent); font-weight: 500; }
+  .nav-item .material-symbols-outlined { font-size: 18px; color: var(--text-muted); }
+  .nav-item.active .material-symbols-outlined { color: var(--accent); }
+  .nav-item .badge-mini { margin-left: auto; font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px; }
+  .nav-item.active .badge-mini { background: var(--accent-muted); color: var(--accent); }
+
+  .main { padding: 24px; overflow: hidden; min-width: 0; }
+  .page-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .page-h .title { font-size: 18px; font-weight: 600; }
+  .page-h .meta { font-size: 13px; color: var(--text-muted); }
+
+  /* Quick add buttons */
+  .qa-row { display: flex; gap: 12px; margin-bottom: 24px; }
+  .qa { flex: 1; display: flex; align-items: center; gap: 12px; background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 12px; padding: 12px 16px; cursor: pointer; }
+  .qa:hover { background: var(--bg-tertiary); }
+  .qa-icon { width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center; }
+  .qa-icon .material-symbols-outlined { font-size: 20px; }
+  .qa-label { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+
+  /* Metric cards (4 up) */
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .metric { background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 12px; padding: 14px; }
+  .m-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 8px; }
+  .m-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+  .m-num { font-size: 32px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  .m-sub { margin-top: 6px; font-size: 12px; color: var(--text-muted); display: flex; gap: 12px; }
+  .m-sub .num { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+  /* Period card (Today/Yesterday) */
+  .period { background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; }
+  .period.hero { border: 2px solid rgba(106,163,255,0.4); }
+  .period-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .period-title { font-size: 14px; font-weight: 600; }
+  .period-title .date { color: var(--text-muted); font-weight: 400; }
+  .period .copy-btn { font-size: 12px; padding: 3px 10px; background: var(--bg-tertiary); border: 1px solid var(--border-primary); border-radius: 4px; color: var(--text-secondary); }
+
+  .seg-h { display: flex; align-items: center; gap: 8px; padding: 10px 0 4px; }
+  .seg-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+  .seg-count { font-size: 11px; color: var(--text-muted); }
+  .item { display: flex; gap: 6px; align-items: baseline; font-size: 13px; color: var(--text-secondary); padding: 1px 0; }
+  .item .glyph { font-weight: 700; }
+  .item.created .glyph { color: var(--accent); }
+  .item.completed .glyph { color: var(--success); }
+
+  .git { display: flex; gap: 12px; font-size: 13px; padding-top: 4px; }
+  .git .num { font-family: var(--font-mono); }
+  .git .add { color: var(--success); }
+  .git .del { color: var(--error); }
+  .git .commits { color: var(--accent); }
+  .commits-list { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+  .commit-row { display: flex; align-items: baseline; gap: 8px; }
+  .commit-row .sha { font-family: var(--font-mono); color: var(--text-muted); flex-shrink: 0; }
+  .commit-row .subj { color: var(--text-secondary); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .commit-row .stat { font-family: var(--font-mono); color: var(--text-muted); flex-shrink: 0; }
+
+  /* Goals page */
+  .filter-row { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; }
+  .filter-pill { padding: 4px 10px; font-size: 12px; border-radius: 4px; color: var(--text-muted); cursor: pointer; }
+  .filter-pill.active { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-secondary); }
+  .filter-input { flex: 1; max-width: 320px; background: var(--bg-secondary); border: 1px solid var(--border-primary); padding: 5px 10px; border-radius: 4px; color: var(--text-primary); font-size: 13px; }
+
+  .goal-row { display: flex; gap: 12px; align-items: flex-start; padding: 11px 14px; background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 8px; cursor: pointer; }
+  .goal-row + .goal-row { margin-top: 8px; }
+  .goal-row:hover { border-color: var(--border-secondary); }
+  .check { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border-secondary); flex-shrink: 0; margin-top: 1px; display: grid; place-items: center; }
+  .check.done { background: var(--success); border-color: var(--success); color: white; font-size: 11px; font-weight: 700; }
+  .goal-grow { flex: 1; min-width: 0; }
+  .goal-title { font-size: 13px; font-weight: 500; }
+  .goal-title.done { color: var(--text-muted); text-decoration: line-through; }
+  .goal-meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 5px; }
+  .goal-counts { font-size: 12px; color: var(--text-muted); margin-top: 5px; }
+  .goal-date { font-size: 12px; color: var(--text-muted); flex-shrink: 0; }
+
+  .badge { display: inline-flex; padding: 1px 7px; font-size: 11px; font-weight: 500; border-radius: 3px; }
+  .b-medium { background: var(--accent-muted); color: var(--accent); }
+  .b-high { background: var(--warning-muted); color: var(--warning); }
+  .b-low { background: var(--bg-tertiary); color: var(--text-muted); }
+  .b-actionable { background: var(--success-muted); color: var(--success); }
+  .b-waiting { background: var(--warning-muted); color: var(--warning); }
+  .b-done { background: var(--success-muted); color: var(--success); }
+  .chip { display: inline-flex; padding: 1px 7px; font-size: 11px; font-weight: 500; border-radius: 3px; border: 1px solid; }
+  .chip.work { color: var(--accent); border-color: rgba(106,163,255,0.3); background: rgba(106,163,255,0.06); }
+  .chip.health { color: var(--magenta); border-color: rgba(200,121,255,0.3); background: rgba(200,121,255,0.06); }
+  .chip.learning { color: var(--success); border-color: rgba(52,201,138,0.3); background: rgba(52,201,138,0.06); }
+  .chip.home { color: var(--warning); border-color: rgba(240,169,59,0.3); background: rgba(240,169,59,0.06); }
+
+  /* Habit page */
+  .habit-row { background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 8px; padding: 14px 16px; margin-bottom: 8px; }
+  .habit-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .habit-title { font-size: 14px; font-weight: 600; }
+  .habit-cadence { font-size: 11px; font-family: var(--font-mono); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-left: 8px; }
+  .habit-streak { font-size: 12px; color: var(--magenta); font-family: var(--font-mono); }
+  .heatmap { display: grid; grid-template-columns: repeat(28, 1fr); gap: 2px; }
+  .heat { aspect-ratio: 1; border-radius: 2px; }
+  .heat-0 { background: var(--bg-tertiary); }
+  .heat-1 { background: rgba(200,121,255,0.4); }
+  .heat-2 { background: rgba(200,121,255,0.7); }
+  .heat-3 { background: var(--magenta); }
+  .heat.future { background: var(--bg-primary); border: 1px dashed var(--border-primary); }
+
+  /* Section header */
+  .section-eyebrow { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.1em; font-size: 11px; color: var(--text-muted); margin: 32px 0 8px; }
+  .section-title { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
+  .section-blurb { color: var(--text-secondary); font-size: 13px; margin: 0 0 20px; max-width: 60ch; line-height: 1.6; }
+</style>
+</head>
+<body>
+  <h1 class="doc-title">Life kit</h1>
+  <p class="doc-sub">Goals, todos, habits, the daily summary. The "what did I do today" and "what comes next" surfaces. The user is themselves; the audience is one.</p>
+
+  <!-- ============================================================ SUMMARY -->
+  <div class="section-eyebrow">01 · Summary page</div>
+  <h2 class="section-title">Summary</h2>
+  <p class="section-blurb">The home screen. Three quick-add buttons for the things you create most. Four metric cards showing today / yesterday / 7-day. A 30-day stack. Period activity below: today is the hero, yesterday normal, last 7 days muted.</p>
+
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="mark">C</div><span class="name">construct</span></div>
+      <div class="nav-group">Life</div>
+      <div class="nav-item active"><span class="material-symbols-outlined">dashboard</span>Summary</div>
+      <div class="nav-item"><span class="material-symbols-outlined">target</span>Goals<span class="badge-mini">12</span></div>
+      <div class="nav-item"><span class="material-symbols-outlined">check_circle</span>Todos<span class="badge-mini">38</span></div>
+      <div class="nav-item"><span class="material-symbols-outlined">autorenew</span>Habits<span class="badge-mini">7</span></div>
+      <div class="nav-group">Research</div>
+      <div class="nav-item"><span class="material-symbols-outlined">science</span>Investigate</div>
+      <div class="nav-item"><span class="material-symbols-outlined">history</span>History</div>
+      <div class="nav-group">Observability</div>
+      <div class="nav-item"><span class="material-symbols-outlined">monitoring</span>Overview</div>
+      <div class="nav-item"><span class="material-symbols-outlined">build</span>Tools</div>
+    </aside>
+
+    <main class="main">
+      <div class="page-h">
+        <div class="title">Summary</div>
+        <div class="meta">Friday, March 14, 2025</div>
+      </div>
+
+      <div class="qa-row">
+        <div class="qa">
+          <div class="qa-icon" style="background: var(--accent-muted); color: var(--accent);"><span class="material-symbols-outlined">add</span></div>
+          <span class="qa-label">New goal</span>
+        </div>
+        <div class="qa">
+          <div class="qa-icon" style="background: var(--success-muted); color: var(--success);"><span class="material-symbols-outlined">check</span></div>
+          <span class="qa-label">New todo</span>
+        </div>
+        <div class="qa">
+          <div class="qa-icon" style="background: rgba(200,121,255,0.15); color: var(--magenta);"><span class="material-symbols-outlined">autorenew</span></div>
+          <span class="qa-label">New habit</span>
+        </div>
+      </div>
+
+      <div class="metrics">
+        <div class="metric">
+          <div class="m-label">Goals created</div>
+          <div class="m-row">
+            <div>
+              <div class="m-num" style="color: var(--accent);">2</div>
+              <div class="m-sub"><span><span class="num">1</span> yest</span><span><span class="num">5</span> 7d</span></div>
+            </div>
+            <svg viewBox="0 0 100 32" style="width:90px;height:32px;"><polyline fill="none" stroke="#6aa3ff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="0,24 16,16 32,20 50,10 66,14 82,6 100,12"/></svg>
+          </div>
+        </div>
+        <div class="metric">
+          <div class="m-label">Goals completed</div>
+          <div class="m-row">
+            <div>
+              <div class="m-num" style="color: var(--success);">4</div>
+              <div class="m-sub"><span><span class="num">2</span> yest</span><span><span class="num">11</span> 7d</span></div>
+            </div>
+            <svg viewBox="0 0 100 32" style="width:90px;height:32px;"><polyline fill="none" stroke="#34c98a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="0,28 16,22 32,16 50,20 66,8 82,12 100,4"/></svg>
+          </div>
+        </div>
+        <div class="metric">
+          <div class="m-label">Todos done</div>
+          <div class="m-row">
+            <div>
+              <div class="m-num" style="color: var(--success);">12</div>
+              <div class="m-sub"><span><span class="num">8</span> yest</span><span><span class="num">47</span> 7d</span></div>
+            </div>
+            <svg viewBox="0 0 100 32" style="width:90px;height:32px;"><polyline fill="none" stroke="#34c98a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="0,18 16,22 32,12 50,14 66,6 82,10 100,4"/></svg>
+          </div>
+        </div>
+        <div class="metric">
+          <div class="m-label">Habits hit</div>
+          <div class="m-row">
+            <div>
+              <div class="m-num" style="color: var(--magenta);">5</div>
+              <div class="m-sub"><span><span class="num">5</span> yest</span><span><span class="num">31</span> 7d</span></div>
+            </div>
+            <svg viewBox="0 0 100 32" style="width:90px;height:32px;"><polyline fill="none" stroke="#c879ff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="0,12 16,12 32,14 50,10 66,8 82,12 100,6"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Period: Today (hero) -->
+      <div class="period hero">
+        <div class="period-h">
+          <div class="period-title">Today <span class="date">— Friday, March 14, 2025</span></div>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <div class="seg-h"><span class="seg-label">Goals</span><span class="seg-count">(2)</span></div>
+        <div class="item created"><span class="glyph">+</span><span>Migrate observability to OTLP</span></div>
+        <div class="item completed"><span class="glyph">✓</span><span>Draft research kickoff doc</span></div>
+
+        <div class="seg-h"><span class="seg-label">Todos finished</span><span class="seg-count">(4)</span></div>
+        <div class="item completed"><span class="glyph">✓</span><span>Reply to Naomi about the staging key</span></div>
+        <div class="item completed"><span class="glyph">✓</span><span>Run schema migration on stage db</span></div>
+        <div class="item completed"><span class="glyph">✓</span><span>Read DDIA ch. 5</span></div>
+        <div class="item completed"><span class="glyph">✓</span><span>Cancel old domain renewal</span></div>
+
+        <div class="seg-h"><span class="seg-label">Habits</span><span class="seg-count">(3)</span></div>
+        <div class="item completed"><span class="glyph">✓</span><span>20 min walk</span></div>
+        <div class="item completed"><span class="glyph">✓</span><span>Reading</span></div>
+        <div class="item completed"><span class="glyph">✓</span><span>Inbox zero</span></div>
+
+        <div class="seg-h"><span class="seg-label">Construct</span></div>
+        <div class="git">
+          <span><span class="num add">+412</span><span style="color: var(--text-muted);"> LOC</span></span>
+          <span><span class="num del">−87</span><span style="color: var(--text-muted);"> LOC</span></span>
+          <span><span class="num commits">7</span><span style="color: var(--text-secondary);"> commits</span></span>
+        </div>
+        <div class="commits-list">
+          <div class="commit-row"><span class="sha">a3f2b1c</span><span class="subj">research: stream findings via SSE</span><span class="stat"><span class="add">+148</span> / <span class="del">−12</span></span></div>
+          <div class="commit-row"><span class="sha">e7c9d04</span><span class="subj">feat(life): habit heatmap component</span><span class="stat"><span class="add">+96</span> / <span class="del">−4</span></span></div>
+          <div class="commit-row"><span class="sha">b21f8a7</span><span class="subj">fix(observ): tool latency p99 calc</span><span class="stat"><span class="add">+38</span> / <span class="del">−24</span></span></div>
+        </div>
+      </div>
+
+      <!-- Yesterday -->
+      <div class="period">
+        <div class="period-h">
+          <div class="period-title" style="font-size: 13px;">Yesterday <span class="date">— Thursday, March 13, 2025</span></div>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <div class="seg-h"><span class="seg-label">Todos finished</span><span class="seg-count">(8)</span></div>
+        <div class="item completed"><span class="glyph">✓</span><span>Spec out the run-plan editor</span></div>
+        <div class="item completed"><span class="glyph">✓</span><span>Pair with Liam on the SSE dropouts</span></div>
+        <div class="item completed"><span class="glyph">✓</span><span>+ 6 more</span></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ============================================================ GOALS -->
+  <div class="section-eyebrow">02 · Goals page</div>
+  <h2 class="section-title">Goals — sorted by priority, then date</h2>
+  <p class="section-blurb">Goals are the spine. Filter pills along the top. Search input next to them. Each row carries a checkbox, the title, priority + state + category badges, child counts, and the last-updated date.</p>
+
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="mark">C</div><span class="name">construct</span></div>
+      <div class="nav-group">Life</div>
+      <div class="nav-item"><span class="material-symbols-outlined">dashboard</span>Summary</div>
+      <div class="nav-item active"><span class="material-symbols-outlined">target</span>Goals<span class="badge-mini">12</span></div>
+      <div class="nav-item"><span class="material-symbols-outlined">check_circle</span>Todos<span class="badge-mini">38</span></div>
+      <div class="nav-item"><span class="material-symbols-outlined">autorenew</span>Habits<span class="badge-mini">7</span></div>
+      <div class="nav-group">Research</div>
+      <div class="nav-item"><span class="material-symbols-outlined">science</span>Investigate</div>
+      <div class="nav-group">Observability</div>
+      <div class="nav-item"><span class="material-symbols-outlined">monitoring</span>Overview</div>
+    </aside>
+
+    <main class="main">
+      <div class="page-h">
+        <div class="title">Goals</div>
+        <button style="background: var(--accent); color: var(--bg-primary); border: none; padding: 6px 14px; border-radius: 4px; font-weight: 600; font-size: 13px; display: inline-flex; align-items: center; gap: 4px;"><span class="material-symbols-outlined" style="font-size: 16px;">add</span>New goal</button>
+      </div>
+
+      <div class="filter-row">
+        <input class="filter-input" placeholder="Search goals…" />
+        <span class="filter-pill active">All <span style="color: var(--text-muted);">12</span></span>
+        <span class="filter-pill">Actionable</span>
+        <span class="filter-pill">Waiting</span>
+        <span class="filter-pill">Done</span>
+        <span class="filter-pill">Archived</span>
+      </div>
+
+      <div class="goal-row">
+        <span class="check"></span>
+        <div class="goal-grow">
+          <div style="display: flex; justify-content: space-between; gap: 8px; align-items: flex-start;">
+            <span class="goal-title">Migrate observability to OTLP</span>
+            <span class="goal-date">Mar 14</span>
+          </div>
+          <div class="goal-meta">
+            <span class="badge b-high">high</span>
+            <span class="badge b-actionable">actionable</span>
+            <span class="chip work">work</span>
+          </div>
+          <div class="goal-counts">3 todos · 2 notes · 1 habit</div>
+        </div>
+      </div>
+      <div class="goal-row">
+        <span class="check"></span>
+        <div class="goal-grow">
+          <div style="display: flex; justify-content: space-between; gap: 8px; align-items: flex-start;">
+            <span class="goal-title">Read "Designing Data-Intensive Applications"</span>
+            <span class="goal-date">Mar 12</span>
+          </div>
+          <div class="goal-meta">
+            <span class="badge b-medium">medium</span>
+            <span class="badge b-actionable">actionable</span>
+            <span class="chip learning">learning</span>
+          </div>
+          <div class="goal-counts">5 todos · 1 habit</div>
+        </div>
+      </div>
+      <div class="goal-row">
+        <span class="check"></span>
+        <div class="goal-grow">
+          <div style="display: flex; justify-content: space-between; gap: 8px; align-items: flex-start;">
+            <span class="goal-title">Sort out the kitchen renovation quote</span>
+            <span class="goal-date">Mar 10</span>
+          </div>
+          <div class="goal-meta">
+            <span class="badge b-medium">medium</span>
+            <span class="badge b-waiting">waiting</span>
+            <span class="chip home">home</span>
+          </div>
+          <div class="goal-counts">2 todos · 1 note</div>
+        </div>
+      </div>
+      <div class="goal-row">
+        <span class="check done">✓</span>
+        <div class="goal-grow">
+          <div style="display: flex; justify-content: space-between; gap: 8px; align-items: flex-start;">
+            <span class="goal-title done">Get into a 4×/week running cadence</span>
+            <span class="goal-date">Mar 8</span>
+          </div>
+          <div class="goal-meta">
+            <span class="badge b-low">low</span>
+            <span class="badge b-done">done</span>
+            <span class="chip health">health</span>
+          </div>
+        </div>
+      </div>
+      <div class="goal-row">
+        <span class="check"></span>
+        <div class="goal-grow">
+          <div style="display: flex; justify-content: space-between; gap: 8px; align-items: flex-start;">
+            <span class="goal-title">Draft Q2 OKR doc</span>
+            <span class="goal-date">Mar 6</span>
+          </div>
+          <div class="goal-meta">
+            <span class="badge b-high">high</span>
+            <span class="badge b-actionable">actionable</span>
+            <span class="chip work">work</span>
+          </div>
+          <div class="goal-counts">4 todos</div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ============================================================ HABITS -->
+  <div class="section-eyebrow">03 · Habits page</div>
+  <h2 class="section-title">Habits — magenta is the personality color</h2>
+  <p class="section-blurb">Each habit gets a row with a 28-day heatmap, current streak, and cadence label. Magenta is reserved for habits — it's the one bit of personality in an otherwise muted palette, and it earns the role.</p>
+
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="mark">C</div><span class="name">construct</span></div>
+      <div class="nav-group">Life</div>
+      <div class="nav-item"><span class="material-symbols-outlined">dashboard</span>Summary</div>
+      <div class="nav-item"><span class="material-symbols-outlined">target</span>Goals<span class="badge-mini">12</span></div>
+      <div class="nav-item"><span class="material-symbols-outlined">check_circle</span>Todos<span class="badge-mini">38</span></div>
+      <div class="nav-item active"><span class="material-symbols-outlined">autorenew</span>Habits<span class="badge-mini">7</span></div>
+      <div class="nav-group">Research</div>
+      <div class="nav-item"><span class="material-symbols-outlined">science</span>Investigate</div>
+      <div class="nav-group">Observability</div>
+      <div class="nav-item"><span class="material-symbols-outlined">monitoring</span>Overview</div>
+    </aside>
+
+    <main class="main">
+      <div class="page-h">
+        <div class="title">Habits</div>
+        <button style="background: var(--magenta); color: var(--bg-primary); border: none; padding: 6px 14px; border-radius: 4px; font-weight: 600; font-size: 13px; display: inline-flex; align-items: center; gap: 4px;"><span class="material-symbols-outlined" style="font-size: 16px;">add</span>New habit</button>
+      </div>
+
+      <div class="habit-row">
+        <div class="habit-h">
+          <div>
+            <span class="habit-title">20-minute walk</span>
+            <span class="habit-cadence">daily</span>
+          </div>
+          <span class="habit-streak">streak · 12 days</span>
+        </div>
+        <div class="heatmap">
+          <span class="heat heat-3"></span><span class="heat heat-2"></span><span class="heat heat-1"></span><span class="heat heat-0"></span><span class="heat heat-2"></span><span class="heat heat-3"></span><span class="heat heat-3"></span>
+          <span class="heat heat-3"></span><span class="heat heat-1"></span><span class="heat heat-0"></span><span class="heat heat-2"></span><span class="heat heat-3"></span><span class="heat heat-3"></span><span class="heat heat-3"></span>
+          <span class="heat heat-2"></span><span class="heat heat-3"></span><span class="heat heat-3"></span><span class="heat heat-3"></span><span class="heat heat-3"></span><span class="heat heat-3"></span><span class="heat heat-3"></span>
+          <span class="heat heat-3"></span><span class="heat heat-3"></span><span class="heat heat-3"></span><span class="heat heat-3"></span><span class="heat heat-3"></span><span class="heat heat-3"></span><span class="heat heat-3"></span>
+        </div>
+      </div>
+
+      <div class="habit-row">
+        <div class="habit-h">
+          <div>
+            <span class="habit-title">Read 30 minutes</span>
+            <span class="habit-cadence">daily</span>
+          </div>
+          <span class="habit-streak">streak · 4 days</span>
+        </div>
+        <div class="heatmap">
+          <span class="heat heat-2"></span><span class="heat heat-2"></span><span class="heat heat-0"></span><span class="heat heat-3"></span><span class="heat heat-1"></span><span class="heat heat-0"></span><span class="heat heat-2"></span>
+          <span class="heat heat-3"></span><span class="heat heat-2"></span><span class="heat heat-0"></span><span class="heat heat-1"></span><span class="heat heat-3"></span><span class="heat heat-2"></span><span class="heat heat-1"></span>
+          <span class="heat heat-0"></span><span class="heat heat-2"></span><span class="heat heat-3"></span><span class="heat heat-1"></span><span class="heat heat-0"></span><span class="heat heat-2"></span><span class="heat heat-3"></span>
+          <span class="heat heat-3"></span><span class="heat heat-3"></span><span class="heat heat-3"></span><span class="heat heat-3"></span><span class="heat heat-2"></span><span class="heat heat-3"></span><span class="heat heat-3"></span>
+        </div>
+      </div>
+
+      <div class="habit-row">
+        <div class="habit-h">
+          <div>
+            <span class="habit-title">Strength training</span>
+            <span class="habit-cadence">3× weekly</span>
+          </div>
+          <span class="habit-streak">3 of 3 this week</span>
+        </div>
+        <div class="heatmap">
+          <span class="heat heat-3"></span><span class="heat heat-0"></span><span class="heat heat-0"></span><span class="heat heat-3"></span><span class="heat heat-0"></span><span class="heat heat-0"></span><span class="heat heat-3"></span>
+          <span class="heat heat-0"></span><span class="heat heat-3"></span><span class="heat heat-0"></span><span class="heat heat-3"></span><span class="heat heat-0"></span><span class="heat heat-3"></span><span class="heat heat-0"></span>
+          <span class="heat heat-3"></span><span class="heat heat-0"></span><span class="heat heat-3"></span><span class="heat heat-0"></span><span class="heat heat-0"></span><span class="heat heat-3"></span><span class="heat heat-0"></span>
+          <span class="heat heat-3"></span><span class="heat heat-0"></span><span class="heat heat-3"></span><span class="heat heat-0"></span><span class="heat heat-3"></span><span class="heat heat-3"></span><span class="heat heat-0"></span>
+        </div>
+      </div>
+
+      <div class="habit-row">
+        <div class="habit-h">
+          <div>
+            <span class="habit-title">Inbox zero by EOD</span>
+            <span class="habit-cadence">weekdays</span>
+          </div>
+          <span class="habit-streak" style="color: var(--text-muted);">streak · 1 day</span>
+        </div>
+        <div class="heatmap">
+          <span class="heat heat-2"></span><span class="heat heat-1"></span><span class="heat heat-0"></span><span class="heat heat-2"></span><span class="heat heat-1"></span><span class="heat heat-0"></span><span class="heat heat-0"></span>
+          <span class="heat heat-1"></span><span class="heat heat-2"></span><span class="heat heat-1"></span><span class="heat heat-0"></span><span class="heat heat-2"></span><span class="heat heat-0"></span><span class="heat heat-0"></span>
+          <span class="heat heat-2"></span><span class="heat heat-1"></span><span class="heat heat-2"></span><span class="heat heat-1"></span><span class="heat heat-0"></span><span class="heat heat-0"></span><span class="heat heat-0"></span>
+          <span class="heat heat-1"></span><span class="heat heat-2"></span><span class="heat heat-0"></span><span class="heat heat-1"></span><span class="heat heat-3"></span><span class="heat future"></span><span class="heat future"></span>
+        </div>
+      </div>
+    </main>
+  </div>
+<script src="../tokens/theme-picker.js"></script>
+</body>
+</html>

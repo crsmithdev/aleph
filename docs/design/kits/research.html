@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en" data-theme-id="material-palenight">
+<head>
+<meta charset="utf-8" />
+<title>Construct — Research kit</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="stylesheet" href="../tokens/colors_and_type.css" />
+<style>
+  body { padding: 48px 32px; max-width: 1280px; margin: 0 auto; }
+  .doc-title { font-family: var(--font-heading); font-size: 40px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 4px; }
+  .doc-sub { color: var(--text-muted); margin: 0 0 36px; font-size: 14px; max-width: 60ch; line-height: 1.6; }
+
+  /* App shell */
+  .shell { display: grid; grid-template-columns: 220px 1fr; background: var(--bg-primary); border-radius: 12px; overflow: hidden; border: 1px solid var(--border-primary); margin-bottom: 32px; }
+  .sidebar { background: var(--bg-secondary); border-right: 1px solid var(--border-primary); padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 16px; margin-bottom: 8px; border-bottom: 1px solid var(--border-primary); }
+  .brand .mark { width: 28px; height: 28px; border-radius: 6px; background: var(--bg-tertiary); display: grid; place-items: center; font-family: var(--font-heading); font-weight: 900; color: var(--accent); font-size: 14px; }
+  .brand .name { font-family: var(--font-heading); font-size: 15px; font-weight: 700; }
+  .nav-group { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); padding: 12px 8px 4px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 6px 8px; font-size: 13px; color: var(--text-secondary); border-radius: 4px; }
+  .nav-item.active { background: var(--accent-muted); color: var(--accent); font-weight: 500; }
+  .nav-item .material-symbols-outlined { font-size: 18px; color: var(--text-muted); }
+  .nav-item.active .material-symbols-outlined { color: var(--accent); }
+  .nav-item .badge-mini { margin-left: auto; font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px; }
+
+  .main { padding: 24px; overflow: hidden; min-width: 0; }
+  .page-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .page-h .title { font-size: 18px; font-weight: 600; }
+  .page-h .meta { font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); }
+
+  .section-eyebrow { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.1em; font-size: 11px; color: var(--text-muted); margin: 32px 0 8px; }
+  .section-title { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
+  .section-blurb { color: var(--text-secondary); font-size: 13px; margin: 0 0 20px; max-width: 64ch; line-height: 1.6; }
+
+  /* Investigate hero */
+  .ask-card { background: linear-gradient(180deg, rgba(106,163,255,0.08) 0%, var(--bg-secondary) 60%); border: 1px solid rgba(106,163,255,0.3); border-radius: 12px; padding: 22px 24px; margin-bottom: 16px; }
+  .ask-card h3 { margin: 0 0 12px; font-size: 17px; font-weight: 600; }
+  .ask-area { width: 100%; min-height: 120px; background: var(--bg-primary); border: 1px solid var(--border-primary); border-radius: 8px; padding: 12px 14px; color: var(--text-primary); font-family: var(--font-sans); font-size: 14px; line-height: 1.5; resize: none; }
+  .ask-row { display: flex; align-items: center; gap: 14px; margin-top: 14px; flex-wrap: wrap; }
+  .opt-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; font-size: 12px; background: var(--bg-tertiary); border: 1px solid var(--border-primary); border-radius: 4px; color: var(--text-secondary); }
+  .opt-chip .material-symbols-outlined { font-size: 14px; }
+  .start-btn { background: var(--accent); color: var(--bg-primary); border: none; padding: 8px 18px; border-radius: 4px; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; gap: 4px; }
+  .keys { font-size: 11px; color: var(--text-muted); margin-left: auto; font-family: var(--font-mono); }
+
+  /* Recommended cards */
+  .recos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .reco { background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 8px; padding: 12px 14px; }
+  .reco-eyebrow { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 6px; }
+  .reco-title { font-size: 13px; font-weight: 500; line-height: 1.4; }
+  .reco-meta { font-size: 11px; color: var(--text-muted); margin-top: 6px; font-family: var(--font-mono); }
+
+  /* Run detail */
+  .run-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--border-primary); margin-bottom: 16px; }
+  .run-q { font-size: 16px; font-weight: 600; line-height: 1.4; }
+  .run-meta { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted); margin-top: 6px; font-family: var(--font-mono); }
+  .run-controls { display: flex; gap: 6px; flex-shrink: 0; }
+  .run-controls button { background: var(--bg-tertiary); border: 1px solid var(--border-primary); color: var(--text-secondary); padding: 4px 10px; border-radius: 4px; font-size: 12px; }
+  .run-controls .pause { color: var(--warning); }
+  .run-controls .stop { color: var(--error); }
+
+  .status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; }
+  .status-running { background: var(--accent-muted); color: var(--accent); }
+  .status-running .dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; animation: pulse 1.6s infinite; }
+  .status-done { background: var(--success-muted); color: var(--success); }
+  .status-error { background: var(--error-muted); color: var(--error); }
+  .status-paused { background: var(--warning-muted); color: var(--warning); }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  /* Workers grid */
+  .workers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+  .worker { background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 8px; padding: 12px 14px; }
+  .worker-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .worker-id { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+  .worker-task { font-size: 12px; line-height: 1.5; color: var(--text-secondary); margin-bottom: 8px; min-height: 36px; }
+  .worker-stats { display: flex; gap: 10px; font-size: 11px; font-family: var(--font-mono); color: var(--text-muted); padding-top: 8px; border-top: 1px solid var(--border-primary); }
+
+  /* Findings stream */
+  .findings-h { display: flex; justify-content: space-between; align-items: baseline; margin: 20px 0 10px; }
+  .findings-h .label { font-size: 14px; font-weight: 600; }
+  .findings-h .count { font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); }
+  .finding { display: grid; grid-template-columns: 64px 80px 1fr; gap: 12px; padding: 10px 12px; background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 6px; margin-bottom: 6px; align-items: baseline; }
+  .finding .ts { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+  .finding .src { font-family: var(--font-mono); font-size: 11px; }
+  .src.web { color: var(--magenta); }
+  .src.tool { color: var(--success); }
+  .src.synth { color: var(--accent); }
+  .finding .text { font-size: 13px; line-height: 1.5; color: var(--text-primary); }
+  .finding .text .url { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+  .finding.synth { border-left: 2px solid var(--accent); }
+
+  /* History page */
+  .hist-row { display: grid; grid-template-columns: 110px 100px 1fr 80px 80px 80px; gap: 16px; padding: 11px 14px; background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 6px; margin-bottom: 6px; align-items: center; font-size: 13px; }
+  .hist-row.header { background: transparent; border: none; padding: 4px 14px; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+  .hist-row .ts { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
+  .hist-row .q { color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hist-row .num { font-family: var(--font-mono); color: var(--text-secondary); font-variant-numeric: tabular-nums; text-align: right; }
+</style>
+</head>
+<body>
+  <h1 class="doc-title">Research kit</h1>
+  <p class="doc-sub">Investigate, history, run detail. Multi-agent research surfaces — the user kicks off a question, fans out to workers, then watches findings stream in. The most agent-native part of construct.</p>
+
+  <!-- ============================================================ INVESTIGATE -->
+  <div class="section-eyebrow">01 · Investigate (start)</div>
+  <h2 class="section-title">Ask, then go</h2>
+  <p class="section-blurb">A single textarea is the front door. Plan controls (depth, breadth, sources, budget) sit as quiet chips below it. Recommended starts come from the user's own goals and todos — not generic suggestions.</p>
+
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="mark">C</div><span class="name">construct</span></div>
+      <div class="nav-group">Life</div>
+      <div class="nav-item"><span class="material-symbols-outlined">dashboard</span>Summary</div>
+      <div class="nav-item"><span class="material-symbols-outlined">target</span>Goals<span class="badge-mini">12</span></div>
+      <div class="nav-group">Research</div>
+      <div class="nav-item active"><span class="material-symbols-outlined">science</span>Investigate</div>
+      <div class="nav-item"><span class="material-symbols-outlined">history</span>History<span class="badge-mini">142</span></div>
+      <div class="nav-item"><span class="material-symbols-outlined">memory</span>Workers<span class="badge-mini">3</span></div>
+      <div class="nav-item"><span class="material-symbols-outlined">tune</span>Config</div>
+      <div class="nav-group">Observability</div>
+      <div class="nav-item"><span class="material-symbols-outlined">monitoring</span>Overview</div>
+    </aside>
+
+    <main class="main">
+      <div class="page-h">
+        <div class="title">Investigate</div>
+        <div class="meta">3 runs in flight · 142 total</div>
+      </div>
+
+      <div class="ask-card">
+        <h3>What do you want to investigate?</h3>
+        <textarea class="ask-area" placeholder="A timeline of how Detroit techno crossed the Atlantic — labels, DJs, pivotal venues 1986–94, plus the UK rave scene that picked it up.">A timeline of how Detroit techno crossed the Atlantic — labels, DJs, pivotal venues 1986–94, plus the UK rave scene that picked it up.</textarea>
+        <div class="ask-row">
+          <span class="opt-chip"><span class="material-symbols-outlined">layers</span>Depth · standard</span>
+          <span class="opt-chip"><span class="material-symbols-outlined">call_split</span>Breadth · 6 workers</span>
+          <span class="opt-chip"><span class="material-symbols-outlined">public</span>Web + arxiv</span>
+          <span class="opt-chip"><span class="material-symbols-outlined">payments</span>Cap $0.50</span>
+          <span class="keys">↵ start · ⌘↵ start &amp; open</span>
+        </div>
+        <div style="margin-top: 14px;">
+          <button class="start-btn">Start research <span class="material-symbols-outlined" style="font-size: 16px;">arrow_forward</span></button>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: baseline; margin: 24px 0 8px;">
+        <div style="font-size: 13px; font-weight: 600;">Or pick up where you left off</div>
+        <div style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">RECOMMENDED · FROM YOUR GOALS</div>
+      </div>
+      <div class="recos">
+        <div class="reco">
+          <div class="reco-eyebrow">From goal · Q2 OKR doc</div>
+          <div class="reco-title">Benchmarks for engineering team OKRs at series-B startups</div>
+          <div class="reco-meta">est. 4 min · 8 workers</div>
+        </div>
+        <div class="reco">
+          <div class="reco-eyebrow">From todo · Run schema migration</div>
+          <div class="reco-title">Postgres logical replication gotchas under heavy write load</div>
+          <div class="reco-meta">est. 3 min · 5 workers</div>
+        </div>
+        <div class="reco">
+          <div class="reco-eyebrow">From last week · 47 cited</div>
+          <div class="reco-title">Long context vs. RAG: when does fine-tuning still win in 2025?</div>
+          <div class="reco-meta">est. 6 min · 10 workers</div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ============================================================ RUN DETAIL -->
+  <div class="section-eyebrow">02 · Run detail (live)</div>
+  <h2 class="section-title">Workers fan out, findings stream in</h2>
+  <p class="section-blurb">The detail view is built around the live event stream. Worker cards up top show what each agent is doing right now. Findings drop in below as they're discovered — web hits, tool results, and the orchestrator's syntheses (left-borded in accent so you can scan past them or focus on them).</p>
+
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="mark">C</div><span class="name">construct</span></div>
+      <div class="nav-group">Research</div>
+      <div class="nav-item active"><span class="material-symbols-outlined">science</span>Investigate</div>
+      <div class="nav-item"><span class="material-symbols-outlined">history</span>History<span class="badge-mini">142</span></div>
+      <div class="nav-item"><span class="material-symbols-outlined">memory</span>Workers<span class="badge-mini">3</span></div>
+      <div class="nav-group">Observability</div>
+      <div class="nav-item"><span class="material-symbols-outlined">monitoring</span>Overview</div>
+      <div class="nav-item"><span class="material-symbols-outlined">build</span>Tools</div>
+    </aside>
+
+    <main class="main">
+      <div class="run-h">
+        <div style="min-width: 0; flex: 1;">
+          <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 6px;">
+            <span class="status-pill status-running"><span class="dot"></span>RUNNING</span>
+            <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);">run_a3f2b1c · 02:17 elapsed</span>
+          </div>
+          <div class="run-q">A timeline of how Detroit techno crossed the Atlantic — labels, DJs, pivotal venues 1986–94…</div>
+          <div class="run-meta">
+            <span>6 workers · 3 active</span>
+            <span>112 findings</span>
+            <span>$0.21 / $0.50</span>
+            <span>14,832 tok in / 3,419 tok out</span>
+          </div>
+        </div>
+        <div class="run-controls">
+          <button class="pause"><span class="material-symbols-outlined" style="font-size: 14px; vertical-align: -3px;">pause</span> Pause</button>
+          <button class="stop"><span class="material-symbols-outlined" style="font-size: 14px; vertical-align: -3px;">stop</span> Halt</button>
+        </div>
+      </div>
+
+      <div style="font-size: 12px; font-family: var(--font-mono); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px;">WORKERS</div>
+      <div class="workers">
+        <div class="worker">
+          <div class="worker-h">
+            <span class="worker-id">w_01 · scout</span>
+            <span class="status-pill status-running"><span class="dot"></span>active</span>
+          </div>
+          <div class="worker-task">Mapping early Belleville Three releases &amp; Transmat / Metroplex catalog numbers</div>
+          <div class="worker-stats"><span>web_search ×8</span><span>fetch ×3</span><span>tok 4,128</span></div>
+        </div>
+        <div class="worker">
+          <div class="worker-h">
+            <span class="worker-id">w_02 · scout</span>
+            <span class="status-pill status-running"><span class="dot"></span>active</span>
+          </div>
+          <div class="worker-task">UK side: Northern Soul DJs, Hardcore Continuum, Eastern Bloc record shop in Manchester</div>
+          <div class="worker-stats"><span>web_search ×6</span><span>fetch ×4</span><span>tok 3,917</span></div>
+        </div>
+        <div class="worker">
+          <div class="worker-h">
+            <span class="worker-id">w_03 · cross-ref</span>
+            <span class="status-pill status-running"><span class="dot"></span>active</span>
+          </div>
+          <div class="worker-task">Verifying claim: Neil Rushton's "Techno! The New Dance Sound of Detroit" comp on 10 Records</div>
+          <div class="worker-stats"><span>fetch ×5</span><span>tok 2,103</span></div>
+        </div>
+        <div class="worker">
+          <div class="worker-h">
+            <span class="worker-id">w_04 · scout</span>
+            <span class="status-pill status-done">done</span>
+          </div>
+          <div class="worker-task">Pivotal venues — The Music Institute Detroit, The Haçienda Manchester</div>
+          <div class="worker-stats"><span>web_search ×4</span><span>fetch ×6</span><span>tok 3,401</span></div>
+        </div>
+        <div class="worker">
+          <div class="worker-h">
+            <span class="worker-id">w_05 · cross-ref</span>
+            <span class="status-pill status-done">done</span>
+          </div>
+          <div class="worker-task">Discogs label timeline 1985–1990</div>
+          <div class="worker-stats"><span>fetch ×9</span><span>tok 1,283</span></div>
+        </div>
+        <div class="worker">
+          <div class="worker-h">
+            <span class="worker-id">w_06 · scout</span>
+            <span class="status-pill status-error">retried</span>
+          </div>
+          <div class="worker-task">Pirate radio archives — Kiss FM tape recordings 1988</div>
+          <div class="worker-stats"><span>web_search ×3</span><span>fetch ×2</span><span>tok 921</span></div>
+        </div>
+      </div>
+
+      <div class="findings-h">
+        <span class="label">Findings stream</span>
+        <span class="count">112 · streaming · scroll up to pause</span>
+      </div>
+
+      <div class="finding synth">
+        <span class="ts">02:14:07</span>
+        <span class="src synth">SYNTH</span>
+        <span class="text"><strong>Anchor 1988:</strong> Neil Rushton flies to Detroit, signs a comp deal with Juan Atkins / Derrick May / Kevin Saunderson. The album lands as <em>"Techno! The New Dance Sound of Detroit"</em> on 10 Records (UK) — first time the term "techno" is used commercially as a genre label.</span>
+      </div>
+      <div class="finding">
+        <span class="ts">02:13:51</span>
+        <span class="src tool">FETCH</span>
+        <span class="text"><span class="url">discogs.com/label/transmat</span> — Transmat catalog: MS-001 (1986) Strings of Life · MS-002 (1987) Big Fun · MS-004 (1988) The Beginning</span>
+      </div>
+      <div class="finding">
+        <span class="ts">02:13:42</span>
+        <span class="src web">WEB</span>
+        <span class="text">Eastern Bloc Records (Stevenson Sq, Manchester) opened 1985 — early UK importer of Detroit 12"s; staffed by future Hard Times DJs.</span>
+      </div>
+      <div class="finding">
+        <span class="ts">02:13:31</span>
+        <span class="src web">WEB</span>
+        <span class="text">The Music Institute opened May 1988 at 1315 Broadway, Detroit. Closed 1989, but resident DJs Derrick May, Kevin Saunderson, Alton Miller defined the city's club sound.</span>
+      </div>
+      <div class="finding synth">
+        <span class="ts">02:12:58</span>
+        <span class="src synth">SYNTH</span>
+        <span class="text"><strong>Pre-1986:</strong> Detroit producers (Atkins as Cybotron, then Model 500) ship records to Chicago, then via mail-order to UK record shops. Northern Soul DJs were buying Detroit imports as early as 1984 — physical infrastructure preceded the genre name by ~3 years.</span>
+      </div>
+      <div class="finding">
+        <span class="ts">02:12:14</span>
+        <span class="src tool">FETCH</span>
+        <span class="text"><span class="url">archive.org/details/kiss-fm-1988</span> — Kiss FM (London pirate) 4-hour tape, Colin Faver set, July 1988: opens with Inner City "Big Fun" → Rhythim Is Rhythim "Strings of Life"</span>
+      </div>
+      <div class="finding">
+        <span class="ts">02:11:55</span>
+        <span class="src web">WEB</span>
+        <span class="text">The Haçienda's "Nude" night (1986–88, Mike Pickering) playing Chicago house and Detroit techno alongside hip-hop — widely cited as the entry point for the UK's 1988 acid summer.</span>
+      </div>
+    </main>
+  </div>
+
+  <!-- ============================================================ HISTORY -->
+  <div class="section-eyebrow">03 · History</div>
+  <h2 class="section-title">Run table — chronological, scannable</h2>
+  <p class="section-blurb">All past runs in a flat list. Each row is one run: timestamp, status, the question (truncated), worker count, finding count, cost. Click anywhere on the row to open the detail view.</p>
+
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="mark">C</div><span class="name">construct</span></div>
+      <div class="nav-group">Research</div>
+      <div class="nav-item"><span class="material-symbols-outlined">science</span>Investigate</div>
+      <div class="nav-item active"><span class="material-symbols-outlined">history</span>History<span class="badge-mini">142</span></div>
+      <div class="nav-item"><span class="material-symbols-outlined">memory</span>Workers<span class="badge-mini">3</span></div>
+      <div class="nav-group">Observability</div>
+      <div class="nav-item"><span class="material-symbols-outlined">monitoring</span>Overview</div>
+    </aside>
+
+    <main class="main">
+      <div class="page-h">
+        <div class="title">History</div>
+        <div class="meta">142 runs · last 30 days</div>
+      </div>
+
+      <div class="hist-row header">
+        <span>WHEN</span>
+        <span>STATUS</span>
+        <span>QUESTION</span>
+        <span style="text-align:right;">WORKERS</span>
+        <span style="text-align:right;">FINDINGS</span>
+        <span style="text-align:right;">COST</span>
+      </div>
+      <div class="hist-row">
+        <span class="ts">2m ago</span>
+        <span><span class="status-pill status-running"><span class="dot"></span>running</span></span>
+        <span class="q">A timeline of how Detroit techno crossed the Atlantic — labels, DJs…</span>
+        <span class="num">6</span>
+        <span class="num">112</span>
+        <span class="num">$0.21</span>
+      </div>
+      <div class="hist-row">
+        <span class="ts">1h ago</span>
+        <span><span class="status-pill status-done">done</span></span>
+        <span class="q">Postgres logical replication gotchas under heavy write load</span>
+        <span class="num">5</span>
+        <span class="num">87</span>
+        <span class="num">$0.34</span>
+      </div>
+      <div class="hist-row">
+        <span class="ts">3h ago</span>
+        <span><span class="status-pill status-done">done</span></span>
+        <span class="q">Long context vs. RAG: when does fine-tuning still win in 2025?</span>
+        <span class="num">10</span>
+        <span class="num">203</span>
+        <span class="num">$0.62</span>
+      </div>
+      <div class="hist-row">
+        <span class="ts">Yesterday</span>
+        <span><span class="status-pill status-paused">paused</span></span>
+        <span class="q">Nordic energy market dynamics 2024 — capacity vs. spot prices</span>
+        <span class="num">8</span>
+        <span class="num">54</span>
+        <span class="num">$0.18</span>
+      </div>
+      <div class="hist-row">
+        <span class="ts">Yesterday</span>
+        <span><span class="status-pill status-error">halted</span></span>
+        <span class="q">Compare TimescaleDB vs ClickHouse for sub-100ms p99 dashboards</span>
+        <span class="num">4</span>
+        <span class="num">11</span>
+        <span class="num">$0.04</span>
+      </div>
+      <div class="hist-row">
+        <span class="ts">Mar 12</span>
+        <span><span class="status-pill status-done">done</span></span>
+        <span class="q">Survey of human-rated coding benchmarks released in 2024–25</span>
+        <span class="num">12</span>
+        <span class="num">341</span>
+        <span class="num">$0.91</span>
+      </div>
+      <div class="hist-row">
+        <span class="ts">Mar 11</span>
+        <span><span class="status-pill status-done">done</span></span>
+        <span class="q">What's the actual story on the 1958 Hofstra dorm closure?</span>
+        <span class="num">3</span>
+        <span class="num">29</span>
+        <span class="num">$0.08</span>
+      </div>
+      <div class="hist-row">
+        <span class="ts">Mar 11</span>
+        <span><span class="status-pill status-done">done</span></span>
+        <span class="q">Brutalist-era Boston civic buildings — architects, current status</span>
+        <span class="num">6</span>
+        <span class="num">98</span>
+        <span class="num">$0.29</span>
+      </div>
+      <div class="hist-row">
+        <span class="ts">Mar 10</span>
+        <span><span class="status-pill status-done">done</span></span>
+        <span class="q">Span attribute conventions in OpenTelemetry 1.x for LLM tracing</span>
+        <span class="num">5</span>
+        <span class="num">67</span>
+        <span class="num">$0.22</span>
+      </div>
+    </main>
+  </div>
+<script src="../tokens/theme-picker.js"></script>
+</body>
+</html>
