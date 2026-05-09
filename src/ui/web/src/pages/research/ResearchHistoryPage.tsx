@@ -8,7 +8,7 @@ import {
   type QuestionShape,
   type TopicCluster,
 } from '../../api/research-hooks';
-import { PageHeader } from '../../components/layout/PageHeader';
+import { PageHeader, PageTitle } from '../../components/layout/PageHeader';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { Button } from '../../components/ui/Button';
@@ -123,10 +123,10 @@ export function ResearchHistoryPage() {
       <div className="px-6 pt-6">
         <PageHeader
           title={
-            <span className="font-heading text-2xl font-bold leading-tight text-text-primary">
-              History
-              <span className="ml-3 text-base font-mono font-normal text-text-muted">{visibleQueries.length}</span>
-            </span>
+            <>
+              <PageTitle>History</PageTitle>
+              <span className="text-base font-mono text-text-muted shrink-0 tabular-nums">{visibleQueries.length}</span>
+            </>
           }
           actions={<RangeSelector value={range} onChange={setRange} />}
         />
@@ -287,7 +287,7 @@ function buildHistoryColumns(): Column<ResearchQuery>[] {
       shrink: true,
       render: (q) => (
         <span className={clsx(
-          'inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium',
+          'inline-flex items-center gap-1.5 px-2 py-0.5 rounded font-mono text-[10px] uppercase tracking-wide',
           STATUS_BADGE[q.status] ?? 'bg-bg-tertiary text-text-secondary',
         )}>
           <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', STATUS_DOT[q.status] ?? 'bg-text-muted')} />
@@ -418,14 +418,15 @@ function ShapeChips({ shapes }: { shapes: QuestionShape[] }) {
 }
 
 function VerdictChip({ verdict }: { verdict: 'pass' | 'flag' | 'halt' | null }) {
+  const base = 'inline-flex items-center px-2 py-0.5 rounded font-mono text-[10px] uppercase tracking-wide';
   if (verdict === 'pass') {
-    return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-success/15 text-success">pass</span>;
+    return <span className={clsx(base, 'bg-success/15 text-success')}>pass</span>;
   }
   if (verdict === 'flag') {
-    return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-warning/15 text-warning">flag</span>;
+    return <span className={clsx(base, 'bg-warning/15 text-warning')}>flag</span>;
   }
   if (verdict === 'halt') {
-    return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-error/15 text-error">halt</span>;
+    return <span className={clsx(base, 'bg-error/15 text-error')}>halt</span>;
   }
   return <span className="text-text-muted text-xs">—</span>;
 }

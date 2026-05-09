@@ -24,6 +24,8 @@ import { Button } from '../../components/ui/Button';
 import { PageTitle, PageTitleLink, PageTitleSeparator } from '../../components/layout/PageHeader';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
+import { StatCard } from '../../components/data/StatCard';
+import { fmtCurrency, fmtNumber } from '../../utils/format';
 import { ConfigForm, patchByPath, getByPath } from './config-schema';
 import { ResearchActivityView } from './ResearchActivityView';
 import { ResearchGraphView } from './ResearchGraphView';
@@ -194,7 +196,7 @@ function SectionMetaPanel({
         <div className="px-3 py-2.5 space-y-3 bg-bg-primary/20 border-t border-border-primary/20">
           {uniqueSources.length > 0 && (
             <div>
-              <p className="text-text-disabled uppercase tracking-wide text-sm mb-1 font-medium">Sources</p>
+              <p className="font-mono text-xs uppercase tracking-wide text-text-muted mb-1 font-medium">Sources</p>
               <div className="space-y-0.5">
                 {uniqueSources.map((src, i) => (
                   <a key={i} href={src.url} target="_blank" rel="noopener noreferrer"
@@ -214,7 +216,7 @@ function SectionMetaPanel({
           )}
           {questions.length > 0 && (
             <div>
-              <p className="text-text-disabled uppercase tracking-wide text-sm mb-1 font-medium">Questions</p>
+              <p className="font-mono text-xs uppercase tracking-wide text-text-muted mb-1 font-medium">Questions</p>
               <ul className="space-y-0.5">
                 {questions.map((q, i) => (
                   <li key={i} className="text-text-muted italic leading-relaxed">{q}</li>
@@ -2508,7 +2510,7 @@ export function ResearchQueryDetailPage() {
 
           {/* Secondary content */}
           <div className="px-6 pb-0">
-            <p className="text-sm text-text-muted line-clamp-3 mb-2">{session.prompt_short || session.prompt}</p>
+            <p className="text-base font-medium text-text-secondary line-clamp-3 mb-3 leading-snug">{session.prompt_short || session.prompt}</p>
 
             <div className="mb-2">
               <QuestionShapeBar session={session} />
@@ -2543,27 +2545,25 @@ export function ResearchQueryDetailPage() {
           )}
 
           {/* Stats row */}
-          <div className="flex items-center gap-6 mt-3">
-            {[
-              { label: 'Findings', value: findingsData.length },
-              { label: 'Threads', value: threadsData.length },
-              { label: 'Cost', value: costs ? `$${costs.total_cost.toFixed(3)}` : '...' },
-              { label: 'Today', value: costs ? `$${costs.today_cost.toFixed(3)}` : '...' },
-            ].map(stat => (
-              <div key={stat.label} className="flex items-center gap-1.5">
-                <span className="text-sm text-text-muted">{stat.label}:</span>
-                <span className="text-sm font-semibold text-text-primary tabular-nums">{stat.value}</span>
-              </div>
-            ))}
-            {(() => {
-              const busy = workers.filter(w => w.currentJob).length;
-              if (busy === 0) return null;
-              return (
-                <span className="text-sm text-text-muted">
-                  {busy} {busy === 1 ? 'worker' : 'workers'}
-                </span>
-              );
-            })()}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-3">
+            <StatCard label="Findings" value={fmtNumber(findingsData.length)} accent="success" compact />
+            <StatCard label="Threads" value={fmtNumber(threadsData.length)} compact />
+            <StatCard
+              label="Total Cost"
+              value={costs ? fmtCurrency(costs.total_cost) : '—'}
+              accent="neutral"
+              compact
+              detail={(() => {
+                const busy = workers.filter(w => w.currentJob).length;
+                return busy > 0 ? `${busy} ${busy === 1 ? 'worker' : 'workers'} busy` : undefined;
+              })()}
+            />
+            <StatCard
+              label="Today"
+              value={costs ? fmtCurrency(costs.today_cost) : '—'}
+              accent="neutral"
+              compact
+            />
           </div>
 
           {/* Tab bar */}
