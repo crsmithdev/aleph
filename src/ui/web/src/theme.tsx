@@ -7,42 +7,36 @@ export interface FontDef {
   family: string;
 }
 
-// General-purpose / body fonts — sorted alphabetically.
+// Body + heading fonts share one superset list — sorted alphabetically.
 export const fonts: FontDef[] = [
   { id: 'albert-sans', name: 'Albert Sans', family: "'Albert Sans'" },
   { id: 'ar-one-sans', name: 'AR One Sans', family: "'AR One Sans'" },
   { id: 'atkinson', name: 'Atkinson Hyperlegible', family: "'Atkinson Hyperlegible Next'" },
+  { id: 'bricolage-grotesque', name: 'Bricolage Grotesque', family: "'Bricolage Grotesque'" },
   { id: 'commissioner', name: 'Commissioner', family: "'Commissioner'" },
   { id: 'dm-sans', name: 'DM Sans', family: "'DM Sans'" },
-  { id: 'lato', name: 'Lato', family: "'Lato'" },
-  { id: 'mulish', name: 'Mulish', family: "'Mulish'" },
-  { id: 'noto-sans', name: 'Noto Sans', family: "'Noto Sans'" },
-  { id: 'nunito-sans', name: 'Nunito Sans', family: "'Nunito Sans'" },
-  { id: 'rethink-sans', name: 'Rethink Sans', family: "'Rethink Sans'" },
-  { id: 'rubik', name: 'Rubik', family: "'Rubik'" },
-  { id: 'tasa-orbiter', name: 'TASA Orbiter', family: "'TASA Orbiter'" },
-  { id: 'work-sans', name: 'Work Sans', family: "'Work Sans'" },
-  { id: 'zalando-sans', name: 'Zalando Sans', family: "'Zalando Sans'" },
-];
-
-// Title / heading fonts — sorted alphabetically.
-export const headingFonts: FontDef[] = [
-  { id: 'ar-one-sans', name: 'AR One Sans', family: "'AR One Sans'" },
-  { id: 'atkinson', name: 'Atkinson Hyperlegible', family: "'Atkinson Hyperlegible Next'" },
-  { id: 'bricolage-grotesque', name: 'Bricolage Grotesque', family: "'Bricolage Grotesque'" },
   { id: 'figtree', name: 'Figtree', family: "'Figtree'" },
   { id: 'funnel-display', name: 'Funnel Display', family: "'Funnel Display'" },
   { id: 'geist', name: 'Geist', family: "'Geist'" },
   { id: 'geologica', name: 'Geologica', family: "'Geologica'" },
+  { id: 'lato', name: 'Lato', family: "'Lato'" },
   { id: 'merriweather', name: 'Merriweather', family: "'Merriweather'" },
   { id: 'merriweather-sans', name: 'Merriweather Sans', family: "'Merriweather Sans'" },
   { id: 'mulish', name: 'Mulish', family: "'Mulish'" },
   { id: 'noto-sans', name: 'Noto Sans', family: "'Noto Sans'" },
+  { id: 'nunito-sans', name: 'Nunito Sans', family: "'Nunito Sans'" },
   { id: 'rem', name: 'REM', family: "'REM'" },
+  { id: 'rethink-sans', name: 'Rethink Sans', family: "'Rethink Sans'" },
+  { id: 'rubik', name: 'Rubik', family: "'Rubik'" },
   { id: 'spinnaker', name: 'Spinnaker', family: "'Spinnaker'" },
+  { id: 'tasa-orbiter', name: 'TASA Orbiter', family: "'TASA Orbiter'" },
   { id: 'varela', name: 'Varela', family: "'Varela'" },
   { id: 'voces', name: 'Voces', family: "'Voces'" },
+  { id: 'work-sans', name: 'Work Sans', family: "'Work Sans'" },
+  { id: 'zalando-sans', name: 'Zalando Sans', family: "'Zalando Sans'" },
 ];
+
+export const headingFonts = fonts;
 
 export const monoFonts: FontDef[] = [
   { id: 'atkinson-mono', name: 'Atkinson Hyperlegible Mono', family: "'Atkinson Hyperlegible Mono'" },
