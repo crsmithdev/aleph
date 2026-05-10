@@ -1,5 +1,4 @@
 import type { Sqlite } from '@construct/data';
-import { log } from '@construct/logger';
 import type { SessionConfig } from '../types.js';
 import { DEFAULT_SESSION_CONFIG } from '../types.js';
 
@@ -17,75 +16,9 @@ function mergeWithCodeDefaults(partial: Partial<SessionConfig>): SessionConfig {
 }
 
 export function seedDefaults(sqlite: Sqlite): void {
-  const existing = sqlite.prepare('SELECT config FROM research_defaults WHERE id = 1').get() as { config: string } | undefined;
+  const existing = sqlite.prepare('SELECT 1 FROM research_defaults WHERE id = 1').get();
   if (!existing) {
     sqlite.prepare('INSERT INTO research_defaults (id, config) VALUES (1, ?)').run(JSON.stringify(DEFAULT_SESSION_CONFIG));
-    return;
-  }
-  migrateDefaults(sqlite, existing.config);
-}
-
-/** Bump stored default fields to current code defaults IF the stored value
- *  still matches the previous code default (i.e., the user hasn't customized).
- *  Narrow + idempotent: runs on every startup, only rewrites when applicable. */
-function migrateDefaults(sqlite: Sqlite, storedJson: string): void {
-  const stored = JSON.parse(storedJson) as Partial<SessionConfig> & Record<string, unknown>;
-
-  // (previous_default, new_default) tuples — only migrate if stored still matches previous.
-  const scalarMigrations: Array<[keyof SessionConfig, unknown, unknown]> = [
-    ['max_total_threads', 150, DEFAULT_SESSION_CONFIG.max_total_threads],
-    // Depth bumps: 3 → previous default, 2 → too-shallow earlier default.
-    // We migrate both to the current default so an old install picks up the
-    // wider tree without losing customizations.
-    ['max_thread_depth', 3, DEFAULT_SESSION_CONFIG.max_thread_depth],
-    ['max_thread_depth', 2, DEFAULT_SESSION_CONFIG.max_thread_depth],
-    ['min_searches_per_thread', 2, DEFAULT_SESSION_CONFIG.min_searches_per_thread],
-    // Bump per-session thread parallelism so workers actually fan out — burst
-    // session-jobs are now kickoff-only and follow-ups go through thread-jobs,
-    // so the prior cap of 3 left 5/8 workers idle on every active session.
-    ['max_concurrent_threads', 3, DEFAULT_SESSION_CONFIG.max_concurrent_threads],
-    // Bump primary model: deepseek-chat → deepseek-v3.2 (50% cheaper output,
-    // sparse attention, same prompt behavior). Only migrate if stored is the
-    // previous default, so user-customized models stay put.
-    ['model', 'deepseek/deepseek-chat', DEFAULT_SESSION_CONFIG.model],
-    // Role priming default flipped false → true (every session now picks a
-    // domain agent role). The UI never exposed a toggle, so any stored false
-    // is the prior code default, not a user choice — safe to migrate.
-    ['role_priming_enabled', false, DEFAULT_SESSION_CONFIG.role_priming_enabled],
-  ];
-
-  let changed = false;
-  for (const [key, prev, next] of scalarMigrations) {
-    if (stored[key as string] === prev) { (stored as Record<string, unknown>)[key as string] = next; changed = true; }
-  }
-
-  // Migrate openrouter_models default array if it still matches the prior default.
-  const providers = stored.providers as { openrouter_models?: string[] } | undefined;
-  if (providers && Array.isArray(providers.openrouter_models)
-      && providers.openrouter_models.length === 1
-      && providers.openrouter_models[0] === 'deepseek/deepseek-chat') {
-    providers.openrouter_models = [...DEFAULT_SESSION_CONFIG.providers.openrouter_models];
-    changed = true;
-  }
-
-  // Backfill model_fast for installs that predate the field.
-  if (stored.model_fast === undefined) {
-    stored.model_fast = DEFAULT_SESSION_CONFIG.model_fast;
-    changed = true;
-  }
-
-  const fu = (stored.follow_up ?? {}) as Record<string, unknown>;
-  if (fu.min_count === 2 && fu.max_count === 4) {
-    fu.min_count = DEFAULT_SESSION_CONFIG.follow_up.min_count;
-    fu.max_count = DEFAULT_SESSION_CONFIG.follow_up.max_count;
-    stored.follow_up = fu as unknown as SessionConfig['follow_up'];
-    changed = true;
-  }
-
-  if (changed) {
-    sqlite.prepare("UPDATE research_defaults SET config = ?, updated_at = datetime('now') WHERE id = 1")
-      .run(JSON.stringify(stored));
-    log({ source: 'research_defaults', msg: 'migrated to new code defaults' });
   }
 }
 
