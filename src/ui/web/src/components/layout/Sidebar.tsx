@@ -182,7 +182,7 @@ export function Sidebar() {
         ) : (
           <NavLink to="/" className="flex items-center gap-2.5 min-w-0">
             <BrandMark />
-            <span className="font-heading text-2xl font-bold leading-tight text-text-primary truncate">construct</span>
+            <span className="font-heading text-2xl font-bold leading-tight text-text-primary truncate">Construct</span>
           </NavLink>
         )}
         <button
