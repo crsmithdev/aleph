@@ -151,7 +151,7 @@ function SidebarLink({ to, label, icon, depth = 0, collapsed = false, disabled =
 function BrandMark() {
   return (
     <div
-      className="grid place-items-center w-9 h-9 rounded-md bg-bg-tertiary font-heading font-black text-accent text-lg shrink-0"
+      className="grid place-items-center w-8 h-8 rounded-md bg-bg-tertiary font-heading font-black text-accent text-base shrink-0"
       aria-label="Construct"
     >
       C
@@ -174,8 +174,8 @@ export function Sidebar() {
     >
       {/* Header / brand */}
       <div className={clsx(
-        'flex h-14 items-center border-b border-border-primary',
-        collapsed ? 'flex-col gap-1.5 justify-center px-2' : 'justify-between px-3'
+        'flex items-center border-b border-border-primary',
+        collapsed ? 'flex-col gap-2 justify-center py-3 px-2' : 'h-14 justify-between px-3'
       )}>
         {collapsed ? (
           <NavLink to="/" title="Construct"><BrandMark /></NavLink>
