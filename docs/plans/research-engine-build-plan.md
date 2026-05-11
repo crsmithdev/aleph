@@ -45,7 +45,7 @@ Inherits from `research-system-principles.md` (single-operator scale, AI-maintai
 
 - **Output-shape enforcement.** `output_shape` field populated at session create (one LLM call). Renderer gates the run on shape satisfaction. `stop_rule` becomes `schedule_complete OR envelope_consumed OR shape_satisfied`.
 - **Adaptive planner.** Replaces today's `(question_shape × topic_cluster) → RunPlan` lookup in `run-plan.ts` with an LLM call that takes `(prompt, question_shape, output_shape, envelope)` and produces a typed `LoopSchedule` artifact. The 6-cluster topic taxonomy and the `SHAPE_DEFAULTS` budget table are deleted entirely. The planner produces seed canon, branch decomposition, per-branch budgets, and which perturbation strategies to favor. URL detection in the prompt feeds the planner (it grounds canon on URL contents) rather than running as a switch around a fixed lookup. The typed `question_shape` enum is retained as a planner *input* and renderer *constraint*, not as a lookup key.
-- **Plan as a first-class artifact** (`kind: 'schedule'`). Diffable. Re-plans at milestones produce new schedule artifacts with `predecessor_id`. Lays the foundation for v2 mid-run editing.
+- **Plan as a first-class artifact, visible and explorable in the UI** (`kind: 'schedule'`). Diffable. Re-plans at milestones produce new schedule artifacts with `predecessor_id`. Rendered on the loop-detail page as a tree/list: canon items, branches (with their queries, expected depth/cycles/budget, perturbation weights), and the milestone plan. Read-only while running; the same inline-editor pattern already in `InferredPanel` makes each field editable when paused (the editing UX itself ships in v2). Schedule payload shape: `{ canon[], branches[], milestone_plan[], predecessor_id?, directives_consumed?, rationale }`.
 - **Per-role model selection.** `model_planner` / `model_extractor` / `model_synth` config fields. Default: strong on planning + synthesis, cheap on extraction.
 
 **UX (from the design doc's configurability section):**
@@ -105,9 +105,9 @@ Detect `output_shape` at session create. Renderer-as-gate: if shape unsatisfied,
 Delete `run-plan.ts`'s `(shape × topic) → RunPlan` lookup, the 6-cluster `TOPIC_CLUSTERS` constant, and the `SHAPE_DEFAULTS` budget table. Add a planner LLM call that emits a typed `LoopSchedule`: `{ canon[], branches[], per_branch_budget, perturbation_weights, milestone_plan }`. Inputs: the prompt, detected `question_shape`, detected `output_shape`, and the envelope. URL detection in the prompt feeds the planner as a grounding signal (contents fetched, supplied as canon seed) rather than as a separate code path.
 *Deliverable:* Awesome-Deep-Research-style queries don't pull AlphaFold/Adam optimizer — the planner sees the GitHub URL and grounds canon on the listed projects.
 
-**Phase 5 — Plan as artifact + per-role model selection.**
-`LoopSchedule` persists as `kind: 'schedule'`. Re-plans produce new schedule artifacts. `SessionConfig` gains per-role model fields.
-*Deliverable:* schedule is diffable and visible; cheap model runs extraction; cost-per-run drops.
+**Phase 5 — Plan as artifact + UI exploration + per-role model selection.**
+`LoopSchedule` persists as `kind: 'schedule'` (initial + each milestone re-plan, chained by `predecessor_id`). New "Schedule" view on the loop-detail page renders the current schedule as a tree: canon → branches → per-branch budget + perturbation weights, plus the milestone plan. Read-only in v1 (editing comes with v2's pause/resume). `SessionConfig` gains `model_planner` / `model_extractor` / `model_synth` fields.
+*Deliverable:* the user can see what the planner decided for a running or completed loop and diff against prior plans. Cheap model runs extraction; cost-per-run drops.
 
 **Phase 6 — UI rewrite.**
 Keep `InferredPanel`. Add envelope presets. Add `output_shape` editor. Drop `WorkersPage`, Reviews tab, inline cycle/thread visualization (moved to Debug tab). Sidebar IA: Research / Monitors / Telemetry.
@@ -136,12 +136,27 @@ Acceptance checks (below) pass. v2 work can begin.
 
 Immediately after v1 cutover. Theme: turn v1's foundations into the steerable, self-aware engine the survey pointed toward. Each item depends on something v1 lays down.
 
-**v2.1 — Mid-run pause / edit / resume.**
-v1's schedule-as-artifact + InferredPanel already do most of the work. v2 adds:
-- `paused` state on the loop row (cooperative cancellation point in the processor)
+**v2.1 — Strong mid-run steerability: pause, edit, nudge, resume.**
+v1's schedule-as-artifact + Schedule view + InferredPanel editors do most of the work. v2 turns pause into an authoring mode and adds a free-form directive channel.
+
+*Pause / edit / resume:*
+- `paused` state on the loop row (cooperative cancellation point in the processor — checks between cycles)
 - API: `POST /loops/:id/pause`, `POST /loops/:id/resume`, `PATCH /loops/:id/schedule`
-- UI: "Pause" button in the live surface; while paused, the InferredPanel's existing editors apply to the live schedule artifact; "Resume" re-spawns with the edited schedule
-- *Empirical case:* the universal observed failure mode (Appendix A). Highest single-feature ROI.
+- UI: "Pause" button in the live surface; while paused, the Schedule view becomes editable (every canon item, branch, budget, perturbation weight); "Resume" re-spawns with the edited schedule
+
+*Directive channel (the "nudge" capability):*
+- New artifact kind `directive` with payload `{ text, scope: 'next_replan' | 'permanent', author, consumed_by_schedule_id? }`
+- API: `POST /loops/:id/directives` (works whether running or paused)
+- UI: "Send directive" text box on the live surface — free-form input like "focus on the Bay Area portion" or "skip the history, dig into the places themselves"
+- The planner sees recent unconsumed directives on its next re-plan and incorporates them; `permanent` directives stick around for subsequent re-plans, `next_replan` directives burn on use
+- Directives appear in the schedule view's "directives consumed" trail so the user can see which nudges the planner took on
+
+*Three modes the user can move between:*
+- AI-led: no intervention, default
+- AI-led with nudges: drop directives, planner adapts on next re-plan
+- Human-led: pause, edit schedule directly, resume
+
+*Empirical case:* the universal observed failure mode (Appendix A). Highest single-feature ROI. Closes the "fire-and-forget" gap that ResearStudio's paper identifies as the single biggest difference between controllable and uncontrollable deep-research systems.
 
 **v2.2 — Adaptive value-based stop-rule.**
 - Cheap heuristic over accumulated artifacts: `(last-N findings similarity, last-N citation novelty, last-N planner confidence)`
@@ -178,6 +193,7 @@ v1's schedule-as-artifact + InferredPanel already do most of the work. v2 adds:
 ### v2 acceptance criteria
 
 - A user can pause a 20-minute run, edit the schedule (e.g., add a sub-question or kill a wandering thread), and resume — without losing any completed cycles.
+- A user can send a free-form directive ("focus on Bay Area places, less history") to a running loop and observe the next re-plan incorporate it. The schedule view shows which directives the planner consumed.
 - A user can fork any completed run from cycle N, producing a new loop with the schedule editable from that point.
 - The adaptive stop-rule's A/B on the historical corpus shows ≥ 80% agreement with "shape satisfied" outcomes and saves cost on ≥ 30% of runs (target — adjust after measurement).
 - Every paused/failed run has a human-readable narrative explaining what flagged.
@@ -270,16 +286,16 @@ Worth restating since the comparison doc surveyed them and decided no:
 
 ### Feature inventory at a glance
 
-**v1 ships:** loop engine + 4-hook template interface · research template · monitor template · cycle ledger · envelope · milestones · child-process per loop · output-shape enforcement · adaptive planner (replaces shape × topic lookup; URL-grounded; emits typed `LoopSchedule`) · plan-as-artifact · per-role model selection · InferredPanel (preserved + `output_shape` editor added) · envelope presets · mockable LLM boundary · typed failure-mode identifiers · cost-as-observable · event-triggered background work · two real-LLM e2e tests.
+**v1 ships:** loop engine + 4-hook template interface · research template · monitor template · cycle ledger · envelope · milestones · child-process per loop · output-shape enforcement · adaptive planner (replaces shape × topic lookup; URL-grounded; emits typed `LoopSchedule`) · **plan-as-artifact rendered as an explorable Schedule view in the UI** · per-role model selection · InferredPanel (preserved + `output_shape` editor added) · envelope presets · mockable LLM boundary · typed failure-mode identifiers · cost-as-observable · event-triggered background work · two real-LLM e2e tests.
 
-**v1 does NOT ship:** pause/edit/resume control · adaptive stop · per-cycle redundancy detector · narrative post-mortem content · self-healing remediation · forkable runs · source-type specialized processors · context compression · charts in renderer · heavy-modality cycles · pre-flight clarification flow · recursive sub-loops · new templates (code/writing/image).
+**v1 does NOT ship:** Schedule view *editing* (read-only in v1; editing comes in v2) · pause/resume control · directive (nudge) channel · adaptive stop · per-cycle redundancy detector · narrative post-mortem content · self-healing remediation · forkable runs · source-type specialized processors · context compression · charts in renderer · heavy-modality cycles · pre-flight clarification flow · recursive sub-loops · new templates (code/writing/image).
 
 ### Roadmap
 
 | Version | Theme | Headline features | Depends on |
 |---|---|---|---|
 | **v1 (MVP)** | Cutover with empirical fixes | Loop engine, research + monitor templates, output-shape enforcement, **adaptive planner** (replaces shape × topic lookup), plan-as-artifact, per-role model selection. Keep `InferredPanel`. Mockable LLM, typed failure modes, real-LLM CI. | — |
-| **v2** | Stabilize and steer | Pause/edit/resume, adaptive stop, redundancy detector, narrative post-mortems, canon tuning, self-healing layer, forkable runs. | v1 plan-as-artifact + typed failure modes |
+| **v2** | Stabilize and steer | **Strong mid-run steerability** (pause + edit + free-form directive channel), adaptive stop, redundancy detector, narrative post-mortems, planner prompt tuning, self-healing layer, forkable runs. | v1 plan-as-artifact + Schedule view + typed failure modes |
 | **v3** | Extend | Source-type processors, context compression at milestones, charts in renderer, heavy-modality cycles, cross-template evaluator. | v2 stability |
 | **v4** | New templates | Code-dev, long-form writing, image-iteration. Recursive sub-loops if needed. | v3 surface extensions |
 

@@ -74,7 +74,7 @@ Whether and how a user can intervene during a running query.
 | CORAL | Heartbeat CLI subcommand can inject reflection prompts or trigger skill consolidation mid-run |
 | Most others (WriteHERE, WebWeaver, WebResearcher, Open Deep Search, Tongyi, ReSum, Stop-RAG, BATS, Agentic Reasoning, Multimodal DR) | None. Submit and wait for completion or cancel |
 | Current system | None. Cancel only |
-| Current plan | None planned |
+| Current plan | **Strong steerability — full ResearStudio-equivalent.** v1 makes the plan visible and explorable in the UI (read-only Schedule view). v2 adds pause/edit/resume *and* a free-form directive channel for nudging the planner without pausing. Three modes the user can move between: AI-led (default), AI-led with nudges (directives queue, planner adapts at re-plan), human-led (pause + edit schedule directly + resume). |
 
 **Three of fifteen comparators have any mid-run intervention surface.** EDR and ResearStudio go furthest; CORAL has a narrow injection path. Most systems run to completion without intervention.
 
@@ -82,9 +82,11 @@ Whether and how a user can intervene during a running query.
 
 The lesser frequency of mid-run controls in the survey is partly explained by the comparators being academic prototypes optimizing for benchmark scores, where human intervention is methodologically inconvenient. For a tool meant to be used, the absence is harder to defend.
 
-**For the system.** A pause-and-edit primitive at every planning checkpoint, applied to the same artifact the planner produces. The user sees the plan that's about to run, edits it (shape, topic, sources, branching factor, depth, budget), and resumes. Pause should not require a new state machine if the engine is already cooperative-cancellable at cycle boundaries; the artifact-based plan is the resumable handle.
+**For the system.** Ship both the structural and the natural-language intervention paths — they're complementary rather than alternatives. **The structural path:** pause-and-edit at any cycle boundary, applied to the same `schedule` artifact the planner produces. The user sees the plan, edits it (canon, branches, budgets, perturbation weights, depth, milestones), and resumes. Pause is a cooperative-cancellation point between cycles; the artifact-based plan is the resumable handle. **The natural-language path:** a `directive` artifact kind — free-form text from the user ("focus on the Bay Area portion," "skip the history, dig into the places," "use academic sources for this"). The planner reads unconsumed directives on its next re-plan and incorporates them. Directives don't require pause — they queue. Scope flag distinguishes `next_replan` (one-shot) from `permanent` (sticks across re-plans). The Schedule view shows which directives the planner consumed and what changed as a result, so the user gets visible feedback on whether their nudge landed.
 
-A weaker version (steering by free-form text injected mid-run, as in EDR) is interesting but lower-yield against the observed failures: most of those failures need *structural* edits (different shape, different topic, different source mix), not natural-language nudges.
+Two failure modes the two paths address differently: structural edits are for hard pivots where the user knows exactly what should change (kill these branches, raise that budget, replace this canon item). Directives are for nudges where the user has a felt sense but not a structural change in mind ("less history, more places"). Most observed F1/F2 failures could be addressed by either; having both means the user picks the cheaper tool for the situation.
+
+**Render the plan in the UI from v1.** The plan being visible is a precondition for it being editable. Even before pause/edit/resume ships (v2), users benefit from seeing what the adaptive planner decided — both as transparency on a paid LLM call and as preparation for the steering features that come next. The Schedule view in v1 is read-only; the same component becomes editable in v2 when paused.
 
 ---
 
