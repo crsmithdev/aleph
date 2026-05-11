@@ -57,8 +57,9 @@ Inherits from `research-system-principles.md` (single-operator scale, AI-maintai
 
 **Foundational infrastructure (from `research-system-principles.md`):**
 
+- **Live inspectability as a first-class UI surface.** The Activity-equivalent view — real-time stream of cycles, events, decisions, intermediate outputs, errors — is co-equal with the artifact view on the loop-detail page. Not relegated to a debug tab. This preserves the current system's Activity-tab pattern and is the rendered form of the event log.
 - **Mockable LLM boundary.** All real model calls go through one provider abstraction; a fake/recorded LLM drives tests and UI verification. Makes "verify through the UI" cheap in CI.
-- **Single event log with typed failure-mode identifiers.** Replace today's free-form post-mortem flag strings with stable typed IDs: `topic_drift`, `shape_mismatch`, `yield_collapse`, `thread_skew`, etc. The self-healing layer (v2) pattern-matches on these; the UI filters on them.
+- **Single event log with typed failure-mode identifiers.** Every discrete step (events, decisions, evaluations, intermediate outputs, errors) writes to one log. Failure modes get stable typed IDs: `topic_drift`, `shape_mismatch`, `yield_collapse`, `thread_skew`, etc. The self-healing layer (v2) pattern-matches on these; the UI filters on them; the Activity view renders them.
 - **Cost as a first-class observable.** Per-run, per-cycle, per-feature cost visible in the UI and in the event log without per-feature dashboard work.
 - **Event-triggered background work.** Monitors, cleanups, and periodic tasks fire on logged triggers, not opaque crons.
 - **Typed contracts end-to-end.** Frontend and backend share types. Artifact payloads, schema, API are all typed (extends today's `types.ts` discipline to the new tables).
@@ -110,8 +111,8 @@ Delete `run-plan.ts`'s `(shape × topic) → RunPlan` lookup, the 6-cluster `TOP
 *Deliverable:* the user can see what the planner decided for a running or completed loop and diff against prior plans. Cheap model runs extraction; cost-per-run drops.
 
 **Phase 6 — UI rewrite.**
-Keep `InferredPanel`. Add envelope presets. Add `output_shape` editor. Drop `WorkersPage`, Reviews tab, inline cycle/thread visualization (moved to Debug tab). Sidebar IA: Research / Monitors / Telemetry.
-*Deliverable:* the entry experience is the existing InferredPanel + envelope presets. No regression for the user; the loop-detail page renders artifacts from the new engine.
+Keep `InferredPanel`. Add envelope presets. Add `output_shape` editor. Add the explorable Schedule view (Phase 5 deliverable). **Keep the Activity tab as a first-class live view** — real-time stream of cycles, events, decisions, intermediate outputs, and errors. Per `research-system-principles.md`, live inspectability is essential and not relegated to a debug surface. Drop `WorkersPage` and the Reviews tab. Sidebar IA: Research / Monitors / Telemetry.
+*Deliverable:* the entry experience is the existing InferredPanel + envelope presets. The loop-detail page shows three co-equal surfaces during a live run — Activity (live event stream), Schedule (current plan artifact), and Artifact (the report-in-progress). No regression on the existing Activity-tab pattern.
 
 **Phase 7 — Cutover.**
 Delete in one pass: `research_jobs`, `worker.ts`, `services/jobs.ts`, `scheduler.ts`, `research_perturbation_state` table, `research_monitor_*` tables, `WorkersPage`, `ResearchReviewsView`. Drop `schedule.mode = 'default'|'scheduled'|'priority'`.
@@ -128,6 +129,7 @@ Acceptance checks (below) pass. v2 work can begin.
 - Today's user re-runs disappear from the dataset: the system either produces the right thing or pauses with a clear shape-unsatisfied signal the user can edit.
 - Cost per run trends downward (extractor on cheap model).
 - Monitor template works against the same engine — proves the abstraction is honest.
+- **Live Activity view streams events, cycle starts/ends, planner decisions, perturbation firings, extraction outcomes, and errors in real time during a running loop — no refresh required, no dev tools needed.** Parity with today's Activity tab is the floor, not the ceiling.
 - `bun test.ts` + `bun run build` + `bun run ui:smoke` all green.
 
 ---
@@ -286,7 +288,7 @@ Worth restating since the comparison doc surveyed them and decided no:
 
 ### Feature inventory at a glance
 
-**v1 ships:** loop engine + 4-hook template interface · research template · monitor template · cycle ledger · envelope · milestones · child-process per loop · output-shape enforcement · adaptive planner (replaces shape × topic lookup; URL-grounded; emits typed `LoopSchedule`) · **plan-as-artifact rendered as an explorable Schedule view in the UI** · per-role model selection · InferredPanel (preserved + `output_shape` editor added) · envelope presets · mockable LLM boundary · typed failure-mode identifiers · cost-as-observable · event-triggered background work · two real-LLM e2e tests.
+**v1 ships:** loop engine + 4-hook template interface · research template · monitor template · cycle ledger · envelope · milestones · child-process per loop · output-shape enforcement · adaptive planner (replaces shape × topic lookup; URL-grounded; emits typed `LoopSchedule`) · **plan-as-artifact rendered as an explorable Schedule view in the UI** · **live Activity view as a first-class surface (real-time event/cycle/decision stream)** · per-role model selection · InferredPanel (preserved + `output_shape` editor added) · envelope presets · mockable LLM boundary · typed failure-mode identifiers · cost-as-observable · event-triggered background work · two real-LLM e2e tests.
 
 **v1 does NOT ship:** Schedule view *editing* (read-only in v1; editing comes in v2) · pause/resume control · directive (nudge) channel · adaptive stop · per-cycle redundancy detector · narrative post-mortem content · self-healing remediation · forkable runs · source-type specialized processors · context compression · charts in renderer · heavy-modality cycles · pre-flight clarification flow · recursive sub-loops · new templates (code/writing/image).
 

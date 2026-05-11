@@ -21,8 +21,12 @@ Using research-system-design.md as the reference, suggest features for the next 
 - At least two full end-to-end tests run against real LLMs: one with the cheapest models that produce usable output (smoke / basic correctness), one with optimal selections (quality evaluation).
 
 # Observability
-- Every discrete step — events, decisions, evaluations, intermediate outputs, errors — is written to a single event log.
-- The event log streams to the UI in real time (same pattern as the current system) and is downloadable for offline debugging.
+
+**Live inspectability is essential, not optional.** The current system's Activity tab — a real-time view into a running search showing cycles, events, decisions, intermediate outputs, and errors as they happen — is what makes the system trustworthy and debuggable. A user watching a run unfold can see what the engine is doing right now, what it just decided, and what it's about to do next, without refreshing or opening dev tools. The new system must preserve this as a primary UI surface, not relegate it to a "debug" expander.
+
+- The Activity-equivalent live view is a first-class UI surface in v1 — co-equal with the artifact view, not a power-user expander. It's the default live view of a running loop.
+- Every discrete step — events, decisions, evaluations, intermediate outputs, errors — is written to a single event log, and that log streams to the UI in real time. The Activity view is the rendered form of this stream.
+- The event log is also downloadable for offline debugging and replayable for post-hoc analysis.
 - Telemetry feeds the UI by default: per-run performance, cost, and self-analytical metrics are visible without per-feature dashboard work. New features get observability essentially for free.
 - Cost is a first-class observable: per-run, per-cycle, and per-feature cost are surfaced in the UI and in the event log.
 - Failure modes have stable typed identifiers (e.g., `topic_drift`, `shape_mismatch`, `yield_collapse`), not free-form strings. The self-healing layer pattern-matches against these; the UI can filter by them.
