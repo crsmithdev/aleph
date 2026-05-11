@@ -96,29 +96,42 @@ How a system decides to investigate more than one thread of inquiry.
 
 | System | Approach |
 |---|---|
-| WriteHERE | Recursive task graph; sub-tasks spawn at any depth via decomposer LLM call |
-| EDR | Specialized agents per source type (General, Academic, GitHub, LinkedIn); branching is per-agent assignment |
-| WebWeaver | Outline sections as branches; planner-driven, not reactive |
-| WebResearcher | Single thread; iteration replaces branching |
-| Open Deep Search | Single orchestrator; branching is implicit in tool-use loop |
-| Tongyi DeepResearch | Single agent, two modes; no explicit branching |
-| ReSum | Single thread with periodic compression |
-| CORAL | Multi-agent (configurable agent count); each agent runs its own attempt in a git worktree |
-| Stop-RAG | Single thread, learned policy on continue/stop |
-| Agentic Reasoning | Three agents (mind-map, search, reasoning) running in coordination, not branching per se |
-| Multimodal DR | Pipeline stages, not branches |
-| Current system | Reactive branch spawning from findings via perturbation strategies; flat tree, parent-child by single hop; priority-ordered queue with concurrency cap |
-| Current plan | Same reactive model, with perturbation promoted from defensive to primary derivation; up-front schedule estimates branching factor |
+| WriteHERE | Recursive task graph; decomposer LLM call spawns sub-tasks adaptively based on prior task outputs |
+| EDR | Specialized agents per source type (General, Academic, GitHub, LinkedIn); reflection mechanism detects knowledge gaps and routes follow-up to the relevant agent |
+| WebWeaver | Outline sections as branches; planner edits the outline per evidence batch (findings-reactive at outline granularity) |
+| WebResearcher | Single thread; MDP framing — each iteration decides next direction based on prior state including findings |
+| Open Deep Search | Single orchestrator running ReAct loop; next tool/query chosen per cycle based on prior results |
+| Tongyi DeepResearch (IterResearch Heavy) | Iterative — each iteration's plan reacts to prior summary |
+| ReSum | Single thread; subsequent reasoning runs against the periodic summary of prior cycles |
+| CORAL | Multi-agent parallel attempts; within an attempt, the coding agent's own loop adapts |
+| Stop-RAG | Single thread; value-function reads accumulated retrievals to decide continue/stop |
+| Agentic Reasoning | Mind-map agent updates a knowledge graph from findings; search agent reads the graph to pick next search |
+| BATS | "Dig vs pivot" decision per cycle, based on budget + signal from prior cycles |
+| Multimodal DR | Fixed four-stage pipeline — *not* findings-reactive within a stage |
+| Current system | Two adaptation layers: (a) milestone re-plans by the planner LLM reading accumulated findings, (b) rule-based perturbation menu firing between cycles — 21 typed strategies in 5 categories, with phase-aware weighting, cooldowns, forced-diversity thresholds, probabilistic firing, and typed `spawned_from_finding_id` linkage |
+| Current plan | Same two-layer model. Perturbation promoted from defensive rate-limited to primary derivation; planner adaptive (per v1) |
 
-**The current system is the only one in the survey that spawns branches reactively from findings.** Most comparators spawn proactively from the planner or use a recursive task graph that decomposes top-down. CORAL spawns multiple parallel attempts of the same task, which is a different concept — attempt-level branching, not query-level branching.
+**Almost all comparators adapt direction based on findings.** The earlier framing of "the current system is the only one that spawns reactively from findings" was wrong. The distinction is *mechanism*, not whether-it-adapts.
 
-**Impact on observed failures.** Reactive branching is a genuine differentiator that the survey neither validates nor contradicts. Against the observed failures, reactive branching contributes to F4 (yield collapse): if early findings are off-topic, the branches spawned from them compound the error. Recursive task-graph approaches (WriteHERE) would handle F2 better for composition-heavy queries (the structure forces an outline), but at the cost of much higher per-query LLM use.
+**Most comparators use LLM-driven adaptation:** the model reads prior state (findings, accumulated context, summaries) and decides what's next. This is unstructured — the model can produce any next action. The granularity varies: per-cycle (ReAct family — Open Deep Search, Stop-RAG, BATS, Agentic Reasoning, WebResearcher), per evidence batch (WebWeaver), per recursive decomposition (WriteHERE), or per stage (Multimodal DR is *not* findings-reactive within a stage).
 
-The current branching model isn't the cause of any observed failure on its own, but it amplifies upstream failures. If the canon enumeration is wrong (F1), reactive branches lock in the wrong direction faster than a planner-driven model would.
+**The current system has two adaptation layers:**
+1. **LLM-driven re-plans at milestones** (per the v1 adaptive planner) — same pattern as the comparators, occurring every 25 % of envelope. Handles "the answer needs a different shape."
+2. **Rule-based perturbation between cycles** — typed strategy menu (analogical, contrarian, scale_shift, citation_chain, etc.) with structured firing rules. Handles "inject diversity here" / "shift to a different scale" without paying an LLM-decision cost per firing. The LLM is involved only in *framing* the resulting query under the chosen strategy, not in *deciding* to fire.
 
-**For the system.** Keep reactive finding-driven branching as the main mechanism — the survey gives no evidence that it's worse than the alternatives, and it expresses query-shape adaptation well. But make branching budget visible at plan time: how many derivation-spawned branches the schedule will allow given the envelope, the perturbation strategy weights, and the topic. Currently the planner doesn't know about derivation budget at all, which means the up-front plan and the actual run drift independently. A predicted derivation count at plan time lets the planner trade depth-on-fewer against breadth-on-more.
+The perturbation layer is the genuine differentiator. No comparator has an inference-time strategy menu. The closest analogs (ZeroSearch, HiPRAG, Atom-Searcher) are *training-time* objectives — they teach a model to do similar things implicitly. Construct does it explicitly at inference, with the structure visible and tunable.
 
-Recursive sub-loops (the WriteHERE pattern) should be available for opt-in by templates that need it (long-form composition), not baked into the engine.
+**Why both layers are complementary.** A pure LLM-driven approach (most comparators) pays a model call per decision and can converge on similar follow-ups across cycles — there's no built-in pressure toward strategy diversity. A pure rule-based approach (no LLM re-plan) can't respond to high-level signals like "this whole branch isn't yielding." Construct having both means cheap diversity injection at cycle granularity plus expensive shape correction at milestone granularity, with each layer doing what it's best at.
+
+**Impact on observed failures.** The two-layer model doesn't directly cause any of the observed failures. Where it interacts with them:
+- F1 (topic drift) is upstream of branching — bad canon means perturbation-spawned branches compound the error. Addressed by the adaptive planner (§1).
+- F4 (yield collapse) is the reactive-branching downside: if early findings are off-topic, perturbation amplifies. Adaptive milestone re-plans pull the loop back; planner-level depth-vs-breadth decisions become visible (see below).
+
+**For the system.** Keep both layers. They address different signals at different costs. Two concrete refinements:
+
+1. **Make derivation budget visible at plan time.** Currently the planner doesn't know how many perturbation-spawned branches the run will permit given the envelope, strategy weights, and cooldown rules. A predicted derivation count at plan time lets the planner trade depth-on-fewer against breadth-on-more. With the adaptive planner now LLM-driven (v1), this is just an extra input to the planner prompt.
+
+2. **Recursive sub-loops** (the WriteHERE pattern) should be available for opt-in by templates that need it (long-form composition, code-dev with test sub-runs), not baked into the engine. Most templates won't need it.
 
 ---
 
