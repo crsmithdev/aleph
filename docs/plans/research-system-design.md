@@ -139,6 +139,8 @@ The perturbation layer is the genuine differentiator. No comparator has an infer
 
 How accumulated findings, prior reasoning, and intermediate state are fed back into subsequent cycles.
 
+**Scope note.** "Compression" in this section refers specifically to **engine-side state handling** — what the next cycle's LLM prompt sees when prior cycles have accumulated. It is *distinct from* user-facing milestone summaries (narrative checkpoints the user reads on the loop-detail page). Milestones and engine-side digests can be co-produced at the same checkpoint moments, but they have different audiences (user vs. next cycle's model), different formats (narrative + citations vs. compact structured state), and different lifecycles (milestones persist as deliverables; digests are working state for the planner and processor). The two should be separate artifact kinds.
+
 | System | Approach |
 |---|---|
 | ReSum | Periodic summarization tool invoked between rounds; subsequent reasoning runs against the summary, not raw history |
@@ -162,7 +164,7 @@ How accumulated findings, prior reasoning, and intermediate state are fed back i
 
 **For the system.** Don't make compression a primary operation. The argument for it is future-tense (longer envelopes than are currently run) and the design cost is modest, but adding a primary operation for an unmotivated need is the kind of thing that compounds into systemic complexity. Re-evaluate when a query pattern emerges that actually pressures the window.
 
-Keep the milestone-summary pattern in the plan; treat it as user-facing artifact only, not as working context. If compression becomes useful later, it slots in as a window strategy that templates can declare without disturbing the rest of the design.
+Keep the milestone-summary pattern in the plan as a v1 deliverable — but explicitly as a **user-facing artifact** (`kind: 'milestone'`), not as the next cycle's working context. The next cycle in v1 still sees prior artifacts directly. When engine-side compression becomes useful later (heavy-modality, overnight envelopes), it slots in as a separate `kind: 'digest'` artifact co-produced at the same checkpoints — same trigger, different consumer, different format. Templates declare a window strategy (`full | digest | digest_plus_recent_N`) to opt into engine-side compression without disturbing the user-facing milestone flow.
 
 ---
 

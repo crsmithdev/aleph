@@ -30,7 +30,7 @@ Inherits from `research-system-principles.md` (single-operator scale, AI-maintai
 - Loop primitive with four-hook template interface (`processor`, `derivation`, `renderer`, `stop_rule`)
 - Cycle ledger with input-hash dedup for crash resume
 - Envelope: `{ time?, cost?, cycles?, sources? }` — multiple stack, stops at first consumed
-- Milestones at 25 / 50 / 75 % envelope consumption (each is itself an artifact)
+- Milestones at 25 / 50 / 75 % envelope consumption. Each emits a `kind: 'milestone'` artifact — a **user-facing** narrative summary (prose + citations + "what's confirmed / what's open / what's next") visible on the loop-detail page; the user can promote a milestone to the final artifact if the answer is already there. This is *not* the next-cycle's working context (that's the `digest` companion, v3.2).
 - Child-process per loop, supervised by API server
 - Schema cutover: `loops`, `cycles`, `artifacts`, `cycle_ledger`, `milestones`
 - Within-loop priority float preserved (`ORDER BY priority DESC, created_at ASC`)
@@ -76,7 +76,7 @@ Each item below could plausibly be in v1 — they're called out so the boundary 
 | Per-cycle redundancy detector (HiPRAG-style) | Same — needs to be measured before defaulting on. | v2 |
 | Post-mortem narrative content | Today flags are empty-content; filling them is a small UX win but unrelated to the engine cutover. | v2 |
 | Source-type specialized processors (academic, GitHub, directory, restaurant) | Wants the research template stable before adding processor diversity. | v3 |
-| Context compression at milestones (ReSum-style) | No observed need yet in the dev DB. Belongs with heavy-modality envelopes. | v3 |
+| Engine-side context compression at milestones (ReSum-style `digest`; distinct from v1's user-facing `milestone` artifacts) | No observed need yet in the dev DB — runs hit yield walls and shape mismatches before context-window walls. Belongs with heavy-modality / overnight envelopes. | v3 |
 | Charts in renderer (FDV-style) | No observed need. Renderer hook supports it later. | v3 |
 | Heavy-modality cycles (books, PDFs, images) | Was step 5 of the refocus build order. Decouple from v1. | v3 |
 | Pre-flight clarification flow | The InferredPanel already does most of what this is for. Promote only if needed. | maybe v2, maybe never |
@@ -212,11 +212,14 @@ After v2 stabilizes. Theme: grow the surface so heavier, more varied research wo
 - Planner chooses the mix based on `(shape × topic × prompt_signals)`. Extended `RunPlan` includes `processor_mix`.
 - *Empirical case:* Berkeley Volunteering (688 sources, no directory processor), Smashed Burgers (no restaurant-directory processor), Awesome-DR (no GitHub-aware processor).
 
-**v3.2 — Context compression at milestones.**
-- New artifact kind: `digest` (already in the refocus plan).
-- After each milestone, the working context fed into the next cycle is `digest + recent_cycles`, not `all_artifacts`.
+**v3.2 — Engine-side context compression at milestones.**
+This is the **engine-facing companion** to v1's user-facing `milestone` artifacts. The two are co-produced at each 25/50/75 % checkpoint but serve different consumers.
+
+- New artifact kind: `digest` — compact structured state (open questions, confirmed findings, gaps, recent decisions) consumed by the **next cycle's LLM prompt**. Distinct from `milestone`, which is the user-facing narrative summary.
+- After each checkpoint, the working context fed into the next cycle is `digest + recent_cycles`, not `all_artifacts`. The user-facing milestone artifact is unchanged by this — only the next cycle's prompt input changes.
 - Per-template "window strategy" declaration: `{ full | digest | digest_plus_recent_N }`.
-- Unblocks: overnight envelopes (12+ hours), heavy-modality runs (books/PDFs/images), monitor inner-loops with long histories.
+- Production: a single milestone LLM call emits both shapes (or one to make the narrative, a cheap second extraction pass to derive the digest) — co-produced, not double-paid.
+- Unblocks: overnight envelopes (12+ hours), heavy-modality runs (books/PDFs/images), monitor inner-loops with long histories. None of which v1 needs to support.
 
 **v3.3 — Charts in the renderer.**
 - New artifact kind: `chart` with FDV-style structured payload.
