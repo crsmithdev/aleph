@@ -1,5 +1,3 @@
-API Key: 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
-
 # Deep Research — Feature Specification
 
 **Project:** Construct
