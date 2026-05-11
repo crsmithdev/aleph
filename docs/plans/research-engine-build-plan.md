@@ -12,11 +12,12 @@ This doc selects what ships in v1 (MVP) and roadmaps v2–v4. v1 is the hard cut
 
 Inherits from `research-system-principles.md` (single-operator scale, AI-maintainable, typed contracts, mockable LLM, typed failure-mode identifiers, perturbation as primary, forkable runs, event-triggered background work). Build-plan-specific principles:
 
-1. **Ship the abstraction with two templates at once.** Research alone produces a research-shaped engine. Monitor is small but forces the boundary to be honest.
-2. **Fold in the empirical fixes** from the design doc's observed-data appendix. The Awesome-Deep-Research drift, the HSV/HPV table-not-produced, the Smashed-Burgers list-in-prose, the universal `low_finding_yield` flag — these are catchable in v1 with small additions to the spec baseline.
-3. **Preserve what works today.** The `InferredPanel` "engine infers, user corrects" pattern. The 21-strategy perturbation menu. The typed-shape detection. These are differentiators — the rewrite is the dispatcher, not the brain.
-4. **One hard cutover, no coexistence.** Phases 1–6 land additively, Phase 7 deletes the old engine in one pass.
-5. **Defer ambition.** Every comparator-derived feature whose empirical pain isn't visible in the dev DB waits for v2 or later.
+1. **Engine-deterministic, planner-adaptive.** Engine plumbing (input-hash dedup, priority dispatch order, cycle ledger, render from a fixed artifact set) stays deterministic — that's what enables crash-resume, forkable runs, and stable replay of state. Planning (canon, decomposition, budget allocation, strategy selection) is fully adaptive — each query gets a fresh LLM-planned `LoopSchedule`. Same prompt twice may produce different plans; same artifact set always produces the same render.
+2. **Ship the abstraction with two templates at once.** Research alone produces a research-shaped engine. Monitor is small but forces the boundary to be honest.
+3. **Fold in the empirical fixes** from the design doc's observed-data appendix. The Awesome-Deep-Research drift, the HSV/HPV table-not-produced, the Smashed-Burgers list-in-prose, the universal `low_finding_yield` flag — these are catchable in v1 with small additions to the spec baseline.
+4. **Preserve what works today.** The `InferredPanel` "engine infers, user corrects" pattern. The 21-strategy perturbation menu. The typed `question_shape` detection. These are differentiators — the rewrite is the dispatcher, not the brain.
+5. **One hard cutover, no coexistence.** Phases 1–6 land additively, Phase 7 deletes the old engine in one pass.
+6. **Defer ambition.** Every comparator-derived feature whose empirical pain isn't visible in the dev DB waits for v2 or later.
 
 ---
 
@@ -43,7 +44,7 @@ Inherits from `research-system-principles.md` (single-operator scale, AI-maintai
 **Empirically-grounded additions (from Appendix A):**
 
 - **Output-shape enforcement.** `output_shape` field populated at session create (one LLM call). Renderer gates the run on shape satisfaction. `stop_rule` becomes `schedule_complete OR envelope_consumed OR shape_satisfied`.
-- **Topic-cluster + canon enumeration overhaul.** URL-grounded queries detect URLs in the prompt and fetch contents as the seed source set. `enumerateCanon` becomes shape-conditional (skip for `comparison` over a user-provided list). Topic taxonomy widens past the current fixed 6 clusters (free-text + autocomplete, or grow to ~20 clusters).
+- **Adaptive planner.** Replaces today's `(question_shape × topic_cluster) → RunPlan` lookup in `run-plan.ts` with an LLM call that takes `(prompt, question_shape, output_shape, envelope)` and produces a typed `LoopSchedule` artifact. The 6-cluster topic taxonomy and the `SHAPE_DEFAULTS` budget table are deleted entirely. The planner produces seed canon, branch decomposition, per-branch budgets, and which perturbation strategies to favor. URL detection in the prompt feeds the planner (it grounds canon on URL contents) rather than running as a switch around a fixed lookup. The typed `question_shape` enum is retained as a planner *input* and renderer *constraint*, not as a lookup key.
 - **Plan as a first-class artifact** (`kind: 'schedule'`). Diffable. Re-plans at milestones produce new schedule artifacts with `predecessor_id`. Lays the foundation for v2 mid-run editing.
 - **Per-role model selection.** `model_planner` / `model_extractor` / `model_synth` config fields. Default: strong on planning + synthesis, cheap on extraction.
 
@@ -100,9 +101,9 @@ Research processor / derivation / renderer / stop_rule wraps today's logic. Moni
 Detect `output_shape` at session create. Renderer-as-gate: if shape unsatisfied, request more derivation before declaring done. `stop_rule` rejects "done" without shape.
 *Deliverable:* HSV/HPV-style queries produce the requested table. Berkeley-volunteering-style queries produce a list.
 
-**Phase 4 — Canon overhaul.**
-URL detection in the prompt; fetch and use contents as the seed source set. Shape-conditional canon (skip enumeration for `comparison` over explicit lists). Topic taxonomy widens.
-*Deliverable:* Awesome-Deep-Research-style queries don't pull AlphaFold/Adam optimizer.
+**Phase 4 — Adaptive planner.**
+Delete `run-plan.ts`'s `(shape × topic) → RunPlan` lookup, the 6-cluster `TOPIC_CLUSTERS` constant, and the `SHAPE_DEFAULTS` budget table. Add a planner LLM call that emits a typed `LoopSchedule`: `{ canon[], branches[], per_branch_budget, perturbation_weights, milestone_plan }`. Inputs: the prompt, detected `question_shape`, detected `output_shape`, and the envelope. URL detection in the prompt feeds the planner as a grounding signal (contents fetched, supplied as canon seed) rather than as a separate code path.
+*Deliverable:* Awesome-Deep-Research-style queries don't pull AlphaFold/Adam optimizer — the planner sees the GitHub URL and grounds canon on the listed projects.
 
 **Phase 5 — Plan as artifact + per-role model selection.**
 `LoopSchedule` persists as `kind: 'schedule'`. Re-plans produce new schedule artifacts. `SessionConfig` gains per-role model fields.
@@ -158,10 +159,10 @@ v1's schedule-as-artifact + InferredPanel already do most of the work. v2 adds:
 - Surface in the InferredPanel after a run paused/failed: "the engine flagged thread_skew because 47 of 60 threads explored cooking technique vs. only 13 on Bay Area restaurants — want to rebalance?"
 - *Empirical case:* the universal `low_finding_yield + thread_skew` flag pattern (Appendix A). The flags exist; the user can't see why.
 
-**v2.5 — Canon enumeration tuning.**
-- After v1 makes `enumerateCanon` shape-conditional, v2 evaluates the rules across the historical query corpus
-- Tighten where wrong, widen where over-restrictive
-- *Empirical case:* the long tail of `Misc`-bucketed queries today
+**v2.5 — Planner prompt tuning.**
+- v1's adaptive planner is fully LLM-driven. v2 evaluates planner outputs across the historical query corpus and tunes the prompt + few-shot examples for systematic failures
+- Adds a small set of "canonical good plans" for representative shape × topic combinations as in-prompt examples (closing the loop on what the deleted lookup table used to encode)
+- *Empirical case:* the long tail of historically-bucketed `Misc` queries — verify the adaptive planner handles them at least as well as the old lookup
 
 **v2.6 — Self-healing layer** (from principles doc).
 - The system evaluates its own outputs against the design goals declared for each run (shape, coverage, intent alignment) and flags when they aren't met — using the typed failure-mode IDs from v1
@@ -243,9 +244,10 @@ The three things to watch across v1.
    - *Risk:* the LLM misdetects "table" when the user wanted prose. Renderer forces a table for everyone.
    - *Mitigation:* keep it editable in the InferredPanel; default to `prose` unless the prompt explicitly says "table" / "list of N" / "timeline".
 
-2. **Canon overhaul regresses query types that today rely on it.**
-   - *Risk:* lookup / audit queries lean on canonical-source enumeration today. If we drop canon too broadly, those degrade.
-   - *Mitigation:* keep canon ON for shapes where it works (audit, lookup, survey); OFF only for `comparison` over explicit lists. Don't drop wholesale.
+2. **Adaptive planner regresses query types the lookup table got right by accident.**
+   - *Risk:* lookup / audit queries today happen to land on reasonable defaults because their topics fit the existing 6-cluster taxonomy. An adaptive planner with a weak prompt could regress these.
+   - *Mitigation:* before deleting the lookup table, run the adaptive planner on the historical query corpus and compare schedule outputs to the lookup-derived plans on the queries the lookup got right. Block the cutover if the planner regresses on > 10% of them. Encode the lookup's good defaults as few-shot examples in the planner prompt rather than as a code path.
+   - *Loss accepted:* planner output is no longer byte-deterministic. Same prompt twice may produce different plans. The user explicitly accepted this tradeoff. Reproducibility at the engine layer (input-hash dedup, dispatch order, render-from-artifacts) is preserved.
 
 3. **Schema cutover blast radius.**
    - *Risk:* the single Phase-7 migration touches 4+ tables. If something goes wrong, the entire research surface is down.
@@ -268,7 +270,7 @@ Worth restating since the comparison doc surveyed them and decided no:
 
 ### Feature inventory at a glance
 
-**v1 ships:** loop engine + 4-hook template interface · research template · monitor template · cycle ledger · envelope · milestones · child-process per loop · output-shape enforcement · canon overhaul (URL-grounded, shape-conditional, widened taxonomy) · plan-as-artifact · per-role model selection · InferredPanel (preserved + `output_shape` editor added) · envelope presets · mockable LLM boundary · typed failure-mode identifiers · cost-as-observable · event-triggered background work · two real-LLM e2e tests.
+**v1 ships:** loop engine + 4-hook template interface · research template · monitor template · cycle ledger · envelope · milestones · child-process per loop · output-shape enforcement · adaptive planner (replaces shape × topic lookup; URL-grounded; emits typed `LoopSchedule`) · plan-as-artifact · per-role model selection · InferredPanel (preserved + `output_shape` editor added) · envelope presets · mockable LLM boundary · typed failure-mode identifiers · cost-as-observable · event-triggered background work · two real-LLM e2e tests.
 
 **v1 does NOT ship:** pause/edit/resume control · adaptive stop · per-cycle redundancy detector · narrative post-mortem content · self-healing remediation · forkable runs · source-type specialized processors · context compression · charts in renderer · heavy-modality cycles · pre-flight clarification flow · recursive sub-loops · new templates (code/writing/image).
 
@@ -276,7 +278,7 @@ Worth restating since the comparison doc surveyed them and decided no:
 
 | Version | Theme | Headline features | Depends on |
 |---|---|---|---|
-| **v1 (MVP)** | Cutover with empirical fixes | Loop engine, research + monitor templates, output-shape enforcement, canon overhaul, plan-as-artifact, per-role model selection. Keep `InferredPanel`. Mockable LLM, typed failure modes, real-LLM CI. | — |
+| **v1 (MVP)** | Cutover with empirical fixes | Loop engine, research + monitor templates, output-shape enforcement, **adaptive planner** (replaces shape × topic lookup), plan-as-artifact, per-role model selection. Keep `InferredPanel`. Mockable LLM, typed failure modes, real-LLM CI. | — |
 | **v2** | Stabilize and steer | Pause/edit/resume, adaptive stop, redundancy detector, narrative post-mortems, canon tuning, self-healing layer, forkable runs. | v1 plan-as-artifact + typed failure modes |
 | **v3** | Extend | Source-type processors, context compression at milestones, charts in renderer, heavy-modality cycles, cross-template evaluator. | v2 stability |
 | **v4** | New templates | Code-dev, long-form writing, image-iteration. Recursive sub-loops if needed. | v3 surface extensions |
