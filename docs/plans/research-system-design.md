@@ -145,7 +145,7 @@ How accumulated findings, prior reasoning, and intermediate state are fed back i
 | WebResearcher | Evolving report rewritten each iteration; the report is the working state |
 | Tongyi DeepResearch (IterResearch Heavy mode) | Iterative summarization at each step; test-time scaling via compression |
 | Agentic Reasoning | Mind-Map knowledge graph maintained as structured long-horizon memory |
-| WebWeaver | Focused workspace per cycle plus the outline; outline carries forward |
+| WebWeaver | Outline plus an external memory bank of evidence; the writer retrieves only the needed evidence per section via citations rather than carrying full history forward |
 | EDR | LangGraph state object; full history retained |
 | Open Deep Search | Full history retained in context |
 | WriteHERE | In-memory state module; full history |
@@ -172,23 +172,23 @@ When the system declares the run done.
 
 | System | Approach |
 |---|---|
-| Stop-RAG | Iteration framed as finite-horizon MDP; learned value controller decides continue vs. stop per round |
-| BATS | Budget Tracker; framework decides dig-deeper vs. pivot based on remaining budget |
-| EDR | Adaptive — reflection mechanism stops when gaps close; budget cap as backstop |
-| ResearStudio | Modal — human-led mode lets the user stop; AI-led runs to a configured limit |
-| WriteHERE | Composition-driven — stops when document is "complete" by writer-LLM judgment |
-| WebWeaver | Stops when outline is fully cited |
-| WebResearcher | Stops at MDP terminal condition (configured) |
-| ReSum | Fixed iteration count or external signal |
-| Open Deep Search | Fixed iteration count per role |
-| Tongyi DeepResearch | Heavy mode has a fixed cycle budget; ReAct stops when model emits final |
-| CORAL | Per-task time/budget caps; grader determines pass/fail |
-| Agentic Reasoning | Stops when the mind-map "converges" by LLM judgment |
-| Multimodal DR | Pipeline completes when all stages finish |
+| Stop-RAG | Iteration framed as finite-horizon MDP; learned value controller decides continue vs. stop per round (confirmed in abstract) |
+| BATS | Budget Tracker plug-in; framework decides "dig deeper" vs. "pivot" based on remaining budget (confirmed in abstract) |
+| EDR | Reflection mechanism detects knowledge gaps and updates research direction (confirmed); whether the run *stops* on gap closure vs. only re-routes is not documented in the README — budget cap is the documented backstop |
+| ResearStudio | Three-mode operation (AI-led / human-assisted / human-led); human-led runs are user-terminated (confirmed in abstract); AI-led termination criterion not documented |
+| WriteHERE | Long-form composition framework; stop criterion not documented in README — plausibly composition-complete by writer judgment |
+| WebWeaver | Stop criterion not documented in abstract; plausibly when the planner's outline is fully populated from the memory bank |
+| WebResearcher | MDP framing implies a terminal condition; specifics not documented |
+| ReSum | Stop criterion not documented; the summarization paradigm itself doesn't specify one |
+| Open Deep Search | ReAct-style termination: model decides when to emit a final answer; iteration caps configurable |
+| Tongyi DeepResearch | ReAct mode terminates on the model's final answer; Heavy mode is described as "test-time scaling" without an explicit stop rule in the README |
+| CORAL | Per-task time / budget caps in YAML config; grader determines pass/fail (confirmed in README) |
+| Agentic Reasoning | Stop criterion not documented in abstract |
+| Multimodal DR | Fixed four-stage pipeline; "stop" is just pipeline completion |
 | Current system | Iteration count, budget, depth — hard-coded caps; stuck-state heuristic via similarity |
 | Current plan | Adds shape-driven completion (e.g. "list shape needs ≥10 items") and milestone-driven envelope checks |
 
-**Three patterns.** Hard caps (most comparators, current system). Learned value controller (Stop-RAG). Adaptive heuristic (EDR's reflection, BATS's budget-aware). The current plan adds a shape-completeness clause — a specific form of adaptive stop.
+**Three documented patterns.** Hard caps (most comparators, current system — confirmed for CORAL via YAML, plus envelope/iteration caps in most others). Learned value controller (Stop-RAG — confirmed). Adaptive heuristics: BATS's budget-aware dig-vs-pivot is confirmed; EDR's reflection mechanism updates direction but isn't documented to also stop the run. Several other comparators' stopping criteria aren't explicitly documented in their READMEs or abstracts — table entries above flag that. The current plan adds a shape-completeness clause — a specific form of adaptive stop.
 
 **Impact on observed failures.** F4 (yield collapse without early stop) is the direct target. F7 (expensive abandoned long runs) is related — many of the long runs in the dataset were near-stationary by cycle 30 but ran to cycle 60 because no stopping rule modeled marginal value. A value-based stop would address both, but it's also the highest-risk addition: a bad scorer is worse than no scorer, because it'll stop runs that were about to find the key insight.
 
@@ -418,17 +418,19 @@ The strategy weights should be auditable: the operator should be able to see, fo
 
 A research system characterized by:
 
-- *Deterministic question classification* with typed question shapes, a richer topic taxonomy, role priming, and explicit detection of URL-grounded queries. Reproducible same-query-same-plan behavior. Output shape is a first-class inferred-then-editable field, distinct from question shape.
+- *Engine-deterministic, planner-adaptive.* Engine plumbing (input-hash dedup, cycle priority dispatch, cycle ledger, render from a fixed artifact set) is deterministic — that's the layer that makes crash-resume, forkable runs, and stable replay possible. Planning is adaptive — each query's `LoopSchedule` is an LLM call rather than a table lookup. Same prompt twice may produce different plans; same artifact set always produces the same render.
 
-- *Plan as first-class artifact*, persisted, diffable, editable. Generated from the inputs and re-generable on edit. Replaces internal-struct planning.
+- *Typed question classification* — 7 question shapes and a separate inferred output shape, both as planner *inputs* and renderer *constraints*, not as lookup keys. Role priming preserved. URL-grounded queries detected and supplied to the planner as canon seed. The 6-cluster topic taxonomy is deleted entirely.
 
-- *Pause-and-edit primitive* at every cycle boundary, reusing the entry surface's field editors. Cooperative cancellation at cycle boundaries is the engine-side prerequisite.
+- *Plan as first-class artifact*, persisted as `kind: 'schedule'`, diffable across re-plans, **rendered as an explorable Schedule view in the UI from v1** (read-only initially; editable when paused). Each re-plan produces a new artifact linked to its predecessor.
 
-- *Reactive finding-driven branching* with planner-visible derivation budgeting, and a yield-collapse fallback in the perturbation system.
+- *Strong mid-run steerability* (v2). Two intervention paths: structural (pause + edit the schedule artifact + resume) and natural-language (free-form `directive` artifacts the planner reads on its next re-plan, no pause required). Three modes: AI-led, AI-led with nudges, human-led.
+
+- *Two-layer findings-reactive branching.* Milestone re-plans by the planner LLM (course correction at envelope-percent checkpoints) plus a rule-based perturbation menu firing between cycles (21 strategies with phase-aware weighting, cooldowns, forced-diversity thresholds, probabilistic firing). The planner is also given derivation-budget visibility so it can trade depth-on-fewer against breadth-on-more.
 
 - *Composite stopping rule*: envelope exhausted, or shape completed, or marginal-value floor breached. The marginal-value clause is conservative — stop only when last-N cycles produce no new sources, no new findings, and no planner-confidence movement.
 
-- *Typed processors per source type* (web, academic, code repository, directory, PDF, structured). Planner picks the mix. Single web search remains the default for queries that don't trip a specialization.
+- *Typed processors per source type* (web, academic, code repository, directory, PDF, structured). Planner picks the mix. Single web search remains the default for queries that don't trip a specialization. v3.
 
 - *Output-shape enforcement at the renderer*. Final-render gate rejects "done" if the shape isn't satisfied. Multimodal output is reserved for templates that need it.
 
@@ -440,7 +442,7 @@ A research system characterized by:
 
 - *Two-tier evaluation*: intra-run checks drive the stopping rule's marginal-value clause; post-run introspection includes a single intent-alignment LLM call that reads prompt + document and judges alignment. F3 (silent re-submission) detection lives here.
 
-- *Perturbation strategy menu* with phase-aware weighting, depth-scaling, forced diversity, and a yield-collapse fallback that overrides phase weighting when novelty stalls.
+- *Perturbation strategy menu* with phase-aware weighting, depth-scaling, forced diversity, and a yield-collapse fallback that overrides phase weighting when novelty stalls. Visible to the planner as a constraint to allocate against; visible to the user as a tunable surface.
 
 Features explicitly *not* included: periodic context compression as a primary operation, recursive task-graph scheduling at the engine level, multimodal chart generation, continuous evaluator agent, LangGraph adoption, full MCP tool ecosystem, learned value controller for stopping, leaderboard / eval-on-commit infrastructure. Each was evaluated and skipped for the reasons in its section.
 
