@@ -1,56 +1,104 @@
 {
   "rules": [
     {
-      "skill": "build",
-      "keywords": ["build", "implement", "add feature", "create feature", "new feature", "refactor", "redesign", "overhaul"]
+      "skill": "search",
+      "keywords": ["search for", "look up", "find out", "what is", "how does", "compare", "search online", "web search", "find examples", "examine", "look for", "check online", "/\\bonline\\b/"]
     },
     {
-      "skill": "research",
-      "keywords": ["research", "investigate", "look into", "find out", "compare", "survey", "analyze"]
-    },
-    {
-      "skill": "verification",
-      "keywords": ["verify", "verify that", "verify it", "confirm passing", "validate that", "prove it works", "verification"]
-    },
-    {
-      "skill": "debugging",
-      "keywords": ["debug", "bug", "broken", "failing", "error", "crash", "exception", "traceback", "root cause", "bisect"]
-    },
-    {
-      "skill": "docs-review",
-      "keywords": ["doc sync", "docs drift", "documentation mismatch", "docs match", "check docs", "review docs", "docs review", "verify docs", "documentation review"]
+      "skill": "verify-completion",
+      "keywords": ["verify", "check it works", "make sure it works", "validate", "end to end", "e2e"]
     },
     {
       "skill": "ralph-loop",
       "keywords": ["ralph", "ralph loop", "autonomous loop", "keep iterating", "iterate until"]
     },
     {
+      "skill": "git-workflow",
+      "keywords": ["worktree", "create worktree", "merge this", "time to merge", "merge the branch", "new branch", "feature branch", "merge and push", "commit and push", "ship it", "/merge.{0,15}push/", "/commit.{0,25}push/"]
+    },
+    {
+      "skill": "test-webapp",
+      "keywords": ["test webapp", "test web app", "playwright", "browser test", "frontend test", "ui test", "screenshot", "browser automation", "test local server", "verify ui", "test the ui", "/test.{0,20}(workflow|ui|page|frontend)/"]
+    },
+    {
+      "skill": "skill-creator",
+      "keywords": ["create a skill", "make a skill", "new skill", "write a skill", "skill creator", "improve skill", "optimize skill", "skill description", "skill eval", "test a skill"]
+    },
+    {
+      "skill": "code-debug",
+      "keywords": ["still failing", "still erroring", "not working", "not loading", "all erroring", "fix this error", "broken", "root cause", "debug", "/why is.{0,30}(not|error|fail|break|wrong|crash)/", "/still.{0,10}(fail|error|broke|crash)/", "/(all|every).{0,25}(fail|error)/"]
+    },
+    {
+      "skill": "agent-browser",
+      "keywords": ["agent-browser", "browser automation", "open a website", "fill out a form", "click a button", "take a screenshot", "scrape data", "automate browser", "web automation", "navigate page", "browser cli"]
+    },
+    {
+      "skill": "code-simplify",
+      "keywords": ["deslop", "remove slop", "clean up code", "remove boilerplate", "over-engineered", "unnecessary comments", "simplify before commit", "simplify code", "clean this up", "too much boilerplate", "simplify this"]
+    },
+    {
       "skill": "code-review",
-      "keywords": ["dead code", "unused", "clean up", "cleanup", "simplify", "code quality", "code review", "lint"]
+      "keywords": ["code review", "review this code", "architecture review", "review my implementation", "check my code", "review the changes", "/review.{0,15}(code|changes|implementation|diff)/"]
     },
     {
-      "skill": "hooks-review",
-      "keywords": ["review hooks", "audit hooks", "hook check", "hook review"]
+      "skill": "code-refactor",
+      "keywords": ["refactor", "reorganize files", "restructure code", "move files", "update imports", "break down this file", "split this module", "break it up", "too big", "reorganize", "restructure", "/break.{0,15}(up|apart|out|down)/", "/(too|really).{0,10}(big|long|monolithic)/"]
     },
     {
-      "skill": "commands-review",
-      "keywords": ["review commands", "audit commands", "command check", "slash command review"]
+      "skill": "docs-author",
+      "keywords": ["document this", "write documentation", "create docs", "update the docs", "write a readme", "docs review", "update docs", "full docs review", "document the architecture"]
     },
     {
-      "skill": "skills-review",
-      "keywords": ["review skills", "audit skills", "skill check", "skill quality"]
+      "skill": "docs-author-v2",
+      "keywords": ["docs-v2", "use docs-author-v2", "docs author v2", "/v2 docs/"]
     },
     {
-      "skill": "config-review",
-      "keywords": ["review config", "audit config", "settings review", "config check", "settings audit"]
+      "skill": "docs-audit",
+      "keywords": ["docs audit", "audit docs", "audit the docs", "doc audit", "documentation audit", "/(audit|review|check).{0,15}(docs|documentation)/"]
     },
     {
-      "skill": "finishing-branch",
-      "keywords": ["finish branch", "merge branch", "create pr", "ready to merge", "branch done", "pull request", "open pr", "make pr", "submit pr"]
+      "skill": "docs-conform",
+      "keywords": ["docs-conform", "make the docs match", "align the docs", "same readme structure", "match the readme", "/(readmes|docs|guides).{0,30}(match|like|same|consistent)/"]
     },
     {
-      "skill": "git-worktrees",
-      "keywords": ["worktree", "create worktree", "isolated branch", "parallel branch"]
+      "skill": "docs-optimize",
+      "keywords": ["optimize docs", "optimize documentation", "c7score", "llms.txt", "docs for ai", "docs for llm"]
+    },
+    {
+      "skill": "context-compact",
+      "keywords": ["context window", "token budget", "context limit", "context is full", "save and clear", "running out of context", "/context.{0,15}(full|100|limit|running out)/"]
+    },
+    {
+      "skill": "eval-harness",
+      "keywords": ["eval", "define eval", "run eval", "eval report"]
+    },
+    {
+      "skill": "design-audit",
+      "keywords": ["design audit", "audit the design", "audit the ui", "audit ui", "design review", "make this feel professional", "make this look professional", "polish the interface", "ux audit", "go through the ui", "review the ui", "the ui needs work", "clean up the ui", "/(review|audit|go through).{0,15}(ui|design|interface|ux)/"]
+    },
+    {
+      "skill": "design-type",
+      "keywords": ["typography", "fix typography", "em dash", "en dash", "text hierarchy", "review layout", "fix the font", "change the font", "font size", "font is wrong", "/(fix|change|update|wrong).{0,15}font/", "/font.{0,15}(wrong|bad|ugly|small|big|size)/"]
+    },
+    {
+      "skill": "design-standards",
+      "keywords": ["web standards", "check accessibility", "accessibility audit", "a11y", "best practices", "review ux"]
+    },
+    {
+      "skill": "config-audit",
+      "keywords": ["audit hooks", "hook audit", "audit my hooks", "check hooks", "are my hooks", "hook outputs", "dead hooks", "unused hooks", "audit skills", "skill audit", "audit my skills", "check skills", "audit config", "config audit", "audit my config", "audit agents", "agent audit", "audit my agents", "audit setup", "audit agent", "audit claude.md", "check agent config", "go through the hooks", "go through the skills", "unused skills", "/(audit|check|review).{0,15}(hook|skill|config|agent|setup)/", "/unused.{0,10}(hook|skill)/", "/(hook|skill).{0,10}(unused|dead|broken|working)/"]
+    },
+    {
+      "skill": "code-conform",
+      "keywords": ["code-conform", "conform", "make the others", "make the other", "apply this pattern", "apply the pattern", "align with", "match the way", "match this pattern", "fix drift", "standardize", "make them consistent", "make consistent", "same pattern", "propagate this", "align the routes", "align the handlers", "match this handler", "make the providers consistent", "fix drift in the schemas", "consolidate", "single source of truth", "deduplicate", "/(handlers|providers|routes|schemas|hooks|helpers).{0,30}(consistent|match|same|like)/", "/(make|fix|align).{0,30}(consistent|match|same|like)/"]
+    },
+    {
+      "skill": "design-conform",
+      "keywords": ["design-conform", "conform", "make the pages match", "make the others", "align the layouts", "same loading state", "same empty state", "match the table headers", "make the components consistent", "same shape", "apply to all", "/(pages|tables|layouts|components|cards|forms).{0,30}(match|like|same|consistent)/", "/(make|fix|align).{0,30}(consistent|match|same|like)/"]
+    },
+    {
+      "skill": "dogfood",
+      "keywords": ["dogfood", "try this as a user", "use it like a user", "use it like a real user", "pretend you don't know the internals", "how does this feel to use", "/dogfood\\s+\\S+/"]
     }
   ]
 }

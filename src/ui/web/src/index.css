@@ -1,9 +1,45 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'Material Symbols Outlined';
+  src: url('/fonts/MaterialSymbolsOutlined.woff2') format('woff2');
+  font-weight: 100 700;
+  font-style: normal;
+  font-display: block;
+}
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20;
+  user-select: none;
+  flex-shrink: 0;
+}
+
 @theme {
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-heading: 'Archivo', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-sans: 'Noto Sans', system-ui, sans-serif;
+  --font-heading: 'Merriweather', Georgia, serif;
+  --font-mono: 'Noto Sans Mono', ui-monospace, monospace;
+
+  /* Standard type scale at 16px base */
+  --text-xs:   0.75rem;    --text-xs--line-height:   1rem;      /* 12px / 16px */
+  --text-sm:   0.875rem;   --text-sm--line-height:   1.25rem;   /* 14px / 20px */
+  --text-base: 1rem;       --text-base--line-height: 1.5rem;    /* 16px / 24px */
+  --text-lg:   1.125rem;   --text-lg--line-height:   1.75rem;   /* 18px / 28px */
+  --text-xl:   1.25rem;    --text-xl--line-height:   1.75rem;   /* 20px / 28px */
+  --text-2xl:  1.5rem;     --text-2xl--line-height:  2rem;      /* 24px / 32px */
+  --text-3xl:  1.875rem;   --text-3xl--line-height:  2.25rem;   /* 30px / 36px */
+  --text-4xl:  2.25rem;    --text-4xl--line-height:  2.5rem;    /* 36px / 40px */
+  --text-5xl:  2.4rem;     --text-5xl--line-height:  1;          /* 38px — stat card values */
 
   --color-bg-primary: var(--bg-primary);
   --color-bg-secondary: var(--bg-secondary);
@@ -30,88 +66,45 @@
   --color-links: var(--c-links);
   --color-agent: var(--c-agent);
   --color-agent-border: var(--c-agent-border);
+  --color-magenta: var(--magenta);
 }
 
+/* Base theme vars (--bg-primary, --accent, --border, etc.) are set by JS in theme.tsx.
+   Derived vars below are computed from those base vars using color-mix(). */
 :root {
-  --bg-primary: #FAFAFA;
-  --bg-secondary: #F2F2F2;
-  --bg-tertiary: #E7E7E8;
-  --bg-hover: #E7E7E8;
-  --bg-contrast: #EEEEEE;
-  --bg-buttons: #F2F2F2;
-  --text-primary: #272727;
-  --text-secondary: #546E7A;
-  --text-muted: #AABFC5;
-  --text-disabled: #D2D4D5;
-  --border-primary: #d3e1e8;
-  --border-secondary: #D2D4D5;
-  --c-accent: #00BCD4;
-  --c-accent-hover: #0097A7;
-  --c-accent-muted: #80DEEA;
-  --c-accent-subtle: #E0F7FA;
-  --c-success: #91B859;
-  --c-success-muted: rgb(145 184 89 / 0.15);
-  --c-warning: #F6A434;
-  --c-warning-muted: rgb(246 164 52 / 0.15);
-  --c-error: #E53935;
-  --c-error-muted: rgb(229 57 53 / 0.15);
-  --c-links: #00BCD4;
-  --c-agent: #c8ccd0;
-  --c-agent-border: #b0b5ba;
+  --bg-buttons:      var(--bg-secondary);
+  --border-primary:  var(--border);
+  --border-secondary: var(--text-disabled);
+  /* Magenta — the one personality color, reserved for habits per the design system */
+  --magenta:         #c879ff;
+  --c-accent:        var(--accent);
+  --c-accent-hover:  color-mix(in srgb, var(--accent), var(--text-primary) 20%);
+  --c-accent-muted:  color-mix(in srgb, var(--accent), var(--bg-primary) 50%);
+  --c-accent-subtle: color-mix(in srgb, var(--accent) 12%, var(--bg-primary));
+  --c-success:       var(--success);
+  --c-success-muted: color-mix(in srgb, var(--success) 15%, transparent);
+  --c-warning:       var(--warning);
+  --c-warning-muted: color-mix(in srgb, var(--warning) 15%, transparent);
+  --c-error:         var(--error);
+  --c-error-muted:   color-mix(in srgb, var(--error) 15%, transparent);
+  --c-links:         var(--accent);
+  --c-agent:         var(--bg-tertiary);
+  --c-agent-border:  var(--border);
+  --chart-other:     var(--text-muted);
 
-  --chart-1: #6182B8;
-  --chart-2: #91B859;
-  --chart-3: #7C4DFF;
-  --chart-4: #F6A434;
-  --chart-5: #E53935;
-  --chart-grid: #d3e1e8;
-  --chart-text: #546E7A;
-  --chart-tooltip-bg: #FAFAFA;
-  --chart-tooltip-border: #d3e1e8;
-
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.10), 0 2px 6px -2px rgb(0 0 0 / 0.06);
 }
 
 [data-theme="dark"] {
-  --bg-primary: #0f172a;
-  --bg-secondary: #1e293b;
-  --bg-tertiary: #334155;
-  --bg-hover: #2d3a4f;
-  --bg-contrast: #0c1220;
-  --bg-buttons: #1a2740;
-  --text-primary: #e2e8f0;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --text-disabled: #475569;
-  --border-primary: #1e293b;
-  --border-secondary: #334155;
-  --c-accent: #14b8a6;
-  --c-accent-hover: #0d9488;
-  --c-accent-muted: #0f766e;
-  --c-accent-subtle: #0f2a2a;
-  --c-success: #86efac;
-  --c-success-muted: rgb(134 239 172 / 0.15);
-  --c-warning: #fbbf24;
-  --c-warning-muted: rgb(251 191 36 / 0.15);
-  --c-error: #f87171;
-  --c-error-muted: rgb(248 113 113 / 0.15);
-  --c-links: #5eead4;
-  --c-agent: #3d4f63;
-  --c-agent-border: #4a5f75;
-
-  --chart-1: #38bdf8;
-  --chart-2: #86efac;
-  --chart-3: #a78bfa;
-  --chart-4: #fbbf24;
-  --chart-5: #5eead4;
-  --chart-grid: #1e293b;
-  --chart-text: #64748b;
-  --chart-tooltip-bg: #1e293b;
-  --chart-tooltip-border: #334155;
-
   --shadow-sm: none;
   --shadow-md: none;
+}
+
+/* Noto Sans Mono has a larger x-height than typical mono fonts — scale it down slightly.
+   In @layer base so explicit text-{size} utilities (utilities layer) can override it. */
+@layer base {
+  .font-mono { font-size: 0.9em; }
 }
 
 body {
@@ -123,8 +116,10 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1, h2, h3, h4, h5, h6,
+.font-heading {
   font-family: var(--font-heading);
+  letter-spacing: 0.02em;
 }
 
 ::selection {
@@ -159,14 +154,14 @@ dialog::backdrop {
 
 /* Markdown content rendering */
 .md-content {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: var(--text-secondary);
 }
 .md-content p { margin-bottom: 0.5rem; }
 .md-content p:last-child { margin-bottom: 0; }
 .md-content h1 { font-size: 0.875rem; font-weight: 600; margin-bottom: 0.25rem; }
-.md-content h2 { font-size: 0.75rem; font-weight: 600; margin-bottom: 0.25rem; }
-.md-content h3 { font-size: 0.75rem; font-weight: 600; margin-bottom: 0.25rem; }
+.md-content h2 { font-size: 0.875rem; font-weight: 600; margin-bottom: 0.25rem; }
+.md-content h3 { font-size: 0.875rem; font-weight: 600; margin-bottom: 0.25rem; }
 .md-content ul { list-style-type: disc; padding-left: 1rem; margin-bottom: 0.5rem; }
 .md-content ol { list-style-type: decimal; padding-left: 1rem; margin-bottom: 0.5rem; }
 .md-content li { margin-bottom: 0.125rem; }
@@ -180,4 +175,20 @@ dialog::backdrop {
 .md-content table { border-collapse: collapse; margin-bottom: 0.5rem; }
 .md-content th, .md-content td { border: 1px solid var(--border-primary); padding: 0.25rem 0.5rem; }
 .md-content hr { border: none; border-top: 1px solid var(--border-primary); margin: 0.5rem 0; }
-.md-content.md-sm h1, .md-content.md-sm h2, .md-content.md-sm h3 { font-size: 0.6875rem; }
+.md-content.md-sm h1, .md-content.md-sm h2, .md-content.md-sm h3 { font-size: 0.875rem; }
+
+/* Article view — override compact md-content for long-form reading */
+.md-content.article-view { font-size: 1rem; line-height: 1.85; color: var(--text-primary); }
+.md-content.article-view p { margin-bottom: 1rem; color: var(--text-secondary); }
+.md-content.article-view ul { font-size: 1rem; padding-left: 1.5rem; margin-bottom: 1rem; }
+.md-content.article-view ol { font-size: 1rem; padding-left: 1.5rem; margin-bottom: 1rem; }
+.md-content.article-view li { margin-bottom: 0.25rem; color: var(--text-secondary); }
+.md-content.article-view blockquote { border-left-width: 3px; padding-left: 1rem; margin: 1.5rem 0; }
+.md-content.article-view code { font-size: 0.9em; }
+.md-content.article-view pre { padding: 1rem; margin-bottom: 1rem; }
+.md-content.article-view hr { margin: 2rem 0; }
+.md-content.article-view table { font-size: 0.9375rem; }
+.md-content.article-view th, .md-content.article-view td { padding: 0.5rem 0.75rem; }
+
+/* Recharts legend — override default li margin so legendProps gap controls spacing */
+.recharts-legend-item { margin-right: 0 !important; }

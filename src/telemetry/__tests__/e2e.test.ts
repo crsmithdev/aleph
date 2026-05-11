@@ -2,18 +2,19 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { resolve, join } from "path";
 import { mkdirSync, cpSync, rmSync } from "fs";
 import { tmpdir } from "os";
-import { parseAllSessions, clearCache } from "../src/parser.js";
+import { adaptAllSessions as parseAllSessions, clearCache } from "../src/adapter.js";
 import {
-  aggregateOverview,
-  aggregateTools,
-  aggregateHooks,
-  aggregateTokens,
-  aggregateCost,
-  aggregateSessions,
-  aggregateMemoryUsage,
-  aggregateSessionTrace,
-} from "../src/aggregator.js";
-import type { SessionEntry } from "../src/types.js";
+  reduceOverview as aggregateOverview,
+  reduceTools as aggregateTools,
+  reduceHooks as aggregateHooks,
+  reduceTokens as aggregateTokens,
+  reduceCost as aggregateCost,
+  reduceSessions as aggregateSessions,
+  reduceMemoryUsage as aggregateMemoryUsage,
+  reduceSessionTrace as aggregateSessionTrace,
+  reduceSubagents as aggregateSubagents,
+} from "../src/reducers.js";
+import type { TelemetryEvent } from "../src/event.js";
 
 const fixturesDir = resolve(import.meta.dir, "fixtures/e2e");
 
@@ -221,7 +222,7 @@ function setupTempDir(sessionDir: string): string {
 describe("e2e telemetry pipeline", () => {
   for (const session of SESSIONS) {
     describe(`${session.dir} (${session.sessionId})`, () => {
-      let entries: SessionEntry[];
+      let entries: TelemetryEvent[];
       let baseDir: string;
 
       beforeEach(() => {
@@ -240,79 +241,80 @@ describe("e2e telemetry pipeline", () => {
         });
 
         it("assigns the correct session ID", () => {
-          const mainEntries = entries.filter((e) => e.sessionId === session.sessionId);
+          const mainEntries = entries.filter((e) => e.sid === session.sessionId);
           expect(mainEntries.length).toBeGreaterThan(0);
         });
 
         it("extracts the correct number of user_message entries", () => {
           const userMsgs = entries.filter(
-            (e) => e.entryType === "user_message" && e.sessionId === session.sessionId,
+            (e) => e.kind === "message" && e.sid === session.sessionId,
           );
           expect(userMsgs.length).toBe(session.main.userMessagesWithText);
         });
 
         it("extracts the correct number of token entries (assistant messages)", () => {
           const tokens = entries.filter(
-            (e) => e.entryType === "tokens" && e.sessionId === session.sessionId,
+            (e) => e.kind === "tokens" && e.sid === session.sessionId,
           );
           expect(tokens.length).toBe(session.main.tokenEntries);
         });
 
         it("extracts the correct tool_use counts per tool type", () => {
           const toolUses = entries.filter(
-            (e) => e.entryType === "tool_use" && e.sessionId === session.sessionId,
+            (e) => e.kind === "tool" && e.sid === session.sessionId,
           );
           const counts: Record<string, number> = {};
           for (const e of toolUses) {
-            counts[e.toolName!] = (counts[e.toolName!] || 0) + 1;
+            const t = (e.data?.tool as string) || "";
+            counts[t] = (counts[t] || 0) + 1;
           }
           expect(counts).toEqual(session.main.toolCalls);
         });
 
         it("extracts the correct total tool call count", () => {
           const toolUses = entries.filter(
-            (e) => e.entryType === "tool_use" && e.sessionId === session.sessionId,
+            (e) => e.kind === "tool" && e.sid === session.sessionId,
           );
           expect(toolUses.length).toBe(session.main.totalToolCalls);
         });
 
         it("extracts the correct number of tool errors", () => {
           const errors = entries.filter(
-            (e) => e.entryType === "tool_result" && e.isError && e.sessionId === session.sessionId,
+            (e) => e.kind === "tool_result" && e.err !== undefined && e.sid === session.sessionId,
           );
           expect(errors.length).toBe(session.main.toolErrors);
         });
 
         it("extracts the correct number of stop_hook_summary entries", () => {
           const hooks = entries.filter(
-            (e) => e.entryType === "stop_hook_summary" && e.sessionId === session.sessionId,
+            (e) => e.kind === "hook_summary" && e.sid === session.sessionId,
           );
           expect(hooks.length).toBe(session.main.hookSummaries);
         });
 
         it("extracts the correct number of hook_progress entries", () => {
           const progress = entries.filter(
-            (e) => e.entryType === "hook_progress" && e.sessionId === session.sessionId,
+            (e) => e.kind === "hook" && e.sid === session.sessionId,
           );
           expect(progress.length).toBe(session.main.hookProgressCount);
         });
 
         it("extracts correct token totals", () => {
           const tokenEntries = entries.filter(
-            (e) => e.entryType === "tokens" && e.sessionId === session.sessionId,
+            (e) => e.kind === "tokens" && e.sid === session.sessionId,
           );
           const totals = {
-            input: tokenEntries.reduce((s, e) => s + (e.inputTokens || 0), 0),
-            output: tokenEntries.reduce((s, e) => s + (e.outputTokens || 0), 0),
-            cacheRead: tokenEntries.reduce((s, e) => s + (e.cacheReadTokens || 0), 0),
-            cacheCreation: tokenEntries.reduce((s, e) => s + (e.cacheCreationTokens || 0), 0),
+            input: tokenEntries.reduce((s, e) => s + ((e.data?.input as number) || 0), 0),
+            output: tokenEntries.reduce((s, e) => s + ((e.data?.output as number) || 0), 0),
+            cacheRead: tokenEntries.reduce((s, e) => s + ((e.data?.cacheRead as number) || 0), 0),
+            cacheCreation: tokenEntries.reduce((s, e) => s + ((e.data?.cacheCreation as number) || 0), 0),
           };
           expect(totals).toEqual(session.main.tokens);
         });
 
         it("preserves correct timestamp range", () => {
-          const sessionEntries = entries.filter((e) => e.sessionId === session.sessionId);
-          const timestamps = sessionEntries.map((e) => e.timestamp).filter(Boolean).sort();
+          const sessionEntries = entries.filter((e) => e.sid === session.sessionId);
+          const timestamps = sessionEntries.map((e) => e.ts).filter(Boolean).sort();
           expect(timestamps[0]).toBe(session.main.firstTimestamp);
           expect(timestamps[timestamps.length - 1]).toBe(session.main.lastTimestamp);
         });

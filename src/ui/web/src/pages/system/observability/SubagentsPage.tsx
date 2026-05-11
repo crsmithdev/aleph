@@ -6,10 +6,10 @@ import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { StatCard } from '../../../components/data/StatCard';
 import { DataTable, type Column } from '../../../components/data/DataTable';
-import { ObsControlBar } from '../../../components/data/ObsControlBar';
+import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
 import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
 import { ChartContainer } from '../../../components/charts/ChartContainer';
-import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps } from '../../../components/charts/chartTheme';
+import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, labelFormatter, legendProps, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { fmtNumber, fmtMs, relativeTime, shortDate, granLabel } from '../../../utils/format';
 import { clsx } from 'clsx';
@@ -31,18 +31,19 @@ export function SubagentsPage() {
     {
       key: 'subagentType',
       label: 'Type',
-      render: (row) => <span className="font-mono text-text-primary text-xs">{row.subagentType}</span>,
+      render: (row) => <span className="text-text-primary text-sm">{row.subagentType}</span>,
     },
-    { key: 'count', label: 'Count', align: 'right', sortable: true, render: (row) => fmtNumber(row.count) },
-    { key: 'pct', label: '% Total', align: 'right', render: (row) => `${row.pct}%` },
-    { key: 'avgMs', label: 'Avg', align: 'right', sortable: true, render: (row) => fmtMs(row.avgMs) },
-    { key: 'p95Ms', label: 'p95', align: 'right', sortable: true, render: (row) => fmtMs(row.p95Ms) },
+    { key: 'count', label: 'Count', align: 'right', sortable: true, width: '80px', render: (row) => <span className="font-mono">{fmtNumber(row.count)}</span> },
+    { key: 'pct', label: '% Total', align: 'right', width: '90px', render: (row) => <span className="font-mono">{row.pct}%</span> },
+    { key: 'avgMs', label: 'Avg', align: 'right', sortable: true, width: '80px', render: (row) => <span className="font-mono">{fmtMs(row.avgMs)}</span> },
+    { key: 'p95Ms', label: 'p95', align: 'right', sortable: true, width: '80px', render: (row) => <span className="font-mono">{fmtMs(row.p95Ms)}</span> },
     {
       key: 'errors',
       label: 'Errors',
       align: 'right',
       sortable: true,
-      render: (row) => <span className={row.errors > 0 ? 'text-error' : ''}>{fmtNumber(row.errors)}</span>,
+      width: '80px',
+      render: (row) => <span className={clsx('font-mono', row.errors > 0 && 'text-error')}>{fmtNumber(row.errors)}</span>,
     },
   ];
 
@@ -51,7 +52,7 @@ export function SubagentsPage() {
       key: 'description',
       label: 'Description',
       render: (row) => (
-        <span className="text-text-primary text-xs max-w-xs truncate block" title={row.description}>
+        <span className="text-text-primary text-sm truncate block" title={row.description}>
           {row.description || '—'}
         </span>
       ),
@@ -60,15 +61,17 @@ export function SubagentsPage() {
       key: 'timestamp',
       label: 'Time',
       sortable: true,
-      render: (row) => <span className="text-text-secondary text-xs whitespace-nowrap">{relativeTime(row.timestamp)}</span>,
+      width: '160px',
+      render: (row) => <span className="font-mono text-text-secondary text-sm whitespace-nowrap">{relativeTime(row.timestamp)}</span>,
     },
     {
       key: 'sessionId',
       label: 'Session',
+      width: '90px',
       render: (row) => (
         <Link
           to={`/observability/sessions/${encodeURIComponent(row.sessionId)}`}
-          className="font-mono text-xs text-accent hover:underline"
+          className="font-mono text-sm text-accent hover:underline"
           onClick={(e) => e.stopPropagation()}
         >
           {row.sessionId.slice(0, 8)}
@@ -78,48 +81,54 @@ export function SubagentsPage() {
     {
       key: 'subagentType',
       label: 'Type',
-      render: (row) => <span className="font-mono text-text-secondary text-xs">{row.subagentType || '—'}</span>,
+      width: '140px',
+      render: (row) => <span className="text-text-secondary text-sm">{row.subagentType || '—'}</span>,
     },
     {
       key: 'model',
       label: 'Model',
-      render: (row) => <span className="text-text-secondary text-xs">{row.model || '—'}</span>,
+      width: '160px',
+      render: (row) => <span className="font-mono text-text-secondary text-sm">{row.model || '—'}</span>,
     },
     {
       key: 'durationMs',
       label: 'Duration',
       align: 'right',
       sortable: true,
-      render: (row) => <span className="text-xs">{row.durationMs ? fmtMs(row.durationMs) : '—'}</span>,
+      width: '90px',
+      render: (row) => <span className="font-mono text-sm">{row.durationMs ? fmtMs(row.durationMs) : '—'}</span>,
     },
     {
       key: 'runInBackground',
       label: 'BG',
       align: 'right',
+      width: '60px',
       render: (row) => row.runInBackground
-        ? <span className="text-xs px-1.5 py-0.5 rounded bg-accent/20 text-accent">bg</span>
-        : <span className="text-xs text-text-tertiary">fg</span>,
+        ? <span className="text-xs px-1.5 py-0.5 rounded bg-accent/15 text-accent">bg</span>
+        : <span className="text-xs text-text-disabled">fg</span>,
     },
     {
       key: 'isError',
       label: 'Status',
       align: 'right',
+      width: '80px',
       render: (row) => row.isError
-        ? <span className="text-xs px-1.5 py-0.5 rounded bg-error/20 text-error">error</span>
-        : <span className="text-xs px-1.5 py-0.5 rounded bg-success/20 text-success">ok</span>,
+        ? <span className="text-xs px-1.5 py-0.5 rounded bg-error/15 text-error">error</span>
+        : <span className="text-xs px-1.5 py-0.5 rounded bg-success/15 text-success">ok</span>,
     },
     {
       key: 'subagentSessionId',
       label: 'Child',
+      width: '90px',
       render: (row) => row.subagentSessionId ? (
         <Link
           to={`/observability/sessions/${encodeURIComponent(row.subagentSessionId)}`}
-          className="font-mono text-xs text-accent hover:underline"
+          className="font-mono text-sm text-accent hover:underline"
           onClick={(e) => e.stopPropagation()}
         >
           {row.subagentSessionId.slice(0, 8)}
         </Link>
-      ) : <span className="text-text-tertiary text-xs">—</span>,
+      ) : <span className="text-text-disabled text-sm">—</span>,
     },
   ];
 
@@ -127,26 +136,22 @@ export function SubagentsPage() {
   return (
     <div className="space-y-6">
       <ObsControlBar
-        title={<h1 className="text-2xl font-bold text-text-primary">Subagents</h1>}
+        title="Subagents"
         range={range}
         onRangeChange={setRange}
         granularity={granularity}
         onGranularityChange={setGranularity}
-      >
-        <button
-          className={clsx(
-            'px-3 py-1 text-xs rounded-md border transition-colors',
-            bgOnly
-              ? 'bg-accent/20 border-accent text-accent'
-              : 'border-border text-text-secondary hover:text-text-primary',
-          )}
-          onClick={() => setBgOnly(!bgOnly)}
-        >
-          Background only
-        </button>
-      </ObsControlBar>
+        filters={
+          <FilterToggle
+            label="Background only"
+            active={bgOnly}
+            onToggle={() => setBgOnly(!bgOnly)}
+          />
+        }
+        activeFilterCount={bgOnly ? 1 : 0}
+      />
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-4 gap-4 !mt-0">
         <StatCard
           label="Active Now"
           value={<span className={data.activeNow > 0 ? 'text-accent' : ''}>{fmtNumber(data.activeNow)}</span>}
@@ -164,12 +169,12 @@ export function SubagentsPage() {
         <ChartContainer title={granLabel(granularity, 'Dispatches')}>
           <BarChart data={data.byDay}>
             <CartesianGrid {...gridProps} />
-            <XAxis dataKey="date" {...axisProps} tickFormatter={shortDate} />
+            <XAxis dataKey="date" {...xAxisDateProps} />
             <YAxis {...axisProps} />
             <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
             <Legend {...legendProps} />
-            <Bar dataKey="backgroundCount" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Background" stackId="a" />
-            <Bar dataKey="foregroundCount" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Foreground" stackId="a" />
+            <Bar isAnimationActive={false} dataKey="backgroundCount" fill={CHART_PALETTE[0]} radius={[2, 2, 0, 0]} name="Background" stackId="a" />
+            <Bar isAnimationActive={false} dataKey="foregroundCount" fill={CHART_PALETTE[1]} radius={[2, 2, 0, 0]} name="Foreground" stackId="a" />
           </BarChart>
         </ChartContainer>
       )}

@@ -4,15 +4,18 @@
       "Bash(git:*)", "Bash(pnpm:*)", "Bash(npm:*)", "Bash(node:*)", "Bash(bun:*)",
       "Bash(python3:*)", "Bash(uv:*)", "Bash(ruff:*)", "Bash(vitest:*)", "Bash(playwright:*)",
       "Bash(ls:*)", "Bash(cat:*)", "Bash(grep:*)", "Bash(find:*)", "Bash(mkdir:*)",
-      "Bash(cp:*)", "Bash(mv:*)", "Bash(echo:*)", "Bash(jq:*)", "Bash(curl:*)"
+      "Bash(cp:*)", "Bash(mv:*)", "Bash(echo:*)", "Bash(jq:*)", "Bash(curl:*)",
+      "Bash(kill:*)", "Bash(killall:*)", "Bash(pkill:*)", "Bash(lsof:*)",
+      "Bash(npx:*)",
+      "Bash(systemctl:*)"
     ],
     "deny": [
       "Bash(rm -rf /*)", "Bash(rm -rf ~*)", "Bash(dd:*)", "Bash(mkfs:*)",
       "Bash(sudo rm:*)", "Bash(chmod 777:*)"
     ],
     "ask": [
-      "Bash(sudo:*)", "Bash(rm -rf:*)", "Bash(kill:*)", "Bash(killall:*)",
-      "Bash(pkill:*)", "Bash(systemctl:*)", "Bash(shutdown:*)", "Bash(reboot:*)"
+      "Bash(sudo:*)", "Bash(rm -rf:*)",
+      "Bash(shutdown:*)", "Bash(reboot:*)"
     ]
   },
   "statusLine": {

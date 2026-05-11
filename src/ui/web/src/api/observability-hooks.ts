@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 
-type TimeRange = 'session' | '1h' | '1d' | '7d' | '30d';
+export type TimeRange = 'session' | '1h' | '1d' | '7d' | '30d';
 type Granularity = 'minute' | 'hour' | 'day';
 
 interface ObsQueryOpts {
@@ -50,9 +50,22 @@ export function useObsTools(range: TimeRange, granularity?: Granularity, session
       avgMs?: number;
       p50Ms?: number;
       p95Ms?: number;
+      linesAdded?: number;
+      linesRemoved?: number;
+      sessionCount?: number;
+      velocity?: number;
     }>;
     byDay: Array<{ date: string; count: number; tools: Record<string, number> }>;
+    byDayChurn: Array<{ date: string; count: number; tools: Record<string, number> }>;
+    byDayProject: Array<{ date: string; count: number; projects: Record<string, number> }>;
+    byDayVelocity: Array<{ date: string; count: number; velocity: number }>;
+    byDayErrors: Array<{ date: string; count: number; tools: Record<string, number> }>;
+    byDayLatency: Array<{ date: string; count: number; tools: Record<string, number> }>;
+    byDaySessionCount: Array<{ date: string; count: number; tools: Record<string, number> }>;
+    skillToolMatrix: Array<{ skill: string; tools: Array<{ tool: string; count: number }> }>;
+    projectRanked: Array<{ project: string; count: number; pct: number }>;
     queryTimeMs: number;
+    totalRows: number;
   }>('tools', { range, granularity, session });
 }
 
@@ -66,24 +79,47 @@ export function useObsHooks(range: TimeRange, granularity?: Granularity, session
       p50Ms: number;
       p95Ms: number;
       errors: number;
+      lastUsed?: string;
       active: boolean;
       fullCommand?: string;
       blocking?: boolean;
       gate?: string;
       markerFile?: string;
       description?: string;
+      group?: string;
     }>;
     byDay: Array<{ date: string; count: number; hooks: Record<string, number> }>;
-    unused: Array<{ command: string; event: string; blocking?: boolean; gate?: string; markerFile?: string; description?: string }>;
+    byEvent?: Array<{ event: string; count: number }>;
+    byDayLatency: Array<{ date: string; count: number; hooks: Record<string, number> }>;
+    byDayErrors: Array<{ date: string; count: number; hooks: Record<string, number> }>;
+    byDayEvent: Array<{ date: string; count: number; events: Record<string, number> }>;
+    unused: Array<{ command: string; event: string; blocking?: boolean; gate?: string; markerFile?: string; description?: string; group?: string }>;
     markerStats?: Record<string, { writes: number; clears: number; activeNow: boolean }>;
+    gating?: Record<string, HookGatingStat>;
     queryTimeMs: number;
   }>('hooks', { range, granularity, session });
 }
 
+export type HookGatingStat = {
+  blocks: number;
+  advisories: number;
+  passes: number;
+  total: number;
+  blockRate: number;
+  advisoryRate: number;
+  ignoredAdvisories: number;
+  repeatedBlocks: number;
+  topPatterns?: Array<{ detail: string; count: number }>;
+};
+
 export function useObsSkills(range: TimeRange, granularity?: Granularity, session?: string) {
   return obsQuery<{
-    ranked: Array<{ skill: string; count: number; pct: number; errors: number; lastUsed?: string; type: 'command' | 'skill'; registered: boolean }>;
+    ranked: Array<{ skill: string; count: number; pct: number; errors: number; avgMs?: number; p50Ms?: number; p95Ms?: number; sessions?: number; lastUsed?: string; type: 'command' | 'skill'; registered: boolean }>;
     byDay: Array<{ date: string; count: number; skills: Record<string, number> }>;
+    byType?: Array<{ type: string; count: number }>;
+    byDaySessions: Array<{ date: string; count: number; skills: Record<string, number> }>;
+    byDayErrors: Array<{ date: string; count: number; skills: Record<string, number> }>;
+    byDayLatency: Array<{ date: string; count: number; skills: Record<string, number> }>;
     unused: string[];
     queryTimeMs: number;
   }>('skills', { range, granularity, session });
@@ -118,7 +154,8 @@ export function useObsCost(range: TimeRange, granularity?: Granularity, session?
 
 export function useObsSessions(range: TimeRange, granularity?: Granularity, session?: string) {
   return obsQuery<{
-    byDay: Array<{ date: string; sessions: number; messages: number; userMessages?: number; assistantMessages?: number }>;
+    byDay: Array<{ date: string; sessions: number; messages: number; userMessages?: number; assistantMessages?: number; cost?: number; linesAdded?: number; linesRemoved?: number; commits?: number }>;
+    byDayProject: Array<{ date: string; count: number; projects: Record<string, number> }>;
     byProject: Array<{ project: string; sessions: number }>;
     byActivity: Array<{ date: string; count: number }>;
     sessions: Array<{
@@ -138,7 +175,10 @@ export function useObsSessions(range: TimeRange, granularity?: Granularity, sess
       gitBranch?: string;
       parentSessionId?: string;
       hasSubagents?: boolean;
-      gateInfo?: { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; mode: 'dispatched' | 'inline' | 'none' };
+      gateInfo?: { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; hookBlocks: number; hookAdvisories: number; mode: 'dispatched' | 'inline' | 'none' };
+      firstUserMessage?: string;
+      intent?: string;
+      outcome?: string;
     }>;
     avgDurationMs: number;
     totalUserMessages: number;
@@ -170,8 +210,12 @@ export function useObsToolDetail(name: string, range: TimeRange) {
     name: string;
     totalCount: number;
     errorCount: number;
-    byDay: Array<{ date: string; count: number; byHour: Record<number, number> }>;
-    invocations: Array<{ timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; isError?: boolean; errorMessage?: string }>;
+    totalLinesAdded: number;
+    totalLinesRemoved: number;
+    sessionCount: number;
+    byDay: Array<{ date: string; count: number; byHour: Record<number, number>; errors: number; errorRate: number; sessions: number; linesAdded: number; linesRemoved: number; p50Ms?: number; p95Ms?: number; avgMs?: number }>;
+    skills: Array<{ name: string; count: number }>;
+    invocations: Array<{ timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; durationMs?: number; isError?: boolean; errorMessage?: string; errorFull?: string; skill?: string; linesAdded?: number; linesRemoved?: number }>;
     queryTimeMs: number;
   }>({
     queryKey: ['observability', 'tool-detail', name, range],
@@ -205,6 +249,9 @@ export function useObsHookDetail(name: string, range: TimeRange) {
     active: boolean;
     fullCommand?: string;
     sourceCode?: string;
+    blocking?: boolean;
+    description?: string;
+    gating?: HookGatingStat | null;
     byDay: Array<{ date: string; count: number; avgMs: number }>;
     invocations: Array<{ timestamp: string; sessionId: string; durationMs: number; exitCode?: number; output?: string; trigger?: string; isError?: boolean; errorMessage?: string }>;
     queryTimeMs: number;
@@ -307,13 +354,39 @@ export function useObsMemoryUsage(range: TimeRange, granularity?: Granularity) {
   }>('memory/usage', { range, granularity });
 }
 
+export function useObsMemorySearches(range: TimeRange) {
+  return obsQuery<{
+    totalSearches: number;
+    invocations: Array<{
+      timestamp: string;
+      sessionId: string;
+      query: string;
+      mode?: string;
+      tags?: string[];
+      durationMs?: number;
+      isError?: boolean;
+      errorMessage?: string;
+      results: Array<{
+        id?: string;
+        content: string;
+        memory_type?: string;
+        tags?: string[];
+        score?: number;
+        name?: string;
+      }>;
+      resultCount: number;
+    }>;
+    queryTimeMs: number;
+  }>('memory/searches', { range });
+}
+
 export function useObsCompaction(range: TimeRange, granularity?: Granularity, session?: string) {
   return obsQuery<{
     totalCompactions: number;
     totalTokensAtCompaction: number;
     avgPreTokens: number;
     byDay: Array<{ date: string; count: number }>;
-    events: Array<{ timestamp: string; sessionId: string; trigger: string; preTokens: number }>;
+    events: Array<{ timestamp: string; sessionId: string; trigger: string; preTokens: number; toolCallCount?: number; contextPct?: number }>;
     queryTimeMs: number;
   }>('compaction', { range, granularity, session });
 }
@@ -339,7 +412,7 @@ export function useObsSessionTrace(sessionId: string, range: TimeRange) {
       durationMs: number;
       spans: Array<{
         id: string;
-        kind: 'tool' | 'hook' | 'token';
+        kind: 'tool' | 'hook' | 'token' | 'verify';
         label: string;
         startMs: number;
         durationMs: number;
@@ -349,14 +422,18 @@ export function useObsSessionTrace(sessionId: string, range: TimeRange) {
         subagentSessionId?: string;
       }>;
       tokenCount?: number;
+      contextTokens?: number;
+      outputTokens?: number;
       cost?: number;
       model?: string;
+      assistantText?: string;
     }>;
     parentSessionId?: string;
+    compactions: Array<{ timestamp: string; trigger: string; preTokens?: number }>;
     totalDurationMs: number;
     totalTokens: number;
     totalCost: number;
-    gateInfo?: { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; mode: 'dispatched' | 'inline' | 'none' };
+    gateInfo?: { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; hookBlocks: number; hookAdvisories: number; mode: 'dispatched' | 'inline' | 'none' };
     queryTimeMs: number;
   }>({
     queryKey: ['observability', 'session-trace', sessionId, range],
@@ -427,6 +504,16 @@ export interface SubagentsData {
   queryTimeMs?: number;
 }
 
+export function useObsSessionContextFiles(sessionId: string) {
+  return useQuery<{
+    files: Array<{ label: string; path: string; chars: number; estTokens: number }>;
+  }>({
+    queryKey: ['observability', 'session-context-files', sessionId],
+    queryFn: () => api.get(`/observability/sessions/${encodeURIComponent(sessionId)}/context-files`),
+    staleTime: Infinity,
+  });
+}
+
 export function useObsSubagents(range: TimeRange, granularity?: Granularity) {
   const shouldPoll = range === '1h' || range === '1d';
   return useQuery<SubagentsData>({
@@ -441,5 +528,193 @@ export function useTriggerSnapshot() {
   return useMutation({
     mutationFn: () => api.post('/observability/memory/snapshot', {}),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['observability', 'memory'] }),
+  });
+}
+
+export function useObsDbContents(db: string, table: string, limit = 50, offset = 0) {
+  return useQuery<{ rows: Record<string, unknown>[]; total: number; error?: string }>({
+    queryKey: ['observability', 'db-contents', db, table, limit, offset],
+    queryFn: () => api.get(`/observability/db-contents/${encodeURIComponent(db)}/${encodeURIComponent(table)}?limit=${limit}&offset=${offset}`),
+    enabled: !!db && !!table,
+  });
+}
+
+export function useDeleteMemory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/observability/memory/${encodeURIComponent(id)}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['observability', 'memory-items'] }),
+  });
+}
+
+export function useUpdateMemory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, content }: { id: string; content: string }) =>
+      api.put(`/observability/memory/${encodeURIComponent(id)}`, { content }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['observability', 'memory-items'] }),
+  });
+}
+
+export type EvalResult = {
+  name: string;
+  totalRuns: number;
+  passAt1Rate: number;
+  passAt3Rate: number;
+  lastRun: string;
+  trend: 'improving' | 'stable' | 'regressing';
+};
+
+export function useObsEvals() {
+  return useQuery<{
+    evals: EvalResult[];
+    byDay: Array<{ date: string; runs: number; passRate: number }>;
+    totalRuns: number;
+    overallPassAt3Rate: number;
+  }>({
+    queryKey: ['observability', 'evals'],
+    queryFn: () => api.get('/observability/evals'),
+    staleTime: 30_000,
+  });
+}
+
+export type EvalScenario = {
+  name: string;
+  dirName: string;
+  description: string;
+  hook: string;
+  event: string;
+  expect: string;
+  depth: string;
+  trials: number;
+  prompt: string;
+  constraints: string[];
+};
+
+export function useObsEvalScenarios() {
+  return useQuery<{ scenarios: EvalScenario[] }>({
+    queryKey: ['observability', 'evals', 'scenarios'],
+    queryFn: () => api.get('/observability/evals/scenarios'),
+    staleTime: 30_000,
+  });
+}
+
+export function useObsEvalScenarioDetail(name: string) {
+  return useQuery<EvalScenario & { runs: EvalRun[] }>({
+    queryKey: ['observability', 'evals', 'scenarios', name],
+    queryFn: () => api.get(`/observability/evals/scenarios/${encodeURIComponent(name)}`),
+    enabled: !!name,
+    staleTime: 10_000,
+  });
+}
+
+export type EvalRun = {
+  ts: string;
+  evalName: string;
+  passed: number;
+  failed: number;
+  passAt1: boolean;
+  hookName?: string;
+  scenarioName?: string;
+  expectedDecision?: string;
+  actualDecision?: string;
+  tier?: number;
+  graders?: Array<{ type: string; result: string }>;
+};
+
+export function useObsEvalRuns(scenario?: string) {
+  return useQuery<{ runs: EvalRun[]; total: number }>({
+    queryKey: ['observability', 'evals', 'runs', scenario ?? ''],
+    queryFn: () => api.get(`/observability/evals/runs${scenario ? `?scenario=${encodeURIComponent(scenario)}` : ''}`),
+    staleTime: 10_000,
+  });
+}
+
+export function useRunEvalScenario() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => api.post(`/observability/evals/run/${encodeURIComponent(name)}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['observability', 'evals'] });
+    },
+  });
+}
+
+export function useCreateEvalScenario() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => api.post('/observability/evals/scenarios', body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['observability', 'evals', 'scenarios'] });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Signal file hooks
+// ---------------------------------------------------------------------------
+
+export function useObsRatings() {
+  return useQuery<{
+    ratings: Array<{ timestamp: string; rating: string; type?: string; context?: string }>;
+    total: number;
+    byType: Record<string, number>;
+    byDay: Array<{ date: string; positive: number; negative: number }>;
+  }>({
+    queryKey: ['observability', 'signals', 'ratings'],
+    queryFn: () => api.get('/observability/signals/ratings'),
+  });
+}
+
+export function useObsDirectives() {
+  return useQuery<{
+    directives: Array<{ ts: string; sessionId: string; directives: string[]; promptWords?: number }>;
+    total: number;
+    depthCounts: Record<string, number>;
+    byDay: Array<{ date: string; full: number; quick: number; total: number }>;
+    topSkills: Array<{ skill: string; count: number }>;
+  }>({
+    queryKey: ['observability', 'signals', 'directives'],
+    queryFn: () => api.get('/observability/signals/directives'),
+  });
+}
+
+export function useObsToolSignals() {
+  return useQuery<{
+    signals: Array<{ type: string; file: string; count: number; sessionId: string; timestamp: string }>;
+    byFile: Array<{ file: string; count: number }>;
+    total: number;
+  }>({
+    queryKey: ['observability', 'signals', 'tool-signals'],
+    queryFn: () => api.get('/observability/signals/tool-signals'),
+  });
+}
+
+export function useObsConsolidation() {
+  return useQuery<{
+    state: { lastRun?: string; lastMemoryCount?: number };
+    rules: string[];
+    rulesPath: string | null;
+  }>({
+    queryKey: ['observability', 'signals', 'consolidation'],
+    queryFn: () => api.get('/observability/signals/consolidation'),
+    staleTime: 30_000,
+  });
+}
+
+export function useObsSessionFiles(limit?: number) {
+  return useQuery<{
+    sessions: Array<{
+      filename: string;
+      timestamp: string;
+      intent: string;
+      outcome: string;
+      milestones: string[];
+      notes: string[];
+    }>;
+    total: number;
+  }>({
+    queryKey: ['observability', 'signals', 'sessions', limit ?? 100],
+    queryFn: () => api.get(`/observability/signals/sessions${limit ? `?limit=${limit}` : ''}`),
   });
 }

@@ -8,10 +8,4 @@ export default defineConfig({
   resolve: {
     alias: { '@': resolve(__dirname, 'src') },
   },
-  server: {
-    port: parseInt(process.env.VITE_PORT || '5173', 10),
-    proxy: {
-      '/api': { target: `http://localhost:${process.env.API_PORT || '3000'}`, changeOrigin: true },
-    },
-  },
 });

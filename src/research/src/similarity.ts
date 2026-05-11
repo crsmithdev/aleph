@@ -98,21 +98,26 @@ export interface SimilarityResult {
 
 // Multi-method pipeline:
 // 1. Compute jaccard
-// 2. If |jaccard - threshold| > 0.15 → use jaccard (decisive)
+// 2. If |jaccard - threshold| > jaccardMargin → use jaccard (decisive)
 // 3. Else → call embed(a), embed(b), compute cosine
 // 4. If |embedding - threshold| > 0.10 → use embedding (decisive)
 // 5. Else → call llmJudge(a, b) → 0 or 1
+//
+// Default jaccardMargin tightened from 0.15 → 0.10 (May 2026): the wider
+// border was sending 35% of all LLM calls into the dedup judge. With 0.10,
+// only the truly ambiguous pairs (within ±0.10 of threshold) escalate.
 export async function computeSimilarity(
   a: string,
   b: string,
   threshold: number,
   embed: ((text: string) => Promise<number[]>) | null,
-  llmJudge: ((a: string, b: string) => Promise<number>) | null
+  llmJudge: ((a: string, b: string) => Promise<number>) | null,
+  jaccardMargin: number = 0.10
 ): Promise<SimilarityResult> {
   const jaccard = jaccardSimilarity(a, b);
 
   // Step 2: jaccard decisive if far from threshold
-  if (Math.abs(jaccard - threshold) > 0.15) {
+  if (Math.abs(jaccard - threshold) > jaccardMargin) {
     return { score: jaccard, method: 'jaccard', jaccard, embedding: null, llm: null };
   }
 

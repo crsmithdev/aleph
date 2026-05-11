@@ -2,6 +2,7 @@ import { useTodos } from '../../api/hooks';
 import { TodoQuickAdd } from '../../components/todos/TodoQuickAdd';
 import { TodoItem } from '../../components/todos/TodoItem';
 import { PageLoading } from '../../components/ui/Spinner';
+import { PageHeader } from '../../components/layout/PageHeader';
 
 export function TodosPage() {
   const { data, isLoading } = useTodos();
@@ -11,7 +12,7 @@ export function TodosPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-text-primary">Todos</h1>
+      <PageHeader title="Todos" />
 
       <TodoQuickAdd />
 

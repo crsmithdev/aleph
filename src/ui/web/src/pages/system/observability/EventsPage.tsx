@@ -1,24 +1,39 @@
 import { useState, useCallback, useRef } from 'react';
-import { useObsEvents } from '../../../api/observability-hooks';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { useObsEvents, useObsSessions, useObsTokens } from '../../../api/observability-hooks';
 import { PageLoading } from '../../../components/ui/Spinner';
 import { ErrorState } from '../../../components/ui/ErrorState';
 import { DataTable, type Column } from '../../../components/data/DataTable';
 import { ObsControlBar, FilterToggle } from '../../../components/data/ObsControlBar';
-import { type TimeRange } from '../../../components/data/TimeRangeSelector';
+import { type TimeRange, type Granularity } from '../../../components/data/TimeRangeSelector';
+import { tooltipStyle, gridProps, axisProps, CHART_PALETTE, CHART_OTHER, chartColor, labelFormatter, xAxisDateProps } from '../../../components/charts/chartTheme';
 import { QueryTiming } from '../../../components/data/QueryTiming';
 import { dateTime, fmtNumber, fmtMs, fmtToolName } from '../../../utils/format';
+import { GRAN_LABEL } from '../../../utils/chart-helpers';
+
+type EventsDataset = 'activity' | 'tokens';
+const EVENTS_DATASETS: { key: EventsDataset; label: string }[] = [
+  { key: 'activity', label: 'Activity' },
+  { key: 'tokens', label: 'Tokens' },
+];
+
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { clsx } from 'clsx';
 
-type EntryType =
-  | 'tool_use'
-  | 'tool_result'
-  | 'hook_progress'
-  | 'stop_hook_summary'
-  | 'tokens'
-  | 'turn_duration'
-  | 'directive'
-  | 'user_message'
-  | 'compact_boundary';
+const EVENT_TYPES = [
+  'tool_use',
+  'tool_result',
+  'hook_progress',
+  'stop_hook_summary',
+  'tokens',
+  'turn_duration',
+  'directive',
+  'user_message',
+  'compact_boundary',
+] as const;
+
+type EntryType = typeof EVENT_TYPES[number];
 
 type EventRow = {
   sessionId: string;
@@ -49,18 +64,6 @@ type EventRow = {
   compactTrigger?: string;
   compactPreTokens?: number;
 };
-
-const EVENT_TYPES: EntryType[] = [
-  'tool_use',
-  'tool_result',
-  'hook_progress',
-  'stop_hook_summary',
-  'tokens',
-  'turn_duration',
-  'directive',
-  'user_message',
-  'compact_boundary',
-];
 
 const TYPE_LABELS: Record<EntryType, string> = {
   tool_use: 'tool_use',
@@ -93,7 +96,7 @@ function TypeBadge({ type, isError }: { type: string; isError?: boolean }) {
   const cls = classes[type] ?? 'bg-bg-tertiary text-text-muted border-border-primary';
 
   return (
-    <span className={clsx('inline-block px-1.5 py-0.5 text-[10px] font-mono rounded border whitespace-nowrap', cls)}>
+    <span className={clsx('inline-block px-1.5 py-0.5 text-xs font-mono rounded border whitespace-nowrap', cls)}>
       {label}
     </span>
   );
@@ -126,8 +129,10 @@ function getDetail(row: EventRow): string {
 
 function getInfoPreview(row: EventRow): string {
   if (row.entryType === 'tool_use' && row.toolParams) {
-    const s = JSON.stringify(row.toolParams);
-    return s.length > 60 ? s.slice(0, 60) + '…' : s;
+    return Object.entries(row.toolParams)
+      .map(([k, v]) => `${k}: ${typeof v === 'string' ? v.slice(0, 30) : JSON.stringify(v)}`)
+      .slice(0, 3)
+      .join(' · ');
   }
   if (row.entryType === 'stop_hook_summary' && row.hookOutput) {
     return row.hookOutput.slice(0, 60) + (row.hookOutput.length > 60 ? '…' : '');
@@ -159,7 +164,7 @@ function rowKey(row: EventRow & { _idx?: number }): string {
 }
 
 function ExpandedRow({ row }: { row: EventRow }) {
-  const sections: Array<{ label: string; content: string; isError?: boolean }> = [];
+  const sections: Array<{ label: string; content: string; isError?: boolean; isMarkdown?: boolean }> = [];
 
   if (row.entryType === 'tool_use') {
     if (row.toolName) sections.push({ label: 'Tool', content: fmtToolName(row.toolName) });
@@ -191,7 +196,7 @@ function ExpandedRow({ row }: { row: EventRow }) {
     if (row.directives?.length) sections.push({ label: 'Directives', content: row.directives.join(', ') });
     if (row.promptWords != null) sections.push({ label: 'Prompt Words', content: String(row.promptWords) });
   } else if (row.entryType === 'user_message') {
-    if (row.userRequest) sections.push({ label: 'Message', content: row.userRequest });
+    if (row.userRequest) sections.push({ label: 'Message', content: row.userRequest, isMarkdown: true });
   } else if (row.entryType === 'compact_boundary') {
     if (row.compactTrigger) sections.push({ label: 'Trigger', content: row.compactTrigger });
     if (row.compactPreTokens != null) sections.push({ label: 'Pre-Compact Tokens', content: fmtNumber(row.compactPreTokens) });
@@ -209,7 +214,16 @@ function ExpandedRow({ row }: { row: EventRow }) {
       {sections.map((s) => (
         <div key={s.label} className="contents">
           <span className="text-text-muted font-medium whitespace-nowrap">{s.label}</span>
-          {s.content.includes('\n') || s.content.length > 80 ? (
+          {s.isMarkdown ? (
+            <div className="text-text-secondary
+              [&_p]:text-sm [&_p]:leading-relaxed [&_p]:mb-1
+              [&_code]:font-mono [&_code]:bg-bg-tertiary [&_code]:px-1 [&_code]:rounded [&_code]:text-accent [&_code]:text-xs
+              [&_pre]:bg-bg-tertiary [&_pre]:rounded [&_pre]:p-2 [&_pre]:text-xs [&_pre]:overflow-x-auto [&_pre_code]:bg-transparent [&_pre_code]:p-0
+              [&_ul]:list-disc [&_ul]:ml-4 [&_ul]:mb-1 [&_ol]:list-decimal [&_ol]:ml-4 [&_ol]:mb-1
+              [&_strong]:font-semibold [&_strong]:text-text-primary">
+              <Markdown remarkPlugins={[remarkGfm]}>{s.content}</Markdown>
+            </div>
+          ) : s.content.includes('\n') || s.content.length > 80 ? (
             <pre className={clsx(
               'font-mono whitespace-pre-wrap break-all max-h-48 overflow-auto rounded bg-bg-tertiary px-2 py-1',
               s.isError && 'text-error'
@@ -265,6 +279,7 @@ function Pagination({ start, end, total, hasPrev, hasNext, onPrev, onNext }: {
 
 export function EventsPage() {
   const [range, setRange] = useState<TimeRange>('30d');
+  const [granularity, setGranularity] = useState<Granularity>('day');
   const [activeType, setActiveType] = useState<EntryType | undefined>(undefined);
   const [errorsOnly, setErrorsOnly] = useState(false);
   const [search, setSearch] = useState('');
@@ -295,19 +310,49 @@ export function EventsPage() {
     offset,
   );
 
+  const [chartDataset, setChartDataset] = useState<EventsDataset>('activity');
+  const sessions = useObsSessions(range, granularity);
+  const tokens = useObsTokens(range, granularity);
+
   const allEvents = (data?.events ?? []).map((e: EventRow, i: number) => ({ ...e, _idx: i }));
   const events = errorsOnly ? allEvents.filter((e) => e.isError) : allEvents;
   const total = errorsOnly ? events.length : (data?.total ?? 0);
   const errorCount = allEvents.filter((e) => e.isError).length;
 
+  const typeCounts = allEvents.reduce<Record<string, number>>((acc, e) => {
+    acc[e.entryType] = (acc[e.entryType] ?? 0) + 1;
+    return acc;
+  }, {});
+  const allDonutData = Object.entries(typeCounts)
+    .map(([type, count]) => ({ type, count, label: TYPE_LABELS[type as EntryType] ?? type }))
+    .sort((a, b) => b.count - a.count);
+  const topDonut = allDonutData.slice(0, 5);
+  const otherCount = allDonutData.slice(5).reduce((s, r) => s + r.count, 0);
+  const donutData = otherCount > 0
+    ? [...topDonut, { type: 'other', count: otherCount, label: 'Other' }]
+    : topDonut;
+
   const columns: Column<EventRow>[] = [
     {
-      key: 'timestamp',
-      label: 'Time',
-      width: '160px',
-      render: (row) => (
-        <span className="text-text-secondary text-xs whitespace-nowrap">{dateTime(row.timestamp)}</span>
-      ),
+      key: 'detail',
+      label: 'Detail',
+      shrink: true,
+      render: (row) => {
+        const detail = getDetail(row);
+        return detail
+          ? <span className="font-mono text-text-primary truncate block">{detail}</span>
+          : <span className="text-text-muted">—</span>;
+      },
+    },
+    {
+      key: 'info',
+      label: 'Parameters',
+      render: (row) => {
+        const preview = getInfoPreview(row);
+        return preview
+          ? <span className="font-mono text-text-muted block truncate">{preview}</span>
+          : <span className="text-text-muted">—</span>;
+      },
     },
     {
       key: 'entryType',
@@ -316,32 +361,19 @@ export function EventsPage() {
       render: (row) => <TypeBadge type={row.entryType} isError={row.isError} />,
     },
     {
-      key: 'detail',
-      label: 'Detail',
-      width: '140px',
-      render: (row) => {
-        const detail = getDetail(row);
-        return detail
-          ? <span className="font-mono text-xs text-text-primary truncate block">{detail}</span>
-          : <span className="text-text-muted">—</span>;
-      },
-    },
-    {
-      key: 'info',
-      label: 'Info',
-      render: (row) => {
-        const preview = getInfoPreview(row);
-        return preview
-          ? <span className="font-mono text-xs text-text-muted block truncate">{preview}</span>
-          : <span className="text-text-muted">—</span>;
-      },
+      key: 'timestamp',
+      label: 'Time',
+      width: '160px',
+      render: (row) => (
+        <span className="font-mono text-text-secondary whitespace-nowrap">{dateTime(row.timestamp)}</span>
+      ),
     },
     {
       key: 'sessionId',
       label: 'Session',
       width: '90px',
       render: (row) => (
-        <span className="font-mono text-xs text-text-muted">{row.sessionId.slice(0, 8)}</span>
+        <span className="font-mono text-text-muted">{row.sessionId.slice(0, 8)}</span>
       ),
     },
   ];
@@ -351,35 +383,141 @@ export function EventsPage() {
   const hasPrev = !errorsOnly && offset > 0;
   const hasNext = !errorsOnly && offset + PAGE_SIZE < (data?.total ?? 0);
 
-  return (
-    <div className="space-y-4">
-      <ObsControlBar title={<h1 className="text-2xl font-bold text-text-primary">Events</h1>} range={range} onRangeChange={(r) => { setRange(r); setOffset(0); }}>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {EVENT_TYPES.map((type) => (
-            <FilterToggle
-              key={type}
-              label={TYPE_LABELS[type]}
-              active={activeType === type}
-              onToggle={() => handleTypeToggle(type)}
-            />
-          ))}
-        </div>
-        {errorCount > 0 && (
-          <FilterToggle
-            label={`Errors (${errorCount})`}
-            active={errorsOnly}
-            onToggle={() => { setErrorsOnly(!errorsOnly); setOffset(0); }}
-            activeColor="error"
-          />
-        )}
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => handleSearch(e.target.value)}
-          placeholder="Search…"
-          className="px-2.5 py-1 text-xs rounded-md border border-border-primary bg-bg-secondary text-text-primary placeholder-text-muted focus:outline-none focus:border-accent w-40"
+  const activityData = sessions.data?.byActivity ?? [];
+
+  const eventFilters = (
+    <>
+      {EVENT_TYPES.map((type) => (
+        <FilterToggle
+          key={type}
+          label={TYPE_LABELS[type]}
+          active={activeType === type}
+          onToggle={() => handleTypeToggle(type)}
         />
-      </ObsControlBar>
+      ))}
+      {errorCount > 0 && (
+        <FilterToggle
+          label={`Errors (${errorCount})`}
+          active={errorsOnly}
+          onToggle={() => { setErrorsOnly(!errorsOnly); setOffset(0); }}
+          activeColor="error"
+        />
+      )}
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => handleSearch(e.target.value)}
+        placeholder="Search…"
+        className="px-2.5 py-0.5 text-xs rounded border border-border-primary bg-bg-secondary text-text-primary placeholder-text-muted focus:outline-none focus:border-accent w-32"
+      />
+    </>
+  );
+
+  return (
+    <div className="space-y-6">
+      <ObsControlBar
+        title="Events"
+        range={range}
+        onRangeChange={(r) => { setRange(r); setOffset(0); }}
+        granularity={granularity}
+        onGranularityChange={setGranularity}
+        datasets={EVENTS_DATASETS}
+        dataset={chartDataset}
+        onDatasetChange={(d) => setChartDataset(d as EventsDataset)}
+        filters={eventFilters}
+        activeFilterCount={(activeType ? 1 : 0) + (errorsOnly ? 1 : 0) + (search ? 1 : 0)}
+      />
+
+      <div className="rounded-lg border border-border-primary bg-bg-secondary p-4 h-[350px] flex flex-col">
+        <div className="flex-1 min-h-0 flex">
+          <div className="flex-1 min-w-0 flex flex-col">
+            <div className="flex items-center justify-between mb-2 shrink-0">
+              <h3 className="font-heading text-lg font-medium text-text-secondary">
+                {chartDataset === 'tokens'
+                  ? `${GRAN_LABEL[granularity] ?? 'Daily'} Token Usage`
+                  : `${GRAN_LABEL[granularity] ?? 'Daily'} Activity by Day`}
+              </h3>
+            </div>
+            <div className="h-1" />
+            <div className="flex-1 min-h-0">
+              <ResponsiveContainer width="100%" height="100%">
+                {chartDataset === 'tokens' && tokens.data ? (
+                  <AreaChart data={tokens.data.byDay}>
+                    <CartesianGrid {...gridProps} />
+                    <XAxis dataKey="date" {...xAxisDateProps} />
+                    <YAxis {...axisProps} tickFormatter={fmtNumber} />
+                    <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+                    <Area isAnimationActive={false} type="monotone" dataKey="input" stackId="t" stroke={CHART_PALETTE[0]} fill={CHART_PALETTE[0]} fillOpacity={0.4} strokeWidth={1.5} dot={false} name="Input" />
+                    <Area isAnimationActive={false} type="monotone" dataKey="output" stackId="t" stroke={CHART_PALETTE[1]} fill={CHART_PALETTE[1]} fillOpacity={0.4} strokeWidth={1.5} dot={false} name="Output" />
+                    <Area isAnimationActive={false} type="monotone" dataKey="cacheRead" stackId="t" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.4} strokeWidth={1.5} dot={false} name="Cache Read" />
+                  </AreaChart>
+                ) : (
+                  <AreaChart data={activityData}>
+                    <CartesianGrid {...gridProps} />
+                    <XAxis dataKey="date" {...xAxisDateProps} />
+                    <YAxis {...axisProps} />
+                    <Tooltip contentStyle={tooltipStyle} labelFormatter={labelFormatter} />
+                    <Area isAnimationActive={false} type="monotone" dataKey="count" stroke={CHART_PALETTE[2]} fill={CHART_PALETTE[2]} fillOpacity={0.15} strokeWidth={2} dot={false} name="Events" />
+                  </AreaChart>
+                )}
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="w-px bg-border-primary shrink-0 mx-5" />
+
+          <div className="w-[360px] shrink-0 flex flex-col">
+            <div className="flex items-center justify-between mb-3 shrink-0">
+              <h3 className="font-heading text-lg font-medium text-text-secondary">
+                {chartDataset === 'tokens' ? 'Token Breakdown' : 'Events by Type'}
+              </h3>
+            </div>
+            {chartDataset === 'tokens' && tokens.data ? (() => {
+              const tokenBreakdown = [
+                { label: 'Input', count: tokens.data.totalInput, color: CHART_PALETTE[0] },
+                { label: 'Output', count: tokens.data.totalOutput, color: CHART_PALETTE[1] },
+                { label: 'Cache Read', count: tokens.data.totalCacheRead, color: CHART_PALETTE[2] },
+                { label: 'Cache Creation', count: tokens.data.totalCacheCreation, color: CHART_PALETTE[3] },
+              ].filter(r => r.count > 0);
+              return (
+                <div className="flex-1 min-h-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie isAnimationActive={false} data={tokenBreakdown} dataKey="count" nameKey="label" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                        {tokenBreakdown.map((r, i) => <Cell key={i} fill={r.color} />)}
+                      </Pie>
+                      <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              );
+            })() : donutData.length > 0 ? (
+              <div className="flex-1 min-h-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie isAnimationActive={false} data={donutData} dataKey="count" nameKey="label" cx="50%" cy="50%" innerRadius="38%" outerRadius="92%">
+                      {donutData.map((entry, i) => <Cell key={i} fill={entry.type === 'other' ? CHART_OTHER : CHART_PALETTE[i % CHART_PALETTE.length]} />)}
+                    </Pie>
+                    <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [fmtNumber(Number(v)), String(n)]} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-center gap-x-2 gap-y-[5px] mt-1 mb-1 text-xs shrink-0 flex-wrap">
+          {chartDataset === 'tokens' ? (
+            <>
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full inline-block" style={{ background: CHART_PALETTE[0] }} />Input</span>
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full inline-block" style={{ background: CHART_PALETTE[1] }} />Output</span>
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full inline-block" style={{ background: CHART_PALETTE[2] }} />Cache Read</span>
+            </>
+          ) : (
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full inline-block" style={{ background: CHART_PALETTE[2] }} />Events</span>
+          )}
+        </div>
+      </div>
 
       {isLoading ? (
         <PageLoading />

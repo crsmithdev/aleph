@@ -22,7 +22,7 @@ export function Select({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className={clsx(
-          'w-full bg-bg-tertiary border border-border-primary rounded-md',
+          'w-full bg-bg-tertiary border border-border-primary rounded-sm',
           'px-2.5 py-1.5 text-sm text-text-primary',
           'focus:outline-none focus:ring-1 focus:ring-accent'
         )}

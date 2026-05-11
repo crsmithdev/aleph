@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useUpdateTodo, useDeleteTodo, usePromoteTodo } from '../../api/hooks';
 import type { Todo } from '../../types';
+import { Icon } from '../ui/Icon';
 
 interface TodoItemProps {
   todo: Todo & { goalTitle?: string };
@@ -77,10 +78,10 @@ export function TodoItem({ todo }: TodoItemProps) {
                   autoFocus
                 />
                 <div className="flex flex-col gap-1">
-                  <button onClick={saveNote} className="text-xs text-accent hover:text-accent-hover">Save</button>
+                  <button onClick={saveNote} className="text-sm text-accent hover:text-accent-hover">Save</button>
                   <button
                     onClick={() => { setNoteText(todo.note || ''); setEditingNote(false); }}
-                    className="text-xs text-text-muted hover:text-text-secondary"
+                    className="text-sm text-text-muted hover:text-text-secondary"
                   >
                     Cancel
                   </button>
@@ -88,7 +89,7 @@ export function TodoItem({ todo }: TodoItemProps) {
               </div>
             ) : (
               <div
-                className="text-xs text-text-muted cursor-pointer hover:text-text-secondary mt-1 min-h-4"
+                className="text-sm text-text-muted cursor-pointer hover:text-text-secondary mt-1 min-h-5"
                 onClick={() => setEditingNote(true)}
               >
                 {todo.note || 'Click to add note...'}
@@ -101,44 +102,48 @@ export function TodoItem({ todo }: TodoItemProps) {
       {todo.goalTitle && todo.goalId && (
         <Link
           to={`/goals/${todo.goalId}`}
-          className="text-xs text-text-muted hover:text-text-secondary truncate max-w-[12rem] flex-shrink-0"
+          className="text-sm text-text-muted hover:text-text-secondary truncate max-w-[12rem] flex-shrink-0"
           onClick={(e) => e.stopPropagation()}
         >
           {todo.goalTitle}
         </Link>
       )}
 
-      {!todo.done && (
-        <div className="flex items-center gap-1 flex-shrink-0">
+      <div className="flex items-center gap-1 flex-shrink-0 pl-2 ml-1 border-l border-border-primary">
+        {todo.done ? (
           <button
-            onClick={() => promoteTodo.mutate(todo.id)}
-            className="p-1 rounded text-text-muted hover:text-accent hover:bg-accent/10 transition-colors"
-            title="Promote to goal"
+            onClick={() => updateTodo.mutate({ id: todo.id, done: false })}
+            className="p-2 rounded-md text-text-secondary hover:text-warning hover:bg-warning/10 transition-colors"
+            title="Mark incomplete"
           >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
-            </svg>
+            <Icon name="undo" size="md" />
           </button>
-          <button
-            onClick={() => updateTodo.mutate({ id: todo.id, done: true })}
-            className="p-1 rounded text-text-muted hover:text-success hover:bg-success/10 transition-colors"
-            title="Complete"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-            </svg>
-          </button>
-          <button
-            onClick={() => deleteTodo.mutate(todo.id)}
-            className="p-1 rounded text-text-muted hover:text-error hover:bg-error/10 transition-colors"
-            title="Delete"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      )}
+        ) : (
+          <>
+            <button
+              onClick={() => promoteTodo.mutate(todo.id)}
+              className="p-2 rounded-md text-text-secondary hover:text-accent hover:bg-accent/10 transition-colors"
+              title="Promote to goal"
+            >
+              <Icon name="arrow_upward" size="md" />
+            </button>
+            <button
+              onClick={() => updateTodo.mutate({ id: todo.id, done: true })}
+              className="p-2 rounded-md text-text-secondary hover:text-success hover:bg-success/10 transition-colors"
+              title="Complete"
+            >
+              <Icon name="check" size="md" />
+            </button>
+            <button
+              onClick={() => deleteTodo.mutate(todo.id)}
+              className="p-2 rounded-md text-text-secondary hover:text-error hover:bg-error/10 transition-colors"
+              title="Delete"
+            >
+              <Icon name="close" size="md" />
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

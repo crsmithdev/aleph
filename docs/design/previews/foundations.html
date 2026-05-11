@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en" data-theme-id="material-palenight">
+<head>
+<meta charset="utf-8" />
+<title>Construct — Foundations</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="stylesheet" href="../tokens/colors_and_type.css" />
+<style>
+  body { padding: 48px; max-width: 1280px; margin: 0 auto; }
+
+  .doc-title { font-family: var(--font-heading); font-size: 40px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 4px; color: var(--text-primary); }
+  .doc-sub { color: var(--text-muted); margin: 0 0 48px; font-size: 14px; }
+
+  .section { margin-bottom: 56px; }
+  .section-eyebrow { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; font-size: 12px; font-weight: 500; color: var(--text-muted); margin-bottom: 12px; }
+  .section-title { font-size: 24px; font-weight: 600; color: var(--text-primary); margin: 0 0 4px; }
+  .section-blurb { color: var(--text-secondary); font-size: 14px; margin: 0 0 24px; max-width: 60ch; line-height: 1.6; }
+
+  .grid { display: grid; gap: 12px; }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+  .grid-6 { grid-template-columns: repeat(6, 1fr); }
+
+  /* Surface tiles */
+  .surface-tile { padding: 20px; border-radius: 8px; border: 1px solid var(--border-primary); display: flex; flex-direction: column; justify-content: space-between; min-height: 140px; }
+  .surface-tile .name { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); }
+  .surface-tile .hex { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); margin-top: 8px; }
+  .surface-tile .role { font-size: 13px; color: var(--text-primary); font-weight: 500; }
+
+  /* Color tiles */
+  .color-tile { border-radius: 8px; border: 1px solid var(--border-primary); overflow: hidden; }
+  .color-swatch { height: 88px; display: flex; align-items: flex-end; padding: 12px; }
+  .color-meta { padding: 12px 14px; background: var(--bg-secondary); }
+  .color-meta .name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+  .color-meta .hex { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .color-meta .use { font-size: 12px; color: var(--text-secondary); margin-top: 6px; line-height: 1.45; }
+
+  /* Text colors row */
+  .text-row { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 8px; }
+  .text-row + .text-row { margin-top: 8px; }
+  .text-row .label { font-size: 12px; font-family: var(--font-mono); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .text-row .sample { font-size: 16px; }
+
+  /* Type specimens */
+  .specimen { display: grid; grid-template-columns: 180px 1fr 120px; gap: 24px; padding: 20px 0; border-bottom: 1px solid var(--border-primary); align-items: baseline; }
+  .specimen:last-child { border-bottom: 0; }
+  .specimen .meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .specimen .meta strong { display: block; color: var(--text-secondary); margin-bottom: 4px; font-weight: 600; }
+  .specimen .sample { color: var(--text-primary); }
+  .specimen .pixels { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); text-align: right; }
+
+  /* Spacing scale */
+  .space-row { display: flex; align-items: center; gap: 16px; padding: 8px 0; border-bottom: 1px solid var(--border-primary); }
+  .space-row:last-child { border-bottom: 0; }
+  .space-token { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); width: 72px; }
+  .space-px { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); width: 56px; }
+  .space-bar { background: var(--accent); height: 12px; border-radius: 2px; }
+
+  /* Radius */
+  .radius-tile { background: var(--bg-secondary); border: 1px solid var(--border-primary); padding: 20px; display: flex; align-items: center; gap: 16px; }
+  .radius-block { width: 56px; height: 56px; background: var(--bg-tertiary); border: 1px solid var(--border-secondary); }
+  .radius-meta .token { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
+  .radius-meta .px { font-size: 13px; color: var(--text-primary); margin-top: 2px; }
+
+  /* Stat hero */
+  .hero { background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 12px; padding: 32px 36px; }
+  .hero .label { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.1em; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; }
+  .hero .stat { font-family: var(--font-heading); font-size: 64px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; color: var(--accent); display: flex; align-items: baseline; gap: 12px; }
+  .hero .stat .unit { font-family: var(--font-sans); font-size: 16px; color: var(--text-muted); font-weight: 400; letter-spacing: 0; }
+  .hero .meta { color: var(--text-secondary); margin-top: 12px; font-size: 13px; }
+  .hero .meta .num { color: var(--text-primary); font-family: var(--font-mono); }
+
+  /* Iconography */
+  .icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+  .icon-cell { background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 6px; padding: 14px 10px 10px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .icon-cell .icon { color: var(--text-primary); font-size: 24px; }
+  .icon-cell .name { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); }
+
+  /* Logo */
+  .logo-row { display: flex; align-items: center; gap: 14px; }
+  .logo-mark { width: 40px; height: 40px; border-radius: 8px; background: var(--bg-secondary); border: 1px solid var(--border-primary); display: grid; place-items: center; font-family: var(--font-heading); font-weight: 900; color: var(--accent); font-size: 20px; }
+  .logo-word { font-family: var(--font-heading); font-size: 26px; font-weight: 700; letter-spacing: -0.01em; color: var(--text-primary); }
+  .logo-word .accent { color: var(--accent); }
+</style>
+</head>
+<body>
+  <h1 class="doc-title">Foundations</h1>
+  <p class="doc-sub">Surfaces, color, type, spacing, and the iconography vocabulary that everything else is built on.</p>
+
+  <!-- ============================================================ THEME PREVIEW -->
+  <section class="section">
+    <div class="section-eyebrow">00 · Theming</div>
+    <h2 class="section-title">Themes are a one-attribute swap</h2>
+    <p class="section-blurb">All color tokens live inside <span style="font-family: var(--font-mono); color: var(--text-secondary);">[data-theme-id="…"]</span> blocks. 33 themes (22 dark, 12 light) are bundled — pick one with the picker bottom-right. UI code never references raw hex values — only semantic tokens (<span style="font-family: var(--font-mono); color: var(--text-secondary);">--bg-secondary</span>, <span style="font-family: var(--font-mono); color: var(--text-secondary);">--accent</span>, etc). To add a new preset, copy the dark block and rewrite its values; nothing else needs to change. Below: the same surface specimen rendered under each theme.</p>
+
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+      <div data-theme-id="material-palenight" style="background: var(--bg-primary); border: 1px solid var(--border-primary); border-radius: 8px; padding: 20px; color: var(--text-primary);">
+        <div style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px;">material-palenight · default dark</div>
+        <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+          <div style="height: 32px; flex: 1; background: var(--bg-primary); border: 1px solid var(--border-primary); border-radius: 4px;"></div>
+          <div style="height: 32px; flex: 1; background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 4px;"></div>
+          <div style="height: 32px; flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border-primary); border-radius: 4px;"></div>
+          <div style="height: 32px; width: 32px; background: var(--accent); border-radius: 4px;"></div>
+          <div style="height: 32px; width: 32px; background: var(--success); border-radius: 4px;"></div>
+          <div style="height: 32px; width: 32px; background: var(--warning); border-radius: 4px;"></div>
+          <div style="height: 32px; width: 32px; background: var(--error); border-radius: 4px;"></div>
+          <div style="height: 32px; width: 32px; background: var(--magenta); border-radius: 4px;"></div>
+        </div>
+        <div style="font-family: var(--font-heading); font-size: 32px; font-weight: 700; color: var(--accent); line-height: 1;">142</div>
+        <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">runs · 30 days</div>
+      </div>
+
+      <div data-theme-id="github-light" style="background: var(--bg-primary); border: 1px solid var(--border-primary); border-radius: 8px; padding: 20px; color: var(--text-primary);">
+        <div style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px;">github-light · default light</div>
+        <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+          <div style="height: 32px; flex: 1; background: var(--bg-primary); border: 1px solid var(--border-primary); border-radius: 4px;"></div>
+          <div style="height: 32px; flex: 1; background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 4px;"></div>
+          <div style="height: 32px; flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border-primary); border-radius: 4px;"></div>
+          <div style="height: 32px; width: 32px; background: var(--accent); border-radius: 4px;"></div>
+          <div style="height: 32px; width: 32px; background: var(--success); border-radius: 4px;"></div>
+          <div style="height: 32px; width: 32px; background: var(--warning); border-radius: 4px;"></div>
+          <div style="height: 32px; width: 32px; background: var(--error); border-radius: 4px;"></div>
+          <div style="height: 32px; width: 32px; background: var(--magenta); border-radius: 4px;"></div>
+        </div>
+        <div style="font-family: var(--font-heading); font-size: 32px; font-weight: 700; color: var(--accent); line-height: 1;">142</div>
+        <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">runs · 30 days</div>
+      </div>
+    </div>
+    <p style="font-size: 12px; color: var(--text-muted); margin: 12px 0 0; font-family: var(--font-mono);">// future presets land alongside these — same tokens, different values.</p>
+  </section>
+
+  <!-- ============================================================ LOGO -->
+  <section class="section">
+    <div class="section-eyebrow">01 · Identity</div>
+    <h2 class="section-title">Construct</h2>
+    <p class="section-blurb">A wordmark, not a logotype. Set in Merriweather to share gravity with the display numerics elsewhere in the system. The accent stripe on the "C" is the only ornament.</p>
+
+    <div style="display: flex; gap: 48px; align-items: center; padding: 32px; background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 8px;">
+      <div class="logo-row">
+        <div class="logo-mark">C</div>
+        <span class="logo-word"><span class="accent">▍</span>construct</span>
+      </div>
+      <div style="color: var(--text-muted); font-family: var(--font-mono); font-size: 12px; line-height: 1.6;">
+        wordmark · merriweather 700<br/>
+        mark · accent stripe + lowercase
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ SURFACES -->
+  <section class="section">
+    <div class="section-eyebrow">02 · Surfaces</div>
+    <h2 class="section-title">Three-tier depth</h2>
+    <p class="section-blurb">Every screen in Construct is built from three background values. The primary is the floor; secondary is where work happens; tertiary is for hover, inputs, and nested chrome. No drop shadows — depth comes from value steps.</p>
+
+    <div class="grid grid-3">
+      <div class="surface-tile" style="background: var(--bg-primary);">
+        <div>
+          <div class="name">--bg-primary</div>
+          <div class="role" style="margin-top: 8px;">Page floor</div>
+        </div>
+        <div class="hex">#0d0e10</div>
+      </div>
+      <div class="surface-tile" style="background: var(--bg-secondary);">
+        <div>
+          <div class="name">--bg-secondary</div>
+          <div class="role" style="margin-top: 8px;">Cards · panels · modals</div>
+        </div>
+        <div class="hex">#15171a</div>
+      </div>
+      <div class="surface-tile" style="background: var(--bg-tertiary);">
+        <div>
+          <div class="name">--bg-tertiary</div>
+          <div class="role" style="margin-top: 8px;">Hover · inputs · nested</div>
+        </div>
+        <div class="hex">#1d2024</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ COLOR -->
+  <section class="section">
+    <div class="section-eyebrow">03 · Color</div>
+    <h2 class="section-title">Semantic accents</h2>
+    <p class="section-blurb">A muted, near-monochrome base lets the semantic accents carry meaning. Blue is the brand pulse — used for primary actions, links, and "this is the thing." Other colors are reserved for what they denote.</p>
+
+    <div class="grid grid-6">
+      <div class="color-tile">
+        <div class="color-swatch" style="background: var(--accent);"></div>
+        <div class="color-meta">
+          <div class="name">accent</div>
+          <div class="hex">#6aa3ff</div>
+          <div class="use">Primary action, link, focus</div>
+        </div>
+      </div>
+      <div class="color-tile">
+        <div class="color-swatch" style="background: var(--success);"></div>
+        <div class="color-meta">
+          <div class="name">success</div>
+          <div class="hex">#34c98a</div>
+          <div class="use">Done, positive delta, hit</div>
+        </div>
+      </div>
+      <div class="color-tile">
+        <div class="color-swatch" style="background: var(--warning);"></div>
+        <div class="color-meta">
+          <div class="name">warning</div>
+          <div class="hex">#f0a93b</div>
+          <div class="use">Paused, slow, attention</div>
+        </div>
+      </div>
+      <div class="color-tile">
+        <div class="color-swatch" style="background: var(--error);"></div>
+        <div class="color-meta">
+          <div class="name">error</div>
+          <div class="hex">#ef5b5b</div>
+          <div class="use">Halted, failed, negative</div>
+        </div>
+      </div>
+      <div class="color-tile">
+        <div class="color-swatch" style="background: var(--info);"></div>
+        <div class="color-meta">
+          <div class="name">info</div>
+          <div class="hex">#5fb8d4</div>
+          <div class="use">Completed, neutral notice</div>
+        </div>
+      </div>
+      <div class="color-tile">
+        <div class="color-swatch" style="background: var(--magenta);"></div>
+        <div class="color-meta">
+          <div class="name">magenta</div>
+          <div class="hex">#c879ff</div>
+          <div class="use">Habits — only here</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ TEXT COLORS -->
+  <section class="section">
+    <div class="section-eyebrow">04 · Text</div>
+    <h2 class="section-title">Four greys do all the work</h2>
+    <p class="section-blurb">Hierarchy comes from value, not size. Primary is for body and headings. Secondary handles axis labels and supporting copy. Muted lives in metadata and timestamps. Disabled is for what's there but not for now.</p>
+
+    <div class="text-row">
+      <div class="label">--text-primary · #e6e8ec</div>
+      <div class="sample text-primary">Body, headings, the thing you're meant to read.</div>
+    </div>
+    <div class="text-row">
+      <div class="label">--text-secondary · #b4b8c0</div>
+      <div class="sample text-secondary">Axis labels, supporting copy, second-tier UI.</div>
+    </div>
+    <div class="text-row">
+      <div class="label">--text-muted · #797f8a</div>
+      <div class="sample text-muted">Timestamps, captions, helper text, hint copy.</div>
+    </div>
+    <div class="text-row">
+      <div class="label">--text-disabled · #4a4f58</div>
+      <div class="sample text-disabled">Disabled controls and placeholder values.</div>
+    </div>
+  </section>
+
+  <!-- ============================================================ TYPE -->
+  <section class="section">
+    <div class="section-eyebrow">05 · Type</div>
+    <h2 class="section-title">Three families, scoped jobs</h2>
+    <p class="section-blurb">Merriweather carries gravity for display numerics. Noto Sans handles everything in the UI. Noto Sans Mono is for code, IDs, hashes, and SHAs. Default body is 14px. The 5xl serif numerals in stat cards are the loudest thing on the page — they earn it.</p>
+
+    <div style="background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 8px; padding: 8px 24px;">
+      <div class="specimen">
+        <div class="meta"><strong>Display</strong>Merriweather 700</div>
+        <div class="sample" style="font-family: var(--font-heading); font-size: 60px; font-weight: 700; line-height: 1; letter-spacing: -0.02em;">142</div>
+        <div class="pixels">60 / 1.0</div>
+      </div>
+      <div class="specimen">
+        <div class="meta"><strong>Stat compact</strong>Merriweather 700</div>
+        <div class="sample tabular-nums" style="font-family: var(--font-heading); font-size: 32px; font-weight: 700; line-height: 1.1; letter-spacing: -0.01em; color: var(--accent);">$2,430.18</div>
+        <div class="pixels">32 / 1.1</div>
+      </div>
+      <div class="specimen">
+        <div class="meta"><strong>Page title</strong>Merriweather 700</div>
+        <div class="sample" style="font-family: var(--font-heading); font-size: 26px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2;">Research · history</div>
+        <div class="pixels">26 / 1.2</div>
+      </div>
+      <div class="specimen">
+        <div class="meta"><strong>Body</strong>Noto Sans 400</div>
+        <div class="sample" style="font-size: 14px; line-height: 1.5;">A timeline of how Detroit techno crossed the Atlantic — labels, DJs, pivotal venues 1986–94.</div>
+        <div class="pixels">14 / 1.5</div>
+      </div>
+      <div class="specimen">
+        <div class="meta"><strong>Eyebrow</strong>Noto Sans 600 · upper</div>
+        <div class="sample" style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted);">Goals · last 7 days</div>
+        <div class="pixels">12 / upper</div>
+      </div>
+      <div class="specimen">
+        <div class="meta"><strong>Caption</strong>Noto Sans 400</div>
+        <div class="sample" style="font-size: 12px; color: var(--text-muted);">avg 4.7 / run · last updated 2m ago</div>
+        <div class="pixels">12 / 1.5</div>
+      </div>
+      <div class="specimen">
+        <div class="meta"><strong>Mono</strong>Noto Sans Mono 500</div>
+        <div class="sample" style="font-family: var(--font-mono); font-size: 13px; color: var(--text-secondary);">a3f2b1c · src/research/runner.ts:142</div>
+        <div class="pixels">13 / mono</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ STAT -->
+  <section class="section">
+    <div class="section-eyebrow">06 · Stat hero</div>
+    <h2 class="section-title">The signature</h2>
+    <p class="section-blurb">When numbers matter, they get the serif. The combination of Merriweather digits and a quiet uppercase eyebrow is the most recognizable thing in the system — used on every dashboard.</p>
+
+    <div class="grid" style="grid-template-columns: repeat(3, 1fr);">
+      <div class="hero">
+        <div class="label">Runs · 30 days</div>
+        <div class="stat">142</div>
+        <div class="meta"><span class="num">+18</span> vs prev period</div>
+      </div>
+      <div class="hero">
+        <div class="label">Findings · 30 days</div>
+        <div class="stat" style="color: var(--success);">8,374</div>
+        <div class="meta">avg <span class="num">59.0</span> / run</div>
+      </div>
+      <div class="hero">
+        <div class="label">Spend · 30 days</div>
+        <div class="stat" style="color: var(--text-primary);">$87.42</div>
+        <div class="meta"><span class="num">$0.61</span> / run</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ SPACING & RADIUS -->
+  <section class="section">
+    <div class="section-eyebrow">07 · Spacing & radius</div>
+    <h2 class="section-title">Tight by default</h2>
+    <p class="section-blurb">A 4px base scale — rarely larger than 16. Construct screens are dense. Power users scan, they don't read. Match this. Radii stay small: Construct doesn't pillow.</p>
+
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 32px;">
+      <div style="background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 8px; padding: 16px 24px;">
+        <div class="space-row"><span class="space-token">--sp-1</span><span class="space-px">4px</span><div class="space-bar" style="width: 4px;"></div></div>
+        <div class="space-row"><span class="space-token">--sp-2</span><span class="space-px">8px</span><div class="space-bar" style="width: 8px;"></div></div>
+        <div class="space-row"><span class="space-token">--sp-3</span><span class="space-px">12px</span><div class="space-bar" style="width: 12px;"></div></div>
+        <div class="space-row"><span class="space-token">--sp-4</span><span class="space-px">16px</span><div class="space-bar" style="width: 16px;"></div></div>
+        <div class="space-row"><span class="space-token">--sp-6</span><span class="space-px">24px</span><div class="space-bar" style="width: 24px;"></div></div>
+        <div class="space-row"><span class="space-token">--sp-8</span><span class="space-px">32px</span><div class="space-bar" style="width: 32px;"></div></div>
+        <div class="space-row"><span class="space-token">--sp-12</span><span class="space-px">48px</span><div class="space-bar" style="width: 48px;"></div></div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div class="radius-tile">
+          <div class="radius-block" style="border-radius: 2px;"></div>
+          <div class="radius-meta"><div class="token">--radius-sm</div><div class="px">2px · chips, tooltips</div></div>
+        </div>
+        <div class="radius-tile">
+          <div class="radius-block" style="border-radius: 4px;"></div>
+          <div class="radius-meta"><div class="token">--radius-md</div><div class="px">4px · badges, buttons</div></div>
+        </div>
+        <div class="radius-tile">
+          <div class="radius-block" style="border-radius: 8px;"></div>
+          <div class="radius-meta"><div class="token">--radius-lg</div><div class="px">8px · cards, panels</div></div>
+        </div>
+        <div class="radius-tile">
+          <div class="radius-block" style="border-radius: 12px;"></div>
+          <div class="radius-meta"><div class="token">--radius-xl</div><div class="px">12px · modals, hero</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ ICONS -->
+  <section class="section">
+    <div class="section-eyebrow">08 · Iconography</div>
+    <h2 class="section-title">Material Symbols, outlined</h2>
+    <p class="section-blurb">The whole UI runs on <span style="font-family: var(--font-mono); color: var(--text-secondary);">Material Symbols Outlined</span> with weight 300, opsz 20. Filled variants only for active/selected states. No custom icon sets. No SVG illustrations in product chrome.</p>
+
+    <div class="icon-grid">
+      <div class="icon-cell"><span class="material-symbols-outlined icon">target</span><span class="name">target</span></div>
+      <div class="icon-cell"><span class="material-symbols-outlined icon">check</span><span class="name">check</span></div>
+      <div class="icon-cell"><span class="material-symbols-outlined icon">autorenew</span><span class="name">autorenew</span></div>
+      <div class="icon-cell"><span class="material-symbols-outlined icon">science</span><span class="name">science</span></div>
+      <div class="icon-cell"><span class="material-symbols-outlined icon">monitoring</span><span class="name">monitoring</span></div>
+      <div class="icon-cell"><span class="material-symbols-outlined icon">schedule</span><span class="name">schedule</span></div>
+      <div class="icon-cell"><span class="material-symbols-outlined icon">filter_list</span><span class="name">filter_list</span></div>
+      <div class="icon-cell"><span class="material-symbols-outlined icon">tune</span><span class="name">tune</span></div>
+      <div class="icon-cell"><span class="material-symbols-outlined icon">bar_chart</span><span class="name">bar_chart</span></div>
+      <div class="icon-cell"><span class="material-symbols-outlined icon">terminal</span><span class="name">terminal</span></div>
+      <div class="icon-cell"><span class="material-symbols-outlined icon">memory</span><span class="name">memory</span></div>
+      <div class="icon-cell"><span class="material-symbols-outlined icon">database</span><span class="name">database</span></div>
+      <div class="icon-cell"><span class="material-symbols-outlined icon">play_arrow</span><span class="name">play_arrow</span></div>
+      <div class="icon-cell"><span class="material-symbols-outlined icon">pause</span><span class="name">pause</span></div>
+      <div class="icon-cell"><span class="material-symbols-outlined icon">stop</span><span class="name">stop</span></div>
+      <div class="icon-cell"><span class="material-symbols-outlined icon">add</span><span class="name">add</span></div>
+    </div>
+  </section>
+<script src="../tokens/theme-picker.js"></script>
+</body>
+</html>

@@ -69,7 +69,7 @@ function HabitItem({ habit, onComplete, onUncomplete }: HabitItemProps) {
         <span className={`text-sm ${checked ? 'line-through text-text-muted' : 'text-text-primary'}`}>
           {habit.title}
         </span>
-        <span className="text-xs px-1.5 py-0.5 rounded bg-bg-tertiary text-text-muted border border-border-secondary">
+        <span className="text-sm px-2 py-0.5 rounded bg-bg-tertiary text-text-muted border border-border-secondary">
           {frequencyLabel(habit.frequency)}
         </span>
       </div>

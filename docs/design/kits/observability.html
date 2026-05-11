@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en" data-theme-id="material-palenight">
+<head>
+<meta charset="utf-8" />
+<title>Construct — Observability kit</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="stylesheet" href="../tokens/colors_and_type.css" />
+<style>
+  body { padding: 48px 32px; max-width: 1280px; margin: 0 auto; }
+  .doc-title { font-family: var(--font-heading); font-size: 40px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 4px; }
+  .doc-sub { color: var(--text-muted); margin: 0 0 36px; font-size: 14px; max-width: 60ch; line-height: 1.6; }
+
+  .shell { display: grid; grid-template-columns: 220px 1fr; background: var(--bg-primary); border-radius: 12px; overflow: hidden; border: 1px solid var(--border-primary); margin-bottom: 32px; }
+  .sidebar { background: var(--bg-secondary); border-right: 1px solid var(--border-primary); padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 16px; margin-bottom: 8px; border-bottom: 1px solid var(--border-primary); }
+  .brand .mark { width: 28px; height: 28px; border-radius: 6px; background: var(--bg-tertiary); display: grid; place-items: center; font-family: var(--font-heading); font-weight: 900; color: var(--accent); font-size: 14px; }
+  .brand .name { font-family: var(--font-heading); font-size: 15px; font-weight: 700; }
+  .nav-group { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); padding: 12px 8px 4px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 6px 8px; font-size: 13px; color: var(--text-secondary); border-radius: 4px; }
+  .nav-item.active { background: var(--accent-muted); color: var(--accent); font-weight: 500; }
+  .nav-item .material-symbols-outlined { font-size: 18px; color: var(--text-muted); }
+  .nav-item.active .material-symbols-outlined { color: var(--accent); }
+
+  .main { min-width: 0; display: flex; flex-direction: column; }
+
+  .control-bar { height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 24px; border-bottom: 1px solid var(--border-primary); flex-shrink: 0; }
+  .cb-title { font-size: 16px; font-weight: 600; flex: 1; }
+  .cb-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-secondary); padding: 4px 8px; }
+  .cb-pill .material-symbols-outlined { font-size: 14px; color: var(--text-muted); }
+  .cb-pipe { color: var(--text-muted); font-size: 12px; user-select: none; }
+  .cb-divider { width: 4px; height: 16px; border-radius: 2px; background: var(--text-muted); margin: 0 4px; }
+
+  .body { padding: 20px 24px; }
+
+  /* KPI strip */
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  .kpi { background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 8px; padding: 14px 16px; }
+  .kpi .label { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 6px; }
+  .kpi .num { font-family: var(--font-heading); font-size: 32px; font-weight: 700; line-height: 1; }
+  .kpi .sub { font-size: 11px; color: var(--text-muted); margin-top: 6px; font-family: var(--font-mono); }
+  .kpi .delta-up { color: var(--success); }
+  .kpi .delta-down { color: var(--error); }
+
+  /* Chart card */
+  .chart-card { background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; }
+  .chart-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+  .chart-h .title { font-size: 13px; font-weight: 600; }
+  .chart-h .meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+
+  /* Stacked bar chart (SVG) */
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; font-size: 11px; color: var(--text-secondary); font-family: var(--font-mono); }
+  .legend-swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: 0px; }
+
+  /* Tools table */
+  .tools-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .tools-table thead th { text-align: left; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 500; padding: 8px 12px; border-bottom: 1px solid var(--border-primary); }
+  .tools-table thead th.right { text-align: right; }
+  .tools-table tbody td { padding: 9px 12px; border-bottom: 1px solid var(--border-primary); }
+  .tools-table tbody tr:last-child td { border-bottom: 0; }
+  .tools-table .tool-name { font-family: var(--font-mono); font-size: 12px; color: var(--text-primary); }
+  .tools-table .right { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: 12px; }
+  .tools-table .err { color: var(--error); }
+  .tools-table .ok { color: var(--success); }
+  .tools-table .bar-cell { width: 120px; }
+  .mini-bar { height: 6px; background: var(--bg-tertiary); border-radius: 2px; position: relative; overflow: hidden; }
+  .mini-bar .fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 2px; }
+
+  /* Sparklines + lat */
+  .lat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  /* Trace waterfall */
+  .trace { background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 8px; }
+  .trace-h { padding: 12px 16px; border-bottom: 1px solid var(--border-primary); display: flex; gap: 16px; align-items: baseline; flex-wrap: wrap; }
+  .trace-id { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); }
+  .trace-meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+  .trace-meta strong { color: var(--text-secondary); font-weight: 500; }
+  .trace-rows { padding: 8px 0; }
+  .span { display: grid; grid-template-columns: 240px 1fr 80px; gap: 12px; padding: 4px 16px; align-items: center; font-size: 12px; }
+  .span:hover { background: var(--bg-tertiary); }
+  .span-name { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .span-name .material-symbols-outlined { font-size: 14px; color: var(--text-muted); }
+  .span-name.depth-1 { padding-left: 16px; }
+  .span-name.depth-2 { padding-left: 32px; }
+  .span-name.depth-3 { padding-left: 48px; }
+  .span-track { position: relative; height: 18px; background: var(--bg-tertiary); border-radius: 2px; }
+  .span-bar { position: absolute; top: 3px; bottom: 3px; border-radius: 2px; }
+  .span-bar.s1 { background: var(--accent); }
+  .span-bar.s2 { background: var(--success); }
+  .span-bar.s3 { background: var(--magenta); }
+  .span-bar.s4 { background: var(--warning); }
+  .span-bar.s5 { background: var(--info); }
+  .span-bar.err { background: var(--error); }
+  .span-dur { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); text-align: right; }
+
+  .section-eyebrow { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.1em; font-size: 11px; color: var(--text-muted); margin: 32px 0 8px; }
+  .section-title { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
+  .section-blurb { color: var(--text-secondary); font-size: 13px; margin: 0 0 20px; max-width: 64ch; line-height: 1.6; }
+
+  /* Sessions list */
+  .sess-row { display: grid; grid-template-columns: 110px 90px 1fr 80px 100px 70px; gap: 16px; padding: 11px 14px; background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 6px; margin-bottom: 6px; align-items: center; font-size: 12px; }
+  .sess-row.header { background: transparent; border: none; padding: 4px 14px; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+  .sess-row .ts { font-family: var(--font-mono); color: var(--text-muted); }
+  .sess-row .summary { color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sess-row .num { font-family: var(--font-mono); color: var(--text-secondary); text-align: right; font-variant-numeric: tabular-nums; }
+  .pill { display: inline-flex; padding: 1px 7px; border-radius: 3px; font-size: 10px; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; }
+  .pill.ok { background: var(--success-muted); color: var(--success); }
+  .pill.err { background: var(--error-muted); color: var(--error); }
+  .pill.warn { background: var(--warning-muted); color: var(--warning); }
+</style>
+</head>
+<body>
+  <h1 class="doc-title">Observability kit</h1>
+  <p class="doc-sub">The instrumented half. Tools, hooks, tokens, sessions, traces — all the same shapes, the same control bar, the same chart language. The audience is one engineer at midnight asking "what just happened."</p>
+
+  <!-- ============================================================ TOOLS -->
+  <div class="section-eyebrow">01 · Tools page</div>
+  <h2 class="section-title">Stacked bars + sortable table</h2>
+  <p class="section-blurb">Every observability page has the same shape: KPI strip, a primary chart, then a flat table beneath it. Top-N stacked bars over time call out which tools dominate; "other" gets an explicit grey wedge so the math always adds up.</p>
+
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="mark">C</div><span class="name">construct</span></div>
+      <div class="nav-group">Observability</div>
+      <div class="nav-item"><span class="material-symbols-outlined">monitoring</span>Overview</div>
+      <div class="nav-item active"><span class="material-symbols-outlined">build</span>Tools</div>
+      <div class="nav-item"><span class="material-symbols-outlined">webhook</span>Hooks</div>
+      <div class="nav-item"><span class="material-symbols-outlined">payments</span>Tokens</div>
+      <div class="nav-item"><span class="material-symbols-outlined">forum</span>Sessions</div>
+      <div class="nav-item"><span class="material-symbols-outlined">extension</span>Skills</div>
+      <div class="nav-item"><span class="material-symbols-outlined">database</span>DB stats</div>
+    </aside>
+
+    <main class="main">
+      <div class="control-bar">
+        <div class="cb-title">Tools</div>
+        <span class="cb-pill"><span class="material-symbols-outlined">bar_chart</span>Calls</span>
+        <span class="cb-pipe">|</span>
+        <span class="cb-pill"><span class="material-symbols-outlined">filter_list</span>(2)</span>
+        <span class="cb-pipe">|</span>
+        <span class="cb-pill"><span class="material-symbols-outlined">tune</span>10+Other</span>
+        <span class="cb-divider"></span>
+        <span class="cb-pill"><span class="material-symbols-outlined">calendar_today</span>7d</span>
+        <span class="cb-pipe">|</span>
+        <span class="cb-pill"><span class="material-symbols-outlined">schedule</span>Day</span>
+      </div>
+
+      <div class="body">
+        <div class="kpis">
+          <div class="kpi"><div class="label">Calls · 7d</div><div class="num">42,108</div><div class="sub"><span class="delta-up">↑ 12.4%</span> vs prev</div></div>
+          <div class="kpi"><div class="label">Unique tools</div><div class="num">37</div><div class="sub"><span class="delta-up">↑ 2</span> new this week</div></div>
+          <div class="kpi"><div class="label">Error rate</div><div class="num" style="color: var(--error);">2.1%</div><div class="sub"><span class="delta-down">↑ 0.4pp</span> vs prev</div></div>
+          <div class="kpi"><div class="label">p95 latency</div><div class="num">412ms</div><div class="sub"><span class="delta-up">↓ 38ms</span> vs prev</div></div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-h"><div class="title">Tool calls per day · top 6 + other</div><div class="meta">Mar 8 – Mar 14</div></div>
+
+          <svg viewBox="0 0 720 220" style="width: 100%; height: 220px; overflow: visible;">
+            <!-- gridlines -->
+            <line x1="40" y1="20"  x2="700" y2="20"  stroke="var(--chart-grid)" stroke-dasharray="2 4"/>
+            <line x1="40" y1="60"  x2="700" y2="60"  stroke="var(--chart-grid)" stroke-dasharray="2 4"/>
+            <line x1="40" y1="100" x2="700" y2="100" stroke="var(--chart-grid)" stroke-dasharray="2 4"/>
+            <line x1="40" y1="140" x2="700" y2="140" stroke="var(--chart-grid)" stroke-dasharray="2 4"/>
+            <line x1="40" y1="180" x2="700" y2="180" stroke="var(--chart-grid)" stroke-dasharray="2 4"/>
+            <!-- y axis labels -->
+            <g font-family="var(--font-mono)" font-size="10" fill="var(--chart-text)" text-anchor="end">
+              <text x="34" y="184">0</text>
+              <text x="34" y="144">2k</text>
+              <text x="34" y="104">4k</text>
+              <text x="34" y="64">6k</text>
+              <text x="34" y="24">8k</text>
+            </g>
+            <!-- bars: 7 days, each ~80px slot -->
+            <g>
+              <!-- d1 -->
+              <g transform="translate(60,0)"><rect x="0" y="60" width="48" height="20" fill="var(--chart-1)"/><rect x="0" y="80" width="48" height="22" fill="var(--chart-2)"/><rect x="0" y="102" width="48" height="14" fill="var(--chart-3)"/><rect x="0" y="116" width="48" height="18" fill="var(--chart-4)"/><rect x="0" y="134" width="48" height="12" fill="var(--chart-5)"/><rect x="0" y="146" width="48" height="14" fill="var(--chart-6)"/><rect x="0" y="160" width="48" height="20" fill="var(--chart-other)"/></g>
+              <g transform="translate(150,0)"><rect x="0" y="48" width="48" height="22" fill="var(--chart-1)"/><rect x="0" y="70" width="48" height="28" fill="var(--chart-2)"/><rect x="0" y="98" width="48" height="14" fill="var(--chart-3)"/><rect x="0" y="112" width="48" height="20" fill="var(--chart-4)"/><rect x="0" y="132" width="48" height="14" fill="var(--chart-5)"/><rect x="0" y="146" width="48" height="14" fill="var(--chart-6)"/><rect x="0" y="160" width="48" height="20" fill="var(--chart-other)"/></g>
+              <g transform="translate(240,0)"><rect x="0" y="40" width="48" height="28" fill="var(--chart-1)"/><rect x="0" y="68" width="48" height="32" fill="var(--chart-2)"/><rect x="0" y="100" width="48" height="16" fill="var(--chart-3)"/><rect x="0" y="116" width="48" height="20" fill="var(--chart-4)"/><rect x="0" y="136" width="48" height="14" fill="var(--chart-5)"/><rect x="0" y="150" width="48" height="12" fill="var(--chart-6)"/><rect x="0" y="162" width="48" height="18" fill="var(--chart-other)"/></g>
+              <g transform="translate(330,0)"><rect x="0" y="56" width="48" height="20" fill="var(--chart-1)"/><rect x="0" y="76" width="48" height="26" fill="var(--chart-2)"/><rect x="0" y="102" width="48" height="14" fill="var(--chart-3)"/><rect x="0" y="116" width="48" height="18" fill="var(--chart-4)"/><rect x="0" y="134" width="48" height="14" fill="var(--chart-5)"/><rect x="0" y="148" width="48" height="14" fill="var(--chart-6)"/><rect x="0" y="162" width="48" height="18" fill="var(--chart-other)"/></g>
+              <g transform="translate(420,0)"><rect x="0" y="34" width="48" height="32" fill="var(--chart-1)"/><rect x="0" y="66" width="48" height="32" fill="var(--chart-2)"/><rect x="0" y="98" width="48" height="18" fill="var(--chart-3)"/><rect x="0" y="116" width="48" height="22" fill="var(--chart-4)"/><rect x="0" y="138" width="48" height="14" fill="var(--chart-5)"/><rect x="0" y="152" width="48" height="12" fill="var(--chart-6)"/><rect x="0" y="164" width="48" height="16" fill="var(--chart-other)"/></g>
+              <g transform="translate(510,0)"><rect x="0" y="44" width="48" height="26" fill="var(--chart-1)"/><rect x="0" y="70" width="48" height="34" fill="var(--chart-2)"/><rect x="0" y="104" width="48" height="14" fill="var(--chart-3)"/><rect x="0" y="118" width="48" height="20" fill="var(--chart-4)"/><rect x="0" y="138" width="48" height="14" fill="var(--chart-5)"/><rect x="0" y="152" width="48" height="14" fill="var(--chart-6)"/><rect x="0" y="166" width="48" height="14" fill="var(--chart-other)"/></g>
+              <g transform="translate(600,0)"><rect x="0" y="30" width="48" height="36" fill="var(--chart-1)"/><rect x="0" y="66" width="48" height="36" fill="var(--chart-2)"/><rect x="0" y="102" width="48" height="18" fill="var(--chart-3)"/><rect x="0" y="120" width="48" height="22" fill="var(--chart-4)"/><rect x="0" y="142" width="48" height="14" fill="var(--chart-5)"/><rect x="0" y="156" width="48" height="12" fill="var(--chart-6)"/><rect x="0" y="168" width="48" height="12" fill="var(--chart-other)"/></g>
+            </g>
+            <!-- x axis -->
+            <g font-family="var(--font-mono)" font-size="10" fill="var(--chart-text)" text-anchor="middle">
+              <text x="84"  y="200">Sat 8</text>
+              <text x="174" y="200">Sun 9</text>
+              <text x="264" y="200">Mon 10</text>
+              <text x="354" y="200">Tue 11</text>
+              <text x="444" y="200">Wed 12</text>
+              <text x="534" y="200">Thu 13</text>
+              <text x="624" y="200">Fri 14</text>
+            </g>
+          </svg>
+          <div class="legend">
+            <span><span class="legend-swatch" style="background: var(--chart-1);"></span>web_search</span>
+            <span><span class="legend-swatch" style="background: var(--chart-2);"></span>fetch_url</span>
+            <span><span class="legend-swatch" style="background: var(--chart-3);"></span>db_query</span>
+            <span><span class="legend-swatch" style="background: var(--chart-4);"></span>fs_read</span>
+            <span><span class="legend-swatch" style="background: var(--chart-5);"></span>shell_exec</span>
+            <span><span class="legend-swatch" style="background: var(--chart-6);"></span>code_run</span>
+            <span><span class="legend-swatch" style="background: var(--chart-other);"></span>31 other</span>
+          </div>
+        </div>
+
+        <table class="tools-table">
+          <thead>
+            <tr>
+              <th>Tool</th>
+              <th class="right">Calls</th>
+              <th class="bar-cell">Share</th>
+              <th class="right">Errors</th>
+              <th class="right">p50</th>
+              <th class="right">p95</th>
+              <th class="right">p99</th>
+              <th class="right">Spend</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><span class="tool-name">web_search</span></td><td class="right">9,412</td><td><div class="mini-bar"><span class="fill" style="width: 100%; background: var(--chart-1);"></span></div></td><td class="right ok">0.3%</td><td class="right">182ms</td><td class="right">621ms</td><td class="right">1.2s</td><td class="right">$12.40</td></tr>
+            <tr><td><span class="tool-name">fetch_url</span></td><td class="right">8,127</td><td><div class="mini-bar"><span class="fill" style="width: 86%; background: var(--chart-2);"></span></div></td><td class="right err">4.1%</td><td class="right">94ms</td><td class="right">412ms</td><td class="right">2.4s</td><td class="right">$3.21</td></tr>
+            <tr><td><span class="tool-name">db_query</span></td><td class="right">5,403</td><td><div class="mini-bar"><span class="fill" style="width: 57%; background: var(--chart-3);"></span></div></td><td class="right ok">0.1%</td><td class="right">12ms</td><td class="right">48ms</td><td class="right">128ms</td><td class="right">—</td></tr>
+            <tr><td><span class="tool-name">fs_read</span></td><td class="right">4,891</td><td><div class="mini-bar"><span class="fill" style="width: 52%; background: var(--chart-4);"></span></div></td><td class="right ok">0.0%</td><td class="right">3ms</td><td class="right">14ms</td><td class="right">52ms</td><td class="right">—</td></tr>
+            <tr><td><span class="tool-name">shell_exec</span></td><td class="right">3,204</td><td><div class="mini-bar"><span class="fill" style="width: 34%; background: var(--chart-5);"></span></div></td><td class="right">2.4%</td><td class="right">142ms</td><td class="right">2.1s</td><td class="right">8.4s</td><td class="right">—</td></tr>
+            <tr><td><span class="tool-name">code_run</span></td><td class="right">2,847</td><td><div class="mini-bar"><span class="fill" style="width: 30%; background: var(--chart-6);"></span></div></td><td class="right">1.8%</td><td class="right">418ms</td><td class="right">3.2s</td><td class="right">12.1s</td><td class="right">$0.84</td></tr>
+            <tr><td><span class="tool-name">memory.recall</span></td><td class="right">1,892</td><td><div class="mini-bar"><span class="fill" style="width: 20%; background: var(--chart-other);"></span></div></td><td class="right ok">0.0%</td><td class="right">8ms</td><td class="right">22ms</td><td class="right">61ms</td><td class="right">—</td></tr>
+            <tr><td><span class="tool-name">31 other</span></td><td class="right">6,332</td><td><div class="mini-bar"><span class="fill" style="width: 67%; background: var(--chart-other);"></span></div></td><td class="right">1.4%</td><td class="right">—</td><td class="right">—</td><td class="right">—</td><td class="right">$2.19</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <!-- ============================================================ TRACE -->
+  <div class="section-eyebrow">02 · Session trace</div>
+  <h2 class="section-title">Span waterfall</h2>
+  <p class="section-blurb">Each session opens to a flat span list — the orchestrator at depth 0, workers at 1, tool calls at 2, sub-fetches at 3. Color identifies the span kind, indent identifies the parent, and an error span turns red end-to-end.</p>
+
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="mark">C</div><span class="name">construct</span></div>
+      <div class="nav-group">Observability</div>
+      <div class="nav-item"><span class="material-symbols-outlined">monitoring</span>Overview</div>
+      <div class="nav-item"><span class="material-symbols-outlined">build</span>Tools</div>
+      <div class="nav-item active"><span class="material-symbols-outlined">forum</span>Sessions</div>
+      <div class="nav-item"><span class="material-symbols-outlined">database</span>DB stats</div>
+    </aside>
+
+    <main class="main">
+      <div class="control-bar">
+        <div class="cb-title">Session detail</div>
+        <span class="cb-pill" style="font-family: var(--font-mono);">trace_a3f2b1c · 31 spans · 4.82s</span>
+      </div>
+
+      <div class="body">
+        <div class="trace">
+          <div class="trace-h">
+            <span class="trace-id">trace_a3f2b1c8e90</span>
+            <span class="trace-meta"><strong>started</strong> 02:14:07</span>
+            <span class="trace-meta"><strong>duration</strong> 4.82s</span>
+            <span class="trace-meta"><strong>tokens</strong> 18,251 in / 4,127 out</span>
+            <span class="trace-meta"><strong>spend</strong> $0.21</span>
+            <span class="pill ok">ok</span>
+          </div>
+          <div class="trace-rows">
+            <!-- Root run -->
+            <div class="span">
+              <span class="span-name"><span class="material-symbols-outlined">science</span>research.run</span>
+              <div class="span-track"><div class="span-bar s1" style="left: 0%; width: 100%;"></div></div>
+              <div class="span-dur">4.82s</div>
+            </div>
+            <!-- planner -->
+            <div class="span">
+              <span class="span-name depth-1"><span class="material-symbols-outlined">psychology</span>planner.plan</span>
+              <div class="span-track"><div class="span-bar s2" style="left: 0%; width: 9%;"></div></div>
+              <div class="span-dur">438ms</div>
+            </div>
+            <!-- workers fan out -->
+            <div class="span">
+              <span class="span-name depth-1"><span class="material-symbols-outlined">memory</span>worker.w_01</span>
+              <div class="span-track"><div class="span-bar s3" style="left: 9%; width: 56%;"></div></div>
+              <div class="span-dur">2.7s</div>
+            </div>
+            <div class="span">
+              <span class="span-name depth-2"><span class="material-symbols-outlined">search</span>web_search</span>
+              <div class="span-track"><div class="span-bar s1" style="left: 12%; width: 14%;"></div></div>
+              <div class="span-dur">678ms</div>
+            </div>
+            <div class="span">
+              <span class="span-name depth-2"><span class="material-symbols-outlined">cloud_download</span>fetch_url</span>
+              <div class="span-track"><div class="span-bar s1" style="left: 28%; width: 11%;"></div></div>
+              <div class="span-dur">524ms</div>
+            </div>
+            <div class="span">
+              <span class="span-name depth-3"><span class="material-symbols-outlined">link</span>tcp_connect</span>
+              <div class="span-track"><div class="span-bar s4" style="left: 28%; width: 4%;"></div></div>
+              <div class="span-dur">192ms</div>
+            </div>
+            <div class="span">
+              <span class="span-name depth-2"><span class="material-symbols-outlined">cloud_download</span>fetch_url</span>
+              <div class="span-track"><div class="span-bar err" style="left: 41%; width: 8%;"></div></div>
+              <div class="span-dur err">timeout</div>
+            </div>
+            <div class="span">
+              <span class="span-name depth-2"><span class="material-symbols-outlined">cloud_download</span>fetch_url <span class="pill warn">retry</span></span>
+              <div class="span-track"><div class="span-bar s1" style="left: 49%; width: 12%;"></div></div>
+              <div class="span-dur">582ms</div>
+            </div>
+
+            <div class="span">
+              <span class="span-name depth-1"><span class="material-symbols-outlined">memory</span>worker.w_02</span>
+              <div class="span-track"><div class="span-bar s3" style="left: 9%; width: 62%;"></div></div>
+              <div class="span-dur">2.99s</div>
+            </div>
+            <div class="span">
+              <span class="span-name depth-2"><span class="material-symbols-outlined">search</span>web_search</span>
+              <div class="span-track"><div class="span-bar s1" style="left: 11%; width: 12%;"></div></div>
+              <div class="span-dur">581ms</div>
+            </div>
+            <div class="span">
+              <span class="span-name depth-2"><span class="material-symbols-outlined">cloud_download</span>fetch_url ×3</span>
+              <div class="span-track"><div class="span-bar s1" style="left: 24%; width: 22%;"></div></div>
+              <div class="span-dur">1.06s</div>
+            </div>
+            <div class="span">
+              <span class="span-name depth-2"><span class="material-symbols-outlined">database</span>memory.recall</span>
+              <div class="span-track"><div class="span-bar s5" style="left: 47%; width: 2%;"></div></div>
+              <div class="span-dur">86ms</div>
+            </div>
+
+            <!-- Synthesis -->
+            <div class="span">
+              <span class="span-name depth-1"><span class="material-symbols-outlined">auto_fix_high</span>orchestrator.synthesize</span>
+              <div class="span-track"><div class="span-bar s2" style="left: 71%; width: 22%;"></div></div>
+              <div class="span-dur">1.06s</div>
+            </div>
+            <div class="span">
+              <span class="span-name depth-1"><span class="material-symbols-outlined">database</span>db.write findings ×34</span>
+              <div class="span-track"><div class="span-bar s5" style="left: 93%; width: 6%;"></div></div>
+              <div class="span-dur">288ms</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ============================================================ SESSIONS LIST -->
+  <div class="section-eyebrow">03 · Sessions list</div>
+  <h2 class="section-title">Flat, scannable, dense</h2>
+  <p class="section-blurb">No cards, no avatars. One line per session. Status pill on the left, summary in the middle, numerics right-aligned with tabular figures so columns line up perfectly.</p>
+
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="mark">C</div><span class="name">construct</span></div>
+      <div class="nav-group">Observability</div>
+      <div class="nav-item"><span class="material-symbols-outlined">monitoring</span>Overview</div>
+      <div class="nav-item active"><span class="material-symbols-outlined">forum</span>Sessions</div>
+    </aside>
+
+    <main class="main">
+      <div class="control-bar">
+        <div class="cb-title">Sessions</div>
+        <span class="cb-pill"><span class="material-symbols-outlined">filter_list</span>all</span>
+        <span class="cb-pipe">|</span>
+        <span class="cb-pill"><span class="material-symbols-outlined">calendar_today</span>24h</span>
+      </div>
+      <div class="body">
+        <div class="sess-row header">
+          <span>WHEN</span><span>STATUS</span><span>SUMMARY</span><span style="text-align:right;">SPANS</span><span style="text-align:right;">DURATION</span><span style="text-align:right;">$</span>
+        </div>
+        <div class="sess-row"><span class="ts">14:21:07</span><span><span class="pill ok">ok</span></span><span class="summary">research.run · "detroit techno timeline"</span><span class="num">31</span><span class="num">4.82s</span><span class="num">$0.21</span></div>
+        <div class="sess-row"><span class="ts">13:48:33</span><span><span class="pill ok">ok</span></span><span class="summary">life.summary · daily roll-up</span><span class="num">14</span><span class="num">312ms</span><span class="num">—</span></div>
+        <div class="sess-row"><span class="ts">13:11:02</span><span><span class="pill warn">retry</span></span><span class="summary">research.run · "postgres replication"</span><span class="num">28</span><span class="num">5.41s</span><span class="num">$0.34</span></div>
+        <div class="sess-row"><span class="ts">12:56:18</span><span><span class="pill ok">ok</span></span><span class="summary">hooks.fire · goal_completed → calendar</span><span class="num">6</span><span class="num">214ms</span><span class="num">—</span></div>
+        <div class="sess-row"><span class="ts">12:14:44</span><span><span class="pill err">err</span></span><span class="summary">research.run · halted at budget cap</span><span class="num">19</span><span class="num">2.10s</span><span class="num">$0.50</span></div>
+        <div class="sess-row"><span class="ts">11:37:29</span><span><span class="pill ok">ok</span></span><span class="summary">research.run · "OTLP migration patterns"</span><span class="num">42</span><span class="num">8.71s</span><span class="num">$0.47</span></div>
+        <div class="sess-row"><span class="ts">11:02:11</span><span><span class="pill ok">ok</span></span><span class="summary">life.todo.complete ×4 batch</span><span class="num">9</span><span class="num">94ms</span><span class="num">—</span></div>
+        <div class="sess-row"><span class="ts">10:48:52</span><span><span class="pill ok">ok</span></span><span class="summary">research.run · "OKR benchmarks series-B"</span><span class="num">36</span><span class="num">6.12s</span><span class="num">$0.38</span></div>
+      </div>
+    </main>
+  </div>
+<script src="../tokens/theme-picker.js"></script>
+</body>
+</html>

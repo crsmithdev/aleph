@@ -42,8 +42,7 @@ export const webhookRoutes: FastifyPluginAsync = async (app) => {
         })
         .run();
 
-      const created = app.db.select().from(webhooks).where(eq(webhooks.id, id)).get()!;
-      return reply.status(201).send({ ...created, events: JSON.parse(created.events) });
+      return reply.status(201).send({ id, url, events, secret: secret ?? null, active: true, createdAt: now, updatedAt: now });
     }
   );
 
@@ -68,8 +67,8 @@ export const webhookRoutes: FastifyPluginAsync = async (app) => {
 
       app.db.update(webhooks).set(updateData).where(eq(webhooks.id, req.params.id)).run();
 
-      const updated = app.db.select().from(webhooks).where(eq(webhooks.id, req.params.id)).get()!;
-      return { ...updated, events: JSON.parse(updated.events) };
+      const merged = { ...existing, ...updateData };
+      return { ...merged, events: JSON.parse(String(merged.events)) };
     }
   );
 

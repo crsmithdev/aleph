@@ -50,6 +50,11 @@ export interface Todo {
   updatedAt: string;
 }
 
+export interface HabitHistoryCell {
+  periodKey: string;
+  completed: boolean;
+}
+
 export interface Habit {
   id: string;
   title: string;
@@ -63,6 +68,7 @@ export interface Habit {
   currentPeriodKey: string;
   missedLastPeriod: boolean;
   streak?: number;
+  history?: HabitHistoryCell[];
 }
 
 export interface GoalMeta {
@@ -71,6 +77,7 @@ export interface GoalMeta {
   todoCount?: number;
   noteCount?: number;
   habitCount?: number;
+  linkedGoals?: Goal[];
 }
 
 export interface HistoryLog {

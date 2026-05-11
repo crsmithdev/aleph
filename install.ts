@@ -6,132 +6,92 @@ import { tmpdir } from "node:os";
 import { mkdtemp } from "node:fs/promises";
 import { existsSync } from "node:fs";
 
-// Construct installer — deploys from repo to ~/.claude
-// Source: src/ (everything — modules, commands, CLAUDE.md, hooks config)
-// Preserves: ALL CAPS files in identity/ and memory/
-// Overwrites: hooks, skills, meta, commands, settings, CLAUDE.md
-// User data lives in ~/.construct/ (DB, sessions, signals)
+// Construct installer — deploys from repo src/ to ~/.claude/construct/
+// Preserves: ALL CAPS .md files in identity/ and memory/; DB files
+// User data: ~/.construct/ (DB, sessions, signals) — never touched
 
 const REPO = dirname(resolve(Bun.argv[1]));
 const CONSTRUCT_SRC = join(REPO, "src");
 const DST = join(Bun.env.HOME!, ".claude");
-
-const INFRA_FILES = new Set(["README.md", "INSTALL.md"]);
-
-// File extensions that should never be overwritten during sync (runtime data)
-const SKIP_EXTENSIONS = [".db", ".db-wal", ".db-shm"];
-
 const DATA_DIR = join(Bun.env.HOME!, ".construct");
 const BACKUP_DIR = join(DATA_DIR, "backups");
 const MAX_BACKUPS = 5;
+const INFRA_FILES = new Set(["README.md", "INSTALL.md"]);
+const SKIP_EXTENSIONS = [".db", ".db-wal", ".db-shm"];
+const SKIP_DIRS = new Set(["node_modules", ".bun", "backups"]);
 
-/** Back up the DB before install, keeping the last N backups */
-async function backupDb(): Promise<void> {
+function step(label: string, value: string) {
+  console.log(`  ${label.padEnd(10)} ${value}`);
+}
+
+async function exists(path: string): Promise<boolean> {
+  try { await stat(path); return true; } catch { return false; }
+}
+
+async function backupDb(): Promise<string | null> {
   const dbPath = join(DATA_DIR, "construct.db");
-  if (!(await exists(dbPath))) return;
-
+  if (!await exists(dbPath)) return null;
   await mkdir(BACKUP_DIR, { recursive: true });
   const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-  await cp(dbPath, join(BACKUP_DIR, `construct-${ts}.db`));
-
-  // Copy WAL if present (ensures consistent backup)
+  const name = `construct-${ts}.db`;
+  await cp(dbPath, join(BACKUP_DIR, name));
   const walPath = dbPath + "-wal";
-  if (await exists(walPath)) {
-    await cp(walPath, join(BACKUP_DIR, `construct-${ts}.db-wal`));
-  }
-
-  console.log(`  backed up: construct-${ts}.db`);
-
-  // Prune old backups, keep last N
+  if (await exists(walPath)) await cp(walPath, join(BACKUP_DIR, name + "-wal"));
+  // Prune: keep last MAX_BACKUPS
   const files = (await readdir(BACKUP_DIR))
-    .filter((f) => f.startsWith("construct-") && f.endsWith(".db"))
-    .sort()
-    .reverse();
-
+    .filter(f => f.startsWith("construct-") && f.endsWith(".db"))
+    .sort().reverse();
   for (const f of files.slice(MAX_BACKUPS)) {
     const stem = f.replace(/\.db$/, "");
     await rm(join(BACKUP_DIR, f), { force: true });
     await rm(join(BACKUP_DIR, stem + ".db-wal"), { force: true });
     await rm(join(BACKUP_DIR, stem + ".db-shm"), { force: true });
   }
+  return name;
 }
 
-/** Migrate data from old locations to ~/.construct/ */
-async function migrateData(): Promise<void> {
+async function migrateData(): Promise<number> {
   const oldDataDir = join(DST, "data");
-  const migrations: Array<{ from: string; to: string; type: "file" | "dir" }> = [
-    // From ~/.claude/data/ (previous layout)
-    { from: join(oldDataDir, "construct.db"), to: join(DATA_DIR, "construct.db"), type: "file" },
-    { from: join(oldDataDir, "sessions"), to: join(DATA_DIR, "sessions"), type: "dir" },
-    { from: join(oldDataDir, "signals"), to: join(DATA_DIR, "signals"), type: "dir" },
-    { from: join(oldDataDir, "backups"), to: join(DATA_DIR, "backups"), type: "dir" },
-    { from: join(oldDataDir, "memory"), to: join(DATA_DIR, "memory"), type: "dir" },
-    // From even older layout under construct/
-    { from: join(DST, "construct", "data", "construct.db"), to: join(DATA_DIR, "construct.db"), type: "file" },
-    { from: join(DST, "construct", "memory", "sessions"), to: join(DATA_DIR, "sessions"), type: "dir" },
-    { from: join(DST, "construct", "memory", "signals"), to: join(DATA_DIR, "signals"), type: "dir" },
+  const migrations = [
+    { from: join(oldDataDir, "construct.db"), to: join(DATA_DIR, "construct.db"), type: "file" as const },
+    { from: join(oldDataDir, "sessions"), to: join(DATA_DIR, "sessions"), type: "dir" as const },
+    { from: join(oldDataDir, "signals"), to: join(DATA_DIR, "signals"), type: "dir" as const },
+    { from: join(oldDataDir, "backups"), to: join(DATA_DIR, "backups"), type: "dir" as const },
+    { from: join(oldDataDir, "memory"), to: join(DATA_DIR, "memory"), type: "dir" as const },
+    { from: join(DST, "construct", "data", "construct.db"), to: join(DATA_DIR, "construct.db"), type: "file" as const },
+    { from: join(DST, "construct", "memory", "sessions"), to: join(DATA_DIR, "sessions"), type: "dir" as const },
+    { from: join(DST, "construct", "memory", "signals"), to: join(DATA_DIR, "signals"), type: "dir" as const },
   ];
-
-  let anyMigrated = false;
+  let count = 0;
   for (const { from, to, type } of migrations) {
-    if (!(await exists(from))) continue;
-    // Skip if destination already has content
+    if (!await exists(from)) continue;
     if (type === "file" && await exists(to)) continue;
     if (type === "dir" && await exists(to) && (await readdir(to)).length > 0) continue;
-
     await mkdir(dirname(to), { recursive: true });
     await cp(from, to, { recursive: type === "dir" });
-
-    // For DB files, also copy WAL/SHM if present
     if (type === "file" && from.endsWith(".db")) {
       for (const ext of ["-wal", "-shm"]) {
-        if (await exists(from + ext)) {
-          await cp(from + ext, to + ext);
-        }
+        if (await exists(from + ext)) await cp(from + ext, to + ext);
       }
     }
-
-    console.log(`  migrated: ${from.replace(DST + "/", "")} → ${to.replace(DST + "/", "")}`);
-    anyMigrated = true;
+    count++;
   }
-
-  if (!anyMigrated) {
-    console.log("  nothing to migrate");
-  }
+  return count;
 }
 
-/** Discover ALL CAPS .md data files in a directory (stem is [A-Z_]+ only) */
 async function discoverAllCapsMd(dir: string): Promise<string[]> {
   if (!existsSync(dir)) return [];
-  const entries = await readdir(dir);
-  return entries.filter((f) => {
-    if (!f.endsWith(".md")) return false;
-    if (INFRA_FILES.has(f)) return false;
-    const stem = f.slice(0, -3);
-    return /^[A-Z_]+$/.test(stem);
+  return (await readdir(dir)).filter(f => {
+    if (!f.endsWith(".md") || INFRA_FILES.has(f)) return false;
+    return /^[A-Z_]+$/.test(f.slice(0, -3));
   });
 }
 
-/** Check if path exists */
-async function exists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** Sync srcDir to dstDir: copy everything from src, delete files in dst not in src */
 async function syncDir(srcDir: string, dstDir: string): Promise<void> {
   await mkdir(dstDir, { recursive: true });
-
-  // Collect all relative paths in src
   const srcPaths = new Set<string>();
-  const SKIP_DIRS = new Set(["node_modules", "dist", ".bun", "backups"]);
   async function walk(dir: string, rel: string) {
-    const entries = await readdir(dir, { withFileTypes: true });
-    for (const e of entries) {
+    for (const e of await readdir(dir, { withFileTypes: true })) {
       const relPath = rel ? `${rel}/${e.name}` : e.name;
       if (e.isDirectory()) {
         if (SKIP_DIRS.has(e.name)) continue;
@@ -143,26 +103,18 @@ async function syncDir(srcDir: string, dstDir: string): Promise<void> {
     }
   }
   await walk(srcDir, "");
-
-  // Copy all from src to dst, skipping node_modules/dist/.bun and DB files
   await cp(srcDir, dstDir, {
-    recursive: true,
-    force: true,
+    recursive: true, force: true,
     filter: (src) => {
       const base = src.split("/").pop()!;
-      if (SKIP_DIRS.has(base)) return false;
-      if (SKIP_EXTENSIONS.some((ext) => base.endsWith(ext))) return false;
-      return true;
+      return !SKIP_DIRS.has(base) && !SKIP_EXTENSIONS.some(ext => base.endsWith(ext));
     },
   });
-
-  // Delete files in dst not in src
   async function cleanDst(dir: string, rel: string) {
-    if (!(await exists(dir))) return;
-    const entries = await readdir(dir, { withFileTypes: true });
-    for (const e of entries) {
+    if (!await exists(dir)) return;
+    for (const e of await readdir(dir, { withFileTypes: true })) {
       const relPath = rel ? `${rel}/${e.name}` : e.name;
-      if (!srcPaths.has(relPath) && !SKIP_DIRS.has(e.name) && !SKIP_EXTENSIONS.some((ext) => e.name.endsWith(ext))) {
+      if (!srcPaths.has(relPath) && !SKIP_DIRS.has(e.name) && !SKIP_EXTENSIONS.some(ext => e.name.endsWith(ext))) {
         await rm(join(dir, e.name), { recursive: true, force: true });
       } else if (e.isDirectory()) {
         await cleanDst(join(dir, e.name), relPath);
@@ -172,177 +124,77 @@ async function syncDir(srcDir: string, dstDir: string): Promise<void> {
   await cleanDst(dstDir, "");
 }
 
-const LINK_ONLY = process.argv.includes("--link-only");
-
-// --- Main ---
-
-console.log(LINK_ONLY ? "=== Construct Link Setup ===" : "=== Construct Installer ===");
-console.log(`src: ${REPO}`);
-console.log(`dst: ${DST}`);
-console.log();
-
-// 0. Ensure data directories exist (~/.construct/)
-await mkdir(DATA_DIR, { recursive: true });
-await mkdir(join(DATA_DIR, "sessions"), { recursive: true });
-await mkdir(join(DATA_DIR, "signals"), { recursive: true });
-await mkdir(join(DATA_DIR, "backups"), { recursive: true });
-await mkdir(join(DATA_DIR, "memory"), { recursive: true });
-
-const backupDir = LINK_ONLY ? "" : await mkdtemp(join(tmpdir(), "construct-backup-"));
-
-try {
-
-if (!LINK_ONLY) {
-  // 1. Migrate data from old locations (if needed)
-  console.log("migrating data...");
-  await migrateData();
-
-  // 2. Back up preserved files to temp dir
-  console.log("backing up preserved files...");
-
-  // Back up ALL CAPS .md files from identity/ and memory/
-  await mkdir(join(backupDir, "core/identity"), { recursive: true });
-  await mkdir(join(backupDir, "memory"), { recursive: true });
-
-  for (const f of await discoverAllCapsMd(join(DST, "construct/core/identity"))) {
-    await cp(join(DST, "construct/core/identity", f), join(backupDir, "core/identity", f));
-    console.log(`  preserved: core/identity/${f}`);
-  }
-
-  for (const f of await discoverAllCapsMd(join(DST, "construct/memory"))) {
-    await cp(join(DST, "construct/memory", f), join(backupDir, "memory", f));
-    console.log(`  preserved: memory/${f}`);
-  }
-
-  // 3. Sync construct/ tree (delete stale files, overwrite everything)
-  // 3a. Back up DB before sync
-  console.log("backing up database...");
-  await backupDb();
-
-  //    DB files (*.db, *.db-wal, *.db-shm) are never overwritten
-  // 3a. Stop UI service before overwriting its files
-  await Bun.$`systemctl --user stop construct-ui 2>/dev/null`.quiet().nothrow();
-
-  // If construct/ is a symlink (dev/link mode), remove it before copying
-  const constructDst = join(DST, "construct");
-  try {
-    const s = await lstat(constructDst);
-    if (s.isSymbolicLink()) {
-      console.log("  removing symlink (switching from link to install mode)...");
-      await rm(constructDst);
-    }
-  } catch { /* doesn't exist yet */ }
-
-  console.log("syncing construct/...");
-  await syncDir(CONSTRUCT_SRC, constructDst);
-
-  // 3b. Install UI and research dependencies
-  const uiDir = join(DST, "construct", "ui");
-  const uiWebDir = join(uiDir, "web");
-  const researchDir = join(DST, "construct", "research");
-  if (await exists(join(uiDir, "package.json"))) {
-    console.log("installing ui dependencies...");
-    await Bun.$`cd ${uiDir} && bun install`.quiet();
-    if (await exists(join(uiWebDir, "package.json"))) {
-      await Bun.$`cd ${uiWebDir} && bun install`.quiet();
-    }
-  }
-  if (await exists(join(researchDir, "package.json"))) {
-    console.log("installing research dependencies...");
-    const dataDir = join(DST, "construct", "data");
-    if (await exists(join(dataDir, "package.json"))) {
-      await Bun.$`cd ${dataDir} && bun install`.quiet();
-    }
-    await Bun.$`cd ${researchDir} && bun install`.quiet();
-  }
-
-  // 4. Restore preserved files from temp dir
-  console.log("restoring preserved files...");
-
-  // Restore ALL CAPS .md files
-  for (const [subdir, target] of [
-    ["core/identity", join(DST, "construct/core/identity")],
-    ["memory", join(DST, "construct/memory")],
-  ]) {
-    const backupSub = join(backupDir, subdir);
-    if (await exists(backupSub)) {
-      for (const f of await readdir(backupSub)) {
-        if (f.endsWith(".md")) {
-          const src = join(backupSub, f);
-          const dst = join(target, f);
-          await cp(src, dst);
-          // Verify byte-size matches
-          const srcSize = (await stat(src)).size;
-          const dstSize = (await stat(dst)).size;
-          if (srcSize !== dstSize) {
-            console.error(`  ✗ size mismatch: ${f} (${srcSize} → ${dstSize})`);
-          }
-        }
-      }
-    }
-  }
-} // end !LINK_ONLY
-
-  // 5. Sync commands — install from repo, remove stale Construct-owned commands
-  console.log("syncing commands...");
+async function syncConfig(): Promise<{ commands: number; removedCommands: number; agents: number }> {
+  const installed = new Set<string>();
   await mkdir(join(DST, "commands"), { recursive: true });
 
+  // Commands from src/commands/
   const cmdDir = join(CONSTRUCT_SRC, "commands");
-  const repoCommands = new Set<string>();
   if (await exists(cmdDir)) {
     for (const f of await readdir(cmdDir)) {
-      if (f.endsWith(".md")) {
-        await cp(join(cmdDir, f), join(DST, "commands", f));
-        repoCommands.add(f);
-      }
+      if (!f.endsWith(".md")) continue;
+      await rm(join(DST, "commands", f), { force: true });
+      await cp(join(cmdDir, f), join(DST, "commands", f));
+      installed.add(f);
     }
   }
-
-  // Register skills from src/skills/*/SKILL.md as commands
+  // Skills → commands
   const skillsDir = join(CONSTRUCT_SRC, "skills");
   if (await exists(skillsDir)) {
     for (const d of await readdir(skillsDir, { withFileTypes: true })) {
       if (!d.isDirectory()) continue;
       const skillFile = join(skillsDir, d.name, "SKILL.md");
-      if (await exists(skillFile)) {
-        const cmdName = `${d.name}.md`;
-        if (!repoCommands.has(cmdName)) {
-          await cp(skillFile, join(DST, "commands", cmdName));
-          repoCommands.add(cmdName);
-        }
+      const cmdName = `${d.name}.md`;
+      if (await exists(skillFile) && !installed.has(cmdName)) {
+        await rm(join(DST, "commands", cmdName), { force: true });
+        await cp(skillFile, join(DST, "commands", cmdName));
+        installed.add(cmdName);
       }
     }
   }
-  console.log(`  installed: ${repoCommands.size ? [...repoCommands].join(" ") : "none"}`);
+  // Remove stale symlinks pointing into CONSTRUCT_SRC
+  let removed = 0;
+  for (const f of await readdir(join(DST, "commands"))) {
+    if (installed.has(f)) continue;
+    const p = join(DST, "commands", f);
+    try {
+      const s = await lstat(p);
+      if (s.isSymbolicLink()) {
+        const target = await import("fs/promises").then(m => m.readlink(p));
+        if (target.startsWith(CONSTRUCT_SRC)) { await rm(p); removed++; }
+      }
+    } catch { /* ignore */ }
+  }
 
-  // Remove stale Construct-owned commands using manifest
-  const manifestPath = join(DST, "commands", ".construct-managed");
-  const previouslyManaged = new Set<string>();
-  if (await exists(manifestPath)) {
-    const content = await readFile(manifestPath, "utf-8");
-    for (const line of content.split("\n")) {
-      const trimmed = line.trim();
-      if (trimmed) previouslyManaged.add(trimmed);
+  // Agents
+  await mkdir(join(DST, "agents"), { recursive: true });
+  const installedAgents = new Set<string>();
+  const agentSrcDir = join(CONSTRUCT_SRC, "agents");
+  if (await exists(agentSrcDir)) {
+    for (const f of await readdir(agentSrcDir)) {
+      if (!f.endsWith(".md")) continue;
+      await rm(join(DST, "agents", f), { force: true });
+      await cp(join(agentSrcDir, f), join(DST, "agents", f));
+      installedAgents.add(f);
     }
   }
-  for (const f of previouslyManaged) {
-    if (!repoCommands.has(f) && await exists(join(DST, "commands", f))) {
-      await rm(join(DST, "commands", f));
-      console.log(`  removed stale: ${f}`);
-    }
+  for (const f of await readdir(join(DST, "agents"))) {
+    if (installedAgents.has(f)) continue;
+    const p = join(DST, "agents", f);
+    try {
+      const s = await lstat(p);
+      if (s.isSymbolicLink()) {
+        const target = await import("fs/promises").then(m => m.readlink(p));
+        if (target.startsWith(CONSTRUCT_SRC)) await rm(p);
+      }
+    } catch { /* ignore */ }
   }
-  await writeFile(manifestPath, [...repoCommands].sort().join("\n") + "\n");
 
-  // 6. Merge settings.json — replace hooks + statusLine, preserve everything else
-  console.log("merging settings.json...");
-
+  // settings.json — replace hooks + statusLine, preserve everything else
   const repoSettings = JSON.parse(await readFile(join(CONSTRUCT_SRC, "core/hooks/settings-hooks.json"), "utf-8"));
-  // Path fixup: rewrite relative paths in hook commands to absolute $HOME-based paths
   const home = Bun.env.HOME!;
   function fixPaths(obj: any): any {
-    if (typeof obj === "string") {
-      return obj.replace(/^(bun|bash) src\//, `$1 ${home}/.claude/construct/`);
-    }
+    if (typeof obj === "string") return obj.replace(/^(bun|bash) src\//, `$1 ${home}/.claude/construct/`);
     if (Array.isArray(obj)) return obj.map(fixPaths);
     if (obj && typeof obj === "object") {
       const out: any = {};
@@ -351,124 +203,166 @@ if (!LINK_ONLY) {
     }
     return obj;
   }
-  const fixedSettings = fixPaths(repoSettings);
-
   const dstSettingsPath = join(DST, "settings.json");
   if (await exists(dstSettingsPath)) {
-    const existingSettings = JSON.parse(await readFile(dstSettingsPath, "utf-8"));
-    const merged = {
-      ...existingSettings,
-      hooks: fixedSettings.hooks,
-      statusLine: fixedSettings.statusLine,
-    };
-    await writeFile(dstSettingsPath, JSON.stringify(merged, null, 2) + "\n");
+    const existing = JSON.parse(await readFile(dstSettingsPath, "utf-8"));
+    await writeFile(dstSettingsPath, JSON.stringify({ ...existing, hooks: fixPaths(repoSettings).hooks, statusLine: fixPaths(repoSettings).statusLine }, null, 2) + "\n");
   } else {
-    await writeFile(dstSettingsPath, JSON.stringify(fixedSettings, null, 2) + "\n");
+    await writeFile(dstSettingsPath, JSON.stringify(fixPaths(repoSettings), null, 2) + "\n");
   }
 
-  // 7. Update CLAUDE.md — replace # Construct section with @import
-  console.log("updating CLAUDE.md...");
+  // CLAUDE.md — ensure @construct/core/CLAUDE.md import
   const constructImport = "# Construct\n\n@construct/core/CLAUDE.md\n";
   const dstClaudeMd = join(DST, "CLAUDE.md");
-
   if (await exists(dstClaudeMd)) {
     const content = await readFile(dstClaudeMd, "utf-8");
     const lines = content.split("\n");
-
-    // Find the start of "# Construct"
-    const startIdx = lines.findIndex((l) => /^# Construct\s*$/.test(l));
-
+    const startIdx = lines.findIndex(l => /^# Construct\s*$/.test(l));
     if (startIdx !== -1) {
-      // Find the end: next ^# heading at same level (single #), or EOF
       let endIdx = lines.length;
       for (let i = startIdx + 1; i < lines.length; i++) {
-        if (/^# [^\s#]/.test(lines[i]) || /^# $/.test(lines[i])) {
-          endIdx = i;
-          break;
-        }
+        if (/^# [^\s#]/.test(lines[i]) || /^# $/.test(lines[i])) { endIdx = i; break; }
       }
-
-      const before = lines.slice(0, startIdx).join("\n")
-        .replace(/<!--\s*SOURCE FILE[^>]*?-->\s*/g, "");
+      const before = lines.slice(0, startIdx).join("\n").replace(/<!--\s*SOURCE FILE[^>]*?-->\s*/g, "");
       const after = lines.slice(endIdx).join("\n");
-
-      let result = "";
-      if (before.trim()) {
-        result = before.replace(/\n+$/, "") + "\n\n";
-      }
+      let result = before.trim() ? before.replace(/\n+$/, "") + "\n\n" : "";
       result += constructImport;
-      if (after.trim()) {
-        result += "\n" + after.replace(/^\n+/, "");
-      }
-
+      if (after.trim()) result += "\n" + after.replace(/^\n+/, "");
       await writeFile(dstClaudeMd, result);
     } else {
-      // No existing Construct section — append
-      const result = content.replace(/\n+$/, "") + "\n\n" + constructImport;
-      await writeFile(dstClaudeMd, result);
+      await writeFile(dstClaudeMd, content.replace(/\n+$/, "") + "\n\n" + constructImport);
     }
   } else {
     await writeFile(dstClaudeMd, constructImport);
   }
 
-if (!LINK_ONLY) {
-  // 8. Verify critical files — byte-size check on key infrastructure
-  const criticalFiles = [
-    "construct/skills/skill-rules.json",
-    "construct/trace.ts",
-    "construct/memory/parse-transcript.ts",
-  ];
-  let verifyFails = 0;
-  for (const rel of criticalFiles) {
-    const src = join(CONSTRUCT_SRC, rel.replace("construct/", ""));
-    const dst = join(DST, rel);
-    if (await exists(src) && await exists(dst)) {
-      const srcSize = (await stat(src)).size;
-      const dstSize = (await stat(dst)).size;
-      if (srcSize !== dstSize) {
-        console.error(`  ✗ size mismatch: ${rel} (src ${srcSize} → dst ${dstSize})`);
-        verifyFails++;
-      }
-    }
+  return { commands: installed.size, removedCommands: removed, agents: installedAgents.size };
+}
+
+// ── Main ───────────────────────────────────────────────────────────────────────
+
+const t0 = Date.now();
+console.log("Construct installer\n");
+
+await mkdir(DATA_DIR, { recursive: true });
+await mkdir(join(DATA_DIR, "sessions"), { recursive: true });
+await mkdir(join(DATA_DIR, "signals"), { recursive: true });
+await mkdir(join(DATA_DIR, "backups"), { recursive: true });
+await mkdir(join(DATA_DIR, "memory"), { recursive: true });
+
+const backupDir = await mkdtemp(join(tmpdir(), "construct-backup-"));
+
+try {
+  // 1. Migrate old data locations
+  const migrated = await migrateData();
+  step("migrate", migrated > 0 ? `${migrated} item${migrated !== 1 ? "s" : ""}` : "nothing to migrate");
+
+  // 2. Back up preserved ALL CAPS files
+  await mkdir(join(backupDir, "core/identity"), { recursive: true });
+  await mkdir(join(backupDir, "memory"), { recursive: true });
+  let preserved = 0;
+  for (const f of await discoverAllCapsMd(join(DST, "construct/core/identity"))) {
+    await cp(join(DST, "construct/core/identity", f), join(backupDir, "core/identity", f));
+    preserved++;
   }
-  if (verifyFails > 0) {
-    console.error(`\n⚠ ${verifyFails} file(s) failed size verification`);
+  for (const f of await discoverAllCapsMd(join(DST, "construct/memory"))) {
+    await cp(join(DST, "construct/memory", f), join(backupDir, "memory", f));
+    preserved++;
   }
 
-  // 9. Write build manifest — git info, paths, timestamps for diagnostics
-  console.log("writing build manifest...");
+  // 3. Back up DB
+  const backupName = await backupDb();
+  step("backup", backupName ?? "no DB yet");
+  if (preserved > 0) step("preserve", `${preserved} file${preserved !== 1 ? "s" : ""}`);
+
+  // 4. Stop service
+  await Bun.$`systemctl --user stop construct-ui 2>/dev/null`.quiet().nothrow();
+
+  // 5. Build UI from source (workspace packages resolve correctly from src/)
+  const uiSrcWebDir = join(CONSTRUCT_SRC, "ui", "web");
+  if (await exists(join(CONSTRUCT_SRC, "ui", "package.json"))) {
+    const buildStart = Date.now();
+    await Bun.$`cd ${uiSrcWebDir} && npm run build`.quiet();
+    step("build", `${((Date.now() - buildStart) / 1000).toFixed(1)}s`);
+  }
+
+  // 6. Sync construct/ to ~/.claude/construct/ (remove symlink if present from old link mode)
+  const constructDst = join(DST, "construct");
+  try {
+    if ((await lstat(constructDst)).isSymbolicLink()) await rm(constructDst);
+  } catch { /* doesn't exist */ }
+  await syncDir(CONSTRUCT_SRC, constructDst);
+  step("sync", "done");
+
+  // 7. Install all dependencies for the installed construct tree.
+  // Create a workspace root at construct/ mirroring the source monorepo structure,
+  // so bun resolves @construct/* workspace deps and all transitive npm deps correctly.
+  const uiDir = join(constructDst, "ui");
+  if (await exists(join(uiDir, "package.json"))) {
+    // Write a workspace root package.json at construct/ (not synced from src)
+    await writeFile(join(constructDst, "package.json"), JSON.stringify({
+      private: true,
+      workspaces: ["data", "eval", "goals", "logger", "research", "telemetry", "ui", "ui/api", "ui/web"],
+    }, null, 2) + "\n");
+    // Remove stale node_modules so bun installs fresh
+    for (const rel of ["node_modules", "ui/node_modules", "ui/api/node_modules", "ui/web/node_modules",
+                        "data/node_modules", "eval/node_modules", "goals/node_modules", "logger/node_modules", "research/node_modules", "telemetry/node_modules"]) {
+      await rm(join(constructDst, rel), { recursive: true, force: true });
+    }
+    await Bun.$`cd ${constructDst} && bun install`.quiet().nothrow();
+  }
+
+  // 8. Research dependencies
+  const researchDir = join(constructDst, "research");
+  if (await exists(join(researchDir, "package.json"))) {
+    const dataDir = join(constructDst, "data");
+    if (await exists(join(dataDir, "package.json"))) {
+      await rm(join(dataDir, "node_modules"), { recursive: true, force: true });
+      await Bun.$`cd ${dataDir} && bun install`.quiet();
+    }
+    await rm(join(researchDir, "node_modules"), { recursive: true, force: true });
+    await Bun.$`cd ${researchDir} && bun install`.quiet();
+  }
+
+  // 9. Restore preserved files
+  for (const [subdir, target] of [
+    ["core/identity", join(DST, "construct/core/identity")],
+    ["memory", join(DST, "construct/memory")],
+  ] as const) {
+    const backupSub = join(backupDir, subdir);
+    if (!await exists(backupSub)) continue;
+    for (const f of await readdir(backupSub)) {
+      if (!f.endsWith(".md")) continue;
+      await cp(join(backupSub, f), join(target, f));
+    }
+  }
+
+  // 10. Sync commands, agents, settings, CLAUDE.md
+  const cfg = await syncConfig();
+  const removedStr = cfg.removedCommands > 0 ? `, ${cfg.removedCommands} removed` : "";
+  step("commands", `${cfg.commands} installed${removedStr}`);
+  step("agents", `${cfg.agents} installed`);
+
+  // 11. Write build manifest
   try {
     const rev = (await Bun.$`git -C ${REPO} rev-parse --short HEAD`.text()).trim();
     const fullRev = (await Bun.$`git -C ${REPO} rev-parse HEAD`.text()).trim();
     const dirty = (await Bun.$`git -C ${REPO} diff --quiet HEAD`.exitCode) !== 0;
-    const hash = `${rev}${dirty ? "-dirty" : ""}`;
+    const branch = (await Bun.$`git -C ${REPO} rev-parse --abbrev-ref HEAD`.text()).trim();
+    const commitCount = (await Bun.$`git -C ${REPO} rev-list --count HEAD`.text()).trim();
     const lastCommitMsg = (await Bun.$`git -C ${REPO} log -1 --format=%s`.text()).trim();
     const lastCommitDate = (await Bun.$`git -C ${REPO} log -1 --format=%ci`.text()).trim();
-    const commitCount = (await Bun.$`git -C ${REPO} rev-list --count HEAD`.text()).trim();
-    const branch = (await Bun.$`git -C ${REPO} rev-parse --abbrev-ref HEAD`.text()).trim();
-
-    // Commits since last tag (if any tags exist)
     let sinceTag = "n/a";
     try {
       const lastTag = (await Bun.$`git -C ${REPO} describe --tags --abbrev=0 2>/dev/null`.text()).trim();
-      if (lastTag) {
-        const count = (await Bun.$`git -C ${REPO} rev-list ${lastTag}..HEAD --count`.text()).trim();
-        sinceTag = `${count} (since ${lastTag})`;
-      }
-    } catch (e) {
-      console.log(`  no tags: ${(e as Error).message?.slice(0, 60) ?? "unknown"}`);
-    }
-
-    // Write full manifest
+      if (lastTag) sinceTag = `${(await Bun.$`git -C ${REPO} rev-list ${lastTag}..HEAD --count`.text()).trim()} (since ${lastTag})`;
+    } catch { /* no tags */ }
     const dbPath = join(DATA_DIR, "construct.db");
-    const dbSize = (await exists(dbPath)) ? (await stat(dbPath)).size : 0;
-    const sessionCount = (await exists(join(DATA_DIR, "sessions")))
-      ? (await readdir(join(DATA_DIR, "sessions"))).filter((f) => f.endsWith(".md")).length
-      : 0;
-
-    const manifest = [
+    const dbSize = await exists(dbPath) ? (await stat(dbPath)).size : 0;
+    const sessionCount = await exists(join(DATA_DIR, "sessions"))
+      ? (await readdir(join(DATA_DIR, "sessions"))).filter(f => f.endsWith(".md")).length : 0;
+    await writeFile(join(DST, "construct", ".manifest"), [
       `# Construct Build Manifest`,
-      `# Generated by install.ts — do not edit`,
       ``,
       `[git]`,
       `revision = ${fullRev}`,
@@ -503,18 +397,26 @@ if (!LINK_ONLY) {
       `db_size_bytes = ${dbSize}`,
       `session_count = ${sessionCount}`,
       ``,
-    ].join("\n");
-
-    await writeFile(join(DST, "construct", ".manifest"), manifest);
-    console.log(`  build: ${hash}`);
+    ].join("\n"));
   } catch (e) {
-    console.error(`  manifest failed: ${(e as Error).message?.slice(0, 80) ?? "unknown"}`);
+    step("manifest", `failed: ${(e as Error).message?.slice(0, 60) ?? "unknown"}`);
   }
 
-  // 10. Write systemd service unit and restart
-  console.log("updating construct-ui service...");
+  // 12. Write env file + systemd services
   const serviceDir = join(Bun.env.HOME!, ".config/systemd/user");
   await mkdir(serviceDir, { recursive: true });
+
+  // Write API keys to env file (keeps them out of .service files)
+  const envFilePath = join(DATA_DIR, ".env");
+  const envLines: string[] = [];
+  for (const key of ["ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "TAVILY_API_KEY", "BRAVE_SEARCH_API_KEY", "JINA_API_KEY"]) {
+    if (Bun.env[key]) envLines.push(`${key}=${Bun.env[key]}`);
+  }
+  if (envLines.length > 0) {
+    await writeFile(envFilePath, envLines.join("\n") + "\n");
+    await Bun.$`chmod 600 ${envFilePath}`.quiet();
+  }
+
   await writeFile(join(serviceDir, "construct-ui.service"), [
     "[Unit]",
     "Description=Construct UI (API + Web)",
@@ -525,7 +427,7 @@ if (!LINK_ONLY) {
     "WorkingDirectory=%h/.claude/construct/ui",
     "Environment=PATH=%h/.bun/bin:/usr/local/bin:/usr/bin:/bin",
     "Environment=NODE_ENV=production",
-    `Environment=ANTHROPIC_API_KEY=${Bun.env.ANTHROPIC_API_KEY || ""}`,
+    "EnvironmentFile=%h/.construct/.env",
     "ExecStart=%h/.bun/bin/bun run serve",
     "Restart=on-failure",
     "RestartSec=5",
@@ -544,7 +446,7 @@ if (!LINK_ONLY) {
     "WorkingDirectory=%h/.claude/construct/research",
     "Environment=PATH=%h/.bun/bin:/usr/local/bin:/usr/bin:/bin",
     "Environment=NODE_ENV=production",
-    `Environment=ANTHROPIC_API_KEY=${Bun.env.ANTHROPIC_API_KEY || ""}`,
+    "EnvironmentFile=%h/.construct/.env",
     "ExecStart=%h/.bun/bin/bun src/worker.ts",
     "Restart=on-failure",
     "RestartSec=10",
@@ -553,53 +455,42 @@ if (!LINK_ONLY) {
     "WantedBy=default.target",
     "",
   ].join("\n"));
-
   await Bun.$`systemctl --user daemon-reload`.quiet().nothrow();
   await Bun.$`systemctl --user restart construct-ui`.quiet().nothrow();
   await Bun.$`systemctl --user restart construct-research-worker`.quiet().nothrow();
+  step("service", "restarted → http://localhost:3000");
 
-  // 11. Verify database health — run DDL and smoke-test each table
-  console.log("verifying database...");
+  // 13. Verify DB
   const dbVerifyPath = join(DATA_DIR, "construct.db");
-  await mkdir(join(DATA_DIR, "memory"), { recursive: true });
   if (await exists(dbVerifyPath)) {
     try {
       const { Database } = await import("bun:sqlite");
       const db = new Database(dbVerifyPath);
       db.exec("PRAGMA journal_mode=WAL");
-
-      // Run DDL to ensure migrations apply cleanly
       const { applyDDL } = await import(join(DST, "construct/goals/src/ddl.ts"));
       applyDDL(db);
-
-      // Smoke-test: SELECT from every core table
       const tables = ["goals", "categories", "notes", "todos", "habits", "habit_completions", "history_logs", "goal_categories"];
-      for (const table of tables) {
-        const row = db.prepare(`SELECT count(*) as c FROM ${table}`).get() as { c: number };
-        if (row.c < 0) throw new Error(`Invalid count for ${table}`);
-      }
-
-      // Verify due_date column exists on todos
-      const cols = db.prepare("SELECT name FROM pragma_table_info('todos')").all() as { name: string }[];
-      const colNames = cols.map((c) => c.name);
-      if (!colNames.includes("due_date")) {
-        throw new Error("todos table missing due_date column after DDL");
-      }
-
+      for (const t of tables) db.prepare(`SELECT count(*) FROM ${t}`).get();
       db.close();
-      console.log("  ✓ DDL applied, all tables accessible");
+      step("verify", "✓ DB healthy");
     } catch (e) {
-      console.error(`  ✗ database verification failed: ${(e as Error).message}`);
-      console.error("  ACTION REQUIRED: check DDL migrations and database integrity");
+      step("verify", `✗ ${(e as Error).message?.slice(0, 60)}`);
     }
   } else {
-    console.log("  ⚠ no database found (will be created on first API start)");
+    step("verify", "⚠ no DB (created on first start)");
   }
 
-} // end !LINK_ONLY
+  // Summary
+  const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+  try {
+    const rev = (await Bun.$`git -C ${REPO} rev-parse --short HEAD`.text()).trim();
+    const dirty = (await Bun.$`git -C ${REPO} diff --quiet HEAD`.exitCode) !== 0;
+    const branch = (await Bun.$`git -C ${REPO} rev-parse --abbrev-ref HEAD`.text()).trim();
+    console.log(`\n  ${rev}${dirty ? "-dirty" : ""} · ${branch} · done in ${elapsed}s`);
+  } catch {
+    console.log(`\n  done in ${elapsed}s`);
+  }
 
-  console.log();
-  console.log("done.");
 } finally {
-  if (backupDir) await rm(backupDir, { recursive: true, force: true });
+  await rm(backupDir, { recursive: true, force: true });
 }

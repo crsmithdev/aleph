@@ -1,130 +1,238 @@
 # Construct
 
-A minimal, ergonomic Claude Code-native personal AI infrastructure, assistant, and life manager. Structured learning, signal capture, quality hooks, and skill routing — all built on hooks and CLAUDE.md rules, no external dependencies.
+Claude Code-native personal AI infrastructure. Hooks, skills, memory, research, and a web UI — all running inside your Claude Code environment.
 
-## Design Principles
+**Install target:** `~/.claude/construct/` · **User data:** `~/.construct/` (never touched by installer) · **DB:** `~/.construct/construct.db`
 
-- Claude Code is the runtime. No Electron, no external process managers.
-- Favor code over AI instructions wherever behavior can be enforced programmatically.
-- Every component must earn its place. If native Claude Code already does it, don't replicate it.
-- Minimal viable first. Expand when friction is felt, not in anticipation of it.
-- No external API keys required for core functionality. The research module optionally uses Anthropic, OpenRouter, or Jina keys.
+---
+
+## Quick Start
+
+```bash
+git clone <repo> ~/construct && cd ~/construct
+bun install.ts           # deploy to ~/.claude/construct/, set up systemd, verify DB
+
+bun dev-server.ts        # dev: hot-reload at http://localhost:3001
+```
+
+See [INSTALL.md](INSTALL.md) for full installation, upgrade, and verification steps.
+
+---
 
 ## Modules
 
-Nine modules, installed in order. Each is independent after its dependencies are met.
+Nine modules, deployed together. Core is always required; others are inert if unused.
 
-| Module | Depends on | What it provides |
-|------|-----------|-----------------|
-| `construct-core` | — | CLAUDE.md, settings.json, statusline, optional identity files |
-| `construct-memory` | core | Session hooks, memory dirs, ratings |
-| `construct-skills` | core | Skill routing, quality hook, notify hook, skill playbooks |
-| `construct-data` | — | Shared SQLite persistence layer, path resolution |
+| Module | Depends on | Provides |
+|---|---|---|
+| `construct-core` | — | CLAUDE.md, settings.json, statusline, identity files |
+| `construct-memory` | core | Session hooks, semantic memory, ratings |
+| `construct-skills` | core | Skill routing, quality hooks, skill playbooks |
+| `construct-data` | — | Shared SQLite persistence, path resolution |
 | `construct-telemetry` | data | JSONL parser, aggregator, pricing, CLI status |
 | `construct-eval` | — | Agent SDK eval harness, test scenarios |
-| `construct-goals` | data | Goal/TODO domain logic, MCP server, /goal and /todo commands |
-| `construct-research` | data | Autonomous multi-threaded research engine, worker supervisor, monitors |
-| `construct-ui` | data, goals, telemetry, research | Web UI (Fastify API + React SPA) |
+| `construct-goals` | data | Goal/TODO domain logic, MCP server, `/goal` + `/todo` commands |
+| `construct-research` | data | Autonomous multi-threaded research engine, worker supervisor |
+| `construct-ui` | data, goals, telemetry, research | Fastify API + React SPA |
 
-All modules are deployed together. Core is always required; the rest are inert if unused.
-
-See [INSTALL.md](INSTALL.md) for installation, upgrade, and mandatory post-install verification.
+---
 
 ## Directory Layout
 
 ```
-src/                                      # all Construct code (symlinked or synced to ~/.claude/construct/)
-├── core/
-│   ├── CLAUDE.md                        # Construct behavioral rules (@imported by ~/.claude/CLAUDE.md)
-│   ├── hooks/
-│   │   └── settings-hooks.json          # hook registrations + statusLine config
-│   └── identity/                        # optional semantic identity layer
-│       ├── SOUL.md, IDENTITY.md, STYLE.md, USER.md
-├── commands/                            # slash commands (copied to ~/.claude/commands/)
-│   ├── finish.md, gist.md, goal.md, todo.md
-├── memory/
-│   └── hooks/                           # session-start, rating-capture, session-summary, memory-extract
-├── skills/
-│   ├── skill-rules.json                 # keyword routing config
-│   ├── hooks/                           # 9 hook scripts (quality, git, isolation, context, routing, notify)
-│   └── */SKILL.md                       # 13 skill playbooks
-├── data/                                # shared SQLite persistence, path resolution
-├── eval/                                # Agent SDK eval harness + scenarios
-├── telemetry/                           # JSONL parser, aggregator, pricing
-├── goals/                               # Goal/TODO domain logic + MCP server
-├── research/                            # autonomous research engine, worker supervisor, monitors
-└── ui/                                  # Fastify API + React SPA
+src/
+├── core/           CLAUDE.md, hooks/, identity/ (SOUL.md, STYLE.md, USER.md)
+├── memory/         hooks/ (session-start, rating-capture, session-summary, memory-extract)
+├── skills/         skill-rules.json, 19 skill dirs
+├── agents/         agent definition files
+├── commands/       slash command .md files
+├── data/           SQLite persistence, path resolution
+├── eval/           Agent SDK eval harness + scenarios
+├── telemetry/      JSONL parser, aggregator, pricing
+├── goals/          Goal/TODO domain logic + MCP server
+├── research/       autonomous research engine + workers
+└── ui/             Fastify API + React SPA (web/)
 
-.claude/                                  # project-local config (never installed)
-├── CLAUDE.md                            # repo-specific dev rules, loaded at runtime
-└── settings.json                        # permissions, statusline, MCP config (no hooks)
+.claude/            project dev config (never installed)
+docs/               HOOKS.md, SKILLS.md, TESTS.md, AGENTS.md, spec/
+install.ts          installer
+test.ts             test runner
 ```
+
+---
 
 ## Hooks
 
-| Event | Hook | Module | Purpose |
-|-------|------|------|---------|
-| SessionStart | session-start.ts | memory | Surface last session summary, background work briefing |
-| UserPromptSubmit | rating-capture.ts | memory | Capture explicit N/10 ratings |
-| UserPromptSubmit | routing-submit-classify.ts | skills | Depth classification + skill matching |
-| Stop | quality-stop-check-e2e.ts | skills | E2e advisory check |
-| Stop | context-stop-monitor.ts | skills | Context window usage warning (80%/90%) |
-| Stop | session-summary.ts | memory | Structured session summary |
-| Stop | memory-extract.ts | memory | Auto-extract memories to semantic store |
-| PreToolUse | git-pre-require-commit.ts | skills | Require commit before more edits |
-| PreToolUse | isolation-pre-block-destructive-sql.ts | skills | Block destructive SQL operations |
-| PostToolUse | quality-post-format.ts | skills | Per-file lint/format on Edit/Write |
-| PostToolUse | quality-post-typecheck.ts | skills | TypeScript type-check on Edit/Write |
-| PreCompact | context-precompact-backup.ts | skills | Transcript backup before compaction |
-| Notification | notify-event-toast.ts | skills | WSL toast / macOS alert / terminal bell |
+| Event | Script | Module | Purpose |
+|---|---|---|---|
+| SessionStart | `src/memory/hooks/session-start.ts` | memory | Surface last session summary |
+| UserPromptSubmit | `src/memory/hooks/rating-capture.ts` | memory | Capture N/10 ratings |
+| UserPromptSubmit | `src/core/hooks/routing-submit-classify.ts` | core | Depth classification + skill matching |
+| Stop | `src/core/hooks/quality-stop-check-e2e.ts` | core | E2e advisory check |
+| Stop | `src/core/hooks/context-stop-monitor.ts` | core | Context window usage warning |
+| Stop | `src/memory/hooks/session-summary.ts` | memory | Structured session summary |
+| Stop | `src/memory/hooks/memory-extract.ts` | memory | Auto-extract memories to semantic store |
+| PreToolUse (SQL) | `src/core/hooks/isolation-pre-block-destructive-sql.ts` | core | Block destructive SQL |
+| PreToolUse (Edit/Write) | `src/core/hooks/git-pre-require-commit.ts` | core | Require commit before more edits |
+| PreToolUse (Edit/Write) | `src/core/hooks/context-compact-suggest.ts` | core | Suggest compact when context high |
+| PreToolUse (Bash) | `src/core/hooks/security-scan-pre-commit.ts` | core | Pre-commit security scan |
+| PostToolUse (Edit/Write) | `src/core/hooks/quality-post-format.ts` | core | Lint/format on save |
+| PostToolUse (Edit/Write) | `src/core/hooks/quality-post-typecheck.ts` | core | TypeScript type-check on save |
+| PreCompact | `src/core/hooks/context-precompact-backup.ts` | core | Transcript backup before compaction |
 
-The statusline (`ccstatusline`) is configured via the `statusLine` key in settings.json, not as a hook.
+Full hook detail: [docs/specs/HOOKS.md](docs/specs/HOOKS.md)
+
+---
 
 ## Slash Commands
 
-### Installed globally (`src/commands/` -> `~/.claude/commands/`)
-
-| Command | Module | Purpose |
-|---------|------|---------|
-| `/gist` | core | Surface Claude's current mental model + project understanding |
-| `/goal` | goals | Manage goals: list, create, update, delete, show, archive |
-| `/todo` | goals | Manage todos: list, add, recurring |
-| `/finish` | goals | Mark a todo or goal as done; undo completion; complete recurring todos |
-
-### Project-level (`.claude/commands/` — Construct repo only)
+**Global** (`src/commands/` → `~/.claude/commands/`):
 
 | Command | Purpose |
-|---------|---------|
+|---|---|
+| `/gist` | Surface Claude's current project understanding |
+| `/goal` | Manage goals: list, create, update, delete, archive |
+| `/todo` | Manage todos: list, add, recurring |
+| `/finish` | Mark goal/todo done; undo; complete recurring |
+| `/research` | Manage research sessions: start, status, findings, pause, resume |
+
+**Project-only** (`.claude/commands/` — Construct repo only):
+
+| Command | Purpose |
+|---|---|
 | `/install` | Deploy repo to `~/.claude` with post-install verification |
-| `/audit` | Full project audit: code, docs |
+| `/link` | Symlink `~/.claude/construct` to `src/` for live dev |
+| `/wipe` | Wipe all research data |
 
-## Identity Architecture
+Full skills and commands: [docs/specs/SKILLS.md](docs/specs/SKILLS.md)
 
-Two layers:
-
-- **Identity** (slow-changing): `SOUL.md`, `IDENTITY.md`, `STYLE.md`, `USER.md` — who you are, how you think, how you present. Loaded via `@path` imports in CLAUDE.md.
-- **Memory** (fast-changing): semantic memory via mcp-memory-service — decisions, patterns, preferences. Automatic storage and retrieval.
+---
 
 ## Skills
 
-Domain-specific playbooks in `src/skills/<name>/SKILL.md`. The `routing-submit-classify.ts` hook reads `skill-rules.json` and matches skills whose keywords appear in the current prompt.
+19 skill playbooks in `src/skills/<name>/SKILL.md`. The `routing-submit-classify.ts` hook reads `skill-rules.json` and activates matching skills based on prompt keywords. Skills can also be invoked explicitly via the `Skill()` tool.
 
 | Skill | Purpose |
-|-------|---------|
-| `research` | Structured research methodology |
-| `verification` | Evidence-based completion verification |
-| `debugging` | 4-phase systematic root cause debugging |
-| `build` | Unified implementation lifecycle: design, plan, TDD execute, review, finish |
-| `code-review` | Dead code, unused imports, silent failures, dead references |
-| `docs-review` | Documentation drift detection, spec completeness |
-| `hooks-review` | Hook script correctness, safety, settings.json alignment |
-| `commands-review` | Slash command clarity, registration, completeness |
-| `skills-review` | SKILL.md quality, skill-rules.json alignment |
-| `config-review` | settings.json and CLAUDE.md consistency |
-| `ralph-loop` | Autonomous iterative development via subagent loops |
-| `finishing-branch` | Verify then integrate: merge, PR, keep, or discard a feature branch |
-| `git-worktrees` | Set up isolated worktrees for parallel feature work |
+|---|---|
+| `agent-browser` | Browser automation for AI agents |
+| `code-debug` | Systematic root-cause debugging |
+| `code-refactor` | Code organization and architecture |
+| `code-review` | Dead code, issues, quality scan |
+| `code-simplify` | Remove over-engineering and slop |
+| `context-compact` | Guide context compaction |
+| `design-audit` | UI/UX design review |
+| `design-standards` | Web interface best practices |
+| `design-type` | Typography rules |
+| `docs-author` | Create/update documentation |
+| `docs-optimize` | Optimize docs for LLM discoverability |
+| `eval-harness` | Define and run evals |
+| `git-workflow` | Branch, merge, PR workflow |
+| `ralph-loop` | Autonomous iterative development |
+| `search` | Quick web research |
+| `skill-creator` | Create and improve skills |
+| `test-webapp` | Playwright webapp testing |
+| `verify-completion` | Evidence-based completion gate |
 
-## CLAUDE.md Structure
+To add a skill: create `src/skills/<name>/SKILL.md` and add keyword triggers to `src/skills/skill-rules.json`. Run `bun install.ts` to deploy.
 
-Core behavioral rules are installed by construct-core; each module appends its own `##` section.
+---
+
+## Running
+
+### Dev (live-reload)
+
+```bash
+bun dev-server.ts        # hot-reload at http://localhost:3001
+```
+
+Single process: Fastify API + Vite middleware. React hot-reloads on save. Port: `$PORT` / `$API_PORT`, default **3001**.
+
+### Dev (symlink mode — edit src/ and see changes without reinstalling)
+
+```bash
+# One-time setup: symlink ~/.claude/construct/ → src/
+/link                    # run in Claude Code — creates symlink, syncs commands/settings
+
+# Then start the dev server
+bun dev-server.ts        # live from src/ at http://localhost:3001
+```
+
+Run `/install` to switch back to a deployed copy.
+
+### Upgrade
+
+```bash
+git pull && bun install.ts   # pulls latest, redeploys, preserves user data
+```
+
+What survives an upgrade: ALL CAPS `.md` files in `core/identity/` and `memory/` (e.g. `SOUL.md`, `USER.md`). Everything else in `~/.claude/construct/` is overwritten. `~/.construct/` (DB, sessions, signals) is never touched.
+
+### Production
+
+```bash
+systemctl --user start   construct-ui
+systemctl --user stop    construct-ui
+systemctl --user status  construct-ui
+```
+
+Serves pre-built SPA on port **3000**. Deployed via `bun install.ts`.
+
+### Research Workers
+
+Workers are spawned automatically by the UI on startup (`WORKER_COUNT=3` by default). They require `OPENROUTER_API_KEY`. To run standalone:
+
+```bash
+systemctl --user start   construct-research-worker
+journalctl --user -u construct-research-worker -f   # tail logs
+```
+
+Workers poll `construct.db` for pending research jobs, heartbeat every 60s, and restart automatically on crash (exponential backoff, max 20 restarts).
+
+### Tests
+
+```bash
+bun test.ts              # unit + integration (src/tests/*.test.ts), fails if <90% pass
+npm run ui:e2e           # Playwright e2e: goals UI
+npm run validate         # JSON lint (settings-hooks.json, skill-rules.json)
+```
+
+### Deploy
+
+```bash
+bun install.ts           # src/ → ~/.claude/construct/, deps, systemd, DB verify
+```
+
+Safe to re-run. All user data in `~/.construct/` is preserved.
+
+---
+
+## Environment Variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PORT` / `API_PORT` | 3001 dev / 3000 prod | UI server port |
+| `OPENROUTER_API_KEY` | — | Required for research workers |
+| `ANTHROPIC_API_KEY` | — | Optional fallback |
+| `WORKER_COUNT` | 3 | Research workers to spawn |
+| `DATABASE_URL` | `~/.construct/construct.db` | Override DB path |
+| `CONSTRUCT_DATA_ROOT` | `~/.construct/` | Override data root |
+| `MEMORY_DB_PATH` | `~/.construct/memory/sqlite_vec.db` | Override memory DB path |
+
+Place in `.env` at repo root; sourced automatically on dev start.
+
+---
+
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [INSTALL.md](INSTALL.md) | Installation, upgrade, verification |
+| [docs/specs/SPEC.md](docs/specs/SPEC.md) | Core + UI behavioral spec |
+| [docs/specs/HOOKS.md](docs/specs/HOOKS.md) | Hook scripts, events, behavior |
+| [docs/specs/SKILLS.md](docs/specs/SKILLS.md) | Skills, commands, routing |
+| [docs/specs/TESTS.md](docs/specs/TESTS.md) | Test suite listing |
+| [docs/specs/TELEMETRY.md](docs/specs/TELEMETRY.md) | Telemetry spec |
+| [docs/specs/RESEARCH.md](docs/specs/RESEARCH.md) | Research module spec |
+| [docs/specs/EVAL.md](docs/specs/EVAL.md) | Eval harness spec |
+| [docs/AGENTS.md](docs/AGENTS.md) | Agent definitions |
+| [docs/design/](docs/design/) | Design system tokens, kits, previews |

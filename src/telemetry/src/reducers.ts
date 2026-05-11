@@ -19,17 +19,30 @@ import type {
   HookDetailData,
   SkillDetailData,
   MemoryUsageData,
+  MemorySearchData, MemorySearchInvocation, MemorySearchResult,
   HookEventData, HookInvocation,
   CompactionData,
   ApiDurationData,
   TraceData, TraceSpan, TraceTurn,
   SubagentsData, SubagentInvocation, SubagentTypeBucket,
+  VerificationData,
 } from "./types.js";
 import { calculateCost } from "./pricing.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/** Extract a readable hook name from a shell command string (e.g. "bun /path/hook.ts 2>/dev/null"). */
+function hookBasename(command: string | null | undefined): string {
+  if (!command) return "unknown";
+  const tokens = command.split(/\s+/);
+  const script = tokens.find((t) => /\.(ts|js|sh|py)$/.test(t) && t.includes("/"));
+  if (script) return script.split("/").pop()!.replace(/\.(ts|js|sh|py)$/, "");
+  const path = tokens.find((t) => t.startsWith("/") && !t.startsWith("/dev/"));
+  if (path) return path.split("/").pop() || "unknown";
+  return "unknown";
+}
 
 function bucketKey(ts: string, g: Granularity): string {
   switch (g) {
@@ -100,14 +113,29 @@ export function reduceOverview(events: TelemetryEvent[], granularity: Granularit
 // ---------------------------------------------------------------------------
 
 export function reduceTools(events: TelemetryEvent[], granularity: Granularity = "day"): ToolsData {
-  const toolCounts = new Map<string, { count: number; errors: number; lastUsed: string; durations: number[] }>();
+  const toolCounts = new Map<string, {
+    count: number; errors: number; lastUsed: string; durations: number[];
+    linesAdded: number; linesRemoved: number; sessions: Set<string>;
+  }>();
   const dayToolMap = new Map<string, Map<string, number>>();
+  const dayChurnMap = new Map<string, Map<string, number>>();
+  const dayProjectMap = new Map<string, Map<string, number>>();
+  const daySessionMap = new Map<string, Set<string>>();
+  const dayErrorMap = new Map<string, Map<string, number>>();
+  const dayLatencyMap = new Map<string, Map<string, number[]>>();
+  const dayToolSessionMap = new Map<string, Map<string, Set<string>>>();
+  const skillToolMap = new Map<string, Map<string, number>>();
+  const projectCounts = new Map<string, number>();
+  const sidToProject = new Map<string, string>();
 
-  // Build useId → toolName + timestamp maps
+  // Build useId → toolName map and sid → project map
   const useIdToTool = new Map<string, { toolName: string; timestamp: string }>();
   for (const e of events) {
     if (e.kind === "tool" && e.data?.tool && e.data?.useId) {
       useIdToTool.set(e.data.useId as string, { toolName: e.data.tool as string, timestamp: e.ts });
+    }
+    if (e.data?.project && !sidToProject.has(e.sid)) {
+      sidToProject.set(e.sid, e.data.project as string);
     }
   }
 
@@ -122,25 +150,66 @@ export function reduceTools(events: TelemetryEvent[], granularity: Granularity =
   for (const e of events) {
     if (e.kind === "tool" && e.data?.tool) {
       const toolName = e.data.tool as string;
-      const cur = toolCounts.get(toolName) || { count: 0, errors: 0, lastUsed: "", durations: [] };
+      const cur = toolCounts.get(toolName) || { count: 0, errors: 0, lastUsed: "", durations: [], linesAdded: 0, linesRemoved: 0, sessions: new Set<string>() };
       cur.count++;
+      cur.sessions.add(e.sid);
       if (!cur.lastUsed || e.ts > cur.lastUsed) cur.lastUsed = e.ts;
+
+      const added = (e.data?.linesAdded as number) || 0;
+      const removed = (e.data?.linesRemoved as number) || 0;
+      cur.linesAdded += added;
+      cur.linesRemoved += removed;
 
       const useId = e.data.useId as string | undefined;
       if (useId) {
         const result = resultInfo.get(useId);
         if (result) {
           const ms = result.durationMs ?? (new Date(result.timestamp).getTime() - new Date(e.ts).getTime());
-          if (ms >= 0 && ms < 3600000) cur.durations.push(ms);
+          if (ms >= 0 && ms < 3600000) {
+            cur.durations.push(ms);
+            const bkLat = bucketKey(e.ts, granularity);
+            if (!dayLatencyMap.has(bkLat)) dayLatencyMap.set(bkLat, new Map());
+            const dlm = dayLatencyMap.get(bkLat)!;
+            if (!dlm.has(toolName)) dlm.set(toolName, []);
+            dlm.get(toolName)!.push(ms);
+          }
         }
       }
 
       toolCounts.set(toolName, cur);
 
       const bk = bucketKey(e.ts, granularity);
+
       if (!dayToolMap.has(bk)) dayToolMap.set(bk, new Map());
-      const dm = dayToolMap.get(bk)!;
-      dm.set(toolName, (dm.get(toolName) || 0) + 1);
+      dayToolMap.get(bk)!.set(toolName, (dayToolMap.get(bk)!.get(toolName) || 0) + 1);
+
+      // Track per-day sessions per tool
+      if (!dayToolSessionMap.has(bk)) dayToolSessionMap.set(bk, new Map());
+      const dtss = dayToolSessionMap.get(bk)!;
+      if (!dtss.has(toolName)) dtss.set(toolName, new Set());
+      dtss.get(toolName)!.add(e.sid);
+
+      // Track skill→tool correlation
+      if (e.data?.skill) {
+        const skillName = e.data.skill as string;
+        if (!skillToolMap.has(skillName)) skillToolMap.set(skillName, new Map());
+        const stm = skillToolMap.get(skillName)!;
+        stm.set(toolName, (stm.get(toolName) || 0) + 1);
+      }
+
+      const churnTotal = added + removed;
+      if (churnTotal > 0) {
+        if (!dayChurnMap.has(bk)) dayChurnMap.set(bk, new Map());
+        dayChurnMap.get(bk)!.set(toolName, (dayChurnMap.get(bk)!.get(toolName) || 0) + churnTotal);
+      }
+
+      const project = sidToProject.get(e.sid) || "unknown";
+      projectCounts.set(project, (projectCounts.get(project) || 0) + 1);
+      if (!dayProjectMap.has(bk)) dayProjectMap.set(bk, new Map());
+      dayProjectMap.get(bk)!.set(project, (dayProjectMap.get(bk)!.get(project) || 0) + 1);
+
+      if (!daySessionMap.has(bk)) daySessionMap.set(bk, new Set());
+      daySessionMap.get(bk)!.add(e.sid);
     }
 
     if (e.kind === "tool_result" && e.data?.isError) {
@@ -149,6 +218,10 @@ export function reduceTools(events: TelemetryEvent[], granularity: Granularity =
       if (info) {
         const cur = toolCounts.get(info.toolName);
         if (cur) cur.errors++;
+        const errBk = bucketKey(info.timestamp, granularity);
+        if (!dayErrorMap.has(errBk)) dayErrorMap.set(errBk, new Map());
+        const dem = dayErrorMap.get(errBk)!;
+        dem.set(info.toolName, (dem.get(info.toolName) || 0) + 1);
       }
     }
   }
@@ -158,24 +231,74 @@ export function reduceTools(events: TelemetryEvent[], granularity: Granularity =
     .map(([name, v]) => {
       const sorted = v.durations.slice().sort((a, b) => a - b);
       const avgMs = sorted.length > 0 ? Math.round(sorted.reduce((s, d) => s + d, 0) / sorted.length) : undefined;
+      const sessionCount = v.sessions.size;
       return {
         name, count: v.count, errorCount: v.errors,
         pct: total > 0 ? (v.count / total) * 100 : 0,
         lastUsed: v.lastUsed, avgMs,
         p50Ms: sorted.length > 0 ? Math.round(percentile(sorted, 50)) : undefined,
         p95Ms: sorted.length > 0 ? Math.round(percentile(sorted, 95)) : undefined,
+        linesAdded: v.linesAdded || undefined,
+        linesRemoved: v.linesRemoved || undefined,
+        sessionCount: sessionCount || undefined,
+        velocity: sessionCount > 0 ? Math.round((v.count / sessionCount) * 10) / 10 : undefined,
       };
     })
     .sort((a, b) => b.count - a.count);
 
-  const byDay = [...dayToolMap.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, tools]) => ({
-      date, count: [...tools.values()].reduce((s, v) => s + v, 0),
-      tools: Object.fromEntries(tools),
-    }));
+  const sortBuckets = <T extends { date: string }>(map: Map<string, T>): T[] =>
+    [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
 
-  return { ranked, byDay };
+  const byDay = sortBuckets(new Map([...dayToolMap.entries()].map(([date, tools]) => [date, {
+    date, count: [...tools.values()].reduce((s, v) => s + v, 0), tools: Object.fromEntries(tools),
+  }])));
+
+  const byDayChurn = sortBuckets(new Map([...dayChurnMap.entries()].map(([date, tools]) => [date, {
+    date, count: [...tools.values()].reduce((s, v) => s + v, 0), tools: Object.fromEntries(tools),
+  }])));
+
+  const byDayProject = sortBuckets(new Map([...dayProjectMap.entries()].map(([date, projects]) => [date, {
+    date, count: [...projects.values()].reduce((s, v) => s + v, 0), projects: Object.fromEntries(projects),
+  }])));
+
+  const byDayVelocity = [...dayToolMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, tools]) => {
+      const calls = [...tools.values()].reduce((s, v) => s + v, 0);
+      const sessions = daySessionMap.get(date)?.size || 1;
+      return { date, count: calls, velocity: Math.round((calls / sessions) * 10) / 10 };
+    });
+
+  const projectTotal = [...projectCounts.values()].reduce((s, v) => s + v, 0);
+  const projectRanked = [...projectCounts.entries()]
+    .map(([project, count]) => ({ project, count, pct: projectTotal > 0 ? (count / projectTotal) * 100 : 0 }))
+    .sort((a, b) => b.count - a.count);
+
+  const byDayErrors = sortBuckets(new Map([...dayErrorMap.entries()].map(([date, tools]) => [date, {
+    date, count: [...tools.values()].reduce((s, v) => s + v, 0), tools: Object.fromEntries(tools),
+  }])));
+
+  const byDayLatency = sortBuckets(new Map([...dayLatencyMap.entries()].map(([date, toolDurations]) => [date, {
+    date, count: [...toolDurations.values()].reduce((s, v) => s + v.length, 0),
+    tools: Object.fromEntries([...toolDurations.entries()].map(([tool, durations]) => [
+      tool, durations.length > 0 ? Math.round(durations.reduce((s, d) => s + d, 0) / durations.length) : 0,
+    ])),
+  }])));
+
+  const byDaySessionCount = sortBuckets(new Map([...dayToolSessionMap.entries()].map(([date, toolSessions]) => [date, {
+    date, count: [...toolSessions.values()].reduce((s, v) => s + v.size, 0),
+    tools: Object.fromEntries([...toolSessions.entries()].map(([tool, sids]) => [tool, sids.size])),
+  }])));
+
+  const skillToolMatrix = [...skillToolMap.entries()].map(([skill, toolCounts]) => ({
+    skill,
+    tools: [...toolCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([tool, count]) => ({ tool, count })),
+  })).sort((a, b) => b.tools.reduce((s, t) => s + t.count, 0) - a.tools.reduce((s, t) => s + t.count, 0));
+
+  return { ranked, byDay, byDayChurn, byDayProject, byDayVelocity, byDayErrors, byDayLatency, byDaySessionCount, skillToolMatrix, projectRanked };
 }
 
 // ---------------------------------------------------------------------------
@@ -183,29 +306,50 @@ export function reduceTools(events: TelemetryEvent[], granularity: Granularity =
 // ---------------------------------------------------------------------------
 
 export function reduceHooks(events: TelemetryEvent[], granularity: Granularity = "day"): HooksData {
-  const hookMap = new Map<string, { event: string; durations: number[]; errors: number; fullCommand: string; progressCount: number }>();
+  const hookMap = new Map<string, { event: string; durations: number[]; errors: number; fullCommand: string; progressCount: number; lastUsed: string }>();
   const dayHookMap = new Map<string, Map<string, number>>();
+  const dayHookLatencyMap = new Map<string, Map<string, number[]>>();
+  const dayHookErrorMap = new Map<string, Map<string, number>>();
+  const dayHookEventMap = new Map<string, Map<string, number>>();
 
   for (const e of events) {
     if (e.kind === "hook_summary" && e.data?.command) {
       const shortCmd = e.name;
-      const cur = hookMap.get(shortCmd) || { event: "", durations: [], errors: 0, fullCommand: (e.data.command as string), progressCount: 0 };
+      const cur = hookMap.get(shortCmd) || { event: "", durations: [], errors: 0, fullCommand: (e.data.command as string), progressCount: 0, lastUsed: "" };
       if (e.ms !== undefined) cur.durations.push(e.ms);
       if (e.data.isError) cur.errors++;
       cur.fullCommand = e.data.command as string;
+      if (!cur.lastUsed || e.ts > cur.lastUsed) cur.lastUsed = e.ts;
       hookMap.set(shortCmd, cur);
 
       const bk = bucketKey(e.ts, granularity);
       if (!dayHookMap.has(bk)) dayHookMap.set(bk, new Map());
       const dm = dayHookMap.get(bk)!;
       dm.set(shortCmd, (dm.get(shortCmd) || 0) + 1);
+
+      if (e.ms !== undefined) {
+        if (!dayHookLatencyMap.has(bk)) dayHookLatencyMap.set(bk, new Map());
+        const dlm = dayHookLatencyMap.get(bk)!;
+        if (!dlm.has(shortCmd)) dlm.set(shortCmd, []);
+        dlm.get(shortCmd)!.push(e.ms);
+      }
+      if (e.data.isError) {
+        if (!dayHookErrorMap.has(bk)) dayHookErrorMap.set(bk, new Map());
+        const dem = dayHookErrorMap.get(bk)!;
+        dem.set(shortCmd, (dem.get(shortCmd) || 0) + 1);
+      }
+      const eventType = (e.data.event as string) || "unknown";
+      if (!dayHookEventMap.has(bk)) dayHookEventMap.set(bk, new Map());
+      const devM = dayHookEventMap.get(bk)!;
+      devM.set(eventType, (devM.get(eventType) || 0) + 1);
     }
 
     if (e.kind === "hook" && e.data?.command) {
       const shortCmd = e.name;
-      const cur = hookMap.get(shortCmd) || { event: "", durations: [], errors: 0, fullCommand: (e.data.command as string), progressCount: 0 };
+      const cur = hookMap.get(shortCmd) || { event: "", durations: [], errors: 0, fullCommand: (e.data.command as string), progressCount: 0, lastUsed: "" };
       cur.event = (e.data.event as string) || cur.event;
       cur.fullCommand = e.data.command as string;
+      if (!cur.lastUsed || e.ts > cur.lastUsed) cur.lastUsed = e.ts;
       hookMap.set(shortCmd, cur);
 
       if ((e.data.event as string) !== "Stop") {
@@ -214,6 +358,10 @@ export function reduceHooks(events: TelemetryEvent[], granularity: Granularity =
         if (!dayHookMap.has(bk)) dayHookMap.set(bk, new Map());
         const dm = dayHookMap.get(bk)!;
         dm.set(shortCmd, (dm.get(shortCmd) || 0) + 1);
+        const evType = (e.data.event as string) || "unknown";
+        if (!dayHookEventMap.has(bk)) dayHookEventMap.set(bk, new Map());
+        const devM = dayHookEventMap.get(bk)!;
+        devM.set(evType, (devM.get(evType) || 0) + 1);
       }
     }
   }
@@ -230,6 +378,7 @@ export function reduceHooks(events: TelemetryEvent[], granularity: Granularity =
         p50Ms: Math.round(percentile(sorted, 50)),
         p95Ms: Math.round(percentile(sorted, 95)),
         errors: v.errors, fullCommand: v.fullCommand,
+        lastUsed: v.lastUsed || undefined,
       };
     })
     .sort((a, b) => b.count - a.count);
@@ -241,7 +390,28 @@ export function reduceHooks(events: TelemetryEvent[], granularity: Granularity =
       hooks: Object.fromEntries(hooks),
     }));
 
-  return { ranked, byDay };
+  const byDayLatency = [...dayHookLatencyMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, hookDurations]) => ({
+      date, count: [...hookDurations.values()].reduce((s, v) => s + v.length, 0),
+      hooks: Object.fromEntries([...hookDurations.entries()].map(([hook, durations]) => [
+        hook, durations.length > 0 ? Math.round(durations.reduce((s, d) => s + d, 0) / durations.length) : 0,
+      ])),
+    }));
+
+  const byDayErrors = [...dayHookErrorMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, hooks]) => ({
+      date, count: [...hooks.values()].reduce((s, v) => s + v, 0), hooks: Object.fromEntries(hooks),
+    }));
+
+  const byDayEvent = [...dayHookEventMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, events]) => ({
+      date, count: [...events.values()].reduce((s, v) => s + v, 0), events: Object.fromEntries(events),
+    }));
+
+  return { ranked, byDay, byDayLatency, byDayErrors, byDayEvent };
 }
 
 // ---------------------------------------------------------------------------
@@ -249,15 +419,21 @@ export function reduceHooks(events: TelemetryEvent[], granularity: Granularity =
 // ---------------------------------------------------------------------------
 
 export function reduceSkills(events: TelemetryEvent[], granularity: Granularity = "day", validSkills?: Set<string>): SkillsData {
-  const skillCounts = new Map<string, { count: number; errors: number; lastUsed: string }>();
+  const skillCounts = new Map<string, { count: number; errors: number; sessions: Set<string>; durations: number[]; lastUsed: string }>();
   const daySkillMap = new Map<string, Map<string, number>>();
+  const daySkillSessionMap = new Map<string, Map<string, Set<string>>>();
+  const daySkillErrorMap = new Map<string, Map<string, number>>();
+  const daySkillLatencyMap = new Map<string, Map<string, number[]>>();
 
   for (const e of events) {
     if (e.kind === "tool" && e.data?.skill) {
       const skillName = e.data.skill as string;
       if (validSkills && !validSkills.has(skillName)) continue;
-      const cur = skillCounts.get(skillName) || { count: 0, errors: 0, lastUsed: "" };
+      const cur = skillCounts.get(skillName) || { count: 0, errors: 0, sessions: new Set<string>(), durations: [], lastUsed: "" };
       cur.count++;
+      if (e.err) cur.errors++;
+      cur.sessions.add(e.sid);
+      if (e.ms != null) cur.durations.push(e.ms);
       if (!cur.lastUsed || e.ts > cur.lastUsed) cur.lastUsed = e.ts;
       skillCounts.set(skillName, cur);
 
@@ -265,16 +441,41 @@ export function reduceSkills(events: TelemetryEvent[], granularity: Granularity 
       if (!daySkillMap.has(bk)) daySkillMap.set(bk, new Map());
       const dm = daySkillMap.get(bk)!;
       dm.set(skillName, (dm.get(skillName) || 0) + 1);
+
+      if (!daySkillSessionMap.has(bk)) daySkillSessionMap.set(bk, new Map());
+      const dsm = daySkillSessionMap.get(bk)!;
+      if (!dsm.has(skillName)) dsm.set(skillName, new Set());
+      dsm.get(skillName)!.add(e.sid);
+
+      if (e.err) {
+        if (!daySkillErrorMap.has(bk)) daySkillErrorMap.set(bk, new Map());
+        const dem = daySkillErrorMap.get(bk)!;
+        dem.set(skillName, (dem.get(skillName) || 0) + 1);
+      }
+
+      if (e.ms != null) {
+        if (!daySkillLatencyMap.has(bk)) daySkillLatencyMap.set(bk, new Map());
+        const dlm = daySkillLatencyMap.get(bk)!;
+        if (!dlm.has(skillName)) dlm.set(skillName, []);
+        dlm.get(skillName)!.push(e.ms);
+      }
     }
   }
 
   const total = [...skillCounts.values()].reduce((s, v) => s + v.count, 0);
   const ranked: SkillMetric[] = [...skillCounts.entries()]
-    .map(([skill, v]) => ({
-      skill, count: v.count,
-      pct: total > 0 ? (v.count / total) * 100 : 0,
-      errors: v.errors, lastUsed: v.lastUsed,
-    }))
+    .map(([skill, v]) => {
+      const sorted = [...v.durations].sort((a, b) => a - b);
+      const avgMs = sorted.length > 0 ? sorted.reduce((s, x) => s + x, 0) / sorted.length : undefined;
+      const p50Ms = sorted.length > 0 ? sorted[Math.floor(sorted.length * 0.5)] : undefined;
+      const p95Ms = sorted.length > 0 ? sorted[Math.floor(sorted.length * 0.95)] : undefined;
+      return {
+        skill, count: v.count,
+        pct: total > 0 ? (v.count / total) * 100 : 0,
+        errors: v.errors, sessions: v.sessions.size,
+        avgMs, p50Ms, p95Ms, lastUsed: v.lastUsed,
+      };
+    })
     .sort((a, b) => b.count - a.count);
 
   const byDay = [...daySkillMap.entries()]
@@ -284,7 +485,29 @@ export function reduceSkills(events: TelemetryEvent[], granularity: Granularity 
       skills: Object.fromEntries(skills),
     }));
 
-  return { ranked, byDay };
+  const byDaySessions = [...daySkillSessionMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, skillSessions]) => ({
+      date, count: [...skillSessions.values()].reduce((s, v) => s + v.size, 0),
+      skills: Object.fromEntries([...skillSessions.entries()].map(([skill, sids]) => [skill, sids.size])),
+    }));
+
+  const byDayErrors = [...daySkillErrorMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, skills]) => ({
+      date, count: [...skills.values()].reduce((s, v) => s + v, 0), skills: Object.fromEntries(skills),
+    }));
+
+  const byDayLatency = [...daySkillLatencyMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, skillDurations]) => ({
+      date, count: [...skillDurations.values()].reduce((s, v) => s + v.length, 0),
+      skills: Object.fromEntries([...skillDurations.entries()].map(([skill, durations]) => [
+        skill, durations.length > 0 ? Math.round(durations.reduce((s, d) => s + d, 0) / durations.length) : 0,
+      ])),
+    }));
+
+  return { ranked, byDay, byDaySessions, byDayErrors, byDayLatency };
 }
 
 // ---------------------------------------------------------------------------
@@ -352,9 +575,10 @@ export function reduceCost(events: TelemetryEvent[], granularity: Granularity = 
 // ---------------------------------------------------------------------------
 
 export function reduceSessions(events: TelemetryEvent[], granularity: Granularity = "day"): SessionsData {
-  const dayMap = new Map<string, { sessions: Set<string>; messages: number; userMessages: number; assistantMessages: number }>();
+  const dayMap = new Map<string, { sessions: Set<string>; messages: number; userMessages: number; assistantMessages: number; cost: number; linesAdded: number; linesRemoved: number; commits: number }>();
   const projectMap = new Map<string, Set<string>>();
   const activityMap = new Map<string, number>();
+  const dayProjectMap = new Map<string, Map<string, number>>();
 
   const sessionMap = new Map<string, {
     project: string; parentSessionId?: string;
@@ -364,7 +588,11 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
     linesAdded: number; linesRemoved: number;
     commits: number; compactions: number;
     hasSubagents: boolean; gitBranch?: string;
+    firstUserMessage?: string;
   }>();
+
+  // Track which sessions have a pending skill injection (next user message should be skipped)
+  const pendingSkillInjection = new Map<string, boolean>();
 
   function getSession(sid: string, project: string, ts: string, parentSessionId?: string) {
     if (!sessionMap.has(sid)) {
@@ -383,7 +611,7 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
   for (const e of events) {
     const project = (e.data?.project as string) || "unknown";
     const day = bucketKey(e.ts, granularity);
-    if (!dayMap.has(day)) dayMap.set(day, { sessions: new Set(), messages: 0, userMessages: 0, assistantMessages: 0 });
+    if (!dayMap.has(day)) dayMap.set(day, { sessions: new Set(), messages: 0, userMessages: 0, assistantMessages: 0, cost: 0, linesAdded: 0, linesRemoved: 0, commits: 0 });
     const bucket = dayMap.get(day)!;
     bucket.sessions.add(e.sid);
 
@@ -394,24 +622,56 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
     if (e.kind === "tokens") {
       bucket.messages++; bucket.assistantMessages++;
       sess.assistantMessages++;
-      sess.cost += costFromTokenEvent(e);
+      const tokenCost = costFromTokenEvent(e);
+      sess.cost += tokenCost;
+      bucket.cost += tokenCost;
     }
 
     if (e.kind === "message" && e.data?.role === "user") {
       bucket.messages++; bucket.userMessages++;
       sess.userMessages++;
+      if (pendingSkillInjection.get(e.sid)) {
+        pendingSkillInjection.set(e.sid, false);
+      } else if (!sess.firstUserMessage && e.data?.text) {
+        const raw = e.data.text as string;
+        const SKIP_COMMANDS = new Set(["clear", "reset"]);
+        if (raw.includes("local-command-caveat")) { /* skip */ }
+        else if (raw.includes("<command-name>")) {
+          const nameMatch = raw.match(/<command-name>([^<]+)<\/command-name>/);
+          const argsMatch = raw.match(/<command-args>([^<]*)<\/command-args>/);
+          if (nameMatch) {
+            const name = nameMatch[1].trim();
+            const bare = name.replace(/^\//, "");
+            if (!SKIP_COMMANDS.has(bare)) {
+              const args = (argsMatch?.[1] ?? "").trim();
+              const isDup = args === name || args === `/${bare}` || args === bare;
+              sess.firstUserMessage = isDup || !args ? name : `${name} ${args}`;
+            }
+          }
+        } else {
+          const cleaned = raw.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim().slice(0, 100);
+          const isUrl = /^https?:\/\/\S+$/.test(cleaned);
+          const isFilePath = /^[A-Za-z]:[\\\/]/.test(cleaned) || /^\/[\w/.-]+$/.test(cleaned);
+          const isInterrupted = cleaned === "[Request interrupted by user]";
+          const isMarkdownHeading = /^#+ /.test(raw.trimStart());
+          if (cleaned && !isUrl && !isFilePath && !isInterrupted && !isMarkdownHeading) sess.firstUserMessage = cleaned;
+        }
+      }
     }
 
     if (e.kind === "tool") {
       sess.toolCalls++;
       const tool = e.data?.tool as string;
       if (tool === "Agent") sess.hasSubagents = true;
-      if (e.data?.linesAdded) sess.linesAdded += e.data.linesAdded as number;
-      if (e.data?.linesRemoved) sess.linesRemoved += e.data.linesRemoved as number;
+      if (tool === "Skill") pendingSkillInjection.set(e.sid, true);
+      const linesAdded = (e.data?.linesAdded as number) || 0;
+      const linesRemoved = (e.data?.linesRemoved as number) || 0;
+      if (linesAdded) { sess.linesAdded += linesAdded; bucket.linesAdded += linesAdded; }
+      if (linesRemoved) { sess.linesRemoved += linesRemoved; bucket.linesRemoved += linesRemoved; }
 
       if (tool === "Bash" && e.data?.params) {
         const cmd = (e.data.params as Record<string, unknown>)?.command;
-        if (typeof cmd === "string" && /\bgit\s+commit\b/.test(cmd)) sess.commits++;
+        if (typeof cmd === "string" && /\bgit\s+commit\b/.test(cmd)) { sess.commits++; bucket.commits++; }
       }
     }
 
@@ -419,6 +679,10 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
 
     if (!projectMap.has(project)) projectMap.set(project, new Set());
     projectMap.get(project)!.add(e.sid);
+
+    if (!dayProjectMap.has(day)) dayProjectMap.set(day, new Map());
+    const dpBucket = dayProjectMap.get(day)!;
+    dpBucket.set(project, (dpBucket.get(project) || 0) + 1);
 
     const actKey = bucketKey(e.ts, granularity);
     activityMap.set(actKey, (activityMap.get(actKey) || 0) + 1);
@@ -429,6 +693,7 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
     .map(([date, v]) => ({
       date, sessions: v.sessions.size, messages: v.messages,
       userMessages: v.userMessages, assistantMessages: v.assistantMessages,
+      cost: v.cost, linesAdded: v.linesAdded, linesRemoved: v.linesRemoved, commits: v.commits,
     }));
 
   const byProject: ProjectBucket[] = [...projectMap.entries()]
@@ -438,6 +703,12 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
   const byActivity: TimeBucket[] = [...activityMap.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, count]) => ({ date, count }));
+
+  const byDayProject = [...dayProjectMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, projects]) => ({
+      date, count: [...projects.values()].reduce((s, v) => s + v, 0), projects: Object.fromEntries(projects),
+    }));
 
   const sessions: SessionMetric[] = [...sessionMap.entries()]
     .map(([sessionId, s]) => ({
@@ -449,6 +720,7 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
       commits: s.commits, compactions: s.compactions,
       firstTimestamp: s.firstTs, lastTimestamp: s.lastTs,
       gitBranch: s.gitBranch, hasSubagents: s.hasSubagents,
+      firstUserMessage: s.firstUserMessage,
     }))
     .sort((a, b) => b.lastTimestamp.localeCompare(a.lastTimestamp));
 
@@ -456,7 +728,7 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
   const avgDurationMs = durations.length > 0 ? Math.round(durations.reduce((s, d) => s + d, 0) / durations.length) : 0;
 
   return {
-    byDay, byProject, byActivity, sessions, avgDurationMs,
+    byDay, byProject, byActivity, byDayProject, sessions, avgDurationMs,
     totalUserMessages: sessions.reduce((s, v) => s + v.userMessages, 0),
     totalAssistantMessages: sessions.reduce((s, v) => s + v.assistantMessages, 0),
     totalLinesAdded: sessions.reduce((s, v) => s + v.linesAdded, 0),
@@ -472,20 +744,32 @@ export function reduceSessions(events: TelemetryEvent[], granularity: Granularit
 export function reduceToolDetail(events: TelemetryEvent[], toolName: string): ToolDetailData {
   const useIdToTimestamp = new Map<string, string>();
   const errorByUseId = new Map<string, string | undefined>();
+  const errorFullByUseId = new Map<string, string>();
+  const resultByUseId = new Map<string, { timestamp: string; durationMs?: number }>();
 
   for (const e of events) {
     if (e.kind === "tool" && (e.data?.tool as string) === toolName && e.data?.useId) {
       useIdToTimestamp.set(e.data.useId as string, e.ts);
     }
-    if (e.kind === "tool_result" && e.data?.isError && e.data?.useId) {
-      errorByUseId.set(e.data.useId as string, e.err);
+    if (e.kind === "tool_result" && e.data?.useId) {
+      if (e.data.isError) {
+        errorByUseId.set(e.data.useId as string, e.err);
+        const full = (e.data.resultContent as string | undefined) || e.err;
+        if (full) errorFullByUseId.set(e.data.useId as string, full);
+      }
+      resultByUseId.set(e.data.useId as string, { timestamp: e.ts, durationMs: e.ms });
     }
   }
 
   const errorTimestamps = new Map<string, string | undefined>();
+  const errorFullTimestamps = new Map<string, string>();
   for (const [useId, msg] of errorByUseId) {
     const ts = useIdToTimestamp.get(useId);
-    if (ts) errorTimestamps.set(ts, msg);
+    if (ts) {
+      errorTimestamps.set(ts, msg);
+      const full = errorFullByUseId.get(useId);
+      if (full) errorFullTimestamps.set(ts, full);
+    }
   }
 
   // Positional fallback
@@ -495,6 +779,8 @@ export function reduceToolDetail(events: TelemetryEvent[], toolName: string): To
       lastToolUseTs = e.ts;
     } else if (e.kind === "tool_result" && e.data?.isError && lastToolUseTs && !e.data?.useId) {
       errorTimestamps.set(lastToolUseTs, e.err);
+      const full = (e.data?.resultContent as string | undefined) || e.err;
+      if (full) errorFullTimestamps.set(lastToolUseTs, full);
       lastToolUseTs = null;
     } else if (e.kind === "tool") {
       lastToolUseTs = null;
@@ -503,7 +789,17 @@ export function reduceToolDetail(events: TelemetryEvent[], toolName: string): To
 
   const matched = events.filter((e) => e.kind === "tool" && (e.data?.tool as string) === toolName);
   let errorCount = 0;
+  let totalLinesAdded = 0;
+  let totalLinesRemoved = 0;
+  const allSessions = new Set<string>();
+  const skillCounts = new Map<string, number>();
+
   const dayMap = new Map<string, Map<number, number>>();
+  const dayErrors = new Map<string, number>();
+  const daySessions = new Map<string, Set<string>>();
+  const dayChurn = new Map<string, { added: number; removed: number }>();
+  const dayDurations = new Map<string, number[]>();
+
   const invocations: ToolDetailData["invocations"] = [];
 
   for (const e of matched) {
@@ -513,26 +809,95 @@ export function reduceToolDetail(events: TelemetryEvent[], toolName: string): To
     const hour = hourKey(e.ts);
     hm.set(hour, (hm.get(hour) || 0) + 1);
 
+    allSessions.add(e.sid);
+    if (!daySessions.has(day)) daySessions.set(day, new Set());
+    daySessions.get(day)!.add(e.sid);
+
     const isError = errorTimestamps.has(e.ts);
-    if (isError) errorCount++;
+    if (isError) {
+      errorCount++;
+      dayErrors.set(day, (dayErrors.get(day) || 0) + 1);
+    }
+
+    const added = (e.data?.linesAdded as number) || 0;
+    const removed = (e.data?.linesRemoved as number) || 0;
+    totalLinesAdded += added;
+    totalLinesRemoved += removed;
+    if (added + removed > 0) {
+      const dc = dayChurn.get(day) || { added: 0, removed: 0 };
+      dc.added += added;
+      dc.removed += removed;
+      dayChurn.set(day, dc);
+    }
+
+    const skill = e.data?.skill as string | undefined;
+    if (skill) skillCounts.set(skill, (skillCounts.get(skill) || 0) + 1);
+
+    // Duration: adapter already joins tool_result ms onto tool events
+    let durationMs: number | undefined = e.ms;
+    if (durationMs == null) {
+      const useId = e.data?.useId as string | undefined;
+      if (useId) {
+        const result = resultByUseId.get(useId);
+        if (result) {
+          durationMs = result.durationMs ?? (new Date(result.timestamp).getTime() - new Date(e.ts).getTime());
+          if (durationMs != null && (durationMs < 0 || durationMs > 3600000)) durationMs = undefined;
+        }
+      }
+    }
+
+    if (durationMs != null) {
+      if (!dayDurations.has(day)) dayDurations.set(day, []);
+      dayDurations.get(day)!.push(durationMs);
+    }
 
     invocations.push({
       timestamp: e.ts, sessionId: e.sid, project: (e.data?.project as string) || "",
       params: e.data?.params as Record<string, unknown> | undefined,
+      durationMs,
       isError: isError || undefined,
       errorMessage: isError ? errorTimestamps.get(e.ts) : undefined,
+      errorFull: isError ? errorFullTimestamps.get(e.ts) : undefined,
+      skill: skill || undefined,
+      linesAdded: added || undefined,
+      linesRemoved: removed || undefined,
     });
   }
 
+  const percentile = (arr: number[], p: number) => {
+    const s = arr.slice().sort((a, b) => a - b);
+    return s.length > 0 ? s[Math.floor(s.length * p)] : undefined;
+  };
+
   const byDay = [...dayMap.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, hours]) => ({
-      date, count: [...hours.values()].reduce((s, v) => s + v, 0),
-      byHour: Object.fromEntries(hours) as Record<number, number>,
-    }));
+    .map(([date, hours]) => {
+      const count = [...hours.values()].reduce((s, v) => s + v, 0);
+      const errors = dayErrors.get(date) || 0;
+      const durations = dayDurations.get(date) || [];
+      const churn = dayChurn.get(date) || { added: 0, removed: 0 };
+      return {
+        date, count,
+        byHour: Object.fromEntries(hours) as Record<number, number>,
+        errors,
+        errorRate: count > 0 ? Math.round((errors / count) * 1000) / 10 : 0,
+        sessions: daySessions.get(date)?.size || 0,
+        linesAdded: churn.added,
+        linesRemoved: churn.removed,
+        p50Ms: percentile(durations, 0.5),
+        p95Ms: percentile(durations, 0.95),
+        avgMs: durations.length > 0 ? Math.round(durations.reduce((s, d) => s + d, 0) / durations.length) : undefined,
+      };
+    });
+
+  const skills = [...skillCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, count]) => ({ name, count }));
 
   return {
     name: toolName, totalCount: matched.length, errorCount, byDay,
+    totalLinesAdded, totalLinesRemoved,
+    sessionCount: allSessions.size, skills,
     invocations: invocations.sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 200),
   };
 }
@@ -741,6 +1106,80 @@ export function reduceMemoryUsage(events: TelemetryEvent[], granularity: Granula
 }
 
 // ---------------------------------------------------------------------------
+// Memory Searches
+// ---------------------------------------------------------------------------
+
+const MEMORY_SEARCH_TOOLS = new Set(["memory_search", "mcp__memory__memory_search"]);
+
+export function reduceMemorySearches(events: TelemetryEvent[]): MemorySearchData {
+  // Build useId → resultContent map from tool_result events
+  const resultByUseId = new Map<string, { content?: string; durationMs?: number; isError?: boolean; errorMessage?: string }>();
+  for (const e of events) {
+    if (e.kind === "tool_result" && e.data?.useId) {
+      resultByUseId.set(e.data.useId as string, {
+        content: e.data.resultContent as string | undefined,
+        durationMs: e.ms,
+        isError: e.data.isError as boolean | undefined,
+        errorMessage: e.data.errorMessage as string | undefined,
+      });
+    }
+  }
+
+  const invocations: MemorySearchInvocation[] = [];
+
+  for (const e of events) {
+    if (e.kind !== "tool" || !e.data?.tool) continue;
+    if (!MEMORY_SEARCH_TOOLS.has(e.data.tool as string)) continue;
+
+    const params = e.data.params as Record<string, unknown> | undefined;
+    const query = (params?.query ?? params?.content ?? "") as string;
+    const mode = params?.mode as string | undefined;
+    const tags = Array.isArray(params?.tags) ? (params!.tags as unknown[]).map(String) : undefined;
+
+    const resultData = e.data.useId ? resultByUseId.get(e.data.useId as string) : undefined;
+
+    // Parse text-format result from memory MCP server
+    // Format: "Found N memories (mode: X) for query: '...'\n\n1. content...\n\n2. content..."
+    let results: MemorySearchResult[] = [];
+    if (resultData?.content) {
+      const text = resultData.content;
+      // Extract each numbered entry
+      const entryRegex = /(?:^|\n)(\d+)\.\s+([\s\S]*?)(?=\n\d+\.\s+|$)/g;
+      let m: RegExpExecArray | null;
+      while ((m = entryRegex.exec(text)) !== null) {
+        const raw = m[2].trim();
+        if (raw) {
+          // Strip trailing metadata lines (Hash:, Created:, Tags:)
+          const contentLines = raw.split("\n").filter(l => !/^\s*(Hash:|Created:|Tags:|Updated:)/.test(l));
+          const content = contentLines.join("\n").trim();
+          if (content) results.push({ content });
+        }
+      }
+    }
+
+    invocations.push({
+      timestamp: e.ts,
+      sessionId: e.sid,
+      query,
+      mode,
+      tags,
+      durationMs: resultData?.durationMs ?? e.ms,
+      isError: resultData?.isError,
+      errorMessage: resultData?.errorMessage,
+      results,
+      resultCount: results.length,
+    });
+  }
+
+  invocations.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+  return {
+    totalSearches: invocations.length,
+    invocations: invocations.slice(0, 500),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Compaction
 // ---------------------------------------------------------------------------
 
@@ -755,7 +1194,10 @@ export function reduceCompaction(events: TelemetryEvent[], granularity: Granular
     totalTokensAtCompaction += preTokens;
     compEvents.push({
       timestamp: e.ts, sessionId: e.sid,
-      trigger: (e.data?.trigger as string) || "unknown", preTokens,
+      trigger: (e.data?.trigger as string) || "unknown",
+      preTokens,
+      toolCallCount: (e.data?.toolCallCount as number) | 0 || undefined,
+      contextPct: (e.data?.contextPct as number) || undefined,
     });
     const day = bucketKey(e.ts, granularity);
     dayMap.set(day, (dayMap.get(day) || 0) + 1);
@@ -811,7 +1253,7 @@ export function reduceSessionTrace(events: TelemetryEvent[], sessionId: string):
     .sort((a, b) => a.ts.localeCompare(b.ts));
 
   if (sessionEvents.length === 0) {
-    return { sessionId, project: "", turns: [], totalDurationMs: 0, totalTokens: 0, totalCost: 0 };
+    return { sessionId, project: "", turns: [], compactions: [], totalDurationMs: 0, totalTokens: 0, totalCost: 0 };
   }
 
   const project = (sessionEvents[0].data?.project as string) || "";
@@ -833,19 +1275,37 @@ export function reduceSessionTrace(events: TelemetryEvent[], sessionId: string):
   const resultTimestamps = new Map<string, string>();
   const resultDurations = new Map<string, number>();
   const resultErrors = new Map<string, { isError: boolean; errorMessage?: string }>();
+  const resultCharsMap = new Map<string, number>();
   for (const e of sessionEvents) {
     if (e.kind === "tool_result" && e.data?.useId) {
       const useId = e.data.useId as string;
       resultTimestamps.set(useId, e.ts);
       if (e.ms) resultDurations.set(useId, e.ms);
       if (e.data.isError) resultErrors.set(useId, { isError: true, errorMessage: e.err });
+      if (e.data.resultChars) resultCharsMap.set(useId, e.data.resultChars as number);
     }
   }
 
-  // Split at message events
+  // Identify skill injection user messages: the Skill tool injects its content
+  // back as a user message. We detect injections by scanning once and tracking
+  // whether the next user message should be marked as an injection.
+  const skillInjectionIndices = new Set<number>();
+  let pendingSkillInjection = false;
+  for (let i = 0; i < sessionEvents.length; i++) {
+    const e = sessionEvents[i];
+    if (e.kind === "tool" && (e.data?.tool as string) === "Skill") {
+      pendingSkillInjection = true;
+    } else if (pendingSkillInjection && e.kind === "message" && e.data?.role === "user") {
+      skillInjectionIndices.add(i);
+      pendingSkillInjection = false;
+    }
+  }
+
+  // Split at user message events, but skip skill injections
   const turnBoundaries: number[] = [];
   for (let i = 0; i < sessionEvents.length; i++) {
-    if (sessionEvents[i].kind === "message" && sessionEvents[i].data?.role === "user") turnBoundaries.push(i);
+    if (sessionEvents[i].kind === "message" && sessionEvents[i].data?.role === "user"
+        && !skillInjectionIndices.has(i)) turnBoundaries.push(i);
   }
 
   const turns: TraceTurn[] = [];
@@ -860,6 +1320,8 @@ export function reduceSessionTrace(events: TelemetryEvent[], sessionId: string):
 
     const spans: TraceSpan[] = [];
     let turnTokens = 0, turnCost = 0, turnModel: string | undefined, turnDurationMs = 0, spanCounter = 0;
+    let turnContextTokens = 0, turnOutputTokens = 0, turnInputTokens = 0, turnCacheReadTokens = 0, turnCacheCreationTokens = 0;
+    let assistantText: string | undefined;
 
     for (const e of turnEntries) {
       const offsetMs = new Date(e.ts).getTime() - turnStart;
@@ -914,19 +1376,26 @@ export function reduceSessionTrace(events: TelemetryEvent[], sessionId: string):
         }
 
         const skillName = e.data.skill as string | undefined;
+        const resultChars = useId ? resultCharsMap.get(useId) : undefined;
+        const resultTokens = resultChars !== undefined ? Math.ceil(resultChars / 4) : undefined;
         spans.push({
           id: `span-${t}-${spanCounter++}`, kind: "tool",
           label: skillName ? `Skill(${skillName})` : (e.data.tool as string),
           startMs: offsetMs, durationMs,
           isError: isError || undefined, detail,
-          toolUseId: useId, subagentSessionId,
+          toolUseId: useId, subagentSessionId, resultTokens,
         });
       }
 
       if (e.kind === "hook_summary" && e.data?.command) {
+        // e.name may be the string "null" if the command ends with "2>/dev/null"
+        // (split("/").pop() bug in adapter). Re-derive from the command if needed.
+        const rawLabel = (e.name === "null" || !e.name)
+          ? hookBasename(e.data.command as string)
+          : e.name;
         spans.push({
           id: `span-${t}-${spanCounter++}`, kind: "hook",
-          label: e.name, startMs: offsetMs,
+          label: rawLabel, startMs: offsetMs,
           durationMs: e.ms || 0,
           isError: (e.data.isError as boolean) || undefined,
           detail: (e.data.output as string) || e.err,
@@ -942,16 +1411,40 @@ export function reduceSessionTrace(events: TelemetryEvent[], sessionId: string):
         });
       }
 
+      if (e.kind === "hook_feedback") {
+        spans.push({
+          id: `span-${t}-${spanCounter++}`, kind: "hook",
+          label: "stop.blocked",
+          startMs: offsetMs, durationMs: 0,
+          isError: true,
+          detail: (e.data?.text as string) || e.err,
+        });
+      }
+
       if (e.kind === "tokens") {
         const d = e.data || {};
-        const tokens = ((d.input as number) || 0) + ((d.output as number) || 0);
+        const inp = (d.input as number) || 0;
+        const out = (d.output as number) || 0;
+        const cacheRead = (d.cacheRead as number) || 0;
+        const cacheCreation = (d.cacheCreation as number) || 0;
+        const tokens = inp + out;
         const cost = costFromTokenEvent(e);
         turnTokens += tokens; turnCost += cost;
         totalTokens += tokens; totalCost += cost;
         if (d.model) turnModel = d.model as string;
+        // Total context window = fresh input + cached reads + newly cached
+        turnContextTokens = inp + cacheRead + cacheCreation;
+        turnOutputTokens = out;
+        turnInputTokens = inp;
+        turnCacheReadTokens = cacheRead;
+        turnCacheCreationTokens = cacheCreation;
       }
 
       if (e.kind === "turn" && e.ms) turnDurationMs = e.ms;
+
+      if (e.kind === "message" && e.data?.role === "assistant" && e.data?.text) {
+        assistantText = e.data.text as string;
+      }
     }
 
     if (turnDurationMs === 0 && spans.length > 0) {
@@ -965,6 +1458,10 @@ export function reduceSessionTrace(events: TelemetryEvent[], sessionId: string):
       index: t, userMessage, startTime: turnEntries[0].ts, durationMs: turnDurationMs,
       spans: spans.sort((a, b) => a.startMs - b.startMs),
       tokenCount: turnTokens || undefined, cost: turnCost || undefined, model: turnModel,
+      contextTokens: turnContextTokens || undefined, outputTokens: turnOutputTokens || undefined,
+      inputTokens: turnInputTokens || undefined, cacheReadTokens: turnCacheReadTokens || undefined,
+      cacheCreationTokens: turnCacheCreationTokens || undefined,
+      assistantText: assistantText || undefined,
     });
   }
 
@@ -972,7 +1469,15 @@ export function reduceSessionTrace(events: TelemetryEvent[], sessionId: string):
     ? new Date(sessionEvents[sessionEvents.length - 1].ts).getTime() - new Date(sessionEvents[0].ts).getTime()
     : 0;
 
-  return { sessionId, parentSessionId, project, turns, totalDurationMs, totalTokens, totalCost };
+  const compactions = sessionEvents
+    .filter((e) => e.kind === "compact")
+    .map((e) => ({
+      timestamp: e.ts,
+      trigger: (e.name as string) || "unknown",
+      preTokens: (e.data?.preTokens as number) || undefined,
+    }));
+
+  return { sessionId, parentSessionId, project, turns, compactions, totalDurationMs, totalTokens, totalCost };
 }
 
 // ---------------------------------------------------------------------------
@@ -1168,4 +1673,48 @@ export function reduceSubagents(events: TelemetryEvent[], granularity: Granulari
     p50Ms: percentile(durations, 50), p95Ms: percentile(durations, 95),
     byDay, byType, recent: recent.slice(0, 100),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Verification
+// ---------------------------------------------------------------------------
+
+export function reduceVerifications(events: TelemetryEvent[], granularity: Granularity = "day"): VerificationData {
+  type PhaseMap = Record<string, { pass: number; fail: number; skip: number }>;
+  const phases: PhaseMap = {};
+  const dayPass = new Map<string, number>();
+  const dayFail = new Map<string, number>();
+  const runMap = new Map<string, { timestamp: string; sessionId: string; phases: Record<string, { result: string; count?: number; coverage?: number }> }>();
+
+  for (const e of events) {
+    if (e.kind !== "verify") continue;
+    const phase = (e.data?.phase as string) || "unknown";
+    const result = (e.data?.result as string) || "skip";
+    if (!phases[phase]) phases[phase] = { pass: 0, fail: 0, skip: 0 };
+    if (result === "pass") phases[phase].pass++;
+    else if (result === "fail") phases[phase].fail++;
+    else phases[phase].skip++;
+
+    const day = bucketKey(e.ts, granularity);
+    if (result === "pass") dayPass.set(day, (dayPass.get(day) || 0) + 1);
+    else if (result === "fail") dayFail.set(day, (dayFail.get(day) || 0) + 1);
+
+    // Group by session+day for recent runs
+    const runKey = `${e.sid}:${day}`;
+    if (!runMap.has(runKey)) runMap.set(runKey, { timestamp: e.ts, sessionId: e.sid, phases: {} });
+    runMap.get(runKey)!.phases[phase] = { result, count: e.data?.count as number | undefined, coverage: e.data?.coverage as number | undefined };
+  }
+
+  const allDays = new Set([...dayPass.keys(), ...dayFail.keys()]);
+  const byDay = [...allDays]
+    .sort()
+    .map((date) => ({ date, pass: dayPass.get(date) || 0, fail: dayFail.get(date) || 0 }));
+
+  const recentRuns = [...runMap.values()]
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+    .slice(0, 50)
+    .map((r) => ({ ...r, phases: r.phases as Record<string, { result: "pass" | "fail" | "skip"; count?: number; coverage?: number }> }));
+
+  const totalRuns = runMap.size;
+  return { totalRuns, byPhase: phases, byDay, recentRuns };
 }

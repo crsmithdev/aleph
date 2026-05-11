@@ -20,7 +20,7 @@ export function MarkdownBlock({ content, filename }: { content: string; filename
           {!collapsed && (
             <button
               onClick={(e) => { e.stopPropagation(); setViewRaw(!viewRaw); }}
-              className="text-[10px] text-text-muted hover:text-text-secondary transition-colors px-1.5 py-0.5 rounded border border-border-primary bg-bg-tertiary"
+              className="text-xs text-text-muted hover:text-text-secondary transition-colors px-1.5 py-0.5 rounded border border-border-primary bg-bg-tertiary"
             >
               {viewRaw ? 'Preview' : 'Raw'}
             </button>

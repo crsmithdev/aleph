@@ -43,11 +43,6 @@ The installer automatically discovers and preserves any ALL CAPS `.md` file (fil
 
 All user data lives in `~/.construct/` (databases, sessions, signals, backups, memory) — the installer never touches this directory. It only syncs `~/.claude/construct/` (code) and `~/.claude/commands/` (commands).
 
-### Development with /link
-
-Use `/link` to create a single symlink (`~/.claude/construct → src/`). All code changes take effect immediately. A one-time `bun install.ts --link-only` syncs commands, settings, and CLAUDE.md. Run `/install` to go back to a deployed copy.
-
-
 ### What gets overwritten
 
 Everything else in `construct/` is overwritten (hooks, skills, meta, README/INSTALL files, non-ALLCAPS files). This is intentional — infrastructure updates cleanly, user data survives.
@@ -71,6 +66,16 @@ To add a new preserved file, create it with an ALL CAPS name in either `identity
 
 After upgrade completes, run `/install`. Pay special attention to the **Data** checks — they confirm preserved files were not lost or zeroed out.
 
+## Development
+
+| Command | Purpose |
+|---------|---------|
+| `/link` | Creates symlink `~/.claude/construct → src/` for live dev — all code changes take effect immediately without reinstalling. A one-time sync of commands, settings, and CLAUDE.md is still needed (`bun install.ts --link-only`). |
+| `bun dev-server.ts` | Starts the dev server at port 3001 with Vite HMR. Serves live from `src/`. Both dev and prod share data at `~/.construct/`. |
+| `bun install.ts` | Deploys to prod (port 3000 via systemd `construct-ui.service`). Run `/install` to go back from a linked dev copy. |
+
+Code installs to `~/.claude/construct/` (overwritten on each install). User data lives at `~/.construct/` (databases, sessions, signals, backups, memory) — the installer never touches this directory.
+
 ## Post-install Verification
 
 Checks are defined in each module's `INSTALL.md`:
@@ -78,12 +83,12 @@ Checks are defined in each module's `INSTALL.md`:
 | Module | Checks | Detection |
 |------|--------|-----------|
 | construct-core | `src/core/INSTALL.md` | `~/.claude/CLAUDE.md` exists |
-| construct-memory | `src/memory/INSTALL.md` | `src/memory/hooks/session-start.ts` exists |
-| construct-skills | `src/skills/INSTALL.md` | `src/skills/skill-rules.json` exists |
-| construct-data | `src/data/INSTALL.md` | `src/data/src/client.ts` exists |
-| construct-eval | `src/eval/INSTALL.md` | `src/eval/runner.ts` exists |
-| construct-goals | `src/goals/INSTALL.md` | `src/goals/src/index.ts` exists |
-| construct-ui | `src/ui/INSTALL.md` | `src/ui/api/src/app.ts` exists |
+| construct-memory | `src/memory/INSTALL.md` | `~/.claude/construct/memory/hooks/session-start.ts` exists |
+| construct-skills | `src/skills/INSTALL.md` | `~/.claude/construct/skills/skill-rules.json` exists |
+| construct-data | `src/data/INSTALL.md` | `~/.claude/construct/data/src/client.ts` exists |
+| construct-eval | `src/eval/INSTALL.md` | `~/.claude/construct/eval/runner.ts` exists |
+| construct-goals | `src/goals/INSTALL.md` | `~/.claude/construct/goals/src/index.ts` exists |
+| construct-ui | `src/ui/INSTALL.md` | `~/.claude/construct/ui/api/src/app.ts` exists |
 
 Each module's INSTALL.md defines three categories of checks:
 - **Files** — expected files exist at the target

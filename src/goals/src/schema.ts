@@ -100,6 +100,22 @@ export const habitCompletions = sqliteTable(
   })
 );
 
+export const goalLinks = sqliteTable(
+  'goal_links',
+  {
+    goalId: text('goal_id')
+      .notNull()
+      .references(() => goals.id, { onDelete: 'cascade' }),
+    linkedGoalId: text('linked_goal_id')
+      .notNull()
+      .references(() => goals.id, { onDelete: 'cascade' }),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.goalId, t.linkedGoalId] }),
+    linkedIdx: index('goal_links_linked_idx').on(t.linkedGoalId),
+  })
+);
+
 export const historyLogs = sqliteTable(
   'history_logs',
   {

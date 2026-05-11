@@ -1,18 +1,23 @@
 import type { Sqlite } from '@construct/data';
 import { generateId } from './id.js';
+import { emitResearchEvent } from './events.js';
 import type { ResearchStep, ToolCallRecord } from '../types.js';
 
 function rowToStep(row: Record<string, unknown>): ResearchStep {
   return {
     ...row,
     tool_calls: JSON.parse(row.tool_calls as string),
+    label: row.label ?? null,
+    error_kind: row.error_kind ?? null,
+    metadata: row.metadata ? JSON.parse(row.metadata as string) : null,
   } as unknown as ResearchStep;
 }
 
 export function createStep(
   sqlite: Sqlite,
   params: {
-    thread_id: string;
+    /** Null for session-scope LLM calls that don't belong to a thread. */
+    thread_id: string | null;
     session_id: string;
     finding_id?: string | null;
     model: string;
@@ -23,6 +28,9 @@ export function createStep(
     tool_calls?: ToolCallRecord[];
     duration_ms: number;
     error?: string | null;
+    error_kind?: string | null;
+    label?: string | null;
+    metadata?: Record<string, unknown> | null;
   }
 ): ResearchStep {
   const id = generateId();
@@ -31,29 +39,53 @@ export function createStep(
   sqlite.prepare(`
     INSERT INTO research_steps
       (id, thread_id, session_id, finding_id, model, provider,
-       prompt_tokens, completion_tokens, cost_usd, tool_calls, duration_ms, error, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       prompt_tokens, completion_tokens, cost_usd, tool_calls, duration_ms, error, error_kind, label, metadata, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     params.thread_id,
     params.session_id,
     params.finding_id ?? null,
     params.model,
-    params.provider ?? 'anthropic',
+    params.provider ?? 'openrouter',
     params.prompt_tokens,
     params.completion_tokens,
     params.cost_usd,
     JSON.stringify(params.tool_calls ?? []),
     params.duration_ms,
     params.error ?? null,
+    params.error_kind ?? null,
+    params.label ?? null,
+    JSON.stringify(params.metadata ?? null),
     now
   );
 
-  return getStep(sqlite, id)!;
+  const step = getStep(sqlite, id)!;
+  emitResearchEvent(step.session_id, 'step', step);
+  return step;
 }
 
 export function getStep(sqlite: Sqlite, id: string): ResearchStep | null {
   const row = sqlite.prepare('SELECT * FROM research_steps WHERE id = ?').get(id) as Record<string, unknown> | null;
+  return row ? rowToStep(row) : null;
+}
+
+/** Merges new fields into the step's existing metadata. Replaces only the
+ *  specified keys; leaves anything else (e.g. input_excerpt/output_excerpt
+ *  written by TrackedLLM) intact. Use this when a caller wants to layer a
+ *  decision-block on top of the auto-captured content. */
+export function updateStepMetadata(sqlite: Sqlite, stepId: string, patch: Record<string, unknown>): void {
+  const row = sqlite.prepare('SELECT metadata FROM research_steps WHERE id = ?').get(stepId) as { metadata: string | null } | undefined;
+  const existing = row?.metadata ? JSON.parse(row.metadata) as Record<string, unknown> : {};
+  const merged = { ...existing, ...patch };
+  sqlite.prepare('UPDATE research_steps SET metadata = ? WHERE id = ?')
+    .run(JSON.stringify(merged), stepId);
+}
+
+export function getLatestStepByLabel(sqlite: Sqlite, threadId: string, label: string): ResearchStep | null {
+  const row = sqlite.prepare(
+    'SELECT * FROM research_steps WHERE thread_id = ? AND label = ? ORDER BY created_at DESC LIMIT 1'
+  ).get(threadId, label) as Record<string, unknown> | null;
   return row ? rowToStep(row) : null;
 }
 

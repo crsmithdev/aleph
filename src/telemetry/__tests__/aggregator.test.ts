@@ -2,17 +2,17 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { resolve, join } from "path";
 import { mkdirSync, copyFileSync, rmSync } from "fs";
 import { tmpdir } from "os";
-import { parseAllSessions, clearCache } from "../src/parser.js";
+import { adaptAllSessions as parseAllSessions, clearCache } from "../src/adapter.js";
 import {
-  aggregateOverview,
-  aggregateTools,
-  aggregateHooks,
-  aggregateSkills,
-  aggregateTokens,
-  aggregateCost,
-  aggregateSessions,
-} from "../src/aggregator.js";
-import type { SessionEntry } from "../src/types.js";
+  reduceOverview as aggregateOverview,
+  reduceTools as aggregateTools,
+  reduceHooks as aggregateHooks,
+  reduceSkills as aggregateSkills,
+  reduceTokens as aggregateTokens,
+  reduceCost as aggregateCost,
+  reduceSessions as aggregateSessions,
+} from "../src/reducers.js";
+import type { TelemetryEvent } from "../src/event.js";
 
 const fixturesDir = resolve(import.meta.dir, "../fixtures");
 
@@ -28,7 +28,7 @@ function setupFixtureDir(): string {
 }
 
 describe("aggregator", () => {
-  let entries: SessionEntry[];
+  let entries: TelemetryEvent[];
   let baseDir: string;
 
   beforeEach(() => {
@@ -90,7 +90,7 @@ describe("aggregator", () => {
       const hooks = aggregateHooks(entries);
       expect(hooks.ranked.length).toBeGreaterThan(0);
       const formatHook = hooks.ranked.find((h) =>
-        h.command.includes("routing-submit-classify"),
+        h.command.includes("routing-classify-submit"),
       );
       expect(formatHook).toBeDefined();
       expect(formatHook!.count).toBeGreaterThanOrEqual(1);

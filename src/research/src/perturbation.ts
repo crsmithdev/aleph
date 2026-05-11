@@ -67,8 +67,26 @@ export function selectStrategy(
   config: PerturbationConfig,
   state: PerturbationState
 ): PerturbationStrategy {
+  return selectStrategyWithDetails(config, state).strategy;
+}
+
+/** Returns the chosen strategy plus the inputs that drove the choice
+ *  (candidates with their final weights, plus which strategies were excluded
+ *  by cooldown). The engine writes these into a `select_perturbation` step
+ *  so the user can audit each decision in the Events tab. */
+export interface StrategySelection {
+  strategy: PerturbationStrategy;
+  candidates: Array<{ strategy: PerturbationStrategy; weight: number }>;
+  cooldown_excluded: PerturbationStrategy[];
+}
+
+export function selectStrategyWithDetails(
+  config: PerturbationConfig,
+  state: PerturbationState
+): StrategySelection {
   // Filter out recently used strategies (cooldown)
   const cooldownSet = new Set(state.recentStrategies.slice(-config.strategy_cooldown));
+  const cooldown_excluded = Array.from(cooldownSet);
 
   // Phase awareness: early iterations favor breadth, late favor depth
   const earlyPhase = state.iterationCount < 20;
@@ -98,7 +116,8 @@ export function selectStrategy(
 
   // If no candidates (all on cooldown), use any strategy
   if (candidates.length === 0) {
-    return ALL_STRATEGIES[Math.floor(Math.random() * ALL_STRATEGIES.length)];
+    const fallback = ALL_STRATEGIES[Math.floor(Math.random() * ALL_STRATEGIES.length)];
+    return { strategy: fallback, candidates: [], cooldown_excluded };
   }
 
   // Weighted random selection
@@ -106,10 +125,10 @@ export function selectStrategy(
   let rand = Math.random() * totalWeight;
   for (const candidate of candidates) {
     rand -= candidate.weight;
-    if (rand <= 0) return candidate.strategy;
+    if (rand <= 0) return { strategy: candidate.strategy, candidates, cooldown_excluded };
   }
 
-  return candidates[candidates.length - 1].strategy;
+  return { strategy: candidates[candidates.length - 1].strategy, candidates, cooldown_excluded };
 }
 
 export function recordStrategyUse(state: PerturbationState, strategy: PerturbationStrategy): void {
@@ -156,7 +175,7 @@ export function generatePerturbationPrompt(
       return `${base}How is this topic approached in ${region}? Generate ONE specific search query exploring this topic from that geographic/cultural perspective.`;
     })(),
 
-    temporal_shift: `${base}Generate ONE specific search query that shifts the temporal frame — either how this was understood 20-50 years ago, or projecting forward 10-20 years.`,
+    temporal_shift: `${base}Generate ONE specific search query that shifts the temporal frame backwards — how this topic was understood, framed, or practiced 20-50 years ago. Look for historical precedents, earlier theories, or contemporaneous debates from that era. Do not speculate about the future; ground the query in primary or secondary sources from the past.`,
 
     scale_shift: `${base}What happens if you make this 10x bigger, 10x smaller, 10x cheaper, or 10x more expensive? Generate ONE specific search query exploring an extreme scale shift.`,
 

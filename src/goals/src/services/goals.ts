@@ -1,7 +1,7 @@
 import { nanoid } from 'nanoid';
-import { eq, inArray, desc } from 'drizzle-orm';
+import { eq, inArray, desc, and } from 'drizzle-orm';
 import type { Db } from '@construct/data';
-import { goals, goalCategories, categories, notes, todos, habits } from '../schema.js';
+import { goals, goalCategories, goalLinks, categories, notes, todos, habits } from '../schema.js';
 import { createGoalSchema, updateGoalSchema } from '../validators.js';
 import type { EventBus } from './event-bus.js';
 import type { GoalWithMeta } from '../types.js';
@@ -79,6 +79,29 @@ export function attachMeta(db: Db, goalRows: GoalRow[]): GoalWithMeta[] {
     }
   }
 
+  const linkRows = db
+    .select({ goalId: goalLinks.goalId, linkedGoalId: goalLinks.linkedGoalId })
+    .from(goalLinks)
+    .where(inArray(goalLinks.goalId, ids))
+    .all();
+
+  const linkedGoalIds = [...new Set(linkRows.map((r) => r.linkedGoalId))];
+  const linkedGoalRows: GoalRow[] =
+    linkedGoalIds.length > 0
+      ? db.select().from(goals).where(inArray(goals.id, linkedGoalIds)).all()
+      : [];
+  const linkedGoalById = new Map(linkedGoalRows.map((g) => [g.id, g]));
+
+  const linkedGoalsByGoal = new Map<string, GoalRow[]>();
+  for (const link of linkRows) {
+    const linked = linkedGoalById.get(link.linkedGoalId);
+    if (linked) {
+      const list = linkedGoalsByGoal.get(link.goalId) ?? [];
+      list.push(linked);
+      linkedGoalsByGoal.set(link.goalId, list);
+    }
+  }
+
   return goalRows.map((g) => ({
     ...g,
     categories: catsByGoal.get(g.id) ?? [],
@@ -86,6 +109,7 @@ export function attachMeta(db: Db, goalRows: GoalRow[]): GoalWithMeta[] {
     todoCount: todoCountByGoal.get(g.id) ?? 0,
     noteCount: noteCountByGoal.get(g.id) ?? 0,
     habitCount: habitCountByGoal.get(g.id) ?? 0,
+    linkedGoals: linkedGoalsByGoal.get(g.id) ?? [],
   }));
 }
 
@@ -201,6 +225,27 @@ export function deleteGoal(db: Db, id: string): boolean {
   const existing = db.select().from(goals).where(eq(goals.id, id)).get();
   if (!existing) return false;
   db.delete(goals).where(eq(goals.id, id)).run();
+  return true;
+}
+
+export function linkGoals(db: Db, goalId: string, otherId: string): boolean {
+  if (goalId === otherId) return false;
+  const a = db.select().from(goals).where(eq(goals.id, goalId)).get();
+  const b = db.select().from(goals).where(eq(goals.id, otherId)).get();
+  if (!a || !b) return false;
+  // Store both directions so queries are simple
+  db.insert(goalLinks).values({ goalId, linkedGoalId: otherId }).onConflictDoNothing().run();
+  db.insert(goalLinks).values({ goalId: otherId, linkedGoalId: goalId }).onConflictDoNothing().run();
+  return true;
+}
+
+export function unlinkGoals(db: Db, goalId: string, otherId: string): boolean {
+  db.delete(goalLinks)
+    .where(and(eq(goalLinks.goalId, goalId), eq(goalLinks.linkedGoalId, otherId)))
+    .run();
+  db.delete(goalLinks)
+    .where(and(eq(goalLinks.goalId, otherId), eq(goalLinks.linkedGoalId, goalId)))
+    .run();
   return true;
 }
 

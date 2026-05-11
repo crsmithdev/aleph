@@ -1,0 +1,18 @@
+name: verification-gate-passes-docs-only
+description: "Docs-only edits should pass silently with no advisory"
+hook: quality-stop-check-e2e
+event: Stop
+expect: pass
+
+setup:
+  depth: quick
+  prompt: |
+    Update README.md to add a section about the new verification system.
+
+success:
+  - type: hook_decision
+    expected: pass
+  - type: no_output
+    description: "Hook should produce no stdout"
+
+trials: 3

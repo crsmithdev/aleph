@@ -1,43 +1,61 @@
 import { nanoid } from 'nanoid';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import type { Db } from '@construct/data';
 import { habits, habitCompletions } from '../schema.js';
 import { createHabitSchema, updateHabitSchema } from '../validators.js';
 import type { Frequency } from '../constants.js';
-import { getPeriodKey, getPreviousPeriodKey } from './recurring.js';
+import { getPeriodKey, getPreviousPeriodKey, getRecentPeriodKeys } from './recurring.js';
+
+const HISTORY_PERIODS = 28;
 
 function enrichWithPeriodStatus(db: Db, habit: typeof habits.$inferSelect, now: Date) {
   const frequency = habit.frequency as Frequency;
   const currentPeriod = getPeriodKey(now, frequency);
   const prevPeriod = getPreviousPeriodKey(now, frequency);
+  const recentKeys = getRecentPeriodKeys(now, frequency, HISTORY_PERIODS);
 
-  const currentCompletion = db
-    .select()
-    .from(habitCompletions)
-    .where(
-      and(
-        eq(habitCompletions.habitId, habit.id),
-        eq(habitCompletions.periodKey, currentPeriod)
+  const completedKeys = new Set(
+    db
+      .select({ periodKey: habitCompletions.periodKey })
+      .from(habitCompletions)
+      .where(
+        and(
+          eq(habitCompletions.habitId, habit.id),
+          inArray(habitCompletions.periodKey, recentKeys),
+        ),
       )
-    )
-    .get();
+      .all()
+      .map((r) => r.periodKey),
+  );
 
-  const prevCompletion = db
-    .select()
-    .from(habitCompletions)
-    .where(
-      and(
-        eq(habitCompletions.habitId, habit.id),
-        eq(habitCompletions.periodKey, prevPeriod)
-      )
-    )
-    .get();
+  const history = recentKeys.map((periodKey) => ({
+    periodKey,
+    completed: completedKeys.has(periodKey),
+  }));
+
+  // Streak = consecutive completed periods ending at the current period
+  // (or, if the current isn't done yet, the previous period). Stops at the
+  // first miss.
+  let streak = 0;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const cell = history[i];
+    if (cell.completed) {
+      streak++;
+    } else if (cell.periodKey === currentPeriod) {
+      // Current period not yet done — don't reset, just keep walking.
+      continue;
+    } else {
+      break;
+    }
+  }
 
   return {
     ...habit,
     currentPeriodKey: currentPeriod,
-    completedThisPeriod: !!currentCompletion,
-    missedLastPeriod: !prevCompletion,
+    completedThisPeriod: completedKeys.has(currentPeriod),
+    missedLastPeriod: !completedKeys.has(prevPeriod),
+    streak,
+    history,
   };
 }
 

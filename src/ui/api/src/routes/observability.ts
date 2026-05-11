@@ -1,6 +1,9 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { resolve } from 'path';
-import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
+import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, writeFileSync } from 'fs';
+import { stringify as yamlStringify } from 'yaml';
+import { loadScenario, listHookScenarios } from '@construct/eval/scenario-loader.ts';
+import { spawn } from 'child_process';
 import { claudePaths, dataPaths, getMemoryDbPath } from '@construct/data';
 import { Database } from 'bun:sqlite';
 import {
@@ -16,14 +19,48 @@ import {
   aggregateHookDetail,
   aggregateSkillDetail,
   aggregateMemoryUsage,
+  aggregateMemorySearches,
   aggregateHookEvents,
   aggregateCompaction,
   aggregateApiDuration,
   aggregateSessionTrace,
   getRecentEvents,
   aggregateSubagents,
+  aggregateVerifications,
 } from '@construct/telemetry';
 import type { Granularity, TelemetryEvent } from '@construct/telemetry';
+
+const MAX_MEMORY_ITEMS = 500;
+
+// ---------------------------------------------------------------------------
+// Reducer result cache: 5-minute TTL for heavy aggregate views (tools, hooks,
+// sessions, cost, etc.); 60s for lighter detail views. The underlying corpus
+// cache (adapter.ts) refreshes every 5s, so aggregate views may lag behind raw
+// events by at most the TTL. Keyed by route URL (path + query string) — safe
+// for read-only aggregate endpoints. Session traces excluded (per-session id).
+// ---------------------------------------------------------------------------
+
+const MAX_CACHE = 100;
+
+interface ResultCacheEntry {
+  value: unknown;
+  expiresAt: number;
+}
+
+const resultCache = new Map<string, ResultCacheEntry>();
+
+function cachedResult<T>(key: string, ttlMs: number, fn: () => T): T {
+  const now = Date.now();
+  const cached = resultCache.get(key);
+  if (cached && now < cached.expiresAt) return cached.value as T;
+  if (resultCache.size >= MAX_CACHE) {
+    const firstKey = resultCache.keys().next().value;
+    if (firstKey) resultCache.delete(firstKey);
+  }
+  const value = fn();
+  resultCache.set(key, { value, expiresAt: now + ttlMs });
+  return value;
+}
 
 type QueryParams = { days?: string; range?: string; granularity?: string; session?: string };
 type ObsRequest = FastifyRequest<{ Querystring: QueryParams }> & {
@@ -115,6 +152,68 @@ function tryRead(path: string): string | undefined {
   try { return readFileSync(path, 'utf-8'); } catch { return undefined; }
 }
 
+type ContextFile = { label: string; path: string; chars: number; estTokens: number };
+
+function readContextFiles(sessionId: string): { files: ContextFile[] } {
+  // Find the project for this session by scanning telemetry dirs
+  let projectEncoded: string | undefined;
+  for (const dir of readdirSync(claudePaths.projects)) {
+    const sessionFile = resolve(claudePaths.projects, dir, `${sessionId}.jsonl`);
+    if (existsSync(sessionFile)) { projectEncoded = dir; break; }
+  }
+
+  const files: ContextFile[] = [];
+
+  function addFile(label: string, path: string): string | undefined {
+    const content = tryRead(path);
+    if (content === undefined) return undefined;
+    files.push({ label, path, chars: content.length, estTokens: Math.ceil(content.length / 3.5) });
+    return content;
+  }
+
+  // 1. Global CLAUDE.md
+  const globalContent = addFile('Global CLAUDE.md', resolve(claudePaths.root, 'CLAUDE.md'));
+
+  // 2. Resolve @-references in global CLAUDE.md (e.g. @construct/core/CLAUDE.md)
+  if (globalContent) {
+    for (const ref of globalContent.matchAll(/^@([^\s]+)/gm)) {
+      const refPath = ref[1];
+      // Map known construct/ prefix to actual construct path
+      const resolved = refPath.startsWith('construct/')
+        ? resolve(claudePaths.construct, refPath.slice('construct/'.length))
+        : resolve(claudePaths.root, refPath);
+      addFile(refPath, resolved);
+    }
+  }
+
+  // 3. Project-local CLAUDE.md
+  let projectPath: string | undefined;
+  if (projectEncoded) {
+    projectPath = projectIdToPath(projectEncoded) ?? undefined;
+    if (projectPath) {
+      const projectContent = addFile('Project CLAUDE.md', resolve(projectPath, '.claude', 'CLAUDE.md'));
+      // Resolve @-refs in project CLAUDE.md too
+      if (projectContent) {
+        for (const ref of projectContent.matchAll(/^@([^\s]+)/gm)) {
+          const refPath = ref[1];
+          const resolved = resolve(projectPath, '.claude', refPath);
+          if (!files.some(f => f.path === resolved)) addFile(refPath, resolved);
+        }
+      }
+    }
+  }
+
+  // 4. Settings files — Claude Code reads these and injects permissions + hook names into context
+  addFile('Global settings.json', resolve(claudePaths.root, 'settings.json'));
+  addFile('Global settings.local.json', resolve(claudePaths.root, 'settings.local.json'));
+  if (projectPath) {
+    addFile('Project settings.json', resolve(projectPath, '.claude', 'settings.json'));
+    addFile('Project settings.local.json', resolve(projectPath, '.claude', 'settings.local.json'));
+  }
+
+  return { files };
+}
+
 function readHookSource(fullCommand: string): string | undefined {
   const path = extractHookPath(fullCommand);
   if (!path) return undefined;
@@ -149,11 +248,11 @@ function readSessionGateInfo(): Map<string, SessionGateInfo> {
   return map;
 }
 
-function toGateInfo(info: SessionGateInfo | undefined): { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; mode: 'dispatched' | 'inline' | 'none' } | undefined {
+function toGateInfo(info: SessionGateInfo | undefined): { inlineOverride: boolean; dispatchBlocks: number; dispatchAllows: number; hookBlocks: number; hookAdvisories: number; mode: 'dispatched' | 'inline' | 'none' } | undefined {
   if (!info) return undefined;
   if (!info.inlineOverride && info.dispatchBlocks === 0 && info.dispatchAllows === 0) return undefined;
   const mode = info.inlineOverride ? 'inline' : info.dispatchBlocks > 0 ? 'dispatched' : 'none';
-  return { ...info, mode };
+  return { ...info, hookBlocks: 0, hookAdvisories: 0, mode };
 }
 
 function readSelfReportedHookCounts(startDate?: string): Map<string, { count: number; event: string }> {
@@ -255,7 +354,10 @@ function getRegisteredHooks(): Array<{ command: string; event: string }> {
       for (const entry of entries as Array<{ hooks?: Array<{ command: string }>; command?: string }>) {
         const cmds = entry.hooks?.map(h => h.command) ?? (entry.command ? [entry.command] : []);
         for (const raw of cmds) {
-          const cmd = raw.split('/').pop()?.replace(/\.ts$/, '') || raw;
+          // Strip shell redirections (e.g. "2>/dev/null") before extracting filename
+          const clean = raw.replace(/\s+\d*>\s*\/dev\/null/g, '').trim();
+          const cmd = clean.split('/').pop()?.replace(/\.ts$/, '') || clean;
+          if (!cmd || cmd === 'null') continue;
           hooks.push({ command: cmd, event });
         }
       }
@@ -284,46 +386,240 @@ type HookMeta = {
 };
 
 const HOOK_METADATA: Record<string, HookMeta> = {
-  'isolation-pre-block-destructive-sql': {
+  'isolation-block-sql': {
     blocking: true,
     description: 'Blocks destructive SQL (DROP, TRUNCATE, DELETE without WHERE)',
   },
-  'quality-stop-check-e2e': {
+  'quality-check-stop': {
     blocking: false,
     description: 'Advisory check for e2e verification evidence after edits',
   },
-  'git-pre-require-commit': {
+  'git-require-edit': {
     blocking: true,
-    gate: 'commit-nudge',
-    markerFile: 'git-pre-require-commit-{sessionId}',
+    gate: 'git-require-edit',
+    markerFile: 'git-require-edit-{sessionId}',
     description: 'Groups dirty files by directory; warns at 3 groups, blocks at 5',
   },
-  'quality-post-format': {
+  'quality-format-edit': {
     blocking: false,
     description: 'Post-tool formatting quality checks',
   },
-  'quality-post-typecheck': {
+  'quality-typecheck-edit': {
     blocking: false,
     description: 'Runs tsc type-check after Edit/Write on .ts files',
   },
-  'routing-submit-classify': {
+  'routing-classify-submit': {
     blocking: false,
     gate: 'dispatch',
     description: 'Classifies prompt depth, matches skills, writes directives',
   },
-  'context-stop-monitor': {
+  'context-monitor-stop': {
     blocking: false,
     description: 'Monitors context window usage at stop',
   },
-  'context-precompact-backup': {
+  'context-backup-precompact': {
     blocking: false,
     description: 'Backs up transcript before context compaction',
   },
-  'notify-event-toast': {
+  'context-suggest-edit': {
     blocking: false,
-    description: 'Sends desktop toast notifications for events',
+    description: 'Suggests /compact at 50 tool calls with phase-boundary decision guide',
+  },
+  'security-scan-bash': {
+    blocking: false,
+    description: 'Scans staged diff for secrets and console.log before git commit',
   },
 };
+
+// ---------------------------------------------------------------------------
+// Hook group inference from name prefix
+// ---------------------------------------------------------------------------
+
+const HOOK_GROUP_MAP: Record<string, string> = {
+  quality: 'Quality',
+  memory: 'Memory',
+  git: 'Git',
+  context: 'Context',
+  routing: 'Routing',
+  signal: 'Signals',
+  isolation: 'Isolation',
+  security: 'Security',
+  consolidator: 'Memory',
+  'context-save': 'Context',
+  'context-restore': 'Context',
+  'context-monitor': 'Context',
+  'context-backup': 'Context',
+  'context-suggest': 'Context',
+};
+
+function hookGroup(command: string): string | undefined {
+  const base = command.replace(/\.ts$/, '');
+  for (const [prefix, group] of Object.entries(HOOK_GROUP_MAP)) {
+    if (base.startsWith(prefix + '-') || base === prefix) return group;
+  }
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Hook gating stats from hook-events.jsonl
+// ---------------------------------------------------------------------------
+
+type HookGatingStat = {
+  blocks: number;
+  advisories: number;
+  passes: number;
+  total: number;
+  blockRate: number;
+  advisoryRate: number;
+  ignoredAdvisories: number;
+  repeatedBlocks: number;
+  topPatterns: Array<{ detail: string; count: number }>;
+};
+
+function readHookGatingStats(startDate?: string): Record<string, HookGatingStat> {
+  const hookEventsPath = dataPaths.hookEvents;
+  if (!existsSync(hookEventsPath)) return {};
+  type Entry = { ts: string; hook: string; event: string; sessionId: string; decision?: string; detail?: string };
+  type HookAccum = {
+    blocks: number;
+    advisories: number;
+    passes: number;
+    sessionAdvisories: Map<string, boolean>;
+    sessionBlocks: Map<string, number>;
+    detailCounts: Map<string, number>;
+  };
+  const perHook: Record<string, HookAccum> = {};
+  try {
+    const lines = readFileSync(hookEventsPath, 'utf-8').split('\n').filter(Boolean);
+    for (const line of lines) {
+      try {
+        const entry = JSON.parse(line) as Entry;
+        if (startDate && entry.ts < startDate) continue;
+        const hook = entry.hook;
+        if (!perHook[hook]) {
+          perHook[hook] = { blocks: 0, advisories: 0, passes: 0, sessionAdvisories: new Map(), sessionBlocks: new Map(), detailCounts: new Map() };
+        }
+        const h = perHook[hook];
+        if (entry.decision === 'block') {
+          h.blocks++;
+          h.sessionBlocks.set(entry.sessionId, (h.sessionBlocks.get(entry.sessionId) ?? 0) + 1);
+          if (h.sessionAdvisories.has(entry.sessionId) && !h.sessionAdvisories.get(entry.sessionId)) {
+            h.sessionAdvisories.set(entry.sessionId, true); // advisory ignored → then blocked
+          }
+        } else if (entry.decision === 'advisory') {
+          h.advisories++;
+          if (!h.sessionAdvisories.has(entry.sessionId)) h.sessionAdvisories.set(entry.sessionId, false);
+        } else {
+          h.passes++;
+        }
+        if (entry.detail) {
+          h.detailCounts.set(entry.detail, (h.detailCounts.get(entry.detail) ?? 0) + 1);
+        }
+      } catch {}
+    }
+  } catch {}
+  const result: Record<string, HookGatingStat> = {};
+  for (const [hook, h] of Object.entries(perHook)) {
+    if (h.blocks === 0 && h.advisories === 0) continue;
+    const ignoredAdvisories = [...h.sessionAdvisories.values()].filter(Boolean).length;
+    const repeatedBlocks = [...h.sessionBlocks.values()].filter(n => n >= 2).length;
+    const total = h.blocks + h.advisories + h.passes;
+    const topPatterns = [...h.detailCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([detail, count]) => ({ detail, count }));
+    result[hook] = {
+      blocks: h.blocks, advisories: h.advisories, passes: h.passes, total,
+      blockRate: total > 0 ? h.blocks / total : 0,
+      advisoryRate: total > 0 ? h.advisories / total : 0,
+      ignoredAdvisories, repeatedBlocks, topPatterns,
+    };
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Session files reader (from context-save-stop.ts output)
+// ---------------------------------------------------------------------------
+
+type SessionFileSummary = {
+  filename: string;
+  timestamp: string; // ISO from filename
+  intent: string;
+  outcome: string;
+  milestones: string[];
+  notes: string[];
+};
+
+function parseSessionFile(content: string): Pick<SessionFileSummary, 'intent' | 'outcome' | 'milestones' | 'notes'> {
+  const lines = content.split('\n');
+  const intent = lines.find(l => l.startsWith('- Intent:'))?.replace('- Intent:', '').trim() ?? '';
+  const outcome = lines.find(l => l.startsWith('- Outcome:'))?.replace('- Outcome:', '').trim() ?? '';
+  const milestonesIdx = lines.findIndex(l => l.trimStart() === '- Milestones:');
+  const milestones = milestonesIdx === -1 ? [] : lines
+    .slice(milestonesIdx + 1)
+    .filter(l => l.trim().startsWith('- ') && !l.trim().startsWith('- Tools:') && !l.trim().startsWith('- Edits:') && !l.trim().startsWith('- Messages:') && !l.trim().startsWith('- Notes:') && !l.trim().startsWith('- Intent:') && !l.trim().startsWith('- Outcome:'))
+    .map(l => l.trim().replace(/^- /, ''))
+    .slice(0, 4);
+  const notesIdx = lines.findIndex(l => l.trimStart() === '- Notes:');
+  const notes = notesIdx === -1 ? [] : lines
+    .slice(notesIdx + 1)
+    .filter(l => l.trim().startsWith('- '))
+    .map(l => l.trim().replace(/^- /, ''))
+    .slice(0, 3);
+  return { intent, outcome, milestones, notes };
+}
+
+function filenameToTimestamp(filename: string): string | null {
+  // 2026-04-13-141748 → 2026-04-13T14:17:48Z
+  const m = filename.match(/^(\d{4}-\d{2}-\d{2})-(\d{2})(\d{2})(\d{2})/);
+  if (!m) return null;
+  return `${m[1]}T${m[2]}:${m[3]}:${m[4]}Z`;
+}
+
+function readSessionFiles(limit = 200): SessionFileSummary[] {
+  const dir = dataPaths.sessions;
+  if (!existsSync(dir)) return [];
+  try {
+    const files = readdirSync(dir)
+      .filter(f => f.endsWith('.md') && !f.startsWith('.'))
+      .sort()
+      .reverse()
+      .slice(0, limit);
+    const results: SessionFileSummary[] = [];
+    for (const f of files) {
+      const timestamp = filenameToTimestamp(f.replace('.md', ''));
+      if (!timestamp) continue;
+      try {
+        const content = readFileSync(resolve(dir, f), 'utf-8');
+        results.push({ filename: f, timestamp, ...parseSessionFile(content) });
+      } catch {}
+    }
+    return results;
+  } catch { return []; }
+}
+
+// Build a map: ISO-timestamp → session file summary for fast lookup
+function buildSessionFileMap(files: SessionFileSummary[]): Map<string, SessionFileSummary> {
+  return new Map(files.map(f => [f.timestamp, f]));
+}
+
+// Match a session by lastTimestamp to the closest session file (within 120s)
+function matchSessionFile(
+  lastTimestamp: string,
+  fileMap: Map<string, SessionFileSummary>,
+  sortedTimestamps: string[],
+): SessionFileSummary | undefined {
+  const target = new Date(lastTimestamp).getTime();
+  let best: SessionFileSummary | undefined;
+  let bestDelta = 120_000;
+  for (const ts of sortedTimestamps) {
+    const delta = Math.abs(new Date(ts).getTime() - target);
+    if (delta < bestDelta) { bestDelta = delta; best = fileMap.get(ts); }
+    if (delta > 120_000) continue;
+  }
+  return best;
+}
 
 function readMarkerFileStats(): Record<string, { writes: number; clears: number; activeNow: boolean }> {
   const stats: Record<string, { writes: number; clears: number; activeNow: boolean }> = {};
@@ -346,194 +642,264 @@ function readMarkerFileStats(): Record<string, { writes: number; clears: number;
   // Check git commit markers
   try {
     const signalFiles = readdirSync(dataPaths.signals);
-    const commitMarkers = signalFiles.filter(f => f.startsWith('git-pre-require-commit-'));
-    stats['git-pre-require-commit'] = {
+    const commitMarkers = signalFiles.filter(f => f.startsWith('git-require-edit-'));
+    stats['git-require-edit'] = {
       writes: 0,
       clears: 0,
       activeNow: commitMarkers.length > 0,
     };
   } catch {
-    stats['git-pre-require-commit'] = { writes: 0, clears: 0, activeNow: false };
+    stats['git-require-edit'] = { writes: 0, clears: 0, activeNow: false };
   }
 
   return stats;
 }
 
 export const observabilityRoutes: FastifyPluginAsync = async (app) => {
-  app.get<{ Querystring: QueryParams }>('/overview', { preHandler: parseDaysPreHandler }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/overview', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    const { result, queryTimeMs } = timed(() => aggregateOverview(obsReq.telemetryEntries, obsReq.granularity));
-    return { ...result, queryTimeMs };
+    return cachedResult(req.url, 300_000, () => {
+      const { result, queryTimeMs } = timed(() => aggregateOverview(obsReq.telemetryEntries, obsReq.granularity));
+      return { ...result, queryTimeMs };
+    });
   });
 
-  app.get<{ Querystring: QueryParams }>('/tools', { preHandler: parseDaysPreHandler }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/tools', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    const { result, queryTimeMs } = timed(() => aggregateTools(obsReq.telemetryEntries, obsReq.granularity));
-    // Add active status
-    const ranked = result.ranked.map((t) => ({
-      ...t,
-      active: checkToolActive(t.name, t.lastUsed),
-    }));
-    return { ...result, ranked, queryTimeMs };
+    return cachedResult(req.url, 300_000, () => {
+      const { result, queryTimeMs } = timed(() => aggregateTools(obsReq.telemetryEntries, obsReq.granularity));
+      const ranked = result.ranked.map((t) => ({
+        ...t,
+        active: checkToolActive(t.name, t.lastUsed),
+      }));
+      return { ...result, ranked, queryTimeMs, totalRows: obsReq.telemetryEntries.length };
+    });
   });
 
-  app.get<{ Querystring: QueryParams }>('/hooks', { preHandler: parseDaysPreHandler }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/hooks', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    const { result, queryTimeMs } = timed(() => aggregateHooks(obsReq.telemetryEntries, obsReq.granularity));
+    return cachedResult(req.url, 300_000, () => {
+      const { result, queryTimeMs } = timed(() => aggregateHooks(obsReq.telemetryEntries, obsReq.granularity));
 
-    // Merge self-reported hook events (for hooks on events Claude Code doesn't log)
-    const days = rangeToDays(req.query.range) || rangeToDays(req.query.days ? `${req.query.days}d` : undefined) || 30;
-    const startDate = new Date(Date.now() - days * 86400000).toISOString();
-    const selfReported = readSelfReportedHookCounts(startDate);
-    const rankedMap = new Map(result.ranked.map((h) => [h.command, h]));
-    for (const [hook, { count, event }] of selfReported) {
-      const existing = rankedMap.get(hook);
-      if (existing) {
-        existing.count = Math.max(existing.count, count);
-        if (!existing.event) existing.event = event;
-      } else {
-        rankedMap.set(hook, { command: hook, event, count, avgMs: 0, p50Ms: 0, p95Ms: 0, errors: 0, fullCommand: hook });
+      // Merge self-reported hook events (for hooks on events Claude Code doesn't log)
+      const days = rangeToDays(req.query.range) || rangeToDays(req.query.days ? `${req.query.days}d` : undefined) || 30;
+      const startDate = new Date(Date.now() - days * 86400000).toISOString();
+      const selfReported = readSelfReportedHookCounts(startDate);
+      const rankedMap = new Map(result.ranked.map((h) => [h.command, h]));
+      for (const [hook, { count, event }] of selfReported) {
+        const existing = rankedMap.get(hook);
+        if (existing) {
+          existing.count = Math.max(existing.count, count);
+          if (!existing.event) existing.event = event;
+        } else {
+          rankedMap.set(hook, { command: hook, event, count, avgMs: 0, p50Ms: 0, p95Ms: 0, errors: 0, fullCommand: hook });
+        }
       }
-    }
-    const merged = [...rankedMap.values()].sort((a, b) => b.count - a.count);
+      const merged = [...rankedMap.values()].sort((a, b) => b.count - a.count);
 
-    const markerStats = readMarkerFileStats();
-    const ranked = merged.map((h) => {
-      const name = h.command.replace(/\.ts$/, '');
-      const meta = HOOK_METADATA[name];
-      return {
-        ...h,
-        active: h.fullCommand ? checkHookActive(h.fullCommand) : false,
-        blocking: meta?.blocking ?? false,
-        gate: meta?.gate,
-        markerFile: meta?.markerFile,
-        description: meta?.description,
-      };
+      const markerStats = readMarkerFileStats();
+      const gatingStartDate = new Date(Date.now() - days * 86400000).toISOString();
+      const gating = readHookGatingStats(gatingStartDate);
+      const ranked = merged.map((h) => {
+        const name = h.command.replace(/\.ts$/, '');
+        const meta = HOOK_METADATA[name];
+        return {
+          ...h,
+          active: h.fullCommand ? checkHookActive(h.fullCommand) : false,
+          blocking: meta?.blocking ?? false,
+          gate: meta?.gate,
+          markerFile: meta?.markerFile,
+          description: meta?.description,
+          group: hookGroup(h.command),
+        };
+      });
+      const registered = getRegisteredHooks();
+      const normalize = (cmd: string) => cmd.replace(/\.(ts|sh)$/, '');
+      const usedCommands = new Set(ranked.map(h => normalize(h.command)));
+      const unused = registered.filter(h => !usedCommands.has(normalize(h.command))).map(h => {
+        const meta = HOOK_METADATA[normalize(h.command)];
+        return {
+          ...h,
+          blocking: meta?.blocking ?? false,
+          gate: meta?.gate,
+          markerFile: meta?.markerFile,
+          description: meta?.description,
+        };
+      });
+      const byEventMap = new Map<string, number>();
+      for (const h of merged) {
+        if (h.event) byEventMap.set(h.event, (byEventMap.get(h.event) || 0) + h.count);
+      }
+      const byEvent = [...byEventMap.entries()].map(([event, count]) => ({ event, count })).sort((a, b) => b.count - a.count);
+      return { ...result, ranked, unused, markerStats, byEvent, gating, queryTimeMs };
     });
-    const registered = getRegisteredHooks();
-    const normalize = (cmd: string) => cmd.replace(/\.(ts|sh)$/, '');
-    const usedCommands = new Set(ranked.map(h => normalize(h.command)));
-    const unused = registered.filter(h => !usedCommands.has(normalize(h.command))).map(h => {
-      const meta = HOOK_METADATA[normalize(h.command)];
-      return {
-        ...h,
-        blocking: meta?.blocking ?? false,
-        gate: meta?.gate,
-        markerFile: meta?.markerFile,
-        description: meta?.description,
-      };
+  });
+
+  app.get<{ Querystring: QueryParams }>('/skills', { preHandler: [parseDaysPreHandler] }, async (req) => {
+    const obsReq = req as ObsRequest;
+    return cachedResult(req.url, 300_000, () => {
+      const { result, queryTimeMs } = timed(() => aggregateSkills(obsReq.telemetryEntries, obsReq.granularity));
+      const registeredSkills = new Set(getRegisteredSkills());
+      const commandNames = getCommandNames();
+      const usedNames = new Set(result.ranked.map(s => s.skill.replace(/^\//, '')));
+      const unusedSkills = [...registeredSkills].filter(s => !usedNames.has(s)).map(s => ({ name: s, type: 'skill' as const }));
+      const unusedCommands = [...commandNames].filter(s => !usedNames.has(s) && !registeredSkills.has(s)).map(s => ({ name: s, type: 'command' as const }));
+      const unused = [...unusedSkills, ...unusedCommands];
+      const ranked = result.ranked.map(s => {
+        const bare = s.skill.replace(/^\//, '');
+        const isSkill = registeredSkills.has(bare);
+        const isCommand = commandNames.has(bare) && !isSkill;
+        return {
+          ...s,
+          type: isCommand ? 'command' as const : 'skill' as const,
+          registered: isCommand || isSkill,
+        };
+      });
+      const typeMap = new Map<string, number>();
+      for (const s of ranked) {
+        typeMap.set(s.type, (typeMap.get(s.type) || 0) + s.count);
+      }
+      const byType = [...typeMap.entries()].map(([type, count]) => ({ type, count }));
+      return { ...result, ranked, unused, byType, queryTimeMs };
     });
-    return { ...result, ranked, unused, markerStats, queryTimeMs };
   });
 
-  app.get<{ Querystring: QueryParams }>('/skills', { preHandler: parseDaysPreHandler }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/tokens', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    const { result, queryTimeMs } = timed(() => aggregateSkills(obsReq.telemetryEntries, obsReq.granularity));
-    const registeredSkills = new Set(getRegisteredSkills());
-    const commandNames = getCommandNames();
-    const usedNames = new Set(result.ranked.map(s => s.skill.replace(/^\//, '')));
-    const unusedSkills = [...registeredSkills].filter(s => !usedNames.has(s)).map(s => ({ name: s, type: 'skill' as const }));
-    const unusedCommands = [...commandNames].filter(s => !usedNames.has(s) && !registeredSkills.has(s)).map(s => ({ name: s, type: 'command' as const }));
-    const unused = [...unusedSkills, ...unusedCommands];
-    const ranked = result.ranked.map(s => {
-      const bare = s.skill.replace(/^\//, '');
-      const isSkill = registeredSkills.has(bare);
-      const isCommand = commandNames.has(bare) && !isSkill;
-      return {
-        ...s,
-        type: isCommand ? 'command' as const : 'skill' as const,
-        registered: isCommand || isSkill,
-      };
+    return cachedResult(req.url, 300_000, () => {
+      const { result, queryTimeMs } = timed(() => aggregateTokens(obsReq.telemetryEntries, obsReq.granularity));
+      return { ...result, queryTimeMs };
     });
-    return { ...result, ranked, unused, queryTimeMs };
   });
 
-  app.get<{ Querystring: QueryParams }>('/tokens', { preHandler: parseDaysPreHandler }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/cost', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    const { result, queryTimeMs } = timed(() => aggregateTokens(obsReq.telemetryEntries, obsReq.granularity));
-    return { ...result, queryTimeMs };
+    return cachedResult(req.url, 300_000, () => {
+      const { result, queryTimeMs } = timed(() => aggregateCost(obsReq.telemetryEntries, obsReq.granularity));
+      return { ...result, queryTimeMs };
+    });
   });
 
-  app.get<{ Querystring: QueryParams }>('/cost', { preHandler: parseDaysPreHandler }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/sessions', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    const { result, queryTimeMs } = timed(() => aggregateCost(obsReq.telemetryEntries, obsReq.granularity));
-    return { ...result, queryTimeMs };
-  });
-
-  app.get<{ Querystring: QueryParams }>('/sessions', { preHandler: parseDaysPreHandler }, async (req) => {
-    const obsReq = req as ObsRequest;
-    const { result, queryTimeMs } = timed(() => aggregateSessions(obsReq.telemetryEntries, obsReq.granularity));
-    const gateMap = readSessionGateInfo();
-    for (const session of result.sessions) {
-      session.gateInfo = toGateInfo(gateMap.get(session.sessionId));
-    }
-    return { ...result, queryTimeMs };
+    return cachedResult(req.url, 300_000, () => {
+      const { result, queryTimeMs } = timed(() => aggregateSessions(obsReq.telemetryEntries, obsReq.granularity));
+      const gateMap = readSessionGateInfo();
+      const sessionFiles = readSessionFiles(500);
+      const fileMap = buildSessionFileMap(sessionFiles);
+      const sortedTimestamps = [...fileMap.keys()].sort();
+      for (const session of result.sessions) {
+        session.gateInfo = toGateInfo(gateMap.get(session.sessionId));
+        if (session.lastTimestamp) {
+          const match = matchSessionFile(session.lastTimestamp, fileMap, sortedTimestamps);
+          if (match) {
+            session.intent = match.intent ? match.intent.slice(0, 100) : match.intent;
+            session.outcome = match.outcome ? match.outcome.slice(0, 90) : match.outcome;
+            // sessionNotes omitted from list view
+          }
+        }
+      }
+      return { ...result, queryTimeMs };
+    });
   });
 
   app.get<{ Params: { id: string }; Querystring: QueryParams }>(
     '/sessions/:id/trace',
-    { preHandler: parseDaysPreHandler },
+    { preHandler: [parseDaysPreHandler] },
     async (req) => {
       const sessionId = decodeURIComponent(req.params.id);
-      const { result, queryTimeMs } = timed(() => aggregateSessionTrace((req as ObsRequest).telemetryEntries, sessionId));
-      const gateMap = readSessionGateInfo();
-      result.gateInfo = toGateInfo(gateMap.get(sessionId));
-      return { ...result, queryTimeMs };
+      return cachedResult(req.url, 30_000, () => {
+        const { result, queryTimeMs } = timed(() => aggregateSessionTrace((req as ObsRequest).telemetryEntries, sessionId));
+        const gateMap = readSessionGateInfo();
+        result.gateInfo = toGateInfo(gateMap.get(sessionId));
+        return { ...result, queryTimeMs };
+      });
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    '/sessions/:id/context-files',
+    async (req) => {
+      const sessionId = decodeURIComponent(req.params.id);
+      return cachedResult(req.url, 300_000, () => readContextFiles(sessionId));
     },
   );
 
   app.get<{ Params: { name: string }; Querystring: QueryParams }>(
     '/tools/:name',
-    { preHandler: parseDaysPreHandler },
+    { preHandler: [parseDaysPreHandler] },
     async (req) => {
-      const toolName = decodeURIComponent(req.params.name);
-      const { result, queryTimeMs } = timed(() => aggregateToolDetail((req as ObsRequest).telemetryEntries, toolName));
-      return { ...result, queryTimeMs };
+      const obsReq = req as ObsRequest;
+      return cachedResult(req.url, 60_000, () => {
+        const toolName = decodeURIComponent(req.params.name);
+        const { result, queryTimeMs } = timed(() => aggregateToolDetail(obsReq.telemetryEntries, toolName));
+        return { ...result, queryTimeMs };
+      });
     },
   );
 
-  app.get<{ Querystring: QueryParams }>('/hooks/events', { preHandler: parseDaysPreHandler }, async (req) => {
+  app.get<{ Querystring: QueryParams }>('/hooks/events', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    const { result, queryTimeMs } = timed(() => aggregateHookEvents(obsReq.telemetryEntries));
-    return { ...result, queryTimeMs };
+    return cachedResult(req.url, 60_000, () => {
+      const { result, queryTimeMs } = timed(() => aggregateHookEvents(obsReq.telemetryEntries));
+      return { ...result, queryTimeMs };
+    });
   });
 
   app.get<{ Params: { name: string }; Querystring: QueryParams }>(
     '/hooks/:name',
-    { preHandler: parseDaysPreHandler },
+    { preHandler: [parseDaysPreHandler] },
     async (req) => {
-      const hookName = decodeURIComponent(req.params.name);
       const obsReq = req as ObsRequest;
-      const { result, queryTimeMs } = timed(() => aggregateHookDetail(obsReq.telemetryEntries, hookName));
-      const active = result.fullCommand ? checkHookActive(result.fullCommand) : false;
-      const sourceCode = result.fullCommand ? readHookSource(result.fullCommand) : undefined;
-      return { ...result, active, sourceCode, queryTimeMs };
+      return cachedResult(req.url, 60_000, () => {
+        const hookName = decodeURIComponent(req.params.name);
+        const { result, queryTimeMs } = timed(() => aggregateHookDetail(obsReq.telemetryEntries, hookName));
+        const active = result.fullCommand ? checkHookActive(result.fullCommand) : false;
+        const sourceCode = result.fullCommand ? readHookSource(result.fullCommand) : undefined;
+        return { ...result, active, sourceCode, queryTimeMs };
+      });
     },
   );
 
   app.get<{ Params: { name: string }; Querystring: QueryParams }>(
     '/skills/:name',
-    { preHandler: parseDaysPreHandler },
+    { preHandler: [parseDaysPreHandler] },
     async (req) => {
-      const skillName = decodeURIComponent(req.params.name);
       const obsReq = req as ObsRequest;
-      const { result, queryTimeMs } = timed(() => aggregateSkillDetail(obsReq.telemetryEntries, skillName));
-      const projects = [...new Set(result.invocations?.map((i: { project: string }) => i.project) ?? [])];
-      const sourceContent = findSkillSource(skillName, projects);
-      const commandNames = getCommandNames();
-      const bare = skillName.startsWith('/') ? skillName.slice(1) : skillName;
-      const type = commandNames.has(bare) ? 'command' as const : 'skill' as const;
-      return { ...result, sourceContent, type, queryTimeMs };
+      return cachedResult(req.url, 60_000, () => {
+        const skillName = decodeURIComponent(req.params.name);
+        const { result, queryTimeMs } = timed(() => aggregateSkillDetail(obsReq.telemetryEntries, skillName));
+        const projects = [...new Set(result.invocations?.map((i: { project: string }) => i.project) ?? [])];
+        const sourceContent = findSkillSource(skillName, projects);
+        const commandNames = getCommandNames();
+        const bare = skillName.startsWith('/') ? skillName.slice(1) : skillName;
+        const type = commandNames.has(bare) ? 'command' as const : 'skill' as const;
+        return { ...result, sourceContent, type, queryTimeMs };
+      });
     },
   );
 
   app.get<{ Querystring: QueryParams }>(
     '/memory/usage',
-    { preHandler: parseDaysPreHandler },
+    { preHandler: [parseDaysPreHandler] },
     async (req) => {
       const obsReq = req as ObsRequest;
-      const { result, queryTimeMs } = timed(() => aggregateMemoryUsage(obsReq.telemetryEntries, obsReq.granularity));
-      return { ...result, queryTimeMs };
+      return cachedResult(req.url, 60_000, () => {
+        const { result, queryTimeMs } = timed(() => aggregateMemoryUsage(obsReq.telemetryEntries, obsReq.granularity));
+        return { ...result, queryTimeMs };
+      });
+    },
+  );
+
+  app.get<{ Querystring: QueryParams }>(
+    '/memory/searches',
+    { preHandler: [parseDaysPreHandler] },
+    async (req) => {
+      const obsReq = req as ObsRequest;
+      return cachedResult(req.url, 60_000, () => {
+        const { result, queryTimeMs } = timed(() => aggregateMemorySearches(obsReq.telemetryEntries));
+        return { ...result, queryTimeMs };
+      });
     },
   );
 
@@ -545,7 +911,7 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
         return { items: [] };
       }
 
-      const limit = Math.min(Math.max(parseInt(req.query.limit || '50', 10) || 50, 1), 500);
+      const limit = Math.min(Math.max(parseInt(req.query.limit || '50', 10) || 50, 1), MAX_MEMORY_ITEMS);
       const conditions: string[] = [];
       const params: (string | number)[] = [];
       const useFts = !!req.query.q;
@@ -597,31 +963,209 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  app.get<{ Querystring: QueryParams }>('/compaction', { preHandler: parseDaysPreHandler }, async (req) => {
-    const obsReq = req as ObsRequest;
-    const { result, queryTimeMs } = timed(() => aggregateCompaction(obsReq.telemetryEntries, obsReq.granularity));
-    return { ...result, queryTimeMs };
+  app.put<{ Params: { id: string }; Body: { content: string } }>(
+    '/memory/:id',
+    async (req) => {
+      const dbPath = getMemoryDbPath();
+      if (!existsSync(dbPath)) return { error: 'memory db not found' };
+      const { id } = req.params;
+      const { content } = req.body as { content: string };
+      if (!content || typeof content !== 'string') return { error: 'content required' };
+      let db: Database | null = null;
+      try {
+        db = new Database(dbPath);
+        db.run(`UPDATE memories SET content = ?, updated_at = unixepoch() WHERE id = ?`, [content, id]);
+        return { ok: true };
+      } catch (err) {
+        return { error: (err as Error).message };
+      } finally {
+        db?.close();
+      }
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>(
+    '/memory/:id',
+    async (req) => {
+      const dbPath = getMemoryDbPath();
+      if (!existsSync(dbPath)) return { error: 'memory db not found' };
+      const { id } = req.params;
+      let db: Database | null = null;
+      try {
+        db = new Database(dbPath);
+        db.run(`DELETE FROM memories WHERE id = ?`, [id]);
+        return { ok: true };
+      } catch (err) {
+        return { error: (err as Error).message };
+      } finally {
+        db?.close();
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // Signal file endpoints (ratings, directives, tool-signals, consolidation)
+  // ---------------------------------------------------------------------------
+
+  app.get('/signals/ratings', async () => {
+    return cachedResult('/signals/ratings', 60_000, () => {
+      const path = dataPaths.ratings;
+      if (!existsSync(path)) return { ratings: [], total: 0 };
+      try {
+        type RatingEntry = { timestamp: string; rating: string; type?: string; context?: string };
+        const lines = readFileSync(path, 'utf-8').split('\n').filter(Boolean);
+        const ratings: RatingEntry[] = [];
+        const byType: Record<string, number> = {};
+        const byDay: Record<string, { positive: number; negative: number }> = {};
+        for (const line of lines) {
+          try {
+            const entry = JSON.parse(line) as RatingEntry;
+            ratings.push(entry);
+            const t = entry.type ?? 'unknown';
+            byType[t] = (byType[t] ?? 0) + 1;
+            const day = entry.timestamp?.slice(0, 10);
+            if (day) {
+              if (!byDay[day]) byDay[day] = { positive: 0, negative: 0 };
+              if (entry.rating === 'positive' || entry.rating === '👍') byDay[day].positive++;
+              else byDay[day].negative++;
+            }
+          } catch {}
+        }
+        ratings.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+        const byDayArr = Object.entries(byDay).sort((a, b) => a[0].localeCompare(b[0])).map(([date, v]) => ({ date, ...v }));
+        return { ratings: ratings.slice(0, 200), total: ratings.length, byType, byDay: byDayArr };
+      } catch { return { ratings: [], total: 0 }; }
+    });
   });
 
-  app.get<{ Querystring: QueryParams }>('/api-duration', { preHandler: parseDaysPreHandler }, async (req) => {
+  app.get('/signals/directives', async () => {
+    return cachedResult('/signals/directives', 60_000, () => {
+      const path = dataPaths.directives;
+      if (!existsSync(path)) return { directives: [], total: 0 };
+      try {
+        type DirectiveEntry = { ts: string; sessionId: string; directives: string[]; promptWords?: number };
+        const lines = readFileSync(path, 'utf-8').split('\n').filter(Boolean);
+        const directives: DirectiveEntry[] = [];
+        const depthCounts: Record<string, number> = {};
+        const skillHits: Record<string, number> = {};
+        const byDay: Record<string, { full: number; quick: number; total: number }> = {};
+        for (const line of lines) {
+          try {
+            const entry = JSON.parse(line) as DirectiveEntry;
+            directives.push(entry);
+            const day = entry.ts?.slice(0, 10);
+            if (day) {
+              if (!byDay[day]) byDay[day] = { full: 0, quick: 0, total: 0 };
+              byDay[day].total++;
+            }
+            for (const d of entry.directives ?? []) {
+              const upper = d.toUpperCase();
+              if (upper.startsWith('FULL')) {
+                depthCounts['FULL'] = (depthCounts['FULL'] ?? 0) + 1;
+                if (day) byDay[day].full++;
+              } else if (upper.startsWith('QUICK')) {
+                depthCounts['QUICK'] = (depthCounts['QUICK'] ?? 0) + 1;
+                if (day) byDay[day].quick++;
+              }
+              // Skill matches: entries like "SKILL:research" or just skill names
+              const skillMatch = d.match(/^(?:SKILL:|skill:)(.+)$/i);
+              if (skillMatch) skillHits[skillMatch[1]] = (skillHits[skillMatch[1]] ?? 0) + 1;
+            }
+          } catch {}
+        }
+        directives.sort((a, b) => b.ts.localeCompare(a.ts));
+        const byDayArr = Object.entries(byDay).sort((a, b) => a[0].localeCompare(b[0])).map(([date, v]) => ({ date, ...v }));
+        const topSkills = Object.entries(skillHits).sort((a, b) => b[1] - a[1]).slice(0, 20).map(([skill, count]) => ({ skill, count }));
+        return { directives: directives.slice(0, 200), total: directives.length, depthCounts, byDay: byDayArr, topSkills };
+      } catch { return { directives: [], total: 0 }; }
+    });
+  });
+
+  app.get('/signals/tool-signals', async () => {
+    return cachedResult('/signals/tool-signals', 60_000, () => {
+      const path = dataPaths.toolSignals;
+      if (!existsSync(path)) return { signals: [], byFile: [], total: 0 };
+      try {
+        type ToolSignalEntry = { type: string; file: string; count: number; sessionId: string; timestamp: string };
+        const lines = readFileSync(path, 'utf-8').split('\n').filter(Boolean);
+        const signals: ToolSignalEntry[] = [];
+        const fileCounts: Record<string, number> = {};
+        for (const line of lines) {
+          try {
+            const entry = JSON.parse(line) as ToolSignalEntry;
+            signals.push(entry);
+            if (entry.type === 're-edit') fileCounts[entry.file] = (fileCounts[entry.file] ?? 0) + 1;
+          } catch {}
+        }
+        signals.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+        const byFile = Object.entries(fileCounts).sort((a, b) => b[1] - a[1]).slice(0, 50).map(([file, count]) => ({ file, count }));
+        return { signals: signals.slice(0, 200), byFile, total: signals.length };
+      } catch { return { signals: [], byFile: [], total: 0 }; }
+    });
+  });
+
+  app.get('/signals/consolidation', async () => {
+    return cachedResult('/signals/consolidation', 30_000, () => {
+      const statePath = dataPaths.consolidationState;
+      const rulesPath = dataPaths.learnedRules;
+      let state: { lastRun?: string; lastMemoryCount?: number } = {};
+      let rules: string[] = [];
+      if (existsSync(statePath)) {
+        try { state = JSON.parse(readFileSync(statePath, 'utf-8')); } catch {}
+      }
+      if (existsSync(rulesPath)) {
+        try {
+          rules = readFileSync(rulesPath, 'utf-8')
+            .split('\n')
+            .filter(l => l.startsWith('- '))
+            .map(l => l.slice(2).trim());
+        } catch {}
+      }
+      return { state, rules, rulesPath: existsSync(rulesPath) ? rulesPath : null };
+    });
+  });
+
+  app.get<{ Querystring: { limit?: string } }>('/signals/sessions', async (req) => {
+    return cachedResult(req.url, 60_000, () => {
+      const limit = Math.min(Math.max(parseInt(req.query.limit || '100', 10) || 100, 1), 500);
+      const files = readSessionFiles(limit);
+      return { sessions: files, total: files.length };
+    });
+  });
+
+  app.get<{ Querystring: QueryParams }>('/compaction', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    const { result, queryTimeMs } = timed(() => aggregateApiDuration(obsReq.telemetryEntries, obsReq.granularity));
-    return { ...result, queryTimeMs };
+    return cachedResult(req.url, 60_000, () => {
+      const { result, queryTimeMs } = timed(() => aggregateCompaction(obsReq.telemetryEntries, obsReq.granularity));
+      return { ...result, queryTimeMs };
+    });
+  });
+
+  app.get<{ Querystring: QueryParams }>('/api-duration', { preHandler: [parseDaysPreHandler] }, async (req) => {
+    const obsReq = req as ObsRequest;
+    return cachedResult(req.url, 60_000, () => {
+      const { result, queryTimeMs } = timed(() => aggregateApiDuration(obsReq.telemetryEntries, obsReq.granularity));
+      return { ...result, queryTimeMs };
+    });
   });
 
   app.get<{ Querystring: QueryParams & { type?: string; search?: string; limit?: string; offset?: string } }>(
     '/events',
-    { preHandler: parseDaysPreHandler },
+    { preHandler: [parseDaysPreHandler] },
     async (req) => {
-      const limit = Math.min(Math.max(parseInt(req.query.limit || '100', 10) || 100, 1), 500);
-      const offset = Math.max(parseInt(req.query.offset || '0', 10) || 0, 0);
-      const filters: { entryType?: string; search?: string } = {};
-      if (req.query.type) filters.entryType = req.query.type;
-      if (req.query.search) filters.search = req.query.search;
-      const { result, queryTimeMs } = timed(() =>
-        getRecentEvents((req as ObsRequest).telemetryEntries, limit, offset, filters),
-      );
-      return { ...result, queryTimeMs };
+      // Events are not cached — they're paginated and search-filtered, so the URL
+      // key already differentiates pages/queries, but staleness of 5s is fine.
+      return cachedResult(req.url, 5_000, () => {
+        const limit = Math.min(Math.max(parseInt(req.query.limit || '100', 10) || 100, 1), 500);
+        const offset = Math.max(parseInt(req.query.offset || '0', 10) || 0, 0);
+        const filters: { entryType?: string; search?: string } = {};
+        if (req.query.type) filters.entryType = req.query.type;
+        if (req.query.search) filters.search = req.query.search;
+        const { result, queryTimeMs } = timed(() =>
+          getRecentEvents((req as ObsRequest).telemetryEntries, limit, offset, filters),
+        );
+        return { ...result, queryTimeMs };
+      });
     },
   );
 
@@ -662,9 +1206,11 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
       try {
         db = new Database(dbPath, { readonly: true });
         const tableNames = db.query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all() as Array<{ name: string }>;
-        const tables = tableNames.map((t) => {
-          const countRow = db!.query(`SELECT count(*) as c FROM "${t.name}"`).get() as { c: number };
-          return { name: t.name, rows: countRow.c };
+        const tables = tableNames.flatMap((t) => {
+          try {
+            const countRow = db!.query(`SELECT count(*) as c FROM "${t.name}"`).get() as { c: number };
+            return [{ name: t.name, rows: countRow.c }];
+          } catch { return []; }
         });
         return { name, path: dbPath, sizeBytes: stat.size, walSizeBytes: walSize, tables };
       } catch {
@@ -690,7 +1236,8 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     let db: Database | null = null;
     try {
       db = new Database(dbPath, { readonly: true });
-      const columns = db.query(`PRAGMA table_info("${table.replace(/"/g, '')}")`).all() as Array<{
+      const safeTable = table.replace(/[^a-zA-Z0-9_]/g, '');
+      const columns = db.query(`PRAGMA table_info("${safeTable}")`).all() as Array<{
         cid: number; name: string; type: string; notnull: number; dflt_value: string | null; pk: number;
       }>;
       return { columns: columns.map(c => ({ name: c.name, type: c.type, notnull: !!c.notnull, pk: !!c.pk, defaultValue: c.dflt_value })) };
@@ -701,10 +1248,35 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  app.get<{ Querystring: QueryParams }>('/subagents', { preHandler: parseDaysPreHandler }, async (req) => {
+  app.get<{ Params: { db: string; table: string }; Querystring: { limit?: string; offset?: string } }>(
+    '/db-contents/:db/:table',
+    async (request) => {
+      const { db: dbName, table } = request.params;
+      const limit = Math.min(Math.max(parseInt(request.query.limit || '50', 10) || 50, 1), 200);
+      const offset = Math.max(parseInt(request.query.offset || '0', 10) || 0, 0);
+      const dbPath = dbName === 'construct' ? dataPaths.db : dbName === 'memory' ? getMemoryDbPath() : null;
+      if (!dbPath || !existsSync(dbPath)) return { rows: [], total: 0 };
+      const safeTable = table.replace(/[^a-zA-Z0-9_]/g, '');
+      let db: Database | null = null;
+      try {
+        db = new Database(dbPath, { readonly: true });
+        const totalRow = db.query(`SELECT count(*) as c FROM "${safeTable}"`).get() as { c: number };
+        const rows = db.query(`SELECT * FROM "${safeTable}" LIMIT ? OFFSET ?`).all(limit, offset);
+        return { rows, total: totalRow.c };
+      } catch (err) {
+        return { rows: [], total: 0, error: (err as Error).message };
+      } finally {
+        db?.close();
+      }
+    },
+  );
+
+  app.get<{ Querystring: QueryParams }>('/subagents', { preHandler: [parseDaysPreHandler] }, async (req) => {
     const obsReq = req as ObsRequest;
-    const { result, queryTimeMs } = timed(() => aggregateSubagents(obsReq.telemetryEntries, obsReq.granularity));
-    return { ...result, queryTimeMs };
+    return cachedResult(req.url, 60_000, () => {
+      const { result, queryTimeMs } = timed(() => aggregateSubagents(obsReq.telemetryEntries, obsReq.granularity));
+      return { ...result, queryTimeMs };
+    });
   });
 
   app.post('/memory/snapshot', async () => {
@@ -719,5 +1291,343 @@ export const observabilityRoutes: FastifyPluginAsync = async (app) => {
     } catch (err) {
       return { status: 'error', message: String(err) };
     }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Evals
+  // ---------------------------------------------------------------------------
+
+  app.get('/evals', async () => {
+    const evalsFile = resolve(dataPaths.root, 'evals', 'results.jsonl');
+    if (!existsSync(evalsFile)) {
+      return { evals: [], byDay: [], totalRuns: 0, overallPassAt3Rate: 0 };
+    }
+
+    let lines: string[];
+    try {
+      lines = readFileSync(evalsFile, 'utf-8').split('\n').filter(Boolean);
+    } catch {
+      return { evals: [], byDay: [], totalRuns: 0, overallPassAt3Rate: 0 };
+    }
+
+    // Parse all eval results
+    type EvalEntry = { ts: string; evalName: string; attempt: number; passed: number; failed: number; passAt1: boolean };
+    const entries: EvalEntry[] = [];
+    for (const line of lines) {
+      try { entries.push(JSON.parse(line)); } catch {}
+    }
+
+    // Group by eval name
+    const byName = new Map<string, EvalEntry[]>();
+    for (const e of entries) {
+      if (!byName.has(e.evalName)) byName.set(e.evalName, []);
+      byName.get(e.evalName)!.push(e);
+    }
+
+    // Calculate pass@k per eval
+    const evals = [...byName.entries()].map(([name, runs]) => {
+      const sorted = runs.sort((a, b) => a.ts.localeCompare(b.ts));
+      const passAt1Runs = sorted.filter(r => r.passAt1).length;
+      const passAt1Rate = Math.round((passAt1Runs / sorted.length) * 100);
+
+      // pass@3: group consecutive runs of ≤3 and check if any succeed
+      let pass3 = 0; let total3 = 0;
+      for (let i = 0; i < sorted.length; i += 3) {
+        const window = sorted.slice(i, i + 3);
+        total3++;
+        if (window.some(r => r.passed > 0 && r.failed === 0)) pass3++;
+      }
+      const passAt3Rate = total3 > 0 ? Math.round((pass3 / total3) * 100) : 0;
+
+      // Trend: compare last 3 runs vs previous 3
+      const recent3 = sorted.slice(-3);
+      const prev3 = sorted.slice(-6, -3);
+      const recentPassRate = recent3.filter(r => r.passAt1).length / Math.max(recent3.length, 1);
+      const prevPassRate = prev3.length > 0 ? prev3.filter(r => r.passAt1).length / prev3.length : recentPassRate;
+      const trend = prev3.length === 0 ? 'stable'
+        : recentPassRate > prevPassRate + 0.1 ? 'improving'
+        : recentPassRate < prevPassRate - 0.1 ? 'regressing'
+        : 'stable';
+
+      return { name, totalRuns: sorted.length, passAt1Rate, passAt3Rate, lastRun: sorted[sorted.length - 1].ts, trend };
+    });
+
+    // By day
+    const dayMap = new Map<string, { runs: number; passes: number }>();
+    for (const e of entries) {
+      const day = e.ts.slice(0, 10);
+      const cur = dayMap.get(day) ?? { runs: 0, passes: 0 };
+      cur.runs++;
+      if (e.passAt1) cur.passes++;
+      dayMap.set(day, cur);
+    }
+    const byDay = [...dayMap.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, { runs, passes }]) => ({ date, runs, passRate: runs > 0 ? Math.round((passes / runs) * 100) : 0 }));
+
+    const totalRuns = entries.length;
+    const passAt3Rates = evals.map(e => e.passAt3Rate);
+    const overallPassAt3Rate = passAt3Rates.length > 0
+      ? Math.round(passAt3Rates.reduce((s, r) => s + r, 0) / passAt3Rates.length)
+      : 0;
+
+    return { evals, byDay, totalRuns, overallPassAt3Rate };
+  });
+
+  // ---------------------------------------------------------------------------
+  // Eval scenario management
+  // ---------------------------------------------------------------------------
+
+  const SCENARIOS_DIR = resolve(import.meta.dirname, '../../../../eval/scenarios');
+  const EVALS_RESULTS_FILE = resolve(dataPaths.root, 'evals', 'results.jsonl');
+
+  app.get('/evals/scenarios', async () => {
+    if (!existsSync(SCENARIOS_DIR)) return { scenarios: [] };
+    const dirNames = listHookScenarios(SCENARIOS_DIR);
+    const scenarios = [];
+    for (const dirName of dirNames) {
+      try {
+        const s = loadScenario(resolve(SCENARIOS_DIR, dirName));
+        scenarios.push({
+          name: s.name,
+          dirName,
+          description: s.description,
+          hook: s.hook,
+          event: s.event,
+          expect: s.expect,
+          depth: s.setup.depth,
+          trials: s.trials,
+          prompt: s.setup.prompt.slice(0, 200),
+          constraints: s.setup.constraints ?? [],
+        });
+      } catch (err) {
+        // Skip malformed scenarios but log
+        app.log.warn(`Failed to load scenario ${dirName}: ${(err as Error).message}`);
+      }
+    }
+    return { scenarios };
+  });
+
+  app.get<{ Params: { name: string } }>('/evals/scenarios/:name', async (req, reply) => {
+    const { name } = req.params;
+    const scenarioDir = resolve(SCENARIOS_DIR, name);
+    if (!existsSync(scenarioDir) || !existsSync(resolve(scenarioDir, 'scenario.yaml'))) {
+      reply.code(404);
+      return { error: `Scenario '${name}' not found` };
+    }
+
+    let scenario;
+    try {
+      scenario = loadScenario(scenarioDir);
+    } catch (err) {
+      reply.code(400);
+      return { error: `Failed to load scenario: ${(err as Error).message}` };
+    }
+
+    const evalName = `hook:${scenario.name}`;
+    const runs: Array<{
+      ts: string;
+      passed: number;
+      failed: number;
+      passAt1: boolean;
+      hookName: string;
+      expectedDecision: string;
+      actualDecision: string | null;
+      tier: number | null;
+      graders: Array<{ type: string; result: string; decision?: string }>;
+    }> = [];
+
+    if (existsSync(EVALS_RESULTS_FILE)) {
+      try {
+        const lines = readFileSync(EVALS_RESULTS_FILE, 'utf-8').split('\n').filter(Boolean);
+        for (const line of lines) {
+          try {
+            const entry = JSON.parse(line) as Record<string, unknown>;
+            if (entry.evalName !== evalName) continue;
+            runs.push({
+              ts: entry.ts as string,
+              passed: (entry.passed as number) ?? 0,
+              failed: (entry.failed as number) ?? 0,
+              passAt1: (entry.passAt1 as boolean) ?? false,
+              hookName: (entry.hookName as string) ?? scenario.hook,
+              expectedDecision: (entry.expectedDecision as string) ?? scenario.expect,
+              actualDecision: (entry.actualDecision as string | null) ?? null,
+              tier: (entry.tier as number | null) ?? null,
+              graders: (entry.graders as Array<{ type: string; result: string; decision?: string }>) ?? [],
+            });
+          } catch {}
+        }
+      } catch {}
+    }
+
+    runs.sort((a, b) => b.ts.localeCompare(a.ts));
+    return { scenario, runs };
+  });
+
+  app.post<{
+    Body: {
+      name: string;
+      description: string;
+      hook: string;
+      event: string;
+      expect: 'block' | 'advisory' | 'pass';
+      setup: { depth: 'full' | 'quick'; prompt: string; constraints?: string[] };
+      success: Array<{ type: string; expected?: string; description?: string }>;
+      trials: number;
+    };
+  }>('/evals/scenarios', async (req, reply) => {
+    const body = req.body;
+    if (!body.name || typeof body.name !== 'string') {
+      reply.code(400); return { error: 'name is required' };
+    }
+    if (!['block', 'advisory', 'pass'].includes(body.expect)) {
+      reply.code(400); return { error: 'expect must be block|advisory|pass' };
+    }
+    if (!body.setup?.prompt) {
+      reply.code(400); return { error: 'setup.prompt is required' };
+    }
+    if (!['full', 'quick'].includes(body.setup?.depth)) {
+      reply.code(400); return { error: 'setup.depth must be full|quick' };
+    }
+    if (!Array.isArray(body.success) || body.success.length === 0) {
+      reply.code(400); return { error: 'success must be a non-empty array' };
+    }
+    if (typeof body.trials !== 'number' || body.trials < 1) {
+      reply.code(400); return { error: 'trials must be a positive number' };
+    }
+
+    const dirName = body.name.toLowerCase().replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const scenarioDir = resolve(SCENARIOS_DIR, dirName);
+
+    if (existsSync(scenarioDir)) {
+      reply.code(409); return { error: `Scenario directory '${dirName}' already exists` };
+    }
+
+    const yamlContent = yamlStringify({
+      name: body.name,
+      description: body.description,
+      hook: body.hook,
+      event: body.event,
+      expect: body.expect,
+      setup: body.setup,
+      success: body.success,
+      trials: body.trials,
+    });
+
+    try {
+      mkdirSync(scenarioDir, { recursive: true });
+      writeFileSync(resolve(scenarioDir, 'scenario.yaml'), yamlContent, 'utf-8');
+    } catch (err) {
+      reply.code(500); return { error: `Failed to write scenario: ${(err as Error).message}` };
+    }
+
+    reply.code(201);
+    return { created: true, dirName };
+  });
+
+  app.post<{ Params: { name: string } }>('/evals/run/:name', async (req, reply) => {
+    const { name } = req.params;
+    const scenarioDir = resolve(SCENARIOS_DIR, name);
+    if (!existsSync(scenarioDir) || !existsSync(resolve(scenarioDir, 'scenario.yaml'))) {
+      reply.code(404); return { error: `Scenario '${name}' not found` };
+    }
+
+    const runnerPath = resolve(import.meta.dirname, '../../../../eval/runner.ts');
+    const projectRoot = resolve(import.meta.dirname, '../../../..');
+
+    const child = spawn('bun', [runnerPath, '--hook-scenario', name], {
+      detached: true,
+      stdio: 'ignore',
+      cwd: projectRoot,
+    });
+    child.unref();
+
+    return { started: true, scenarioName: name, pid: child.pid };
+  });
+
+  app.get<{ Querystring: { scenario?: string; limit?: string; offset?: string } }>(
+    '/evals/runs',
+    async (req) => {
+      if (!existsSync(EVALS_RESULTS_FILE)) {
+        return { runs: [], total: 0 };
+      }
+
+      const limit = Math.min(Math.max(parseInt(req.query.limit || '50', 10) || 50, 1), 500);
+      const offset = Math.max(parseInt(req.query.offset || '0', 10) || 0, 0);
+      const scenarioFilter = req.query.scenario;
+
+      let lines: string[];
+      try {
+        lines = readFileSync(EVALS_RESULTS_FILE, 'utf-8').split('\n').filter(Boolean);
+      } catch {
+        return { runs: [], total: 0 };
+      }
+
+      type RunEntry = {
+        ts: string;
+        evalName: string;
+        attempt: number;
+        passed: number;
+        failed: number;
+        passAt1: boolean;
+        hookName?: string;
+        scenarioName?: string;
+        expectedDecision?: string;
+        actualDecision?: string;
+        tier?: number;
+        graders?: Array<{ type: string; result: string }>;
+      };
+
+      const all: RunEntry[] = [];
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line) as RunEntry;
+          if (scenarioFilter) {
+            // Match by evalName "hook:<scenarioName>" or explicit scenarioName field
+            const matchesName = entry.evalName === `hook:${scenarioFilter}` || entry.scenarioName === scenarioFilter;
+            if (!matchesName) continue;
+          }
+          all.push(entry);
+        } catch {}
+      }
+
+      // Sort newest first
+      all.sort((a, b) => b.ts.localeCompare(a.ts));
+      const total = all.length;
+      const runs = all.slice(offset, offset + limit);
+
+      return { runs, total };
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // Verifications
+  // ---------------------------------------------------------------------------
+
+  app.get<{ Querystring: QueryParams }>('/verifications', { preHandler: [parseDaysPreHandler] }, async (req) => {
+    const obsReq = req as ObsRequest;
+    return cachedResult(req.url, 60_000, () => {
+      const { result, queryTimeMs } = timed(() => aggregateVerifications(obsReq.telemetryEntries, obsReq.granularity));
+      return { ...result, queryTimeMs };
+    });
+  });
+
+  // Pre-warm the cache for the most expensive endpoints on server start so the
+  // first user request is always fast. Runs after all plugins are registered.
+  app.addHook('onReady', (done) => {
+    // Fire-and-forget background warmup — don't block server startup
+    // URLs must match what the browser sends (granularity=day is omitted when default)
+    const warmupUrls = [
+      '/observability/tools?range=30d',
+      '/observability/hooks?range=30d',
+      '/observability/sessions?range=30d',
+      '/observability/cost?range=30d',
+      '/observability/tokens?range=30d',
+      '/observability/overview?range=30d',
+    ];
+    for (const url of warmupUrls) {
+      app.inject({ method: 'GET', url: `/api${url}` }).catch(() => {});
+    }
+    done();
   });
 };

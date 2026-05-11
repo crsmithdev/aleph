@@ -99,7 +99,7 @@ export function CategoryManager({ goalId, currentCategories }: CategoryManagerPr
       <div className="relative" ref={dropdownRef}>
         <button
           onClick={() => setOpen((v) => !v)}
-          className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-xs text-text-muted border border-border-secondary border-dashed hover:border-border-primary hover:text-text-secondary transition-colors"
+          className="inline-flex items-center gap-0.5 px-2 py-1 rounded text-sm text-text-muted border border-border-secondary border-dashed hover:border-border-primary hover:text-text-secondary transition-colors"
         >
           <span className="text-base leading-none">+</span> Add
         </button>
@@ -131,7 +131,7 @@ export function CategoryManager({ goalId, currentCategories }: CategoryManagerPr
                   if (e.key === 'Escape') { setOpen(false); setNewName(''); }
                 }}
                 placeholder="New category..."
-                className="w-full bg-bg-secondary border border-border-primary rounded px-2 py-1 text-xs text-text-primary placeholder-text-muted focus:outline-none focus:border-accent"
+                className="w-full bg-bg-secondary border border-border-primary rounded px-2 py-1 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent"
               />
             </div>
           </div>

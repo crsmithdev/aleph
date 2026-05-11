@@ -4,6 +4,7 @@
     "src/data",
     "src/eval",
     "src/goals",
+    "src/logger",
     "src/research",
     "src/telemetry",
     "src/ui",
@@ -13,15 +14,21 @@
   "scripts": {
     "test": "bun test.ts",
     "validate": "jq . src/core/hooks/settings-hooks.json > /dev/null && jq . src/skills/skill-rules.json > /dev/null",
-    "dev": "cd src/ui && bun run dev",
+    "dev": "fuser -k 3001/tcp 2>/dev/null; cd src/ui && bun run start",
     "ui:build": "cd src/ui && bun run build",
     "ui:e2e": "bun src/ui/e2e/goal-flow.test.ts",
-    "ui:e2e:obs": "bun src/ui/e2e/observability-flow.test.ts"
+    "ui:e2e:obs": "bun src/ui/e2e/observability-flow.test.ts",
+    "ui:smoke": "bun src/ui/e2e/server-boot.test.ts && bun src/ui/e2e/ui-smoke.test.ts",
+    "ui:smoke:boot": "bun src/ui/e2e/server-boot.test.ts",
+    "ui:smoke:routes": "bun src/ui/e2e/ui-smoke.test.ts",
+    "ui:e2e:credit": "bun src/ui/e2e/credit-exhausted-ui.test.ts",
+    "ui:e2e:research": "bun src/ui/e2e/research-full-pipeline.test.ts"
   },
   "dependencies": {},
   "devDependencies": {
     "@mozilla/readability": "^0.6.0",
     "linkedom": "^0.18.12",
-    "node-html-parser": "^7.1.0"
+    "node-html-parser": "^7.1.0",
+    "typescript": "^6.0.3"
   }
 }

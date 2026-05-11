@@ -75,6 +75,24 @@ export interface TurnPayload {
 export interface CompactPayload {
   trigger: string;
   preTokens?: number;
+  toolCallCount?: number;
+  contextPct?: number;
+}
+
+export interface VerifyPayload {
+  phase: "build" | "type" | "lint" | "test" | "security" | "e2e";
+  result: "pass" | "fail" | "skip";
+  count?: number;
+  coverage?: number;
+}
+
+export interface EvalPayload {
+  evalName: string;
+  grader: "code" | "model" | "human";
+  passed: number;
+  failed: number;
+  passAt1: boolean;
+  attemptNumber: number;
 }
 
 export interface MessagePayload {

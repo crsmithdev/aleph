@@ -2,6 +2,7 @@ import { Database } from 'bun:sqlite';
 import { describe, test, expect, beforeEach, mock } from 'bun:test';
 import { applyResearchDDL } from './ddl';
 import * as sessions from './services/sessions';
+import * as queries from './services/queries';
 import * as threads from './services/threads';
 import * as findings from './services/findings';
 import * as steps from './services/steps';
@@ -43,7 +44,7 @@ describe('sessions CRUD', () => {
     const session = sessions.createSession(sqlite, 'Test', 'test query');
     expect(session.id).toBeTruthy();
     expect(session.title).toBe('Test');
-    expect(session.seed_query).toBe('test query');
+    expect(session.prompt).toBe('test query');
     expect(session.status).toBe('active');
     expect(session.config.budget_daily_usd).toBe(5.0);
   });
@@ -165,6 +166,61 @@ describe('findings CRUD', () => {
     findings.createFinding(sqlite, { thread_id: threadId, session_id: sessionId, content: 'a', summary: 's1' });
     findings.createFinding(sqlite, { thread_id: threadId, session_id: sessionId, content: 'b', summary: 's2' });
     expect(findings.countFindings(sqlite, sessionId)).toBe(2);
+  });
+
+  test('finding from seed thread is kind=normal', () => {
+    const f = findings.createFinding(sqlite, { thread_id: threadId, session_id: sessionId, content: 'a', summary: 's', confidence: 0.9 });
+    expect(f.kind).toBe('normal');
+    expect(f.confidence).toBe(0.9);
+  });
+
+  test('finding from perturbation thread is kind=perturbation', () => {
+    const pertThread = threads.createThread(sqlite, { session_id: sessionId, query: 'tangent', origin: 'perturbation', perturbation_strategy: 'analogical' });
+    const f = findings.createFinding(sqlite, { thread_id: pertThread.id, session_id: sessionId, content: 'analogous case', summary: 'an analog', confidence: 0.9 });
+    expect(f.kind).toBe('perturbation');
+    expect(f.confidence).toBe(0.9); // perturbation is not capped, only speculation is
+  });
+
+  test('temporal_shift perturbation with backward-looking text is kind=perturbation', () => {
+    // The temporal_shift prompt is constrained to backwards-only as of B5.
+    // Findings that follow that constraint are not speculation.
+    const pertThread = threads.createThread(sqlite, { session_id: sessionId, query: 'historical context', origin: 'perturbation', perturbation_strategy: 'temporal_shift' });
+    const f = findings.createFinding(sqlite, { thread_id: pertThread.id, session_id: sessionId, content: 'In 1985 the field was understood through the lens of...', summary: 'historical', confidence: 0.9 });
+    expect(f.kind).toBe('perturbation');
+    expect(f.confidence).toBe(0.9);
+  });
+
+  test('temporal_shift drift into forward text is caught by the regex', () => {
+    // If the LLM ignores the backwards-only constraint and produces
+    // forward-looking text anyway, the speculation regex still flags it.
+    const pertThread = threads.createThread(sqlite, { session_id: sessionId, query: 'historical', origin: 'perturbation', perturbation_strategy: 'temporal_shift' });
+    const f = findings.createFinding(sqlite, { thread_id: pertThread.id, session_id: sessionId, content: 'By 2040 the field will be transformed', summary: 's', confidence: 0.9 });
+    expect(f.kind).toBe('speculation');
+    expect(f.confidence).toBe(0.5);
+  });
+
+  test('forward-date text triggers kind=speculation even on a normal thread', () => {
+    const f = findings.createFinding(sqlite, { thread_id: threadId, session_id: sessionId, content: 'By 2040 the industry will evolve', summary: 'forecast', confidence: 0.85 });
+    expect(f.kind).toBe('speculation');
+    expect(f.confidence).toBe(0.5);
+  });
+
+  test('forward-verb text triggers kind=speculation', () => {
+    const f = findings.createFinding(sqlite, { thread_id: threadId, session_id: sessionId, content: 'projected to grow substantially', summary: 's', confidence: 0.8 });
+    expect(f.kind).toBe('speculation');
+    expect(f.confidence).toBe(0.5);
+  });
+
+  test('speculation with confidence below cap is not lowered', () => {
+    const f = findings.createFinding(sqlite, { thread_id: threadId, session_id: sessionId, content: 'projected to grow', summary: 's', confidence: 0.3 });
+    expect(f.kind).toBe('speculation');
+    expect(f.confidence).toBe(0.3);
+  });
+
+  test('explicit kind override bypasses classifier', () => {
+    const f = findings.createFinding(sqlite, { thread_id: threadId, session_id: sessionId, content: 'By 2040 X', summary: 's', confidence: 0.95, kind: 'normal' });
+    expect(f.kind).toBe('normal');
+    expect(f.confidence).toBe(0.95); // no cap because kind=normal
   });
 });
 
@@ -427,7 +483,7 @@ describe('data integrity', () => {
     });
 
     // Delete session — should cascade
-    sqlite.prepare('DELETE FROM research_sessions WHERE id = ?').run(session.id);
+    sqlite.prepare('DELETE FROM research_queries WHERE id = ?').run(session.id);
     expect(threads.listThreads(sqlite, session.id).length).toBe(0);
     expect(findings.listFindings(sqlite, session.id).length).toBe(0);
   });
@@ -954,7 +1010,7 @@ describe('scoreAndRankFollowUps', () => {
     const c = candidates[0];
     expect(typeof c.text).toBe('string');
     expect(typeof c.quality_score).toBe('number');
-    expect(typeof c.jaccard_similarity).toBe('number');
+    expect(typeof c.dedup_similarity).toBe('number');
     expect(typeof c.distance_from_parent).toBe('number');
     expect(typeof c.rank_score).toBe('number');
     expect(typeof c.accepted).toBe('boolean');
@@ -1042,5 +1098,144 @@ describe('evaluateFollowUps retry', () => {
     expect(f.follow_up_analysis!.candidates).toBeDefined();
     expect(Array.isArray(f.follow_up_analysis!.candidates)).toBe(true);
     expect(typeof f.follow_up_analysis!.similarity_threshold).toBe('number');
+  });
+});
+
+// ========== getResearchStats verdict aggregation ==========
+
+describe('getResearchStats verdict aggregation', () => {
+  let sqlite: Database;
+  beforeEach(() => { sqlite = createTestDb(); });
+
+  function makeSession(title: string, status: string): string {
+    const s = sessions.createSession(sqlite, title, `prompt for ${title}`);
+    sessions.updateSession(sqlite, s.id, { status: status as any });
+    return s.id;
+  }
+
+  function recordPM(sessionId: string, verdict: 'pass' | 'flag', createdAt?: string): void {
+    const id = `pm-${Math.random().toString(36).slice(2, 10)}`;
+    if (createdAt) {
+      sqlite.prepare(`
+        INSERT INTO research_post_mortems (id, session_id, verdict, flags, notes, recommendations, metrics_snapshot, created_at)
+        VALUES (?, ?, ?, '[]', '', '[]', '{}', ?)
+      `).run(id, sessionId, verdict, createdAt);
+    } else {
+      sqlite.prepare(`
+        INSERT INTO research_post_mortems (id, session_id, verdict, flags, notes, recommendations, metrics_snapshot)
+        VALUES (?, ?, ?, '[]', '', '[]', '{}')
+      `).run(id, sessionId, verdict);
+    }
+  }
+
+  test('returns zero rates with no finished sessions', () => {
+    // active session — not finished
+    makeSession('active', 'active');
+    const stats = queries.getResearchStats(sqlite, 'all', 'day');
+    expect(stats.passRate).toBe(0);
+    expect(stats.flagRate).toBe(0);
+    expect(stats.haltRate).toBe(0);
+    expect(stats.byVerdict).toEqual([]);
+  });
+
+  test('aggregates pass/flag/halt across judged sessions regardless of status', () => {
+    // 2 pass, 1 flag, 1 halt, 1 active-with-flag-PM (judged), 1 no-PM (excluded)
+    const passA = makeSession('passA', 'completed');
+    const passB = makeSession('passB', 'exhausted');
+    const flagged = makeSession('flag', 'completed');
+    const halted = makeSession('halt', 'halted');
+    const activeFlagged = makeSession('active-flagged', 'active'); // active but already judged
+    makeSession('no-pm', 'completed'); // no verdict — excluded from denominator
+
+    recordPM(passA, 'pass');
+    recordPM(passB, 'pass');
+    recordPM(flagged, 'flag');
+    // halted session also has a flag PM — halt must take priority
+    recordPM(halted, 'flag');
+    recordPM(activeFlagged, 'flag');
+
+    const stats = queries.getResearchStats(sqlite, 'all', 'day');
+
+    // 5 judged sessions in the denominator (no-pm excluded)
+    expect(stats.passRate).toBeCloseTo(2 / 5, 5);
+    expect(stats.flagRate).toBeCloseTo(2 / 5, 5);
+    expect(stats.haltRate).toBeCloseTo(1 / 5, 5);
+    // every judged session is classified — sum = 1
+    expect(stats.passRate + stats.flagRate + stats.haltRate).toBeCloseTo(1, 5);
+  });
+
+  test('uses latest post-mortem when a session has multiple', () => {
+    const sid = makeSession('multi', 'completed');
+    recordPM(sid, 'flag', '2024-01-01T00:00:00.000Z');
+    recordPM(sid, 'pass', '2024-06-01T00:00:00.000Z'); // latest
+    const stats = queries.getResearchStats(sqlite, 'all', 'day');
+    expect(stats.passRate).toBe(1);
+    expect(stats.flagRate).toBe(0);
+  });
+
+  test('byVerdict buckets by created_at date', () => {
+    // Two sessions on different days. Override created_at directly to control bucketing.
+    const a = makeSession('a', 'completed');
+    const b = makeSession('b', 'halted');
+    sqlite.prepare("UPDATE research_queries SET created_at = '2024-03-01T10:00:00.000Z' WHERE id = ?").run(a);
+    sqlite.prepare("UPDATE research_queries SET created_at = '2024-03-02T10:00:00.000Z' WHERE id = ?").run(b);
+    recordPM(a, 'pass');
+
+    const stats = queries.getResearchStats(sqlite, 'all', 'day');
+    expect(stats.byVerdict.length).toBe(2);
+    const day1 = stats.byVerdict.find(d => d.date === '2024-03-01');
+    const day2 = stats.byVerdict.find(d => d.date === '2024-03-02');
+    expect(day1).toEqual({ date: '2024-03-01', pass: 1, flag: 0, halt: 0 });
+    expect(day2).toEqual({ date: '2024-03-02', pass: 0, flag: 0, halt: 1 });
+  });
+});
+
+describe('pauseStaleActiveSessions', () => {
+  let sqlite: Database;
+  beforeEach(() => { sqlite = createTestDb(); });
+
+  function makeActiveSession(title: string, createdAtIso?: string): string {
+    const s = sessions.createSession(sqlite, title, `prompt for ${title}`);
+    if (createdAtIso) {
+      sqlite.prepare('UPDATE research_queries SET created_at = ? WHERE id = ?').run(createdAtIso, s.id);
+    }
+    return s.id;
+  }
+
+  function recordStep(sessionId: string, createdAtIso: string): void {
+    sqlite.prepare(`
+      INSERT INTO research_steps (id, session_id, thread_id, model, provider, cost_usd, duration_ms, prompt_tokens, completion_tokens, tool_calls, error, created_at)
+      VALUES (?, ?, NULL, 'm', 'p', 0, 0, 0, 0, '[]', NULL, ?)
+    `).run(`step-${Math.random().toString(36).slice(2, 10)}`, sessionId, createdAtIso);
+  }
+
+  test('pauses active sessions with no recent step and no in-flight job', () => {
+    const long_ago = '2020-01-01T00:00:00.000Z';
+    const fresh = makeActiveSession('fresh');
+    const stale = makeActiveSession('stale', long_ago);
+    recordStep(fresh, new Date().toISOString());
+
+    const paused = queries.pauseStaleActiveSessions(sqlite, 30 * 60 * 1000);
+    expect(paused).toBe(1);
+    expect(queries.getQuery(sqlite, stale)?.status).toBe('paused');
+    expect(queries.getQuery(sqlite, fresh)?.status).toBe('active');
+  });
+
+  test('does not pause sessions with active jobs even when last step is old', () => {
+    const long_ago = '2020-01-01T00:00:00.000Z';
+    const stale = makeActiveSession('stale-with-job', long_ago);
+    sqlite.prepare(`
+      INSERT INTO research_jobs (id, session_id, thread_id, status, mode, max_iterations, iterations_completed, claimed_by, claimed_at, started_at, completed_at, error, created_at, updated_at, heartbeat_at)
+      VALUES ('job1', ?, NULL, 'running', 'priority', 1, 0, 'w1', datetime('now'), datetime('now'), NULL, NULL, datetime('now'), datetime('now'), datetime('now'))
+    `).run(stale);
+
+    const paused = queries.pauseStaleActiveSessions(sqlite, 30 * 60 * 1000);
+    expect(paused).toBe(0);
+    expect(queries.getQuery(sqlite, stale)?.status).toBe('active');
+  });
+
+  test('returns 0 with no zombies', () => {
+    makeActiveSession('a');
+    expect(queries.pauseStaleActiveSessions(sqlite, 30 * 60 * 1000)).toBe(0);
   });
 });

@@ -21,7 +21,7 @@ export function useGoals(filters?: { state?: string; priority?: string; category
 export function useGoal(id: string) {
   return useQuery({
     queryKey: ['goals', id],
-    queryFn: () => api.get<Goal & { categories: Category[]; latestNote?: Note }>(`/goals/${id}`),
+    queryFn: () => api.get<Goal & { categories: Category[]; latestNote?: Note; linkedGoals: Goal[] }>(`/goals/${id}`),
     enabled: !!id,
   });
 }
@@ -51,6 +51,24 @@ export function useDeleteGoal() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.delete(`/goals/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['goals'] }),
+  });
+}
+
+export function useLinkGoal(goalId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (linkedGoalId: string) =>
+      api.post<void>(`/goals/${goalId}/links`, { linkedGoalId }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['goals'] }),
+  });
+}
+
+export function useUnlinkGoal(goalId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (otherId: string) =>
+      api.delete(`/goals/${goalId}/links/${otherId}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['goals'] }),
   });
 }
@@ -294,6 +312,33 @@ export function useSummary(startDate: string, endDate: string) {
   return useQuery({
     queryKey: ['summary', startDate, endDate],
     queryFn: () => api.get<unknown>(`/summary?start=${startDate}&end=${endDate}&tz=${new Date().getTimezoneOffset()}`),
+    enabled: !!startDate && !!endDate,
+  });
+}
+
+export type TopCommit = { sha: string; subject: string; added: number; deleted: number };
+export type GitStats = { commits: number; added: number; deleted: number; topCommits: TopCommit[] };
+
+export function useGitStats(startDate: string, endDate: string) {
+  return useQuery({
+    queryKey: ['summary', 'git', startDate, endDate],
+    queryFn: () => api.get<GitStats>(`/summary/git?start=${startDate}&end=${endDate}`),
+    enabled: !!startDate && !!endDate,
+  });
+}
+
+export type TimeseriesPoint = {
+  date: string;
+  goalsCreated: number;
+  goalsCompleted: number;
+  todosCompleted: number;
+  habitsHit: number;
+};
+
+export function useTimeseries(startDate: string, endDate: string) {
+  return useQuery({
+    queryKey: ['summary', 'timeseries', startDate, endDate],
+    queryFn: () => api.get<TimeseriesPoint[]>(`/summary/timeseries?start=${startDate}&end=${endDate}&tz=${new Date().getTimezoneOffset()}`),
     enabled: !!startDate && !!endDate,
   });
 }

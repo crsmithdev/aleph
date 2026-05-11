@@ -36,6 +36,58 @@ export function relativeTime(iso: string): string {
   return formatDistanceToNow(new Date(iso), { addSuffix: true });
 }
 
+export function shortRelativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 60) return 'now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 7) return `${diffDay}d`;
+  const diffWeek = Math.floor(diffDay / 7);
+  if (diffWeek < 5) return `${diffWeek}w`;
+  const diffMo = Math.floor(diffDay / 30);
+  return `${diffMo}mo`;
+}
+
+export function stripMarkdown(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/__(.+?)__/g, '$1')
+    .replace(/_(.+?)_/g, '$1')
+    .replace(/~~(.+?)~~/g, '$1')
+    .replace(/`(.+?)`/g, '$1')
+    .replace(/^\s*[-*+]\s+/gm, '')
+    .replace(/^\s*>\s*/gm, '')
+    .replace(/\[(.+?)\]\(.+?\)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Returns the context window size in tokens for a given model ID.
+// Defaults to 200_000 for unknown Claude models.
+export function modelContextWindow(model: string | undefined): number {
+  if (!model) return 200_000;
+  if (model.includes('haiku')) return 200_000;
+  if (model.includes('sonnet')) return 200_000;
+  if (model.includes('opus')) return 200_000;
+  return 200_000;
+}
+
+export function formatModelName(model: string): string {
+  const bare = model.replace(/^claude-/, '');
+  const m = /^(\w+)-(\d+)-(\d+)/.exec(bare);
+  if (m) {
+    const name = m[1].charAt(0).toUpperCase() + m[1].slice(1);
+    return `${name} ${m[2]}.${m[3]}`;
+  }
+  return bare.charAt(0).toUpperCase() + bare.slice(1);
+}
+
 export function toDateStr(d: Date): string {
   return format(d, 'yyyy-MM-dd');
 }
@@ -49,7 +101,9 @@ export function subDays(dateStr: string, n: number): string {
 }
 
 export function fmtNumber(n: number): string {
+  if (n >= 10_000_000) return Math.round(n / 1_000_000) + 'M';
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 10_000) return Math.round(n / 1_000) + 'K';
   if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
   return String(n);
 }
@@ -75,23 +129,27 @@ export function granLabel(granularity: string, noun: string): string {
   }
 }
 
+function titleCase(s: string): string {
+  return s.replace(/[_.\-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 export function fmtToolName(name: string): string {
   if (name.startsWith('mcp__')) {
     const parts = name.slice(5).split('__');
     if (parts.length >= 2) {
-      const server = parts[0];
-      const action = parts.slice(1).join(' ').replace(/_/g, ' ');
+      const server = titleCase(parts[0]);
+      const action = titleCase(parts.slice(1).join('_'));
       return `${server} / ${action}`;
     }
   }
-  return name;
+  return titleCase(name);
 }
 
 export function parseToolSource(name: string): { server: string; tool: string } {
   if (name.startsWith('mcp__')) {
     const parts = name.slice(5).split('__');
     if (parts.length >= 2) {
-      return { server: parts[0], tool: parts.slice(1).join('_') };
+      return { server: titleCase(parts[0]), tool: titleCase(parts.slice(1).join('_')) };
     }
   }
   return { server: 'builtin', tool: name };
@@ -99,11 +157,12 @@ export function parseToolSource(name: string): { server: string; tool: string } 
 
 export function fmtProject(raw: string): string {
   // "-home-crsmi-construct" → "crsmi/construct"
-  // Strip leading /home/<user>/ or -home-<user>- prefix, then join with /
+  // "-home-crsmi" → "crsmi/~"
   const cleaned = raw.replace(/^-/, '').replace(/^home-/, '');
   const parts = cleaned.split('-').filter(Boolean);
-  if (parts.length >= 2) return parts.join('/');
-  return raw;
+  if (parts.length >= 2) return `${parts[0]}/${parts.slice(1).join('-')}`.toLowerCase();
+  if (parts.length === 1) return `${parts[0].toLowerCase()}/~`;
+  return raw.toLowerCase();
 }
 
 export function rangeToDays(range: string): number {
@@ -119,7 +178,8 @@ export function rangeToDays(range: string): number {
 export function fmtDuration(ms: number): string {
   if (ms < 60000) return fmtMs(ms);
   const mins = Math.floor(ms / 60000);
-  if (mins < 60) return `${mins}m`;
+  const secs = Math.floor((ms % 60000) / 1000);
+  if (mins < 60) return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
   const hours = Math.floor(mins / 60);
   const remMins = mins % 60;
   return remMins > 0 ? `${hours}h ${remMins}m` : `${hours}h`;
@@ -136,4 +196,18 @@ export function cleanMessage(msg: string): string {
     .replace(/<[^>]+>/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+export function fmtSeriesName(name: string): string {
+  return titleCase(name);
+}
+
+/** Smart legend/tooltip label formatter — detects project paths and MCP tool names automatically. */
+export function fmtLegendLabel(name: string): string {
+  if (!name || name === 'Other') return name;
+  if (name.startsWith('mcp__')) return fmtToolName(name);
+  // Project paths: -home-user-project or user/project
+  if (name.startsWith('-home-') || name.startsWith('-')) return fmtProject(name);
+  if (name.includes('/')) return name.toLowerCase();
+  return fmtSeriesName(name);
 }

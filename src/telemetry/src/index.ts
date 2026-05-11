@@ -32,6 +32,9 @@ export type {
   HookDetailData,
   SkillDetailData,
   MemoryUsageData,
+  MemorySearchData,
+  MemorySearchInvocation,
+  MemorySearchResult,
   HookEventData,
   HookEventSummary,
   HookInvocation,
@@ -44,6 +47,9 @@ export type {
   SubagentInvocation,
   SubagentTypeBucket,
   GateInfo,
+  VerificationData,
+  EvalData,
+  EvalResult,
 } from "./types.js";
 
 // Re-export new types
@@ -70,12 +76,14 @@ export {
   reduceHookDetail as aggregateHookDetail,
   reduceSkillDetail as aggregateSkillDetail,
   reduceMemoryUsage as aggregateMemoryUsage,
+  reduceMemorySearches as aggregateMemorySearches,
   reduceHookEvents as aggregateHookEvents,
   reduceCompaction as aggregateCompaction,
   reduceApiDuration as aggregateApiDuration,
   reduceSessionTrace as aggregateSessionTrace,
   reduceRecentEvents as getRecentEvents,
   reduceSubagents as aggregateSubagents,
+  reduceVerifications as aggregateVerifications,
 } from "./reducers.js";
 
 // -- getStatus convenience function --

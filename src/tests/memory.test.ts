@@ -15,10 +15,13 @@ mkdirSync(sessionsDir, { recursive: true });
 const ratingsFile = resolve(te.tmpBase, "ratings.jsonl");
 te.env.RATINGS_FILE = ratingsFile;
 
+const feedbackFile = resolve(te.tmpBase, "feedback.jsonl");
+te.env.FEEDBACK_FILE = feedbackFile;
+
 // ── Session start ────────────────────────────────────────────────────────────
 
-console.log("--- session-start ---");
-runAndCheck(te, r, "memory/hooks/session-start.ts", "smoke", "{}", { expectStdout: ["Session Start"] });
+console.log("--- context-restore-start ---");
+runAndCheck(te, r, "memory/hooks/context-restore-start.ts", "smoke", "{}", { expectStdout: ["Session Start"] });
 
 // Morning briefing: no new sessions since last interactive → no digest
 {
@@ -27,7 +30,7 @@ runAndCheck(te, r, "memory/hooks/session-start.ts", "smoke", "{}", { expectStdou
   const futureSession = resolve(sessionsDir, "9998-01-01-000000.md");
   writeFileSync(futureSession, "# Session: 9998-01-01\n\n- Intent: test\n- Outcome: done\n- Tools: none; files: none\n- Edits: 0 tool calls, 0 files\n- Messages: 4 (2 user, 2 assistant)\n");
   writeFileSync(briefingMarker, "9998-01-01-000000.md");
-  const { stdout } = runHook(te, "memory/hooks/session-start.ts", "{}");
+  const { stdout } = runHook(te, "memory/hooks/context-restore-start.ts", "{}");
   check(r, "morning-briefing: no digest when no new sessions", !stdout.includes("Background Work"));
   check(r, "morning-briefing: still shows session count", stdout.includes("Sessions:"));
   check(r, "morning-briefing: still shows last session header", stdout.includes("Last session ("));
@@ -51,7 +54,7 @@ runAndCheck(te, r, "memory/hooks/session-start.ts", "smoke", "{}", { expectStdou
 
   writeFileSync(briefingMarker, "2000-01-01-000000.md");
 
-  const { stdout } = runHook(te, "memory/hooks/session-start.ts", "{}");
+  const { stdout } = runHook(te, "memory/hooks/context-restore-start.ts", "{}");
 
   check(r, "morning-briefing: shows background work header", stdout.includes("Background Work"));
   check(r, "morning-briefing: shows completed work section", stdout.includes("Completed") || stdout.includes("Done"));
@@ -77,7 +80,7 @@ runAndCheck(te, r, "memory/hooks/session-start.ts", "smoke", "{}", { expectStdou
   writeFileSync(s1, "# Session: 2000-02-01\n\n- Intent: first session\n- Outcome: done\n- Tools: none; files: none\n- Edits: 0 tool calls, 0 files\n- Messages: 4 (2 user, 2 assistant)\n");
   writeFileSync(s2, "# Session: 2000-02-01\n\n- Intent: second session background task\n- Outcome: completed background work\n- Tools: Bash; files: none\n- Edits: 0 tool calls, 0 files\n- Messages: 4 (2 user, 2 assistant)\n");
 
-  const { stdout } = runHook(te, "memory/hooks/session-start.ts", "{}");
+  const { stdout } = runHook(te, "memory/hooks/context-restore-start.ts", "{}");
   check(r, "morning-briefing: no marker + multiple sessions shows briefing", stdout.includes("Background Work"));
 
   try { unlinkSync(s1); } catch {}
@@ -92,7 +95,7 @@ console.log("\n--- rating-capture ---");
 function ratingTest(prompt: string): { rating: number | null; output: string } {
   let linesBefore = 0;
   try { linesBefore = readFileSync(ratingsFile, "utf-8").trim().split("\n").filter(Boolean).length; } catch {}
-  const { stdout } = runHook(te, "memory/hooks/rating-capture.ts", JSON.stringify({ prompt }));
+  const { stdout } = runHook(te, "memory/hooks/rating-capture-submit.ts", JSON.stringify({ prompt }));
   let linesAfter = 0;
   try { linesAfter = readFileSync(ratingsFile, "utf-8").trim().split("\n").filter(Boolean).length; } catch {}
   if (linesAfter > linesBefore) {
@@ -118,17 +121,90 @@ check(r, "rating: 'rate this' alone → no match", ratingTest("rate this").ratin
 const lowResult = ratingTest("2");
 check(r, "rating: low rating warns", lowResult.rating === 2 && lowResult.output.includes("Low rating"));
 
-runAndCheck(te, r, "memory/hooks/rating-capture.ts", "malformed", "not json");
+runAndCheck(te, r, "memory/hooks/rating-capture-submit.ts", "malformed", "not json");
+
+// ── Feedback (sentiment) capture ─────────────────────────────────────────────
+
+console.log("\n--- feedback-capture ---");
+
+function feedbackTest(prompt: string, transcriptPath?: string): { entry: any | null; output: string } {
+  let linesBefore = 0;
+  try { linesBefore = readFileSync(feedbackFile, "utf-8").trim().split("\n").filter(Boolean).length; } catch {}
+  const payload: any = { prompt, session_id: "fb-test" };
+  if (transcriptPath) payload.transcript_path = transcriptPath;
+  const { stdout } = runHook(te, "memory/hooks/feedback-capture-submit.ts", JSON.stringify(payload));
+  let linesAfter = 0;
+  try { linesAfter = readFileSync(feedbackFile, "utf-8").trim().split("\n").filter(Boolean).length; } catch {}
+  if (linesAfter > linesBefore) {
+    const last = readFileSync(feedbackFile, "utf-8").trim().split("\n").pop()!;
+    return { entry: JSON.parse(last), output: stdout };
+  }
+  return { entry: null, output: stdout };
+}
+
+// Positive — high-confidence words
+check(r, "feedback: 'great' → positive", feedbackTest("great").entry?.polarity === "positive");
+check(r, "feedback: 'perfect, now do X' → positive", feedbackTest("perfect, now do X").entry?.polarity === "positive");
+check(r, "feedback: 'thanks!' → positive", feedbackTest("thanks!").entry?.polarity === "positive");
+check(r, "feedback: 'exactly' → positive", feedbackTest("exactly").entry?.polarity === "positive");
+check(r, "feedback: 'looks good' → positive", feedbackTest("looks good").entry?.polarity === "positive");
+
+// Positive — standalone-only words
+check(r, "feedback: standalone 'yes' → positive", feedbackTest("yes").entry?.polarity === "positive");
+check(r, "feedback: standalone 'good' → positive", feedbackTest("good").entry?.polarity === "positive");
+check(r, "feedback: 'yes the file is at /src/foo' → no match (not standalone)",
+  feedbackTest("yes the file is at /src/foo").entry === null);
+check(r, "feedback: 'good question, but...' → no match",
+  feedbackTest("good question, but does this work?").entry === null);
+
+// Negative — reuses CORRECTION_RE
+check(r, "feedback: 'no, do it differently' → negative",
+  feedbackTest("no, do it differently").entry?.polarity === "negative");
+check(r, "feedback: \"don't mock the database\" → negative",
+  feedbackTest("don't mock the database").entry?.polarity === "negative");
+check(r, "feedback: 'actually, use postgres' → negative",
+  feedbackTest("actually, use postgres").entry?.polarity === "negative");
+
+// No-match cases
+check(r, "feedback: random prompt → no match", feedbackTest("write a test for foo").entry === null);
+check(r, "feedback: 'great work on this is what I want to discuss' → still positive (leads with great)",
+  feedbackTest("great work on this is what I want to discuss").entry?.polarity === "positive");
+check(r, "feedback: short non-feedback → no match", feedbackTest("hi").entry === null);
+
+// Trigger word captured
+const triggerEntry = feedbackTest("Perfect, ship it").entry;
+check(r, "feedback: trigger word lowercased", triggerEntry?.trigger === "perfect");
+
+// Prior-turn context populated when transcript provided
+{
+  const tFile = writeTranscript(te, "fb-prior", [
+    userMsg("fix the auth bug"),
+    assistantMsg("Refactored auth.ts to use cookie sessions", [
+      { name: "Edit", input: { file_path: "/src/auth.ts" } },
+      { name: "Bash", input: { command: "bun test auth" } },
+    ]),
+  ]);
+  const e = feedbackTest("great, ship it", tFile).entry;
+  check(r, "feedback: prior_tools captured from transcript",
+    Array.isArray(e?.prior_tools) && e.prior_tools.includes("Edit") && e.prior_tools.includes("Bash"));
+  check(r, "feedback: prior_files captured from transcript",
+    Array.isArray(e?.prior_files) && e.prior_files.some((f: string) => f.includes("auth.ts")));
+  check(r, "feedback: prior_text excerpted from transcript",
+    typeof e?.prior_text === "string" && e.prior_text.includes("auth"));
+  try { unlinkSync(tFile); } catch {}
+}
+
+runAndCheck(te, r, "memory/hooks/feedback-capture-submit.ts", "malformed", "not json");
 
 // ── Session summary ──────────────────────────────────────────────────────────
 
 console.log("\n--- session-summary ---");
 {
   const tinyTranscript = writeTranscript(te, "tiny", [userMsg("hi"), assistantMsg("hello")]);
-  runAndCheck(te, r, "memory/hooks/session-summary.ts", "too few", JSON.stringify({ transcript_path: tinyTranscript }));
+  runAndCheck(te, r, "memory/hooks/context-save-stop.ts", "too few", JSON.stringify({ transcript_path: tinyTranscript }));
   try { unlinkSync(tinyTranscript); } catch {}
 }
-runAndCheck(te, r, "memory/hooks/session-summary.ts", "malformed", "not json");
+runAndCheck(te, r, "memory/hooks/context-save-stop.ts", "malformed", "not json");
 
 // ── Memory extraction ───────────────────────────────────────────────────────
 
@@ -145,7 +221,7 @@ console.log("\n--- memory-extract ---");
     userMsg("good"),
     assistantMsg("done"),
   ]);
-  runAndCheck(te, r, "memory/hooks/memory-extract.ts", "extracts from substantive session",
+  runAndCheck(te, r, "memory/hooks/memory-extract-stop.ts", "extracts from substantive session",
     JSON.stringify({ transcript_path: extractFile }));
   try { unlinkSync(extractFile); } catch {}
 }
@@ -161,19 +237,19 @@ console.log("\n--- memory-extract ---");
     userMsg("good"),
     assistantMsg("done"),
   ]);
-  runAndCheck(te, r, "memory/hooks/memory-extract.ts", "skips when memory_store present",
+  runAndCheck(te, r, "memory/hooks/memory-extract-stop.ts", "skips when memory_store present",
     JSON.stringify({ transcript_path: extractStoreFile }));
   try { unlinkSync(extractStoreFile); } catch {}
 }
 
 {
   const extractSmall = writeTranscript(te, "extract-small", [userMsg("hi"), assistantMsg("hello")]);
-  runAndCheck(te, r, "memory/hooks/memory-extract.ts", "skips non-substantive",
+  runAndCheck(te, r, "memory/hooks/memory-extract-stop.ts", "skips non-substantive",
     JSON.stringify({ transcript_path: extractSmall }));
   try { unlinkSync(extractSmall); } catch {}
 }
 
-runAndCheck(te, r, "memory/hooks/memory-extract.ts", "malformed stdin", "not json");
+runAndCheck(te, r, "memory/hooks/memory-extract-stop.ts", "malformed stdin", "not json");
 
 // Heuristic tests via direct import
 {
@@ -214,6 +290,189 @@ runAndCheck(te, r, "memory/hooks/memory-extract.ts", "malformed stdin", "not jso
   try { unlinkSync(storeFile2); } catch {}
 }
 
+// ── Re-edit ↔ correction correlation (#4) ────────────────────────────────────
+
+console.log("\n--- re-edit correlation ---");
+{
+  const { augmentWithSignals } = await import("../memory/extract.ts");
+  const SID = "corr-sess";
+
+  const reEditSig = (file: string) => JSON.stringify({
+    type: "re-edit", file, count: 3, sessionId: SID, timestamp: "2026-05-09T10:00:00Z",
+  });
+
+  const negFb = (file: string, prompt: string, prior_text: string) => JSON.stringify({
+    timestamp: "2026-05-09T10:30:00Z", session_id: SID, polarity: "negative", trigger: "no",
+    prompt, prior_text, prior_tools: ["Edit"], prior_files: [file],
+  });
+
+  // Case 1: re-edit + matching negative feedback → approach_friction
+  {
+    const out = augmentWithSignals(
+      [],
+      reEditSig("src/auth.ts"),
+      negFb("src/auth.ts", "no don't use mocks", "switching to mocked sessions"),
+      SID,
+    );
+    check(r, "correlate: matching feedback → approach_friction tag",
+      out.some(m => m.tags.includes("approach_friction")));
+    check(r, "correlate: includes user pushback in content",
+      out.some(m => m.content.includes("don't use mocks")));
+    check(r, "correlate: includes prior reaction context",
+      out.some(m => m.content.includes("mocked sessions")));
+    check(r, "correlate: no quiet 'Re-edit observation' when matched",
+      !out.some(m => m.content.startsWith("Re-edit observation")));
+  }
+
+  // Case 2: re-edit, no matching feedback → quieter observation, no editorial
+  {
+    const out = augmentWithSignals(
+      [],
+      reEditSig("src/parser.ts"),
+      "", // no feedback
+      SID,
+    );
+    check(r, "no-correlate: emits Re-edit observation (not friction)",
+      out.some(m => m.content.startsWith("Re-edit observation: src/parser.ts")));
+    check(r, "no-correlate: no approach_friction tag",
+      !out.some(m => m.tags.includes("approach_friction")));
+    check(r, "no-correlate: drops 'approach needed corrections' editorial",
+      !out.some(m => m.content.includes("approach needed")));
+  }
+
+  // Case 3: re-edit + UNRELATED negative feedback (different file) → no correlation
+  {
+    const out = augmentWithSignals(
+      [],
+      reEditSig("src/auth.ts"),
+      negFb("src/parser.ts", "no don't do that", "doing something to parser"),
+      SID,
+    );
+    check(r, "no-correlate: feedback on different file does not match",
+      !out.some(m => m.tags.includes("approach_friction")));
+    check(r, "no-correlate: still emits the quiet observation",
+      out.some(m => m.content.startsWith("Re-edit observation")));
+  }
+
+  // Case 4: positive feedback still produces validated-approach memories
+  {
+    const posFb = JSON.stringify({
+      timestamp: "2026-05-09T10:30:00Z", session_id: SID, polarity: "positive",
+      trigger: "perfect", prompt: "perfect, ship it",
+      prior_text: "Refactored to use cookie sessions", prior_tools: ["Edit", "Bash"],
+      prior_files: ["src/auth.ts"],
+    });
+    const out = augmentWithSignals([], "", posFb, SID);
+    check(r, "validated: positive feedback → validated tag",
+      out.some(m => m.tags.includes("validated")));
+    check(r, "validated: content names trigger word",
+      out.some(m => m.content.includes(`"perfect"`)));
+  }
+
+  // Case 5: filters by session_id
+  {
+    const out = augmentWithSignals(
+      [],
+      JSON.stringify({ type: "re-edit", file: "x.ts", count: 3, sessionId: "OTHER", timestamp: "2026-05-09" }),
+      "",
+      SID,
+    );
+    check(r, "session filter: ignores other-session signals", out.length === 0);
+  }
+}
+
+// ── Rule fingerprint helpers (#5) ────────────────────────────────────────────
+
+console.log("\n--- rule-fingerprint ---");
+{
+  const { ruleFingerprint, parseRuleLine, similarity, effectivenessScore } = await import("../memory/rule-fingerprint.ts");
+
+  // ruleFingerprint stable across whitespace/punctuation
+  check(r, "fingerprint: stable across capitalization",
+    ruleFingerprint("Use real DB not mocks") === ruleFingerprint("use real db not mocks"));
+  check(r, "fingerprint: stable across trailing punctuation",
+    ruleFingerprint("use real db not mocks.") === ruleFingerprint("use real db not mocks"));
+  check(r, "fingerprint: different rules → different hashes",
+    ruleFingerprint("use real db") !== ruleFingerprint("commit before context switch"));
+
+  // parseRuleLine
+  const a = parseRuleLine("- [avoid] use real db not mocks _(3x)_");
+  check(r, "parseRuleLine: extracts text", a?.text === "use real db not mocks");
+  check(r, "parseRuleLine: extracts polarity", a?.polarity === "avoid");
+
+  const b = parseRuleLine("- [keep] verify with bun test.ts before claiming done");
+  check(r, "parseRuleLine: handles [keep] → validated", b?.polarity === "validated");
+
+  const c = parseRuleLine("- some untagged rule that should still parse");
+  check(r, "parseRuleLine: handles untagged lines", c?.text === "some untagged rule that should still parse" && c?.polarity === null);
+
+  check(r, "parseRuleLine: rejects too-short lines", parseRuleLine("- hi") === null);
+
+  // similarity
+  check(r, "similarity: identical → 1.0",
+    similarity("use real db not mocks", "use real db not mocks") === 1);
+  check(r, "similarity: paraphrased same rule → above threshold",
+    similarity("commit before context switch", "always commit before switching context") >= 0.4);
+  check(r, "similarity: unrelated → low",
+    similarity("commit frequently", "review pull requests") < 0.3);
+
+  // effectivenessScore
+  check(r, "effectiveness: avoid w/ 0 recurrences → 1.0",
+    effectivenessScore({ text: "x", polarity: "avoid", first_seen: "", last_seen: "", injections: 5, recurrences: 0, reaffirmations: 0 }) === 1);
+  check(r, "effectiveness: avoid w/ all recurrences → 0",
+    effectivenessScore({ text: "x", polarity: "avoid", first_seen: "", last_seen: "", injections: 5, recurrences: 5, reaffirmations: 0 }) === 0);
+  check(r, "effectiveness: validated w/ 3/5 reaffirmations → 0.6",
+    Math.abs((effectivenessScore({ text: "x", polarity: "validated", first_seen: "", last_seen: "", injections: 5, recurrences: 0, reaffirmations: 3 }) ?? 0) - 0.6) < 0.001);
+  check(r, "effectiveness: 0 injections → null",
+    effectivenessScore({ text: "x", polarity: "avoid", first_seen: "", last_seen: "", injections: 0, recurrences: 0, reaffirmations: 0 }) === null);
+}
+
+// ── Rule injection logging (#5) ──────────────────────────────────────────────
+
+console.log("\n--- rule-injection logging ---");
+{
+  const { resolve: resolvePath } = await import("path");
+  const injFile = resolvePath(te.tmpBase, "signals", "rule-injections.jsonl");
+  const rulesFile = resolvePath(te.tmpBase, "signals", "learned-rules.md");
+
+  // Write a learned-rules.md the SessionStart hook will read
+  const sessionsDir2 = resolve(te.tmpBase, "sessions");
+  // Clear injections from prior runs
+  try { unlinkSync(injFile); } catch {}
+  writeFileSync(rulesFile, [
+    "# Learned Rules",
+    "_Auto-generated 2026-05-09_",
+    "",
+    "- [avoid] use real db not mocks _(3x)_",
+    "- [keep] verify with bun test.ts before claiming done",
+    "- [avoid] do not edit ~/.claude directly _(2x)_",
+    "",
+  ].join("\n"));
+
+  const { stdout } = runHook(te, "memory/hooks/context-restore-start.ts",
+    JSON.stringify({ session_id: "inj-test-sess" }));
+
+  check(r, "injection: briefing includes rules", stdout.includes("Learned Behavioral Rules"));
+
+  let lines: string[] = [];
+  try { lines = readFileSync(injFile, "utf-8").trim().split("\n").filter(Boolean); } catch {}
+  check(r, "injection: rule-injections.jsonl has 3 entries", lines.length === 3);
+  if (lines.length === 3) {
+    const parsed = lines.map(l => JSON.parse(l));
+    check(r, "injection: each entry has rule_hash", parsed.every(p => typeof p.rule_hash === "string" && p.rule_hash.length > 0));
+    check(r, "injection: each entry has session_id", parsed.every(p => p.session_id === "inj-test-sess"));
+    check(r, "injection: polarity captured for [avoid]",
+      parsed.filter(p => p.polarity === "avoid").length === 2);
+    check(r, "injection: polarity captured for [keep]→validated",
+      parsed.filter(p => p.polarity === "validated").length === 1);
+    check(r, "injection: text strips frequency suffix",
+      parsed[0].rule_text === "use real db not mocks");
+  }
+
+  try { unlinkSync(rulesFile); } catch {}
+  try { unlinkSync(injFile); } catch {}
+}
+
 // ── Session recall ───────────────────────────────────────────────────────────
 
 console.log("\n--- session recall ---");
@@ -251,11 +510,11 @@ console.log("\n--- session recall ---");
   ]);
 
   const beforeSessions = new Set(readdirSync(sessionsDir));
-  runHook(te, "memory/hooks/session-summary.ts", JSON.stringify({ transcript_path: recallTranscript }));
+  runHook(te, "memory/hooks/context-save-stop.ts", JSON.stringify({ transcript_path: recallTranscript }));
   const newSessions = readdirSync(sessionsDir).filter(f => !beforeSessions.has(f));
 
   if (newSessions.length === 0) {
-    check(r, "session-summary did not create a file", false);
+    check(r, "context-save-stop did not create a file", false);
   } else {
     const summary = readFileSync(resolve(sessionsDir, newSessions[0]), "utf-8");
 
@@ -272,7 +531,7 @@ console.log("\n--- session recall ---");
 
     const seedFile = resolve(sessionsDir, "9999-99-99-999999.md");
     writeFileSync(seedFile, summary);
-    const { stdout: startOut } = runHook(te, "memory/hooks/session-start.ts", "{}");
+    const { stdout: startOut } = runHook(te, "memory/hooks/context-restore-start.ts", "{}");
     check(r, "recall: start shows what was worked on", startOut.includes("webhook") || startOut.includes("payments") || startOut.includes("500"));
     check(r, "recall: start shows work is unfinished", startOut.includes("failing") || startOut.includes("pick that up") || startOut.includes("next time") || startOut.includes("2 test"));
     try { unlinkSync(seedFile); } catch {}

@@ -5,6 +5,7 @@ import { useMonitors, useCreateMonitor } from '../../api/monitor-hooks';
 import { Button } from '../../components/ui/Button';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
+import { PageHeader } from '../../components/layout/PageHeader';
 
 const statusColors: Record<string, string> = {
   active: 'bg-green-900/50 text-green-300',
@@ -30,15 +31,11 @@ export function MonitorsPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary">Monitors</h1>
-          <p className="text-sm text-text-muted mt-0.5">
-            {monitors.length} monitor{monitors.length !== 1 ? 's' : ''}
-          </p>
-        </div>
-        <Button onClick={() => setNewOpen(!newOpen)}>+ New monitor</Button>
-      </div>
+      <PageHeader
+        title="Monitors"
+        subtitle={`${monitors.length} monitor${monitors.length !== 1 ? 's' : ''}`}
+        actions={<Button onClick={() => setNewOpen(!newOpen)}>+ New monitor</Button>}
+      />
 
       {newOpen && (
         <form onSubmit={handleCreate} className="bg-bg-secondary border border-border-primary rounded-lg p-4 space-y-3">
@@ -83,10 +80,10 @@ export function MonitorsPage() {
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <h3 className="text-sm font-medium text-text-primary truncate">{monitor.title}</h3>
-                  <p className="text-xs text-text-muted mt-1">{monitor.queries.join(', ')}</p>
-                  <p className="text-xs text-text-muted mt-1">Schedule: {monitor.schedule}</p>
+                  <p className="text-sm text-text-muted mt-1">{monitor.queries.join(', ')}</p>
+                  <p className="text-sm text-text-muted mt-1">Schedule: {monitor.schedule}</p>
                 </div>
-                <span className={clsx('px-2 py-0.5 rounded text-xs font-medium ml-3', statusColors[monitor.status])}>
+                <span className={clsx('px-2 py-0.5 rounded text-sm font-medium ml-3', statusColors[monitor.status])}>
                   {monitor.status}
                 </span>
               </div>

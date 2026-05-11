@@ -1,7 +1,11 @@
+import { Icon } from '../../components/ui/Icon';
 import React, { useState, useEffect } from 'react';
 import { api } from '../../api/client';
 import { fmtBytes } from '../../utils/format';
+import { PageHeader } from '../../components/layout/PageHeader';
 import { clsx } from 'clsx';
+import { useTheme, fonts, headingFonts, monoFonts, type FontDef } from '../../theme';
+import { darkThemes, lightThemes, type ThemeDef } from '../../themes';
 
 // --- Types ---
 
@@ -53,9 +57,9 @@ type SystemInfo = {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-bg-secondary border border-border-primary rounded-lg overflow-hidden">
+    <div className="bg-bg-secondary border border-border-primary rounded-lg">
       <div className="px-4 py-3 border-b border-border-primary">
-        <h2 className="text-base font-semibold text-text-primary">{title}</h2>
+        <h2 className="text-lg font-semibold text-text-primary">{title}</h2>
       </div>
       <div className="p-4 space-y-3">{children}</div>
     </div>
@@ -106,44 +110,27 @@ function SystemInfoSection() {
   const buildTag = `${info.git.short}${info.git.dirty ? '-dirty' : ''}`;
 
   return (
-    <>
-      <Section title="Build">
-        <InfoGrid rows={[
-          ['Revision', `${buildTag} (${info.git.branch})`],
-          ['Commits', `${info.git.commitCount} total${info.git.commitsSinceTag !== 'n/a' ? `, ${info.git.commitsSinceTag}` : ''}`],
-          ['Last Commit', info.git.lastCommit],
-          ['Commit Date', info.git.lastCommitDate],
-          ['Installed', formatTimestamp(info.install.timestamp)],
-          ['Bun', info.install.bunVersion],
-          ['Platform', `${info.install.platform} / ${info.install.arch}`],
-        ]} />
-      </Section>
-
-      <Section title="Paths">
-        <InfoGrid rows={[
-          ['CLAUDE_ROOT', info.paths.claudeRoot],
-          ['Source Repo', info.paths.repo],
-          ['Construct', info.paths.construct],
-          ['Commands', info.paths.commands],
-          ['Skills', info.paths.skills],
-          ['Construct DB', info.paths.db],
-          ['Memory DB', info.paths.memoryDb],
-          ['Sessions', info.paths.sessions],
-          ['Telemetry', info.paths.telemetry],
-          ['Signals', info.paths.signals],
-          ['Ratings', info.paths.ratings],
-          ['Backups', info.paths.backups],
-        ]} dimAfter={1} />
-      </Section>
-
-      <Section title="Runtime">
-        <InfoGrid rows={[
-          ['Environment', info.runtime.nodeEnv],
-          ['API Port', String(info.runtime.port)],
-          ['DB Size', fmtBytes(info.runtime.dbSizeBytes)],
-        ]} />
-      </Section>
-    </>
+    <Section title="System">
+      <InfoGrid rows={[
+        ['Revision', `${buildTag} (${info.git.branch})`],
+        ['Commits', `${info.git.commitCount} total${info.git.commitsSinceTag !== 'n/a' ? `, ${info.git.commitsSinceTag}` : ''}`],
+        ['Last Commit', info.git.lastCommit],
+        ['Commit Date', info.git.lastCommitDate],
+        ['Installed', formatTimestamp(info.install.timestamp)],
+        ['Bun', info.install.bunVersion],
+        ['Platform', `${info.install.platform} / ${info.install.arch}`],
+        ['API Port', String(info.runtime.port)],
+        ['DB Size', fmtBytes(info.runtime.dbSizeBytes)],
+      ]} />
+      <hr className="border-border-primary" />
+      <InfoGrid rows={[
+        ['Construct', info.paths.construct],
+        ['Construct DB', info.paths.db],
+        ['Memory DB', info.paths.memoryDb],
+        ['Telemetry', info.paths.telemetry],
+        ['Backups', info.paths.backups],
+      ]} />
+    </Section>
   );
 }
 
@@ -217,9 +204,7 @@ function BackupSection() {
           )}
           title="Refresh backups"
         >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182M2.985 19.644V14.651" />
-          </svg>
+          <Icon name="refresh" size="sm" />
         </button>
         {message && <span className="text-xs text-text-muted">{message}</span>}
       </div>
@@ -252,12 +237,174 @@ function BackupSection() {
   );
 }
 
+// --- Theme Section ---
+
+function ThemeSwatch({ vars, size = 'md' }: { vars: Record<string, string>; size?: 'md' | 'lg' }) {
+  const stops = [
+    vars['--bg-primary'],
+    vars['--accent'],
+    vars['--chart-2'],
+    vars['--chart-3'],
+    vars['--chart-5'],
+  ];
+  return (
+    <span
+      className={clsx(
+        'inline-flex shrink-0 rounded-md border border-border-primary overflow-hidden',
+        size === 'lg' ? 'h-7 w-20' : 'h-5 w-14'
+      )}
+      aria-hidden
+    >
+      {stops.map((c, i) => (
+        <span key={i} className="h-full" style={{ flex: 1, background: c }} />
+      ))}
+    </span>
+  );
+}
+
+function ThemeOption({ t, active, onSelect }: { t: ThemeDef; active: boolean; onSelect: () => void }) {
+  return (
+    <button
+      onClick={onSelect}
+      className={clsx(
+        'flex items-center gap-3 w-full px-3 py-2 text-sm transition-colors',
+        active ? 'text-accent bg-bg-tertiary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'
+      )}
+    >
+      <ThemeSwatch vars={t.vars} size="lg" />
+      <span className="flex-1 text-left truncate">{t.name}</span>
+      {active && <Icon name="check" size="sm" />}
+    </button>
+  );
+}
+
+function ThemeSection() {
+  const { themeId, theme, setThemeId } = useTheme();
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Section title="Theme">
+      <div className="relative w-full max-w-sm">
+        <button
+          onClick={() => setOpen(!open)}
+          className={clsx(
+            'flex items-center justify-between w-full rounded-lg border border-border-primary',
+            'bg-bg-tertiary px-3 py-2 text-sm text-text-primary hover:bg-bg-hover transition-colors'
+          )}
+        >
+          <span className="flex items-center gap-3 min-w-0">
+            <ThemeSwatch vars={theme.vars} size="lg" />
+            <span className="truncate">{theme.name}</span>
+            <span className="text-xs text-text-muted shrink-0">{theme.mode === 'dark' ? 'Dark' : 'Light'}</span>
+          </span>
+          <Icon name="expand_more" size="sm" className="text-text-muted shrink-0" />
+        </button>
+        {open && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+            <div className="absolute top-full left-0 mt-1 w-full max-h-96 overflow-y-auto z-50 rounded-lg border border-border-primary bg-bg-secondary shadow-md py-1">
+              <div className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-text-muted">Dark</div>
+              {darkThemes.map((t) => (
+                <ThemeOption key={t.id} t={t} active={t.id === themeId} onSelect={() => { setThemeId(t.id); setOpen(false); }} />
+              ))}
+              <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-text-muted border-t border-border-primary mt-1">Light</div>
+              {lightThemes.map((t) => (
+                <ThemeOption key={t.id} t={t} active={t.id === themeId} onSelect={() => { setThemeId(t.id); setOpen(false); }} />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </Section>
+  );
+}
+
+// --- Fonts Section ---
+
+function FontPicker({
+  label, icon, items, activeId, onSelect, fallbackStack,
+}: {
+  label: string;
+  icon: string;
+  items: FontDef[];
+  activeId: string;
+  onSelect: (id: string) => void;
+  fallbackStack: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const active = items.find((f) => f.id === activeId) ?? items[0];
+
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 w-32 shrink-0 text-sm text-text-secondary">
+        <Icon name={icon} size="sm" className="text-text-muted" />
+        <span>{label}</span>
+      </div>
+      <div className="relative w-full max-w-xs">
+        <button
+          onClick={() => setOpen(!open)}
+          className={clsx(
+            'flex items-center justify-between w-full rounded-lg border border-border-primary',
+            'bg-bg-tertiary px-3 py-2 text-sm text-text-primary hover:bg-bg-hover transition-colors'
+          )}
+        >
+          <span
+            className="truncate text-left"
+            style={{ fontFamily: `${active.family}, ${fallbackStack}` }}
+          >
+            {active.name}
+          </span>
+          <Icon name="expand_more" size="sm" className="text-text-muted shrink-0" />
+        </button>
+        {open && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+            <div className="absolute top-full left-0 mt-1 w-full max-h-80 overflow-y-auto z-50 rounded-lg border border-border-primary bg-bg-secondary shadow-md py-1">
+              {items.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => { onSelect(f.id); setOpen(false); }}
+                  className={clsx(
+                    'flex items-center justify-between w-full px-3 py-2 text-sm transition-colors',
+                    f.id === activeId ? 'text-accent bg-bg-tertiary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'
+                  )}
+                  style={{ fontFamily: `${f.family}, ${fallbackStack}` }}
+                >
+                  <span className="truncate">{f.name}</span>
+                  {f.id === activeId && <Icon name="check" size="sm" />}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FontsSection() {
+  const {
+    fontId, setFontId,
+    headingFontId, setHeadingFontId,
+    monoFontId, setMonoFontId,
+  } = useTheme();
+  return (
+    <Section title="Fonts">
+      <FontPicker label="Body" icon="text_fields" items={fonts} activeId={fontId} onSelect={setFontId} fallbackStack="system-ui, sans-serif" />
+      <FontPicker label="Heading" icon="title" items={headingFonts} activeId={headingFontId} onSelect={setHeadingFontId} fallbackStack="system-ui, sans-serif" />
+      <FontPicker label="Mono" icon="code" items={monoFonts} activeId={monoFontId} onSelect={setMonoFontId} fallbackStack="ui-monospace, monospace" />
+    </Section>
+  );
+}
+
 // --- Main Settings Page ---
 
 export function SettingsPage() {
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-text-primary">Settings</h1>
+      <PageHeader title="Settings" />
+      <ThemeSection />
+      <FontsSection />
       <SystemInfoSection />
       <BackupSection />
     </div>

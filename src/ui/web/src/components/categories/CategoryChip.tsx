@@ -1,3 +1,5 @@
+import { Icon } from '../ui/Icon';
+
 export function CategoryChip({
   name,
   color,
@@ -30,10 +32,10 @@ export function CategoryChip({
       {onRemove && (
         <button
           onClick={onRemove}
-          className="ml-0.5 opacity-60 hover:opacity-100 leading-none transition-opacity"
+          className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity flex items-center"
           aria-label={`Remove ${name}`}
         >
-          ×
+          <Icon name="close" size="xs" />
         </button>
       )}
     </span>

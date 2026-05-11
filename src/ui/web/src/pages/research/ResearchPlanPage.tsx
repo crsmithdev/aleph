@@ -2,6 +2,7 @@ import { useParams, Link } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { useResearchPlan, useResearchSession, useModifyPlan } from '../../api/research-hooks';
 import { Button } from '../../components/ui/Button';
+import { PageHeader } from '../../components/layout/PageHeader';
 import { PageLoading } from '../../components/ui/Spinner';
 import { ErrorState } from '../../components/ui/ErrorState';
 
@@ -15,13 +16,14 @@ const originColors: Record<string, string> = {
 export function ResearchPlanPage() {
   const { id } = useParams<{ id: string }>();
   const { data: session } = useResearchSession(id!);
-  const { data: plan, isLoading, isError } = useResearchPlan(id!);
+  const { data: planEnvelope, isLoading, isError } = useResearchPlan(id!);
+  const plan = planEnvelope?.plan ?? null;
   const modifyPlan = useModifyPlan();
 
   if (isLoading) return <PageLoading />;
   if (isError || !plan) return (
     <div className="flex flex-col gap-5">
-      <Link to={`/research/${id}`} className="text-xs text-accent hover:underline">&larr; Back to session</Link>
+      <Link to={`/research/${id}`} className="text-sm text-accent hover:underline">&larr; Back to session</Link>
       <ErrorState message="No research plan available yet. Run at least one iteration to generate a plan." />
     </div>
   );
@@ -37,11 +39,11 @@ export function ResearchPlanPage() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <Link to={`/research/${id}`} className="text-xs text-accent hover:underline">&larr; Back to session</Link>
-        <h1 className="text-2xl font-bold text-text-primary mt-2">Research Plan</h1>
-        <p className="text-sm text-text-muted mt-0.5">
-          {session?.title} — {plan.items.length} upcoming items
-        </p>
+        <Link to={`/research/${id}`} className="text-sm text-accent hover:underline">&larr; Back to session</Link>
+        <PageHeader
+          title="Research Plan"
+          subtitle={<>{session?.title} — {plan.items.length} upcoming items</>}
+        />
       </div>
 
       <div className="space-y-2">
@@ -53,19 +55,19 @@ export function ResearchPlanPage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-text-primary">{item.thread_query}</p>
                   <div className="flex items-center gap-2 mt-1.5">
-                    <span className={clsx('px-1.5 py-0.5 rounded text-xs font-medium', originColors[item.origin])}>
+                    <span className={clsx('px-1.5 py-0.5 rounded text-sm font-medium', originColors[item.origin])}>
                       {item.origin.replace('_', ' ')}
                     </span>
                     {item.perturbation_strategy && (
-                      <span className="px-1.5 py-0.5 bg-orange-900/30 text-orange-300 rounded text-xs">
+                      <span className="px-1.5 py-0.5 bg-orange-900/30 text-orange-300 rounded text-sm">
                         {item.perturbation_strategy.replace('_', ' ')}
                       </span>
                     )}
                     {item.parent_thread_title && (
-                      <span className="text-xs text-text-muted truncate">from: {item.parent_thread_title}</span>
+                      <span className="text-sm text-text-muted truncate">from: {item.parent_thread_title}</span>
                     )}
                   </div>
-                  <p className="text-xs text-text-muted mt-1">{item.rationale}</p>
+                  <p className="text-sm text-text-muted mt-1">{item.rationale}</p>
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">

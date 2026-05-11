@@ -36,3 +36,18 @@ export function getPreviousPeriodKey(date: Date, frequency: Frequency): string {
   }
   return getPeriodKey(prev, frequency);
 }
+
+/** Returns the last `n` period keys ending at `date`, oldest first. */
+export function getRecentPeriodKeys(date: Date, frequency: Frequency, n: number): string[] {
+  const out: string[] = [];
+  const cursor = new Date(date);
+  for (let i = 0; i < n; i++) {
+    out.push(getPeriodKey(cursor, frequency));
+    switch (frequency) {
+      case 'daily': cursor.setDate(cursor.getDate() - 1); break;
+      case 'weekly': cursor.setDate(cursor.getDate() - 7); break;
+      case 'monthly': cursor.setMonth(cursor.getMonth() - 1); break;
+    }
+  }
+  return out.reverse();
+}

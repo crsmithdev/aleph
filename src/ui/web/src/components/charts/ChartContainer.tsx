@@ -1,40 +1,16 @@
 import { ResponsiveContainer } from 'recharts';
 import { clsx } from 'clsx';
 import type { ReactNode } from 'react';
+import { Icon } from '../ui/Icon';
 
-function BarChartIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect x="1" y="7" width="3" height="8" rx="0.5" fill="currentColor" fillOpacity={active ? 1 : 0.4} />
-      <rect x="6" y="4" width="3" height="11" rx="0.5" fill="currentColor" fillOpacity={active ? 1 : 0.4} />
-      <rect x="11" y="1" width="3" height="14" rx="0.5" fill="currentColor" fillOpacity={active ? 1 : 0.4} />
-    </svg>
-  );
-}
-
-function LineChartIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <polyline
-        points="1,13 5,7 9,10 13,3"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeOpacity={active ? 1 : 0.4}
-        fill="none"
-      />
-      <circle cx="1" cy="13" r="1.5" fill="currentColor" fillOpacity={active ? 1 : 0.4} />
-      <circle cx="5" cy="7" r="1.5" fill="currentColor" fillOpacity={active ? 1 : 0.4} />
-      <circle cx="9" cy="10" r="1.5" fill="currentColor" fillOpacity={active ? 1 : 0.4} />
-      <circle cx="13" cy="3" r="1.5" fill="currentColor" fillOpacity={active ? 1 : 0.4} />
-    </svg>
-  );
-}
+/** Consistent card styling for all observability charts. */
+export const chartCardClass = 'rounded-lg border border-border-primary bg-bg-secondary p-4';
 
 export function ChartContainer({
   title,
   height = 250,
+  fill = false,
+  raw = false,
   children,
   className,
   chartType,
@@ -42,6 +18,9 @@ export function ChartContainer({
 }: {
   title?: string;
   height?: number;
+  fill?: boolean;
+  /** When true, renders children directly without wrapping in ResponsiveContainer. */
+  raw?: boolean;
   children: ReactNode;
   className?: string;
   chartType?: 'bar' | 'line';
@@ -50,39 +29,53 @@ export function ChartContainer({
   const showToggle = chartType !== undefined && onChartTypeChange !== undefined;
 
   return (
-    <div className={clsx('rounded-lg border border-border-primary bg-bg-secondary p-4', className)}>
+    <div className={clsx(chartCardClass, fill && 'flex flex-col', className)}>
       {(title || showToggle) && (
-        <div className="mb-3 flex items-center justify-between">
-          {title && <h3 className="text-sm font-medium text-text-secondary">{title}</h3>}
+        <div className={clsx('flex items-center justify-between', fill ? 'mb-3 shrink-0' : 'mb-3')}>
+          {title && <h3 className="font-heading text-lg font-medium text-text-secondary">{title}</h3>}
           {showToggle && (
             <div className="flex items-center gap-0.5 rounded-md border border-border-primary bg-bg-tertiary p-0.5">
               <button
                 onClick={() => onChartTypeChange('line')}
                 className={clsx(
-                  'flex items-center rounded px-1.5 py-1 text-text-muted transition-colors hover:text-text-primary',
-                  chartType === 'line' && 'bg-bg-secondary text-text-primary shadow-sm'
+                  'flex items-center rounded px-1.5 py-1 transition-colors',
+                  chartType === 'line'
+                    ? 'bg-bg-secondary text-text-primary shadow-sm'
+                    : 'text-text-muted hover:text-text-primary'
                 )}
                 title="Line chart"
               >
-                <LineChartIcon active={chartType === 'line'} />
+                <Icon name="show_chart" size="sm" />
               </button>
               <button
                 onClick={() => onChartTypeChange('bar')}
                 className={clsx(
-                  'flex items-center rounded px-1.5 py-1 text-text-muted transition-colors hover:text-text-primary',
-                  chartType === 'bar' && 'bg-bg-secondary text-text-primary shadow-sm'
+                  'flex items-center rounded px-1.5 py-1 transition-colors',
+                  chartType === 'bar'
+                    ? 'bg-bg-secondary text-text-primary shadow-sm'
+                    : 'text-text-muted hover:text-text-primary'
                 )}
                 title="Bar chart"
               >
-                <BarChartIcon active={chartType === 'bar'} />
+                <Icon name="bar_chart" size="sm" />
               </button>
             </div>
           )}
         </div>
       )}
-      <ResponsiveContainer width="100%" height={height}>
-        {children as React.ReactElement}
-      </ResponsiveContainer>
+      {raw ? (
+        children
+      ) : fill ? (
+        <div className="flex-1 min-h-0">
+          <ResponsiveContainer width="100%" height="100%">
+            {children as React.ReactElement}
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height={height}>
+          {children as React.ReactElement}
+        </ResponsiveContainer>
+      )}
     </div>
   );
 }

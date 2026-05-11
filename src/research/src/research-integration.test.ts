@@ -12,6 +12,7 @@ import * as threads from './services/threads';
 import * as findings from './services/findings';
 import * as steps from './services/steps';
 import * as plans from './services/plans';
+import { ALL_STRATEGIES } from './perturbation';
 
 function createTestDb(): Database {
   const sqlite = new Database(':memory:');
@@ -48,13 +49,17 @@ class MockProvider implements LLMProvider {
     return this;
   }
 
-  // Add responses for one iteration (formulate + search + synthesize + dedup)
+  // Add responses for one iteration (formulate + search + synthesize + dedup + detectGaps)
   // Set firstIteration=true to skip dedup response (engine skips dedup when no prior findings)
   addIteration(findingOverrides?: Record<string, unknown>, firstIteration = false) {
     this.addComplete(JSON.stringify(['test query']));
     this.addSearch('Search results about the topic with useful data.');
     this.addComplete(standardFinding(findingOverrides));
     if (!firstIteration) this.addComplete('false'); // dedup
+    this.addComplete(JSON.stringify([              // detectGaps (always called by evaluateFollowUps)
+      'What are the long-term economic implications for global markets?',
+      'How do similar phenomena manifest across different geographic regions?',
+    ]));
     return this;
   }
 
@@ -105,10 +110,12 @@ function lowNoveltyFinding() {
 }
 
 function setupStandardProvider(): MockProvider {
-  return new MockProvider().addIteration(undefined, true);
+  return new MockProvider()
+    .addComplete('Sourdough Bread') // absorbs summarizeThreadAsync seed-thread call
+    .addIteration(undefined, true);
 }
 
-const NO_DELAY = { min_delay_between_steps_ms: 0 };
+const NO_DELAY = { min_delay_between_steps_ms: 0, gap_analysis: { enabled: false } };
 
 // ========== Execution Loop Resilience ==========
 
@@ -154,12 +161,12 @@ describe('execution loop resilience', () => {
       maxIterations: 20,
     });
 
-    // Very low budget: search step costs ~$0.0105, so should pause after ~2 iterations
-    const session = await engine.startSession('Budget', 'test', { budget_daily_usd: 0.02, ...NO_DELAY });
+    // Very low budget: with claude-haiku-4-5 search step costs ~$0.003, should pause after 1 iteration
+    const session = await engine.startSession('Budget', 'test', { model: 'claude-haiku-4-5', budget_daily_usd: 0.001, ...NO_DELAY });
     await engine.runIterations(session.id);
 
     const updated = sessions.getSession(sqlite, session.id);
-    expect(updated?.status).toBe('paused');
+    expect(updated?.status).toBe('halted');
   });
 
   test('garbage query: handles gracefully, no infinite loop', async () => {
@@ -193,7 +200,9 @@ describe('perturbation correctness', () => {
     });
 
     const session = await engine.startSession('Test', 'sourdough baking', {
-      p_serendipity: 1.0, ...NO_DELAY,
+      p_serendipity: 1.0,
+      perturbation_coherence_floor: 0, // test perturbation creation, not the floor
+      ...NO_DELAY,
     });
     await engine.runIterations(session.id);
 
@@ -202,7 +211,9 @@ describe('perturbation correctness', () => {
     expect(pertThreads.length).toBeGreaterThanOrEqual(1);
     for (const pt of pertThreads) {
       expect(pt.perturbation_strategy).toBeTruthy();
-      expect(['analogical', 'contrarian', 'failure_post_mortem', 'temporal_shift']).toContain(pt.perturbation_strategy);
+      // Engine now selects from all 21 strategies via perturbation.ts/selectStrategy
+      // (was 4: analogical/contrarian/failure_post_mortem/temporal_shift).
+      expect(ALL_STRATEGIES).toContain(pt.perturbation_strategy);
     }
   });
 
@@ -242,7 +253,9 @@ describe('perturbation correctness', () => {
       });
 
       const session = await engine.startSession(`S${i}`, 'urban farming', {
-        p_serendipity: 1.0, ...NO_DELAY,
+        p_serendipity: 1.0,
+        perturbation_coherence_floor: 0, // test strategy diversity, not the floor
+        ...NO_DELAY,
       });
       await engine.runIterations(session.id);
 
@@ -256,6 +269,125 @@ describe('perturbation correctness', () => {
     // Should use multiple strategies over 8 runs
     const unique = new Set(usedStrategies);
     expect(unique.size).toBeGreaterThanOrEqual(2);
+  });
+
+  test('coherence floor rejects pure-tangent perturbations and records a step', async () => {
+    const sqlite = createTestDb();
+    const provider = new MockProvider();
+    provider.addComplete(JSON.stringify(['test query'])); // formulate
+    provider.addSearch('Search results');
+    provider.addComplete(standardFinding()); // synthesize
+    // Two off-topic perturbation candidates — no token overlap with seed,
+    // jaccard = 0, well below any non-zero floor. Engine retries once then rejects.
+    provider.addComplete('quantum chromodynamics confinement asymptotic freedom');
+    provider.addComplete('elephant migration patterns Serengeti dry season');
+
+    const engine = new ResearchEngine({
+      sqlite, provider, maxIterations: 1,
+    });
+
+    const session = await engine.startSession('Test', 'sourdough baking', {
+      p_serendipity: 1.0,
+      perturbation_coherence_floor: 0.5, // strict floor for the test
+      ...NO_DELAY,
+    });
+    await engine.runIterations(session.id);
+
+    // No perturbation thread should have been created — both candidates rejected.
+    const allThreads = threads.listThreads(sqlite, session.id);
+    const pertThreads = allThreads.filter(t => t.origin === 'perturbation');
+    expect(pertThreads.length).toBe(0);
+
+    // A perturbation_rejected step must be recorded — visible in the Events tab.
+    const allSteps = steps.listSteps(sqlite, session.id);
+    const rejected = allSteps.filter(s => {
+      const meta = s.metadata as Record<string, unknown> | null;
+      return meta?.decision === 'perturbation_rejected';
+    });
+    expect(rejected.length).toBe(1);
+    const meta = rejected[0].metadata as Record<string, unknown>;
+    expect(meta.reason).toBe('below coherence floor');
+    expect(typeof meta.similarity).toBe('number');
+    expect(meta.similarity as number).toBeLessThan(0.5);
+    expect(meta.floor).toBe(0.5);
+    expect(meta.strategy).toBeTruthy();
+  });
+
+  test('perturbation finding records strategy outcome to research_perturbation_state', async () => {
+    const sqlite = createTestDb();
+    const provider = new MockProvider();
+    // Iteration 1 — seed thread (formulate, search, synthesize)
+    provider.addComplete(JSON.stringify(['test query']));
+    provider.addSearch('Search results');
+    provider.addComplete(standardFinding());
+    // Perturbation: an on-topic tangent (overlaps "sourdough") so the
+    // coherence floor lets it through, then formulate/search/synthesize
+    // for the perturbation thread itself.
+    provider.addComplete('How does sourdough fermentation evolve in different climates?');
+    provider.addComplete(JSON.stringify(['sourdough climate query']));
+    provider.addSearch('Climate fermentation results');
+    provider.addComplete(standardFinding({ confidence: 0.7, novelty: 0.6 }));
+
+    const engine = new ResearchEngine({
+      sqlite, provider, maxIterations: 2,
+    });
+
+    const session = await engine.startSession('Test', 'sourdough baking', {
+      p_serendipity: 1.0,
+      ...NO_DELAY,
+    });
+    await engine.runIterations(session.id);
+
+    // The perturbation thread's finding should have written a
+    // research_perturbation_state row with successes ≥ 1.
+    const rows = sqlite.prepare(
+      'SELECT strategy, attempts, successes, novelty_sum, confidence_sum FROM research_perturbation_state WHERE session_id = ?'
+    ).all(session.id) as Array<{ strategy: string; attempts: number; successes: number; novelty_sum: number; confidence_sum: number }>;
+
+    // At least one strategy was attempted and produced an outcome.
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    const totalAttempts = rows.reduce((s, r) => s + r.attempts, 0);
+    const totalSuccesses = rows.reduce((s, r) => s + r.successes, 0);
+    expect(totalAttempts).toBeGreaterThanOrEqual(1);
+    expect(totalSuccesses).toBeGreaterThanOrEqual(1);
+    // Outcome sums must have non-zero values when a finding emerged.
+    const totalNovelty = rows.reduce((s, r) => s + r.novelty_sum, 0);
+    const totalConfidence = rows.reduce((s, r) => s + r.confidence_sum, 0);
+    expect(totalNovelty).toBeGreaterThan(0);
+    expect(totalConfidence).toBeGreaterThan(0);
+  });
+
+  test('coherence floor disabled (0) lets all perturbations through', async () => {
+    const sqlite = createTestDb();
+    const provider = new MockProvider();
+    provider.addComplete(JSON.stringify(['test query'])); // formulate
+    provider.addSearch('Search results');
+    provider.addComplete(standardFinding()); // synthesize
+    provider.addComplete('quantum chromodynamics confinement'); // off-topic perturbation
+
+    const engine = new ResearchEngine({
+      sqlite, provider, maxIterations: 1,
+    });
+
+    const session = await engine.startSession('Test', 'sourdough baking', {
+      p_serendipity: 1.0,
+      perturbation_coherence_floor: 0, // disabled
+      ...NO_DELAY,
+    });
+    await engine.runIterations(session.id);
+
+    // Off-topic perturbation should have been kept since the floor is off.
+    const pertThreads = threads.listThreads(sqlite, session.id)
+      .filter(t => t.origin === 'perturbation');
+    expect(pertThreads.length).toBeGreaterThanOrEqual(1);
+
+    // No rejection step should be recorded.
+    const allSteps = steps.listSteps(sqlite, session.id);
+    const rejected = allSteps.filter(s => {
+      const meta = s.metadata as Record<string, unknown> | null;
+      return meta?.decision === 'perturbation_rejected';
+    });
+    expect(rejected.length).toBe(0);
   });
 });
 
@@ -419,7 +551,7 @@ describe('cost tracking accuracy', () => {
     const engine = new ResearchEngine({
       sqlite, provider, maxIterations: 3,
     });
-    const session = await engine.startSession('Cost', 'test', { p_serendipity: 0.0, ...NO_DELAY });
+    const session = await engine.startSession('Cost', 'test', { model: 'claude-haiku-4-5', p_serendipity: 0.0, ...NO_DELAY });
     await engine.runIterations(session.id);
 
     const stepCosts = steps.getStepCosts(sqlite, session.id);
@@ -445,7 +577,7 @@ describe('data integrity', () => {
     });
     plans.createPlan(sqlite, session.id, []);
 
-    sqlite.prepare('DELETE FROM research_sessions WHERE id = ?').run(session.id);
+    sqlite.prepare('DELETE FROM research_queries WHERE id = ?').run(session.id);
     expect(threads.listThreads(sqlite, session.id).length).toBe(0);
     expect(findings.listFindings(sqlite, session.id).length).toBe(0);
   });
@@ -477,11 +609,16 @@ describe('data integrity', () => {
     const session = sessions.createSession(sqlite, 'Test', 'q');
     const thread = threads.createThread(sqlite, { session_id: session.id, query: 'q', origin: 'seed' });
 
+    // Use explicit IDs to avoid the word-based generator's birthday-problem collisions at scale
+    const now = new Date().toISOString();
+    const stmt = sqlite.prepare(`
+      INSERT INTO research_findings
+        (id, thread_id, session_id, content, summary, source_urls, source_texts, source_url_meta,
+         source_quality, tags, confidence, novelty, actionability, follow_ups, created_at)
+      VALUES (?, ?, ?, ?, ?, '[]', '[]', '[]', 0.5, '[]', 0.5, 0.5, 0.5, '[]', ?)
+    `);
     for (let i = 0; i < 500; i++) {
-      findings.createFinding(sqlite, {
-        thread_id: thread.id, session_id: session.id,
-        content: `Finding ${i}`, summary: `Summary ${i}`,
-      });
+      stmt.run(`finding-${i}`, thread.id, session.id, `Content ${i}`, `Summary ${i}`, now);
     }
 
     expect(findings.countFindings(sqlite, session.id)).toBe(500);
@@ -499,7 +636,7 @@ describe('full engine flow', () => {
     const engine = new ResearchEngine({
       sqlite, provider, maxIterations: 1,
     });
-    const session = await engine.startSession('Full', 'sourdough bread', { p_serendipity: 0.0, ...NO_DELAY });
+    const session = await engine.startSession('Full', 'sourdough bread', { model: 'claude-haiku-4-5', p_serendipity: 0.0, ...NO_DELAY });
     const result = await engine.runIterations(session.id);
 
     expect(result.iterations).toBe(1);

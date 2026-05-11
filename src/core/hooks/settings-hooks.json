@@ -10,7 +10,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/memory/hooks/session-start.ts",
+            "command": "bun src/memory/hooks/context-restore-start.ts 2>/dev/null",
             "timeout": 5000
           }
         ]
@@ -21,7 +21,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/memory/hooks/rating-capture.ts",
+            "command": "bun src/memory/hooks/rating-capture-submit.ts 2>/dev/null",
             "timeout": 2000
           }
         ]
@@ -30,7 +30,16 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/skills/hooks/routing-submit-classify.ts",
+            "command": "bun src/memory/hooks/feedback-capture-submit.ts 2>/dev/null",
+            "timeout": 2000
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun src/core/hooks/routing-classify-submit.ts 2>/dev/null",
             "timeout": 3000
           }
         ]
@@ -41,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/skills/hooks/quality-stop-check-e2e.ts",
+            "command": "bun src/core/hooks/quality-check-stop.ts 2>/dev/null",
             "timeout": 3000
           }
         ]
@@ -50,26 +59,44 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/skills/hooks/context-stop-monitor.ts",
-            "timeout": 3000
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun src/memory/hooks/session-summary.ts",
-            "timeout": 3000
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun src/memory/hooks/memory-extract.ts",
+            "command": "bun src/core/hooks/git-hygiene-stop.ts 2>/dev/null",
             "timeout": 5000
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun src/core/hooks/context-monitor-stop.ts 2>/dev/null",
+            "timeout": 3000
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun src/memory/hooks/context-save-stop.ts 2>/dev/null",
+            "timeout": 3000
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun src/memory/hooks/memory-extract-stop.ts 2>/dev/null",
+            "timeout": 5000
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun src/memory/hooks/memory-consolidate-stop.ts 2>/dev/null",
+            "timeout": 3000
           }
         ]
       }
@@ -80,7 +107,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/skills/hooks/isolation-pre-block-destructive-sql.ts",
+            "command": "bun src/core/hooks/isolation-block-sql.ts 2>/dev/null",
             "timeout": 3000
           }
         ]
@@ -90,7 +117,27 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/skills/hooks/git-pre-require-commit.ts",
+            "command": "bun src/core/hooks/git-require-edit.ts 2>/dev/null",
+            "timeout": 5000
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun src/core/hooks/context-suggest-edit.ts 2>/dev/null",
+            "timeout": 3000
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun src/core/hooks/security-scan-bash.ts 2>/dev/null",
             "timeout": 5000
           }
         ]
@@ -102,7 +149,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/skills/hooks/quality-post-format.ts",
+            "command": "bun src/core/hooks/quality-format-edit.ts 2>/dev/null",
             "timeout": 10000
           }
         ]
@@ -112,8 +159,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/skills/hooks/quality-post-typecheck.ts",
+            "command": "bun src/core/hooks/quality-typecheck-edit.ts 2>/dev/null",
             "timeout": 15000
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun src/memory/hooks/signal-capture-posttooluse.ts 2>/dev/null",
+            "timeout": 1000
           }
         ]
       }
@@ -123,19 +180,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun src/skills/hooks/context-precompact-backup.ts",
+            "command": "bun src/core/hooks/context-backup-precompact.ts 2>/dev/null",
             "timeout": 5000
-          }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun src/skills/hooks/notify-event-toast.ts",
-            "timeout": 3000
           }
         ]
       }

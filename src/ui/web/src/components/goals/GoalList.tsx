@@ -1,5 +1,6 @@
 import type { Goal, Category } from '../../types';
 import { GoalCard } from './GoalCard';
+import { Icon } from '../ui/Icon';
 
 type GoalWithMeta = Goal & { categories?: Category[]; latestNote?: { content: string } };
 
@@ -12,10 +13,8 @@ interface GoalListProps {
 export function GoalList({ goals, groupBy = 'none', categories = [] }: GoalListProps) {
   if (goals.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-text-disabled">
-        <svg className="w-10 h-10 mb-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-        </svg>
+      <div className="flex flex-col items-center justify-center py-16 text-text-muted">
+        <Icon name="assignment" size="xl" className="mb-3 opacity-40" />
         <p className="text-sm">No goals match the current filters.</p>
       </div>
     );
@@ -59,7 +58,7 @@ export function GoalList({ goals, groupBy = 'none', categories = [] }: GoalListP
           <div className="flex items-center gap-2 mb-2">
             {group.cat ? (
               <span
-                className="text-xs font-semibold uppercase tracking-wider px-2 py-0.5 rounded"
+                className="text-sm font-semibold uppercase tracking-wider px-2 py-0.5 rounded"
                 style={
                   group.cat.color
                     ? { backgroundColor: `${group.cat.color}20`, color: group.cat.color }
@@ -69,11 +68,11 @@ export function GoalList({ goals, groupBy = 'none', categories = [] }: GoalListP
                 {group.cat.name}
               </span>
             ) : (
-              <span className="text-xs font-semibold uppercase tracking-wider text-text-disabled">
+              <span className="text-sm font-semibold uppercase tracking-wider text-text-muted">
                 Uncategorized
               </span>
             )}
-            <span className="text-xs text-text-disabled">({group.goals.length})</span>
+            <span className="text-sm text-text-muted">({group.goals.length})</span>
           </div>
           <div className="flex flex-col gap-2">
             {group.goals.map((g) => (

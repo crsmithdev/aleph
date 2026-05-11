@@ -1,0 +1,376 @@
+[
+  {
+    "id": "dracula",
+    "name": "Dracula",
+    "mode": "dark",
+    "swatch": [
+      "#282a36",
+      "#21222c",
+      "#bd93f9",
+      "#f8f8f2"
+    ]
+  },
+  {
+    "id": "one-dark-pro",
+    "name": "One Dark Pro",
+    "mode": "dark",
+    "swatch": [
+      "#282c34",
+      "#21252b",
+      "#c678dd",
+      "#abb2bf"
+    ]
+  },
+  {
+    "id": "nord",
+    "name": "Nord",
+    "mode": "dark",
+    "swatch": [
+      "#2e3440",
+      "#3b4252",
+      "#88c0d0",
+      "#d8dee9"
+    ]
+  },
+  {
+    "id": "material-palenight",
+    "name": "Material Palenight",
+    "mode": "dark",
+    "swatch": [
+      "#292d3e",
+      "#2f3347",
+      "#c792ea",
+      "#babed8"
+    ]
+  },
+  {
+    "id": "bluloco-dark",
+    "name": "Bluloco Dark",
+    "mode": "dark",
+    "swatch": [
+      "#282c34",
+      "#21252b",
+      "#3691ff",
+      "#abb2bf"
+    ]
+  },
+  {
+    "id": "ayu-mirage",
+    "name": "Ayu Mirage",
+    "mode": "dark",
+    "swatch": [
+      "#1f2430",
+      "#232834",
+      "#ffcc66",
+      "#cbccc6"
+    ]
+  },
+  {
+    "id": "oh-lucy-dark",
+    "name": "Oh Lucy Dark",
+    "mode": "dark",
+    "swatch": [
+      "#1b1d26",
+      "#232530",
+      "#ff7eb6",
+      "#dfdfe0"
+    ]
+  },
+  {
+    "id": "material-darker",
+    "name": "Material Darker",
+    "mode": "dark",
+    "swatch": [
+      "#212121",
+      "#1a1a1a",
+      "#82aaff",
+      "#eeffff"
+    ]
+  },
+  {
+    "id": "houston",
+    "name": "Houston",
+    "mode": "dark",
+    "swatch": [
+      "#17191e",
+      "#1c1e25",
+      "#4cc9f0",
+      "#dee2e6"
+    ]
+  },
+  {
+    "id": "one-candy-dark",
+    "name": "One Candy Dark",
+    "mode": "dark",
+    "swatch": [
+      "#1e2030",
+      "#232538",
+      "#f5a9b8",
+      "#c8cedc"
+    ]
+  },
+  {
+    "id": "moonlight-ii",
+    "name": "Moonlight II",
+    "mode": "dark",
+    "swatch": [
+      "#222436",
+      "#1e2030",
+      "#c099ff",
+      "#c8d3f5"
+    ]
+  },
+  {
+    "id": "one-monokai",
+    "name": "One Monokai",
+    "mode": "dark",
+    "swatch": [
+      "#282c34",
+      "#21252b",
+      "#e5c07b",
+      "#abb2bf"
+    ]
+  },
+  {
+    "id": "palenight",
+    "name": "Palenight",
+    "mode": "dark",
+    "swatch": [
+      "#292d3e",
+      "#242837",
+      "#c792ea",
+      "#a6accd"
+    ]
+  },
+  {
+    "id": "one-dark-pro-flat",
+    "name": "One Dark Pro Flat",
+    "mode": "dark",
+    "swatch": [
+      "#282c34",
+      "#282c34",
+      "#61afef",
+      "#abb2bf"
+    ]
+  },
+  {
+    "id": "catppuccin-macchiato",
+    "name": "Catppuccin Macchiato",
+    "mode": "dark",
+    "swatch": [
+      "#24273a",
+      "#1e2030",
+      "#c6a0f6",
+      "#cad3f5"
+    ]
+  },
+  {
+    "id": "catppuccin-frappe",
+    "name": "Catppuccin Frappé",
+    "mode": "dark",
+    "swatch": [
+      "#303446",
+      "#292c3c",
+      "#ca9ee6",
+      "#c6d0f5"
+    ]
+  },
+  {
+    "id": "github-dark-dimmed",
+    "name": "GitHub Dark Dimmed",
+    "mode": "dark",
+    "swatch": [
+      "#22272e",
+      "#2d333b",
+      "#539bf5",
+      "#adbac7"
+    ]
+  },
+  {
+    "id": "slate",
+    "name": "Slate",
+    "mode": "dark",
+    "swatch": [
+      "#0f172a",
+      "#1e293b",
+      "#60a5fa",
+      "#e2e8f0"
+    ]
+  },
+  {
+    "id": "fog",
+    "name": "Fog",
+    "mode": "dark",
+    "swatch": [
+      "#111418",
+      "#191d22",
+      "#90a4ae",
+      "#d0d7de"
+    ]
+  },
+  {
+    "id": "carbon",
+    "name": "Carbon",
+    "mode": "dark",
+    "swatch": [
+      "#161616",
+      "#1c1c1c",
+      "#0f62fe",
+      "#f4f4f4"
+    ]
+  },
+  {
+    "id": "ink",
+    "name": "Ink",
+    "mode": "dark",
+    "swatch": [
+      "#111217",
+      "#181920",
+      "#818cf8",
+      "#d6d8e1"
+    ]
+  },
+  {
+    "id": "neon-teal",
+    "name": "Neon Teal",
+    "mode": "dark",
+    "swatch": [
+      "#090c10",
+      "#0f1318",
+      "#22d3ee",
+      "#cdd6e0"
+    ]
+  },
+  {
+    "id": "github-light",
+    "name": "GitHub Light",
+    "mode": "light",
+    "swatch": [
+      "#ffffff",
+      "#f6f8fa",
+      "#0969da",
+      "#24292f"
+    ]
+  },
+  {
+    "id": "atom-one-light",
+    "name": "Atom One Light",
+    "mode": "light",
+    "swatch": [
+      "#fafafa",
+      "#f0f0f0",
+      "#4078f2",
+      "#383a42"
+    ]
+  },
+  {
+    "id": "brackets-light",
+    "name": "Brackets Light",
+    "mode": "light",
+    "swatch": [
+      "#f8f8f8",
+      "#ffffff",
+      "#446fbd",
+      "#333333"
+    ]
+  },
+  {
+    "id": "bluloco-light",
+    "name": "Bluloco Light",
+    "mode": "light",
+    "swatch": [
+      "#f9f9f9",
+      "#f0f2f5",
+      "#275fe4",
+      "#373737"
+    ]
+  },
+  {
+    "id": "material-lighter",
+    "name": "Material Lighter",
+    "mode": "light",
+    "swatch": [
+      "#fafafa",
+      "#ffffff",
+      "#7c4dff",
+      "#546e7a"
+    ]
+  },
+  {
+    "id": "catppuccin-latte",
+    "name": "Catppuccin Latte",
+    "mode": "light",
+    "swatch": [
+      "#eff1f5",
+      "#e6e9ef",
+      "#8839ef",
+      "#4c4f69"
+    ]
+  },
+  {
+    "id": "dracula-soft-light",
+    "name": "Dracula Soft Light",
+    "mode": "light",
+    "swatch": [
+      "#f5f2f8",
+      "#ece8f2",
+      "#8c6ec7",
+      "#44405a"
+    ]
+  },
+  {
+    "id": "nord-light",
+    "name": "Nord Light",
+    "mode": "light",
+    "swatch": [
+      "#eceff4",
+      "#e5e9f0",
+      "#5e81ac",
+      "#3b4252"
+    ]
+  },
+  {
+    "id": "github-light-default",
+    "name": "GitHub Light Default",
+    "mode": "light",
+    "swatch": [
+      "#f6f8fa",
+      "#ffffff",
+      "#0969da",
+      "#1f2328"
+    ]
+  },
+  {
+    "id": "houston-light",
+    "name": "Houston Light",
+    "mode": "light",
+    "swatch": [
+      "#f2f3f5",
+      "#e9eaed",
+      "#2ba5c7",
+      "#2c2e33"
+    ]
+  },
+  {
+    "id": "one-candy-light",
+    "name": "One Candy Light",
+    "mode": "light",
+    "swatch": [
+      "#eff1f5",
+      "#e6e8ee",
+      "#c05a82",
+      "#3e4058"
+    ]
+  },
+  {
+    "id": "graphite",
+    "name": "Graphite",
+    "mode": "light",
+    "swatch": [
+      "#f1f3f5",
+      "#f8f9fa",
+      "#4b5563",
+      "#1f2937"
+    ]
+  }
+]

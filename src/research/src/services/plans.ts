@@ -77,8 +77,16 @@ export function addPlanModification(
 
 export function getPendingModifications(sqlite: Sqlite, planId: string): PlanModification[] {
   return (sqlite.prepare(
-    'SELECT * FROM research_plan_modifications WHERE plan_id = ? ORDER BY created_at ASC'
+    'SELECT * FROM research_plan_modifications WHERE plan_id = ? AND applied_at IS NULL ORDER BY created_at ASC'
   ).all(planId) as Record<string, unknown>[]).map(rowToMod);
+}
+
+export function markModificationsApplied(sqlite: Sqlite, ids: string[]): void {
+  if (ids.length === 0) return;
+  const placeholders = ids.map(() => '?').join(',');
+  sqlite.prepare(
+    `UPDATE research_plan_modifications SET applied_at = datetime('now') WHERE id IN (${placeholders})`
+  ).run(...ids);
 }
 
 export function updatePlanStatus(sqlite: Sqlite, id: string, status: ResearchPlan['status']): void {

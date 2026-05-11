@@ -62,6 +62,10 @@ export interface ToolMetric {
   avgMs?: number;
   p50Ms?: number;
   p95Ms?: number;
+  linesAdded?: number;
+  linesRemoved?: number;
+  sessionCount?: number;
+  velocity?: number;
 }
 
 export interface CompactionData {
@@ -69,7 +73,36 @@ export interface CompactionData {
   totalTokensAtCompaction: number;
   avgPreTokens: number;
   byDay: TimeBucket[];
-  events: Array<{ timestamp: string; sessionId: string; trigger: string; preTokens: number }>;
+  events: Array<{ timestamp: string; sessionId: string; trigger: string; preTokens: number; toolCallCount?: number; contextPct?: number }>;
+}
+
+export interface VerificationPhaseResult {
+  result: "pass" | "fail" | "skip";
+  count?: number;
+  coverage?: number;
+}
+
+export interface VerificationData {
+  totalRuns: number;
+  byPhase: Record<string, { pass: number; fail: number; skip: number }>;
+  byDay: Array<{ date: string; pass: number; fail: number }>;
+  recentRuns: Array<{ timestamp: string; sessionId: string; phases: Record<string, VerificationPhaseResult> }>;
+}
+
+export interface EvalResult {
+  name: string;
+  totalRuns: number;
+  passAt1Rate: number;
+  passAt3Rate: number;
+  lastRun: string;
+  trend: "improving" | "stable" | "regressing";
+}
+
+export interface EvalData {
+  evals: EvalResult[];
+  byDay: Array<{ date: string; runs: number; passRate: number }>;
+  totalRuns: number;
+  overallPassAt3Rate: number;
 }
 
 export interface ApiDurationData {
@@ -87,6 +120,7 @@ export interface HookMetric {
   p50Ms: number;
   p95Ms: number;
   errors: number;
+  lastUsed?: string;
   active?: boolean;
   fullCommand?: string;
 }
@@ -96,6 +130,10 @@ export interface SkillMetric {
   count: number;
   pct: number;
   errors: number;
+  sessions: number;
+  avgMs?: number;
+  p50Ms?: number;
+  p95Ms?: number;
   lastUsed?: string;
 }
 
@@ -129,6 +167,10 @@ export interface SessionBucket {
   messages: number;
   userMessages?: number;
   assistantMessages?: number;
+  cost?: number;
+  linesAdded?: number;
+  linesRemoved?: number;
+  commits?: number;
 }
 
 export interface ProjectBucket {
@@ -149,16 +191,30 @@ export interface OverviewData {
 export interface ToolsData {
   ranked: ToolMetric[];
   byDay: (TimeBucket & { tools: Record<string, number> })[];
+  byDayChurn: (TimeBucket & { tools: Record<string, number> })[];
+  byDayProject: (TimeBucket & { projects: Record<string, number> })[];
+  byDayVelocity: (TimeBucket & { velocity: number })[];
+  byDayErrors: (TimeBucket & { tools: Record<string, number> })[];
+  byDayLatency: (TimeBucket & { tools: Record<string, number> })[];
+  byDaySessionCount: (TimeBucket & { tools: Record<string, number> })[];
+  skillToolMatrix: Array<{ skill: string; tools: Array<{ tool: string; count: number }> }>;
+  projectRanked: Array<{ project: string; count: number; pct: number }>;
 }
 
 export interface HooksData {
   ranked: HookMetric[];
   byDay: (TimeBucket & { hooks: Record<string, number> })[];
+  byDayLatency: (TimeBucket & { hooks: Record<string, number> })[];
+  byDayErrors: (TimeBucket & { hooks: Record<string, number> })[];
+  byDayEvent: (TimeBucket & { events: Record<string, number> })[];
 }
 
 export interface SkillsData {
   ranked: SkillMetric[];
   byDay: (TimeBucket & { skills: Record<string, number> })[];
+  byDaySessions: (TimeBucket & { skills: Record<string, number> })[];
+  byDayErrors: (TimeBucket & { skills: Record<string, number> })[];
+  byDayLatency: (TimeBucket & { skills: Record<string, number> })[];
 }
 
 export interface TokensData {
@@ -201,12 +257,14 @@ export interface SessionMetric {
   gitBranch?: string;
   hasSubagents?: boolean;
   gateInfo?: GateInfo;
+  firstUserMessage?: string;
 }
 
 export interface SessionsData {
   byDay: SessionBucket[];
   byProject: ProjectBucket[];
   byActivity: TimeBucket[];
+  byDayProject: (TimeBucket & { projects: Record<string, number> })[];
   sessions: SessionMetric[];
   avgDurationMs: number;
   totalUserMessages: number;
@@ -220,8 +278,22 @@ export interface ToolDetailData {
   name: string;
   totalCount: number;
   errorCount: number;
-  byDay: (TimeBucket & { byHour: Record<number, number> })[];
-  invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; isError?: boolean; errorMessage?: string }[];
+  totalLinesAdded: number;
+  totalLinesRemoved: number;
+  sessionCount: number;
+  byDay: (TimeBucket & {
+    byHour: Record<number, number>;
+    errors: number;
+    errorRate: number;
+    sessions: number;
+    linesAdded: number;
+    linesRemoved: number;
+    p50Ms?: number;
+    p95Ms?: number;
+    avgMs?: number;
+  })[];
+  skills: { name: string; count: number }[];
+  invocations: { timestamp: string; sessionId: string; project: string; params?: Record<string, unknown>; durationMs?: number; isError?: boolean; errorMessage?: string; errorFull?: string; skill?: string; linesAdded?: number; linesRemoved?: number }[];
 }
 
 export interface HookDetailData {
@@ -248,6 +320,33 @@ export interface MemoryUsageData {
   stores: number;
   searches: number;
   byDay: { date: string; stores: number; searches: number }[];
+}
+
+export interface MemorySearchResult {
+  id?: string;
+  content: string;
+  memory_type?: string;
+  tags?: string[];
+  score?: number;
+  name?: string;
+}
+
+export interface MemorySearchInvocation {
+  timestamp: string;
+  sessionId: string;
+  query: string;
+  mode?: string;
+  tags?: string[];
+  durationMs?: number;
+  isError?: boolean;
+  errorMessage?: string;
+  results: MemorySearchResult[];
+  resultCount: number;
+}
+
+export interface MemorySearchData {
+  totalSearches: number;
+  invocations: MemorySearchInvocation[];
 }
 
 export interface HookInvocation {
@@ -289,6 +388,7 @@ export interface TraceSpan {
   detail?: string;
   toolUseId?: string;
   subagentSessionId?: string;
+  resultTokens?: number;
 }
 
 export interface TraceTurn {
@@ -298,8 +398,21 @@ export interface TraceTurn {
   durationMs: number;
   spans: TraceSpan[];
   tokenCount?: number;
+  contextTokens?: number;
+  outputTokens?: number;
+  inputTokens?: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
   cost?: number;
   model?: string;
+  assistantText?: string;
+}
+
+export interface TraceCompaction {
+  timestamp: string;
+  trigger: string;
+  preTokens?: number;
+  summary?: string;
 }
 
 export interface TraceData {
@@ -307,6 +420,7 @@ export interface TraceData {
   parentSessionId?: string;
   project: string;
   turns: TraceTurn[];
+  compactions: TraceCompaction[];
   totalDurationMs: number;
   totalTokens: number;
   totalCost: number;

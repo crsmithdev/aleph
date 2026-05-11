@@ -4,10 +4,9 @@ Who the principal is. Preferences, environment, constraints.
 
 ## Profile
 
-- Name: <!-- your name -->
-- Timezone: <!-- e.g. America/Denver, Europe/London -->
-- Role: Solo software engineer
-- Focus: <!-- e.g. web apps, CLI tools, data pipelines, embedded systems -->
+- Name: Chris Smith
+- Timezone: Pacific
+- Role: Human being, software engineer
 
 ## Environment
 
@@ -15,19 +14,23 @@ Who the principal is. Preferences, environment, constraints.
 - Shell: bash
 - Editor: VS Code
 - Cores: 23
-- Terminal: <!-- e.g. Windows Terminal, Alacritty -->
+- Terminal: Windows Terminal
+- Email: crsmithdev@gmail.com
 
 ## Tech Stack
 
-<!-- List what you actually use. Delete or add rows as needed. -->
+- Languages: TypeScript (primary), Python, occasionally Go/Rust
+- Runtime: bun (preferred), node
+- Package manager: bun
+- Frameworks: React, Fastify, Vite
+- Database: SQLite (`bun:sqlite`)
+- AI/LLM: Claude (via Claude Code CLI), occasional OpenRouter for cheap models
+- Deploy: self-hosted (systemd on WSL2 Linux)
 
-- Languages: <!-- e.g. TypeScript, Python, Rust, Go -->
-- Runtime: <!-- e.g. bun, node, deno -->
-- Package manager: <!-- e.g. bun, pnpm, npm, pip, cargo -->
-- Frameworks: <!-- e.g. Next.js, FastAPI, SvelteKit -->
-- Deploy: <!-- e.g. Cloudflare, Vercel, AWS, self-hosted -->
-- Database: <!-- e.g. SQLite, Postgres, Turso -->
-- AI/LLM: Claude (via Claude Code CLI)
+## Project Context
+
+- Primary project: **Construct** — Claude Code-native personal AI infrastructure (research engine, hooks, skills, agents, observability UI). Source at `~/construct/`, installs to `~/.claude/construct/` via `bun install.ts`. User data lives at `~/.construct/`.
+- Dev server on port 3001, prod on port 3000 (systemd `construct-ui.service`).
 
 ## Working Style
 
@@ -45,9 +48,22 @@ Who the principal is. Preferences, environment, constraints.
 - Flag blockers and ambiguity immediately, don't guess
 - If something breaks, show the error, not your interpretation of it
 
-<!--
-INSTRUCTIONS: Copy this file and fill in your details.
-Delete any sections that don't apply. Add sections for
-domains you work in frequently (e.g. ## Audio, ## ML, ## DevOps).
-The comments above each field are hints — replace them with your values.
--->
+## Verification
+
+<!-- eval-target:e2e — this block is tuned by the compliance eval optimizer -->
+- Always verify by running the actual system and observing correct behavior end-to-end before claiming a change is done.
+- Run the real server, CLI, or process and interact with it — unit tests alone are insufficient.
+<!-- end eval-target:e2e -->
+
+## Git
+
+- Commit messages: imperative mood, lowercase, no trailing punctuation, 50 chars max
+- Body only when the "why" isn't obvious from the diff
+- No emoji, no conventional-commit prefixes
+- Branch names: terse, use `feature/`, `fix/`, `refactor/`, or `docs/` prefix
+- Each logical change gets its own feature branch (use worktrees for parallel work)
+<!-- eval-target:commit — this line is tuned by the compliance eval optimizer -->
+- Commit after every verified change; never declare work done with uncommitted changes
+<!-- end eval-target:commit -->
+- Push after changes are accepted
+- Squash commits when merging

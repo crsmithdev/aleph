@@ -9,6 +9,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
     "@construct/data": "file:../data",
+    "@construct/logger": "file:../logger",
     "@mozilla/readability": "^0.6.0",
     "linkedom": "^0.18.12",
     "nanoid": "^5.1.2",

@@ -1,5 +1,5 @@
-.dev/
 .claude/worktrees/
+.worktrees/
 .claude/commands/
 .claude/MEMORY.md
 .claude/settings.local.json
@@ -15,6 +15,7 @@ docs/SCRATCH.md
 # Dashboard
 node_modules/
 dist/
+*.tsbuildinfo
 *.db
 *.db-wal
 *.db-shm
@@ -27,3 +28,5 @@ test-results/
 playwright-report/
 src/dashboard/api/data/
 evidence/
+.trace
+.claude/*.lock
