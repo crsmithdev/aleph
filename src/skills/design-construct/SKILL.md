@@ -1,3 +1,8 @@
+---
+name: design-construct
+description: Construct's design system — tokens, surfaces, type scale, iconography, component patterns. Use when building or modifying Construct UI to enforce token usage (no inline hex), the three-tier surface system, Merriweather/Noto type pairing, and Material Symbols icon conventions. Reference `previews/*.html` and `kits/*.html` as visual specs before redesigning chrome.
+---
+
 # Construct Design System — usage notes
 
 When designing for **construct**, follow these rules.
