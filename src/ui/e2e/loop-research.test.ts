@@ -91,28 +91,24 @@ async function runTests(port: number) {
   const baseSearchCount = fake.searchCount();
   const baseCompleteCount = fake.completeCount();
 
-  // --- Submit page ---
-  console.log('\n--- /loops/new ---');
-  await page.goto(`${baseUrl}/loops/new`);
-  await page.waitForSelector('[data-testid="loop-new-form"]', { timeout: 8000 });
-  check('submit form renders', true);
+  // --- Start a research loop via the API + navigate to /research/:slug ---
+  // /loops/new is gone (commit 67b693d). The /research compose box submits
+  // research-template loops directly to /api/loops/start; tests use the same
+  // API entry point for parity with production and to avoid coupling to UI
+  // form selectors that may evolve.
+  console.log('\n--- POST /api/loops/start (research) ---');
+  const startRes = await page.request.post(`${baseUrl}/api/loops/start`, {
+    headers: { 'content-type': 'application/json' },
+    data: { template_id: 'research', prompt: 'how does a sourdough starter develop?' },
+  });
+  check('POST /api/loops/start → 201', startRes.status() === 201, `got ${startRes.status()}`);
+  const { id: loopId } = await startRes.json() as { id: string };
+  check('start returned a slug id', /^[a-z]+-[a-z]+-[a-z]+-[a-f0-9]+$/.test(loopId), loopId);
 
-  // --- Select research template + prompt ---
-  await page.locator('[data-testid="loop-new-template"]').selectOption('research');
-  check('template select has research option',
-    (await page.locator('[data-testid="loop-new-template"]').inputValue()) === 'research');
-  await page.locator('[data-testid="loop-new-prompt"]').fill('how does a sourdough starter develop?');
-
-  // --- Submit ---
-  console.log('\n--- submit ---');
-  await page.locator('[data-testid="loop-new-submit"]').click();
-  await page.waitForURL(/\/loops\/[a-f0-9-]{36}$/, { timeout: 8000 });
-  const url = page.url();
-  const loopId = url.match(/\/loops\/([a-f0-9-]{36})$/)?.[1];
-  check('navigated to /loops/:id', !!loopId, url);
-
-  // --- Detail page ---
-  console.log('\n--- /loops/:id ---');
+  console.log('\n--- /research/:id ---');
+  await page.goto(`${baseUrl}/research/${loopId}`);
+  await page.waitForURL(new RegExp(`/research/${loopId}$`), { timeout: 8000 });
+  check('navigated to /research/:id', page.url().endsWith(`/research/${loopId}`), page.url());
   await page.waitForSelector('[data-testid="page-loop-detail"]', { timeout: 8000 });
   check('three panels render',
     (await page.locator('[data-testid="loop-activity"]').count()) === 1 &&

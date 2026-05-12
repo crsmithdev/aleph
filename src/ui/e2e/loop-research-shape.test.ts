@@ -89,19 +89,26 @@ async function runTests(port: number) {
     else { console.log(`  ✗ ${name}${detail ? ': ' + detail : ''}`); failed++; }
   }
 
-  // --- Submit a table-shape prompt via the form ---
-  console.log('\n--- /loops/new (table case) ---');
-  await page.goto(`${baseUrl}/loops/new`);
-  await page.waitForSelector('[data-testid="loop-new-form"]', { timeout: 8000 });
-  await page.locator('[data-testid="loop-new-template"]').selectOption('research');
-  await page.locator('[data-testid="loop-new-prompt"]').fill(
-    'Compare HSV and HPV: transmission, symptoms, treatment, vaccine.',
-  );
-  await page.locator('[data-testid="loop-new-submit"]').click();
-  await page.waitForURL(/\/loops\/[a-f0-9-]{36}$/, { timeout: 8000 });
-  const url = page.url();
-  const loopId = url.match(/\/loops\/([a-f0-9-]{36})$/)?.[1];
-  check('navigated to /loops/:id', !!loopId, url);
+  // --- Start a table-shape research loop via the API ---
+  // /loops/new is gone (commit 67b693d); /research compose box now drives
+  // research-template submission. Tests use the API entry point directly
+  // for parity, then navigate to /research/:slug to drive the Schedule
+  // panel + shape gate assertions through the live UI.
+  console.log('\n--- POST /api/loops/start (research, table case) ---');
+  const startRes = await page.request.post(`${baseUrl}/api/loops/start`, {
+    headers: { 'content-type': 'application/json' },
+    data: {
+      template_id: 'research',
+      prompt: 'Compare HSV and HPV: transmission, symptoms, treatment, vaccine.',
+    },
+  });
+  check('POST /api/loops/start → 201', startRes.status() === 201, `got ${startRes.status()}`);
+  const { id: loopId } = await startRes.json() as { id: string };
+
+  await page.goto(`${baseUrl}/research/${loopId}`);
+  await page.waitForURL(new RegExp(`/research/${loopId}$`), { timeout: 8000 });
+  check('navigated to /research/:id', page.url().endsWith(`/research/${loopId}`), page.url());
+  await page.waitForSelector('[data-testid="page-loop-detail"]', { timeout: 8000 });
 
   // --- Wait for completion via the UI's status indicator ---
   console.log('\n--- completion ---');

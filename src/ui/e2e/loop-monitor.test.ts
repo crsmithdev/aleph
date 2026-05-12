@@ -80,17 +80,19 @@ async function runTests(port: number) {
     else { console.log(`  ✗ ${name}${detail ? ': ' + detail : ''}`); failed++; }
   }
 
-  await page.goto(`${baseUrl}/loops/new`);
-  await page.waitForSelector('[data-testid="loop-new-form"]', { timeout: 8000 });
+  // /loops/new is gone (commit 67b693d). Monitor template starts via the
+  // API + we navigate to /research/:slug — same as production for any
+  // non-research template.
+  const startRes = await page.request.post(`${baseUrl}/api/loops/start`, {
+    headers: { 'content-type': 'application/json' },
+    data: { template_id: 'monitor', prompt: 'watch for changes in sourdough microbiology' },
+  });
+  check('POST /api/loops/start → 201', startRes.status() === 201, `got ${startRes.status()}`);
+  const { id: loopId } = await startRes.json() as { id: string };
 
-  await page.locator('[data-testid="loop-new-template"]').selectOption('monitor');
-  check('template select has monitor option',
-    (await page.locator('[data-testid="loop-new-template"]').inputValue()) === 'monitor');
-  await page.locator('[data-testid="loop-new-prompt"]').fill('watch for changes in sourdough microbiology');
-
-  await page.locator('[data-testid="loop-new-submit"]').click();
-  await page.waitForURL(/\/loops\/[a-f0-9-]{36}$/, { timeout: 8000 });
-  check('navigated to /loops/:id', true);
+  await page.goto(`${baseUrl}/research/${loopId}`);
+  await page.waitForURL(new RegExp(`/research/${loopId}$`), { timeout: 8000 });
+  check('navigated to /research/:id', page.url().endsWith(`/research/${loopId}`), page.url());
 
   await page.waitForSelector('[data-testid="page-loop-detail"]', { timeout: 8000 });
   await page.waitForFunction(
