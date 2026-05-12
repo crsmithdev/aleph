@@ -127,6 +127,22 @@
     {
       "skill": "agents-audit",
       "keywords": ["agents-audit", "audit subagents", "audit my agents", "audit the agents", "find agent drift", "check agent dispatch", "agent routing collision", "/agents-audit", "/(audit|check).{0,10}(agent|subagent)/"]
+    },
+    {
+      "skill": "docs-fix",
+      "keywords": ["docs-fix", "fix the docs findings", "remediate docs drift", "/docs-fix", "/fix docs", "apply docs fixes", "/(fix|remediate).{0,10}(doc|docs)/"]
+    },
+    {
+      "skill": "skills-fix",
+      "keywords": ["skills-fix", "fix the skills findings", "remediate skill drift", "fix orphaned skills", "/skills-fix", "/fix skills", "apply skill fixes", "/(fix|remediate).{0,10}(skill|registry)/"]
+    },
+    {
+      "skill": "hooks-fix",
+      "keywords": ["hooks-fix", "fix the hooks findings", "remediate hook silent-fails", "fix dead outputs", "/hooks-fix", "/fix hooks", "apply hook fixes", "/(fix|remediate).{0,10}hook/"]
+    },
+    {
+      "skill": "agents-fix",
+      "keywords": ["agents-fix", "fix the agents findings", "remediate agent drift", "fix agent dispatch ambiguity", "/agents-fix", "/fix agents", "apply agent fixes", "/(fix|remediate).{0,10}(agent|subagent)/"]
     }
   ]
 }
