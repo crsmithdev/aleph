@@ -86,7 +86,7 @@ Inherits from `research-system-principles.md` (single-operator scale, AI-maintai
 **UX (from the design doc's configurability section):**
 
 - **Compose box: prompt textarea + mode-button row.** The mode row contains the 8 modes above (Quick / Default / Deep / Roam / Bonkers / Dev / Eval / Custom). Default is selected when nothing else is, but the mode can also be **inferred from the prompt** at session-create time (cheap LLM call; user can override).
-- **`InferredPanel` preserved**, with editors for `question_shape`, `output_shape` (new in v1), `topic` (note: 6-cluster taxonomy deleted; this becomes a free-text label or removed entirely — see Phase 4), `mode`, and `role` (new in v1 — `pickAgentRole` already runs, just expose its output for editing). The InferredPanel covers the *query classification* fields; the **Schedule view covers everything else**, including model / budget / perturbation / canon / branches / milestones.
+- **`InferredPanel` preserved**, with editors for `question_shape`, `output_shape` (new in v1), and `role` (new in v1 — `pickAgentRole` already runs, just expose its output for editing). The InferredPanel covers the *query classification* fields; the **Schedule view covers everything else**, including model / budget / perturbation / canon / branches / milestones.
 - **Sidebar IA:** `Research`, `Monitors`, `Telemetry`. `WorkersPage` removed. Reviews tab folded into the report + a Debug tab.
 
 **Foundational infrastructure (from `research-system-principles.md`):**
@@ -146,7 +146,7 @@ Delete `run-plan.ts`'s `(shape × topic) → RunPlan` lookup, the 6-cluster `TOP
 *Deliverable:* the user can see and (in Custom or paused state) edit every per-loop knob in one place. No advanced/expert panel anywhere in the system. Cost-per-run drops because the extractor runs on a cheap model.
 
 **Phase 6 — UI rewrite.**
-Compose box: prompt textarea + 8-button mode row (Quick / Default / Deep / Roam / Bonkers / Dev / Eval / Custom). `InferredPanel` preserved with editors for question_shape, output_shape, mode, role, topic-as-free-text. Schedule view from Phase 5 wired up as the universal editor. **Activity tab as a first-class live view** — real-time stream of cycles, events, decisions, intermediate outputs, and errors; co-equal with the Schedule and Artifact views, not relegated to a debug surface. Drop `WorkersPage` and the Reviews tab. Sidebar IA: Research / Monitors / Telemetry.
+Compose box: prompt textarea + 8-button mode row (Quick / Default / Deep / Roam / Bonkers / Dev / Eval / Custom). `InferredPanel` preserved with editors for question_shape, output_shape, role. Schedule view from Phase 5 wired up as the universal editor. **Activity tab as a first-class live view** — real-time stream of cycles, events, decisions, intermediate outputs, and errors; co-equal with the Schedule and Artifact views, not relegated to a debug surface. Drop `WorkersPage` and the Reviews tab. Sidebar IA: Research / Monitors / Telemetry.
 *Deliverable:* the loop-detail page shows three co-equal surfaces during a live run — **Activity** (live event stream), **Schedule** (current plan artifact, editable when paused or in Custom mode), **Artifact** (the report-in-progress). Mode buttons always visible. No advanced/expert panel anywhere.
 
 **Phase 7 — Cutover.**
@@ -230,7 +230,7 @@ All three flow through the same API (`POST /loops/:id/checks`) and the same audi
 ### v2.5 — Planner prompt tuning (separate from checks)
 
 - v1's adaptive planner is fully LLM-driven. v2 evaluates planner outputs across the historical query corpus and tunes the prompt + few-shot examples for systematic failures.
-- Adds a small set of "canonical good plans" for representative `(shape, topic_label)` situations as in-prompt examples — closing the loop on what the deleted lookup table used to encode.
+- Adds a small set of "canonical good plans" drawn from the historical query corpus as in-prompt examples — closing the loop on what the deleted lookup table used to encode.
 - *Empirical case:* the long tail of historically-bucketed `Misc` queries — verify the adaptive planner handles them at least as well as the old lookup. Standalone from the check framework; pure planner-quality work.
 
 ### v2 acceptance criteria
@@ -364,7 +364,7 @@ Worth restating since the comparison doc surveyed them and decided no:
 
 ### Feature inventory at a glance
 
-**v1 ships:** loop engine + 4-hook template interface · research template · monitor template · cycle ledger · envelope · milestones · child-process per loop · output-shape enforcement · adaptive planner (replaces shape × topic lookup; URL-grounded; emits typed `LoopSchedule`) · **schedule as the universal loop config** (every per-loop knob is a field on the schedule artifact) · **Schedule view = universal editor** (pre-run / mid-run / historical) · **8-mode set** (Quick / Default / Deep / Roam / Bonkers / Dev / Eval / Custom; all visible, no dev gating) · **live Activity view as a first-class surface** · locked-field mechanic on schedule edits · per-role model selection · `InferredPanel` (shape, output_shape, mode, role, free-text topic) · mockable LLM boundary · typed failure-mode identifiers · cost-as-observable · event-triggered background work · two real-LLM e2e tests.
+**v1 ships:** loop engine + 4-hook template interface · research template · monitor template · cycle ledger · envelope · milestones · child-process per loop · output-shape enforcement · adaptive planner (replaces shape × topic lookup; URL-grounded; emits typed `LoopSchedule`) · **schedule as the universal loop config** (every per-loop knob is a field on the schedule artifact) · **Schedule view = universal editor** (pre-run / mid-run / historical) · **8-mode set** (Quick / Default / Deep / Roam / Bonkers / Dev / Eval / Custom; all visible, no dev gating) · **live Activity view as a first-class surface** · locked-field mechanic on schedule edits · per-role model selection · `InferredPanel` (shape, output_shape, role) · mockable LLM boundary · typed failure-mode identifiers · cost-as-observable · event-triggered background work · two real-LLM e2e tests.
 
 **v1 does NOT ship:** mid-run *editing* of the Schedule view (read-only while running; editing only in Custom mode pre-run or paused state — pause itself is v2) · the **Check framework** and all checks built on it (marginal-value stop, redundancy detector, continuous watcher, self-healing remediations, intent-alignment, narrative post-mortems, user-authored checks for pause/directive/fork — all v2) · source-type specialized processors · engine-side context compression (digest artifact) · charts in renderer · heavy-modality cycles · pre-flight clarification flow · recursive sub-loops · new templates (code/writing/image) · cross-run features (related-runs panel, concept/source indexes, knowledge graph view — all v5).
 
