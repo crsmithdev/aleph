@@ -215,13 +215,13 @@ describe('Loops API — Phase 3 output-shape enforcement', () => {
     expect(finalState.loop.status).toBe('completed');
 
     // Schedule artifact carries the detected table shape with the right columns.
+    // Phase 4 also stores a `plan` field on the same payload; this test asserts
+    // shape only — planner coverage lives in `src/research/src/loop/planner.test.ts`.
     const schedule = finalState.artifacts.find(a => a.kind === 'schedule');
     expect(schedule).toBeDefined();
-    expect(schedule!.payload).toEqual({
-      output_shape: {
-        kind: 'table',
-        columns: ['transmission', 'symptoms', 'treatment', 'vaccine'],
-      },
+    expect((schedule!.payload as { output_shape: unknown }).output_shape).toEqual({
+      kind: 'table',
+      columns: ['transmission', 'symptoms', 'treatment', 'vaccine'],
     });
 
     // Every cycle_output's render payload reflects the table gate. The final
@@ -269,8 +269,8 @@ describe('Loops API — Phase 3 output-shape enforcement', () => {
 
     const schedule = finalState.artifacts.find(a => a.kind === 'schedule');
     expect(schedule).toBeDefined();
-    expect(schedule!.payload).toEqual({
-      output_shape: { kind: 'list', min_items: 5 },
+    expect((schedule!.payload as { output_shape: unknown }).output_shape).toEqual({
+      kind: 'list', min_items: 5,
     });
 
     const cycleOutputs = finalState.artifacts.filter(a => a.kind === 'cycle_output');
@@ -315,11 +315,9 @@ describe('Loops API — Phase 3 output-shape enforcement', () => {
 
     const schedule = finalState.artifacts.find(a => a.kind === 'schedule');
     expect(schedule).toBeDefined();
-    expect(schedule!.payload).toEqual({
-      output_shape: {
-        kind: 'mixed',
-        components: [{ kind: 'prose' }, { kind: 'list', min_items: 5 }],
-      },
+    expect((schedule!.payload as { output_shape: unknown }).output_shape).toEqual({
+      kind: 'mixed',
+      components: [{ kind: 'prose' }, { kind: 'list', min_items: 5 }],
     });
 
     const cycleOutputs = finalState.artifacts.filter(a => a.kind === 'cycle_output');

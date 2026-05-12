@@ -28,6 +28,7 @@
 import type { Sqlite } from '@construct/data';
 import { createArtifact, listArtifacts } from './db.js';
 import type { LLMProvider } from './llm.js';
+import { planLoop } from './planner.js';
 import type { Artifact, LoopId, LoopState, OutputShape, SchedulePayload } from './types.js';
 
 const DEFAULT_DETECT_MODEL = 'openai/gpt-5-nano';
@@ -137,10 +138,15 @@ export async function detectOutputShape(
 
 /**
  * Idempotent: returns the existing schedule artifact's payload if one is
- * already on the loop; otherwise runs `detectOutputShape` and writes a new
- * `kind: 'schedule'` artifact. Called at child-process start so that crash
- * resume doesn't re-run detection (and doesn't risk a different shape on
- * the second LLM call). Returns the SchedulePayload either way.
+ * already on the loop; otherwise runs `detectOutputShape` AND `planLoop` and
+ * writes a new `kind: 'schedule'` artifact carrying both. Called at child-
+ * process start so that crash resume doesn't re-run either step (and doesn't
+ * risk a different shape or plan on the second LLM pass). Returns the
+ * SchedulePayload either way.
+ *
+ * Two sequential LLM calls — detection feeds planning, so they don't
+ * parallelise. Both target the cheap nano model by default; per-step
+ * overrides are available for tests.
  */
 export async function ensureScheduleArtifact(
   sqlite: Sqlite,
@@ -148,13 +154,15 @@ export async function ensureScheduleArtifact(
   prompt: string,
   llm: LLMProvider,
   detectModel?: string,
+  planModel?: string,
 ): Promise<SchedulePayload> {
   const existing = listArtifacts(sqlite, loop_id, 'schedule');
   if (existing.length > 0) {
     return existing[0].payload as unknown as SchedulePayload;
   }
   const output_shape = await detectOutputShape(prompt, llm, detectModel);
-  const payload: SchedulePayload = { output_shape };
+  const plan = await planLoop(prompt, output_shape, llm, planModel);
+  const payload: SchedulePayload = { output_shape, plan };
   createArtifact(sqlite, {
     loop_id,
     cycle_id: null,

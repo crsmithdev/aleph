@@ -15,9 +15,11 @@ export type {
   Milestone,
   LoopState, StopDecision, Template,
   OutputShape, SchedulePayload,
+  Branch, LoopSchedule,
 } from './types.js';
 
 export { detectOutputShape, ensureScheduleArtifact, readScheduleFromArtifacts } from './shape.js';
+export { planLoop } from './planner.js';
 
 export {
   createLoop, getLoop, updateLoopStatus, updateLoopChildPid,

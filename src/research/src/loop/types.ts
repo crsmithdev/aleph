@@ -126,15 +126,74 @@ export type OutputShape =
   | { kind: 'timeline'; min_events?: number }
   | { kind: 'mixed'; components: OutputShape[] };
 
+// ---- Adaptive planner (Phase 4) ----------------------------------------------
+
+/**
+ * One investigation thread within a loop. The research template's derivation
+ * hook seeds cycle queries from the schedule's `branches[]` instead of the
+ * Phase-2 "first follow-up" pickup, so the planner controls thread topology
+ * up front. Phase 5 will add a `predecessor_id` link for milestone re-plans.
+ */
+export interface Branch {
+  /** Stable identifier within the schedule. Slug form (e.g.
+   *  `"react-state-libs"`). Perturbation system links spawned cycles back
+   *  via this id. */
+  id: string;
+  /** Seed query — the first cycle on this branch uses it verbatim;
+   *  subsequent cycles derive from accumulated findings. */
+  query: string;
+  /** Per-branch override of the schedule's `per_branch_budget`. Planner
+   *  sets it only when the branch warrants more or less than the default. */
+  budget?: number;
+}
+
+/**
+ * Adaptive planner output. Replaces `run-plan.ts`'s
+ * `(question_shape × topic_cluster) → RunPlan` lookup with an LLM call that
+ * takes (prompt, question_shape, output_shape, envelope, role) and emits this
+ * typed schedule. Per `docs/plans/research-engine-build-plan.md` §Phase 4,
+ * the Phase-4 slice is the structural plan only; envelope, models,
+ * perturbation_config, flags, mode metadata collapse onto `SchedulePayload`
+ * at Phase 5.
+ *
+ * The defense against F1 (topic / canon drift): the planner sees the prompt
+ * directly and can ground canon on URL contents when the prompt contains a
+ * URL, rather than routing through a 6-cluster topic lookup whose taxonomy
+ * was the documented root of the failure.
+ */
+export interface LoopSchedule {
+  /** Authoritative list of entities / concepts the loop investigates. Order
+   *  is significant — earlier entries get earlier cycles. URL-grounded
+   *  prompts seed canon from the URL contents; otherwise the planner derives
+   *  it from the prompt. */
+  canon: string[];
+  /** Decomposition of the prompt into investigation threads. */
+  branches: Branch[];
+  /** Default cycle budget per branch (cycles, not USD — the USD envelope
+   *  stays on `SessionConfig` until Phase 5 collapses it onto the
+   *  schedule). Individual branches may override via `Branch.budget`. */
+  per_branch_budget: number;
+  /** Planner's preference for the perturbation strategy menu, expressed as
+   *  `strategy_id → weight` (0..1). Strategies not listed inherit the
+   *  default weight from the perturbation system. Phase 4 emits this;
+   *  engine consumes at Phase 5. */
+  perturbation_weights: Record<string, number>;
+  /** Milestone re-plan checkpoints as fractions of envelope (0..1). At
+   *  each milestone the planner re-fires with accumulated findings;
+   *  resulting schedule artifacts chain via `predecessor_id` (Phase 5). */
+  milestone_plan: number[];
+}
+
 /**
  * Payload of the `kind: 'schedule'` artifact written once at session-create
- * time. Phase 3 carries only `output_shape`. Phase 5 collapses the rest of the
- * per-loop knobs (envelope, models, perturbation_config, canon, branches,
- * milestones, flags) onto this same payload — anticipating that move now
- * avoids a DDL migration when the planner lands.
+ * time. Phase 3 carries `output_shape`; Phase 4 adds `plan`. Phase 5 collapses
+ * the rest of the per-loop knobs (envelope, models, perturbation_config,
+ * flags, mode metadata) onto this same payload — anticipating that move now
+ * avoids a DDL migration when the universal-config slice lands.
  */
 export interface SchedulePayload {
   output_shape: OutputShape;
+  plan: LoopSchedule;
 }
 
 // ---- Cycle ledger ------------------------------------------------------------

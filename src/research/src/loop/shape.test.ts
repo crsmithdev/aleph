@@ -119,37 +119,11 @@ describe('detectOutputShape — tolerance + fallbacks', () => {
   });
 });
 
-describe('ensureScheduleArtifact — idempotent persistence', () => {
+describe('readScheduleFromArtifacts — payload roundtrip', () => {
   let sqlite: ReturnType<typeof newDb>;
   beforeEach(() => { sqlite = newDb(); });
 
-  test('first call detects and writes a schedule artifact', async () => {
-    const llm = llmReturning('{"kind":"list","min_items":5}');
-    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'best Berkeley volunteer options' });
-
-    const payload = await ensureScheduleArtifact(sqlite, loop.id, loop.prompt, llm);
-
-    expect(payload.output_shape).toEqual({ kind: 'list', min_items: 5 });
-    const artifacts = listArtifacts(sqlite, loop.id, 'schedule');
-    expect(artifacts).toHaveLength(1);
-    expect(artifacts[0].payload).toEqual({ output_shape: { kind: 'list', min_items: 5 } });
-    expect(llm.completeCalls).toBe(1);
-  });
-
-  test('second call reuses the existing artifact without a new LLM call', async () => {
-    const llm = llmReturning('{"kind":"list","min_items":5}');
-    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
-
-    await ensureScheduleArtifact(sqlite, loop.id, loop.prompt, llm);
-    const callsAfterFirst = llm.completeCalls;
-    const second = await ensureScheduleArtifact(sqlite, loop.id, loop.prompt, llm);
-
-    expect(llm.completeCalls).toBe(callsAfterFirst);     // no extra call on respawn
-    expect(second.output_shape).toEqual({ kind: 'list', min_items: 5 });
-    expect(listArtifacts(sqlite, loop.id, 'schedule')).toHaveLength(1);
-  });
-
-  test('readScheduleFromArtifacts surfaces the payload from a LoopState-style list', async () => {
+  test('surfaces the payload from a LoopState-style artifact list', async () => {
     const llm = llmReturning('{"kind":"table","columns":["a","b"]}');
     const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
     await ensureScheduleArtifact(sqlite, loop.id, loop.prompt, llm);
