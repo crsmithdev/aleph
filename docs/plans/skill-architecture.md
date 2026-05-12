@@ -83,7 +83,7 @@ The 7-step conform process that currently appears in `code-conform / design-conf
 
 ### R3. Findings emitted in SARIF
 
-Every leaf-skill audit emits SARIF v2.1.0 (OASIS standard). The omnibus reads SARIF; humans read the prose alongside. SARIF gives free interop with GitHub Code Scanning, VS Code's Problems panel, and any other static-analysis-aware tool. We do not invent a custom JSON shape.
+Every leaf-skill audit emits SARIF v2.1.0 (OASIS standard). The omnibus reads SARIF; humans read the prose alongside. We do not invent a custom JSON shape — SARIF is the industry standard and lets the same finding stream be consumed by any SARIF-aware tool in the future.
 
 ### R4. Per-project verification gates loaded from `VERIFICATION.md`
 
@@ -268,17 +268,9 @@ Empty cells skipped silently with a "Skipped: <reason>" line in the report.
    - **Security, auth, payments, infrastructure** — always human-review, per finding.
 10. **Fix dispatch (fix verb only).** Route each approved finding to `<domain>-fix` with the SARIF result as input. Parallel within a phase; sequential across phases. After each phase, run `gate(<domain>)` for every touched domain. No phase advances until green.
 
-### Three forms (CI integration as first-class)
+### Form
 
-The omnibus ships as:
-
-| Form | Use |
-|---|---|
-| Slash command (`/audit`) | Interactive development in Claude Code |
-| Local CLI (`omnibus audit`) | Pre-commit hook, terminal use outside Claude Code |
-| GitHub Action (`construct/omnibus@v1`) | PR-time review, posts SARIF to Code Scanning, optionally comments inline |
-
-Per the security-review plugin pattern — three forms, one engine.
+The omnibus is invoked as a slash command (`/audit`, `/fix`, `/suggest`) inside Claude Code. SARIF output is captured to a file under the project for review and replay. Out-of-band invocation (CLI / CI) is out of scope for v1; nothing in the architecture precludes it later, but it isn't a deliverable.
 
 ---
 
@@ -376,7 +368,6 @@ Security is split from `code` because:
 1. **Distinct rule sources.** OWASP Top 10, CWE Top 25, NIST CSF 2.0, ASVS 5.0, MITRE ATT&CK, SOC 2, ISO 27001:2022 — these are maintained external standards, not project conventions.
 2. **Different audit cognition.** Code-audit catches "this is sloppy"; security-audit catches "this is exploitable." Different reasoning, different tolerances.
 3. **Different approval policy.** Security findings always require human review, never auto-approval.
-4. **Different output destination.** Security findings should also feed CI gating (SARIF → GitHub Code Scanning), not just developer console.
 
 `security-audit` checks (lifted from Anthropic's `claude-code-security-review`):
 
@@ -496,8 +487,7 @@ These are not blockers for v1 but should be tracked:
 2. **Phase 2 — Rules consolidation.** Create `src/rules/<domain>/RULES.md` for each domain. Move `docs-author-v2/RULES.md` content into `src/rules/docs/RULES.md`. Author the missing ones (`code`, `design`, `security` first; `skills`, `hooks`, `agents`, `config` after).
 3. **Phase 3 — One vertical, end-to-end.** Build `code-audit` + `code-fix` + omnibus dispatch for the code domain only. Run on this repo. Compare findings against Anthropic's `code-review` plugin (installed side-by-side). Iterate until the vertical is clean.
 4. **Phase 4 — Replicate for design and docs.** Apply the v1 pattern to design and docs domains. These have the most existing skills to consolidate.
-5. **Phase 5 — Fill in security.** New domain; build `security-audit` + `security-fix` against OWASP/CWE rules. Pair with the existing `claude-code-security-review` GitHub Action for CI.
+5. **Phase 5 — Fill in security.** New domain; build `security-audit` + `security-fix` against OWASP/CWE rules.
 6. **Phase 6 — Fill in skills, hooks, agents, config.** These are Construct-specific and mostly net-new audit content.
-7. **Phase 7 — CI integration.** Wrap the local omnibus in a GitHub Action; post SARIF to Code Scanning; gate PR merges on `blocking` findings.
 
-Each phase is mergeable on its own. Phases 3-6 are independent vertical slices and can run in parallel if a team wants.
+Each phase is mergeable on its own. Phases 3-6 are independent vertical slices and can run in parallel if a team wants. Out-of-band invocation (CLI / CI) is deliberately out of scope; v1 is a slash-command-only architecture.

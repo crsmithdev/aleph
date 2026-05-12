@@ -1,0 +1,161 @@
+# omnibus.yml — Construct project config for the omnibus orchestrator
+#
+# This file is the per-project surface for the skill-matrix architecture defined
+# in docs/plans/skill-architecture.md. The omnibus skill reads this file to
+# decide which leaf skills to run, with what defaults, and how to gate fixes.
+#
+# CLI flags layer on top of these defaults: `/audit --threshold 60 --all`
+# overrides `defaults.threshold` and `defaults.scope` for that one run.
+#
+# Schema version is bumped when the structure changes incompatibly.
+
+version: 1
+
+# ---------------------------------------------------------------------------
+# Defaults — applied to every omnibus invocation unless overridden by CLI.
+# ---------------------------------------------------------------------------
+defaults:
+  scope: diff                       # diff | module | all
+  threshold: 80                     # 0-100 confidence floor for inclusion
+  phases:                           # severity tiers to include in output
+    - blocking
+    - important
+
+# ---------------------------------------------------------------------------
+# Active leaves — which (verb, domain) cells are populated and dispatched.
+# Empty cells in the matrix are simply absent here; the omnibus skips them
+# silently and emits a "Skipped: <domain>" line in the report.
+#
+# These names will resolve to skills under src/skills/<name>/ once Phase 3+
+# builds the actual leaves. Today (Phase 1) they're declared intent; the
+# omnibus dispatcher (not yet built) will return "leaf not installed yet" for
+# any name without a matching skill directory.
+# ---------------------------------------------------------------------------
+active:
+  audit:
+    - code
+    - design
+    - docs
+    - skills
+    - hooks
+    - agents
+    - config
+    - security
+  fix:
+    - code
+    - design
+    - docs
+    - skills
+    - hooks
+    - agents
+    - security
+  suggest:
+    - code
+    - design
+    - docs
+    - skills
+    - hooks
+    - agents
+    - config
+    - security
+  # 'author' is invoked directly per artifact creation, not orchestrated.
+
+# ---------------------------------------------------------------------------
+# Per-leaf configuration. Each leaf inherits rules from src/rules/<domain>/
+# unless overridden here.
+# ---------------------------------------------------------------------------
+leaves:
+  code-audit:
+    rules: src/rules/code/RULES.md
+    exclude:
+      - "src/skills/docs-author/**"  # legacy, scheduled for migration
+      - "**/*.generated.ts"
+      - ".worktrees/**"
+
+  design-audit:
+    rules: src/rules/design/RULES.md
+    references:
+      - src/rules/design/typography.md
+      - src/rules/design/accessibility.md
+
+  docs-audit:
+    # Until Phase 2 consolidation, leaf-level rules still live with the legacy skill.
+    rules: src/rules/docs/RULES.md
+    legacy_source: src/skills/docs-author-v2/RULES.md
+
+  security-audit:
+    rules: src/rules/security/RULES.md
+    framework_mappings:
+      - OWASP-Top-10-2025
+      - CWE-Top-25
+      - NIST-CSF-2.0
+      - ASVS-5.0
+      - MITRE-ATT&CK
+
+  hooks-audit:
+    rules: src/rules/hooks/RULES.md
+
+  skills-audit:
+    rules: src/rules/skills/RULES.md
+
+  agents-audit:
+    rules: src/rules/agents/RULES.md
+
+  config-audit:
+    rules: src/rules/config/RULES.md
+    use_agnix: true                 # agnix --dry-run handles structural lint
+
+# ---------------------------------------------------------------------------
+# Verification gates — mirrors VERIFICATION.md. Skills call gate("<domain>")
+# and the resolution happens here. Keep this in sync with VERIFICATION.md.
+# ---------------------------------------------------------------------------
+verification:
+  code: "bun test.ts"
+  design: "bun run --cwd src/ui ui:smoke"
+  docs: ""                          # not yet implemented
+  skills: "bun test src/skills"
+  hooks: "bun test src/core/hooks"
+  agents: ""                        # manual for now
+  config: "agnix --dry-run ."
+  security: ""                      # CI-only for now
+
+# ---------------------------------------------------------------------------
+# Approval policy — risk-tiered (per Anthropic 2026 Agentic Coding Trends).
+# auto: applied without prompting
+# single: one approval prompt for all findings in the slice
+# per-finding: every finding requires explicit approval
+# ---------------------------------------------------------------------------
+approval:
+  # by severity tier
+  by_severity:
+    blocking:    single
+    important:   single
+    nit:         auto
+    suggestion:  single
+    learning:    auto
+    praise:      auto
+
+  # by domain — domain rule overrides severity rule when stricter
+  by_domain:
+    docs:     auto
+    code:     single
+    design:   single
+    skills:   single
+    hooks:    single
+    agents:   single
+    config:   single
+    security: per-finding
+
+  # by tag — most specific override
+  by_tag:
+    secret:      per-finding
+    auth:        per-finding
+    payments:    per-finding
+    rce:         per-finding
+    injection:   per-finding
+    crypto:      per-finding
+
+# ---------------------------------------------------------------------------
+# Finding contract — pointer to the SARIF + properties shape leaves emit.
+# ---------------------------------------------------------------------------
+finding_contract: src/skills/_shared/finding.md
