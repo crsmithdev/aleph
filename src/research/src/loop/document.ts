@@ -1,0 +1,179 @@
+/**
+ * Document-polish pass for the v1 loop engine.
+ *
+ * The research template's renderer hook produces a `render` artifact every
+ * cycle — a concatenation of per-cycle synthesized text. Useful as the
+ * "current answer" while a loop is running, but reads as raw research notes
+ * rather than a finished article: branch-by-branch sections with no
+ * connective prose, no unified citation scheme, no introductory framing.
+ *
+ * `generateDocument` is the optional polish pass that fills that gap. It
+ * takes the latest `render` artifact and asks one cheap LLM call to
+ * restructure the material into a Wikipedia-style article — lead section,
+ * topical headings, numbered `[1]`-style citations, References section.
+ * The output lands as a separate `kind: 'document'` artifact so the UI can
+ * surface it while keeping the raw `render` available as a fallback for
+ * loops that haven't been polished yet.
+ *
+ * Two entry points:
+ *   - `runLoop` fires this once on natural completion (engine.ts), so the
+ *     user gets a finished article without clicking anything.
+ *   - The API exposes a regenerate endpoint (routes/loops.ts) so the user
+ *     can re-fire the polish on demand — useful after a milestone re-plan
+ *     adds new branches, or just to retry with a different model later.
+ *
+ * The prompt is ported verbatim from the legacy `generateDocumentLegacy`
+ * (engine.ts:2704) so the article style stays consistent across the engine
+ * cutover; the only difference is the source-of-truth shifted from
+ * `research_findings` rows to the `render` artifact's findings + sources.
+ */
+import type { Sqlite } from '@construct/data';
+import { createArtifact, listArtifacts } from './db.js';
+import type { LLMProvider } from './llm.js';
+import type { Artifact, LoopId } from './types.js';
+
+const DEFAULT_DOCUMENT_MODEL = 'google/gemini-2.0-flash-001';
+const DOCUMENT_MAX_TOKENS = 8000;
+
+/** Payload of a `kind: 'document'` artifact. The text is the polished
+ *  Markdown article; the rest is metadata for the UI surface. */
+export interface DocumentPayload {
+  text: string;
+  source_count: number;
+  generated_at: string;
+  model: string;
+  /** Source ids of the cycles whose render artifact fed this document — lets
+   *  the UI flag a document as "stale relative to the latest render". */
+  rendered_cycles: number;
+}
+
+interface RenderFinding {
+  cycle: number;
+  query: string;
+  text: string;
+}
+interface RenderSource {
+  url: string;
+  title: string;
+}
+interface RenderPayload {
+  kind: 'render';
+  findings: RenderFinding[];
+  sources: RenderSource[];
+  cycles_rendered: number;
+}
+
+/**
+ * Find the latest `render` artifact for a loop. Templates may write the
+ * render either as a top-level artifact (renderer hook output) or as the
+ * `render` field of a `cycle_output` payload — the research template does
+ * the latter. We scan both kinds and prefer the freshest by created_at.
+ */
+function findLatestRender(artifacts: Artifact[]): RenderPayload | null {
+  let best: { ts: string; payload: RenderPayload } | null = null;
+  for (const a of artifacts) {
+    if (a.kind === 'render') {
+      const p = a.payload as unknown as RenderPayload;
+      if (!best || a.created_at > best.ts) best = { ts: a.created_at, payload: p };
+      continue;
+    }
+    if (a.kind === 'cycle_output') {
+      const render = (a.payload as { render?: RenderPayload }).render;
+      if (render && Array.isArray(render.findings)) {
+        if (!best || a.created_at > best.ts) best = { ts: a.created_at, payload: render };
+      }
+    }
+  }
+  return best?.payload ?? null;
+}
+
+/**
+ * Build the encyclopedia-editor prompt. Mirrors `generateDocumentLegacy`'s
+ * prompt structure so article style stays consistent across the cutover.
+ * The source material is laid out as `[Cycle N: <query>]\n<text>` blocks,
+ * paralleling the legacy `[Thread: <q>]` format.
+ */
+function buildPolishPrompt(prompt: string, render: RenderPayload): string {
+  const material = render.findings
+    .map(f => `[Cycle ${f.cycle}: ${f.query}]\n${f.text}`)
+    .join('\n\n---\n\n');
+  const sourceList = render.sources
+    .map((s, i) => `[${i + 1}] ${s.title || s.url} — ${s.url}`)
+    .join('\n');
+
+  return [
+    'You are a skilled encyclopedia editor. Using the research findings below as source material, write a comprehensive, well-structured article about: "' + prompt + '"',
+    '',
+    'Write it like a Wikipedia article:',
+    '- Start with a concise lead section (2-3 paragraphs) that summarizes the entire topic',
+    '- Organize the body into logical sections with short heading titles (1-5 words each, ## level)',
+    '- Use subsections (### level) where appropriate',
+    '- Write in flowing, connected prose — not bullet points or lists',
+    '- Weave findings together into a coherent narrative; do not just list them sequentially',
+    '- Use transitional phrases between paragraphs and sections',
+    '- Where appropriate, cite sources using numbered references like [1], [2] etc.',
+    '- End with a "## References" section listing all cited sources as numbered items',
+    '- Do NOT include confidence scores, tags, metadata, or any research-process artifacts',
+    '- The tone should be encyclopedic: neutral, informative, authoritative',
+    '',
+    `Source material (${render.findings.length} cycles):`,
+    '',
+    material,
+    '',
+    `Available sources for citation (${render.sources.length}):`,
+    sourceList,
+    '',
+    'Write the full article in Markdown.',
+  ].join('\n');
+}
+
+/**
+ * Run the polish pass and persist a new `kind: 'document'` artifact.
+ * Returns the artifact, or `null` if there's no render to polish yet
+ * (e.g. the loop ended with zero cycles of usable output — degenerate
+ * case the caller can surface as a warning).
+ *
+ * On LLM failure the function rethrows; callers decide whether to log
+ * + continue (the auto-fire path) or surface as a 500 (the regenerate
+ * endpoint, where the user is explicitly asking and wants the error).
+ */
+export async function generateDocument(
+  sqlite: Sqlite,
+  loop_id: LoopId,
+  prompt: string,
+  llm: LLMProvider,
+  model: string = DEFAULT_DOCUMENT_MODEL,
+): Promise<Artifact | null> {
+  const artifacts = listArtifacts(sqlite, loop_id);
+  const render = findLatestRender(artifacts);
+  if (!render || render.findings.length === 0) return null;
+
+  const result = await llm.complete(model, buildPolishPrompt(prompt, render), DOCUMENT_MAX_TOKENS);
+
+  const payload: DocumentPayload = {
+    text: result.text,
+    source_count: render.sources.length,
+    generated_at: new Date().toISOString(),
+    model: result.model || model,
+    rendered_cycles: render.cycles_rendered,
+  };
+  return createArtifact(sqlite, {
+    loop_id,
+    cycle_id: null,
+    kind: 'document',
+    payload: payload as unknown as Record<string, unknown>,
+  });
+}
+
+/**
+ * Pull the latest `document` artifact off a loop's artifact list. Templates
+ * + UI components call this from inside their render path so they don't
+ * need a separate DB read — the engine already loads artifacts into state.
+ */
+export function readLatestDocument(artifacts: Artifact[]): { artifact: Artifact; payload: DocumentPayload } | null {
+  const docs = artifacts
+    .filter(a => a.kind === 'document')
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  if (docs.length === 0) return null;
+  return { artifact: docs[0], payload: docs[0].payload as unknown as DocumentPayload };
+}

@@ -20,6 +20,8 @@ export type {
 
 export { detectOutputShape, ensureScheduleArtifact, readScheduleFromArtifacts } from './shape.js';
 export { planLoop } from './planner.js';
+export { generateDocument, readLatestDocument } from './document.js';
+export type { DocumentPayload } from './document.js';
 
 export {
   createLoop, getLoop, listLoops, updateLoopStatus, updateLoopChildPid,

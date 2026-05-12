@@ -22,6 +22,7 @@ import { applyResearchDDL } from '../ddl.js';
 import { OpenRouterProvider } from '../providers/openrouter.js';
 import { onResearchEvent, type ResearchEvent } from '../services/events.js';
 import { getLoop, updateLoopStatus } from './db.js';
+import { generateDocument } from './document.js';
 import { runLoop } from './engine.js';
 import type { LLMProvider } from './llm.js';
 import type { Sqlite } from '@construct/data';
@@ -134,7 +135,24 @@ async function main() {
   onResearchEvent(writeEvent);
 
   try {
-    await runLoop(sqlite, template, loop_id);
+    const result = await runLoop(sqlite, template, loop_id);
+
+    // Auto-polish on natural completion: fire the document generator once
+    // before the child exits, so the user lands on a finished article when
+    // they open /research/:id. Failure here doesn't fail the loop —
+    // observable via stderr per Commandment 1, and the regenerate endpoint
+    // lets the user retry from the UI.
+    if (result.status === 'completed' && deps.llm) {
+      try {
+        const doc = await generateDocument(sqlite, loop_id, loop.prompt, deps.llm);
+        if (!doc) {
+          process.stderr.write(`[document] generateDocument: no render artifact to polish for ${loop_id}\n`);
+        }
+      } catch (err) {
+        process.stderr.write(`[document] generateDocument failed for ${loop_id}: ${(err as Error).message}\n`);
+      }
+    }
+
     process.exit(0);
   } catch (err) {
     process.stderr.write(`runLoop failed: ${(err as Error).stack ?? err}\n`);

@@ -14,9 +14,10 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { createReadStream, existsSync } from 'fs';
 import {
-  createLoop, getLoop, listLoops, listMilestones, readState,
+  createLoop, getLoop, generateDocument, listLoops, listMilestones, readState,
   onResearchEvent,
   listTemplateIds,
+  OpenRouterProvider,
   type Envelope,
 } from '@construct/research';
 import { readSessionLog, sessionLogPath } from '../research-logger.js';
@@ -58,6 +59,29 @@ export const loopRoutes: FastifyPluginAsync = async (app) => {
     const loop = createLoop(app.sqlite, { template_id, prompt, envelope });
     spawnLoopChild(app.sqlite, loop.id, { processor_delay_ms, cycles_target, poll_every });
     return reply.status(201).send({ id: loop.id });
+  });
+
+  /**
+   * Manually re-fire the document polish. The engine auto-fires this once on
+   * natural completion (run.ts); the regenerate endpoint exists so the user
+   * can re-polish after a milestone re-plan adds branches, or just to retry
+   * with a different model later. The new document is appended as another
+   * `kind: 'document'` artifact — `readLatestDocument` always returns the
+   * freshest so the UI seamlessly picks it up.
+   */
+  app.post<{ Params: { id: string } }>('/:id/regenerate-document', async (req, reply) => {
+    const loop = getLoop(app.sqlite, req.params.id);
+    if (!loop) return reply.status(404).send({ error: 'loop not found' });
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) return reply.status(500).send({ error: 'OPENROUTER_API_KEY not set' });
+    const llm = new OpenRouterProvider({ apiKey, models: [] });
+    try {
+      const doc = await generateDocument(app.sqlite, loop.id, loop.prompt, llm);
+      if (!doc) return reply.status(409).send({ error: 'no render artifact to polish yet' });
+      return reply.status(201).send({ id: doc.id, kind: doc.kind, created_at: doc.created_at });
+    } catch (err) {
+      return reply.status(502).send({ error: `polish failed: ${(err as Error).message}` });
+    }
   });
 
   app.get<{ Params: { id: string } }>('/:id', async (req, reply) => {
