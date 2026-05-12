@@ -519,5 +519,73 @@ export function applyResearchDDL(sqlite: Sqlite): void {
     }
   } catch { /* not applicable */ }
 
+  // ===========================================================================
+  // Loop engine (v1 rewrite, lands additively alongside the existing engine).
+  // Spec: docs/plans/research-engine-build-plan.md §Phase 1.
+  // Phase 7 will delete the legacy tables (research_jobs, research_perturbation_state,
+  // research_monitor_*); these `loops`/`cycles`/`artifacts`/`cycle_ledger`/`milestones`
+  // are the cutover destinations.
+  // ===========================================================================
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS loops (
+      id TEXT PRIMARY KEY,
+      template_id TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      envelope TEXT NOT NULL DEFAULT '{}',           -- JSON: { time?, cost?, cycles?, sources? }
+      envelope_consumed TEXT NOT NULL DEFAULT '{"time_minutes":0,"cost_usd":0,"cycles_count":0,"sources_count":0}',
+      child_pid INTEGER,                              -- pid of supervising child process, null when not running
+      prompt TEXT NOT NULL DEFAULT '',                -- the user's prompt; templates that don't use it ignore it
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_loops_status ON loops(status);
+
+    CREATE TABLE IF NOT EXISTS cycles (
+      id TEXT PRIMARY KEY,
+      loop_id TEXT NOT NULL REFERENCES loops(id) ON DELETE CASCADE,
+      idx INTEGER NOT NULL,                            -- dispatch order within the loop (0-based)
+      priority REAL NOT NULL DEFAULT 0.5,              -- ORDER BY priority DESC, created_at ASC
+      status TEXT NOT NULL DEFAULT 'pending',
+      started_at TEXT,
+      finalized_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_cycles_loop_dispatch ON cycles(loop_id, priority DESC, created_at);
+    CREATE INDEX IF NOT EXISTS idx_cycles_loop_status ON cycles(loop_id, status);
+
+    CREATE TABLE IF NOT EXISTS artifacts (
+      id TEXT PRIMARY KEY,
+      loop_id TEXT NOT NULL REFERENCES loops(id) ON DELETE CASCADE,
+      cycle_id TEXT REFERENCES cycles(id) ON DELETE SET NULL,
+      kind TEXT NOT NULL,                              -- 'milestone'|'schedule'|'render'|'noop_output'|...
+      payload TEXT NOT NULL DEFAULT '{}',              -- JSON; engine never introspects, templates own shape
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_artifacts_loop_kind ON artifacts(loop_id, kind, created_at);
+    CREATE INDEX IF NOT EXISTS idx_artifacts_cycle ON artifacts(cycle_id);
+
+    CREATE TABLE IF NOT EXISTS cycle_ledger (
+      loop_id TEXT NOT NULL REFERENCES loops(id) ON DELETE CASCADE,
+      cycle_id TEXT NOT NULL REFERENCES cycles(id) ON DELETE CASCADE,
+      step TEXT NOT NULL,                              -- 'processor'|'derivation'|'renderer'|'stop_rule'
+      input_hash TEXT NOT NULL,                        -- stable hash of step input; dedups on resume
+      output TEXT NOT NULL,                            -- JSON-serialised output
+      cost_usd REAL NOT NULL DEFAULT 0,
+      recorded_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (loop_id, cycle_id, step, input_hash)
+    );
+    CREATE INDEX IF NOT EXISTS idx_ledger_loop ON cycle_ledger(loop_id, recorded_at);
+
+    CREATE TABLE IF NOT EXISTS milestones (
+      id TEXT PRIMARY KEY,
+      loop_id TEXT NOT NULL REFERENCES loops(id) ON DELETE CASCADE,
+      at_envelope_pct INTEGER NOT NULL,               -- 25 | 50 | 75
+      artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
+      digest_artifact_id TEXT REFERENCES artifacts(id) ON DELETE SET NULL,   -- v3.2 companion; null in v1
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_milestones_loop ON milestones(loop_id, at_envelope_pct);
+  `);
+
   seedDefaults(sqlite);
 }
