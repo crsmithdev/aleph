@@ -77,14 +77,48 @@ interface Artifact {
   created_at: string;
 }
 
+type SourceExtractionStatus = 'extracted' | 'snippet_only' | 'failed';
+
+interface RenderSourceEntry {
+  url: string;
+  title: string;
+  extraction_status: SourceExtractionStatus;
+  attempts: number;
+  error?: string;
+}
+
 interface RenderPayload {
   kind: 'render';
   findings: Array<{ cycle: number; query: string; text: string }>;
-  sources: Array<{ url: string; title: string }>;
+  sources: RenderSourceEntry[];
   cycles_rendered: number;
   shape_kind?: string;
   shape_satisfied?: boolean;
   shape_missing?: unknown;
+}
+
+type DecisionPayload =
+  | { type: 'canon_pick'; entity: string; index: number; total: number; rationale?: string }
+  | { type: 'branch_pick'; branch_id: string; query: string; index: number; total: number; budget?: number; rationale?: string }
+  | { type: 'followup_pick'; query: string; accepted: boolean; index: number; total: number; cycle_id: string; reason?: string };
+
+interface DecisionLogEntry { decision: DecisionPayload; recorded_at: string }
+interface DecisionLogPayload { entries: DecisionLogEntry[] }
+
+interface IterationCheckPayload {
+  at_envelope_pct: 25 | 50 | 75;
+  verdict: 'on_track' | 'drifting' | 'needs_correction';
+  notes: string;
+  correction?: Record<string, unknown>;
+  model: string;
+}
+
+interface PostMortemPayload {
+  verdict: 'success' | 'partial' | 'failure';
+  flags: string[];
+  recommendations: string[];
+  metrics_snapshot: Record<string, unknown>;
+  model: string;
 }
 
 interface DocumentPayload {
@@ -104,7 +138,7 @@ interface ProcessorOutput {
 }
 
 interface StreamFrame {
-  type: 'loop' | 'cycle' | 'cycle_step' | 'milestone' | 'artifact';
+  type: 'loop' | 'cycle' | 'cycle_step' | 'milestone' | 'artifact' | 'decision';
   payload: Record<string, unknown>;
   logged_at: string;
 }
@@ -244,7 +278,7 @@ function DocumentTab({ loopId, artifacts }: { loopId: string; artifacts: Artifac
     return { artifact: docs[0], payload: docs[0].payload as unknown as DocumentPayload };
   }, [artifacts]);
 
-  const fallbackRender = useMemo(() => findLatestRender(artifacts), [artifacts]);
+  const fallbackRender = useMemo(() => findLatestRenderPayload(artifacts), [artifacts]);
   const [regenerating, setRegenerating] = useState(false);
   const [regenError, setRegenError] = useState<string | null>(null);
 
@@ -331,20 +365,21 @@ function DocumentTab({ loopId, artifacts }: { loopId: string; artifacts: Artifac
  * loops engine. Two-column dashboard:
  *
  *   LEFT  : KPI strip (Cycles · Steps · Cost · Duration)
+ *           Post-Mortem (one card, on completion)
+ *           Iteration Checks (list of milestone verdicts)
  *           Cycle Lifecycle table — per-cycle queue / dispatch / run / e2e
  *             percentiles (replaces the v0 Job Lifecycle table)
+ *           Source Extraction stats — failure rate + top failing domains
  *           Branch State stackbar — schedule.branches × cycle status counts
  *             (replaces the v0 Thread State stackbar)
+ *           Decisions — planner + derivation choices, filterable
  *   RIGHT : Event log — sticky panel with type filter pills, scrolls
  *             independently of the left column
  *
- * The mockup also showed Post-Mortem, Iteration Checks, Source Extraction,
- * and Decisions panels. Those panels surfaced data from the v0 engine's
- * post_mortem / iteration_check / source_extraction / decision events,
- * which the loop engine doesn't emit yet. Re-introducing them is a
- * follow-up (post-mortem as a final-cycle LLM hook; iteration checks as
- * milestone-tied verdicts; decisions as planner/derivation events; per-
- * source extraction status as a render-artifact field).
+ * Empty-state behavior: each panel renders only when its underlying
+ * artifact / event source has data. Early in a run only the KPIs + Cycle
+ * Lifecycle + Branch State + Event Log are populated; the others appear
+ * as the engine progresses.
  */
 function ActivityTab({
   loop, cycles, artifacts, events,
@@ -357,6 +392,10 @@ function ActivityTab({
   const kpis = useMemo(() => computeKpis(loop, cycles, events), [loop, cycles, events]);
   const lifecycle = useMemo(() => computeCycleLifecycle(cycles), [cycles]);
   const branchState = useMemo(() => computeBranchState(artifacts, cycles), [artifacts, cycles]);
+  const postMortem = useMemo(() => findLatestPostMortem(artifacts), [artifacts]);
+  const iterationChecks = useMemo(() => collectIterationChecks(artifacts), [artifacts]);
+  const sourceStats = useMemo(() => computeSourceStats(artifacts), [artifacts]);
+  const decisions = useMemo(() => readLatestDecisionLog(artifacts), [artifacts]);
 
   const [eventFilter, setEventFilter] = useState<'all' | StreamFrame['type']>('all');
   const filteredEvents = useMemo(
@@ -374,8 +413,12 @@ function ActivityTab({
       <KpiStrip kpis={kpis} />
       <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-5 items-start">
         <div className="flex flex-col gap-4 min-w-0">
+          {postMortem && <PostMortemPanel payload={postMortem} />}
+          {iterationChecks.length > 0 && <IterationChecksPanel checks={iterationChecks} />}
           <CycleLifecycle data={lifecycle} cycles={cycles} />
+          {sourceStats.total > 0 && <SourceExtractionPanel stats={sourceStats} />}
           <BranchState entries={branchState} />
+          {decisions.length > 0 && <DecisionsPanel entries={decisions} />}
         </div>
         <EventLog
           events={filteredEvents}
@@ -630,7 +673,294 @@ function BranchState({ entries }: { entries: BranchStateEntry[] }) {
   );
 }
 
-const EVENT_FILTERS: Array<'all' | StreamFrame['type']> = ['all', 'loop', 'cycle', 'cycle_step', 'artifact', 'milestone'];
+// ---- New panels (Post-Mortem · Iteration Checks · Source Extraction · Decisions) ----
+
+function findLatestPostMortem(artifacts: Artifact[]): PostMortemPayload | null {
+  const sorted = artifacts
+    .filter(a => a.kind === 'post_mortem')
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  return sorted[0]?.payload as unknown as PostMortemPayload ?? null;
+}
+
+const VERDICT_CLASS: Record<PostMortemPayload['verdict'], string> = {
+  success: 'bg-success/15 text-success border-success/40',
+  partial: 'bg-amber-500/15 text-amber-400 border-amber-500/40',
+  failure: 'bg-red-500/15 text-red-400 border-red-500/40',
+};
+
+function PostMortemPanel({ payload }: { payload: PostMortemPayload }) {
+  return (
+    <Panel
+      title="Post-mortem"
+      subtitle={`verdict · ${payload.verdict}`}
+      testId="post-mortem"
+    >
+      <div className="flex flex-col gap-3">
+        <div className={clsx('inline-flex self-start items-center px-2 py-0.5 rounded text-xs font-medium uppercase tracking-wider border', VERDICT_CLASS[payload.verdict])}>
+          {payload.verdict}
+        </div>
+        {payload.flags.length > 0 && (
+          <section>
+            <h5 className="text-xs uppercase tracking-wider text-text-muted mb-1.5">Flags</h5>
+            <ul className="flex flex-col gap-1 text-sm text-text-secondary">
+              {payload.flags.map((f, i) => (
+                <li key={i} className="flex gap-2"><span className="text-text-muted shrink-0">·</span><span>{f}</span></li>
+              ))}
+            </ul>
+          </section>
+        )}
+        {payload.recommendations.length > 0 && (
+          <section>
+            <h5 className="text-xs uppercase tracking-wider text-text-muted mb-1.5">Recommendations</h5>
+            <ul className="flex flex-col gap-1 text-sm text-text-secondary">
+              {payload.recommendations.map((r, i) => (
+                <li key={i} className="flex gap-2"><span className="text-text-muted shrink-0">·</span><span>{r}</span></li>
+              ))}
+            </ul>
+          </section>
+        )}
+        {Object.keys(payload.metrics_snapshot).length > 0 && (
+          <details className="text-xs">
+            <summary className="cursor-pointer text-text-muted hover:text-text-primary">Metrics snapshot</summary>
+            <pre className="mt-2 font-mono text-xs text-text-secondary overflow-x-auto p-2 bg-bg-tertiary rounded">{JSON.stringify(payload.metrics_snapshot, null, 2)}</pre>
+          </details>
+        )}
+        <div className="text-xs text-text-muted">model · <span className="font-mono">{payload.model}</span></div>
+      </div>
+    </Panel>
+  );
+}
+
+interface IterationCheckEntry { payload: IterationCheckPayload; created_at: string }
+
+function collectIterationChecks(artifacts: Artifact[]): IterationCheckEntry[] {
+  return artifacts
+    .filter(a => a.kind === 'iteration_check')
+    .map(a => ({ payload: a.payload as unknown as IterationCheckPayload, created_at: a.created_at }))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+const ITER_CHIP_CLASS: Record<IterationCheckPayload['verdict'], string> = {
+  on_track:          'bg-success/15 text-success',
+  drifting:          'bg-amber-500/15 text-amber-400',
+  needs_correction:  'bg-red-500/15 text-red-400',
+};
+
+function IterationChecksPanel({ checks }: { checks: IterationCheckEntry[] }) {
+  const latest = checks[0]?.payload.verdict;
+  const latestChip = latest ? (
+    <span className={clsx('text-xs px-1.5 py-0.5 rounded font-medium uppercase tracking-wider', ITER_CHIP_CLASS[latest])}>
+      {latest.replace('_', ' ')}
+    </span>
+  ) : null;
+  return (
+    <Panel
+      title="Iteration checks"
+      subtitle={`${checks.length} check${checks.length !== 1 ? 's' : ''}${checks[0] ? ` · last at ${checks[0].payload.at_envelope_pct}%` : ''}`}
+      testId="iteration-checks"
+      rightSlot={latestChip}
+    >
+      <ul className="flex flex-col gap-3" data-testid="iteration-checks-list">
+        {checks.map((c, i) => (
+          <li key={i} className="border-b border-border-primary last:border-b-0 pb-3 last:pb-0">
+            <div className="flex items-baseline gap-2 mb-1">
+              <span className={clsx('text-xs px-1.5 py-0.5 rounded font-medium uppercase tracking-wider', ITER_CHIP_CLASS[c.payload.verdict])}>
+                {c.payload.verdict.replace('_', ' ')}
+              </span>
+              <span className="text-xs text-text-muted">at {c.payload.at_envelope_pct}%</span>
+              <span className="text-xs font-mono text-text-muted ml-auto">{formatTs(c.created_at)}</span>
+            </div>
+            <p className="text-sm text-text-secondary">{c.payload.notes}</p>
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  );
+}
+
+interface SourceStats {
+  total: number;
+  extracted: number;
+  snippet_only: number;
+  failed: number;
+  failure_rate: number;
+  avg_attempts_on_failure: number;
+  top_failing_domains: Array<{ domain: string; failed: number; total: number }>;
+}
+
+function computeSourceStats(artifacts: Artifact[]): SourceStats {
+  const render = findLatestRenderPayload(artifacts);
+  const sources: RenderSourceEntry[] = render?.sources ?? [];
+  const total = sources.length;
+  if (total === 0) {
+    return { total: 0, extracted: 0, snippet_only: 0, failed: 0, failure_rate: 0, avg_attempts_on_failure: 0, top_failing_domains: [] };
+  }
+  let extracted = 0;
+  let snippet_only = 0;
+  let failed = 0;
+  let failureAttempts = 0;
+  const perDomain = new Map<string, { failed: number; total: number }>();
+  for (const s of sources) {
+    if (s.extraction_status === 'extracted') extracted++;
+    else if (s.extraction_status === 'snippet_only') snippet_only++;
+    else if (s.extraction_status === 'failed') { failed++; failureAttempts += s.attempts; }
+    const domain = safeDomain(s.url);
+    const entry = perDomain.get(domain) ?? { failed: 0, total: 0 };
+    entry.total++;
+    if (s.extraction_status === 'failed') entry.failed++;
+    perDomain.set(domain, entry);
+  }
+  const top_failing_domains = [...perDomain.entries()]
+    .filter(([, v]) => v.failed > 0)
+    .sort((a, b) => (b[1].failed / b[1].total) - (a[1].failed / a[1].total))
+    .slice(0, 5)
+    .map(([domain, v]) => ({ domain, ...v }));
+  return {
+    total,
+    extracted,
+    snippet_only,
+    failed,
+    failure_rate: failed / total,
+    avg_attempts_on_failure: failed > 0 ? failureAttempts / failed : 0,
+    top_failing_domains,
+  };
+}
+
+function safeDomain(url: string): string {
+  try { return new URL(url).hostname; } catch { return url.slice(0, 40); }
+}
+
+function SourceExtractionPanel({ stats }: { stats: SourceStats }) {
+  const failureColor = stats.failure_rate >= 0.2 ? 'text-red-400' : stats.failure_rate > 0 ? 'text-amber-400' : 'text-success';
+  return (
+    <Panel
+      title="Source extraction"
+      subtitle={`${stats.total} sources · ${(stats.failure_rate * 100).toFixed(1)}% failure`}
+      testId="source-extraction"
+    >
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_1.3fr] gap-5">
+        <div>
+          <div className="flex items-baseline justify-between mb-2">
+            <span className="text-xs text-text-muted">Failure rate</span>
+            <span className={clsx('text-2xl font-mono tabular-nums', failureColor)}>{(stats.failure_rate * 100).toFixed(1)}%</span>
+          </div>
+          <dl className="flex flex-col gap-1 text-sm">
+            <Row label="Extracted"><span className="font-mono tabular-nums text-success">{stats.extracted}</span></Row>
+            <Row label="Snippet only"><span className="font-mono tabular-nums">{stats.snippet_only}</span></Row>
+            <Row label="Failed"><span className="font-mono tabular-nums text-red-400">{stats.failed}</span></Row>
+            {stats.failed > 0 && <Row label="Avg attempts (on failure)"><span className="font-mono tabular-nums">{stats.avg_attempts_on_failure.toFixed(1)}</span></Row>}
+          </dl>
+        </div>
+        <div>
+          <h5 className="text-xs uppercase tracking-wider text-text-muted mb-2">Top failing domains</h5>
+          {stats.top_failing_domains.length === 0 ? (
+            <p className="text-sm text-text-muted italic">No failures yet.</p>
+          ) : (
+            <ul className="flex flex-col gap-1 text-sm">
+              {stats.top_failing_domains.map((d, i) => {
+                const pct = d.total > 0 ? (d.failed / d.total) * 100 : 0;
+                const tone = pct >= 50 ? 'text-red-400' : 'text-amber-400';
+                return (
+                  <li key={i} className="flex items-baseline justify-between gap-2">
+                    <span className="font-mono text-xs text-text-secondary truncate">{d.domain}</span>
+                    <span className="font-mono text-xs tabular-nums">
+                      <span className={tone}>{d.failed}</span> / {d.total} <span className="text-text-muted">({pct.toFixed(0)}%)</span>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function readLatestDecisionLog(artifacts: Artifact[]): DecisionLogEntry[] {
+  const logs = artifacts.filter(a => a.kind === 'decision_log');
+  if (logs.length === 0) return [];
+  // The append-as-new-row pattern means later rows supersede earlier ones;
+  // pick the last in artifact-list order (already sorted by created_at asc).
+  const latest = logs[logs.length - 1];
+  return ((latest.payload as unknown as DecisionLogPayload).entries ?? []).slice().reverse();
+}
+
+const DECISION_TYPES: Array<'all' | DecisionPayload['type']> = ['all', 'canon_pick', 'branch_pick', 'followup_pick'];
+
+function DecisionsPanel({ entries }: { entries: DecisionLogEntry[] }) {
+  const [filter, setFilter] = useState<'all' | DecisionPayload['type']>('all');
+  const filtered = filter === 'all' ? entries : entries.filter(e => e.decision.type === filter);
+  const counts: Record<string, number> = { all: entries.length };
+  for (const e of entries) counts[e.decision.type] = (counts[e.decision.type] ?? 0) + 1;
+  return (
+    <Panel
+      title="Decisions"
+      subtitle={`${entries.length} decision${entries.length !== 1 ? 's' : ''}`}
+      testId="decisions"
+    >
+      <div className="flex flex-wrap gap-1 mb-3" data-testid="decisions-filters">
+        {DECISION_TYPES.map(t => {
+          const active = filter === t;
+          return (
+            <button
+              key={t}
+              onClick={() => setFilter(t)}
+              className={clsx(
+                'text-xs px-2 py-0.5 rounded border font-medium',
+                active
+                  ? 'bg-accent/15 text-accent border-accent/40'
+                  : 'border-border-primary text-text-muted hover:text-text-primary hover:border-text-muted',
+              )}
+            >
+              {t === 'all' ? 'all' : t.replace('_pick', '')} <span className="text-text-muted ml-0.5">{counts[t] ?? 0}</span>
+            </button>
+          );
+        })}
+      </div>
+      {filtered.length === 0 ? (
+        <p className="text-sm text-text-muted italic">No decisions match this filter.</p>
+      ) : (
+        <ul className="flex flex-col gap-1" data-testid="decisions-list">
+          {filtered.map((e, i) => (
+            <li key={i} className="text-xs font-mono text-text-secondary flex gap-3 items-baseline py-0.5 border-b border-border-primary last:border-b-0">
+              <span className="text-text-muted shrink-0">{formatTs(e.recorded_at)}</span>
+              <span className="text-accent shrink-0 w-24">{e.decision.type.replace('_pick', '')}</span>
+              <span className="text-text-secondary truncate">{summarizeDecision(e.decision)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
+function summarizeDecision(d: DecisionPayload): string {
+  if (d.type === 'canon_pick')    return `${d.entity}  (${d.index + 1}/${d.total})`;
+  if (d.type === 'branch_pick')   return `${d.branch_id} → ${d.query}  (${d.index + 1}/${d.total}${d.budget != null ? `, budget=${d.budget}` : ''})`;
+  if (d.type === 'followup_pick') return `${d.accepted ? '✓' : '·'} ${d.query}  (${d.index + 1}/${d.total}${d.reason ? `, ${d.reason}` : ''})`;
+  return '';
+}
+
+function findLatestRenderPayload(artifacts: Artifact[]): RenderPayload | null {
+  let best: { ts: string; payload: RenderPayload } | null = null;
+  for (const a of artifacts) {
+    if (a.kind === 'render') {
+      const p = a.payload as unknown as RenderPayload;
+      if (!best || a.created_at > best.ts) best = { ts: a.created_at, payload: p };
+      continue;
+    }
+    if (a.kind === 'cycle_output') {
+      const render = (a.payload as { render?: RenderPayload }).render;
+      if (render && Array.isArray(render.findings)) {
+        if (!best || a.created_at > best.ts) best = { ts: a.created_at, payload: render };
+      }
+    }
+  }
+  return best?.payload ?? null;
+}
+
+const EVENT_FILTERS: Array<'all' | StreamFrame['type']> = ['all', 'loop', 'cycle', 'cycle_step', 'artifact', 'milestone', 'decision'];
 
 function EventLog({
   events, totalCount, filter, setFilter, filterCounts,
@@ -685,11 +1015,12 @@ function EventLog({
 }
 
 function Panel({
-  title, subtitle, testId, children,
+  title, subtitle, testId, rightSlot, children,
 }: {
   title: string;
   subtitle?: string;
   testId?: string;
+  rightSlot?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -700,6 +1031,7 @@ function Panel({
       <div className="flex items-baseline gap-3 px-4 py-2.5 border-b border-border-primary bg-bg-primary">
         <h4 className="text-sm font-medium text-text-primary">{title}</h4>
         {subtitle && <span className="text-xs text-text-muted">{subtitle}</span>}
+        {rightSlot && <span className="ml-auto">{rightSlot}</span>}
       </div>
       <div className="p-3">{children}</div>
     </div>
@@ -956,6 +1288,7 @@ function summarizeEvent(f: StreamFrame): string {
   if (f.type === 'cycle_step') return `cycle=${p.cycle_index} step=${p.step} cached=${p.cached}`;
   if (f.type === 'milestone')  return `pct=${p.at_envelope_pct}`;
   if (f.type === 'artifact')   return `kind=${p.kind}`;
+  if (f.type === 'decision')   return summarizeDecision(p as unknown as DecisionPayload);
   return '';
 }
 
@@ -969,20 +1302,3 @@ function formatShape(shape: OutputShape): string {
   }
 }
 
-function findLatestRender(artifacts: Artifact[]): RenderPayload | null {
-  let best: { ts: string; payload: RenderPayload } | null = null;
-  for (const a of artifacts) {
-    if (a.kind === 'render') {
-      const p = a.payload as unknown as RenderPayload;
-      if (!best || a.created_at > best.ts) best = { ts: a.created_at, payload: p };
-      continue;
-    }
-    if (a.kind === 'cycle_output') {
-      const render = (a.payload as { render?: RenderPayload }).render;
-      if (render && Array.isArray(render.findings)) {
-        if (!best || a.created_at > best.ts) best = { ts: a.created_at, payload: render };
-      }
-    }
-  }
-  return best?.payload ?? null;
-}
