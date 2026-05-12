@@ -46,7 +46,7 @@ This directory is currently scaffolding. The skill-architecture migration (`docs
 
 | Domain | Legacy source | Migration status |
 |---|---|---|
-| `code` | `src/skills/code-review/SKILL.md` §1-8, scattered CLAUDE.md rules | Stub |
+| `code` | `src/skills/code-review/SKILL.md` §1-8, `src/skills/code-simplify/SKILL.md` slop patterns, CLAUDE.md commandments | **Populated** |
 | `design` | `src/skills/design-audit/`, `design-standards/`, `design-type/` | Stub |
 | `docs` | (moved from `src/skills/docs-author-v2/RULES.md`) | **Populated** |
 | `skills` | `src/skills/skill-creator/` (rules buried in process) | Stub |
