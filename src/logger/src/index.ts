@@ -2,21 +2,12 @@
  * Unified dev-server logger — shared across api, supervisor, worker, and any
  * `@construct/*` peer module that previously used `console.log`.
  *
- * One entry point — `log({source, level, msg, ...fields})` — fans events out
- * across two regimes selected by the `CONSTRUCT_LOG_JSON` env var:
+ * One entry point — `log({source, level, msg, ...fields})`:
+ *   - Append NDJSON record to ~/.construct/logs/dev-YYYY-MM-DD.ndjson
+ *   - Write a colorized vite-style line to stdout: `HH:MM:SS [source] msg`
  *
- *   PARENT MODE (default, env unset):
- *     - Append NDJSON record to ~/.construct/logs/dev-YYYY-MM-DD.ndjson
- *     - Write a colorized vite-style line to stdout: `HH:MM:SS [source] msg`
- *
- *   CHILD MODE (env=1, set by WorkerSupervisor when spawning children):
- *     - Emit the structured record as a single NDJSON line to stdout
- *     - Parent supervisor parses each line, augments with `worker_id`, and
- *       re-emits via its own log() — preserving structure end-to-end.
- *
- * Sources used in this codebase: dev, api, supervisor, worker, vite, fastify,
- * research, research_defaults, ddl. `worker_id` is rendered inline as
- * `[source @ N]` per the project format spec.
+ * Sources used in this codebase: dev, api, vite, fastify, research, ddl,
+ * loop, supervisor.
  */
 
 import { Writable } from 'node:stream';
@@ -78,43 +69,11 @@ export interface LogEvent {
   [extra: string]: unknown;
 }
 
-const childMode = process.env.CONSTRUCT_LOG_JSON === '1';
-
 export function log(event: LogEvent): void {
   const ts = new Date();
   const record = { ts: ts.toISOString(), level: event.level ?? 'info', ...event };
-
-  if (childMode) {
-    // Single JSON line on stdout — supervisor will parse, augment, and re-log.
-    process.stdout.write(JSON.stringify(record) + '\n');
-    return;
-  }
-
   try { appendFileSync(logFilePath(), JSON.stringify(record) + '\n'); } catch { /* non-fatal */ }
   process.stdout.write(formatConsole(record, ts));
-}
-
-/**
- * Used by WorkerSupervisor to ingest a child's stdout line. If it parses as a
- * structured record from our own `log()`, augment with worker_id and re-emit.
- * Otherwise fall back to a plain text record so legacy `console.log` lines in
- * children still surface uniformly as `HH:MM:SS [source @ N] msg`.
- */
-export function ingestChildLine(workerId: number, line: string, level: LogLevel = 'info'): void {
-  const trimmed = line.replace(/\r$/, '').trim();
-  if (!trimmed) return;
-  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-    try {
-      const record = JSON.parse(trimmed) as LogEvent & { ts?: string; level?: LogLevel };
-      const { ts: _ts, level: childLevel, ...rest } = record;
-      log({ ...rest, level: childLevel ?? level, worker_id: workerId });
-      return;
-    } catch { /* fall through to plain-text path */ }
-  }
-  // Strip a leading bracketed tag like "[worker]" or "[engine]" so we don't
-  // double-tag as `[worker @ N] [worker] msg`.
-  const stripped = trimmed.replace(/^\[[^\]]+\]\s*/, '');
-  log({ source: 'worker', level, worker_id: workerId, msg: stripped });
 }
 
 function formatStatus(s: number): string {

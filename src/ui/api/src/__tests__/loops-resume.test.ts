@@ -23,7 +23,6 @@ beforeAll(async () => {
   process.env.HOME = tmp;
   app = await createApp({
     dbUrl: join(tmp, 'db.sqlite'),
-    workerCount: 0,
     skipStatic: true,
   });
   await app.ready();

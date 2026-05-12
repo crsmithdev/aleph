@@ -64,7 +64,7 @@ let server: Awaited<ReturnType<typeof createApp>> | null = null;
 let browser: Awaited<ReturnType<typeof chromium.launch>> | null = null;
 
 async function setup() {
-  server = await createApp({ dbUrl: dbPath, workerCount: 0 });
+  server = await createApp({ dbUrl: dbPath });
   await server.listen({ port: 0, host: '127.0.0.1' });
   const port = (server.server.address() as any).port;
   console.log(`[smoke] server on :${port}`);

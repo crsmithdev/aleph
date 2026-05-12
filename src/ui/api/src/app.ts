@@ -25,7 +25,6 @@ import { webhooks } from './db/schema.js';
 import { existsSync } from 'fs';
 import { resolve } from 'path';
 import { createLogStream, log } from './logger.js';
-import { WorkerSupervisor } from './worker-supervisor.js';
 import { startResearchLogger } from './research-logger.js';
 import { stopAllChildren } from './loop-supervisor.js';
 import { getSystemInfo } from './system-info.js';
@@ -35,7 +34,6 @@ declare module 'fastify' {
     db: ReturnType<typeof createDb>['db'];
     sqlite: ReturnType<typeof createDb>['sqlite'];
     eventBus: EventBus;
-    supervisor: WorkerSupervisor;
   }
 }
 
@@ -69,7 +67,7 @@ function applyWebhookDDL(sqlite: SqliteDb) {
   `);
 }
 
-export async function createApp(opts?: { dbUrl?: string; workerCount?: number; skipStatic?: boolean }) {
+export async function createApp(opts?: { dbUrl?: string; skipStatic?: boolean }) {
   const customLogging = opts?.dbUrl !== ':memory:';
   const app = Fastify({
     logger: customLogging ? { stream: createLogStream() } : false,
@@ -97,12 +95,6 @@ export async function createApp(opts?: { dbUrl?: string; workerCount?: number; s
 
   const eventBus = new EventBus();
   app.decorate('eventBus', eventBus);
-
-  // Default 8 workers — 24-core machines have plenty of headroom; the
-  // real ceiling is provider rate-limit, not CPU. Override via WORKER_COUNT.
-  const workerCount = opts?.workerCount ?? parseInt(process.env.WORKER_COUNT || '8', 10);
-  const supervisor = new WorkerSupervisor(workerCount);
-  app.decorate('supervisor', supervisor);
 
   const historyService = new HistoryService(db, eventBus);
   historyService.start();
@@ -168,12 +160,9 @@ export async function createApp(opts?: { dbUrl?: string; workerCount?: number; s
   }
 
   app.addHook('onReady', async () => {
-    // Start research workers (skip in test mode)
-    if (opts?.dbUrl !== ':memory:') supervisor.start();
-
     // Goals domain DDL
     applyDDL(sqlite);
-    // Research domain DDL
+    // Research domain DDL (loop engine tables + idempotent legacy-table drop)
     applyResearchDDL(sqlite);
     // Observability DDL — TODO: move to @construct/telemetry as applyObsDDL()
     applyObsDDL(sqlite);
@@ -183,7 +172,6 @@ export async function createApp(opts?: { dbUrl?: string; workerCount?: number; s
 
   app.addHook('onClose', async () => {
     await stopAllChildren();
-    await supervisor.stop();
     sqlite.close();
   });
 

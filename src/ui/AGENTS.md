@@ -12,11 +12,11 @@ Fastify API + React SPA serving Construct's web interface.
 ```
 src/ui/
   api/src/
-    app.ts               — Fastify app factory, route registrations, WorkerSupervisor init
+    app.ts               — Fastify app factory, route registrations
     server.ts            — process entry point
     config.ts            — env-driven config
     env.ts               — env var declarations
-    worker-supervisor.ts — spawns/monitors research worker child processes
+    loop-supervisor.ts   — spawns/monitors one child process per running loop
     routes/              — one file per domain
     db/                  — Drizzle ORM schema + client
     plugins/             — error-handler
@@ -89,6 +89,6 @@ src/ui/
 
 ---
 
-## WorkerSupervisor
+## LoopSupervisor
 
-`src/ui/api/src/worker-supervisor.ts` spawns N research worker processes (`src/research/src/worker.ts`) as child processes. Count defaults to `WORKER_COUNT` env var (default 3). Started in `app.ts` on server boot (skipped in test mode). Do not bypass `supervisor.start()`/`supervisor.stop()` lifecycle.
+`src/ui/api/src/loop-supervisor.ts` spawns one child process per running loop on `POST /api/loops/start`. Each child runs the loop engine to completion and persists every step to `cycle_ledger` so a SIGKILL mid-run resumes idempotently on respawn. There is no long-running worker pool — children come and go with loops.

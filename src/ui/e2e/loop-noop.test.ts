@@ -54,7 +54,7 @@ async function setup() {
   `);
   sqlite.close();
 
-  server = await createApp({ dbUrl: dbPath, workerCount: 0 });
+  server = await createApp({ dbUrl: dbPath });
   await server.listen({ port: 0, host: '127.0.0.1' });
   const addr = server.server.address();
   if (!addr || typeof addr === 'string') throw new Error('no address');

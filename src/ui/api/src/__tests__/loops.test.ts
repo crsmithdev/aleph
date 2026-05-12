@@ -28,7 +28,7 @@ beforeAll(async () => {
   // so the test is hermetic.
   process.env.HOME = tmp;
   const dbUrl = join(tmp, 'db.sqlite');
-  app = await createApp({ dbUrl, workerCount: 0, skipStatic: true });
+  app = await createApp({ dbUrl, skipStatic: true });
   await app.ready();
   await app.listen({ port: 0, host: '127.0.0.1' });
   const addr = app.server.address();
