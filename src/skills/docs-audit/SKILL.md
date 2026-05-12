@@ -4,8 +4,8 @@ description: >
   Post-hoc review of existing documentation against the canonical rule set in
   src/rules/docs/RULES.md. AUDIT MODE: identifies violations, doc-vs-code
   drift, and structural issues; emits a phased plan (Critical / Refinement /
-  Polish). On peer drift, invokes docs-conform. On c7score-style issues,
-  invokes docs-optimize. Does not write changes without approval.
+  Polish). Tags peer-drift and c7score findings for the omnibus to route to
+  follow-up leaves. Does not write changes without approval.
 metadata:
   argument-hint: <doc-or-doc-family>
 ---
@@ -89,26 +89,32 @@ section E ("Doc-vs-code drift truth sources").
 
 ### 6. LLM-optimization check
 
-Invoke `Skill('docs-optimize')` to run c7score-style analysis on the doc(s)
-in scope. Capture findings about:
+Walk c7score-style criteria against the doc(s) in scope, sourcing the
+methodology from `src/skills/docs-optimize/REFERENCE.md` and
+`src/skills/docs-optimize/references/c7score_metrics.md` as reference files.
+Emit a finding for each violation, tagged `c7score`:
 - Question coverage (snippets answering "How do I X?")
 - Self-contained example completeness
 - Metadata snippet pollution
 - Import-only / install-only fragments
 
-The c7score methodology lives in `docs-optimize/REFERENCE.md` and
-`docs-optimize/references/c7score_metrics.md`.
+The omnibus routes `c7score`-tagged findings to `docs-optimize` for the fix
+pass. This leaf does not call it directly (per architecture R1: only the
+omnibus chains skills).
 
 ### 7. Drift between peer docs
 
 Compare docs in scope against other docs in their family (sibling SKILL.md
-files, sibling module READMEs, etc.). Flag:
+files, sibling module READMEs, etc.). Emit a finding for each divergence,
+tagged `peer-drift`, with `relatedLocations` pointing at the canonical
+reference and the drifted peers:
 - Structural divergence (this README has Verification section; peers don't)
 - Voice divergence (this guide is terse; peers are verbose)
 - Frontmatter divergence (some have `argument-hint`; others don't)
 
-When drift findings appear, invoke `Skill('docs-conform')` with the
-canonical reference + drifted peers, rather than emitting a manual fix item.
+The omnibus routes `peer-drift`-tagged findings to `docs-conform` for the
+fix pass. This leaf does not call it directly (per architecture R1: only
+the omnibus chains skills).
 
 ### 8. Compile the phased plan
 
@@ -158,11 +164,11 @@ Last Updated: YYYY-MM-DD
 ## Pre-existing Issues (out of scope)
 <findings outside the audit window>
 
-## Drift findings — invoking docs-conform
-<files where peer drift detected; reference + peer list passed to docs-conform>
+## Drift findings — tagged `peer-drift` for omnibus routing
+<files where peer drift detected; reference + drifted peers in relatedLocations>
 
-## C7Score findings — invoking docs-optimize
-<snippets / sections flagged; analysis report from docs-optimize>
+## C7Score findings — tagged `c7score` for omnibus routing
+<snippets / sections flagged>
 
 ## Next Steps
 <approval gate>
@@ -175,7 +181,7 @@ Default save path:
 
 - All audited docs covered with specific, actionable findings
 - Every finding cites a RULES.md section + file:line
-- Drift findings routed to `docs-conform`; c7score findings routed to `docs-optimize`
+- Drift findings tagged `peer-drift`; c7score findings tagged `c7score` (omnibus routes to fix leaves)
 - Plan saved to file
 - Parent process informed: "Docs audit saved to: [path]"
 
