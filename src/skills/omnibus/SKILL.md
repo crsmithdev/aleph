@@ -37,6 +37,15 @@ Before dispatching:
 1. **Skip-conditions** — if invoked against a PR, skip when the PR is closed / draft / trivially small / already-reviewed-by-this-skill.
 2. **Read `omnibus.yml`** — load `defaults`, `active`, `leaves`, `verification`, `approval` blocks.
 3. **Resolve registry** — for each (verb, domain) cell requested, look up the leaf skill name. Cells with no leaf are skipped silently with a "Skipped: <domain> — no leaf installed" line in the final report.
+4. **Resolve scope** — compute the concrete file set the leaves will audit. Default `scope: diff` means files changed vs. the merge-base with `main` (`git diff --name-only $(git merge-base HEAD main)..HEAD`). If the user is on `main` with a clean tree, this returns 0 files. Rather than dispatching an empty audit, **auto-fall back to `--since HEAD~10`** — the file set touched by the last 10 commits — and surface a one-line notice in the summary:
+
+   ```
+   Notice: scope=diff was empty on clean main; falling back to --since HEAD~10 (N files across M commits).
+   ```
+
+   If `--since HEAD~10` is also empty (truly stale branch), surface "scope empty — pass `--all` or `--module <path>` to widen" and exit without dispatching.
+
+   Explicit `--all`, `--module <path>`, or `--since <ref>` overrides skip the fallback chain.
 
 Registry (current — all audit + fix cells populated, suggest pending):
 
