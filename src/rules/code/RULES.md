@@ -313,6 +313,6 @@ Rules in those files apply at write-time (via `code-author` enforcement). Rules 
 
 ## Citation format for findings
 
-Findings cite rules as `code/RULES.md#<section-anchor>` — e.g., `code/RULES.md#a-1-no-any-to-bypass-type-errors`. The anchor follows GitHub-style markdown heading slug rules.
+Findings cite rules as `code/RULES.md#<section-id>` — e.g., `code/RULES.md#A.1`, `code/RULES.md#H.3`. The section ID is the literal heading number (period preserved). See `src/skills/_shared/finding.md` "ruleId conventions" for the full rationale.
 
-For findings sourced from external linters, use the linter's prefix: `agnix/CC-SK-12`, `eslint/no-explicit-any`.
+For findings sourced from external linters, use the linter's prefix and native rule id: `agnix/CC-SK-12`, `eslint/no-explicit-any`.

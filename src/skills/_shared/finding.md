@@ -14,7 +14,7 @@ We do not invent a custom JSON shape. We extend SARIF via its `properties` mecha
 
 ## Minimal SARIF run
 
-Every audit leaf emits one SARIF run per invocation. Minimal shape:
+Every audit leaf emits one SARIF run per invocation. Minimal shape (real example from a code-audit run on this repo):
 
 ```json
 {
@@ -31,23 +31,23 @@ Every audit leaf emits one SARIF run per invocation. Minimal shape:
       },
       "results": [
         {
-          "ruleId": "code/RULES.md#A.2-secrets",
-          "level": "error",
-          "message": { "text": "Hardcoded API key in source." },
+          "ruleId": "code/RULES.md#H.3",
+          "level": "warning",
+          "message": { "text": "Catch block returns empty string on any error; failure mode is invisible to callers." },
           "locations": [
             {
               "physicalLocation": {
-                "artifactLocation": { "uri": "src/foo.ts" },
-                "region": { "startLine": 42, "endLine": 42 }
+                "artifactLocation": { "uri": "src/research/src/providers/websearch.ts" },
+                "region": { "startLine": 209, "endLine": 211 }
               }
             }
           ],
           "properties": {
-            "confidence": 92,
-            "severity": "blocking",
-            "fix": "Load from env via getEnv('KEY').",
-            "tag": "secret",
-            "scope": "diff"
+            "confidence": 88,
+            "severity": "important",
+            "fix": "Log the error before returning '', or return a tagged result type so callers can distinguish 'empty page' from 'fetch failed'.",
+            "tag": "silent-fail",
+            "scope": "module"
           }
         }
       ]
@@ -124,16 +124,24 @@ These exclusions exist to keep signal-to-noise high. The validation pass enforce
 
 ## ruleId conventions
 
-Format: `<domain>/RULES.md#<section-anchor>` — for example:
+Format: `<domain>/RULES.md#<section-id>` where `<section-id>` is the **literal section number from the RULES.md heading**, preserving the period:
 
-- `code/RULES.md#A.2-secrets`
-- `design/RULES.md#L-state-coverage`
-- `docs/RULES.md#E-drift`
-- `security/RULES.md#injection-sql`
+| ✅ Use | ❌ Avoid |
+|---|---|
+| `code/RULES.md#A.1` | `code/RULES.md#a-1-no-any-to-bypass-type-errors` (GitHub auto-slug — long + brittle) |
+| `code/RULES.md#H.3` | `code/RULES.md#h3-swallowed-errors` (lossy — no fixed-prose-to-slug rule) |
+| `design/RULES.md#L` | `design/RULES.md#l-state-coverage` |
+| `security/RULES.md#A` (Injection) | `security/RULES.md#injection-sql` (sub-categorization belongs in `properties.tag`, not the ruleId) |
 
-The section anchor is the markdown heading slug from the corresponding `RULES.md`. Tooling can deep-link from finding → rule.
+Why this convention:
 
-For findings sourced from agnix or other external linters, prefix with the tool name: `agnix/CC-SK-12`, `eslint/no-explicit-any`. These are passthrough citations; the omnibus may suppress them per the negative-filter list above.
+- **Stable.** RULES.md headings can be reworded without breaking citations.
+- **Terse.** `code/RULES.md#H.3` fits in a SARIF result; `code/RULES.md#h-3-internal-helpers-dont-swallow-errors` doesn't.
+- **Greppable.** A consumer can find rule H.3 in RULES.md with `grep '^### H\.3'` — no slug computation needed.
+
+The anchor is NOT a literal `<a id>` target; tooling resolving the rule looks for the heading line `### <section-id> <title>` in the file.
+
+For findings sourced from agnix or other external linters, prefix with the tool name and keep their native rule id: `agnix/CC-SK-12`, `eslint/no-explicit-any`. These are passthrough citations; the omnibus may suppress them per the negative-filter list above.
 
 ## relatedLocations
 
@@ -141,12 +149,12 @@ Use `relatedLocations` for cross-file context. Critical for the consolidation / 
 
 ```json
 {
-  "ruleId": "code/RULES.md#C-duplication",
-  "message": { "text": "Inline `name.slice(5).split('__')` — duplicate of canonical helper." },
+  "ruleId": "code/RULES.md#C.1",
+  "message": { "text": "Inline `name.slice(5).split('__')` duplicates the canonical helper fmtToolName." },
   "locations": [
     {
       "physicalLocation": {
-        "artifactLocation": { "uri": "src/research/engine/runner.ts" },
+        "artifactLocation": { "uri": "src/research/src/engine.ts" },
         "region": { "startLine": 128, "endLine": 128 }
       }
     }

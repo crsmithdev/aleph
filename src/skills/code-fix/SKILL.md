@@ -74,14 +74,15 @@ For each finding, compute the minimal `Edit` operation. Group edits by file so t
 Before applying, output the planned edits as a unified diff or per-file edit list:
 
 ```
-Plan: 12 findings → 8 file edits across 5 files
+Plan: 4 findings → 3 file edits across 2 files
 
-src/research/providers/openai.ts:
-  - L34: replace `process.env.OPENAI_API_KEY` with `getEnv("OPENAI_API_KEY")`
-  - L36-39: drop defensive null check (B.1)
+src/research/src/providers/websearch.ts:
+  - L19-21: add `console.warn('tavily failed: ' + err.message)` before fall-through (H.3)
+  - L64: log `res.status` + body snippet before `return []` (H.3)
+  - L209-211: replace `catch { return ''; }` with logged + tagged result (H.3)
 
-src/research/engine/runner.ts:
-  - L128: replace inline parse with `import { fmtToolName } from "../../ui/web/src/utils/format"; ... fmtToolName(name)` (C.1)
+src/research/src/providers/router.ts:
+  - L42-45: remove unused `_taskType` parameter and inline `this.modelConfig.model` at the one caller (B.3)
 
 ...
 ```

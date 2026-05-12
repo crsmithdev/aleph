@@ -91,16 +91,17 @@ N blocking · N important · N nit · N suggestion · N learning · N praise
 Domains run: <list>   Domains skipped: <list with reasons>
 
 ## blocking
-[code-audit] src/foo.ts:42 — code/RULES.md#A.2 — confidence 92
-  Hardcoded API key. Fix: getEnv("KEY").
-  [tag: secret] [approval: per-finding]
+[code-audit] src/research/src/providers/websearch.ts:209 — code/RULES.md#H.3 — confidence 88
+  Catch returns '' on any error; failure mode invisible. Fix: log + tagged-result type.
+  [tag: silent-fail] [approval: single]
 
 ## important
 ...
 
 ## praise
-[code-audit] src/research/ResearchQueryDetailPage.tsx — code/RULES.md#H.3 — confidence 95
-  Error handling explicit at every catch site; good reference for peers.
+[code-audit] src/research/src/providers/websearch.ts:106 — code/RULES.md#H.3 — confidence 95
+  Circuit breaker disables Jina after first 402; surfaces failure instead of swallowing.
+  Use as reference for: failure-informative error handling across other providers.
 ```
 
 For each finding, surface the approval mode it'll need (from `omnibus.yml` `approval` block — by severity, by domain, by tag, most-specific wins).

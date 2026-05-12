@@ -28,7 +28,7 @@ This skill is a pure leaf: no `Skill()` calls. The omnibus chains us; we report.
 
 ## Inputs
 
-1. **Scope** (default: diff) — `--diff` against `origin/main`, `--module <path>`, or `--all`.
+1. **Scope** (default: smart — see below) — `--diff` against `origin/main`, `--module <path>`, `--since <git-ref>`, or `--all`.
 2. **Reference** (optional) — a file/section/symbol; when provided, enables drift checks (RULES §D).
 3. **Threshold** (optional) — confidence floor 0-100; default 80 per `omnibus.yml`.
 
@@ -37,15 +37,25 @@ This skill is a pure leaf: no `Skill()` calls. The omnibus chains us; we report.
 ### 1. Resolve scope
 
 ```bash
-# Default
+# --diff (against origin/main, the conventional default for feature branches)
 git diff --name-only origin/main...HEAD -- 'src/**/*.ts' '*.ts' | grep -v '^src/ui/'
 
-# --module <path>
+# --since <ref> (everything changed between <ref> and HEAD)
+git diff --name-only <ref>...HEAD -- 'src/**/*.ts' '*.ts' | grep -v '^src/ui/'
+
+# --module <path>   (path can be a directory, glob, or single file)
 find <path> -name '*.ts' -not -path '*/node_modules/*'
 
 # --all
 find src -name '*.ts' -not -path '*/node_modules/*' -not -path 'src/ui/*'
 ```
+
+**Smart default:**
+
+1. Try `--diff` first.
+2. If `--diff` returns empty (typical right after a push to main, or on a clean main checkout):
+   - **Do not silently audit nothing.** Stop and surface this message: *"No files in scope: `origin/main...HEAD` is empty. Try `/audit code --module <path>`, `/audit code --since HEAD~5`, or `/audit code --all`."*
+   - The audit ends here unless the user re-invokes with an explicit scope.
 
 Exclude `src/ui/` (visual concerns → `design-audit`), `*.generated.ts`, `.worktrees/`, and anything matched by `omnibus.yml` `leaves.code-audit.exclude`.
 
@@ -95,7 +105,15 @@ Output a single SARIF v2.1.0 run with `tool.driver.name = "code-audit"`. Per `sr
 }
 ```
 
-When proposing a `praise` finding, look for code that's notably well-done — comprehensive error handling that's not defensive, a clean abstraction, a hard problem solved simply. At least one `praise` per audit when warranted.
+When proposing a `praise` finding, the bar is concrete: **the code solves a typical anti-pattern with a clean solution worth propagating to peers.** Praise must be (a) tied to a specific RULES.md rule the code exemplifies the opposite of, and (b) actionable — every praise finding's `fix` field carries a one-line "use this as a reference for: <pattern>" so `code-fix` (in propagation mode) or `code-conform` can use it as the anchor for aligning peers.
+
+Examples of qualifying praise:
+- A try/catch that logs + rethrows with context (counter-example for H.2 / H.3 violations elsewhere)
+- A circuit breaker that captures and exposes failure mode instead of swallowing it
+- A function that absorbs complexity behind a clean interface (counter-example for B.1 over-engineering)
+- A test that exercises the negative path with real malformed input
+
+If no code in the scope qualifies, **omit praise** — don't manufacture it. Tokenistic praise ("this file uses TypeScript") degrades the signal.
 
 ### 5. Emit a phased prose summary
 
