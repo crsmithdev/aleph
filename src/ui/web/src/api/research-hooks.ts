@@ -198,13 +198,6 @@ export interface ResearchDefaults {
   schedule: { mode: string; active_windows: unknown[]; timezone: string };
   topic_coherence: { seed_similarity_min: number; hop_similarity_min: number };
   follow_up: { min_count: number; max_count: number; max_retries: number; similarity_threshold: number };
-  perturbation: {
-    depth_scaling: boolean;
-    chain_length: number;
-    strategy_cooldown: number;
-    forced_diversity_threshold: number;
-    strategy_weights: Record<string, number>;
-  };
   burst_iterations: number;
   min_searches_per_thread: number;
   fetch_source_text: boolean;
