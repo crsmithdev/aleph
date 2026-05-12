@@ -56,22 +56,53 @@ The prior session's Explore subagent cataloged 80+ legacy v0 concepts surviving 
 
 ## 3. V8 dogfood grading
 
-**Status:** ⏳ in progress (orchestrator, foreground).
+**Status:** ✅ done (2026-05-12). Loop `late-sky-peak-5c06` was still in the dev DB — no fresh run needed.
 
-The original `late-sky-peak-5c06` loop was wiped from the DB during this session. A fresh run is needed.
+### Verdict: Misleading — confirms the stop-rule planning gap
 
-**Procedure**
+The planner emitted a 6-branch plan to cover the question correctly. The engine clipped to 3 cycles and only ran the first three branches. The polished document is technically accurate on the topics it covers but **misleading by omission** on the prompt as asked.
 
-1. Confirm dev server on port 3001 is on the post-merge main code; hard-restart if `bun --watch` didn't re-pick up cross-package changes.
-2. `POST /api/loops/start` with `template_id: 'research'`, prompt: "What innovations did the V8 JavaScript engine introduce over earlier JS engines?", default models (gemini-2.0-flash-001, ~$0.006/loop).
-3. Wait for status=completed; let the post_mortem hook fire.
-4. Grade the polished `kind: 'document'` artifact against the literal question. Capture: does it cover JIT (Crankshaft/TurboFan), hidden classes, inline caching, ignition interpreter, sparkplug baseline JIT, type feedback, GC innovations? Where does it land on the original "Misleading" rating?
-5. Capture screenshots of the Activity tab on the completed run so we have a real-data record of all eight panels.
+**Plan vs. execution**
 
-**Acceptance**
+| # | Branch id | Query | Ran? |
+|---|---|---|---|
+| 0 | `v8-architecture` | V8 JavaScript engine architecture and design | ✅ |
+| 1 | `jit-compilation` | V8 JavaScript engine Just-In-Time (JIT) compilation techniques | ✅ |
+| 2 | `optimization-strategies` | V8 JavaScript engine optimization strategies | ✅ |
+| 3 | `predecessor-comparison` | JavaScript engines existing before V8: performance and features | ❌ |
+| 4 | `memory-management` | V8 JavaScript engine memory management and garbage collection | ❌ |
+| 5 | `ecmascript-compliance` | V8 JavaScript engine ECMAScript compliance | ❌ |
 
-- Grade recorded here (factual coverage / hallucination check / verdict).
-- Activity tab screenshots saved at `/tmp/v8-dogfood-activity-{1..N}.png`.
+The planner specifically planned `predecessor-comparison` — exactly the framing of the user's question ("innovations *over earlier JS engines*"). The stop rule clipped it.
+
+**Document content coverage (3 cycles of synthesis)**
+
+| Topic | Covered | Notes |
+|---|---|---|
+| JIT compilation | ✅ | Strong section |
+| Hidden classes / shapes | ✅ | Doesn't credit Self (1991) as the conceptual ancestor |
+| Inline caching | ✅ | Doesn't credit Self either |
+| TurboFan | ✅ | Brief, ports-focused |
+| Type specialization | ✅ | Light |
+| Garbage collection | ⚠️ | Calls it "stop-the-world" — accurate for old V8, misleading for modern V8 which is heavily concurrent / incremental (Orinoco) |
+| Crankshaft (TurboFan predecessor) | ❌ | Missing — historical context |
+| Ignition (baseline interpreter, 2016) | ❌ | Missing — multi-tier architecture foundation |
+| Sparkplug (baseline JIT, 2021) | ❌ | Missing |
+| Maglev (mid-tier JIT, 2023) | ❌ | Missing |
+| Orinoco / concurrent GC | ❌ | Missing |
+| Pointer compression | ❌ | Missing |
+| Snapshot startup | ❌ | Missing |
+| WebAssembly (Liftoff, TurboFan-wasm) | ❌ | One-line mention in Overview |
+
+Coverage of canonical V8 innovations: roughly **5/14 major items** — and zero from 2016 onward. The doc reads as a circa-2014 V8 retrospective, which is the natural consequence of only running 3 of the 6 planned branches (and not the historical-comparison or memory-management ones).
+
+**Cost**: $0.0000 reported in `envelope_consumed` — but the loop predates this session's cost-sum fix, so cost was never recorded. The real LLM spend for this loop was probably ~$0.006 in retrospect.
+
+**Activity tab visual record** — `/tmp/v8-activity.png` (also embedded inline in the session transcript): KPIs / Cycle Lifecycle / Source Extraction (0% failure since pre-extraction_status sources have no status field) / Branch State (6 branches: 3 finalized, 3 pending — visually shows the bug) / Event Log render. Post-Mortem / Iteration Checks / Decisions panels correctly do NOT mount because this loop predates the backend instrumentation.
+
+**Implication for item 5 (Stop-rule gap)** — confirmed reproducer. The stop rule needs to terminate on `completed >= branches.length` (or `branches.length * per_branch_budget` if the planner intends each branch to run multiple cycles), not on a static `cycles_target`. Item 5 should be prioritized — without it, the planner's branching logic is structurally undercut.
+
+**Next action**: re-run this exact prompt once item 5 lands. Compare resulting document for `predecessor-comparison` and `memory-management` coverage. That will be the right "is V8 innovation grading fixed?" gate.
 
 ---
 
