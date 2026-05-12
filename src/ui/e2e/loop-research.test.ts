@@ -9,7 +9,7 @@
  *   5. Submit, navigate to /loops/:id
  *   6. Watch the live Activity panel populate via SSE
  *   7. Verify the loop reaches status=completed
- *   8. Verify the Artifact panel reflects research output (research_proc)
+ *   8. Verify the Artifact panel renders the cycle's processor text (Markdown)
  *   9. Verify the fake LLM server was hit (search + complete counts > 0)
  *
  * The cycles_target override is enforced via a URL query param on the submit
@@ -137,9 +137,12 @@ async function runTests(port: number) {
   check('loop reaches status=completed', finalStatus === 'completed', finalStatus ?? 'null');
 
   // --- Artifact panel reflects research output ---
+  // Phase 3+: the panel renders processor.text as Markdown, not raw JSON.
+  // Assert the synthesized text from the fake LLM (sourdough microbiology
+  // boilerplate) lands in the panel.
   const artifactText = await page.locator('[data-testid="loop-artifact"]').textContent();
-  check('artifact panel renders research_proc cycle output',
-    !!artifactText && artifactText.includes('research_proc'),
+  check('artifact panel renders synthesized processor text',
+    !!artifactText && /sourdough/i.test(artifactText),
     artifactText?.slice(0, 200) ?? '',
   );
 

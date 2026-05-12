@@ -102,8 +102,14 @@ async function runTests(port: number) {
   check('loop reaches status=completed', finalStatus === 'completed', finalStatus ?? 'null');
 
   const artifactText = await page.locator('[data-testid="loop-artifact"]').textContent();
-  check('artifact panel shows monitor output',
-    !!artifactText && (artifactText.includes('monitor_run') || artifactText.includes('monitor_wait')),
+  // Phase 3+: the panel renders processor.text as Markdown (run-cycles have
+  // text; wait-cycles don't). Either the run-cycle's text reached the panel,
+  // or the panel shows the latest cycle kind for the wait-terminal case.
+  check('artifact panel shows monitor output (text from run-cycle, or wait fallback)',
+    !!artifactText && (
+      /sourdough|starter|levain|wild yeast/i.test(artifactText) ||
+      /monitor_wait|no text yet/i.test(artifactText)
+    ),
     artifactText?.slice(0, 200) ?? '');
 
   check('no JS console errors', consoleErrors.length === 0, consoleErrors.join('; ').substring(0, 200));

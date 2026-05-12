@@ -15,15 +15,30 @@ export async function fetchSearchResults(query: string): Promise<SearchResult[]>
   const tavily = process.env.TAVILY_API_KEY;
   const brave = process.env.BRAVE_SEARCH_API_KEY;
 
+  // Each provider failure logs to stderr so the supervisor's stderr capture
+  // surfaces *why* search came back empty. Silent fallback through the chain
+  // violates "nothing may fail silently" — and produced the dogfood F4 case
+  // where all three providers failed (Tavily 432 quota, no Brave key, DDG
+  // 403) but the engine got back `[]` and the LLM hallucinated an answer.
   if (tavily) {
     try { return await tavilySearch(query, tavily); }
-    catch { /* fall through to next provider */ }
+    catch (err) {
+      process.stderr.write(`[websearch] Tavily failed: ${(err as Error).message}\n`);
+    }
   }
   if (brave) {
     try { return await braveSearch(query, brave); }
-    catch { /* fall through to DDG */ }
+    catch (err) {
+      process.stderr.write(`[websearch] Brave failed: ${(err as Error).message}\n`);
+    }
   }
-  return duckduckgoSearch(query);
+  const ddg = await duckduckgoSearch(query);
+  if (ddg.length === 0) {
+    process.stderr.write(
+      `[websearch] all providers returned 0 results for query: ${query.slice(0, 80)}\n`,
+    );
+  }
+  return ddg;
 }
 
 async function tavilySearch(query: string, apiKey: string): Promise<SearchResult[]> {
@@ -56,12 +71,15 @@ async function braveSearch(query: string, apiKey: string): Promise<SearchResult[
 }
 
 async function duckduckgoSearch(query: string): Promise<SearchResult[]> {
-  // DuckDuckGo HTML search — no key required
+  // DuckDuckGo HTML search — no key required (but currently blocked, see below).
   const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
   const res = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0 (compatible; research-agent/1.0)' },
   });
-  if (!res.ok) return [];
+  if (!res.ok) {
+    process.stderr.write(`[websearch] DDG HTTP ${res.status} (rate-limit or block); returning []\n`);
+    return [];
+  }
   const html = await res.text();
 
   const results: SearchResult[] = [];
