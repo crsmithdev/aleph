@@ -1,540 +1,39 @@
 import type { Sqlite } from '@construct/data';
 import { seedDefaults } from './services/defaults.js';
 
+/**
+ * DDL for the @construct/research package — post-Phase 7.
+ *
+ * Three surviving tables:
+ *   - `research_defaults`  — persisted SessionConfig (config store, not v0
+ *                            work-tracking; backs /api/research/defaults).
+ *   - `loops` / `cycles` / `artifacts` / `cycle_ledger` / `milestones` — the
+ *                            loop engine's full table set.
+ *
+ * Every other research_* table from the v0 engine (queries, threads, findings,
+ * steps, plans, jobs, sources, concepts, monitors, iteration_checks, post_mortems,
+ * perturbation_state, …) is dropped by `dropLegacyTables()` below on first boot
+ * after the Phase 7 cutover. The drop is idempotent — re-running on an already-
+ * clean DB is a no-op.
+ */
 export function applyResearchDDL(sqlite: Sqlite): void {
-  // Run rename migration BEFORE CREATE TABLE so it doesn't create an empty research_queries first
-  try {
-    // Only rename if research_queries doesn't already exist
-    const hasQueries = sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='research_queries'").get();
-    const hasSessions = sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='research_sessions'").get();
-    if (!hasQueries && hasSessions) {
-      sqlite.exec('ALTER TABLE research_sessions RENAME TO research_queries');
-    } else if (hasQueries && hasSessions) {
-      // Both tables exist: dependent tables have stale FK refs to research_sessions.
-      // Drop and let CREATE TABLE IF NOT EXISTS below recreate with correct FKs.
-      // Safe because these tables have no rows (all inserts failed due to stale FK).
-      sqlite.exec('PRAGMA foreign_keys = OFF');
-      sqlite.exec(`
-        DROP TABLE IF EXISTS research_proposed_monitors;
-        DROP TABLE IF EXISTS research_monitor_alerts;
-        DROP TABLE IF EXISTS research_monitor_snapshots;
-        DROP TABLE IF EXISTS research_plan_modifications;
-        DROP TABLE IF EXISTS research_plans;
-        DROP TABLE IF EXISTS research_jobs;
-        DROP TABLE IF EXISTS research_steps;
-        DROP TABLE IF EXISTS research_findings;
-        DROP TABLE IF EXISTS research_threads;
-        DROP TABLE IF EXISTS research_sessions;
-      `);
-      sqlite.exec('PRAGMA foreign_keys = ON');
-    }
-  } catch { /* already renamed or not applicable */ }
+  dropLegacyTables(sqlite);
 
   sqlite.exec(`
-    CREATE TABLE IF NOT EXISTS research_queries (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      prompt TEXT NOT NULL,
-      prompt_short TEXT,
-      prompt_super_short TEXT,
-      prompt_hints TEXT NOT NULL DEFAULT '{}',
-      status TEXT NOT NULL DEFAULT 'active',
-      config TEXT NOT NULL DEFAULT '{}',
-      summary TEXT NOT NULL DEFAULT '',
-      user_notes TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS research_threads (
-      id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
-      parent_thread_id TEXT REFERENCES research_threads(id) ON DELETE SET NULL,
-      spawned_from_finding_id TEXT,
-      query TEXT NOT NULL,
-      node_type TEXT NOT NULL DEFAULT 'question',
-      origin TEXT NOT NULL DEFAULT 'seed',
-      perturbation_strategy TEXT,
-      status TEXT NOT NULL DEFAULT 'queued',
-      priority REAL NOT NULL DEFAULT 0.5,
-      depth INTEGER NOT NULL DEFAULT 0,
-      max_depth INTEGER NOT NULL DEFAULT 9,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_rt_session_status ON research_threads(session_id, status, priority);
-
-    CREATE TABLE IF NOT EXISTS research_findings (
-      id TEXT PRIMARY KEY,
-      thread_id TEXT NOT NULL REFERENCES research_threads(id) ON DELETE CASCADE,
-      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
-      content TEXT NOT NULL,
-      summary TEXT NOT NULL,
-      source_urls TEXT NOT NULL DEFAULT '[]',
-      source_quality REAL NOT NULL DEFAULT 0.5,
-      tags TEXT NOT NULL DEFAULT '[]',
-      confidence REAL NOT NULL DEFAULT 0.5,
-      novelty REAL NOT NULL DEFAULT 0.5,
-      actionability REAL NOT NULL DEFAULT 0.5,
-      user_rating TEXT,
-      follow_ups TEXT NOT NULL DEFAULT '[]',
-      follow_up_analysis TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_rf_session_created ON research_findings(session_id, created_at);
-    CREATE INDEX IF NOT EXISTS idx_rf_thread ON research_findings(thread_id);
-
-    CREATE TABLE IF NOT EXISTS research_steps (
-      id TEXT PRIMARY KEY,
-      -- thread_id is nullable so session-scope LLM calls (role pick, title gen,
-      -- hooks running outside any thread) can record a step automatically.
-      thread_id TEXT REFERENCES research_threads(id) ON DELETE CASCADE,
-      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
-      finding_id TEXT REFERENCES research_findings(id) ON DELETE SET NULL,
-      model TEXT NOT NULL,
-      provider TEXT NOT NULL DEFAULT 'openrouter',
-      prompt_tokens INTEGER NOT NULL DEFAULT 0,
-      completion_tokens INTEGER NOT NULL DEFAULT 0,
-      cost_usd REAL NOT NULL DEFAULT 0,
-      tool_calls TEXT NOT NULL DEFAULT '[]',
-      duration_ms INTEGER NOT NULL DEFAULT 0,
-      error TEXT,
-      error_kind TEXT,
-      metadata TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_rs_session_created ON research_steps(session_id, created_at);
-    -- Note: idx_rs_session_error_kind is created in the ALTER TABLE migration section
-    -- below, AFTER the column is added. Creating it here fails on pre-existing DBs
-    -- where the table already exists without the column (CREATE TABLE IF NOT EXISTS
-    -- is a no-op there).
-
-    CREATE TABLE IF NOT EXISTS research_plans (
-      id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
-      items TEXT NOT NULL DEFAULT '[]',
-      generated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      status TEXT NOT NULL DEFAULT 'proposed'
-    );
-    CREATE INDEX IF NOT EXISTS idx_rp_session ON research_plans(session_id);
-
-    CREATE TABLE IF NOT EXISTS research_plan_modifications (
-      id TEXT PRIMARY KEY,
-      plan_id TEXT NOT NULL REFERENCES research_plans(id) ON DELETE CASCADE,
-      action TEXT NOT NULL,
-      target_item_rank INTEGER,
-      target_thread_id TEXT,
-      payload TEXT NOT NULL DEFAULT '',
-      source TEXT NOT NULL DEFAULT 'cli',
-      raw_input TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_rpm_plan ON research_plan_modifications(plan_id);
-
-    CREATE TABLE IF NOT EXISTS research_monitors (
-      id TEXT PRIMARY KEY,
-      session_id TEXT REFERENCES research_queries(id) ON DELETE SET NULL,
-      title TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'active',
-      queries TEXT NOT NULL DEFAULT '[]',
-      fetch_urls TEXT NOT NULL DEFAULT '[]',
-      schedule TEXT NOT NULL DEFAULT '0 8 * * *',
-      timezone TEXT NOT NULL DEFAULT 'America/Los_Angeles',
-      match_criteria TEXT NOT NULL DEFAULT '{}',
-      model TEXT NOT NULL DEFAULT 'claude-haiku-4-5',
-      cost_per_cycle_estimate REAL NOT NULL DEFAULT 0,
-      budget_daily_usd REAL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS research_monitor_snapshots (
-      id TEXT PRIMARY KEY,
-      monitor_id TEXT NOT NULL REFERENCES research_monitors(id) ON DELETE CASCADE,
-      cycle_number INTEGER NOT NULL,
-      raw_results TEXT NOT NULL,
-      result_hash TEXT NOT NULL,
-      item_count INTEGER NOT NULL DEFAULT 0,
-      cost_usd REAL NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_rms_monitor ON research_monitor_snapshots(monitor_id, cycle_number DESC);
-
-    CREATE TABLE IF NOT EXISTS research_monitor_alerts (
-      id TEXT PRIMARY KEY,
-      monitor_id TEXT NOT NULL REFERENCES research_monitors(id) ON DELETE CASCADE,
-      snapshot_id TEXT NOT NULL REFERENCES research_monitor_snapshots(id) ON DELETE CASCADE,
-      alert_type TEXT NOT NULL,
-      title TEXT NOT NULL,
-      content TEXT NOT NULL DEFAULT '',
-      source_url TEXT,
-      matched_criteria TEXT NOT NULL DEFAULT '[]',
-      severity TEXT NOT NULL DEFAULT 'info',
-      status TEXT NOT NULL DEFAULT 'unread',
-      spawned_thread_id TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_rma_monitor ON research_monitor_alerts(monitor_id, status, created_at);
-
-    CREATE TABLE IF NOT EXISTS research_proposed_monitors (
-      id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
-      thread_id TEXT NOT NULL REFERENCES research_threads(id) ON DELETE CASCADE,
-      proposed_queries TEXT NOT NULL DEFAULT '[]',
-      proposed_fetch_urls TEXT NOT NULL DEFAULT '[]',
-      proposed_criteria TEXT NOT NULL DEFAULT '{}',
-      proposed_schedule TEXT NOT NULL DEFAULT '0 8 * * *',
-      rationale TEXT NOT NULL DEFAULT '',
-      status TEXT NOT NULL DEFAULT 'proposed',
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_rpm_session ON research_proposed_monitors(session_id);
-
-    CREATE TABLE IF NOT EXISTS research_iteration_checks (
-      id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
-      job_id TEXT,
-      iterations_completed INTEGER NOT NULL,
-      verdict TEXT NOT NULL,
-      notes TEXT NOT NULL DEFAULT '',
-      correction TEXT,
-      applied_actions TEXT NOT NULL DEFAULT '[]',
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_ric_session ON research_iteration_checks(session_id, created_at);
-    CREATE INDEX IF NOT EXISTS idx_ric_job ON research_iteration_checks(job_id);
-
-    CREATE TABLE IF NOT EXISTS research_post_mortems (
-      id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
-      job_id TEXT,
-      verdict TEXT NOT NULL,
-      flags TEXT NOT NULL DEFAULT '[]',
-      notes TEXT NOT NULL DEFAULT '',
-      recommendations TEXT NOT NULL DEFAULT '[]',
-      metrics_snapshot TEXT NOT NULL DEFAULT '{}',
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_rpm2_session ON research_post_mortems(session_id, created_at);
-    CREATE INDEX IF NOT EXISTS idx_rpm2_job ON research_post_mortems(job_id);
-
-    CREATE TABLE IF NOT EXISTS research_jobs (
-      id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
-      thread_id TEXT REFERENCES research_threads(id) ON DELETE SET NULL,
-      status TEXT NOT NULL DEFAULT 'pending',
-      mode TEXT NOT NULL DEFAULT 'priority',
-      max_iterations INTEGER,
-      iterations_completed INTEGER NOT NULL DEFAULT 0,
-      claimed_by TEXT,
-      claimed_at TEXT,
-      heartbeat_at TEXT,
-      started_at TEXT,
-      completed_at TEXT,
-      error TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_rj_status ON research_jobs(status, created_at);
-    CREATE INDEX IF NOT EXISTS idx_rj_session ON research_jobs(session_id, status);
-    CREATE INDEX IF NOT EXISTS idx_rj_heartbeat ON research_jobs(status, heartbeat_at);
-
     CREATE TABLE IF NOT EXISTS research_defaults (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       config TEXT NOT NULL DEFAULT '{}',
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
-    CREATE TABLE IF NOT EXISTS research_concepts (
-      id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
-      canonical_name TEXT NOT NULL,
-      aliases TEXT NOT NULL DEFAULT '[]',
-      summary TEXT NOT NULL DEFAULT '',
-      key_facts TEXT NOT NULL DEFAULT '[]',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_rc_session ON research_concepts(session_id);
-    CREATE INDEX IF NOT EXISTS idx_rc_canonical ON research_concepts(session_id, canonical_name);
-
-    CREATE TABLE IF NOT EXISTS research_concept_links (
-      id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
-      from_concept_id TEXT NOT NULL REFERENCES research_concepts(id) ON DELETE CASCADE,
-      to_concept_id TEXT NOT NULL REFERENCES research_concepts(id) ON DELETE CASCADE,
-      relation TEXT NOT NULL,
-      evidence_finding_ids TEXT NOT NULL DEFAULT '[]',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      UNIQUE(from_concept_id, to_concept_id, relation)
-    );
-    CREATE INDEX IF NOT EXISTS idx_rcl_session ON research_concept_links(session_id);
-    CREATE INDEX IF NOT EXISTS idx_rcl_from ON research_concept_links(from_concept_id);
-
-    CREATE TABLE IF NOT EXISTS research_finding_concepts (
-      finding_id TEXT NOT NULL REFERENCES research_findings(id) ON DELETE CASCADE,
-      concept_id TEXT NOT NULL REFERENCES research_concepts(id) ON DELETE CASCADE,
-      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      PRIMARY KEY (finding_id, concept_id)
-    );
-    CREATE INDEX IF NOT EXISTS idx_rfc_concept ON research_finding_concepts(concept_id);
-    CREATE INDEX IF NOT EXISTS idx_rfc_session ON research_finding_concepts(session_id);
-
-    CREATE TABLE IF NOT EXISTS research_sources (
-      id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
-      url TEXT NOT NULL,
-      title TEXT NOT NULL DEFAULT '',
-      snippet TEXT NOT NULL DEFAULT '',
-      extraction_status TEXT NOT NULL DEFAULT 'pending',
-      extracted_text TEXT,
-      extracted_at TEXT,
-      fetched_at TEXT,
-      error TEXT,
-      attempt_count INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      UNIQUE(session_id, url)
-    );
-    CREATE INDEX IF NOT EXISTS idx_rsrc_session_status ON research_sources(session_id, extraction_status);
-    CREATE INDEX IF NOT EXISTS idx_rsrc_status ON research_sources(extraction_status, created_at);
-
-    -- Per-session perturbation strategy outcomes. Drives fruitfulness boosting
-    -- in selectStrategy (perturbation.ts) — strategies that have produced
-    -- novel/confident findings get weighted higher. Counters survive engine
-    -- restarts and worker handoffs (previously the in-memory PerturbationState
-    -- vanished on restart, so the boost never accumulated).
-    CREATE TABLE IF NOT EXISTS research_perturbation_state (
-      session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
-      strategy TEXT NOT NULL,
-      attempts INTEGER NOT NULL DEFAULT 0,
-      successes INTEGER NOT NULL DEFAULT 0,
-      novelty_sum REAL NOT NULL DEFAULT 0,
-      confidence_sum REAL NOT NULL DEFAULT 0,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      PRIMARY KEY (session_id, strategy)
-    );
-    CREATE INDEX IF NOT EXISTS idx_rps_session ON research_perturbation_state(session_id);
-  `);
-
-  // Migrations
-  // Rename pre-refactor column: prompt → seed_query. Old dev/prod DBs predate
-  // the rename; new DBs created by CREATE TABLE above already have seed_query,
-  // so this only fires on legacy DBs.
-  try { sqlite.exec(`ALTER TABLE research_queries RENAME COLUMN prompt TO seed_query`); } catch { /* already renamed or column absent */ }
-  try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN short_query TEXT`); } catch { /* exists */ }
-  try { sqlite.exec(`ALTER TABLE research_queries RENAME COLUMN seed_query TO prompt`); } catch { /* already renamed or fresh DB */ }
-  try { sqlite.exec(`ALTER TABLE research_queries RENAME COLUMN seed_query_short TO prompt_short`); } catch { /* already renamed */ }
-  try { sqlite.exec(`ALTER TABLE research_queries RENAME COLUMN seed_query_super_short TO prompt_super_short`); } catch { /* already renamed */ }
-  try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN prompt_short TEXT`); } catch { /* exists */ }
-  try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN prompt_super_short TEXT`); } catch { /* exists */ }
-  try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN prompt_hints TEXT NOT NULL DEFAULT '{}'`); } catch { /* exists */ }
-  try { sqlite.exec(`ALTER TABLE research_steps ADD COLUMN label TEXT`); } catch { /* exists */ }
-  try { sqlite.exec("ALTER TABLE research_findings ADD COLUMN source_url_meta TEXT NOT NULL DEFAULT '[]'"); } catch { /* exists */ }
-  try { sqlite.exec(`ALTER TABLE research_findings ADD COLUMN follow_up_analysis TEXT`); } catch { /* exists */ }
-  try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN node_type TEXT NOT NULL DEFAULT 'question'`); } catch { /* exists */ }
-  try { sqlite.exec(`ALTER TABLE research_findings RENAME COLUMN follow_up_questions TO follow_ups`); } catch { /* exists or unsupported */ }
-  try { sqlite.exec(`ALTER TABLE research_findings ADD COLUMN source_texts TEXT NOT NULL DEFAULT '[]'`); } catch { /* exists */ }
-  try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN min_searches INTEGER`); } catch { /* exists */ }
-  try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN fetch_source_text INTEGER`); } catch { /* exists */ }
-  try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN document TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
-  // Question-shape analysis (survey/timeline/list/dynamics/comparison/lookup/audit).
-  // Nullable: detector populates async after creation; old rows stay NULL until re-detected.
-  try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN question_shape TEXT`); } catch { /* exists */ }
-  // Topic-cluster classification (AI / LLM tooling | Music history | Databases | Audio & DSP | Personal infra | Misc).
-  // JSON-serialized {cluster, confidence}. Nullable: classifier populates async after creation.
-  try { sqlite.exec(`ALTER TABLE research_queries ADD COLUMN topic_cluster TEXT`); } catch { /* exists */ }
-  // Finding kind: 'normal' | 'perturbation' | 'speculation'. Default 'normal'
-  // so old rows have a defined value. Classifier in services/findings.ts
-  // upgrades to 'perturbation' or 'speculation' based on parent thread origin
-  // and forward-looking text patterns; speculation also caps confidence.
-  try { sqlite.exec(`ALTER TABLE research_findings ADD COLUMN kind TEXT NOT NULL DEFAULT 'normal'`); } catch { /* exists */ }
-  try { sqlite.exec(`ALTER TABLE research_jobs ADD COLUMN thread_id TEXT`); } catch { /* exists */ }
-  try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_rj_thread ON research_jobs(thread_id, status)`); } catch { /* exists */ }
-  // Enforce: at most one active job per thread. Belt-and-suspenders against the
-  // race where checkQueuedThreads on two workers both createThreadJobIfNone in
-  // the window after resetOrphanedActiveThreads flipped a thread back to queued.
-  // If existing rows violate the invariant, the index creation fails silently —
-  // in that case, cleanup_duplicate_active_thread_jobs runs first.
-  try {
-    sqlite.exec(`
-      DELETE FROM research_jobs
-      WHERE id IN (
-        SELECT id FROM (
-          SELECT id, ROW_NUMBER() OVER (PARTITION BY thread_id ORDER BY created_at ASC) AS rn
-          FROM research_jobs
-          WHERE thread_id IS NOT NULL
-          AND status IN ('pending', 'claimed', 'running')
-        ) WHERE rn > 1
-      )
-    `);
-  } catch { /* ignore */ }
-  try {
-    sqlite.exec(`
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_rj_thread_active
-      ON research_jobs(thread_id)
-      WHERE thread_id IS NOT NULL AND status IN ('pending', 'claimed', 'running')
-    `);
-  } catch { /* exists or conflict */ }
-  try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN retry_after TEXT`); } catch { /* exists */ }
-  try { sqlite.exec(`ALTER TABLE research_threads ADD COLUMN seed_similarity REAL`); } catch { /* exists */ }
-  try { sqlite.exec(`ALTER TABLE research_steps ADD COLUMN metadata TEXT`); } catch { /* exists */ }
-  try { sqlite.exec(`ALTER TABLE research_steps ADD COLUMN error_kind TEXT`); } catch { /* exists */ }
-  try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_rs_session_error_kind ON research_steps(session_id, error_kind) WHERE error_kind IS NOT NULL`); } catch { /* exists */ }
-
-  // Rebuild research_steps to make thread_id nullable. Session-scope LLM calls
-  // (role pick, title generation, post-mortem/iteration-check hooks) have no
-  // thread, so they previously bypassed step recording entirely. SQLite has no
-  // ALTER COLUMN, so we use the standard new-table → copy → rename dance, but
-  // only when the existing column is still NOT NULL.
-  try {
-    const cols = sqlite.prepare("PRAGMA table_info(research_steps)").all() as Array<{ name: string; notnull: number }>;
-    const threadIdCol = cols.find(c => c.name === 'thread_id');
-    if (threadIdCol && threadIdCol.notnull === 1) {
-      sqlite.exec(`
-        CREATE TABLE research_steps_new (
-          id TEXT PRIMARY KEY,
-          thread_id TEXT REFERENCES research_threads(id) ON DELETE CASCADE,
-          session_id TEXT NOT NULL REFERENCES research_queries(id) ON DELETE CASCADE,
-          finding_id TEXT REFERENCES research_findings(id) ON DELETE SET NULL,
-          model TEXT NOT NULL,
-          provider TEXT NOT NULL DEFAULT 'openrouter',
-          prompt_tokens INTEGER NOT NULL DEFAULT 0,
-          completion_tokens INTEGER NOT NULL DEFAULT 0,
-          cost_usd REAL NOT NULL DEFAULT 0,
-          tool_calls TEXT NOT NULL DEFAULT '[]',
-          duration_ms INTEGER NOT NULL DEFAULT 0,
-          error TEXT,
-          error_kind TEXT,
-          label TEXT,
-          metadata TEXT,
-          created_at TEXT NOT NULL DEFAULT (datetime('now'))
-        );
-        INSERT INTO research_steps_new (
-          id, thread_id, session_id, finding_id, model, provider,
-          prompt_tokens, completion_tokens, cost_usd, tool_calls, duration_ms,
-          error, error_kind, label, metadata, created_at
-        ) SELECT
-          id, thread_id, session_id, finding_id, model, provider,
-          prompt_tokens, completion_tokens, cost_usd, tool_calls, duration_ms,
-          error, error_kind, label, metadata, created_at
-        FROM research_steps;
-        DROP TABLE research_steps;
-        ALTER TABLE research_steps_new RENAME TO research_steps;
-        CREATE INDEX IF NOT EXISTS idx_rs_session_created ON research_steps(session_id, created_at);
-        CREATE INDEX IF NOT EXISTS idx_rs_session_error_kind ON research_steps(session_id, error_kind) WHERE error_kind IS NOT NULL;
-      `);
-      console.log('[ddl] migrated research_steps.thread_id to nullable');
-    }
-  } catch (err) {
-    console.warn('[ddl] research_steps.thread_id nullable migration skipped:', err);
-  }
-  // applied_at on plan mods so boost/deprioritize priority-deltas don't re-apply every engine loop.
-  try { sqlite.exec(`ALTER TABLE research_plan_modifications ADD COLUMN applied_at TEXT`); } catch { /* exists */ }
-  // Rename job modes: burst → priority, background → default
-  try { sqlite.exec(`UPDATE research_jobs SET mode = 'priority' WHERE mode = 'burst'`); } catch { /* ignore */ }
-  try { sqlite.exec(`UPDATE research_jobs SET mode = 'default' WHERE mode = 'background'`); } catch { /* ignore */ }
-  // Rename session schedule mode: burst → priority, background → default
-  try {
-    sqlite.exec(`UPDATE research_queries SET config = json_patch(config, json_object('schedule', json_patch(json_extract(config, '$.schedule'), json_object('mode', 'priority')))) WHERE json_extract(config, '$.schedule.mode') = 'burst'`);
-    sqlite.exec(`UPDATE research_queries SET config = json_patch(config, json_object('schedule', json_patch(json_extract(config, '$.schedule'), json_object('mode', 'default')))) WHERE json_extract(config, '$.schedule.mode') = 'background'`);
-  } catch { /* ignore */ }
-
-  // Mid-flight nudges are gone; drop the table on existing DBs. New DBs never create it.
-  sqlite.exec(`DROP TABLE IF EXISTS research_steering_notes;`);
-
-  // Backfill cost_usd for steps stored before pricing was configured (idempotent — only touches cost_usd=0 rows)
-  sqlite.exec(`
-    UPDATE research_steps SET cost_usd =
-      CASE model
-        WHEN 'deepseek/deepseek-chat'    THEN (prompt_tokens * 0.27 + completion_tokens * 1.10) / 1000000.0
-        WHEN 'deepseek/deepseek-chat-v3' THEN (prompt_tokens * 0.27 + completion_tokens * 1.10) / 1000000.0
-        ELSE cost_usd
-      END
-    WHERE cost_usd = 0 AND (prompt_tokens > 0 OR completion_tokens > 0)
-      AND model IN ('deepseek/deepseek-chat', 'deepseek/deepseek-chat-v3')
-  `);
-
-  // Seed research_sources from existing findings' source_url_meta.
-  // Existing URLs go in as 'skipped' — the queue is forward-looking, we don't
-  // want a backlog drain to re-fetch everything on first boot after upgrade.
-  try {
-    const already = sqlite.prepare('SELECT 1 FROM research_sources LIMIT 1').get();
-    if (!already) {
-      const rows = sqlite.prepare(
-        'SELECT id, session_id, source_url_meta FROM research_findings WHERE source_url_meta IS NOT NULL AND source_url_meta != \'[]\''
-      ).all() as Array<{ id: string; session_id: string; source_url_meta: string }>;
-      const insert = sqlite.prepare(
-        `INSERT OR IGNORE INTO research_sources (id, session_id, url, title, snippet, extraction_status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'skipped', datetime('now'), datetime('now'))`
-      );
-      const seed = sqlite.transaction((items: Array<{ sid: string; url: string; title: string; snippet: string }>) => {
-        for (const it of items) {
-          insert.run(`src_${it.sid.slice(0, 8)}_${Buffer.from(it.url).toString('base64').slice(0, 16)}`, it.sid, it.url, it.title, it.snippet);
-        }
-      });
-      const items: Array<{ sid: string; url: string; title: string; snippet: string }> = [];
-      for (const r of rows) {
-        try {
-          const meta = JSON.parse(r.source_url_meta) as Array<{ url: string; title?: string; snippet?: string }>;
-          for (const m of meta) {
-            if (m && m.url) items.push({ sid: r.session_id, url: m.url, title: m.title ?? '', snippet: m.snippet ?? '' });
-          }
-        } catch { /* skip malformed */ }
-      }
-      if (items.length > 0) seed(items);
-    }
-  } catch { /* table or data absent */ }
-
-  // Fix stale FK: research_monitors.session_id may reference the old 'research_sessions'
-  // table name (pre-rename). Rebuild the table to point at research_queries.
-  try {
-    const fks = sqlite.prepare('PRAGMA foreign_key_list(research_monitors)').all() as Array<{ table: string }>;
-    const hasStaleFK = fks.some(f => f.table === 'research_sessions');
-    if (hasStaleFK) {
-      sqlite.exec('PRAGMA foreign_keys = OFF');
-      sqlite.exec(`
-        CREATE TABLE research_monitors_new (
-          id TEXT PRIMARY KEY,
-          session_id TEXT REFERENCES research_queries(id) ON DELETE SET NULL,
-          title TEXT NOT NULL,
-          status TEXT NOT NULL DEFAULT 'active',
-          queries TEXT NOT NULL DEFAULT '[]',
-          fetch_urls TEXT NOT NULL DEFAULT '[]',
-          schedule TEXT NOT NULL DEFAULT '0 8 * * *',
-          timezone TEXT NOT NULL DEFAULT 'America/Los_Angeles',
-          match_criteria TEXT NOT NULL DEFAULT '{}',
-          model TEXT NOT NULL DEFAULT 'claude-haiku-4-5',
-          cost_per_cycle_estimate REAL NOT NULL DEFAULT 0,
-          budget_daily_usd REAL,
-          created_at TEXT NOT NULL DEFAULT (datetime('now')),
-          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-        );
-        INSERT INTO research_monitors_new SELECT * FROM research_monitors;
-        DROP TABLE research_monitors;
-        ALTER TABLE research_monitors_new RENAME TO research_monitors;
-      `);
-      sqlite.exec('PRAGMA foreign_keys = ON');
-    }
-  } catch { /* not applicable */ }
-
-  // ===========================================================================
-  // Loop engine (v1 rewrite, lands additively alongside the existing engine).
-  // Spec: docs/plans/research-engine-build-plan.md §Phase 1.
-  // Phase 7 will delete the legacy tables (research_jobs, research_perturbation_state,
-  // research_monitor_*); these `loops`/`cycles`/`artifacts`/`cycle_ledger`/`milestones`
-  // are the cutover destinations.
-  // ===========================================================================
-  sqlite.exec(`
     CREATE TABLE IF NOT EXISTS loops (
       id TEXT PRIMARY KEY,
       template_id TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'pending',
-      envelope TEXT NOT NULL DEFAULT '{}',           -- JSON: { time?, cost?, cycles?, sources? }
+      envelope TEXT NOT NULL DEFAULT '{}',
       envelope_consumed TEXT NOT NULL DEFAULT '{"time_minutes":0,"cost_usd":0,"cycles_count":0,"sources_count":0}',
-      child_pid INTEGER,                              -- pid of supervising child process, null when not running
-      prompt TEXT NOT NULL DEFAULT '',                -- the user's prompt; templates that don't use it ignore it
+      child_pid INTEGER,
+      prompt TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -543,8 +42,8 @@ export function applyResearchDDL(sqlite: Sqlite): void {
     CREATE TABLE IF NOT EXISTS cycles (
       id TEXT PRIMARY KEY,
       loop_id TEXT NOT NULL REFERENCES loops(id) ON DELETE CASCADE,
-      idx INTEGER NOT NULL,                            -- dispatch order within the loop (0-based)
-      priority REAL NOT NULL DEFAULT 0.5,              -- ORDER BY priority DESC, created_at ASC
+      idx INTEGER NOT NULL,
+      priority REAL NOT NULL DEFAULT 0.5,
       status TEXT NOT NULL DEFAULT 'pending',
       started_at TEXT,
       finalized_at TEXT,
@@ -557,8 +56,8 @@ export function applyResearchDDL(sqlite: Sqlite): void {
       id TEXT PRIMARY KEY,
       loop_id TEXT NOT NULL REFERENCES loops(id) ON DELETE CASCADE,
       cycle_id TEXT REFERENCES cycles(id) ON DELETE SET NULL,
-      kind TEXT NOT NULL,                              -- 'milestone'|'schedule'|'render'|'noop_output'|...
-      payload TEXT NOT NULL DEFAULT '{}',              -- JSON; engine never introspects, templates own shape
+      kind TEXT NOT NULL,
+      payload TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_artifacts_loop_kind ON artifacts(loop_id, kind, created_at);
@@ -567,9 +66,9 @@ export function applyResearchDDL(sqlite: Sqlite): void {
     CREATE TABLE IF NOT EXISTS cycle_ledger (
       loop_id TEXT NOT NULL REFERENCES loops(id) ON DELETE CASCADE,
       cycle_id TEXT NOT NULL REFERENCES cycles(id) ON DELETE CASCADE,
-      step TEXT NOT NULL,                              -- 'processor'|'derivation'|'renderer'|'stop_rule'
-      input_hash TEXT NOT NULL,                        -- stable hash of step input; dedups on resume
-      output TEXT NOT NULL,                            -- JSON-serialised output
+      step TEXT NOT NULL,
+      input_hash TEXT NOT NULL,
+      output TEXT NOT NULL,
       cost_usd REAL NOT NULL DEFAULT 0,
       recorded_at TEXT NOT NULL DEFAULT (datetime('now')),
       PRIMARY KEY (loop_id, cycle_id, step, input_hash)
@@ -579,13 +78,48 @@ export function applyResearchDDL(sqlite: Sqlite): void {
     CREATE TABLE IF NOT EXISTS milestones (
       id TEXT PRIMARY KEY,
       loop_id TEXT NOT NULL REFERENCES loops(id) ON DELETE CASCADE,
-      at_envelope_pct INTEGER NOT NULL,               -- 25 | 50 | 75
+      at_envelope_pct INTEGER NOT NULL,
       artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
-      digest_artifact_id TEXT REFERENCES artifacts(id) ON DELETE SET NULL,   -- v3.2 companion; null in v1
+      digest_artifact_id TEXT REFERENCES artifacts(id) ON DELETE SET NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_milestones_loop ON milestones(loop_id, at_envelope_pct);
   `);
 
   seedDefaults(sqlite);
+}
+
+/**
+ * Idempotent drop of every legacy v0 research table. Runs on every boot —
+ * a no-op on already-clean DBs (CI, fresh installs), drops the lot on dev
+ * DBs that still carry the v0 schema.
+ *
+ * Order matters: drop child tables before parents to avoid FK cascade
+ * surprises. PRAGMA foreign_keys = OFF makes the order moot but explicit
+ * order is still safer.
+ */
+function dropLegacyTables(sqlite: Sqlite): void {
+  sqlite.exec('PRAGMA foreign_keys = OFF');
+  sqlite.exec(`
+    DROP TABLE IF EXISTS research_perturbation_state;
+    DROP TABLE IF EXISTS research_finding_concepts;
+    DROP TABLE IF EXISTS research_concept_links;
+    DROP TABLE IF EXISTS research_concepts;
+    DROP TABLE IF EXISTS research_sources;
+    DROP TABLE IF EXISTS research_post_mortems;
+    DROP TABLE IF EXISTS research_iteration_checks;
+    DROP TABLE IF EXISTS research_proposed_monitors;
+    DROP TABLE IF EXISTS research_monitor_alerts;
+    DROP TABLE IF EXISTS research_monitor_snapshots;
+    DROP TABLE IF EXISTS research_monitors;
+    DROP TABLE IF EXISTS research_jobs;
+    DROP TABLE IF EXISTS research_plan_modifications;
+    DROP TABLE IF EXISTS research_plans;
+    DROP TABLE IF EXISTS research_steps;
+    DROP TABLE IF EXISTS research_findings;
+    DROP TABLE IF EXISTS research_threads;
+    DROP TABLE IF EXISTS research_queries;
+    DROP TABLE IF EXISTS research_sessions;
+  `);
+  sqlite.exec('PRAGMA foreign_keys = ON');
 }
