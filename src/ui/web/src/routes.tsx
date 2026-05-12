@@ -23,7 +23,7 @@ import { SummaryPage } from './pages/life/SummaryPage';
 // Research
 import { ResearchLandingPage } from './pages/research/ResearchLandingPage';
 import { ResearchHistoryPage } from './pages/research/ResearchHistoryPage';
-import { ResearchDetail } from './pages/research/ResearchDetail';
+import { ResearchLoopDetail } from './pages/research/ResearchLoopDetail';
 import { ResearchPlanPage } from './pages/research/ResearchPlanPage';
 import { ResearchWorkersPage } from './pages/research/ResearchWorkersPage';
 import { ResearchConfigPage } from './pages/research/ResearchConfigPage';
@@ -62,7 +62,7 @@ const ELEMENTS: Record<string, ReactNode> = {
 
   '/research': <ResearchLandingPage />,
   '/research/history': <ResearchHistoryPage />,
-  '/research/:id': <ResearchDetail />,
+  '/research/:id': <ResearchLoopDetail />,
   '/research/:id/plan': <ResearchPlanPage />,
   '/research/workers': <ResearchWorkersPage />,
   '/research/config': <ResearchConfigPage />,
