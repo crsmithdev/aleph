@@ -105,6 +105,14 @@
       "keywords": ["design system", "construct design", "design tokens", "color tokens", "surface tokens", "type scale", "design reference", "design kit", "material symbols", "construct ui pattern"]
     },
     {
+      "skill": "security-audit",
+      "keywords": ["security audit", "audit for vulnerabilities", "scan for security issues", "security review", "find vulnerabilities", "OWASP", "owasp", "CWE", "cwe", "ASVS", "asvs", "vulnerability scan", "audit for security", "SQL injection", "XSS", "XXE", "SSRF", "IDOR", "/(audit|scan|review|check).{0,15}(security|vuln|vulnerab|owasp|cwe)/", "/(security|vulnerab).{0,15}(audit|scan|review|check)/"]
+    },
+    {
+      "skill": "security-fix",
+      "keywords": ["security-fix", "fix the vulnerabilities", "remediate", "remediate security", "patch security", "fix security findings", "/fix security", "apply security fixes", "fix the security findings", "/(fix|remediate|patch).{0,15}(security|vuln|vulnerab|owasp|cwe)/"]
+    },
+    {
       "skill": "dogfood",
       "keywords": ["dogfood", "try this as a user", "use it like a user", "use it like a real user", "pretend you don't know the internals", "how does this feel to use", "/dogfood\\s+\\S+/"]
     }
