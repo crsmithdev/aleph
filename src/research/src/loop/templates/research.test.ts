@@ -1,0 +1,190 @@
+/**
+ * Research template tests — Phase 2.
+ *
+ * Drives `runLoop` with a FakeLLMProvider so the full engine + four-hook
+ * contract runs in-memory, no network. The fake's per-prompt-shape dispatch
+ * mirrors `src/ui/e2e/fake-llm-server.ts` but in-process — unit tests don't
+ * need an HTTP server.
+ *
+ * Covers:
+ *  - happy path: searchWeb + complete called per cycle, cycle_output artifacts
+ *    accumulate, render artifact assembles findings + dedupes sources
+ *  - query chaining: cycle N uses cycle (N-1)'s first follow-up
+ *  - malformed derivation: bad JSON falls back to the previous query
+ *  - registry dispatch: buildTemplate('research', ...) requires deps.llm
+ *  - crash resume: the second runLoop on the same loop uses cached ledger
+ *    entries — no extra LLM calls beyond the unfinished cycle
+ */
+
+import { describe, test, expect, beforeEach } from 'bun:test';
+import { Database } from 'bun:sqlite';
+import { applyResearchDDL } from '../../ddl';
+import { createLoop, listArtifacts, listCycles, readState } from '../db';
+import { runLoop } from '../engine';
+import { FakeLLMProvider } from '../llm';
+import { makeResearchTemplate } from './research';
+import { buildTemplate } from './registry';
+
+function newDb() {
+  const sqlite = new Database(':memory:');
+  sqlite.exec('PRAGMA journal_mode = WAL');
+  sqlite.exec('PRAGMA foreign_keys = ON');
+  applyResearchDDL(sqlite as unknown as Parameters<typeof applyResearchDDL>[0]);
+  return sqlite as unknown as Parameters<typeof applyResearchDDL>[0];
+}
+
+function makeDefaultFake() {
+  return new FakeLLMProvider({
+    searchWeb: (_model, query) => ({
+      text: `Synthesized result for "${query}". Findings include foo, bar, baz.`,
+      sources: [
+        { url: `https://example.test/${encodeURIComponent(query)}/a`, title: `A about ${query}`, snippet: 'a' },
+        { url: `https://example.test/${encodeURIComponent(query)}/b`, title: `B about ${query}`, snippet: 'b' },
+      ],
+    }),
+    complete: (_model, prompt) => {
+      // Encode the prompt's query into the next follow-ups so we can assert chaining.
+      const m = prompt.match(/Most recent search query: (.+)/);
+      const base = m ? m[1].trim() : 'fallback';
+      return JSON.stringify([`${base}: deeper detail`, `${base}: alternative angle`]);
+    },
+  });
+}
+
+describe('research template — happy path', () => {
+  let sqlite: ReturnType<typeof newDb>;
+  beforeEach(() => { sqlite = newDb(); });
+
+  test('runs cycles_target cycles, calling searchWeb + complete per cycle', async () => {
+    const llm = makeDefaultFake();
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'how does a sourdough starter develop?' });
+    const template = makeResearchTemplate('how does a sourdough starter develop?', { cycles_target: 3 }, { llm });
+
+    const result = await runLoop(sqlite, template as Parameters<typeof runLoop>[1], loop.id);
+
+    expect(result.status).toBe('completed');
+    expect(result.reason).toBe('research_target_reached:3');
+    expect(result.cycles_run).toBe(3);
+    expect(llm.searchCalls).toBe(3);
+    expect(llm.completeCalls).toBe(3);
+
+    const cycles = listCycles(sqlite, loop.id);
+    expect(cycles).toHaveLength(3);
+    expect(cycles.every(c => c.status === 'finalized')).toBe(true);
+  });
+
+  test('cycle 0 searches the prompt; cycle N searches cycle (N-1)\'s first follow-up', async () => {
+    const seenQueries: string[] = [];
+    const llm = new FakeLLMProvider({
+      searchWeb: (_model, query) => {
+        seenQueries.push(query);
+        return { text: `result for "${query}"`, sources: [{ url: 'https://x.test/1', title: 't', snippet: 's' }] };
+      },
+      complete: (_model, prompt) => {
+        const m = prompt.match(/Most recent search query: (.+)/);
+        const base = m ? m[1].trim() : 'fb';
+        return JSON.stringify([`${base} -> next`, `${base} -> alt`]);
+      },
+    });
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'origin question' });
+    const template = makeResearchTemplate('origin question', { cycles_target: 3 }, { llm });
+    await runLoop(sqlite, template as Parameters<typeof runLoop>[1], loop.id);
+
+    expect(seenQueries).toEqual([
+      'origin question',
+      'origin question -> next',
+      'origin question -> next -> next',
+    ]);
+  });
+
+  test('render artifact at completion contains findings + deduped sources', async () => {
+    // Two of the three searches return overlapping sources to test dedup.
+    let n = 0;
+    const llm = new FakeLLMProvider({
+      searchWeb: (_model, query) => {
+        n++;
+        const shared = { url: 'https://shared.test/x', title: 'shared', snippet: 's' };
+        const unique = { url: `https://uniq.test/${n}`, title: `u${n}`, snippet: 's' };
+        return { text: `text ${n} for ${query}`, sources: n === 2 ? [shared] : [shared, unique] };
+      },
+      complete: () => JSON.stringify(['next q', 'alt q']),
+    });
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'p' });
+    const template = makeResearchTemplate('p', { cycles_target: 3 }, { llm });
+    await runLoop(sqlite, template as Parameters<typeof runLoop>[1], loop.id);
+
+    // Run a final render against the terminal state.
+    const state = readState(sqlite, loop.id);
+    const render = await template.renderer(state);
+
+    expect(render.kind).toBe('render');
+    expect(render.cycles_rendered).toBe(3);
+    expect(render.findings).toHaveLength(3);
+    expect(render.findings[0].cycle).toBe(0);
+    // Dedup: shared.test/x is in cycles 1 and 2's sources but should appear once.
+    const sharedCount = render.sources.filter(s => s.url === 'https://shared.test/x').length;
+    expect(sharedCount).toBe(1);
+    // Unique sources from cycles 1 and 3 also present (cycle 2 only returned the shared source).
+    expect(render.sources.map(s => s.url).sort()).toEqual([
+      'https://shared.test/x',
+      'https://uniq.test/1',
+      'https://uniq.test/3',
+    ]);
+  });
+
+  test('malformed derivation response falls back to the prior query', async () => {
+    const seenQueries: string[] = [];
+    const llm = new FakeLLMProvider({
+      searchWeb: (_model, query) => {
+        seenQueries.push(query);
+        return { text: `t for ${query}`, sources: [{ url: 'https://x.test/1', title: 't', snippet: 's' }] };
+      },
+      complete: () => 'not json at all, just prose',
+    });
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'the original' });
+    const template = makeResearchTemplate('the original', { cycles_target: 2 }, { llm });
+    await runLoop(sqlite, template as Parameters<typeof runLoop>[1], loop.id);
+
+    // Cycle 1 should re-use cycle 0's query because derivation couldn't propose a follow-up.
+    expect(seenQueries).toEqual(['the original', 'the original']);
+
+    // The loop still produces cycle_output artifacts; degradation doesn't crash.
+    const outputs = listArtifacts(sqlite, loop.id, 'cycle_output');
+    expect(outputs).toHaveLength(2);
+  });
+});
+
+describe('research template — registry dispatch', () => {
+  test('buildTemplate("research") requires deps.llm', () => {
+    expect(() => buildTemplate('research', 'q', {}, {})).toThrow(/requires deps.llm/);
+  });
+
+  test('buildTemplate("research") with deps.llm returns a Template', () => {
+    const llm = makeDefaultFake();
+    const t = buildTemplate('research', 'q', { cycles_target: 2 }, { llm });
+    expect(t).not.toBeNull();
+    expect(t!.id).toBe('research');
+  });
+
+  test('buildTemplate("noop") still works without deps', () => {
+    const t = buildTemplate('noop', 'q', {}, {});
+    expect(t).not.toBeNull();
+    expect(t!.id).toBe('noop');
+  });
+});
+
+describe('research template — crash resume via ledger', () => {
+  test('a second runLoop on a completed loop is a no-op', async () => {
+    const sqlite = newDb();
+    const llm = makeDefaultFake();
+    const loop = createLoop(sqlite, { template_id: 'research', prompt: 'q' });
+    const template = makeResearchTemplate('q', { cycles_target: 2 }, { llm });
+    await runLoop(sqlite, template as Parameters<typeof runLoop>[1], loop.id);
+    const callsAfterFirst = llm.searchCalls;
+
+    // Second call should detect terminal status and exit fast — no new LLM calls.
+    const result = await runLoop(sqlite, template as Parameters<typeof runLoop>[1], loop.id);
+    expect(result.cycles_run).toBe(0);
+    expect(llm.searchCalls).toBe(callsAfterFirst);
+  });
+});

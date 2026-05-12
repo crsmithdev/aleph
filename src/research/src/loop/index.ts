@@ -37,5 +37,10 @@ export {
 } from './envelope.js';
 
 export { makeNoopTemplate } from './templates/noop.js';
+export { makeResearchTemplate } from './templates/research.js';
+export type { ResearchTemplateOptions, ResearchTemplateDeps } from './templates/research.js';
 export { buildTemplate, listTemplateIds } from './templates/registry.js';
-export type { TemplateOverrides } from './templates/registry.js';
+export type { TemplateOverrides, TemplateDeps } from './templates/registry.js';
+
+export { FakeLLMProvider } from './llm.js';
+export type { LLMProvider, LLMResult, WebSearchResult, SearchOptions, SourceMeta } from './llm.js';
