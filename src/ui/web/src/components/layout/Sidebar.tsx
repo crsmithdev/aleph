@@ -51,6 +51,7 @@ const navGroups: NavGroup[] = [
           { to: '/research/history', label: 'History', icon: 'history' },
           { to: '/research/workers', label: 'Workers', icon: 'engineering' },
           { to: '/research/config', label: 'Providers', icon: 'tune' },
+          { to: '/loops/new', label: 'Loops (v1)', icon: 'loop', separator: 'before' },
         ],
       },
     ],

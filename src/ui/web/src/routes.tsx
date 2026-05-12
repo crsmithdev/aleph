@@ -28,6 +28,10 @@ import { ResearchPlanPage } from './pages/research/ResearchPlanPage';
 import { ResearchWorkersPage } from './pages/research/ResearchWorkersPage';
 import { ResearchConfigPage } from './pages/research/ResearchConfigPage';
 
+// Loops (v1 engine — temporary surface; Phase 6 absorbs into the rewrite)
+import { LoopNewPage } from './pages/loops/LoopNewPage';
+import { LoopDetailPage } from './pages/loops/LoopDetailPage';
+
 // System
 import { OverviewPage } from './pages/system/observability/OverviewPage';
 import { ToolsPage } from './pages/system/observability/ToolsPage';
@@ -66,6 +70,9 @@ const ELEMENTS: Record<string, ReactNode> = {
   '/research/:id/plan': <ResearchPlanPage />,
   '/research/workers': <ResearchWorkersPage />,
   '/research/config': <ResearchConfigPage />,
+
+  '/loops/new': <LoopNewPage />,
+  '/loops/:id': <LoopDetailPage />,
 
   '/observability': <OverviewPage />,
   '/observability/tools': <ToolsPage />,

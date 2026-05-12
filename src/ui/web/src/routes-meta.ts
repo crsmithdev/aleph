@@ -65,6 +65,10 @@ export const ROUTE_META: readonly RouteMeta[] = [
   { path: '/research/workers', smoke: { testid: 'page-research-workers', heading: /^Workers$/ } },
   { path: '/research/config', smoke: { testid: 'page-research-config', heading: /^Research Config$/ } },
 
+  // Loops (v1 engine — temporary; absorbed by Phase 6)
+  { path: '/loops/new', smoke: { testid: 'loop-new-form' } },
+  { path: '/loops/:id' },
+
   // Observability
   { path: '/observability', smoke: { testid: 'page-observability-overview' } },
   { path: '/observability/tools', smoke: { testid: 'page-observability-tools' } },
