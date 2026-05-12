@@ -47,6 +47,82 @@ export const loopRoutes: FastifyPluginAsync = async (app) => {
     return rows;
   });
 
+  /**
+   * Aggregate stats backing the LandingPage KPI strip + History range strip.
+   * Maps cleanly onto loops: total runs, active runs, total cost from
+   * envelope_consumed.cost_usd, total findings = COUNT(cycle_output artifacts),
+   * grouped by day. Honors `?range=7d|30d|90d|all` for the window.
+   *
+   * Replaces the legacy `/api/research/stats` which read from research_queries
+   * et al; the legacy pass/flag/halt verdict aggregates are dropped (no
+   * equivalent in the new system yet).
+   */
+  app.get<{ Querystring: { range?: string } }>('/stats', async (req) => {
+    const range = req.query.range ?? '30d';
+    const days = range === '7d' ? 7 : range === '90d' ? 90 : range === 'all' ? 0 : 30;
+    const sinceClause = days > 0 ? `WHERE created_at >= datetime('now', '-${days} days')` : '';
+
+    const rows = app.sqlite.prepare(
+      `SELECT status, envelope_consumed, date(created_at) AS day FROM loops ${sinceClause}`
+    ).all() as Array<{ status: string; envelope_consumed: string; day: string }>;
+
+    let totalSessions = 0;
+    let activeSessions = 0;
+    let totalCost = 0;
+    const byDayMap = new Map<string, { sessions: number; findings: number; cost: number }>();
+
+    for (const row of rows) {
+      totalSessions += 1;
+      if (row.status === 'running' || row.status === 'pending') activeSessions += 1;
+      const consumed = (() => {
+        try { return JSON.parse(row.envelope_consumed) as { cost_usd?: number }; }
+        catch { return { cost_usd: 0 }; }
+      })();
+      const cost = consumed.cost_usd ?? 0;
+      totalCost += cost;
+      const day = row.day;
+      const bucket = byDayMap.get(day) ?? { sessions: 0, findings: 0, cost: 0 };
+      bucket.sessions += 1;
+      bucket.cost += cost;
+      byDayMap.set(day, bucket);
+    }
+
+    // Findings: cycle_output artifacts in the same window. One per cycle.
+    const findingsRows = app.sqlite.prepare(
+      `SELECT date(a.created_at) AS day, COUNT(*) AS n
+       FROM artifacts a JOIN loops l ON l.id = a.loop_id
+       WHERE a.kind = 'cycle_output' ${days > 0 ? `AND l.created_at >= datetime('now', '-${days} days')` : ''}
+       GROUP BY day`
+    ).all() as Array<{ day: string; n: number }>;
+
+    let totalFindings = 0;
+    for (const f of findingsRows) {
+      totalFindings += f.n;
+      const bucket = byDayMap.get(f.day) ?? { sessions: 0, findings: 0, cost: 0 };
+      bucket.findings = f.n;
+      byDayMap.set(f.day, bucket);
+    }
+
+    const byDay = [...byDayMap.entries()]
+      .map(([date, v]) => ({ date, ...v }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    return {
+      totalSessions,
+      activeSessions,
+      totalFindings,
+      totalThreads: 0,
+      totalCost,
+      avgConfidence: 0,
+      avgNovelty: 0,
+      passRate: 0,
+      flagRate: 0,
+      haltRate: 0,
+      byDay,
+      byVerdict: [],
+    };
+  });
+
   app.post<{ Body: StartBody }>('/start', async (req, reply) => {
     const { template_id, prompt, envelope, processor_delay_ms, cycles_target, poll_every } = req.body ?? {};
     if (!template_id || typeof template_id !== 'string') {

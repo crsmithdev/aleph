@@ -243,10 +243,13 @@ export interface ResearchStatsData {
 }
 
 export function useResearchStats(range: string, granularity: string) {
-  const params = new URLSearchParams({ range, granularity });
+  const params = new URLSearchParams({ range });
   return useQuery({
-    queryKey: ['research-stats', range, granularity],
-    queryFn: () => api.get<ResearchStatsData>(`/research/stats?${params}`),
+    // granularity is retained in the queryKey so the cache invalidates if a
+    // caller toggles between day/hour even though the loops endpoint always
+    // returns daily buckets — the UI just renders whatever resolution it gets.
+    queryKey: ['loops-stats', range, granularity],
+    queryFn: () => api.get<ResearchStatsData>(`/loops/stats?${params}`),
   });
 }
 

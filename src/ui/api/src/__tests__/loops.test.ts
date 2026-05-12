@@ -141,6 +141,42 @@ describe('Loops API — noop end-to-end', () => {
   });
 });
 
+describe('Loops API — stats', () => {
+  it('GET /api/loops/stats aggregates loops + artifacts into the legacy shape', async () => {
+    // Start a quick noop loop so there's something in the stats window.
+    const startRes = await fetch(`http://127.0.0.1:${port}/api/loops/start`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ template_id: 'noop' }),
+    });
+    const { id } = await startRes.json() as { id: string };
+    await poll(
+      async () => {
+        const res = await fetch(`http://127.0.0.1:${port}/api/loops/${id}`);
+        return res.status === 200 ? await res.json() as { loop: { status: string } } : null;
+      },
+      v => v.loop.status === 'completed',
+      10_000,
+    );
+
+    const res = await fetch(`http://127.0.0.1:${port}/api/loops/stats?range=30d`);
+    expect(res.status).toBe(200);
+    const stats = await res.json() as {
+      totalSessions: number; activeSessions: number; totalFindings: number;
+      totalCost: number; byDay: Array<{ date: string; sessions: number; findings: number; cost: number }>;
+      passRate: number; flagRate: number; haltRate: number; byVerdict: unknown[];
+    };
+
+    expect(stats.totalSessions).toBeGreaterThanOrEqual(1);
+    // The noop template writes 5 cycle_output artifacts per loop.
+    expect(stats.totalFindings).toBeGreaterThanOrEqual(5);
+    expect(stats.byDay.length).toBeGreaterThanOrEqual(1);
+    // Pass/flag/halt fields exist (legacy shape) but are zeroed for the new system.
+    expect(stats.passRate).toBe(0);
+    expect(stats.byVerdict).toEqual([]);
+  });
+});
+
 describe('Loops API — SSE snapshot', () => {
   it('GET /api/loops/:id/stream sends an initial snapshot then keeps the connection open', async () => {
     // Use an already-completed loop so the snapshot includes a non-trivial state.
