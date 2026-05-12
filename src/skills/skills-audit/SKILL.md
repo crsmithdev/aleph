@@ -14,6 +14,8 @@ description: >
 verb: audit
 domain: skills
 modes: [report]
+metadata:
+  argument-hint: <skill-name-or-dir>
 ---
 
 # Skills Audit

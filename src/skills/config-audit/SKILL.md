@@ -13,6 +13,8 @@ description: >
 verb: audit
 domain: config
 modes: [report]
+metadata:
+  argument-hint: <config-area>
 ---
 
 # Config Audit

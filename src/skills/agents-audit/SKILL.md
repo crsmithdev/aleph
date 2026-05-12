@@ -14,6 +14,8 @@ description: >
 verb: audit
 domain: agents
 modes: [report]
+metadata:
+  argument-hint: <agent-name-or-dir>
 ---
 
 # Agents Audit

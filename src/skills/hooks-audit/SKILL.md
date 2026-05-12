@@ -14,6 +14,8 @@ description: >
 verb: audit
 domain: hooks
 modes: [report]
+metadata:
+  argument-hint: <hook-file-or-dir>
 ---
 
 # Hooks Audit

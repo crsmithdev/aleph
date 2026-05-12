@@ -4,6 +4,8 @@ description: Audit TypeScript/JavaScript code under src/ against src/rules/code/
 verb: audit
 domain: code
 modes: [report]
+metadata:
+  argument-hint: <scope-or-module>
 ---
 
 # Code Audit

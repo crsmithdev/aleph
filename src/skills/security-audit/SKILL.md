@@ -14,6 +14,8 @@ description: >
 verb: audit
 domain: security
 modes: [report]
+metadata:
+  argument-hint: <scope-or-module>
 ---
 
 # Security Audit
