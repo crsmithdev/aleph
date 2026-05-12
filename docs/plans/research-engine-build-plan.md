@@ -4,17 +4,17 @@ Companion to:
 - `research-system-design.md` — comparator survey + observed-data analysis
 - `research-system-principles.md` — operating constraints (single-operator scale, AI-maintainable, mockable LLM, typed failure modes, forkable runs, etc.)
 
-This doc selects what ships in v1 (MVP) and roadmaps v2–v4. v1 is the hard cutover; v2 and v3 are additive.
+This doc selects what ships in v1 (MVP) and roadmaps v2–v5. v1 is the hard cutover; v2–v5 are additive.
 
 ---
 
 ## Principles
 
-Inherits from `research-system-principles.md` (single-operator scale, AI-maintainable, typed contracts, mockable LLM, typed failure-mode identifiers, perturbation as primary, forkable runs, event-triggered background work). Build-plan-specific principles:
+Inherits all of `research-system-principles.md` — Scope / AI as primary maintainer / Architecture for change / Verification / Observability / Self-managing and self-healing / Configurability / Perturbation as a core mechanism / Forkable runs. Build-plan-specific principles:
 
 1. **Engine-deterministic, planner-adaptive.** Engine plumbing (input-hash dedup, priority dispatch order, cycle ledger, render from a fixed artifact set) stays deterministic — that's what enables crash-resume, forkable runs, and stable replay of state. Planning (canon, decomposition, budget allocation, strategy selection) is fully adaptive — each query gets a fresh LLM-planned `LoopSchedule`. Same prompt twice may produce different plans; same artifact set always produces the same render.
 2. **Ship the abstraction with two templates at once.** Research alone produces a research-shaped engine. Monitor is small but forces the boundary to be honest.
-3. **Fold in the empirical fixes** from the design doc's observed-data appendix. The Awesome-Deep-Research drift, the HSV/HPV table-not-produced, the Smashed-Burgers list-in-prose, the universal `low_finding_yield` flag — these are catchable in v1 with small additions to the spec baseline.
+3. **Fold in the empirical fixes** from the design doc's failure-mode evaluation criteria and methodology/observed-data sections. The Awesome-Deep-Research drift, the HSV/HPV table-not-produced, the Smashed-Burgers list-in-prose, the universal `low_finding_yield` flag — these are catchable in v1 with small additions to the spec baseline.
 4. **Preserve what works today.** The `InferredPanel` "engine infers, user corrects" pattern. The 21-strategy perturbation menu. The typed `question_shape` detection. These are differentiators — the rewrite is the dispatcher, not the brain.
 5. **One hard cutover, no coexistence.** Phases 1–6 land additively, Phase 7 deletes the old engine in one pass.
 6. **Defer ambition.** Every comparator-derived feature whose empirical pain isn't visible in the dev DB waits for v2 or later.
@@ -23,7 +23,7 @@ Inherits from `research-system-principles.md` (single-operator scale, AI-maintai
 
 ## Verification gates per phase
 
-Every phase closes on the gates from `research-system-principles.md` §Verification — coverage ≥ 80%, telemetry-exists test, event-log-source-of-truth test, whole-workflow Playwright e2e, phase-specific e2e validation. Each phase's *Deliverable* below **is** its phase-specific gate; the gate is satisfied by observing the deliverable in a browser via Playwright, not by inferring from code.
+Every phase closes on the gates defined in `research-system-principles.md` §Verification. Each phase's *Deliverable* below **is** its phase-specific gate; the gate is satisfied by observing the deliverable in a browser via Playwright, not by inferring from code.
 
 **Phase progression authority.** When all gates pass at the end of a phase, Phases 1–4 advance without per-phase approval. Phase 5 onward requires explicit go-ahead — Phase 5 collapses `SessionConfig` into the schedule artifact (schema change), Phase 6 is the UI rewrite, Phase 7 is the single-pass cutover. The standing rule for Phases 1–4: *do the tests exist and do they run.*
 
@@ -33,7 +33,7 @@ Every phase closes on the gates from `research-system-principles.md` §Verificat
 
 ### v1 (MVP) — IN
 
-**Engine primitives (from refocus doc):**
+**Engine primitives:**
 
 - Loop primitive with four-hook template interface (`processor`, `derivation`, `renderer`, `stop_rule`)
 - Cycle ledger with input-hash dedup for crash resume
@@ -47,12 +47,12 @@ Every phase closes on the gates from `research-system-principles.md` §Verificat
 **Templates (both ship together):**
 
 - **Research template** — wraps today's `executeSearches`, `extractor.ts`, citation logic, perturbation strategies (promoted from defensive to primary `derivation` hook). Renderer = markdown report with sections, citations, references appendix, gaps section.
-- **Monitor template** — wait-cycles and run-cycles per the refocus doc §Monitors extension. Renderer = weekly digest by default.
+- **Monitor template** — wait-cycles + run-cycles (a small inner loop that re-fires on schedule). Renderer = weekly digest by default.
 
-**Empirically-grounded additions (from Appendix A):**
+**Empirically-grounded additions (from the design doc's observed failure modes F1–F7):**
 
 - **Output-shape enforcement.** `output_shape` field populated at session create (one LLM call). Renderer gates the run on shape satisfaction. `stop_rule` becomes `schedule_complete OR envelope_consumed OR shape_satisfied`.
-- **Adaptive planner.** Replaces today's `(question_shape × topic_cluster) → RunPlan` lookup in `run-plan.ts` with an LLM call that takes `(prompt, question_shape, output_shape, envelope)` and produces a typed `LoopSchedule` artifact. The 6-cluster topic taxonomy and the `SHAPE_DEFAULTS` budget table are deleted entirely. The planner produces seed canon, branch decomposition, per-branch budgets, and which perturbation strategies to favor. URL detection in the prompt feeds the planner (it grounds canon on URL contents) rather than running as a switch around a fixed lookup. The typed `question_shape` enum is retained as a planner *input* and renderer *constraint*, not as a lookup key.
+- **Adaptive planner.** Replaces today's `(question_shape × topic_cluster) → RunPlan` lookup in `run-plan.ts` with an LLM call that takes `(prompt, question_shape, output_shape, envelope, role)` and produces a typed `LoopSchedule` artifact. The 6-cluster topic taxonomy and the `SHAPE_DEFAULTS` budget table are deleted entirely. The planner produces seed canon, branch decomposition, per-branch budgets, and which perturbation strategies to favor. URL detection in the prompt feeds the planner (it grounds canon on URL contents) rather than running as a switch around a fixed lookup. The typed `question_shape` enum is retained as a planner *input* and renderer *constraint*, not as a lookup key.
 - **Schedule as the universal loop configuration**, a first-class artifact (`kind: 'schedule'`) that is **the complete editable surface** for every per-loop setting. No separate advanced/expert UI — every knob is a field on the schedule, every change is a schedule edit. The schedule artifact's payload covers the structural plan AND the run-level config:
     ```ts
     type SchedulePayload = {
@@ -102,7 +102,7 @@ Every phase closes on the gates from `research-system-principles.md` §Verificat
 
 - **Compose box: prompt textarea + mode-button row.** The mode row contains the 8 modes above (Quick / Default / Deep / Roam / Bonkers / Dev / Eval / Custom). Default is selected when nothing else is, but the mode can also be **inferred from the prompt** at session-create time (cheap LLM call; user can override).
 - **`InferredPanel` preserved**, with editors for `question_shape`, `output_shape` (new in v1), and `role` (new in v1 — `pickAgentRole` already runs, just expose its output for editing). The InferredPanel covers the *query classification* fields; the **Schedule view covers everything else**, including model / budget / perturbation / canon / branches / milestones.
-- **Sidebar IA:** `Research`, `Monitors`, `Telemetry`. `WorkersPage` removed. Reviews tab folded into the report + a Debug tab.
+- **Sidebar IA:** `Research`, `Monitors`, `Telemetry`. `WorkersPage` removed. Reviews tab content (post-mortem flags, narratives) folds into the artifact view alongside its event-log links.
 
 **Foundational infrastructure (from `research-system-principles.md`):**
 
@@ -127,7 +127,7 @@ Each item below could plausibly be in v1 — they're called out so the boundary 
 | Source-type specialized processors (academic, GitHub, directory, restaurant) | Wants the research template stable before adding processor diversity. | v3 |
 | Engine-side context compression at milestones (ReSum-style `digest`; distinct from v1's user-facing `milestone` artifacts) | No observed need yet in the dev DB — runs hit yield walls and shape mismatches before context-window walls. Belongs with heavy-modality / overnight envelopes. | v3 |
 | Charts in renderer (FDV-style) | No observed need. Renderer hook supports it later. | v3 |
-| Heavy-modality cycles (books, PDFs, images) | Was step 5 of the refocus build order. Decouple from v1. | v3 |
+| Heavy-modality cycles (books, PDFs, images) | Decouple from v1; engine surface ready once source-list-bounded envelopes are exercised in v3. | v3 |
 | Pre-flight clarification flow | The InferredPanel already does most of what this is for. Promote only if needed. | maybe v2, maybe never |
 | Recursive sub-loops via `parent_loop_id` | Opt-in per template. Add when a template demands it. | v4 |
 | Code-dev / image-iteration / long-form writing templates | After the engine is proven stable on research + monitor. | v4 |
@@ -153,7 +153,7 @@ Detect `output_shape` at session create. Renderer-as-gate: if shape unsatisfied,
 *Deliverable:* HSV/HPV-style queries produce the requested table. Berkeley-volunteering-style queries produce a list.
 
 **Phase 4 — Adaptive planner.**
-Delete `run-plan.ts`'s `(shape × topic) → RunPlan` lookup, the 6-cluster `TOPIC_CLUSTERS` constant, and the `SHAPE_DEFAULTS` budget table. Add a planner LLM call that emits a typed `LoopSchedule`: `{ canon[], branches[], per_branch_budget, perturbation_weights, milestone_plan }`. Inputs: the prompt, detected `question_shape`, detected `output_shape`, and the envelope. URL detection in the prompt feeds the planner as a grounding signal (contents fetched, supplied as canon seed) rather than as a separate code path.
+Delete `run-plan.ts`'s `(shape × topic) → RunPlan` lookup, the 6-cluster `TOPIC_CLUSTERS` constant, and the `SHAPE_DEFAULTS` budget table. Add a planner LLM call that emits a typed `LoopSchedule` — Phase 4 ships the structural-plan slice (`{ canon[], branches[], per_branch_budget, perturbation_weights, milestone_plan }`); the rest of the SchedulePayload (envelope, models, perturbation_config, flags) collapses in at Phase 5. Inputs: the prompt, detected `question_shape`, detected `output_shape`, the envelope, and `role`. URL detection in the prompt feeds the planner as a grounding signal (contents fetched, supplied as canon seed) rather than as a separate code path.
 *Deliverable:* Awesome-Deep-Research-style queries don't pull AlphaFold/Adam optimizer — the planner sees the GitHub URL and grounds canon on the listed projects.
 
 **Phase 5 — Schedule as the universal loop config + Schedule view editor.**
@@ -180,7 +180,7 @@ Acceptance checks (below) pass. v2 work can begin.
 - Cost per run trends downward (extractor on cheap model).
 - Monitor template works against the same engine — proves the abstraction is honest.
 - **Live Activity view streams events, cycle starts/ends, planner decisions, perturbation firings, extraction outcomes, and errors in real time during a running loop — no refresh required, no dev tools needed.** Parity with today's Activity tab is the floor, not the ceiling.
-- **Per-phase verification gates** (coverage ≥ 80%, telemetry test, event-log-source-of-truth test, whole-workflow Playwright e2e, phase-specific e2e validation) green at every phase before progression. See `## Verification gates per phase`.
+- **Per-phase verification gates** green at every phase before progression (see `## Verification gates per phase` + `research-system-principles.md` §Verification — principles is canonical).
 - `bun test.ts` + `bun run build` + `bun run ui:smoke` + Playwright e2e suite all green.
 
 ---
@@ -250,7 +250,7 @@ All three flow through the same API (`POST /loops/:id/checks`) and the same audi
 
 - v1's adaptive planner is fully LLM-driven. v2 evaluates planner outputs across the historical query corpus and tunes the prompt + few-shot examples for systematic failures.
 - Adds a small set of "canonical good plans" drawn from the historical query corpus as in-prompt examples — closing the loop on what the deleted lookup table used to encode.
-- *Empirical case:* the long tail of historically-bucketed `Misc` queries — verify the adaptive planner handles them at least as well as the old lookup. Standalone from the check framework; pure planner-quality work.
+- *Empirical case:* the long tail of historical queries the old lookup table couldn't categorize cleanly — verify the adaptive planner handles them at least as well as the old lookup. Standalone from the check framework; pure planner-quality work.
 
 ### v2 acceptance criteria
 
@@ -270,7 +270,7 @@ After v2 stabilizes. Theme: grow the surface so heavier, more varied research wo
 
 **v3.1 — Source-type specialized processors.**
 - Typed processors under the research template: `web_search` (today's default), `academic` (arXiv, Semantic Scholar), `github` (repo + README aware), `directory` (Idealist / VolunteerMatch / Yelp shape), `pdf` (heavy-modality)
-- Planner chooses the mix based on `(shape × topic × prompt_signals)`. Extended `RunPlan` includes `processor_mix`.
+- Planner chooses the mix based on `(shape × prompt content × source-list hints)`. Extended `RunPlan` includes `processor_mix`.
 - *Empirical case:* Berkeley Volunteering (688 sources, no directory processor), Smashed Burgers (no restaurant-directory processor), Awesome-DR (no GitHub-aware processor).
 
 **v3.2 — Engine-side context compression at milestones.**
@@ -290,12 +290,12 @@ This is the **engine-facing companion** to v1's user-facing `milestone` artifact
 
 **v3.4 — Heavy-modality cycles** (books, PDFs, long-form video).
 - Source-list-bounded envelope already supports it; this phase wires the cycle shapes (chapter, transcript, image) and the per-source cycle ledger granularity.
-- Defers cycle-ledger sub-keying decision (refocus doc open question) — settle it here.
+- Settles the cycle-ledger sub-keying decision (per-source granularity) — needed for heavy-modality cycle shapes.
 
 **v3.5 — Cross-template evaluator** (formalized post-mortem).
 - The `eval-harness` skill grows a "score this loop against its `output_shape`" capability.
 - Runs against the historical query corpus to produce a quality leaderboard per release.
-- Borrowed concept from RAG-Gym's critic axis (Appendix A — kept the idea, deferred adoption to here).
+- Borrowed concept from RAG-Gym's critic axis (noted in the design doc's methodology — kept the idea, deferred adoption to here).
 
 ### v3 acceptance criteria
 
