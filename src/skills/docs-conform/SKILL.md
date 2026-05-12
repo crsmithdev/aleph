@@ -6,7 +6,7 @@ description: >
   them. Often invoked from docs-audit on drift findings; can be called
   directly when the user notices structural divergence between READMEs,
   AGENTS.md files, SKILL.md frontmatter, or similar doc families. Validates
-  against ../docs-author-v2/RULES.md.
+  against src/rules/docs/RULES.md.
 metadata:
   argument-hint: <reference-doc> [peer-scope]
 ---
@@ -17,7 +17,7 @@ Take a doc reference (a README, AGENTS.md, SKILL.md, guide), find peer docs
 that should look like it, and align them. Ad-hoc — no registry, no template
 file. The reference *is* the spec.
 
-Canonical rules (used to validate alignment): `../docs-author-v2/RULES.md`.
+Canonical rules (used to validate alignment): `src/rules/docs/RULES.md`.
 
 ## When to use
 
@@ -84,7 +84,7 @@ Trim or proceed?"
 ### Step 4: Compare and report
 
 Diff each peer against reference along the chosen dimensions. Validate
-findings against `../docs-author-v2/RULES.md`. Rank by severity:
+findings against `src/rules/docs/RULES.md`. Rank by severity:
 
 - **Major** — pattern entirely missing (no Verification section in a peer
   README that should have one; missing required frontmatter key)
@@ -176,7 +176,7 @@ construct-repo's module READMEs to a canonical shape.
 
 ## Cross-references
 
-- Rules used to validate alignment: `../docs-author-v2/RULES.md`
+- Rules used to validate alignment: `src/rules/docs/RULES.md`
 - Conform dimensions deep reference: `references/dimensions.md`
 - Verification gates: `references/verification.md`
 - Sibling skills: `docs-author-v2` (write-time), `docs-audit` (post-hoc review),

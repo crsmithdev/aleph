@@ -2,7 +2,7 @@
 name: docs-audit
 description: >
   Post-hoc review of existing documentation against the canonical rule set in
-  docs-author-v2/RULES.md. AUDIT MODE: identifies violations, doc-vs-code
+  src/rules/docs/RULES.md. AUDIT MODE: identifies violations, doc-vs-code
   drift, and structural issues; emits a phased plan (Critical / Refinement /
   Polish). On peer drift, invokes docs-conform. On c7score-style issues,
   invokes docs-optimize. Does not write changes without approval.
@@ -18,10 +18,10 @@ findings instead of suppressing them at write-time.
 ## Mode of operation
 
 **AUDIT (only mode).** Walk the doc(s) in scope, check against every rule in
-`../docs-author-v2/RULES.md`, run drift checks, and emit a phased plan. Do
+`src/rules/docs/RULES.md`, run drift checks, and emit a phased plan. Do
 not write any fix without the user's explicit approval per finding.
 
-Canonical rules: `../docs-author-v2/RULES.md`. This skill does not duplicate
+Canonical rules: `src/rules/docs/RULES.md`. This skill does not duplicate
 them — every finding cites the rule by section + file:line.
 
 ## Process

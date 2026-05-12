@@ -18,7 +18,8 @@ src/rules/
 │   ├── accessibility.md   # from former design-standards
 │   └── ...
 ├── docs/
-│   ├── RULES.md           # eventual home of docs-author-v2/RULES.md content
+│   ├── RULES.md           # canonical doc rule set (moved from docs-author-v2/)
+│   ├── SUGGESTIONS.md     # proposed rule additions awaiting approval
 │   └── ...
 ├── skills/
 │   └── RULES.md
@@ -47,7 +48,7 @@ This directory is currently scaffolding. The skill-architecture migration (`docs
 |---|---|---|
 | `code` | `src/skills/code-review/SKILL.md` §1-8, scattered CLAUDE.md rules | Stub |
 | `design` | `src/skills/design-audit/`, `design-standards/`, `design-type/` | Stub |
-| `docs` | `src/skills/docs-author-v2/RULES.md` (already exists, will be moved here) | Stub |
+| `docs` | (moved from `src/skills/docs-author-v2/RULES.md`) | **Populated** |
 | `skills` | `src/skills/skill-creator/` (rules buried in process) | Stub |
 | `hooks` | `src/skills/config-audit/SKILL.md` Phase 2 + Construct-specific hook conventions | Stub |
 | `agents` | Construct conventions (mostly net-new) | Stub |

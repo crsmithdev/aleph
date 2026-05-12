@@ -130,6 +130,6 @@ reference. All five align.
 
 ## Cross-references
 
-- Rules used: `../docs-author-v2/RULES.md`
+- Rules used: `src/rules/docs/RULES.md`
 - Dimension taxonomy: `../references/dimensions.md`
 - Gates: `../references/verification.md`

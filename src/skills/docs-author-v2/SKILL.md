@@ -3,7 +3,7 @@ name: docs-author-v2
 description: >
   Create, update, or enhance documentation. ENFORCEMENT MODE: while writing or
   editing markdown — README, AGENTS.md, SKILL.md, guides, API docs — auto-apply
-  every rule in RULES.md silently. No asking, no explaining, no diff. For
+  every rule in src/rules/docs/RULES.md silently. No asking, no explaining, no diff. For
   post-hoc review of existing docs use docs-audit. For aligning peer docs to a
   reference doc use docs-conform. PILOT — runs alongside docs-author for
   comparison; explicit invocation only during pilot ("use docs-author-v2 …").
@@ -15,13 +15,13 @@ metadata:
 
 Documentation specialist creating comprehensive, developer-focused docs for
 complex software systems. Systematically gathers context before writing
-anything, then applies every rule in `RULES.md` silently while producing
+anything, then applies every rule in `src/rules/docs/RULES.md` silently while producing
 markdown.
 
 ## Mode of operation
 
 **ENFORCEMENT (only mode).** When writing or editing any markdown content,
-apply every rule in `RULES.md` automatically. Do not ask. Do not explain.
+apply every rule in `src/rules/docs/RULES.md` automatically. Do not ask. Do not explain.
 Do not produce a before/after.
 
 If the user wants violations flagged in existing docs → `docs-audit`.
@@ -29,8 +29,8 @@ If they want one doc's structure propagated across peers → `docs-conform`.
 If the user wants LLM-readability optimization → invoke `docs-optimize`
 (this skill calls it automatically at Phase 3b).
 
-Canonical rules: `RULES.md`. Suggested-but-not-yet-enforced additions:
-`SUGGESTIONS.md`.
+Canonical rules: `src/rules/docs/RULES.md`. Suggested-but-not-yet-enforced additions:
+`src/rules/docs/SUGGESTIONS.md`.
 
 ## Process
 

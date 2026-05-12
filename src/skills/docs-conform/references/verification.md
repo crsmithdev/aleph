@@ -55,7 +55,7 @@ done.
 
 For docs that describe behavior, after the conform pass the doc must still
 match the code in the same commit. Use the truth-source table from
-`../docs-author-v2/RULES.md` section E:
+`src/rules/docs/RULES.md` section E:
 
 | Document | Truth source |
 |---|---|
