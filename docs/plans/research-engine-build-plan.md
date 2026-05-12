@@ -59,8 +59,15 @@ Inherits from `research-system-principles.md` (single-operator scale, AI-maintai
       // promoted from SessionConfig / mode preset
       envelope: { time?, cost?, cycles?, sources? };
       models: { planner, extractor, synthesizer };
-      perturbation_config: { p_serendipity, max_p, depth_scaling,
-        chain_length, strategy_cooldown, forced_diversity_threshold };
+      perturbation_config: {
+        p_serendipity, max_p, depth_scaling,
+        chain_length, strategy_cooldown, forced_diversity_threshold,
+        default_leap_size: 'small' | 'medium' | 'large',
+        // v2 gates — heuristic by default, LLM opt-in
+        plausibility_gate: { enabled, mode: 'heuristic' | 'llm', threshold },
+        utility_gate: { enabled, mode: 'heuristic' | 'llm', check_after_cycles, kill_action: 'stop_branch' | 'drop_branch' },
+        yield_collapse_rescue: { enabled, threshold, lookback_cycles, burst_size },
+      };
       flags: { fake_llm?, cached_planner?, watcher_mode?, /* etc. */ };
       // provenance
       predecessor_id?;                // links to prior schedule on re-plan
@@ -73,10 +80,10 @@ Inherits from `research-system-principles.md` (single-operator scale, AI-maintai
 - **Locked-field mechanic.** Every schedule field has an implicit `locked` flag set when a non-planner author edits it. Milestone re-planner respects locks — it won't overwrite user-edited fields. Schedule view shows lock state visually.
 - **Mode preset = named starting template.** Picking a mode at submit time selects which template constructs the initial schedule. After that, modes have no runtime presence — the schedule is what runs, and the mode label survives only as `created_with_mode` metadata. The v1 mode set:
     - **Quick** — small envelope, cheap models throughout, perturbation suppressed. "5-minute answer."
-    - **Default** — balanced envelope and models, perturbation slightly above today's baseline (`p_serendipity ≈ 0.22`). The default for most queries.
+    - **Default** — balanced envelope and models. Perturbation tuned for many small leaps + sensible tangents: `p_serendipity ≈ 0.35`, cooldowns relaxed, forced-diversity threshold lowered, strategy weights biased toward small-magnitude leaps (analogical, scale_shift, context_swap). The default for most queries.
     - **Deep** — large envelope, premium models, Default's perturbation profile. Super-high effort.
-    - **Roam** — Default envelope + heavy perturbation (`p_serendipity ≈ 0.45`, near-zero cooldown, weighting on perspective-shifts + network-walking + second-order). Chaotic + savant; high signal aim.
-    - **Bonkers** — fully unhinged perturbation (`p_serendipity ≥ 0.6`, no cooldown, maximum weirdness; LLM temperature nudged up at framing). Entertainment-grade variance.
+    - **Roam** — Default envelope + heavy perturbation (`p_serendipity ≈ 0.45`, near-zero cooldown, weights biased toward medium- and large-magnitude leaps: perspective-shifts, network-walking, second-order). Chaotic + savant; high signal aim.
+    - **Bonkers** — fully unhinged perturbation (`p_serendipity ≥ 0.6`, no cooldown, max weight on large-magnitude leaps; LLM temperature nudged up at framing). Entertainment-grade variance.
     - **Dev** — tiny envelope, fake/recorded LLM, for CI and UI testing.
     - **Eval** — Default-ish envelope, cached planner output (replays first-recorded planner response for reproducibility), intent-alignment introspection on. Runs against the v1 acceptance corpus.
     - **Custom** — opens the Schedule view immediately on a Default-template draft; user edits whatever they want before hitting Start. No separate UI; it's just "edit the schedule before running."
@@ -208,10 +215,13 @@ Every author of change goes through this. Schedule edits and directives are acti
 | **Redundancy detector** | cycle_boundary | heuristic or cheap LLM | `{ perturbation_trigger }` or `{ schedule_edit: pivot_branch }` when a cycle's output is highly similar to prior cycles | v2.3 per-cycle redundancy |
 | **Post-mortem with narrative** | on_finish | LLM | `{ flag }` with `failure_mode` + a human-readable narrative on the artifact, e.g. "47 of 60 threads explored cooking technique; only 13 on Bay Area restaurants" | v2.4 post-mortem narrative |
 | **Intent-alignment** | on_finish | LLM | `{ flag: topic_drift / shape_mismatch }` when the produced document doesn't answer the original prompt in the requested form | new (was implicit in self-healing) |
-| **Self-healing remediations** | event (on typed failure flag) | heuristic | `{ schedule_edit }` for known failure modes (`topic_drift` → re-plan canon; `shape_mismatch` → force renderer gate; `yield_collapse` → escalate stop) | v2.6 self-healing layer |
+| **Self-healing remediations** | event (on typed failure flag) | heuristic | `{ schedule_edit }` for known failure modes (`topic_drift` → re-plan canon; `shape_mismatch` → force renderer gate) | v2.6 self-healing layer |
 | **Continuous watcher** | event (any of interest) | LLM (suggest-only by default) | `{ directive }` (suggest-only) or `{ schedule_edit }` (autonomous, opt-in per loop) | v2.8 watcher |
+| **Plausibility gate** | pre-perturbation | heuristic (LLM opt-in) | `{ noop }` (allow firing) or `{ schedule_edit: skip_perturbation }` when proposed leap fails plausibility threshold | new — wraps perturbation system |
+| **Utility gate** | cycle_boundary on perturbed branch | heuristic (LLM opt-in) | `{ noop }` (continue) or `{ schedule_edit: stop_branch }` when branch yields no novel findings in last N cycles | new — wraps perturbation system |
+| **Yield-collapse rescue** | event (on `yield_collapse` flag) | heuristic | `{ perturbation_trigger }` — force high-novelty burst regardless of phase weighting | v2.6 (moved out of self-healing's `yield_collapse → escalate stop`; rescue tries first, marginal-value stop is the later backstop) |
 
-Default behavior: built-in checks are on by default. Each can be disabled per-loop via the schedule's `flags` field. The continuous watcher defaults to **suggest-only** — emits proposed edits as low-priority directives; user confirms or ignores. Autonomous mode is an opt-in toggle (likely on by default for Deep + Overnight runs since the user isn't watching).
+Default behavior: built-in checks are on by default. Each can be disabled per-loop via the schedule's `flags` field. **All gates default to heuristic mode**; LLM judgment is an opt-in flag — in `perturbation_config` for the perturbation gates, in `flags` for the rest. The continuous watcher defaults to **suggest-only** — emits proposed edits as low-priority directives; user confirms or ignores. Autonomous mode is an opt-in toggle (likely on by default for Deep + Overnight runs since the user isn't watching).
 
 ### v2-C. User-authored checks (the universal intervention path)
 

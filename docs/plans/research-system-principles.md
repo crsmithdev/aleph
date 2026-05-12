@@ -47,6 +47,8 @@ Using research-system-design.md as the reference, suggest features for the next 
 
 # Perturbation as a core mechanism
 - The system takes non-deterministic leaps in how it answers, where it searches, and how it branches. Deliberate exploration is a primary engine behavior, not a defensive fallback — diversity of approach is a core feature.
+- **Default: more, smaller leaps.** The Default mode favors frequent small-magnitude perturbations (sensible tangents) over rare large leaps. Large-leap profiles (Roam, Bonkers) are opt-in via mode selection. Yield-collapse forces a perturbation burst regardless of phase.
+- **Heuristic-default, AI-modulated.** Firing rates, leap-size weights, plausibility checks, utility checks, and the yield-collapse rescue all default to heuristics with explicit numeric thresholds. LLM judgment overlays as an optional tuner or veto per-loop — keeps cost-per-cycle predictable while leaving room for smarter modulation when warranted.
 
 # Forkable runs
 - Any completed or paused run can be branched from any cycle to explore "what if the plan had been different here." Extends pause-and-edit with retrospective analysis. Mostly free if state is artifact-based.

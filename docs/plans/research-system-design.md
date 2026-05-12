@@ -448,19 +448,27 @@ How a system generates diversity in its sub-queries to avoid premature convergen
 
 | System | Approach |
 |---|---|
-| None of the comparators | No comparable inference-time strategy menu. Some training papers (skipped) explore similar ideas as RL objectives |
+| None of the comparators | No comparable inference-time strategy menu. Training-objective analogs (ZeroSearch, HiPRAG, Atom-Searcher) live in excluded training-only papers; training pipelines of the surveyed trained-model systems (Tongyi, WebResearcher, Stop-RAG) were not separately audited for diversity-shaping objectives |
 | Current system | 21 perturbation strategies in 5 categories, with cooldown, depth-scaling, forced-diversity threshold, and phase-aware weighting (breadth-early, depth-late) |
 | Current plan | Promotes perturbation from defensive state machine to primary derivation mechanism |
 
-**Also unique.** The survey turned up nothing comparable as an inference-time mechanism. Perturbation-style ideas exist in the training literature but as objectives, not as runtime strategy menus.
+**Also unique.** The survey turned up nothing comparable as an inference-time mechanism. Perturbation-style ideas appear in the training literature (ZeroSearch, HiPRAG, Atom-Searcher) — as RL reward signals that teach a model to seek diversity implicitly — but not as runtime strategy menus. Whether the surveyed trained-model systems (Tongyi, WebResearcher, Stop-RAG) include diversity-shaping training objectives was not separately audited; their inference architectures don't expose one. The runtime-menu posture is what Construct can implement without a training pipeline.
 
 **Impact on observed failures.** F4 (yield collapse) is the most direct concern. The current data shows yield collapse near-universally on long runs, which suggests the perturbation strategies aren't generating enough novelty late in runs — possibly because the strategy weights underweight novelty-seeking in late phase, possibly because the forced-diversity threshold doesn't fire often enough. The plan's promotion of perturbation to primary derivation may help, but the strategy weights themselves should be reviewed against late-run yield data.
 
 The phase-aware weighting (breadth-early, depth-late) is the right shape but assumes the early phase succeeded in finding the right breadth. When canon enumeration is wrong (F1), breadth-early phase consolidates into the wrong direction faster, and depth-late phase compounds it. The fix is upstream (sections 1, 12), but the perturbation system could carry a fallback: if late-phase yield collapses, trigger a high-novelty perturbation burst rather than continuing depth-phase strategies.
 
-**For the system.** Keep the strategy menu and the phase-aware weighting. Add a yield-collapse fallback: when intra-run yield drops below a threshold over the last N cycles, force a perturbation burst with high-novelty strategies regardless of phase. This is the perturbation system reacting to its own ineffectiveness, which is meta-stable in a way the current implementation isn't.
+**For the system.** Keep the strategy menu and the phase-aware weighting. Three direction shifts on top:
 
-The strategy weights should be auditable: the operator should be able to see, for a given run, which strategies fired how many times, and which produced findings vs. which were dead ends. This feeds back into tuning.
+1. **More perturbations by default, smaller leaps.** The Default mode's profile raises `p_serendipity` from ~0.22 to ~0.35, relaxes cooldowns, and lowers the forced-diversity threshold. Strategy weights bias toward small-magnitude leaps (analogical, scale_shift, context_swap) — sensible tangents rather than wild leaps. Each strategy carries a `leap_magnitude: small | medium | large` tag. Large-leap profiles (Roam, Bonkers) shift weights toward medium and large.
+
+2. **Two gates wrapping each firing (v2 Check primitive).**
+   - **Plausibility gate (pre-fire):** before a perturbation dispatches, check that the proposed leap isn't silly. Heuristic by default (pattern match on strategy × question_shape × prompt signals); generously tuned to err toward firing. LLM mode is opt-in via `perturbation_config.plausibility_gate.mode`.
+   - **Utility gate (post-fire):** after N cycles on a perturbed branch, evaluate whether the branch produced novel sources / findings. Heuristic count by default, LLM judgment opt-in. Kill action is soft — `stop_branch` (no more cycles, keep what's collected) — not `drop_branch`.
+
+3. **Yield-collapse rescue (v2 Check primitive, dedicated).** When intra-run yield drops below threshold over the last N cycles, force a perturbation burst with high-novelty strategies regardless of phase. The perturbation system reacting to its own ineffectiveness — meta-stable in a way the current implementation isn't. Separate from "marginal-value stop": rescue fires first (try harder); if the burst also fails to lift yield, marginal-value stop takes over.
+
+**Heuristic-default, AI-modulated.** All three gates default to heuristic logic with explicit numeric thresholds. LLM judgment overlays per-loop via flags on the schedule's `perturbation_config` — keeps cost-per-cycle predictable. Strategy weights and gate thresholds are auditable: the operator can see which strategies fired, which produced findings, and which were pruned by which gate. The Schedule view exposes the full `perturbation_config` for editing; mode chips set the starting profile.
 
 ---
 
@@ -492,7 +500,7 @@ A research system characterized by:
 
 - *Unified Check primitive.* `(state, trigger) → action[]` subsumes adaptive stop, redundancy detection, intent-alignment, self-healing, the continuous watcher, and user pause/edit/directive/fork — one audit trail, one API. F3 (silent re-submission) detection lives here via the intent-alignment check at on_finish.
 
-- *Perturbation strategy menu* with phase-aware weighting, depth-scaling, forced diversity, and a yield-collapse fallback that overrides phase weighting when novelty stalls. Visible to the planner as a constraint to allocate against; visible to the user as a tunable surface.
+- *Perturbation strategy menu* with phase-aware weighting, depth-scaling, forced diversity, per-strategy `leap_magnitude` tagging, and three heuristic-default gates (plausibility pre-fire, utility post-fire, yield-collapse rescue) — LLM-modulatable per-loop but heuristic by default. Default profile: more frequent, smaller leaps. Visible to the planner as a constraint to allocate against; visible to the user as a tunable surface on the Schedule view.
 
 Features explicitly *not* included: periodic context compression as a primary operation, recursive task-graph scheduling at the engine level, multimodal chart generation, continuous evaluator agent, LangGraph adoption, full MCP tool ecosystem, learned value controller for stopping, leaderboard / eval-on-commit infrastructure. Each was evaluated and skipped for the reasons in its section.
 
