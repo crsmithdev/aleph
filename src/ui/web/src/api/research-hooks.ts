@@ -585,22 +585,17 @@ function loopAsQuery(loop: LoopRow): ResearchQuery {
   };
 }
 
-export function useResearchQueries(status?: string) {
-  const params = status ? `?status=${status}` : '';
+export function useResearchQueries(_status?: string) {
+  // Loops are the only research backend post-Phase 7. The `_status` argument
+  // is preserved on the hook signature so existing call sites still type-check
+  // but is currently ignored — the loops endpoint doesn't support status
+  // filtering and the in-memory filter the surviving UI does is fine for the
+  // small loop counts we have.
   return useQuery({
-    queryKey: ['research-queries', status],
+    queryKey: ['research-queries'],
     queryFn: async () => {
-      // Fetch both legacy research_queries and new loops in parallel; merge
-      // newest-first. Loops are adapted to ResearchQuery shape via loopAsQuery
-      // so the existing 600-line history table renders them unchanged.
-      const [legacy, loops] = await Promise.all([
-        api.get<ResearchQuery[]>(`/research/queries${params}`).catch(() => []),
-        api.get<LoopRow[]>(`/loops`).catch(() => []),
-      ]);
-      const adapted = loops.map(loopAsQuery);
-      const all = [...adapted, ...legacy];
-      all.sort((a, b) => b.created_at.localeCompare(a.created_at));
-      return all;
+      const loops = await api.get<LoopRow[]>(`/loops`);
+      return loops.map(loopAsQuery).sort((a, b) => b.created_at.localeCompare(a.created_at));
     },
   });
 }
