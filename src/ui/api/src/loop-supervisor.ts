@@ -51,10 +51,15 @@ export function spawnLoopChild(
   if (opts.processor_delay_ms !== undefined) args.push(`--processor-delay-ms=${opts.processor_delay_ms}`);
   if (opts.cycles_target !== undefined) args.push(`--cycles-target=${opts.cycles_target}`);
 
+  // Explicit env pass: Bun.spawn snapshots env at runtime startup and does NOT
+  // pick up later process.env mutations unless the env object is passed
+  // directly. Tests rely on setting OPENROUTER_BASE_URL etc. before the first
+  // POST /start, so this spread is load-bearing.
   const proc = Bun.spawn(args, {
     stdout: 'pipe',
     stderr: 'pipe',
     stdin: 'ignore',
+    env: { ...process.env },
   });
 
   const respawns = prior ? prior.respawns + 1 : 0;

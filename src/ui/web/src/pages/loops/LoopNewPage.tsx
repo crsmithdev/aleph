@@ -39,7 +39,7 @@ export function LoopNewPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="New Loop" subtitle="Start a loop with the v1 engine. Phase 1 ships the noop template only." />
+      <PageHeader title="New Loop" subtitle="Start a loop with the v1 engine. Phase 1: noop. Phase 2: research." />
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-w-2xl" data-testid="loop-new-form">
         <label className="flex flex-col gap-1.5">
@@ -51,6 +51,7 @@ export function LoopNewPage() {
             data-testid="loop-new-template"
           >
             <option value="noop">noop (5 cycles, canned outputs — Phase 1 smoke)</option>
+            <option value="research">research (search + extract — Phase 2)</option>
           </select>
         </label>
 
@@ -60,7 +61,7 @@ export function LoopNewPage() {
             value={prompt}
             onChange={e => setPrompt(e.target.value)}
             rows={4}
-            placeholder="Ignored by the noop template; required for real templates landing in Phase 2."
+            placeholder="Ignored by the noop template; required for research."
             className="bg-bg-secondary border border-border-primary rounded px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50"
             data-testid="loop-new-prompt"
           />

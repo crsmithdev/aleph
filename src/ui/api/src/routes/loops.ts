@@ -16,7 +16,7 @@ import { createReadStream, existsSync } from 'fs';
 import {
   createLoop, getLoop, listArtifacts, listCycles, listMilestones, readState,
   onResearchEvent,
-  buildTemplate, listTemplateIds,
+  listTemplateIds,
   type Envelope,
 } from '@construct/research';
 import { sessionLogPath } from '../research-logger.js';
@@ -39,10 +39,6 @@ export const loopRoutes: FastifyPluginAsync = async (app) => {
     }
     if (!listTemplateIds().includes(template_id)) {
       return reply.status(400).send({ error: `unknown template_id: ${template_id}` });
-    }
-    // Verify the template actually builds — guards against partial registry.
-    if (!buildTemplate(template_id, prompt ?? '', {})) {
-      return reply.status(400).send({ error: `template ${template_id} failed to build` });
     }
 
     const loop = createLoop(app.sqlite, { template_id, prompt, envelope });

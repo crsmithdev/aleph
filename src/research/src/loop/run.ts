@@ -19,10 +19,42 @@
  */
 import { createDb } from '@construct/data';
 import { applyResearchDDL } from '../ddl.js';
+import { OpenRouterProvider } from '../providers/openrouter.js';
 import { onResearchEvent, type ResearchEvent } from '../services/events.js';
-import { getLoop } from './db.js';
+import { getLoop, updateLoopStatus } from './db.js';
 import { runLoop } from './engine.js';
-import { buildTemplate, type TemplateOverrides } from './templates/registry.js';
+import type { LLMProvider } from './llm.js';
+import type { Sqlite } from '@construct/data';
+import { buildTemplate, type TemplateDeps, type TemplateOverrides } from './templates/registry.js';
+
+/**
+ * Wire production deps for the given template. Honours OPENROUTER_API_KEY +
+ * OPENROUTER_BASE_URL (the latter is how integration tests redirect the
+ * provider at a local fake server — see `src/ui/e2e/fake-llm-server.ts`).
+ * Templates that don't need an LLM (noop) get an empty deps object.
+ */
+/**
+ * Mark the loop `failed` so the supervisor stops respawning. Used when the
+ * child can't even start (missing env, unknown template). The respawn loop
+ * only continues if the loop status is non-terminal.
+ */
+function failLoop(sqlite: Sqlite, loop_id: string, reason: string): void {
+  process.stderr.write(`run.ts failing loop ${loop_id}: ${reason}\n`);
+  try { updateLoopStatus(sqlite, loop_id, 'failed'); }
+  catch (err) { process.stderr.write(`(also: failed to mark loop status: ${(err as Error).message})\n`); }
+}
+
+function buildDeps(template_id: string): TemplateDeps {
+  if (template_id === 'research') {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) {
+      throw new Error('research template requires OPENROUTER_API_KEY in the environment');
+    }
+    const llm: LLMProvider = new OpenRouterProvider({ apiKey, models: [] });
+    return { llm };
+  }
+  return {};
+}
 
 function parseArgs(argv: string[]): { db_path: string; loop_id: string; overrides: TemplateOverrides } {
   const positional: string[] = [];
@@ -55,9 +87,24 @@ async function main() {
     return;
   }
 
-  const template = buildTemplate(loop.template_id, loop.prompt, overrides);
+  let deps: TemplateDeps;
+  try {
+    deps = buildDeps(loop.template_id);
+  } catch (err) {
+    failLoop(sqlite, loop_id, `buildDeps: ${(err as Error).message}`);
+    process.exit(2);
+    return;
+  }
+  let template;
+  try {
+    template = buildTemplate(loop.template_id, loop.prompt, overrides, deps);
+  } catch (err) {
+    failLoop(sqlite, loop_id, `buildTemplate: ${(err as Error).message}`);
+    process.exit(2);
+    return;
+  }
   if (template === null) {
-    process.stderr.write(`unknown template_id: ${loop.template_id}\n`);
+    failLoop(sqlite, loop_id, `unknown template_id: ${loop.template_id}`);
     process.exit(2);
     return;
   }
