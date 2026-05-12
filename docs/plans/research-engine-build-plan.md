@@ -70,7 +70,9 @@ Every phase closes on the gates defined in `research-system-principles.md` §Ver
       perturbation_config: {
         p_serendipity, max_p, depth_scaling,
         chain_length, strategy_cooldown, forced_diversity_threshold,
-        default_leap_size: 'small' | 'medium' | 'large',
+        // loop-wide per-strategy weights; modes encode leap-magnitude bias here
+        // (no separate `default_leap_size` — strategy_weights is the single surface)
+        strategy_weights: Record<StrategyId, number>,
         // v2 gates — heuristic by default, LLM opt-in
         plausibility_gate: { enabled, mode: 'heuristic' | 'llm', threshold },
         utility_gate: { enabled, mode: 'heuristic' | 'llm', check_after_cycles, kill_action: 'stop_branch' | 'drop_branch' },
@@ -80,13 +82,17 @@ Every phase closes on the gates defined in `research-system-principles.md` §Ver
       // provenance
       predecessor_id?;                // links to prior schedule on re-plan
       created_with_mode?: string;      // metadata only — "default", "deep", "roam", …
-      directives_consumed?;
+      directives_consumed?;             // (populated in v2 by user-authored directive checks)
       rationale: string;
     };
     ```
-- **Schedule view** on the loop-detail page renders this artifact and is the **only** editor for it. Does triple duty: pre-run editing (in Custom mode, or after pausing a not-yet-started loop), mid-run editing (when paused), and historical viewing + fork-from-cycle (on completed runs). Same component, three states.
+- **Schedule view** on the loop-detail page renders this artifact and is the **only** editor for it. Does triple duty: pre-run editing (in Custom mode, or after pausing a not-yet-started loop), mid-run editing (when paused — **v2 only**, since pause doesn't exist in v1; v1 mid-run is therefore read-only), and historical viewing + fork-from-cycle (on completed runs). Same component, three states.
 - **Locked-field mechanic.** Every schedule field has an implicit `locked` flag set when a non-planner author edits it. Milestone re-planner respects locks — it won't overwrite user-edited fields. Schedule view shows lock state visually.
-- **Mode preset = named starting template.** Picking a mode at submit time selects which template constructs the initial schedule. After that, modes have no runtime presence — the schedule is what runs, and the mode label survives only as `created_with_mode` metadata. The v1 mode set:
+- **Per-role model selection.** `model_planner` / `model_extractor` / `model_synth` config fields. Default: strong on planning + synthesis, cheap on extraction.
+
+**UX (from the design doc's configurability section):**
+
+- **Mode preset = named starting template.** Picking a mode at submit time selects which template constructs the initial schedule. After construction, modes have no runtime presence — the schedule is what runs, and the mode label survives only as `created_with_mode` metadata. The v1 mode set:
     - **Quick** — small envelope, cheap models throughout, perturbation suppressed. "5-minute answer."
     - **Default** — balanced envelope and models. Perturbation tuned for many small leaps + sensible tangents: `p_serendipity ≈ 0.35`, cooldowns relaxed, forced-diversity threshold lowered, strategy weights biased toward small-magnitude leaps (analogical, scale_shift, context_swap). The default for most queries.
     - **Deep** — large envelope, premium models, Default's perturbation profile. Super-high effort.
@@ -96,12 +102,8 @@ Every phase closes on the gates defined in `research-system-principles.md` §Ver
     - **Eval** — Default-ish envelope, cached planner output (replays first-recorded planner response for reproducibility), intent-alignment introspection on. Runs against the v1 acceptance corpus.
     - **Custom** — opens the Schedule view immediately on a Default-template draft; user edits whatever they want before hitting Start. No separate UI; it's just "edit the schedule before running."
 - **Modes always visible.** No developer-mode toggle gating Dev / Eval. The full row is in the compose box for everyone.
-- **Per-role model selection.** `model_planner` / `model_extractor` / `model_synth` config fields. Default: strong on planning + synthesis, cheap on extraction.
-
-**UX (from the design doc's configurability section):**
-
-- **Compose box: prompt textarea + mode-button row.** The mode row contains the 8 modes above (Quick / Default / Deep / Roam / Bonkers / Dev / Eval / Custom). Default is selected when nothing else is, but the mode can also be **inferred from the prompt** at session-create time (cheap LLM call; user can override).
-- **`InferredPanel` preserved**, with editors for `question_shape`, `output_shape` (new in v1), and `role` (new in v1 — `pickAgentRole` already runs, just expose its output for editing). The InferredPanel covers the *query classification* fields; the **Schedule view covers everything else**, including model / budget / perturbation / canon / branches / milestones.
+- **Compose box: prompt textarea + mode-button row.** The mode row contains the 8 modes above. Default is selected when nothing else is, but the mode can also be **inferred from the prompt** at session-create time (cheap LLM call; user can override).
+- **`InferredPanel` preserved**, with editors for `question_shape`, `output_shape` (new in v1), and `role` (new in v1 — `pickAgentRole` already runs, just expose its output for editing). The InferredPanel covers the *query classification* fields; the **Schedule view covers everything else**, including model / budget / perturbation / canon / branches / milestones. Fields are editable pre-submit only; once the run starts the InferredPanel locks to read-only — allowance for mid-run inferred-field edits will be revisited after v2's pause/edit flow lands.
 - **Sidebar IA:** `Research`, `Monitors`, `Telemetry`. `WorkersPage` removed. Reviews tab content (post-mortem flags, narratives) folds into the artifact view alongside its event-log links.
 
 **Foundational infrastructure (from `research-system-principles.md`):**
@@ -246,7 +248,7 @@ All three flow through the same API (`POST /loops/:id/checks`) and the same audi
 
 *Three intervention postures the user can move between:* AI-led (no checks posted), AI-led with nudges (occasional directive checks), human-led (pause + schedule_edit checks). The system stays autonomous by default; controls are always present in the UI without forcing a mode choice up front.
 
-### v2.5 — Planner prompt tuning (separate from checks)
+### v2-D. Planner prompt tuning (separate from checks)
 
 - v1's adaptive planner is fully LLM-driven. v2 evaluates planner outputs across the historical query corpus and tunes the prompt + few-shot examples for systematic failures.
 - Adds a small set of "canonical good plans" drawn from the historical query corpus as in-prompt examples — closing the loop on what the deleted lookup table used to encode.
