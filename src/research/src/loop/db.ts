@@ -7,6 +7,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { Sqlite } from '@construct/data';
+import { emitResearchEvent } from '../services/events.js';
 import { generateId } from '../services/id.js';
 import { EMPTY_USAGE } from './envelope.js';
 import type {
@@ -175,7 +176,19 @@ export function createArtifact(
   sqlite.prepare(
     'INSERT INTO artifacts (id, loop_id, cycle_id, kind, payload) VALUES (?, ?, ?, ?, ?)'
   ).run(id, args.loop_id, args.cycle_id ?? null, args.kind, JSON.stringify(args.payload));
-  return getArtifact(sqlite, id)!;
+  const artifact = getArtifact(sqlite, id)!;
+  // Emit on the bus so research-logger persists this to events.ndjson and
+  // SSE listeners see it live. Previously the SSE route fabricated artifact
+  // frames on connect from listArtifacts() — that left a postmortem replay
+  // of the on-disk log unable to recover artifact timing.
+  emitResearchEvent(args.loop_id, 'artifact', {
+    id: artifact.id,
+    loop_id: artifact.loop_id,
+    cycle_id: artifact.cycle_id,
+    kind: artifact.kind,
+    created_at: artifact.created_at,
+  });
+  return artifact;
 }
 
 export function getArtifact(sqlite: Sqlite, id: ArtifactId): Artifact | null {

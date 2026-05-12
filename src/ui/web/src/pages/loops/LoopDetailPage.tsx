@@ -78,9 +78,16 @@ export function LoopDetailPage() {
     const source = new EventSource(`/api/loops/${id}/stream`);
     source.onmessage = e => {
       try {
-        const frame = JSON.parse(e.data) as { type: StreamFrame['type']; payload: Record<string, unknown> };
-        const ts = new Date().toISOString();
-        setEvents(prev => [...prev, { ...frame, ts }]);
+        const frame = JSON.parse(e.data) as {
+          type: StreamFrame['type'];
+          payload: Record<string, unknown>;
+          logged_at?: string;
+        };
+        // Prefer the engine-emit timestamp the server forwards on every SSE
+        // frame (backfill + live). Fall back to receive-time only for frames
+        // that pre-date the server-side change (older logs).
+        const ts = frame.logged_at ?? new Date().toISOString();
+        setEvents(prev => [...prev, { type: frame.type, payload: frame.payload, ts }]);
         if (frame.type === 'loop') {
           const incoming = frame.payload as Partial<Loop>;
           setSnapshot(prev => prev ? { ...prev, loop: { ...prev.loop, ...incoming } } : prev);

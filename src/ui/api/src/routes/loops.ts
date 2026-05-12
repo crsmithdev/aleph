@@ -14,12 +14,12 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { createReadStream, existsSync } from 'fs';
 import {
-  createLoop, getLoop, listArtifacts, listCycles, listLoops, listMilestones, readState,
+  createLoop, getLoop, listLoops, listMilestones, readState,
   onResearchEvent,
   listTemplateIds,
   type Envelope,
 } from '@construct/research';
-import { sessionLogPath } from '../research-logger.js';
+import { readSessionLog, sessionLogPath } from '../research-logger.js';
 import { spawnLoopChild } from '../loop-supervisor.js';
 
 interface StartBody {
@@ -90,21 +90,27 @@ export const loopRoutes: FastifyPluginAsync = async (app) => {
     reply.raw.flushHeaders();
 
     let closed = false;
-    const send = (type: string, payload: unknown) => {
-      if (!closed) reply.raw.write(`data: ${JSON.stringify({ type, payload })}\n\n`);
+    const send = (type: string, payload: unknown, logged_at: string) => {
+      if (!closed) reply.raw.write(`data: ${JSON.stringify({ type, payload, logged_at })}\n\n`);
     };
 
-    // Initial snapshot so the client doesn't need a separate GET on connect.
+    // Backfill the entire engine history from the persisted NDJSON log. This
+    // is lossless: every emitResearchEvent call writes through research-logger
+    // before reaching SSE subscribers, so the file always contains the full
+    // sequence (loop / cycle / cycle_step / milestone / artifact) with
+    // accurate engine-emit timestamps. Previously the backfill fabricated
+    // snapshot frames (loop + cycles + artifacts) from the DB on connect,
+    // which dropped cycle_step events entirely and stamped every frame with
+    // page-load time.
     try {
-      const loop = getLoop(app.sqlite, loopId);
-      if (loop) send('loop', loop);
-      for (const c of listCycles(app.sqlite, loopId)) send('cycle', c);
-      for (const a of listArtifacts(app.sqlite, loopId)) send('artifact', a);
+      for (const entry of readSessionLog(loopId)) {
+        send(entry.type, entry.payload, entry.logged_at);
+      }
     } catch { /* non-fatal */ }
 
     const unsubscribe = onResearchEvent((event) => {
       if (event.session_id !== loopId) return;
-      send(event.type, event.payload);
+      send(event.type, event.payload, event.logged_at);
     });
 
     const heartbeat = setInterval(() => {

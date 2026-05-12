@@ -29,7 +29,12 @@ import {
 const logsDir = join(process.env.HOME!, '.construct', 'research-logs');
 
 export interface LoggedEvent {
-  type: 'finding' | 'step' | 'thread' | 'job' | 'source';
+  // v0 engine events + v1 loop engine events. The push path writes all of
+  // them through `handlePushEvent`; loop events skip the dedupe blocks since
+  // those are keyed on v0 mutation shapes.
+  type:
+    | 'finding' | 'step' | 'thread' | 'job' | 'source' | 'concept' | 'concept_link' | 'query'
+    | 'loop' | 'cycle' | 'cycle_step' | 'milestone' | 'artifact';
   payload: unknown;
   logged_at: string;
 }

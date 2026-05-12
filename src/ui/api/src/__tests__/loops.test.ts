@@ -118,8 +118,8 @@ describe('Loops API — noop end-to-end', () => {
       type: string; payload: Record<string, unknown>; logged_at: string;
     });
 
-    // Engine event count: 1 loop:running + 5 × (cycle:running + 3 cycle_step + cycle:finalized) + 1 loop:completed = 27.
-    expect(events.length).toBe(27);
+    // Engine event count: 1 loop:running + 5 × (cycle:running + 3 cycle_step + 1 artifact + cycle:finalized) + 1 loop:completed = 32.
+    expect(events.length).toBe(32);
 
     const byType = (t: string) => events.filter(e => e.type === t);
     expect(byType('loop')).toHaveLength(2);
@@ -129,7 +129,8 @@ describe('Loops API — noop end-to-end', () => {
 
     expect(byType('cycle')).toHaveLength(10); // 5 × (running, finalized)
     expect(byType('cycle_step')).toHaveLength(15); // 5 × 3 steps
-    expect(byType('milestone')).toHaveLength(0); // no envelope set
+    expect(byType('artifact')).toHaveLength(5);    // 5 × cycle_output, one per cycle
+    expect(byType('milestone')).toHaveLength(0);   // no envelope set
 
     // Every cycle_step on a fresh run reports cached=false.
     expect(byType('cycle_step').every(e => e.payload.cached === false)).toBe(true);
@@ -166,15 +167,17 @@ describe('Loops API — SSE snapshot', () => {
 
     const reader = res.body!.getReader();
     const decoder = new TextDecoder();
-    const frames: Array<{ type: string; payload: unknown }> = [];
+    const frames: Array<{ type: string; payload: unknown; logged_at: string }> = [];
     let buf = '';
     const readWithTimeout = async (ms: number) => {
       const t = new Promise<{ done: true; value: undefined }>(r => setTimeout(() => r({ done: true, value: undefined }), ms));
       return Promise.race([reader.read(), t]);
     };
-    // Pull frames for up to 1s; the snapshot should arrive immediately.
+    // Pull frames for up to 1s; the snapshot replays the full NDJSON log on
+    // connect (loop + cycles + cycle_steps + artifacts), so the frame budget
+    // has to cover everything emitted during the noop loop's 5 cycles.
     const deadline = Date.now() + 1000;
-    while (Date.now() < deadline && frames.length < 6) {
+    while (Date.now() < deadline && frames.length < 50) {
       const { done, value } = await readWithTimeout(200);
       if (done) break;
       buf += decoder.decode(value, { stream: true });
@@ -190,12 +193,16 @@ describe('Loops API — SSE snapshot', () => {
     ctrl.abort();
     try { await reader.cancel(); } catch { /* ignore */ }
 
-    // Snapshot: 1 loop + 5 cycles + ≥5 artifacts. The terminal `loop:completed`
-    // event already lives in NDJSON; on the live stream it WAS pushed but the
-    // listener wasn't attached when it fired, so the snapshot is what we get.
+    // Backfill replays the full NDJSON log: cycle events fire on start AND
+    // finalize (2 per cycle), cycle_step fires 3× per cycle, and artifacts
+    // get an event on creation (cycle_output × 5, plus any kinds the noop
+    // template writes).
     const types = frames.map(f => f.type);
     expect(types).toContain('loop');
-    expect(types.filter(t => t === 'cycle')).toHaveLength(5);
+    expect(types.filter(t => t === 'cycle')).toHaveLength(10);
+    expect(types.filter(t => t === 'cycle_step')).toHaveLength(15);
     expect(types.filter(t => t === 'artifact').length).toBeGreaterThanOrEqual(5);
+    // Every frame carries the engine-emit timestamp, not page-load time.
+    expect(frames.every(f => typeof f.logged_at === 'string' && f.logged_at.length > 0)).toBe(true);
   });
 });

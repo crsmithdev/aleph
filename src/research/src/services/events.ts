@@ -18,7 +18,7 @@ export type ResearchEventType =
   // v0 engine (old)
   | 'thread' | 'job' | 'step' | 'finding' | 'source' | 'concept' | 'concept_link' | 'query'
   // v1 loop engine (new — see src/research/src/loop/)
-  | 'loop' | 'cycle' | 'cycle_step' | 'milestone';
+  | 'loop' | 'cycle' | 'cycle_step' | 'milestone' | 'artifact';
 
 export interface ResearchEvent {
   session_id: string;
