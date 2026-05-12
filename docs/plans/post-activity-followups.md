@@ -65,6 +65,113 @@ The prior session's Explore subagent cataloged 80+ legacy v0 concepts surviving 
 - Each finding either deleted with a one-line justification, or marked "keep — used by X" with the consumer named.
 - `bun test.ts` + `bun test src/research/src/loop/` + `bun run --cwd src/ui build` + `src/ui/e2e/activity-panels.test.ts` all green after.
 
+### Findings (audit re-run, 2026-05-12)
+
+Audit done by walking every suspect file the prior session flagged and grepping each
+type / field / hook / route for live consumers. Only the loop engine + the
+schema + the two surviving routes (`/research/config`, `/research/defaults`)
+have real callers; everything else is orphan from the Phase 7 cutover.
+
+#### T — Backend type carry-overs (`src/research/src/types.ts`)
+
+Live consumers of `SessionConfig` and `DEFAULT_SESSION_CONFIG` are:
+`src/research/src/services/defaults.ts` (read/write `research_defaults`),
+`src/ui/api/src/routes/research.ts` (the `PUT /defaults` handler),
+`src/ui/web/src/pages/research/config-schema.tsx` (the editable form), and the
+`ResearchDefaults` shape mirrored in `src/ui/web/src/api/research-hooks.ts`.
+Everything below is loaded by nothing.
+
+- `types.ts:1-28` `ResearchQuery` — **DELETE** — no caller; loop engine has its own `Loop` type. UI mirror lives in `research-hooks.ts`.
+- `types.ts:30-31` `ResearchSession` `@deprecated` alias — **DELETE**.
+- `types.ts:33-43` `PromptShape | PromptDepth | PromptAudience | PromptUrgency | PromptHints` — **DELETE** — only embedded in `ResearchQuery` (also being deleted). UI mirror keeps its own copies.
+- `types.ts:50-94` `QuestionShape | ShapeLens | ShapeAnalysis | TopicCluster | TopicClusterAnalysis` — **DELETE** — only embedded in `ResearchQuery`. UI mirrors its own.
+- `types.ts:298-300` `ThreadOrigin | ThreadStatus` — **DELETE** — only used by `ResearchThread`.
+- `types.ts:302-328` `PerturbationStrategy` enum — **DELETE** — only consumed by `perturbation.ts` (also dead) and `ResearchThread`.
+- `types.ts:330-350` `ResearchThread` — **DELETE** — no caller; loops use `Cycle`.
+- `types.ts:352-360` `FindingKind` — **DELETE** — only embedded in `ResearchFinding`.
+- `types.ts:362-382` `ResearchFinding` — **DELETE** — no caller.
+- `types.ts:384-408` `Concept | ConceptLink | ConceptWithStats` — **DELETE** — concept tables dropped Phase 7.
+- `types.ts:410-426` `SourceExtractionStatus | Source` — **DELETE** — sources table dropped Phase 7; the activity-tab "Source Extraction" panel reads loop artifacts, not this shape.
+- `types.ts:428-446` `ResearchStep | ToolCallRecord | JinaFetchRecord` — **DELETE** — research_steps table dropped Phase 7; loop telemetry is in `cycle_ledger`.
+- `types.ts:455-461` `ToolCallRecord | JinaFetchRecord` (already in 428-446 bundle).
+- `types.ts:463-481` `FollowUpCandidate | FollowUpAnalysis` — **DELETE** — only embedded in `ResearchFinding`; loop follow-ups are inline in `decisions.ts` decision payloads.
+- `types.ts:483-502` `StepMetadata | PerturbationTrigger` — **DELETE** — no caller.
+- `types.ts:504-534` `ResearchPlan | ResearchPlanItem | PlanModification` — **DELETE** — research_plans table dropped Phase 7; loops have `LoopSchedule` in `loop/types.ts`.
+- `types.ts:536-602` `Monitor | MatchCriteria | MonitorSnapshot | MonitorAlert | ProposedMonitor` — **DELETE** — every monitor table dropped Phase 7; `loop/templates/monitor.ts` is a loop template that doesn't use these shapes.
+- `types.ts:604-625` `JobStatus | JobMode | ResearchJob` — **DELETE** — research_jobs table dropped Phase 7.
+- `types.ts:96-296` `SessionConfig` + `DEFAULT_SESSION_CONFIG` — **KEEP** — used by `defaults.ts`, the `/defaults` route, and the UI config form. Subfields to scrub:
+  - `topic_coherence` (lines 111-114, 250-253) — **KEEP** — wired in `config-schema.tsx:61-62` (advanced fields).
+  - `perturbation_coherence_floor` (line 122, 254) — **DELETE** — no schema entry, no loop consumer.
+  - `perturbation: PerturbationConfig` (line 159, 267-295) — **DELETE** — no schema entry, no loop consumer, `perturbation.ts` is dead.
+  - `follow_up` (line 160-165, 244-249) — **KEEP** — wired in `config-schema.tsx:41-43`.
+  - `gap_analysis` (line 169-178, 258-263) — **KEEP** — wired in `config-schema.tsx:52-53`.
+  - `role_priming_enabled | role_label | role_prompt` (lines 153-158, 241-243) — **KEEP** — loop's research template reads these (planner role priming).
+  - `iteration_check_model | post_mortem_model | model_fast` (lines 124-135, 221-223) — **KEEP** — loop template hooks consume them.
+- `types.ts:184-190` `PerturbationConfig` — **DELETE** with the rest of the perturbation tree.
+- `types.ts:631-650` `MODEL_PRICING` — **KEEP if a consumer exists; check during deletion** — providers/openrouter has its own pricing call (`getOpenRouterPricing`); this static table may be dead too.
+
+#### A — Adapter shims (`src/ui/web/src/api/research-hooks.ts`)
+
+- `research-hooks.ts:88-105` `ResearchQuery` UI mirror — **KEEP** — consumed by `ResearchLandingPage`, `ResearchHistoryPage`. (See U.)
+- `research-hooks.ts:274-292` `loopAsQuery` adapter — **KEEP** — the History/Landing pages still drive off this. Folding the pages onto a loops-shape is a bigger UX migration — out of scope here.
+- `research-hooks.ts:26-35` `QueryStats` — **KEEP** but **REWORD comment** — every field of QueryStats is null in `loopAsQuery`; the type is only retained so `ResearchQuery.stats` typechecks. Worth documenting that no loop ever populates it.
+
+#### F — Field-level zeroes (loop adapter)
+
+- `research-hooks.ts:281` `prompt_hints: {} as PromptHints` — **DELETE** the cast comment / leave the empty object literal as-is for type compatibility. Track as part of the `PromptHints` rewording rather than a separate item.
+- `research-hooks.ts:282-283` `question_shape: null, topic_cluster: null` — **KEEP** — explicit nulls so the UI columns render dashes. Fine.
+
+#### D — Dead config fields
+
+Covered under T (the `SessionConfig` subfield audit above):
+- `perturbation_coherence_floor` — **DELETE**
+- `perturbation: PerturbationConfig` — **DELETE**
+- The matching field-shape mirror in `research-hooks.ts:201-207` (`ResearchDefaults.perturbation: { ... }`) — **DELETE**.
+- The matching field-shape mirror in `research-hooks.ts:188` (`max_perturbation_probability`) — **DELETE** if no schema entry. Schema has it at advanced (line 60). **KEEP** for now — it could still drive perturbation rate-limit telemetry in v1.1.
+
+#### U — UI rendering of v0 concepts
+
+- `research-hooks.ts` 1-30 — comment header references "PromptHints, ShapeAnalysis, QueryStats" — **REWORD** to drop the implication these are still computed.
+- `research-hooks.ts:37-86` `PromptShape | PromptDepth | PromptAudience | PromptUrgency | PromptHints | QuestionShape | ShapeLens | ShapeAnalysis | TopicClusterAnalysis | TopicCluster | TOPIC_CLUSTERS` — **KEEP** — consumed by `HistoryFilterRail` and the `ResearchHistoryPage` / `ResearchLandingPage` rendering. They render dashes for all of these, which is the only honest thing they can do until the pages are folded onto loops-shape.
+- `ResearchHistoryPage.tsx:259-345` Shape / Verdict / Findings / Cost / Duration / Activity columns — **KEEP** — they all render em-dashes against loops data (intentional graceful degradation). Re-evaluating these is a separate UX migration.
+- `ResearchHistoryPage.tsx:359-402` `GroupedTable` (group-by-shape) — **KEEP** — same.
+- `ResearchHistoryPage.tsx:520-540` `deriveVerdict` / `computeDurationMs` / `costBandFor` — **KEEP** — same.
+- `ResearchLandingPage.tsx:309-365` `JobRow` — **KEEP** — renders shape/topic/findings/cost as null-safe.
+- `HistoryFilterRail.tsx` — **KEEP** — shape/topic/verdict facets all show "0" against loops data, which is consistent with the page's current state.
+- `HistorySummaryStrip.tsx` — **KEEP** — pass/flag/halt always zero; findings always zero. Same as above.
+
+#### Monitor hooks orphan
+
+- `src/ui/web/src/api/monitor-hooks.ts` (entire file, 109 lines, hits `/research/monitors`) — **DELETE** — no UI page imports it; the `/research/monitors` route was deleted in Phase 7. Pure orphan.
+
+#### C — Dead comments
+
+- `defaults.ts:11` `perturbation: { ...DEFAULT_SESSION_CONFIG.perturbation, ... }` — **DELETE** with the `perturbation` field.
+- `defaults.ts:13` `topic_coherence: { ... }` — **KEEP** (live config) — already documented.
+- `index.ts:5-12` docstring — **REWORD** — drop the "v0 engine is gone" framing once router.ts is deleted; tighten to describe the surface.
+- `types.ts:8-14` JSDoc for `question_shape` — **DELETE** with the field.
+- `types.ts:16-19` JSDoc for `topic_cluster` — **DELETE** with the field.
+- `loop/types.ts:152-163` references to `(question_shape × topic_cluster) → RunPlan` — **REWORD** — describe what the planner replaced, not what it used to be.
+- `loop/types.ts:170-175` `"USD envelope stays on SessionConfig until Phase 5 ..."` — **KEEP** — accurate description of the Phase 5 plan.
+- `loop/types.ts:178-180` "Phase 4 emits this; engine consumes at Phase 5" w/ `perturbation_weights` — **KEEP** — accurate; `loop/types.ts` is on the keep list.
+- `loop/planner.ts:5` `"... (question_shape × topic_cluster) → RunPlan lookup with an LLM call ..."` — **KEEP** — describes the rewrite (correct, useful context).
+- `routes/research.ts:14-16` "queries / threads / findings / jobs / concepts / sources / workers / monitors / metrics / hooks / agent endpoints" — **KEEP** — accurate dead-pointer list; useful for whoever next reads the route file.
+
+#### P — Provider router
+
+- `src/research/src/providers/router.ts` (entire file, 64 lines, imports from non-existent `../engine.js`) — **DELETE** — no caller; `loop/run.ts` uses `OpenRouterProvider` directly. The file literally won't compile if you typecheck strictly since `engine.js` was deleted Phase 7.
+- `index.ts:22-23` `export { ModelRouter } from './providers/router.js'` and the `TaskType | ModelConfig | ProviderConfig` re-exports — **DELETE** with router.ts.
+
+#### L — DDL cleanup
+
+- `ddl.ts:101-124` `dropLegacyTables()` — **KEEP** — idempotent, fires on every boot, safety net for dev DBs that still carry v0 schema. A no-op on fresh installs; tiny boot-time cost; cheap insurance. Reconsider in a later cycle once we trust every running install has run it once.
+
+#### Dead helpers
+
+- `src/research/src/perturbation.ts` (entire file, 267 lines) — **DELETE** — no caller in `loop/` or anywhere else. Engine + worker pool both gone.
+- `src/research/src/similarity.ts` (entire file, 163 lines) — **DELETE** — no caller. The loop engine doesn't use jaccard or cosine similarity anywhere.
+- `services/events.ts:17-21` v0 event types in the `ResearchEventType` union (`'thread' | 'job' | 'step' | 'finding' | 'source' | 'concept' | 'concept_link' | 'query'`) — **DELETE** — no `emitResearchEvent` call uses them; only loop event types are emitted (`'loop'`, `'cycle'`, `'cycle_step'`, `'milestone'`, `'artifact'`, `'decision'`).
+
 ---
 
 ## 3. V8 dogfood grading
