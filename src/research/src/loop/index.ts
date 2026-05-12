@@ -14,7 +14,10 @@ export type {
   CycleLedgerEntry, LedgerStep,
   Milestone,
   LoopState, StopDecision, Template,
+  OutputShape, SchedulePayload,
 } from './types.js';
+
+export { detectOutputShape, ensureScheduleArtifact, readScheduleFromArtifacts } from './shape.js';
 
 export {
   createLoop, getLoop, updateLoopStatus, updateLoopChildPid,

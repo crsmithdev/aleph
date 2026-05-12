@@ -25,6 +25,7 @@ import { getLoop, updateLoopStatus } from './db.js';
 import { runLoop } from './engine.js';
 import type { LLMProvider } from './llm.js';
 import type { Sqlite } from '@construct/data';
+import { ensureScheduleArtifact } from './shape.js';
 import { buildTemplate, type TemplateDeps, type TemplateOverrides } from './templates/registry.js';
 
 /**
@@ -109,6 +110,19 @@ async function main() {
     failLoop(sqlite, loop_id, `unknown template_id: ${loop.template_id}`);
     process.exit(2);
     return;
+  }
+
+  // Phase 3 — detect output_shape and persist on a schedule artifact before
+  // the engine runs. Idempotent: a respawn after crash skips re-detection.
+  // Templates with no schedule (noop) skip this entirely.
+  if (deps.llm) {
+    try {
+      await ensureScheduleArtifact(sqlite, loop_id, loop.prompt, deps.llm);
+    } catch (err) {
+      failLoop(sqlite, loop_id, `ensureScheduleArtifact: ${(err as Error).message}`);
+      process.exit(2);
+      return;
+    }
   }
 
   // Pipe every event to stdout. The supervisor re-emits these in the API

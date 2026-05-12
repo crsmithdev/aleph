@@ -93,6 +93,50 @@ export interface Artifact {
   created_at: string;
 }
 
+// ---- Output shape ------------------------------------------------------------
+
+/**
+ * Detected output shape — what the renderer must produce to satisfy the user's
+ * question. Inferred from the prompt at session-create time (one cheap LLM
+ * call), persisted on the `kind: 'schedule'` artifact, and consumed by the
+ * renderer as a gate and by `stop_rule` as a precondition for "done".
+ *
+ * Per `docs/plans/research-system-design.md` §6 the taxonomy is prose / list /
+ * table / timeline / mixed. Each variant carries the parameters its gate needs:
+ *
+ *  - `prose`       — narrative answer. Always satisfied; no gate.
+ *  - `list`        — enumerable answer. Renderer counts items; gate requires
+ *                    `>= min_items`. Default min_items=5.
+ *  - `table`       — comparison answer with named columns. Renderer parses a
+ *                    table from the findings; gate requires every column to be
+ *                    populated in at least one row.
+ *  - `timeline`    — time-ordered events. Renderer extracts dated events; gate
+ *                    requires `>= min_events`. Default min_events=3.
+ *  - `mixed`       — composite of two-or-more shapes. Gate AND-combines its
+ *                    components' gates.
+ *
+ * Phase 3 lands `prose`, `list`, `table`, `mixed`. `timeline` rounds out the
+ * v1 taxonomy but is not in the build plan's deliverable list — gate ships,
+ * detector permits, no dedicated e2e case.
+ */
+export type OutputShape =
+  | { kind: 'prose' }
+  | { kind: 'list'; min_items?: number }
+  | { kind: 'table'; columns: string[] }
+  | { kind: 'timeline'; min_events?: number }
+  | { kind: 'mixed'; components: OutputShape[] };
+
+/**
+ * Payload of the `kind: 'schedule'` artifact written once at session-create
+ * time. Phase 3 carries only `output_shape`. Phase 5 collapses the rest of the
+ * per-loop knobs (envelope, models, perturbation_config, canon, branches,
+ * milestones, flags) onto this same payload — anticipating that move now
+ * avoids a DDL migration when the planner lands.
+ */
+export interface SchedulePayload {
+  output_shape: OutputShape;
+}
+
 // ---- Cycle ledger ------------------------------------------------------------
 
 /**
