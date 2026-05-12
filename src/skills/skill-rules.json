@@ -18,7 +18,7 @@
     },
     {
       "skill": "test-webapp",
-      "keywords": ["test webapp", "test web app", "playwright", "browser test", "frontend test", "ui test", "screenshot", "browser automation", "test local server", "verify ui", "test the ui", "/test.{0,20}(workflow|ui|page|frontend)/"]
+      "keywords": ["test webapp", "test web app", "playwright", "browser test", "frontend test", "ui test", "screenshot", "test local server", "verify ui", "test the ui", "/test.{0,20}(workflow|ui|page|frontend)/"]
     },
     {
       "skill": "skill-creator",
@@ -50,7 +50,7 @@
     },
     {
       "skill": "omnibus",
-      "keywords": ["/audit", "/fix", "/suggest", "omnibus", "audit everything", "audit all", "review everything", "check all the things", "fix everything", "fix the findings", "full audit", "full review", "comprehensive audit", "audit the codebase", "review the codebase", "/(audit|fix|suggest).{0,10}(code|design|docs|skills|hooks|agents|config|security|everything|all)/"]
+      "keywords": ["/audit", "/fix", "/suggest", "omnibus", "audit everything", "audit all", "review everything", "check all the things", "fix everything", "full audit", "full review", "comprehensive audit", "audit the codebase", "review the codebase", "/(audit|fix|suggest).{0,10}(code|design|docs|skills|hooks|agents|config|security|everything|all)/"]
     },
     {
       "skill": "code-refactor",
@@ -90,7 +90,7 @@
     },
     {
       "skill": "config-audit",
-      "keywords": ["config-audit", "audit hooks", "hook audit", "audit my hooks", "check hooks", "are my hooks", "hook outputs", "dead hooks", "unused hooks", "audit skills", "skill audit", "audit my skills", "check skills", "audit config", "config audit", "audit my config", "audit agents", "agent audit", "audit my agents", "audit setup", "audit agent", "audit claude.md", "check agent config", "go through the hooks", "go through the skills", "unused skills", "/(audit|check|review).{0,15}(hook|skill|config|agent|setup)/", "/unused.{0,10}(hook|skill)/", "/(hook|skill).{0,10}(unused|dead|broken|working)/"]
+      "keywords": ["config-audit", "audit config", "config audit", "audit my config", "audit setup", "audit claude.md", "check agent config", "audit the agent setup", "/(audit|check|review).{0,15}(config|setup|claude\\.md)/", "/are my (hooks|skills|agents) wired/", "/what's broken in my (setup|config)/"]
     },
     {
       "skill": "code-conform",
@@ -98,7 +98,7 @@
     },
     {
       "skill": "design-fix",
-      "keywords": ["design-fix", "design-conform", "conform", "make the pages match", "make the others", "align the layouts", "same loading state", "same empty state", "match the table headers", "make the components consistent", "same shape", "apply to all", "/(pages|tables|layouts|components|cards|forms).{0,30}(match|like|same|consistent)/", "/(make|fix|align).{0,30}(consistent|match|same|like)/"]
+      "keywords": ["design-fix", "design-conform", "make the pages match", "align the layouts", "same loading state", "same empty state", "match the table headers", "make the components consistent", "same shape", "apply to all", "/(pages|tables|layouts|components|cards|forms).{0,30}(match|like|same|consistent)/"]
     },
     {
       "skill": "design-construct",

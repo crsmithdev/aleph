@@ -86,26 +86,7 @@ You MUST complete each phase before proceeding to the next.
    THEN investigate that specific component
    ```
 
-   **Example (multi-layer system):**
-   ```bash
-   # Layer 1: Workflow
-   echo "=== Secrets available in workflow: ==="
-   echo "IDENTITY: ${IDENTITY:+SET}${IDENTITY:-UNSET}"
-
-   # Layer 2: Build script
-   echo "=== Env vars in build script: ==="
-   env | grep IDENTITY || echo "IDENTITY not in environment"
-
-   # Layer 3: Signing script
-   echo "=== Keychain state: ==="
-   security list-keychains
-   security find-identity -v
-
-   # Layer 4: Actual signing
-   codesign --sign "$IDENTITY" --verbose=4 "$APP"
-   ```
-
-   **This reveals:** Which layer fails (secrets → workflow ✓, workflow → build ✗)
+   **Example pattern:** at each layer (workflow → build script → signing script → signing call), echo the relevant env vars and state. The instrumentation reveals which boundary drops the data.
 
 5. **Trace Data Flow**
 
@@ -232,16 +213,7 @@ If you catch yourself thinking:
 
 ## Common Rationalizations
 
-| Excuse | Reality |
-|--------|---------|
-| "Issue is simple, don't need process" | Simple issues have root causes too. Process is fast for simple bugs. |
-| "Emergency, no time for process" | Systematic debugging is FASTER than guess-and-check thrashing. |
-| "Just try this first, then investigate" | First fix sets the pattern. Do it right from the start. |
-| "I'll write test after confirming fix works" | Untested fixes don't stick. Test first proves it. |
-| "Multiple fixes at once saves time" | Can't isolate what worked. Causes new bugs. |
-| "Reference too long, I'll adapt the pattern" | Partial understanding guarantees bugs. Read it completely. |
-| "I see the problem, let me fix it" | Seeing symptoms ≠ understanding root cause. |
-| "One more fix attempt" (after 2+ failures) | 3+ failures = architectural problem. Question pattern, don't fix again. |
+Push-back menu for when you try to justify skipping the process. Full table in `references/common-rationalizations.md` — load when needed.
 
 ## Quick Reference
 
@@ -254,76 +226,7 @@ If you catch yourself thinking:
 
 ## Agent Failure Recovery
 
-When the agent itself is stuck — looping, retrying without progress, or drifting from the goal — use this four-phase recovery loop instead of continuing blindly.
-
-### Phase 1: Failure Capture
-
-Stop and record the failure before attempting recovery:
-
-```
-## Failure Capture
-- Session / task:
-- Goal in progress:
-- Error / symptom:
-- Last successful step:
-- Last failed tool / command:
-- Repeated pattern seen:
-- Environment assumptions to verify:
-```
-
-### Phase 2: Root-Cause Diagnosis
-
-Match the failure to a known pattern:
-
-| Symptom | Likely Cause | Check |
-|---|---|---|
-| Same tool call repeated 3+ times | Loop / no exit path | Inspect last N tool calls |
-| Degraded reasoning, context drift | Context overflow | Check context % via monitor |
-| `ECONNREFUSED` / timeout | Service down or wrong port | Verify service health |
-| `429` / quota | Retry storm / missing backoff | Count repeated calls |
-| File missing after write | Wrong cwd, race, branch drift | Re-check path, git status |
-| Tests still failing after "fix" | Wrong hypothesis | Isolate the exact failing test |
-
-Diagnosis questions:
-- Logic failure, state failure, environment failure, or policy failure?
-- Did the agent lose the real objective and start optimizing a subtask?
-- Is the failure deterministic or transient?
-- What is the smallest reversible action that validates the diagnosis?
-
-### Phase 3: Contained Recovery
-
-Recover with the smallest action that changes the diagnosis surface:
-
-```
-## Recovery Action
-- Diagnosis chosen:
-- Smallest action taken:
-- Why this is safe:
-- Evidence that proves the fix worked:
-```
-
-Recovery heuristics (in order):
-1. Restate the real objective in one sentence
-2. Verify the world state — don't trust memory
-3. Shrink the failing scope to one file, command, or test
-4. Run one discriminating check
-5. Only then retry
-
-Escalate to a human when the failure is high-risk or externally blocked.
-
-### Phase 4: Introspection Report
-
-```
-## Agent Self-Debug Report
-- Session / task:
-- Failure:
-- Root cause:
-- Recovery action:
-- Result: success | partial | blocked
-- Token / time burn risk:
-- Follow-up needed:
-- Preventive change to encode later:
-```
+When the agent itself is stuck — looping, retrying without progress, or drifting from the goal — use the four-phase recovery loop in `references/agent-failure-recovery.md`: Failure Capture → Root-Cause Diagnosis → Contained Recovery → Introspection Report.
 
 ## Supporting Techniques
 
