@@ -19,8 +19,6 @@ export type { ResearchEvent, ResearchEventType } from './services/events.js';
 
 export { OpenRouterProvider, getOpenRouterPricing } from './providers/openrouter.js';
 export type { OpenRouterConfig } from './providers/openrouter.js';
-export { ModelRouter } from './providers/router.js';
-export type { TaskType, ModelConfig, ProviderConfig } from './providers/router.js';
 export { fetchPageText, JS_RENDERED_FLAG } from './providers/websearch.js';
 
 export * from './perturbation.js';
